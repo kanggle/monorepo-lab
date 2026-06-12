@@ -613,15 +613,17 @@ Owned by `account-service` v1 (compliance gate); `kyc-service` v2. Fund-movement
 The double-entry ledger is owned by `ledger-service` (ADR-MONO-008 § D3). Increments
 live: **1st** (TASK-FIN-BE-007 — auto-journal + read), **2nd** (TASK-FIN-BE-008 —
 period close), **3rd** (TASK-FIN-BE-009 — GL/AP-feed outbox emission), **4th**
-(TASK-FIN-BE-010 — reconciliation matching, F8 no-auto-close). Reconciliation
-period-lock and manual journal posting remain **v2-planned**.
+(TASK-FIN-BE-010 — reconciliation matching, F8 no-auto-close), **5th**
+(TASK-FIN-BE-011 — operator manual journal posting: the first journal mutation REST
+endpoint, synchronous balance/account/closed-period guards + `Idempotency-Key`).
+Reconciliation period-lock remains **v2-planned**.
 
 | Code | HTTP | Description |
 |---|---|---|
-| LEDGER_ENTRY_UNBALANCED | 422 | Double-entry debit ≠ credit (ledger invariant) — `ledger-service` posting guard |
+| LEDGER_ENTRY_UNBALANCED | 422 | Double-entry debit ≠ credit (or <2 lines) — `ledger-service` posting guard; **(5th incr)** surfaced synchronously on the manual `POST /entries` path |
 | JOURNAL_ENTRY_NOT_FOUND | 404 | Journal entry id unknown / not in tenant — `ledger-service` read |
-| LEDGER_ACCOUNT_NOT_FOUND | 404 | Ledger account code unknown — `ledger-service` read |
-| LEDGER_PERIOD_CLOSED | 422 | Journal posting whose `postedAt` falls in a CLOSED accounting period — `ledger-service` posting guard (consumer-path → DLT; net-zero when no closed period covers it) — `LedgerPeriodClosedException` |
+| LEDGER_ACCOUNT_NOT_FOUND | 404 | Ledger account code unknown — `ledger-service` read; **(5th incr)** also a manual-posting guard (a referenced account must already exist — no lazy mint) |
+| LEDGER_PERIOD_CLOSED | 422 | Journal posting whose `postedAt` falls in a CLOSED accounting period — `ledger-service` posting guard (consumer-path → DLT; **(5th incr)** synchronous 422 on the manual `POST /entries` path; net-zero when no closed period covers it) — `LedgerPeriodClosedException` |
 | ACCOUNTING_PERIOD_NOT_FOUND | 404 | Accounting period id unknown / not in tenant — `ledger-service` (`AccountingPeriodNotFoundException`) |
 | ACCOUNTING_PERIOD_OVERLAP | 422 | Opened period window overlaps an existing period for the tenant — `ledger-service` (`AccountingPeriodOverlapException`) |
 | ACCOUNTING_PERIOD_ALREADY_CLOSED | 409 | Close attempted on an already-CLOSED period — `ledger-service` (`AccountingPeriodAlreadyClosedException`) |

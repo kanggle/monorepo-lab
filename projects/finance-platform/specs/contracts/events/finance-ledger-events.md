@@ -82,7 +82,7 @@ own consumer parses):
 
 | Topic | Appended when | `payload` |
 |---|---|---|
-| `finance.ledger.entry.posted.v1` | every posted `JournalEntry` (auto-journal + reversal), in `PostJournalEntryUseCase.post`'s `@Transactional` | `{ entryId, postedAt, lines:[{ ledgerAccountCode, direction: "DEBIT"\|"CREDIT", money:{amount,currency} }], source:{ sourceType, sourceTransactionId, sourceEventId }, reversalOfEntryId? }` |
+| `finance.ledger.entry.posted.v1` | every posted `JournalEntry` (auto-journal + reversal; **(5th incr)** operator manual posting), in `PostJournalEntryUseCase.post`'s `@Transactional` | `{ entryId, postedAt, lines:[{ ledgerAccountCode, direction: "DEBIT"\|"CREDIT", money:{amount,currency} }], source:{ sourceType: "TRANSACTION"\|"MANUAL", sourceTransactionId, sourceEventId }, reversalOfEntryId? }` |
 | `finance.ledger.period.closed.v1` | an accounting period closes, in `CloseAccountingPeriodUseCase.close`'s `@Transactional` | `{ periodId, from, to, closedAt, entryCount }` |
 | `finance.ledger.reconciliation.completed.v1` | **(4th incr)** an external statement is ingested + matched, in `IngestStatementUseCase`'s `@Transactional` | `{ statementId, ledgerAccountCode, source, statementDate, matchedCount, discrepancyCount }` |
 | `finance.ledger.reconciliation.discrepancy.detected.v1` | **(4th incr)** one per recorded discrepancy, in the same ingest `@Transactional` | `{ discrepancyId, ledgerAccountCode, type: "UNMATCHED_EXTERNAL"\|"UNMATCHED_INTERNAL"\|"AMOUNT_MISMATCH", expectedMinor, actualMinor, currency, externalRef?, journalEntryId? }` |
@@ -97,6 +97,12 @@ own consumer parses):
   `RELEASE` post no entry, so they emit no `entry.posted`; a posting rejected by the
   closed-period guard rolls the Tx back → no `entry.posted` row. Reconciliation
   discrepancies are emitted but **never auto-resolved** (F8 — operator review).
+- **(5th incr) `sourceType: "MANUAL"`** — an operator-posted adjusting entry
+  (TASK-FIN-BE-011, `POST /api/finance/ledger/entries`) emits the same
+  `entry.posted.v1`, tagged `source.sourceType = "MANUAL"`
+  (`sourceTransactionId` = the operator `reference`, `sourceEventId` =
+  `manual:{Idempotency-Key}`) — the GL/AP feed distinguishes operator adjustments from
+  transaction-driven postings by provenance. No new topic.
 
 > **Outbox path (not the libs `OutboxWriter`).** ledger-service keeps the libs
 > `OutboxAutoConfiguration` excluded (its `ProcessedEventJpaEntity` would collide with
