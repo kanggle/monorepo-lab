@@ -8,7 +8,7 @@ shipping-service: carrier-webhook 경로 gateway public-route 노출 (ADR-007 D5
 
 # Status
 
-ready
+review
 
 # Owner
 

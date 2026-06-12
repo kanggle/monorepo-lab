@@ -33,13 +33,39 @@ class RouteServiceTest {
         assertThat(result).isTrue();
     }
 
+    @Test
+    @DisplayName("POST /api/shippings/carrier-webhook 은 공개 경로다 (TASK-BE-359, ADR-007 D5-2)")
+    void isPublicRoute_carrierWebhook_post_returnsTrue() {
+        boolean result = routeService.isPublicRoute(HttpMethod.POST, "/api/shippings/carrier-webhook");
+
+        assertThat(result).isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "GET, /api/shippings/carrier-webhook",
+            "PUT, /api/shippings/carrier-webhook",
+            "DELETE, /api/shippings/carrier-webhook"
+    })
+    @DisplayName("carrier-webhook 경로라도 POST 이외의 메서드는 공개 경로가 아니다 (AC-3 과노출 방지)")
+    void isPublicRoute_carrierWebhook_nonPost_returnsFalse(String method, String path) {
+        boolean result = routeService.isPublicRoute(HttpMethod.valueOf(method), path);
+
+        assertThat(result).isFalse();
+    }
+
     @ParameterizedTest
     @CsvSource({
             "GET, /api/orders/123",
             "POST, /api/orders",
             "POST, /api/products",
             "GET, /api/users/me",
-            "POST, /api/payments"
+            "POST, /api/payments",
+            // Other shipping paths must NOT be opened by BE-359 (AC-3)
+            "GET, /api/shippings/orders/order-1",
+            "PUT, /api/shippings/ship-1/status",
+            "GET, /api/shippings",
+            "POST, /api/shippings/ship-1/refresh-tracking"
     })
     @DisplayName("보호된 경로는 false를 반환한다")
     void isPublicRoute_protectedPaths_returnsFalse(String method, String path) {

@@ -321,4 +321,63 @@ class GatewayIntegrationTest {
                 .expectBody()
                 .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
     }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-359 — carrier-webhook gateway public-route (ADR-007 D5-2)
+    //
+    // AC-2: gateway does NOT return 401 for POST /api/shippings/carrier-webhook
+    //        without a JWT (public-route). The downstream shipping-service HMAC
+    //        verifier handles authentication — the gateway only exposes the path.
+    // AC-3: other /api/shippings/** paths remain JWT-protected.
+    // AC-4: net-zero / fail-closed is enforced downstream (CarrierWebhookVerifier),
+    //        not at the gateway — the gateway's job is only to NOT block the path.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-2: POST /api/shippings/carrier-webhook 은 JWT 없이도 게이트웨이 401을 반환하지 않는다 (공개 경로)")
+    void carrierWebhook_noToken_gatewayDoesNotReturn401() {
+        // The downstream shipping-service is unavailable in this test context,
+        // so we expect a 5xx (connection refused) — NOT 401.
+        // A 401 here would mean the gateway itself rejected the unauthenticated request,
+        // which would violate AC-2.
+        webTestClient.post()
+                .uri("/api/shippings/carrier-webhook")
+                .bodyValue("{\"deliveryId\":\"d1\",\"shippingId\":\"s1\",\"status\":\"DELIVERED\"}")
+                .exchange()
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("AC-3: GET /api/shippings/orders/{orderId} 는 JWT 없으면 401 (다른 shipping 경로는 보호 유지)")
+    void shippingRoute_otherPath_noToken_returns401() {
+        webTestClient.get()
+                .uri("/api/shippings/orders/order-123")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+    }
+
+    @Test
+    @DisplayName("AC-3: POST /api/shippings/{id}/refresh-tracking 는 JWT 없으면 401 (과노출 없음)")
+    void shippingRoute_refreshTracking_noToken_returns401() {
+        webTestClient.post()
+                .uri("/api/shippings/ship-123/refresh-tracking")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+    }
+
+    @Test
+    @DisplayName("AC-3: GET /api/shippings 는 JWT 없으면 401 (목록 조회 경로 보호 유지)")
+    void shippingRoute_list_noToken_returns401() {
+        webTestClient.get()
+                .uri("/api/shippings")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+    }
 }
