@@ -43,9 +43,13 @@ All implementation tasks targeting this service must follow this declaration,
 > reconciliation: a matched foreign statement line whose bank-reported base [KRW] value
 > differs from the internal carrying base records an `AMOUNT_MISMATCH` [FX-difference]
 > discrepancy for operator review) is specified by § Reconciliation § Multi-currency
-> reconciliation + § Increment Scope. A partial / weighted-average settlement, a
-> bulk/period-close revaluation hook, a live FX rate feed, cross-currency base-leg
-> matching, and fuzzy / N:M matching remain forward-declared (§ Increment Scope).
+> reconciliation + § Increment Scope. The **twelfth increment** (TASK-FIN-BE-018 — partial /
+> weighted-average settlement: an operator settles a *portion* of a foreign position via an
+> optional `settleForeignAmount`, removing a proportional `round(C×|F_settle|/|F|)` share of the
+> carrying base and leaving a residual OPEN position) is specified by § FX settlement § Partial
+> settlement + § Increment Scope. A FIFO / lot-level cost basis, a bulk/period-close revaluation
+> hook, a live FX rate feed, cross-currency base-leg matching, and fuzzy / N:M matching remain
+> forward-declared (§ Increment Scope).
 > The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
@@ -358,15 +362,42 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   statement, or a foreign statement without `baseAmount`s, reconciles byte-identically to
   FIN-BE-010. See § Reconciliation § Multi-currency reconciliation.
 
+**Twelfth increment — IN (TASK-FIN-BE-018, partial / weighted-average settlement):**
+- The 10th increment settles the **whole** `(account, currency)` position; this increment settles
+  a **portion**. An operator supplies an optional `settleForeignAmount` (foreign minor) and the
+  position is reduced by exactly that, leaving a **residual OPEN position**. Omitting it (or
+  supplying the full balance) settles the whole position **byte-identically to the 10th**
+  (net-zero — the 10th's tests are unchanged). `POST /api/finance/ledger/settlements` (same path).
+- **Decision — weighted-average proportional carrying; no FIFO/lot tracking, no new line
+  primitive, no migration.** The settled portion's carrying base is a **proportional share** of
+  the position's carrying at its **average unit cost**: `C_settle = round(C × |F_settle| / |F|)`
+  (HALF_UP, signed). The 10th's 3-line entry is reused unchanged with the **partial** quantities —
+  position-removal `JournalLine.of(money = |F_settle|, baseAmount = |C_settle|)`,
+  `proceedsBase = round(F_settle × settlementRate)`, realized `= proceedsBase − C_settle` → the
+  same `FX_GAIN`/`FX_LOSS` contra (omitted when `realized == 0`). The **residual**
+  `(F − F_settle, C − C_settle)` simply remains on the account — double-entry leaves it OPEN, no
+  extra line. Rounding is **self-correcting**: a final settle of the residual
+  (`F_settle = F_remaining`) removes exactly `C_remaining` (`round(C × F/F) = C`), so repeated
+  partials net to zero carrying with no drift.
+- Polarity stays automatic (`sign(F)` / `sign(realized)`, § Tenth increment) — `F_settle` carries
+  the **same sign** as `F`. Funnels through the existing `PostJournalEntryUseCase.post` (same
+  guarded write path), same `SETTLEMENT` `sourceType`, same `settle:{key}` idempotency, same
+  `finance.ledger.entry.posted.v1` (no new event, no new write boundary). One new code
+  `SETTLEMENT_AMOUNT_INVALID` (422): `settleForeignAmount` is zero, has the **opposite sign** to
+  `F`, or its magnitude **exceeds** `|F|` (over-settle). All 10th-increment errors
+  (`SETTLEMENT_RATE_INVALID`, `CURRENCY_MISMATCH`, `LEDGER_ACCOUNT_NOT_FOUND`) are unchanged.
+  **Net-zero**: `settleForeignAmount` omitted → the 10th's full-settle path exactly. See § FX
+  settlement § Partial settlement.
+
 **Forward-declared — OUT (each a later task):**
 - Fuzzy / N:M / split matching; period **reopen**; **cross-currency base-leg matching** (the
   11th increment matches same-foreign-currency lines + the base-leg FX check; matching a
   base-currency [KRW] external statement against foreign internal lines by their carrying base is
   forward-declared) + a **configurable FX tolerance** (the 11th is an exact base comparison).
-- **Partial / weighted-average settlement** — the 10th increment settles a **whole**
-  `(account, currency)` position; settling a *portion* (a specified foreign amount, removing a
-  **proportional** share of the carrying base under a weighted-average or FIFO cost basis, with
-  a residual position) is forward-declared. A **bulk / all-positions** revaluation + a
+- **FIFO / lot-level settlement cost basis** — the 12th increment (TASK-FIN-BE-018) settles a
+  *portion* of a `(account, currency)` position under a **weighted-average** carrying basis (a
+  proportional share `round(C × |F_settle|/|F|)`, residual OPEN position); a **FIFO / lot-level**
+  cost basis (per-lot acquisition tracking) is forward-declared. A **bulk / all-positions** revaluation + a
   **period-close auto-hook** (the 9th/10th increments act on one `(account, currency)` per
   operator call). A **live FX rate feed** (rates are caller-supplied, not fetched), a
   **proceeds-amount input** (the 10th derives proceeds from a rate; supplying the *actual*
