@@ -65,10 +65,19 @@ not re-derive them:
 | Topic | When (deferred increment) | Payload sketch |
 |---|---|---|
 | `finance.ledger.entry.posted.v1` | each journal entry posted — the **GL/AP feed** for an external accounting system | `{ entryId, postedAt, lines:[{ledgerAccountCode,direction,money}], source }` |
-| `finance.ledger.period.closed.v1` | an accounting period is locked (period-close increment) | `{ periodId, from, to, closedAt, entryCount }` |
+| `finance.ledger.period.closed.v1` | an accounting period is locked | `{ periodId, from, to, closedAt, entryCount }` |
 
 When the GL/AP-feed increment lands, the service gains an outbox (it becomes a
 publishing consumer); until then it emits nothing.
+
+> **Period-close increment (TASK-FIN-BE-008) — emission still deferred.** The
+> period-close increment delivers the `AccountingPeriod` lifecycle + posting guard
+> + close snapshot + read endpoints **without** introducing an outbox: the service
+> stays a **terminal consumer**, so `finance.ledger.period.closed.v1` is **NOT yet
+> emitted** (the topic stays forward-declared above). Emission lands with the
+> GL/AP-feed increment that introduces the outbox — that increment will emit both
+> `entry.posted.v1` and `period.closed.v1`. This keeps outbox introduction a single,
+> deliberate step rather than smuggling it into the period-close increment.
 
 ## Relationship to platform / rules
 

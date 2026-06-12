@@ -1,10 +1,11 @@
-# ledger-api — HTTP contract (ledger-service, first increment)
+# ledger-api — HTTP contract (ledger-service)
 
-Read-only HTTP surface of `finance-platform/apps/ledger-service`. Authored by
+HTTP surface of `finance-platform/apps/ledger-service`. Authored by
 TASK-FIN-BE-007 **before** implementation (contract-first,
-`platform/service-types/rest-api.md`). Postings are **event-driven** (§
-`finance-ledger-events.md`); the first increment exposes **no mutation
-endpoints**. Architecture: [`../../services/ledger-service/architecture.md`](../../services/ledger-service/architecture.md).
+`platform/service-types/rest-api.md`); extended by TASK-FIN-BE-008 (period close).
+Journal **postings** are **event-driven** (§ `finance-ledger-events.md`) — there is
+no posting mutation endpoint; the **2nd increment** adds **period** mutation
+endpoints (open/close — § Accounting periods). Architecture: [`../../services/ledger-service/architecture.md`](../../services/ledger-service/architecture.md).
 
 All paths under `/api/finance/ledger/**`. All require a valid IAM RS256 JWT with
 `tenant_id` accepted by the dual-accept gate (`finance` / `*` / `entitled_domains ∋
@@ -92,6 +93,74 @@ in the v1 KRW happy path).
 
 ---
 
+## Accounting periods (2nd increment — TASK-FIN-BE-008)
+
+Period mutations require a valid JWT accepted by the dual-accept tenant gate
+(`.authenticated()` + tenant gate — no separate scope-authority axis; the operator
+caller arrives via the platform-console client). A period window is a **half-open**
+`[from, to)` interval of ISO-8601 instants.
+
+### 5. POST `/api/finance/ledger/periods`
+
+Open an accounting period. Request:
+```json
+{ "from": "2026-01-01T00:00:00Z", "to": "2026-02-01T00:00:00Z" }
+```
+`201`:
+```json
+{ "data": {
+    "periodId": "...", "status": "OPEN",
+    "from": "2026-01-01T00:00:00Z", "to": "2026-02-01T00:00:00Z",
+    "closedAt": null, "closedBy": null, "entryCount": null
+  }, "meta": { "timestamp": "..." } }
+```
+`422 ACCOUNTING_PERIOD_INVALID_WINDOW` when `from ≥ to`;
+`422 ACCOUNTING_PERIOD_OVERLAP` when the window overlaps an existing period for the tenant.
+
+### 6. POST `/api/finance/ledger/periods/{periodId}/close`
+
+Close an OPEN period: capture the trial-balance snapshot (entries with `postedAt <
+to`) and transition OPEN→CLOSED. `200`:
+```json
+{ "data": {
+    "periodId": "...", "status": "CLOSED",
+    "from": "2026-01-01T00:00:00Z", "to": "2026-02-01T00:00:00Z",
+    "closedAt": "<ISO-8601>", "closedBy": "<actor>", "entryCount": 12,
+    "snapshot": {
+      "accounts": [
+        { "ledgerAccountCode": "CASH_CLEARING", "debitTotal": {…}, "creditTotal": {…} },
+        { "ledgerAccountCode": "CUSTOMER_WALLET:acc-1", "debitTotal": {…}, "creditTotal": {…} }
+      ],
+      "grandDebitTotal": { "amount": "…", "currency": "KRW" },
+      "grandCreditTotal": { "amount": "…", "currency": "KRW" },
+      "inBalance": true
+    }
+  }, "meta": { "timestamp": "..." } }
+```
+`404 ACCOUNTING_PERIOD_NOT_FOUND` when the id is unknown;
+`409 ACCOUNTING_PERIOD_ALREADY_CLOSED` when the period is already CLOSED. The
+snapshot is immutable (insert-only); `inBalance` is always `true` (the books are
+balanced by the posting guard).
+
+### 7. GET `/api/finance/ledger/periods`
+
+List accounting periods for the tenant (most-recent window first). `200`: `data`
+= array of the period object (without `snapshot`); `meta` carries pagination.
+
+### 8. GET `/api/finance/ledger/periods/{periodId}`
+
+Period detail including its balance `snapshot` (present only for a CLOSED period;
+`null` while OPEN). `404 ACCOUNTING_PERIOD_NOT_FOUND` when absent / not in tenant.
+
+> **Posting guard** — once a period is CLOSED, the **event-driven** posting path
+> rejects any journal entry whose `postedAt` falls in the closed window with `422
+> LEDGER_PERIOD_CLOSED` (the consumer routes such an event to the DLT). With no
+> covering closed period — including when no period is defined — postings proceed
+> unchanged (net-zero). There is no REST posting endpoint, so `LEDGER_PERIOD_CLOSED`
+> surfaces on the consumer path, not as a synchronous HTTP response in this increment.
+
+---
+
 ## Error codes (this contract → `platform/error-handling.md`)
 
 | Code | HTTP | Meaning |
@@ -101,12 +170,16 @@ in the v1 KRW happy path).
 | `LEDGER_ENTRY_UNBALANCED` | 422 | debit ≠ credit (a posting-path guard; surfaced if a future manual-posting endpoint is added — pre-registered) |
 | `CURRENCY_MISMATCH` | 422 | cross-currency lines in one entry (reused fintech code) |
 | `TENANT_FORBIDDEN` | 403 | dual-accept gate rejects (both branches fail) |
+| `LEDGER_PERIOD_CLOSED` | 422 | **(2nd incr)** journal posting into a CLOSED accounting period (consumer-path → DLT; net-zero when no closed period covers `postedAt`) |
+| `ACCOUNTING_PERIOD_NOT_FOUND` | 404 | **(2nd incr)** period id unknown / not in tenant |
+| `ACCOUNTING_PERIOD_OVERLAP` | 422 | **(2nd incr)** opened window overlaps an existing period for the tenant |
+| `ACCOUNTING_PERIOD_ALREADY_CLOSED` | 409 | **(2nd incr)** close attempted on an already-CLOSED period |
+| `ACCOUNTING_PERIOD_INVALID_WINDOW` | 422 | **(2nd incr)** `from ≥ to` |
 
-`LEDGER_PERIOD_CLOSED` (422) is pre-registered for the deferred period-close increment.
+## Out of scope (forward-declared — later increments)
 
-## Out of scope (first increment — forward-declared)
-
-- Mutation endpoints (manual journal posting / adjusting entries).
-- Period-close endpoints (`POST /periods/{id}/close`, `GET /periods`).
-- GL/AP export endpoints.
-- Multi-currency trial-balance consolidation.
+- Manual journal posting / adjusting-entry mutation endpoints.
+- Period **reopen**; a "period must have ended (`to ≤ now`)" close policy.
+- GL/AP export endpoints (`finance.ledger.entry.posted.v1` — the increment that
+  introduces the outbox, and with it the deferred `finance.ledger.period.closed.v1`).
+- Multi-currency trial-balance / snapshot consolidation.

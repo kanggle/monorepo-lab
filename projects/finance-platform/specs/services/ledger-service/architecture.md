@@ -10,10 +10,12 @@ All implementation tasks targeting this service must follow this declaration,
 > implementation (HARDSTOP-09 — architecture decision precedes code).
 > `ledger-service` is the **v2 double-entry ledger** deferred by
 > [ADR-MONO-008](../../../../../docs/adr/ADR-MONO-008-finance-platform-bootstrap.md)
-> § D3 (declared in `PROJECT.md` Service Map v2). This spec scopes a **first
-> increment** (event-driven auto-journal + read); period-close, GL/AP feed,
-> reconciliation matching, manual journal posting, and multi-currency are
-> forward-declared (§ Increment Scope). The account-service architecture
+> § D3 (declared in `PROJECT.md` Service Map v2). The **first increment**
+> (TASK-FIN-BE-007 — event-driven auto-journal + read) is live; the **second
+> increment** (TASK-FIN-BE-008 — period close: `AccountingPeriod` lifecycle +
+> posting guard + close snapshot, emission deferred) is specified by § Accounting
+> Period + § Increment Scope. GL/AP feed, reconciliation matching, manual journal
+> posting, and multi-currency remain forward-declared (§ Increment Scope). The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
 > idempotency, audit) — this service mirrors it.
@@ -86,11 +88,29 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
 - **Terminal consumer** (no outbox / no emission) — `OutboxAutoConfiguration`
   excluded, like erp read-model-service.
 
+**Second increment — IN (TASK-FIN-BE-008, period close):**
+- **`AccountingPeriod`** aggregate (OPEN→CLOSED state machine; tenant-scoped,
+  non-overlapping `[from, to)` windows), a **posting-path guard** (a journal
+  entry whose `postedAt` is covered by a CLOSED period is rejected with
+  `LEDGER_PERIOD_CLOSED` → DLT on the consumer path; **net-zero** when no closed
+  period covers it — including when no period is defined), and a **close-time
+  trial-balance snapshot** (`PeriodBalanceSnapshot` — per-account + grand totals,
+  in balance, == the live trial balance at close). Operator REST: open / close /
+  list / detail (§ Accounting Period, § REST endpoints).
+- **Decision — emission deferred / terminal consumer preserved**:
+  `finance.ledger.period.closed.v1` is NOT emitted by this increment. The events
+  contract sequences outbox introduction to the **GL/AP-feed** increment ("the
+  service gains an outbox … until then it emits nothing"); period close lands the
+  lifecycle + guard + snapshot + reads **without** an outbox, so the service stays
+  a terminal consumer through this increment (the `period.closed.v1` topic stays
+  forward-declared in the events contract). This mirrors the erp first-increment
+  discipline — slice the depth, do not pull the outbox in early.
+
 **Forward-declared — OUT (each a later task):**
-- **Period close** (`AccountingPeriod`, `LEDGER_PERIOD_CLOSED` guard, lock a
-  closed period against new postings) — `finance.ledger.period.closed.v1`.
 - **GL/AP feed emission** (`finance.ledger.entry.posted.v1` via outbox — the
-  forward interface for an external accounting/ERP system).
+  forward interface for an external accounting/ERP system; the increment that
+  introduces the outbox, and with it the deferred `finance.ledger.period.closed.v1`
+  emission).
 - **Reconciliation matching** (`reconciliation_discrepancy` real matching vs
   external statements — account-service models it as a placeholder, F8).
 - **Manual journal posting API** (operator-initiated adjusting entries).
@@ -187,6 +207,12 @@ com.example.finance.ledger/
 │   │   ├── PostingPolicy.java             ← transaction-type → balanced lines (pure; § Posting Policy)
 │   │   ├── SourceRef.java                 ← (sourceType, sourceTxnId, sourceEventId) provenance
 │   │   └── repository/JournalRepository.java
+│   ├── period/                           ← (2nd increment) accounting period
+│   │   ├── AccountingPeriod.java          ← aggregate; OPEN→CLOSED state machine; [from,to) covers(); non-overlap
+│   │   ├── PeriodStatus.java              ← OPEN / CLOSED
+│   │   ├── PeriodBalanceSnapshot.java     ← close-time per-account + grand totals (pure, immutable)
+│   │   ├── PeriodAccountTotal.java        ← one account's debit/credit Money in the snapshot
+│   │   └── repository/AccountingPeriodRepository.java  ← outbound port (findOverlapping/findCovering/save/findById/findAll)
 │   ├── money/
 │   │   ├── Money.java                     ← long minorUnits + Currency (NO float/double)
 │   │   └── Currency.java                  ← ISO-4217 + minor-unit scale
@@ -196,11 +222,17 @@ com.example.finance.ledger/
 │   └── error/                             ← domain exceptions (fintech codes)
 │       (LedgerEntryUnbalancedException, LedgerAccountNotFoundException,
 │        JournalEntryNotFoundException, DuplicateSourceEventException [internal — drives dedupe],
-│        CurrencyMismatchException, ...)
+│        CurrencyMismatchException, ...;
+│        (2nd incr) LedgerPeriodClosedException, AccountingPeriodNotFoundException,
+│        AccountingPeriodOverlapException, AccountingPeriodAlreadyClosedException,
+│        AccountingPeriodInvalidWindowException)
 ├── application/                           ← use cases + outbound ports
-│   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → persist entry + lines + audit (one Tx)
+│   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit (one Tx)
 │   ├── PostFromTransactionUseCase.java    ← maps an account-service transaction envelope → PostJournalEntry (via PostingPolicy); idempotent on sourceEventId
 │   ├── QueryLedgerUseCase.java            ← read: entry detail / per-account entries + balance / trial balance
+│   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
+│   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit
+│   ├── QueryAccountingPeriodUseCase.java  ← (2nd incr) read: list periods / period detail + snapshot
 │   ├── ActorContext.java
 │   ├── view/ (JournalEntryView, JournalLineView, LedgerAccountBalanceView, TrialBalanceView)
 │   └── port/outbound/
@@ -209,7 +241,8 @@ com.example.finance.ledger/
 ├── infrastructure/
 │   ├── persistence/jpa/                   ← Spring Data + adapters (toDomain/fromDomain)
 │   │   (LedgerAccountJpaEntity/Repository/Adapter, JournalEntryJpaEntity, JournalLineJpaEntity,
-│   │    AuditLogJpaEntity, processed_events)
+│   │    AuditLogJpaEntity, processed_events;
+│   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity)
 │   ├── security/  (SecurityConfig, AllowedIssuersValidator, TenantClaimValidator,
 │   │               ActorContextJwtAuthenticationConverter, ServiceLevelOAuth2Config)
 │   └── config/ (ClockConfig, JpaConfig, KafkaConsumerConfig, ChartOfAccountsSeedConfig)
@@ -219,8 +252,9 @@ com.example.finance.ledger/
 │   ├── TransactionEnvelope.java           ← inbound payload DTO (tolerant of unknown fields)
 │   └── EnvelopeToCommandMapper.java       ← envelope → PostFromTransaction command
 └── presentation/                          ← inbound web adapter
-    ├── controller/LedgerController.java    ← /api/finance/ledger/**
-    ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes)
+    ├── controller/LedgerController.java    ← /api/finance/ledger/** (reads)
+    ├── controller/PeriodController.java     ← (2nd incr) /api/finance/ledger/periods/** (open/close/list/detail)
+    ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes; (2nd incr) period codes)
     ├── dto/                                ← response DTOs (money as minor-units integer + currency)
     ├── filter/TenantClaimEnforcer.java
     └── security/PublicPaths.java
@@ -302,6 +336,56 @@ the `finance.transaction.reversed.v1` event (which references the original
 transaction; the ledger looks up the original entry by source transaction id).
 Both entries are retained; the trial balance stays at zero.
 
+## Accounting Period (second increment — TASK-FIN-BE-008)
+
+An **`AccountingPeriod`** locks the books for a time window. It is a pure-domain
+aggregate (state machine), guarded write path, and a close-time snapshot — no
+outbox, no emission (§ Increment Scope decision).
+
+**Model.** `AccountingPeriod(periodId, tenantId, [from, to), status, closedAt?,
+closedBy?, entryCount?)`. The window is **half-open**: `covers(t) ⇔ from ≤ t < to`
+(so consecutive periods abut at the boundary with no gap and no overlap). `status`
+∈ {OPEN, CLOSED}. State machine:
+
+- `AccountingPeriod.open(periodId, tenantId, from, to)` — factory; `from ≥ to` →
+  `AccountingPeriodInvalidWindowException` (422 `ACCOUNTING_PERIOD_INVALID_WINDOW`).
+  Creates an OPEN period.
+- `close(closedAt, closedBy, entryCount)` — OPEN→CLOSED; a second close →
+  `AccountingPeriodAlreadyClosedException` (`ACCOUNTING_PERIOD_ALREADY_CLOSED`).
+  **No reopen** (forward-declared).
+
+**Non-overlap invariant.** For one tenant no two periods' windows may overlap.
+`OpenAccountingPeriodUseCase` rejects a window overlapping any existing period →
+`AccountingPeriodOverlapException` (`ACCOUNTING_PERIOD_OVERLAP`). This keeps "which
+period owns this entry" unambiguous (an entry's owning period is the one whose
+window covers its `postedAt`).
+
+**Posting guard (the lock).** `PostJournalEntryUseCase.post` — the single guarded
+write path — consults `AccountingPeriodRepository.findCovering(tenantId,
+entry.postedAt, CLOSED)`. If a CLOSED period covers the entry's `postedAt` →
+`LedgerPeriodClosedException` (422 `LEDGER_PERIOD_CLOSED`). On the **consumer**
+path this propagates → `@RetryableTopic` exhausts → DLT (a late/replayed/backdated
+event into a closed window is a real anomaly, surfaced not swallowed; the dedupe
+row is NOT written for a rejected entry). **Net-zero**: `findCovering` empty — the
+common case, and always when no period is defined — posting proceeds byte-identically
+to the first increment (the guard never blocks the happy path; periods are optional).
+
+> Closing a window that includes the present is **permitted** in this increment
+> (the model is the lock mechanism; a "period must have ended (`to ≤ now`)" policy
+> is forward-declared). This is also what makes the guard deterministically testable
+> against the real clock: close a window covering now, then a posting into it is
+> rejected. In production an operator closes a *past* month, and the guard protects
+> that closed month from backdated/replayed postings.
+
+**Close-time snapshot.** `CloseAccountingPeriodUseCase` (one `@Transactional`):
+load the period, require OPEN, compute a **`PeriodBalanceSnapshot`** — per-account
+debit/credit totals + grand totals over entries with `postedAt < to` (tenant-scoped,
+reusing the existing per-account totals query the trial balance uses) — flip
+OPEN→CLOSED carrying `entryCount`, persist the immutable snapshot rows + the audit
+row. The snapshot grand totals are **in balance** (Σdebit == Σcredit) and equal the
+live trial balance at close; it is the period's immutable ending record (insert-only,
+no UPDATE/DELETE — F3/F6 parity).
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):
@@ -340,12 +424,19 @@ All under `/api/finance/ledger/**`. Formal shapes → [`ledger-api.md`](../../co
 | `GET` | `/api/finance/ledger/accounts/{ledgerAccountCode}/entries` | JWT | paginated lines for a ledger account |
 | `GET` | `/api/finance/ledger/accounts/{ledgerAccountCode}/balance` | JWT | the account's running balance (Σdebit − Σcredit) |
 | `GET` | `/api/finance/ledger/trial-balance` | JWT | Σ over all accounts (== 0 invariant) |
+| `POST` | `/api/finance/ledger/periods` | JWT (authenticated) | **(2nd increment)** open an accounting period `{from, to}` |
+| `POST` | `/api/finance/ledger/periods/{periodId}/close` | JWT (authenticated) | **(2nd increment)** close a period → capture the trial-balance snapshot |
+| `GET` | `/api/finance/ledger/periods` | JWT | **(2nd increment)** list accounting periods |
+| `GET` | `/api/finance/ledger/periods/{periodId}` | JWT | **(2nd increment)** period detail + its balance snapshot |
 | `GET` | `/actuator/{health,info}` | none | probes |
 | `GET` | `/actuator/prometheus` | network-isolated | metrics |
 
-No mutation endpoints in the first increment (postings are event-driven). The
-`{ledgerAccountCode}` path segment carries the `CUSTOMER_WALLET:{accountId}` form
-url-encoded; reads are tenant-scoped.
+Auto-journal postings remain event-driven (no posting mutation endpoint). The
+**period mutations** (open/close) are the increment's only write endpoints —
+`.authenticated()` + the dual-accept tenant gate (parity with the service's
+current posture; no new scope-authority axis — the operator caller arrives via the
+platform-console client). The `{ledgerAccountCode}` path segment carries the
+`CUSTOMER_WALLET:{accountId}` form url-encoded; reads are tenant-scoped.
 
 ## Event consumption
 
@@ -371,7 +462,7 @@ malformed / unmappable envelope → DLT (not poison-looped); dedupe via
 | **F6** immutable audit | ✅ | append-only `audit_log`, same Tx (audit-heavy) |
 | **F7** regulated PII encrypted/masked | N/A (first increment) | the ledger stores account ids + amounts, no new regulated PII (no KYC documents); reuses account-service-masked refs |
 | **F8** reconciliation no auto-close | forward-decl | reconciliation matching is a later increment (account-service models the placeholder) |
-| **F2 (period close)** | forward-decl | `LEDGER_PERIOD_CLOSED` reserved; `AccountingPeriod` is a later increment |
+| **F2 (period close)** | ✅ (2nd increment) | `AccountingPeriod` OPEN→CLOSED + non-overlap invariant; `PostJournalEntryUseCase` guard rejects a posting into a CLOSED period (`LEDGER_PERIOD_CLOSED`, net-zero otherwise); close captures an immutable trial-balance snapshot (§ Accounting Period) |
 
 ## Trait Rule mapping
 
@@ -416,6 +507,11 @@ exposes reads; it does not call other services or write back.
 | 6 | Unknown ledger account / entry on read | 404 `LEDGER_ACCOUNT_NOT_FOUND` / `JOURNAL_ENTRY_NOT_FOUND` |
 | 7 | Cross-currency lines in one entry | 422 `CURRENCY_MISMATCH` |
 | 8 | HOLD / RELEASE transaction completed | no entry posted (documented; not an error) |
+| 9 | Entry `postedAt` covered by a CLOSED period (late/replayed/backdated) | 422 `LEDGER_PERIOD_CLOSED` — entry rejected, consumer event → DLT after retries (no dedupe row written); no covering closed period → posts normally (net-zero) |
+| 10 | Open a window overlapping an existing period | 422 `ACCOUNTING_PERIOD_OVERLAP` |
+| 11 | Open a window with `from ≥ to` | 422 `ACCOUNTING_PERIOD_INVALID_WINDOW` |
+| 12 | Close an already-closed period | 409 `ACCOUNTING_PERIOD_ALREADY_CLOSED` |
+| 13 | Period id unknown on close/detail | 404 `ACCOUNTING_PERIOD_NOT_FOUND` |
 
 ## Testing Strategy
 
@@ -433,6 +529,16 @@ exposes reads; it does not call other services or write back.
   two wallet lines; a `reversed.v1` → reversal entry, trial balance still 0;
   cross-tenant read → 403; HOLD completed → no entry. `integrationTest` excluded from
   `./gradlew check`.
+- **Period close (2nd increment)**: unit — `AccountingPeriodTest` (open/close
+  transitions, re-close rejection, invalid window, `covers` boundary [inclusive
+  `from`, exclusive `to`]); application — `CloseAccountingPeriodUseCaseTest`
+  (snapshot computation, OPEN-required), `OpenAccountingPeriodUseCaseTest` (overlap
+  rejection), `PostJournalEntryUseCase` guard (closed-covering rejects;
+  no-period / open-period proceeds — net-zero). Integration: post entries → open a
+  window covering now → close → snapshot == live trial balance + status CLOSED +
+  entryCount; a subsequent `transaction.completed.v1` into the closed window posts
+  **no** entry (→ DLT, `LEDGER_PERIOD_CLOSED`); a non-overlapping window opens; an
+  overlapping window → 422; re-close → 409; list/detail return the contract shapes.
 
 ## Required Artifacts mapping (rules/domains/fintech.md § Required Artifacts)
 

@@ -612,15 +612,21 @@ Owned by `account-service` v1 (compliance gate); `kyc-service` v2. Fund-movement
 
 The double-entry ledger is owned by `ledger-service` (ADR-MONO-008 § D3). Its
 **first increment** (TASK-FIN-BE-007 — event-driven auto-journal + read) implements
-the double-entry invariant + read surface; reconciliation matching and period close
-remain **v2-planned** (later ledger-service increments).
+the double-entry invariant + read surface; its **second increment** (TASK-FIN-BE-008
+— period close) adds the `AccountingPeriod` lifecycle + posting guard + close
+snapshot. Reconciliation matching and GL/AP-feed emission remain **v2-planned**
+(later ledger-service increments).
 
 | Code | HTTP | Description |
 |---|---|---|
 | LEDGER_ENTRY_UNBALANCED | 422 | Double-entry debit ≠ credit (ledger invariant) — `ledger-service` posting guard |
 | JOURNAL_ENTRY_NOT_FOUND | 404 | Journal entry id unknown / not in tenant — `ledger-service` read |
 | LEDGER_ACCOUNT_NOT_FOUND | 404 | Ledger account code unknown — `ledger-service` read |
-| LEDGER_PERIOD_CLOSED | 422 | Journal attempt on a closed accounting period — **v2-planned** (period-close increment) |
+| LEDGER_PERIOD_CLOSED | 422 | Journal posting whose `postedAt` falls in a CLOSED accounting period — `ledger-service` posting guard (consumer-path → DLT; net-zero when no closed period covers it) — `LedgerPeriodClosedException` |
+| ACCOUNTING_PERIOD_NOT_FOUND | 404 | Accounting period id unknown / not in tenant — `ledger-service` (`AccountingPeriodNotFoundException`) |
+| ACCOUNTING_PERIOD_OVERLAP | 422 | Opened period window overlaps an existing period for the tenant — `ledger-service` (`AccountingPeriodOverlapException`) |
+| ACCOUNTING_PERIOD_ALREADY_CLOSED | 409 | Close attempted on an already-CLOSED period — `ledger-service` (`AccountingPeriodAlreadyClosedException`) |
+| ACCOUNTING_PERIOD_INVALID_WINDOW | 422 | Period window `from ≥ to` — `ledger-service` (`AccountingPeriodInvalidWindowException`) |
 | RECONCILIATION_DISCREPANCY | 422 | Internal ledger ↔ external statement mismatch; operator review (auto-close forbidden, F8) — **v2-planned** |
 | RECONCILIATION_PERIOD_LOCKED | 422 | Mutation of a locked reconciliation period (F8) — **v2-planned** |
 
