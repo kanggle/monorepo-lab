@@ -8,7 +8,7 @@ Make the IAM domain-health card resolve to `data-status='ok'` in the Platform Co
 
 # Status
 
-backlog
+ready
 
 # Owner
 
