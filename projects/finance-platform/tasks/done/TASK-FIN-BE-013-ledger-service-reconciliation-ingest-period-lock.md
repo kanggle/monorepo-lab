@@ -1,6 +1,6 @@
 # TASK-FIN-BE-013 — ledger-service reconciliation ingest-time period-lock (7th increment: ingesting a statement dated in a CLOSED period is rejected)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (one guard mirroring the just-shipped FIN-BE-012 pattern; the only subtlety is guard placement before any persist/match/emit + net-zero)
