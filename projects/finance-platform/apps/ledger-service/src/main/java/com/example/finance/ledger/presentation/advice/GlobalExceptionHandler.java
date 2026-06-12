@@ -36,6 +36,10 @@ public class GlobalExceptionHandler {
             Map.entry("ACCOUNTING_PERIOD_OVERLAP", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("ACCOUNTING_PERIOD_ALREADY_CLOSED", HttpStatus.CONFLICT),
             Map.entry("ACCOUNTING_PERIOD_INVALID_WINDOW", HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry("RECONCILIATION_ACCOUNT_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry("RECONCILIATION_STATEMENT_NOT_FOUND", HttpStatus.NOT_FOUND),
+            Map.entry("RECONCILIATION_DISCREPANCY_NOT_FOUND", HttpStatus.NOT_FOUND),
+            Map.entry("RECONCILIATION_ALREADY_RESOLVED", HttpStatus.CONFLICT),
             Map.entry("TENANT_FORBIDDEN", HttpStatus.FORBIDDEN));
 
     @ExceptionHandler(LedgerDomainException.class)

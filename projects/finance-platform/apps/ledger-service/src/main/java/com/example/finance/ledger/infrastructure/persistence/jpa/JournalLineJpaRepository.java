@@ -66,4 +66,23 @@ public interface JournalLineJpaRepository extends JpaRepository<JournalLine, Lon
             """)
     List<AccountTotalsRow> accountTotalsUpTo(@Param("tenantId") String tenantId,
                                              @Param("to") java.time.Instant to);
+
+    /**
+     * Journal lines on one ledger account (tenant-scoped) whose owning entry is
+     * NOT already linked by a {@code ReconciliationMatch} — the candidate internal
+     * lines for matching (the anti-join against prior matches). Ordered by the
+     * line's posting instant + id so the matcher's "first deterministic candidate"
+     * is stable across runs.
+     */
+    @Query("""
+            select l from JournalLine l
+            where l.tenantId = :tenantId
+              and l.ledgerAccountCode = :code
+              and l.entryId not in (
+                  select m.journalEntryId from ReconciliationMatch m
+                  where m.tenantId = :tenantId)
+            order by l.postedAt asc, l.id asc
+            """)
+    List<JournalLine> findUnmatchedInternalLines(@Param("tenantId") String tenantId,
+                                                 @Param("code") String code);
 }
