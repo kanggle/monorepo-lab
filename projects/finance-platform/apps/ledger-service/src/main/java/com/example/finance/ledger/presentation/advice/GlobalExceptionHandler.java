@@ -44,6 +44,7 @@ public class GlobalExceptionHandler {
             Map.entry("RECONCILIATION_PERIOD_LOCKED", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("IDEMPOTENCY_KEY_REQUIRED", HttpStatus.BAD_REQUEST),
             Map.entry("REVALUATION_RATE_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry("SETTLEMENT_RATE_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("TENANT_FORBIDDEN", HttpStatus.FORBIDDEN));
 
     @ExceptionHandler(LedgerDomainException.class)
