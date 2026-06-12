@@ -27,9 +27,13 @@ All implementation tasks targeting this service must follow this declaration,
 > `RECONCILIATION_PERIOD_LOCKED`) and the **seventh increment** (TASK-FIN-BE-013 —
 > reconciliation *ingest-time* period-lock: ingesting a statement dated in a CLOSED
 > period is rejected with the same code, before any persist/match/emit) are specified
-> by § Reconciliation § Period lock + § Increment Scope. Multi-currency journals and
-> fuzzy / N:M matching remain forward-declared (§ Increment Scope). The
-> account-service architecture
+> by § Reconciliation § Period lock + § Increment Scope. The **eighth increment**
+> (TASK-FIN-BE-014 — multi-currency journals: one entry may carry lines in different
+> currencies, balanced in a fixed base/reporting currency [KRW] via per-line
+> `exchangeRate` + `baseAmount`) is specified by § Multi-currency journals +
+> § Increment Scope. FX gain/loss + revaluation, a live FX rate feed, multi-currency
+> reconciliation, and fuzzy / N:M matching remain forward-declared (§ Increment Scope).
+> The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
 > idempotency, audit) — this service mirrors it.
@@ -209,10 +213,39 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   `IngestStatementUseCase`. Together the 6th + 7th increments close a CLOSED period to
   reconciliation on **both** sides (ingest and resolve). See § Reconciliation § Period lock.
 
+**Eighth increment — IN (TASK-FIN-BE-014, multi-currency journals):**
+- A single journal entry may now carry lines in **different currencies**, balanced in a
+  fixed **reporting / base currency (KRW)**. Each `JournalLine` keeps its original
+  transaction `Money` (currency + minor units) and gains an **`exchangeRate`** (exact
+  decimal to the base currency) + a **`baseAmount`** (the line's value in the base
+  currency, KRW minor units). **The balance identity moves to the base currency**:
+  `Σ baseDebit == Σ baseCredit` (→ `LEDGER_ENTRY_UNBALANCED`) — so cross-currency lines
+  in one entry are now **allowed** (the previous blanket per-entry `CURRENCY_MISMATCH`
+  rejection is removed; the base amounts are summed, all in KRW, so no mixed-currency
+  arithmetic occurs). The trial balance gains a **base-currency consolidated** total
+  (which balances) alongside the existing per-currency original breakdown.
+- **`baseAmount` is authoritative for the balance** (supplied per line; the rate is
+  recorded as provenance = `baseAmount / amount`). This avoids any "rounding breaks the
+  balance" hazard — the entry balances **exactly** in integer base minor units. A
+  same-base-currency (KRW) line has `rate = 1` and `baseAmount = amount`.
+- **Net-zero for existing/auto-journal entries**: every existing line is KRW; the V5
+  migration backfills `base_currency = currency` (KRW), `base_amount_minor = amount_minor`,
+  `exchange_rate = 1`, and the base-currency balance check on an all-KRW entry is
+  identical to the prior same-currency check. The auto-journal `PostingPolicy`
+  (KRW transactions) produces lines with `baseAmount = money`, `rate = 1` — byte-identical
+  posting. Multi-currency is exercised via **manual posting** (an operator FX adjusting
+  entry) — the FIN-BE-011 path gains an optional per-line base amount; a single-currency
+  manual entry is unchanged.
+- See § Multi-currency journals.
+
 **Forward-declared — OUT (each a later task):**
 - Fuzzy / N:M / split matching + multi-currency statements; period **reopen**.
-- **Multi-currency journals** (each entry is single-currency per entry; the chart +
-  lines carry currency but cross-currency entries are rejected).
+- **FX gain/loss + period-end revaluation** (revaluing a foreign-currency balance at a
+  new rate, booking `FX_GAIN` / `FX_LOSS`) — a distinct mechanic; the 8th increment books
+  multi-currency entries at the supplied rate but does not revalue. A **live FX rate
+  feed** (rates are caller-supplied, not fetched), **multi-currency reconciliation**
+  (cross-currency clearing-account matching), and a **configurable base currency**
+  (fixed KRW in v1) are also forward-declared.
 - **Manual-posting body-hash idempotency conflict** (`IDEMPOTENCY_KEY_CONFLICT` 409
   on a same-key/different-body replay — the 5th increment is replay-safe on the key
   alone; storing the request hash for conflict detection is forward-declared) +
@@ -306,8 +339,8 @@ com.example.finance.ledger/
 │   │   ├── NormalSide.java                ← DEBIT / CREDIT
 │   │   └── repository/LedgerAccountRepository.java   ← outbound port
 │   ├── journal/
-│   │   ├── JournalEntry.java              ← aggregate root; balanced invariant; immutable; sourceRef
-│   │   ├── JournalLine.java               ← (ledgerAccountCode, direction DEBIT/CREDIT, Money)
+│   │   ├── JournalEntry.java              ← aggregate root; balanced invariant; immutable; sourceRef; (8th incr) balance moves to base currency (Σ baseDebit == Σ baseCredit); cross-currency lines allowed
+│   │   ├── JournalLine.java               ← (ledgerAccountCode, direction DEBIT/CREDIT, Money); (8th incr) + exchangeRate(BigDecimal) + baseAmount(Money in base/KRW); base-ccy line: rate=1, baseAmount=amount
 │   │   ├── EntryDirection.java            ← DEBIT / CREDIT
 │   │   ├── PostingPolicy.java             ← transaction-type → balanced lines (pure; § Posting Policy)
 │   │   ├── SourceRef.java                 ← (sourceType, sourceTxnId, sourceEventId) provenance; (5th incr) ofManual(reference, idempotencyKey) → TYPE_MANUAL
@@ -327,7 +360,8 @@ com.example.finance.ledger/
 │   │   └── repository/ReconciliationRepository.java + ReconciliationAccounts.java (clearing-account allow-list)
 │   ├── money/
 │   │   ├── Money.java                     ← long minorUnits + Currency (NO float/double)
-│   │   └── Currency.java                  ← ISO-4217 + minor-unit scale
+│   │   ├── Currency.java                  ← ISO-4217 + minor-unit scale (KRW/USD/EUR/JPY)
+│   │   └── LedgerReportingCurrency.java   ← (8th incr) BASE = KRW (fixed reporting/base currency; configurable forward-declared)
 │   ├── audit/
 │   │   ├── AuditLog.java
 │   │   └── AuditLogRepository.java
@@ -361,10 +395,12 @@ com.example.finance.ledger/
 │       └── ClockPort.java
 ├── infrastructure/
 │   ├── persistence/jpa/                   ← Spring Data + adapters (toDomain/fromDomain)
-│   │   (LedgerAccountJpaEntity/Repository/Adapter, JournalEntryJpaEntity, JournalLineJpaEntity,
+│   │   (LedgerAccountJpaEntity/Repository/Adapter, JournalEntryJpaEntity, JournalLineJpaEntity;
+│   │    (8th incr) JournalLineJpaEntity + exchange_rate/base_amount_minor/base_currency cols; AccountTotalsRow + base sums; accountTotals* queries add base SUM;
 │   │    AuditLogJpaEntity, processed_events;
 │   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity;
 │   │    (4th incr) ReconciliationStatement/Line/Match/DiscrepancyJpaEntity + Repository/Adapter)
+│   │   Flyway: V1 init, V2 period, V3 outbox, V4 reconciliation, (8th incr) V5__add_multi_currency (journal_line cols + backfill KRW rate=1)
 │   ├── outbox/                            ← (3rd incr) per-service transactional outbox (OutboxRow path)
 │   │   ├── LedgerOutboxJpaEntity.java     ← implements OutboxRow (@Table ledger_outbox, MySQL payload TEXT)
 │   │   ├── LedgerOutboxJpaRepository.java ← findPending(Pageable) + countByPublishedAtIsNull
@@ -454,8 +490,13 @@ transaction types post; `HOLD` / `RELEASE` change the wallet's held/available sp
 
 Every produced entry satisfies `Σ debit == Σ credit` by construction; the
 `JournalEntry` factory re-asserts it (defense in depth → `LEDGER_ENTRY_UNBALANCED`
-if a future policy bug produced an unbalanced set). Cross-currency lines in one
-entry → `CURRENCY_MISMATCH` (first increment is single-currency per entry).
+if a future policy bug produced an unbalanced set). The `PostingPolicy` is
+**single-currency** (account-service transactions are KRW): each line is KRW, so
+**(8th increment)** `baseAmount = money` and `rate = 1` — the auto-journal path is
+byte-identical (net-zero) under multi-currency. Cross-currency lines in **one entry**
+are allowed only via **manual posting** (§ Multi-currency journals), balanced in the
+base currency; `CURRENCY_MISMATCH` no longer rejects a multi-currency entry (it remains
+a guard for mixed-currency `Money` arithmetic).
 
 ## Immutability + Reversal (F3)
 
@@ -669,6 +710,69 @@ feed sees operator adjustments tagged by provenance. No new topic.
 replay-safe on the key alone); a maker/checker **approval** workflow for manual
 entries; bulk / multi-entry posting.
 
+## Multi-currency journals (eighth increment — TASK-FIN-BE-014)
+
+The first increment was single-currency per entry (cross-currency lines →
+`CURRENCY_MISMATCH`). The 8th increment lets one entry carry lines in **different
+currencies**, balanced in a fixed **reporting / base currency**.
+
+**Base / reporting currency.** A single ledger-wide base currency — **KRW** in v1
+(a `LedgerReportingCurrency.BASE` constant; a configurable base is forward-declared).
+Every line's value is also expressed in this base currency, and the **double-entry
+identity holds in the base currency** (`Σ baseDebit == Σ baseCredit`).
+
+**Line model.** `JournalLine` keeps its transaction `Money` (`amountMinor` + `currency`)
+and gains:
+- `exchangeRate` — an **exact decimal** rate to the base currency (`baseAmount / amount`),
+  stored as `DECIMAL(20,8)` (NOT a float — F5 is preserved: money stays integer minor
+  units; only the *rate* is a decimal, and it is recorded for provenance, never used to
+  re-derive the balance).
+- `baseAmount` — the line's value in the **base currency** (KRW minor units, a `long`).
+  **This is authoritative for the balance check.** A base-currency (KRW) line has
+  `rate = 1` and `baseAmount = amount`.
+
+**Balance identity (now in base currency).** `JournalEntry`'s factory sums each line's
+`baseAmount` (all in KRW — single-currency arithmetic, no mismatch) and requires
+`Σ baseDebit == Σ baseCredit` exactly → `LEDGER_ENTRY_UNBALANCED` otherwise. The blanket
+"all lines same currency" check is **removed** (cross-currency lines are the point);
+`CURRENCY_MISMATCH` remains only for genuinely mixed-currency `Money` arithmetic, which
+the base-sum path never triggers. Because `baseAmount` is **supplied per line** (not
+re-derived from the rate at balance time), the entry balances in **integer base minor
+units** — there is no "rounding breaks the balance" hazard.
+
+**Sources.**
+- **Auto-journal** (`PostingPolicy`, account-service KRW transactions): each line is
+  KRW → `baseAmount = money`, `rate = 1`. **Byte-identical** to the first increment
+  (net-zero) — the policy is single-currency.
+- **Manual posting** (FIN-BE-011): the request line gains an **optional base amount** for
+  a foreign-currency line (`{ ledgerAccountCode, direction, money:{amount,currency},
+  baseAmount?:{amount,"KRW"} }`); a base-currency line omits it (`baseAmount = amount`,
+  `rate = 1`). The use case builds the lines with their base amounts; the factory
+  validates the base-currency balance. This is how an operator books an FX adjusting
+  entry (e.g. DR a USD clearing account, CR a KRW wallet, balanced in KRW).
+- **Reversal** (F3): swaps debit/credit while preserving each line's transaction `Money`,
+  `exchangeRate`, and `baseAmount` — the reversal balances in base by construction.
+
+**Trial balance + period snapshot.** The per-account totals query gains **base-currency
+sums** alongside the existing per-`(account, currency)` original sums. The trial balance
+response keeps its per-currency breakdown and adds a **base-currency consolidated**
+section (`grandBaseDebitTotal == grandBaseCreditTotal`, in balance). The close-time
+period snapshot likewise records base totals so a multi-currency period still closes in
+balance (the snapshot's grand totals are the base-currency consolidated totals).
+
+**Persistence.** Flyway `V5__add_multi_currency.sql` adds `exchange_rate DECIMAL(20,8)
+NOT NULL DEFAULT 1`, `base_amount_minor BIGINT NOT NULL`, `base_currency VARCHAR(3) NOT
+NULL DEFAULT 'KRW'` to `journal_line` and **backfills existing rows**
+(`base_amount_minor = amount_minor`, `base_currency = currency`, `exchange_rate = 1` —
+all existing lines are KRW, so the backfill is exact and the base-balance check is
+unchanged for them).
+
+**Deferred** (forward-declared): **FX gain/loss** accounts + period-end **revaluation**
+of foreign balances at a new rate (the 8th increment books at the supplied rate, it does
+not revalue); a **live FX rate feed** (rates are caller-supplied); **multi-currency
+reconciliation** (cross-currency clearing-account matching); a **configurable base
+currency** (fixed KRW in v1).
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):
@@ -786,7 +890,7 @@ owns `LedgerOutboxJpaEntity implements OutboxRow` (`ledger_outbox` table, MySQL
 | **F1** idempotent + Tx-protected | ✅ | `processed_events` dedupe (source event id) in the posting `@Transactional`; at-most-once entry per event; **(5th incr)** manual posting reuses the same dedupe keyed by the client `Idempotency-Key` (`manual:{key}`) — replay returns the original entry |
 | **F2** double-entry ledger | ✅ (this is it) | `JournalEntry` balanced invariant `Σdebit == Σcredit`; ledger is downstream of the wallet, never writes back; **(5th incr)** operator manual entries pass the SAME factory balance gate before any persist |
 | **F3** posted entry immutable; reversal-only | ✅ | no UPDATE/DELETE of entries/lines; `REVERSAL` entry references the original; **(5th incr)** manual adjusting entries are equally immutable (a correction is another entry) |
-| **F5** money = minor-units, no float | ✅ | `Money(long, Currency)`; grep-zero float/double in `domain/money`; `CURRENCY_MISMATCH` guard |
+| **F5** money = minor-units, no float | ✅ | `Money(long, Currency)`; grep-zero float/double in `domain/money`; `CURRENCY_MISMATCH` guard. **(8th incr)** money stays integer minor units (both transaction and base amounts are `long`); the `exchangeRate` is an exact `BigDecimal` / `DECIMAL(20,8)` (decimal, **not** a float) recorded for provenance — the balance is checked on integer `baseAmount`s, never re-derived from the rate, so no rounding can create/destroy funds |
 | **F6** immutable audit | ✅ | append-only `audit_log`, same Tx (audit-heavy) |
 | **F7** regulated PII encrypted/masked | N/A (first increment) | the ledger stores account ids + amounts, no new regulated PII (no KYC documents); reuses account-service-masked refs |
 | **F8** reconciliation no auto-close | ✅ (4th increment) | `ReconciliationMatcher` records mismatches as OPEN `ReconciliationDiscrepancy` (operator review queue); resolution is operator-only via `ResolveDiscrepancyUseCase` — no code path auto-closes or adjusts a discrepancy (§ Reconciliation); **(6th/7th increment)** a CLOSED period is closed to reconciliation on both sides — neither resolving an existing discrepancy nor ingesting a new statement dated in the period is allowed (`RECONCILIATION_PERIOD_LOCKED`; § Reconciliation § Period lock) |
@@ -836,7 +940,7 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
 | 4 | Reversal event with no original entry found | → DLT (the original COMPLETED event should have arrived first; per-account ordering makes this a real anomaly, not silently dropped) |
 | 5 | Cross-tenant read JWT (`tenant_id ∉ {finance,*}` and `entitled_domains ∌ finance`) | 403 `TENANT_FORBIDDEN` |
 | 6 | Unknown ledger account / entry on read | 404 `LEDGER_ACCOUNT_NOT_FOUND` / `JOURNAL_ENTRY_NOT_FOUND` |
-| 7 | Cross-currency lines in one entry | 422 `CURRENCY_MISMATCH` |
+| 7 | Cross-currency lines in one entry | **(≤7th incr)** 422 `CURRENCY_MISMATCH`; **(8th incr)** allowed — balanced in the base currency (§ Multi-currency journals) |
 | 8 | HOLD / RELEASE transaction completed | no entry posted (documented; not an error) |
 | 9 | Entry `postedAt` covered by a CLOSED period (late/replayed/backdated) | 422 `LEDGER_PERIOD_CLOSED` — entry rejected, consumer event → DLT after retries (no dedupe row written); no covering closed period → posts normally (net-zero) |
 | 10 | Open a window overlapping an existing period | 422 `ACCOUNTING_PERIOD_OVERLAP` |
@@ -856,6 +960,8 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
 | 24 | **(5th incr)** Manual posting `Idempotency-Key` absent / replayed | absent → 400 `IDEMPOTENCY_KEY_REQUIRED`; replayed key → 200 returning the original entry (no second post — `processed_events` dedupe, F1) |
 | 25 | **(6th incr)** Resolve a discrepancy whose statement date is in a CLOSED period | 422 `RECONCILIATION_PERIOD_LOCKED` (the books are frozen; correct via the next period). No covering CLOSED period / no statement → resolve proceeds (net-zero) |
 | 26 | **(7th incr)** Ingest a statement whose statement date is in a CLOSED period | 422 `RECONCILIATION_PERIOD_LOCKED` thrown before any persist/match/emit — a locked ingest records nothing (atomic). No covering CLOSED period → ingest proceeds (net-zero) |
+| 27 | **(8th incr)** Multi-currency entry whose base amounts do not balance | 422 `LEDGER_ENTRY_UNBALANCED` (`Σ baseDebit ≠ Σ baseCredit`) — the factory rejects before persist; the base amounts are authoritative (no rounding involved at balance time) |
+| 28 | **(8th incr)** A line's currency / base currency unsupported | 422 `CURRENCY_MISMATCH` (`UnsupportedCurrencyException` — outside `{KRW,USD,EUR,JPY}`; the base currency is always KRW in v1) |
 
 ## Testing Strategy
 
@@ -945,6 +1051,23 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
   / no discrepancy / no event emitted; an ingest with a statement date NOT in any
   closed period → 201 (net-zero, matches + OPEN discrepancies as in FIN-BE-010); a
   cross-tenant JWT → 403.
+- **Multi-currency journals (8th increment)**: unit — `JournalEntryTest` (a
+  cross-currency entry whose base amounts balance is accepted [DR USD line baseAmount ==
+  CR KRW line baseAmount]; base amounts NOT balancing → `LEDGER_ENTRY_UNBALANCED`; a
+  single-currency KRW entry is unchanged — `baseAmount = amount`, `rate = 1`); reversal
+  preserves txn money + rate + baseAmount and still balances. `MoneyTest`/conversion
+  (BigDecimal rate, no float; baseAmount supplied not re-derived). Application —
+  `PostManualJournalEntryUseCaseTest` (a foreign-currency manual entry with per-line
+  base amounts posts + emits with the base amounts; an unbalanced-base manual entry →
+  422). Integration (Testcontainers, authoritative): **V5 migration runs + backfills
+  existing KRW lines** (assert an existing/auto-journal KRW entry still posts
+  byte-identically, `base_amount == amount`, `rate = 1`, trial balance == 0); a
+  **manual cross-currency entry** (DR USD clearing / CR KRW wallet, balanced in KRW) →
+  201, persisted with per-line base amounts, and the **trial balance** shows the
+  per-currency breakdown + a **base-currency consolidated** total in balance; a
+  multi-currency period close captures a base-balanced snapshot; an
+  unbalanced-base manual entry → 422 `LEDGER_ENTRY_UNBALANCED`. The auto-journal KRW
+  round-trip (post → entry.posted.v1) is unchanged (net-zero).
 
 ## Required Artifacts mapping (rules/domains/fintech.md § Required Artifacts)
 
