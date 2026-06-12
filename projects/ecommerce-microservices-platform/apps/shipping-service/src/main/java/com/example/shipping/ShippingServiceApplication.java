@@ -7,7 +7,11 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@EnableJpaRepositories(basePackages = "com.example.shipping.infrastructure.persistence")
+// Scan the whole infrastructure tree, not just `.persistence`: carrier webhook
+// idempotency (TASK-BE-294) put ProcessedCarrierWebhookJpaRepository under
+// `.webhook`, which the narrower scope missed → the repository bean was never
+// created → APPLICATION FAILED TO START in the full-stack boot (TASK-BE-358).
+@EnableJpaRepositories(basePackages = "com.example.shipping.infrastructure")
 @EntityScan(basePackages = {"com.example.shipping", "com.example.messaging"})
 @EnableScheduling
 public class ShippingServiceApplication {
