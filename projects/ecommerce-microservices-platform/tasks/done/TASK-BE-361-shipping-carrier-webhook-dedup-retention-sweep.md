@@ -8,7 +8,7 @@ shipping-service: carrier webhook dedup-marker retention/cleanup sweep (ADR-007 
 
 # Status
 
-review
+done
 
 # Owner
 
