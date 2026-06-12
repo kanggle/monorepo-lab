@@ -8,7 +8,7 @@ Add a `PreToolUse[Bash]` advisory hook (`warn-shared-checkout-switch.ps1`) that 
 
 # Status
 
-ready
+done
 
 # Owner
 
