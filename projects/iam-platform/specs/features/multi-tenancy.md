@@ -279,8 +279,8 @@ IAM 는 두 가지 producer-side 선행물을 제공한다.
 - admin-service 가 `GET /api/admin/console/registry` 로 노출 (operator JWT 필수,
   read-only, audit row 없음). 상세 contract:
   [console-registry-api.md](../contracts/http/console-registry-api.md).
-- 응답은 5개 product (`iam`/`wms`/`scm`/`erp`/`finance`) 의 catalog 이며 각
-  product 의 `available` 플래그 + 운영자가 선택 가능한 `tenants` +
+- 응답은 6개 product (`iam`/`wms`/`scm`/`erp`/`finance`/`ecommerce`) 의 catalog
+  이며 각 product 의 `available` 플래그 + 운영자가 선택 가능한 `tenants` +
   `displayName` + `baseRoute` 를 담는다 (console-integration-contract § 2.2
   shape).
 - **operator-scoped + tenant-aware**: platform-scope(`tenant_id='*'`,
@@ -288,12 +288,19 @@ IAM 는 두 가지 producer-side 선행물을 제공한다.
   운영자는 자신의 테넌트 1개만 (`tenants` length ≤ 1). 다른 테넌트의 slug 는
   어떤 product 의 `tenants` 에도 노출되지 않는다 (cross-tenant 격리 회귀 테스트
   필수, 본 문서 [격리 회귀 방지](#격리-회귀-방지) + M6).
-- 5 federated domains (`iam` + `wms` + `scm` + `erp` + `finance`) 는 모두 V1
-  live 이며 `available:true` 로 노출된다 (TASK-BE-305 2026-05-21
+- 6 federated domains (`iam` + `wms` + `scm` + `erp` + `finance` + `ecommerce`)
+  는 모두 V1 live 이며 `available:true` 로 노출된다 (TASK-BE-305 2026-05-21
   reality-alignment — finance Phase 5 COMPLETE 2026-05-19/20 + erp Phase 6
-  COMPLETE 2026-05-20 per ADR-MONO-013 § D6). product catalog 변경은
-  registry 변경만으로 console-web 코드 변경 0 — `available` flag flip 자체가
-  `ServiceTile` 의 interactive/non-interactive 분기를 결정한다.
+  COMPLETE 2026-05-20 per ADR-MONO-013 § D6; `ecommerce` 는 TASK-MONO-240
+  2026-06-13 per ADR-MONO-030 ACCEPTED — `tenant_domain_subscription`
+  `domain_key='ecommerce'` self-seed V0022 로 subscription-driven 바인딩).
+  **렌더는 data-driven (console-web 코드 변경 0)**: 기존 멤버의 `available`
+  flip/`displayName`/`tenants` 변경은 registry 변경만으로 충분하고 `ServiceTile`
+  의 interactive/non-interactive 분기를 결정한다. **단, 새 `productKey` 추가는
+  예외** — console-web `ProductKeySchema` Zod enum 1줄 확장이 필수 (고정-멤버십
+  가드; 누락 시 registry 응답이 `RegistryResponseSchema.parse` 에서 throw →
+  전 catalog degraded). 따라서 새 도메인 추가는 producer item + consumer enum 을
+  동일 atomic PR 로 (Change Rule 3; ADR-MONO-030 § 6 factual correction).
 - tenant 목록은 account-service 가 owns (`tenants` 테이블) 하며 admin-service
   `ListTenantsUseCase` 의 read-through proxy 로 조회. account-service 불가
   시 부분 catalog 가 아니라 503 (degradation 은 콘솔 섹션 한정).

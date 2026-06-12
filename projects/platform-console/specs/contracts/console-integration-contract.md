@@ -36,14 +36,14 @@
 
 | Field | Type | Meaning |
 |---|---|---|
-| `productKey` | string | `iam` \| `wms` \| `scm` \| `erp` \| `finance` |
+| `productKey` | string | `iam` \| `wms` \| `scm` \| `erp` \| `finance` \| `ecommerce` |
 | `displayName` | string | Catalog tile label |
-| `available` | boolean | `false` → rendered as "coming soon"; reserved for future product additions (all 5 federated v1 domains — `iam` + `wms` + `scm` + `erp` + `finance` — are `available:true` as of TASK-BE-305 2026-05-21) |
+| `available` | boolean | `false` → rendered as "coming soon"; reserved for future product additions (all 6 federated v1 domains — `iam` + `wms` + `scm` + `erp` + `finance` + `ecommerce` — are `available:true`; `ecommerce` added by TASK-MONO-240 2026-06-13 per ADR-MONO-030) |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
 | `baseRoute` | string | Console-internal route prefix for the product's screens |
 | `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304 (producer) / TASK-PC-FE-014 (consumer)** — optional extensible per-operator per-product profile attributes carrier. **Omitted entirely** when no attribute is set (not rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from IAM `admin_operators.finance_default_account_id`); the other 4 items always omit it. Authoritative producer shape + emission rule: [`iam-platform/specs/contracts/http/console-registry-api.md § Per-operator profile attributes`](../../../iam-platform/specs/contracts/http/console-registry-api.md). Consumer-side wiring (parser → session → dashboard proxy header) per § 2.4.9.1 Implementation guidance — Option (a) activation. |
 
-- Adding a product (e.g. finance) or flipping `available` is a **registry change only** — zero `console-web` code change (ADR-MONO-013 § 1.2 / D5).
+- Flipping `available` / `displayName` / `tenants` of an **existing** catalog member is a **registry change only** — zero `console-web` code change (the catalog renders the dynamic product list verbatim; ADR-MONO-013 § 1.2 / D5). **Adding a NEW `productKey`, however, requires a one-line consumer-side `ProductKeySchema` Zod enum extension** in `console-web` (`src/shared/api/registry-types.ts`) — the fixed-membership guard asserted by `registry-contract.test.ts` "rejects unknown productKey". An unknown `productKey` makes `RegistryResponseSchema.parse` throw → the whole catalog renders `degraded`. So a new-domain catalog addition lands the producer item + this consumer enum in the **same atomic PR** (TASK-MONO-240 added `ecommerce`; ADR-MONO-030 § 6 factual correction). Render is data-driven (0-change); membership is an explicit extension.
 - **Subscription-driven `tenants` derivation (TASK-BE-322 / ADR-MONO-019 D2/D4 — envelope shape UNCHANGED, zero console-web change)**: each domain product's `tenants[]` is now derived producer-side from the **ACTIVE tenant↔domain subscriptions** IAM account-service owns (the D2 entitlement authority), instead of the prior fixed `tenantSlug == domain` binding. This is a **producer-internal derivation change only** — the response envelope, item shape, and field semantics are identical. In ADR-019 **step 1** the values are still the domain slugs (a backward-compatible self-subscription seed makes the output byte-identical to the pre-BE-322 catalog); real customer-tenant names surface in a later step (step 2) without any console-web change. `iam` continues to federate **all** registered tenants (it never consults the subscription surface).
 
 ### 2.3 Routing

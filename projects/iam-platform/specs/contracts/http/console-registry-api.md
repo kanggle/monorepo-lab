@@ -177,12 +177,12 @@ Returns the data-driven product/tenant catalog the console renders.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `productKey` | string | one of `iam` \| `wms` \| `scm` \| `erp` \| `finance` |
+| `productKey` | string | one of `iam` \| `wms` \| `scm` \| `erp` \| `finance` \| `ecommerce` |
 | `displayName` | string | Catalog tile label |
 | `available` | boolean | `false` → console renders "coming soon" |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
 | `baseRoute` | string | Console-internal route prefix for the product's screens |
-| `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304** — optional extensible carrier for per-operator per-product profile attributes; **omitted entirely** when no attribute is set (never rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from `admin_operators.finance_default_account_id`); the other 4 items always omit it. See § Per-operator profile attributes. |
+| `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304** — optional extensible carrier for per-operator per-product profile attributes; **omitted entirely** when no attribute is set (never rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from `admin_operators.finance_default_account_id`); the other 5 items always omit it. See § Per-operator profile attributes. |
 
 ### Per-operator profile attributes (`operatorContext`) — TASK-BE-304
 
@@ -230,6 +230,7 @@ Per-product emission rule (v1):
 | `scm` | no | — | always omitted |
 | `erp` | no | — | always omitted |
 | `finance` | yes (`{ defaultAccountId }`) | `admin_operators.finance_default_account_id` | when the column is non-null + non-empty after trim; omitted otherwise |
+| `ecommerce` | no | — | always omitted |
 
 The schema reserves `operatorContext` for future per-operator per-product
 attributes; the v1 producer surface populates only the `finance` product item.
@@ -238,8 +239,8 @@ the v1 consumer.
 
 ### Product catalog (static, registry-driven)
 
-The 5 product keys form a fixed catalog (ADR-MONO-013 federated domains).
-`available` is derived:
+The 6 product keys form a fixed catalog (ADR-MONO-013 federated domains +
+ADR-MONO-030 ecommerce marketplace). `available` is derived:
 
 | productKey | displayName | available rule |
 |---|---|---|
@@ -248,13 +249,24 @@ The 5 product keys form a fixed catalog (ADR-MONO-013 federated domains).
 | `scm` | Supply Chain Management | `true` (bootstrapped — V0013/V0015 seeds) |
 | `erp` | Enterprise Resource Planning | `true` (V1 live per ADR-MONO-013 § D6 Phase 6 COMPLETE 2026-05-20 — ADR-MONO-016 ACCEPTED + ERP-BE-001 masterdata-service + ERP-BE-002 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
 | `finance` | Finance | `true` (V1 live per ADR-MONO-013 § D6 Phase 5 COMPLETE 2026-05-19/20 — ADR-MONO-008 ACCEPTED + FIN-BE-001 account-service + FIN-BE-005 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
+| `ecommerce` | E-Commerce Marketplace | `true` (V1 live per ADR-MONO-030 ACCEPTED — multi-vendor marketplace SaaS; bound subscription-driven like wms/scm/erp/finance via `tenant_domain_subscription` `domain_key='ecommerce'` self-seed V0022, TASK-MONO-240 2026-06-13) |
 
-Adding a product or flipping `available` is a **registry change only** — zero
-`console-web` code change (console-integration-contract § 2.2 / ADR-MONO-013
-§ 1.2 / D5). All 5 federated domains (`iam` + `wms` + `scm` + `erp` + `finance`)
-are now V1 live; the `available` flag is `true` across the catalog and the
-console renders each tile as interactive (subject to per-operator `tenants`
-selection per § Tenant selection rule).
+**Render is data-driven (0-change); membership enum is an explicit extension.**
+Flipping `available` / changing `displayName` / changing `tenants` of an
+**existing** catalog member is a **registry change only** — zero `console-web`
+code change (console-integration-contract § 2.2 / ADR-MONO-013 § 1.2 / D5): the
+console renders the dynamic product list verbatim. **Adding a NEW `productKey`,
+however, requires a one-line `console-web` `ProductKeySchema` Zod enum
+extension** — the deliberate fixed-membership guard asserted by
+`registry-contract.test.ts` "rejects unknown productKey". A registry item whose
+`productKey` is absent from that enum makes `RegistryResponseSchema.parse` throw
+→ the whole catalog renders `degraded` (not a crash). So the producer-side
+catalog addition and the consumer-side enum extension must land in the **same
+atomic PR** (TASK-MONO-240 — ADR-MONO-030 § 6 factual correction). All 6
+federated domains (`iam` + `wms` + `scm` + `erp` + `finance` + `ecommerce`) are
+now V1 live; the `available` flag is `true` across the catalog and the console
+renders each tile as interactive (subject to per-operator `tenants` selection
+per § Tenant selection rule).
 
 ### Tenant selection rule
 
@@ -284,7 +296,8 @@ and projected here (ADR-019 **D4**). This **replaces** the prior fixed
 registered+ACTIVE intersection (3) are unchanged and still apply on top.
 
 **Net-zero (ADR-019 step 1)**: a backward-compatible seed has each domain-slug
-tenant self-subscribe (`(wms,wms)`, `(scm,scm)`, `(erp,erp)`, `(finance,finance)`),
+tenant self-subscribe (`(wms,wms)`, `(scm,scm)`, `(erp,erp)`, `(finance,finance)`,
+and `(ecommerce,ecommerce)` per V0022 / TASK-MONO-240),
 so `subscriptions(domain_key) ∩ activeTenants` reproduces the legacy slug
 binding **byte-identically**. The response envelope, item shape, and values are
 unchanged in step 1; real customer-tenant subscriptions surface in a later step
@@ -342,7 +355,11 @@ Error envelope: the standard
    a deployed integration (console-integration-contract § 5).
 3. Product catalog membership / `available` rules are documented here and in
    [multi-tenancy.md](../../features/multi-tenancy.md) "Platform Console
-   Registry" — keep both in sync in the same PR.
+   Registry" — keep both in sync in the same PR. **Adding a new `productKey`
+   additionally requires the consumer-side `console-web` `ProductKeySchema` Zod
+   enum extension** (+ its `registry-contract.test.ts` membership assertion) in
+   the same atomic PR — render is data-driven but membership is a fixed-set
+   guard (TASK-MONO-240 added `ecommerce`; ADR-MONO-030 § 6 factual correction).
 4. Adding a new `operatorContext.*` attribute (TASK-BE-304 extensible carrier)
    is **additive** when (a) it is optional + omitted-by-default and (b) the
    attribute is per-operator + scoped via `resolveOperator(operator.operatorId())`

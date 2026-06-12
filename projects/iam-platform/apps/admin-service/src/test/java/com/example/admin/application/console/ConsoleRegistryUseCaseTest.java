@@ -142,11 +142,11 @@ class ConsoleRegistryUseCaseTest {
     }
 
     @Test
-    @DisplayName("catalog: exactly 5 products; erp/finance available=true + tenants=[] when their slugs not registered (TASK-BE-305)")
-    void catalog_five_products_erp_finance_available_noRegisteredTenants() {
-        // Seeds only fan-platform (no erp/finance tenant rows) — the tenant-selection
-        // rule returns tenants:[] for erp/finance (slug not in activeTenants), but
-        // available stays true (AC-1 / TASK-BE-305 reality-alignment).
+    @DisplayName("catalog: exactly 6 products; erp/finance/ecommerce available=true + tenants=[] when their slugs not registered (TASK-BE-305 / TASK-MONO-240)")
+    void catalog_six_products_erp_finance_ecommerce_available_noRegisteredTenants() {
+        // Seeds only fan-platform (no erp/finance/ecommerce tenant rows) — the
+        // tenant-selection rule returns tenants:[] for those (slug not in
+        // activeTenants), but available stays true (AC-1 / TASK-BE-305 + TASK-MONO-240).
         stubOperator("op-1", "*");
         stubTenants(tenant("fan-platform", "ACTIVE"));
         stubBackwardCompatSubscriptions();
@@ -154,11 +154,16 @@ class ConsoleRegistryUseCaseTest {
         ConsoleRegistry r = useCase().execute(new OperatorContext("op-1", "jti"));
 
         assertThat(r.products()).extracting(ConsoleProduct::productKey)
-                .containsExactly("iam", "wms", "scm", "erp", "finance");
+                .containsExactly("iam", "wms", "scm", "erp", "finance", "ecommerce");
         assertThat(product(r, "erp").available()).isTrue();
         assertThat(product(r, "erp").tenants()).isEmpty();
         assertThat(product(r, "finance").available()).isTrue();
         assertThat(product(r, "finance").tenants()).isEmpty();
+        // TASK-MONO-240: ecommerce is the 6th catalog member, available=true,
+        // tenants:[] (no ecommerce subscription in the backward-compat seed).
+        assertThat(product(r, "ecommerce").available()).isTrue();
+        assertThat(product(r, "ecommerce").tenants()).isEmpty();
+        assertThat(product(r, "ecommerce").baseRoute()).isEqualTo("/ecommerce");
         assertThat(product(r, "iam").baseRoute()).isEqualTo("/iam");
     }
 
