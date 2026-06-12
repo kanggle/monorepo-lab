@@ -48,7 +48,9 @@ unknown fields):
 
 - **Idempotent** — `eventId` is recorded in `processed_events` in the same Tx as the
   entry; a re-delivered event posts nothing (at-most-once entry).
-- **Terminal** — the first-increment consumer does NOT re-emit (no outbox).
+- **GL/AP feed (3rd increment)** — posting an entry / closing a period appends a
+  `finance.ledger.*` outbox row in the same Tx (§ Published — emitted); the consumer
+  itself does not synchronously re-publish (the relay does, asynchronously).
 - **Unmappable / malformed envelope** → DLT (no poison loop).
 - **Unbalanced policy result** (a guard, should never happen) → `LEDGER_ENTRY_UNBALANCED`
   → DLT after retries; the books never persist unbalanced.
@@ -56,28 +58,43 @@ unknown fields):
   makes a missing original a real anomaly, surfaced not swallowed).
 - The ledger never mutates account-service state or writes to `finance_db`.
 
-## Published (forward-declared — NOT emitted in the first increment)
+## Published — emitted (3rd increment, TASK-FIN-BE-009: the GL/AP feed)
 
-The first increment is a **terminal consumer** (no outbox). These topics are the
-forward interface for the deferred increments and are declared here so consumers do
-not re-derive them:
+From the **3rd increment** ledger-service is a **publishing consumer**: it gains a
+**per-service transactional outbox** (`OutboxRow` path — see architecture.md
+§ Event publication) and emits these two events as the forward interface for an
+external accounting / ERP / AP system. Both are appended **inside the domain write
+`@Transactional`** (atomic — the feed can never diverge from the books) and relayed
+to Kafka at-least-once (downstream consumers dedupe on the envelope `eventId`).
 
-| Topic | When (deferred increment) | Payload sketch |
+Each event is wrapped in the **canonical envelope** (the same shape ledger-service's
+own consumer parses):
+```json
+{ "eventId": "<uuidv7>", "eventType": "finance.ledger.entry.posted",
+  "occurredAt": "<ISO-8601>", "tenantId": "finance",
+  "source": "finance-platform-ledger-service",
+  "aggregateType": "JournalEntry", "aggregateId": "<entryId>",
+  "payload": { … } }
+```
+
+| Topic | Appended when | `payload` |
 |---|---|---|
-| `finance.ledger.entry.posted.v1` | each journal entry posted — the **GL/AP feed** for an external accounting system | `{ entryId, postedAt, lines:[{ledgerAccountCode,direction,money}], source }` |
-| `finance.ledger.period.closed.v1` | an accounting period is locked | `{ periodId, from, to, closedAt, entryCount }` |
+| `finance.ledger.entry.posted.v1` | every posted `JournalEntry` (auto-journal + reversal), in `PostJournalEntryUseCase.post`'s `@Transactional` | `{ entryId, postedAt, lines:[{ ledgerAccountCode, direction: "DEBIT"\|"CREDIT", money:{amount,currency} }], source:{ sourceType, sourceTransactionId, sourceEventId }, reversalOfEntryId? }` |
+| `finance.ledger.period.closed.v1` | an accounting period closes, in `CloseAccountingPeriodUseCase.close`'s `@Transactional` | `{ periodId, from, to, closedAt, entryCount }` |
 
-When the GL/AP-feed increment lands, the service gains an outbox (it becomes a
-publishing consumer); until then it emits nothing.
+- **Money** is `{amount:"<minor-units-string>", currency}` (F5 — never a float).
+- **No regulated PII** (F7) — ids + amounts only; the GL feed carries no KYC detail.
+- **partition key**: `entry.posted` keyed by `entryId`, `period.closed` by `periodId`
+  (entries/periods are independent — no cross-entry ordering requirement).
+- **No in-repo consumer yet** — this increment ships the producer + topics only (the
+  external GL/AP system is the intended consumer). `HOLD`/`RELEASE` post no entry, so
+  they emit no `entry.posted`; a posting rejected by the closed-period guard rolls the
+  Tx back → no `entry.posted` row.
 
-> **Period-close increment (TASK-FIN-BE-008) — emission still deferred.** The
-> period-close increment delivers the `AccountingPeriod` lifecycle + posting guard
-> + close snapshot + read endpoints **without** introducing an outbox: the service
-> stays a **terminal consumer**, so `finance.ledger.period.closed.v1` is **NOT yet
-> emitted** (the topic stays forward-declared above). Emission lands with the
-> GL/AP-feed increment that introduces the outbox — that increment will emit both
-> `entry.posted.v1` and `period.closed.v1`. This keeps outbox introduction a single,
-> deliberate step rather than smuggling it into the period-close increment.
+> **Outbox path (not the libs `OutboxWriter`).** ledger-service keeps the libs
+> `OutboxAutoConfiguration` excluded (its `ProcessedEventJpaEntity` would collide with
+> the ledger's own consumer-dedupe `processed_events`) and uses the
+> `AbstractOutboxPublisher` + per-service `LedgerOutboxJpaEntity` path (ADR-MONO-004).
 
 ## Relationship to platform / rules
 

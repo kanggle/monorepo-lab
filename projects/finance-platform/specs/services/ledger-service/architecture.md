@@ -13,8 +13,10 @@ All implementation tasks targeting this service must follow this declaration,
 > § D3 (declared in `PROJECT.md` Service Map v2). The **first increment**
 > (TASK-FIN-BE-007 — event-driven auto-journal + read) is live; the **second
 > increment** (TASK-FIN-BE-008 — period close: `AccountingPeriod` lifecycle +
-> posting guard + close snapshot, emission deferred) is specified by § Accounting
-> Period + § Increment Scope. GL/AP feed, reconciliation matching, manual journal
+> posting guard + close snapshot, emission deferred) is live; the **third increment**
+> (TASK-FIN-BE-009 — GL/AP feed: the transactional outbox + `finance.ledger.{entry.posted,
+> period.closed}.v1` emission, terminal→publishing consumer) is specified by
+> § Event publication + § Increment Scope. Reconciliation matching, manual journal
 > posting, and multi-currency remain forward-declared (§ Increment Scope). The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
@@ -37,8 +39,8 @@ All implementation tasks targeting this service must follow this declaration,
 | Deployable unit | `apps/ledger-service/` |
 | Data store | MySQL `finance_ledger_db` (Flyway) — separate schema from account-service `finance_db` |
 | Event consumption | Kafka — `finance.transaction.completed.v1` / `finance.transaction.reversed.v1` (account-service outbox) |
-| Event publication | None in the first increment (terminal consumer; `finance.ledger.entry.posted.v1` GL/AP feed forward-declared) |
-| Outbound integration | None — GL/AP/ERP feed is v2 (fintech.md § Integration Boundaries) |
+| Event publication | **(3rd increment, TASK-FIN-BE-009)** `finance.ledger.entry.posted.v1` (every posted entry — the GL/AP feed) + `finance.ledger.period.closed.v1` (on period close), via a per-service transactional outbox (`OutboxRow` path). 1st/2nd increments published nothing (terminal consumer); the 3rd makes it a **publishing consumer**. |
+| Outbound integration | The GL/AP/ERP feed is the **emitted topics** above (the forward interface for an external accounting system); no synchronous outbound call (no in-repo consumer of the feed yet) |
 
 ### Service Type Composition
 
@@ -106,11 +108,26 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   forward-declared in the events contract). This mirrors the erp first-increment
   discipline — slice the depth, do not pull the outbox in early.
 
+**Third increment — IN (TASK-FIN-BE-009, GL/AP feed — the outbox):**
+- ledger-service transitions **terminal consumer → publishing consumer**: it gains
+  a **transactional outbox** and emits the two forward-declared events as the
+  external accounting/ERP/AP forward interface — **`finance.ledger.entry.posted.v1`**
+  (appended for every posted entry in the posting `@Transactional`) +
+  **`finance.ledger.period.closed.v1`** (appended on close in the close
+  `@Transactional`). Atomic — the outbox row commits with the domain write (the GL
+  feed can never diverge from the books). See § Event publication.
+- **Decision — per-service `OutboxRow` path, NOT the libs `OutboxWriter`**: the libs
+  `OutboxAutoConfiguration` (`OutboxWriter`) entity-scans the libs
+  `ProcessedEventJpaEntity` (mapped to `processed_events`), which would **collide**
+  with ledger-service's OWN `processed_events` consumer-dedupe table (different
+  schema — the collision that made the 1st increment exclude `OutboxAutoConfiguration`).
+  So this increment uses the **`AbstractOutboxPublisher` + per-service
+  `LedgerOutboxJpaEntity implements OutboxRow`** path (ADR-MONO-004; wms
+  inbound/inventory/outbound precedent): ledger keeps `OutboxAutoConfiguration` +
+  `OutboxMetricsAutoConfiguration` **excluded** and owns a `ledger_outbox` table +
+  relay. The consumer-dedupe path is untouched.
+
 **Forward-declared — OUT (each a later task):**
-- **GL/AP feed emission** (`finance.ledger.entry.posted.v1` via outbox — the
-  forward interface for an external accounting/ERP system; the increment that
-  introduces the outbox, and with it the deferred `finance.ledger.period.closed.v1`
-  emission).
 - **Reconciliation matching** (`reconciliation_discrepancy` real matching vs
   external statements — account-service models it as a placeholder, F8).
 - **Manual journal posting API** (operator-initiated adjusting entries).
@@ -158,7 +175,11 @@ It MUST NOT:
 - Post an **unbalanced** entry, or mutate a posted entry (immutability, F3).
 - Couple to external GL/ERP/bank SDKs in `domain/` or `application/` (v2 feed
   sits behind an `infrastructure/` port).
-- Emit events or run an outbox in the first increment (terminal consumer).
+- Mutate account-service state or write back to `finance_db` when publishing the
+  GL/AP feed — the emitted events (3rd increment) are a one-way downstream feed, not
+  a callback into the wallet. (The 1st/2nd increments emitted nothing; the 3rd adds
+  the per-service outbox — `OutboxRow` path, libs `OutboxAutoConfiguration` still
+  excluded — see § Event publication.)
 
 ---
 
@@ -227,25 +248,32 @@ com.example.finance.ledger/
 │        AccountingPeriodOverlapException, AccountingPeriodAlreadyClosedException,
 │        AccountingPeriodInvalidWindowException)
 ├── application/                           ← use cases + outbound ports
-│   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit (one Tx)
+│   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit → (3rd incr) append entry.posted outbox row (one Tx)
 │   ├── PostFromTransactionUseCase.java    ← maps an account-service transaction envelope → PostJournalEntry (via PostingPolicy); idempotent on sourceEventId
 │   ├── QueryLedgerUseCase.java            ← read: entry detail / per-account entries + balance / trial balance
 │   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
-│   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit
+│   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit → (3rd incr) append period.closed outbox row
 │   ├── QueryAccountingPeriodUseCase.java  ← (2nd incr) read: list periods / period detail + snapshot
 │   ├── ActorContext.java
 │   ├── view/ (JournalEntryView, JournalLineView, LedgerAccountBalanceView, TrialBalanceView)
 │   └── port/outbound/
 │       ├── ProcessedEventStore.java       ← dedupe port (processed_events, source event id)
+│       ├── LedgerEventPublisher.java      ← (3rd incr) append-side port: publishEntryPosted / publishPeriodClosed (called in-Tx)
 │       └── ClockPort.java
 ├── infrastructure/
 │   ├── persistence/jpa/                   ← Spring Data + adapters (toDomain/fromDomain)
 │   │   (LedgerAccountJpaEntity/Repository/Adapter, JournalEntryJpaEntity, JournalLineJpaEntity,
 │   │    AuditLogJpaEntity, processed_events;
 │   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity)
+│   ├── outbox/                            ← (3rd incr) per-service transactional outbox (OutboxRow path)
+│   │   ├── LedgerOutboxJpaEntity.java     ← implements OutboxRow (@Table ledger_outbox, MySQL payload TEXT)
+│   │   ├── LedgerOutboxJpaRepository.java ← findPending(Pageable) + countByPublishedAtIsNull
+│   │   ├── LedgerOutboxPublisher.java     ← extends AbstractOutboxPublisher; @Scheduled relay; TopicResolver finance.ledger.X→.v1
+│   │   └── OutboxLedgerEventPublisher.java ← LedgerEventPublisher impl: build canonical envelope → save ledger_outbox row
 │   ├── security/  (SecurityConfig, AllowedIssuersValidator, TenantClaimValidator,
 │   │               ActorContextJwtAuthenticationConverter, ServiceLevelOAuth2Config)
-│   └── config/ (ClockConfig, JpaConfig, KafkaConsumerConfig, ChartOfAccountsSeedConfig)
+│   └── config/ (ClockConfig, JpaConfig, KafkaConsumerConfig [also the outbox-relay KafkaTemplate],
+│                ChartOfAccountsSeedConfig, (3rd incr) OutboxConfig [TransactionTemplate + ledger.outbox.* props])
 ├── messaging/                             ← inbound event adapter
 │   ├── TransactionEventConsumer.java      ← @KafkaListener finance.transaction.{completed,reversed}.v1
 │   │                                          group finance-ledger-v1, @RetryableTopic + DLT, manual ACK, dedupe
@@ -447,9 +475,44 @@ platform-console client). The `{ledgerAccountCode}` path segment carries the
 
 Consumer group `finance-ledger-v1`; `@RetryableTopic` (3 retries → DLT); manual ACK;
 malformed / unmappable envelope → DLT (not poison-looped); dedupe via
-`processed_events`. **Terminal** — no re-emission, no outbox (grep-zero
-`KafkaTemplate`/publish in the posting path). Payload shapes →
+`processed_events`. Payload shapes →
 [`finance-ledger-events.md`](../../contracts/events/finance-ledger-events.md).
+
+## Event publication (third increment — TASK-FIN-BE-009: the GL/AP feed)
+
+From the 3rd increment ledger-service is a **publishing consumer** — it emits two
+events as the forward interface for an external accounting/ERP/AP system, via a
+**per-service transactional outbox** (NOT a synchronous publish).
+
+| Topic | Appended when | Payload (in the canonical envelope) |
+|---|---|---|
+| `finance.ledger.entry.posted.v1` | every posted `JournalEntry` (auto-journal + reversal), in `PostJournalEntryUseCase.post`'s `@Transactional` | `{ entryId, postedAt, lines:[{ledgerAccountCode, direction, money}], source:{sourceType, sourceTransactionId, sourceEventId}, reversalOfEntryId? }` |
+| `finance.ledger.period.closed.v1` | a period closes, in `CloseAccountingPeriodUseCase.close`'s `@Transactional` | `{ periodId, from, to, closedAt, entryCount }` |
+
+**Transactional outbox (atomic).** The append-side `LedgerEventPublisher` builds the
+canonical envelope (the same shape ledger-service's own consumer parses —
+`{eventId, eventType, occurredAt, tenantId, source, aggregateType, aggregateId,
+payload}`, `source = "finance-platform-ledger-service"`) and persists a
+`ledger_outbox` row **inside the same `@Transactional`** as the domain write. The
+row commits with the entry+audit (or close+snapshot) or not at all — the GL feed
+can never diverge from the books (F1/T3). A guard-rejected posting into a CLOSED
+period rolls the whole Tx back → **no** `entry.posted` row.
+
+**Relay (`OutboxRow` path).** `LedgerOutboxPublisher extends
+AbstractOutboxPublisher<LedgerOutboxJpaEntity>` (`libs/java-messaging`, ADR-MONO-004)
+polls `ledger_outbox` (`published_at IS NULL`, created-at order), publishes via the
+EXISTING `KafkaTemplate` (already present for `@RetryableTopic` DLT), and marks the
+row published after the Kafka ACK (at-least-once; downstream consumers dedupe on the
+envelope `eventId`). `TopicResolver`: `finance.ledger.X → finance.ledger.X.v1`.
+Exponential backoff + a `ledger.outbox.pending.count` gauge come from the lib.
+
+**Why the `OutboxRow` path, not the libs `OutboxWriter`.** The libs
+`OutboxAutoConfiguration` entity-scans the libs `ProcessedEventJpaEntity` (mapped to
+`processed_events`), which collides with ledger-service's OWN `processed_events`
+consumer-dedupe table. ledger keeps `OutboxAutoConfiguration` +
+`OutboxMetricsAutoConfiguration` **excluded** (1st-increment stance unchanged) and
+owns `LedgerOutboxJpaEntity implements OutboxRow` (`ledger_outbox` table, MySQL
+`payload TEXT`). The consumer-dedupe path is untouched (§ Idempotency / dedupe).
 
 ## fintech Mandatory Rule mapping (rules/domains/fintech.md)
 
@@ -480,12 +543,15 @@ malformed / unmappable envelope → DLT (not poison-looped); dedupe via
 |---|---|---|---|
 | In | Kafka `finance.transaction.{completed,reversed}.v1` | TCP | account-service outbox; partition key `accountId` (per-account ordering) |
 | In | finance `gateway-service` (v1 deferred) / direct JWT | HTTP `/api/finance/ledger/**` | tenant-validated read JWT |
-| Out | MySQL `finance_ledger_db` | JDBC | ledger_account, journal_entry, journal_line, audit_log, processed_events |
+| Out | MySQL `finance_ledger_db` | JDBC | ledger_account, journal_entry, journal_line, audit_log, processed_events; **(3rd incr)** `ledger_outbox` |
+| Out | **(3rd incr)** Kafka `finance.ledger.{entry.posted,period.closed}.v1` | TCP | GL/AP feed — per-service outbox relay (`OutboxRow` path); partition key `entryId` / `periodId` |
 | Out | IAM `/oauth2/jwks` | HTTPS | RS256 verification (libs/java-security) |
 | Out (obs) | OTLP collector | HTTPS | traces |
 
-ledger-service is a **leaf consumer** — it consumes account-service events and
-exposes reads; it does not call other services or write back.
+ledger-service is a **publishing consumer** (3rd increment) — it consumes
+account-service events, exposes reads, and emits a one-way **GL/AP feed**
+(`finance.ledger.*`) for an external accounting system; it never calls other
+services synchronously or writes back to `finance_db` (the feed is downstream-only).
 
 ## Observability
 
@@ -512,6 +578,9 @@ exposes reads; it does not call other services or write back.
 | 11 | Open a window with `from ≥ to` | 422 `ACCOUNTING_PERIOD_INVALID_WINDOW` |
 | 12 | Close an already-closed period | 409 `ACCOUNTING_PERIOD_ALREADY_CLOSED` |
 | 13 | Period id unknown on close/detail | 404 `ACCOUNTING_PERIOD_NOT_FOUND` |
+| 14 | **(3rd incr)** Kafka publish fails (broker down) | the `ledger_outbox` row stays `published_at IS NULL`; the relay retries with exponential backoff (at-least-once); the domain write already committed (transactional outbox) |
+| 15 | **(3rd incr)** Posting rejected (e.g. closed period) before the outbox append | the whole posting `@Transactional` rolls back → no entry AND no `entry.posted` outbox row (atomic) |
+| 16 | **(3rd incr)** Re-delivered GL-feed event downstream (at-least-once) | consumers dedupe on the envelope `eventId` (no in-repo consumer yet; documented for the external GL/AP system) |
 
 ## Testing Strategy
 
@@ -539,6 +608,20 @@ exposes reads; it does not call other services or write back.
   entryCount; a subsequent `transaction.completed.v1` into the closed window posts
   **no** entry (→ DLT, `LEDGER_PERIOD_CLOSED`); a non-overlapping window opens; an
   overlapping window → 422; re-close → 409; list/detail return the contract shapes.
+- **GL/AP feed (3rd increment)**: unit — `LedgerEventPublisher` builds the exact
+  envelope + payload for both events (entry-posted incl. `reversalOfEntryId`;
+  period-closed); `LedgerOutboxPublisher` topic resolution
+  (`finance.ledger.entry.posted → finance.ledger.entry.posted.v1`);
+  `PostJournalEntryUseCase` / `CloseAccountingPeriodUseCase` invoke the publisher
+  in-Tx (mock port, verify call + after-save ordering). Integration (real Kafka,
+  the authoritative round-trip): produce `transaction.completed.v1` → entry posts →
+  a `ledger_outbox` row appears → the relay publishes → **consume
+  `finance.ledger.entry.posted.v1`** and assert the envelope + balanced-lines
+  payload; close a period → **consume `finance.ledger.period.closed.v1`** and assert
+  `{periodId, from, to, closedAt, entryCount}`; a guard-rejected posting into a
+  CLOSED period emits **no** `entry.posted` row (atomic rollback). App boot proves
+  no `processed_events` duplicate-mapping (OutboxRow path; `OutboxAutoConfiguration`
+  excluded).
 
 ## Required Artifacts mapping (rules/domains/fintech.md § Required Artifacts)
 
