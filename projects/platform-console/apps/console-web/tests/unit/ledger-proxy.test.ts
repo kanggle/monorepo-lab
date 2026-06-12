@@ -56,6 +56,9 @@ import { GET as periodGET } from '@/app/api/ledger/periods/[periodId]/route';
 import { GET as entryGET } from '@/app/api/ledger/entries/[entryId]/route';
 import { GET as discrepanciesGET } from '@/app/api/ledger/reconciliation/discrepancies/route';
 import { GET as discrepancyGET } from '@/app/api/ledger/reconciliation/discrepancies/[id]/route';
+import { POST as resolvePOST } from '@/app/api/ledger/reconciliation/discrepancies/[id]/resolve/route';
+import * as resolveRoute from '@/app/api/ledger/reconciliation/discrepancies/[id]/resolve/route';
+import * as discrepancyRoute from '@/app/api/ledger/reconciliation/discrepancies/[id]/route';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(
@@ -273,5 +276,196 @@ describe('GET /api/ledger/reconciliation/discrepancies/{id} proxy (read-only)', 
     expect(res.status).toBe(404);
     const b = await res.json();
     expect(b.code).toBe('RECONCILIATION_DISCREPANCY_NOT_FOUND');
+  });
+});
+
+// ===========================================================================
+// POST .../discrepancies/{id}/resolve — the ONLY mutation proxy (PC-FE-073).
+// ===========================================================================
+
+const RESOLVED = {
+  discrepancyId: 'd-1',
+  type: 'AMOUNT_MISMATCH',
+  externalRef: 'bank-1',
+  journalEntryId: 'je-9',
+  expectedMinor: '100',
+  actualMinor: '105',
+  currency: 'KRW',
+  status: 'RESOLVED',
+  resolution: {
+    resolutionType: 'WRITTEN_OFF',
+    note: 'fx gap',
+    resolvedBy: 'op-1',
+    resolvedAt: '2026-05-20T00:00:00Z',
+  },
+};
+
+describe('discrepancy resolve proxy — method exposure', () => {
+  it('the discrepancy-by-id route stays GET-only (the resolve is a SEPARATE sub-route)', () => {
+    expect(typeof discrepancyRoute.GET).toBe('function');
+    expect((discrepancyRoute as Record<string, unknown>).POST).toBeUndefined();
+  });
+
+  it('the resolve route: POST only (no GET/PUT/PATCH/DELETE)', () => {
+    expect(typeof resolveRoute.POST).toBe('function');
+    expect((resolveRoute as Record<string, unknown>).GET).toBeUndefined();
+    expect((resolveRoute as Record<string, unknown>).PUT).toBeUndefined();
+    expect((resolveRoute as Record<string, unknown>).PATCH).toBeUndefined();
+    expect((resolveRoute as Record<string, unknown>).DELETE).toBeUndefined();
+  });
+});
+
+describe('POST /api/ledger/reconciliation/discrepancies/{id}/resolve', () => {
+  function resolveReq(id: string, body: unknown) {
+    return resolvePOST(
+      new Request(
+        `http://console.local/api/ledger/reconciliation/discrepancies/${id}/resolve`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
+      { params: Promise.resolve({ id }) },
+    );
+  }
+
+  it('forwards body { resolutionType, note } with the domain-facing token; NO Idempotency-Key, NO X-Operator-Reason, NO X-Tenant-Id', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: RESOLVED, meta: { timestamp: 'x' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await resolveReq('d-1', {
+      resolutionType: 'WRITTEN_OFF',
+      note: 'fx gap',
+    });
+    expect(res.status).toBe(200);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect((init as RequestInit).method).toBe('POST');
+    expect(String(url)).toBe(
+      'http://finance.local/api/finance/ledger/reconciliation/discrepancies/d-1/resolve',
+    );
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    // THE KEY DEVIATION: NO Idempotency-Key (the producer defines none).
+    expect(h['Idempotency-Key']).toBeUndefined();
+    expect(h['X-Operator-Reason']).toBeUndefined();
+    expect(h['X-Tenant-Id']).toBeUndefined();
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body).toEqual({ resolutionType: 'WRITTEN_OFF', note: 'fx gap' });
+    expect(body.idempotencyKey).toBeUndefined();
+    // The resolved discrepancy is forwarded (status RESOLVED + resolution).
+    const out = await res.json();
+    expect(out.status).toBe('RESOLVED');
+  });
+
+  it('empty note → 400 VALIDATION_ERROR with NO upstream call', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await resolveReq('d-1', {
+      resolutionType: 'WRITTEN_OFF',
+      note: '',
+    });
+    expect(res.status).toBe(400);
+    const b = await res.json();
+    expect(b.code).toBe('VALIDATION_ERROR');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('whitespace-only note → 400 VALIDATION_ERROR with NO upstream call', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await resolveReq('d-1', {
+      resolutionType: 'WRITTEN_OFF',
+      note: '   ',
+    });
+    expect(res.status).toBe(400);
+    const b = await res.json();
+    expect(b.code).toBe('VALIDATION_ERROR');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('out-of-vocabulary resolutionType → 400 VALIDATION_ERROR with NO upstream call', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await resolveReq('d-1', {
+      resolutionType: 'NOT_A_REAL_TYPE',
+      note: 'x',
+    });
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('409 RECONCILIATION_ALREADY_RESOLVED passes through inline-actionably', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ledgerError('RECONCILIATION_ALREADY_RESOLVED', 409)),
+    );
+    const res = await resolveReq('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    });
+    expect(res.status).toBe(409);
+    const b = await res.json();
+    expect(b.code).toBe('RECONCILIATION_ALREADY_RESOLVED');
+  });
+
+  it('422 RECONCILIATION_PERIOD_LOCKED passes through inline-actionably', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ledgerError('RECONCILIATION_PERIOD_LOCKED', 422)),
+    );
+    const res = await resolveReq('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    });
+    expect(res.status).toBe(422);
+    const b = await res.json();
+    expect(b.code).toBe('RECONCILIATION_PERIOD_LOCKED');
+  });
+
+  it('404 RECONCILIATION_DISCREPANCY_NOT_FOUND passes through', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(ledgerError('RECONCILIATION_DISCREPANCY_NOT_FOUND', 404)),
+    );
+    const res = await resolveReq('nope', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('no IAM session → 401, no upstream call', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await resolveReq('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    });
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('503 from the ledger → 503 (ledger section degrades only)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ledgerError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await resolveReq('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    });
+    expect(res.status).toBe(503);
   });
 });

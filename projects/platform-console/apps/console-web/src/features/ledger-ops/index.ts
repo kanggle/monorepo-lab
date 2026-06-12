@@ -31,6 +31,7 @@ export { JournalEntryLookup } from './components/JournalEntryLookup';
 export { JournalEntryDetail } from './components/JournalEntryDetail';
 export { DiscrepancyQueue } from './components/DiscrepancyQueue';
 export { DiscrepancyDetail } from './components/DiscrepancyDetail';
+export { DiscrepancyResolveDialog } from './components/DiscrepancyResolveDialog';
 export { getLedgerSectionState } from './api/ledger-state';
 export type { LedgerSectionState } from './api/ledger-state';
 export type {
@@ -45,6 +46,8 @@ export type {
   Discrepancy,
   DiscrepanciesResponse,
   DiscrepanciesQueryParams,
+  ResolveDiscrepancyBody,
+  ResolutionType,
   Money,
   LedgerMeta,
 } from './api/types';
@@ -56,5 +59,6 @@ export {
   KNOWN_PERIOD_STATUSES,
   KNOWN_DISCREPANCY_TYPES,
   KNOWN_DISCREPANCY_STATUSES,
+  RESOLUTION_TYPES,
   DEFAULT_CURRENCY_SCALES,
 } from './api/types';

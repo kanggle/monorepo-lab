@@ -84,6 +84,7 @@ import {
   getJournalEntry,
   listDiscrepancies,
   getDiscrepancy,
+  resolveDiscrepancy,
 } from '@/features/ledger-ops/api/ledger-api';
 import { ApiError, LedgerUnavailableError } from '@/shared/api/errors';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
@@ -340,15 +341,18 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
     expect(calls.length).toBe(6);
     for (const [, init] of calls) {
       const h = init.headers as Record<string, string>;
+      // The SIX reads are pure GETs with NO mutation artifacts. (The resolve
+      // mutation — the ONLY POST — is asserted separately in section 7.)
       expect(init.method).toBe('GET');
       expect(init.body).toBeUndefined();
       expect(h['Idempotency-Key']).toBeUndefined();
       expect(h['X-Operator-Reason']).toBeUndefined();
       expect(h['Content-Type']).toBeUndefined();
     }
-    // The api module exports ONLY read functions — no ledger write
-    // (manual posting / revaluation / settlement / statement ingest /
-    // discrepancy resolve), no entry list/search (id-driven).
+    // The api module exports the six read functions + EXACTLY ONE mutation
+    // (`resolveDiscrepancy` — TASK-PC-FE-073). No OTHER ledger write (manual
+    // posting / revaluation / settlement / statement ingest), no entry
+    // list/search (id-driven).
     const mod = await import('@/features/ledger-ops/api/ledger-api');
     expect(Object.keys(mod).sort()).toEqual(
       [
@@ -358,11 +362,12 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
         'getJournalEntry',
         'listDiscrepancies',
         'getDiscrepancy',
+        'resolveDiscrepancy',
       ].sort(),
     );
   });
 
-  it('the proxy directory exposes ONLY GET route handlers (no mutation route at all)', async () => {
+  it('the proxy directory exposes ONLY GET reads + EXACTLY ONE POST (the resolve mutation; no PUT/PATCH/DELETE)', async () => {
     const proxyRoot = path.resolve(__dirname, '../../src/app/api/ledger');
     function walk(p: string): string[] {
       const out: string[] = [];
@@ -376,15 +381,29 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
     const tsFiles = walk(proxyRoot).filter((f) => f.endsWith('.ts'));
     expect(tsFiles.length).toBeGreaterThan(0);
 
+    let postRoutes = 0;
     for (const f of tsFiles) {
       const src = readFileSync(f, 'utf8');
       if (path.basename(f) === '_proxy.ts') continue;
-      expect(src).toMatch(/export\s+async\s+function\s+GET\b/);
-      expect(src).not.toMatch(/export\s+async\s+function\s+POST\b/);
+      const isResolve = f.replace(/\\/g, '/').endsWith(
+        'reconciliation/discrepancies/[id]/resolve/route.ts',
+      );
+      if (isResolve) {
+        // The ONLY mutation route — POST only (no GET/PUT/PATCH/DELETE).
+        expect(src).toMatch(/export\s+async\s+function\s+POST\b/);
+        expect(src).not.toMatch(/export\s+async\s+function\s+GET\b/);
+        postRoutes += 1;
+      } else {
+        // Every other route is a pure GET read.
+        expect(src).toMatch(/export\s+async\s+function\s+GET\b/);
+        expect(src).not.toMatch(/export\s+async\s+function\s+POST\b/);
+      }
       expect(src).not.toMatch(/export\s+async\s+function\s+PUT\b/);
       expect(src).not.toMatch(/export\s+async\s+function\s+PATCH\b/);
       expect(src).not.toMatch(/export\s+async\s+function\s+DELETE\b/);
     }
+    // EXACTLY ONE mutation route in the whole ledger proxy tree.
+    expect(postRoutes).toBe(1);
   });
 });
 
@@ -726,5 +745,190 @@ describe('ledger-api / types — tolerant parsing (unknown enum → no throw; §
     const r = await listDiscrepancies();
     expect(r.data[0].type).toBe('FUTURE_DISCREPANCY_TYPE');
     expect(r.data[0].status).toBe('FUTURE_STATUS');
+  });
+});
+
+// ===========================================================================
+// 7. resolveDiscrepancy — the ledger's FIRST and ONLY mutation (PC-FE-073).
+//    Header matrix: domain-facing token; body { resolutionType, note };
+//    NO Idempotency-Key (the KEY deviation); NO X-Operator-Reason;
+//    NO X-Tenant-Id. 409/422/404 → ApiError; 503/timeout → degrade.
+// ===========================================================================
+
+const RESOLVED_ENVELOPE = {
+  data: {
+    discrepancyId: 'd-1',
+    type: 'AMOUNT_MISMATCH',
+    externalRef: 'bank-ref-1',
+    journalEntryId: 'je-9',
+    expectedMinor: '100',
+    actualMinor: '105',
+    currency: 'KRW',
+    status: 'RESOLVED',
+    resolution: {
+      resolutionType: 'WRITTEN_OFF',
+      note: 'fx gap below threshold',
+      resolvedBy: 'op-1',
+      resolvedAt: '2026-05-20T00:00:00Z',
+    },
+  },
+  meta: { timestamp: 'x' },
+};
+
+describe('ledger-api — resolveDiscrepancy (the ONLY mutation; PC-FE-073 header matrix)', () => {
+  beforeEach(() => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS-required-by-ledger');
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN-must-not-be-used');
+  });
+
+  it('POSTs the domain-facing token + body { resolutionType, note }; NO Idempotency-Key, NO X-Operator-Reason, NO X-Tenant-Id', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(RESOLVED_ENVELOPE));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await resolveDiscrepancy('d-1', {
+      resolutionType: 'WRITTEN_OFF',
+      note: 'fx gap below threshold',
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect((init as RequestInit).method).toBe('POST');
+    // domain-facing IAM OIDC token — NEVER the operator token.
+    expect(h.Authorization).toBe('Bearer GAP-OIDC-ACCESS-required-by-ledger');
+    expect(h.Authorization).not.toContain('OPERATOR-TOKEN-must-not-be-used');
+    // THE KEY DEVIATION from the delegation-revoke template: NO Idempotency-Key.
+    expect(h['Idempotency-Key']).toBeUndefined();
+    // NO X-Operator-Reason — the reason rides in the body `note`.
+    expect(h['X-Operator-Reason']).toBeUndefined();
+    // NO X-Tenant-Id — tenant from the JWT claim.
+    expect(h['X-Tenant-Id']).toBeUndefined();
+    // A body IS present (Content-Type added) — this is the mutation.
+    expect(h['Content-Type']).toBe('application/json');
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body).toEqual({
+      resolutionType: 'WRITTEN_OFF',
+      note: 'fx gap below threshold',
+    });
+    expect(body.idempotencyKey).toBeUndefined();
+    expect(String(url)).toBe(
+      'http://finance.local/api/finance/ledger/reconciliation/discrepancies/d-1/resolve',
+    );
+    // The returned discrepancy reflects RESOLVED + the resolution sub-object.
+    expect(result.status).toBe('RESOLVED');
+    expect(result.resolution?.resolutionType).toBe('WRITTEN_OFF');
+  });
+
+  it('uses getDomainFacingToken() and NEVER getOperatorToken() for the resolve', async () => {
+    const getDomainFacingSpy = vi.spyOn(sessionModule, 'getDomainFacingToken');
+    const getOperatorSpy = vi.spyOn(sessionModule, 'getOperatorToken');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(RESOLVED_ENVELOPE)),
+    );
+    await resolveDiscrepancy('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'accepted',
+    });
+    expect(getDomainFacingSpy).toHaveBeenCalled();
+    expect(getOperatorSpy).not.toHaveBeenCalled();
+  });
+
+  it('409 RECONCILIATION_ALREADY_RESOLVED → ApiError(409) inline', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(ledgerError('RECONCILIATION_ALREADY_RESOLVED', 409)),
+    );
+    const err = await resolveDiscrepancy('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(409);
+    expect(err.code).toBe('RECONCILIATION_ALREADY_RESOLVED');
+  });
+
+  it('422 RECONCILIATION_PERIOD_LOCKED → ApiError(422) inline', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(ledgerError('RECONCILIATION_PERIOD_LOCKED', 422)),
+    );
+    const err = await resolveDiscrepancy('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(422);
+    expect(err.code).toBe('RECONCILIATION_PERIOD_LOCKED');
+  });
+
+  it('404 RECONCILIATION_DISCREPANCY_NOT_FOUND → ApiError(404) inline', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          ledgerError('RECONCILIATION_DISCREPANCY_NOT_FOUND', 404),
+        ),
+    );
+    const err = await resolveDiscrepancy('nope', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(404);
+    expect(err.code).toBe('RECONCILIATION_DISCREPANCY_NOT_FOUND');
+  });
+
+  it('503 → LedgerUnavailableError (the ledger section degrades, resolve re-enables on retry)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ledgerError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const err = await resolveDiscrepancy('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(LedgerUnavailableError);
+    expect(err.reason).toBe('downstream');
+  });
+
+  it('timeout → LedgerUnavailableError(timeout)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_u: string, init?: RequestInit) => {
+        return new Promise((_res, rej) => {
+          init?.signal?.addEventListener('abort', () => {
+            const e = new Error('aborted');
+            e.name = 'AbortError';
+            rej(e);
+          });
+        });
+      }),
+    );
+    const err = await resolveDiscrepancy('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(LedgerUnavailableError);
+    expect(err.reason).toBe('timeout');
+  });
+
+  it('no IAM session → 401 with NO fetch (whole-session re-login signal)', async () => {
+    cookieJar.clear();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const err = await resolveDiscrepancy('d-1', {
+      resolutionType: 'ACCEPTED',
+      note: 'x',
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

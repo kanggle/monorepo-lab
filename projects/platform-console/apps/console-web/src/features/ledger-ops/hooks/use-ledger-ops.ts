@@ -1,6 +1,10 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
 import {
   TrialBalanceSchema,
@@ -17,6 +21,7 @@ import {
   DiscrepanciesResponseSchema,
   type DiscrepanciesResponse,
   type DiscrepanciesQueryParams,
+  type ResolveDiscrepancyBody,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from '../api/types';
@@ -30,9 +35,13 @@ import {
  * directly (contract § 2.3). The § 2.4.5 per-domain credential rule is
  * reused via the § 2.4.7 finance binding, NOT re-derived (§ 2.4.7.1).
  *
- * READ-ONLY: there are NO mutation hooks at all (the ledger surface is a
- * pure read — trial balance / periods / journal entries / reconciliation
- * queue). The hooks below are pure reads.
+ * READ + ONE MUTATION: the read hooks below are pure reads. As of
+ * TASK-PC-FE-073 there is EXACTLY ONE mutation hook — `useResolveDiscrepancy`
+ * (the reconciliation discrepancy *resolve*) — which POSTs to the same-origin
+ * proxy with a body `{ resolutionType, note }` (NO `Idempotency-Key` — the
+ * producer defines none; the `409 RECONCILIATION_ALREADY_RESOLVED` state
+ * guard is the double-submit defence) and, `onSuccess`, invalidates the
+ * discrepancy list + detail queries so the queue/detail reflect `RESOLVED`.
  *
  * No tight refetch loop / refetchInterval / refetchOnWindowFocus — a
  * re-query is a periodId / entryId / filter / page change (a new queryKey)
@@ -250,5 +259,43 @@ export function useDiscrepancy(id: string | null) {
     refetchOnWindowFocus: false,
     refetchInterval: false,
     retry: false,
+  });
+}
+
+// --- reconciliation discrepancy RESOLVE (the ledger's ONLY mutation) ------
+//
+// TASK-PC-FE-073 — POSTs to the same-origin proxy
+//   /api/ledger/reconciliation/discrepancies/{id}/resolve
+// with a body `{ resolutionType, note }`. NO `Idempotency-Key` (the producer
+// defines none for resolve — the `409 RECONCILIATION_ALREADY_RESOLVED` state
+// guard is the double-submit defence), NO `X-Operator-Reason` (the reason
+// rides in the body `note`). `retry: false` — a failure surfaces immediately
+// (no client retry storm; no 429 backoff). `onSuccess` invalidates the
+// discrepancy list (any status/page) + the resolved row's detail so the
+// queue/detail reflect `RESOLVED` + `resolution`.
+
+export interface ResolveDiscrepancyArgs {
+  id: string;
+  input: ResolveDiscrepancyBody;
+}
+
+export function useResolveDiscrepancy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: ResolveDiscrepancyArgs) => {
+      const raw = await apiClient.post<unknown>(
+        `/api/ledger/reconciliation/discrepancies/${encodeURIComponent(id)}/resolve`,
+        { resolutionType: input.resolutionType, note: input.note },
+      );
+      return DiscrepancySchema.parse(raw);
+    },
+    retry: false,
+    onSuccess: (_data, { id }) => {
+      // Invalidate the whole discrepancy queue (any status / page) + the
+      // resolved row's detail read — the queue/detail re-fetch and reflect
+      // RESOLVED + the resolution sub-object.
+      qc.invalidateQueries({ queryKey: [LEDGER_KEY, 'discrepancies'] });
+      qc.invalidateQueries({ queryKey: discrepancyKey(id) });
+    },
   });
 }

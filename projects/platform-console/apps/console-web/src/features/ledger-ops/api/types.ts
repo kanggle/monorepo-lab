@@ -373,6 +373,54 @@ export type DiscrepanciesResponse = z.infer<
   typeof DiscrepanciesResponseSchema
 >;
 
+// ---------------------------------------------------------------------------
+// Reconciliation discrepancy RESOLVE mutation — reconciliation-api.md § 2
+//   POST /api/finance/ledger/reconciliation/discrepancies/{id}/resolve
+//   (TASK-PC-FE-073 — the ledger surface's FIRST and ONLY operator mutation)
+// ---------------------------------------------------------------------------
+
+/**
+ * The three producer-sanctioned resolution types (`reconciliation-api.md`
+ * § 2 — `resolutionType ∈ { MATCHED_MANUALLY, WRITTEN_OFF, ACCEPTED }`).
+ * Unlike the READ enum vocabularies (which are tolerant free strings so an
+ * unknown/future producer value never throws), the RESOLVE request is a
+ * console-ORIGINATED value: the operator picks exactly one of these three —
+ * a closed `z.enum` is correct here (we must never send a value the producer
+ * does not define).
+ */
+export const RESOLUTION_TYPES = [
+  'MATCHED_MANUALLY',
+  'WRITTEN_OFF',
+  'ACCEPTED',
+] as const;
+export type ResolutionType = (typeof RESOLUTION_TYPES)[number];
+
+/**
+ * The resolve request body — `{ resolutionType, note }`.
+ *
+ * `note` is a **required**, non-empty operator narrative (the audit record);
+ * the producer's `409 RECONCILIATION_ALREADY_RESOLVED` state guard is the
+ * double-submit defence, so there is deliberately **NO `idempotencyKey`
+ * field** — `reconciliation-api.md` § 2 defines none for resolve (unlike the
+ * ledger `POST /entries`, which requires one). Fabricating a header the
+ * producer ignores is forbidden (the same honesty discipline as the no-429
+ * rule).
+ */
+export const ResolveDiscrepancyBodySchema = z.object({
+  resolutionType: z.enum(RESOLUTION_TYPES),
+  // A non-empty operator narrative — the audit record. A whitespace-only
+  // value is rejected (the reason is required); the proxy maps a parse
+  // failure to `400 VALIDATION_ERROR` with NO upstream call.
+  note: z
+    .string()
+    .min(1)
+    .max(512)
+    .refine((s) => s.trim() !== '', { message: 'note must not be blank' }),
+});
+export type ResolveDiscrepancyBody = z.infer<
+  typeof ResolveDiscrepancyBodySchema
+>;
+
 /**
  * Materialises a discrepancy's `expectedMinor` / `actualMinor` strings as
  * Money objects for the same `currency` (the reconciliation amounts are

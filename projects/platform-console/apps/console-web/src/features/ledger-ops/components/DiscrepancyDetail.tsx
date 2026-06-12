@@ -1,17 +1,21 @@
 'use client';
 
+import { useState } from 'react';
+import { Button } from '@/shared/ui/Button';
 import {
   formatMoney,
   discrepancyMoney,
   KNOWN_DISCREPANCY_TYPES,
   KNOWN_DISCREPANCY_STATUSES,
   type Discrepancy,
+  type ResolutionType,
 } from '../api/types';
-import { useDiscrepancy } from '../hooks/use-ledger-ops';
+import { useDiscrepancy, useResolveDiscrepancy } from '../hooks/use-ledger-ops';
+import { DiscrepancyResolveDialog } from './DiscrepancyResolveDialog';
 
 /**
  * Reconciliation discrepancy detail (TASK-PC-FE-072 — § 2.4.7.1 /
- * `reconciliation-api.md` § 5).
+ * `reconciliation-api.md` § 5; resolve mutation added TASK-PC-FE-073).
  *
  * Renders the full discrepancy, including the `resolution` sub-object when
  * `status === 'RESOLVED'` (resolutionType / note / resolvedBy / resolvedAt
@@ -20,7 +24,12 @@ import { useDiscrepancy } from '../hooks/use-ledger-ops';
  * 11th-increment FX-difference `AMOUNT_MISMATCH`, BOTH `externalRef` and
  * `journalEntryId` (the matched pair) are surfaced.
  *
- * STRICTLY READ-ONLY — no mutation affordance (no resolve button).
+ * RESOLVE (TASK-PC-FE-073 — the ledger surface's FIRST and ONLY mutation):
+ * a resolve action is offered **ONLY on an OPEN discrepancy** (a RESOLVED
+ * row exposes no resolve affordance). Clicking it opens the confirm-gated
+ * `DiscrepancyResolveDialog` (resolutionType select + required note). On
+ * success the detail re-fetches (the hook invalidates the list + detail) and
+ * reflects `RESOLVED` + `resolution`.
  */
 export interface DiscrepancyDetailProps {
   discrepancyId: string;
@@ -40,6 +49,19 @@ function statusLabel(status: string): string {
 export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
   const q = useDiscrepancy(discrepancyId);
   const d: Discrepancy | null = q.data ?? null;
+  const resolveM = useResolveDiscrepancy();
+  const [resolveOpen, setResolveOpen] = useState(false);
+
+  function onConfirmResolve(resolutionType: ResolutionType, note: string) {
+    resolveM.mutate(
+      { id: discrepancyId, input: { resolutionType, note } },
+      {
+        onSuccess: () => {
+          setResolveOpen(false);
+        },
+      },
+    );
+  }
 
   if (!d) {
     return (
@@ -66,6 +88,9 @@ export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
 
   const m = discrepancyMoney(d);
   const resolution = d.resolution ?? null;
+  // The resolve affordance is offered ONLY on an OPEN discrepancy (a RESOLVED
+  // row exposes no resolve button) — § 2.4.7.1 / TASK-PC-FE-073.
+  const isOpen = d.status === 'OPEN';
 
   return (
     <section
@@ -73,12 +98,24 @@ export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
       className="mb-6 rounded-md border border-border bg-background p-4"
       data-testid="ledger-recon-detail"
     >
-      <h3
-        id="ledger-recon-detail-heading"
-        className="mb-3 text-base font-medium text-foreground"
-      >
-        대사 차이 상세 — {d.discrepancyId}
-      </h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3
+          id="ledger-recon-detail-heading"
+          className="text-base font-medium text-foreground"
+        >
+          대사 차이 상세 — {d.discrepancyId}
+        </h3>
+        {isOpen && (
+          <Button
+            variant="primary"
+            onClick={() => setResolveOpen(true)}
+            disabled={resolveM.isPending}
+            data-testid="ledger-recon-resolve-open"
+          >
+            해소
+          </Button>
+        )}
+      </div>
       <dl className="mb-4 grid grid-cols-2 gap-3 text-sm">
         <div>
           <dt className="text-muted-foreground">유형</dt>
@@ -172,6 +209,16 @@ export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
         >
           아직 해소되지 않은 대사 차이입니다 (OPEN).
         </p>
+      )}
+
+      {resolveOpen && isOpen && (
+        <DiscrepancyResolveDialog
+          discrepancyId={d.discrepancyId}
+          pending={resolveM.isPending}
+          error={resolveM.error}
+          onCancel={() => setResolveOpen(false)}
+          onConfirm={onConfirmResolve}
+        />
       )}
     </section>
   );
