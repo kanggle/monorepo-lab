@@ -8,7 +8,7 @@ community-service live-trio e2e — membership 게이트 escape-hatch 정렬. FA
 
 # Status
 
-review
+done
 
 # Owner
 
