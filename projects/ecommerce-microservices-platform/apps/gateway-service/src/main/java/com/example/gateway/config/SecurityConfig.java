@@ -33,6 +33,15 @@ public class SecurityConfig {
             "/oauth/**"
     };
 
+    /**
+     * Carrier webhook public endpoint (ADR-007 D5-2 / TASK-BE-359).
+     * Exact method + path match — only POST to this path is exempt from JWT auth.
+     * Authentication is delegated entirely to the downstream shipping-service HMAC
+     * verifier (CarrierWebhookVerifier, TASK-BE-294, fail-closed/net-zero).
+     * No other /api/shippings/** path is opened by this rule.
+     */
+    private static final String CARRIER_WEBHOOK_PATH = "/api/shippings/carrier-webhook";
+
     @Bean
     SecurityWebFilterChain securityWebFilterChain(
             ServerHttpSecurity http,
@@ -51,6 +60,9 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/api/products/**").permitAll()
                         // Reviews — read-only paths are public
                         .pathMatchers(HttpMethod.GET, "/api/reviews/products/**").permitAll()
+                        // Carrier inbound webhook — public (HMAC-authenticated downstream, ADR-007 D5-2).
+                        // EXACT method+path: POST only; every other /api/shippings/** stays JWT-protected.
+                        .pathMatchers(HttpMethod.POST, CARRIER_WEBHOOK_PATH).permitAll()
                         // Everything else requires authentication
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2

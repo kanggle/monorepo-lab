@@ -16,7 +16,9 @@ public class RouteService {
         if (HttpMethod.POST.equals(method)) {
             return "/api/auth/signup".equals(path)
                     || "/api/auth/login".equals(path)
-                    || "/api/auth/refresh".equals(path);
+                    || "/api/auth/refresh".equals(path)
+                    // Carrier webhook — HMAC-authenticated downstream (ADR-007 D5-2 / TASK-BE-359)
+                    || "/api/shippings/carrier-webhook".equals(path);
         }
         if (HttpMethod.GET.equals(method)) {
             return PATH_MATCHER.match("/api/products/**", path)

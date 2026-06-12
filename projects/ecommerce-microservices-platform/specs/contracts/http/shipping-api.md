@@ -114,6 +114,35 @@ List all shipping records.
 
 ---
 
+---
+
+### POST /api/shippings/carrier-webhook (Public — HMAC authenticated)
+Inbound carrier/aggregator delivery event webhook. **Gateway public-route** (TASK-BE-359).
+No bearer token is required at the gateway; the request is authenticated downstream via
+HMAC-SHA256 (`X-Carrier-Signature: sha256=<lowercase-hex>` over the raw request body).
+
+**Authentication**: `X-Carrier-Signature: sha256=<hex>` (HMAC-SHA256, shared secret configured
+in `shipping.carrier.webhook.secret`). Fail-closed: blank secret → 401 for every request.
+
+**Request Body**
+```json
+{
+  "deliveryId": "string (idempotency key, UUID)",
+  "shippingId": "string (UUID)",
+  "status": "string (carrier/aggregator status code)"
+}
+```
+
+**Response 200** — webhook acknowledged (outcome: ADVANCED / IGNORED / DUPLICATE)
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | INVALID_SHIPPING_REQUEST | Malformed body / missing required fields |
+| 401 | UNAUTHORIZED | Missing, invalid, or misconfigured HMAC signature |
+
+---
+
 ## Shipping Status Values
 
 | Status | Description |
@@ -156,3 +185,11 @@ Backward or skip transitions are not allowed.
   (HMAC-SHA256 `X-Carrier-Signature: sha256=<hex>`, idempotent) ingests the aggregator's push.
   The `carrier` field is the aggregator-internal carrier code (the aggregator may auto-assign);
   shipment identity is keyed by `trackingNumber`/`shippingId`, not by the returned carrier code.
+- **`POST /api/shippings/carrier-webhook` — gateway public-route** (TASK-BE-359 / ADR-007 D5-2):
+  this endpoint is the ONLY path in `/api/shippings/**` that is exempt from JWT authentication at
+  the gateway. Callers (the logistics aggregator) do NOT present a bearer token; authentication is
+  performed exclusively by the downstream shipping-service HMAC verifier
+  (`X-Carrier-Signature: sha256=<hex>`, `CarrierWebhookVerifier`, TASK-BE-294).
+  Fail-closed: a blank `shipping.carrier.webhook.secret` causes the downstream to reject every
+  webhook with 401 regardless of gateway public-route exposure (ADR-007 D4 net-zero).
+  All other `/api/shippings/**` paths/methods retain their existing JWT requirement.
