@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <ol>
  *   <li>AC-9: {@code GET /actuator/health} returns 200.</li>
  *   <li>AC-10: {@code GET /actuator/prometheus} exposes the 3 mandatory metric names.</li>
- *   <li>AC-12 (c): per-domain {@code CredentialSelectionPort} 5-row dispatch dry-run.</li>
+ *   <li>AC-12 (c): per-domain {@code CredentialSelectionPort} 6-row dispatch dry-run.</li>
  *   <li>AC-12 (e): {@code OperatorCredentialContext} reads headers correctly.</li>
  * </ol>
  */
@@ -171,6 +171,17 @@ class ConsoleBffSmokeIntegrationTest extends AbstractConsoleBffIntegrationTest {
             CredentialSelectionAdapter adapter = applicationContext
                     .getBean(CredentialSelectionAdapter.class);
             OutboundCredential cred = adapter.selectFor(DomainTarget.ERP);
+            assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
+        });
+    }
+
+    @Test
+    @DisplayName("CredentialSelectionAdapter: ECOMMERCE → IamOidcAccessToken (dry-run, TASK-MONO-241)")
+    void credentialSelector_ecommerceDomain_returnsGapOidcToken() {
+        withRequestContext("op-tok-abc", "ecommerce", gapOidcJwt, () -> {
+            CredentialSelectionAdapter adapter = applicationContext
+                    .getBean(CredentialSelectionAdapter.class);
+            OutboundCredential cred = adapter.selectFor(DomainTarget.ECOMMERCE);
             assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
         });
     }

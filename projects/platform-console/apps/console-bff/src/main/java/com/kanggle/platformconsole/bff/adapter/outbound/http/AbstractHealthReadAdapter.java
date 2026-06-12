@@ -6,11 +6,12 @@ import org.springframework.web.client.RestClient;
 import java.util.Map;
 
 /**
- * Base class for the 5 domain {@code /actuator/health} outbound legs.
+ * Base class for the 6 domain {@code /actuator/health} outbound legs.
  *
- * <p>All five domain health adapters ({@link IamHealthReadAdapter},
+ * <p>All six domain health adapters ({@link IamHealthReadAdapter},
  * {@link WmsHealthReadAdapter}, {@link ScmHealthReadAdapter},
- * {@link FinanceHealthReadAdapter}, {@link ErpHealthReadAdapter}) share
+ * {@link FinanceHealthReadAdapter}, {@link ErpHealthReadAdapter},
+ * {@link EcommerceHealthReadAdapter}) share
  * identical logic: {@code GET /actuator/health} with {@code Accept:
  * application/json} and no auth / tenant headers (actuator endpoints are
  * {@code permitAll} and not tenant-scoped). The only variation is the

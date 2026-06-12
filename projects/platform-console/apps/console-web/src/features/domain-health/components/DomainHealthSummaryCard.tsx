@@ -23,6 +23,7 @@ const DOMAIN_LABEL: Record<DomainKey, string> = {
   scm: 'SCM',
   finance: 'Finance',
   erp: 'ERP',
+  ecommerce: 'E-Commerce',
 };
 
 const TONE_DOT: Record<HealthTone, string> = {

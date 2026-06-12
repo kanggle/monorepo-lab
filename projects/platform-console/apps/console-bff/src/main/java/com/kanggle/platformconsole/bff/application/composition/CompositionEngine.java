@@ -50,9 +50,14 @@ import java.util.function.Supplier;
  *   <li>Pending-leg fallback at composition-level timeout: emits the
  *       {@code timeout} error counter and surfaces
  *       {@code degraded / TIMEOUT}.</li>
- *   <li>Fixed leg order: {@link DomainTarget#IAM},
- *       {@link DomainTarget#WMS}, {@link DomainTarget#SCM},
- *       {@link DomainTarget#FINANCE}, {@link DomainTarget#ERP}.</li>
+ *   <li>Leg order: the <b>use-case owns the card order</b> — the engine
+ *       follows the iteration order of the {@code legBodies} map it is
+ *       handed (an {@link EnumMap}, so {@link DomainTarget} declaration
+ *       order). The engine no longer pins a single static leg set
+ *       (TASK-MONO-241): Operator Overview (§ 2.4.9.1) passes 5 legs and
+ *       Domain Health Overview (§ 2.4.9.2) passes 6 — each independent,
+ *       both byte-stable for the domains they share because
+ *       {@code ECOMMERCE} was appended last to the enum.</li>
  * </ul>
  *
  * <p>Concurrency: each leg gets its own Java 21 virtual thread; the
@@ -85,7 +90,16 @@ public final class CompositionEngine {
     public static final Duration COMPOSITION_TIMEOUT = Duration.ofSeconds(5);
 
     /**
-     * Fixed leg order — § 2.4.9.1 / § 2.4.9.2 envelope schema invariant.
+     * The historic 5-domain leg order, retained as a convenience constant for
+     * callers/tests that still want the original shared set.
+     *
+     * <p><b>TASK-MONO-241 decoupling</b>: {@link #fanOut(String, Map)} no longer
+     * iterates this constant — it iterates the {@code legBodies} map it is
+     * handed (enum-order via {@link EnumMap}). Each use-case now owns its own
+     * card order ({@code OperatorOverviewCompositionUseCase.CARD_ORDER} = these
+     * 5; {@code DomainHealthCompositionUseCase.CARD_ORDER} = these 5 +
+     * {@link DomainTarget#ECOMMERCE}). The engine is order-agnostic and simply
+     * preserves whatever order the provided map yields.
      */
     public static final List<DomainTarget> CARD_ORDER = List.of(
             DomainTarget.IAM,
@@ -135,18 +149,23 @@ public final class CompositionEngine {
      * {@code timeout} error counter (matches the historic
      * {@code resolve(...)} behavior in both use-cases).
      *
-     * <p>The supplied {@code legBodies} map is expected to contain exactly
-     * one entry per {@link DomainTarget} in {@link #CARD_ORDER}. The caller
-     * is responsible for pre-resolving any request-scoped state into plain
-     * values captured by each supplier's closure — the engine does not
-     * touch a credential, a tenant header, or a request-scope bean.
+     * <p>The engine fires <b>exactly the legs present in {@code legBodies}</b>
+     * and resolves them in that map's iteration order. Callers pass an
+     * {@link EnumMap} keyed by {@link DomainTarget}, so the order is enum
+     * declaration order; the caller's {@code CARD_ORDER} list is expected to be
+     * a subset matching the map's key set (the use-case re-orders with its own
+     * {@code CARD_ORDER} on the returned map). The caller is responsible for
+     * pre-resolving any request-scoped state into plain values captured by each
+     * supplier's closure — the engine does not touch a credential, a tenant
+     * header, or a request-scope bean.
      *
      * @param tenantIdForLogging the active tenant — used only for
      *                           composition-level timeout logging; never
      *                           passed to a leg body
-     * @param legBodies          5 leg bodies keyed by {@link DomainTarget}
-     * @return the assembled per-domain results in iteration-stable order
-     *         (the caller picks the {@link #CARD_ORDER} sequence)
+     * @param legBodies          the leg bodies keyed by {@link DomainTarget}
+     *                           (5 for Operator Overview, 6 for Domain Health)
+     * @return the assembled per-domain results keyed by the same domains the
+     *         caller supplied, in the map's iteration order
      */
     public Map<DomainTarget, CompositionLeg> fanOut(
             String tenantIdForLogging,
@@ -169,8 +188,9 @@ public final class CompositionEngine {
             Executor tracedExecutor = snapshot.wrapExecutor(executor);
             Map<DomainTarget, CompletableFuture<CompositionLeg>> futures =
                     new EnumMap<>(DomainTarget.class);
-            for (DomainTarget domain : CARD_ORDER) {
-                Supplier<CompositionLeg> body = legBodies.get(domain);
+            for (Map.Entry<DomainTarget, Supplier<CompositionLeg>> entry : legBodies.entrySet()) {
+                DomainTarget domain = entry.getKey();
+                Supplier<CompositionLeg> body = entry.getValue();
                 if (body == null) {
                     throw new IllegalStateException(
                             "CompositionEngine.fanOut: missing leg body for " + domain);
@@ -199,7 +219,7 @@ public final class CompositionEngine {
             }
 
             Map<DomainTarget, CompositionLeg> map = new EnumMap<>(DomainTarget.class);
-            for (DomainTarget domain : CARD_ORDER) {
+            for (DomainTarget domain : futures.keySet()) {
                 map.put(domain, resolve(futures.get(domain), domain));
             }
             return map;

@@ -1,6 +1,7 @@
 package com.kanggle.platformconsole.bff.application.usecase;
 
 import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
+import com.kanggle.platformconsole.bff.application.port.outbound.EcommerceHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.IamHealthReadPort;
@@ -34,16 +35,16 @@ import static org.mockito.Mockito.when;
 /**
  * Application unit test for {@link DomainHealthCompositionUseCase}.
  *
- * <p>Mocks the 5 narrow health-read ports + a {@link CredentialSelectionPort}
+ * <p>Mocks the 6 narrow health-read ports + a {@link CredentialSelectionPort}
  * stub that is NEVER consulted (the key invariant: domain-health legs are
  * credential-less, the D4 sealed-switch is not invoked).
  *
  * <p>Coverage (§ 2.4.9.2):
  * <ul>
- *   <li>Fixed leg order {@code [gap, wms, scm, finance, erp]}.</li>
- *   <li>5-all-ok happy path with Spring Boot health JSON body propagation.</li>
+ *   <li>Fixed leg order {@code [gap, wms, scm, finance, erp, ecommerce]}.</li>
+ *   <li>6-all-ok happy path with Spring Boot health JSON body propagation.</li>
  *   <li>Per-leg downstream-error → degraded/DOWNSTREAM_ERROR.</li>
- *   <li>All-down (5x 5xx) → all 5 cards degraded + 5 degrade-counter increments.</li>
+ *   <li>All-down (6x 5xx) → all 6 cards degraded + 6 degrade-counter increments.</li>
  *   <li>{@link CredentialSelectionPort#selectFor} is NEVER invoked (the D4 scope
  *       clarification: actuator legs are outside D4).</li>
  *   <li>{@code data.status} payload propagation (UP/DOWN/OUT_OF_SERVICE/UNKNOWN).</li>
@@ -71,6 +72,9 @@ class DomainHealthCompositionUseCaseTest {
     @Mock
     ErpHealthReadPort erpPort;
 
+    @Mock
+    EcommerceHealthReadPort ecommercePort;
+
     SimpleMeterRegistry meterRegistry;
     DomainHealthCompositionUseCase useCase;
 
@@ -78,7 +82,8 @@ class DomainHealthCompositionUseCaseTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         useCase = new DomainHealthCompositionUseCase(
-                meterRegistry, Tracer.NOOP, gapPort, wmsPort, scmPort, financePort, erpPort);
+                meterRegistry, Tracer.NOOP, gapPort, wmsPort, scmPort, financePort, erpPort,
+                ecommercePort);
     }
 
     // ------------------------------------------------------------------
@@ -86,22 +91,25 @@ class DomainHealthCompositionUseCaseTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("happy_all_5_ok: every leg UP → 5 ok cards in fixed order, data.status propagated")
-    void happy_all_5_ok() {
+    @DisplayName("happy_all_6_ok: every leg UP → 6 ok cards in fixed order, data.status propagated")
+    void happy_all_6_ok() {
         when(gapPort.read()).thenReturn(Map.of("status", "UP"));
         when(wmsPort.read()).thenReturn(Map.of("status", "UP"));
         when(scmPort.read()).thenReturn(Map.of("status", "UP"));
         when(financePort.read()).thenReturn(Map.of("status", "UP"));
         when(erpPort.read()).thenReturn(Map.of("status", "UP"));
+        when(ecommercePort.read()).thenReturn(Map.of("status", "UP"));
 
         List<CompositionLeg> legs = useCase.compose();
 
-        assertThat(legs).hasSize(5);
+        assertThat(legs).hasSize(6);
         assertThat(legs.get(0).outcome().domain()).isEqualTo(DomainTarget.IAM);
         assertThat(legs.get(1).outcome().domain()).isEqualTo(DomainTarget.WMS);
         assertThat(legs.get(2).outcome().domain()).isEqualTo(DomainTarget.SCM);
         assertThat(legs.get(3).outcome().domain()).isEqualTo(DomainTarget.FINANCE);
         assertThat(legs.get(4).outcome().domain()).isEqualTo(DomainTarget.ERP);
+        // ecommerce appended last (TASK-MONO-241) — existing 5 keep their order.
+        assertThat(legs.get(5).outcome().domain()).isEqualTo(DomainTarget.ECOMMERCE);
         // All cards ok with data.status="UP".
         for (CompositionLeg leg : legs) {
             assertThat(leg.outcome().isOk()).isTrue();
@@ -118,6 +126,7 @@ class DomainHealthCompositionUseCaseTest {
         when(scmPort.read()).thenReturn(Map.of("status", "UP"));
         when(financePort.read()).thenReturn(Map.of("status", "UP"));
         when(erpPort.read()).thenReturn(Map.of("status", "UP"));
+        when(ecommercePort.read()).thenReturn(Map.of("status", "UP"));
 
         useCase.compose();
 
@@ -128,6 +137,7 @@ class DomainHealthCompositionUseCaseTest {
         verify(credentialSelection, never()).selectFor(DomainTarget.SCM);
         verify(credentialSelection, never()).selectFor(DomainTarget.FINANCE);
         verify(credentialSelection, never()).selectFor(DomainTarget.ERP);
+        verify(credentialSelection, never()).selectFor(DomainTarget.ECOMMERCE);
     }
 
     // ------------------------------------------------------------------
@@ -144,6 +154,7 @@ class DomainHealthCompositionUseCaseTest {
         when(scmPort.read()).thenReturn(Map.of("status", "UP"));
         when(financePort.read()).thenReturn(Map.of("status", "UP"));
         when(erpPort.read()).thenReturn(Map.of("status", "UP"));
+        when(ecommercePort.read()).thenReturn(Map.of("status", "UP"));
 
         List<CompositionLeg> legs = useCase.compose();
 
@@ -160,8 +171,8 @@ class DomainHealthCompositionUseCaseTest {
     }
 
     @Test
-    @DisplayName("all_5_down: every leg 5xx → 5 degraded cards (NOT thrown; HTTP 200 still emitted)")
-    void all_5_down_envelope() {
+    @DisplayName("all_6_down: every leg 5xx → 6 degraded cards (NOT thrown; HTTP 200 still emitted)")
+    void all_6_down_envelope() {
         HttpClientErrorException boom = HttpClientErrorException.create(
                 HttpStatus.INTERNAL_SERVER_ERROR, "boom", null, null, null);
         when(gapPort.read()).thenThrow(boom);
@@ -169,14 +180,15 @@ class DomainHealthCompositionUseCaseTest {
         when(scmPort.read()).thenThrow(boom);
         when(financePort.read()).thenThrow(boom);
         when(erpPort.read()).thenThrow(boom);
+        when(ecommercePort.read()).thenThrow(boom);
 
         List<CompositionLeg> legs = useCase.compose();
 
-        assertThat(legs).hasSize(5);
+        assertThat(legs).hasSize(6);
         for (CompositionLeg leg : legs) {
             assertThat(leg.outcome().isDegraded()).isTrue();
         }
-        // 5 degrade-counter increments (one per non-ok leg).
+        // 6 degrade-counter increments (one per non-ok leg).
         double total = 0.0;
         for (DomainTarget d : DomainTarget.values()) {
             Counter c = meterRegistry.find("bff_aggregation_degrade_count")
@@ -187,7 +199,7 @@ class DomainHealthCompositionUseCaseTest {
                 total += c.count();
             }
         }
-        assertThat(total).isEqualTo(5.0);
+        assertThat(total).isEqualTo(6.0);
     }
 
     @Test
@@ -198,10 +210,11 @@ class DomainHealthCompositionUseCaseTest {
         when(scmPort.read()).thenReturn(Map.of("status", "OUT_OF_SERVICE"));
         when(financePort.read()).thenReturn(Map.of("status", "UNKNOWN"));
         when(erpPort.read()).thenReturn(Map.of("status", "UP"));
+        when(ecommercePort.read()).thenReturn(Map.of("status", "UP"));
 
         List<CompositionLeg> legs = useCase.compose();
 
-        // All 5 are ok at composition level — the producer self-reported status
+        // All 6 are ok at composition level — the producer self-reported status
         // does NOT degrade the leg (the BFF reached the producer and got a
         // response; DOWN/OOS/UNKNOWN are honest producer self-reports, NOT BFF
         // failures).
@@ -214,6 +227,8 @@ class DomainHealthCompositionUseCaseTest {
         assertThat(legs.get(3).outcome().isOk()).isTrue();
         assertThat(((Map<?, ?>) legs.get(3).data()).get("status")).isEqualTo("UNKNOWN");
         assertThat(legs.get(4).outcome().isOk()).isTrue();
+        assertThat(legs.get(5).outcome().domain()).isEqualTo(DomainTarget.ECOMMERCE);
+        assertThat(legs.get(5).outcome().isOk()).isTrue();
     }
 
     @Test
@@ -224,6 +239,7 @@ class DomainHealthCompositionUseCaseTest {
         when(scmPort.read()).thenReturn(Map.of("status", "UP"));
         when(financePort.read()).thenReturn(Map.of("status", "UP"));
         when(erpPort.read()).thenReturn(Map.of("status", "UP"));
+        when(ecommercePort.read()).thenReturn(Map.of("status", "UP"));
 
         useCase.compose();
 

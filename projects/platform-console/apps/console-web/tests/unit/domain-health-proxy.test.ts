@@ -50,6 +50,7 @@ const HAPPY_ENVELOPE = {
     { domain: 'scm', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
     { domain: 'finance', status: 'ok', data: { status: 'OUT_OF_SERVICE' } },
     { domain: 'erp', status: 'ok', data: { status: 'UP' } },
+    { domain: 'ecommerce', status: 'ok', data: { status: 'UP' } },
   ],
 };
 
@@ -126,7 +127,7 @@ describe('GET /api/console/dashboards/domain-health proxy — response shape pas
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.asOf).toBe('2026-05-21T01:30:00Z');
-    expect(body.cards).toHaveLength(5);
+    expect(body.cards).toHaveLength(6);
     // per-card degrade lives inside the 200 payload (status="degraded"
     // on scm card) — the proxy did NOT re-classify into 5xx.
     expect(body.cards[2].status).toBe('degraded');

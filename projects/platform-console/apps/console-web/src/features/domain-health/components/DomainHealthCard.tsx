@@ -34,6 +34,7 @@ const DOMAIN_TITLE: Record<DomainKey, string> = {
   scm: 'SCM',
   finance: 'Finance',
   erp: 'ERP',
+  ecommerce: 'E-Commerce',
 };
 
 const DEGRADED_COPY: Record<DegradedReason, string> = {

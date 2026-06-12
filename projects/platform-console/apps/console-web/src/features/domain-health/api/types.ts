@@ -13,9 +13,10 @@ import { z } from 'zod';
  * `route="operator-overview"` there).
  *
  * Hard invariants (mirrored from § 2.4.9.2 + the BE Javadoc):
- *  - `cards[]` is ALWAYS exactly 5 entries in fixed order
- *    `[gap, wms, scm, finance, erp]`. The screen re-sorts/maps
- *    defensively by `domain` rather than positional order.
+ *  - `cards[]` is ALWAYS exactly 6 entries in fixed order
+ *    `[gap, wms, scm, finance, erp, ecommerce]` (ecommerce 6th card added
+ *    by TASK-MONO-241). The screen re-sorts/maps defensively by `domain`
+ *    rather than positional order.
  *  - `cards[i].status` ∈ `{ ok, degraded }` ONLY — `forbidden` is
  *    NEVER emitted on this route (no permission outcome exists on a
  *    public actuator leg per the § D4 scope clarification: D4 governs
@@ -40,8 +41,20 @@ import { z } from 'zod';
 
 // --- domain enum ----------------------------------------------------------
 
-/** Fixed render order — § 2.4.9.2 envelope schema invariant. */
-export const CARD_ORDER = ['iam', 'wms', 'scm', 'finance', 'erp'] as const;
+/**
+ * Fixed render order — § 2.4.9.2 envelope schema invariant. `ecommerce` is
+ * appended LAST (TASK-MONO-241) so the existing 5 keep their positions; the
+ * Domain Health surface is 6 cards while the Operator Overview (§ 2.4.9.1)
+ * stays 5 (two independent surfaces).
+ */
+export const CARD_ORDER = [
+  'iam',
+  'wms',
+  'scm',
+  'finance',
+  'erp',
+  'ecommerce',
+] as const;
 export type DomainKey = (typeof CARD_ORDER)[number];
 
 const DomainKeySchema = z.enum(CARD_ORDER);
@@ -120,10 +133,10 @@ export type DegradedCard = z.infer<typeof DegradedCardSchema>;
 // --- envelope ------------------------------------------------------------
 
 /**
- * The composition envelope — fixed 5-card array + `asOf` request timestamp.
+ * The composition envelope — fixed 6-card array + `asOf` request timestamp.
  *
- * The BE invariant is "5 cards in fixed `[gap, wms, scm, finance, erp]`
- * order"; the schema asserts "exactly 5 cards" + per-card shape +
+ * The BE invariant is "6 cards in fixed `[gap, wms, scm, finance, erp,
+ * ecommerce]` order"; the schema asserts "exactly 6 cards" + per-card shape +
  * "each declared domain appears exactly once". The screen does the
  * re-sort/map defensively (it indexes by `domain` rather than positional
  * order), so a future re-ordering bug in the BE would not crash the UI.
@@ -131,7 +144,7 @@ export type DegradedCard = z.infer<typeof DegradedCardSchema>;
 export const DomainHealthSchema = z
   .object({
     asOf: z.string().min(1),
-    cards: z.array(CardSchema).length(5),
+    cards: z.array(CardSchema).length(CARD_ORDER.length),
   })
   .refine(
     (env) => {
@@ -142,7 +155,7 @@ export const DomainHealthSchema = z
     },
     {
       message:
-        'cards[] MUST contain each of [gap,wms,scm,finance,erp] exactly once',
+        'cards[] MUST contain each of [gap,wms,scm,finance,erp,ecommerce] exactly once',
       path: ['cards'],
     },
   );

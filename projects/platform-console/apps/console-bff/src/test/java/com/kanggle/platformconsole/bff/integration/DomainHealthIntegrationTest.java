@@ -37,8 +37,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (§ 2.4.9.2 / TASK-PC-FE-013).
  *
  * <p>Extends {@link AbstractConsoleBffIntegrationTest} (reuses JWKS_SERVER +
- * spring.security.oauth2.resourceserver wiring). Adds 5 MockWebServer instances
- * stubbing the 5 backend domains' public {@code /actuator/health} endpoints.
+ * spring.security.oauth2.resourceserver wiring). Adds 6 MockWebServer instances
+ * stubbing the 6 backend domains' public {@code /actuator/health} endpoints
+ * (ecommerce 6th leg added by TASK-MONO-241).
  *
  * <p>Coverage:
  * <ul>
@@ -62,6 +63,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
     @SuppressWarnings("resource") static final MockWebServer SCM = new MockWebServer();
     @SuppressWarnings("resource") static final MockWebServer FINANCE = new MockWebServer();
     @SuppressWarnings("resource") static final MockWebServer ERP = new MockWebServer();
+    @SuppressWarnings("resource") static final MockWebServer ECOMMERCE = new MockWebServer();
 
     private static RSAKey rsaKey;
     private static String gapOidcJwt;
@@ -76,6 +78,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         SCM.start();
         FINANCE.start();
         ERP.start();
+        ECOMMERCE.start();
 
         rsaKey = new RSAKeyGenerator(2048).keyID("test-key-it-health").generate();
         String publicJwksJson = "{\"keys\":[" + rsaKey.toPublicJWK().toJSONString() + "]}";
@@ -104,6 +107,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         SCM.shutdown();
         FINANCE.shutdown();
         ERP.shutdown();
+        ECOMMERCE.shutdown();
     }
 
     @DynamicPropertySource
@@ -113,6 +117,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         registry.add("consolebff.outbound.scm.base-url", () -> baseUrl(SCM));
         registry.add("consolebff.outbound.finance.base-url", () -> baseUrl(FINANCE));
         registry.add("consolebff.outbound.erp.base-url", () -> baseUrl(ERP));
+        registry.add("consolebff.outbound.ecommerce.base-url", () -> baseUrl(ECOMMERCE));
     }
 
     private static String baseUrl(MockWebServer server) {
@@ -131,6 +136,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         resetMockServer(SCM);
         resetMockServer(FINANCE);
         resetMockServer(ERP);
+        resetMockServer(ECOMMERCE);
     }
 
     private static void resetMockServer(MockWebServer server) {
@@ -179,13 +185,14 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("happy_5_cards_all_UP: credential-LESS dispatch verified (no Authorization / X-Tenant-Id / X-Operator-Token on any outbound leg)")
-    void happy_5_cards_all_UP_credential_less_dispatch_verified() throws Exception {
+    @DisplayName("happy_6_cards_all_UP: credential-LESS dispatch verified (no Authorization / X-Tenant-Id / X-Operator-Token on any outbound leg)")
+    void happy_6_cards_all_UP_credential_less_dispatch_verified() throws Exception {
         respond(GAP, 200, "{\"status\":\"UP\"}");
         respond(WMS, 200, "{\"status\":\"UP\"}");
         respond(SCM, 200, "{\"status\":\"UP\"}");
         respond(FINANCE, 200, "{\"status\":\"UP\"}");
         respond(ERP, 200, "{\"status\":\"UP\"}");
+        respond(ECOMMERCE, 200, "{\"status\":\"UP\"}");
 
         ResponseEntity<String> response = callHealth(authHeaders());
         String body = response.getBody();
@@ -201,6 +208,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
                 .contains("\"domain\":\"scm\"")
                 .contains("\"domain\":\"finance\"")
                 .contains("\"domain\":\"erp\"")
+                .contains("\"domain\":\"ecommerce\"")
                 .contains("\"status\":\"UP\"");
         // No 'forbidden' anywhere on this route — § 2.4.9.2 invariant.
         assertThat(body).as("body:\n%s", body).doesNotContain("\"forbidden\"");
@@ -211,7 +219,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         // X-Operator-Token. The D4 sealed-switch is NOT invoked.
         // Path must be /actuator/health on every leg.
         // ───────────────────────────────────────────────────────────────
-        for (MockWebServer s : new MockWebServer[]{GAP, WMS, SCM, FINANCE, ERP}) {
+        for (MockWebServer s : new MockWebServer[]{GAP, WMS, SCM, FINANCE, ERP, ECOMMERCE}) {
             RecordedRequest r = s.takeRequest(2, TimeUnit.SECONDS);
             assertThat(r).as("expected outbound on stub %s", s.getPort()).isNotNull();
             assertThat(r.getPath())
@@ -240,6 +248,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         respond(SCM, 200, "{\"status\":\"UP\"}");
         respond(FINANCE, 200, "{\"status\":\"UP\"}");
         respond(ERP, 200, "{\"status\":\"UP\"}");
+        respond(ECOMMERCE, 200, "{\"status\":\"UP\"}");
 
         ResponseEntity<String> response = callHealth(authHeaders());
         String body = response.getBody();
@@ -266,6 +275,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         respond(SCM, 200, "{\"status\":\"UP\"}");
         respond(FINANCE, 200, "{\"status\":\"UP\"}");
         respond(ERP, 200, "{\"status\":\"UP\"}");
+        respond(ECOMMERCE, 200, "{\"status\":\"UP\"}");
 
         ResponseEntity<String> response = callHealth(authHeaders());
         String body = response.getBody();
@@ -289,6 +299,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         respond(SCM, 401, "{}");
         respond(FINANCE, 200, "{\"status\":\"UP\"}");
         respond(ERP, 200, "{\"status\":\"UP\"}");
+        respond(ECOMMERCE, 200, "{\"status\":\"UP\"}");
 
         ResponseEntity<String> response = callHealth(authHeaders());
         String body = response.getBody();
@@ -307,13 +318,14 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("all_down_5x_503: 200 envelope with all 5 degraded cards; no forbidden anywhere")
-    void all_down_5x_503() {
+    @DisplayName("all_down_6x_503: 200 envelope with all 6 degraded cards; no forbidden anywhere")
+    void all_down_6x_503() {
         respond(GAP, 503, "{}");
         respond(WMS, 503, "{}");
         respond(SCM, 503, "{}");
         respond(FINANCE, 503, "{}");
         respond(ERP, 503, "{}");
+        respond(ECOMMERCE, 503, "{}");
 
         ResponseEntity<String> response = callHealth(authHeaders());
         String body = response.getBody();
@@ -321,8 +333,9 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         assertThat(response.getStatusCode())
                 .as("non-200 body:\n%s", body)
                 .isEqualTo(HttpStatus.OK);
-        // 5 cards all degraded; no forbidden anywhere.
+        // 6 cards all degraded; no forbidden anywhere.
         assertThat(body).as("body:\n%s", body).contains("\"status\":\"degraded\"");
+        assertThat(body).as("body:\n%s", body).contains("\"domain\":\"ecommerce\"");
         assertThat(body).as("body:\n%s", body).doesNotContain("\"forbidden\"");
     }
 
@@ -379,6 +392,7 @@ class DomainHealthIntegrationTest extends AbstractConsoleBffIntegrationTest {
         s.add(SCM.getRequestCount());
         s.add(FINANCE.getRequestCount());
         s.add(ERP.getRequestCount());
+        s.add(ECOMMERCE.getRequestCount());
         return s;
     }
 }

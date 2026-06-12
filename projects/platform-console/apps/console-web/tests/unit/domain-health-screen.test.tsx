@@ -6,15 +6,16 @@ import { DomainHealthScreen, DomainHealthCard } from '@/features/domain-health';
 import type { Card, DomainHealth } from '@/features/domain-health';
 
 /**
- * `<DomainHealthScreen>` (TASK-PC-FE-013):
- *   - renders exactly 5 `<DomainHealthCard>` children in the FIXED
- *     order `[gap, wms, scm, finance, erp]` regardless of the BE
- *     `cards[]` array order (the screen indexes by domain, not
+ * `<DomainHealthScreen>` (TASK-PC-FE-013 + TASK-MONO-241):
+ *   - renders exactly 6 `<DomainHealthCard>` children in the FIXED
+ *     order `[gap, wms, scm, finance, erp, ecommerce]` regardless of the
+ *     BE `cards[]` array order (the screen indexes by domain, not
  *     position) and regardless of card status (cards never reordered
- *     by status — § 2.4.9.2 invariant).
+ *     by status — § 2.4.9.2 invariant; ecommerce 6th card added by
+ *     TASK-MONO-241).
  *   - renders all 4 `data.status` variants (UP/DOWN/OUT_OF_SERVICE/UNKNOWN)
  *     plus the degraded branch with distinct visuals.
- *   - DegradeBanner shown only when all 5 cards are `degraded`.
+ *   - DegradeBanner shown only when all 6 cards are `degraded`.
  */
 
 function wrapper() {
@@ -34,6 +35,7 @@ const MIXED_VARIANTS: DomainHealth = {
     { domain: 'scm', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
     { domain: 'finance', status: 'ok', data: { status: 'OUT_OF_SERVICE' } },
     { domain: 'erp', status: 'ok', data: { status: 'UNKNOWN' } },
+    { domain: 'ecommerce', status: 'ok', data: { status: 'UP' } },
   ],
 };
 
@@ -43,6 +45,7 @@ const ALL_DEGRADED_CARDS: Card[] = [
   { domain: 'scm', status: 'degraded', reason: 'CIRCUIT_OPEN' },
   { domain: 'finance', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
   { domain: 'erp', status: 'degraded', reason: 'TIMEOUT' },
+  { domain: 'ecommerce', status: 'degraded', reason: 'CIRCUIT_OPEN' },
 ];
 
 const ALL_DEGRADED: DomainHealth = {
@@ -50,8 +53,8 @@ const ALL_DEGRADED: DomainHealth = {
   cards: ALL_DEGRADED_CARDS as DomainHealth['cards'],
 };
 
-describe('DomainHealthScreen — fixed 5-card order', () => {
-  it('renders exactly 5 cards in [gap, wms, scm, finance, erp] order', () => {
+describe('DomainHealthScreen — fixed 6-card order', () => {
+  it('renders exactly 6 cards in [gap, wms, scm, finance, erp, ecommerce] order', () => {
     render(<DomainHealthScreen health={MIXED_VARIANTS} />, {
       wrapper: wrapper(),
     });
@@ -59,13 +62,14 @@ describe('DomainHealthScreen — fixed 5-card order', () => {
     const cardSections = within(container)
       .getAllByTestId(/^domain-health-card-/)
       .filter((el) => el.hasAttribute('data-domain'));
-    expect(cardSections).toHaveLength(5);
+    expect(cardSections).toHaveLength(6);
     expect(cardSections.map((el) => el.getAttribute('data-domain'))).toEqual([
       'iam',
       'wms',
       'scm',
       'finance',
       'erp',
+      'ecommerce',
     ]);
   });
 
@@ -73,6 +77,7 @@ describe('DomainHealthScreen — fixed 5-card order', () => {
     const shuffled: DomainHealth = {
       ...MIXED_VARIANTS,
       cards: [
+        MIXED_VARIANTS.cards[5]!, // ecommerce
         MIXED_VARIANTS.cards[4]!, // erp
         MIXED_VARIANTS.cards[2]!, // scm
         MIXED_VARIANTS.cards[0]!, // gap
@@ -93,7 +98,20 @@ describe('DomainHealthScreen — fixed 5-card order', () => {
       'scm',
       'finance',
       'erp',
+      'ecommerce',
     ]);
+  });
+
+  it('renders the ecommerce 6th card with the E-Commerce title (TASK-MONO-241)', () => {
+    render(<DomainHealthScreen health={MIXED_VARIANTS} />, {
+      wrapper: wrapper(),
+    });
+    const ecomCard = screen.getByTestId('domain-health-card-ecommerce');
+    expect(ecomCard.getAttribute('data-domain')).toBe('ecommerce');
+    expect(ecomCard.getAttribute('data-status')).toBe('ok');
+    expect(
+      screen.getByRole('heading', { name: 'E-Commerce' }),
+    ).toBeInTheDocument();
   });
 
   it('does NOT reorder cards by status (degraded card stays in its fixed position)', () => {
@@ -176,7 +194,7 @@ describe('DomainHealthScreen — 4 data.status variants + degraded', () => {
 });
 
 describe('DomainHealthScreen — DegradeBanner', () => {
-  it('shows the all-degraded banner when ALL 5 cards are degraded', () => {
+  it('shows the all-degraded banner when ALL 6 cards are degraded', () => {
     render(<DomainHealthScreen health={ALL_DEGRADED} />, {
       wrapper: wrapper(),
     });
@@ -198,7 +216,7 @@ describe('DomainHealthScreen — DegradeBanner', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('does NOT show the degrade banner when all 5 cards are ok', () => {
+  it('does NOT show the degrade banner when all 6 cards are ok', () => {
     const allOk: DomainHealth = {
       asOf: '2026-05-21T01:30:00Z',
       cards: [
@@ -207,6 +225,7 @@ describe('DomainHealthScreen — DegradeBanner', () => {
         { domain: 'scm', status: 'ok', data: { status: 'UP' } },
         { domain: 'finance', status: 'ok', data: { status: 'UP' } },
         { domain: 'erp', status: 'ok', data: { status: 'UP' } },
+        { domain: 'ecommerce', status: 'ok', data: { status: 'UP' } },
       ],
     };
     render(<DomainHealthScreen health={allOk} />, { wrapper: wrapper() });

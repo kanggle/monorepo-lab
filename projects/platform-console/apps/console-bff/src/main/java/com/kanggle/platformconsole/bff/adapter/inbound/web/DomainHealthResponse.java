@@ -15,20 +15,22 @@ import java.util.List;
  * {
  *   "asOf": "2026-05-21T01:30:00Z",
  *   "cards": [
- *     { "domain": "iam",     "status": "ok",       "data": { "status": "UP" } },
- *     { "domain": "wms",     "status": "ok",       "data": { "status": "UP" } },
- *     { "domain": "scm",     "status": "degraded", "reason": "DOWNSTREAM_ERROR" },
- *     { "domain": "finance", "status": "ok",       "data": { "status": "OUT_OF_SERVICE" } },
- *     { "domain": "erp",     "status": "ok",       "data": { "status": "UP" } }
+ *     { "domain": "iam",       "status": "ok",       "data": { "status": "UP" } },
+ *     { "domain": "wms",       "status": "ok",       "data": { "status": "UP" } },
+ *     { "domain": "scm",       "status": "degraded", "reason": "DOWNSTREAM_ERROR" },
+ *     { "domain": "finance",   "status": "ok",       "data": { "status": "OUT_OF_SERVICE" } },
+ *     { "domain": "erp",       "status": "ok",       "data": { "status": "UP" } },
+ *     { "domain": "ecommerce", "status": "ok",       "data": { "status": "UP" } }
  *   ]
  * }
  * </pre>
  *
  * <p>Hard invariants:
  * <ul>
- *   <li>{@code cards} is always exactly 5 entries in fixed order
- *       {@code [gap, wms, scm, finance, erp]} regardless of which legs
- *       succeeded.</li>
+ *   <li>{@code cards} is always exactly 6 entries in fixed order
+ *       {@code [gap, wms, scm, finance, erp, ecommerce]} regardless of which
+ *       legs succeeded (ecommerce 6th card added by TASK-MONO-241; the
+ *       response is data-driven so it maps the leg list verbatim).</li>
  *   <li>{@code cards[i].status} ∈ {@code { "ok", "degraded" }} only —
  *       {@code "forbidden"} is NEVER emitted on this route (no permission
  *       outcome exists for a public actuator leg).</li>

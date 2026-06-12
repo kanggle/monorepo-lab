@@ -84,3 +84,7 @@ consolebff:
       base-url: ${CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL:http://finance.local}
     erp:
       base-url: ${CONSOLE_BFF_OUTBOUND_ERP_BASE_URL:http://erp.local}
+    # ecommerce is the 6th DOMAIN-HEALTH leg only (§ 2.4.9.2 — not an
+    # operator-overview leg). gateway-service /actuator/health, credential-less.
+    ecommerce:
+      base-url: ${CONSOLE_BFF_OUTBOUND_ECOMMERCE_BASE_URL:http://ecommerce.local}
