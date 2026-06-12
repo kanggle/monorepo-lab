@@ -106,7 +106,7 @@ services:
       # Reuse the GAP init script verbatim — it creates the 4 GAP databases +
       # service users. finance_db is created at seed time (seed.sql first
       # statement) since GAP's init.sh is GAP-owned (AC-3).
-      - ../iam/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - ../iam-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
       interval: 10s
@@ -172,7 +172,7 @@ services:
   # ---------------------------------------------------------------------------
   auth-service:
     build:
-      context: ../iam
+      context: ../iam-platform
       dockerfile: apps/auth-service/Dockerfile
     environment:
       <<: *iam-service-env
@@ -189,7 +189,7 @@ services:
       JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
       JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
     volumes:
-      - ../iam/apps/auth-service/src/test/resources/keys:/app/keys:ro
+      - ../iam-platform/apps/auth-service/src/test/resources/keys:/app/keys:ro
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -221,7 +221,7 @@ services:
   # ---------------------------------------------------------------------------
   account-service:
     build:
-      context: ../iam
+      context: ../iam-platform
       dockerfile: apps/account-service/Dockerfile
     environment:
       <<: *iam-service-env
@@ -252,7 +252,7 @@ services:
   # ---------------------------------------------------------------------------
   admin-service:
     build:
-      context: ../iam
+      context: ../iam-platform
       dockerfile: apps/admin-service/Dockerfile
     environment:
       <<: *iam-service-env
