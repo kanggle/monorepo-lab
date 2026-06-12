@@ -190,6 +190,13 @@ Full convention + branching + PR shape: [`docs/guides/monorepo-workflow.md`](doc
 - Workaround if you hit it: `git push -u origin HEAD` (renaming the branch is cleaner).
 - Encountered repeatedly across BE-052, BE-161.
 
+**Concurrent-session worktree isolation** — multiple interactive agent sessions (or routines) running at the same time must never share the main checkout. Each concurrent task gets its own `git worktree add` directory; the main `monorepo-lab` checkout stays parked on a stable branch (ideally `main`) and is not used for task work.
+
+- A `git checkout` / `checkout -b` in a directory another live session is using moves the **single shared HEAD + index** of that directory — the other session's uncommitted WIP gets stranded on the wrong branch, and its next `git commit` lands on *your* branch. ("branch per task" alone is insufficient; the isolation unit is the **worktree (directory)**, not the branch.)
+- The `protect-main-branch.ps1` hook only blocks commits/pushes **on `main`** — it does NOT catch two sessions sharing the main checkout across two *feature* branches. There is no automated guard for this case; it is a discipline rule. (`docs/guides/monorepo-workflow.md` documents the worktree convention, but that guide is human-reference-only and assumes the harness-managed `.claude/worktrees/agent-<id>/` dispatch model, not manual multi-session worktrees.)
+- Symptom: `git worktree list` shows the main checkout on an unexpected feature branch, or `git status` surfaces files from a task you are not working on. Recovery: commit only your own files by **explicit path** (leave the other session's WIP untouched), then `git checkout <their-branch>` to restore the shared HEAD — uncommitted WIP travels along and re-lands on the correct branch (0 path overlap = no conflict). Afterward move your work to its own `git worktree add` directory.
+- Worktree-add Windows pitfalls (DWIM remote-branch resolution, failed-remove, prune side effects): project memory `env_git_worktree_verify_windows`. Worked incident + reflog-timestamp forensics: project memory `env_concurrent_git_branch_switch_hazard`.
+
 **Post-merge branch hygiene** — the repo squash-merges PRs; feature/chore refs are not auto-pruned and accumulate.
 
 - After a PR squash-merges, delete its feature + close-chore refs immediately. Stacked work uses a single tip-only PR (the tip contains its base; the base ref becomes squash-residue → delete it too).
