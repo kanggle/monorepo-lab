@@ -1,6 +1,7 @@
 package com.example.erp.notification.application;
 
 import com.example.erp.notification.config.ExternalNotificationProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -21,6 +22,7 @@ public class RetryBackoffPolicy {
     private final long maxBackoffMs;
     private final RandomGenerator random;
 
+    @Autowired
     public RetryBackoffPolicy(ExternalNotificationProperties properties, RandomGenerator random) {
         this(properties.getRetry().getInitialBackoffMs(),
                 properties.getRetry().getMaxBackoffMs(), random);
