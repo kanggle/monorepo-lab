@@ -1,6 +1,7 @@
 package com.example.finance.ledger.application;
 
 import com.example.finance.ledger.application.port.outbound.ClockPort;
+import com.example.finance.ledger.application.port.outbound.LedgerEventPublisher;
 import com.example.finance.ledger.application.view.AccountingPeriodView;
 import com.example.finance.ledger.domain.audit.AuditLog;
 import com.example.finance.ledger.domain.audit.AuditLogRepository;
@@ -48,6 +49,7 @@ class CloseAccountingPeriodUseCaseTest {
     @Mock AccountingPeriodRepository periodRepository;
     @Mock JournalRepository journalRepository;
     @Mock AuditLogRepository auditLogRepository;
+    @Mock LedgerEventPublisher ledgerEventPublisher;
     @Mock ClockPort clock;
 
     CloseAccountingPeriodUseCase useCase;
@@ -55,7 +57,8 @@ class CloseAccountingPeriodUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new CloseAccountingPeriodUseCase(
-                periodRepository, journalRepository, auditLogRepository, clock);
+                periodRepository, journalRepository, auditLogRepository,
+                ledgerEventPublisher, clock);
     }
 
     @Test
@@ -89,6 +92,14 @@ class CloseAccountingPeriodUseCaseTest {
         ArgumentCaptor<AuditLog> audit = ArgumentCaptor.forClass(AuditLog.class);
         verify(auditLogRepository).save(audit.capture());
         assertThat(audit.getValue().getAction()).isEqualTo("CLOSED");
+
+        // AC-2: closing a period appends one period.closed outbox row, after the
+        // close + snapshot save, with the closed aggregate (entryCount stamped).
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                periodRepository, auditLogRepository, ledgerEventPublisher);
+        inOrder.verify(periodRepository).save(period);
+        inOrder.verify(auditLogRepository).save(any());
+        inOrder.verify(ledgerEventPublisher).publishPeriodClosed(period);
     }
 
     @Test
@@ -115,6 +126,7 @@ class CloseAccountingPeriodUseCaseTest {
         assertThatThrownBy(() -> useCase.close("missing", TENANT, "user-1"))
                 .isInstanceOf(AccountingPeriodNotFoundException.class);
         verify(periodRepository, never()).save(any());
+        verify(ledgerEventPublisher, never()).publishPeriodClosed(any());
     }
 
     @Test
@@ -132,5 +144,6 @@ class CloseAccountingPeriodUseCaseTest {
 
         verify(periodRepository, never()).save(any());
         verify(periodRepository, never()).saveSnapshot(any(), any(), any());
+        verify(ledgerEventPublisher, never()).publishPeriodClosed(any());
     }
 }

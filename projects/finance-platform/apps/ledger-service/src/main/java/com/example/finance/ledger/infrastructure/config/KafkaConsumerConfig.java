@@ -27,10 +27,12 @@ import java.util.Map;
  * mapper (blueprint: read-model-service) so an undeserializable payload is a
  * controlled DLT route, not a poison-pill deserialization loop.
  *
- * <p>The {@link KafkaTemplate} producer is required by {@code @RetryableTopic} to
- * publish retry / DLT records; the ledger itself publishes <b>no domain events</b>
- * (terminal consumer — this template is resilience plumbing only, never used for
- * a domain emission).
+ * <p>The single {@link KafkaTemplate} producer is shared by two transports: the
+ * {@code @RetryableTopic} retry / DLT machinery AND — from the 3rd increment
+ * (TASK-FIN-BE-009) — the GL/AP-feed outbox relay ({@code LedgerOutboxPublisher}),
+ * which forwards {@code ledger_outbox} rows to
+ * {@code finance.ledger.{entry.posted,period.closed}.v1}. The ledger is now a
+ * <b>publishing consumer</b>; this is still the same bean (no second producer).
  */
 @Configuration
 public class KafkaConsumerConfig {

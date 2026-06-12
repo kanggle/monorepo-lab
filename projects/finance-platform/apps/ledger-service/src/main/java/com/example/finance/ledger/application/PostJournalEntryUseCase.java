@@ -1,6 +1,7 @@
 package com.example.finance.ledger.application;
 
 import com.example.finance.ledger.application.port.outbound.ClockPort;
+import com.example.finance.ledger.application.port.outbound.LedgerEventPublisher;
 import com.example.finance.ledger.domain.account.LedgerAccount;
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.account.repository.LedgerAccountRepository;
@@ -40,6 +41,7 @@ public class PostJournalEntryUseCase {
     private final LedgerAccountRepository ledgerAccountRepository;
     private final AuditLogRepository auditLogRepository;
     private final AccountingPeriodRepository accountingPeriodRepository;
+    private final LedgerEventPublisher ledgerEventPublisher;
     private final ClockPort clock;
 
     /**
@@ -59,6 +61,10 @@ public class PostJournalEntryUseCase {
         auditLogRepository.save(AuditLog.of(
                 entry.tenantId(), AGGREGATE_TYPE, entry.entryId(), "POSTED",
                 ACTOR, auditSummary(entry), reason, now));
+        // (3rd incr) Append the GL/AP feed row in THIS transaction — atomic with
+        // the entry + audit (transactional outbox; the feed can never diverge from
+        // the books). A guard-rejected posting threw above → no row appended.
+        ledgerEventPublisher.publishEntryPosted(saved);
         return saved;
     }
 

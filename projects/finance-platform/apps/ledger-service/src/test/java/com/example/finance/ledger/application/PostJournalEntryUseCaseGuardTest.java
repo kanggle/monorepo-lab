@@ -1,6 +1,7 @@
 package com.example.finance.ledger.application;
 
 import com.example.finance.ledger.application.port.outbound.ClockPort;
+import com.example.finance.ledger.application.port.outbound.LedgerEventPublisher;
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.audit.AuditLogRepository;
 import com.example.finance.ledger.domain.account.repository.LedgerAccountRepository;
@@ -54,6 +55,7 @@ class PostJournalEntryUseCaseGuardTest {
     @Mock LedgerAccountRepository ledgerAccountRepository;
     @Mock AuditLogRepository auditLogRepository;
     @Mock AccountingPeriodRepository accountingPeriodRepository;
+    @Mock LedgerEventPublisher ledgerEventPublisher;
     @Mock ClockPort clock;
 
     PostJournalEntryUseCase useCase;
@@ -61,7 +63,7 @@ class PostJournalEntryUseCaseGuardTest {
     @BeforeEach
     void setUp() {
         useCase = new PostJournalEntryUseCase(journalRepository, ledgerAccountRepository,
-                auditLogRepository, accountingPeriodRepository, clock);
+                auditLogRepository, accountingPeriodRepository, ledgerEventPublisher, clock);
     }
 
     private static JournalEntry entry() {
@@ -87,6 +89,8 @@ class PostJournalEntryUseCaseGuardTest {
         verify(journalRepository, never()).save(any());
         verify(auditLogRepository, never()).save(any());
         verify(ledgerAccountRepository, never()).save(any());
+        // AC-3: a guard-rejected posting appends NO outbox row (the whole Tx rolls back).
+        verify(ledgerEventPublisher, never()).publishEntryPosted(any());
     }
 
     @Test
@@ -102,5 +106,12 @@ class PostJournalEntryUseCaseGuardTest {
 
         verify(journalRepository).save(saved);
         verify(auditLogRepository).save(any());
+        // AC-1: every posted entry appends exactly one entry.posted outbox row,
+        // after the entry+audit save, in the same transaction.
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                journalRepository, auditLogRepository, ledgerEventPublisher);
+        inOrder.verify(journalRepository).save(saved);
+        inOrder.verify(auditLogRepository).save(any());
+        inOrder.verify(ledgerEventPublisher).publishEntryPosted(saved);
     }
 }
