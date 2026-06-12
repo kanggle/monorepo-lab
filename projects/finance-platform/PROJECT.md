@@ -60,7 +60,7 @@ taxonomy_version: 0.1
 
 | Service | Service Type | 핵심 책임 |
 |---|---|---|
-| `ledger-service` | rest-api | 복식부기 원장 (차변/대변, 잔액 reconciliation, 기간 마감), GL/AP feed — fintech accounting 깊이 (ADR-008 § D3 v2) |
+| `ledger-service` | rest-api + event-consumer | 복식부기 원장 (차변/대변, 잔액 reconciliation, 기간 마감), GL/AP feed — fintech accounting 깊이 (ADR-008 § D3 v2). **첫 증분 부트스트랩 = TASK-FIN-BE-007**: 이벤트구동 자동분개(account-service `finance.transaction.*` 소비 → 균형 분개) + 조회 REST(분개/계정잔액/시산표). 기간 마감·GL/AP feed 발행·reconciliation 매칭·수동분개·멀티통화는 후속 증분으로 forward-declared (`specs/services/ledger-service/architecture.md` § Increment Scope). Service Type 은 architecture.md 가 dual-type 으로 확정 (이벤트 소비가 1차 trigger — erp read-model-service 동형). |
 | `wallet-service` | rest-api | 사용자별 잔액 보관 분리, 멀티-통화 지갑 (v1 은 account-service 내 balance 로 통합) |
 | `kyc-service` | rest-api | KYC/AML 단계 관리, 외부 신원확인·제재목록 제공사 adapter |
 | `notification-service` | event-consumer | 거래/KYC/한도/의심거래 알림 fanout |

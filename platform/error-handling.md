@@ -610,14 +610,19 @@ Owned by `account-service` v1 (compliance gate); `kyc-service` v2. Fund-movement
 
 ## Reconciliation / Ledger  `[domain: fintech]`
 
-Forward-declared (fintech.md F8 / ledger v2). v1 models the operator queue; real external matching + double-entry = v2 (ADR-MONO-008 § D3) — **v2-planned**, no exception classes yet.
+The double-entry ledger is owned by `ledger-service` (ADR-MONO-008 § D3). Its
+**first increment** (TASK-FIN-BE-007 — event-driven auto-journal + read) implements
+the double-entry invariant + read surface; reconciliation matching and period close
+remain **v2-planned** (later ledger-service increments).
 
 | Code | HTTP | Description |
 |---|---|---|
+| LEDGER_ENTRY_UNBALANCED | 422 | Double-entry debit ≠ credit (ledger invariant) — `ledger-service` posting guard |
+| JOURNAL_ENTRY_NOT_FOUND | 404 | Journal entry id unknown / not in tenant — `ledger-service` read |
+| LEDGER_ACCOUNT_NOT_FOUND | 404 | Ledger account code unknown — `ledger-service` read |
+| LEDGER_PERIOD_CLOSED | 422 | Journal attempt on a closed accounting period — **v2-planned** (period-close increment) |
 | RECONCILIATION_DISCREPANCY | 422 | Internal ledger ↔ external statement mismatch; operator review (auto-close forbidden, F8) — **v2-planned** |
 | RECONCILIATION_PERIOD_LOCKED | 422 | Mutation of a locked reconciliation period (F8) — **v2-planned** |
-| LEDGER_ENTRY_UNBALANCED | 422 | Double-entry debit ≠ credit (ledger invariant) — **v2-planned** |
-| LEDGER_PERIOD_CLOSED | 422 | Journal attempt on a closed accounting period — **v2-planned** |
 
 ---
 
