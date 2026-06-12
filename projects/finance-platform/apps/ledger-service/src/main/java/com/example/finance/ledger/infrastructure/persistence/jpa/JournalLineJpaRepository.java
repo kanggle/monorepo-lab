@@ -15,7 +15,10 @@ public interface JournalLineJpaRepository extends JpaRepository<JournalLine, Lon
     Page<JournalLine> findByLedgerAccountCodeAndTenantIdOrderByPostedAtDescIdDesc(
             String ledgerAccountCode, String tenantId, Pageable pageable);
 
-    /** Per-account debit/credit totals (minor units) grouped by account + currency. */
+    /**
+     * Per-account debit/credit totals (minor units) grouped by account + currency.
+     * (8th incr) each row also carries the base-currency (KRW) consolidated sums.
+     */
     @Query("""
             select new com.example.finance.ledger.infrastructure.persistence.jpa.AccountTotalsRow(
                 l.ledgerAccountCode,
@@ -23,7 +26,11 @@ public interface JournalLineJpaRepository extends JpaRepository<JournalLine, Lon
                 coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.DEBIT
                     then l.amountMinor else 0 end), 0),
                 coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.CREDIT
-                    then l.amountMinor else 0 end), 0))
+                    then l.amountMinor else 0 end), 0),
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.DEBIT
+                    then l.baseAmountMinor else 0 end), 0),
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.CREDIT
+                    then l.baseAmountMinor else 0 end), 0))
             from JournalLine l
             where l.tenantId = :tenantId
             group by l.ledgerAccountCode, l.currency
@@ -38,7 +45,11 @@ public interface JournalLineJpaRepository extends JpaRepository<JournalLine, Lon
                 coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.DEBIT
                     then l.amountMinor else 0 end), 0),
                 coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.CREDIT
-                    then l.amountMinor else 0 end), 0))
+                    then l.amountMinor else 0 end), 0),
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.DEBIT
+                    then l.baseAmountMinor else 0 end), 0),
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.CREDIT
+                    then l.baseAmountMinor else 0 end), 0))
             from JournalLine l
             where l.tenantId = :tenantId and l.ledgerAccountCode = :code
             group by l.ledgerAccountCode, l.currency
@@ -58,7 +69,11 @@ public interface JournalLineJpaRepository extends JpaRepository<JournalLine, Lon
                 coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.DEBIT
                     then l.amountMinor else 0 end), 0),
                 coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.CREDIT
-                    then l.amountMinor else 0 end), 0))
+                    then l.amountMinor else 0 end), 0),
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.DEBIT
+                    then l.baseAmountMinor else 0 end), 0),
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.CREDIT
+                    then l.baseAmountMinor else 0 end), 0))
             from JournalLine l
             where l.tenantId = :tenantId and l.postedAt < :to
             group by l.ledgerAccountCode, l.currency

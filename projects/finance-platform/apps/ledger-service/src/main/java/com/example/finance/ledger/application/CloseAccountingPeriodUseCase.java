@@ -9,6 +9,7 @@ import com.example.finance.ledger.domain.error.LedgerErrors.AccountingPeriodNotF
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
 import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import com.example.finance.ledger.domain.money.Money;
 import com.example.finance.ledger.domain.period.AccountingPeriod;
 import com.example.finance.ledger.domain.period.PeriodAccountTotal;
@@ -71,16 +72,18 @@ public class CloseAccountingPeriodUseCase {
 
     private PeriodBalanceSnapshot computeSnapshot(String tenantId, Instant to) {
         List<AccountTotals> totals = journalRepository.accountTotalsUpTo(tenantId, to);
-        // First increment is single-currency; default to KRW when the window is empty.
-        Currency currency = totals.isEmpty()
-                ? Currency.KRW : Currency.of(totals.get(0).currency());
+        // (8th incr) The snapshot consolidates in the base/reporting currency (KRW) so
+        // a multi-currency period still closes in balance — the per-account rows carry
+        // each account's base-currency (KRW) totals and the grand totals are the
+        // base-currency consolidation. In the all-KRW path this is byte-identical to
+        // the per-increment behaviour (base == original).
+        Currency base = LedgerReportingCurrency.BASE;
         List<PeriodAccountTotal> accounts = new ArrayList<>(totals.size());
         for (AccountTotals t : totals) {
-            Currency c = Currency.of(t.currency());
             accounts.add(new PeriodAccountTotal(t.ledgerAccountCode(),
-                    Money.of(t.debitMinor(), c), Money.of(t.creditMinor(), c)));
+                    Money.of(t.baseDebitMinor(), base), Money.of(t.baseCreditMinor(), base)));
         }
-        return PeriodBalanceSnapshot.of(accounts, currency);
+        return PeriodBalanceSnapshot.of(accounts, base);
     }
 
     private static String auditSummary(AccountingPeriod p, PeriodBalanceSnapshot snapshot) {

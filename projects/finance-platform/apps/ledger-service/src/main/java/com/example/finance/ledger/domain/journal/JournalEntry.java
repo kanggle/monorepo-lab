@@ -3,6 +3,7 @@ package com.example.finance.ledger.domain.journal;
 import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerEntryUnbalancedException;
 import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import com.example.finance.ledger.domain.money.Money;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -33,8 +34,16 @@ import java.util.Objects;
  * is no mutator; a correction is a NEW {@code REVERSAL} entry built from
  * {@link #reversalEntry} (F3).
  *
- * <p>Single-currency per entry: all lines must share one {@link Currency} or the
- * factory raises {@link CurrencyMismatchException} (422 CURRENCY_MISMATCH).
+ * <p><b>(8th increment — multi-currency, TASK-FIN-BE-014)</b> the balance identity
+ * moves to the fixed base/reporting currency ({@link LedgerReportingCurrency#BASE}
+ * = KRW): the factory sums each line's {@code baseAmount} (all KRW) per side and
+ * requires {@code Σ baseDebit == Σ baseCredit} → else
+ * {@link LedgerEntryUnbalancedException}. Cross-currency lines in one entry are now
+ * <b>allowed</b> (the previous blanket "all lines same currency" rejection is
+ * removed); {@link CurrencyMismatchException} remains only for an unsupported
+ * currency / a non-base {@code baseAmount}. The base amounts are supplied per line,
+ * so the entry balances in <b>integer base minor units</b> — no rounding hazard.
+ * A single-currency KRW entry is byte-identical (base == amount, rate == 1).
  *
  * <p>JPA annotations are the allowed domain↔framework exception; the balance
  * identity is pure Java and exhaustively unit-tested.
@@ -84,9 +93,10 @@ public class JournalEntry {
 
     /**
      * Construct a posted journal entry, re-asserting the balance identity. The
-     * lines MUST be ≥2, single-currency, and balanced ({@code Σ debit == Σ
-     * credit}) — otherwise {@link LedgerEntryUnbalancedException} /
-     * {@link CurrencyMismatchException}.
+     * lines MUST be ≥2 and balanced in the base currency
+     * ({@code Σ baseDebit == Σ baseCredit}) — otherwise
+     * {@link LedgerEntryUnbalancedException}. Lines may be in different currencies
+     * (8th increment); each carries its base-currency value.
      */
     public static JournalEntry post(String entryId, String tenantId, Instant postedAt,
                                     SourceRef source, List<JournalLine> lines) {
@@ -121,25 +131,22 @@ public class JournalEntry {
             throw new LedgerEntryUnbalancedException(
                     "a journal entry must have at least two lines, got " + lines.size());
         }
-        Currency currency = lines.get(0).currency();
-        Money debitTotal = Money.zero(currency);
-        Money creditTotal = Money.zero(currency);
+        // (8th incr) The balance identity holds in the base/reporting currency.
+        // Each line carries its baseAmount (all KRW), so the per-side sums are
+        // single-currency arithmetic — cross-currency lines are allowed.
+        Money baseDebitTotal = Money.zero(LedgerReportingCurrency.BASE);
+        Money baseCreditTotal = Money.zero(LedgerReportingCurrency.BASE);
         for (JournalLine line : lines) {
-            if (line.currency() != currency) {
-                throw new CurrencyMismatchException(
-                        "cross-currency lines in one entry: " + currency
-                                + " vs " + line.currency());
-            }
             if (line.isDebit()) {
-                debitTotal = debitTotal.add(line.money());
+                baseDebitTotal = baseDebitTotal.add(line.baseMoney());
             } else {
-                creditTotal = creditTotal.add(line.money());
+                baseCreditTotal = baseCreditTotal.add(line.baseMoney());
             }
         }
-        if (!debitTotal.equals(creditTotal)) {
+        if (!baseDebitTotal.equals(baseCreditTotal)) {
             throw new LedgerEntryUnbalancedException(
-                    "unbalanced entry: Σ debit " + debitTotal
-                            + " != Σ credit " + creditTotal);
+                    "unbalanced entry: Σ baseDebit " + baseDebitTotal
+                            + " != Σ baseCredit " + baseCreditTotal);
         }
         List<JournalLine> attached = new ArrayList<>(lines);
         for (JournalLine line : attached) {
@@ -154,10 +161,27 @@ public class JournalEntry {
         return Collections.unmodifiableList(lines);
     }
 
+    /**
+     * The first line's transaction currency. For a single-currency entry this is
+     * the entry currency; for a multi-currency entry it is only indicative — the
+     * authoritative reporting currency is {@link #baseCurrency()} and the reads use
+     * the per-{@code (account, currency)} breakdown from the SQL grouping, not this.
+     */
     public Currency currency() {
         return lines.get(0).currency();
     }
 
+    /** The base/reporting currency (KRW) — the currency the entry balances in. */
+    public Currency baseCurrency() {
+        return LedgerReportingCurrency.BASE;
+    }
+
+    /**
+     * Σ of the debit lines' transaction {@code money}. Only meaningful for a
+     * single-currency entry (it would throw on cross-currency arithmetic); the
+     * consolidated/audit path uses {@link #baseDebitTotal()} instead, so this is
+     * never called on a mixed-currency entry.
+     */
     public Money debitTotal() {
         Money total = Money.zero(currency());
         for (JournalLine line : lines) {
@@ -168,6 +192,7 @@ public class JournalEntry {
         return total;
     }
 
+    /** Σ of the credit lines' transaction {@code money} (single-currency only — see {@link #debitTotal()}). */
     public Money creditTotal() {
         Money total = Money.zero(currency());
         for (JournalLine line : lines) {
@@ -178,9 +203,35 @@ public class JournalEntry {
         return total;
     }
 
-    /** Always true for a constructed entry (the factory rejects unbalanced sets). */
+    /** Σ of the debit lines' base-currency (KRW) value — balance-authoritative. */
+    public Money baseDebitTotal() {
+        Money total = Money.zero(LedgerReportingCurrency.BASE);
+        for (JournalLine line : lines) {
+            if (line.isDebit()) {
+                total = total.add(line.baseMoney());
+            }
+        }
+        return total;
+    }
+
+    /** Σ of the credit lines' base-currency (KRW) value — balance-authoritative. */
+    public Money baseCreditTotal() {
+        Money total = Money.zero(LedgerReportingCurrency.BASE);
+        for (JournalLine line : lines) {
+            if (line.isCredit()) {
+                total = total.add(line.baseMoney());
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Always true for a constructed entry (the factory rejects sets whose base
+     * amounts do not net). Computed on the base currency so it is valid for a
+     * multi-currency entry.
+     */
     public boolean isBalanced() {
-        return debitTotal().equals(creditTotal());
+        return baseDebitTotal().equals(baseCreditTotal());
     }
 
     public boolean isReversal() {

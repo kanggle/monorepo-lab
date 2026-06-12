@@ -76,6 +76,7 @@ public class JournalRepositoryImpl implements JournalRepository {
 
     private AccountTotals toTotals(AccountTotalsRow row) {
         return new AccountTotals(row.ledgerAccountCode(), row.currency().code(),
-                row.debitMinor(), row.creditMinor());
+                row.debitMinor(), row.creditMinor(),
+                row.baseDebitMinor(), row.baseCreditMinor());
     }
 }

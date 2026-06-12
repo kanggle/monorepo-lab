@@ -74,8 +74,10 @@ class LedgerControllerSliceTest {
         JournalEntryView view = new JournalEntryView(
                 "e-1", Instant.now(), "TRANSACTION", "txn-1", "evt-1", null,
                 List.of(
-                        new JournalLineView("CASH_CLEARING", EntryDirection.DEBIT, krw(150_000)),
-                        new JournalLineView("CUSTOMER_WALLET:acc-1", EntryDirection.CREDIT, krw(150_000))),
+                        new JournalLineView("CASH_CLEARING", EntryDirection.DEBIT, krw(150_000),
+                                java.math.BigDecimal.ONE, krw(150_000)),
+                        new JournalLineView("CUSTOMER_WALLET:acc-1", EntryDirection.CREDIT, krw(150_000),
+                                java.math.BigDecimal.ONE, krw(150_000))),
                 true);
         when(queryLedger.getEntry("e-1", "finance")).thenReturn(view);
 
@@ -87,6 +89,9 @@ class LedgerControllerSliceTest {
                 .andExpect(jsonPath("$.data.lines[0].direction").value("DEBIT"))
                 .andExpect(jsonPath("$.data.lines[0].money.amount").value("150000"))
                 .andExpect(jsonPath("$.data.lines[0].money.currency").value("KRW"))
+                .andExpect(jsonPath("$.data.lines[0].exchangeRate").value("1"))
+                .andExpect(jsonPath("$.data.lines[0].baseAmount.amount").value("150000"))
+                .andExpect(jsonPath("$.data.lines[0].baseAmount.currency").value("KRW"))
                 .andExpect(jsonPath("$.meta.timestamp").exists());
     }
 
@@ -145,9 +150,11 @@ class LedgerControllerSliceTest {
     @DisplayName("GET /trial-balance → 200 with inBalance true")
     void getTrialBalance() throws Exception {
         TrialBalanceView view = new TrialBalanceView(List.of(
-                new TrialBalanceView.AccountTotalsView("CASH_CLEARING", krw(150_000), krw(0)),
-                new TrialBalanceView.AccountTotalsView("CUSTOMER_WALLET:acc-1", krw(0), krw(150_000))),
-                krw(150_000), krw(150_000), true);
+                new TrialBalanceView.AccountTotalsView("CASH_CLEARING", krw(150_000), krw(0),
+                        krw(150_000), krw(0)),
+                new TrialBalanceView.AccountTotalsView("CUSTOMER_WALLET:acc-1", krw(0), krw(150_000),
+                        krw(0), krw(150_000))),
+                krw(150_000), krw(150_000), krw(150_000), krw(150_000), true);
         when(queryLedger.getTrialBalance("finance")).thenReturn(view);
 
         mockMvc.perform(get("/api/finance/ledger/trial-balance"))
@@ -155,6 +162,9 @@ class LedgerControllerSliceTest {
                 .andExpect(jsonPath("$.data.inBalance").value(true))
                 .andExpect(jsonPath("$.data.grandDebitTotal.amount").value("150000"))
                 .andExpect(jsonPath("$.data.grandCreditTotal.amount").value("150000"))
-                .andExpect(jsonPath("$.data.accounts[0].ledgerAccountCode").value("CASH_CLEARING"));
+                .andExpect(jsonPath("$.data.grandBaseDebitTotal.amount").value("150000"))
+                .andExpect(jsonPath("$.data.grandBaseCreditTotal.amount").value("150000"))
+                .andExpect(jsonPath("$.data.accounts[0].ledgerAccountCode").value("CASH_CLEARING"))
+                .andExpect(jsonPath("$.data.accounts[0].baseDebitTotal.amount").value("150000"));
     }
 }

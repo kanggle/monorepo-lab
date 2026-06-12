@@ -67,8 +67,8 @@ class CloseAccountingPeriodUseCaseTest {
         AccountingPeriod period = AccountingPeriod.open("p-1", TENANT, FROM, TO);
         when(periodRepository.findById("p-1", TENANT)).thenReturn(Optional.of(period));
         when(journalRepository.accountTotalsUpTo(TENANT, TO)).thenReturn(List.of(
-                new AccountTotals("CASH_CLEARING", "KRW", 150_000L, 0L),
-                new AccountTotals("CUSTOMER_WALLET:acc-1", "KRW", 0L, 150_000L)));
+                new AccountTotals("CASH_CLEARING", "KRW", 150_000L, 0L, 150_000L, 0L),
+                new AccountTotals("CUSTOMER_WALLET:acc-1", "KRW", 0L, 150_000L, 0L, 150_000L)));
         when(journalRepository.countEntriesUpTo(TENANT, TO)).thenReturn(1L);
         when(clock.now()).thenReturn(NOW);
 

@@ -108,11 +108,14 @@ public class PostJournalEntryUseCase {
     }
 
     private static String auditSummary(JournalEntry entry) {
+        // (8th incr) Use the base-currency totals so a multi-currency entry's audit
+        // row does not throw on cross-currency arithmetic (debitTotal()/creditTotal()
+        // are single-currency only). The base totals balance by construction.
         return "entryId=" + entry.entryId()
                 + " lines=" + entry.lines().size()
-                + " debitTotal=" + entry.debitTotal().toMinorString()
-                + " creditTotal=" + entry.creditTotal().toMinorString()
-                + " currency=" + entry.currency().code()
+                + " baseDebitTotal=" + entry.baseDebitTotal().toMinorString()
+                + " baseCreditTotal=" + entry.baseCreditTotal().toMinorString()
+                + " baseCurrency=" + entry.baseCurrency().code()
                 + (entry.isReversal() ? " reversalOf=" + entry.reversalOfEntryId() : "");
     }
 }

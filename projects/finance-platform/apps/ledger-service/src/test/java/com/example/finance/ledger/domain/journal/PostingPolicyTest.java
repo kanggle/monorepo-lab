@@ -43,6 +43,21 @@ class PostingPolicyTest {
     }
 
     @Test
+    @DisplayName("(8th incr, net-zero) auto-journal KRW lines carry base == money, rate == 1")
+    void autoJournalLinesAreBaseCurrency() {
+        JournalEntry e = PostingPolicy.toEntry("e-1", Instant.now(), source(),
+                txn(LedgerTransactionType.TOPUP, null)).orElseThrow();
+        assertThat(e.lines()).allSatisfy(l -> {
+            assertThat(l.baseMoney()).isEqualTo(l.money());
+            assertThat(l.baseCurrency()).isEqualTo(Currency.KRW);
+            assertThat(l.exchangeRate()).isEqualByComparingTo(java.math.BigDecimal.ONE);
+        });
+        // the base-currency balance check coincides with the original (net-zero)
+        assertThat(e.baseDebitTotal()).isEqualTo(MONEY);
+        assertThat(e.baseCreditTotal()).isEqualTo(MONEY);
+    }
+
+    @Test
     @DisplayName("WITHDRAW → DR CUSTOMER_WALLET:{acct} / CR CASH_CLEARING (reverse of TOPUP)")
     void withdraw() {
         JournalEntry e = PostingPolicy.toEntry("e-1", Instant.now(), source(),

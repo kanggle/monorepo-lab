@@ -57,8 +57,14 @@ public interface JournalRepository {
                     long totalElements, int totalPages) {
     }
 
-    /** Per-account debit/credit totals (minor units) for a single currency. */
+    /**
+     * Per-account debit/credit totals (minor units) for a single transaction
+     * currency, plus the base-currency (KRW) consolidated sums (8th increment — the
+     * base sums are KRW regardless of {@code currency}, so summing them across rows
+     * yields the base-currency grand total).
+     */
     record AccountTotals(String ledgerAccountCode, String currency,
-                         long debitMinor, long creditMinor) {
+                         long debitMinor, long creditMinor,
+                         long baseDebitMinor, long baseCreditMinor) {
     }
 }
