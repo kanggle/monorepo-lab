@@ -19,7 +19,9 @@ $fixtures = @(
     'hardstop-body-canonical-sync.ps1',
     'format-alignment.ps1',
     'protect-main-branch.ps1',
-    'verify-worktree-isolation.ps1'
+    'verify-worktree-isolation.ps1',
+    'verify-worktree-isolation.ps1',
+    'warn-shared-checkout-switch.ps1'
 )
 
 $failed = @()
