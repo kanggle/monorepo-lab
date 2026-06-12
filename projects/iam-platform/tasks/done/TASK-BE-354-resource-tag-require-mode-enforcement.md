@@ -1,6 +1,6 @@
 # TASK-BE-354 — Enforce the RESOURCE_TAG **require** mode (complete the condition's mode surface)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (authorization enforcement — security-sensitive)
