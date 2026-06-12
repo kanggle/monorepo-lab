@@ -8,7 +8,7 @@ Make the IAM domain-health card resolve to `data-status='ok'` in the Platform Co
 
 # Status
 
-review
+done
 
 > **⚠️ Diagnosis reversed at runtime (2026-06-13).** The premise threaded through
 > this task (Title / Owner / Goal / Static Analysis Notes) — *"the IAM
