@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-008-ledger-service-period-close.md` — **READY** (analysis=Opus 4.8 / impl=Opus). ledger-service **2nd increment** — the **period-close** forward-declared by TASK-FIN-BE-007 / architecture.md § Increment Scope. Adds an `AccountingPeriod` aggregate (OPEN→CLOSED state machine, tenant-scoped non-overlap `[from,to)` windows), a **posting-path guard** (`PostJournalEntryUseCase` rejects an entry whose `postedAt` is covered by a CLOSED period → `LEDGER_PERIOD_CLOSED` 422 → DLT on the consumer path; **net-zero** — no covering closed period [incl. none defined] → posting unchanged), and a **close-time trial-balance snapshot** (per-account + grand totals, in balance, == live trial balance at close). Operator REST: `POST /periods` (open), `POST /periods/{id}/close`, `GET /periods`, `GET /periods/{id}` (with snapshot). **Terminal consumer preserved — `finance.ledger.period.closed.v1` emission stays deferred to the GL/AP-feed outbox increment** (architecture.md § Increment Scope decision; the events contract sequences outbox introduction there, not here). Flyway `V2__create_accounting_period.sql` (`accounting_period` + `period_balance_snapshot`); no deploy-wiring change (ledger-service already wired by FIN-BE-007 — the `V2` migration runs in the existing finance Integration job). Spec PR: architecture.md (§ Accounting Period + Increment Scope decision + REST + Failure Modes) + ledger-api.md (period endpoints + claimed `LEDGER_PERIOD_CLOSED` + `ACCOUNTING_PERIOD_{NOT_FOUND,OVERLAP,ALREADY_CLOSED,INVALID_WINDOW}`) + finance-ledger-events.md (emission-deferred note) + platform/error-handling.md (claim + add codes).
 
 ## in-progress
 
