@@ -184,6 +184,17 @@ DENIED row 기록과 403 응답은 **단일 트랜잭션**이어야 한다 ([rul
 - **net-zero / opt-in**: CIDR 미설정(기본 빈 값)이면 게이트 비활성 — 기존 동작과 byte-identical. **읽기(GET)는 게이트되지 않는다.**
 - 평가는 공유 `com.example.security.access.SourceIpCondition` (`libs/java-security`) 이 수행하며, `RequiresPermissionAspect` 단일 결정 지점에서 합성된다.
 
+> **다중 조건 AND 합성.** 4번째 게이트는 닫힌 조건 enum 을 **AND-only** 로 합성한다 — `SOURCE_IP`(위) **AND** `TIME_WINDOW`(ADR-MONO-028, `admin.access.time-window.*`) **AND** `RESOURCE_TAG`(ADR-MONO-029). 설정된 조건 중 **하나라도** 불충족이면 `403 ACCESS_CONDITION_UNMET`. 미설정 조건은 skip(net-zero) 이므로 합성은 "설정된 조건만"으로 깔끔히 degrade 한다.
+
+### Resource-Tag Access Condition modes (ADR-MONO-029, TASK-BE-353/BE-354)
+
+`RESOURCE_TAG` 은 **대상 리소스의 태그**(`OperatorResourceTagResolver` 가 `admin_operators.tags` 신뢰 컬럼에서 해석 — 요청 아님, anti-spoof)로 변이를 게이트하며 **두 모드**를 지원한다. 둘 다 빈 값(기본)이면 net-zero:
+
+- **forbidden / deny-if-present** (`admin.access.resource-tag.forbidden`, env `ADMIN_ACCESS_RESOURCE_TAG_FORBIDDEN`) — 대상이 금지 태그(예: `protected`) 중 하나라도 보유하면 변이 거부 (TASK-BE-353).
+- **required / deny-if-absent** (`admin.access.resource-tag.required`, env `ADMIN_ACCESS_RESOURCE_TAG_REQUIRED`) — 대상이 요구 태그(예: `certified`)를 **전부** 보유할 때만 변이 허용 (TASK-BE-354).
+
+두 모드는 각각 별도의 `ResourceTagCondition` 빈(`forbidden(...)` / `required(...)`)으로, `RequiresPermissionAspect` 가 `ObjectProvider.orderedStream()` 로 **모든** 설정된 `ResourceTagCondition` 을 **AND-only** 평가한다(resolver 는 단일 결정 지점에서 1회만 호출). fail-safe: 미해석 태그(`null`)=deny; known-empty 태그셋=forbidden 하 허용·require 하 거부.
+
 ### Target-Tenant Scope Confinement (ADR-MONO-024 D2)
 
 권한 union 통과(step 4) 이후, **administration 표면의 변이**(operator/assignment/subscription 관리)는 추가로 **대상 테넌트 confinement**를 거친다 ([ADR-MONO-024](../../../../../docs/adr/ADR-MONO-024-tenant-admin-delegation.md) D2). 한 operator 가 *어떤 테넌트를 관리(administer)* 할 수 있는지는 그 permission 을 부여하는 **role-grant 의 테넌트 스코프**로 결정된다 — assume-tenant 운영 스코프(`TenantScopeResolver` = home ∪ `operator_tenant_assignment`)와는 **별개의 축**이다.

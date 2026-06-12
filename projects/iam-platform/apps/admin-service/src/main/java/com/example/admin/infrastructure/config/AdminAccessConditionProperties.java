@@ -115,12 +115,18 @@ public class AdminAccessConditionProperties {
     }
 
     /**
-     * The {@code RESOURCE_TAG} guard-config (ADR-MONO-029 § D3): the deny-if-present
-     * forbidden tags. An operator carrying any of these tags has its role/status/
-     * profile mutation denied. Empty (the default) ⇒ net-zero (no gate).
+     * The {@code RESOURCE_TAG} guard-config (ADR-MONO-029 § D3). Two modes, each
+     * net-zero when its list is empty (the default), composed AND-only:
+     * <ul>
+     *   <li>{@link #getForbidden() forbidden} (deny-if-present) — an operator carrying
+     *       any of these tags has its mutation denied (TASK-BE-353).</li>
+     *   <li>{@link #getRequired() required} (deny-if-absent) — a mutation is allowed
+     *       only when the target resource carries ALL of these tags (TASK-BE-354).</li>
+     * </ul>
      */
     public static class ResourceTag {
         private List<String> forbidden = List.of();
+        private List<String> required = List.of();
 
         public List<String> getForbidden() {
             return forbidden;
@@ -128,6 +134,14 @@ public class AdminAccessConditionProperties {
 
         public void setForbidden(List<String> forbidden) {
             this.forbidden = forbidden == null ? List.of() : forbidden;
+        }
+
+        public List<String> getRequired() {
+            return required;
+        }
+
+        public void setRequired(List<String> required) {
+            this.required = required == null ? List.of() : required;
         }
     }
 }
