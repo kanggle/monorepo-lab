@@ -129,6 +129,84 @@ services:
       start_period: 40s
 
   # ---------------------------------------------------------------------------
+  # ledger-service — activated by TASK-FIN-BE-007. Double-entry general ledger
+  # (first increment): consumes account-service transaction events
+  # (finance.transaction.{completed,reversed}.v1) and posts balanced journal
+  # entries per the Posting Policy, then serves a read-only ledger REST API.
+  # Terminal consumer (no outbox). Own schema finance_ledger_db (separate from
+  # account-service's finance_db). Reached via http://ledger.local/.
+  # ---------------------------------------------------------------------------
+  ledger-service:
+    image: finance-platform/ledger-service:local
+    container_name: finance-platform-ledger
+    build:
+      context: ./apps/ledger-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      MYSQL_HOST: ledger-mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DB: ${LEDGER_MYSQL_DB:-finance_ledger_db}
+      MYSQL_USER: ${MYSQL_USER:-finance}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-finance}
+      KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
+    depends_on:
+      ledger-mysql:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.finance-platform-ledger.rule=Host(`ledger.local`)"
+      - "traefik.http.routers.finance-platform-ledger.entrypoints=web"
+      - "traefik.http.services.finance-platform-ledger.loadbalancer.server.port=8080"
+    networks:
+      - finance-platform-net
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # MySQL 8 — ledger-service backing store (TASK-FIN-BE-007). finance_ledger_db,
+  # a SEPARATE schema/instance from account-service's finance_db (the ledger is
+  # a downstream derivation; it never writes back to the wallet store).
+  # expose: only — no host port (Local Network Convention).
+  # ---------------------------------------------------------------------------
+  ledger-mysql:
+    image: mysql:8.0
+    container_name: finance-platform-ledger-mysql
+    restart: unless-stopped
+    expose:
+      - "3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${LEDGER_MYSQL_DB:-finance_ledger_db}
+      MYSQL_USER: ${MYSQL_USER:-finance}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-finance}
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+    volumes:
+      - ledger-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${MYSQL_ROOT_PASSWORD:-root} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - finance-platform-net
+
+  # ---------------------------------------------------------------------------
   # MySQL 8 — backing store for account-service (TASK-FIN-BE-001+). finance_db.
   # Mirrors GAP's MySQL engine choice (GAP Identity tables are MySQL); fintech
   # account/balance tables live here. expose: only — no host port (Local
@@ -183,6 +261,7 @@ services:
 
 volumes:
   mysql-data:
+  ledger-mysql-data:
   redis-data:
 
 networks:

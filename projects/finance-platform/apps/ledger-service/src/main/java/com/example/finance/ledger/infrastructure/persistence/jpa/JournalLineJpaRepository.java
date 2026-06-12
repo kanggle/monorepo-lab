@@ -1,0 +1,48 @@
+package com.example.finance.ledger.infrastructure.persistence.jpa;
+
+import com.example.finance.ledger.domain.journal.JournalLine;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
+
+/** Spring Data repository for journal lines (per-account view + trial-balance totals). */
+public interface JournalLineJpaRepository extends JpaRepository<JournalLine, Long> {
+
+    Page<JournalLine> findByLedgerAccountCodeAndTenantIdOrderByPostedAtDescIdDesc(
+            String ledgerAccountCode, String tenantId, Pageable pageable);
+
+    /** Per-account debit/credit totals (minor units) grouped by account + currency. */
+    @Query("""
+            select new com.example.finance.ledger.infrastructure.persistence.jpa.AccountTotalsRow(
+                l.ledgerAccountCode,
+                l.currency,
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.DEBIT
+                    then l.amountMinor else 0 end), 0),
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.CREDIT
+                    then l.amountMinor else 0 end), 0))
+            from JournalLine l
+            where l.tenantId = :tenantId
+            group by l.ledgerAccountCode, l.currency
+            order by l.ledgerAccountCode
+            """)
+    List<AccountTotalsRow> accountTotals(@Param("tenantId") String tenantId);
+
+    @Query("""
+            select new com.example.finance.ledger.infrastructure.persistence.jpa.AccountTotalsRow(
+                l.ledgerAccountCode,
+                l.currency,
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.DEBIT
+                    then l.amountMinor else 0 end), 0),
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.CREDIT
+                    then l.amountMinor else 0 end), 0))
+            from JournalLine l
+            where l.tenantId = :tenantId and l.ledgerAccountCode = :code
+            group by l.ledgerAccountCode, l.currency
+            """)
+    List<AccountTotalsRow> accountTotalsForCode(@Param("code") String code,
+                                                @Param("tenantId") String tenantId);
+}

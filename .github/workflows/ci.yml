@@ -369,10 +369,11 @@ jobs:
         # excluded from default :test/:check tasks (see account-service
         # build.gradle). Docker-backed integrationTest is invoked separately
         # on dev environments / finance-integration-tests job below.
-        # TASK-FIN-BE-001: account-service
+        # TASK-FIN-BE-001: account-service / TASK-FIN-BE-007: ledger-service
         run: >-
           ./gradlew
           :projects:finance-platform:apps:account-service:check
+          :projects:finance-platform:apps:ledger-service:check
           --no-daemon --stacktrace
 
       - name: Build and check erp-platform backend (Docker-free)
@@ -1167,6 +1168,7 @@ jobs:
         run: >-
           ./gradlew
           :projects:finance-platform:apps:account-service:integrationTest
+          :projects:finance-platform:apps:ledger-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload finance integration test reports on failure
