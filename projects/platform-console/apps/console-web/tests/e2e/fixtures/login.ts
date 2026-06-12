@@ -169,16 +169,24 @@ async function driveOidcPkceLogin(
     // session, 302s back to /oauth2/authorize, which then 302s to the
     // redirect_uri (console-web /api/auth/callback). The callback handler
     // does the token + operator-token-exchange and sets the production
-    // cookies, then 302s to `/`. `/` page.tsx then `redirect()`s to
-    // `/dashboards` (the `(console)` shell's canonical landing — see
-    // `src/app/page.tsx`); Playwright `waitForURL` matches the FINAL URL
-    // after all redirects, so we wait for the dashboards landing rather
-    // than the intermediate `/`. TASK-BE-311 iter 7 — corrected from the
-    // original `${consoleOrigin}/` assertion which would never match
-    // because Next.js dispatches the / → /dashboards redirect before any
-    // observable state in the browser.
+    // cookies, then 302s to `/`. `/` page.tsx then `redirect()`s to the
+    // canonical console landing under `/dashboards/...` — see
+    // `src/app/page.tsx`. TASK-PC-FE-034 (#1017) re-pointed that landing
+    // from `/dashboards` to `/dashboards/overview` (5-domain overview as
+    // home); the IAM 3-leg overview is now a drill-down still at
+    // `/dashboards`. Playwright `waitForURL` matches the FINAL URL after
+    // all redirects, so we match the `/dashboards` PREFIX (predicate, not
+    // an exact string) — this lands whether the canonical home is
+    // `/dashboards`, `/dashboards/overview`, or any future sub-route, and
+    // never matches the intermediate `/`. TASK-BE-311 iter 7 first moved
+    // this off the original `${consoleOrigin}/` assertion (which never
+    // matched because Next.js dispatches the / → landing redirect before
+    // any observable state); TASK-PC-FE-070 then made it prefix-tolerant
+    // after the exact `/dashboards` string silently broke globalSetup.
     await Promise.all([
-      page.waitForURL(`${DEFAULTS.consoleOrigin}/dashboards`, { timeout: 30_000 }),
+      page.waitForURL((url) => url.pathname.startsWith('/dashboards'), {
+        timeout: 30_000,
+      }),
       page.click('button[type="submit"]'),
     ]);
 

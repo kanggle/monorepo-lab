@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-070-console-e2e-login-landing-route-fix.md` — **REVIEW (impl, awaiting merge)**. console-web Playwright `globalSetup` 의 OIDC login helper(`tests/e2e/fixtures/login.ts:181`)가 **정확 문자열** `${consoleOrigin}/dashboards` 를 `waitForURL` 했는데, TASK-PC-FE-034(#1017, squash `175b36ae8`, 2026-06-02)가 로그인 후 랜딩 `/` → `/dashboards/overview` 로 re-point → 정확 매칭 미해소 → 30s timeout → globalSetup throw → **전 spec 0개 실행**. `Nightly E2E`의 `Platform Console E2E full-stack` job 이 PR-게이트가 아니라 ~11일간 조용히 RED(마지막 GREEN nightly console-e2e=2026-05-30). Fix=`waitForURL((url)=>url.pathname.startsWith('/dashboards'))` 프리픽스 predicate(`/dashboards`·`/dashboards/overview`·미래 `/dashboards/*` 모두 매칭, 중간 `/` 불매칭, 재발 내성) + Step-4 주석 갱신. app/route/`page.tsx`/BFF/contract 무변경(login.ts 1파일). 분석=Opus 4.8 / 구현=Opus 4.8(진단=route archaeology). 검증=머지 후 첫 nightly console-e2e job conclusion=`success` 확인이 SoT(로컬 `:check`는 login 미실행). [[project_platform_console_adr_013]] [[project_adr023_plane_separation_fed_e2e]]
 
 ## done
 
