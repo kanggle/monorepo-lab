@@ -8,7 +8,7 @@ CLAUDE.md § "Concurrent-session worktree isolation" 에 **서브에이전트 wo
 
 # Status
 
-review
+done
 
 # Owner
 
