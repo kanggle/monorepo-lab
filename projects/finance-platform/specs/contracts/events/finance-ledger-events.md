@@ -58,14 +58,17 @@ unknown fields):
   makes a missing original a real anomaly, surfaced not swallowed).
 - The ledger never mutates account-service state or writes to `finance_db`.
 
-## Published — emitted (3rd increment, TASK-FIN-BE-009: the GL/AP feed)
+## Published — emitted (3rd + 4th increments)
 
-From the **3rd increment** ledger-service is a **publishing consumer**: it gains a
-**per-service transactional outbox** (`OutboxRow` path — see architecture.md
-§ Event publication) and emits these two events as the forward interface for an
-external accounting / ERP / AP system. Both are appended **inside the domain write
-`@Transactional`** (atomic — the feed can never diverge from the books) and relayed
-to Kafka at-least-once (downstream consumers dedupe on the envelope `eventId`).
+From the **3rd increment** (TASK-FIN-BE-009) ledger-service is a **publishing
+consumer**: it gains a **per-service transactional outbox** (`OutboxRow` path — see
+architecture.md § Event publication) and emits these events as the forward interface
+for an external accounting / ERP / AP / reconciliation-ops system. All are appended
+**inside the domain write `@Transactional`** (atomic — the feed can never diverge
+from the books/records) and relayed to Kafka at-least-once (downstream consumers
+dedupe on the envelope `eventId`). The **4th increment** (TASK-FIN-BE-010) adds the
+two reconciliation events, reusing the same outbox (the relay's generic
+`TopicResolver finance.ledger.X → finance.ledger.X.v1` covers them — no relay change).
 
 Each event is wrapped in the **canonical envelope** (the same shape ledger-service's
 own consumer parses):
@@ -81,15 +84,19 @@ own consumer parses):
 |---|---|---|
 | `finance.ledger.entry.posted.v1` | every posted `JournalEntry` (auto-journal + reversal), in `PostJournalEntryUseCase.post`'s `@Transactional` | `{ entryId, postedAt, lines:[{ ledgerAccountCode, direction: "DEBIT"\|"CREDIT", money:{amount,currency} }], source:{ sourceType, sourceTransactionId, sourceEventId }, reversalOfEntryId? }` |
 | `finance.ledger.period.closed.v1` | an accounting period closes, in `CloseAccountingPeriodUseCase.close`'s `@Transactional` | `{ periodId, from, to, closedAt, entryCount }` |
+| `finance.ledger.reconciliation.completed.v1` | **(4th incr)** an external statement is ingested + matched, in `IngestStatementUseCase`'s `@Transactional` | `{ statementId, ledgerAccountCode, source, statementDate, matchedCount, discrepancyCount }` |
+| `finance.ledger.reconciliation.discrepancy.detected.v1` | **(4th incr)** one per recorded discrepancy, in the same ingest `@Transactional` | `{ discrepancyId, ledgerAccountCode, type: "UNMATCHED_EXTERNAL"\|"UNMATCHED_INTERNAL"\|"AMOUNT_MISMATCH", expectedMinor, actualMinor, currency, externalRef?, journalEntryId? }` |
 
 - **Money** is `{amount:"<minor-units-string>", currency}` (F5 — never a float).
-- **No regulated PII** (F7) — ids + amounts only; the GL feed carries no KYC detail.
-- **partition key**: `entry.posted` keyed by `entryId`, `period.closed` by `periodId`
-  (entries/periods are independent — no cross-entry ordering requirement).
-- **No in-repo consumer yet** — this increment ships the producer + topics only (the
-  external GL/AP system is the intended consumer). `HOLD`/`RELEASE` post no entry, so
-  they emit no `entry.posted`; a posting rejected by the closed-period guard rolls the
-  Tx back → no `entry.posted` row.
+- **No regulated PII** (F7) — ids + amounts only; the feed carries no KYC detail.
+- **partition key**: `entry.posted` keyed by `entryId`, `period.closed` by `periodId`,
+  `reconciliation.completed` by `statementId`, `discrepancy.detected` by `discrepancyId`
+  (each independent — no cross-aggregate ordering requirement).
+- **No in-repo consumer yet** — these increments ship the producer + topics only (the
+  external GL/AP + reconciliation-ops systems are the intended consumers). `HOLD`/
+  `RELEASE` post no entry, so they emit no `entry.posted`; a posting rejected by the
+  closed-period guard rolls the Tx back → no `entry.posted` row. Reconciliation
+  discrepancies are emitted but **never auto-resolved** (F8 — operator review).
 
 > **Outbox path (not the libs `OutboxWriter`).** ledger-service keeps the libs
 > `OutboxAutoConfiguration` excluded (its `ProcessedEventJpaEntity` would collide with

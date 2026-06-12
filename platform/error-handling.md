@@ -610,12 +610,11 @@ Owned by `account-service` v1 (compliance gate); `kyc-service` v2. Fund-movement
 
 ## Reconciliation / Ledger  `[domain: fintech]`
 
-The double-entry ledger is owned by `ledger-service` (ADR-MONO-008 § D3). Its
-**first increment** (TASK-FIN-BE-007 — event-driven auto-journal + read) implements
-the double-entry invariant + read surface; its **second increment** (TASK-FIN-BE-008
-— period close) adds the `AccountingPeriod` lifecycle + posting guard + close
-snapshot. Reconciliation matching and GL/AP-feed emission remain **v2-planned**
-(later ledger-service increments).
+The double-entry ledger is owned by `ledger-service` (ADR-MONO-008 § D3). Increments
+live: **1st** (TASK-FIN-BE-007 — auto-journal + read), **2nd** (TASK-FIN-BE-008 —
+period close), **3rd** (TASK-FIN-BE-009 — GL/AP-feed outbox emission), **4th**
+(TASK-FIN-BE-010 — reconciliation matching, F8 no-auto-close). Reconciliation
+period-lock and manual journal posting remain **v2-planned**.
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -627,8 +626,12 @@ snapshot. Reconciliation matching and GL/AP-feed emission remain **v2-planned**
 | ACCOUNTING_PERIOD_OVERLAP | 422 | Opened period window overlaps an existing period for the tenant — `ledger-service` (`AccountingPeriodOverlapException`) |
 | ACCOUNTING_PERIOD_ALREADY_CLOSED | 409 | Close attempted on an already-CLOSED period — `ledger-service` (`AccountingPeriodAlreadyClosedException`) |
 | ACCOUNTING_PERIOD_INVALID_WINDOW | 422 | Period window `from ≥ to` — `ledger-service` (`AccountingPeriodInvalidWindowException`) |
-| RECONCILIATION_DISCREPANCY | 422 | Internal ledger ↔ external statement mismatch; operator review (auto-close forbidden, F8) — **v2-planned** |
-| RECONCILIATION_PERIOD_LOCKED | 422 | Mutation of a locked reconciliation period (F8) — **v2-planned** |
+| RECONCILIATION_DISCREPANCY | — | Internal ledger ↔ external statement mismatch; the **recorded discrepancy entity** (type + OPEN/RESOLVED status, operator review, auto-close forbidden, F8) — `ledger-service` (4th incr; a persisted record, NOT an HTTP error response) |
+| RECONCILIATION_ACCOUNT_INVALID | 422 | Reconciliation ingest target is not a reconcilable clearing account — `ledger-service` (`ReconciliationAccountInvalidException`) |
+| RECONCILIATION_STATEMENT_NOT_FOUND | 404 | Reconciliation statement id unknown / not in tenant — `ledger-service` (`ReconciliationStatementNotFoundException`) |
+| RECONCILIATION_DISCREPANCY_NOT_FOUND | 404 | Reconciliation discrepancy id unknown / not in tenant — `ledger-service` (`ReconciliationDiscrepancyNotFoundException`) |
+| RECONCILIATION_ALREADY_RESOLVED | 409 | Resolve attempted on an already-RESOLVED discrepancy — `ledger-service` (`ReconciliationAlreadyResolvedException`) |
+| RECONCILIATION_PERIOD_LOCKED | 422 | Mutation of a discrepancy in a locked (CLOSED) reconciliation period (F8) — **v2-planned** (deferred period-lock increment) |
 
 ---
 

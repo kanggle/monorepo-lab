@@ -16,8 +16,11 @@ All implementation tasks targeting this service must follow this declaration,
 > posting guard + close snapshot, emission deferred) is live; the **third increment**
 > (TASK-FIN-BE-009 — GL/AP feed: the transactional outbox + `finance.ledger.{entry.posted,
 > period.closed}.v1` emission, terminal→publishing consumer) is specified by
-> § Event publication + § Increment Scope. Reconciliation matching, manual journal
-> posting, and multi-currency remain forward-declared (§ Increment Scope). The account-service architecture
+> § Event publication + § Increment Scope; the **fourth increment** (TASK-FIN-BE-010
+> — reconciliation matching: external-statement matching + the F8 no-auto-close
+> discrepancy queue + emission) is specified by § Reconciliation + § Increment Scope.
+> Reconciliation period-lock, manual journal posting, and multi-currency remain
+> forward-declared (§ Increment Scope). The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
 > idempotency, audit) — this service mirrors it.
@@ -39,7 +42,7 @@ All implementation tasks targeting this service must follow this declaration,
 | Deployable unit | `apps/ledger-service/` |
 | Data store | MySQL `finance_ledger_db` (Flyway) — separate schema from account-service `finance_db` |
 | Event consumption | Kafka — `finance.transaction.completed.v1` / `finance.transaction.reversed.v1` (account-service outbox) |
-| Event publication | **(3rd increment, TASK-FIN-BE-009)** `finance.ledger.entry.posted.v1` (every posted entry — the GL/AP feed) + `finance.ledger.period.closed.v1` (on period close), via a per-service transactional outbox (`OutboxRow` path). 1st/2nd increments published nothing (terminal consumer); the 3rd makes it a **publishing consumer**. |
+| Event publication | **(3rd increment, TASK-FIN-BE-009)** `finance.ledger.entry.posted.v1` + `finance.ledger.period.closed.v1`; **(4th increment, TASK-FIN-BE-010)** `finance.ledger.reconciliation.completed.v1` + `finance.ledger.reconciliation.discrepancy.detected.v1` — all via the per-service transactional outbox (`OutboxRow` path; the generic `TopicResolver` covers new `finance.ledger.*` types). A **publishing consumer** from the 3rd increment. |
 | Outbound integration | The GL/AP/ERP feed is the **emitted topics** above (the forward interface for an external accounting system); no synchronous outbound call (no in-repo consumer of the feed yet) |
 
 ### Service Type Composition
@@ -127,9 +130,21 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   `OutboxMetricsAutoConfiguration` **excluded** and owns a `ledger_outbox` table +
   relay. The consumer-dedupe path is untouched.
 
+**Fourth increment — IN (TASK-FIN-BE-010, reconciliation matching):**
+- The ledger reconciles its **clearing-account** entries (`CASH_CLEARING` /
+  `SETTLEMENT_SUSPENSE`) against an ingested **external statement** (bank / PG
+  settlement lines): 1:1 match by (amount, currency, direction); anything unmatched
+  on either side → a **`ReconciliationDiscrepancy`** in an **OPEN operator review
+  queue**. **F8 — no auto-close**: the system only RECORDS discrepancies (never
+  auto-resolves or adjusts the difference); an operator resolves each manually.
+  Emits `finance.ledger.reconciliation.completed.v1` + `.discrepancy.detected.v1`
+  via the **existing FIN-BE-009 outbox** (the generic `TopicResolver` covers the new
+  event types — no relay change). See § Reconciliation.
+
 **Forward-declared — OUT (each a later task):**
-- **Reconciliation matching** (`reconciliation_discrepancy` real matching vs
-  external statements — account-service models it as a placeholder, F8).
+- **Reconciliation period lock** (`RECONCILIATION_PERIOD_LOCKED` — a discrepancy
+  whose statement date is in a CLOSED accounting period is immutable; correction via
+  the next period) + fuzzy / N:M matching + multi-currency statements.
 - **Manual journal posting API** (operator-initiated adjusting entries).
 - **Multi-currency journals** (first increment is single-currency per entry;
   the chart + lines carry currency but cross-currency entries are rejected).
@@ -234,6 +249,13 @@ com.example.finance.ledger/
 │   │   ├── PeriodBalanceSnapshot.java     ← close-time per-account + grand totals (pure, immutable)
 │   │   ├── PeriodAccountTotal.java        ← one account's debit/credit Money in the snapshot
 │   │   └── repository/AccountingPeriodRepository.java  ← outbound port (findOverlapping/findCovering/save/findById/findAll)
+│   ├── reconciliation/                   ← (4th increment) external-statement matching (F8)
+│   │   ├── ExternalStatement.java         ← aggregate (statementId, ledgerAccountCode, source, statementDate, lines)
+│   │   ├── ExternalStatementLine.java     ← (externalRef, Money, direction, valueDate, matchStatus)
+│   │   ├── ReconciliationMatch.java       ← statementLine ↔ internal journalEntryId
+│   │   ├── ReconciliationDiscrepancy.java ← OPEN→RESOLVED (operator-only); type; resolution record (mirrors account-service placeholder)
+│   │   ├── ReconciliationMatcher.java     ← pure 1:1 by (amount,currency,direction) → matches + discrepancies
+│   │   └── repository/ReconciliationRepository.java + ReconciliationAccounts.java (clearing-account allow-list)
 │   ├── money/
 │   │   ├── Money.java                     ← long minorUnits + Currency (NO float/double)
 │   │   └── Currency.java                  ← ISO-4217 + minor-unit scale
@@ -246,7 +268,9 @@ com.example.finance.ledger/
 │        CurrencyMismatchException, ...;
 │        (2nd incr) LedgerPeriodClosedException, AccountingPeriodNotFoundException,
 │        AccountingPeriodOverlapException, AccountingPeriodAlreadyClosedException,
-│        AccountingPeriodInvalidWindowException)
+│        AccountingPeriodInvalidWindowException;
+│        (4th incr) ReconciliationStatementNotFoundException, ReconciliationDiscrepancyNotFoundException,
+│        ReconciliationAlreadyResolvedException, ReconciliationAccountInvalidException)
 ├── application/                           ← use cases + outbound ports
 │   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit → (3rd incr) append entry.posted outbox row (one Tx)
 │   ├── PostFromTransactionUseCase.java    ← maps an account-service transaction envelope → PostJournalEntry (via PostingPolicy); idempotent on sourceEventId
@@ -254,17 +278,21 @@ com.example.finance.ledger/
 │   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
 │   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit → (3rd incr) append period.closed outbox row
 │   ├── QueryAccountingPeriodUseCase.java  ← (2nd incr) read: list periods / period detail + snapshot
+│   ├── IngestStatementUseCase.java        ← (4th incr) @Transactional: validate clearing acct → persist statement+lines → match → persist matches + OPEN discrepancies + audit → append recon outbox events (no auto-close)
+│   ├── ResolveDiscrepancyUseCase.java     ← (4th incr) @Transactional operator: OPEN→RESOLVED + resolution + audit
+│   ├── QueryReconciliationUseCase.java    ← (4th incr) read: statement detail+summary / discrepancy queue / detail
 │   ├── ActorContext.java
 │   ├── view/ (JournalEntryView, JournalLineView, LedgerAccountBalanceView, TrialBalanceView)
 │   └── port/outbound/
 │       ├── ProcessedEventStore.java       ← dedupe port (processed_events, source event id)
-│       ├── LedgerEventPublisher.java      ← (3rd incr) append-side port: publishEntryPosted / publishPeriodClosed (called in-Tx)
+│       ├── LedgerEventPublisher.java      ← (3rd incr) append-side port: publishEntryPosted / publishPeriodClosed; (4th incr) + publishReconciliationCompleted / publishDiscrepancyDetected (all called in-Tx)
 │       └── ClockPort.java
 ├── infrastructure/
 │   ├── persistence/jpa/                   ← Spring Data + adapters (toDomain/fromDomain)
 │   │   (LedgerAccountJpaEntity/Repository/Adapter, JournalEntryJpaEntity, JournalLineJpaEntity,
 │   │    AuditLogJpaEntity, processed_events;
-│   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity)
+│   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity;
+│   │    (4th incr) ReconciliationStatement/Line/Match/DiscrepancyJpaEntity + Repository/Adapter)
 │   ├── outbox/                            ← (3rd incr) per-service transactional outbox (OutboxRow path)
 │   │   ├── LedgerOutboxJpaEntity.java     ← implements OutboxRow (@Table ledger_outbox, MySQL payload TEXT)
 │   │   ├── LedgerOutboxJpaRepository.java ← findPending(Pageable) + countByPublishedAtIsNull
@@ -282,6 +310,7 @@ com.example.finance.ledger/
 └── presentation/                          ← inbound web adapter
     ├── controller/LedgerController.java    ← /api/finance/ledger/** (reads)
     ├── controller/PeriodController.java     ← (2nd incr) /api/finance/ledger/periods/** (open/close/list/detail)
+    ├── controller/ReconciliationController.java ← (4th incr) /api/finance/ledger/reconciliation/** (ingest/resolve/read)
     ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes; (2nd incr) period codes)
     ├── dto/                                ← response DTOs (money as minor-units integer + currency)
     ├── filter/TenantClaimEnforcer.java
@@ -414,6 +443,59 @@ row. The snapshot grand totals are **in balance** (Σdebit == Σcredit) and equa
 live trial balance at close; it is the period's immutable ending record (insert-only,
 no UPDATE/DELETE — F3/F6 parity).
 
+## Reconciliation (fourth increment — TASK-FIN-BE-010, F8)
+
+The ledger reconciles its **clearing accounts** (`CASH_CLEARING`, `SETTLEMENT_SUSPENSE`
+— the accounts that face an external bank / PG) against an ingested **external
+statement**, classifying mismatches into an operator review queue. The governing
+rule is **fintech F8 — no auto-close**: a discrepancy is RECORDED and surfaced; the
+system never auto-resolves it or adjusts the difference (fund-leakage / accounting-
+inconsistency risk). account-service modelled the `reconciliation_discrepancy`
+placeholder (columns + policy); this increment is the first real matching.
+
+**Model** (`domain/reconciliation/`, pure):
+- `ExternalStatement` — a batch of external settlement lines for ONE clearing
+  account: `(statementId, tenantId, ledgerAccountCode, source [BANK/PG/…],
+  statementDate, lines)`. `ExternalStatementLine` =
+  `(lineId, externalRef, Money, direction DEBIT/CREDIT vs the account, valueDate,
+  description?, matchStatus UNMATCHED/MATCHED)`.
+- `ReconciliationMatch` — links a matched `ExternalStatementLine` to an internal
+  `journalEntryId` on the reconciled account (`Money`).
+- `ReconciliationDiscrepancy` — a recorded mismatch:
+  `(discrepancyId, tenantId, ledgerAccountCode, type {UNMATCHED_EXTERNAL,
+  UNMATCHED_INTERNAL, AMOUNT_MISMATCH}, externalRef?, journalEntryId?,
+  expectedMinor, actualMinor, currency, status {OPEN, RESOLVED},
+  resolution? {resolutionType {MATCHED_MANUALLY, WRITTEN_OFF, ACCEPTED}, note,
+  resolvedBy, resolvedAt}, detectedAt)` — mirrors the account-service placeholder
+  columns. State machine **OPEN → RESOLVED only via the operator use case** (never
+  auto). `RESOLVED` carries the resolution record (audit).
+
+**Matching engine** (`ReconciliationMatcher`, pure): given the external lines + the
+internal clearing-account ledger lines in scope, produce matches + discrepancies.
+First increment = **1:1 by (amount, currency, direction)**; an external line with no
+internal counterpart → `UNMATCHED_EXTERNAL`; an internal entry with no external
+counterpart → `UNMATCHED_INTERNAL`. Deterministic (when an amount could match
+multiple internal entries, the first deterministic candidate matches; the rest stay
+unmatched → discrepancy → operator review — documented, not silently merged).
+Exhaustively unit-tested, no Spring/JPA.
+
+**Ingest** (`IngestStatementUseCase`, one `@Transactional`): validate the account is
+a reconcilable clearing account (`RECONCILIATION_ACCOUNT_INVALID` otherwise),
+persist the statement + lines, run the matcher against the internal ledger lines on
+that account (reuse the per-account line query, scoped to the statement window),
+persist matches + **OPEN** discrepancies + audit, and append the outbox events
+(`reconciliation.completed` + one `reconciliation.discrepancy.detected` per
+discrepancy) in the SAME Tx (transactional outbox, FIN-BE-009). **No auto-close.**
+
+**Resolve** (`ResolveDiscrepancyUseCase`, operator, one `@Transactional`): require
+`OPEN` (`RECONCILIATION_ALREADY_RESOLVED` otherwise), set RESOLVED + resolutionType
++ note + resolvedBy + audit. There is **no** auto-resolve path anywhere.
+
+**Deferred** (forward-declared): a reconciliation **period lock**
+(`RECONCILIATION_PERIOD_LOCKED` — a discrepancy whose statement date falls in a
+CLOSED accounting period is immutable, corrected via the next period); fuzzy / N:M
+matching; multi-currency statements.
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):
@@ -456,6 +538,11 @@ All under `/api/finance/ledger/**`. Formal shapes → [`ledger-api.md`](../../co
 | `POST` | `/api/finance/ledger/periods/{periodId}/close` | JWT (authenticated) | **(2nd increment)** close a period → capture the trial-balance snapshot |
 | `GET` | `/api/finance/ledger/periods` | JWT | **(2nd increment)** list accounting periods |
 | `GET` | `/api/finance/ledger/periods/{periodId}` | JWT | **(2nd increment)** period detail + its balance snapshot |
+| `POST` | `/api/finance/ledger/reconciliation/statements` | JWT (authenticated) | **(4th increment)** ingest an external statement → match + record discrepancies |
+| `POST` | `/api/finance/ledger/reconciliation/discrepancies/{id}/resolve` | JWT (authenticated) | **(4th increment)** operator resolve a discrepancy (OPEN→RESOLVED) |
+| `GET` | `/api/finance/ledger/reconciliation/statements/{id}` | JWT | **(4th increment)** statement detail + match/discrepancy summary |
+| `GET` | `/api/finance/ledger/reconciliation/discrepancies` | JWT | **(4th increment)** discrepancy review queue (`?status=OPEN`) |
+| `GET` | `/api/finance/ledger/reconciliation/discrepancies/{id}` | JWT | **(4th increment)** discrepancy detail |
 | `GET` | `/actuator/{health,info}` | none | probes |
 | `GET` | `/actuator/prometheus` | network-isolated | metrics |
 
@@ -488,6 +575,8 @@ events as the forward interface for an external accounting/ERP/AP system, via a
 |---|---|---|
 | `finance.ledger.entry.posted.v1` | every posted `JournalEntry` (auto-journal + reversal), in `PostJournalEntryUseCase.post`'s `@Transactional` | `{ entryId, postedAt, lines:[{ledgerAccountCode, direction, money}], source:{sourceType, sourceTransactionId, sourceEventId}, reversalOfEntryId? }` |
 | `finance.ledger.period.closed.v1` | a period closes, in `CloseAccountingPeriodUseCase.close`'s `@Transactional` | `{ periodId, from, to, closedAt, entryCount }` |
+| `finance.ledger.reconciliation.completed.v1` | **(4th increment)** a statement is ingested + matched, in `IngestStatementUseCase`'s `@Transactional` | `{ statementId, ledgerAccountCode, source, statementDate, matchedCount, discrepancyCount }` |
+| `finance.ledger.reconciliation.discrepancy.detected.v1` | **(4th increment)** one per recorded discrepancy, in the same ingest `@Transactional` | `{ discrepancyId, ledgerAccountCode, type, expectedMinor, actualMinor, currency, externalRef?, journalEntryId? }` |
 
 **Transactional outbox (atomic).** The append-side `LedgerEventPublisher` builds the
 canonical envelope (the same shape ledger-service's own consumer parses —
@@ -524,7 +613,7 @@ owns `LedgerOutboxJpaEntity implements OutboxRow` (`ledger_outbox` table, MySQL
 | **F5** money = minor-units, no float | ✅ | `Money(long, Currency)`; grep-zero float/double in `domain/money`; `CURRENCY_MISMATCH` guard |
 | **F6** immutable audit | ✅ | append-only `audit_log`, same Tx (audit-heavy) |
 | **F7** regulated PII encrypted/masked | N/A (first increment) | the ledger stores account ids + amounts, no new regulated PII (no KYC documents); reuses account-service-masked refs |
-| **F8** reconciliation no auto-close | forward-decl | reconciliation matching is a later increment (account-service models the placeholder) |
+| **F8** reconciliation no auto-close | ✅ (4th increment) | `ReconciliationMatcher` records mismatches as OPEN `ReconciliationDiscrepancy` (operator review queue); resolution is operator-only via `ResolveDiscrepancyUseCase` — no code path auto-closes or adjusts a discrepancy (§ Reconciliation); period-lock forward-declared |
 | **F2 (period close)** | ✅ (2nd increment) | `AccountingPeriod` OPEN→CLOSED + non-overlap invariant; `PostJournalEntryUseCase` guard rejects a posting into a CLOSED period (`LEDGER_PERIOD_CLOSED`, net-zero otherwise); close captures an immutable trial-balance snapshot (§ Accounting Period) |
 
 ## Trait Rule mapping
@@ -581,6 +670,10 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
 | 14 | **(3rd incr)** Kafka publish fails (broker down) | the `ledger_outbox` row stays `published_at IS NULL`; the relay retries with exponential backoff (at-least-once); the domain write already committed (transactional outbox) |
 | 15 | **(3rd incr)** Posting rejected (e.g. closed period) before the outbox append | the whole posting `@Transactional` rolls back → no entry AND no `entry.posted` outbox row (atomic) |
 | 16 | **(3rd incr)** Re-delivered GL-feed event downstream (at-least-once) | consumers dedupe on the envelope `eventId` (no in-repo consumer yet; documented for the external GL/AP system) |
+| 17 | **(4th incr)** Unmatched external statement line / unmatched internal entry | recorded as an OPEN `ReconciliationDiscrepancy` (UNMATCHED_EXTERNAL / UNMATCHED_INTERNAL) — surfaced to the operator queue, NEVER auto-closed (F8) |
+| 18 | **(4th incr)** Resolve an already-RESOLVED discrepancy | 409 `RECONCILIATION_ALREADY_RESOLVED` |
+| 19 | **(4th incr)** Ingest a statement for a non-clearing account | 422 `RECONCILIATION_ACCOUNT_INVALID` (only `CASH_CLEARING` / `SETTLEMENT_SUSPENSE` reconcile) |
+| 20 | **(4th incr)** Unknown statement / discrepancy id on read or resolve | 404 `RECONCILIATION_STATEMENT_NOT_FOUND` / `RECONCILIATION_DISCREPANCY_NOT_FOUND` |
 
 ## Testing Strategy
 
@@ -622,6 +715,19 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
   CLOSED period emits **no** `entry.posted` row (atomic rollback). App boot proves
   no `processed_events` duplicate-mapping (OutboxRow path; `OutboxAutoConfiguration`
   excluded).
+- **Reconciliation (4th increment)**: unit — `ReconciliationMatcherTest` (1:1 match;
+  unmatched-external → UNMATCHED_EXTERNAL; unmatched-internal → UNMATCHED_INTERNAL;
+  amount-mismatch; multi-line determinism); application — `IngestStatementUseCase`
+  (persists matches + **OPEN** discrepancies, emits both event types, **NO
+  auto-close**), `ResolveDiscrepancyUseCase` (OPEN→RESOLVED, re-resolve → 409,
+  account-invalid → 422). Integration (Testcontainers, authoritative): post ledger
+  entries (TOPUP/TRANSFER → CASH_CLEARING) → ingest an external statement (some lines
+  match, some don't) → matches + **OPEN** discrepancies recorded (assert NOT
+  auto-closed) → **consume `finance.ledger.reconciliation.completed.v1` +
+  `.discrepancy.detected.v1`**; resolve a discrepancy → RESOLVED; re-resolve → 409;
+  ingest on a non-clearing account → 422 `RECONCILIATION_ACCOUNT_INVALID`. (The IT
+  base `@BeforeEach` period cleanup also covers reconciliation tables to keep the
+  static-container classes isolated.)
 
 ## Required Artifacts mapping (rules/domains/fintech.md § Required Artifacts)
 
