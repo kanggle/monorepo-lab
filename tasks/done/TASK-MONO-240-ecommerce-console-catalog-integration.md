@@ -8,7 +8,7 @@ ecommerce를 platform-console 도메인 카탈로그에 6번째 구독가능 도
 
 # Status
 
-review
+done
 
 # Owner
 
