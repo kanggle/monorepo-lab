@@ -8,7 +8,7 @@ Promote the concurrent-session worktree-isolation rule from project memory to `C
 
 # Status
 
-ready
+done
 
 # Owner
 
