@@ -1,11 +1,23 @@
 import Link from 'next/link';
 import { getFanSession } from '@/shared/auth/session';
-import { getNotifications, NotificationList } from '@/features/notification';
+import {
+  getNotificationPage,
+  NotificationList,
+  NotificationPagination,
+} from '@/features/notification';
 import { EmptyState } from '@/shared/ui/EmptyState';
 import type { NotificationStatus } from '@/entities/notification';
 
+/** Inbox page size — small enough that the pager is exercised in the demo. */
+const PAGE_SIZE = 20;
+
 function parseStatus(raw: string | undefined): NotificationStatus | undefined {
   return raw === 'UNREAD' || raw === 'READ' ? raw : undefined;
+}
+
+function parsePage(raw: string | undefined): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : 0;
 }
 
 const TABS: { key: string; label: string; href: string }[] = [
@@ -23,14 +35,15 @@ const TABS: { key: string; label: string; href: string }[] = [
 export default async function NotificationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
-  const { status } = await searchParams;
+  const { status, page } = await searchParams;
   const statusFilter = parseStatus(status);
   const activeKey = statusFilter ?? 'ALL';
+  const pageIndex = parsePage(page);
 
   const session = await getFanSession();
-  const notifications = await getNotifications(session.accessToken, statusFilter);
+  const result = await getNotificationPage(session.accessToken, statusFilter, pageIndex, PAGE_SIZE);
 
   return (
     <section className="flex flex-col gap-6">
@@ -56,7 +69,7 @@ export default async function NotificationsPage({
         ))}
       </nav>
 
-      {notifications.length === 0 ? (
+      {result.totalElements === 0 ? (
         <EmptyState
           title="알림이 없습니다"
           description={
@@ -66,7 +79,18 @@ export default async function NotificationsPage({
           }
         />
       ) : (
-        <NotificationList initial={notifications} />
+        <>
+          {result.items.length > 0 ? (
+            <NotificationList initial={result.items} />
+          ) : (
+            <p className="text-sm text-ink-500">이 페이지에 알림이 없습니다.</p>
+          )}
+          <NotificationPagination
+            status={statusFilter}
+            page={result.page}
+            totalPages={result.totalPages}
+          />
+        </>
       )}
     </section>
   );
