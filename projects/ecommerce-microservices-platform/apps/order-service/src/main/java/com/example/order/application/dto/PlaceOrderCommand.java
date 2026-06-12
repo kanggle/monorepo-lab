@@ -13,8 +13,15 @@ public record PlaceOrderCommand(
             String productName,
             String optionName,
             int quantity,
-            long unitPrice
-    ) {}
+            long unitPrice,
+            String sellerId
+    ) {
+        /** Backward-compatible (no seller) — defaults to the default seller (D8). */
+        public OrderItemCommand(String productId, String variantId, String productName,
+                                String optionName, int quantity, long unitPrice) {
+            this(productId, variantId, productName, optionName, quantity, unitPrice, null);
+        }
+    }
 
     public record ShippingAddressCommand(
             String recipient,

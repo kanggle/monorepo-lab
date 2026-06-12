@@ -14,11 +14,12 @@ public record ProductDetail(
         long price,
         UUID categoryId,
         String thumbnailUrl,
+        String sellerId,
         List<VariantDetail> variants
 ) {
     public ProductDetail(UUID id, String name, String description, ProductStatus status, long price,
                          UUID categoryId, List<VariantDetail> variants) {
-        this(id, name, description, status, price, categoryId, null, variants);
+        this(id, name, description, status, price, categoryId, null, null, variants);
     }
 
     public static ProductDetail from(Product product) {
@@ -34,6 +35,7 @@ public record ProductDetail(
                 product.getPrice().value(),
                 product.getCategoryId(),
                 product.getThumbnailUrl(),
+                product.getSellerId(),
                 variants);
     }
 }

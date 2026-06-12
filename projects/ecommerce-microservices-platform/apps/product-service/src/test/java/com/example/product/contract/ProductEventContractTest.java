@@ -31,7 +31,7 @@ class ProductEventContractTest {
     void productCreated_envelope_matchesSpec() throws Exception {
         ProductCreatedPayload payload = new ProductCreatedPayload(
                 "prod-1", "노트북", "설명", 1000000L, "ON_SALE", "cat-1",
-                "https://example.com/thumb.jpg",
+                "https://example.com/thumb.jpg", "default",
                 List.of(new ProductCreatedPayload.VariantPayload("var-1", "기본", 100, 0L)));
         ProductEvent event = ProductEvent.created(payload);
 
@@ -43,14 +43,14 @@ class ProductEventContractTest {
     void productCreated_payload_matchesSpec() throws Exception {
         ProductCreatedPayload payload = new ProductCreatedPayload(
                 "prod-1", "노트북", "설명", 1000000L, "ON_SALE", "cat-1",
-                "https://example.com/thumb.jpg",
+                "https://example.com/thumb.jpg", "default",
                 List.of(new ProductCreatedPayload.VariantPayload("var-1", "기본", 100, 0L)));
         ProductEvent event = ProductEvent.created(payload);
 
         JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(event));
         JsonNode payloadNode = root.get("payload");
 
-        assertFieldsMatch(payloadNode, Set.of("productId", "name", "description", "price", "status", "categoryId", "thumbnailUrl", "variants"),
+        assertFieldsMatch(payloadNode, Set.of("productId", "name", "description", "price", "status", "categoryId", "thumbnailUrl", "sellerId", "variants"),
                 SPEC_REF + " ProductCreated payload");
 
         JsonNode variant = payloadNode.get("variants").get(0);

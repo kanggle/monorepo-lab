@@ -30,12 +30,13 @@ List products with filtering and pagination.
 {
   "content": [
     {
-      "productId": "string (UUID)",
+      "id": "string (UUID)",
       "name": "string",
       "status": "ON_SALE",
       "price": 10000,
       "thumbnailUrl": "string",
-      "categoryId": "string (UUID)"
+      "categoryId": "string (UUID)",
+      "sellerId": "string (read-only — owning seller within the tenant)"
     }
   ],
   "page": 0,
@@ -43,6 +44,12 @@ List products with filtering and pagination.
   "totalElements": 100
 }
 ```
+
+`sellerId` (inner marketplace axis — ADR-MONO-030 Step 3 §3.2) is the owning
+seller within the tenant. On the CONSUMER plane it is **read-only display** (the
+shared catalog is never seller-narrowed — F5). When an OPERATOR request carries a
+seller-scope claim (gateway header `X-Seller-Scope`), the list is narrowed to that
+seller; an absent / `*` scope returns the full tenant catalog (net-zero, F1).
 
 ---
 
@@ -59,6 +66,7 @@ Get product detail including variants.
   "price": 10000,
   "categoryId": "string (UUID)",
   "thumbnailUrl": "string (nullable — resolved URL of primary image)",
+  "sellerId": "string (read-only — owning seller within the tenant)",
   "images": [
     {
       "imageId": "string (UUID)",
@@ -99,6 +107,7 @@ Register a new product. Requires admin role.
   "description": "string",
   "price": 10000,
   "categoryId": "string (UUID)",
+  "sellerId": "string (optional — owning seller; OPERATOR surface)",
   "variants": [
     {
       "optionName": "string",
@@ -109,9 +118,14 @@ Register a new product. Requires admin role.
 }
 ```
 
+`sellerId` (optional, OPERATOR surface — ADR-MONO-030 Step 3 §3.2) sets the owning
+seller. When omitted, ownership resolves from the request's seller-scope claim
+(`X-Seller-Scope`), else the per-tenant default seller `default` (D8). The CONSUMER
+plane has no seller authority — it cannot register products.
+
 **Response 201**
 ```json
-{ "productId": "string (UUID)" }
+{ "id": "string (UUID)" }
 ```
 
 **Error responses**
@@ -119,6 +133,33 @@ Register a new product. Requires admin role.
 |---|---|---|
 | 400 | VALIDATION_ERROR | Missing or invalid field |
 | 400 | INVALID_CATEGORY | Category with given ID does not exist |
+| 403 | ACCESS_DENIED | Admin role required |
+
+---
+
+### POST /api/admin/sellers
+Register a marketplace seller within the current tenant (ADR-MONO-030 Step 3 §3.1).
+Requires admin role. Minimal v1 lifecycle (register + ACTIVE); the owning
+`tenant_id` is derived from the token (gateway `X-Tenant-Id`), not the body.
+Onboarding flow / settlement are out of scope (Step 4).
+
+**Request Body**
+```json
+{
+  "sellerId": "string",
+  "displayName": "string"
+}
+```
+
+**Response 201**
+```json
+{ "sellerId": "string" }
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | VALIDATION_ERROR | Missing or invalid field |
 | 403 | ACCESS_DENIED | Admin role required |
 
 ---

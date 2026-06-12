@@ -104,6 +104,61 @@ class ProductControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/products/{productId} - CONSUMER 응답에 seller_id 가 읽기 전용으로 노출된다 (AC-4/AC-7)")
+    void getProduct_exposesSellerIdReadOnly() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        VariantDetail variant = new VariantDetail(variantId, "기본", 10, 0L);
+        // full ProductDetail carrying sellerId (seller-owned product)
+        ProductDetail detail = new ProductDetail(id, "상품", "설명", ProductStatus.ON_SALE, 10000L,
+                null, null, "seller-a1", List.of(variant));
+        given(queryProductService.findById(id)).willReturn(detail);
+
+        mockMvc.perform(get("/api/products/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sellerId").value("seller-a1"));
+    }
+
+    @Test
+    @DisplayName("GET /api/products - 목록 content[]에 seller_id 가 노출된다 (AC-7)")
+    void getProducts_listExposesSellerId() throws Exception {
+        UUID id = UUID.randomUUID();
+        ProductSummary summary = new ProductSummary(id, "상품", ProductStatus.ON_SALE, 10000L, null, null, "seller-a1");
+        ProductListResult result = new ProductListResult(List.of(summary), 0, 20, 1L);
+        given(queryProductService.findAll(any(), any(), anyInt(), anyInt())).willReturn(result);
+
+        mockMvc.perform(get("/api/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].sellerId").value("seller-a1"));
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/products - request.sellerId 가 command 로 전달된다 (OPERATOR 표면)")
+    void registerProduct_forwardsSellerId() throws Exception {
+        UUID newId = UUID.randomUUID();
+        org.mockito.ArgumentCaptor<com.example.product.application.command.RegisterProductCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.product.application.command.RegisterProductCommand.class);
+        given(registerProductService.register(captor.capture())).willReturn(newId);
+
+        String requestBody = """
+                {
+                  "name": "셀러 상품",
+                  "price": 10000,
+                  "sellerId": "seller-a1",
+                  "variants": [ { "optionName": "기본", "stock": 10, "additionalPrice": 0 } ]
+                }
+                """;
+
+        mockMvc.perform(post("/api/admin/products")
+                        .header("X-User-Role", "ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated());
+
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().sellerId()).isEqualTo("seller-a1");
+    }
+
+    @Test
     @DisplayName("GET /api/products/{productId} - 존재하지 않으면 404 반환")
     void getProduct_notFound_returns404() throws Exception {
         UUID id = UUID.randomUUID();

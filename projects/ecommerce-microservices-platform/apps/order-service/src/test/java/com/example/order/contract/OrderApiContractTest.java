@@ -136,7 +136,7 @@ class OrderApiContractTest {
                 SPEC_REF + " GET /api/orders/{orderId} 200");
 
         JsonNode item = root.get("items").get(0);
-        assertFieldsMatch(item, Set.of("productId", "variantId", "productName", "optionName", "quantity", "unitPrice"),
+        assertFieldsMatch(item, Set.of("productId", "variantId", "productName", "optionName", "quantity", "unitPrice", "sellerId"),
                 SPEC_REF + " GET /api/orders/{orderId} 200 items[]");
 
         JsonNode addr = root.get("shippingAddress");

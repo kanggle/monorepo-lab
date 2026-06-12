@@ -73,6 +73,47 @@ class OrderPlacementServiceTest {
     }
 
     @Test
+    @DisplayName("OrderPlaced 이벤트 라인이 각 셀러를 담는다 (다중 셀러 귀속)")
+    void placeOrder_multiSeller_eventItemsCarrySellerId() {
+        PlaceOrderCommand command = new PlaceOrderCommand(
+                "user1",
+                List.of(
+                        new PlaceOrderCommand.OrderItemCommand("p1", "v1", "노트북", "블랙", 1, 1000000L, "seller-a1"),
+                        new PlaceOrderCommand.OrderItemCommand("p2", "v2", "마우스", null, 2, 50000L, "seller-a2")
+                ),
+                ADDRESS
+        );
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+
+        orderPlacementService.placeOrder(command);
+
+        ArgumentCaptor<OrderPlacedEvent> eventCaptor = ArgumentCaptor.forClass(OrderPlacedEvent.class);
+        verify(orderEventPublisher).publishOrderPlaced(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().payload().items())
+                .extracting(OrderPlacedEvent.Item::sellerId)
+                .containsExactly("seller-a1", "seller-a2");
+    }
+
+    @Test
+    @DisplayName("seller 미지정 라인은 default seller 로 이벤트에 실린다 (degrade)")
+    void placeOrder_absentSeller_eventItemDefaults() {
+        PlaceOrderCommand command = new PlaceOrderCommand(
+                "user1",
+                List.of(new PlaceOrderCommand.OrderItemCommand("p1", "v1", "노트북", "블랙", 1, 1000000L)),
+                ADDRESS
+        );
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+
+        orderPlacementService.placeOrder(command);
+
+        ArgumentCaptor<OrderPlacedEvent> eventCaptor = ArgumentCaptor.forClass(OrderPlacedEvent.class);
+        verify(orderEventPublisher).publishOrderPlaced(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().payload().items().get(0).sellerId()).isEqualTo("default");
+    }
+
+    @Test
     @DisplayName("items가 비어있으면 InvalidOrderException이 발생한다")
     void placeOrder_emptyItems_throwsInvalidOrderException() {
         PlaceOrderCommand command = new PlaceOrderCommand("user1", List.of(), ADDRESS);

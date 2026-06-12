@@ -32,7 +32,7 @@ public record OrderDetail(
                 .map(i -> new OrderItemDetail(
                         i.getProductId(), i.getVariantId(),
                         i.getProductName(), i.getOptionName(),
-                        i.getQuantity(), i.getUnitPrice()
+                        i.getQuantity(), i.getUnitPrice(), i.getSellerId()
                 ))
                 .toList();
     }
@@ -50,8 +50,15 @@ public record OrderDetail(
             String productName,
             String optionName,
             int quantity,
-            long unitPrice
-    ) {}
+            long unitPrice,
+            String sellerId
+    ) {
+        /** Backward-compatible (no seller) — defaults to the default seller (D8). */
+        public OrderItemDetail(String productId, String variantId, String productName,
+                               String optionName, int quantity, long unitPrice) {
+            this(productId, variantId, productName, optionName, quantity, unitPrice, "default");
+        }
+    }
 
     public record ShippingAddressDetail(
             String recipient,

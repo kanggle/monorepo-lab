@@ -27,7 +27,8 @@ Place a new order.
       "productName": "string",
       "optionName": "string (optional)",
       "quantity": 2,
-      "unitPrice": 15000
+      "unitPrice": 15000,
+      "sellerId": "string (optional — owning seller of this line)"
     }
   ],
   "shippingAddress": {
@@ -39,6 +40,12 @@ Place a new order.
   }
 }
 ```
+
+`items[].sellerId` (inner marketplace axis — ADR-MONO-030 Step 3 §3.2) is the
+owning seller of the line, supplied by the client as a denormalized snapshot
+(like `productName` / `unitPrice`; order-service does not call product-service)
+and captured immutably on the line. A single order may span multiple sellers.
+Absent → the default seller `default` (D8 net-zero).
 
 **Response 201**
 ```json
@@ -108,7 +115,8 @@ Get order detail for the authenticated user.
       "productName": "string",
       "optionName": "string",
       "quantity": 2,
-      "unitPrice": 15000
+      "unitPrice": 15000,
+      "sellerId": "string (owning seller of this line)"
     }
   ],
   "shippingAddress": {
@@ -260,7 +268,8 @@ Get order detail (admin view). Includes order owner userId.
       "productName": "string",
       "optionName": "string",
       "quantity": 2,
-      "unitPrice": 15000
+      "unitPrice": 15000,
+      "sellerId": "string (owning seller of this line)"
     }
   ],
   "shippingAddress": {

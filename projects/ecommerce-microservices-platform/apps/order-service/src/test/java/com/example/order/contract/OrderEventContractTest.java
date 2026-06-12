@@ -62,7 +62,7 @@ class OrderEventContractTest {
                 SPEC_REF + " OrderPlaced payload");
 
         JsonNode item = payload.get("items").get(0);
-        assertFieldsMatch(item, Set.of("productId", "variantId", "quantity", "unitPrice"),
+        assertFieldsMatch(item, Set.of("productId", "variantId", "quantity", "unitPrice", "sellerId"),
                 SPEC_REF + " OrderPlaced payload items[]");
 
         JsonNode addr = payload.get("shippingAddress");

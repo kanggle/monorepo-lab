@@ -45,6 +45,7 @@ Published when a new product is successfully registered.
   "status": "ON_SALE",
   "thumbnailUrl": "string",
   "categoryId": "string (UUID)",
+  "sellerId": "string",
   "variants": [
     {
       "variantId": "string (UUID)",
@@ -55,6 +56,13 @@ Published when a new product is successfully registered.
   ]
 }
 ```
+
+`sellerId` (inner marketplace axis — ADR-MONO-030 Step 3 §3.2,
+[multi-tenancy-and-marketplace.md](../../features/multi-tenancy-and-marketplace.md))
+is the owning seller within the tenant (ownership key `(tenant_id, seller_id)`).
+It is always present (never blank); a product registered without a seller —
+standalone / pre-marketplace data — resolves to the per-tenant default seller
+`default` (D8 net-zero). The outer `tenant_id` is on the envelope (above).
 
 ---
 

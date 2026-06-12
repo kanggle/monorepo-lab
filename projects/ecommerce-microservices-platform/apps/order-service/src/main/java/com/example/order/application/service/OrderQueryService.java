@@ -53,7 +53,10 @@ public class OrderQueryService {
 
     @Transactional(readOnly = true)
     public AdminOrderDetail getOrderForAdmin(String orderId) {
-        Order order = orderRepository.findById(orderId)
+        // OPERATOR detail: tenant + nested net-zero seller scope (AC-6). A cross-seller
+        // (or cross-tenant) id resolves to empty → 404 (M3). Absent / '*' scope =
+        // full tenant view (F1).
+        Order order = orderRepository.findByIdForAdmin(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         return AdminOrderDetail.from(order);
     }

@@ -23,6 +23,16 @@ public interface OrderRepository {
     Optional<Order> findById(String orderId);
 
     /**
+     * Tenant-scoped admin lookup (OPERATOR detail path) with a nested net-zero
+     * seller-scope filter: when a concrete seller scope is bound, the order is
+     * visible only if it has at least one line attributed to that seller; absent /
+     * {@code '*'} scope returns the full tenant view (fail-OPEN, F1). A cross-seller
+     * id resolves to empty → 404 (M3). The seller filter is always nested inside the
+     * tenant filter (AC-6).
+     */
+    Optional<Order> findByIdForAdmin(String orderId);
+
+    /**
      * Tenant-agnostic lookup by globally-unique order id, for the system/saga path
      * (consumed payment/stock/withdrawal/wms events, stuck-detector recovery).
      * Addressing by unique id cannot reach the wrong order, so it cannot leak

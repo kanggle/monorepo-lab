@@ -113,7 +113,7 @@ class ProductApiContractTest {
                 SPEC_REF + " GET /api/products 200");
 
         JsonNode item = objectMapper.readTree(json).get("content").get(0);
-        assertFieldsMatch(item, Set.of("id", "name", "status", "price", "thumbnailUrl", "categoryId"),
+        assertFieldsMatch(item, Set.of("id", "name", "status", "price", "thumbnailUrl", "categoryId", "sellerId"),
                 SPEC_REF + " GET /api/products 200 content[]");
     }
 
@@ -135,7 +135,7 @@ class ProductApiContractTest {
         String json = result.getResponse().getContentAsString();
         JsonNode root = objectMapper.readTree(json);
 
-        assertFieldsMatch(root, Set.of("id", "name", "description", "status", "price", "categoryId", "thumbnailUrl", "images", "variants"),
+        assertFieldsMatch(root, Set.of("id", "name", "description", "status", "price", "categoryId", "thumbnailUrl", "sellerId", "images", "variants"),
                 SPEC_REF + " GET /api/products/{productId} 200");
 
         JsonNode variant = root.get("variants").get(0);
