@@ -1,6 +1,6 @@
 # TASK-FIN-BE-007 — ledger-service bootstrap (first increment: event-driven auto-journal + read)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (complex domain — double-entry invariant, event consumer, new Hexagonal service)

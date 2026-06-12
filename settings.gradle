@@ -95,7 +95,12 @@ include(
 // implements it. This bootstrap intentionally resets the libs/ churn clock
 // (ADR-MONO-003a § D2.1, recorded in ADR-MONO-008 § 3.3).
 include(
-    'projects:finance-platform:apps:account-service'
+    'projects:finance-platform:apps:account-service',
+    // TASK-FIN-BE-007: ledger-service (v2 double-entry general ledger, first
+    // increment — ADR-MONO-008 § D3). Hexagonal + DDD; rest-api + event-consumer
+    // (terminal — no outbox). Own schema finance_ledger_db (downstream of
+    // account-service's finance_db).
+    'projects:finance-platform:apps:ledger-service'
 )
 
 // Project: erp-platform

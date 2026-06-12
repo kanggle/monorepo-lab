@@ -1,0 +1,27 @@
+# Test profile defaults. Integration tests inject concrete values for
+# spring.datasource.* (MySQL Testcontainer), spring.kafka.bootstrap-servers
+# (Kafka Testcontainer), and spring.security.oauth2.resourceserver.jwt.jwk-set-uri
+# (MockWebServer JWKS) via @DynamicPropertySource. H2 is FORBIDDEN — slice tests
+# stub the use-case layer; integration tests use real MySQL + Kafka.
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  # Kafka listeners do NOT auto-start in unit/slice runs (no broker). The
+  # integration suite flips spring.kafka.listener.auto-startup=true.
+  kafka:
+    listener:
+      auto-startup: false
+
+financeplatform:
+  oauth2:
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,iam}
+    required-tenant-id: finance

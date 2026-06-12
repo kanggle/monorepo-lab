@@ -1,0 +1,101 @@
+# -----------------------------------------------------------------------------
+# finance-platform ledger-service — TASK-FIN-BE-007.
+#
+# Double-entry general ledger (first increment). Consumes account-service
+# transaction events, posts balanced journal entries per the Posting Policy,
+# serves a read-only ledger REST API. No outbox / no event publication
+# (terminal consumer). Separate schema from account-service: finance_ledger_db.
+# -----------------------------------------------------------------------------
+spring:
+  application:
+    name: finance-platform-ledger-service
+
+  datasource:
+    # Own ledger store — separate database from account-service's finance_db.
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:finance_ledger_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER:finance}
+    password: ${MYSQL_PASSWORD:finance}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema — Hibernate validates only.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc.time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # Kafka consumer — account-service transaction topics. Manual ACK; values are
+  # read as String and parsed with the service ObjectMapper (blueprint:
+  # read-model-service) so an undeserializable payload is a controlled DLT route.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
+    consumer:
+      group-id: finance-ledger-v1
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: manual
+
+  # Standard OAuth2 Resource Server backed by IAM's JWKS (RS256), mirrors
+  # account-service's chain (same finance tenant gate).
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URL:http://iam.local}
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}}
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.example.finance.ledger: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} ledgerAccountCode=%X{ledgerAccountCode:-}]"
+
+financeplatform:
+  oauth2:
+    # Keep byte-identical to account-service's allowed-issuers (cross-service
+    # issuer drift guard — SAS issuer + legacy iam D2-b).
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:finance}
