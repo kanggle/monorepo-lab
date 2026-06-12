@@ -131,6 +131,18 @@ class LedgerFxSettlementIntegrationTest extends AbstractLedgerIntegrationTest {
                 + ",\"reference\":\"FX-SETTLE-1\",\"memo\":\"liquidate USD\"}";
     }
 
+    /** A settlement body carrying the optional {@code settleForeignAmount} (12th increment). */
+    private String partialSettlementBody(String currency, String rate, String proceedsAccount,
+                                         String settleForeignAmount) {
+        return "{"
+                + "\"ledgerAccountCode\":\"CASH_CLEARING\","
+                + "\"currency\":\"" + currency + "\","
+                + "\"settlementRate\":\"" + rate + "\","
+                + "\"proceedsAccountCode\":\"" + proceedsAccount + "\","
+                + "\"settleForeignAmount\":\"" + settleForeignAmount + "\","
+                + "\"reference\":\"FX-SETTLE-PARTIAL\",\"memo\":\"partial liquidation\"}";
+    }
+
     private String revaluationBody(String currency, String rate) {
         return "{"
                 + "\"ledgerAccountCode\":\"CASH_CLEARING\","
@@ -276,6 +288,49 @@ class LedgerFxSettlementIntegrationTest extends AbstractLedgerIntegrationTest {
         assertThat(replayBody.at("/data/settled").asBoolean()).isFalse();
         assertThat(replayBody.at("/data/reason").asText()).isEqualTo("REPLAY");
         assertThat(replayBody.at("/data/entry/entryId").asText()).isEqualTo(entryId1);
+
+        // (5b) Partial / weighted-average settlement (12th increment — TASK-FIN-BE-018).
+        //      The CASH_CLEARING USD aggregate is 0 here (steps 2/3/4 fully settled their
+        //      positions); this block establishes one fresh position and nets it back to 0
+        //      so the later steps see the same clean baseline.
+        String walletP = ensureWallet(token);
+        establishUsdPosition(token, walletP);   // +10000 USD, carrying 130000 @ 13.0
+        assertThat(usdPosition()[0]).isEqualTo(10_000L);
+
+        // Settle $40 of the $100 position @ 13.7 → C_settle = round(130000×4000/10000) = 52000,
+        // proceeds = 54800, realized = +2800; residual (6000, 78000) stays OPEN (AC-1).
+        String partialKey = "PARTIAL-" + newId().substring(0, 8);
+        HttpResponse<String> rPartial = postSettlement(token, partialKey,
+                partialSettlementBody("USD", "13.7", PROCEEDS, "4000"));
+        assertThat(rPartial.statusCode()).isEqualTo(201);
+        JsonNode bPartial = objectMapper.readTree(rPartial.body());
+        assertThat(bPartial.at("/data/realizedBaseMinor").asText()).isEqualTo("2800");
+        assertThat(bPartial.at("/data/proceedsBaseMinor").asText()).isEqualTo("54800");
+        assertThat(bPartial.at("/data/outcome").asText()).isEqualTo("FX_GAIN");
+        assertThat(bPartial.at("/data/residualForeignMinor").asText()).isEqualTo("6000");
+        assertThat(bPartial.at("/data/residualCarryingBaseMinor").asText()).isEqualTo("78000");
+        // The residual position is queryable and non-zero (OPEN).
+        long[] residual = usdPosition();
+        assertThat(residual[0]).isEqualTo(6_000L);
+        assertThat(residual[1]).isEqualTo(78_000L);
+
+        // Over-settle the residual (|F_settle| > |F|) → 422 SETTLEMENT_AMOUNT_INVALID, no entry,
+        // key not consumed, position unchanged (AC-4 / F1).
+        HttpResponse<String> overSettle = postSettlement(token, "OVER-" + newId().substring(0, 8),
+                partialSettlementBody("USD", "13.7", PROCEEDS, "6001"));
+        assertThat(overSettle.statusCode()).isEqualTo(422);
+        assertThat(objectMapper.readTree(overSettle.body()).at("/code").asText())
+                .isEqualTo("SETTLEMENT_AMOUNT_INVALID");
+        assertThat(usdPosition()[0]).isEqualTo(6_000L);   // unchanged
+
+        // Settle the whole residual (omit settleForeignAmount = full settle @ 13.0 → proceeds 78000,
+        // realized 0) → removes exactly C_remaining; position to (0, 0) with NO drift (AC-3 / F2).
+        HttpResponse<String> rFinal = postSettlement(token, "RESIDUAL-" + newId().substring(0, 8),
+                settlementBody("USD", "13.0", PROCEEDS, null));
+        assertThat(rFinal.statusCode()).isEqualTo(201);
+        long[] afterResidual = usdPosition();
+        assertThat(afterResidual[0]).isZero();
+        assertThat(afterResidual[1]).isZero();
 
         // (6) settlementRate 0 → 422 SETTLEMENT_RATE_INVALID (re-establish a position first).
         String wallet4 = ensureWallet(token);

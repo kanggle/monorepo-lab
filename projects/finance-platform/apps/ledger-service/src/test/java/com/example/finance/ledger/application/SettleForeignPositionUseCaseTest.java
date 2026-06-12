@@ -10,6 +10,7 @@ import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchExce
 import com.example.finance.ledger.domain.error.LedgerErrors.IdempotencyKeyRequiredException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
+import com.example.finance.ledger.domain.error.LedgerErrors.SettlementAmountInvalidException;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
 import com.example.finance.ledger.domain.journal.EntryDirection;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.Outcome;
@@ -81,7 +82,13 @@ class SettleForeignPositionUseCaseTest {
     private static SettleForeignPositionCommand cmd(String rate) {
         return new SettleForeignPositionCommand(
                 TENANT, OPERATOR, CASH, Currency.USD, new BigDecimal(rate), PROCEEDS,
-                NOW, KEY, "liquidate USD holdings", KEY);
+                null, NOW, KEY, "liquidate USD holdings", KEY);
+    }
+
+    private static SettleForeignPositionCommand partialCmd(String rate, Long settleForeignMinor) {
+        return new SettleForeignPositionCommand(
+                TENANT, OPERATOR, CASH, Currency.USD, new BigDecimal(rate), PROCEEDS,
+                settleForeignMinor, NOW, KEY, "partial liquidation", KEY);
     }
 
     /** A USD asset position: debit-positive foreign balance + base carrying (KRW). */
@@ -246,7 +253,7 @@ class SettleForeignPositionUseCaseTest {
     void blankKeyRejected() {
         SettleForeignPositionCommand blank = new SettleForeignPositionCommand(
                 TENANT, OPERATOR, CASH, Currency.USD, new BigDecimal("13.7"), PROCEEDS,
-                NOW, KEY, "memo", "  ");
+                null, NOW, KEY, "memo", "  ");
 
         assertThatThrownBy(() -> useCase.settle(blank))
                 .isInstanceOf(IdempotencyKeyRequiredException.class);
@@ -259,7 +266,7 @@ class SettleForeignPositionUseCaseTest {
         String tooLong = "k".repeat(51);
         SettleForeignPositionCommand cmd = new SettleForeignPositionCommand(
                 TENANT, OPERATOR, CASH, Currency.USD, new BigDecimal("13.7"), PROCEEDS,
-                NOW, KEY, "memo", tooLong);
+                null, NOW, KEY, "memo", tooLong);
 
         assertThatThrownBy(() -> useCase.settle(cmd))
                 .isInstanceOf(IdempotencyKeyRequiredException.class);
@@ -272,7 +279,7 @@ class SettleForeignPositionUseCaseTest {
         when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
         SettleForeignPositionCommand krw = new SettleForeignPositionCommand(
                 TENANT, OPERATOR, CASH, Currency.KRW, new BigDecimal("1"), PROCEEDS,
-                NOW, KEY, "memo", KEY);
+                null, NOW, KEY, "memo", KEY);
 
         assertThatThrownBy(() -> useCase.settle(krw))
                 .isInstanceOf(CurrencyMismatchException.class);
@@ -291,6 +298,115 @@ class SettleForeignPositionUseCaseTest {
         assertThatThrownBy(() -> useCase.settle(cmd("0")))
                 .isInstanceOf(SettlementRateInvalidException.class);
         verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+    }
+
+    // ---- Partial / weighted-average settlement (12th increment — TASK-FIN-BE-018) ----
+
+    @Test
+    @DisplayName("a partial settle books C_settle and exposes the residual OPEN position")
+    void partialSettleExposesResidual() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // Settle $40 of the $100 position @ 13.7: C_settle = 52000, proceeds = 54800,
+        // realized = +2800; residual = (10000 − 4000, 130000 − 52000) = (6000, 78000).
+        Result result = useCase.settle(partialCmd("13.7", 4_000L));
+
+        assertThat(result.settled()).isTrue();
+        assertThat(result.realizedBaseMinor()).isEqualTo(2_800L);
+        assertThat(result.proceedsBaseMinor()).isEqualTo(54_800L);
+        assertThat(result.outcome()).isEqualTo(Outcome.FX_GAIN);
+        assertThat(result.residualForeignMinor()).isEqualTo(6_000L);
+        assertThat(result.residualCarryingBaseMinor()).isEqualTo(78_000L);
+
+        ArgumentCaptor<JournalEntry> entry = ArgumentCaptor.forClass(JournalEntry.class);
+        verify(postJournalEntryUseCase).post(entry.capture(), anyString(), eq(OPERATOR));
+        assertThat(entry.getValue().isBalanced()).isTrue();
+    }
+
+    @Test
+    @DisplayName("settleForeignAmount omitted (null) → full settlement, residual (0,0) — net-zero AC-2")
+    void nullSettleAmountIsFull() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Result result = useCase.settle(partialCmd("13.7", null));
+
+        assertThat(result.realizedBaseMinor()).isEqualTo(7_000L);     // == full settle
+        assertThat(result.proceedsBaseMinor()).isEqualTo(137_000L);
+        assertThat(result.residualForeignMinor()).isZero();
+        assertThat(result.residualCarryingBaseMinor()).isZero();
+    }
+
+    @Test
+    @DisplayName("settleForeignAmount == |F| → full settlement, residual (0,0)")
+    void exactFullAmountIsFull() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Result result = useCase.settle(partialCmd("13.7", 10_000L));
+
+        assertThat(result.realizedBaseMinor()).isEqualTo(7_000L);
+        assertThat(result.residualForeignMinor()).isZero();
+        assertThat(result.residualCarryingBaseMinor()).isZero();
+    }
+
+    @Test
+    @DisplayName("settleForeignAmount zero → SETTLEMENT_AMOUNT_INVALID, no post, key NOT marked")
+    void zeroSettleAmountRejected() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+
+        assertThatThrownBy(() -> useCase.settle(partialCmd("13.7", 0L)))
+                .isInstanceOf(SettlementAmountInvalidException.class);
+        verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+        verify(processedEventStore, never()).markProcessed(anyString(), anyString(),
+                anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("settleForeignAmount opposite sign to F → SETTLEMENT_AMOUNT_INVALID")
+    void oppositeSignRejected() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L))); // F = +10000
+
+        assertThatThrownBy(() -> useCase.settle(partialCmd("13.7", -4_000L)))
+                .isInstanceOf(SettlementAmountInvalidException.class);
+        verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("settleForeignAmount > |F| (over-settle) → SETTLEMENT_AMOUNT_INVALID, no entry")
+    void overSettleRejected() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+
+        assertThatThrownBy(() -> useCase.settle(partialCmd("13.7", 10_001L)))
+                .isInstanceOf(SettlementAmountInvalidException.class);
+        verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+        verify(processedEventStore, never()).markProcessed(anyString(), anyString(),
+                anyString(), anyString(), any());
     }
 
     private static List<JournalLine> settlementLines() {

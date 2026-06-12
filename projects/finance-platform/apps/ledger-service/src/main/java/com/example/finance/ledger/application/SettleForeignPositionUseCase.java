@@ -7,6 +7,7 @@ import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchExce
 import com.example.finance.ledger.domain.error.LedgerErrors.IdempotencyKeyRequiredException;
 import com.example.finance.ledger.domain.error.LedgerErrors.JournalEntryNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoundException;
+import com.example.finance.ledger.domain.error.LedgerErrors.SettlementAmountInvalidException;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.SettlementResult;
 import com.example.finance.ledger.domain.journal.JournalEntry;
@@ -65,20 +66,25 @@ public class SettleForeignPositionUseCase {
     /**
      * The settlement outcome. {@code settled=true} → an entry was booked (the
      * controller maps it to 201) with the signed {@code realizedBaseMinor} + the
-     * {@code proceedsBaseMinor} + the FX {@code outcome}; {@code settled=false} → a
-     * no-op/replay (200) carrying the {@link NoOpReason} and the original entry on a
-     * replay (else {@code null}).
+     * {@code proceedsBaseMinor} + the FX {@code outcome} + the residual OPEN position
+     * {@code (residualForeignMinor, residualCarryingBaseMinor)} that remains after a
+     * partial settle (both {@code 0} on a full settle — 12th increment,
+     * TASK-FIN-BE-018); {@code settled=false} → a no-op/replay (200) carrying the
+     * {@link NoOpReason} and the original entry on a replay (else {@code null}).
      */
     public record Result(boolean settled, long realizedBaseMinor, long proceedsBaseMinor,
-                         FxSettlementPolicy.Outcome outcome, NoOpReason reason,
+                         FxSettlementPolicy.Outcome outcome, long residualForeignMinor,
+                         long residualCarryingBaseMinor, NoOpReason reason,
                          JournalEntry entry) {
 
-        static Result settled(SettlementResult r, JournalEntry entry) {
-            return new Result(true, r.realized(), r.proceedsBase(), r.outcome(), null, entry);
+        static Result settled(SettlementResult r, long residualForeignMinor,
+                              long residualCarryingBaseMinor, JournalEntry entry) {
+            return new Result(true, r.realized(), r.proceedsBase(), r.outcome(),
+                    residualForeignMinor, residualCarryingBaseMinor, null, entry);
         }
 
         static Result noOp(NoOpReason reason, JournalEntry entry) {
-            return new Result(false, 0L, 0L, null, reason, entry);
+            return new Result(false, 0L, 0L, null, 0L, 0L, reason, entry);
         }
     }
 
@@ -133,12 +139,21 @@ public class SettleForeignPositionUseCase {
             return Result.noOp(NoOpReason.NO_POSITION, null);
         }
 
+        // (4b) Resolve the settled portion F_settle. null → full settlement (F,
+        //      byte-identical to the 10th). A supplied partial must be non-zero, the
+        //      SAME sign as F, and no larger in magnitude than |F| (over-settle would
+        //      drive the residual negative / flip the position) → 422
+        //      SETTLEMENT_AMOUNT_INVALID; nothing persists, the key is not consumed.
+        long settleForeignMinor = resolveSettleForeignMinor(cmd.settleForeignMinor(), foreignBalanceMinor);
+
         // (5) Compute. settlementRate ≤ 0 → SETTLEMENT_RATE_INVALID (422). A position
         //     always books an entry (even realized == 0 — a 2-line removal+proceeds).
+        //     F_settle == F → full settlement (residual exactly 0); F_settle < |F| →
+        //     weighted-average partial, residual (F − F_settle, C − C_settle) stays OPEN.
         Optional<SettlementResult> computed = FxSettlementPolicy.settle(
                 cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
-                foreignBalanceMinor, carryingBaseMinor, cmd.settlementRate(),
-                cmd.proceedsAccountCode());
+                foreignBalanceMinor, carryingBaseMinor, settleForeignMinor,
+                cmd.settlementRate(), cmd.proceedsAccountCode());
         if (computed.isEmpty()) {
             // F == 0 was already handled above; this is defensive.
             return Result.noOp(NoOpReason.NO_POSITION, null);
@@ -155,7 +170,39 @@ public class SettleForeignPositionUseCase {
         processedEventStore.markProcessed(dedupeKey, cmd.tenantId(), DEDUPE_TOPIC,
                 entry.source().getSourceTransactionId(), clock.now());
         JournalEntry posted = postJournalEntryUseCase.post(entry, reason(cmd), cmd.operatorSubject());
-        return Result.settled(result, posted);
+
+        // The residual OPEN position left after a partial settle — (F − F_settle,
+        // C − C_settle). Exactly (0, 0) on a full settle (F_settle == F, C_settle == C).
+        long residualForeignMinor = foreignBalanceMinor - result.settledForeignMinor();
+        long residualCarryingBaseMinor = carryingBaseMinor - result.carryingSettledMinor();
+        return Result.settled(result, residualForeignMinor, residualCarryingBaseMinor, posted);
+    }
+
+    /**
+     * Resolve the settled foreign portion {@code F_settle} against the loaded position's
+     * foreign balance {@code F}. {@code null} → full settlement ({@code F}). A supplied
+     * partial is rejected (422 {@code SETTLEMENT_AMOUNT_INVALID}) when it is zero, has the
+     * opposite sign to {@code F}, or exceeds {@code |F|} (over-settle, F1/F4). The
+     * over-settle / sign guard lives <b>here</b> in the use case — {@code FxSettlementPolicy}
+     * delegates and trusts the bounds.
+     */
+    private static long resolveSettleForeignMinor(Long settleForeignMinor, long foreignBalanceMinor) {
+        if (settleForeignMinor == null) {
+            return foreignBalanceMinor; // full settlement (net-zero, AC-2)
+        }
+        long fSettle = settleForeignMinor;
+        if (fSettle == 0L) {
+            throw new SettlementAmountInvalidException("settleForeignAmount must not be zero");
+        }
+        if (Long.signum(fSettle) != Long.signum(foreignBalanceMinor)) {
+            throw new SettlementAmountInvalidException(
+                    "settleForeignAmount must have the same sign as the position's foreign balance");
+        }
+        if (Math.abs(fSettle) > Math.abs(foreignBalanceMinor)) {
+            throw new SettlementAmountInvalidException(
+                    "settleForeignAmount exceeds the position's foreign balance (over-settle)");
+        }
+        return fSettle;
     }
 
     private static String reason(SettleForeignPositionCommand cmd) {

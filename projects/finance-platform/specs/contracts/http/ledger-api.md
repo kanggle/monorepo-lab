@@ -354,18 +354,24 @@ Headers: `Idempotency-Key: <client-key>` (required, ≤ 50 chars). Request:
   "currency": "USD",
   "settlementRate": "13.7",
   "proceedsAccountCode": "CASH_KRW",
+  "settleForeignAmount": "4000",
   "postedAt": "2026-06-30T23:59:59Z",
   "reference": "FX-SETTLE-2026-06-USD",
   "memo": "liquidate USD holdings" }
 ```
 - `ledgerAccountCode` + `currency` identify the **foreign position** to settle (the account's
-  lines in that currency); the **whole** position is settled (partial is forward-declared).
-  `currency` MUST NOT be the base currency (KRW).
+  lines in that currency). `currency` MUST NOT be the base currency (KRW).
 - `settlementRate` is the **base-currency minor units per one foreign-currency minor unit**
-  (string decimal, never a float — F5); the base proceeds = `round(foreignBalance ×
-  settlementRate)`. MUST be strictly positive.
+  (string decimal, never a float — F5); the base proceeds = `round(F_settle × settlementRate)`.
+  MUST be strictly positive.
 - `proceedsAccountCode` is the **base-currency account** that receives (asset) or pays
   (liability) the proceeds; it MUST already exist (no lazy mint).
+- `settleForeignAmount` **(12th incr — optional)** the foreign-minor portion `F_settle` to settle
+  (string integer, F5). **Omitted** → the **whole** position is settled (byte-identical to the
+  10th, net-zero). When present it MUST be non-zero, carry the **same sign** as the position's
+  foreign balance `F`, and satisfy `|F_settle| ≤ |F|` — otherwise `422 SETTLEMENT_AMOUNT_INVALID`.
+  A partial settle removes a **weighted-average** share of carrying `C_settle = round(C ×
+  |F_settle|/|F|)` (HALF_UP) and leaves the residual `(F − F_settle, C − C_settle)` **OPEN**.
 - `postedAt` optional (defaults to the server clock); the closed-period guard applies.
 - `reference` / `memo` optional operator narrative (audit reason + `source.sourceTransactionId`).
 
@@ -377,6 +383,8 @@ Headers: `Idempotency-Key: <client-key>` (required, ≤ 50 chars). Request:
     "realizedBaseMinor": "7000",
     "proceedsBaseMinor": "137000",
     "outcome": "FX_GAIN",
+    "residualForeignMinor": "0",
+    "residualCarryingBaseMinor": "0",
     "entry": {
       "entryId": "...", "postedAt": "2026-06-30T23:59:59Z",
       "source": { "sourceType": "SETTLEMENT", "sourceTransactionId": "FX-SETTLE-2026-06-USD", "sourceEventId": "settle:<client-key>" },
@@ -390,8 +398,11 @@ Headers: `Idempotency-Key: <client-key>` (required, ≤ 50 chars). Request:
     }
   }, "meta": { "timestamp": "..." } }
 ```
-The `CASH_CLEARING` USD position is **removed** (its foreign + base sums go to zero); the
-proceeds sit in `CASH_KRW`; `realizedBaseMinor = proceedsBase − carryingBase`.
+The `CASH_CLEARING` USD position is **removed** (its foreign + base sums go to zero) on a full
+settle; the proceeds sit in `CASH_KRW`; `realizedBaseMinor = proceedsBase − carryingBase`.
+`residualForeignMinor` / `residualCarryingBaseMinor` are the **OPEN** remainder after a partial
+settle (`"0"` / `"0"` on a full settle — 12th incr); on a partial they are `(F − F_settle,
+C − C_settle)` and the position is still queryable.
 
 `200` — **no settlement booked** (`settled: false`): there is **no position** in that
 `currency` on the account (`foreignBalance == 0`), OR an **idempotent replay** (the same
@@ -400,6 +411,9 @@ proceeds sit in `CASH_KRW`; `realizedBaseMinor = proceedsBase − carryingBase`.
 
 - `400 IDEMPOTENCY_KEY_REQUIRED` when the `Idempotency-Key` header is absent / blank / > 50 chars.
 - `422 SETTLEMENT_RATE_INVALID` when `settlementRate` is not strictly positive.
+- `422 SETTLEMENT_AMOUNT_INVALID` **(12th incr)** when a supplied `settleForeignAmount` is zero,
+  the opposite sign to the position's foreign balance, or exceeds it (over-settle); no entry, key
+  not consumed.
 - `422 CURRENCY_MISMATCH` when `currency` is unsupported or is the base currency (KRW).
 - `404 LEDGER_ACCOUNT_NOT_FOUND` when `ledgerAccountCode` or `proceedsAccountCode` does not exist.
 - `422 LEDGER_PERIOD_CLOSED` when `postedAt` falls in a CLOSED accounting period.
@@ -430,6 +444,7 @@ incremental movement — no double-count.
 | `ACCOUNTING_PERIOD_INVALID_WINDOW` | 422 | **(2nd incr)** `from ≥ to` |
 | `REVALUATION_RATE_INVALID` | 422 | **(9th incr)** FX revaluation `closingRate` not strictly positive on `POST /revaluations` (`RevaluationRateInvalidException`) |
 | `SETTLEMENT_RATE_INVALID` | 422 | **(10th incr)** FX settlement `settlementRate` not strictly positive on `POST /settlements` (`SettlementRateInvalidException`) |
+| `SETTLEMENT_AMOUNT_INVALID` | 422 | **(12th incr)** partial FX settlement `settleForeignAmount` zero / opposite-sign / over-settle (`> \|F\|`) on `POST /settlements` (`SettlementAmountInvalidException`) |
 
 ## Out of scope (forward-declared — later increments)
 
@@ -439,11 +454,11 @@ incremental movement — no double-count.
 - Period **reopen**; a "period must have ended (`to ≤ now`)" close policy.
 - GL/AP export endpoints (`finance.ledger.entry.posted.v1` — the increment that
   introduces the outbox, and with it the deferred `finance.ledger.period.closed.v1`).
-- **Partial / weighted-average settlement** (the 10th increment settles a **whole**
-  `(account, currency)` position; settling a *portion* with a proportional / FIFO carrying basis
-  + a residual position is forward-declared) + a **proceeds-amount input** (the 10th derives
-  proceeds from a `settlementRate`; supplying the *actual* base received is forward-declared)
-  + a **bulk / all-positions** revaluation and a **period-close auto-hook** (the 9th/10th
-  increments act on one `(account, currency)` per call, operator-triggered) + a **live FX rate
-  feed** (rates are caller-supplied) + a **configurable base currency** (fixed KRW in v1)
+- A **FIFO / lot-level** settlement carrying basis (the 12th increment settles a *portion* with a
+  **weighted-average** proportional carrying + a residual OPEN position; FIFO/lot cost basis is
+  forward-declared) + a **proceeds-amount input** (the 10th/12th derive proceeds from a
+  `settlementRate`; supplying the *actual* base received is forward-declared)
+  + a **bulk / all-positions** settlement/revaluation and a **period-close auto-hook** (the
+  9th/10th/12th increments act on one `(account, currency)` per call, operator-triggered) + a
+  **live FX rate feed** (rates are caller-supplied) + a **configurable base currency** (fixed KRW in v1)
   + **multi-currency reconciliation** (cross-currency clearing-account matching).
