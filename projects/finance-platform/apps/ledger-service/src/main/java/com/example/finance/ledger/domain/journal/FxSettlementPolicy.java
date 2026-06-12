@@ -1,0 +1,168 @@
+package com.example.finance.ledger.domain.journal;
+
+import com.example.finance.ledger.domain.account.LedgerAccountCodes;
+import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
+import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
+import com.example.finance.ledger.domain.money.Money;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * Realized FX gain/loss on settlement policy (10th increment, TASK-FIN-BE-016 —
+ * architecture.md § FX settlement). Pure domain logic — NO Spring/JPA. Given a
+ * foreign position's debit-positive signed balances (foreign {@code F} + base
+ * carrying {@code C}) and a settlement (spot) rate, computes the base proceeds, the
+ * realized gain/loss, and builds the balanced base-currency (KRW) 3-line entry that
+ * <b>removes</b> the position at carrying and recognises the realized difference.
+ *
+ * <p>Where the 9th-increment {@link FxRevaluationPolicy} marks an OPEN position to
+ * spot (unrealized), settlement <b>closes</b> it (realized). It <b>reuses</b> the
+ * 8th-increment multi-currency line + the 9th-increment FX accounts — no new line
+ * primitive, no migration. The three unattached {@link JournalLine}s it returns are:
+ * <ul>
+ *   <li>a <b>position-removal</b> line on the foreign account — the 8th-increment
+ *       multi-currency form {@link JournalLine#of(String, String, EntryDirection,
+ *       Money, Money)} ({@code money = |F| {currency}}, {@code baseAmount = |C| KRW}),
+ *       posted on the side that <b>zeroes</b> the {@code (account, currency)}
+ *       position;</li>
+ *   <li>a <b>base proceeds</b> line on the operator-supplied {@code proceedsAccountCode}
+ *       — an ordinary KRW line for {@code |proceedsBase|}; and</li>
+ *   <li>the realized <b>{@code FX_GAIN}</b> (income) / <b>{@code FX_LOSS}</b> (expense)
+ *       contra — an ordinary KRW line for {@code |realized|} (omitted when
+ *       {@code realized == 0} — a 2-line removal+proceeds entry that still balances).</li>
+ * </ul>
+ * All KRW base amounts net ({@code Σ baseDebit == Σ baseCredit}), so the existing
+ * {@link JournalEntry} factory accepts it unchanged.
+ *
+ * <p><b>Polarity is automatic</b> for asset AND liability positions — every line's
+ * direction is a sign. The removal + proceeds directions follow {@code sign(F)} (a
+ * debit-balance asset is removed by a CREDIT and brings base IN → DR proceeds; a
+ * credit-balance liability by a DEBIT and pays base OUT → CR proceeds); the FX line's
+ * direction follows {@code sign(realized)} ({@code > 0} → CR {@code FX_GAIN}, {@code < 0}
+ * → DR {@code FX_LOSS}). No account-type branching.
+ *
+ * <p><b>No double-count vs revaluation</b> — {@code realized = proceedsBase − C} is
+ * measured against the <b>carrying</b> {@code C}, which already embeds any prior
+ * revaluation, so a revalue-then-settle realizes only the incremental movement.
+ *
+ * <p><b>F5</b>: money stays integer minor units; only {@code settlementRate} is an
+ * exact {@link BigDecimal}; {@code proceedsBase} is rounded HALF_UP to a {@code long}.
+ */
+public final class FxSettlementPolicy {
+
+    private FxSettlementPolicy() {
+    }
+
+    /** Whether the settlement realized a gain ({@code FX_GAIN}), a loss ({@code FX_LOSS}), or neither. */
+    public enum Outcome {
+        FX_GAIN(LedgerAccountCodes.FX_GAIN),
+        FX_LOSS(LedgerAccountCodes.FX_LOSS),
+        NONE(null);
+
+        private final String accountCode;
+
+        Outcome(String accountCode) {
+            this.accountCode = accountCode;
+        }
+
+        /** The contra GL account code for this outcome ({@code null} for {@link #NONE}). */
+        public String accountCode() {
+            return accountCode;
+        }
+    }
+
+    /**
+     * The result of settling a position: the signed realized base gain/loss
+     * ({@code realized}, KRW minor, debit-positive), the signed {@code proceedsBase}
+     * (KRW minor), the {@link Outcome} ({@link Outcome#NONE} when {@code realized == 0}),
+     * and the unattached lines to post (3 lines, or 2 when {@code realized == 0}).
+     */
+    public record SettlementResult(long realized, long proceedsBase,
+                                   Outcome outcome, List<JournalLine> lines) {
+    }
+
+    /**
+     * Settle the whole {@code (ledgerAccountCode, currency)} foreign position.
+     *
+     * @param tenantId            the owning tenant (stamped onto the built lines)
+     * @param ledgerAccountCode   the foreign account whose position is removed
+     * @param currency            the position's foreign currency (must not be base/KRW)
+     * @param foreignBalanceMinor the position's foreign balance {@code F}
+     *                            ({@code Σdebit − Σcredit}, debit-positive)
+     * @param carryingBaseMinor   the position's current base carrying {@code C}
+     *                            ({@code ΣbaseDebit − ΣbaseCredit}, includes prior revaluation)
+     * @param settlementRate      the base-minor-per-foreign-minor spot factor (strictly positive)
+     * @param proceedsAccountCode the operator-supplied base-currency proceeds account
+     * @return the 3-line (or 2-line when realized == 0) settlement entry, or
+     *         {@link Optional#empty()} when there is no position ({@code F == 0})
+     * @throws SettlementRateInvalidException if {@code settlementRate ≤ 0}
+     */
+    public static Optional<SettlementResult> settle(String tenantId, String ledgerAccountCode,
+                                                    Currency currency, long foreignBalanceMinor,
+                                                    long carryingBaseMinor, BigDecimal settlementRate,
+                                                    String proceedsAccountCode) {
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(ledgerAccountCode, "ledgerAccountCode");
+        Objects.requireNonNull(currency, "currency");
+        Objects.requireNonNull(settlementRate, "settlementRate");
+        Objects.requireNonNull(proceedsAccountCode, "proceedsAccountCode");
+        if (settlementRate.signum() <= 0) {
+            throw new SettlementRateInvalidException(
+                    "settlementRate must be strictly positive: " + settlementRate.toPlainString());
+        }
+        if (foreignBalanceMinor == 0L) {
+            return Optional.empty();
+        }
+
+        // proceedsBase = round(F × settlementRate), HALF_UP, signed integer KRW minor
+        // (F5: the only decimal is the rate; the result is exact integer minor units).
+        long proceedsBase = new BigDecimal(foreignBalanceMinor)
+                .multiply(settlementRate)
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
+        long realized = proceedsBase - carryingBaseMinor;
+
+        Currency base = LedgerReportingCurrency.BASE;
+        boolean assetSide = foreignBalanceMinor > 0L; // debit-balance asset removed by CREDIT
+
+        // (1) Position-removal line — zeroes the (account, currency) position. The
+        //     8th-incr multi-currency form: money = |F| {currency}, baseAmount = |C| KRW.
+        JournalLine removal = JournalLine.of(tenantId, ledgerAccountCode,
+                assetSide ? EntryDirection.CREDIT : EntryDirection.DEBIT,
+                Money.of(Math.abs(foreignBalanceMinor), currency),
+                Money.of(Math.abs(carryingBaseMinor), base));
+
+        // (2) Base proceeds line — an ordinary KRW line on the proceeds account; an
+        //     asset settlement brings base IN (DR), a liability pays base OUT (CR).
+        JournalLine proceeds = JournalLine.of(tenantId, proceedsAccountCode,
+                assetSide ? EntryDirection.DEBIT : EntryDirection.CREDIT,
+                Money.of(Math.abs(proceedsBase), base));
+
+        List<JournalLine> lines = new ArrayList<>(3);
+        lines.add(removal);
+        lines.add(proceeds);
+
+        // (3) Realized FX contra — CR FX_GAIN when realized > 0, DR FX_LOSS when < 0;
+        //     no FX line when realized == 0 (the 2 lines already balance: |C| == |proceedsBase|).
+        Outcome outcome;
+        if (realized > 0L) {
+            outcome = Outcome.FX_GAIN;
+            lines.add(JournalLine.credit(tenantId, LedgerAccountCodes.FX_GAIN,
+                    Money.of(Math.abs(realized), base)));
+        } else if (realized < 0L) {
+            outcome = Outcome.FX_LOSS;
+            lines.add(JournalLine.debit(tenantId, LedgerAccountCodes.FX_LOSS,
+                    Money.of(Math.abs(realized), base)));
+        } else {
+            outcome = Outcome.NONE;
+        }
+
+        return Optional.of(new SettlementResult(realized, proceedsBase, outcome, List.copyOf(lines)));
+    }
+}

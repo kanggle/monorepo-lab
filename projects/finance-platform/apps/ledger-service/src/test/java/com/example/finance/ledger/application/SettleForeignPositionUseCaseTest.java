@@ -1,0 +1,306 @@
+package com.example.finance.ledger.application;
+
+import com.example.finance.ledger.application.SettleForeignPositionUseCase.NoOpReason;
+import com.example.finance.ledger.application.SettleForeignPositionUseCase.Result;
+import com.example.finance.ledger.application.port.outbound.ClockPort;
+import com.example.finance.ledger.application.port.outbound.ProcessedEventStore;
+import com.example.finance.ledger.domain.account.LedgerAccountCodes;
+import com.example.finance.ledger.domain.account.repository.LedgerAccountRepository;
+import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
+import com.example.finance.ledger.domain.error.LedgerErrors.IdempotencyKeyRequiredException;
+import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoundException;
+import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
+import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
+import com.example.finance.ledger.domain.journal.EntryDirection;
+import com.example.finance.ledger.domain.journal.FxSettlementPolicy.Outcome;
+import com.example.finance.ledger.domain.journal.JournalEntry;
+import com.example.finance.ledger.domain.journal.JournalLine;
+import com.example.finance.ledger.domain.journal.SourceRef;
+import com.example.finance.ledger.domain.journal.repository.JournalRepository;
+import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
+import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.ledger.domain.money.Money;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * Unit test for {@link SettleForeignPositionUseCase} (10th increment, TASK-FIN-BE-016).
+ * Mocks all ports — proves a gain/loss position funnels a balanced 3-line entry through
+ * {@code PostJournalEntryUseCase.post(entry, reason, actor)} with the operator subject
+ * as actor + a {@code SETTLEMENT} source, the no-position no-op leaves the key unmarked,
+ * a replay returns the original, an unknown proceeds account → 404, a CLOSED period
+ * surfaces, and the key/currency/rate guards fire.
+ */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+class SettleForeignPositionUseCaseTest {
+
+    private static final String TENANT = "finance";
+    private static final String OPERATOR = "operator-7";
+    private static final String KEY = "FX-SETTLE-2026-06-USD";
+    private static final String DEDUPE = "settle:" + KEY;
+    private static final String CASH = LedgerAccountCodes.CASH_CLEARING;
+    private static final String PROCEEDS = LedgerAccountCodes.SETTLEMENT_SUSPENSE;
+    private static final Instant NOW = Instant.parse("2026-06-30T23:59:59Z");
+
+    @Mock JournalRepository journalRepository;
+    @Mock LedgerAccountRepository ledgerAccountRepository;
+    @Mock ProcessedEventStore processedEventStore;
+    @Mock PostJournalEntryUseCase postJournalEntryUseCase;
+    @Mock ClockPort clock;
+
+    SettleForeignPositionUseCase useCase;
+
+    @BeforeEach
+    void setUp() {
+        useCase = new SettleForeignPositionUseCase(journalRepository, ledgerAccountRepository,
+                processedEventStore, postJournalEntryUseCase, clock);
+    }
+
+    private static SettleForeignPositionCommand cmd(String rate) {
+        return new SettleForeignPositionCommand(
+                TENANT, OPERATOR, CASH, Currency.USD, new BigDecimal(rate), PROCEEDS,
+                NOW, KEY, "liquidate USD holdings", KEY);
+    }
+
+    /** A USD asset position: debit-positive foreign balance + base carrying (KRW). */
+    private static AccountTotals usdPosition(long debitMinor, long baseDebitMinor) {
+        return new AccountTotals(CASH, "USD", debitMinor, 0L, baseDebitMinor, 0L);
+    }
+
+    @Test
+    @DisplayName("a gain settlement posts the 3-line SETTLEMENT entry via the guarded path with the operator as actor")
+    void gainPosts() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Result result = useCase.settle(cmd("13.7"));
+
+        assertThat(result.settled()).isTrue();
+        assertThat(result.realizedBaseMinor()).isEqualTo(7_000L);
+        assertThat(result.proceedsBaseMinor()).isEqualTo(137_000L);
+        assertThat(result.outcome()).isEqualTo(Outcome.FX_GAIN);
+
+        ArgumentCaptor<JournalEntry> entry = ArgumentCaptor.forClass(JournalEntry.class);
+        verify(postJournalEntryUseCase).post(entry.capture(), anyString(), eq(OPERATOR));
+        JournalEntry posted = entry.getValue();
+        assertThat(posted.isBalanced()).isTrue();
+        assertThat(posted.lines()).hasSize(3);
+        assertThat(posted.source().getSourceType()).isEqualTo(SourceRef.TYPE_SETTLEMENT);
+        assertThat(posted.source().getSourceEventId()).isEqualTo(DEDUPE);
+        assertThat(posted.source().getSourceTransactionId()).isEqualTo(KEY);
+        verify(processedEventStore).markProcessed(DEDUPE, TENANT, "fx-settlement", KEY, NOW);
+    }
+
+    @Test
+    @DisplayName("a loss settlement (rate below carrying) posts an FX_LOSS entry")
+    void lossPosts() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Result result = useCase.settle(cmd("12.5"));
+
+        assertThat(result.settled()).isTrue();
+        assertThat(result.realizedBaseMinor()).isEqualTo(-5_000L);
+        assertThat(result.proceedsBaseMinor()).isEqualTo(125_000L);
+        assertThat(result.outcome()).isEqualTo(Outcome.FX_LOSS);
+        verify(postJournalEntryUseCase).post(any(), anyString(), eq(OPERATOR));
+    }
+
+    @Test
+    @DisplayName("no position in that currency → settled:false NO_POSITION, no post, key NOT marked")
+    void noPositionNoOp() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.empty());
+
+        Result result = useCase.settle(cmd("13.7"));
+
+        assertThat(result.settled()).isFalse();
+        assertThat(result.reason()).isEqualTo(NoOpReason.NO_POSITION);
+        verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+        verify(processedEventStore, never()).markProcessed(anyString(), anyString(),
+                anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("a zero foreign balance → settled:false NO_POSITION (key NOT marked)")
+    void zeroForeignBalanceNoOp() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        // Σdebit == Σcredit in the foreign currency → foreignBalance == 0.
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(new AccountTotals(CASH, "USD",
+                        10_000L, 10_000L, 130_000L, 130_000L)));
+
+        Result result = useCase.settle(cmd("13.7"));
+
+        assertThat(result.settled()).isFalse();
+        assertThat(result.reason()).isEqualTo(NoOpReason.NO_POSITION);
+        verify(processedEventStore, never()).markProcessed(anyString(), anyString(),
+                anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("settling at carrying rate (realized == 0) still books a 2-line entry")
+    void atCarryingStillBooks() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Result result = useCase.settle(cmd("13.0")); // proceeds 130000 == carrying → realized 0
+
+        assertThat(result.settled()).isTrue();
+        assertThat(result.realizedBaseMinor()).isZero();
+        assertThat(result.outcome()).isEqualTo(Outcome.NONE);
+        ArgumentCaptor<JournalEntry> entry = ArgumentCaptor.forClass(JournalEntry.class);
+        verify(postJournalEntryUseCase).post(entry.capture(), anyString(), eq(OPERATOR));
+        assertThat(entry.getValue().lines()).hasSize(2);
+        verify(processedEventStore).markProcessed(DEDUPE, TENANT, "fx-settlement", KEY, NOW);
+    }
+
+    @Test
+    @DisplayName("a replay (key already processed) returns the original entry — no second post")
+    void replayReturnsOriginal() {
+        JournalEntry original = JournalEntry.post("e-1", TENANT, NOW,
+                SourceRef.ofSettlement(KEY, DEDUPE), settlementLines());
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(true);
+        when(journalRepository.findBySourceEventId(DEDUPE, TENANT))
+                .thenReturn(Optional.of(original));
+
+        Result result = useCase.settle(cmd("13.7"));
+
+        assertThat(result.settled()).isFalse();
+        assertThat(result.reason()).isEqualTo(NoOpReason.REPLAY);
+        assertThat(result.entry()).isSameAs(original);
+        verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+        verify(processedEventStore, never()).markProcessed(anyString(), anyString(),
+                anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("an unknown proceeds account → LEDGER_ACCOUNT_NOT_FOUND, no post, key NOT marked")
+    void unknownProceedsAccount() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(false);
+
+        assertThatThrownBy(() -> useCase.settle(cmd("13.7")))
+                .isInstanceOf(LedgerAccountNotFoundException.class);
+        verify(journalRepository, never()).accountTotalsForCurrency(anyString(), any(), anyString());
+        verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("a CLOSED period (the guarded path throws) propagates LEDGER_PERIOD_CLOSED")
+    void closedPeriodPropagates() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenThrow(new LedgerPeriodClosedException("posting into a CLOSED period"));
+
+        assertThatThrownBy(() -> useCase.settle(cmd("13.7")))
+                .isInstanceOf(LedgerPeriodClosedException.class);
+    }
+
+    @Test
+    @DisplayName("a blank Idempotency-Key → IDEMPOTENCY_KEY_REQUIRED before any work")
+    void blankKeyRejected() {
+        SettleForeignPositionCommand blank = new SettleForeignPositionCommand(
+                TENANT, OPERATOR, CASH, Currency.USD, new BigDecimal("13.7"), PROCEEDS,
+                NOW, KEY, "memo", "  ");
+
+        assertThatThrownBy(() -> useCase.settle(blank))
+                .isInstanceOf(IdempotencyKeyRequiredException.class);
+        verify(processedEventStore, never()).isProcessed(anyString());
+    }
+
+    @Test
+    @DisplayName("an oversized Idempotency-Key → IDEMPOTENCY_KEY_REQUIRED (key must fit the column)")
+    void oversizedKeyRejected() {
+        String tooLong = "k".repeat(51);
+        SettleForeignPositionCommand cmd = new SettleForeignPositionCommand(
+                TENANT, OPERATOR, CASH, Currency.USD, new BigDecimal("13.7"), PROCEEDS,
+                NOW, KEY, "memo", tooLong);
+
+        assertThatThrownBy(() -> useCase.settle(cmd))
+                .isInstanceOf(IdempotencyKeyRequiredException.class);
+        verify(processedEventStore, never()).isProcessed(anyString());
+    }
+
+    @Test
+    @DisplayName("the base currency (KRW) cannot be settled → CURRENCY_MISMATCH")
+    void baseCurrencyRejected() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        SettleForeignPositionCommand krw = new SettleForeignPositionCommand(
+                TENANT, OPERATOR, CASH, Currency.KRW, new BigDecimal("1"), PROCEEDS,
+                NOW, KEY, "memo", KEY);
+
+        assertThatThrownBy(() -> useCase.settle(krw))
+                .isInstanceOf(CurrencyMismatchException.class);
+        verify(ledgerAccountRepository, never()).existsByCode(anyString(), anyString());
+        verify(journalRepository, never()).accountTotalsForCurrency(anyString(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("settlementRate ≤ 0 on an existing position → SETTLEMENT_RATE_INVALID")
+    void invalidRateRejected() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+
+        assertThatThrownBy(() -> useCase.settle(cmd("0")))
+                .isInstanceOf(SettlementRateInvalidException.class);
+        verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+    }
+
+    private static List<JournalLine> settlementLines() {
+        Money base130 = Money.of(130_000L, Currency.KRW);
+        Money base137 = Money.of(137_000L, Currency.KRW);
+        Money base7 = Money.of(7_000L, Currency.KRW);
+        return List.of(
+                JournalLine.of(TENANT, CASH, EntryDirection.CREDIT,
+                        Money.of(10_000L, Currency.USD), base130),
+                JournalLine.of(TENANT, PROCEEDS, EntryDirection.DEBIT, base137),
+                JournalLine.credit(TENANT, LedgerAccountCodes.FX_GAIN, base7));
+    }
+}

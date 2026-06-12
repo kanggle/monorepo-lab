@@ -170,4 +170,18 @@ public final class LedgerErrors {
             super("REVALUATION_RATE_INVALID", message);
         }
     }
+
+    // ---- FX settlement (10th increment — TASK-FIN-BE-016, F4) ----
+
+    /**
+     * An FX settlement {@code settlementRate} that is not strictly positive — a
+     * foreign position cannot be converted at a zero/negative spot rate
+     * (architecture.md § FX settlement; ledger-api.md § 11). 422; nothing persists.
+     * Thrown by {@code FxSettlementPolicy} before any line is built.
+     */
+    public static final class SettlementRateInvalidException extends LedgerDomainException {
+        public SettlementRateInvalidException(String message) {
+            super("SETTLEMENT_RATE_INVALID", message);
+        }
+    }
 }

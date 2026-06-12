@@ -25,6 +25,7 @@ public final class SourceRef {
     public static final String TYPE_TRANSACTION = "TRANSACTION";
     public static final String TYPE_MANUAL = "MANUAL";
     public static final String TYPE_REVALUATION = "REVALUATION";
+    public static final String TYPE_SETTLEMENT = "SETTLEMENT";
 
     @Column(name = "source_type", length = 30, nullable = false)
     private String sourceType;
@@ -73,6 +74,20 @@ public final class SourceRef {
         Objects.requireNonNull(sourceEventId, "sourceEventId");
         String txnId = (reference != null && !reference.isBlank()) ? reference : sourceEventId;
         return new SourceRef(TYPE_REVALUATION, txnId, sourceEventId);
+    }
+
+    /**
+     * Provenance for an operator-initiated FX settlement (10th increment,
+     * TASK-FIN-BE-016 — mirrors {@link #ofRevaluation}). {@code sourceEventId} is the
+     * namespaced dedupe key ({@code settle:{Idempotency-Key}}); {@code sourceTransactionId}
+     * carries the operator {@code reference} when present, falling back to the
+     * {@code sourceEventId} so the NOT-NULL column always has a value. The GL/AP feed
+     * sees the realized FX result tagged {@code sourceType = "SETTLEMENT"}.
+     */
+    public static SourceRef ofSettlement(String reference, String sourceEventId) {
+        Objects.requireNonNull(sourceEventId, "sourceEventId");
+        String txnId = (reference != null && !reference.isBlank()) ? reference : sourceEventId;
+        return new SourceRef(TYPE_SETTLEMENT, txnId, sourceEventId);
     }
 
     @Override
