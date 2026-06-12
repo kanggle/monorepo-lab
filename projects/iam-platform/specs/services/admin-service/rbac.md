@@ -184,6 +184,19 @@ DENIED row 기록과 403 응답은 **단일 트랜잭션**이어야 한다 ([rul
 - **net-zero / opt-in**: CIDR 미설정(기본 빈 값)이면 게이트 비활성 — 기존 동작과 byte-identical. **읽기(GET)는 게이트되지 않는다.**
 - 평가는 공유 `com.example.security.access.SourceIpCondition` (`libs/java-security`) 이 수행하며, `RequiresPermissionAspect` 단일 결정 지점에서 합성된다.
 
+### Resource-Tag Access Condition (ADR-MONO-029, axis ② 2단계 — 양 모드)
+
+SOURCE_IP·TIME_WINDOW 과 동일한 **4번째 직교 게이트** 자리에서, 변이 엔드포인트는 **대상 리소스(operator)의 태그**를 기준으로 `RESOURCE_TAG` access condition 을 거친다 ([ADR-MONO-029](../../../../../docs/adr/ADR-MONO-029-resource-tag-access-condition.md), [platform/access-conditions.md](../../../../../platform/access-conditions.md)). 닫힌 조건 enum 의 마지막 타입이며, **두 모드를 모두 enforce** 한다(TASK-BE-353 deny-if-present → TASK-BE-354 require 로 모드 표면 완성):
+
+- **forbidden (deny-if-present)** — 대상 operator 가 forbidden 태그(예: `protected`) 중 하나라도 보유하면 변이 거부.
+- **required (deny-if-absent)** — 대상 operator 가 required 태그(예: `certified`)를 **전부** 보유한 경우에만 변이 허용; 미태그/부분태그 대상은 거부.
+- **carrier = 도메인 가드설정(D3-B)**: 두 태그 목록은 `admin.access.resource-tag.forbidden` / `admin.access.resource-tag.required` (env `ADMIN_ACCESS_RESOURCE_TAG_FORBIDDEN` / `ADMIN_ACCESS_RESOURCE_TAG_REQUIRED`) 로 admin-service 가 보유 — JWT claim·producer·IAM 무변경(consumer-side).
+- **대상 태그 해소(D2-A)**: 신뢰 도메인 데이터 `admin_operators.tags` 에서 `OperatorResourceTagResolver` 가 해소한다 — **요청에서 읽지 않는다**(spoof 방지). 리소스를 해소할 수 없는 요청(태그 대상 아님)은 게이트 건너뜀(net-zero).
+- **AND-only 합성**: 두 모드가 모두 설정되면 한 번 해소한 태그 집합을 **모든** 설정된 `ResourceTagCondition`(forbidden + required) 에 대해 평가하여 **하나라도 불만족이면 거부** — resolver 는 단일 결정 지점에서 **1회만** 호출된다.
+- **restriction-only / fail-safe**: step 4 통과 후에만 평가하며 게이트만 한다. 태그 미해소(`null`) → deny. 위반 시 `recordDenied(...)` 후 **403 `ACCESS_CONDITION_UNMET`**.
+- **net-zero / opt-in**: 두 목록 모두 빈 값(기본)이면 게이트 비활성 — 기존 동작과 byte-identical. **읽기(GET)는 게이트되지 않는다.**
+- 평가는 공유 `com.example.security.access.ResourceTagCondition` (`libs/java-security`, `forbidden(...)` / `required(...)`) 이 수행한다.
+
 ### Target-Tenant Scope Confinement (ADR-MONO-024 D2)
 
 권한 union 통과(step 4) 이후, **administration 표면의 변이**(operator/assignment/subscription 관리)는 추가로 **대상 테넌트 confinement**를 거친다 ([ADR-MONO-024](../../../../../docs/adr/ADR-MONO-024-tenant-admin-delegation.md) D2). 한 operator 가 *어떤 테넌트를 관리(administer)* 할 수 있는지는 그 permission 을 부여하는 **role-grant 의 테넌트 스코프**로 결정된다 — assume-tenant 운영 스코프(`TenantScopeResolver` = home ∪ `operator_tenant_assignment`)와는 **별개의 축**이다.

@@ -83,14 +83,18 @@ admin:
       days: ${ADMIN_ACCESS_TIME_WINDOW_DAYS:}
       start: ${ADMIN_ACCESS_TIME_WINDOW_START:}
       end: ${ADMIN_ACCESS_TIME_WINDOW_END:}
-    # ADR-MONO-029 — RESOURCE_TAG access condition (3rd / final type), composed
-    # AND-only. Comma-separated forbidden tags (deny-if-present): an admin
-    # MUTATION on an operator carrying any of these tags is denied 403
-    # ACCESS_CONDITION_UNMET. EMPTY (the default) = net-zero (no gate). The target
+    # ADR-MONO-029 / TASK-BE-354 — RESOURCE_TAG access condition (3rd / final type),
+    # both modes, composed AND-only. Comma-separated tag lists:
+    #   forbidden (deny-if-present) — a mutation on an operator carrying ANY of these
+    #     tags is denied 403 ACCESS_CONDITION_UNMET.
+    #   required  (deny-if-absent)  — only an operator carrying ALL of these tags may
+    #     be mutated; an untagged / partially-tagged target is denied.
+    # Each EMPTY (the default) = that mode is net-zero (no gate). The target
     # operator's tags come from admin_operators.tags (trusted), resolved by
     # OperatorResourceTagResolver — never from the request.
     resource-tag:
       forbidden: ${ADMIN_ACCESS_RESOURCE_TAG_FORBIDDEN:}
+      required: ${ADMIN_ACCESS_RESOURCE_TAG_REQUIRED:}
   jwt:
     # Active kid used for newly minted operator tokens. Rotation: register a
     # new kid under signing-keys, flip active-signing-kid, retire old kid

@@ -15,6 +15,9 @@ import org.springframework.context.annotation.Configuration;
  * 4th authorization gate, composed <b>AND-only</b> (ADR-028 § D2). The
  * {@code RESOURCE_TAG} condition's resource tags are resolved by a
  * {@code ResourceTagResolver} (ADR-029 § D2-A — the single decision site is kept).
+ * Two {@code ResourceTagCondition} beans are declared (TASK-BE-354) — one per mode
+ * (forbidden / required); both are consumed only via the aspect's
+ * {@code ObjectProvider.orderedStream()} and composed AND-only.
  *
  * <p>Each bean is always present in the running service (built from config that
  * defaults to empty ⇒ {@code isConfigured()} false ⇒ net-zero). {@code @WebMvcTest}
@@ -41,8 +44,18 @@ public class AccessConditionConfig {
 
     @Bean
     public ResourceTagCondition resourceTagCondition(AdminAccessConditionProperties properties) {
-        // Pilot semantics = deny-if-present (ADR-029 § D3): an operator carrying any
-        // forbidden tag (e.g. `protected`) is denied. Empty list ⇒ net-zero.
+        // deny-if-present (ADR-029 § D3): an operator carrying any forbidden tag
+        // (e.g. `protected`) is denied. Empty list ⇒ net-zero.
         return ResourceTagCondition.forbidden(properties.getResourceTag().getForbidden());
+    }
+
+    @Bean
+    public ResourceTagCondition requiredResourceTagCondition(AdminAccessConditionProperties properties) {
+        // TASK-BE-354 — the require mode (deny-if-absent): only an operator carrying
+        // ALL required tags (e.g. `certified`) may be mutated. Empty list ⇒ net-zero.
+        // Two same-type ResourceTagCondition beans now exist; they are consumed ONLY
+        // via the aspect's ObjectProvider.orderedStream() (no by-name / single-type
+        // injection), composed AND-only at the single decision site.
+        return ResourceTagCondition.required(properties.getResourceTag().getRequired());
     }
 }

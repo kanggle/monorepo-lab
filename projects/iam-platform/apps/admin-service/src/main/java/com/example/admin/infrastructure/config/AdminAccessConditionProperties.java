@@ -41,8 +41,10 @@ public class AdminAccessConditionProperties {
     private TimeWindow timeWindow = new TimeWindow();
 
     /**
-     * ADR-MONO-029 — the {@code RESOURCE_TAG} condition (deny-if-present) for the
-     * admin mutation surface. An empty forbidden-tag list (the default) ⇒ net-zero.
+     * ADR-MONO-029 / TASK-BE-354 — the {@code RESOURCE_TAG} condition for the admin
+     * mutation surface, carrying both modes: {@code forbidden} (deny-if-present) and
+     * {@code required} (deny-if-absent). Each list empty (the default) ⇒ that mode is
+     * net-zero; when both are set they compose AND-only.
      */
     private ResourceTag resourceTag = new ResourceTag();
 
@@ -115,12 +117,22 @@ public class AdminAccessConditionProperties {
     }
 
     /**
-     * The {@code RESOURCE_TAG} guard-config (ADR-MONO-029 § D3): the deny-if-present
-     * forbidden tags. An operator carrying any of these tags has its role/status/
-     * profile mutation denied. Empty (the default) ⇒ net-zero (no gate).
+     * The {@code RESOURCE_TAG} guard-config (ADR-MONO-029 § D3 / TASK-BE-354): the two
+     * enforcement modes of the type.
+     * <ul>
+     *   <li>{@link #getForbidden()} — <b>deny-if-present</b>: an operator carrying any
+     *       of these tags has its role/status/profile mutation denied.</li>
+     *   <li>{@link #getRequired()} — <b>require</b> (deny-if-absent): only an operator
+     *       carrying ALL of these tags may be mutated (e.g. {@code certified}).</li>
+     * </ul>
+     * Each list empty (the default) ⇒ that mode is net-zero (no gate). When both are
+     * configured they compose <b>AND-only</b> (both must hold) at the single decision
+     * site (the aspect evaluates the once-resolved tag set against every configured
+     * condition).
      */
     public static class ResourceTag {
         private List<String> forbidden = List.of();
+        private List<String> required = List.of();
 
         public List<String> getForbidden() {
             return forbidden;
@@ -128,6 +140,14 @@ public class AdminAccessConditionProperties {
 
         public void setForbidden(List<String> forbidden) {
             this.forbidden = forbidden == null ? List.of() : forbidden;
+        }
+
+        public List<String> getRequired() {
+            return required;
+        }
+
+        public void setRequired(List<String> required) {
+            this.required = required == null ? List.of() : required;
         }
     }
 }

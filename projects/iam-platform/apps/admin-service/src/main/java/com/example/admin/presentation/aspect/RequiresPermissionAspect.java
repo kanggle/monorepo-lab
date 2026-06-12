@@ -80,7 +80,11 @@ public class RequiresPermissionAspect {
      * bean if present (slice tests inject a fixed one), else {@code Clock.systemUTC()}.
      */
     private final ObjectProvider<Clock> clockProvider;
-    /** ADR-MONO-029 — the RESOURCE_TAG condition, composed AND-only. */
+    /**
+     * ADR-MONO-029 / TASK-BE-354 — the RESOURCE_TAG condition(s), composed AND-only.
+     * Multiple beans exist (one per mode: forbidden + required); all configured ones
+     * are evaluated via {@code orderedStream()} against the once-resolved tag set.
+     */
     private final ObjectProvider<ResourceTagCondition> resourceTagConditionProvider;
     /**
      * ADR-MONO-029 § D2-A — resolves the target resource's tags so the
@@ -151,17 +155,29 @@ public class RequiresPermissionAspect {
                 && !timeWindow.isSatisfiedBy(currentClock().instant())) {
             return true;
         }
-        // ADR-MONO-029 — RESOURCE_TAG: gate by the TARGET resource's tags, resolved
-        // at this single decision site (D2-A). The resolver returns empty when the
-        // request targets no resolvable resource → the condition is skipped (the
-        // mutation is not a tagged-resource mutation; net-zero).
-        ResourceTagCondition resourceTag = resourceTagConditionProvider.getIfAvailable();
-        if (resourceTag != null && resourceTag.isConfigured()) {
+        // ADR-MONO-029 / TASK-BE-354 — RESOURCE_TAG: gate by the TARGET resource's
+        // tags, resolved at this single decision site (D2-A). Evaluate the once-
+        // resolved tag set against EVERY configured ResourceTagCondition bean (the
+        // forbidden / deny-if-present mode AND the require / deny-if-absent mode),
+        // composed AND-only — any unsatisfied condition denies. Each unconfigured
+        // mode is filtered out (net-zero); the resolver is consulted ONCE and its
+        // result reused across modes (single decision site preserved). The resolver
+        // returns empty when the request targets no resolvable resource → all modes
+        // are skipped (not a tagged-resource mutation; net-zero).
+        List<ResourceTagCondition> resourceTagConditions = resourceTagConditionProvider.orderedStream()
+                .filter(ResourceTagCondition::isConfigured)
+                .toList();
+        if (!resourceTagConditions.isEmpty()) {
             ResourceTagResolver resolver = resourceTagResolverProvider.getIfAvailable();
             if (resolver != null) {
                 Optional<Set<String>> tags = resolver.resolveResourceTags(request);
-                if (tags.isPresent() && !resourceTag.isSatisfiedBy(tags.get())) {
-                    return true;
+                if (tags.isPresent()) {
+                    Set<String> resolved = tags.get();
+                    for (ResourceTagCondition condition : resourceTagConditions) {
+                        if (!condition.isSatisfiedBy(resolved)) {
+                            return true;
+                        }
+                    }
                 }
             }
         }
