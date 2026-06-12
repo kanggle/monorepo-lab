@@ -621,7 +621,12 @@ date is in a CLOSED period is immutable; `resolve` rejected with
 `RECONCILIATION_PERIOD_LOCKED`, mirroring `LEDGER_PERIOD_CLOSED`), **7th**
 (TASK-FIN-BE-013 — reconciliation *ingest-time* period-lock: ingesting a statement
 dated in a CLOSED period is rejected with the same code, before any persist/match/emit
-— a CLOSED period is closed to reconciliation on both sides).
+— a CLOSED period is closed to reconciliation on both sides), **8th**
+(TASK-FIN-BE-014 — multi-currency journals: one entry may carry lines in different
+currencies, balanced in a fixed base/reporting currency [KRW] via per-line
+`exchangeRate` + `baseAmount`; the balance identity holds in the base currency. **No new
+error code** — `LEDGER_ENTRY_UNBALANCED` (422) covers a base-amount imbalance,
+`CURRENCY_MISMATCH` (422) an unsupported currency).
 
 | Code | HTTP | Description |
 |---|---|---|

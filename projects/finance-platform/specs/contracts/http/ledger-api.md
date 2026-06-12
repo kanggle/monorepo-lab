@@ -37,11 +37,32 @@ A single journal entry with its lines.
     "source": { "sourceType": "TRANSACTION", "sourceTransactionId": "...", "sourceEventId": "..." },
     "reversalOfEntryId": null,
     "lines": [
-      { "ledgerAccountCode": "CASH_CLEARING", "direction": "DEBIT",  "money": { "amount": "150000", "currency": "KRW" } },
-      { "ledgerAccountCode": "CUSTOMER_WALLET:acc-1", "direction": "CREDIT", "money": { "amount": "150000", "currency": "KRW" } }
+      { "ledgerAccountCode": "CASH_CLEARING", "direction": "DEBIT",  "money": { "amount": "150000", "currency": "KRW" },
+        "exchangeRate": "1", "baseAmount": { "amount": "150000", "currency": "KRW" } },
+      { "ledgerAccountCode": "CUSTOMER_WALLET:acc-1", "direction": "CREDIT", "money": { "amount": "150000", "currency": "KRW" },
+        "exchangeRate": "1", "baseAmount": { "amount": "150000", "currency": "KRW" } }
     ],
     "balanced": true
   }, "meta": { "timestamp": "..." } }
+```
+**(8th increment)** Each line carries its transaction `money` plus an `exchangeRate`
+and a `baseAmount` (the line's value in the fixed base currency, **KRW**). **`baseAmount`
+is authoritative for the balance**; `exchangeRate` is the exact-decimal provenance factor
+**in minor units** (`exchangeRate = baseAmount.amount / money.amount`). A single-currency
+KRW entry has `exchangeRate: "1"` and `baseAmount == money` (existing entries —
+backfilled). The double-entry identity holds in the base currency
+(`Σ baseDebit == Σ baseCredit`); `balanced` reflects that. A multi-currency example (an
+operator FX adjusting entry, DR USD clearing / CR KRW wallet, where `$100.00` USD =
+`10000` minor units converts to `135000` KRW — `1 USD = 1350 KRW`, i.e. minor-to-minor
+`13.5`):
+```json
+{ "lines": [
+    { "ledgerAccountCode": "CASH_CLEARING", "direction": "DEBIT",
+      "money": { "amount": "10000", "currency": "USD" },
+      "exchangeRate": "13.5", "baseAmount": { "amount": "135000", "currency": "KRW" } },
+    { "ledgerAccountCode": "CUSTOMER_WALLET:acc-1", "direction": "CREDIT",
+      "money": { "amount": "135000", "currency": "KRW" },
+      "exchangeRate": "1", "baseAmount": { "amount": "135000", "currency": "KRW" } } ] }
 ```
 `404 JOURNAL_ENTRY_NOT_FOUND` when absent / not in tenant.
 
@@ -80,18 +101,26 @@ totals, which MUST be equal (Σ debit == Σ credit across the ledger).
 ```json
 { "data": {
     "accounts": [
-      { "ledgerAccountCode": "CASH_CLEARING", "debitTotal": {…}, "creditTotal": {…} },
-      { "ledgerAccountCode": "CUSTOMER_WALLET:acc-1", "debitTotal": {…}, "creditTotal": {…} }
+      { "ledgerAccountCode": "CASH_CLEARING", "debitTotal": {…}, "creditTotal": {…},
+        "baseDebitTotal": {…}, "baseCreditTotal": {…} },
+      { "ledgerAccountCode": "CUSTOMER_WALLET:acc-1", "debitTotal": {…}, "creditTotal": {…},
+        "baseDebitTotal": {…}, "baseCreditTotal": {…} }
     ],
     "grandDebitTotal":  { "amount": "150000", "currency": "KRW" },
     "grandCreditTotal": { "amount": "150000", "currency": "KRW" },
+    "grandBaseDebitTotal":  { "amount": "150000", "currency": "KRW" },
+    "grandBaseCreditTotal": { "amount": "150000", "currency": "KRW" },
     "inBalance": true
   }, "meta": { "timestamp": "..." } }
 ```
 `inBalance` is always `true` in a correct ledger (the posting path rejects unbalanced
 entries — `LEDGER_ENTRY_UNBALANCED` — so the books can never go out of balance). The
-first increment is single-currency; the trial balance groups by currency (one group
-in the v1 KRW happy path).
+per-account `debitTotal`/`creditTotal` are grouped **by currency** (the original
+transaction amounts). **(8th increment)** each account also carries its **base-currency**
+(KRW) totals (`baseDebitTotal`/`baseCreditTotal`), and the grand totals add the
+**base-currency consolidated** `grandBaseDebitTotal == grandBaseCreditTotal` — the
+invariant that holds across currencies (`inBalance` reflects the base-currency
+consolidation). In the all-KRW happy path the original and base totals coincide.
 
 ---
 
@@ -189,7 +218,14 @@ Headers: `Idempotency-Key: <client-key>` (required). Request:
 `postedAt` is optional (defaults to the server clock; a back-dated effective instant
 for an adjusting entry). `reference` / `memo` are optional operator narrative
 (recorded as the audit reason + the entry's `source.sourceTransactionId`). `lines`
-MUST be ≥2, single-currency, and balanced (`Σ debit == Σ credit`).
+MUST be ≥2 and balanced.
+
+**(8th increment — multi-currency)** a line MAY carry a foreign `money.currency` together
+with an explicit `baseAmount` (the line's value in the base currency, **KRW**); a
+base-currency (KRW) line omits `baseAmount` (it defaults to `money`, `exchangeRate = 1`).
+The balance requirement is **on the base amounts**: `Σ baseDebit == Σ baseCredit` (an
+all-KRW entry is unchanged — base == original). Example of a multi-currency line:
+`{ "ledgerAccountCode": "CASH_CLEARING", "direction": "DEBIT", "money": {"amount":"10000","currency":"USD"}, "baseAmount": {"amount":"135000","currency":"KRW"} }`.
 
 `201` — the posted entry, in the § 1 entry shape, with
 `source.sourceType = "MANUAL"`:
@@ -205,7 +241,9 @@ MUST be ≥2, single-currency, and balanced (`Σ debit == Σ credit`).
 - **Idempotent replay** — re-issuing the SAME `Idempotency-Key` returns `200` with
   the **original** entry (no second post; `processed_events` dedupe, F1).
 - `400 IDEMPOTENCY_KEY_REQUIRED` when the `Idempotency-Key` header is absent.
-- `422 LEDGER_ENTRY_UNBALANCED` when `Σ debit ≠ Σ credit` (or fewer than 2 lines).
+- `422 LEDGER_ENTRY_UNBALANCED` when the base amounts do not balance (`Σ baseDebit ≠ Σ
+  baseCredit`, or fewer than 2 lines). **(8th increment)** a multi-currency entry whose
+  per-line base amounts do not net to zero is rejected here.
 - `422 CURRENCY_MISMATCH` when lines carry more than one currency.
 - `404 LEDGER_ACCOUNT_NOT_FOUND` when a line references a ledger account that does
   not exist (the manual path does **not** lazily create accounts — an operator
@@ -240,4 +278,7 @@ MUST be ≥2, single-currency, and balanced (`Σ debit == Σ credit`).
 - Period **reopen**; a "period must have ended (`to ≤ now`)" close policy.
 - GL/AP export endpoints (`finance.ledger.entry.posted.v1` — the increment that
   introduces the outbox, and with it the deferred `finance.ledger.period.closed.v1`).
-- Multi-currency trial-balance / snapshot consolidation.
+- **FX gain/loss + period-end revaluation** of foreign balances (the 8th increment books
+  multi-currency entries at the supplied rate; revaluing a foreign balance at a new rate
+  and booking `FX_GAIN`/`FX_LOSS` is forward-declared) + a live FX rate feed (rates are
+  caller-supplied) + a configurable base currency (fixed KRW in v1).
