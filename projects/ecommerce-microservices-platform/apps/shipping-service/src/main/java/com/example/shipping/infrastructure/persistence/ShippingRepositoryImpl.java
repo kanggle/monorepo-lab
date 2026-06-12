@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 @RequiredArgsConstructor
@@ -74,6 +75,17 @@ public class ShippingRepositoryImpl implements ShippingRepository {
         PageRequest pageable = toPageRequest(pageQuery);
         Page<ShippingJpaEntity> page = jpaRepository.findByStatus(status, pageable);
         return toPageResult(page);
+    }
+
+    private static final Set<ShippingStatus> IN_FLIGHT =
+            Set.of(ShippingStatus.SHIPPED, ShippingStatus.IN_TRANSIT);
+
+    @Override
+    public List<Shipping> findInFlightWithTracking(int limit) {
+        PageRequest pageable = PageRequest.of(0, limit);
+        return jpaRepository.findInFlightWithTracking(IN_FLIGHT, pageable).stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 
     private PageRequest toPageRequest(PageQuery pageQuery) {

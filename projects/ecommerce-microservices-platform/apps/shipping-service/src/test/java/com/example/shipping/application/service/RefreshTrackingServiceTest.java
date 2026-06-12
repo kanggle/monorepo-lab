@@ -44,9 +44,10 @@ class RefreshTrackingServiceTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        service = new RefreshTrackingService(
+        CarrierAdvanceProcessor processor = new CarrierAdvanceProcessor(
                 shippingRepository, shippingEventPublisher, carrierTrackingPort,
                 new CarrierStatusObserver(meterRegistry), clock);
+        service = new RefreshTrackingService(shippingRepository, processor);
     }
 
     /** A SHIPPED shipment with tracking + carrier set (the realistic refresh subject). */

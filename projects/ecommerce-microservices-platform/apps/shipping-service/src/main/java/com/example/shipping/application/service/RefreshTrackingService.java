@@ -1,28 +1,22 @@
 package com.example.shipping.application.service;
 
-import com.example.shipping.application.port.CarrierTrackingPort;
-import com.example.shipping.application.port.CarrierTrackingPort.CarrierTrackingSnapshot;
 import com.example.shipping.application.result.UpdateShippingStatusResult;
 import com.example.web.exception.AccessDeniedException;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
 import com.example.shipping.domain.model.Shipping;
-import com.example.shipping.domain.model.ShippingStatus;
 import com.example.shipping.domain.repository.ShippingRepository;
-import com.example.shipping.application.port.ShippingEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
-import java.util.Optional;
-
 /**
  * Refresh a shipment's status from its carrier (TASK-BE-293, the v2 carrier
  * integration first increment). Admin-triggered: given a shipment that already
  * carries a tracking number + carrier, fetch the carrier's latest status and advance
- * the shipment forward to it. The carrier-driven {@code auto-collect} scheduler is a
- * later increment; this exercises the integration deterministically.
+ * the shipment forward to it. The carrier-driven {@code auto-collect} scheduler
+ * (TASK-BE-360, {@link AutoCollectTrackingService}) is a later increment; this exercises
+ * the integration deterministically on demand.
  *
  * <p><b>Best-effort.</b> The carrier port never throws — a carrier outage / unknown
  * status returns empty and the refresh is a no-op (the shipment is unchanged, no
@@ -32,6 +26,10 @@ import java.util.Optional;
  * valid step at a time (each step appends domain status history); one consolidated
  * {@code original → final} event is published on a net change, matching the manual
  * transition's event contract.
+ *
+ * <p>The fetch → map → forward-advance → publish core is shared with the auto-collect
+ * sweep via {@link CarrierAdvanceProcessor}; this service adds the admin authorisation +
+ * shipment load + tracking-presence guard around it.
  */
 @Slf4j
 @Service
@@ -40,10 +38,7 @@ import java.util.Optional;
 public class RefreshTrackingService {
 
     private final ShippingRepository shippingRepository;
-    private final ShippingEventPublisher shippingEventPublisher;
-    private final CarrierTrackingPort carrierTrackingPort;
-    private final CarrierStatusObserver carrierStatusObserver;
-    private final Clock clock;
+    private final CarrierAdvanceProcessor carrierAdvanceProcessor;
 
     @Transactional
     public UpdateShippingStatusResult refreshFromCarrier(String shippingId, String userRole) {
@@ -61,33 +56,8 @@ public class RefreshTrackingService {
             return result(shipping);
         }
 
-        Optional<CarrierTrackingSnapshot> snapshot = carrierTrackingPort.fetchLatest(carrier, trackingNumber);
-        Optional<ShippingStatus> target = snapshot
-                .flatMap(s -> CarrierStatusMapper.toShippingStatus(s.rawStatus()));
-        if (target.isEmpty()) {
-            // A non-blank aggregator status that did not map = an unmapped code (silent-stall
-            // risk → make it observable); a blank/absent status carries no signal (net-zero).
-            snapshot.ifPresent(s -> carrierStatusObserver.recordUnmapped("refresh", s.rawStatus()));
-            log.info("Carrier returned no usable status for shipping {} ({}/{}); refresh no-op",
-                    shippingId, carrier, trackingNumber);
-            return result(shipping);
-        }
-
-        Optional<ShippingStatus> changedFrom =
-                ShippingForwardAdvancer.advanceForward(shipping, target.get(), clock);
-        if (changedFrom.isEmpty()) {
-            log.info("Carrier status {} for shipping {} is not ahead of {}; refresh no-op",
-                    target.get(), shippingId, shipping.getStatus());
-            return result(shipping);
-        }
-
-        ShippingStatus original = changedFrom.get();
-        Shipping saved = shippingRepository.save(shipping);
-        shippingEventPublisher.publishShippingStatusChanged(
-                saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
-                original, saved.getStatus(), saved.getTrackingNumber(), saved.getCarrier());
-        log.info("Shipping {} advanced {} -> {} via carrier refresh", shippingId, original, saved.getStatus());
-        return new UpdateShippingStatusResult(saved.getShippingId(), saved.getStatus(), saved.getUpdatedAt());
+        carrierAdvanceProcessor.advanceFromCarrier(shipping, "refresh");
+        return result(shipping);
     }
 
     private static UpdateShippingStatusResult result(Shipping shipping) {

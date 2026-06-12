@@ -38,8 +38,18 @@
   tracking delivery to `carrier-webhook`; it is **HMAC-SHA256 signature-authenticated**
   (`shipping.carrier.webhook.secret`, blank default = fail-closed/net-zero), **idempotent**
   (dedup by carrier `deliveryId`), and advances the shipment forward (shared
-  `ShippingForwardAdvancer`, forward-only). The carrier-driven **auto-collect scheduler**
-  (poll all in-flight shipments) remains a later increment.
+  `ShippingForwardAdvancer`, forward-only).
+- **External carrier integration — unattended auto-collect scheduler (TASK-BE-360)**: a
+  periodic sweep (`@Scheduled` fixed-delay) polls in-flight shipments (`SHIPPED`/`IN_TRANSIT`
+  with tracking + carrier, oldest-first, batch-capped) and runs the **same** carrier
+  forward-advance as the admin pull (shared `CarrierAdvanceProcessor`), so a shipment converges
+  to `DELIVERED` even when nobody presses refresh and the aggregator webhook is lost/delayed
+  (backstop). **ShedLock** (`shipping-auto-collect-tracking` lock, JDBC provider, `shedlock`
+  table V6) gives single-instance execution across replicas. Default `enabled=false`
+  (`shipping.carrier.auto-collect.enabled`) = scheduler bean not created (net-zero); with
+  `mode=mock` + blank `mock-status` even an enabled sweep is a real no-op. Best-effort per item
+  (one shipment's carrier outage / unmapped status never aborts the batch); per-tick
+  processed/advanced/no-op/failed counts via `carrier_auto_collect_processed`.
 
 ## Public surface
 
