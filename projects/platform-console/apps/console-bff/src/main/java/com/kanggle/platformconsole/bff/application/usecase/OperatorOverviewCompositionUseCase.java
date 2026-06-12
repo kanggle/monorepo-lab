@@ -52,8 +52,22 @@ public class OperatorOverviewCompositionUseCase {
     static final String ROUTE_LABEL = "operator-overview";
     static final String DASHBOARD_LABEL = "operator-overview";
 
-    /** Fixed leg order — § 2.4.9.1 envelope schema invariant. */
-    public static final List<DomainTarget> CARD_ORDER = CompositionEngine.CARD_ORDER;
+    /**
+     * Fixed leg order — § 2.4.9.1 envelope schema invariant. Owned by this
+     * use-case (TASK-MONO-241): the Operator Overview stays exactly 5 legs
+     * {@code [IAM, WMS, SCM, FINANCE, ERP]}. It deliberately does NOT include
+     * {@link DomainTarget#ECOMMERCE} — that domain has a public health leg
+     * (§ 2.4.9.2) but no operator-plane snapshot read yet (deferred facet
+     * a-후속-2). Previously this aliased {@code CompositionEngine.CARD_ORDER};
+     * decoupled so the Domain Health surface can independently be 6 cards.
+     */
+    public static final List<DomainTarget> CARD_ORDER = List.of(
+            DomainTarget.IAM,
+            DomainTarget.WMS,
+            DomainTarget.SCM,
+            DomainTarget.FINANCE,
+            DomainTarget.ERP
+    );
 
     private final CredentialSelectionPort credentialSelection;
     private final CompositionEngine engine;

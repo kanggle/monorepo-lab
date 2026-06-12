@@ -13,13 +13,14 @@ import { DegradeBanner } from './DegradeBanner';
  *
  * Server component. Receives the composed envelope from the page's
  * SSR `fetchDomainHealth()` call and renders:
- *   - `<DegradeBanner>` if all 5 cards are `degraded`
- *   - `<DomainHealthCard>` × 5 in the FIXED `[gap, wms, scm, finance, erp]`
- *     order (indexed by domain; defensive against any BE re-ordering).
+ *   - `<DegradeBanner>` if all 6 cards are `degraded`
+ *   - `<DomainHealthCard>` × 6 in the FIXED `[gap, wms, scm, finance, erp,
+ *     ecommerce]` order (indexed by domain; defensive against any BE
+ *     re-ordering; ecommerce 6th card added by TASK-MONO-241).
  *
  * Fixed-order invariant (§ 2.4.9.2 envelope schema): the BE always
- * returns the 5 cards in `[gap, wms, scm, finance, erp]` order;
- * `DomainHealthSchema` asserts "exactly 5, each domain exactly once".
+ * returns the 6 cards in `[gap, wms, scm, finance, erp, ecommerce]` order;
+ * `DomainHealthSchema` asserts "exactly 6, each domain exactly once".
  * The screen builds a `Map<domain, Card>` and walks `CARD_ORDER` so the
  * DOM order is INDEPENDENT of the BE array order — a future BE
  * re-ordering bug cannot break the UI. The DOM order is ALSO independent
@@ -46,10 +47,10 @@ export function DomainHealthScreen({ health }: DomainHealthScreenProps) {
           도메인 상태 개요
         </h1>
         <p className="text-sm text-muted-foreground">
-          5개 도메인(IAM · WMS · SCM · Finance · ERP)의 자체 헬스 상태를
-          한 번에 확인합니다. 각 도메인 카드는 독립적으로 동작하며, 한
-          도메인의 일시 장애가 다른 도메인이나 콘솔 전체에 영향을 주지
-          않습니다.
+          6개 도메인(IAM · WMS · SCM · Finance · ERP · E-Commerce)의 자체
+          헬스 상태를 한 번에 확인합니다. 각 도메인 카드는 독립적으로
+          동작하며, 한 도메인의 일시 장애가 다른 도메인이나 콘솔 전체에
+          영향을 주지 않습니다.
         </p>
         <p
           className="mt-1 text-xs text-muted-foreground"

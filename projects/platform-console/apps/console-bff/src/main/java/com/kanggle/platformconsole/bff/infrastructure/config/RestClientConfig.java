@@ -17,13 +17,14 @@ import java.time.Duration;
  * the {@code ObservationRegistry} is injected into {@code RestClient.Builder} which
  * instruments outbound calls with W3C trace context (architecture.md § Observability).
  *
- * <p><b>5 per-domain {@link RestClient} beans (TASK-PC-FE-011)</b>:
+ * <p><b>6 per-domain {@link RestClient} beans (TASK-PC-FE-011 + TASK-MONO-241)</b>:
  * <pre>
- *   gapRestClient     → consolebff.outbound.gap.base-url
- *   wmsRestClient     → consolebff.outbound.wms.base-url
- *   scmRestClient     → consolebff.outbound.scm.base-url
- *   financeRestClient → consolebff.outbound.finance.base-url
- *   erpRestClient     → consolebff.outbound.erp.base-url
+ *   gapRestClient       → consolebff.outbound.gap.base-url
+ *   wmsRestClient       → consolebff.outbound.wms.base-url
+ *   scmRestClient       → consolebff.outbound.scm.base-url
+ *   financeRestClient   → consolebff.outbound.finance.base-url
+ *   erpRestClient       → consolebff.outbound.erp.base-url
+ *   ecommerceRestClient → consolebff.outbound.ecommerce.base-url  (Domain Health leg only — § 2.4.9.2)
  * </pre>
  *
  * <p>Each bean shares the OTel-traced builder baseline ({@link #restClientBuilder})
@@ -88,6 +89,15 @@ public class RestClientConfig {
     @Bean(name = "erpRestClient")
     public RestClient erpRestClient(RestClient.Builder builder,
                                     @Value("${consolebff.outbound.erp.base-url}") String baseUrl) {
+        return builder.clone()
+                .baseUrl(baseUrl)
+                .requestFactory(timeoutRequestFactory())
+                .build();
+    }
+
+    @Bean(name = "ecommerceRestClient")
+    public RestClient ecommerceRestClient(RestClient.Builder builder,
+                                          @Value("${consolebff.outbound.ecommerce.base-url}") String baseUrl) {
         return builder.clone()
                 .baseUrl(baseUrl)
                 .requestFactory(timeoutRequestFactory())

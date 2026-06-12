@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *
  * <p>Coverage (§ 2.4.9.2):
  * <ul>
- *   <li>200 happy envelope shape — 5 cards in fixed order with {@code data.status}.</li>
+ *   <li>200 happy envelope shape — 6 cards in fixed order with {@code data.status}.</li>
  *   <li>200 mixed envelope — ok + degraded cards (NO forbidden branch).</li>
  *   <li>400 NO_ACTIVE_TENANT via MissingTenantException.</li>
  * </ul>
@@ -55,7 +55,7 @@ class DomainHealthSliceTest {
     OperatorCredentialContext credentialContext;
 
     @Test
-    @DisplayName("happy_200_envelope: 5-card all-UP envelope; data.status present, no reason on ok cards")
+    @DisplayName("happy_200_envelope: 6-card all-UP envelope; data.status present, no reason on ok cards")
     void happy_200_envelope() throws Exception {
         when(credentialContext.hasTenant()).thenReturn(true);
         when(compositionUseCase.compose()).thenReturn(List.of(
@@ -63,7 +63,8 @@ class DomainHealthSliceTest {
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), Map.of("status", "UP")),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("status", "UP")),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.FINANCE), Map.of("status", "UP")),
-                CompositionLeg.ok(LegOutcome.ok(DomainTarget.ERP), Map.of("status", "UP"))
+                CompositionLeg.ok(LegOutcome.ok(DomainTarget.ERP), Map.of("status", "UP")),
+                CompositionLeg.ok(LegOutcome.ok(DomainTarget.ECOMMERCE), Map.of("status", "UP"))
         ));
 
         MvcResult result = mockMvc.perform(get("/api/console/dashboards/domain-health")
@@ -74,16 +75,19 @@ class DomainHealthSliceTest {
 
         assertThat(status).as("non-200 body:\n%s", body).isEqualTo(200);
         assertThat(body).as("body shape:\n%s", body).contains("\"asOf\"").contains("\"cards\"");
-        // Fixed order: gap → wms → scm → finance → erp.
+        // Fixed order: gap → wms → scm → finance → erp → ecommerce.
         int gapIdx = body.indexOf("\"domain\":\"iam\"");
         int wmsIdx = body.indexOf("\"domain\":\"wms\"");
         int scmIdx = body.indexOf("\"domain\":\"scm\"");
         int finIdx = body.indexOf("\"domain\":\"finance\"");
         int erpIdx = body.indexOf("\"domain\":\"erp\"");
+        int ecomIdx = body.indexOf("\"domain\":\"ecommerce\"");
         assertThat(gapIdx).as("body:\n%s", body).isLessThan(wmsIdx);
         assertThat(wmsIdx).isLessThan(scmIdx);
         assertThat(scmIdx).isLessThan(finIdx);
         assertThat(finIdx).isLessThan(erpIdx);
+        // ecommerce card renders last (TASK-MONO-241 6th card).
+        assertThat(ecomIdx).as("ecommerce card present + last, body:\n%s", body).isGreaterThan(erpIdx);
         // data.status present on ok cards.
         assertThat(body).as("body:\n%s", body).contains("\"status\":\"UP\"");
         // NO 'forbidden' anywhere — this route only emits {ok, degraded}.

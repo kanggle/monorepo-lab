@@ -11,7 +11,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     console-bff directly; tokens stay HttpOnly on the server side);
  *   - GET only, no body, no `Idempotency-Key`, no `X-Operator-Reason`
  *     (READ-ONLY § 2.4.9 hard invariant);
- *   - parses the 5-card envelope per `DomainHealthSchema`;
+ *   - parses the 6-card envelope per `DomainHealthSchema` (ecommerce 6th
+ *     card added by TASK-MONO-241);
  *   - schema rejects a `'forbidden'` literal — § 2.4.9.2 invariant:
  *     `forbidden` is NEVER emitted on this route;
  *   - schema rejects an invalid `data.status` enum (the producer's
@@ -86,6 +87,7 @@ const HAPPY_ENVELOPE = {
     { domain: 'scm', status: 'degraded', reason: 'DOWNSTREAM_ERROR' },
     { domain: 'finance', status: 'ok', data: { status: 'OUT_OF_SERVICE' } },
     { domain: 'erp', status: 'ok', data: { status: 'UP' } },
+    { domain: 'ecommerce', status: 'ok', data: { status: 'UP' } },
   ],
 };
 
@@ -94,7 +96,7 @@ beforeEach(() => {
 });
 
 describe('DomainHealthSchema — runtime validation', () => {
-  it('accepts the canonical 5-card envelope (mixed ok + degraded)', () => {
+  it('accepts the canonical 6-card envelope (mixed ok + degraded)', () => {
     const parsed = DomainHealthSchema.safeParse(HAPPY_ENVELOPE);
     expect(parsed.success).toBe(true);
   });
@@ -108,6 +110,7 @@ describe('DomainHealthSchema — runtime validation', () => {
         { domain: 'scm', status: 'ok', data: { status: 'OUT_OF_SERVICE' } },
         { domain: 'finance', status: 'ok', data: { status: 'UNKNOWN' } },
         { domain: 'erp', status: 'ok', data: { status: 'UP' } },
+        { domain: 'ecommerce', status: 'ok', data: { status: 'UP' } },
       ],
     };
     expect(DomainHealthSchema.safeParse(envelope).success).toBe(true);
@@ -136,7 +139,7 @@ describe('DomainHealthSchema — runtime validation', () => {
     expect(DomainHealthSchema.safeParse(bad).success).toBe(false);
   });
 
-  it('rejects a 4-card envelope (missing wms)', () => {
+  it('rejects a 5-card envelope (missing wms — must be exactly 6)', () => {
     const bad = {
       ...HAPPY_ENVELOPE,
       cards: HAPPY_ENVELOPE.cards.filter((c) => c.domain !== 'wms'),
@@ -144,13 +147,25 @@ describe('DomainHealthSchema — runtime validation', () => {
     expect(DomainHealthSchema.safeParse(bad).success).toBe(false);
   });
 
-  it('rejects a 5-card envelope with a duplicate domain (no erp)', () => {
+  it('rejects a 6-card envelope with a duplicate domain (no erp, iam twice)', () => {
     const bad = {
       ...HAPPY_ENVELOPE,
       cards: [
         ...HAPPY_ENVELOPE.cards.filter((c) => c.domain !== 'erp'),
         { domain: 'iam', status: 'ok', data: { status: 'UP' } },
       ],
+    };
+    expect(DomainHealthSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('rejects an unknown domain key (e.g. "payments")', () => {
+    const bad = {
+      ...HAPPY_ENVELOPE,
+      cards: HAPPY_ENVELOPE.cards.map((c) =>
+        c.domain === 'ecommerce'
+          ? { domain: 'payments', status: 'ok', data: { status: 'UP' } }
+          : c,
+      ),
     };
     expect(DomainHealthSchema.safeParse(bad).success).toBe(false);
   });
@@ -197,13 +212,14 @@ describe('fetchDomainHealth — happy path', () => {
     expect(headers['X-Operator-Reason']).toBeUndefined();
 
     expect(health.asOf).toBe('2026-05-21T01:30:00Z');
-    expect(health.cards).toHaveLength(5);
+    expect(health.cards).toHaveLength(6);
     expect(health.cards.map((c) => c.domain)).toEqual([
       'iam',
       'wms',
       'scm',
       'finance',
       'erp',
+      'ecommerce',
     ]);
   });
 });

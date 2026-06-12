@@ -7,8 +7,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Domain unit test — verifies the 5-row credential selector predicate
- * (AC-8 / architecture.md § Auth Flow outbound / § 2.4.9 table verbatim).
+ * Domain unit test — verifies the 6-row credential selector predicate
+ * (AC-8 / architecture.md § Auth Flow outbound / § 2.4.9 table verbatim;
+ * ECOMMERCE row added by TASK-MONO-241).
  *
  * <p>Framework-free (no Spring context).
  */
@@ -24,7 +25,8 @@ class CredentialSelectionTest {
     private OutboundCredential select(DomainTarget domain, String operatorToken, String gapOidcToken) {
         return switch (domain) {
             case IAM -> new OutboundCredential.OperatorToken(operatorToken);
-            case WMS, SCM, FINANCE, ERP -> new OutboundCredential.IamOidcAccessToken(gapOidcToken);
+            case WMS, SCM, FINANCE, ERP, ECOMMERCE ->
+                    new OutboundCredential.IamOidcAccessToken(gapOidcToken);
         };
     }
 
@@ -69,6 +71,14 @@ class CredentialSelectionTest {
     }
 
     @Test
+    @DisplayName("Row 6: ECOMMERCE domain → IamOidcAccessToken (TASK-MONO-241)")
+    void ecommerceDomain_returnsGapOidcToken() {
+        OutboundCredential cred = select(DomainTarget.ECOMMERCE, OPERATOR_TOKEN, GAP_OIDC_TOKEN);
+        assertThat(cred).isInstanceOf(OutboundCredential.IamOidcAccessToken.class);
+        assertThat(((OutboundCredential.IamOidcAccessToken) cred).token()).isEqualTo(GAP_OIDC_TOKEN);
+    }
+
+    @Test
     @DisplayName("GAP leg with absent operator token → MissingCredentialException (fail-closed, NO fallback)")
     void gapDomain_absentOperatorToken_failsClosed() {
         // HARD INVARIANT: must NOT fall back to GAP OIDC token.
@@ -91,9 +101,9 @@ class CredentialSelectionTest {
     }
 
     @Test
-    @DisplayName("All 5 DomainTarget enum values have a corresponding selector row")
+    @DisplayName("All 6 DomainTarget enum values have a corresponding selector row")
     void allDomainTargets_covered() {
-        // Exhaustive coverage assertion — if DomainTarget gains a 6th value
+        // Exhaustive coverage assertion — if DomainTarget gains a 7th value
         // without updating the switch, the compile-time exhaustiveness check
         // fails. This test provides a runtime guard too.
         for (DomainTarget domain : DomainTarget.values()) {

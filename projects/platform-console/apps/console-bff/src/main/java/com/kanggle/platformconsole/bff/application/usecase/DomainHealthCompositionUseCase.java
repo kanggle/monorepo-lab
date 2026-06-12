@@ -2,6 +2,7 @@ package com.kanggle.platformconsole.bff.application.usecase;
 
 import com.kanggle.platformconsole.bff.application.composition.CompositionEngine;
 import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
+import com.kanggle.platformconsole.bff.application.port.outbound.EcommerceHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceHealthReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.IamHealthReadPort;
@@ -28,15 +29,22 @@ import java.util.function.Supplier;
 /**
  * Phase 7 "Domain Health Overview" composition use-case.
  *
- * <p>Fans out across all 5 backend domains in parallel via the shared
- * {@link CompositionEngine} (TASK-PC-BE-005 L6 extraction), reads each
- * domain's public Spring Boot {@code /actuator/health}, maps the result
- * to a {@link CompositionLeg}. Controller maps to § 2.4.9.2 envelope.
+ * <p>Fans out across all 6 backend domains in parallel via the shared
+ * {@link CompositionEngine} (TASK-PC-BE-005 L6 extraction; ecommerce 6th leg
+ * added by TASK-MONO-241), reads each domain's public Spring Boot
+ * {@code /actuator/health}, maps the result to a {@link CompositionLeg}.
+ * Controller maps to § 2.4.9.2 envelope.
+ *
+ * <p><b>Card order (TASK-MONO-241)</b>: this use-case owns its own
+ * {@link #CARD_ORDER} (6 domains) — it no longer aliases
+ * {@code CompositionEngine.CARD_ORDER} (5). This is what lets the Domain
+ * Health surface be 6 cards while the Operator Overview (§ 2.4.9.1) stays 5,
+ * over the same order-agnostic {@link CompositionEngine}.
  *
  * <p>Hard invariants — byte-equal preserved across TASK-PC-BE-005:
  * NO outbound credential (D4 sealed-switch NEVER invoked), NO tenant
  * pass-through (actuator endpoints not tenant-scoped), all-down still
- * emits 5 legs, NO cross-leg 401 collapse (401 from any leg ⇒ that
+ * emits 6 legs, NO cross-leg 401 collapse (401 from any leg ⇒ that
  * card's {@code DOWNSTREAM_ERROR}), fixed leg order,
  * {@code status ∈ {ok, degraded}} only, 5s composition timeout.
  */
@@ -48,8 +56,20 @@ public class DomainHealthCompositionUseCase {
     static final String ROUTE_LABEL = "domain-health";
     static final String DASHBOARD_LABEL = "domain-health";
 
-    /** Fixed leg order — § 2.4.9.2 envelope schema invariant. */
-    public static final List<DomainTarget> CARD_ORDER = CompositionEngine.CARD_ORDER;
+    /**
+     * Fixed leg order — § 2.4.9.2 envelope schema invariant. Owned by this
+     * use-case (TASK-MONO-241) so the Domain Health surface is independently
+     * 6 cards, not coupled to the 5-leg Operator Overview via the shared engine.
+     * {@code ECOMMERCE} is appended last → existing 5 cards keep their order.
+     */
+    public static final List<DomainTarget> CARD_ORDER = List.of(
+            DomainTarget.IAM,
+            DomainTarget.WMS,
+            DomainTarget.SCM,
+            DomainTarget.FINANCE,
+            DomainTarget.ERP,
+            DomainTarget.ECOMMERCE
+    );
 
     private final CompositionEngine engine;
     private final IamHealthReadPort gapPort;
@@ -57,6 +77,7 @@ public class DomainHealthCompositionUseCase {
     private final ScmHealthReadPort scmPort;
     private final FinanceHealthReadPort financePort;
     private final ErpHealthReadPort erpPort;
+    private final EcommerceHealthReadPort ecommercePort;
 
     public DomainHealthCompositionUseCase(
             MeterRegistry meterRegistry,
@@ -65,16 +86,18 @@ public class DomainHealthCompositionUseCase {
             WmsHealthReadPort wmsPort,
             ScmHealthReadPort scmPort,
             FinanceHealthReadPort financePort,
-            ErpHealthReadPort erpPort) {
+            ErpHealthReadPort erpPort,
+            EcommerceHealthReadPort ecommercePort) {
         this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL);
         this.gapPort = gapPort;
         this.wmsPort = wmsPort;
         this.scmPort = scmPort;
         this.financePort = financePort;
         this.erpPort = erpPort;
+        this.ecommercePort = ecommercePort;
     }
 
-    /** Composes the domain-health envelope by firing 5 parallel credential-less legs. */
+    /** Composes the domain-health envelope by firing 6 parallel credential-less legs. */
     public List<CompositionLeg> compose() {
         Map<DomainTarget, Supplier<CompositionLeg>> legBodies = new EnumMap<>(DomainTarget.class);
         legBodies.put(DomainTarget.IAM, () -> timed(DomainTarget.IAM, gapPort::read));
@@ -82,6 +105,7 @@ public class DomainHealthCompositionUseCase {
         legBodies.put(DomainTarget.SCM, () -> timed(DomainTarget.SCM, scmPort::read));
         legBodies.put(DomainTarget.FINANCE, () -> timed(DomainTarget.FINANCE, financePort::read));
         legBodies.put(DomainTarget.ERP, () -> timed(DomainTarget.ERP, erpPort::read));
+        legBodies.put(DomainTarget.ECOMMERCE, () -> timed(DomainTarget.ECOMMERCE, ecommercePort::read));
 
         Map<DomainTarget, CompositionLeg> results = engine.fanOut(null, legBodies);
 
@@ -96,7 +120,7 @@ public class DomainHealthCompositionUseCase {
             }
         }
         if (DegradePolicy.isAllDown(outcomesForPolicy)) {
-            LOG.warn("Domain-health composition: all 5 legs non-ok (still emitting 200 per D5.A)");
+            LOG.warn("Domain-health composition: all 6 legs non-ok (still emitting 200 per D5.A)");
         }
         return ordered;
     }
