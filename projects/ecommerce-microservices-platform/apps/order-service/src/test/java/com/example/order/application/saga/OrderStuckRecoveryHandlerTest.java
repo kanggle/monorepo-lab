@@ -50,7 +50,7 @@ class OrderStuckRecoveryHandlerTest {
     @DisplayName("첫 attempt: count 0→1, status PENDING 유지, recovery.fired metric +1, 이벤트 발행 없음")
     void firstAttempt_bumpsCount_noEvent() {
         Order order = pendingOrder("order-1", 0);
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdAcrossTenants("order-1")).thenReturn(Optional.of(order));
 
         handler.recover("order-1", MAX_ATTEMPTS);
 
@@ -65,7 +65,7 @@ class OrderStuckRecoveryHandlerTest {
     @DisplayName("cap 도달 (count 4 → 5): markExhausted + STUCK_RECOVERY_FAILED + alert 이벤트 발행")
     void capReached_marksExhaustedAndPublishesAlert() {
         Order order = pendingOrder("order-1", 4);
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdAcrossTenants("order-1")).thenReturn(Optional.of(order));
 
         handler.recover("order-1", MAX_ATTEMPTS);
 
@@ -87,7 +87,7 @@ class OrderStuckRecoveryHandlerTest {
     @DisplayName("race: 다시 로드했을 때 payment_id != null 이면 skip (no metric / no event)")
     void racePaymentCompleted_isSkipped() {
         Order order = paidOrder("order-1");
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdAcrossTenants("order-1")).thenReturn(Optional.of(order));
 
         handler.recover("order-1", MAX_ATTEMPTS);
 
@@ -100,7 +100,7 @@ class OrderStuckRecoveryHandlerTest {
     @Test
     @DisplayName("race: order 가 사라졌을 때 (Optional.empty) 예외 없이 skip")
     void raceOrderVanished_doesNotThrow() {
-        when(orderRepository.findById("order-1")).thenReturn(Optional.empty());
+        when(orderRepository.findByIdAcrossTenants("order-1")).thenReturn(Optional.empty());
 
         handler.recover("order-1", MAX_ATTEMPTS);
 
@@ -114,7 +114,7 @@ class OrderStuckRecoveryHandlerTest {
         Order order = paidOrder("order-1");
         // confirm 까지 진행된 상태로 만들기
         order.confirm(Clock.fixed(NOW, ZoneOffset.UTC));
-        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdAcrossTenants("order-1")).thenReturn(Optional.of(order));
 
         handler.recover("order-1", MAX_ATTEMPTS);
 

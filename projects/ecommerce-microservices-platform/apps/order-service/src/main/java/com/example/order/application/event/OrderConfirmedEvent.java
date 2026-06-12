@@ -1,5 +1,6 @@
 package com.example.order.application.event;
 
+import com.example.order.domain.tenant.TenantContext;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.Clock;
@@ -24,16 +25,21 @@ public record OrderConfirmedEvent(
         @JsonProperty("event_type") String eventType,
         @JsonProperty("occurred_at") String occurredAt,
         String source,
+        @JsonProperty("tenant_id") String tenantId,
         Payload payload
 ) {
     public static OrderConfirmedEvent of(String orderId, String userId, Instant confirmedAt,
                                          List<Line> lines, ShippingAddress shippingAddress,
                                          Clock clock) {
+        // Envelope tenant (M5): confirmation runs on the StockChanged consumer path,
+        // which binds the order's tenant from the consumed envelope. Unset → default
+        // tenant (net-zero, D8).
         return new OrderConfirmedEvent(
                 UUID.randomUUID().toString(),
                 "OrderConfirmed",
                 Instant.now(clock).toString(),
                 "order-service",
+                TenantContext.currentTenant(),
                 new Payload(orderId, userId, confirmedAt.toString(), lines, shippingAddress)
         );
     }

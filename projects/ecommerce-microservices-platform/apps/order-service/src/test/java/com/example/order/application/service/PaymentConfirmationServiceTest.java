@@ -52,7 +52,7 @@ class PaymentConfirmationServiceTest {
     @DisplayName("정상적으로 결제 완료를 반영하고 저장한다")
     void markPaymentCompleted_validOrder_savesPaymentInfo() {
         Order order = createOrder();
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(Instant.parse("2026-03-25T10:00:00Z"));
 
@@ -66,7 +66,7 @@ class PaymentConfirmationServiceTest {
     @Test
     @DisplayName("주문이 존재하지 않으면 warn 로그만 남기고 정상 완료한다")
     void markPaymentCompleted_orderNotFound_doesNotThrow() {
-        given(orderRepository.findById("nonexistent")).willReturn(Optional.empty());
+        given(orderRepository.findByIdAcrossTenants("nonexistent")).willReturn(Optional.empty());
 
         assertThatNoException().isThrownBy(() ->
                 paymentConfirmationService.markPaymentCompleted("nonexistent", "pay-123", PAID_AT));
@@ -79,7 +79,7 @@ class PaymentConfirmationServiceTest {
     void markPaymentCompleted_alreadyCompleted_doesNotSave() {
         Order order = createOrder();
         order.markPaymentCompleted("pay-existing", PAID_AT, FIXED_CLOCK);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
 
         paymentConfirmationService.markPaymentCompleted(order.getOrderId(), "pay-456", PAID_AT);
 
@@ -91,7 +91,7 @@ class PaymentConfirmationServiceTest {
     void markPaymentCompleted_cancelledOrder_doesNotThrow() {
         Order order = createOrder();
         order.cancel(FIXED_CLOCK);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
 
         assertThatNoException().isThrownBy(() ->
                 paymentConfirmationService.markPaymentCompleted(order.getOrderId(), "pay-123", PAID_AT));
@@ -103,7 +103,7 @@ class PaymentConfirmationServiceTest {
     @DisplayName("동일 paymentId로 2회 호출 시 멱등하게 처리한다")
     void markPaymentCompleted_duplicateCall_idempotent() {
         Order order = createOrder();
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(Instant.parse("2026-03-25T10:00:00Z"));
 

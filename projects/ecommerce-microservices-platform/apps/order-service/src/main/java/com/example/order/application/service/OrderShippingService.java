@@ -28,7 +28,7 @@ public class OrderShippingService {
 
     @Transactional
     public void markShipped(String orderId) {
-        Order order = orderRepository.findById(orderId).orElse(null);
+        Order order = orderRepository.findByIdAcrossTenants(orderId).orElse(null);
         if (order == null) {
             log.warn("Order not found for ShippingStatusChanged(SHIPPED) event: orderId={}", orderId);
             return;

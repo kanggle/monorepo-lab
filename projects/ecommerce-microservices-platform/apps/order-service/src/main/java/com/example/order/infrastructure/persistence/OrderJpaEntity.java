@@ -22,6 +22,15 @@ class OrderJpaEntity {
     @Column(name = "order_id")
     private String orderId;
 
+    /**
+     * Outer-axis tenant owning this order (ADR-MONO-030 Step 2, M1). Stamped once
+     * at insert from the request tenant context; never mutated afterward, so a
+     * saga/recovery update preserves the order's tenant (task §C). Not part of the
+     * clean {@code Order} domain model — it lives in the persistence + event layers.
+     */
+    @Column(name = "tenant_id", nullable = false)
+    private String tenantId;
+
     @Column(name = "user_id", nullable = false)
     private String userId;
 
@@ -62,9 +71,10 @@ class OrderJpaEntity {
     @Version
     private Long version;
 
-    static OrderJpaEntity fromDomain(Order order) {
+    static OrderJpaEntity fromDomain(Order order, String tenantId) {
         OrderJpaEntity entity = new OrderJpaEntity();
         entity.orderId = order.getOrderId();
+        entity.tenantId = tenantId;
         entity.userId = order.getUserId();
         entity.status = order.getStatus();
         entity.totalPrice = order.getTotalPrice();
@@ -79,7 +89,7 @@ class OrderJpaEntity {
         entity.version = order.getVersion();
 
         for (OrderItem item : order.getItems()) {
-            OrderItemJpaEntity itemEntity = OrderItemJpaEntity.fromDomain(item, entity);
+            OrderItemJpaEntity itemEntity = OrderItemJpaEntity.fromDomain(item, entity, tenantId);
             entity.items.add(itemEntity);
         }
 

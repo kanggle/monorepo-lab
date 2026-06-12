@@ -1,7 +1,7 @@
 ---
 name: ecommerce-microservices-platform
 domain: ecommerce
-traits: [transactional, content-heavy, read-heavy, integration-heavy]
+traits: [transactional, content-heavy, read-heavy, integration-heavy, multi-tenant]
 service_types: [rest-api, event-consumer, batch-job, frontend-app]
 compliance: []
 data_sensitivity: pii
@@ -29,6 +29,7 @@ taxonomy_version: 0.1
 - **content-heavy**: Product 카탈로그, Review, 배너/프로모션 콘텐츠가 읽기 트래픽의 핵심 자산. CMS 패턴, 미디어 처리, 검색 인덱싱이 평균 이상으로 중요. [apps/product-service/](apps/product-service/), [apps/review-service/](apps/review-service/), [apps/search-service/](apps/search-service/)
 - **read-heavy**: 쇼핑/검색/상품 상세 조회가 쓰기보다 수십 배 많음. 캐시·CDN·읽기 복제·페이지네이션 최적화가 설계 제약으로 작용
 - **integration-heavy**: PG(결제), 택배 트래킹, 알림 채널(SMS/Email/Push), 소셜 로그인, 검색 엔진 등 외부 시스템 연동 다수. Circuit breaker, retry, DLQ, idempotent side-effect 패턴이 반복 적용. [apps/notification-service/](apps/notification-service/), [apps/shipping-service/](apps/shipping-service/)
+- **multi-tenant**: ecommerce 를 멀티벤더 마켓플레이스 SaaS 로 승격하는 **바깥(tenant) 축** ([ADR-MONO-030](../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md) Step 2). row-level `tenant_id` + 3-layer 격리(gateway entitlement-trust → `X-Tenant-Id` 컨텍스트 → persistence `WHERE tenant_id`) + M3 404 + M5 이벤트 봉투 전파. **현재 product-service + order-service 슬라이스에 적용**(M1 충족); 나머지 11개 서비스는 named migration backlog (아래 Out of Scope "in-migration"). default-tenant 시드로 net-zero(D8). SoT = [specs/features/multi-tenancy-and-marketplace.md](specs/features/multi-tenancy-and-marketplace.md) §2, [rules/traits/multi-tenant.md](../../rules/traits/multi-tenant.md). [apps/product-service/](apps/product-service/), [apps/order-service/](apps/order-service/)
 
 ## Out of Scope (의도적 제외)
 
@@ -37,7 +38,7 @@ taxonomy_version: 0.1
 - **marketplace**: 단일 판매자 구조 — 셀러 온보딩/정산/수수료 없음
 - **regulated**: PCI-DSS 카드 정보 직접 처리 안 함 (PG 위임). GDPR/PIPA 등 컴플라이언스 프레임워크는 아직 미적용
 - **audit-heavy**: 감사 로그 의무화된 도메인 아님. 변경 이력 보관은 기술적 옵션이지 규제 요구는 아님
-- **multi-tenant**: 단일 테넌트
+- **multi-tenant — 슬라이스 적용(ADR-MONO-030 Step 2)**: 더 이상 단일 테넌트 아님. **product-service + order-service 는 row-level `tenant_id` 격리 적용 완료**(M1; trait 활성). 나머지 11개 서비스(cart/payment/promotion/shipping/review/search/notification/user/auth/admin-dashboard/web-store)는 **in-migration** — named backlog (ADR-MONO-030 §3.4 Step 4). 안쪽 `seller_id` 마켓플레이스 축도 미적용(Step 3 / TASK-BE-358). 슬라이스 밖 서비스는 멀티테넌트 가드 부재 — 신규 작업 시 본 trait 의 M1-M7 을 적용할 것.
 - **real-time**: 초단위 reactive 시스템 아님. 실시간성이 중요해지면 trait 재분류 필요
 - **batch-heavy**: 배치가 존재하지만([apps/batch-worker/](apps/batch-worker/)) 시스템 중심이 아님
 - **data-intensive**: 아직 대규모 분석 플랫폼 수준 아님

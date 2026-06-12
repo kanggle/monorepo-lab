@@ -21,7 +21,7 @@ public class PaymentConfirmationService {
 
     @Transactional
     public void markPaymentCompleted(String orderId, String paymentId, Instant paidAt) {
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdAcrossTenants(orderId)
                 .orElse(null);
 
         if (order == null) {

@@ -29,7 +29,7 @@ public class OrderConfirmationService {
 
     @Transactional
     public void confirmOrder(String orderId) {
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdAcrossTenants(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         String previousStatus = order.getStatus().name();
         boolean changed = order.confirm(clock);

@@ -13,9 +13,20 @@ Consumers must not depend on fields not defined in this contract.
   "event_type": "string",
   "occurred_at": "string (ISO 8601)",
   "source": "order-service",
+  "tenant_id": "string (owning tenant; default 'ecommerce')",
   "payload": {}
 }
 ```
+
+> **`tenant_id` (ADR-MONO-030 Step 2, M5).** The outer-axis tenant that owns the
+> order. Carried on the envelope (not the payload) so consumers can route/scope
+> per tenant across the async boundary without parsing the payload. Derived from
+> the request's tenant context at publish time; saga-path events (confirm via
+> consumed `product.product.stock-changed`, etc.) carry the order's tenant. A
+> standalone deployment or a pre-multi-tenant order resolves to the default
+> tenant `'ecommerce'` (net-zero, D8). The `seller_id` inner axis is **not** in
+> this increment (Step 3 / TASK-BE-358); ADR-MONO-022 fulfillment-loop events are
+> threaded in Step 4.
 
 ---
 

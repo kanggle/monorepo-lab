@@ -70,7 +70,7 @@ class OrderBackorderCancellationServiceTest {
     @DisplayName("CONFIRMED 주문은 CANCELLED 로 전이되고 order.cancelled 가 발행된다 (환불 saga 트리거)")
     void confirmedOrder_cancelledAndEventPublished() {
         Order order = order(OrderStatus.CONFIRMED);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
@@ -90,7 +90,7 @@ class OrderBackorderCancellationServiceTest {
     @DisplayName("PENDING 주문도 취소 가능하다")
     void pendingOrder_cancellable() {
         Order order = order(OrderStatus.PENDING);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
@@ -104,7 +104,7 @@ class OrderBackorderCancellationServiceTest {
     @DisplayName("이미 CANCELLED 인 주문은 멱등 no-op (재발행/이벤트 없음)")
     void alreadyCancelled_isNoOp() {
         Order order = order(OrderStatus.CANCELLED);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
 
         service.cancelForBackorder(order.getOrderId(), "INSUFFICIENT_STOCK");
 
@@ -117,7 +117,7 @@ class OrderBackorderCancellationServiceTest {
     @DisplayName("SHIPPED 주문에 대한 backorder 는 ALERT 후 skip — 상태 불변, 이벤트 없음")
     void shippedOrder_alertAndSkip() {
         Order order = order(OrderStatus.SHIPPED);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
 
         service.cancelForBackorder(order.getOrderId(), "INSUFFICIENT_STOCK");
 
@@ -129,7 +129,7 @@ class OrderBackorderCancellationServiceTest {
     @Test
     @DisplayName("존재하지 않는 주문은 warn 후 skip (주문 위조 없음)")
     void unknownOrder_skips() {
-        given(orderRepository.findById("nope")).willReturn(Optional.empty());
+        given(orderRepository.findByIdAcrossTenants("nope")).willReturn(Optional.empty());
 
         service.cancelForBackorder("nope", "INSUFFICIENT_STOCK");
 

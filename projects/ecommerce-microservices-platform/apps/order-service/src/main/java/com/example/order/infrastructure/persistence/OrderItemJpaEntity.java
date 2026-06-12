@@ -16,6 +16,10 @@ class OrderItemJpaEntity {
     @Column(name = "id")
     private String id;
 
+    /** Owning tenant (ADR-MONO-030 Step 2, M1) — denormalized from the parent order. */
+    @Column(name = "tenant_id", nullable = false)
+    private String tenantId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
     private OrderJpaEntity order;
@@ -38,9 +42,10 @@ class OrderItemJpaEntity {
     @Column(name = "unit_price", nullable = false)
     private long unitPrice;
 
-    static OrderItemJpaEntity fromDomain(OrderItem item, OrderJpaEntity orderEntity) {
+    static OrderItemJpaEntity fromDomain(OrderItem item, OrderJpaEntity orderEntity, String tenantId) {
         OrderItemJpaEntity entity = new OrderItemJpaEntity();
         entity.id = item.getId();
+        entity.tenantId = tenantId;
         entity.order = orderEntity;
         entity.productId = item.getProductId();
         entity.variantId = item.getVariantId();

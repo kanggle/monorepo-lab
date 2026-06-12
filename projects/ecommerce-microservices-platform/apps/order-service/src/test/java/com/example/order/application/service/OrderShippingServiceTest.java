@@ -58,7 +58,7 @@ class OrderShippingServiceTest {
     @DisplayName("CONFIRMED 주문에 SHIPPED 적용 시 SHIPPED로 전이된다")
     void markShipped_confirmedOrder_becomesShipped() {
         Order order = confirmedOrder();
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
@@ -74,7 +74,7 @@ class OrderShippingServiceTest {
     void markShipped_alreadyShipped_idempotent() {
         Order order = confirmedOrder();
         order.ship(FIXED_CLOCK);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         orderShippingService.markShipped(order.getOrderId());
@@ -87,7 +87,7 @@ class OrderShippingServiceTest {
     @Test
     @DisplayName("존재하지 않는 주문은 무시된다")
     void markShipped_notFound_skips() {
-        given(orderRepository.findById("nope")).willReturn(Optional.empty());
+        given(orderRepository.findByIdAcrossTenants("nope")).willReturn(Optional.empty());
 
         orderShippingService.markShipped("nope");
 
@@ -101,7 +101,7 @@ class OrderShippingServiceTest {
         Order order = Order.create("user1",
                 List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
                 ADDRESS, FIXED_CLOCK);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
 
         orderShippingService.markShipped(order.getOrderId());
 
