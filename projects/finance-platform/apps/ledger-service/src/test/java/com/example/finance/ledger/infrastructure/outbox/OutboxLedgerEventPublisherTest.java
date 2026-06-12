@@ -7,6 +7,10 @@ import com.example.finance.ledger.domain.journal.SourceRef;
 import com.example.finance.ledger.domain.money.Currency;
 import com.example.finance.ledger.domain.money.Money;
 import com.example.finance.ledger.domain.period.AccountingPeriod;
+import com.example.finance.ledger.domain.reconciliation.DiscrepancyType;
+import com.example.finance.ledger.domain.reconciliation.ExternalStatement;
+import com.example.finance.ledger.domain.reconciliation.ReconciliationDiscrepancy;
+import com.example.finance.ledger.domain.reconciliation.StatementSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -165,5 +169,64 @@ class OutboxLedgerEventPublisherTest {
         assertThat(payload.get("to").asText()).isEqualTo(to.toString());
         assertThat(payload.get("closedAt").asText()).isEqualTo(NOW.toString());
         assertThat(payload.get("entryCount").asLong()).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("reconciliation.completed: {statementId, account, source, date, counts} payload")
+    void reconciliationCompletedEnvelopeAndPayload() throws Exception {
+        ExternalStatement statement = ExternalStatement.open("stmt-1", TENANT,
+                "CASH_CLEARING", StatementSource.BANK,
+                java.time.LocalDate.parse("2026-01-31"), NOW, java.util.List.of());
+
+        publisher.publishReconciliationCompleted(statement, 1, 2);
+
+        LedgerOutboxJpaEntity row = captureSaved();
+        assertThat(row.getEventType()).isEqualTo("finance.ledger.reconciliation.completed");
+        assertThat(row.getAggregateType()).isEqualTo("ReconciliationStatement");
+        assertThat(row.getAggregateId()).isEqualTo("stmt-1");
+        assertThat(row.getPartitionKey()).isEqualTo("stmt-1");
+
+        JsonNode env = envelopeOf(row);
+        assertThat(env.get("eventType").asText())
+                .isEqualTo("finance.ledger.reconciliation.completed");
+        assertThat(env.get("aggregateType").asText()).isEqualTo("ReconciliationStatement");
+        assertThat(env.get("source").asText()).isEqualTo("finance-platform-ledger-service");
+
+        JsonNode payload = env.get("payload");
+        assertThat(payload.get("statementId").asText()).isEqualTo("stmt-1");
+        assertThat(payload.get("ledgerAccountCode").asText()).isEqualTo("CASH_CLEARING");
+        assertThat(payload.get("source").asText()).isEqualTo("BANK");
+        assertThat(payload.get("statementDate").asText()).isEqualTo("2026-01-31");
+        assertThat(payload.get("matchedCount").asInt()).isEqualTo(1);
+        assertThat(payload.get("discrepancyCount").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("discrepancy.detected: {discrepancyId, account, type, minor-strings, currency, refs}")
+    void discrepancyDetectedEnvelopeAndPayload() throws Exception {
+        ReconciliationDiscrepancy discrepancy = ReconciliationDiscrepancy.open("disc-1", TENANT,
+                "stmt-1", "CASH_CLEARING", DiscrepancyType.UNMATCHED_EXTERNAL, "BANKTXN-002",
+                null, 99_000L, 0L, Currency.KRW, NOW);
+
+        publisher.publishDiscrepancyDetected(discrepancy);
+
+        LedgerOutboxJpaEntity row = captureSaved();
+        assertThat(row.getEventType())
+                .isEqualTo("finance.ledger.reconciliation.discrepancy.detected");
+        assertThat(row.getAggregateType()).isEqualTo("ReconciliationDiscrepancy");
+        assertThat(row.getAggregateId()).isEqualTo("disc-1");
+        assertThat(row.getPartitionKey()).isEqualTo("disc-1");
+
+        JsonNode payload = envelopeOf(row).get("payload");
+        assertThat(payload.get("discrepancyId").asText()).isEqualTo("disc-1");
+        assertThat(payload.get("ledgerAccountCode").asText()).isEqualTo("CASH_CLEARING");
+        assertThat(payload.get("type").asText()).isEqualTo("UNMATCHED_EXTERNAL");
+        // F5: minor amounts are STRINGs, never numbers.
+        assertThat(payload.get("expectedMinor").isTextual()).isTrue();
+        assertThat(payload.get("expectedMinor").asText()).isEqualTo("99000");
+        assertThat(payload.get("actualMinor").asText()).isEqualTo("0");
+        assertThat(payload.get("currency").asText()).isEqualTo("KRW");
+        assertThat(payload.get("externalRef").asText()).isEqualTo("BANKTXN-002");
+        assertThat(payload.get("journalEntryId").isNull()).isTrue();
     }
 }

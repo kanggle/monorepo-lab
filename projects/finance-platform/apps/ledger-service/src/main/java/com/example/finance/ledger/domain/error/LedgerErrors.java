@@ -88,4 +88,42 @@ public final class LedgerErrors {
             super("ACCOUNTING_PERIOD_INVALID_WINDOW", message);
         }
     }
+
+    // ---- Reconciliation (4th increment — TASK-FIN-BE-010, F8) ----
+
+    /**
+     * An ingest targeted a ledger account that is not a reconcilable clearing
+     * account — only {@code CASH_CLEARING} / {@code SETTLEMENT_SUSPENSE} reconcile
+     * against an external statement (architecture.md § Reconciliation). 422 —
+     * reconciling a wallet account would mis-classify its movements as discrepancies.
+     */
+    public static final class ReconciliationAccountInvalidException extends LedgerDomainException {
+        public ReconciliationAccountInvalidException(String message) {
+            super("RECONCILIATION_ACCOUNT_INVALID", message);
+        }
+    }
+
+    /** A statement id unknown / not in the tenant on read. 404. */
+    public static final class ReconciliationStatementNotFoundException extends LedgerDomainException {
+        public ReconciliationStatementNotFoundException(String message) {
+            super("RECONCILIATION_STATEMENT_NOT_FOUND", message);
+        }
+    }
+
+    /** A discrepancy id unknown / not in the tenant on read or resolve. 404. */
+    public static final class ReconciliationDiscrepancyNotFoundException extends LedgerDomainException {
+        public ReconciliationDiscrepancyNotFoundException(String message) {
+            super("RECONCILIATION_DISCREPANCY_NOT_FOUND", message);
+        }
+    }
+
+    /**
+     * A resolve attempted on an already-RESOLVED discrepancy — the OPEN→RESOLVED
+     * transition is one-way (operator-only, never auto; fintech F8). 409.
+     */
+    public static final class ReconciliationAlreadyResolvedException extends LedgerDomainException {
+        public ReconciliationAlreadyResolvedException(String message) {
+            super("RECONCILIATION_ALREADY_RESOLVED", message);
+        }
+    }
 }

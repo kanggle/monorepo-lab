@@ -6,6 +6,8 @@ import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
 import com.example.finance.ledger.domain.journal.SourceRef;
 import com.example.finance.ledger.domain.period.AccountingPeriod;
+import com.example.finance.ledger.domain.reconciliation.ExternalStatement;
+import com.example.finance.ledger.domain.reconciliation.ReconciliationDiscrepancy;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
@@ -39,9 +41,13 @@ public class OutboxLedgerEventPublisher implements LedgerEventPublisher {
 
     static final String AGG_JOURNAL_ENTRY = "JournalEntry";
     static final String AGG_ACCOUNTING_PERIOD = "AccountingPeriod";
+    static final String AGG_RECONCILIATION_STATEMENT = "ReconciliationStatement";
+    static final String AGG_RECONCILIATION_DISCREPANCY = "ReconciliationDiscrepancy";
 
     static final String EVENT_ENTRY_POSTED = "finance.ledger.entry.posted";
     static final String EVENT_PERIOD_CLOSED = "finance.ledger.period.closed";
+    static final String EVENT_RECONCILIATION_COMPLETED = "finance.ledger.reconciliation.completed";
+    static final String EVENT_DISCREPANCY_DETECTED = "finance.ledger.reconciliation.discrepancy.detected";
 
     private final LedgerOutboxJpaRepository outboxRepository;
     private final ObjectMapper objectMapper;
@@ -77,6 +83,37 @@ public class OutboxLedgerEventPublisher implements LedgerEventPublisher {
         payload.put("entryCount", period.entryCount());
         append(EVENT_PERIOD_CLOSED, AGG_ACCOUNTING_PERIOD, period.periodId(),
                 period.tenantId(), period.periodId(), payload);
+    }
+
+    @Override
+    public void publishReconciliationCompleted(ExternalStatement statement,
+                                               int matchedCount, int discrepancyCount) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("statementId", statement.statementId());
+        payload.put("ledgerAccountCode", statement.ledgerAccountCode());
+        payload.put("source", statement.source().name());
+        payload.put("statementDate", statement.statementDate().toString());
+        payload.put("matchedCount", matchedCount);
+        payload.put("discrepancyCount", discrepancyCount);
+        append(EVENT_RECONCILIATION_COMPLETED, AGG_RECONCILIATION_STATEMENT,
+                statement.statementId(), statement.tenantId(), statement.statementId(), payload);
+    }
+
+    @Override
+    public void publishDiscrepancyDetected(ReconciliationDiscrepancy discrepancy) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("discrepancyId", discrepancy.discrepancyId());
+        payload.put("ledgerAccountCode", discrepancy.ledgerAccountCode());
+        payload.put("type", discrepancy.type().name());
+        // F5 — money minor units as STRINGs (never a float).
+        payload.put("expectedMinor", Long.toString(discrepancy.expectedMinor()));
+        payload.put("actualMinor", Long.toString(discrepancy.actualMinor()));
+        payload.put("currency", discrepancy.currency().code());
+        payload.put("externalRef", discrepancy.externalRef());
+        payload.put("journalEntryId", discrepancy.journalEntryId());
+        append(EVENT_DISCREPANCY_DETECTED, AGG_RECONCILIATION_DISCREPANCY,
+                discrepancy.discrepancyId(), discrepancy.tenantId(),
+                discrepancy.discrepancyId(), payload);
     }
 
     private static List<Map<String, Object>> lines(JournalEntry entry) {

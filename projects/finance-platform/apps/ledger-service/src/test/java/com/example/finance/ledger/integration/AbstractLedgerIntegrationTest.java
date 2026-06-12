@@ -85,6 +85,12 @@ public abstract class AbstractLedgerIntegrationTest {
     protected static final String TOPIC_ENTRY_POSTED = "finance.ledger.entry.posted.v1";
     protected static final String TOPIC_PERIOD_CLOSED = "finance.ledger.period.closed.v1";
 
+    /** Reconciliation feed topics emitted by the ledger outbox relay (4th increment). */
+    protected static final String TOPIC_RECONCILIATION_COMPLETED =
+            "finance.ledger.reconciliation.completed.v1";
+    protected static final String TOPIC_DISCREPANCY_DETECTED =
+            "finance.ledger.reconciliation.discrepancy.detected.v1";
+
     @SuppressWarnings("resource")
     protected static final MySQLContainer<?> MYSQL =
             new MySQLContainer<>(DockerImageName.parse("mysql:8.0"))
@@ -141,7 +147,9 @@ public abstract class AbstractLedgerIntegrationTest {
                     new NewTopic(TOPIC_COMPLETED, 1, (short) 1),
                     new NewTopic(TOPIC_REVERSED, 1, (short) 1),
                     new NewTopic(TOPIC_ENTRY_POSTED, 1, (short) 1),
-                    new NewTopic(TOPIC_PERIOD_CLOSED, 1, (short) 1)
+                    new NewTopic(TOPIC_PERIOD_CLOSED, 1, (short) 1),
+                    new NewTopic(TOPIC_RECONCILIATION_COMPLETED, 1, (short) 1),
+                    new NewTopic(TOPIC_DISCREPANCY_DETECTED, 1, (short) 1)
             )).all().get(30, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() != null
@@ -187,18 +195,37 @@ public abstract class AbstractLedgerIntegrationTest {
 
     /**
      * Cross-class test isolation. The MySQL container is static (shared by every
-     * ledger IT class in the JVM); a test that closes an accounting period covering
+     * ledger IT class in the JVM). A test that closes an accounting period covering
      * "now" leaves it in {@code accounting_period}, where it would poison a sibling
      * class — postings get rejected with {@code LEDGER_PERIOD_CLOSED}, and a later
-     * {@code open} of an overlapping window 422s. Truncating the period tables before
-     * each test guarantees every test starts with no closed period (the guard is the
-     * only cross-class mutable poison; journal/outbox rows are harmless because each
-     * test computes its own baseline counts). FK order: snapshot rows first.
+     * {@code open} of an overlapping window 422s.
+     *
+     * <p>The 4th-increment reconciliation matcher fetches "the unmatched internal
+     * lines on {@code CASH_CLEARING}", so leftover {@code journal_line} /
+     * {@code reconciliation_match} rows from a sibling class would change the
+     * discrepancy count it asserts. So this cleanup now wipes ALL transactional
+     * tables (NOT {@code ledger_account} — the seeded chart of accounts; wallet
+     * codes are re-created lazily) so every test starts from a deterministic ledger.
+     * This is safe for the existing IT classes — each posts its own data within its
+     * method, after this {@code @BeforeEach}.
+     *
+     * <p>FK-safe order: child rows before parents — reconciliation match/line/
+     * discrepancy/statement, then journal lines before entries, then the standalone
+     * audit / dedupe / period-snapshot / period / outbox tables.
      */
     @BeforeEach
-    void cleanAccountingPeriods() {
+    void cleanLedgerState() {
+        jdbcTemplate.execute("DELETE FROM reconciliation_match");
+        jdbcTemplate.execute("DELETE FROM reconciliation_statement_line");
+        jdbcTemplate.execute("DELETE FROM reconciliation_discrepancy");
+        jdbcTemplate.execute("DELETE FROM reconciliation_statement");
+        jdbcTemplate.execute("DELETE FROM journal_line");
+        jdbcTemplate.execute("DELETE FROM journal_entry");
+        jdbcTemplate.execute("DELETE FROM audit_log");
+        jdbcTemplate.execute("DELETE FROM processed_events");
         jdbcTemplate.execute("DELETE FROM period_balance_snapshot");
         jdbcTemplate.execute("DELETE FROM accounting_period");
+        jdbcTemplate.execute("DELETE FROM ledger_outbox");
     }
 
     // ------------------------------------------------------------------------
