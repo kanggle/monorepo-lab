@@ -2,6 +2,7 @@ package com.example.finance.ledger.domain.journal.repository;
 
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
+import com.example.finance.ledger.domain.money.Currency;
 
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +38,17 @@ public interface JournalRepository {
 
     /** Debit/credit totals for one ledger account, tenant-scoped. */
     Optional<AccountTotals> accountTotals(String ledgerAccountCode, String tenantId);
+
+    /**
+     * Debit/credit totals for one {@code (ledgerAccountCode, currency)} position —
+     * the one foreign position's transaction balance plus its base-currency (KRW)
+     * carrying (9th increment, FX revaluation, TASK-FIN-BE-015). Empty when the
+     * account has no lines in that currency. Implemented by filtering the existing
+     * per-{@code (account, currency)} totals to the requested currency (no new JPQL,
+     * no migration).
+     */
+    Optional<AccountTotals> accountTotalsForCurrency(String ledgerAccountCode,
+                                                     Currency currency, String tenantId);
 
     /**
      * Per-account debit/credit totals over entries with {@code postedAt < to}

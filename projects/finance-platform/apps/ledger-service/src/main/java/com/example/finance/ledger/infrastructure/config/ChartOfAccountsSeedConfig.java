@@ -14,9 +14,10 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Instant;
 
 /**
- * Seeds the two platform GL accounts ({@code CASH_CLEARING},
- * {@code SETTLEMENT_SUSPENSE}) at startup, idempotently (architecture.md
- * § Chart of Accounts). Per-customer wallet accounts
+ * Seeds the platform GL accounts ({@code CASH_CLEARING},
+ * {@code SETTLEMENT_SUSPENSE}; (9th incr) the FX revaluation accounts
+ * {@code FX_GAIN} [INCOME] / {@code FX_LOSS} [EXPENSE]) at startup, idempotently
+ * (architecture.md § Chart of Accounts). Per-customer wallet accounts
  * ({@code CUSTOMER_WALLET:{accountId}}) are created lazily on first posting by
  * {@code PostJournalEntryUseCase}, NOT seeded here.
  */
@@ -34,6 +35,9 @@ public class ChartOfAccountsSeedConfig {
             Instant now = clock.now();
             seed(repository, LedgerAccountCodes.CASH_CLEARING, LedgerAccountType.ASSET, now);
             seed(repository, LedgerAccountCodes.SETTLEMENT_SUSPENSE, LedgerAccountType.ASSET, now);
+            // (9th incr) FX revaluation GL accounts — INCOME (gain) / EXPENSE (loss).
+            seed(repository, LedgerAccountCodes.FX_GAIN, LedgerAccountType.INCOME, now);
+            seed(repository, LedgerAccountCodes.FX_LOSS, LedgerAccountType.EXPENSE, now);
         };
     }
 

@@ -1,0 +1,159 @@
+package com.example.finance.ledger.application;
+
+import com.example.finance.ledger.application.port.outbound.ClockPort;
+import com.example.finance.ledger.application.port.outbound.ProcessedEventStore;
+import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
+import com.example.finance.ledger.domain.error.LedgerErrors.IdempotencyKeyRequiredException;
+import com.example.finance.ledger.domain.error.LedgerErrors.JournalEntryNotFoundException;
+import com.example.finance.ledger.domain.journal.FxRevaluationPolicy;
+import com.example.finance.ledger.domain.journal.FxRevaluationPolicy.RevaluationResult;
+import com.example.finance.ledger.domain.journal.JournalEntry;
+import com.example.finance.ledger.domain.journal.SourceRef;
+import com.example.finance.ledger.domain.journal.repository.JournalRepository;
+import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
+import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * FX gain/loss revaluation use case (9th increment, TASK-FIN-BE-015 — architecture.md
+ * § FX gain/loss revaluation). An operator revalues a {@code (ledgerAccountCode,
+ * currency)} foreign position at a closing (spot) rate, truing its base carrying value
+ * to spot and booking the delta to {@code FX_GAIN}/{@code FX_LOSS}. Like manual posting
+ * (5th increment) it adds <b>no new write boundary</b> — it builds a balanced
+ * base-currency (KRW) adjusting entry via {@link FxRevaluationPolicy} and funnels it
+ * through the existing {@link PostJournalEntryUseCase#post(JournalEntry, String, String)}
+ * (the single guarded write path), inheriting the closed-period guard, the audit row
+ * (actor = the operator subject), and the {@code entry.posted} outbox append.
+ *
+ * <p>Idempotent (F1) on a client {@code Idempotency-Key} namespaced {@code reval:{key}}.
+ * A replay returns the original entry (no re-post). A no-op (no position / already at
+ * spot) returns {@code revalued=false} and does <b>not</b> consume the key (net-zero —
+ * a real position can be revalued later).
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class RevalueForeignBalanceUseCase {
+
+    static final String DEDUPE_PREFIX = "reval:";
+    static final String DEDUPE_TOPIC = "fx-revaluation";
+    /** Max client key length — {@code "reval:" + key} (56) must fit the 64-char column. */
+    static final int MAX_KEY_LENGTH = 50;
+
+    private final JournalRepository journalRepository;
+    private final ProcessedEventStore processedEventStore;
+    private final PostJournalEntryUseCase postJournalEntryUseCase;
+    private final ClockPort clock;
+
+    /** Why a revaluation booked nothing ({@code revalued=false}). */
+    public enum NoOpReason {
+        REPLAY, NO_POSITION, AT_SPOT
+    }
+
+    /**
+     * The revaluation outcome. {@code revalued=true} → an entry was booked (the
+     * controller maps it to 201) with the signed {@code deltaBaseMinor} + the FX
+     * {@code outcome}; {@code revalued=false} → a no-op/replay (200) carrying the
+     * {@link NoOpReason} and the original entry on a replay (else {@code null}).
+     */
+    public record Result(boolean revalued, long deltaBaseMinor,
+                         FxRevaluationPolicy.Outcome outcome, NoOpReason reason,
+                         JournalEntry entry) {
+
+        static Result revalued(RevaluationResult r, JournalEntry entry) {
+            return new Result(true, r.delta(), r.outcome(), null, entry);
+        }
+
+        static Result noOp(NoOpReason reason, JournalEntry entry) {
+            return new Result(false, 0L, null, reason, entry);
+        }
+    }
+
+    @Transactional
+    public Result revalue(RevalueForeignBalanceCommand cmd) {
+        String key = cmd.idempotencyKey();
+        if (key == null || key.isBlank()) {
+            throw new IdempotencyKeyRequiredException("Idempotency-Key header is required");
+        }
+        if (key.length() > MAX_KEY_LENGTH) {
+            throw new IdempotencyKeyRequiredException(
+                    "Idempotency-Key must be at most " + MAX_KEY_LENGTH + " characters");
+        }
+        String dedupeKey = DEDUPE_PREFIX + key;
+
+        // (1) Idempotent replay — the key was already processed; return the original
+        //     entry (no re-post). The unique constraint on processed_events makes a
+        //     concurrent double-submit race-safe (the loser lands here).
+        if (processedEventStore.isProcessed(dedupeKey)) {
+            JournalEntry original = journalRepository
+                    .findBySourceEventId(dedupeKey, cmd.tenantId())
+                    .orElseThrow(() -> new JournalEntryNotFoundException(
+                            "revaluation entry for idempotency key not found (replay): " + dedupeKey));
+            return Result.noOp(NoOpReason.REPLAY, original);
+        }
+
+        // (2) The base currency cannot be revalued against itself (CURRENCY_MISMATCH).
+        if (cmd.currency() == LedgerReportingCurrency.BASE) {
+            throw new CurrencyMismatchException(
+                    "the base currency (" + LedgerReportingCurrency.BASE
+                            + ") cannot be revalued against itself");
+        }
+
+        // (3) Load the position. No row / zero foreign balance → 200 revalued:false
+        //     (net-zero; the key is NOT marked — a real position can be revalued later).
+        Optional<AccountTotals> totals = journalRepository.accountTotalsForCurrency(
+                cmd.ledgerAccountCode(), cmd.currency(), cmd.tenantId());
+        if (totals.isEmpty()) {
+            return Result.noOp(NoOpReason.NO_POSITION, null);
+        }
+        AccountTotals t = totals.get();
+        long foreignBalanceMinor = t.debitMinor() - t.creditMinor();
+        long carryingBaseMinor = t.baseDebitMinor() - t.baseCreditMinor();
+        if (foreignBalanceMinor == 0L) {
+            return Result.noOp(NoOpReason.NO_POSITION, null);
+        }
+
+        // (4) Compute. closingRate ≤ 0 → REVALUATION_RATE_INVALID (422). delta == 0
+        //     (already at spot) → 200 revalued:false (key NOT marked).
+        Optional<RevaluationResult> computed = FxRevaluationPolicy.revalue(
+                cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
+                foreignBalanceMinor, carryingBaseMinor, cmd.closingRate());
+        if (computed.isEmpty()) {
+            return Result.noOp(NoOpReason.AT_SPOT, null);
+        }
+        RevaluationResult result = computed.get();
+
+        // (5) Build the balanced adjusting entry, record the dedupe row in the SAME Tx,
+        //     then funnel through the guarded write path (closed-period guard → 422
+        //     here; audit actor = operator subject; entry.posted outbox append with
+        //     sourceType = REVALUATION).
+        Instant postedAt = cmd.postedAt() != null ? cmd.postedAt() : clock.now();
+        JournalEntry entry = JournalEntry.post(newEntryId(), cmd.tenantId(), postedAt,
+                SourceRef.ofRevaluation(cmd.reference(), dedupeKey), result.lines());
+        processedEventStore.markProcessed(dedupeKey, cmd.tenantId(), DEDUPE_TOPIC,
+                entry.source().getSourceTransactionId(), clock.now());
+        JournalEntry posted = postJournalEntryUseCase.post(entry, reason(cmd), cmd.operatorSubject());
+        return Result.revalued(result, posted);
+    }
+
+    private static String reason(RevalueForeignBalanceCommand cmd) {
+        if (cmd.memo() != null && !cmd.memo().isBlank()) {
+            return cmd.memo();
+        }
+        if (cmd.reference() != null && !cmd.reference().isBlank()) {
+            return cmd.reference();
+        }
+        return "FX revaluation";
+    }
+
+    private static String newEntryId() {
+        return UUID.randomUUID().toString();
+    }
+}

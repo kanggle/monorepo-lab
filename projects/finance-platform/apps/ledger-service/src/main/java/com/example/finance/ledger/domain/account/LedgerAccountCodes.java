@@ -12,6 +12,11 @@ public final class LedgerAccountCodes {
     public static final String SETTLEMENT_SUSPENSE = "SETTLEMENT_SUSPENSE";
     public static final String CUSTOMER_WALLET_PREFIX = "CUSTOMER_WALLET:";
 
+    /** (9th incr) Unrealized FX revaluation gain — an INCOME account (normal CREDIT). */
+    public static final String FX_GAIN = "FX_GAIN";
+    /** (9th incr) Unrealized FX revaluation loss — an EXPENSE account (normal DEBIT). */
+    public static final String FX_LOSS = "FX_LOSS";
+
     private LedgerAccountCodes() {
     }
 
@@ -25,10 +30,21 @@ public final class LedgerAccountCodes {
         return code != null && code.startsWith(CUSTOMER_WALLET_PREFIX);
     }
 
-    /** The natural account type for a code (wallets = LIABILITY, GL accounts = ASSET). */
+    /**
+     * The natural account type for a code (wallets = LIABILITY; (9th incr)
+     * {@code FX_GAIN} = INCOME, {@code FX_LOSS} = EXPENSE; the rest = ASSET). Used
+     * by the guarded write path's lazy-create so even an un-seeded environment
+     * assigns the FX accounts the correct type.
+     */
     public static LedgerAccountType typeForCode(String code) {
         if (isCustomerWallet(code)) {
             return LedgerAccountType.LIABILITY;
+        }
+        if (FX_GAIN.equals(code)) {
+            return LedgerAccountType.INCOME;
+        }
+        if (FX_LOSS.equals(code)) {
+            return LedgerAccountType.EXPENSE;
         }
         return LedgerAccountType.ASSET;
     }
