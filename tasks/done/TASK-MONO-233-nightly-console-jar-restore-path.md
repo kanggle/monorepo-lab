@@ -8,7 +8,7 @@ TASK-MONO-233
 
 # Status
 
-review
+done
 
 # Owner
 
