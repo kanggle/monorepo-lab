@@ -89,10 +89,15 @@ public final class FxSettlementPolicy {
      * The result of settling a position: the signed realized base gain/loss
      * ({@code realized}, KRW minor, debit-positive), the signed {@code proceedsBase}
      * (KRW minor), the {@link Outcome} ({@link Outcome#NONE} when {@code realized == 0}),
+     * the signed settled foreign portion {@code settledForeignMinor} ({@code F_settle},
+     * equal to {@code F} on a full settle) and its weighted-average carrying share
+     * {@code carryingSettledMinor} ({@code C_settle}) — the caller subtracts these from
+     * the position to expose the residual OPEN {@code (F − F_settle, C − C_settle)} —
      * and the unattached lines to post (3 lines, or 2 when {@code realized == 0}).
      */
-    public record SettlementResult(long realized, long proceedsBase,
-                                   Outcome outcome, List<JournalLine> lines) {
+    public record SettlementResult(long realized, long proceedsBase, Outcome outcome,
+                                   long settledForeignMinor, long carryingSettledMinor,
+                                   List<JournalLine> lines) {
     }
 
     /**
@@ -232,6 +237,7 @@ public final class FxSettlementPolicy {
             outcome = Outcome.NONE;
         }
 
-        return Optional.of(new SettlementResult(realized, proceedsBase, outcome, List.copyOf(lines)));
+        return Optional.of(new SettlementResult(realized, proceedsBase, outcome,
+                settleForeignMinor, carryingSettledMinor, List.copyOf(lines)));
     }
 }

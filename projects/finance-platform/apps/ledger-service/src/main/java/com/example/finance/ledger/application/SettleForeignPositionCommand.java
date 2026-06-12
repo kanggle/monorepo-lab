@@ -16,6 +16,13 @@ import java.time.Instant;
  * <p>Money stays integer minor units (F5); only {@code settlementRate} is an exact
  * {@link BigDecimal} (the base-minor-per-foreign-minor spot factor, strictly positive).
  *
+ * <p><b>12th increment (TASK-FIN-BE-018) — partial settlement.</b> The optional
+ * {@code settleForeignMinor} settles only a <b>portion</b> {@code F_settle} of the
+ * position (same sign as the position's foreign balance {@code F}, {@code 0 < |F_settle|
+ * ≤ |F|}); {@code null} settles the <b>whole</b> position byte-identically to the 10th
+ * increment (net-zero). The use case validates it (zero / opposite-sign / over-settle →
+ * {@code SETTLEMENT_AMOUNT_INVALID}).
+ *
  * @param tenantId            the operator's tenant (row-level isolation)
  * @param operatorSubject     the JWT subject recorded as the audit actor
  * @param ledgerAccountCode   the foreign account whose position is settled (removed)
@@ -23,6 +30,8 @@ import java.time.Instant;
  * @param settlementRate      the settlement (spot) rate (base-minor-per-foreign-minor, > 0)
  * @param proceedsAccountCode the base-currency account that receives/pays the proceeds
  *                            (must already exist — no lazy mint)
+ * @param settleForeignMinor  optional partial-settlement portion {@code F_settle} (foreign
+ *                            minor, same sign as {@code F}); {@code null} = full settlement
  * @param postedAt            optional effective instant — {@code null} defaults to now
  * @param reference           optional operator narrative — the entry's
  *                            {@code source.sourceTransactionId} + part of the audit reason
@@ -37,6 +46,7 @@ public record SettleForeignPositionCommand(
         Currency currency,
         BigDecimal settlementRate,
         String proceedsAccountCode,
+        Long settleForeignMinor,
         Instant postedAt,
         String reference,
         String memo,

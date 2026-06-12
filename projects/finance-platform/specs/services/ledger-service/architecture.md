@@ -1201,10 +1201,46 @@ tenant gate (parity with revaluation / manual posting).
 settlement unless the operator calls the endpoint). A settlement entry is **immutable** (F3) — a
 correction is a reversal or a re-establishing manual entry.
 
-**Deferred** (forward-declared): **partial / weighted-average** settlement (a portion of the
-position, proportional / FIFO carrying basis, residual position); a **proceeds-amount input**
-(supply the *actual* base received instead of a rate); a **live FX rate feed**; a
-**configurable base currency**.
+**Deferred** (forward-declared): a **FIFO / lot-level** carrying basis (the 12th increment is
+weighted-average only); a **proceeds-amount input** (supply the *actual* base received instead of
+a rate); a **bulk / all-positions** settle; a **live FX rate feed**; a **configurable base
+currency**.
+
+### Partial settlement (twelfth increment — TASK-FIN-BE-018)
+
+The 10th increment settles the **whole** `(account, currency)` position. The twelfth lets an
+operator settle a **portion** by supplying an optional **`settleForeignAmount`** (foreign minor,
+`F_settle`); omitting it settles the whole position **byte-identically to the 10th** (net-zero —
+the `F_settle/F` ratio collapses to 1, the 10th's tests are unchanged). It adds **no new write
+boundary, no new line primitive, no migration** — the 10th's balanced base-currency 3-line entry
+is reused with the partial quantities and funnelled through the same
+`PostJournalEntryUseCase.post`.
+
+**Weighted-average proportional carrying.** The settled portion removes a proportional share of
+the position's carrying at its average unit cost:
+
+- `C_settle = round(C × |F_settle| / |F|)` (HALF_UP, signed)
+- `proceedsBase = round(F_settle × settlementRate)` (HALF_UP, signed)
+- `realized = proceedsBase − C_settle`
+- position-removal line `money = |F_settle| {currency}`, `baseAmount = |C_settle| KRW`
+
+Polarity stays automatic (`sign(F)` for removal/proceeds, `sign(realized)` for the FX line) —
+`F_settle` carries the **same sign** as `F`. When `round(C × |F_settle|/|F|) == 0` (a very small
+tranche) `C_settle = 0` and `realized = proceedsBase` (a valid pure-FX realization).
+
+**Residual OPEN position.** The remainder `(F − F_settle, C − C_settle)` simply **stays on the
+account** — double-entry leaves it OPEN, no extra line. The `201` response additively exposes it
+as `residualForeignMinor` / `residualCarryingBaseMinor` (both `"0"` on a full settle).
+
+**Self-correcting rounding (no drift).** A final settle of the residual (`F_settle = F_remaining`)
+removes **exactly** `C_remaining` (`round(C × F/F) = C`), so repeated partials summing to `F` net
+to zero carrying with no rounding drift (F2).
+
+**Validation (in the use case, not the policy).** After loading the position, a supplied
+`settleForeignAmount` that is **zero**, the **opposite sign** to `F`, or **`|F_settle| > |F|`**
+(over-settle — would flip the position) → **`SETTLEMENT_AMOUNT_INVALID`** (422); nothing persists,
+the idempotency key is not consumed (F1/F4). `FxSettlementPolicy.settle(...)` delegates and trusts
+the validated bounds.
 
 ## Idempotency / dedupe (F1)
 

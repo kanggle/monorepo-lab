@@ -38,6 +38,12 @@ class FxSettlementPolicyTest {
                 new BigDecimal(rate), PROCEEDS).orElseThrow();
     }
 
+    private static SettlementResult settlePartialOrThrow(long foreign, long carrying,
+                                                         long settleForeign, String rate) {
+        return FxSettlementPolicy.settle(TENANT, CASH, USD, foreign, carrying, settleForeign,
+                new BigDecimal(rate), PROCEEDS).orElseThrow();
+    }
+
     /** Build a JournalEntry from the result's lines; asserts the base balance by construction. */
     private static JournalEntry entryOf(SettlementResult r) {
         return JournalEntry.post("e-1", TENANT, Instant.parse("2026-06-30T23:59:59Z"),
@@ -232,5 +238,114 @@ class FxSettlementPolicyTest {
         assertThat(lines.get(0).ledgerAccountCode()).isEqualTo(CASH);
         assertThat(lines.get(1).ledgerAccountCode()).isEqualTo(PROCEEDS);
         assertThat(lines.get(2).ledgerAccountCode()).isEqualTo(LedgerAccountCodes.FX_GAIN);
+    }
+
+    // ---- Partial / weighted-average settlement (12th increment — TASK-FIN-BE-018) ----
+
+    @Test
+    @DisplayName("partial settle (F_settle < F): C_settle = round(C × |F_settle|/|F|), residual stays OPEN")
+    void partialWeightedAverage() {
+        // F = $100 (10000 USD-minor), carried 130000 KRW; settle 4000 (= $40) @ 13.7.
+        // C_settle = round(130000 × 4000/10000) = 52000; proceeds = round(4000 × 13.7) = 54800;
+        // realized = 54800 − 52000 = +2800 → gain.
+        SettlementResult r = settlePartialOrThrow(10_000L, 130_000L, 4_000L, "13.7");
+
+        assertThat(r.settledForeignMinor()).isEqualTo(4_000L);
+        assertThat(r.carryingSettledMinor()).isEqualTo(52_000L);
+        assertThat(r.proceedsBase()).isEqualTo(54_800L);
+        assertThat(r.realized()).isEqualTo(2_800L);
+        assertThat(r.outcome()).isEqualTo(Outcome.FX_GAIN);
+        assertThat(r.lines()).hasSize(3);
+
+        JournalLine removal = r.lines().get(0);
+        assertThat(removal.isCredit()).isTrue();                       // asset removed by CREDIT
+        assertThat(removal.money().minorUnits()).isEqualTo(4_000L);    // |F_settle| foreign
+        assertThat(removal.baseAmountMinor()).isEqualTo(52_000L);      // |C_settle| base
+        JournalLine proceeds = r.lines().get(1);
+        assertThat(proceeds.isDebit()).isTrue();
+        assertThat(proceeds.money().minorUnits()).isEqualTo(54_800L);
+
+        // The partial entry balances in base on its own.
+        assertThat(entryOf(r).isBalanced()).isTrue();
+    }
+
+    @Test
+    @DisplayName("partial F_settle == F → byte-identical to the full settle (net-zero, AC-2)")
+    void partialFullEquivalence() {
+        SettlementResult full = settleOrThrow(10_000L, 130_000L, "13.7");
+        SettlementResult viaPartial = settlePartialOrThrow(10_000L, 130_000L, 10_000L, "13.7");
+
+        assertThat(viaPartial.realized()).isEqualTo(full.realized());
+        assertThat(viaPartial.proceedsBase()).isEqualTo(full.proceedsBase());
+        assertThat(viaPartial.outcome()).isEqualTo(full.outcome());
+        assertThat(viaPartial.carryingSettledMinor()).isEqualTo(130_000L); // == C
+        assertThat(viaPartial.settledForeignMinor()).isEqualTo(10_000L);   // == F
+        assertThat(viaPartial.lines()).hasSize(full.lines().size());
+        // line-for-line identical (account, direction, money, base)
+        for (int i = 0; i < full.lines().size(); i++) {
+            JournalLine a = full.lines().get(i);
+            JournalLine b = viaPartial.lines().get(i);
+            assertThat(b.ledgerAccountCode()).isEqualTo(a.ledgerAccountCode());
+            assertThat(b.isDebit()).isEqualTo(a.isDebit());
+            assertThat(b.money()).isEqualTo(a.money());
+            assertThat(b.baseMoney()).isEqualTo(a.baseMoney());
+        }
+    }
+
+    @Test
+    @DisplayName("partial liability settle (F<0): F_settle negative, polarity automatic")
+    void partialLiability() {
+        // F = -10000, carried C = -130000; settle F_settle = -4000 @ 12.5.
+        // C_settle = round(-130000 × 4000/10000) = -52000; proceeds = round(-4000 × 12.5) = -50000;
+        // realized = -50000 − (-52000) = +2000 → gain.
+        SettlementResult r = settlePartialOrThrow(-10_000L, -130_000L, -4_000L, "12.5");
+
+        assertThat(r.settledForeignMinor()).isEqualTo(-4_000L);
+        assertThat(r.carryingSettledMinor()).isEqualTo(-52_000L);
+        assertThat(r.proceedsBase()).isEqualTo(-50_000L);
+        assertThat(r.realized()).isEqualTo(2_000L);
+        assertThat(r.outcome()).isEqualTo(Outcome.FX_GAIN);
+
+        JournalLine removal = r.lines().get(0);
+        assertThat(removal.isDebit()).isTrue();                        // liability removed by DEBIT
+        assertThat(removal.money().minorUnits()).isEqualTo(4_000L);    // |F_settle|
+        assertThat(removal.baseAmountMinor()).isEqualTo(52_000L);      // |C_settle|
+        assertThat(entryOf(r).isBalanced()).isTrue();
+    }
+
+    @Test
+    @DisplayName("tiny tranche where round(C × |F_settle|/|F|) == 0 → C_settle 0, realized = pure FX")
+    void tinyTrancheCarryingZero() {
+        // F = 10000, carried C = 5; settle F_settle = 1 @ 13.7.
+        // C_settle = round(5 × 1/10000) = round(0.0005) = 0; proceeds = round(1 × 13.7) = 14;
+        // realized = 14 − 0 = 14 → all FX gain.
+        SettlementResult r = settlePartialOrThrow(10_000L, 5L, 1L, "13.7");
+
+        assertThat(r.carryingSettledMinor()).isZero();
+        assertThat(r.proceedsBase()).isEqualTo(14L);
+        assertThat(r.realized()).isEqualTo(14L);
+        assertThat(r.outcome()).isEqualTo(Outcome.FX_GAIN);
+
+        JournalLine removal = r.lines().get(0);
+        assertThat(removal.money().minorUnits()).isEqualTo(1L);        // |F_settle|
+        assertThat(removal.baseAmountMinor()).isZero();                // |C_settle| = 0
+        assertThat(entryOf(r).isBalanced()).isTrue();
+    }
+
+    @Test
+    @DisplayName("sequential partials summing to F remove exactly C (no rounding drift)")
+    void sequentialPartialsNoDrift() {
+        // F = 10000, C = 130000. Settle 3333 then 3333 then the residual 3334 (= F).
+        // C_settle1 = round(130000 × 3333/10000) = round(43329) = 43329.
+        long c1 = settlePartialOrThrow(10_000L, 130_000L, 3_333L, "13.7").carryingSettledMinor();
+        long fRem1 = 10_000L - 3_333L, cRem1 = 130_000L - c1;          // (6667, 86671)
+        long c2 = settlePartialOrThrow(fRem1, cRem1, 3_333L, "13.7").carryingSettledMinor();
+        long fRem2 = fRem1 - 3_333L, cRem2 = cRem1 - c2;               // (3334, ...)
+        // Final settle of the whole residual removes exactly cRem2 (round(C × F/F) = C).
+        long c3 = settlePartialOrThrow(fRem2, cRem2, fRem2, "13.7").carryingSettledMinor();
+
+        assertThat(fRem2).isEqualTo(3_334L);
+        assertThat(c3).isEqualTo(cRem2);                               // residual fully removed
+        assertThat(c1 + c2 + c3).isEqualTo(130_000L);                  // sums to C, no drift
     }
 }

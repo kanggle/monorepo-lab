@@ -13,12 +13,20 @@ import java.time.Instant;
  * string decimal (never a float — F5); {@code proceedsAccountCode} is the base-currency
  * account that receives/pays the proceeds (must already exist). {@code postedAt} /
  * {@code reference} / {@code memo} are optional operator narrative.
+ *
+ * <p><b>12th increment (TASK-FIN-BE-018) — partial settlement.</b> The optional
+ * {@code settleForeignAmount} (foreign minor string, F5) settles only a portion of the
+ * position; omitting it settles the whole position byte-identically to the 10th
+ * (net-zero). A non-integer value surfaces as a 422; the position-relative validation
+ * (zero / opposite-sign / over-settle -&gt; {@code SETTLEMENT_AMOUNT_INVALID}) is in the
+ * use case.
  */
 public record SettlementRequest(
         String ledgerAccountCode,
         String currency,
         String settlementRate,
         String proceedsAccountCode,
+        String settleForeignAmount,
         Instant postedAt,
         String reference,
         String memo) {
@@ -33,9 +41,10 @@ public record SettlementRequest(
                                                   String idempotencyKey) {
         Currency resolved = Currency.of(currency);
         BigDecimal rate = parseRate(settlementRate);
+        Long settleForeignMinor = parseSettleForeignAmount(settleForeignAmount);
         return new SettleForeignPositionCommand(
                 tenantId, operatorSubject, ledgerAccountCode, resolved, rate,
-                proceedsAccountCode, postedAt, reference, memo, idempotencyKey);
+                proceedsAccountCode, settleForeignMinor, postedAt, reference, memo, idempotencyKey);
     }
 
     private static BigDecimal parseRate(String value) {
@@ -46,6 +55,18 @@ public record SettlementRequest(
             return new BigDecimal(value.trim());
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("settlementRate must be a decimal string: " + value);
+        }
+    }
+
+    private static Long parseSettleForeignAmount(String value) {
+        if (value == null || value.isBlank()) {
+            return null; // full settlement (net-zero, AC-2)
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    "settleForeignAmount must be an integer minor-unit string: " + value);
         }
     }
 }

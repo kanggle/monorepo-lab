@@ -95,7 +95,7 @@ class SettlementControllerSliceTest {
     @DisplayName("POST /settlements booked → 201 settled:true with realized + proceeds + outcome + entry")
     void settledCreated() throws Exception {
         when(settleForeignPosition.settle(any()))
-                .thenReturn(new Result(true, 7_000L, 137_000L, Outcome.FX_GAIN, null, settlementEntry()));
+                .thenReturn(new Result(true, 7_000L, 137_000L, Outcome.FX_GAIN, 0L, 0L, null, settlementEntry()));
 
         mockMvc.perform(post("/api/finance/ledger/settlements")
                         .header("Idempotency-Key", "FX-SETTLE-2026-06-USD")
@@ -113,10 +113,60 @@ class SettlementControllerSliceTest {
     }
 
     @Test
+    @DisplayName("POST /settlements partial (settleForeignAmount) → 201 with residual OPEN exposed")
+    void partialSettledWithResidual() throws Exception {
+        // Settle $40 of $100: realized +2800, proceeds 54800, residual (6000, 78000).
+        when(settleForeignPosition.settle(any()))
+                .thenReturn(new Result(true, 2_800L, 54_800L, Outcome.FX_GAIN,
+                        6_000L, 78_000L, null, settlementEntry()));
+
+        String partialBody = """
+                { "ledgerAccountCode": "CASH_CLEARING",
+                  "currency": "USD",
+                  "settlementRate": "13.7",
+                  "proceedsAccountCode": "SETTLEMENT_SUSPENSE",
+                  "settleForeignAmount": "4000" }
+                """;
+
+        mockMvc.perform(post("/api/finance/ledger/settlements")
+                        .header("Idempotency-Key", "FX-SETTLE-2026-06-USD")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(partialBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.settled").value(true))
+                .andExpect(jsonPath("$.data.realizedBaseMinor").value("2800"))
+                .andExpect(jsonPath("$.data.residualForeignMinor").value("6000"))
+                .andExpect(jsonPath("$.data.residualCarryingBaseMinor").value("78000"));
+    }
+
+    @Test
+    @DisplayName("POST /settlements invalid settleForeignAmount → 422 SETTLEMENT_AMOUNT_INVALID")
+    void invalidSettleAmount() throws Exception {
+        when(settleForeignPosition.settle(any()))
+                .thenThrow(new com.example.finance.ledger.domain.error.LedgerErrors
+                        .SettlementAmountInvalidException("settleForeignAmount exceeds the position"));
+
+        String overBody = """
+                { "ledgerAccountCode": "CASH_CLEARING",
+                  "currency": "USD",
+                  "settlementRate": "13.7",
+                  "proceedsAccountCode": "SETTLEMENT_SUSPENSE",
+                  "settleForeignAmount": "999999" }
+                """;
+
+        mockMvc.perform(post("/api/finance/ledger/settlements")
+                        .header("Idempotency-Key", "k-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(overBody))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SETTLEMENT_AMOUNT_INVALID"));
+    }
+
+    @Test
     @DisplayName("POST /settlements no position → 200 settled:false NO_POSITION, no entry")
     void noPositionNoOp() throws Exception {
         when(settleForeignPosition.settle(any()))
-                .thenReturn(new Result(false, 0L, 0L, null, NoOpReason.NO_POSITION, null));
+                .thenReturn(new Result(false, 0L, 0L, null, 0L, 0L, NoOpReason.NO_POSITION, null));
 
         mockMvc.perform(post("/api/finance/ledger/settlements")
                         .header("Idempotency-Key", "FX-SETTLE-2026-06-USD")
@@ -132,7 +182,7 @@ class SettlementControllerSliceTest {
     @DisplayName("POST /settlements replay → 200 settled:false REPLAY with the original entry")
     void replayOk() throws Exception {
         when(settleForeignPosition.settle(any()))
-                .thenReturn(new Result(false, 0L, 0L, null, NoOpReason.REPLAY, settlementEntry()));
+                .thenReturn(new Result(false, 0L, 0L, null, 0L, 0L, NoOpReason.REPLAY, settlementEntry()));
 
         mockMvc.perform(post("/api/finance/ledger/settlements")
                         .header("Idempotency-Key", "FX-SETTLE-2026-06-USD")
