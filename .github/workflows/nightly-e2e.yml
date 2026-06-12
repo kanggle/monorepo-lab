@@ -771,6 +771,12 @@ jobs:
         # upload-artifact@v4 strips the common prefix (`projects/`) so the
         # artifact contains <project>/apps/<service>/build/libs/<jar>. Move
         # each file to the canonical path Dockerfiles expect.
+        #
+        # The IAM project dir is `iam-platform` (the upload paths keep the full
+        # name). The gap→iam-platform rename (#1149) fixed the equivalent
+        # restore block in federation-hardening-e2e.yml but missed this one —
+        # the stale `iam/` source made every `mv` fail (exit 1) and broke the
+        # platform-console nightly job from 2026-06-06. Use the full dir name.
         working-directory: ${{ github.workspace }}
         run: |
           mkdir -p projects/iam-platform/apps/auth-service/build/libs/
@@ -778,11 +784,11 @@ jobs:
           mkdir -p projects/iam-platform/apps/admin-service/build/libs/
           mkdir -p projects/finance-platform/apps/account-service/build/libs/
           mkdir -p projects/platform-console/apps/console-bff/build/libs/
-          mv projects/platform-console/artifact-staging/iam/apps/auth-service/build/libs/auth-service.jar \
+          mv projects/platform-console/artifact-staging/iam-platform/apps/auth-service/build/libs/auth-service.jar \
              projects/iam-platform/apps/auth-service/build/libs/auth-service.jar
-          mv projects/platform-console/artifact-staging/iam/apps/account-service/build/libs/account-service.jar \
+          mv projects/platform-console/artifact-staging/iam-platform/apps/account-service/build/libs/account-service.jar \
              projects/iam-platform/apps/account-service/build/libs/account-service.jar
-          mv projects/platform-console/artifact-staging/iam/apps/admin-service/build/libs/admin-service.jar \
+          mv projects/platform-console/artifact-staging/iam-platform/apps/admin-service/build/libs/admin-service.jar \
              projects/iam-platform/apps/admin-service/build/libs/admin-service.jar
           mv projects/platform-console/artifact-staging/finance-platform/apps/account-service/build/libs/account-service.jar \
              projects/finance-platform/apps/account-service/build/libs/account-service.jar
