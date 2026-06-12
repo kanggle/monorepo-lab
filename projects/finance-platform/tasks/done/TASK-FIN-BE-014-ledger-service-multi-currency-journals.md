@@ -1,6 +1,6 @@
 # TASK-FIN-BE-014 — ledger-service multi-currency journals (8th increment: one entry may carry lines in different currencies, balanced in a fixed base/reporting currency)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (cross-cutting fintech change — the balance identity moves to a base currency, per-line FX fields, trial-balance + period-snapshot base consolidation, migration + backfill, exhaustive net-zero for existing KRW)
