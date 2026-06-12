@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { LedgerOpsScreen } from '@/features/ledger-ops';
@@ -7,6 +13,7 @@ import { TrialBalanceTable } from '@/features/ledger-ops/components/TrialBalance
 import { PeriodDetail } from '@/features/ledger-ops/components/PeriodDetail';
 import { JournalEntryDetail } from '@/features/ledger-ops/components/JournalEntryDetail';
 import { DiscrepancyQueue } from '@/features/ledger-ops/components/DiscrepancyQueue';
+import { DiscrepancyDetail } from '@/features/ledger-ops/components/DiscrepancyDetail';
 import type {
   TrialBalance,
   PeriodsResponse,
@@ -436,6 +443,210 @@ describe('LedgerOpsScreen — read-only (NO mutation affordance anywhere)', () =
     expect(all).not.toContain('1234567890123'); // trial-balance minor units
     expect(all).not.toContain('182250'); // entry base line value
     expect(all).not.toContain('je-multi'); // entry id
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DiscrepancyDetail — resolve mutation (TASK-PC-FE-073): OPEN-only gating,
+// confirm-gated, success reflects RESOLVED, 409/422 inline, Escape/cancel.
+// ---------------------------------------------------------------------------
+
+const OPEN_DISCREPANCY = {
+  discrepancyId: 'd-1',
+  type: 'AMOUNT_MISMATCH',
+  externalRef: 'bank-ref-1',
+  journalEntryId: 'je-9',
+  expectedMinor: '100',
+  actualMinor: '105',
+  currency: 'KRW',
+  status: 'OPEN',
+};
+
+const RESOLVED_DISCREPANCY = {
+  ...OPEN_DISCREPANCY,
+  status: 'RESOLVED',
+  resolution: {
+    resolutionType: 'WRITTEN_OFF',
+    note: 'fx gap below threshold',
+    resolvedBy: 'op-1',
+    resolvedAt: '2026-05-20T00:00:00Z',
+  },
+};
+
+function jsonRes(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+describe('DiscrepancyDetail — resolve mutation (PC-FE-073)', () => {
+  it('an OPEN discrepancy shows the resolve action; a RESOLVED one does NOT', async () => {
+    // OPEN → resolve button present.
+    const openFetch = vi
+      .fn()
+      .mockResolvedValue(jsonRes(OPEN_DISCREPANCY));
+    vi.stubGlobal('fetch', openFetch);
+    const { unmount } = render(<DiscrepancyDetail discrepancyId="d-1" />, {
+      wrapper: wrapper(),
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('ledger-recon-resolve-open')).toBeInTheDocument(),
+    );
+    unmount();
+
+    // RESOLVED → no resolve affordance at all.
+    const resolvedFetch = vi
+      .fn()
+      .mockResolvedValue(jsonRes(RESOLVED_DISCREPANCY));
+    vi.stubGlobal('fetch', resolvedFetch);
+    render(<DiscrepancyDetail discrepancyId="d-1" />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('ledger-recon-resolution')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('ledger-recon-resolve-open')).toBeNull();
+  });
+
+  it('confirm is gated on a non-empty note (empty note → confirm disabled, NO fetch)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonRes(OPEN_DISCREPANCY));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DiscrepancyDetail discrepancyId="d-1" />, { wrapper: wrapper() });
+    await waitFor(() =>
+      screen.getByTestId('ledger-recon-resolve-open'),
+    );
+    fireEvent.click(screen.getByTestId('ledger-recon-resolve-open'));
+    // Dialog opened with an empty note → confirm disabled.
+    const confirm = screen.getByTestId(
+      'ledger-recon-resolve-confirm',
+    ) as HTMLButtonElement;
+    expect(confirm).toBeDisabled();
+    const callsBefore = fetchMock.mock.calls.length;
+    fireEvent.click(confirm); // disabled → no-op
+    expect(fetchMock.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('on success the detail reflects RESOLVED (the resolve POST resolves, then refetch shows resolution)', async () => {
+    let resolved = false;
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      const u = String(url);
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (u.endsWith('/resolve') && method === 'POST') {
+        resolved = true;
+        return Promise.resolve(jsonRes(RESOLVED_DISCREPANCY));
+      }
+      // The detail read — RESOLVED after the mutation, OPEN before.
+      return Promise.resolve(
+        jsonRes(resolved ? RESOLVED_DISCREPANCY : OPEN_DISCREPANCY),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DiscrepancyDetail discrepancyId="d-1" />, { wrapper: wrapper() });
+    await waitFor(() => screen.getByTestId('ledger-recon-resolve-open'));
+    fireEvent.click(screen.getByTestId('ledger-recon-resolve-open'));
+    fireEvent.change(screen.getByTestId('ledger-recon-resolve-note'), {
+      target: { value: 'fx gap below threshold' },
+    });
+    fireEvent.click(screen.getByTestId('ledger-recon-resolve-confirm'));
+
+    // The POST body carries { resolutionType, note } and NO Idempotency-Key.
+    await waitFor(() => expect(resolved).toBe(true));
+    const postCall = fetchMock.mock.calls.find(
+      ([u, init]) =>
+        String(u).endsWith('/resolve') &&
+        (init as RequestInit)?.method?.toUpperCase() === 'POST',
+    )!;
+    const postInit = postCall[1] as RequestInit;
+    const body = JSON.parse(String(postInit.body));
+    expect(body.note).toBe('fx gap below threshold');
+    expect(body.resolutionType).toBeDefined();
+    expect(body.idempotencyKey).toBeUndefined();
+
+    // The detail refetches + reflects RESOLVED (resolution block appears,
+    // the resolve affordance disappears).
+    await waitFor(() =>
+      expect(screen.getByTestId('ledger-recon-resolution')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('ledger-recon-resolve-open')).toBeNull();
+  });
+
+  it('409 RECONCILIATION_ALREADY_RESOLVED is shown inline (no crash)', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (String(url).endsWith('/resolve') && method === 'POST') {
+        return Promise.resolve(
+          jsonRes({ code: 'RECONCILIATION_ALREADY_RESOLVED', message: 'x' }, 409),
+        );
+      }
+      return Promise.resolve(jsonRes(OPEN_DISCREPANCY));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DiscrepancyDetail discrepancyId="d-1" />, { wrapper: wrapper() });
+    await waitFor(() => screen.getByTestId('ledger-recon-resolve-open'));
+    fireEvent.click(screen.getByTestId('ledger-recon-resolve-open'));
+    fireEvent.change(screen.getByTestId('ledger-recon-resolve-note'), {
+      target: { value: 'note' },
+    });
+    fireEvent.click(screen.getByTestId('ledger-recon-resolve-confirm'));
+    await waitFor(() =>
+      expect(screen.getByTestId('ledger-recon-resolve-error').textContent).toContain(
+        '이미 해소',
+      ),
+    );
+  });
+
+  it('422 RECONCILIATION_PERIOD_LOCKED is shown inline (no crash)', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (String(url).endsWith('/resolve') && method === 'POST') {
+        return Promise.resolve(
+          jsonRes({ code: 'RECONCILIATION_PERIOD_LOCKED', message: 'x' }, 422),
+        );
+      }
+      return Promise.resolve(jsonRes(OPEN_DISCREPANCY));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DiscrepancyDetail discrepancyId="d-1" />, { wrapper: wrapper() });
+    await waitFor(() => screen.getByTestId('ledger-recon-resolve-open'));
+    fireEvent.click(screen.getByTestId('ledger-recon-resolve-open'));
+    fireEvent.change(screen.getByTestId('ledger-recon-resolve-note'), {
+      target: { value: 'note' },
+    });
+    fireEvent.click(screen.getByTestId('ledger-recon-resolve-confirm'));
+    await waitFor(() =>
+      expect(screen.getByTestId('ledger-recon-resolve-error').textContent).toContain(
+        '마감',
+      ),
+    );
+  });
+
+  it('Escape / cancel closes the dialog without a fetch', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonRes(OPEN_DISCREPANCY));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DiscrepancyDetail discrepancyId="d-1" />, { wrapper: wrapper() });
+    await waitFor(() => screen.getByTestId('ledger-recon-resolve-open'));
+    fireEvent.click(screen.getByTestId('ledger-recon-resolve-open'));
+    expect(screen.getByTestId('ledger-recon-resolve-dialog')).toBeInTheDocument();
+    const callsBefore = fetchMock.mock.calls.length;
+    fireEvent.keyDown(screen.getByTestId('ledger-recon-resolve-overlay'), {
+      key: 'Escape',
+    });
+    await waitFor(() =>
+      expect(screen.queryByTestId('ledger-recon-resolve-dialog')).toBeNull(),
+    );
+    // Cancel path issued no additional (mutation) fetch.
+    expect(fetchMock.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('the open resolve dialog is axe-clean (WCAG AA)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonRes(OPEN_DISCREPANCY));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = render(<DiscrepancyDetail discrepancyId="d-1" />, {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => screen.getByTestId('ledger-recon-resolve-open'));
+    fireEvent.click(screen.getByTestId('ledger-recon-resolve-open'));
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
   });
 });
 

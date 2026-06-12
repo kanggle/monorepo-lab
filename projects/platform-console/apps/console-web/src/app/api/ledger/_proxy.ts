@@ -12,10 +12,17 @@ import { newRequestId } from '@/shared/lib/logger';
  * re-derived). Mirrors the FE-009 finance `_proxy` shape for the flat
  * envelope.
  *
- * STRICTLY READ-ONLY: these proxies expose ONLY GET routes — there is NO
- * mutation route (no ledger write, no Idempotency-Key, no
- * X-Operator-Reason, no request body, no manual-posting / revaluation /
- * settlement / statement-ingest / discrepancy-resolve surface).
+ * READ + ONE MUTATION: the six read proxies are GET-only; as of
+ * TASK-PC-FE-073 there is EXACTLY ONE mutation route — the reconciliation
+ * discrepancy *resolve* (`POST .../discrepancies/{id}/resolve`), which
+ * carries a body `{ resolutionType, note }` but — the honest header
+ * difference — NO `Idempotency-Key` (the producer defines none; the
+ * `409 RECONCILIATION_ALREADY_RESOLVED` state guard is the double-submit
+ * defence) and NO `X-Operator-Reason` (the reason rides in the body `note`).
+ * Every OTHER ledger write (manual-posting / revaluation / settlement /
+ * statement-ingest) stays OUT of the console surface. The resolve's
+ * `409 RECONCILIATION_ALREADY_RESOLVED` / `422 RECONCILIATION_PERIOD_LOCKED`
+ * pass through the generic `ApiError` branch below (inline actionable).
  *
  *   - 401 → 401 (the client api-client triggers a WHOLE-SESSION re-login;
  *     no partial authed state — NOT a per-section degrade).

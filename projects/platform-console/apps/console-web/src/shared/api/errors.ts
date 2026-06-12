@@ -560,6 +560,11 @@ const MESSAGES: Record<string, string> = {
   ACCOUNTING_PERIOD_NOT_FOUND: '대상 회계 기간을 찾을 수 없습니다.',
   RECONCILIATION_DISCREPANCY_NOT_FOUND:
     '대상 대사 차이(reconciliation discrepancy)를 찾을 수 없습니다.',
+  // --- finance ledger reconciliation RESOLVE (TASK-PC-FE-073 / §2.4.7.1) ---
+  RECONCILIATION_ALREADY_RESOLVED:
+    '이미 해소된 대사 차이입니다. 새로고침 후 확인하세요.',
+  RECONCILIATION_PERIOD_LOCKED:
+    '해당 기간이 마감되어 대사 차이를 해소할 수 없습니다. 다음 open 기간에 처리하세요.',
   LEDGER_NOT_ELIGIBLE:
     'finance ledger 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
   // --- erp operations (TASK-PC-FE-010 / §2.4.8) ---------------------------

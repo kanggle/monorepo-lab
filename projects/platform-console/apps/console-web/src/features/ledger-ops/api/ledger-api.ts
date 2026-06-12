@@ -17,6 +17,7 @@ import {
   DiscrepanciesResponseSchema,
   type DiscrepanciesResponse,
   type DiscrepanciesQueryParams,
+  type ResolveDiscrepancyBody,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from './types';
@@ -64,12 +65,19 @@ import {
  * `X-Tenant-Id` to the ledger; the tenant rides inside the IAM OIDC token.
  * The ledger rejects cross-tenant producer-side (`403 TENANT_FORBIDDEN`).
  *
- * READ-ONLY (§ 2.4.7.1, NORMATIVE): every call is a pure GET. There is NO
- * mutation anywhere — NO `Idempotency-Key`, NO `X-Operator-Reason`, NO
- * body, NO ledger write call (`POST /entries` manual posting,
- * `/revaluations`, `/settlements`, `/reconciliation/statements` ingest,
- * `/reconciliation/discrepancies/{id}/resolve`). Carrying the FE-007
- * alert-ack OR the GAP § 2.4.1 mutation scaffolding here is a defect (tests
+ * READ + ONE MUTATION (§ 2.4.7.1, NORMATIVE): the six reads are pure GETs.
+ * As of TASK-PC-FE-073 there is EXACTLY ONE operator mutation —
+ * `resolveDiscrepancy()` (`POST .../discrepancies/{id}/resolve`, the F8
+ * operator review close, consuming the *existing* `reconciliation-api.md`
+ * § 2 endpoint). The resolve carries a body `{ resolutionType, note }` +
+ * `Content-Type: application/json`, the SAME domain-facing token, and —
+ * the honest header difference — **NO `Idempotency-Key`** (the producer
+ * defines none for resolve; the `409 RECONCILIATION_ALREADY_RESOLVED` state
+ * guard is the double-submit defence) and **NO `X-Operator-Reason`** (the
+ * reason rides in the body `note`). Every OTHER ledger mutation stays OUT —
+ * NO `POST /entries` manual posting, NO `/revaluations`, NO `/settlements`,
+ * NO `/reconciliation/statements` ingest. Carrying the FE-007 alert-ack OR
+ * the GAP § 2.4.1 destructive mutation scaffolding here is a defect (tests
  * assert their absence). The ledger has NO list/search GET over entries —
  * this client intentionally exposes no entry list/search function
  * (entry-id-driven — the honest ledger constraint, same as the FE-009
@@ -117,6 +125,16 @@ interface CallOptions {
   /** Sanitised path shape for logging (no entryId / periodId /
    *  discrepancyId — e.g. `/api/finance/ledger/entries/{id}`). */
   logPath: string;
+  /** HTTP method — defaults to `GET` (the six reads). The resolve mutation
+   *  is the only `POST`. NO PUT / PATCH / DELETE is ever issued. */
+  method?: 'GET' | 'POST';
+  /** Request body — present ONLY on the resolve mutation
+   *  (`{ resolutionType, note }`). When present, a `Content-Type:
+   *  application/json` header is added; the reads carry NO body.
+   *  Deliberately NO `idempotencyKey` accessor — the resolve producer
+   *  defines no `Idempotency-Key` (the `409 RECONCILIATION_ALREADY_RESOLVED`
+   *  state guard is the double-submit defence). */
+  body?: unknown;
 }
 
 /**
@@ -202,9 +220,16 @@ async function callLedger<T>(
     // NOTE: deliberately NO `X-Tenant-Id` — the ledger resolves tenant
     // from the JWT `tenant_id` claim (§ 2.4.7.1 reuse of the § 2.4.7 /
     // § 2.4.5 divergence).
-    // NOTE: read-only — NO `Idempotency-Key`, NO `X-Operator-Reason`,
-    // NO `Content-Type` (no body).
+    // NOTE: deliberately NO `Idempotency-Key` (the resolve producer defines
+    // none — `reconciliation-api.md` § 2; the
+    // `409 RECONCILIATION_ALREADY_RESOLVED` state guard is the double-submit
+    // defence) and NO `X-Operator-Reason` (the resolve reason rides in the
+    // body `note`). The reads carry no body at all.
   };
+  const method = opts.method ?? 'GET';
+  if (opts.body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(
@@ -213,8 +238,9 @@ async function callLedger<T>(
   );
   try {
     const res = await fetch(`${env.LEDGER_BASE_URL}${opts.path}`, {
-      method: 'GET',
+      method,
       headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       cache: 'no-store',
       signal: controller.signal,
     });
@@ -451,6 +477,49 @@ export async function getDiscrepancy(id: string): Promise<Discrepancy> {
       logPath: '/api/finance/ledger/reconciliation/discrepancies/{id}',
     },
     (json) => {
+      const env = (json ?? {}) as { data?: unknown };
+      return DiscrepancySchema.parse(env.data);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// reconciliation discrepancy RESOLVE (the ledger's FIRST and ONLY mutation) —
+//   POST /api/finance/ledger/reconciliation/discrepancies/{id}/resolve
+//   reconciliation-api.md § 2 — request `{ resolutionType, note }`, 200 →
+//   the discrepancy with `status: "RESOLVED"` + a `resolution` sub-object.
+//
+//   Header matrix (honest, producer-faithful — § 2.4.7.1):
+//     - the SAME domain-facing IAM OIDC token (NEVER getOperatorToken());
+//     - body `{ resolutionType, note }` (Content-Type added by callLedger);
+//     - **NO `Idempotency-Key`** (the producer defines none for resolve; the
+//       `409 RECONCILIATION_ALREADY_RESOLVED` state guard is the
+//       double-submit defence — NOT a fabricated header);
+//     - **NO `X-Operator-Reason`** (the reason rides in the body `note`);
+//     - **NO `X-Tenant-Id`** (tenant from the JWT claim).
+//
+//   Errors map via the SAME taxonomy as the reads: 409
+//   RECONCILIATION_ALREADY_RESOLVED / 422 RECONCILIATION_PERIOD_LOCKED / 404
+//   RECONCILIATION_DISCREPANCY_NOT_FOUND / 400 → ApiError (inline
+//   actionable); 503 / timeout → LedgerUnavailableError (the ledger section
+//   degrades, the resolve affordance re-enables on retry).
+// ---------------------------------------------------------------------------
+
+export async function resolveDiscrepancy(
+  id: string,
+  input: ResolveDiscrepancyBody,
+): Promise<Discrepancy> {
+  return callLedger(
+    {
+      path: `/api/finance/ledger/reconciliation/discrepancies/${encodeURIComponent(id)}/resolve`,
+      // confidential / F7 — the log path carries NO discrepancyId.
+      logPath: '/api/finance/ledger/reconciliation/discrepancies/{id}/resolve',
+      method: 'POST',
+      body: { resolutionType: input.resolutionType, note: input.note },
+    },
+    (json) => {
+      // The producer 200 body is the success envelope `{ data, meta }` — the
+      // discrepancy with `status: "RESOLVED"` + `resolution`.
       const env = (json ?? {}) as { data?: unknown };
       return DiscrepancySchema.parse(env.data);
     },

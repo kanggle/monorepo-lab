@@ -126,9 +126,10 @@ export function LedgerOpsScreen({
         Finance Ledger 운영
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        시산표 · 회계 기간 · 분개 · 대사 차이 조회 (읽기 전용). finance
-        ledger 운영 표면을 콘솔 안에서 조회합니다. 분개 기표 · 기간 마감 ·
-        대사 해소 등 원장 변경 작업은 콘솔 범위가 아닙니다.
+        시산표 · 회계 기간 · 분개 · 대사 차이 조회. finance ledger 운영
+        표면을 콘솔 안에서 조회하고, OPEN 대사 차이는 직접 해소할 수
+        있습니다. 분개 기표 · 기간 마감 등 그 밖의 원장 변경 작업은 콘솔
+        범위가 아닙니다.
       </p>
 
       <div
