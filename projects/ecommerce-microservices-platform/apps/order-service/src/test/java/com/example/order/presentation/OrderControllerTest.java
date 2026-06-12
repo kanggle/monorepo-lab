@@ -391,6 +391,26 @@ class OrderControllerTest {
     }
 
     @Test
+    @DisplayName("주문 상세 항목 응답에 seller_id 가 노출된다 (AC-7, 다중 셀러)")
+    void getOrder_itemsExposeSellerId() throws Exception {
+        OrderDetail detail = new OrderDetail(
+                "order-1", OrderStatus.PENDING.name(), 1500L,
+                List.of(
+                        new OrderDetail.OrderItemDetail("p1", "v1", "노트북", "블랙", 1, 1000L, "seller-a1"),
+                        new OrderDetail.OrderItemDetail("p2", "v2", "마우스", null, 1, 500L, "seller-a2")
+                ),
+                new OrderDetail.ShippingAddressDetail("홍길동", "010", "12345", "서울", null),
+                Instant.now(), Instant.now()
+        );
+        given(orderQueryService.getOrder(eq("order-1"), eq("user1"))).willReturn(detail);
+
+        mockMvc.perform(get("/api/orders/order-1").header("X-User-Id", "user1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].sellerId").value("seller-a1"))
+                .andExpect(jsonPath("$.items[1].sellerId").value("seller-a2"));
+    }
+
+    @Test
     @DisplayName("다른 사용자 주문 조회 시 403 반환")
     void getOrder_unauthorizedUser_returns403() throws Exception {
         given(orderQueryService.getOrder(any(), any())).willThrow(new UnauthorizedOrderAccessException());

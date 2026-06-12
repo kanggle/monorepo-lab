@@ -15,14 +15,34 @@ import java.util.UUID;
 
 interface ProductJpaRepository extends JpaRepository<ProductJpaEntity, UUID> {
 
-    @Query("SELECT p FROM ProductJpaEntity p LEFT JOIN FETCH p.variants WHERE p.id = :id AND p.tenantId = :tenantId AND p.deletedAt IS NULL")
-    Optional<ProductJpaEntity> findWithVariantsById(@Param("id") UUID id, @Param("tenantId") String tenantId);
+    // Every read filters by tenant_id first (outer isolation axis, M2), then —
+    // when a concrete seller scope is bound (OPERATOR seller-scoped read) — narrows
+    // to that seller. The seller predicate is net-zero / fail-OPEN (ADR-025 F1):
+    // `(:sellerRestricted = false OR p.sellerId = :sellerScope)` collapses to no
+    // filter when unrestricted (absent / '*' / CONSUMER plane), returning the full
+    // tenant view. The seller filter is ALWAYS nested inside the tenant filter
+    // (isolate-then-attribute, AC-6) — it can never reach another tenant's rows.
 
-    @Query("SELECT p FROM ProductJpaEntity p WHERE p.tenantId = :tenantId AND (:categoryId IS NULL OR p.categoryId = :categoryId) AND (:status IS NULL OR p.status = :status) AND p.deletedAt IS NULL")
+    @Query("SELECT p FROM ProductJpaEntity p LEFT JOIN FETCH p.variants "
+            + "WHERE p.id = :id AND p.tenantId = :tenantId "
+            + "AND (:sellerRestricted = false OR p.sellerId = :sellerScope) "
+            + "AND p.deletedAt IS NULL")
+    Optional<ProductJpaEntity> findWithVariantsById(@Param("id") UUID id,
+                                                    @Param("tenantId") String tenantId,
+                                                    @Param("sellerRestricted") boolean sellerRestricted,
+                                                    @Param("sellerScope") String sellerScope);
+
+    @Query("SELECT p FROM ProductJpaEntity p WHERE p.tenantId = :tenantId "
+            + "AND (:categoryId IS NULL OR p.categoryId = :categoryId) "
+            + "AND (:status IS NULL OR p.status = :status) "
+            + "AND (:sellerRestricted = false OR p.sellerId = :sellerScope) "
+            + "AND p.deletedAt IS NULL")
     Page<ProductJpaEntity> findByFilters(
             @Param("tenantId") String tenantId,
             @Param("categoryId") UUID categoryId,
             @Param("status") ProductStatus status,
+            @Param("sellerRestricted") boolean sellerRestricted,
+            @Param("sellerScope") String sellerScope,
             Pageable pageable);
 
     @Query("SELECT COUNT(p) > 0 FROM ProductJpaEntity p WHERE p.id = :id AND p.tenantId = :tenantId AND p.deletedAt IS NULL")

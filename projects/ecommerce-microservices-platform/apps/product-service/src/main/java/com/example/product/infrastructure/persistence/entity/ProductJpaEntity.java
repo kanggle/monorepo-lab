@@ -27,6 +27,14 @@ public class ProductJpaEntity implements Persistable<UUID> {
     @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
     private String tenantId;
 
+    /**
+     * Owning seller within the tenant (ADR-MONO-030 Step 3 §3.2 — inner axis).
+     * Stamped once at insert from the resolved domain attribute; immutable
+     * afterward (ownership key {@code (tenant_id, seller_id)}).
+     */
+    @Column(name = "seller_id", nullable = false, updatable = false, length = 64)
+    private String sellerId;
+
     @Column(nullable = false, length = 255)
     private String name;
 
@@ -80,6 +88,7 @@ public class ProductJpaEntity implements Persistable<UUID> {
         ProductJpaEntity entity = new ProductJpaEntity();
         entity.id = product.getId();
         entity.tenantId = tenantId;
+        entity.sellerId = product.getSellerId();
         entity.name = product.getName();
         entity.description = product.getDescription();
         entity.price = product.getPrice().value();
@@ -101,7 +110,7 @@ public class ProductJpaEntity implements Persistable<UUID> {
                 .toList();
         return Product.reconstitute(
                 id, name, description, new Price(price),
-                status, categoryId, thumbnailUrl, createdAt, updatedAt, domainVariants
+                status, categoryId, thumbnailUrl, sellerId, createdAt, updatedAt, domainVariants
         );
     }
 

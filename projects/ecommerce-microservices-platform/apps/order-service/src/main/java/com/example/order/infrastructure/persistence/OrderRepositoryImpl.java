@@ -5,6 +5,7 @@ import com.example.order.domain.model.OrderStatus;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.order.domain.repository.OrderRepository;
+import com.example.order.domain.seller.SellerScopeContext;
 import com.example.order.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -91,6 +92,17 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    public Optional<Order> findByIdForAdmin(String orderId) {
+        // OPERATOR detail read: tenant filter + (when bound) net-zero seller-scope
+        // filter, always nested after the tenant filter (AC-6). Absent / '*' scope =
+        // full tenant view (F1). A cross-seller id resolves to empty → 404 (M3).
+        return jpaRepository.findByOrderIdAndTenantIdForAdmin(
+                        orderId, TenantContext.currentTenant(),
+                        SellerScopeContext.isRestricted(), SellerScopeContext.currentSellerScope())
+                .map(mapper::toDomain);
+    }
+
+    @Override
     public Optional<Order> findByIdAcrossTenants(String orderId) {
         // System/saga/sweep path: the order is addressed by its globally-unique id
         // (a consumed payment/stock/withdrawal/wms event, or the stuck-detector
@@ -141,9 +153,12 @@ public class OrderRepositoryImpl implements OrderRepository {
 
     @Override
     public PageResult<Order> findAllWithItems(PageQuery pageQuery) {
+        // OPERATOR list read: tenant filter + nested net-zero seller-scope filter (AC-6, F1).
         PageRequest pageable = toPageRequest(pageQuery);
         Page<OrderJpaEntity> page = jpaRepository.findAllWithItemsByTenantId(
-                TenantContext.currentTenant(), pageable);
+                TenantContext.currentTenant(),
+                SellerScopeContext.isRestricted(), SellerScopeContext.currentSellerScope(),
+                pageable);
         return toPageResult(page);
     }
 
@@ -151,7 +166,9 @@ public class OrderRepositoryImpl implements OrderRepository {
     public PageResult<Order> findByStatusWithItems(OrderStatus status, PageQuery pageQuery) {
         PageRequest pageable = toPageRequest(pageQuery);
         Page<OrderJpaEntity> page = jpaRepository.findByStatusWithItemsAndTenantId(
-                TenantContext.currentTenant(), status, pageable);
+                TenantContext.currentTenant(), status,
+                SellerScopeContext.isRestricted(), SellerScopeContext.currentSellerScope(),
+                pageable);
         return toPageResult(page);
     }
 

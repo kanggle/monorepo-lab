@@ -12,6 +12,7 @@ public record ProductCreatedPayload(
         String status,
         String categoryId,
         String thumbnailUrl,
+        String sellerId,
         List<VariantPayload> variants
 ) implements EventPayload {
 
@@ -31,6 +32,7 @@ public record ProductCreatedPayload(
                 product.getStatus().name(),
                 product.getCategoryId() != null ? product.getCategoryId().toString() : null,
                 product.getThumbnailUrl(),
+                product.getSellerId(),
                 variantPayloads);
     }
 

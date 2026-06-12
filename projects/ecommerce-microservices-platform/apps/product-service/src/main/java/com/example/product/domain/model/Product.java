@@ -21,16 +21,36 @@ public class Product {
     private ProductStatus status;
     private UUID categoryId;
     private String thumbnailUrl;
+    /**
+     * Owning seller within the tenant (ADR-MONO-030 Step 3 §3.2). Ownership key is
+     * {@code (tenant_id, seller_id)}; {@code tenant_id} is stamped at the
+     * persistence boundary, while {@code seller_id} is a resolved domain attribute
+     * (request seller / scope claim / tenant default). Never blank; immutable.
+     */
+    private String sellerId;
     private Instant createdAt;
     private Instant updatedAt;
     private List<ProductVariant> variants = new ArrayList<>();
     private transient boolean isNew;
 
+    /**
+     * Backward-compatible factory (no explicit seller) — owns the product under the
+     * per-tenant default seller (D8 single-seller degradation, AC-5). Used by the
+     * standalone / pre-marketplace path and tests.
+     */
     public static Product create(String name, String description, Price price, UUID categoryId,
                                  List<ProductVariant> variants) {
+        return create(name, description, price, categoryId, Seller.DEFAULT_SELLER_ID, variants);
+    }
+
+    public static Product create(String name, String description, Price price, UUID categoryId,
+                                 String sellerId, List<ProductVariant> variants) {
         validateName(name);
         if (price == null) {
             throw new IllegalArgumentException("Price must not be null");
+        }
+        if (sellerId == null || sellerId.isBlank()) {
+            throw new IllegalArgumentException("Seller id must not be blank");
         }
         if (variants == null || variants.isEmpty()) {
             throw new IllegalArgumentException("Product must have at least one variant");
@@ -44,6 +64,7 @@ public class Product {
         product.price = price;
         product.status = ProductStatus.ON_SALE;
         product.categoryId = categoryId;
+        product.sellerId = sellerId.trim();
         Instant now = Instant.now();
         product.createdAt = now;
         product.updatedAt = now;
@@ -64,12 +85,12 @@ public class Product {
                                        Instant createdAt, Instant updatedAt,
                                        List<ProductVariant> variants) {
         return reconstitute(id, name, description, price, status, categoryId, null,
-                createdAt, updatedAt, variants);
+                Seller.DEFAULT_SELLER_ID, createdAt, updatedAt, variants);
     }
 
     public static Product reconstitute(UUID id, String name, String description, Price price,
                                        ProductStatus status, UUID categoryId, String thumbnailUrl,
-                                       Instant createdAt, Instant updatedAt,
+                                       String sellerId, Instant createdAt, Instant updatedAt,
                                        List<ProductVariant> variants) {
         if (id == null) throw new IllegalArgumentException("id must not be null");
         if (name == null || name.isBlank()) throw new IllegalArgumentException("Product name must not be blank");
@@ -84,6 +105,7 @@ public class Product {
         product.status = status;
         product.categoryId = categoryId;
         product.thumbnailUrl = thumbnailUrl;
+        product.sellerId = (sellerId == null || sellerId.isBlank()) ? Seller.DEFAULT_SELLER_ID : sellerId;
         product.createdAt = createdAt;
         product.updatedAt = updatedAt;
         product.variants = new ArrayList<>(variants);

@@ -24,9 +24,11 @@ Consumers must not depend on fields not defined in this contract.
 > the request's tenant context at publish time; saga-path events (confirm via
 > consumed `product.product.stock-changed`, etc.) carry the order's tenant. A
 > standalone deployment or a pre-multi-tenant order resolves to the default
-> tenant `'ecommerce'` (net-zero, D8). The `seller_id` inner axis is **not** in
-> this increment (Step 3 / TASK-BE-358); ADR-MONO-022 fulfillment-loop events are
-> threaded in Step 4.
+> tenant `'ecommerce'` (net-zero, D8). The inner `seller_id` axis (Step 3 /
+> TASK-BE-363) is carried **per order-line** in the `OrderPlaced` payload
+> `items[].sellerId` (below), not on the envelope — the order header is
+> tenant-only, each line is independently seller-attributed. ADR-MONO-022
+> fulfillment-loop events are threaded in Step 4.
 
 ---
 
@@ -46,10 +48,9 @@ Published when a new order is successfully created.
     {
       "productId": "string (UUID)",
       "variantId": "string (UUID)",
-      "productName": "string",
-      "optionName": "string",
       "quantity": 2,
-      "unitPrice": 15000
+      "unitPrice": 15000,
+      "sellerId": "string"
     }
   ],
   "shippingAddress": {
@@ -61,6 +62,12 @@ Published when a new order is successfully created.
   }
 }
 ```
+
+`items[].sellerId` (inner marketplace axis — ADR-MONO-030 Step 3 §3.2) is the
+seller this line is attributed to, captured immutably at placement from the line
+snapshot (order-service does not call product-service). A single order may span
+multiple sellers (each line attributed independently). Absent at placement →
+the default seller `default` (D8 net-zero).
 
 ---
 

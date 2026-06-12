@@ -13,6 +13,7 @@ public record ProductDetailResponse(
         long price,
         String categoryId,
         String thumbnailUrl,
+        String sellerId,
         List<ImageItem> images,
         List<VariantDetailItem> variants
 ) {
@@ -51,6 +52,7 @@ public record ProductDetailResponse(
                 detail.price(),
                 UuidUtils.toString(detail.categoryId()),
                 detail.thumbnailUrl(),
+                detail.sellerId(),
                 imageItems,
                 variants);
     }

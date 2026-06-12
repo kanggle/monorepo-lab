@@ -52,7 +52,8 @@ class OrderJpaMapper {
                 entity.getProductName(),
                 entity.getOptionName(),
                 entity.getQuantity(),
-                entity.getUnitPrice()
+                entity.getUnitPrice(),
+                entity.getSellerId()
         );
     }
 }

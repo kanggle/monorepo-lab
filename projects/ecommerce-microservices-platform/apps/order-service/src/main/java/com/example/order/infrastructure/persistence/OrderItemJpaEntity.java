@@ -20,6 +20,14 @@ class OrderItemJpaEntity {
     @Column(name = "tenant_id", nullable = false)
     private String tenantId;
 
+    /**
+     * Owning seller of this line (ADR-MONO-030 Step 3 §3.2 — inner axis). Captured
+     * immutably at placement from the line snapshot; a single order may span
+     * multiple sellers (the order header stays tenant-only).
+     */
+    @Column(name = "seller_id", nullable = false)
+    private String sellerId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
     private OrderJpaEntity order;
@@ -46,6 +54,7 @@ class OrderItemJpaEntity {
         OrderItemJpaEntity entity = new OrderItemJpaEntity();
         entity.id = item.getId();
         entity.tenantId = tenantId;
+        entity.sellerId = item.getSellerId();
         entity.order = orderEntity;
         entity.productId = item.getProductId();
         entity.variantId = item.getVariantId();

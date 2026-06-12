@@ -18,7 +18,7 @@ public record OrderDetailResponse(
         List<OrderItemDetail> items = detail.items().stream()
                 .map(i -> new OrderItemDetail(
                         i.productId(), i.variantId(), i.productName(),
-                        i.optionName(), i.quantity(), i.unitPrice()
+                        i.optionName(), i.quantity(), i.unitPrice(), i.sellerId()
                 ))
                 .toList();
 
@@ -39,8 +39,15 @@ public record OrderDetailResponse(
             String productName,
             String optionName,
             int quantity,
-            long unitPrice
-    ) {}
+            long unitPrice,
+            String sellerId
+    ) {
+        /** Backward-compatible (no seller) — defaults to the default seller (D8). */
+        public OrderItemDetail(String productId, String variantId, String productName,
+                               String optionName, int quantity, long unitPrice) {
+            this(productId, variantId, productName, optionName, quantity, unitPrice, "default");
+        }
+    }
 
     public record ShippingAddressDetail(
             String recipient,

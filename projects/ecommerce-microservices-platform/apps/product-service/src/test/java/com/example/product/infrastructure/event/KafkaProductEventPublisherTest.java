@@ -59,7 +59,7 @@ class KafkaProductEventPublisherTest {
     @DisplayName("이벤트 발행 실패 시 event_publish_failure_total 메트릭이 증가한다")
     void publish_kafkaFailure_incrementsEventPublishFailureMetric() {
         ProductEvent event = ProductEvent.created(
-                new ProductCreatedPayload("product-1", "테스트 상품", "설명", 10000L, "ACTIVE", "cat-1", null, List.of()));
+                new ProductCreatedPayload("product-1", "테스트 상품", "설명", 10000L, "ACTIVE", "cat-1", null, "default", List.of()));
         given(kafkaTemplate.send(eq("product.product.created"), any(), any()))
                 .willThrow(new RuntimeException("Kafka broker unavailable"));
 
@@ -72,7 +72,7 @@ class KafkaProductEventPublisherTest {
     @DisplayName("이벤트 발행 실패 시 ERROR 레벨로 로그가 기록된다")
     void publish_kafkaFailure_logsAtErrorLevel() {
         ProductEvent event = ProductEvent.created(
-                new ProductCreatedPayload("product-1", "테스트 상품", "설명", 10000L, "ACTIVE", "cat-1", null, List.of()));
+                new ProductCreatedPayload("product-1", "테스트 상품", "설명", 10000L, "ACTIVE", "cat-1", null, "default", List.of()));
         given(kafkaTemplate.send(eq("product.product.created"), any(), any()))
                 .willThrow(new RuntimeException("Kafka broker unavailable"));
 
@@ -88,7 +88,7 @@ class KafkaProductEventPublisherTest {
     @DisplayName("이벤트 발행 성공 시 메트릭이 증가하지 않는다")
     void publish_success_doesNotIncrementFailureMetric() {
         ProductEvent event = ProductEvent.created(
-                new ProductCreatedPayload("product-1", "테스트 상품", "설명", 10000L, "ACTIVE", "cat-1", null, List.of()));
+                new ProductCreatedPayload("product-1", "테스트 상품", "설명", 10000L, "ACTIVE", "cat-1", null, "default", List.of()));
 
         publisher.publish(event);
 

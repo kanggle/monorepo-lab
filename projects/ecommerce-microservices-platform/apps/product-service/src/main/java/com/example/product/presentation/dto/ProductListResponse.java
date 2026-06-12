@@ -18,7 +18,8 @@ public record ProductListResponse(
             String status,
             long price,
             String thumbnailUrl,
-            String categoryId
+            String categoryId,
+            String sellerId
     ) {}
 
     public static ProductListResponse from(ProductListResult result) {
@@ -35,6 +36,7 @@ public record ProductListResponse(
                 summary.status().name(),
                 summary.price(),
                 summary.thumbnailUrl(),
-                UuidUtils.toString(summary.categoryId()));
+                UuidUtils.toString(summary.categoryId()),
+                summary.sellerId());
     }
 }

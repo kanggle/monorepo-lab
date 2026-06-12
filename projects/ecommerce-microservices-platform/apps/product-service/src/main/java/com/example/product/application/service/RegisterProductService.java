@@ -6,10 +6,12 @@ import com.example.product.domain.event.ProductEvent;
 import com.example.product.domain.model.Price;
 import com.example.product.domain.model.Product;
 import com.example.product.domain.model.ProductVariant;
+import com.example.product.domain.model.Seller;
 import com.example.product.domain.model.StockQuantity;
 import com.example.product.domain.exception.InvalidCategoryException;
 import com.example.product.domain.repository.CategoryRepository;
 import com.example.product.domain.repository.ProductRepository;
+import com.example.product.domain.repository.SellerRepository;
 import com.example.product.application.port.ProductMetricPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -26,6 +28,8 @@ public class RegisterProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final SellerRepository sellerRepository;
+    private final SellerOwnershipResolver sellerOwnershipResolver;
     private final EventPublishingHelper eventPublishingHelper;
     private final ProductMetricPort productMetrics;
 
@@ -40,6 +44,15 @@ public class RegisterProductService {
                     .orElseThrow(() -> new InvalidCategoryException(command.categoryId()));
         }
 
+        // Resolve product ownership: request seller / restricted scope / tenant
+        // default (ADR-MONO-030 §3.2). When it resolves to the per-tenant default
+        // seller (standalone / no scope, D8), make sure that seller row exists so
+        // the ownership key always references a real seller (idempotent).
+        String sellerId = sellerOwnershipResolver.resolveForRegister(command.sellerId());
+        if (Seller.DEFAULT_SELLER_ID.equals(sellerId)) {
+            sellerRepository.ensureDefaultSeller();
+        }
+
         List<ProductVariant> variants = command.variants().stream()
                 .map(v -> ProductVariant.create(
                         v.optionName(),
@@ -52,6 +65,7 @@ public class RegisterProductService {
                 command.description(),
                 new Price(command.price()),
                 command.categoryId(),
+                sellerId,
                 variants);
         if (command.thumbnailUrl() != null) {
             product.updateThumbnailUrl(command.thumbnailUrl());

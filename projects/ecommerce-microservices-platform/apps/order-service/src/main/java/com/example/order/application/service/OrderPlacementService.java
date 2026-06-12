@@ -45,11 +45,15 @@ public class OrderPlacementService {
     }
 
     private List<Order.OrderItemData> toItemDataList(List<PlaceOrderCommand.OrderItemCommand> items) {
+        // Capture each line's seller (denormalized snapshot at placement, §C). Absent
+        // → default seller is applied by OrderItem (degrade). A single order may span
+        // multiple sellers — each line is attributed independently.
         return items.stream()
                 .map(i -> new Order.OrderItemData(
                         i.productId(), i.variantId(),
                         i.productName(), i.optionName(),
-                        i.quantity(), i.unitPrice()
+                        i.quantity(), i.unitPrice(),
+                        i.sellerId()
                 ))
                 .toList();
     }
@@ -64,7 +68,7 @@ public class OrderPlacementService {
     private OrderPlacedEvent buildOrderPlacedEvent(Order order, PlaceOrderCommand.ShippingAddressCommand addr) {
         List<OrderPlacedEvent.Item> eventItems = order.getItems().stream()
                 .map(i -> new OrderPlacedEvent.Item(
-                        i.getProductId(), i.getVariantId(), i.getQuantity(), i.getUnitPrice()
+                        i.getProductId(), i.getVariantId(), i.getQuantity(), i.getUnitPrice(), i.getSellerId()
                 ))
                 .toList();
 

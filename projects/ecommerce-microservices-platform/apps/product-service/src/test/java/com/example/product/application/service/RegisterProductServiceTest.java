@@ -7,8 +7,10 @@ import com.example.product.domain.event.ProductEventPublisher;
 import com.example.product.domain.exception.InvalidCategoryException;
 import com.example.product.domain.model.Category;
 import com.example.product.domain.model.Product;
+import com.example.product.domain.model.Seller;
 import com.example.product.domain.repository.CategoryRepository;
 import com.example.product.domain.repository.ProductRepository;
+import com.example.product.domain.repository.SellerRepository;
 import com.example.product.application.port.ProductMetricPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +43,9 @@ class RegisterProductServiceTest {
     private CategoryRepository categoryRepository;
 
     @Mock
+    private SellerRepository sellerRepository;
+
+    @Mock
     private ProductEventPublisher productEventPublisher;
 
     @Mock
@@ -54,8 +59,11 @@ class RegisterProductServiceTest {
     @BeforeEach
     void setUp() {
         eventPublishingHelper = new EventPublishingHelper(productEventPublisher);
+        // Real resolver: no explicit seller + no scope → tenant default seller.
+        SellerOwnershipResolver sellerOwnershipResolver = new SellerOwnershipResolver();
         registerProductService = new RegisterProductService(
-                productRepository, categoryRepository, eventPublishingHelper, productMetrics);
+                productRepository, categoryRepository, sellerRepository,
+                sellerOwnershipResolver, eventPublishingHelper, productMetrics);
 
         validCommand = new RegisterProductCommand(
                 "테스트 상품",
@@ -63,6 +71,36 @@ class RegisterProductServiceTest {
                 10000L,
                 null,
                 List.of(new VariantCommand("기본", 10, 0)));
+    }
+
+    @Test
+    @DisplayName("명시/스코프 없으면 default seller 로 귀속 + default seller 시드 보장 (D8)")
+    void register_noSellerNoScope_ownedByDefaultSeller() {
+        given(productRepository.save(any(Product.class))).willAnswer(inv -> inv.getArgument(0));
+
+        registerProductService.register(validCommand);
+
+        ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
+        verify(productRepository).save(captor.capture());
+        assertThat(captor.getValue().getSellerId()).isEqualTo(Seller.DEFAULT_SELLER_ID);
+        // default 귀속 시 per-tenant default seller 존재 보장 (idempotent)
+        verify(sellerRepository).ensureDefaultSeller();
+    }
+
+    @Test
+    @DisplayName("request.sellerId 가 있으면 그 셀러로 귀속 (default seller 시드 불필요)")
+    void register_explicitSeller_ownedByThatSeller() {
+        given(productRepository.save(any(Product.class))).willAnswer(inv -> inv.getArgument(0));
+        RegisterProductCommand command = new RegisterProductCommand(
+                "셀러 상품", "설명", 10000L, null, null, "seller-a1",
+                List.of(new VariantCommand("기본", 10, 0)));
+
+        registerProductService.register(command);
+
+        ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
+        verify(productRepository).save(captor.capture());
+        assertThat(captor.getValue().getSellerId()).isEqualTo("seller-a1");
+        verify(sellerRepository, never()).ensureDefaultSeller();
     }
 
     @Test

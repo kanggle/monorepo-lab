@@ -16,7 +16,7 @@ class ProductEventSerializationTest {
     @DisplayName("envelope 필드가 snake_case로 직렬화된다 - ProductCreated")
     void serialize_productCreated_envelopeFieldsAreSnakeCase() throws Exception {
         ProductCreatedPayload payload = new ProductCreatedPayload(
-                "prod-1", "테스트 상품", "설명", 10000L, "ON_SALE", "cat-1", null, null
+                "prod-1", "테스트 상품", "설명", 10000L, "ON_SALE", "cat-1", null, "default", null
         );
         ProductEvent event = ProductEvent.created(payload);
 

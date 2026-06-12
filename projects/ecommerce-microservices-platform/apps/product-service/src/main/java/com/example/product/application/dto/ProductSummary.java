@@ -10,9 +10,10 @@ public record ProductSummary(
         ProductStatus status,
         long price,
         String thumbnailUrl,
-        UUID categoryId
+        UUID categoryId,
+        String sellerId
 ) {
     public ProductSummary(UUID id, String name, ProductStatus status, long price, UUID categoryId) {
-        this(id, name, status, price, null, categoryId);
+        this(id, name, status, price, null, categoryId, null);
     }
 }

@@ -43,8 +43,14 @@ public record OrderPlacedEvent(
             String productId,
             String variantId,
             int quantity,
-            long unitPrice
-    ) {}
+            long unitPrice,
+            String sellerId
+    ) {
+        /** Backward-compatible (no seller) — defaults to the default seller (D8). */
+        public Item(String productId, String variantId, int quantity, long unitPrice) {
+            this(productId, variantId, quantity, unitPrice, "default");
+        }
+    }
 
     public record ShippingAddress(
             String recipient,

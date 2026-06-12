@@ -21,7 +21,7 @@ public record PlaceOrderRequest(
         List<PlaceOrderCommand.OrderItemCommand> itemCommands = items.stream()
                 .map(i -> new PlaceOrderCommand.OrderItemCommand(
                         i.productId(), i.variantId(), i.productName(), i.optionName(),
-                        i.quantity(), i.unitPrice()))
+                        i.quantity(), i.unitPrice(), i.sellerId()))
                 .toList();
         PlaceOrderCommand.ShippingAddressCommand addrCommand = new PlaceOrderCommand.ShippingAddressCommand(
                 shippingAddress.recipient(), shippingAddress.phone(), shippingAddress.zipCode(),
@@ -45,7 +45,11 @@ public record PlaceOrderRequest(
             int quantity,
 
             @Positive(message = "unitPrice must be at least 1")
-            long unitPrice
+            long unitPrice,
+
+            // Optional owning seller of this line (ADR-MONO-030 §3.2). The client
+            // supplies it exactly like productName/unitPrice; absent → default seller.
+            String sellerId
     ) {}
 
     public record ShippingAddressRequest(

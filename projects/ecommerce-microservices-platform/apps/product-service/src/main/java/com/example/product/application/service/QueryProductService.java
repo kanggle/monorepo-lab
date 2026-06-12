@@ -21,20 +21,22 @@ public class QueryProductService {
     private final ProductRepository productRepository;
     private final ProductQueryPort productQueryPort;
 
-    // Cache keys are tenant-prefixed (T(TenantContext).currentTenant()) so a cache
-    // hit can never serve one tenant's data to another — the cache is a read path
-    // that must honour tenant isolation, not just the DB query (M2).
+    // Cache keys are tenant-prefixed AND seller-scope-prefixed so a cache hit can
+    // never serve one tenant's data to another (M2), nor serve a tenant-wide entry
+    // to a seller-scoped read (or vice versa) — the cache is a read path that must
+    // honour both isolation (tenant) and attribution (seller scope, AC-6). The
+    // scope segment resolves to 'all' when unrestricted (net-zero, F1).
     @Transactional(readOnly = true)
     @Cacheable(
             value = "product-list",
-            key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + T(java.util.Objects).toString(#categoryId, 'all') + ':' + T(java.util.Objects).toString(#status, 'all') + ':' + #page + ':' + #size"
+            key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + T(java.util.Objects).toString(T(com.example.product.domain.seller.SellerScopeContext).currentSellerScope(), 'all') + ':' + T(java.util.Objects).toString(#categoryId, 'all') + ':' + T(java.util.Objects).toString(#status, 'all') + ':' + #page + ':' + #size"
     )
     public ProductListResult findAll(UUID categoryId, ProductStatus status, int page, int size) {
         return productQueryPort.findSummaries(categoryId, status, page, size);
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #productId")
+    @Cacheable(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + T(java.util.Objects).toString(T(com.example.product.domain.seller.SellerScopeContext).currentSellerScope(), 'all') + ':' + #productId")
     public ProductDetail findById(UUID productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));

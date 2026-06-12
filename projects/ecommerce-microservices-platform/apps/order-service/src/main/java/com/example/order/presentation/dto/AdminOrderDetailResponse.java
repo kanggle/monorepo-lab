@@ -20,7 +20,7 @@ public record AdminOrderDetailResponse(
         List<OrderDetailResponse.OrderItemDetail> items = detail.items().stream()
                 .map(i -> new OrderDetailResponse.OrderItemDetail(
                         i.productId(), i.variantId(), i.productName(),
-                        i.optionName(), i.quantity(), i.unitPrice()
+                        i.optionName(), i.quantity(), i.unitPrice(), i.sellerId()
                 ))
                 .toList();
 

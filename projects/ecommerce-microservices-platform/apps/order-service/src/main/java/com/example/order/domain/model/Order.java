@@ -59,7 +59,8 @@ public class Order {
                     UUID.randomUUID().toString(),
                     data.productId(), data.variantId(),
                     data.productName(), data.optionName(),
-                    data.quantity(), data.unitPrice()
+                    data.quantity(), data.unitPrice(),
+                    data.sellerId()
             );
             order.items.add(item);
             total += item.subtotal();
@@ -202,6 +203,14 @@ public class Order {
             String productName,
             String optionName,
             int quantity,
-            long unitPrice
-    ) {}
+            long unitPrice,
+            String sellerId
+    ) {
+        /** Backward-compatible (no seller) — line is attributed to the default seller (D8). */
+        public OrderItemData(String productId, String variantId, String productName,
+                             String optionName, int quantity, long unitPrice) {
+            this(productId, variantId, productName, optionName, quantity, unitPrice,
+                    OrderItem.DEFAULT_SELLER_ID);
+        }
+    }
 }
