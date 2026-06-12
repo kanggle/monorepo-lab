@@ -8,7 +8,7 @@ shipping-service 부팅 실패 핫픽스 — `@EnableJpaRepositories` 스캔 범
 
 # Status
 
-review
+done
 
 # Owner
 
