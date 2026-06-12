@@ -120,6 +120,13 @@ For implementation details (annotations, imports, container images, setup code),
 - Use real containers via Testcontainers. Do not use H2 or in-memory substitutes.
 - Container image versions are specified in `.claude/skills/backend/testing-backend/SKILL.md`.
 
+## Integration-test bootstrap pitfalls (full-context-only failures)
+
+These two failures are invisible to Docker-free `:check` (unit + slice load no Spring `ApplicationContext`); only a Testcontainers `@SpringBootTest` integration test catches them. Apply both when bootstrapping a new service's IT base or adding a multi-dependency bean.
+
+- **Start containers in a `static { }` initializer block, NOT `@BeforeAll`/`@BeforeEach`.** `@DynamicPropertySource` suppliers (e.g. `registry.add("spring.datasource.url", POSTGRES::getJdbcUrl)`) are evaluated at Spring **context-refresh** time, which runs **before** `@BeforeAll`. A container started in `@BeforeAll` is therefore not yet running when its mapped port is queried → `IllegalStateException: Mapped port can only be obtained after the container is started` → `DataSourceAutoConfiguration` fails → every IT errors at `initializationError`. Starting the container in a `static {}` block (class-load = before context-load) fixes it; `@Testcontainers(disabledWithoutDocker=true)` clean-skip is preserved (the skip condition is evaluated before the class is used). Note: a `disabledWithoutDocker` IT base with no dedicated CI job has likely **never actually run** (clean-skips on Docker-less dev hosts) — do not treat its past "passing" as evidence; run the full suite locally once before wiring it into CI.
+- **A `@Component`/`@Service` with two or more constructors MUST mark the injection constructor with `@Autowired`** (or keep a single constructor and move the test-only one to a static factory / `@TestConfiguration` bean). Spring auto-injects a sole constructor, but with 2+ it looks for `@Autowired`, and failing that falls back to a no-arg default constructor → `UnsatisfiedDependencyException` / `NoSuchMethodException: <init>()` at context load. A common trigger is adding a secondary constructor that takes a dependency directly (e.g. `RandomGenerator`/`Clock`) for deterministic unit tests: the unit test passes via that constructor, but the full context cannot choose a constructor. Never conclude wiring is safe from `:check` alone — verify with a full-context IT.
+
 ---
 
 # Naming Conventions
