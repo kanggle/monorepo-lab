@@ -8,7 +8,7 @@ console-web — finance ledger reconciliation discrepancy *resolve* mutation (th
 
 # Status
 
-ready
+done
 
 # Owner
 
