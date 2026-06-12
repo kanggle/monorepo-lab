@@ -80,6 +80,11 @@ shipping:
     mock-status: ${SHIPPING_CARRIER_MOCK_STATUS:}
     connect-timeout-ms: ${SHIPPING_CARRIER_CONNECT_TIMEOUT_MS:2000}
     read-timeout-ms: ${SHIPPING_CARRIER_READ_TIMEOUT_MS:5000}
+    # Inbound carrier webhook (TASK-BE-294): HMAC-SHA256 shared secret over the raw body
+    # (X-Carrier-Signature: sha256=<hex>). Blank (default) = fail-closed: every webhook is
+    # rejected 401 (inbound integration OFF = net-zero).
+    webhook:
+      secret: ${SHIPPING_CARRIER_WEBHOOK_SECRET:}
 
 logging:
   level:
