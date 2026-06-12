@@ -99,3 +99,15 @@ financeplatform:
     # issuer drift guard — SAS issuer + legacy iam D2-b).
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:finance}
+
+# GL/AP-feed transactional outbox relay (3rd increment, TASK-FIN-BE-009). The
+# LedgerOutboxPublisher polls ledger_outbox (published_at IS NULL) and forwards
+# rows to finance.ledger.{entry.posted,period.closed}.v1. Polling defaults ON in
+# production; the unit/slice test profile gates it OFF (no broker).
+ledger:
+  outbox:
+    polling:
+      enabled: ${LEDGER_OUTBOX_POLLING_ENABLED:true}
+    batch-size: ${LEDGER_OUTBOX_BATCH_SIZE:100}
+    polling-interval-ms: ${LEDGER_OUTBOX_POLLING_INTERVAL_MS:500}
+    initial-delay-ms: ${LEDGER_OUTBOX_INITIAL_DELAY_MS:2000}

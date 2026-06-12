@@ -1,6 +1,6 @@
 # TASK-FIN-BE-009 — ledger-service GL/AP feed (3rd increment: transactional outbox + event emission)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (complex domain — outbox introduction, terminal→publishing consumer transition, exactly-once emission semantics, event-contract finalization)

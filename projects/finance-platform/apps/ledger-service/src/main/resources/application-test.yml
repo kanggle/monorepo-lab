@@ -25,3 +25,13 @@ financeplatform:
   oauth2:
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:http://test-issuer,iam}
     required-tenant-id: finance
+
+# Outbox relay OFF by default in the test profile (no broker in unit/slice runs).
+# The Testcontainers integration suite flips ledger.outbox.polling.enabled=true via
+# @DynamicPropertySource so the real Kafka round-trip exercises the relay.
+ledger:
+  outbox:
+    polling:
+      enabled: false
+    initial-delay-ms: 500
+    polling-interval-ms: 300

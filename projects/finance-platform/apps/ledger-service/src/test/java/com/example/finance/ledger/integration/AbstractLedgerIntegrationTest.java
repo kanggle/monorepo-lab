@@ -1,10 +1,12 @@
 package com.example.finance.ledger.integration;
 
+import com.example.finance.ledger.infrastructure.outbox.LedgerOutboxJpaRepository;
 import com.example.finance.ledger.infrastructure.persistence.jpa.JournalEntryJpaRepository;
 import com.example.finance.ledger.infrastructure.persistence.jpa.JournalLineJpaRepository;
 import com.example.finance.ledger.infrastructure.persistence.jpa.LedgerAccountJpaRepository;
 import com.example.finance.ledger.infrastructure.persistence.jpa.ProcessedEventJpaRepository;
 import com.example.testsupport.integration.DockerAvailableCondition;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -18,15 +20,22 @@ import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -71,6 +80,10 @@ public abstract class AbstractLedgerIntegrationTest {
 
     protected static final String TOPIC_COMPLETED = "finance.transaction.completed.v1";
     protected static final String TOPIC_REVERSED = "finance.transaction.reversed.v1";
+
+    /** GL/AP-feed topics emitted by the ledger outbox relay (3rd increment). */
+    protected static final String TOPIC_ENTRY_POSTED = "finance.ledger.entry.posted.v1";
+    protected static final String TOPIC_PERIOD_CLOSED = "finance.ledger.period.closed.v1";
 
     @SuppressWarnings("resource")
     protected static final MySQLContainer<?> MYSQL =
@@ -126,7 +139,9 @@ public abstract class AbstractLedgerIntegrationTest {
         try (AdminClient admin = AdminClient.create(props)) {
             admin.createTopics(List.of(
                     new NewTopic(TOPIC_COMPLETED, 1, (short) 1),
-                    new NewTopic(TOPIC_REVERSED, 1, (short) 1)
+                    new NewTopic(TOPIC_REVERSED, 1, (short) 1),
+                    new NewTopic(TOPIC_ENTRY_POSTED, 1, (short) 1),
+                    new NewTopic(TOPIC_PERIOD_CLOSED, 1, (short) 1)
             )).all().get(30, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() != null
@@ -149,6 +164,11 @@ public abstract class AbstractLedgerIntegrationTest {
                 () -> "org.hibernate.dialect.MySQLDialect");
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("spring.kafka.listener.auto-startup", () -> "true");
+        // (3rd incr) the integration suite exercises the real Kafka outbox→relay→
+        // publish round-trip, so the relay scheduler MUST run here.
+        registry.add("ledger.outbox.polling.enabled", () -> "true");
+        registry.add("ledger.outbox.initial-delay-ms", () -> "500");
+        registry.add("ledger.outbox.polling-interval-ms", () -> "300");
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
                 () -> JWKS.url("/oauth2/jwks").toString());
         registry.add("financeplatform.oauth2.allowed-issuers", () -> ISSUER);
@@ -161,7 +181,25 @@ public abstract class AbstractLedgerIntegrationTest {
     @Autowired protected JournalEntryJpaRepository journalEntryJpa;
     @Autowired protected JournalLineJpaRepository journalLineJpa;
     @Autowired protected ProcessedEventJpaRepository processedEventJpa;
+    @Autowired protected LedgerOutboxJpaRepository ledgerOutboxJpa;
+    @Autowired protected JdbcTemplate jdbcTemplate;
     @Autowired protected ObjectMapper objectMapper;
+
+    /**
+     * Cross-class test isolation. The MySQL container is static (shared by every
+     * ledger IT class in the JVM); a test that closes an accounting period covering
+     * "now" leaves it in {@code accounting_period}, where it would poison a sibling
+     * class — postings get rejected with {@code LEDGER_PERIOD_CLOSED}, and a later
+     * {@code open} of an overlapping window 422s. Truncating the period tables before
+     * each test guarantees every test starts with no closed period (the guard is the
+     * only cross-class mutable poison; journal/outbox rows are harmless because each
+     * test computes its own baseline counts). FK order: snapshot rows first.
+     */
+    @BeforeEach
+    void cleanAccountingPeriods() {
+        jdbcTemplate.execute("DELETE FROM period_balance_snapshot");
+        jdbcTemplate.execute("DELETE FROM accounting_period");
+    }
 
     // ------------------------------------------------------------------------
     // JWT minting
@@ -211,6 +249,47 @@ public abstract class AbstractLedgerIntegrationTest {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to publish to " + topic, e);
         }
+    }
+
+    // ------------------------------------------------------------------------
+    // Kafka consume helpers (GL/AP-feed round-trip)
+    // ------------------------------------------------------------------------
+
+    /**
+     * Drain a topic from the beginning (fresh group + earliest) and return the
+     * first record whose parsed envelope matches {@code matcher}, polling up to
+     * {@code timeout}. Returns the parsed envelope JSON, or fails if none matches.
+     */
+    protected JsonNode awaitEnvelope(String topic,
+                                     java.util.function.Predicate<JsonNode> matcher,
+                                     Duration timeout) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "it-consumer-" + UUID.randomUUID());
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+
+        long deadline = System.currentTimeMillis() + timeout.toMillis();
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(List.of(topic));
+            while (System.currentTimeMillis() < deadline) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<String, String> record : records) {
+                    JsonNode env;
+                    try {
+                        env = objectMapper.readTree(record.value());
+                    } catch (Exception e) {
+                        continue;
+                    }
+                    if (matcher.test(env)) {
+                        return env;
+                    }
+                }
+            }
+        }
+        throw new AssertionError("No matching record on " + topic + " within " + timeout);
     }
 
     /** Builds a finance.transaction.completed.v1 envelope (BaseEventPublisher shape). */

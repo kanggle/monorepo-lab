@@ -1,6 +1,7 @@
 package com.example.finance.ledger.application;
 
 import com.example.finance.ledger.application.port.outbound.ClockPort;
+import com.example.finance.ledger.application.port.outbound.LedgerEventPublisher;
 import com.example.finance.ledger.application.view.AccountingPeriodView;
 import com.example.finance.ledger.domain.audit.AuditLog;
 import com.example.finance.ledger.domain.audit.AuditLogRepository;
@@ -40,6 +41,7 @@ public class CloseAccountingPeriodUseCase {
     private final AccountingPeriodRepository periodRepository;
     private final JournalRepository journalRepository;
     private final AuditLogRepository auditLogRepository;
+    private final LedgerEventPublisher ledgerEventPublisher;
     private final ClockPort clock;
 
     @Transactional
@@ -59,6 +61,10 @@ public class CloseAccountingPeriodUseCase {
         auditLogRepository.save(AuditLog.of(
                 tenantId, AGGREGATE_TYPE, periodId, "CLOSED",
                 actor, auditSummary(period, snapshot), "close accounting period", clock.now()));
+        // (3rd incr) Append the GL/AP feed row in THIS transaction — atomic with
+        // the close + snapshot (transactional outbox). entryCount + closedAt are
+        // already stamped on the aggregate by close() above.
+        ledgerEventPublisher.publishPeriodClosed(period);
 
         return AccountingPeriodView.detail(period, snapshot);
     }
