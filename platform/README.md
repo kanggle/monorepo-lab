@@ -23,6 +23,8 @@
 | [testing-strategy.md](testing-strategy.md) | 테스트 피라미드와 필수 범위 |
 | [observability.md](observability.md) | 로그·메트릭·트레이싱 규격 |
 | [security-rules.md](security-rules.md) | JWT·비밀 관리·민감 데이터 처리 |
+| [abac-data-scope.md](abac-data-scope.md) | 축 ② 1단계 — 서명된 속성으로 operator 데이터 가시 범위를 좁히는 cross-domain ABAC data-scope 계약 (ADR-MONO-025) |
+| [access-conditions.md](access-conditions.md) | 축 ② 2단계 — closed-enum·restriction-only access-condition 게이트 (권한이 *언제* 유효한지; ADR-MONO-026) |
 | [shared-library-policy.md](shared-library-policy.md) | `libs/` 사용 정책 — 기술 재사용만 허용 |
 | [ownership-rule.md](ownership-rule.md) | 서비스·계약·스펙 소유권 |
 | [repository-structure.md](repository-structure.md) | 모노레포 디렉터리 레이아웃 |
