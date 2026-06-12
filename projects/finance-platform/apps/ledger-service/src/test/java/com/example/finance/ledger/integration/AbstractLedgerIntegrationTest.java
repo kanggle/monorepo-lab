@@ -29,11 +29,13 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -180,7 +182,24 @@ public abstract class AbstractLedgerIntegrationTest {
     @Autowired protected JournalLineJpaRepository journalLineJpa;
     @Autowired protected ProcessedEventJpaRepository processedEventJpa;
     @Autowired protected LedgerOutboxJpaRepository ledgerOutboxJpa;
+    @Autowired protected JdbcTemplate jdbcTemplate;
     @Autowired protected ObjectMapper objectMapper;
+
+    /**
+     * Cross-class test isolation. The MySQL container is static (shared by every
+     * ledger IT class in the JVM); a test that closes an accounting period covering
+     * "now" leaves it in {@code accounting_period}, where it would poison a sibling
+     * class — postings get rejected with {@code LEDGER_PERIOD_CLOSED}, and a later
+     * {@code open} of an overlapping window 422s. Truncating the period tables before
+     * each test guarantees every test starts with no closed period (the guard is the
+     * only cross-class mutable poison; journal/outbox rows are harmless because each
+     * test computes its own baseline counts). FK order: snapshot rows first.
+     */
+    @BeforeEach
+    void cleanAccountingPeriods() {
+        jdbcTemplate.execute("DELETE FROM period_balance_snapshot");
+        jdbcTemplate.execute("DELETE FROM accounting_period");
+    }
 
     // ------------------------------------------------------------------------
     // JWT minting
