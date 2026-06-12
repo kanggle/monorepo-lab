@@ -35,7 +35,11 @@ All implementation tasks targeting this service must follow this declaration,
 > an operator revalues a foreign-currency position at a new closing rate, truing its base
 > carrying value to spot and booking the delta to `FX_GAIN` / `FX_LOSS` via a balanced
 > base-currency adjusting entry) is specified by § FX gain/loss revaluation +
-> § Increment Scope. Realized FX gain/loss on settlement, a bulk/period-close revaluation
+> § Increment Scope. The **tenth increment** (TASK-FIN-BE-016 — realized FX gain/loss on
+> settlement: an operator settles a foreign-currency position at a settlement rate, removing
+> the position at its carrying value and recognising the difference between the base proceeds
+> and the carrying as a *realized* `FX_GAIN` / `FX_LOSS`) is specified by § FX settlement +
+> § Increment Scope. A partial / weighted-average settlement, a bulk/period-close revaluation
 > hook, a live FX rate feed, multi-currency reconciliation, and fuzzy / N:M matching remain
 > forward-declared (§ Increment Scope).
 > The account-service architecture
@@ -279,16 +283,62 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   currency → a `200 {revalued:false}` no-op (no entry); the auto-journal path never
   revalues. See § FX gain/loss revaluation.
 
+**Tenth increment — IN (TASK-FIN-BE-016, realized FX gain/loss on settlement):**
+- An **operator settles a foreign-currency position** (`{ledgerAccountCode, currency}`) at a
+  **settlement (spot) rate**, converting it to the base currency. The 9th increment books the
+  **unrealized** movement of an OPEN position; settling it **realizes** the gain/loss — the
+  difference between the **base proceeds** (`foreignBalance × settlementRate`) and the
+  position's **carrying base value** is booked to `FX_GAIN` (income) / `FX_LOSS` (expense),
+  and the position is **removed** (its `(account, currency)` foreign + base sums go to zero).
+  `POST /api/finance/ledger/settlements`.
+- **Decision — a balanced base-currency 3-line entry reusing the 8th + 9th increments; no new
+  line primitive, no migration.** The settlement entry has three lines:
+  - a **position-removal** line on the foreign account — the existing 8th-increment
+    multi-currency line `JournalLine.of(money = |F| {currency}, baseAmount = |C| KRW)`, posted
+    on the side that **zeroes** the position (foreign `Σdebit − Σcredit → 0`, base → 0);
+  - a **base proceeds** line on an operator-supplied `proceedsAccountCode` — an ordinary KRW
+    line for `proceedsBase = round(foreignBalance × settlementRate)`; and
+  - the realized **`FX_GAIN`/`FX_LOSS`** contra (9th-increment accounts) — an ordinary KRW line
+    for the realized difference.
+  All KRW base amounts net (`Σ baseDebit == Σ baseCredit`), so the existing `JournalEntry`
+  factory accepts it — **no `V6`+ migration**, no new `JournalLine` factory.
+- **Decision — polarity automatic for asset AND liability positions (debit-positive signed
+  arithmetic).** `proceedsBase` and the carrying `C` are read debit-positive
+  (`Σbase debit − Σbase credit`); `realized = proceedsBase − C`. The removal line's direction
+  is `sign(F)` (a debit-balance asset is removed by a CREDIT, a credit-balance liability by a
+  DEBIT); the proceeds line's direction is also `sign(F)` (an asset settlement brings base IN
+  → DR the proceeds account; a liability settlement pays base OUT → CR it); the FX line's
+  direction is `sign(realized)` (`> 0` → CR `FX_GAIN`, `< 0` → DR `FX_LOSS`). All three fall out
+  of the signs — no account-type branching. (A foreign **asset** sold above carrying and a
+  foreign **liability** settled below carrying both yield a gain via the same rule.)
+- It funnels through the existing **`PostJournalEntryUseCase.post(entry, reason, actor)`** (the
+  guarded write path — closed-period guard, audit actor = operator, `entry.posted` outbox), is
+  **idempotent** on a client `Idempotency-Key` (`settle:{key}`, replay returns the original),
+  and emits the same `finance.ledger.entry.posted.v1` tagged `source.sourceType = "SETTLEMENT"`
+  (no new event). `SourceRef` gains the `SETTLEMENT` type. One new code `SETTLEMENT_RATE_INVALID`
+  (422, non-positive `settlementRate`); `currency` = base (KRW) or unsupported →
+  `CURRENCY_MISMATCH`; an unknown `ledgerAccountCode` / `proceedsAccountCode` →
+  `LEDGER_ACCOUNT_NOT_FOUND` (no lazy mint — an operator settles into an existing account).
+  **Net-zero**: no position in that currency (`foreignBalance == 0`) → a `200 {settled:false}`
+  no-op (no entry); the auto-journal + revaluation + manual paths never settle.
+- **Decision — full-position settlement only (first slice).** The whole `(account, currency)`
+  position is settled in one call (it removes exactly `F` foreign at carrying `C`). A **partial**
+  settlement (a specified foreign amount with a proportional / weighted-average / FIFO carrying
+  basis + a residual position) is a distinct, harder mechanic → forward-declared. See § FX
+  settlement.
+
 **Forward-declared — OUT (each a later task):**
 - Fuzzy / N:M / split matching + multi-currency statements; period **reopen**.
-- **Realized FX gain/loss on settlement** — the 9th increment books **unrealized**
-  revaluation of an OPEN foreign position; recognising a **realized** gain/loss when a
-  position is *settled* at a rate differing from its carrying is a distinct mechanic (it
-  touches the settlement/posting path). A **bulk / all-positions** revaluation + a
-  **period-close auto-hook** (the 9th increment revalues one `(account, currency)` per
-  operator call). A **live FX rate feed** (rates are caller-supplied, not fetched),
-  **multi-currency reconciliation** (cross-currency clearing-account matching), and a
-  **configurable base currency** (fixed KRW in v1) are also forward-declared.
+- **Partial / weighted-average settlement** — the 10th increment settles a **whole**
+  `(account, currency)` position; settling a *portion* (a specified foreign amount, removing a
+  **proportional** share of the carrying base under a weighted-average or FIFO cost basis, with
+  a residual position) is forward-declared. A **bulk / all-positions** revaluation + a
+  **period-close auto-hook** (the 9th/10th increments act on one `(account, currency)` per
+  operator call). A **live FX rate feed** (rates are caller-supplied, not fetched), a
+  **proceeds-amount input** (the 10th derives proceeds from a rate; supplying the *actual*
+  base received is forward-declared), **multi-currency reconciliation** (cross-currency
+  clearing-account matching), and a **configurable base currency** (fixed KRW in v1) are also
+  forward-declared.
 - **Manual-posting body-hash idempotency conflict** (`IDEMPOTENCY_KEY_CONFLICT` 409
   on a same-key/different-body replay — the 5th increment is replay-safe on the key
   alone; storing the request hash for conflict detection is forward-declared) +
@@ -388,7 +438,8 @@ com.example.finance.ledger/
 │   │   ├── EntryDirection.java            ← DEBIT / CREDIT
 │   │   ├── PostingPolicy.java             ← transaction-type → balanced lines (pure; § Posting Policy)
 │   │   ├── FxRevaluationPolicy.java        ← (9th incr) pure: (account, currency, foreignBalanceMinor, carryingBaseMinor, closingRate) → Optional<RevaluationResult> (delta + base-adjustment + FX_GAIN/FX_LOSS lines); empty when delta==0; non-positive rate → RevaluationRateInvalidException
-│   │   ├── SourceRef.java                 ← (sourceType, sourceTxnId, sourceEventId) provenance; (5th incr) ofManual(reference, idempotencyKey) → TYPE_MANUAL; (9th incr) ofRevaluation(reference, idempotencyKey) → TYPE_REVALUATION
+│   │   ├── FxSettlementPolicy.java         ← (10th incr) pure: (account, currency, F, C, settlementRate, proceedsAccount) → Optional<SettlementResult> (realized + 3 lines: position-removal[8th-incr of(money,baseAmount)] + base proceeds + FX_GAIN/FX_LOSS); empty when F==0; non-positive rate → SettlementRateInvalidException
+│   │   ├── SourceRef.java                 ← (sourceType, sourceTxnId, sourceEventId) provenance; (5th incr) ofManual → TYPE_MANUAL; (9th incr) ofRevaluation → TYPE_REVALUATION; (10th incr) ofSettlement → TYPE_SETTLEMENT
 │   │   └── repository/JournalRepository.java   ← (5th incr) + findBySourceEventId (manual idempotent-replay return); (9th incr) + accountTotalsForCurrency(code, currency, tenant) (one FX position's foreign balance + base carrying)
 │   ├── period/                           ← (2nd increment) accounting period
 │   │   ├── AccountingPeriod.java          ← aggregate; OPEN→CLOSED state machine; [from,to) covers(); non-overlap
@@ -421,13 +472,16 @@ com.example.finance.ledger/
 │        ReconciliationAlreadyResolvedException, ReconciliationAccountInvalidException;
 │        (5th incr) IdempotencyKeyRequiredException [handler guard → 400] — manual posting reuses LedgerEntryUnbalanced/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed, no new domain code;
 │        (6th incr) ReconciliationPeriodLockedException [→ 422];
-│        (9th incr) RevaluationRateInvalidException [→ 422] — FX revaluation reuses IdempotencyKeyRequired/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed otherwise)
+│        (9th incr) RevaluationRateInvalidException [→ 422] — FX revaluation reuses IdempotencyKeyRequired/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed otherwise;
+│        (10th incr) SettlementRateInvalidException [→ 422] — FX settlement reuses CurrencyMismatch/LedgerAccountNotFound/IdempotencyKeyRequired/LedgerPeriodClosed otherwise)
 ├── application/                           ← use cases + outbound ports
 │   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit → (3rd incr) append entry.posted outbox row (one Tx); (5th incr) + post(entry, reason, actor) overload (operator audit actor; the no-actor overload delegates with the auto-journal default — net-zero)
 │   ├── PostFromTransactionUseCase.java    ← maps an account-service transaction envelope → PostJournalEntry (via PostingPolicy); idempotent on sourceEventId
 │   ├── PostManualJournalEntryUseCase.java ← (5th incr) @Transactional operator: require Idempotency-Key → replay-return via findBySourceEventId else markProcessed(manual:{key}) → validate each referenced account EXISTS (no lazy mint) → build JournalEntry.post(SourceRef.ofManual) → PostJournalEntryUseCase.post(entry, reason, actor)
 │   ├── RevalueForeignBalanceUseCase.java  ← (9th incr) @Transactional operator: require Idempotency-Key → replay-return (reval:{key}) → load (account,currency) position totals → FxRevaluationPolicy.revalue → delta==0/no-position → 200 revalued:false; else build base-adjustment + FX_GAIN/FX_LOSS lines, SourceRef.ofRevaluation, markProcessed → PostJournalEntryUseCase.post(entry, reason, actor)
 │   ├── RevalueForeignBalanceCommand.java   ← (9th incr) (tenantId, operatorSubject, ledgerAccountCode, currency, closingRate, postedAt?, reference, memo, idempotencyKey)
+│   ├── SettleForeignPositionUseCase.java   ← (10th incr) @Transactional operator: require Idempotency-Key → replay-return (settle:{key}) → validate currency≠KRW + proceedsAccount EXISTS (no mint) → load position → F==0 → 200 settled:false; else FxSettlementPolicy.settle → build 3-line entry, SourceRef.ofSettlement, markProcessed → PostJournalEntryUseCase.post(entry, reason, actor)
+│   ├── SettleForeignPositionCommand.java   ← (10th incr) (tenantId, operatorSubject, ledgerAccountCode, currency, settlementRate, proceedsAccountCode, postedAt?, reference, memo, idempotencyKey)
 │   ├── QueryLedgerUseCase.java            ← read: entry detail / per-account entries + balance / trial balance
 │   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
 │   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit → (3rd incr) append period.closed outbox row
@@ -468,6 +522,7 @@ com.example.finance.ledger/
     ├── controller/LedgerController.java    ← /api/finance/ledger/** (reads)
     ├── controller/JournalController.java    ← (5th incr) POST /api/finance/ledger/entries (manual posting; Idempotency-Key header; no @Transactional — funnels to PostManualJournalEntryUseCase)
     ├── controller/RevaluationController.java ← (9th incr) POST /api/finance/ledger/revaluations (FX revaluation; Idempotency-Key header; no @Transactional — funnels to RevalueForeignBalanceUseCase; 201 revalued / 200 revalued:false)
+    ├── controller/SettlementController.java ← (10th incr) POST /api/finance/ledger/settlements (FX settlement; Idempotency-Key header; no @Transactional — funnels to SettleForeignPositionUseCase; 201 settled / 200 settled:false)
     ├── controller/PeriodController.java     ← (2nd incr) /api/finance/ledger/periods/** (open/close/list/detail)
     ├── controller/ReconciliationController.java ← (4th incr) /api/finance/ledger/reconciliation/** (ingest/resolve/read)
     ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes; (2nd incr) period codes; (5th incr) LEDGER_ENTRY_UNBALANCED/CURRENCY_MISMATCH/LEDGER_ACCOUNT_NOT_FOUND/LEDGER_PERIOD_CLOSED now surface synchronously + IDEMPOTENCY_KEY_REQUIRED handler guard)
@@ -925,9 +980,109 @@ unless the operator calls the endpoint). A revaluation entry is as **immutable**
 (F3) — a correction is another revaluation (a later rate) or a reversal. `closingRate` is
 **caller-supplied** (a live FX rate feed is forward-declared).
 
-**Deferred** (forward-declared): **realized** FX gain/loss on settlement (this increment is
-unrealized only); a **bulk / all-positions** revaluation + a **period-close auto-hook** (one
-`(account, currency)` per call here); a **live FX rate feed**; a **configurable base currency**.
+**Deferred** (forward-declared): a **bulk / all-positions** revaluation + a **period-close
+auto-hook** (one `(account, currency)` per call here); a **live FX rate feed**; a
+**configurable base currency**. The **realized** FX gain/loss on settlement that this
+increment deferred is delivered by the 10th increment (§ FX settlement).
+
+## FX settlement (tenth increment — TASK-FIN-BE-016)
+
+The 9th increment books the **unrealized** movement of an OPEN foreign position (its carrying
+value tracks spot, the foreign quantity stays). **Settling** the position **realizes** the
+gain/loss: the foreign holding is converted to the base currency and **removed**, and the
+difference between the **base proceeds** and the position's **carrying base value** is
+recognised as a *realized* `FX_GAIN` / `FX_LOSS`. This is the realization counterpart of
+revaluation; together they cover the full FX P&L lifecycle.
+
+**The position** (same read as revaluation). For `(ledgerAccountCode, currency)`, from the
+existing per-`(account, currency)` totals, in **debit-positive** signed minor units:
+`foreignBalance F = Σdebit − Σcredit` (foreign minor) and `carryingBase C = ΣbaseDebit −
+ΣbaseCredit` (KRW minor — the carrying value, which already includes any prior revaluation
+adjustments).
+
+**The computation** (`FxSettlementPolicy`, pure). Given `(F, C, settlementRate,
+proceedsAccountCode)` where `settlementRate` is the **base-minor-per-foreign-minor** spot
+factor:
+- `proceedsBase = round(F × settlementRate)` (HALF_UP, signed `long` KRW minor — the only
+  decimal is the rate; F5: the result is integer minor units);
+- `realized = proceedsBase − C` (debit-positive signed KRW);
+- `F == 0` → **no position** to settle (`Optional.empty()` → the use case returns
+  `200 {settled:false, reason:"NO_POSITION"}`);
+- `settlementRate ≤ 0` → `SettlementRateInvalidException` (422 `SETTLEMENT_RATE_INVALID`).
+
+**The settlement entry** (3 lines, balanced in base). The whole position is settled (first
+slice — partial is forward-declared):
+
+| line | side | amount | reuses |
+|---|---|---|---|
+| **position-removal** on `{ledgerAccountCode}` | `sign(F)>0 → CREDIT`, else `DEBIT` | `money = |F| {currency}`, `baseAmount = |C| KRW` | 8th-incr multi-currency `JournalLine.of(money, baseAmount)` |
+| **base proceeds** on `{proceedsAccountCode}` | `sign(F)>0 → DEBIT`, else `CREDIT` | `|proceedsBase| KRW` | ordinary KRW line |
+| **realized FX** `FX_GAIN`/`FX_LOSS` | `realized>0 → CREDIT FX_GAIN`, `<0 → DEBIT FX_LOSS` | `|realized| KRW` | 9th-incr accounts |
+
+The removal line **zeroes** the position (`F − |F| → 0` foreign and `C − |C| → 0` base for a
+debit-balance asset; the mirror for a liability), and `Σ baseDebit == Σ baseCredit` holds
+(`|proceedsBase|` on one side nets `|C| + |realized|` on the other). Reuses the existing
+`JournalEntry` factory + columns — **no new line primitive, no migration**.
+
+**Polarity is automatic** for assets and liabilities — every line's direction is a sign:
+the removal + proceeds directions follow `sign(F)` (a debit-balance **asset** position is
+removed by a CREDIT and brings base IN → DR proceeds; a credit-balance **liability** is removed
+by a DEBIT and pays base OUT → CR proceeds), and the FX direction follows `sign(realized)`
+(`FX_GAIN` credit / `FX_LOSS` debit). A foreign asset sold **above** carrying and a foreign
+liability settled **below** carrying both realize a gain via the same signed rule.
+
+**Relationship to revaluation (no double-count).** `realized = proceedsBase − C` is measured
+against the **carrying** `C`, which already embeds any prior revaluation. So if a position was
+revalued to rate `R₁` (`C = F × R₁`, the unrealized gain already in `FX_GAIN`) and then settled
+at `R₂`, only the **incremental** `F × (R₂ − R₁)` is realized — the lifetime total
+`= unrealized + realized = (C − cost) + (proceeds − C) = proceeds − cost` is correct; the split
+is purely timing. Settling at the carrying rate realizes 0 (all P&L was already unrealized).
+
+**Worked example** (USD asset, `F = 10 000` USD-minor debit, carried `C = 130 000` KRW @ 13.0;
+settle the whole position at `settlementRate = 13.7`, proceeds to `CASH_KRW`):
+
+| line | dir | money | baseAmount |
+|---|---|---|---|
+| `CASH_KRW` proceeds | DEBIT | 137 000 KRW | 137 000 KRW |
+| `CASH_CLEARING` removal | CREDIT | 10 000 USD | 130 000 KRW |
+| `FX_GAIN` realized | CREDIT | 7 000 KRW | 7 000 KRW |
+
+`proceedsBase = round(10 000 × 13.7) = 137 000`; `realized = 137 000 − 130 000 = +7 000` (gain).
+After posting, the USD position on `CASH_CLEARING` is **gone** (`foreign → 0`, `base → 0`); the
+137 000 KRW sits in `CASH_KRW`; the trial balance stays base-balanced.
+
+**`SettleForeignPositionUseCase`** (one `@Transactional`, operator — mirrors
+`RevalueForeignBalanceUseCase`):
+1. **Idempotency (F1).** Require `Idempotency-Key` (`settle:{key}`, ≤ 50 chars →
+   `IdempotencyKeyRequiredException` 400). A replay returns the original entry via
+   `findBySourceEventId("settle:{key}", tenant)` → `200 {settled:false, reason:"REPLAY"}`.
+2. **Validate + load.** `currency == KRW`/unsupported → `CURRENCY_MISMATCH` (422); the
+   `proceedsAccountCode` must already exist (`existsByCode` → `LEDGER_ACCOUNT_NOT_FOUND` 404,
+   no lazy mint — an operator settles into an existing account). Load the position via
+   `accountTotalsForCurrency`; no row / `F == 0` → `200 {settled:false, reason:"NO_POSITION"}`
+   (net-zero, key NOT marked).
+3. **Compute.** `FxSettlementPolicy.settle(...)`. `settlementRate ≤ 0` →
+   `SETTLEMENT_RATE_INVALID` (422).
+4. **Post.** Build `JournalEntry.post(newId, tenant, postedAt, SourceRef.ofSettlement(reference,
+   "settle:{key}"), [removal, proceeds, fx])`, `markProcessed("settle:{key}")`, then funnel
+   through **`PostJournalEntryUseCase.post(entry, reason, operatorSubject)`** (closed-period
+   guard → 422 `LEDGER_PERIOD_CLOSED`; audit actor = operator; `entry.posted` outbox append,
+   `sourceType = "SETTLEMENT"`). `201 {settled:true, realizedBaseMinor, outcome:"FX_GAIN"|"FX_LOSS",
+   proceedsBaseMinor, entry}`.
+
+**Emission.** A settlement entry emits the **same** `finance.ledger.entry.posted.v1` (FIN-BE-009
+outbox, unchanged) with `source.sourceType = "SETTLEMENT"` — the GL/AP feed sees the realized FX
+result tagged by provenance. No new topic. The endpoint is `.authenticated()` + the dual-accept
+tenant gate (parity with revaluation / manual posting).
+
+**Net-zero / immutability.** The auto-journal, manual, and revaluation paths are untouched (no
+settlement unless the operator calls the endpoint). A settlement entry is **immutable** (F3) — a
+correction is a reversal or a re-establishing manual entry.
+
+**Deferred** (forward-declared): **partial / weighted-average** settlement (a portion of the
+position, proportional / FIFO carrying basis, residual position); a **proceeds-amount input**
+(supply the *actual* base received instead of a rate); a **live FX rate feed**; a
+**configurable base currency**.
 
 ## Idempotency / dedupe (F1)
 
@@ -969,6 +1124,7 @@ All under `/api/finance/ledger/**`. Formal shapes → [`ledger-api.md`](../../co
 | `GET` | `/api/finance/ledger/trial-balance` | JWT | Σ over all accounts (== 0 invariant) |
 | `POST` | `/api/finance/ledger/entries` | JWT (authenticated) + `Idempotency-Key` | **(5th increment)** post a manual adjusting entry (balanced lines → guarded write path) |
 | `POST` | `/api/finance/ledger/revaluations` | JWT (authenticated) + `Idempotency-Key` | **(9th increment)** revalue a foreign-currency position at a closing rate → FX gain/loss adjusting entry (or 200 no-op) |
+| `POST` | `/api/finance/ledger/settlements` | JWT (authenticated) + `Idempotency-Key` | **(10th increment)** settle a foreign-currency position at a settlement rate → realized FX gain/loss + base proceeds, position removed (or 200 no-op) |
 | `POST` | `/api/finance/ledger/periods` | JWT (authenticated) | **(2nd increment)** open an accounting period `{from, to}` |
 | `POST` | `/api/finance/ledger/periods/{periodId}/close` | JWT (authenticated) | **(2nd increment)** close a period → capture the trial-balance snapshot |
 | `GET` | `/api/finance/ledger/periods` | JWT | **(2nd increment)** list accounting periods |
@@ -1053,6 +1209,7 @@ owns `LedgerOutboxJpaEntity implements OutboxRow` (`ledger_outbox` table, MySQL
 | **F8** reconciliation no auto-close | ✅ (4th increment) | `ReconciliationMatcher` records mismatches as OPEN `ReconciliationDiscrepancy` (operator review queue); resolution is operator-only via `ResolveDiscrepancyUseCase` — no code path auto-closes or adjusts a discrepancy (§ Reconciliation); **(6th/7th increment)** a CLOSED period is closed to reconciliation on both sides — neither resolving an existing discrepancy nor ingesting a new statement dated in the period is allowed (`RECONCILIATION_PERIOD_LOCKED`; § Reconciliation § Period lock) |
 | **F2 (period close)** | ✅ (2nd increment) | `AccountingPeriod` OPEN→CLOSED + non-overlap invariant; `PostJournalEntryUseCase` guard rejects a posting into a CLOSED period (`LEDGER_PERIOD_CLOSED`, net-zero otherwise); close captures an immutable trial-balance snapshot (§ Accounting Period) |
 | **F2 (FX revaluation)** | ✅ (9th increment) | unrealized revaluation books a **balanced base-currency** adjusting entry (DR/CR the foreign position's base carrying + contra `FX_GAIN`/`FX_LOSS`) through the SAME guarded write path — the books stay balanced in the base currency; the foreign quantity is untouched (no synthetic currency movement); re-revaluation reads the already-revalued carrying (no double-booking); `delta == 0` / no position → net-zero no-op (§ FX gain/loss revaluation) |
+| **F2 (FX settlement)** | ✅ (10th increment) | realized settlement books a **balanced base-currency 3-line** entry (remove the position at carrying via the 8th-incr multi-currency line + base proceeds + realized `FX_GAIN`/`FX_LOSS`) through the SAME guarded write path — `Σ baseDebit == Σ baseCredit`; `realized = proceeds − carrying` measured against the already-revalued carrying (no double-count vs revaluation); polarity automatic for assets + liabilities (line directions from `sign(F)` + `sign(realized)`); `F == 0` → net-zero no-op (§ FX settlement) |
 
 ## Trait Rule mapping
 
@@ -1124,6 +1281,10 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
 | 30 | **(9th incr)** FX revaluation `currency` is the base currency (KRW) or unsupported | 422 `CURRENCY_MISMATCH` (the base currency cannot be revalued against itself) |
 | 31 | **(9th incr)** FX revaluation finds no position in that currency / the position is already at spot (`delta == 0`) | `200 {revalued:false, reason:"NO_POSITION"\|"AT_SPOT"}` — no entry booked, the `Idempotency-Key` is **not** consumed (net-zero; a later real position can be revalued) |
 | 32 | **(9th incr)** FX revaluation `postedAt` in a CLOSED period / `Idempotency-Key` absent / replayed | 422 `LEDGER_PERIOD_CLOSED` (inherited guard) / 400 `IDEMPOTENCY_KEY_REQUIRED` / `200 {revalued:false, reason:"REPLAY"}` returning the original entry |
+| 33 | **(10th incr)** FX settlement `settlementRate` not strictly positive | 422 `SETTLEMENT_RATE_INVALID` (`SettlementRateInvalidException`) — a position cannot be settled at a zero/negative rate; nothing persists |
+| 34 | **(10th incr)** FX settlement `currency` is the base (KRW)/unsupported, or `proceedsAccountCode` unknown | 422 `CURRENCY_MISMATCH` / 404 `LEDGER_ACCOUNT_NOT_FOUND` (the proceeds account must already exist — no lazy mint) |
+| 35 | **(10th incr)** FX settlement finds no position in that currency (`F == 0`) | `200 {settled:false, reason:"NO_POSITION"}` — no entry booked, the `Idempotency-Key` is **not** consumed (net-zero) |
+| 36 | **(10th incr)** FX settlement `postedAt` in a CLOSED period / `Idempotency-Key` absent / replayed | 422 `LEDGER_PERIOD_CLOSED` (inherited guard) / 400 `IDEMPOTENCY_KEY_REQUIRED` / `200 {settled:false, reason:"REPLAY"}` returning the original entry |
 
 ## Testing Strategy
 
@@ -1257,6 +1418,32 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
   a CLOSED window → 422 `LEDGER_PERIOD_CLOSED`; revaluing a currency with no position → 200
   `revalued:false`; cross-tenant JWT → 403. The all-KRW auto-journal round-trip is unchanged
   (net-zero).
+- **FX settlement (10th increment)**: unit — `FxSettlementPolicyTest` (an **asset** position
+  settled above carrying → realized `FX_GAIN`; below → `FX_LOSS`; a **liability** position
+  (`F < 0`) settled below carrying → gain + above → loss [polarity automatic — line directions
+  from `sign(F)` + `sign(realized)`]; the 3-line entry balances in base [`Σ baseDebit ==
+  Σ baseCredit`]; the removal line zeroes the position [`money=|F| {ccy}`, `baseAmount=|C| KRW`];
+  `proceedsBase = round(F × rate)` HALF_UP; `F == 0` → empty; `settlementRate ≤ 0` →
+  `SettlementRateInvalidException`; settling at the carrying rate realizes 0). Application —
+  `SettleForeignPositionUseCaseTest` (mock ports: a gain/loss settlement posts the 3-line entry
+  + emits `entry.posted` with `sourceType=SETTLEMENT`; no position (`F==0`) → `settled:false`
+  no-op, key NOT marked; replay → original; unknown `proceedsAccountCode` →
+  `LEDGER_ACCOUNT_NOT_FOUND`; `postedAt` in a CLOSED period → `LEDGER_PERIOD_CLOSED`; missing key
+  → `IDEMPOTENCY_KEY_REQUIRED`; KRW currency → `CURRENCY_MISMATCH`; operator subject = audit
+  actor). Slice — `@WebMvcTest SettlementController` (201 settled / 200 no-op, 400 missing key,
+  error envelopes). Integration (Testcontainers, authoritative — **no migration**, reuses the
+  8th-incr multi-currency line + 9th-incr FX accounts): establish a USD position via a
+  multi-currency manual entry (DR USD `CASH_CLEARING` / CR KRW wallet @ 13.0 → carrying 130 000),
+  then `POST /settlements {CASH_CLEARING, USD, 13.7, proceedsAccountCode: CASH_KRW}` → **201**,
+  the 3-line entry persists (DR CASH_KRW 137 000 / CR CASH_CLEARING 10 000 USD@130 000 base / CR
+  FX_GAIN 7 000), the **USD position on CASH_CLEARING is removed** (`accountTotalsForCurrency`
+  → foreign 0 + base 0), the proceeds sit in CASH_KRW, the trial balance stays base-balanced, and
+  **`finance.ledger.entry.posted.v1` with `sourceType=SETTLEMENT`** is consumed; a settlement
+  **below** carrying books `FX_LOSS`; a **revalue-then-settle** sequence realizes only the
+  incremental delta (no double-count); replay (same key) → 200 same entryId; `settlementRate:0`
+  → 422 `SETTLEMENT_RATE_INVALID`; an unknown proceeds account → 404; a back-dated settlement into
+  a CLOSED window → 422 `LEDGER_PERIOD_CLOSED`; a currency with no position → 200 `settled:false`;
+  cross-tenant JWT → 403. The all-KRW auto-journal round-trip is unchanged (net-zero).
 
 ## Required Artifacts mapping (rules/domains/fintech.md § Required Artifacts)
 

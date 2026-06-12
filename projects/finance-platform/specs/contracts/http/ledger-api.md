@@ -3,13 +3,15 @@
 HTTP surface of `finance-platform/apps/ledger-service`. Authored by
 TASK-FIN-BE-007 **before** implementation (contract-first,
 `platform/service-types/rest-api.md`); extended by TASK-FIN-BE-008 (period close),
-TASK-FIN-BE-011 (manual posting), and TASK-FIN-BE-015 (FX revaluation). Journal
+TASK-FIN-BE-011 (manual posting), TASK-FIN-BE-015 (FX revaluation), and
+TASK-FIN-BE-016 (FX settlement). Journal
 **postings** are **event-driven** by default
 (§ `finance-ledger-events.md`); the **2nd increment** adds **period** mutation
 endpoints (open/close — § Accounting periods), the **5th increment** adds the
 first journal **mutation** endpoint — operator **manual posting**
-(`POST /entries` — § Manual journal posting), and the **9th increment** adds operator
-**FX revaluation** (`POST /revaluations` — § FX revaluation). Architecture: [`../../services/ledger-service/architecture.md`](../../services/ledger-service/architecture.md).
+(`POST /entries` — § Manual journal posting), the **9th increment** adds operator
+**FX revaluation** (`POST /revaluations` — § FX revaluation), and the **10th increment** adds
+operator **FX settlement** (`POST /settlements` — § FX settlement). Architecture: [`../../services/ledger-service/architecture.md`](../../services/ledger-service/architecture.md).
 
 All paths under `/api/finance/ledger/**`. All require a valid IAM RS256 JWT with
 `tenant_id` accepted by the dual-accept gate (`finance` / `*` / `entitled_domains ∋
@@ -336,6 +338,81 @@ trues the carrying up again from its **already-revalued** carrying — no double
 
 ---
 
+## FX settlement (10th increment — TASK-FIN-BE-016)
+
+An operator **settles** a foreign-currency position at a settlement (spot) rate — converting
+the holding to the base currency and **removing** the position — and the difference between
+the base proceeds and the position's carrying value is recognised as a **realized** FX gain or
+loss. Where revaluation (§ FX revaluation) marks an OPEN position to market, settlement closes
+it. The entry funnels through the same guarded write path — see architecture.md § FX settlement.
+
+### 11. POST `/api/finance/ledger/settlements`
+
+Headers: `Idempotency-Key: <client-key>` (required, ≤ 50 chars). Request:
+```json
+{ "ledgerAccountCode": "CASH_CLEARING",
+  "currency": "USD",
+  "settlementRate": "13.7",
+  "proceedsAccountCode": "CASH_KRW",
+  "postedAt": "2026-06-30T23:59:59Z",
+  "reference": "FX-SETTLE-2026-06-USD",
+  "memo": "liquidate USD holdings" }
+```
+- `ledgerAccountCode` + `currency` identify the **foreign position** to settle (the account's
+  lines in that currency); the **whole** position is settled (partial is forward-declared).
+  `currency` MUST NOT be the base currency (KRW).
+- `settlementRate` is the **base-currency minor units per one foreign-currency minor unit**
+  (string decimal, never a float — F5); the base proceeds = `round(foreignBalance ×
+  settlementRate)`. MUST be strictly positive.
+- `proceedsAccountCode` is the **base-currency account** that receives (asset) or pays
+  (liability) the proceeds; it MUST already exist (no lazy mint).
+- `postedAt` optional (defaults to the server clock); the closed-period guard applies.
+- `reference` / `memo` optional operator narrative (audit reason + `source.sourceTransactionId`).
+
+`201` — the posted settlement entry, in the § 1 entry shape, with
+`source.sourceType = "SETTLEMENT"` and `settled: true`:
+```json
+{ "data": {
+    "settled": true,
+    "realizedBaseMinor": "7000",
+    "proceedsBaseMinor": "137000",
+    "outcome": "FX_GAIN",
+    "entry": {
+      "entryId": "...", "postedAt": "2026-06-30T23:59:59Z",
+      "source": { "sourceType": "SETTLEMENT", "sourceTransactionId": "FX-SETTLE-2026-06-USD", "sourceEventId": "settle:<client-key>" },
+      "reversalOfEntryId": null,
+      "lines": [
+        { "ledgerAccountCode": "CASH_KRW",       "direction": "DEBIT",  "money": {"amount":"137000","currency":"KRW"}, "exchangeRate": "1",    "baseAmount": {"amount":"137000","currency":"KRW"} },
+        { "ledgerAccountCode": "CASH_CLEARING",  "direction": "CREDIT", "money": {"amount":"10000","currency":"USD"},  "exchangeRate": "13",   "baseAmount": {"amount":"130000","currency":"KRW"} },
+        { "ledgerAccountCode": "FX_GAIN",        "direction": "CREDIT", "money": {"amount":"7000","currency":"KRW"},   "exchangeRate": "1",    "baseAmount": {"amount":"7000","currency":"KRW"} }
+      ],
+      "balanced": true
+    }
+  }, "meta": { "timestamp": "..." } }
+```
+The `CASH_CLEARING` USD position is **removed** (its foreign + base sums go to zero); the
+proceeds sit in `CASH_KRW`; `realizedBaseMinor = proceedsBase − carryingBase`.
+
+`200` — **no settlement booked** (`settled: false`): there is **no position** in that
+`currency` on the account (`foreignBalance == 0`), OR an **idempotent replay** (the same
+`Idempotency-Key` already settled — returns the original entry). Body:
+`{ "data": { "settled": false, "reason": "NO_POSITION" | "REPLAY", "entry": <original-entry-or-null> }, "meta": {…} }`.
+
+- `400 IDEMPOTENCY_KEY_REQUIRED` when the `Idempotency-Key` header is absent / blank / > 50 chars.
+- `422 SETTLEMENT_RATE_INVALID` when `settlementRate` is not strictly positive.
+- `422 CURRENCY_MISMATCH` when `currency` is unsupported or is the base currency (KRW).
+- `404 LEDGER_ACCOUNT_NOT_FOUND` when `ledgerAccountCode` or `proceedsAccountCode` does not exist.
+- `422 LEDGER_PERIOD_CLOSED` when `postedAt` falls in a CLOSED accounting period.
+- `403 TENANT_FORBIDDEN` when the dual-accept gate rejects.
+
+Polarity is automatic for **asset** (debit-balance) and **liability** (credit-balance) foreign
+positions — the line directions derive from `sign(foreignBalance)` (removal + proceeds) and
+`sign(realized)` (FX gain/loss). `realized` is measured against the position's **carrying** value
+(which already embeds any prior revaluation), so a revalue-then-settle realizes only the
+incremental movement — no double-count.
+
+---
+
 ## Error codes (this contract → `platform/error-handling.md`)
 
 | Code | HTTP | Meaning |
@@ -352,6 +429,7 @@ trues the carrying up again from its **already-revalued** carrying — no double
 | `ACCOUNTING_PERIOD_ALREADY_CLOSED` | 409 | **(2nd incr)** close attempted on an already-CLOSED period |
 | `ACCOUNTING_PERIOD_INVALID_WINDOW` | 422 | **(2nd incr)** `from ≥ to` |
 | `REVALUATION_RATE_INVALID` | 422 | **(9th incr)** FX revaluation `closingRate` not strictly positive on `POST /revaluations` (`RevaluationRateInvalidException`) |
+| `SETTLEMENT_RATE_INVALID` | 422 | **(10th incr)** FX settlement `settlementRate` not strictly positive on `POST /settlements` (`SettlementRateInvalidException`) |
 
 ## Out of scope (forward-declared — later increments)
 
@@ -361,10 +439,11 @@ trues the carrying up again from its **already-revalued** carrying — no double
 - Period **reopen**; a "period must have ended (`to ≤ now`)" close policy.
 - GL/AP export endpoints (`finance.ledger.entry.posted.v1` — the increment that
   introduces the outbox, and with it the deferred `finance.ledger.period.closed.v1`).
-- **Realized FX gain/loss on settlement** (the 9th increment books **unrealized**
-  revaluation of an open foreign position at a closing rate; recognising a realized gain/loss
-  when a foreign position is *settled* at a different rate is a distinct mechanic, forward-declared)
-  + a **bulk / all-positions** revaluation and a **period-close auto-hook** (the 9th increment
-  revalues one `(account, currency)` position per call, operator-triggered) + a **live FX rate
+- **Partial / weighted-average settlement** (the 10th increment settles a **whole**
+  `(account, currency)` position; settling a *portion* with a proportional / FIFO carrying basis
+  + a residual position is forward-declared) + a **proceeds-amount input** (the 10th derives
+  proceeds from a `settlementRate`; supplying the *actual* base received is forward-declared)
+  + a **bulk / all-positions** revaluation and a **period-close auto-hook** (the 9th/10th
+  increments act on one `(account, currency)` per call, operator-triggered) + a **live FX rate
   feed** (rates are caller-supplied) + a **configurable base currency** (fixed KRW in v1)
   + **multi-currency reconciliation** (cross-currency clearing-account matching).
