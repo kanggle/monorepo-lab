@@ -135,6 +135,21 @@ shipping:
       enabled: ${SHIPPING_CARRIER_AUTO_COLLECT_ENABLED:false}
       fixed-delay-ms: ${SHIPPING_CARRIER_AUTO_COLLECT_FIXED_DELAY_MS:60000}
       batch-size: ${SHIPPING_CARRIER_AUTO_COLLECT_BATCH_SIZE:100}
+    # Delivery Tracker (tracker.delivery) — the CONCRETE logistics aggregator (ADR-007 D2,
+    # external-integrations.md § 1). Active only when mode=delivery-tracker: an OAuth2
+    # client_credentials token (auth-url) + a GraphQL `track` query (graphql-url) over the same
+    # provider-agnostic CarrierTrackingPort. The default mode=mock leaves this inert (net-zero),
+    # so the existing mock/http adapters + HMAC webhook are byte-unchanged (TASK-BE-364 AC-6).
+    #
+    # client-id / client-secret are env-injected ONLY (no hardcoded secret); a BLANK either one
+    # disables the adapter (every fetch returns empty without calling out = net-zero, AC-5),
+    # identical to mode=mock (ADR-007 D4). Free sandbox keys: console.tracker.delivery.
+    # Timeouts reuse shipping.carrier.connect-timeout-ms / read-timeout-ms (2s / 5s, § 1.5).
+    delivery-tracker:
+      auth-url: ${SHIPPING_CARRIER_DELIVERY_TRACKER_AUTH_URL:https://auth.tracker.delivery/oauth2/token}
+      graphql-url: ${SHIPPING_CARRIER_DELIVERY_TRACKER_GRAPHQL_URL:https://apis.tracker.delivery/graphql}
+      client-id: ${SHIPPING_CARRIER_DELIVERY_TRACKER_CLIENT_ID:}
+      client-secret: ${SHIPPING_CARRIER_DELIVERY_TRACKER_CLIENT_SECRET:}
 
 logging:
   level:

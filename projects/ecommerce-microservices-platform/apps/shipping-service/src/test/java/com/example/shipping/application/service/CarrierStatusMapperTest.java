@@ -37,6 +37,33 @@ class CarrierStatusMapperTest {
         assertThat(CarrierStatusMapper.toShippingStatus(" 배달완료 ")).contains(ShippingStatus.DELIVERED);
     }
 
+    /**
+     * Delivery Tracker {@code TrackEventStatusCode} unified scheme (TASK-BE-364 /
+     * external-integrations.md § 1.4). The normaliser upper-cases + maps {@code -}/space → {@code _},
+     * so the plain enum names map directly.
+     */
+    @Test
+    void mapsDeliveryTrackerUnifiedCodes() {
+        assertThat(CarrierStatusMapper.toShippingStatus("AT_PICKUP")).contains(ShippingStatus.SHIPPED);
+        assertThat(CarrierStatusMapper.toShippingStatus("IN_TRANSIT")).contains(ShippingStatus.IN_TRANSIT);
+        assertThat(CarrierStatusMapper.toShippingStatus("OUT_FOR_DELIVERY")).contains(ShippingStatus.IN_TRANSIT);
+        assertThat(CarrierStatusMapper.toShippingStatus("AVAILABLE_FOR_PICKUP")).contains(ShippingStatus.IN_TRANSIT);
+        assertThat(CarrierStatusMapper.toShippingStatus("DELIVERED")).contains(ShippingStatus.DELIVERED);
+    }
+
+    /**
+     * Delivery Tracker codes that must stay unmapped → empty (forward-only / best-effort; § 1.4):
+     * waybill-registered, failed attempt, and the explicit error/unknown trio.
+     */
+    @Test
+    void deliveryTrackerUnmappedCodesMapToEmpty() {
+        assertThat(CarrierStatusMapper.toShippingStatus("INFORMATION_RECEIVED")).isEmpty();
+        assertThat(CarrierStatusMapper.toShippingStatus("ATTEMPT_FAIL")).isEmpty();
+        assertThat(CarrierStatusMapper.toShippingStatus("EXCEPTION")).isEmpty();
+        assertThat(CarrierStatusMapper.toShippingStatus("UNKNOWN")).isEmpty();
+        assertThat(CarrierStatusMapper.toShippingStatus("NOT_FOUND")).isEmpty();
+    }
+
     @Test
     void unknownOrBlankMapsToEmpty() {
         assertThat(CarrierStatusMapper.toShippingStatus("LOST")).isEmpty();

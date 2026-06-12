@@ -56,7 +56,17 @@ public final class CarrierStatusMapper {
             Map.entry("DELIVERED", ShippingStatus.DELIVERED),
             Map.entry("COMPLETED", ShippingStatus.DELIVERED),
             Map.entry("배송완료", ShippingStatus.DELIVERED),
-            Map.entry("배달완료", ShippingStatus.DELIVERED));
+            Map.entry("배달완료", ShippingStatus.DELIVERED),
+
+            // ---- Delivery Tracker unified scheme (TASK-BE-364 / external-integrations.md § 1.4) ----
+            // The concrete aggregator (ADR-007 D2) is Delivery Tracker; its `TrackEventStatusCode`
+            // enum is the unified scheme. The normaliser upper-cases + maps `-`/space → `_`, so the
+            // plain enum names land here directly. INFORMATION_RECEIVED / ATTEMPT_FAIL / EXCEPTION /
+            // UNKNOWN / NOT_FOUND are intentionally NOT listed = unmapped → no-op (forward-only,
+            // no regress; observable via CarrierStatusObserver).
+            // (IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED already covered by the aggregator rows above.)
+            Map.entry("AT_PICKUP", ShippingStatus.SHIPPED),
+            Map.entry("AVAILABLE_FOR_PICKUP", ShippingStatus.IN_TRANSIT));
 
     private CarrierStatusMapper() {
     }
