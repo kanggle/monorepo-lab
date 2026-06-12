@@ -1,6 +1,6 @@
 # TASK-FIN-BE-011 — ledger-service manual journal posting (5th increment: operator adjusting-entry REST endpoint funnelling the existing guarded write path)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (complex domain — first journal mutation surface, idempotency on the REST path, operator-audit actor, reuse of the guarded write path without a second write boundary)
