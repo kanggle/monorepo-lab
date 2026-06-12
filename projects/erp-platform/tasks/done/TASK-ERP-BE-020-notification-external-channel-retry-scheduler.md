@@ -1,6 +1,6 @@
 # TASK-ERP-BE-020 — notification external channel + DeliveryRetryScheduler (v2 external delivery)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (external integration + Category C retry scheduler + atomic gated dispatch)
@@ -130,3 +130,14 @@ Category C + ADR-MONO-016 § D3 forward-declaration, introducing **no new ADR-le
 - **F3 — infinite retry** — a permanently-failing webhook retried forever. Guarded by AC-3 (cap 5 → terminal FAILED).
 - **F4 — net-zero regression** — a default-on external channel delivering unbidden. Guarded by AC-4 (`external.enabled=false` default; mock adapter `matchIfMissing`).
 - **F5 — double delivery** — a delivered row re-attempted. Guarded by the `status=PENDING` due query + terminal immutability (`DeliveryStateTransitionInvalidException`).
+
+---
+
+## Closure
+
+- **Impl PR**: #1368 — squash `fc1439a652d2435ccfa96e4934b2b675c2978a8c` (merged 2026-06-12). 3-dim verified: (a) state=MERGED; (b) `origin/main` tip = the squash commit; (c) pre-merge checks = **20 SUCCESS + 1 SKIPPED, 0 failing required** (mergeState CLEAN — disjoint from the concurrent FIN-BE-011 merge, no conflict).
+- **Delivered**: `SlackWebhookChannelAdapter` (real, `@ConditionalOnProperty mode=slack`, `ResilienceClientFactory` RestClient, best-effort/never-throw, green-wash-safe) + `NoopExternalChannelAdapter` gated default (`mode=noop`/`matchIfMissing`) + `DeliveryRetryScheduler` (`@ConditionalOnProperty retry.enabled` + `@Scheduled fixedDelay`, non-reentrant) → `RetryDeliveryService` → `DeliveryAttemptProcessor` (`@Transactional` per delivery) + `RetryBackoffPolicy` (exponential + ±20% jitter, cap 5) + gated external-delivery creation in `NotifyOnApprovalEventUseCase` + `NotificationDelivery.createPendingExternal` + repo reads (`findById`/`findDueDeliveryIds`/`findByIdInternal`) + `ExternalNotificationProperties` + `SchedulingConfig` + `application.yml` + `architecture.md` v2.0 amendment.
+- **Verification**: `:notification-service:check` BUILD SUCCESSFUL — **84 tests** (6 new test classes/cases; existing suite byte-unchanged under default-OFF). **Testcontainers integrationTest validated GREEN** (full ApplicationContext; locally + CI "Integration (erp-platform, Testcontainers)" 2m6s). No Flyway migration (schema already reserved `SLACK`/`SMTP` + Category C columns + CHECK allow-lists).
+- **CI-caught wiring fix**: `RetryBackoffPolicy`'s two constructors made Spring unable to auto-select one (UnsatisfiedDependencyException at full-context load) — invisible to the Docker-free `:check`, surfaced only by the Testcontainers IT (the `feedback_spring_boot_diagnostic_patterns` §19/§20 lesson). Fixed with `@Autowired` on the injection constructor; re-validated by a local IT run.
+- **AC**: AC-1…AC-6 satisfied. Default config = net-zero; **no domain/contract change, no vendor SDK**.
+- **Deferred (follow-on)**: multi-instance retry concurrency (the `version` optimistic-lock / ShedLock enforcement); SMTP / push channels; notification preferences/routing; console bell UI.
