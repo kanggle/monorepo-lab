@@ -102,6 +102,19 @@ shipping:
     # (default) = fail-closed: every webhook is rejected 401 (inbound integration OFF = net-zero).
     webhook:
       secret: ${SHIPPING_CARRIER_WEBHOOK_SECRET:}
+    # Unattended auto-collect tracking sweep (TASK-BE-360 / ADR-007 D5-3). Periodically polls
+    # in-flight shipments (SHIPPED / IN_TRANSIT with tracking) via the SAME CarrierTrackingPort
+    # forward-advance as the admin pull, so a shipment converges to DELIVERED even when nobody
+    # presses refresh and the aggregator webhook is lost/delayed. ShedLock guarantees a single
+    # replica runs each tick.
+    #
+    # enabled=false (default) = scheduler bean NOT created (net-zero; existing admin-driven
+    # behaviour is byte-identical). Switch on only once a real aggregator is wired; with
+    # mode=mock + blank mock-status, even enabled it is a real no-op.
+    auto-collect:
+      enabled: ${SHIPPING_CARRIER_AUTO_COLLECT_ENABLED:false}
+      fixed-delay-ms: ${SHIPPING_CARRIER_AUTO_COLLECT_FIXED_DELAY_MS:60000}
+      batch-size: ${SHIPPING_CARRIER_AUTO_COLLECT_BATCH_SIZE:100}
 
 logging:
   level:

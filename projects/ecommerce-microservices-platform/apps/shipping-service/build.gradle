@@ -33,6 +33,12 @@ dependencies {
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
 
+    // ShedLock — distributed scheduler lock for the unattended auto-collect tracking
+    // sweep (TASK-BE-360); single-instance execution across replicas. Version pinned to
+    // match scm-platform's batch services (6.2.0) for monorepo consistency.
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.2.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.2.0'
+
     // PostgreSQL
     runtimeOnly 'org.postgresql:postgresql'
 
