@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-009-ledger-service-gl-ap-feed-outbox.md` — **READY** (analysis=Opus 4.8 / impl=Opus). ledger-service **3rd increment** — the **GL/AP feed** forward-declared by architecture.md § Increment Scope (the increment FIN-BE-008 explicitly deferred event emission to). ledger transitions **terminal consumer → publishing consumer**: gains a **transactional outbox** and emits the two forward-declared events as the external accounting/ERP/AP forward interface — **`finance.ledger.entry.posted.v1`** (every posted entry, in the posting `@Transactional`) + **`finance.ledger.period.closed.v1`** (on close, in the close `@Transactional`). **★Outbox path decision: per-service `OutboxRow` (NOT libs `OutboxWriter`)** — the libs `OutboxAutoConfiguration` entity-scans `ProcessedEventJpaEntity` (mapped `processed_events`) which collides with ledger's OWN consumer-dedupe `processed_events` (the very reason the 1st increment excluded it); so use `AbstractOutboxPublisher` + `LedgerOutboxJpaEntity implements OutboxRow` (ADR-MONO-004, wms inventory precedent) — exclusion **preserved**, own `ledger_outbox` table. Append-side `LedgerEventPublisher` builds the canonical envelope (same shape the ledger consumer parses) inside the existing write boundaries (atomic transactional outbox); relay reuses the EXISTING `KafkaTemplate` (already present for `@RetryableTopic` DLT). Flyway `V3__create_ledger_outbox.sql` (MySQL `payload TEXT`, not jsonb). No new error codes / no deploy-wiring change. Spec PR: architecture.md (§ Event publication + Increment Scope decision) + finance-ledger-events.md (2 events forward-declared→emitted).
 
 ## in-progress
 
