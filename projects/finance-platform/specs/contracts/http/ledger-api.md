@@ -2,12 +2,14 @@
 
 HTTP surface of `finance-platform/apps/ledger-service`. Authored by
 TASK-FIN-BE-007 **before** implementation (contract-first,
-`platform/service-types/rest-api.md`); extended by TASK-FIN-BE-008 (period close) and
-TASK-FIN-BE-011 (manual posting). Journal **postings** are **event-driven** by default
+`platform/service-types/rest-api.md`); extended by TASK-FIN-BE-008 (period close),
+TASK-FIN-BE-011 (manual posting), and TASK-FIN-BE-015 (FX revaluation). Journal
+**postings** are **event-driven** by default
 (§ `finance-ledger-events.md`); the **2nd increment** adds **period** mutation
-endpoints (open/close — § Accounting periods), and the **5th increment** adds the
+endpoints (open/close — § Accounting periods), the **5th increment** adds the
 first journal **mutation** endpoint — operator **manual posting**
-(`POST /entries` — § Manual journal posting). Architecture: [`../../services/ledger-service/architecture.md`](../../services/ledger-service/architecture.md).
+(`POST /entries` — § Manual journal posting), and the **9th increment** adds operator
+**FX revaluation** (`POST /revaluations` — § FX revaluation). Architecture: [`../../services/ledger-service/architecture.md`](../../services/ledger-service/architecture.md).
 
 All paths under `/api/finance/ledger/**`. All require a valid IAM RS256 JWT with
 `tenant_id` accepted by the dual-accept gate (`finance` / `*` / `entitled_domains ∋
@@ -254,6 +256,86 @@ all-KRW entry is unchanged — base == original). Example of a multi-currency li
 
 ---
 
+## FX revaluation (9th increment — TASK-FIN-BE-015)
+
+An operator revalues a **foreign-currency position** at a new closing (spot) rate. The
+8th increment books multi-currency entries at the rate supplied **at posting time**; over
+time the spot rate moves, so a foreign position's **base carrying value** (Σ of its lines'
+historical `baseAmount`) drifts from its current market value. Revaluation **trues that
+carrying value up to spot**, booking the difference as an **unrealized FX gain or loss**.
+
+The revaluation is itself a **balanced base-currency (KRW) adjusting entry**:
+- a **base-carrying adjustment** line on the foreign account — `money.amount = "0"` in the
+  foreign `currency` (the foreign **quantity is unchanged**) with a non-zero `baseAmount`
+  (the carrying delta in KRW); and
+- a contra **`FX_GAIN`** (income) or **`FX_LOSS`** (expense) line for the same KRW amount.
+
+So the foreign account's base carrying value moves to `foreignBalance × closingRate` while
+its foreign-currency balance is untouched. The entry funnels through the **same guarded
+write path** as every posting (balance self-validation in the base currency, closed-period
+guard, audit, `entry.posted` outbox) — see architecture.md § FX gain/loss revaluation.
+
+### 10. POST `/api/finance/ledger/revaluations`
+
+Headers: `Idempotency-Key: <client-key>` (required, ≤ 50 chars). Request:
+```json
+{ "ledgerAccountCode": "CASH_CLEARING",
+  "currency": "USD",
+  "closingRate": "13.5",
+  "postedAt": "2026-06-30T23:59:59Z",
+  "reference": "FX-REVAL-2026-06-USD",
+  "memo": "month-end USD revaluation" }
+```
+- `ledgerAccountCode` + `currency` identify the **foreign position** to revalue (the
+  account's lines in that currency). `currency` MUST NOT be the base currency (KRW).
+- `closingRate` is the **base-currency minor units per one foreign-currency minor unit**
+  (a string decimal — never a float, F5). For USD (minor scale 2) → KRW (minor scale 0) at
+  a spot of ₩1,350 per $1: `$1 = 100 USD-minor = 1350 KRW-minor`, so `closingRate = "13.5"`.
+  MUST be strictly positive.
+- `postedAt` optional (defaults to the server clock; a month-end effective instant). The
+  closed-period guard applies — a revaluation `postedAt` in a CLOSED period is rejected.
+- `reference` / `memo` optional operator narrative (audit reason + `source.sourceTransactionId`).
+
+`201` — the posted revaluation entry, in the § 1 entry shape, with
+`source.sourceType = "REVALUATION"` and `revalued: true`:
+```json
+{ "data": {
+    "revalued": true,
+    "deltaBaseMinor": "5000",
+    "outcome": "FX_GAIN",
+    "entry": {
+      "entryId": "...", "postedAt": "2026-06-30T23:59:59Z",
+      "source": { "sourceType": "REVALUATION", "sourceTransactionId": "FX-REVAL-2026-06-USD", "sourceEventId": "reval:<client-key>" },
+      "reversalOfEntryId": null,
+      "lines": [
+        { "ledgerAccountCode": "CASH_CLEARING", "direction": "DEBIT",  "money": {"amount":"0","currency":"USD"}, "exchangeRate": "13.5", "baseAmount": {"amount":"5000","currency":"KRW"} },
+        { "ledgerAccountCode": "FX_GAIN",       "direction": "CREDIT", "money": {"amount":"5000","currency":"KRW"}, "exchangeRate": "1", "baseAmount": {"amount":"5000","currency":"KRW"} }
+      ],
+      "balanced": true
+    }
+  }, "meta": { "timestamp": "..." } }
+```
+
+`200` — **no adjustment booked** (`revalued: false`): the position is already at spot
+(`delta == 0`), or there is **no position** in that `currency` on the account, OR an
+**idempotent replay** (the same `Idempotency-Key` already booked a revaluation — returns
+the original entry). Body: `{ "data": { "revalued": false, "reason": "AT_SPOT" | "NO_POSITION" | "REPLAY", "entry": <original-entry-or-null> }, "meta": {…} }`.
+
+- `400 IDEMPOTENCY_KEY_REQUIRED` when the `Idempotency-Key` header is absent / blank / > 50 chars.
+- `422 REVALUATION_RATE_INVALID` when `closingRate` is not strictly positive.
+- `422 CURRENCY_MISMATCH` when `currency` is unsupported or is the base currency (KRW —
+  the base currency cannot be revalued against itself).
+- `404 LEDGER_ACCOUNT_NOT_FOUND` when `ledgerAccountCode` does not exist.
+- `422 LEDGER_PERIOD_CLOSED` when `postedAt` falls in a CLOSED accounting period.
+- `403 TENANT_FORBIDDEN` when the dual-accept gate rejects.
+
+The `FX_GAIN` (income) and `FX_LOSS` (expense) GL accounts are seeded in the chart of
+accounts (§ architecture.md § Chart of Accounts). A subsequent revaluation at a newer rate
+trues the carrying up again from its **already-revalued** carrying — no double-booking
+(the prior delta is part of the foreign position's base carrying).
+
+---
+
 ## Error codes (this contract → `platform/error-handling.md`)
 
 | Code | HTTP | Meaning |
@@ -269,6 +351,7 @@ all-KRW entry is unchanged — base == original). Example of a multi-currency li
 | `ACCOUNTING_PERIOD_OVERLAP` | 422 | **(2nd incr)** opened window overlaps an existing period for the tenant |
 | `ACCOUNTING_PERIOD_ALREADY_CLOSED` | 409 | **(2nd incr)** close attempted on an already-CLOSED period |
 | `ACCOUNTING_PERIOD_INVALID_WINDOW` | 422 | **(2nd incr)** `from ≥ to` |
+| `REVALUATION_RATE_INVALID` | 422 | **(9th incr)** FX revaluation `closingRate` not strictly positive on `POST /revaluations` (`RevaluationRateInvalidException`) |
 
 ## Out of scope (forward-declared — later increments)
 
@@ -278,7 +361,10 @@ all-KRW entry is unchanged — base == original). Example of a multi-currency li
 - Period **reopen**; a "period must have ended (`to ≤ now`)" close policy.
 - GL/AP export endpoints (`finance.ledger.entry.posted.v1` — the increment that
   introduces the outbox, and with it the deferred `finance.ledger.period.closed.v1`).
-- **FX gain/loss + period-end revaluation** of foreign balances (the 8th increment books
-  multi-currency entries at the supplied rate; revaluing a foreign balance at a new rate
-  and booking `FX_GAIN`/`FX_LOSS` is forward-declared) + a live FX rate feed (rates are
-  caller-supplied) + a configurable base currency (fixed KRW in v1).
+- **Realized FX gain/loss on settlement** (the 9th increment books **unrealized**
+  revaluation of an open foreign position at a closing rate; recognising a realized gain/loss
+  when a foreign position is *settled* at a different rate is a distinct mechanic, forward-declared)
+  + a **bulk / all-positions** revaluation and a **period-close auto-hook** (the 9th increment
+  revalues one `(account, currency)` position per call, operator-triggered) + a **live FX rate
+  feed** (rates are caller-supplied) + a **configurable base currency** (fixed KRW in v1)
+  + **multi-currency reconciliation** (cross-currency clearing-account matching).

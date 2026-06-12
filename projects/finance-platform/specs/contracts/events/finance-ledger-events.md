@@ -82,7 +82,7 @@ own consumer parses):
 
 | Topic | Appended when | `payload` |
 |---|---|---|
-| `finance.ledger.entry.posted.v1` | every posted `JournalEntry` (auto-journal + reversal; **(5th incr)** operator manual posting), in `PostJournalEntryUseCase.post`'s `@Transactional` | `{ entryId, postedAt, lines:[{ ledgerAccountCode, direction: "DEBIT"\|"CREDIT", money:{amount,currency}, exchangeRate, baseAmount:{amount,currency} }], source:{ sourceType: "TRANSACTION"\|"MANUAL", sourceTransactionId, sourceEventId }, reversalOfEntryId? }` (**(8th incr)** each line carries `exchangeRate` + `baseAmount` [base currency KRW]; an all-KRW line has `exchangeRate:"1"` and `baseAmount==money` — the GL feed is base-currency-aware) |
+| `finance.ledger.entry.posted.v1` | every posted `JournalEntry` (auto-journal + reversal; **(5th incr)** operator manual posting; **(9th incr)** FX revaluation adjusting entry), in `PostJournalEntryUseCase.post`'s `@Transactional` | `{ entryId, postedAt, lines:[{ ledgerAccountCode, direction: "DEBIT"\|"CREDIT", money:{amount,currency}, exchangeRate, baseAmount:{amount,currency} }], source:{ sourceType: "TRANSACTION"\|"MANUAL"\|"REVALUATION", sourceTransactionId, sourceEventId }, reversalOfEntryId? }` (**(8th incr)** each line carries `exchangeRate` + `baseAmount` [base currency KRW]; an all-KRW line has `exchangeRate:"1"` and `baseAmount==money` — the GL feed is base-currency-aware. **(9th incr)** a revaluation entry's foreign-account line carries `money.amount:"0"` [the foreign quantity is unchanged] with a non-zero `baseAmount` [the carrying delta]; its contra is an `FX_GAIN`/`FX_LOSS` KRW line) |
 | `finance.ledger.period.closed.v1` | an accounting period closes, in `CloseAccountingPeriodUseCase.close`'s `@Transactional` | `{ periodId, from, to, closedAt, entryCount }` |
 | `finance.ledger.reconciliation.completed.v1` | **(4th incr)** an external statement is ingested + matched, in `IngestStatementUseCase`'s `@Transactional` | `{ statementId, ledgerAccountCode, source, statementDate, matchedCount, discrepancyCount }` |
 | `finance.ledger.reconciliation.discrepancy.detected.v1` | **(4th incr)** one per recorded discrepancy, in the same ingest `@Transactional` | `{ discrepancyId, ledgerAccountCode, type: "UNMATCHED_EXTERNAL"\|"UNMATCHED_INTERNAL"\|"AMOUNT_MISMATCH", expectedMinor, actualMinor, currency, externalRef?, journalEntryId? }` |
@@ -103,6 +103,12 @@ own consumer parses):
   (`sourceTransactionId` = the operator `reference`, `sourceEventId` =
   `manual:{Idempotency-Key}`) — the GL/AP feed distinguishes operator adjustments from
   transaction-driven postings by provenance. No new topic.
+- **(9th incr) `sourceType: "REVALUATION"`** — an FX revaluation adjusting entry
+  (TASK-FIN-BE-015, `POST /api/finance/ledger/revaluations`) emits the same
+  `entry.posted.v1`, tagged `source.sourceType = "REVALUATION"`
+  (`sourceTransactionId` = the operator `reference`, `sourceEventId` =
+  `reval:{Idempotency-Key}`) — the GL/AP feed sees unrealized FX gain/loss adjustments
+  tagged by provenance, balanced in the base currency. No new topic.
 
 > **Outbox path (not the libs `OutboxWriter`).** ledger-service keeps the libs
 > `OutboxAutoConfiguration` excluded (its `ProcessedEventJpaEntity` would collide with
