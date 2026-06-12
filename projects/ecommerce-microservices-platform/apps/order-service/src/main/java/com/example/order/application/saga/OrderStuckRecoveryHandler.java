@@ -64,7 +64,10 @@ public class OrderStuckRecoveryHandler {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recover(String orderId, int maxAttempts) {
-        Order order = orderRepository.findById(orderId).orElse(null);
+        // Tenant-agnostic: the detector sweeps stuck orders globally (operational),
+        // so recovery must reach the order regardless of any ambient tenant context.
+        // Its immutable tenant_id is preserved through the recovery save.
+        Order order = orderRepository.findByIdAcrossTenants(orderId).orElse(null);
         if (order == null) {
             log.warn("order_stuck_recovery_order_vanished orderId={}", orderId);
             return;

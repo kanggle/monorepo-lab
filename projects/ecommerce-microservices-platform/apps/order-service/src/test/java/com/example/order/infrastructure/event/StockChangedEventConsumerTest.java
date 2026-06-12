@@ -38,6 +38,7 @@ class StockChangedEventConsumerTest {
                 "StockChanged",
                 "2026-03-23T00:00:00",
                 "product-service",
+                "ecommerce",
                 new StockChangedEvent.StockChangedPayload("p1", "v1", 10, 9, -1, reason, orderId)
         );
     }

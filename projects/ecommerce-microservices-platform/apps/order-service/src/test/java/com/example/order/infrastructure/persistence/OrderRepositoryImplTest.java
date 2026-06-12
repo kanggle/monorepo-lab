@@ -68,7 +68,7 @@ class OrderRepositoryImplTest {
         @DisplayName("version이 null인 신규 주문은 INSERT 경로를 탄다")
         void save_newOrder_insertsViaJpaRepositorySave() {
             Order newOrder = createNewOrder();
-            OrderJpaEntity entity = OrderJpaEntity.fromDomain(newOrder);
+            OrderJpaEntity entity = OrderJpaEntity.fromDomain(newOrder, "ecommerce");
             Order savedDomain = createNewOrder();
 
             given(mapper.toEntity(newOrder)).willReturn(entity);
@@ -86,7 +86,7 @@ class OrderRepositoryImplTest {
         @DisplayName("version이 non-null인 기존 주문은 findById 후 updateFrom으로 업데이트한다")
         void save_existingOrder_updatesViaDirtyChecking() {
             Order existingOrder = createExistingOrder();
-            OrderJpaEntity persistedEntity = OrderJpaEntity.fromDomain(existingOrder);
+            OrderJpaEntity persistedEntity = OrderJpaEntity.fromDomain(existingOrder, "ecommerce");
             Order resultDomain = createExistingOrder();
 
             given(jpaRepository.findById("order-1")).willReturn(Optional.of(persistedEntity));

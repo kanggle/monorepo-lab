@@ -26,7 +26,7 @@ class OrderEventContractTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String SPEC_REF = "specs/contracts/events/order-events.md";
-    private static final Set<String> ENVELOPE_FIELDS = Set.of("event_id", "event_type", "occurred_at", "source", "payload");
+    private static final Set<String> ENVELOPE_FIELDS = Set.of("event_id", "event_type", "occurred_at", "source", "tenant_id", "payload");
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-03-25T12:00:00Z"), ZoneOffset.UTC);
 
     // ─── OrderPlaced ────────────────────────────────────────────────────

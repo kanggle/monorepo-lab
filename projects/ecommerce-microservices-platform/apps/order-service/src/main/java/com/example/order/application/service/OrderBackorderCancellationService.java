@@ -44,7 +44,7 @@ public class OrderBackorderCancellationService {
 
     @Transactional
     public void cancelForBackorder(String orderId, String reason) {
-        Order order = orderRepository.findById(orderId).orElse(null);
+        Order order = orderRepository.findByIdAcrossTenants(orderId).orElse(null);
         if (order == null) {
             log.warn("Backorder cancel for unknown order, skipping. orderId={}, reason={}",
                     orderId, reason);

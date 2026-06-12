@@ -16,7 +16,20 @@ public interface OrderRepository {
 
     List<Order> saveAll(List<Order> orders);
 
+    /**
+     * Tenant-scoped lookup (HTTP read path). Resolves to empty for an order owned
+     * by another tenant — the caller surfaces that as 404 (M3, existence hidden).
+     */
     Optional<Order> findById(String orderId);
+
+    /**
+     * Tenant-agnostic lookup by globally-unique order id, for the system/saga path
+     * (consumed payment/stock/withdrawal/wms events, stuck-detector recovery).
+     * Addressing by unique id cannot reach the wrong order, so it cannot leak
+     * across tenants; the order's immutable {@code tenant_id} is preserved across
+     * any subsequent save (ADR-MONO-030 Step 2, task §C).
+     */
+    Optional<Order> findByIdAcrossTenants(String orderId);
 
     PageResult<Order> findByUserId(String userId, PageQuery pageQuery);
 

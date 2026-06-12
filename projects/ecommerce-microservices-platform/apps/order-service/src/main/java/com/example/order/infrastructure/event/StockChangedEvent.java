@@ -12,6 +12,11 @@ public record StockChangedEvent(
         @JsonProperty("event_type") @JsonAlias("eventType") String eventType,
         @JsonProperty("occurred_at") @JsonAlias("occurredAt") String occurredAt,
         String source,
+        // Envelope tenant (ADR-MONO-030 Step 2, M5). product-service stamps this on
+        // the StockChanged envelope (increment B); the consumer binds it so the
+        // product→order confirm saga stays within the tenant boundary. Absent on a
+        // pre-multi-tenant / standalone event → resolves to the default tenant.
+        @JsonProperty("tenant_id") @JsonAlias("tenantId") String tenantId,
         StockChangedPayload payload
 ) {
     public record StockChangedPayload(

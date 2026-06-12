@@ -3,6 +3,7 @@ package com.example.order.infrastructure.persistence;
 import com.example.order.domain.model.Order;
 import com.example.order.domain.model.OrderItem;
 import com.example.order.domain.model.ShippingAddress;
+import com.example.order.domain.tenant.TenantContext;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -38,7 +39,9 @@ class OrderJpaMapper {
     }
 
     OrderJpaEntity toEntity(Order order) {
-        return OrderJpaEntity.fromDomain(order);
+        // Stamp the owning tenant from the request context (M2 layer 3 — write).
+        // Background/standalone paths resolve to the default tenant (net-zero, D8).
+        return OrderJpaEntity.fromDomain(order, TenantContext.currentTenant());
     }
 
     private OrderItem toOrderItem(OrderItemJpaEntity entity) {

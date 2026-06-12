@@ -54,7 +54,7 @@ class PaymentRefundConfirmationServiceTest {
     @DisplayName("정상적으로 환불을 반영하고 저장한다")
     void markRefunded_cancelledOrder_savesRefundInfo() {
         Order order = createCancelledOrder();
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(Instant.parse("2026-03-25T10:00:00Z"));
 
@@ -67,7 +67,7 @@ class PaymentRefundConfirmationServiceTest {
     @Test
     @DisplayName("주문이 존재하지 않으면 warn 로그만 남기고 정상 완료한다")
     void markRefunded_orderNotFound_doesNotThrow() {
-        given(orderRepository.findById("nonexistent")).willReturn(Optional.empty());
+        given(orderRepository.findByIdAcrossTenants("nonexistent")).willReturn(Optional.empty());
 
         assertThatNoException().isThrownBy(() ->
                 paymentRefundConfirmationService.markRefunded("nonexistent", REFUNDED_AT));
@@ -80,7 +80,7 @@ class PaymentRefundConfirmationServiceTest {
     void markRefunded_alreadyRefunded_doesNotSave() {
         Order order = createCancelledOrder();
         order.markRefunded(REFUNDED_AT, FIXED_CLOCK);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
 
         paymentRefundConfirmationService.markRefunded(order.getOrderId(), Instant.now());
 
@@ -93,7 +93,7 @@ class PaymentRefundConfirmationServiceTest {
         Order order = Order.create("user1",
                 List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
                 ADDRESS, FIXED_CLOCK);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
 
         assertThatNoException().isThrownBy(() ->
                 paymentRefundConfirmationService.markRefunded(order.getOrderId(), REFUNDED_AT));
@@ -108,7 +108,7 @@ class PaymentRefundConfirmationServiceTest {
                 List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
                 ADDRESS, FIXED_CLOCK);
         order.markPaymentCompleted("pay-123", Instant.now(), FIXED_CLOCK);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
 
         assertThatNoException().isThrownBy(() ->
                 paymentRefundConfirmationService.markRefunded(order.getOrderId(), REFUNDED_AT));

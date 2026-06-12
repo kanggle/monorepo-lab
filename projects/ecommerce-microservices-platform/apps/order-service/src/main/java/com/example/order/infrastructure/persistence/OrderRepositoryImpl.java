@@ -5,6 +5,7 @@ import com.example.order.domain.model.OrderStatus;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.order.domain.repository.OrderRepository;
+import com.example.order.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -83,20 +84,36 @@ public class OrderRepositoryImpl implements OrderRepository {
 
     @Override
     public Optional<Order> findById(String orderId) {
+        // Tenant-scoped (HTTP read path): a cross-tenant id resolves to empty → 404
+        // (M3, existence hidden). The system/saga path uses findByIdAcrossTenants.
+        return jpaRepository.findByOrderIdAndTenantId(orderId, TenantContext.currentTenant())
+                .map(mapper::toDomain);
+    }
+
+    @Override
+    public Optional<Order> findByIdAcrossTenants(String orderId) {
+        // System/saga/sweep path: the order is addressed by its globally-unique id
+        // (a consumed payment/stock/withdrawal/wms event, or the stuck-detector
+        // recovery), so the lookup is tenant-agnostic — it can never reach the
+        // wrong order (the id is unique) and must find the order regardless of the
+        // ambient context. Downstream state stays on the loaded order's tenant
+        // because tenant_id is immutable after insert (preserved on update).
         return jpaRepository.findById(orderId).map(mapper::toDomain);
     }
 
     @Override
     public PageResult<Order> findByUserId(String userId, PageQuery pageQuery) {
         PageRequest pageable = toPageRequest(pageQuery);
-        Page<OrderJpaEntity> page = jpaRepository.findByUserId(userId, pageable);
+        Page<OrderJpaEntity> page = jpaRepository.findByTenantIdAndUserId(
+                TenantContext.currentTenant(), userId, pageable);
         return toPageResult(page);
     }
 
     @Override
     public PageResult<Order> findByUserIdAndStatus(String userId, OrderStatus status, PageQuery pageQuery) {
         PageRequest pageable = toPageRequest(pageQuery);
-        Page<OrderJpaEntity> page = jpaRepository.findByUserIdAndStatus(userId, status, pageable);
+        Page<OrderJpaEntity> page = jpaRepository.findByTenantIdAndUserIdAndStatus(
+                TenantContext.currentTenant(), userId, status, pageable);
         return toPageResult(page);
     }
 
@@ -110,34 +127,38 @@ public class OrderRepositoryImpl implements OrderRepository {
     @Override
     public PageResult<Order> findAll(PageQuery pageQuery) {
         PageRequest pageable = toPageRequest(pageQuery);
-        Page<OrderJpaEntity> page = jpaRepository.findAll(pageable);
+        Page<OrderJpaEntity> page = jpaRepository.findByTenantId(TenantContext.currentTenant(), pageable);
         return toPageResult(page);
     }
 
     @Override
     public PageResult<Order> findByStatus(OrderStatus status, PageQuery pageQuery) {
         PageRequest pageable = toPageRequest(pageQuery);
-        Page<OrderJpaEntity> page = jpaRepository.findByStatus(status, pageable);
+        Page<OrderJpaEntity> page = jpaRepository.findByTenantIdAndStatus(
+                TenantContext.currentTenant(), status, pageable);
         return toPageResult(page);
     }
 
     @Override
     public PageResult<Order> findAllWithItems(PageQuery pageQuery) {
         PageRequest pageable = toPageRequest(pageQuery);
-        Page<OrderJpaEntity> page = jpaRepository.findAllWithItems(pageable);
+        Page<OrderJpaEntity> page = jpaRepository.findAllWithItemsByTenantId(
+                TenantContext.currentTenant(), pageable);
         return toPageResult(page);
     }
 
     @Override
     public PageResult<Order> findByStatusWithItems(OrderStatus status, PageQuery pageQuery) {
         PageRequest pageable = toPageRequest(pageQuery);
-        Page<OrderJpaEntity> page = jpaRepository.findByStatusWithItems(status, pageable);
+        Page<OrderJpaEntity> page = jpaRepository.findByStatusWithItemsAndTenantId(
+                TenantContext.currentTenant(), status, pageable);
         return toPageResult(page);
     }
 
     @Override
     public boolean existsByUserIdAndProductIdAndStatus(String userId, String productId, OrderStatus status) {
-        return jpaRepository.existsByUserIdAndProductIdAndStatus(userId, productId, status);
+        return jpaRepository.existsByUserIdAndProductIdAndStatusAndTenantId(
+                TenantContext.currentTenant(), userId, productId, status);
     }
 
     @Override

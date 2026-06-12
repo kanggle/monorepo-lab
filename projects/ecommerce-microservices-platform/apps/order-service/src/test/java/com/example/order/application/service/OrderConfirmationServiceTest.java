@@ -59,7 +59,7 @@ class OrderConfirmationServiceTest {
         Order order = Order.create("user1",
                 List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
                 ADDRESS, FIXED_CLOCK);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
@@ -91,7 +91,7 @@ class OrderConfirmationServiceTest {
                 List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
                 ADDRESS, FIXED_CLOCK);
         order.confirm(FIXED_CLOCK);
-        given(orderRepository.findById(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         orderConfirmationService.confirmOrder(order.getOrderId());
@@ -106,7 +106,7 @@ class OrderConfirmationServiceTest {
     @Test
     @DisplayName("존재하지 않는 orderId 확정 시 OrderNotFoundException이 발생한다")
     void confirmOrder_notFound_throwsOrderNotFoundException() {
-        given(orderRepository.findById("nonexistent")).willReturn(Optional.empty());
+        given(orderRepository.findByIdAcrossTenants("nonexistent")).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderConfirmationService.confirmOrder("nonexistent"))
                 .isInstanceOf(OrderNotFoundException.class);

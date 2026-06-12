@@ -1,6 +1,7 @@
 package com.example.order.infrastructure.event;
 
 import com.example.order.application.service.OrderConfirmationService;
+import com.example.order.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,18 @@ public class StockChangedEventConsumer {
     @Transactional
     @KafkaListener(topics = "product.product.stock-changed", groupId = "order-service")
     public void onMessage(@Payload String payload) throws JsonProcessingException {
-        handle(objectMapper.readValue(payload, StockChangedEvent.class));
+        StockChangedEvent event = objectMapper.readValue(payload, StockChangedEvent.class);
+        // Bind the order's tenant from the consumed envelope (M5) so the confirm
+        // saga and the OrderConfirmed it emits stay within the tenant boundary.
+        // A pre-multi-tenant envelope (no tenant_id) resolves to the default tenant
+        // (net-zero, D8). Cleared in finally so the pooled listener thread leaks no
+        // context to the next message.
+        try {
+            TenantContext.set(event.tenantId());
+            handle(event);
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     void handle(StockChangedEvent event) {

@@ -21,7 +21,7 @@ public class PaymentRefundConfirmationService {
 
     @Transactional
     public void markRefunded(String orderId, Instant refundedAt) {
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdAcrossTenants(orderId)
                 .orElse(null);
 
         if (order == null) {
