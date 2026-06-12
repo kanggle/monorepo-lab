@@ -154,15 +154,16 @@ public class RequiresPermissionAspect {
         // ADR-MONO-029 — RESOURCE_TAG: gate by the TARGET resource's tags, resolved
         // at this single decision site (D2-A). Both modes (deny-if-present AND require,
         // TASK-BE-354) are carried as separate ResourceTagCondition beans and composed
-        // AND-only — every configured condition must hold. The resolver is consulted
-        // once; it returns empty when the request targets no resolvable resource → the
-        // condition is skipped (not a tagged-resource mutation; net-zero).
+        // AND-only — every configured condition must hold. The target's tags are
+        // resolved by consulting EVERY registered ResourceTagResolver (operator /
+        // tenant / account, TASK-BE-355); their paths are disjoint, so at most one
+        // applies (returns Optional.of). A request that matches no resolver targets no
+        // resolvable resource → skipped (not a tagged-resource mutation; net-zero).
         List<ResourceTagCondition> resourceTagConditions = resourceTagConditionProvider.orderedStream()
                 .filter(ResourceTagCondition::isConfigured)
                 .toList();
         if (!resourceTagConditions.isEmpty()) {
-            ResourceTagResolver resolver = resourceTagResolverProvider.getIfAvailable();
-            if (resolver != null) {
+            for (ResourceTagResolver resolver : resourceTagResolverProvider.orderedStream().toList()) {
                 Optional<Set<String>> tags = resolver.resolveResourceTags(request);
                 if (tags.isPresent()) {
                     Set<String> resolved = tags.get();
@@ -171,6 +172,7 @@ public class RequiresPermissionAspect {
                             return true;
                         }
                     }
+                    break; // exactly one resolver applies (disjoint paths)
                 }
             }
         }
