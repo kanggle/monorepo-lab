@@ -32,6 +32,7 @@ No single spec — this file is the skill catalog itself. Each row points at the
 | Audit log entity, REQUIRES_NEW transaction pattern | `backend/audit-logging/SKILL.md` |
 | Shared PageQuery/PageResult pagination DTOs | `backend/pagination/SKILL.md` |
 | Scheduled tasks, outbox polling, batch jobs | `backend/scheduled-tasks/SKILL.md` |
+| Real outbound HTTP adapter + inbound webhook ingestion | `backend/external-http-integration/SKILL.md` |
 | @Profile("standalone") in-memory fallbacks for local dev | `backend/standalone-profile/SKILL.md` |
 | Implement Kafka event publisher/consumer | `messaging/event-implementation/SKILL.md` |
 | Implement transactional outbox for reliable events | `messaging/outbox-pattern/SKILL.md` |
@@ -96,6 +97,7 @@ No single spec — this file is the skill catalog itself. Each row points at the
 | Add OAuth provider | `oauth-provider`, `jwt-auth`, `redis-session` |
 | Add event publishing | `event-implementation`, `outbox-pattern`, `scheduled-tasks`, `testing-backend` |
 | Add event consumer | `event-implementation`, `consumer-retry-dlq`, `idempotent-consumer`, `testing-backend` |
+| Add external channel / webhook | `external-http-integration`, `scheduled-tasks`, `consumer-retry-dlq`, `testing-backend` |
 | Add database migration | `schema-change-workflow`, `migration-strategy`, `indexing` |
 | Add frontend screen | matched architecture skill, `api-client`, `state-management`, `form-handling`, `loading-error-handling`, `component-library`, `testing-frontend` |
 | Add search feature | `elasticsearch-index`, `elasticsearch-query`, `index-sync` |
