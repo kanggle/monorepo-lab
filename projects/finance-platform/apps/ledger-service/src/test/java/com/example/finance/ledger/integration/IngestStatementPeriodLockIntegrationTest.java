@@ -131,8 +131,10 @@ class IngestStatementPeriodLockIntegrationTest extends AbstractLedgerIntegration
                 .isZero();
 
         // No outbox row for reconciliation.completed (the guard threw before publish).
+        // ledger_outbox stores the base event_type ('...completed'); the '.v1' topic
+        // suffix is appended by the relay's TopicResolver at publish time, not stored.
         int outboxReconRows = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM ledger_outbox WHERE topic = 'finance.ledger.reconciliation.completed.v1'",
+                "SELECT COUNT(*) FROM ledger_outbox WHERE event_type = 'finance.ledger.reconciliation.completed'",
                 Integer.class);
         assertThat(outboxReconRows)
                 .as("no reconciliation.completed outbox row should be written on locked ingest")
