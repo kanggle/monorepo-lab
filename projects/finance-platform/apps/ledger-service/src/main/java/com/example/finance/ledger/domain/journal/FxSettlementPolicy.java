@@ -53,6 +53,14 @@ import java.util.Optional;
  *
  * <p><b>F5</b>: money stays integer minor units; only {@code settlementRate} is an
  * exact {@link BigDecimal}; {@code proceedsBase} is rounded HALF_UP to a {@code long}.
+ *
+ * <p><b>12th increment (TASK-FIN-BE-018) — partial / weighted-average settlement.</b>
+ * The {@code settleForeignMinor} overload settles a <b>portion</b> {@code F_settle} of
+ * the position at its weighted-average unit cost: the settled carrying is the
+ * proportional share {@code C_settle = round(C × |F_settle|/|F|)} (HALF_UP, signed) and
+ * the residual {@code (F − F_settle, C − C_settle)} simply remains OPEN (double-entry
+ * leaves it — no extra line). The full-settle overload delegates with
+ * {@code F_settle == F} → byte-identical output (net-zero, AC-2).
  */
 public final class FxSettlementPolicy {
 
@@ -88,7 +96,11 @@ public final class FxSettlementPolicy {
     }
 
     /**
-     * Settle the whole {@code (ledgerAccountCode, currency)} foreign position.
+     * Settle the <b>whole</b> {@code (ledgerAccountCode, currency)} foreign position
+     * (10th increment — TASK-FIN-BE-016). Convenience overload of
+     * {@link #settle(String, String, Currency, long, long, long, BigDecimal, String)}
+     * with {@code settleForeignMinor == foreignBalanceMinor} — byte-identical to the
+     * full-settle behaviour (net-zero, AC-2).
      *
      * @param tenantId            the owning tenant (stamped onto the built lines)
      * @param ledgerAccountCode   the foreign account whose position is removed
@@ -107,6 +119,51 @@ public final class FxSettlementPolicy {
                                                     Currency currency, long foreignBalanceMinor,
                                                     long carryingBaseMinor, BigDecimal settlementRate,
                                                     String proceedsAccountCode) {
+        return settle(tenantId, ledgerAccountCode, currency, foreignBalanceMinor,
+                carryingBaseMinor, foreignBalanceMinor, settlementRate, proceedsAccountCode);
+    }
+
+    /**
+     * Settle a <b>portion</b> {@code F_settle} of the {@code (ledgerAccountCode,
+     * currency)} foreign position (12th increment — TASK-FIN-BE-018, weighted-average).
+     * The settled portion's carrying base is a <b>proportional share</b> of the
+     * position's carrying at its average unit cost:
+     * {@code C_settle = round(C × |F_settle| / |F|)} (HALF_UP, signed). The 10th's 3-line
+     * entry is reused unchanged with the partial quantities — position-removal
+     * {@code money = |F_settle| {currency}}, {@code baseAmount = |C_settle| KRW};
+     * {@code proceedsBase = round(F_settle × settlementRate)}; realized
+     * {@code = proceedsBase − C_settle}. The <b>residual</b> {@code (F − F_settle,
+     * C − C_settle)} simply remains on the account — double-entry leaves it OPEN, no
+     * extra line. Rounding is <b>self-correcting</b>: a final settle of the residual
+     * ({@code F_settle = F}) removes exactly {@code C} ({@code round(C × F/F) = C}), so
+     * repeated partials net to zero carrying with no drift.
+     *
+     * <p>When {@code settleForeignMinor == foreignBalanceMinor} the output is
+     * byte-identical to the full settlement (net-zero, AC-2 — the {@code F_settle/F}
+     * ratio collapses to 1 and {@code C_settle == C}).
+     *
+     * <p>{@code F_settle} carries the <b>same sign</b> as {@code F} (validated upstream
+     * in the use case — sign / zero / over-settle → {@code SETTLEMENT_AMOUNT_INVALID});
+     * polarity stays automatic via {@code sign(F)} / {@code sign(realized)}.
+     *
+     * @param tenantId            the owning tenant (stamped onto the built lines)
+     * @param ledgerAccountCode   the foreign account whose position is reduced
+     * @param currency            the position's foreign currency (must not be base/KRW)
+     * @param foreignBalanceMinor the position's foreign balance {@code F} (debit-positive)
+     * @param carryingBaseMinor   the position's current base carrying {@code C}
+     * @param settleForeignMinor  the settled portion {@code F_settle} (same sign as {@code F},
+     *                            {@code 0 < |F_settle| ≤ |F|}; the use case enforces this)
+     * @param settlementRate      the base-minor-per-foreign-minor spot factor (strictly positive)
+     * @param proceedsAccountCode the operator-supplied base-currency proceeds account
+     * @return the 3-line (or 2-line when realized == 0) settlement entry, or
+     *         {@link Optional#empty()} when there is no position ({@code F == 0})
+     * @throws SettlementRateInvalidException if {@code settlementRate ≤ 0}
+     */
+    public static Optional<SettlementResult> settle(String tenantId, String ledgerAccountCode,
+                                                    Currency currency, long foreignBalanceMinor,
+                                                    long carryingBaseMinor, long settleForeignMinor,
+                                                    BigDecimal settlementRate,
+                                                    String proceedsAccountCode) {
         Objects.requireNonNull(tenantId, "tenantId");
         Objects.requireNonNull(ledgerAccountCode, "ledgerAccountCode");
         Objects.requireNonNull(currency, "currency");
@@ -120,23 +177,35 @@ public final class FxSettlementPolicy {
             return Optional.empty();
         }
 
-        // proceedsBase = round(F × settlementRate), HALF_UP, signed integer KRW minor
+        // C_settle = round(C × |F_settle| / |F|), HALF_UP, signed integer KRW minor — the
+        // weighted-average proportional share of the carrying at the position's average
+        // unit cost. When F_settle == F the ratio is exactly 1 → C_settle == C (the
+        // full-settle path, byte-identical to the 10th). Self-correcting: a final
+        // residual settle removes exactly C_remaining (round(C × F/F) = C), no drift.
+        long carryingSettledMinor = carryingBaseMinor == 0L ? 0L
+                : new BigDecimal(carryingBaseMinor)
+                        .multiply(new BigDecimal(Math.abs(settleForeignMinor)))
+                        .divide(new BigDecimal(Math.abs(foreignBalanceMinor)), 0, RoundingMode.HALF_UP)
+                        .longValueExact();
+
+        // proceedsBase = round(F_settle × settlementRate), HALF_UP, signed integer KRW minor
         // (F5: the only decimal is the rate; the result is exact integer minor units).
-        long proceedsBase = new BigDecimal(foreignBalanceMinor)
+        long proceedsBase = new BigDecimal(settleForeignMinor)
                 .multiply(settlementRate)
                 .setScale(0, RoundingMode.HALF_UP)
                 .longValueExact();
-        long realized = proceedsBase - carryingBaseMinor;
+        long realized = proceedsBase - carryingSettledMinor;
 
         Currency base = LedgerReportingCurrency.BASE;
         boolean assetSide = foreignBalanceMinor > 0L; // debit-balance asset removed by CREDIT
 
-        // (1) Position-removal line — zeroes the (account, currency) position. The
-        //     8th-incr multi-currency form: money = |F| {currency}, baseAmount = |C| KRW.
+        // (1) Position-removal line — reduces the (account, currency) position by the
+        //     settled portion. The 8th-incr multi-currency form: money = |F_settle|
+        //     {currency}, baseAmount = |C_settle| KRW. The residual stays OPEN.
         JournalLine removal = JournalLine.of(tenantId, ledgerAccountCode,
                 assetSide ? EntryDirection.CREDIT : EntryDirection.DEBIT,
-                Money.of(Math.abs(foreignBalanceMinor), currency),
-                Money.of(Math.abs(carryingBaseMinor), base));
+                Money.of(Math.abs(settleForeignMinor), currency),
+                Money.of(Math.abs(carryingSettledMinor), base));
 
         // (2) Base proceeds line — an ordinary KRW line on the proceeds account; an
         //     asset settlement brings base IN (DR), a liability pays base OUT (CR).

@@ -184,4 +184,21 @@ public final class LedgerErrors {
             super("SETTLEMENT_RATE_INVALID", message);
         }
     }
+
+    // ---- Partial / weighted-average FX settlement (12th increment — TASK-FIN-BE-018) ----
+
+    /**
+     * A partial-settlement {@code settleForeignAmount} that is invalid against the loaded
+     * position: it is <b>zero</b>, has the <b>opposite sign</b> to the position's foreign
+     * balance {@code F}, or its magnitude <b>exceeds</b> {@code |F|} (over-settle — would
+     * drive the residual negative / flip the position). 422; nothing persists, the
+     * idempotency key is not consumed (architecture.md § FX settlement § Partial
+     * settlement; ledger-api.md § 11). Thrown by {@code SettleForeignPositionUseCase}
+     * after loading the position, before any line is built.
+     */
+    public static final class SettlementAmountInvalidException extends LedgerDomainException {
+        public SettlementAmountInvalidException(String message) {
+            super("SETTLEMENT_AMOUNT_INVALID", message);
+        }
+    }
 }
