@@ -20,6 +20,14 @@ public interface JournalRepository {
     /** The original entry for a source transaction id (reversal lookup, F3). */
     Optional<JournalEntry> findBySourceTransactionId(String sourceTransactionId, String tenantId);
 
+    /**
+     * The entry for a source event id (manual idempotent-replay return, 5th
+     * increment). The manual path namespaces the client {@code Idempotency-Key} as
+     * {@code manual:{key}} into {@code source.sourceEventId}; a replay returns the
+     * original entry instead of re-posting (F1).
+     */
+    Optional<JournalEntry> findBySourceEventId(String sourceEventId, String tenantId);
+
     /** A page of lines posted to one ledger account, most-recent entry first. */
     LinePage findLinesByAccountCode(String ledgerAccountCode, String tenantId,
                                     int page, int size);

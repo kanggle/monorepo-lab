@@ -23,6 +23,7 @@ import java.util.Objects;
 public final class SourceRef {
 
     public static final String TYPE_TRANSACTION = "TRANSACTION";
+    public static final String TYPE_MANUAL = "MANUAL";
 
     @Column(name = "source_type", length = 30, nullable = false)
     private String sourceType;
@@ -43,6 +44,20 @@ public final class SourceRef {
         Objects.requireNonNull(sourceTransactionId, "sourceTransactionId");
         Objects.requireNonNull(sourceEventId, "sourceEventId");
         return new SourceRef(TYPE_TRANSACTION, sourceTransactionId, sourceEventId);
+    }
+
+    /**
+     * Provenance for an operator-initiated manual posting (5th increment,
+     * TASK-FIN-BE-011). {@code sourceEventId} is the namespaced dedupe key
+     * ({@code manual:{Idempotency-Key}}); {@code sourceTransactionId} carries the
+     * operator {@code reference} when present, falling back to the
+     * {@code sourceEventId} so the NOT-NULL column always has a value.
+     */
+    public static SourceRef ofManual(String reference, String sourceEventId) {
+        Objects.requireNonNull(sourceEventId, "sourceEventId");
+        // sourceTransactionId is NOT NULL → fall back to sourceEventId when reference is blank
+        String txnId = (reference != null && !reference.isBlank()) ? reference : sourceEventId;
+        return new SourceRef(TYPE_MANUAL, txnId, sourceEventId);
     }
 
     @Override

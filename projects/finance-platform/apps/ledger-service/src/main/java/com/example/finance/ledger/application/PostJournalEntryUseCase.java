@@ -52,6 +52,21 @@ public class PostJournalEntryUseCase {
      */
     @Transactional
     public JournalEntry post(JournalEntry entry, String reason) {
+        // The auto-journal (consumer) path records the service as the audit actor.
+        // Delegates to the actor overload with the default — byte-identical behaviour
+        // (net-zero; the manual-posting path passes the operator subject instead).
+        return post(entry, reason, ACTOR);
+    }
+
+    /**
+     * Persist a posted entry with an explicit audit {@code actor} (5th increment —
+     * the manual-posting path records the operator subject; the no-actor overload
+     * above delegates here with the {@code finance-ledger-service} default). Same
+     * guarded write path otherwise — closed-period guard, lazy wallet creation, the
+     * audit row, and the {@code entry.posted} outbox append, all in this Tx.
+     */
+    @Transactional
+    public JournalEntry post(JournalEntry entry, String reason, String actor) {
         Instant now = clock.now();
         guardClosedPeriod(entry);
         for (JournalLine line : entry.lines()) {
@@ -60,7 +75,7 @@ public class PostJournalEntryUseCase {
         JournalEntry saved = journalRepository.save(entry);
         auditLogRepository.save(AuditLog.of(
                 entry.tenantId(), AGGREGATE_TYPE, entry.entryId(), "POSTED",
-                ACTOR, auditSummary(entry), reason, now));
+                actor, auditSummary(entry), reason, now));
         // (3rd incr) Append the GL/AP feed row in THIS transaction — atomic with
         // the entry + audit (transactional outbox; the feed can never diverge from
         // the books). A guard-rejected posting threw above → no row appended.
