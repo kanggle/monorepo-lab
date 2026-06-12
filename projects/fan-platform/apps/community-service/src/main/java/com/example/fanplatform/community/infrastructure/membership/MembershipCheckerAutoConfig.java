@@ -3,6 +3,7 @@ package com.example.fanplatform.community.infrastructure.membership;
 import com.example.fanplatform.community.domain.membership.MembershipChecker;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -27,6 +28,16 @@ import java.time.Duration;
  * <p>Tests override the production bean with a {@code @Primary @TestConfiguration}
  * {@code MembershipChecker} (e.g. {@code MembershipGateIntegrationTest}'s
  * deny-all), so the gate can be exercised without a live membership-service.
+ *
+ * <p><strong>Escape hatch.</strong> Setting
+ * {@code community.membership-service.enabled=false} (env
+ * {@code COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false}) excludes the HTTP bean, so
+ * the {@link AlwaysAllowMembershipChecker} fallback is selected instead. This is
+ * how the v1 live-trio e2e (gateway+community+artist, TASK-FAN-INT-001) runs
+ * without membership-service / iam in the stack — the real gate is covered
+ * deterministically by {@code MembershipGateIntegrationTest} (MockWebServer) and
+ * end-to-end by federation-hardening-e2e. Default ({@code matchIfMissing=true})
+ * keeps production on {@link HttpMembershipChecker}.
  */
 @Configuration
 public class MembershipCheckerAutoConfig {
@@ -37,8 +48,16 @@ public class MembershipCheckerAutoConfig {
      * {@link IamClientCredentialsTokenProvider} — a token-acquisition failure
      * surfaces as an exception inside the call and is caught fail-closed by
      * {@link HttpMembershipChecker}.
+     *
+     * <p>Gated by {@code community.membership-service.enabled} (default true) so
+     * deployments without a reachable membership-service / iam (the e2e
+     * live-trio) can opt out and fall back to {@link AlwaysAllowMembershipChecker}.
      */
     @Bean
+    @ConditionalOnProperty(
+            name = "community.membership-service.enabled",
+            havingValue = "true",
+            matchIfMissing = true)
     public MembershipChecker httpMembershipChecker(
             IamClientCredentialsTokenProvider tokenProvider,
             @Value("${community.membership-service.base-url:http://membership-service:8080}") String baseUrl,

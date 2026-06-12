@@ -221,6 +221,13 @@ public abstract class FanPlatformE2ETestBase {
                 .withEnv("JWT_JWKS_URI", jwks.containerJwksUrl())
                 .withEnv("OIDC_REQUIRED_TENANT_ID", JwtTestHelper.DEFAULT_TENANT_ID)
                 .withEnv("OUTBOX_POLLING_INTERVAL_MS", "500")
+                // The live-trio is gateway+community+artist only — membership-service
+                // and iam (the workload-identity token source) are out of scope, so
+                // HttpMembershipChecker would fail-closed on every MEMBERS_ONLY/PREMIUM
+                // read. Opt out via the documented escape hatch so community falls
+                // back to AlwaysAllowMembershipChecker (v1 stub). The real HTTP gate
+                // is covered by MembershipGateIntegrationTest + federation-hardening-e2e.
+                .withEnv("COMMUNITY_MEMBERSHIP_SERVICE_ENABLED", "false")
                 .waitingFor(Wait.forHttp("/actuator/health")
                         .forStatusCode(200)
                         .withStartupTimeout(Duration.ofMinutes(3)));

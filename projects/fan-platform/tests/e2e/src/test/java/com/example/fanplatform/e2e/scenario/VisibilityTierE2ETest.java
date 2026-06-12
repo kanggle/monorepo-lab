@@ -19,36 +19,36 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Scenario 3 — visibility tier gating (TASK-FAN-INT-001 § In Scope #3).
+ * Scenario 3 — visibility tier gating (TASK-FAN-INT-001 § In Scope #3,
+ * realigned by TASK-FAN-INT-002 after TASK-FAN-BE-010).
  *
- * <p><b>Scope deviation from task spec.</b> The task lists three sub-cases:
+ * <p>The live-trio stack is gateway+community+artist only — membership-service
+ * and iam (the workload-identity token source) are out of scope. After
+ * TASK-FAN-BE-010 made {@code HttpMembershipChecker} the production default, the
+ * community container would fail-closed on every MEMBERS_ONLY/PREMIUM read in
+ * this stack. The container therefore opts out via the documented escape hatch
+ * {@code COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false} (see
+ * {@code MembershipCheckerAutoConfig}), so community falls back to
+ * {@code AlwaysAllowMembershipChecker} — the v1 stub. The real HTTP gate (incl.
+ * the 403 {@code MEMBERSHIP_REQUIRED} deny branch) is covered deterministically
+ * by {@code MembershipGateIntegrationTest} (MockWebServer, PR-gated) and
+ * end-to-end by federation-hardening-e2e; this class covers the cross-service
+ * wiring under the stub:
  *
  * <ul>
- *   <li>{@code PUBLIC}: any authenticated tenant member -&gt; 200.</li>
- *   <li>{@code MEMBERS_ONLY}: requires {@code MembershipChecker.hasAccess()}
- *       to return {@code false} for at least one fan to verify the 403
- *       {@code MEMBERSHIP_REQUIRED} branch.</li>
- *   <li>{@code PREMIUM}: v1 always passes + emits a WARN log
- *       ("PREMIUM gate bypassed ...").</li>
+ *   <li>{@code PUBLIC}: any authenticated tenant member -&gt; 200 (no checker
+ *       call).</li>
+ *   <li>{@code MEMBERS_ONLY}: stub {@code hasAccess()=true} -&gt; 200 + WARN
+ *       log.</li>
+ *   <li>{@code PREMIUM}: stub {@code hasAccess()=true} -&gt; 200 + WARN log.</li>
  * </ul>
  *
- * <p>The {@code MEMBERS_ONLY} sub-case requires swapping out the
- * {@code MembershipChecker} bean. Production registers
- * {@code AlwaysAllowMembershipChecker} via {@code @ConditionalOnMissingBean}
- * (see {@code projects/fan-platform/apps/community-service/src/main/java/.../
- * infrastructure/membership/MembershipCheckerAutoConfig.java}). Since the e2e
- * suite runs the actual built image, no test-time bean override is possible
- * without modifying production sources — and TASK-FAN-INT-001's hard rule
- * forbids that. The PR summary therefore files a follow-up
- * (TASK-FAN-INT-002 candidate) to add a
- * {@code SPRING_PROFILES_ACTIVE=e2e-membership-deny} test profile that
- * swaps the bean, and this test class verifies only PUBLIC + PREMIUM here.
- *
- * <p>The PREMIUM WARN log is verified by tailing the community container
- * stdout via {@code GenericContainer.getLogs()} after the request and
- * grepping for the characteristic message — the production code path
- * (PostAccessGuard.ensureVisibilityAccessible) calls
- * {@code log.warn("PREMIUM gate bypassed ...")} on every PREMIUM access.
+ * <p>The bypass WARN is verified by tailing the community container stdout via
+ * {@code GenericContainer.getLogs()} after the request and grepping for the
+ * characteristic message — {@code AlwaysAllowMembershipChecker.hasAccess} calls
+ * {@code log.warn("Membership gate bypassed (inert fallback stub selected ...):
+ * account=.. tier=.. tenant=..")} on every gated read, so the fail-open is loud
+ * in logs/observability.
  */
 @Tag("full")
 class VisibilityTierE2ETest extends FanPlatformE2ETestBase {
@@ -115,29 +115,29 @@ class VisibilityTierE2ETest extends FanPlatformE2ETestBase {
         String postId = objectMapper.readTree(createResp.body())
                 .get("data").get("postId").asText();
 
-        // Different reader. v1 always-pass on PREMIUM means a non-author
-        // non-operator gets 200 anyway. The behaviour is auditable via the
-        // WARN log emitted by PostAccessGuard.ensureVisibilityAccessible
-        // (see PostAccessGuard.java § PREMIUM branch).
+        // Different reader. Under the v1 stub (COMMUNITY_MEMBERSHIP_SERVICE_ENABLED
+        // =false) AlwaysAllowMembershipChecker.hasAccess returns true, so the
+        // PostAccessGuard PREMIUM branch passes and a non-author non-operator
+        // gets 200. The bypass is auditable via the stub's WARN log.
         String readerToken = jwt.signFanToken(randomAccountId());
         HttpResponse<String> readResp = sendString(http, authedGet(
                 gatewayBaseUri().resolve(pathCommunityPostById(postId)), readerToken)
                 .GET().build());
         assertThat(readResp.statusCode())
-                .as("PREMIUM is v1 always-pass; non-author readers get 200")
+                .as("PREMIUM under v1 stub: non-author readers get 200")
                 .isEqualTo(200);
 
         // Capture container stdout and grep for the canonical WARN line.
         // GenericContainer.getLogs() returns aggregated stdout+stderr since
-        // the container started; the substring match below is stable as
-        // long as PostAccessGuard.java keeps the same message template.
+        // the container started; the substring match below is stable as long
+        // as AlwaysAllowMembershipChecker keeps the same message template.
         String containerLogs = community.getLogs();
         assertThat(containerLogs)
-                .as("community-service emits a WARN log line for every PREMIUM bypass")
-                .contains("PREMIUM gate bypassed");
+                .as("community-service emits a WARN log line for every stub bypass")
+                .contains("Membership gate bypassed (inert fallback stub selected");
         assertThat(containerLogs)
-                .as("WARN line names the affected post id so audit pipelines can correlate")
-                .contains(postId);
+                .as("WARN line names the required tier so audit pipelines can correlate")
+                .contains("tier=PREMIUM");
     }
 
     @Test
@@ -185,6 +185,9 @@ class VisibilityTierE2ETest extends FanPlatformE2ETestBase {
         String containerLogs = community.getLogs();
         assertThat(containerLogs)
                 .as("AlwaysAllowMembershipChecker emits a WARN line on every bypass call")
-                .contains("Membership gate bypassed (v1 stub)");
+                .contains("Membership gate bypassed (inert fallback stub selected");
+        assertThat(containerLogs)
+                .as("WARN line names the required tier for the MEMBERS_ONLY read")
+                .contains("tier=MEMBERS_ONLY");
     }
 }
