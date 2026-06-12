@@ -1,6 +1,6 @@
 # TASK-FIN-BE-017 — ledger-service multi-currency reconciliation (11th increment: FX/base-leg difference on a matched foreign statement line → AMOUNT_MISMATCH discrepancy)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (fintech domain mechanic — the pure matcher gains a base-leg FX check producing a new discrepancy class on a *matched* line; threads a carrying base into the matcher inputs; additive nullable migration; exhaustive net-zero for the existing reconciliation paths)
