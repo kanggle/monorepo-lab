@@ -102,6 +102,26 @@ shipping:
     # (default) = fail-closed: every webhook is rejected 401 (inbound integration OFF = net-zero).
     webhook:
       secret: ${SHIPPING_CARRIER_WEBHOOK_SECRET:}
+      # Retention / cleanup sweep for the BE-294 processed_carrier_webhooks dedup table
+      # (TASK-BE-361 / ADR-007 D5-4). Every inbound aggregator webhook persists its delivery_id
+      # as a permanent idempotency marker, so the table grows unbounded; this sweep periodically
+      # deletes markers OLDER than retention-days, in bounded batches, single-instance via
+      # ShedLock. It is separate from processed_events (Kafka event dedup), which has its own
+      # retention (AC-3).
+      #
+      # enabled=false (default) = scheduler bean NOT created (net-zero; AC-5 byte-identical
+      # default). RATIONALE: net-zero default per the project convention (mirrors auto-collect)
+      # — operators should enable it in any long-lived deploy to curb table growth. retention-days
+      # (30) must stay safely longer than the aggregator's max webhook re-delivery delay so an
+      # in-window re-delivery of the same delivery_id stays idempotent (AC-2 / F1). Each batch
+      # delete commits in its own transaction and a single tick is bounded by max-batches-per-tick
+      # (F2) so a huge backlog drains progressively across ticks, never one runaway tick.
+      cleanup:
+        enabled: ${SHIPPING_CARRIER_WEBHOOK_CLEANUP_ENABLED:false}
+        fixed-delay-ms: ${SHIPPING_CARRIER_WEBHOOK_CLEANUP_FIXED_DELAY_MS:3600000}
+        retention-days: ${SHIPPING_CARRIER_WEBHOOK_CLEANUP_RETENTION_DAYS:30}
+        batch-size: ${SHIPPING_CARRIER_WEBHOOK_CLEANUP_BATCH_SIZE:500}
+        max-batches-per-tick: ${SHIPPING_CARRIER_WEBHOOK_CLEANUP_MAX_BATCHES_PER_TICK:100}
     # Unattended auto-collect tracking sweep (TASK-BE-360 / ADR-007 D5-3). Periodically polls
     # in-flight shipments (SHIPPED / IN_TRANSIT with tracking) via the SAME CarrierTrackingPort
     # forward-advance as the admin pull, so a shipment converges to DELIVERED even when nobody
