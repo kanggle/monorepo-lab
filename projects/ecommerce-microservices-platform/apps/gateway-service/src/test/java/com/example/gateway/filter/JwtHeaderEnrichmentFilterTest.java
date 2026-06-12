@@ -128,6 +128,41 @@ class JwtHeaderEnrichmentFilterTest {
         assertThat(headers.getFirst("X-Account-Type")).isEqualTo("CONSUMER");
     }
 
+    @Test
+    void injectsTenantIdHeader() {
+        Jwt jwt = jwtBuilder()
+                .subject("user-42")
+                .claim("tenant_id", "globex")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-Tenant-Id")).isEqualTo("globex");
+    }
+
+    @Test
+    void omitsTenantIdHeaderWhenClaimAbsent() {
+        Jwt jwt = jwtBuilder()
+                .subject("user-42")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-Tenant-Id")).isNull();
+    }
+
+    @Test
+    void omitsTenantIdHeaderWhenClaimBlank() {
+        Jwt jwt = jwtBuilder()
+                .subject("user-42")
+                .claim("tenant_id", "   ")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-Tenant-Id")).isNull();
+    }
+
     // -----------------------------------------------------------------------
     // No-op when no security context
     // -----------------------------------------------------------------------

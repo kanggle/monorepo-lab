@@ -23,7 +23,8 @@ public class IdentityHeaderStripFilter implements GlobalFilter, Ordered {
             "X-User-Id",
             "X-User-Email",
             "X-User-Role",
-            "X-Account-Type"
+            "X-Account-Type",
+            "X-Tenant-Id"
     );
 
     @Override

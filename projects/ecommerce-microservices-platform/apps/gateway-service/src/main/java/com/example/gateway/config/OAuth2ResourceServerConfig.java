@@ -28,10 +28,11 @@ import java.util.List;
  * window: JWKS URI points at GAP, and the {@code iss} claim is validated
  * against an explicit allowlist via {@link AllowedIssuersValidator}.
  *
- * <p>Tenant isolation: every accepted token must additionally carry
- * {@code tenant_id = ecommerce}. Cross-tenant tokens (e.g. {@code wms},
- * {@code fan-platform}) fail validation here and surface as 403
- * {@code TENANT_FORBIDDEN} via {@link TenantClaimValidator}.
+ * <p>Tenant isolation: every accepted token must carry a well-formed
+ * {@code tenant_id} claim. The edge is the multi-tenant SaaS entitlement-trust
+ * gate (ADR-MONO-030 § 2.4) — any non-blank {@code tenant_id} is accepted and
+ * isolated by row downstream; only a blank/missing claim fails here and surfaces
+ * as 403 {@code TENANT_FORBIDDEN} via {@link TenantClaimValidator}.
  *
  * <p>Conditional registration ({@link ConditionalOnMissingBean}) lets
  * integration tests override the decoder with a JWKS pointing at a
