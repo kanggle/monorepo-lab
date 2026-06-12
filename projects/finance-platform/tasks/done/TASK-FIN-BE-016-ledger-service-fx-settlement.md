@@ -1,6 +1,6 @@
 # TASK-FIN-BE-016 — ledger-service realized FX gain/loss on settlement (10th increment: settle a foreign-currency position at a settlement rate, removing it at carrying and booking the realized FX_GAIN / FX_LOSS)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (fintech domain mechanic — a new pure settlement policy with signed asset/liability polarity across a 3-line entry, the realized-vs-carrying computation [no double-count against revaluation], position removal, funnelling through the guarded write path; net-zero for the existing paths)
