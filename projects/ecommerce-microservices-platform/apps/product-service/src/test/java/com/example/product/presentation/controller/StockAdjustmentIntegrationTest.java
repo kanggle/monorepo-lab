@@ -1,5 +1,6 @@
 package com.example.product.presentation.controller;
 
+import com.example.product.ProductServiceApplication;
 import com.example.product.application.command.AdjustStockCommand;
 import com.example.product.application.command.RegisterProductCommand;
 import com.example.product.application.command.VariantCommand;
@@ -22,8 +23,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -34,12 +33,15 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 
-@SpringBootTest
+@SpringBootTest(classes = ProductServiceApplication.class)
 @Tag("integration")
 @Testcontainers
 @Transactional
-@RecordApplicationEvents
 @DisplayName("재고 조정 통합 테스트")
 class StockAdjustmentIntegrationTest {
 
@@ -70,9 +72,6 @@ class StockAdjustmentIntegrationTest {
 
     @Autowired
     private QueryProductService queryProductService;
-
-    @Autowired
-    private ApplicationEvents applicationEvents;
 
     @Test
     @DisplayName("재고 증가 후 DB에 반영된다")
@@ -116,16 +115,20 @@ class StockAdjustmentIntegrationTest {
                 List.of(new VariantCommand("기본", 10, 0)));
         UUID productId = registerProductService.register(command);
         UUID variantId = queryProductService.findById(productId).variants().get(0).id();
-        applicationEvents.stream(ProductEvent.class).close(); // 등록 이벤트 무시
 
         adjustStockService.adjust(new AdjustStockCommand(productId, variantId, 5, "RESTOCK"));
 
-        List<ProductEvent> events = applicationEvents.stream(ProductEvent.class)
-                .filter(e -> "StockChanged".equals(e.eventType()))
-                .toList();
-        assertThat(events).hasSize(1);
-
-        StockChangedPayload payload = (StockChangedPayload) events.get(0).payload();
+        // StockChanged is published via Kafka (mocked); events accumulate on the
+        // context-shared mock across methods, so filter to this product's change.
+        org.mockito.ArgumentCaptor<Object> captor = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(kafkaTemplate, atLeastOnce())
+                .send(eq("product.product.stock-changed"), anyString(), captor.capture());
+        StockChangedPayload payload = captor.getAllValues().stream()
+                .map(ProductEvent.class::cast)
+                .map(e -> (StockChangedPayload) e.payload())
+                .filter(p -> p.productId().equals(productId.toString()))
+                .reduce((first, second) -> second)
+                .orElseThrow();
         assertThat(payload.productId()).isEqualTo(productId.toString());
         assertThat(payload.variantId()).isEqualTo(variantId.toString());
         assertThat(payload.previousStock()).isEqualTo(10);

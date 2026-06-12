@@ -1,5 +1,6 @@
 package com.example.product.presentation.controller;
 
+import com.example.product.ProductServiceApplication;
 import com.example.product.application.command.RegisterProductCommand;
 import com.example.product.application.command.UpdateProductCommand;
 import com.example.product.application.command.VariantCommand;
@@ -21,8 +22,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -33,12 +32,15 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 
-@SpringBootTest
+@SpringBootTest(classes = ProductServiceApplication.class)
 @Tag("integration")
 @Testcontainers
 @Transactional
-@RecordApplicationEvents
 @DisplayName("상품 수정 + 삭제 통합 테스트")
 class ProductUpdateDeleteIntegrationTest {
 
@@ -73,8 +75,28 @@ class ProductUpdateDeleteIntegrationTest {
     @Autowired
     private QueryProductService queryProductService;
 
-    @Autowired
-    private ApplicationEvents applicationEvents;
+    /**
+     * Pulls the published {@link ProductEvent} for {@code topic} whose payload
+     * concerns {@code productId} from the context-shared mock KafkaTemplate (the
+     * real publish transport; events accumulate across methods, so filter by id).
+     */
+    private ProductEvent publishedEvent(String topic, String productId) {
+        org.mockito.ArgumentCaptor<Object> captor = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(kafkaTemplate, atLeastOnce()).send(eq(topic), anyString(), captor.capture());
+        return captor.getAllValues().stream()
+                .map(ProductEvent.class::cast)
+                .filter(e -> productId.equals(eventProductId(e)))
+                .reduce((first, second) -> second)
+                .orElseThrow();
+    }
+
+    private static String eventProductId(ProductEvent event) {
+        return switch (event.payload()) {
+            case ProductUpdatedPayload p -> p.productId();
+            case ProductDeletedPayload p -> p.productId();
+            default -> null;
+        };
+    }
 
     private UUID registerProduct(String name) {
         return registerProductService.register(new RegisterProductCommand(
@@ -101,12 +123,9 @@ class ProductUpdateDeleteIntegrationTest {
 
         updateProductService.update(new UpdateProductCommand(productId, "이벤트 수정 상품", null, null, ProductStatus.HIDDEN));
 
-        List<ProductEvent> events = applicationEvents.stream(ProductEvent.class)
-                .filter(e -> e.eventType().equals("ProductUpdated"))
-                .toList();
-        assertThat(events).hasSize(1);
-
-        ProductUpdatedPayload payload = (ProductUpdatedPayload) events.get(0).payload();
+        ProductEvent event = publishedEvent("product.product.updated", productId.toString());
+        assertThat(event.eventType()).isEqualTo("ProductUpdated");
+        ProductUpdatedPayload payload = (ProductUpdatedPayload) event.payload();
         assertThat(payload.productId()).isEqualTo(productId.toString());
         assertThat(payload.name()).isEqualTo("이벤트 수정 상품");
         assertThat(payload.status()).isEqualTo("HIDDEN");
@@ -130,12 +149,9 @@ class ProductUpdateDeleteIntegrationTest {
 
         deleteProductService.delete(productId);
 
-        List<ProductEvent> events = applicationEvents.stream(ProductEvent.class)
-                .filter(e -> e.eventType().equals("ProductDeleted"))
-                .toList();
-        assertThat(events).hasSize(1);
-
-        ProductDeletedPayload payload = (ProductDeletedPayload) events.get(0).payload();
+        ProductEvent event = publishedEvent("product.product.deleted", productId.toString());
+        assertThat(event.eventType()).isEqualTo("ProductDeleted");
+        ProductDeletedPayload payload = (ProductDeletedPayload) event.payload();
         assertThat(payload.productId()).isEqualTo(productId.toString());
     }
 

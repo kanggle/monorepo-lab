@@ -24,6 +24,9 @@ public class ProductJpaEntity implements Persistable<UUID> {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(nullable = false, length = 255)
     private String name;
 
@@ -73,9 +76,10 @@ public class ProductJpaEntity implements Persistable<UUID> {
         this.isNew = false;
     }
 
-    public static ProductJpaEntity from(Product product) {
+    public static ProductJpaEntity from(Product product, String tenantId) {
         ProductJpaEntity entity = new ProductJpaEntity();
         entity.id = product.getId();
+        entity.tenantId = tenantId;
         entity.name = product.getName();
         entity.description = product.getDescription();
         entity.price = product.getPrice().value();

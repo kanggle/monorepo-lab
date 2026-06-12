@@ -1,5 +1,6 @@
 package com.example.product.domain.event;
 
+import com.example.product.domain.tenant.TenantContext;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.Instant;
@@ -10,6 +11,7 @@ public record ProductEvent(
         @JsonProperty("event_type") String eventType,
         @JsonProperty("occurred_at") Instant occurredAt,
         String source,
+        @JsonProperty("tenant_id") String tenantId,
         EventPayload payload
 ) {
     public static ProductEvent created(ProductCreatedPayload payload) {
@@ -33,6 +35,10 @@ public record ProductEvent(
     }
 
     private static ProductEvent of(String eventType, EventPayload payload) {
-        return new ProductEvent(UUID.randomUUID(), eventType, Instant.now(), "product-service", payload);
+        // Tenant context propagation across the async boundary (M5): the envelope
+        // carries the tenant owning the product. Background/reconciliation threads
+        // (no request context) resolve to the default tenant (net-zero, D8).
+        return new ProductEvent(UUID.randomUUID(), eventType, Instant.now(), "product-service",
+                TenantContext.currentTenant(), payload);
     }
 }
