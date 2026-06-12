@@ -86,6 +86,11 @@ const GROUPS: NavGroup[] = [
       },
       { href: '/scm', label: 'SCM', testid: 'nav-scm' },
       { href: '/finance', label: 'Finance', testid: 'nav-finance' },
+      // The finance ledger surface (TASK-PC-FE-072) — part of the finance
+      // product, on its own in-console route. A plain leaf link next to
+      // the finance entry, gated the same way (no nav-level gating; the
+      // page resolves finance eligibility from the registry).
+      { href: '/ledger', label: 'Finance Ledger', testid: 'nav-ledger' },
       { href: '/erp', label: 'ERP', testid: 'nav-erp' },
     ],
   },
