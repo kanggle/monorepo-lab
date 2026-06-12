@@ -633,7 +633,15 @@ position at a new closing rate, booking the base-carrying delta to `FX_GAIN` (in
 is unchanged, only its base carrying value trues up to spot. Reuses the existing guarded
 write path + `entry.posted.v1` outbox tagged `sourceType = "REVALUATION"` [no new event];
 one new code `REVALUATION_RATE_INVALID` (422) for a non-positive closing rate, and the
-existing `IDEMPOTENCY_KEY_REQUIRED` / `LEDGER_PERIOD_CLOSED` guards apply).
+existing `IDEMPOTENCY_KEY_REQUIRED` / `LEDGER_PERIOD_CLOSED` guards apply), **10th**
+(TASK-FIN-BE-016 — realized FX gain/loss on settlement: an operator settles a foreign-currency
+position at a settlement rate, removing the position at its carrying value [via the 8th-incr
+multi-currency line] and booking the difference between the base proceeds and the carrying as a
+*realized* `FX_GAIN` / `FX_LOSS` — a balanced base-currency 3-line entry through the same guarded
+write path + `entry.posted.v1` tagged `sourceType = "SETTLEMENT"` [no new event]; one new code
+`SETTLEMENT_RATE_INVALID` (422) for a non-positive settlement rate, the existing
+`CURRENCY_MISMATCH` / `LEDGER_ACCOUNT_NOT_FOUND` / `IDEMPOTENCY_KEY_REQUIRED` /
+`LEDGER_PERIOD_CLOSED` guards apply).
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -652,6 +660,7 @@ existing `IDEMPOTENCY_KEY_REQUIRED` / `LEDGER_PERIOD_CLOSED` guards apply).
 | RECONCILIATION_ALREADY_RESOLVED | 409 | Resolve attempted on an already-RESOLVED discrepancy — `ledger-service` (`ReconciliationAlreadyResolvedException`) |
 | RECONCILIATION_PERIOD_LOCKED | 422 | Resolve (6th incr) OR ingest (7th incr) of a statement whose statement date is in a CLOSED accounting period (F8 — frozen with the books; correct via the next period) — `ledger-service` (`ReconciliationPeriodLockedException`; mirrors `LEDGER_PERIOD_CLOSED`; net-zero when no covering closed period; the ingest guard runs before any persist/match/emit) |
 | REVALUATION_RATE_INVALID | 422 | **(9th incr)** FX revaluation `closingRate` is not strictly positive — `ledger-service` (`RevaluationRateInvalidException`). The rate is the base-minor-per-foreign-minor spot factor (caller-supplied); a non-positive rate cannot value a position |
+| SETTLEMENT_RATE_INVALID | 422 | **(10th incr)** FX settlement `settlementRate` is not strictly positive — `ledger-service` (`SettlementRateInvalidException`). Same base-minor-per-foreign-minor spot factor; a non-positive rate cannot settle a position |
 
 ---
 
