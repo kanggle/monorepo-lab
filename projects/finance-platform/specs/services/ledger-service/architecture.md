@@ -31,8 +31,13 @@ All implementation tasks targeting this service must follow this declaration,
 > (TASK-FIN-BE-014 — multi-currency journals: one entry may carry lines in different
 > currencies, balanced in a fixed base/reporting currency [KRW] via per-line
 > `exchangeRate` + `baseAmount`) is specified by § Multi-currency journals +
-> § Increment Scope. FX gain/loss + revaluation, a live FX rate feed, multi-currency
-> reconciliation, and fuzzy / N:M matching remain forward-declared (§ Increment Scope).
+> § Increment Scope. The **ninth increment** (TASK-FIN-BE-015 — FX gain/loss revaluation:
+> an operator revalues a foreign-currency position at a new closing rate, truing its base
+> carrying value to spot and booking the delta to `FX_GAIN` / `FX_LOSS` via a balanced
+> base-currency adjusting entry) is specified by § FX gain/loss revaluation +
+> § Increment Scope. Realized FX gain/loss on settlement, a bulk/period-close revaluation
+> hook, a live FX rate feed, multi-currency reconciliation, and fuzzy / N:M matching remain
+> forward-declared (§ Increment Scope).
 > The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
@@ -238,14 +243,52 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   manual entry is unchanged.
 - See § Multi-currency journals.
 
+**Ninth increment — IN (TASK-FIN-BE-015, FX gain/loss revaluation):**
+- An **operator revalues a foreign-currency position** (`{ledgerAccountCode, currency}`) at
+  a new **closing (spot) rate**. The 8th increment books multi-currency entries at the rate
+  supplied **at posting time**; the spot rate then moves, so the position's **base carrying
+  value** (Σ of its lines' historical `baseAmount`) drifts from its current market value.
+  Revaluation **trues that carrying up to spot** (`foreignBalance × closingRate`) and books
+  the difference as an **unrealized FX gain/loss** to the new GL accounts `FX_GAIN` (income)
+  / `FX_LOSS` (expense). `POST /api/finance/ledger/revaluations`.
+- **Decision — a balanced base-currency (KRW) adjusting entry; no JournalLine schema change,
+  no migration.** The revaluation entry has two lines: a **base-carrying adjustment** on the
+  foreign account (`money.amount = 0` in the foreign currency — the foreign **quantity is
+  unchanged** — with a non-zero `baseAmount` = the carrying delta in KRW; a new
+  `JournalLine.baseAdjustment` factory, the **only** caller that permits a zero transaction
+  amount) + a contra **`FX_GAIN`/`FX_LOSS`** normal KRW line. Both balance in the base
+  currency (`Σ baseDebit == Σ baseCredit`), so the existing factory + the existing
+  `journal_line` columns (`amount_minor` already allows 0) carry it — **no `V6` migration**.
+  The foreign account's per-`(account, currency)` row's `baseAmount` sum trues up while its
+  foreign `amount` sum is untouched; a later revaluation reads the **already-revalued**
+  carrying → **no double-booking**.
+- **Decision — gain/loss polarity is automatic for assets AND liabilities.**
+  `delta = revaluedBase − carryingBase` in **debit-positive** signed arithmetic
+  (`baseDebit − baseCredit`): `delta > 0` → DR the foreign account / CR `FX_GAIN`;
+  `delta < 0` → CR the foreign account / DR `FX_LOSS`. Because the foreign balance is read
+  debit-positive (a liability's credit balance is negative), an appreciating asset (gain)
+  and a growing liability (loss) both fall out of the sign — no account-type special-casing.
+- It funnels through the existing **`PostJournalEntryUseCase.post(entry, reason, actor)`**
+  (the single guarded write path — balance, closed-period guard, audit actor = operator,
+  `entry.posted` outbox), is **idempotent** on a client `Idempotency-Key`
+  (`reval:{key}` in `processed_events`, replay returns the original), and emits the same
+  `finance.ledger.entry.posted.v1` tagged `source.sourceType = "REVALUATION"` (no new
+  event). `SourceRef` gains the `REVALUATION` type. One new code `REVALUATION_RATE_INVALID`
+  (422, non-positive `closingRate`); `currency` = base (KRW) or unsupported →
+  `CURRENCY_MISMATCH`. **Net-zero**: `delta == 0` (already at spot) or no position in that
+  currency → a `200 {revalued:false}` no-op (no entry); the auto-journal path never
+  revalues. See § FX gain/loss revaluation.
+
 **Forward-declared — OUT (each a later task):**
 - Fuzzy / N:M / split matching + multi-currency statements; period **reopen**.
-- **FX gain/loss + period-end revaluation** (revaluing a foreign-currency balance at a
-  new rate, booking `FX_GAIN` / `FX_LOSS`) — a distinct mechanic; the 8th increment books
-  multi-currency entries at the supplied rate but does not revalue. A **live FX rate
-  feed** (rates are caller-supplied, not fetched), **multi-currency reconciliation**
-  (cross-currency clearing-account matching), and a **configurable base currency**
-  (fixed KRW in v1) are also forward-declared.
+- **Realized FX gain/loss on settlement** — the 9th increment books **unrealized**
+  revaluation of an OPEN foreign position; recognising a **realized** gain/loss when a
+  position is *settled* at a rate differing from its carrying is a distinct mechanic (it
+  touches the settlement/posting path). A **bulk / all-positions** revaluation + a
+  **period-close auto-hook** (the 9th increment revalues one `(account, currency)` per
+  operator call). A **live FX rate feed** (rates are caller-supplied, not fetched),
+  **multi-currency reconciliation** (cross-currency clearing-account matching), and a
+  **configurable base currency** (fixed KRW in v1) are also forward-declared.
 - **Manual-posting body-hash idempotency conflict** (`IDEMPOTENCY_KEY_CONFLICT` 409
   on a same-key/different-body replay — the 5th increment is replay-safe on the key
   alone; storing the request hash for conflict detection is forward-declared) +
@@ -335,16 +378,18 @@ com.example.finance.ledger/
 ├── domain/                                ← pure Java, no framework
 │   ├── account/
 │   │   ├── LedgerAccount.java             ← chart-of-accounts node (code, type, normalSide)
-│   │   ├── LedgerAccountType.java         ← ASSET / LIABILITY (+ EQUITY/INCOME/EXPENSE reserved)
+│   │   ├── LedgerAccountCodes.java        ← code constants + typeForCode; (9th incr) + FX_GAIN (INCOME) / FX_LOSS (EXPENSE)
+│   │   ├── LedgerAccountType.java         ← ASSET / LIABILITY / INCOME / EXPENSE (+ EQUITY reserved); (9th incr) INCOME/EXPENSE in use for FX_GAIN/FX_LOSS
 │   │   ├── NormalSide.java                ← DEBIT / CREDIT
 │   │   └── repository/LedgerAccountRepository.java   ← outbound port
 │   ├── journal/
 │   │   ├── JournalEntry.java              ← aggregate root; balanced invariant; immutable; sourceRef; (8th incr) balance moves to base currency (Σ baseDebit == Σ baseCredit); cross-currency lines allowed
-│   │   ├── JournalLine.java               ← (ledgerAccountCode, direction DEBIT/CREDIT, Money); (8th incr) + exchangeRate(BigDecimal) + baseAmount(Money in base/KRW); base-ccy line: rate=1, baseAmount=amount
+│   │   ├── JournalLine.java               ← (ledgerAccountCode, direction DEBIT/CREDIT, Money); (8th incr) + exchangeRate(BigDecimal) + baseAmount(Money in base/KRW); base-ccy line: rate=1, baseAmount=amount; (9th incr) + baseAdjustment(currency, dir, baseAmount, spotRate) factory — zero foreign amount, non-zero base carrying delta (FX revaluation only)
 │   │   ├── EntryDirection.java            ← DEBIT / CREDIT
 │   │   ├── PostingPolicy.java             ← transaction-type → balanced lines (pure; § Posting Policy)
-│   │   ├── SourceRef.java                 ← (sourceType, sourceTxnId, sourceEventId) provenance; (5th incr) ofManual(reference, idempotencyKey) → TYPE_MANUAL
-│   │   └── repository/JournalRepository.java   ← (5th incr) + findBySourceEventId (manual idempotent-replay return)
+│   │   ├── FxRevaluationPolicy.java        ← (9th incr) pure: (account, currency, foreignBalanceMinor, carryingBaseMinor, closingRate) → Optional<RevaluationResult> (delta + base-adjustment + FX_GAIN/FX_LOSS lines); empty when delta==0; non-positive rate → RevaluationRateInvalidException
+│   │   ├── SourceRef.java                 ← (sourceType, sourceTxnId, sourceEventId) provenance; (5th incr) ofManual(reference, idempotencyKey) → TYPE_MANUAL; (9th incr) ofRevaluation(reference, idempotencyKey) → TYPE_REVALUATION
+│   │   └── repository/JournalRepository.java   ← (5th incr) + findBySourceEventId (manual idempotent-replay return); (9th incr) + accountTotalsForCurrency(code, currency, tenant) (one FX position's foreign balance + base carrying)
 │   ├── period/                           ← (2nd increment) accounting period
 │   │   ├── AccountingPeriod.java          ← aggregate; OPEN→CLOSED state machine; [from,to) covers(); non-overlap
 │   │   ├── PeriodStatus.java              ← OPEN / CLOSED
@@ -375,11 +420,14 @@ com.example.finance.ledger/
 │        (4th incr) ReconciliationStatementNotFoundException, ReconciliationDiscrepancyNotFoundException,
 │        ReconciliationAlreadyResolvedException, ReconciliationAccountInvalidException;
 │        (5th incr) IdempotencyKeyRequiredException [handler guard → 400] — manual posting reuses LedgerEntryUnbalanced/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed, no new domain code;
-│        (6th incr) ReconciliationPeriodLockedException [→ 422])
+│        (6th incr) ReconciliationPeriodLockedException [→ 422];
+│        (9th incr) RevaluationRateInvalidException [→ 422] — FX revaluation reuses IdempotencyKeyRequired/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed otherwise)
 ├── application/                           ← use cases + outbound ports
 │   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit → (3rd incr) append entry.posted outbox row (one Tx); (5th incr) + post(entry, reason, actor) overload (operator audit actor; the no-actor overload delegates with the auto-journal default — net-zero)
 │   ├── PostFromTransactionUseCase.java    ← maps an account-service transaction envelope → PostJournalEntry (via PostingPolicy); idempotent on sourceEventId
 │   ├── PostManualJournalEntryUseCase.java ← (5th incr) @Transactional operator: require Idempotency-Key → replay-return via findBySourceEventId else markProcessed(manual:{key}) → validate each referenced account EXISTS (no lazy mint) → build JournalEntry.post(SourceRef.ofManual) → PostJournalEntryUseCase.post(entry, reason, actor)
+│   ├── RevalueForeignBalanceUseCase.java  ← (9th incr) @Transactional operator: require Idempotency-Key → replay-return (reval:{key}) → load (account,currency) position totals → FxRevaluationPolicy.revalue → delta==0/no-position → 200 revalued:false; else build base-adjustment + FX_GAIN/FX_LOSS lines, SourceRef.ofRevaluation, markProcessed → PostJournalEntryUseCase.post(entry, reason, actor)
+│   ├── RevalueForeignBalanceCommand.java   ← (9th incr) (tenantId, operatorSubject, ledgerAccountCode, currency, closingRate, postedAt?, reference, memo, idempotencyKey)
 │   ├── QueryLedgerUseCase.java            ← read: entry detail / per-account entries + balance / trial balance
 │   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
 │   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit → (3rd incr) append period.closed outbox row
@@ -397,6 +445,7 @@ com.example.finance.ledger/
 │   ├── persistence/jpa/                   ← Spring Data + adapters (toDomain/fromDomain)
 │   │   (LedgerAccountJpaEntity/Repository/Adapter, JournalEntryJpaEntity, JournalLineJpaEntity;
 │   │    (8th incr) JournalLineJpaEntity + exchange_rate/base_amount_minor/base_currency cols; AccountTotalsRow + base sums; accountTotals* queries add base SUM;
+│   │    (9th incr) accountTotalsForCurrency(code, currency, tenant) → one FX position's foreign balance + base carrying (filters the existing per-(account,currency) totals; no new column);
 │   │    AuditLogJpaEntity, processed_events;
 │   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity;
 │   │    (4th incr) ReconciliationStatement/Line/Match/DiscrepancyJpaEntity + Repository/Adapter)
@@ -409,7 +458,7 @@ com.example.finance.ledger/
 │   ├── security/  (SecurityConfig, AllowedIssuersValidator, TenantClaimValidator,
 │   │               ActorContextJwtAuthenticationConverter, ServiceLevelOAuth2Config)
 │   └── config/ (ClockConfig, JpaConfig, KafkaConsumerConfig [also the outbox-relay KafkaTemplate],
-│                ChartOfAccountsSeedConfig, (3rd incr) OutboxConfig [TransactionTemplate + ledger.outbox.* props])
+│                ChartOfAccountsSeedConfig [(9th incr) also seeds FX_GAIN/FX_LOSS], (3rd incr) OutboxConfig [TransactionTemplate + ledger.outbox.* props])
 ├── messaging/                             ← inbound event adapter
 │   ├── TransactionEventConsumer.java      ← @KafkaListener finance.transaction.{completed,reversed}.v1
 │   │                                          group finance-ledger-v1, @RetryableTopic + DLT, manual ACK, dedupe
@@ -418,6 +467,7 @@ com.example.finance.ledger/
 └── presentation/                          ← inbound web adapter
     ├── controller/LedgerController.java    ← /api/finance/ledger/** (reads)
     ├── controller/JournalController.java    ← (5th incr) POST /api/finance/ledger/entries (manual posting; Idempotency-Key header; no @Transactional — funnels to PostManualJournalEntryUseCase)
+    ├── controller/RevaluationController.java ← (9th incr) POST /api/finance/ledger/revaluations (FX revaluation; Idempotency-Key header; no @Transactional — funnels to RevalueForeignBalanceUseCase; 201 revalued / 200 revalued:false)
     ├── controller/PeriodController.java     ← (2nd incr) /api/finance/ledger/periods/** (open/close/list/detail)
     ├── controller/ReconciliationController.java ← (4th incr) /api/finance/ledger/reconciliation/** (ingest/resolve/read)
     ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes; (2nd incr) period codes; (5th incr) LEDGER_ENTRY_UNBALANCED/CURRENCY_MISMATCH/LEDGER_ACCOUNT_NOT_FOUND/LEDGER_PERIOD_CLOSED now surface synchronously + IDEMPOTENCY_KEY_REQUIRED handler guard)
@@ -466,10 +516,14 @@ accounts are created lazily on first posting for that account.
 | `CASH_CLEARING` | ASSET | DEBIT | platform cash / external clearing — increases when customers deposit |
 | `SETTLEMENT_SUSPENSE` | ASSET | DEBIT | funds captured/settled out (e.g. a payment leaving the platform) |
 | `CUSTOMER_WALLET:{accountId}` | LIABILITY | CREDIT | the platform's obligation to a customer (their wallet balance) |
+| `FX_GAIN` | INCOME | CREDIT | **(9th incr)** unrealized FX revaluation gain (a foreign position's base carrying value rose to spot) |
+| `FX_LOSS` | EXPENSE | DEBIT | **(9th incr)** unrealized FX revaluation loss (a foreign position's base carrying value fell to spot) |
 
 A ledger account's **running balance** = Σ(debit lines) − Σ(credit lines); its
 *natural* balance is interpreted by `normalSide` (a liability with a credit balance
-is positive). EQUITY/INCOME/EXPENSE types are reserved for later increments.
+is positive). EQUITY is reserved for a later increment; **(9th incr)** INCOME (`FX_GAIN`)
+and EXPENSE (`FX_LOSS`) are now in use for FX revaluation (both seeded in
+`ChartOfAccountsSeedConfig`; `LedgerAccountCodes.typeForCode` classifies them).
 
 ## Posting Policy (transaction-type → balanced entry)
 
@@ -767,11 +821,113 @@ NULL DEFAULT 'KRW'` to `journal_line` and **backfills existing rows**
 all existing lines are KRW, so the backfill is exact and the base-balance check is
 unchanged for them).
 
-**Deferred** (forward-declared): **FX gain/loss** accounts + period-end **revaluation**
-of foreign balances at a new rate (the 8th increment books at the supplied rate, it does
-not revalue); a **live FX rate feed** (rates are caller-supplied); **multi-currency
-reconciliation** (cross-currency clearing-account matching); a **configurable base
-currency** (fixed KRW in v1).
+**Deferred** (forward-declared): a **live FX rate feed** (rates are caller-supplied);
+**multi-currency reconciliation** (cross-currency clearing-account matching); a
+**configurable base currency** (fixed KRW in v1). The **FX gain/loss revaluation** that
+the 8th increment deferred is delivered by the 9th increment (§ FX gain/loss revaluation).
+
+## FX gain/loss revaluation (ninth increment — TASK-FIN-BE-015)
+
+The 8th increment books a multi-currency entry at the rate supplied **at posting time** and
+records each line's base value; it does **not** revalue. Over time the market (spot) rate
+moves, so an open **foreign-currency position**'s carrying value in the base currency drifts
+from its current worth. **Revaluation** trues a position's base carrying value up to the
+**closing (spot) rate**, recognising the difference as an **unrealized FX gain or loss**.
+
+**The position.** A *position* is the lines of one ledger account in one foreign currency —
+identified by `(ledgerAccountCode, currency)` where `currency ≠ KRW`. From the existing
+per-`(account, currency)` totals (the trial-balance query) it has, in **debit-positive**
+signed minor units:
+- `foreignBalance` = `Σ debit − Σ credit` of the position's transaction `money` (foreign minor units);
+- `carryingBase` = `Σ baseDebit − Σ baseCredit` of the position's `baseAmount` (KRW minor units) — its current base carrying value.
+
+**The computation** (`FxRevaluationPolicy`, pure). Given `(foreignBalance, carryingBase,
+closingRate)` where `closingRate` is the **base-minor-per-foreign-minor** spot factor:
+- `revaluedBase = round(foreignBalance × closingRate)` (HALF_UP, a `long` KRW minor — the
+  `closingRate` is an exact `BigDecimal`, F5: the result is integer minor units, never a float);
+- `delta = revaluedBase − carryingBase` (debit-positive signed KRW).
+- `delta == 0` → **no adjustment** (the position is already at spot — `Optional.empty()`).
+- `closingRate ≤ 0` → `RevaluationRateInvalidException` (422 `REVALUATION_RATE_INVALID`).
+
+**The adjusting entry** (balanced in the base currency). When `delta ≠ 0`, build a 2-line entry:
+
+| delta | foreign-account line (base-carrying adjustment) | contra line | meaning |
+|---|---|---|---|
+| `> 0` | **DR** `{account}` — `money = 0 {currency}`, `baseAmount = +delta KRW` | **CR** `FX_GAIN` `delta KRW` | base carrying rose → gain |
+| `< 0` | **CR** `{account}` — `money = 0 {currency}`, `baseAmount = +|delta| KRW` | **DR** `FX_LOSS` `|delta| KRW` | base carrying fell → loss |
+
+The foreign-account line is a **base-carrying adjustment** (`JournalLine.baseAdjustment`):
+its transaction `money` is **zero** in the position's foreign `currency` (the foreign
+**quantity is unchanged** — a revaluation does not buy or sell currency), while its
+`baseAmount` carries the KRW carrying delta. It is the **only** line factory that permits a
+zero transaction amount; `exchangeRate` is recorded as the applied `closingRate` for
+provenance. The contra `FX_GAIN`/`FX_LOSS` line is an ordinary positive KRW line
+(`baseAmount = money`, `rate = 1`). `Σ baseDebit == Σ baseCredit` holds (both are `|delta|`),
+so the **existing `JournalEntry` factory accepts it with no change**, and because both base
+amounts already exist as columns, **there is no `V6` migration**.
+
+**Polarity is automatic** for assets and liabilities. `foreignBalance` is read
+debit-positive: an asset (debit balance) has `foreignBalance > 0`, a liability (credit
+balance) `< 0`. An asset whose base value rises → `delta > 0` → gain; a liability whose base
+value rises → `revaluedBase` more negative → `delta < 0` → loss. The sign of `delta` alone
+selects gain vs loss — no account-type branching.
+
+**No double-booking on re-revaluation.** The base-carrying adjustment lands in the position's
+**own** `(account, currency)` row (it carries that foreign `currency`, just with amount 0), so
+its `baseAmount` is part of the position's `carryingBase`. A later revaluation at a newer rate
+reads the **already-revalued** carrying and books only the **incremental** delta. Worked
+example (USD position, $100 = 10 000 USD-minor debit, first booked @ rate 13.0 → carrying
+130 000 KRW):
+
+| step | closingRate | revaluedBase | carryingBase (before) | delta | entry |
+|---|---|---|---|---|---|
+| reval 1 | 13.5 | 135 000 | 130 000 | +5 000 | DR CASH_CLEARING(USD,base +5 000) / CR FX_GAIN 5 000 |
+| reval 2 | 14.0 | 140 000 | 135 000 | +5 000 | DR CASH_CLEARING(USD,base +5 000) / CR FX_GAIN 5 000 |
+| reval 3 | 13.0 | 130 000 | 140 000 | −10 000 | CR CASH_CLEARING(USD,base +10 000) / DR FX_LOSS 10 000 |
+
+The USD foreign balance stays 10 000 USD-minor throughout (the adjustments add 0 USD); only
+the position's KRW carrying tracks spot. The trial balance's base-consolidated total stays in
+balance (every revaluation entry balances in base).
+
+**`RevalueForeignBalanceUseCase`** (one `@Transactional`, operator):
+1. **Idempotency (F1).** Require a client `Idempotency-Key` (`reval:{key}` in
+   `processed_events`, ≤ 50 chars → `IdempotencyKeyRequiredException` 400 otherwise). A replay
+   (key processed) returns the original entry via `findBySourceEventId("reval:{key}", tenant)`
+   → `200 {revalued:false, reason:"REPLAY"}` (no re-post).
+2. **Load the position.** `journalRepository.accountTotalsForCurrency(account, currency, tenant)`
+   (a focused read filtering the existing per-`(account,currency)` totals). No row / zero
+   foreign balance → `200 {revalued:false, reason:"NO_POSITION"}` (net-zero; nothing booked,
+   key NOT marked — a real position can be revalued later). `currency == KRW` or unsupported →
+   `CURRENCY_MISMATCH` (422).
+3. **Compute.** `FxRevaluationPolicy.revalue(...)`. `delta == 0` →
+   `200 {revalued:false, reason:"AT_SPOT"}` (no entry, key not marked). `closingRate ≤ 0` →
+   `REVALUATION_RATE_INVALID` (422).
+4. **Post.** Build `JournalEntry.post(newId, tenant, postedAt, SourceRef.ofRevaluation(reference,
+   "reval:{key}"), [adjustmentLine, contraLine])`, `markProcessed("reval:{key}")` in the SAME Tx,
+   then funnel through **`PostJournalEntryUseCase.post(entry, reason, operatorSubject)`** — the
+   single guarded write path: the closed-period guard (`postedAt` in a CLOSED period → 422
+   `LEDGER_PERIOD_CLOSED`, synchronous), the audit row (actor = operator subject), and the
+   `entry.posted` outbox append (`sourceType = "REVALUATION"`) are all inherited. `201
+   {revalued:true, deltaBaseMinor, outcome:"FX_GAIN"|"FX_LOSS", entry}`.
+
+**`FX_GAIN` (INCOME) / `FX_LOSS` (EXPENSE)** are seeded in `ChartOfAccountsSeedConfig` and
+classified by `LedgerAccountCodes.typeForCode` (so the lazy-create in the guarded write path
+also assigns the right type). The endpoint is `.authenticated()` + the dual-accept tenant gate
+(parity with manual posting — no new scope-authority axis; the operator arrives via the
+platform-console client).
+
+**Emission.** A revaluation entry emits the **same** `finance.ledger.entry.posted.v1` (the
+FIN-BE-009 outbox, unchanged) with `source.sourceType = "REVALUATION"` — the GL/AP feed sees
+the unrealized FX adjustment tagged by provenance. No new topic.
+
+**Net-zero / immutability.** The auto-journal and manual paths are untouched (no revaluation
+unless the operator calls the endpoint). A revaluation entry is as **immutable** as any other
+(F3) — a correction is another revaluation (a later rate) or a reversal. `closingRate` is
+**caller-supplied** (a live FX rate feed is forward-declared).
+
+**Deferred** (forward-declared): **realized** FX gain/loss on settlement (this increment is
+unrealized only); a **bulk / all-positions** revaluation + a **period-close auto-hook** (one
+`(account, currency)` per call here); a **live FX rate feed**; a **configurable base currency**.
 
 ## Idempotency / dedupe (F1)
 
@@ -812,6 +968,7 @@ All under `/api/finance/ledger/**`. Formal shapes → [`ledger-api.md`](../../co
 | `GET` | `/api/finance/ledger/accounts/{ledgerAccountCode}/balance` | JWT | the account's running balance (Σdebit − Σcredit) |
 | `GET` | `/api/finance/ledger/trial-balance` | JWT | Σ over all accounts (== 0 invariant) |
 | `POST` | `/api/finance/ledger/entries` | JWT (authenticated) + `Idempotency-Key` | **(5th increment)** post a manual adjusting entry (balanced lines → guarded write path) |
+| `POST` | `/api/finance/ledger/revaluations` | JWT (authenticated) + `Idempotency-Key` | **(9th increment)** revalue a foreign-currency position at a closing rate → FX gain/loss adjusting entry (or 200 no-op) |
 | `POST` | `/api/finance/ledger/periods` | JWT (authenticated) | **(2nd increment)** open an accounting period `{from, to}` |
 | `POST` | `/api/finance/ledger/periods/{periodId}/close` | JWT (authenticated) | **(2nd increment)** close a period → capture the trial-balance snapshot |
 | `GET` | `/api/finance/ledger/periods` | JWT | **(2nd increment)** list accounting periods |
@@ -890,11 +1047,12 @@ owns `LedgerOutboxJpaEntity implements OutboxRow` (`ledger_outbox` table, MySQL
 | **F1** idempotent + Tx-protected | ✅ | `processed_events` dedupe (source event id) in the posting `@Transactional`; at-most-once entry per event; **(5th incr)** manual posting reuses the same dedupe keyed by the client `Idempotency-Key` (`manual:{key}`) — replay returns the original entry |
 | **F2** double-entry ledger | ✅ (this is it) | `JournalEntry` balanced invariant `Σdebit == Σcredit`; ledger is downstream of the wallet, never writes back; **(5th incr)** operator manual entries pass the SAME factory balance gate before any persist |
 | **F3** posted entry immutable; reversal-only | ✅ | no UPDATE/DELETE of entries/lines; `REVERSAL` entry references the original; **(5th incr)** manual adjusting entries are equally immutable (a correction is another entry) |
-| **F5** money = minor-units, no float | ✅ | `Money(long, Currency)`; grep-zero float/double in `domain/money`; `CURRENCY_MISMATCH` guard. **(8th incr)** money stays integer minor units (both transaction and base amounts are `long`); the `exchangeRate` is an exact `BigDecimal` / `DECIMAL(20,8)` (decimal, **not** a float) recorded for provenance — the balance is checked on integer `baseAmount`s, never re-derived from the rate, so no rounding can create/destroy funds |
+| **F5** money = minor-units, no float | ✅ | `Money(long, Currency)`; grep-zero float/double in `domain/money`; `CURRENCY_MISMATCH` guard. **(8th incr)** money stays integer minor units (both transaction and base amounts are `long`); the `exchangeRate` is an exact `BigDecimal` / `DECIMAL(20,8)` (decimal, **not** a float) recorded for provenance — the balance is checked on integer `baseAmount`s, never re-derived from the rate, so no rounding can create/destroy funds. **(9th incr)** FX revaluation's `revaluedBase = round(foreignBalance × closingRate)` is computed with the `BigDecimal` rate then stored as a `long` KRW minor (HALF_UP); the booked `delta` is integer base minor units, balanced exactly — no float touches the books |
 | **F6** immutable audit | ✅ | append-only `audit_log`, same Tx (audit-heavy) |
 | **F7** regulated PII encrypted/masked | N/A (first increment) | the ledger stores account ids + amounts, no new regulated PII (no KYC documents); reuses account-service-masked refs |
 | **F8** reconciliation no auto-close | ✅ (4th increment) | `ReconciliationMatcher` records mismatches as OPEN `ReconciliationDiscrepancy` (operator review queue); resolution is operator-only via `ResolveDiscrepancyUseCase` — no code path auto-closes or adjusts a discrepancy (§ Reconciliation); **(6th/7th increment)** a CLOSED period is closed to reconciliation on both sides — neither resolving an existing discrepancy nor ingesting a new statement dated in the period is allowed (`RECONCILIATION_PERIOD_LOCKED`; § Reconciliation § Period lock) |
 | **F2 (period close)** | ✅ (2nd increment) | `AccountingPeriod` OPEN→CLOSED + non-overlap invariant; `PostJournalEntryUseCase` guard rejects a posting into a CLOSED period (`LEDGER_PERIOD_CLOSED`, net-zero otherwise); close captures an immutable trial-balance snapshot (§ Accounting Period) |
+| **F2 (FX revaluation)** | ✅ (9th increment) | unrealized revaluation books a **balanced base-currency** adjusting entry (DR/CR the foreign position's base carrying + contra `FX_GAIN`/`FX_LOSS`) through the SAME guarded write path — the books stay balanced in the base currency; the foreign quantity is untouched (no synthetic currency movement); re-revaluation reads the already-revalued carrying (no double-booking); `delta == 0` / no position → net-zero no-op (§ FX gain/loss revaluation) |
 
 ## Trait Rule mapping
 
@@ -962,6 +1120,10 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
 | 26 | **(7th incr)** Ingest a statement whose statement date is in a CLOSED period | 422 `RECONCILIATION_PERIOD_LOCKED` thrown before any persist/match/emit — a locked ingest records nothing (atomic). No covering CLOSED period → ingest proceeds (net-zero) |
 | 27 | **(8th incr)** Multi-currency entry whose base amounts do not balance | 422 `LEDGER_ENTRY_UNBALANCED` (`Σ baseDebit ≠ Σ baseCredit`) — the factory rejects before persist; the base amounts are authoritative (no rounding involved at balance time) |
 | 28 | **(8th incr)** A line's currency / base currency unsupported | 422 `CURRENCY_MISMATCH` (`UnsupportedCurrencyException` — outside `{KRW,USD,EUR,JPY}`; the base currency is always KRW in v1) |
+| 29 | **(9th incr)** FX revaluation `closingRate` not strictly positive | 422 `REVALUATION_RATE_INVALID` (`RevaluationRateInvalidException`) — a position cannot be valued at a zero/negative rate; nothing persists |
+| 30 | **(9th incr)** FX revaluation `currency` is the base currency (KRW) or unsupported | 422 `CURRENCY_MISMATCH` (the base currency cannot be revalued against itself) |
+| 31 | **(9th incr)** FX revaluation finds no position in that currency / the position is already at spot (`delta == 0`) | `200 {revalued:false, reason:"NO_POSITION"\|"AT_SPOT"}` — no entry booked, the `Idempotency-Key` is **not** consumed (net-zero; a later real position can be revalued) |
+| 32 | **(9th incr)** FX revaluation `postedAt` in a CLOSED period / `Idempotency-Key` absent / replayed | 422 `LEDGER_PERIOD_CLOSED` (inherited guard) / 400 `IDEMPOTENCY_KEY_REQUIRED` / `200 {revalued:false, reason:"REPLAY"}` returning the original entry |
 
 ## Testing Strategy
 
@@ -1068,6 +1230,33 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
   multi-currency period close captures a base-balanced snapshot; an
   unbalanced-base manual entry → 422 `LEDGER_ENTRY_UNBALANCED`. The auto-journal KRW
   round-trip (post → entry.posted.v1) is unchanged (net-zero).
+- **FX gain/loss revaluation (9th increment)**: unit — `FxRevaluationPolicyTest`
+  (asset gain [F>0, rate↑ → delta>0 → DR account/CR FX_GAIN]; asset loss [rate↓ → CR
+  account/DR FX_LOSS]; **liability** loss [F<0, base value ↑ → delta<0 → loss] + liability
+  gain [F<0, rate↓ → delta>0 → gain] — polarity automatic; `delta==0` → empty no-op;
+  rounding HALF_UP on `foreignBalance × closingRate`; `closingRate ≤ 0` →
+  `RevaluationRateInvalidException`); `JournalLineTest` (the `baseAdjustment` factory — zero
+  foreign amount, non-zero base, balances against its KRW contra; `reversed()` preserves it;
+  the positive-amount `of` factories still reject 0). Application —
+  `RevalueForeignBalanceUseCaseTest` (mock ports: a gain/loss position posts the 2-line entry
+  + emits `entry.posted` with `sourceType=REVALUATION`; no position / at-spot → `revalued:false`
+  no-op, key NOT marked; replayed key → original entry; `postedAt` in a CLOSED period →
+  `LEDGER_PERIOD_CLOSED`; missing key → `IDEMPOTENCY_KEY_REQUIRED`; KRW currency →
+  `CURRENCY_MISMATCH`; operator subject = audit actor). Slice — `@WebMvcTest
+  RevaluationController` (201 revalued / 200 no-op, 400 missing key, error envelopes).
+  Integration (Testcontainers, authoritative — **no migration**, columns reused): post a
+  **multi-currency manual entry** establishing a USD position on `CASH_CLEARING` (e.g. DR USD
+  / CR KRW wallet @ rate 13.0) → `POST /revaluations {account:CASH_CLEARING, currency:USD,
+  closingRate:13.5}` → **201**, the 2-line revaluation entry persists (DR CASH_CLEARING USD
+  amount 0 / base +5000, CR FX_GAIN 5000), `FX_GAIN` seeded, the **trial balance** stays
+  base-balanced and the USD position's foreign balance is **unchanged** while its base
+  carrying == `foreignBalance × 13.5`; **consume `finance.ledger.entry.posted.v1` with
+  `sourceType=REVALUATION`**; a **second** revaluation @ 14.0 books only the incremental delta
+  (no double-booking); a revaluation @ a lower rate books `FX_LOSS`; a replay (same key) → 200
+  same entryId; `closingRate:0` → 422 `REVALUATION_RATE_INVALID`; a back-dated revaluation into
+  a CLOSED window → 422 `LEDGER_PERIOD_CLOSED`; revaluing a currency with no position → 200
+  `revalued:false`; cross-tenant JWT → 403. The all-KRW auto-journal round-trip is unchanged
+  (net-zero).
 
 ## Required Artifacts mapping (rules/domains/fintech.md § Required Artifacts)
 

@@ -626,7 +626,14 @@ dated in a CLOSED period is rejected with the same code, before any persist/matc
 currencies, balanced in a fixed base/reporting currency [KRW] via per-line
 `exchangeRate` + `baseAmount`; the balance identity holds in the base currency. **No new
 error code** — `LEDGER_ENTRY_UNBALANCED` (422) covers a base-amount imbalance,
-`CURRENCY_MISMATCH` (422) an unsupported currency).
+`CURRENCY_MISMATCH` (422) an unsupported currency), **9th**
+(TASK-FIN-BE-015 — FX gain/loss revaluation: an operator revalues a foreign-currency
+position at a new closing rate, booking the base-carrying delta to `FX_GAIN` (income) /
+`FX_LOSS` (expense) via a balanced base-currency adjusting entry — the foreign quantity
+is unchanged, only its base carrying value trues up to spot. Reuses the existing guarded
+write path + `entry.posted.v1` outbox tagged `sourceType = "REVALUATION"` [no new event];
+one new code `REVALUATION_RATE_INVALID` (422) for a non-positive closing rate, and the
+existing `IDEMPOTENCY_KEY_REQUIRED` / `LEDGER_PERIOD_CLOSED` guards apply).
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -644,6 +651,7 @@ error code** — `LEDGER_ENTRY_UNBALANCED` (422) covers a base-amount imbalance,
 | RECONCILIATION_DISCREPANCY_NOT_FOUND | 404 | Reconciliation discrepancy id unknown / not in tenant — `ledger-service` (`ReconciliationDiscrepancyNotFoundException`) |
 | RECONCILIATION_ALREADY_RESOLVED | 409 | Resolve attempted on an already-RESOLVED discrepancy — `ledger-service` (`ReconciliationAlreadyResolvedException`) |
 | RECONCILIATION_PERIOD_LOCKED | 422 | Resolve (6th incr) OR ingest (7th incr) of a statement whose statement date is in a CLOSED accounting period (F8 — frozen with the books; correct via the next period) — `ledger-service` (`ReconciliationPeriodLockedException`; mirrors `LEDGER_PERIOD_CLOSED`; net-zero when no covering closed period; the ingest guard runs before any persist/match/emit) |
+| REVALUATION_RATE_INVALID | 422 | **(9th incr)** FX revaluation `closingRate` is not strictly positive — `ledger-service` (`RevaluationRateInvalidException`). The rate is the base-minor-per-foreign-minor spot factor (caller-supplied); a non-positive rate cannot value a position |
 
 ---
 
