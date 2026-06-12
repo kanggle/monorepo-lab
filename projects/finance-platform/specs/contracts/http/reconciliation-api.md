@@ -61,7 +61,11 @@ Operator resolves an OPEN discrepancy. Request:
 `resolutionType` ∈ `{ MATCHED_MANUALLY, WRITTEN_OFF, ACCEPTED }`. `200`: the
 discrepancy with `status: "RESOLVED"` + `resolution:{ resolutionType, note,
 resolvedBy, resolvedAt }`. `404 RECONCILIATION_DISCREPANCY_NOT_FOUND` when unknown;
-`409 RECONCILIATION_ALREADY_RESOLVED` when already RESOLVED. There is **no
+`409 RECONCILIATION_ALREADY_RESOLVED` when already RESOLVED;
+**(6th increment)** `422 RECONCILIATION_PERIOD_LOCKED` when the discrepancy's
+statement date falls in a CLOSED accounting period — the closed month's reconciliation
+is frozen with the books; correct via the next (open) period (mirrors
+`LEDGER_PERIOD_CLOSED`; net-zero when no covering closed period). There is **no
 auto-resolve** path.
 
 ## 3. GET `/api/finance/ledger/reconciliation/statements/{id}`
@@ -89,17 +93,17 @@ Discrepancy detail (incl. `resolution` when RESOLVED).
 | `RECONCILIATION_STATEMENT_NOT_FOUND` | 404 | statement id unknown / not in tenant |
 | `RECONCILIATION_DISCREPANCY_NOT_FOUND` | 404 | discrepancy id unknown / not in tenant |
 | `RECONCILIATION_ALREADY_RESOLVED` | 409 | resolve attempted on an already-RESOLVED discrepancy |
+| `RECONCILIATION_PERIOD_LOCKED` | 422 | **(6th incr)** resolve attempted on a discrepancy whose statement date is in a CLOSED accounting period (frozen with the books; mirrors `LEDGER_PERIOD_CLOSED`) |
 | `TENANT_FORBIDDEN` | 403 | dual-accept gate rejects (both branches fail) |
 
 `RECONCILIATION_DISCREPANCY` (pre-registered, fintech F8) names the **recorded
 discrepancy entity** (its `type` + `OPEN/RESOLVED` status), not an HTTP error
-response. `RECONCILIATION_PERIOD_LOCKED` (422) stays pre-registered for the deferred
-period-lock increment.
+response.
 
 ## Out of scope (forward-declared — later increments)
 
-- Reconciliation **period lock** (`RECONCILIATION_PERIOD_LOCKED` — a discrepancy
-  whose statement date is in a CLOSED accounting period is immutable).
+- Reconciliation **ingest-time** period lock (reject ingesting a statement dated in a
+  CLOSED period — the 6th increment locks *resolution*, not *ingest*).
 - Fuzzy / N:M / split matching; multi-currency statements.
 - An in-repo consumer of the reconciliation feed (this increment ships the producer
   + topics only).

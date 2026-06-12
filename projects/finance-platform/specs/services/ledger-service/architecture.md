@@ -21,9 +21,13 @@ All implementation tasks targeting this service must follow this declaration,
 > discrepancy queue + emission) is specified by § Reconciliation + § Increment Scope;
 > the **fifth increment** (TASK-FIN-BE-011 — manual journal posting: an operator-
 > initiated adjusting-entry REST endpoint funnelling through the existing guarded
-> write path) is specified by § Manual Journal Posting + § Increment Scope.
-> Reconciliation period-lock, multi-currency journals, and fuzzy / N:M matching remain
-> forward-declared (§ Increment Scope). The account-service architecture
+> write path) is specified by § Manual Journal Posting + § Increment Scope; the
+> **sixth increment** (TASK-FIN-BE-012 — reconciliation period-lock: a discrepancy
+> whose statement date is in a CLOSED period is immutable, `resolve` rejected with
+> `RECONCILIATION_PERIOD_LOCKED`) is specified by § Reconciliation § Period lock +
+> § Increment Scope. Multi-currency journals, fuzzy / N:M matching, and a
+> reconciliation ingest-time lock remain forward-declared (§ Increment Scope). The
+> account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
 > idempotency, audit) — this service mirrors it.
@@ -166,10 +170,30 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   referencing an unknown ledger account (`LEDGER_ACCOUNT_NOT_FOUND` 404) — an
   operator adjusts existing accounts, never mints a new chart node via a posting.
 
+**Sixth increment — IN (TASK-FIN-BE-012, reconciliation period-lock):**
+- The **reconciliation analog of the posting closed-period guard** — a discrepancy
+  whose **statement date** falls in a CLOSED accounting period is **immutable**: the
+  operator `resolve` path is rejected with `RECONCILIATION_PERIOD_LOCKED` (422,
+  mirroring `LEDGER_PERIOD_CLOSED`). A closed month's reconciliation outcomes are
+  frozen with the books; a correction is recorded against the next (open) period. The
+  guard reuses the EXISTING `AccountingPeriodRepository.findCovering(tenant, t,
+  CLOSED)` (no new period machinery) and the discrepancy's owning statement
+  (`ExternalStatement.statementDate`, a `LocalDate`, mapped to its **start-of-day UTC
+  instant** for the `covers` check — the ledger is UTC throughout). **Net-zero**: no
+  covering CLOSED period — the common case, and always when no period is defined, or
+  the statement is absent/unknown — `resolve` proceeds byte-identically to FIN-BE-010.
+  **No migration, no new aggregate** — one guard in `ResolveDiscrepancyUseCase` + one
+  exception. See § Reconciliation § Period lock.
+- **Scope decision — resolve-guard only.** This increment freezes *resolution* of a
+  discrepancy in a closed period (the FIN-BE-010 deferred wording: "a discrepancy …
+  is immutable; correction via the next period"). It does **not** block *ingesting* a
+  new statement dated in a closed period (a backdated statement still records its
+  discrepancies OPEN — they are simply locked from resolution); an ingest-time lock is
+  forward-declared.
+
 **Forward-declared — OUT (each a later task):**
-- **Reconciliation period lock** (`RECONCILIATION_PERIOD_LOCKED` — a discrepancy
-  whose statement date is in a CLOSED accounting period is immutable; correction via
-  the next period) + fuzzy / N:M matching + multi-currency statements.
+- **Reconciliation ingest-time period lock** (block ingesting a statement dated in a
+  CLOSED period) + fuzzy / N:M matching + multi-currency statements.
 - **Multi-currency journals** (each entry is single-currency per entry; the chart +
   lines carry currency but cross-currency entries are rejected).
 - **Manual-posting body-hash idempotency conflict** (`IDEMPOTENCY_KEY_CONFLICT` 409
@@ -299,7 +323,8 @@ com.example.finance.ledger/
 │        AccountingPeriodInvalidWindowException;
 │        (4th incr) ReconciliationStatementNotFoundException, ReconciliationDiscrepancyNotFoundException,
 │        ReconciliationAlreadyResolvedException, ReconciliationAccountInvalidException;
-│        (5th incr) IdempotencyKeyRequiredException [handler guard → 400] — manual posting reuses LedgerEntryUnbalanced/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed, no new domain code)
+│        (5th incr) IdempotencyKeyRequiredException [handler guard → 400] — manual posting reuses LedgerEntryUnbalanced/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed, no new domain code;
+│        (6th incr) ReconciliationPeriodLockedException [→ 422])
 ├── application/                           ← use cases + outbound ports
 │   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit → (3rd incr) append entry.posted outbox row (one Tx); (5th incr) + post(entry, reason, actor) overload (operator audit actor; the no-actor overload delegates with the auto-journal default — net-zero)
 │   ├── PostFromTransactionUseCase.java    ← maps an account-service transaction envelope → PostJournalEntry (via PostingPolicy); idempotent on sourceEventId
@@ -309,7 +334,7 @@ com.example.finance.ledger/
 │   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit → (3rd incr) append period.closed outbox row
 │   ├── QueryAccountingPeriodUseCase.java  ← (2nd incr) read: list periods / period detail + snapshot
 │   ├── IngestStatementUseCase.java        ← (4th incr) @Transactional: validate clearing acct → persist statement+lines → match → persist matches + OPEN discrepancies + audit → append recon outbox events (no auto-close)
-│   ├── ResolveDiscrepancyUseCase.java     ← (4th incr) @Transactional operator: OPEN→RESOLVED + resolution + audit
+│   ├── ResolveDiscrepancyUseCase.java     ← (4th incr) @Transactional operator: OPEN→RESOLVED + resolution + audit; (6th incr) + period-lock guard (statement's owning period CLOSED → RECONCILIATION_PERIOD_LOCKED; injects AccountingPeriodRepository + ReconciliationRepository.findStatementById)
 │   ├── QueryReconciliationUseCase.java    ← (4th incr) read: statement detail+summary / discrepancy queue / detail
 │   ├── ActorContext.java
 │   ├── view/ (JournalEntryView, JournalLineView, LedgerAccountBalanceView, TrialBalanceView)
@@ -519,13 +544,46 @@ persist matches + **OPEN** discrepancies + audit, and append the outbox events
 discrepancy) in the SAME Tx (transactional outbox, FIN-BE-009). **No auto-close.**
 
 **Resolve** (`ResolveDiscrepancyUseCase`, operator, one `@Transactional`): require
-`OPEN` (`RECONCILIATION_ALREADY_RESOLVED` otherwise), set RESOLVED + resolutionType
-+ note + resolvedBy + audit. There is **no** auto-resolve path anywhere.
+`OPEN` (`RECONCILIATION_ALREADY_RESOLVED` otherwise), **(6th increment)** require the
+discrepancy's owning period be not CLOSED (§ Period lock — `RECONCILIATION_PERIOD_LOCKED`
+otherwise), set RESOLVED + resolutionType + note + resolvedBy + audit. There is **no**
+auto-resolve path anywhere.
 
-**Deferred** (forward-declared): a reconciliation **period lock**
-(`RECONCILIATION_PERIOD_LOCKED` — a discrepancy whose statement date falls in a
-CLOSED accounting period is immutable, corrected via the next period); fuzzy / N:M
-matching; multi-currency statements.
+### Period lock (sixth increment — TASK-FIN-BE-012)
+
+The **reconciliation analog of the posting closed-period guard** (§ Accounting Period
+§ Posting guard). Once an accounting period is CLOSED, the reconciliation outcomes
+dated in that period are **frozen with the books**: a discrepancy whose **statement
+date** falls in a CLOSED period can no longer be resolved — `resolve` is rejected with
+`ReconciliationPeriodLockedException` (**422 `RECONCILIATION_PERIOD_LOCKED`**,
+mirroring `LEDGER_PERIOD_CLOSED`). The correction is recorded against the next (open)
+period, not by mutating the closed month's record (F8 immutability extended to the
+period boundary).
+
+- **Guard site** — `ResolveDiscrepancyUseCase`, after loading the OPEN discrepancy and
+  **before** `discrepancy.resolve(...)`: load the owning statement
+  (`reconciliationRepository.findStatementById(discrepancy.statementId(), tenant)`),
+  take its `statementDate` (a `LocalDate`), map it to the **start-of-day UTC instant**
+  (`statementDate.atStartOfDay(ZoneOffset.UTC).toInstant()` — the ledger is UTC
+  throughout; a statement dated any day in January maps into the
+  `[Jan 1 00:00Z, Feb 1 00:00Z)` period), and consult
+  `accountingPeriodRepository.findCovering(tenant, thatInstant, CLOSED)`. Present →
+  `RECONCILIATION_PERIOD_LOCKED`.
+- **Net-zero** — `findCovering` empty (the common case, and always when no period is
+  defined), or the discrepancy has no `statementId` / the statement is absent → the
+  guard does not fire and `resolve` proceeds **byte-identically to FIN-BE-010**
+  (the lock is opt-in via closing a period; absence = unrestricted).
+- **No new machinery** — reuses the existing `AccountingPeriodRepository.findCovering`
+  (the posting guard's own query) + the existing statement read; **no migration, no
+  new aggregate, no schema change**. One guard + one exception.
+- **Resolve-only** — this increment freezes *resolution*; it does not block *ingesting*
+  a statement dated in a closed period (a backdated statement still records its
+  discrepancies OPEN — they are simply locked from resolution). An ingest-time lock is
+  forward-declared.
+
+**Deferred** (forward-declared): a reconciliation **ingest-time** period lock (reject
+ingesting a statement dated in a CLOSED period); fuzzy / N:M matching; multi-currency
+statements.
 
 ## Manual Journal Posting (fifth increment — TASK-FIN-BE-011)
 
@@ -710,7 +768,7 @@ owns `LedgerOutboxJpaEntity implements OutboxRow` (`ledger_outbox` table, MySQL
 | **F5** money = minor-units, no float | ✅ | `Money(long, Currency)`; grep-zero float/double in `domain/money`; `CURRENCY_MISMATCH` guard |
 | **F6** immutable audit | ✅ | append-only `audit_log`, same Tx (audit-heavy) |
 | **F7** regulated PII encrypted/masked | N/A (first increment) | the ledger stores account ids + amounts, no new regulated PII (no KYC documents); reuses account-service-masked refs |
-| **F8** reconciliation no auto-close | ✅ (4th increment) | `ReconciliationMatcher` records mismatches as OPEN `ReconciliationDiscrepancy` (operator review queue); resolution is operator-only via `ResolveDiscrepancyUseCase` — no code path auto-closes or adjusts a discrepancy (§ Reconciliation); period-lock forward-declared |
+| **F8** reconciliation no auto-close | ✅ (4th increment) | `ReconciliationMatcher` records mismatches as OPEN `ReconciliationDiscrepancy` (operator review queue); resolution is operator-only via `ResolveDiscrepancyUseCase` — no code path auto-closes or adjusts a discrepancy (§ Reconciliation); **(6th increment)** a discrepancy whose statement date is in a CLOSED period is immutable — `resolve` rejected with `RECONCILIATION_PERIOD_LOCKED` (§ Reconciliation § Period lock) |
 | **F2 (period close)** | ✅ (2nd increment) | `AccountingPeriod` OPEN→CLOSED + non-overlap invariant; `PostJournalEntryUseCase` guard rejects a posting into a CLOSED period (`LEDGER_PERIOD_CLOSED`, net-zero otherwise); close captures an immutable trial-balance snapshot (§ Accounting Period) |
 
 ## Trait Rule mapping
@@ -775,6 +833,7 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
 | 22 | **(5th incr)** Manual posting referencing an unknown ledger account | 404 `LEDGER_ACCOUNT_NOT_FOUND` (no lazy mint via the operator path) |
 | 23 | **(5th incr)** Manual posting whose `postedAt` falls in a CLOSED period | 422 `LEDGER_PERIOD_CLOSED` (the same closed-period guard, now surfaced synchronously on REST — not the consumer DLT route) |
 | 24 | **(5th incr)** Manual posting `Idempotency-Key` absent / replayed | absent → 400 `IDEMPOTENCY_KEY_REQUIRED`; replayed key → 200 returning the original entry (no second post — `processed_events` dedupe, F1) |
+| 25 | **(6th incr)** Resolve a discrepancy whose statement date is in a CLOSED period | 422 `RECONCILIATION_PERIOD_LOCKED` (the books are frozen; correct via the next period). No covering CLOSED period / no statement → resolve proceeds (net-zero) |
 
 ## Testing Strategy
 
@@ -843,6 +902,16 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
   Kafka; replay with the same key → 200 the same entryId (one entry only); an
   unbalanced body → 422 `LEDGER_ENTRY_UNBALANCED`; a back-dated entry into a closed
   window → 422 `LEDGER_PERIOD_CLOSED`; a cross-tenant JWT → 403.
+- **Reconciliation period-lock (6th increment)**: application —
+  `ResolveDiscrepancyUseCaseTest` (statement date covered by a CLOSED period →
+  `RECONCILIATION_PERIOD_LOCKED`, no mutation; no covering period / OPEN period / no
+  statement → resolves normally — net-zero; the `LocalDate` → start-of-day-UTC instant
+  mapping for the boundary). Integration (Testcontainers, authoritative): post a
+  clearing-account entry → ingest a statement (statement date D) producing an OPEN
+  discrepancy → open + close a period whose window covers D's start-of-day-UTC instant
+  → `resolve` the discrepancy → 422 `RECONCILIATION_PERIOD_LOCKED` (still OPEN); a
+  second discrepancy whose statement date is NOT in any closed period → resolves 200
+  (net-zero); a cross-tenant JWT → 403.
 
 ## Required Artifacts mapping (rules/domains/fintech.md § Required Artifacts)
 

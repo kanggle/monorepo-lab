@@ -615,8 +615,11 @@ live: **1st** (TASK-FIN-BE-007 — auto-journal + read), **2nd** (TASK-FIN-BE-00
 period close), **3rd** (TASK-FIN-BE-009 — GL/AP-feed outbox emission), **4th**
 (TASK-FIN-BE-010 — reconciliation matching, F8 no-auto-close), **5th**
 (TASK-FIN-BE-011 — operator manual journal posting: the first journal mutation REST
-endpoint, synchronous balance/account/closed-period guards + `Idempotency-Key`).
-Reconciliation period-lock remains **v2-planned**.
+endpoint, synchronous balance/account/closed-period guards + `Idempotency-Key`),
+**6th** (TASK-FIN-BE-012 — reconciliation period-lock: a discrepancy whose statement
+date is in a CLOSED period is immutable; `resolve` rejected with
+`RECONCILIATION_PERIOD_LOCKED`, mirroring `LEDGER_PERIOD_CLOSED`).
+Reconciliation **ingest-time** period-lock remains **v2-planned**.
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -633,7 +636,7 @@ Reconciliation period-lock remains **v2-planned**.
 | RECONCILIATION_STATEMENT_NOT_FOUND | 404 | Reconciliation statement id unknown / not in tenant — `ledger-service` (`ReconciliationStatementNotFoundException`) |
 | RECONCILIATION_DISCREPANCY_NOT_FOUND | 404 | Reconciliation discrepancy id unknown / not in tenant — `ledger-service` (`ReconciliationDiscrepancyNotFoundException`) |
 | RECONCILIATION_ALREADY_RESOLVED | 409 | Resolve attempted on an already-RESOLVED discrepancy — `ledger-service` (`ReconciliationAlreadyResolvedException`) |
-| RECONCILIATION_PERIOD_LOCKED | 422 | Mutation of a discrepancy in a locked (CLOSED) reconciliation period (F8) — **v2-planned** (deferred period-lock increment) |
+| RECONCILIATION_PERIOD_LOCKED | 422 | Resolve attempted on a discrepancy whose statement date is in a CLOSED accounting period (F8 — frozen with the books; correct via the next period) — `ledger-service` (6th incr; `ReconciliationPeriodLockedException`; mirrors `LEDGER_PERIOD_CLOSED`; net-zero when no covering closed period). Ingest-time lock = **v2-planned** |
 
 ---
 
