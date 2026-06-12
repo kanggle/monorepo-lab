@@ -53,7 +53,7 @@ TASK-BE-293/294 는 carrier 추적을 **admin pull** + **중개사 push(webhook)
 
 ## Out of Scope
 
-- 중개사 어댑터 매핑/credential (→ TASK-BE-358).
+- 중개사 어댑터 매핑/credential (→ TASK-BE-362).
 - gateway public-route (→ TASK-BE-359).
 - webhook dedup cleanup (→ TASK-BE-361).
 - 도메인 전이 규칙·`ShippingStatusChanged` 계약 변경(기존 forward-only 재사용).

@@ -54,7 +54,7 @@ TASK-BE-294 는 carrier webhook 멱등을 위해 `processed_carrier_webhooks`(V5
 
 ## Out of Scope
 
-- 중개사 어댑터/credential (→ TASK-BE-358).
+- 중개사 어댑터/credential (→ TASK-BE-362).
 - gateway public-route (→ TASK-BE-359).
 - auto-collect tracking 스케줄러 (→ TASK-BE-360).
 - `processed_events`(이벤트 dedup) 테이블 — 별도 보존 정책, 건드리지 않음.

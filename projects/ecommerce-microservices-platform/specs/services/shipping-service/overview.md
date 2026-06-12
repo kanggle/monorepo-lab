@@ -27,7 +27,14 @@
   advances it forward. Default `shipping.carrier.mode=mock` (no-op = the v1 admin-driven
   baseline, net-zero); `mode=http` uses the real provider adapter (`integration-heavy`
   pattern: RestClient + resilience timeouts, best-effort/never-throw).
-- **External carrier integration — inbound webhook (TASK-BE-294)**: the carrier POSTs a
+  **Provider = a logistics aggregator** (물류 중개 플랫폼, ADR-007 D2) — not a single
+  carrier, not a contract-partner-direct carrier API: `base-url`/`api-key` point at the
+  aggregator (one endpoint / one key / one unified status scheme that `CarrierStatusMapper`
+  maps; the `carrier` value is the aggregator-internal carrier code). A non-blank aggregator
+  status that fails to map is **observable** (TASK-BE-362) — `carrier_status_unmapped`
+  counter + WARN log (raw value) — so a new/changed aggregator code never silently stalls a
+  shipment.
+- **External carrier integration — inbound webhook (TASK-BE-294)**: the aggregator POSTs a
   tracking delivery to `carrier-webhook`; it is **HMAC-SHA256 signature-authenticated**
   (`shipping.carrier.webhook.secret`, blank default = fail-closed/net-zero), **idempotent**
   (dedup by carrier `deliveryId`), and advances the shipment forward (shared
@@ -76,5 +83,5 @@
 - Order processing — `order-service`.
 - Payment processing — `payment-service`.
 - Notification delivery — `notification-service`.
-- External carrier API 통합 — **outbound pull done (TASK-BE-293)** + **inbound webhook done (TASK-BE-294)**: admin-triggered `refresh-tracking` + `CarrierTrackingPort` (mock/http) 및 signature-authenticated `carrier-webhook` (idempotent). 잔여 v2 = 무인 자동수집 스케줄러(poll) + 실 제공사(CJ대한통운 / Lotte) payload 매핑·credential 배선 + webhook dedup 보존(cleanup) sweep.
+- External carrier API 통합 — **outbound pull done (TASK-BE-293)** + **inbound webhook done (TASK-BE-294)** + **aggregator 매핑·credential 배선 done (TASK-BE-362, ADR-007 D2)**: admin-triggered `refresh-tracking` + `CarrierTrackingPort` (mock/http, provider=물류 중개 aggregator) 및 signature-authenticated `carrier-webhook` (idempotent), 중개사 통일 상태코드 매핑표 + 미매핑 가시화(`carrier_status_unmapped`). 잔여 v2 = `carrier-webhook` gateway 공개 노출(TASK-BE-359) + 무인 자동수집 스케줄러/poll(TASK-BE-360) + webhook dedup 보존 cleanup sweep(TASK-BE-361) + 실 중개사 sandbox 계정 배선.
 - Shipping cost calculation — order-service / promotion-service 가 처리.

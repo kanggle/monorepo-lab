@@ -38,6 +38,7 @@ public class ProcessCarrierWebhookService {
     private final ShippingRepository shippingRepository;
     private final ShippingEventPublisher shippingEventPublisher;
     private final WebhookDeliveryStore webhookDeliveryStore;
+    private final CarrierStatusObserver carrierStatusObserver;
     private final Clock clock;
 
     public enum WebhookOutcome { ADVANCED, IGNORED, DUPLICATE }
@@ -51,6 +52,9 @@ public class ProcessCarrierWebhookService {
 
         Optional<ShippingStatus> target = CarrierStatusMapper.toShippingStatus(command.rawStatus());
         if (target.isEmpty()) {
+            // Non-blank unmapped aggregator status = silent-stall risk → make it observable
+            // (a blank status is a no-signal no-op; the observer ignores it = net-zero).
+            carrierStatusObserver.recordUnmapped("webhook", command.rawStatus());
             log.info("Carrier webhook {} reported unmapped status '{}'; no-op",
                     command.deliveryId(), command.rawStatus());
             return WebhookOutcome.IGNORED;

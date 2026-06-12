@@ -54,7 +54,7 @@ TASK-BE-294 가 만든 inbound webhook 엔드포인트 `POST /api/shippings/carr
 
 ## Out of Scope
 
-- 중개사 어댑터 매핑/credential (→ TASK-BE-358).
+- 중개사 어댑터 매핑/credential (→ TASK-BE-362).
 - auto-collect 스케줄러 (→ TASK-BE-360).
 - webhook dedup cleanup (→ TASK-BE-361).
 - HMAC 검증 로직 변경(BE-294 그대로 사용).

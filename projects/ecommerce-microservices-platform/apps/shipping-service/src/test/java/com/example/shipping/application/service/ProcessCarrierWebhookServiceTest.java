@@ -8,6 +8,7 @@ import com.example.shipping.domain.model.Shipping;
 import com.example.shipping.domain.model.ShippingStatus;
 import com.example.shipping.domain.model.StatusHistoryEntry;
 import com.example.shipping.domain.repository.ShippingRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,12 +36,15 @@ class ProcessCarrierWebhookServiceTest {
     @Mock ShippingEventPublisher shippingEventPublisher;
     @Mock WebhookDeliveryStore webhookDeliveryStore;
 
+    private SimpleMeterRegistry meterRegistry;
     private ProcessCarrierWebhookService service;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         service = new ProcessCarrierWebhookService(
-                shippingRepository, shippingEventPublisher, webhookDeliveryStore, clock);
+                shippingRepository, shippingEventPublisher, webhookDeliveryStore,
+                new CarrierStatusObserver(meterRegistry), clock);
     }
 
     private Shipping shipped() {
@@ -86,7 +90,7 @@ class ProcessCarrierWebhookServiceTest {
     }
 
     @Test
-    void unmappedStatus_isNoOp() {
+    void unmappedStatus_isNoOp_andCountsUnmapped() {
         when(webhookDeliveryStore.registerIfFirst("delivery-1")).thenReturn(true);
 
         WebhookOutcome outcome = service.ingest(cmd("any-id", "WHO-KNOWS"));
@@ -94,6 +98,26 @@ class ProcessCarrierWebhookServiceTest {
         assertThat(outcome).isEqualTo(WebhookOutcome.IGNORED);
         verify(shippingRepository, never()).findById(any());
         verify(shippingRepository, never()).save(any());
+        // F1: the unmapped aggregator status is made observable (counter + tags).
+        assertThat(meterRegistry.get("carrier_status_unmapped")
+                .tags("source", "webhook", "raw_status", "WHO-KNOWS").counter().count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void mappedAggregatorToken_advancesForward() {
+        Shipping shipping = shipped();
+        String id = shipping.getShippingId();
+        when(webhookDeliveryStore.registerIfFirst("delivery-1")).thenReturn(true);
+        when(shippingRepository.findById(id)).thenReturn(Optional.of(shipping));
+        when(shippingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        WebhookOutcome outcome = service.ingest(cmd(id, "배송완료")); // aggregator Korean unified code
+
+        assertThat(outcome).isEqualTo(WebhookOutcome.ADVANCED);
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.DELIVERED);
+        // no unmapped count for a mapped token
+        assertThat(meterRegistry.find("carrier_status_unmapped").counter()).isNull();
     }
 
     @Test

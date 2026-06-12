@@ -68,21 +68,38 @@ fulfillment:
   sku-map: {}
 
 # External carrier tracking integration (TASK-BE-293, the v2 first increment).
+#
+# Provider = a LOGISTICS AGGREGATOR (물류 중개 플랫폼: 굿스플로 / 스윗트래커 / 셀메이트 등),
+# NOT a single carrier and NOT a contract-partner-direct carrier API (ADR-007 D2). The
+# aggregator holds master contracts with the underlying carriers and exposes ONE endpoint
+# / ONE key / ONE unified status-code scheme, which CarrierStatusMapper maps to the four
+# shipping states. So base-url / api-key below point at the AGGREGATOR's endpoint + key.
+#
 # mode=mock (default) = MockCarrierTrackingAdapter; with a blank mock-status the
 # carrier integration is OFF (a refresh is a no-op = the v1 admin-driven baseline).
-# mode=http = HttpCarrierTrackingAdapter (real provider GET ${base-url}/track). The
+# mode=http = HttpCarrierTrackingAdapter (real aggregator GET ${base-url}/track). The
 # two are mutually-exclusive @ConditionalOnProperty beans.
+#
+# Secrets (api-key, webhook.secret) are env-injected ONLY (Secret Manager stand-in) — no
+# value is hard-coded; the defaults are blank so an unconfigured deploy is net-zero/fail-closed.
 shipping:
   carrier:
     mode: ${SHIPPING_CARRIER_MODE:mock}
+    # Aggregator API base URL + key (aggregator account credentials, env-injected).
     base-url: ${SHIPPING_CARRIER_BASE_URL:}
     api-key: ${SHIPPING_CARRIER_API_KEY:}
     mock-status: ${SHIPPING_CARRIER_MOCK_STATUS:}
     connect-timeout-ms: ${SHIPPING_CARRIER_CONNECT_TIMEOUT_MS:2000}
     read-timeout-ms: ${SHIPPING_CARRIER_READ_TIMEOUT_MS:5000}
-    # Inbound carrier webhook (TASK-BE-294): HMAC-SHA256 shared secret over the raw body
-    # (X-Carrier-Signature: sha256=<hex>). Blank (default) = fail-closed: every webhook is
-    # rejected 401 (inbound integration OFF = net-zero).
+    # The `carrier` query param sent to the aggregator is the AGGREGATOR-INTERNAL carrier code
+    # (or a sentinel for aggregator auto-assignment). The aggregator may auto-assign / differ
+    # from what we send — tracking is keyed by our trackingNumber/shippingId, so that is no-op
+    # for identity (ADR-007 Edge Cases). The CarrierTrackingPort.fetchLatest(carrier, ...)
+    # signature is unchanged; only the semantics of `carrier` are documented here.
+    #
+    # Inbound aggregator webhook (TASK-BE-294): HMAC-SHA256 shared secret over the raw body
+    # (X-Carrier-Signature: sha256=<hex>) — the aggregator's webhook signing spec. Blank
+    # (default) = fail-closed: every webhook is rejected 401 (inbound integration OFF = net-zero).
     webhook:
       secret: ${SHIPPING_CARRIER_WEBHOOK_SECRET:}
 

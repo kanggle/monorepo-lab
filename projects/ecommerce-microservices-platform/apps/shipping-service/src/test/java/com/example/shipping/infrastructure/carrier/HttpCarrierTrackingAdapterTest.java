@@ -65,6 +65,38 @@ class HttpCarrierTrackingAdapterTest {
     }
 
     @Test
+    void relaysAggregatorUnifiedStatusVerbatim() throws Exception {
+        // The aggregator (ADR-007 D2) returns its own unified status code (here a Korean
+        // token); the adapter relays it raw — mapping + unmapped-observation happen in the
+        // caller (RefreshTrackingService / CarrierStatusObserver), keeping this a pure ACL.
+        carrier.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"status\":\"배송완료\"}"));
+
+        Optional<CarrierTrackingSnapshot> result = adapter(baseUrl()).fetchLatest("AUTO", "TRK-9");
+
+        assertThat(result).map(CarrierTrackingSnapshot::rawStatus).contains("배송완료");
+        RecordedRequest req = carrier.takeRequest();
+        assertThat(req.getPath()).isEqualTo("/track?carrier=AUTO&trackingNumber=TRK-9");
+    }
+
+    @Test
+    void relaysUnmappedAggregatorStatusVerbatim_noMappingInAdapter() throws Exception {
+        // An aggregator code the mapping table does not cover is still relayed (the adapter
+        // does not map); the caller decides it is unmapped and increments the counter.
+        carrier.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"status\":\"통관보류\"}"));
+
+        Optional<CarrierTrackingSnapshot> result = adapter(baseUrl()).fetchLatest("AUTO", "TRK-9");
+
+        assertThat(result).map(CarrierTrackingSnapshot::rawStatus).contains("통관보류");
+        carrier.takeRequest();
+    }
+
+    @Test
     void twoXxWithoutStatus_returnsEmpty() {
         carrier.enqueue(new MockResponse()
                 .setResponseCode(200)

@@ -1,6 +1,7 @@
 package com.example.shipping.application.service;
 
 import com.example.shipping.application.port.CarrierTrackingPort;
+import com.example.shipping.application.port.CarrierTrackingPort.CarrierTrackingSnapshot;
 import com.example.shipping.application.result.UpdateShippingStatusResult;
 import com.example.web.exception.AccessDeniedException;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
@@ -41,6 +42,7 @@ public class RefreshTrackingService {
     private final ShippingRepository shippingRepository;
     private final ShippingEventPublisher shippingEventPublisher;
     private final CarrierTrackingPort carrierTrackingPort;
+    private final CarrierStatusObserver carrierStatusObserver;
     private final Clock clock;
 
     @Transactional
@@ -59,9 +61,13 @@ public class RefreshTrackingService {
             return result(shipping);
         }
 
-        Optional<ShippingStatus> target = carrierTrackingPort.fetchLatest(carrier, trackingNumber)
-                .flatMap(snapshot -> CarrierStatusMapper.toShippingStatus(snapshot.rawStatus()));
+        Optional<CarrierTrackingSnapshot> snapshot = carrierTrackingPort.fetchLatest(carrier, trackingNumber);
+        Optional<ShippingStatus> target = snapshot
+                .flatMap(s -> CarrierStatusMapper.toShippingStatus(s.rawStatus()));
         if (target.isEmpty()) {
+            // A non-blank aggregator status that did not map = an unmapped code (silent-stall
+            // risk → make it observable); a blank/absent status carries no signal (net-zero).
+            snapshot.ifPresent(s -> carrierStatusObserver.recordUnmapped("refresh", s.rawStatus()));
             log.info("Carrier returned no usable status for shipping {} ({}/{}); refresh no-op",
                     shippingId, carrier, trackingNumber);
             return result(shipping);
