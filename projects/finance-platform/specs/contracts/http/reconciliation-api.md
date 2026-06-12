@@ -29,9 +29,19 @@ Ingest an external statement for one clearing account and run matching. Request:
     { "externalRef": "BANKTXN-001", "money": { "amount": "150000", "currency": "KRW" },
       "direction": "DEBIT", "valueDate": "2026-01-15", "description": "deposit" },
     { "externalRef": "BANKTXN-002", "money": { "amount": "99000", "currency": "KRW" },
-      "direction": "DEBIT", "valueDate": "2026-01-16" }
+      "direction": "DEBIT", "valueDate": "2026-01-16" },
+    { "externalRef": "FXTXN-003", "money": { "amount": "10000", "currency": "USD" },
+      "baseAmount": { "amount": "132000", "currency": "KRW" },
+      "direction": "CREDIT", "valueDate": "2026-01-20", "description": "USD settlement @ bank rate" }
   ] }
 ```
+**(11th increment — multi-currency)** a line MAY carry an optional `baseAmount` — the bank's
+**base-currency (KRW)** value for a foreign-currency line, at the bank's FX rate. When the line
+matches an internal line on the transaction (foreign) leg, the matcher compares this `baseAmount`
+to the internal line's **carrying base**; a difference records an `AMOUNT_MISMATCH`
+(FX-difference) discrepancy on the **matched** line (the settlement is identified, the FX gap is
+flagged for operator review — F8, never auto-adjusted). A KRW line, or a foreign line that omits
+`baseAmount`, is unchanged (net-zero — no base-leg check).
 `201`:
 ```json
 { "data": {
@@ -54,6 +64,10 @@ reconciliation; the guard runs **before** any persist/match/emit (a locked inges
 records nothing). Emits `finance.ledger.reconciliation.completed.v1` + one
 `finance.ledger.reconciliation.discrepancy.detected.v1` per discrepancy
 ([`../events/finance-ledger-events.md`](../events/finance-ledger-events.md)).
+**(11th increment)** an FX-difference discrepancy has `"type": "AMOUNT_MISMATCH"` and carries
+**both** `externalRef` and `journalEntryId` (the matched pair), `expectedMinor` = the internal
+carrying base, `actualMinor` = the bank's base value, `currency": "KRW"`; the corresponding
+line still appears in `matches` (the transaction leg reconciled).
 
 ## 2. POST `/api/finance/ledger/reconciliation/discrepancies/{id}/resolve`
 

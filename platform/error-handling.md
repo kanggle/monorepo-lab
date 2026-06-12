@@ -641,7 +641,14 @@ multi-currency line] and booking the difference between the base proceeds and th
 write path + `entry.posted.v1` tagged `sourceType = "SETTLEMENT"` [no new event]; one new code
 `SETTLEMENT_RATE_INVALID` (422) for a non-positive settlement rate, the existing
 `CURRENCY_MISMATCH` / `LEDGER_ACCOUNT_NOT_FOUND` / `IDEMPOTENCY_KEY_REQUIRED` /
-`LEDGER_PERIOD_CLOSED` guards apply).
+`LEDGER_PERIOD_CLOSED` guards apply), **11th**
+(TASK-FIN-BE-017 — multi-currency reconciliation: a foreign external statement line matches the
+transaction leg but its bank-reported base [KRW] value differs from the internal carrying base →
+the matcher records an `AMOUNT_MISMATCH` [FX-difference] discrepancy [the **first activation** of
+the long-declared `DiscrepancyType`] for operator review, F8 never auto-adjusted. **No new error
+code / status / event** — `AMOUNT_MISMATCH` is an existing `DiscrepancyType` [a persisted record,
+not an HTTP error] emitted on the existing `discrepancy.detected.v1`; only an additive nullable
+`base_amount_minor`/`base_currency` column pair on `reconciliation_statement_line`).
 
 | Code | HTTP | Description |
 |---|---|---|

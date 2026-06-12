@@ -39,9 +39,13 @@ All implementation tasks targeting this service must follow this declaration,
 > settlement: an operator settles a foreign-currency position at a settlement rate, removing
 > the position at its carrying value and recognising the difference between the base proceeds
 > and the carrying as a *realized* `FX_GAIN` / `FX_LOSS`) is specified by § FX settlement +
-> § Increment Scope. A partial / weighted-average settlement, a bulk/period-close revaluation
-> hook, a live FX rate feed, multi-currency reconciliation, and fuzzy / N:M matching remain
-> forward-declared (§ Increment Scope).
+> § Increment Scope. The **eleventh increment** (TASK-FIN-BE-017 — multi-currency
+> reconciliation: a matched foreign statement line whose bank-reported base [KRW] value
+> differs from the internal carrying base records an `AMOUNT_MISMATCH` [FX-difference]
+> discrepancy for operator review) is specified by § Reconciliation § Multi-currency
+> reconciliation + § Increment Scope. A partial / weighted-average settlement, a
+> bulk/period-close revaluation hook, a live FX rate feed, cross-currency base-leg
+> matching, and fuzzy / N:M matching remain forward-declared (§ Increment Scope).
 > The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
@@ -327,8 +331,38 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   basis + a residual position) is a distinct, harder mechanic → forward-declared. See § FX
   settlement.
 
+**Eleventh increment — IN (TASK-FIN-BE-017, multi-currency reconciliation):**
+- After the 8th increment a clearing account holds **multi-currency** lines (each a transaction
+  `Money` + a carrying base [KRW]). A **foreign-currency external statement** already reconciles
+  on the **transaction (foreign) leg** (the FIN-BE-010 matcher is currency-aware: a USD external
+  line matches a USD internal line by exact USD amount — **net-zero**, no change). This increment
+  adds the **base (FX) leg**: a bank reports the **base (KRW) value** it actually credited at its
+  rate; when that differs from the internal line's **carrying base** (booked at the ledger's rate)
+  the matcher records an **`AMOUNT_MISMATCH`** discrepancy — the realized **FX difference** — for
+  **operator review** (F8 — recorded, never auto-adjusted). This is the **first activation** of
+  the long-declared `AMOUNT_MISMATCH` `DiscrepancyType`.
+- **Decision — reuse `AMOUNT_MISMATCH`; no CHECK migration, no new code/status/event.**
+  `AMOUNT_MISMATCH` is already in the `DiscrepancyType` enum, the events `type` enum, and the V4
+  `ck_recon_discrepancy_type` allow-list — so the only migration is **additive nullable columns**
+  (`V6__add_reconciliation_fx.sql`: `base_amount_minor BIGINT NULL` + `base_currency VARCHAR(3)
+  NULL` on `reconciliation_statement_line`). `InternalLine` gains `baseMoney` (from
+  `JournalLine.baseMoney()`); `ExternalStatementLine` gains the optional `baseAmount`; the ingest
+  request line gains an optional `baseAmount`. The transaction-leg match is **still recorded** (a
+  matched line may also carry an FX-difference discrepancy — the settlement is identified, the
+  gap is flagged).
+- **Decision — exact base comparison, same-foreign-currency only (first slice).** The base-leg
+  check fires only when `currency != KRW`, the external `baseAmount` is present, and it differs
+  from the internal `baseMoney` (any non-zero difference → `AMOUNT_MISMATCH`). A **configurable FX
+  tolerance** and **cross-currency base-leg matching** (a KRW external statement matched against
+  foreign internal lines by their carrying base) are forward-declared. **Net-zero**: a KRW-only
+  statement, or a foreign statement without `baseAmount`s, reconciles byte-identically to
+  FIN-BE-010. See § Reconciliation § Multi-currency reconciliation.
+
 **Forward-declared — OUT (each a later task):**
-- Fuzzy / N:M / split matching + multi-currency statements; period **reopen**.
+- Fuzzy / N:M / split matching; period **reopen**; **cross-currency base-leg matching** (the
+  11th increment matches same-foreign-currency lines + the base-leg FX check; matching a
+  base-currency [KRW] external statement against foreign internal lines by their carrying base is
+  forward-declared) + a **configurable FX tolerance** (the 11th is an exact base comparison).
 - **Partial / weighted-average settlement** — the 10th increment settles a **whole**
   `(account, currency)` position; settling a *portion* (a specified foreign amount, removing a
   **proportional** share of the carrying base under a weighted-average or FIFO cost basis, with
@@ -336,9 +370,8 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   **period-close auto-hook** (the 9th/10th increments act on one `(account, currency)` per
   operator call). A **live FX rate feed** (rates are caller-supplied, not fetched), a
   **proceeds-amount input** (the 10th derives proceeds from a rate; supplying the *actual*
-  base received is forward-declared), **multi-currency reconciliation** (cross-currency
-  clearing-account matching), and a **configurable base currency** (fixed KRW in v1) are also
-  forward-declared.
+  base received is forward-declared), and a **configurable base currency** (fixed KRW in v1) are
+  also forward-declared. (Multi-currency **reconciliation** is the 11th increment — § above.)
 - **Manual-posting body-hash idempotency conflict** (`IDEMPOTENCY_KEY_CONFLICT` 409
   on a same-key/different-body replay — the 5th increment is replay-safe on the key
   alone; storing the request hash for conflict detection is forward-declared) +
@@ -448,11 +481,13 @@ com.example.finance.ledger/
 │   │   ├── PeriodAccountTotal.java        ← one account's debit/credit Money in the snapshot
 │   │   └── repository/AccountingPeriodRepository.java  ← outbound port (findOverlapping/findCovering/save/findById/findAll)
 │   ├── reconciliation/                   ← (4th increment) external-statement matching (F8)
-│   │   ├── ExternalStatement.java         ← aggregate (statementId, ledgerAccountCode, source, statementDate, lines)
-│   │   ├── ExternalStatementLine.java     ← (externalRef, Money, direction, valueDate, matchStatus)
+│   │   ├── ExternalStatement.java         ← aggregate (statementId, ledgerAccountCode, source, statementDate, lines); (11th incr) RawLine + optional baseAmount
+│   │   ├── ExternalStatementLine.java     ← (externalRef, Money, direction, valueDate, matchStatus); (11th incr) + optional baseAmount(Money KRW) [bank-reported base value, nullable]
+│   │   ├── InternalLine.java              ← (journalEntryId, code, direction, Money); (11th incr) + baseMoney(Money KRW) [carrying base, from JournalLine.baseMoney()]
 │   │   ├── ReconciliationMatch.java       ← statementLine ↔ internal journalEntryId
 │   │   ├── ReconciliationDiscrepancy.java ← OPEN→RESOLVED (operator-only); type; resolution record (mirrors account-service placeholder)
-│   │   ├── ReconciliationMatcher.java     ← pure 1:1 by (amount,currency,direction) → matches + discrepancies
+│   │   ├── DiscrepancyType.java           ← UNMATCHED_EXTERNAL / UNMATCHED_INTERNAL / AMOUNT_MISMATCH; (11th incr) AMOUNT_MISMATCH first activated = FX/base-leg difference on a matched foreign line
+│   │   ├── ReconciliationMatcher.java     ← pure: txn-leg 1:1 by (amount,currency,direction); (11th incr) + base(FX)-leg check on a match → AMOUNT_MISMATCH when ext.baseAmount ≠ internal.baseMoney (currency≠KRW)
 │   │   └── repository/ReconciliationRepository.java + ReconciliationAccounts.java (clearing-account allow-list)
 │   ├── money/
 │   │   ├── Money.java                     ← long minorUnits + Currency (NO float/double)
@@ -486,7 +521,7 @@ com.example.finance.ledger/
 │   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
 │   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit → (3rd incr) append period.closed outbox row
 │   ├── QueryAccountingPeriodUseCase.java  ← (2nd incr) read: list periods / period detail + snapshot
-│   ├── IngestStatementUseCase.java        ← (4th incr) @Transactional: validate clearing acct → persist statement+lines → match → persist matches + OPEN discrepancies + audit → append recon outbox events (no auto-close); (7th incr) + period-lock guard (statementDate in CLOSED period → RECONCILIATION_PERIOD_LOCKED, before any persist/match/emit; injects AccountingPeriodRepository)
+│   ├── IngestStatementUseCase.java        ← (4th incr) @Transactional: validate clearing acct → persist statement+lines → match → persist matches + OPEN discrepancies + audit → append recon outbox events (no auto-close); (7th incr) + period-lock guard (statementDate in CLOSED period → RECONCILIATION_PERIOD_LOCKED, before any persist/match/emit; injects AccountingPeriodRepository); (11th incr) thread optional per-line baseAmount → ExternalStatement.RawLine; findUnmatchedInternalLines builds InternalLine.baseMoney
 │   ├── ResolveDiscrepancyUseCase.java     ← (4th incr) @Transactional operator: OPEN→RESOLVED + resolution + audit; (6th incr) + period-lock guard (statement's owning period CLOSED → RECONCILIATION_PERIOD_LOCKED; injects AccountingPeriodRepository + ReconciliationRepository.findStatementById)
 │   ├── QueryReconciliationUseCase.java    ← (4th incr) read: statement detail+summary / discrepancy queue / detail
 │   ├── ActorContext.java
@@ -503,7 +538,7 @@ com.example.finance.ledger/
 │   │    AuditLogJpaEntity, processed_events;
 │   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity;
 │   │    (4th incr) ReconciliationStatement/Line/Match/DiscrepancyJpaEntity + Repository/Adapter)
-│   │   Flyway: V1 init, V2 period, V3 outbox, V4 reconciliation, (8th incr) V5__add_multi_currency (journal_line cols + backfill KRW rate=1)
+│   │   Flyway: V1 init, V2 period, V3 outbox, V4 reconciliation, (8th incr) V5__add_multi_currency (journal_line cols + backfill KRW rate=1), (11th incr) V6__add_reconciliation_fx (reconciliation_statement_line base_amount_minor/base_currency NULL — additive, no CHECK change)
 │   ├── outbox/                            ← (3rd incr) per-service transactional outbox (OutboxRow path)
 │   │   ├── LedgerOutboxJpaEntity.java     ← implements OutboxRow (@Table ledger_outbox, MySQL payload TEXT)
 │   │   ├── LedgerOutboxJpaRepository.java ← findPending(Pageable) + countByPublishedAtIsNull
@@ -695,12 +730,14 @@ placeholder (columns + policy); this increment is the first real matching.
 
 **Matching engine** (`ReconciliationMatcher`, pure): given the external lines + the
 internal clearing-account ledger lines in scope, produce matches + discrepancies.
-First increment = **1:1 by (amount, currency, direction)**; an external line with no
-internal counterpart → `UNMATCHED_EXTERNAL`; an internal entry with no external
-counterpart → `UNMATCHED_INTERNAL`. Deterministic (when an amount could match
-multiple internal entries, the first deterministic candidate matches; the rest stay
-unmatched → discrepancy → operator review — documented, not silently merged).
-Exhaustively unit-tested, no Spring/JPA.
+First increment = **1:1 by (amount, currency, direction)** — the **transaction**
+(foreign) leg; an external line with no internal counterpart → `UNMATCHED_EXTERNAL`;
+an internal entry with no external counterpart → `UNMATCHED_INTERNAL`. Deterministic
+(when an amount could match multiple internal entries, the first deterministic
+candidate matches; the rest stay unmatched → discrepancy → operator review —
+documented, not silently merged). Exhaustively unit-tested, no Spring/JPA.
+**(11th increment, TASK-FIN-BE-017)** the matcher additionally reconciles the **base
+(FX) leg** of a matched foreign line — see § Multi-currency reconciliation.
 
 **Ingest** (`IngestStatementUseCase`, one `@Transactional`): validate the account is
 a reconcilable clearing account (`RECONCILIATION_ACCOUNT_INVALID` otherwise),
@@ -753,8 +790,62 @@ use case.
 
 Together the two guards close a CLOSED period to reconciliation on **both** sides.
 
-**Deferred** (forward-declared): fuzzy / N:M / split matching; multi-currency
-statements; period **reopen**.
+### Multi-currency reconciliation (eleventh increment — TASK-FIN-BE-017)
+
+After the 8th increment a clearing account can hold lines in **multiple currencies**
+(KRW + USD …), each carrying a transaction `Money` + a base-currency (KRW)
+`baseAmount` (the carrying value at the booked rate). A **foreign-currency** external
+statement (e.g. a USD nostro statement) already reconciles on the **transaction
+(foreign) leg** — the FIN-BE-010 matcher matches by `(amount, currency, direction)`,
+which is currency-aware, so a USD external line pairs with a USD internal line by
+exact USD amount (net-zero — no change needed for same-currency foreign matching).
+
+The 11th increment adds the **base (FX) leg**: a bank reports not only the foreign
+amount it settled but often the **base-currency (KRW) value** it actually credited,
+at **its** FX rate. When that differs from the internal line's **carrying base**
+(booked at the ledger's rate), there is a realized **FX difference** — the same
+settlement, valued differently. The matcher surfaces it as an **`AMOUNT_MISMATCH`**
+discrepancy (the long-declared type's **first activation** — the base amounts mismatch
+on an otherwise-matched line) for **operator review** (F8 — recorded, never
+auto-adjusted; the operator books the FX correction via a manual entry / settlement).
+
+**Model additions.**
+- `InternalLine` gains `baseMoney` (the carrying base, `Money` in KRW) — the
+  infrastructure `findUnmatchedInternalLines` builds it from `JournalLine.baseMoney()`.
+- `ExternalStatementLine` gains an **optional** `baseAmount` (KRW minor units +
+  `baseCurrency`) — the bank's reported base value, `NULL` when the statement does not
+  carry one. Flyway `V6__add_reconciliation_fx.sql` adds
+  `base_amount_minor BIGINT NULL` + `base_currency VARCHAR(3) NULL` to
+  `reconciliation_statement_line` (additive + nullable — **net-zero** for existing rows;
+  **no CHECK change** — `AMOUNT_MISMATCH` is already in the `ck_recon_discrepancy_type`
+  allow-list).
+
+**Matcher logic.** When an external line matches an internal line on the transaction
+leg (as today), the matcher additionally checks the base leg: **iff** the line's
+`currency != KRW` AND the external `baseAmount` is present AND it differs from the
+internal line's `baseMoney`, it records an **`AMOUNT_MISMATCH`** discrepancy
+(`expectedMinor` = the internal carrying base, `actualMinor` = the external base,
+`currency` = KRW, carrying BOTH the matched `externalRef` and `journalEntryId`). **The
+transaction-leg match is still recorded** — the settlement IS identified; the
+discrepancy flags only the value gap. A KRW line, or a foreign line without an external
+base amount, produces **no** base-leg discrepancy (net-zero — exact comparison, a
+configurable FX tolerance is forward-declared).
+
+**No new error code / no new status / no new event** — `AMOUNT_MISMATCH` is an existing
+`DiscrepancyType` (already in the events `type` enum + the V4 CHECK allow-list); it is
+emitted on the existing `finance.ledger.reconciliation.discrepancy.detected.v1`. The
+ingest request line gains an optional `baseAmount` (§ reconciliation-api.md).
+
+**Net-zero.** A KRW-only statement, or a foreign statement whose lines omit `baseAmount`,
+reconciles byte-identically to FIN-BE-010 (the base-leg check never fires). The existing
+UNMATCHED_* classification, the F8 no-auto-close invariant, the period lock, and the
+transaction-leg matching are all unchanged.
+
+**Deferred** (forward-declared): **cross-currency base-leg matching** (a base-currency
+[KRW] external statement matched against foreign internal lines by their carrying base —
+the 11th increment matches same-foreign-currency lines and adds the base-leg FX check);
+a **configurable FX tolerance** (this increment is an exact base comparison); fuzzy /
+N:M / split matching; period **reopen**.
 
 ## Manual Journal Posting (fifth increment — TASK-FIN-BE-011)
 
@@ -1285,6 +1376,7 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
 | 34 | **(10th incr)** FX settlement `currency` is the base (KRW)/unsupported, or `proceedsAccountCode` unknown | 422 `CURRENCY_MISMATCH` / 404 `LEDGER_ACCOUNT_NOT_FOUND` (the proceeds account must already exist — no lazy mint) |
 | 35 | **(10th incr)** FX settlement finds no position in that currency (`F == 0`) | `200 {settled:false, reason:"NO_POSITION"}` — no entry booked, the `Idempotency-Key` is **not** consumed (net-zero) |
 | 36 | **(10th incr)** FX settlement `postedAt` in a CLOSED period / `Idempotency-Key` absent / replayed | 422 `LEDGER_PERIOD_CLOSED` (inherited guard) / 400 `IDEMPOTENCY_KEY_REQUIRED` / `200 {settled:false, reason:"REPLAY"}` returning the original entry |
+| 37 | **(11th incr)** A foreign external line matches the transaction leg but its bank-reported base (KRW) value differs from the internal carrying base | the match is recorded **and** an OPEN `AMOUNT_MISMATCH` discrepancy records the FX difference (`expectedMinor`=internal carrying base, `actualMinor`=external base, `currency`=KRW) — operator review, never auto-adjusted (F8). A KRW line / a line without an external base amount → no base-leg discrepancy (net-zero) |
 
 ## Testing Strategy
 
@@ -1444,6 +1536,24 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
   → 422 `SETTLEMENT_RATE_INVALID`; an unknown proceeds account → 404; a back-dated settlement into
   a CLOSED window → 422 `LEDGER_PERIOD_CLOSED`; a currency with no position → 200 `settled:false`;
   cross-tenant JWT → 403. The all-KRW auto-journal round-trip is unchanged (net-zero).
+- **Multi-currency reconciliation (11th increment)**: unit — `ReconciliationMatcherTest`
+  additions (a foreign external line matching an internal line on the transaction leg whose
+  external `baseAmount` **equals** the internal `baseMoney` → MATCHED, **no** discrepancy; whose
+  external `baseAmount` **differs** → MATCHED **plus** an `AMOUNT_MISMATCH` discrepancy with
+  `expectedMinor`=internal carrying base, `actualMinor`=external base, `currency`=KRW, carrying
+  both `externalRef` + `journalEntryId`; a KRW line / a foreign line **without** an external base
+  amount → no base-leg discrepancy [net-zero]; the existing UNMATCHED_* paths unchanged). Slice —
+  JPA adapter slice asserting `findUnmatchedInternalLines` populates `InternalLine.baseMoney`.
+  Integration (Testcontainers, authoritative — **V6 runs**): post a **multi-currency** entry
+  establishing a USD line on `CASH_CLEARING` (carrying e.g. 130 000 KRW @ 13.0) → ingest a USD
+  external statement line matching the USD amount + direction but declaring `baseAmount` 132 000
+  KRW → **201**: the line is `MATCHED` (a `ReconciliationMatch` exists) **and** an OPEN
+  `AMOUNT_MISMATCH` discrepancy is recorded (expected 130 000 / actual 132 000 / KRW) and
+  **`finance.ledger.reconciliation.discrepancy.detected.v1` with `type=AMOUNT_MISMATCH`** is
+  consumed; a USD line whose `baseAmount` equals the carrying → MATCHED, no discrepancy; a
+  **KRW-only** statement (FIN-BE-010 scenario) → byte-identical (net-zero, no V6 effect); the
+  discrepancy can be `resolve`d (operator) → RESOLVED; cross-tenant → 403. The existing
+  reconciliation ITs (UNMATCHED_*, period-lock) stay green.
 
 ## Required Artifacts mapping (rules/domains/fintech.md § Required Artifacts)
 
