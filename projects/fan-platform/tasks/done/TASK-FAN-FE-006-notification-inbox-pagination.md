@@ -1,6 +1,6 @@
 # TASK-FAN-FE-006 — Notification inbox pagination (fan-platform-web)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FAN-FE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (FE-only; the backend page API already exists)
@@ -62,3 +62,13 @@ This closes that gap with a server-rendered, searchParams-driven pager (`?page=N
 - **F2 — pager shown for a single page** — visual noise / dead controls. Guarded by AC-3 (`totalPages<=1 ⇒ null`).
 - **F3 — inbox breaks on a notification-service outage** — if `getNotificationPage` threw, the authed page would error. Guarded by AC-4 (degrade-to-empty try/catch, same as `getNotifications`).
 - **F4 — bell regression** — if the shared `getNotifications`/`getUnreadCount` were altered, the header bell badge could break. Guarded by AC-5 (those are untouched; new `getNotificationPage` is additive).
+
+---
+
+## Closure
+
+- **Impl PR**: #1351 — squash `7d3c6cba94192140a4e1eea6b6cd2692f719b903` (merged 2026-06-12). 3-dim verified: (a) state=MERGED; (b) `origin/main` tip = the squash commit; (c) pre-merge checks = 20 SUCCESS + 1 SKIPPED, **0 failing required**.
+- **Delivered**: `paging.ts` (`computeTotalPages` + `buildNotificationsHref`, pure); `getNotificationPage` (server-only, meta-defensive, degrade-to-empty); `NotificationPagination` (server component, `이전`/`다음` Links + 1-based indicator, hidden at 1 page); `notifications/page.tsx` rewired to `?page` + `PAGE_SIZE=20`; `index.ts` exports; `notification-pagination.test.tsx` (11 tests). The header bell's `getNotifications`/`getRecentNotifications`/`getUnreadCount` unchanged.
+- **Verification**: `tsc --noEmit` 0, `vitest` 71/71 (11 new + 60 existing unchanged), `next lint` clean, `next build` OK (`/notifications` 2.53 kB) — all local; CI "Frontend lint & build" + "Frontend unit tests" + "Frontend E2E smoke" + Build & Test GREEN.
+- **AC**: AC-1…AC-5 all satisfied. **FE-only — no backend / contract / gateway change** (the page API + `meta` already existed).
+- **Deferred (out of scope, follow-on)**: infinite-scroll/"더 보기"; membership-history page pagination.
