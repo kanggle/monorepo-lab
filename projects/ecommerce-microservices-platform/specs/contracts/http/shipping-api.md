@@ -185,6 +185,11 @@ Backward or skip transitions are not allowed.
   (HMAC-SHA256 `X-Carrier-Signature: sha256=<hex>`, idempotent) ingests the aggregator's push.
   The `carrier` field is the aggregator-internal carrier code (the aggregator may auto-assign);
   shipment identity is keyed by `trackingNumber`/`shippingId`, not by the returned carrier code.
+  The **concrete aggregator = Delivery Tracker** (`tracker.delivery`): the outbound pull is a
+  GraphQL `track(carrierId, trackingNumber)` call over OAuth2 `client_credentials` (TASK-BE-364);
+  the `carrier` field carries the reverse-DNS `carrierId` (e.g. `kr.cjlogistics`). This outbound
+  vendor wire contract is **not** part of this published HTTP surface — it is specified in
+  [`../../services/shipping-service/external-integrations.md`](../../services/shipping-service/external-integrations.md) § 1.
 - **`POST /api/shippings/carrier-webhook` — gateway public-route** (TASK-BE-359 / ADR-007 D5-2):
   this endpoint is the ONLY path in `/api/shippings/**` that is exempt from JWT authentication at
   the gateway. Callers (the logistics aggregator) do NOT present a bearer token; authentication is
