@@ -133,3 +133,22 @@ A single bounded e2e-harness fix to make the IAM domain-health card `ok` in the 
 ---
 
 분석=Opus 4.8 / 구현 권장=Opus 4.8 (requires bringing up the dockerized e2e stack to confirm the admin-service `/actuator/health` non-`UP` reason, then a precise actuator-health-group / probe-target change without regressing the finance leg — the runtime confirmation + correct layer choice is the hard part; on this Windows host the e2e stack is heavy, so a dedicated session is recommended). 핵심 검증=머지 후 첫 nightly `Platform Console E2E` job 이 7/7 `success`.
+
+---
+
+## Static Analysis Notes (pre-runtime, 2026-06-13 session — paused before AC-1 Docker confirmation)
+
+Worktree prepared: `mlab-pcfe071` on branch `task/pc-fe-071-iam-card-health-probe` (off origin/main `e40d4529d`). Docker e2e diagnosis deferred to a dedicated session (this host's e2e stack is heavy + OOM-cascade history). **Resume**: `git worktree list` → `cd ../mlab-pcfe071` → run AC-1 below first.
+
+⚠️ **The task's "Kafka component DOWN" hypothesis is very likely WRONG** (verified statically — do NOT chase Kafka):
+- admin-service has **zero custom `HealthIndicator`** (grep `HealthIndicator|implements Health` over `admin-service/src/main` = 0).
+- **Spring Boot and spring-kafka do NOT auto-register any Kafka health indicator.** So a dead `KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999` does **not** surface as a DOWN component in admin-service's `/actuator/health`. The Kafka client just logs warnings; health is unaffected.
+
+**Most probable real cause = resilience4j circuitBreakers health indicator:**
+- `admin-service/build.gradle`: `io.github.resilience4j:resilience4j-spring-boot3:2.2.0`.
+- `admin-service/src/main/resources/application.yml` (base): `management.health.circuitbreakers.enabled: true` (+ a `circuitbreakers` health *group*, but the group does NOT remove the indicator from the main aggregate `/actuator/health`).
+- admin-service wraps `@CircuitBreaker(accountService | securityService | authService)` on its outbound clients. If any of those downstream calls fail in the e2e stack → that circuit goes OPEN → `circuitBreakers` indicator DOWN → aggregate `/actuator/health` `status != UP` → BFF (`AbstractHealthReadAdapter` reads full health) classifies `iam` card `degraded`.
+
+**AC-1 (do this FIRST in the dedicated session)** — bring up `projects/platform-console/docker-compose.e2e.yml`, then `curl -s http://localhost:<admin-mapped>/actuator/health` (admin-service container `:8085`; needs `management.endpoint.health.show-details` to see `components`). Identify the actual DOWN component(s) — expect `circuitBreakers`, NOT `kafka`. Also check whether the OPEN circuit is itself a real e2e gap (is account/security/auth-service reachable from admin in the overlay?).
+
+**Fix candidate (re-scoped from the task's option 1)** — if DOWN == `circuitBreakers`: add to `projects/iam-platform/apps/admin-service/src/main/resources/application-e2e.yml` (currently has NO `management:` block — inherits base) a scoped override, e.g. `management.health.circuitbreakers.enabled: false` (admin-service e2e profile ONLY → finance leg untouched = AC-6 safe), OR resolve why the circuit is OPEN (a genuinely-missing downstream). Probe target / profile confirmed: e2e compose `CONSOLE_BFF_OUTBOUND_IAM_BASE_URL=http://admin-service:8085`, admin-service `SPRING_PROFILES_ACTIVE=e2e`. Keep console-web `src/` and the BFF composition byte-unchanged (AC-5).
