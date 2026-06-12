@@ -78,15 +78,21 @@ class LedgerMultiCurrencyReconciliationIntegrationTest extends AbstractLedgerInt
     }
 
     /** Posts DR USD {@code usd} on CASH_CLEARING (base KRW) / CR KRW wallet → entryId. */
-    private String postUsdClearingEntry(String token, String wallet, long usd, long baseKrw)
+    private String postUsdClearingEntry(String token, String counterAccount, long usd, long baseKrw)
             throws Exception {
+        // The counter-leg uses a SEEDED account (SETTLEMENT_SUSPENSE) — the manual
+        // posting path rejects unknown accounts (no lazy mint → 404), unlike the
+        // auto-journal consumer which lazily creates CUSTOMER_WALLET:* accounts. The
+        // entry balances in the base currency (DR USD 10000 @ base 130000 KRW /
+        // CR KRW 130000 on SETTLEMENT_SUSPENSE). Only CASH_CLEARING is reconciled, so
+        // the counter line never enters the matcher's candidate set.
         String body = "{"
                 + "\"reference\":\"FX-RECON\",\"memo\":\"usd clearing\","
                 + "\"lines\":["
                 + "{\"ledgerAccountCode\":\"CASH_CLEARING\",\"direction\":\"DEBIT\","
                 + "\"money\":{\"amount\":\"" + usd + "\",\"currency\":\"USD\"},"
                 + "\"baseAmount\":{\"amount\":\"" + baseKrw + "\",\"currency\":\"KRW\"}},"
-                + "{\"ledgerAccountCode\":\"" + wallet + "\",\"direction\":\"CREDIT\","
+                + "{\"ledgerAccountCode\":\"" + counterAccount + "\",\"direction\":\"CREDIT\","
                 + "\"money\":{\"amount\":\"" + baseKrw + "\",\"currency\":\"KRW\"}}"
                 + "]}";
         HttpResponse<String> created = postEntry(token, "FX-" + newId().substring(0, 8), body);
@@ -97,10 +103,10 @@ class LedgerMultiCurrencyReconciliationIntegrationTest extends AbstractLedgerInt
     @Test
     void foreignBaseDifferenceRecordsAmountMismatchOnMatchedLine() throws Exception {
         String token = financeReadToken();
-        String wallet = "CUSTOMER_WALLET:acc-" + newId();
 
         // (1) A USD DEBIT internal line on CASH_CLEARING, carrying 130000 KRW @ 13.0.
-        String entryId = postUsdClearingEntry(token, wallet, 10_000L, 130_000L);
+        //     Counter-leg = the seeded SETTLEMENT_SUSPENSE (manual posting = no lazy mint).
+        String entryId = postUsdClearingEntry(token, "SETTLEMENT_SUSPENSE", 10_000L, 130_000L);
 
         // (AC-3) the persisted internal CASH_CLEARING USD line carries the KRW base
         // (130000), not its USD amount (10000) — findUnmatchedInternalLines reads this.
@@ -172,8 +178,7 @@ class LedgerMultiCurrencyReconciliationIntegrationTest extends AbstractLedgerInt
         // (4) AC-2 net-zero — a USD line whose external base EQUALS the carrying base
         //     → MATCHED, no discrepancy. Fresh ledger state + fresh internal line.
         cleanLedgerState();
-        String wallet2 = "CUSTOMER_WALLET:acc-" + newId();
-        postUsdClearingEntry(token, wallet2, 10_000L, 130_000L);
+        postUsdClearingEntry(token, "SETTLEMENT_SUSPENSE", 10_000L, 130_000L);
         String equalBaseBody = """
                 { "ledgerAccountCode": "CASH_CLEARING", "source": "BANK",
                   "statementDate": "2026-01-31",
