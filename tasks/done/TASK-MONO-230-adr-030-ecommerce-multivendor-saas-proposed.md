@@ -8,7 +8,9 @@ ADR-MONO-030 (PROPOSED) — ecommerce Multi-Vendor Marketplace SaaS. Author the 
 
 # Status
 
-ready
+done
+
+> **DONE (2026-06-12, 3-dim verified)**: PROPOSED `ADR-MONO-030` authored — impl PR #1365 squash `b20b2f0b7`, docs fast-lane (`changes` pass + all code jobs skipped → 0 failing required). 3-dim: (a) MERGED + `b20b2f0b7`; (b) `git log origin/main` tip = `b20b2f0b7`; (c) pre-merge failing required = 0. D1-D8 + alternatives (incl. fallback option (b)) + ADR-019/020/022/023/025 relationship + Status Transition History. Two orthogonal axes (outer tenant = reuse ADR-019 federation as 6th domain; inner seller = net-new ecommerce-local aggregate). ACCEPTED same-session (MONO-231, user "진행"). 분석=Opus 4.8 / 구현=Opus 직접.
 
 # Owner
 
