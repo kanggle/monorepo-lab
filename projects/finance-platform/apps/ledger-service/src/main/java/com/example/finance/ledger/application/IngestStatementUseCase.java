@@ -6,6 +6,9 @@ import com.example.finance.ledger.application.view.StatementView;
 import com.example.finance.ledger.domain.audit.AuditLog;
 import com.example.finance.ledger.domain.audit.AuditLogRepository;
 import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationAccountInvalidException;
+import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationPeriodLockedException;
+import com.example.finance.ledger.domain.period.PeriodStatus;
+import com.example.finance.ledger.domain.period.repository.AccountingPeriodRepository;
 import com.example.finance.ledger.domain.reconciliation.ExternalStatement;
 import com.example.finance.ledger.domain.reconciliation.InternalLine;
 import com.example.finance.ledger.domain.reconciliation.ReconciliationDiscrepancy;
@@ -18,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 
 /**
@@ -27,6 +32,11 @@ import java.util.List;
  * <ol>
  *   <li>validate the target is a reconcilable clearing account (else
  *       {@code RECONCILIATION_ACCOUNT_INVALID});</li>
+ *   <li>period lock — if the {@code statementDate} falls in a CLOSED accounting
+ *       period, reject with {@code RECONCILIATION_PERIOD_LOCKED} (7th increment,
+ *       TASK-FIN-BE-013; mirrors the resolve-side guard in
+ *       {@link ResolveDiscrepancyUseCase}; runs before any persist/match/emit so
+ *       a locked ingest writes nothing);</li>
  *   <li>persist the statement + its lines;</li>
  *   <li>fetch the unmatched internal ledger lines on that account;</li>
  *   <li>run the pure {@link ReconciliationMatcher} (1:1 by amount/currency/
@@ -53,6 +63,7 @@ public class IngestStatementUseCase {
     private final AuditLogRepository auditLogRepository;
     private final LedgerEventPublisher ledgerEventPublisher;
     private final ClockPort clock;
+    private final AccountingPeriodRepository accountingPeriodRepository;
 
     @Transactional
     public StatementView ingest(IngestStatementCommand command) {
@@ -62,6 +73,12 @@ public class IngestStatementUseCase {
             throw new ReconciliationAccountInvalidException(
                     "ledger account is not a reconcilable clearing account: " + code);
         }
+
+        // (7th incr) Period lock — before any persist/match/emit (a locked ingest
+        // writes nothing; the early throw rolls back the empty @Transactional).
+        // Net-zero when findCovering returns empty (the common case, and always when
+        // no CLOSED period is defined — an OPEN period does NOT lock).
+        guardPeriodLock(tenantId, command.statementDate(), code);
 
         Instant now = clock.now();
         List<ExternalStatement.RawLine> rawLines = command.lines().stream()
@@ -101,6 +118,27 @@ public class IngestStatementUseCase {
         }
 
         return StatementView.of(saved, result.matches(), discrepancies);
+    }
+
+    /**
+     * Period lock (architecture.md § Reconciliation § Period lock, 7th increment,
+     * TASK-FIN-BE-013). If the {@code statementDate} (a {@link LocalDate}) maps to
+     * a start-of-day UTC instant covered by a CLOSED accounting period, the closed
+     * month is frozen to new reconciliation activity →
+     * {@link ReconciliationPeriodLockedException}.
+     *
+     * <p><b>Net-zero</b>: {@code findCovering(..., CLOSED)} empty (no closed period,
+     * or an OPEN period covers the date) → the guard does not fire and ingest proceeds
+     * byte-identically to FIN-BE-010. The half-open {@code [from, to)} parity matches
+     * the posting guard in {@link PostJournalEntryUseCase}.
+     */
+    private void guardPeriodLock(String tenantId, LocalDate statementDate, String code) {
+        Instant at = statementDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+        if (accountingPeriodRepository.findCovering(tenantId, at, PeriodStatus.CLOSED).isPresent()) {
+            throw new ReconciliationPeriodLockedException(
+                    "ingesting a statement dated in a CLOSED accounting period (statementDate="
+                            + statementDate + ", account=" + code + ")");
+        }
     }
 
     private static String auditSummary(ExternalStatement s, ReconciliationResult result) {
