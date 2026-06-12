@@ -97,8 +97,15 @@ public class PostManualJournalEntryUseCase {
         Instant postedAt = cmd.postedAt() != null ? cmd.postedAt() : clock.now();
         List<JournalLine> lines = new ArrayList<>(cmd.lines().size());
         for (ManualLine line : cmd.lines()) {
-            lines.add(JournalLine.of(cmd.tenantId(), line.ledgerAccountCode(),
-                    line.direction(), line.money()));
+            // (8th incr) a foreign-currency line supplies its base amount (KRW); a
+            // base-currency line omits it → the single-currency form (base = money).
+            if (line.baseAmount() != null) {
+                lines.add(JournalLine.of(cmd.tenantId(), line.ledgerAccountCode(),
+                        line.direction(), line.money(), line.baseAmount()));
+            } else {
+                lines.add(JournalLine.of(cmd.tenantId(), line.ledgerAccountCode(),
+                        line.direction(), line.money()));
+            }
         }
         JournalEntry entry = JournalEntry.post(newEntryId(), cmd.tenantId(), postedAt,
                 SourceRef.ofManual(cmd.reference(), dedupeKey), lines);

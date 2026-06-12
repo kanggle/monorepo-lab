@@ -78,7 +78,11 @@ class PostManualJournalEntryUseCaseTest {
     }
 
     private static ManualLine line(String code, EntryDirection dir, Money money) {
-        return new ManualLine(code, dir, money);
+        return new ManualLine(code, dir, money, null);
+    }
+
+    private static ManualLine line(String code, EntryDirection dir, Money money, Money baseAmount) {
+        return new ManualLine(code, dir, money, baseAmount);
     }
 
     private static List<ManualLine> balancedLines() {
@@ -139,6 +143,60 @@ class PostManualJournalEntryUseCaseTest {
                 .isInstanceOf(LedgerAccountNotFoundException.class);
 
         verify(ledgerAccountRepository, never()).save(any());
+        verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+        verify(processedEventStore, never()).markProcessed(anyString(), anyString(),
+                anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("(8th incr) a foreign-currency manual entry (per-line base) posts via the guarded path")
+    void multiCurrencyPosts() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(CASH, TENANT)).thenReturn(true);
+        when(ledgerAccountRepository.existsByCode(WALLET, TENANT)).thenReturn(true);
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // DR $100.00 USD (base 135000 KRW) / CR 135000 KRW — balanced in the base currency.
+        Money usd = Money.of(10_000L, Currency.USD);
+        Money baseKrw = Money.of(135_000L, Currency.KRW);
+        List<ManualLine> lines = List.of(
+                line(CASH, EntryDirection.DEBIT, usd, baseKrw),
+                line(WALLET, EntryDirection.CREDIT, baseKrw, null));
+
+        Result result = useCase.post(cmd(lines));
+
+        assertThat(result.replayed()).isFalse();
+        ArgumentCaptor<JournalEntry> entry = ArgumentCaptor.forClass(JournalEntry.class);
+        verify(postJournalEntryUseCase).post(entry.capture(), anyString(),
+                org.mockito.ArgumentMatchers.eq(OPERATOR));
+        JournalEntry posted = entry.getValue();
+        assertThat(posted.isBalanced()).isTrue();
+        assertThat(posted.baseDebitTotal()).isEqualTo(baseKrw);
+        // the USD line keeps USD money but records the KRW base value
+        JournalLine cash = posted.lines().stream()
+                .filter(l -> l.ledgerAccountCode().equals(CASH)).findFirst().orElseThrow();
+        assertThat(cash.money()).isEqualTo(usd);
+        assertThat(cash.baseMoney()).isEqualTo(baseKrw);
+    }
+
+    @Test
+    @DisplayName("(8th incr) an unbalanced-base multi-currency manual entry → LEDGER_ENTRY_UNBALANCED")
+    void multiCurrencyUnbalancedBaseRejected() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(CASH, TENANT)).thenReturn(true);
+        when(ledgerAccountRepository.existsByCode(WALLET, TENANT)).thenReturn(true);
+
+        Money usd = Money.of(10_000L, Currency.USD);
+        List<ManualLine> lines = List.of(
+                line(CASH, EntryDirection.DEBIT, usd, Money.of(135_000L, Currency.KRW)),
+                line(WALLET, EntryDirection.CREDIT,
+                        Money.of(130_000L, Currency.KRW), Money.of(130_000L, Currency.KRW)));
+
+        assertThatThrownBy(() -> useCase.post(cmd(lines)))
+                .isInstanceOf(LedgerEntryUnbalancedException.class);
+
         verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
         verify(processedEventStore, never()).markProcessed(anyString(), anyString(),
                 anyString(), anyString(), any());

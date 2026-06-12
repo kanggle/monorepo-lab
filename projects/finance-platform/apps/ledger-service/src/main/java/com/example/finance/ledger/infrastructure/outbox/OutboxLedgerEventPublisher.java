@@ -5,6 +5,7 @@ import com.example.finance.ledger.application.port.outbound.LedgerEventPublisher
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
 import com.example.finance.ledger.domain.journal.SourceRef;
+import com.example.finance.ledger.domain.money.Money;
 import com.example.finance.ledger.domain.period.AccountingPeriod;
 import com.example.finance.ledger.domain.reconciliation.ExternalStatement;
 import com.example.finance.ledger.domain.reconciliation.ReconciliationDiscrepancy;
@@ -122,16 +123,20 @@ public class OutboxLedgerEventPublisher implements LedgerEventPublisher {
             Map<String, Object> l = new LinkedHashMap<>();
             l.put("ledgerAccountCode", line.ledgerAccountCode());
             l.put("direction", line.direction().name());
-            l.put("money", money(line));
+            l.put("money", money(line.money()));
+            // (8th incr) the GL feed is base-currency-aware — each line carries its
+            // exchangeRate (decimal string, no trailing zeros) + baseAmount (KRW).
+            l.put("exchangeRate", line.exchangeRate().stripTrailingZeros().toPlainString());
+            l.put("baseAmount", money(line.baseMoney()));
             lines.add(l);
         }
         return lines;
     }
 
-    private static Map<String, Object> money(JournalLine line) {
+    private static Map<String, Object> money(Money money) {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("amount", line.money().toMinorString());
-        m.put("currency", line.currency().code());
+        m.put("amount", money.toMinorString());
+        m.put("currency", money.currency().code());
         return m;
     }
 

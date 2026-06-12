@@ -14,6 +14,7 @@ import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
 import com.example.finance.ledger.domain.money.Currency;
+import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import com.example.finance.ledger.domain.money.Money;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,7 +41,8 @@ public class QueryLedgerUseCase {
                 .orElseThrow(() -> new JournalEntryNotFoundException(
                         "journal entry not found: " + entryId));
         List<JournalLineView> lines = entry.lines().stream()
-                .map(l -> new JournalLineView(l.ledgerAccountCode(), l.direction(), l.money()))
+                .map(l -> new JournalLineView(l.ledgerAccountCode(), l.direction(), l.money(),
+                        l.exchangeRate(), l.baseMoney()))
                 .toList();
         return new JournalEntryView(
                 entry.entryId(), entry.postedAt(),
@@ -68,7 +70,7 @@ public class QueryLedgerUseCase {
     public LedgerAccountBalanceView getBalance(String ledgerAccountCode, String tenantId) {
         LedgerAccount account = requireAccount(ledgerAccountCode, tenantId);
         AccountTotals totals = journalRepository.accountTotals(ledgerAccountCode, tenantId)
-                .orElse(new AccountTotals(ledgerAccountCode, Currency.KRW.code(), 0L, 0L));
+                .orElse(new AccountTotals(ledgerAccountCode, Currency.KRW.code(), 0L, 0L, 0L, 0L));
         Currency currency = Currency.of(totals.currency());
         Money debitTotal = Money.of(totals.debitMinor(), currency);
         Money creditTotal = Money.of(totals.creditMinor(), currency);
@@ -82,23 +84,31 @@ public class QueryLedgerUseCase {
     @Transactional(readOnly = true)
     public TrialBalanceView getTrialBalance(String tenantId) {
         List<AccountTotals> totals = journalRepository.accountTotals(tenantId);
-        // First increment is single-currency; default to KRW when the ledger is empty.
-        Currency currency = totals.isEmpty()
-                ? Currency.KRW : Currency.of(totals.get(0).currency());
+        // (8th incr) Each row carries its per-(account, currency) original sums and
+        // the base-currency (KRW) consolidated sums. The grand totals consolidate in
+        // the BASE currency — the only invariant that holds across currencies — so
+        // they never sum mismatched currencies (which Money.add would reject). In the
+        // all-KRW path the original and base totals coincide.
+        Currency base = LedgerReportingCurrency.BASE;
         List<TrialBalanceView.AccountTotalsView> accounts = new ArrayList<>(totals.size());
-        Money grandDebit = Money.zero(currency);
-        Money grandCredit = Money.zero(currency);
+        Money grandBaseDebit = Money.zero(base);
+        Money grandBaseCredit = Money.zero(base);
         for (AccountTotals t : totals) {
             Currency c = Currency.of(t.currency());
             Money debit = Money.of(t.debitMinor(), c);
             Money credit = Money.of(t.creditMinor(), c);
+            Money baseDebit = Money.of(t.baseDebitMinor(), base);
+            Money baseCredit = Money.of(t.baseCreditMinor(), base);
             accounts.add(new TrialBalanceView.AccountTotalsView(
-                    t.ledgerAccountCode(), debit, credit));
-            grandDebit = grandDebit.add(debit);
-            grandCredit = grandCredit.add(credit);
+                    t.ledgerAccountCode(), debit, credit, baseDebit, baseCredit));
+            grandBaseDebit = grandBaseDebit.add(baseDebit);
+            grandBaseCredit = grandBaseCredit.add(baseCredit);
         }
-        return new TrialBalanceView(accounts, grandDebit, grandCredit,
-                grandDebit.equals(grandCredit));
+        // The grand original totals are the base-currency consolidation (a single,
+        // well-defined currency) — the per-currency original breakdown is preserved
+        // per account above.
+        return new TrialBalanceView(accounts, grandBaseDebit, grandBaseCredit,
+                grandBaseDebit, grandBaseCredit, grandBaseDebit.equals(grandBaseCredit));
     }
 
     private LedgerAccount requireAccount(String ledgerAccountCode, String tenantId) {

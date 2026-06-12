@@ -4,6 +4,7 @@ import com.example.finance.ledger.application.view.JournalEntryView;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -19,18 +20,31 @@ public record JournalEntryResponse(
     public record SourceResponse(String sourceType, String sourceTransactionId, String sourceEventId) {
     }
 
-    public record LineResponse(String ledgerAccountCode, String direction, MoneyResponse money) {
+    /**
+     * One line of the entry. (8th incr) carries the transaction {@code money}, the
+     * {@code exchangeRate} (a decimal string — provenance), and the {@code baseAmount}
+     * (the line's value in the base/KRW currency). A KRW line has
+     * {@code exchangeRate == "1"} and {@code baseAmount == money}.
+     */
+    public record LineResponse(String ledgerAccountCode, String direction, MoneyResponse money,
+                               String exchangeRate, MoneyResponse baseAmount) {
     }
 
     public static JournalEntryResponse from(JournalEntryView v) {
         List<LineResponse> lines = v.lines().stream()
                 .map(l -> new LineResponse(l.ledgerAccountCode(), l.direction().name(),
-                        MoneyResponse.from(l.money())))
+                        MoneyResponse.from(l.money()),
+                        rateString(l.exchangeRate()), MoneyResponse.from(l.baseAmount())))
                 .toList();
         return new JournalEntryResponse(
                 v.entryId(), v.postedAt(),
                 new SourceResponse(v.sourceType(), v.sourceTransactionId(), v.sourceEventId()),
                 v.reversalOfEntryId(), lines, v.balanced());
+    }
+
+    /** Render a rate as a plain decimal string with no trailing zeros ("1", "13.5"). */
+    static String rateString(BigDecimal rate) {
+        return rate.stripTrailingZeros().toPlainString();
     }
 
     /**
@@ -52,6 +66,7 @@ public record JournalEntryResponse(
 
     private static LineResponse lineResponse(JournalLine l) {
         return new LineResponse(l.ledgerAccountCode(), l.direction().name(),
-                MoneyResponse.from(l.money()));
+                MoneyResponse.from(l.money()),
+                rateString(l.exchangeRate()), MoneyResponse.from(l.baseMoney()));
     }
 }

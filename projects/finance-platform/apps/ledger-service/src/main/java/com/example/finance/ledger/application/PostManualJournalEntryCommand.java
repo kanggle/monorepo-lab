@@ -23,7 +23,8 @@ import java.util.List;
  * @param reference      optional operator narrative — the entry's
  *                       {@code source.sourceTransactionId} + part of the audit reason
  * @param memo           optional operator narrative — the audit reason
- * @param lines          the balanced operator-supplied lines (≥2, single-currency)
+ * @param lines          the balanced operator-supplied lines (≥2; balanced in the
+ *                       base/reporting currency — 8th incr)
  */
 public record PostManualJournalEntryCommand(
         String tenantId,
@@ -34,7 +35,12 @@ public record PostManualJournalEntryCommand(
         String memo,
         List<ManualLine> lines) {
 
-    /** One operator-supplied line ({@code ledgerAccountCode}, direction, money). */
-    public record ManualLine(String ledgerAccountCode, EntryDirection direction, Money money) {
+    /**
+     * One operator-supplied line. (8th incr) an optional {@code baseAmount}
+     * (base/KRW currency) for a foreign-currency line; {@code null} → the line is
+     * treated as base-currency ({@code baseAmount = money}, {@code rate = 1}).
+     */
+    public record ManualLine(String ledgerAccountCode, EntryDirection direction, Money money,
+                             Money baseAmount) {
     }
 }
