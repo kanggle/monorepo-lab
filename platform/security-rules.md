@@ -65,6 +65,17 @@ Defines platform-wide security requirements that all services must follow.
 
 ---
 
+# Related Authorization Contracts
+
+Authorization beyond authentication is governed by two **axis-②** contracts (read when a task narrows operator access by data slice or runtime condition):
+
+- [`abac-data-scope.md`](abac-data-scope.md) — 1단계: attribute-based **data-scope** (over *which slice* of a tenant's data an operator may act; ADR-MONO-025).
+- [`access-conditions.md`](access-conditions.md) — 2단계: closed-enum, restriction-only **access-condition** gates (*under which circumstances* a permission is live; ADR-MONO-026).
+
+These complement the RBAC axes (ADR-019/020/021/024). They are also listed in [`README.md`](README.md) § What Lives Here.
+
+---
+
 # Change Rule
 
 Any deviation from these rules requires an explicit ADR (Architecture Decision Record)
