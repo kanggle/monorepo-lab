@@ -8,7 +8,7 @@ Fix the console-web Playwright `globalSetup` login that has silently aborted the
 
 # Status
 
-review
+done
 
 # Owner
 
