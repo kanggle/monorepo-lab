@@ -18,8 +18,11 @@ All implementation tasks targeting this service must follow this declaration,
 > period.closed}.v1` emission, terminal→publishing consumer) is specified by
 > § Event publication + § Increment Scope; the **fourth increment** (TASK-FIN-BE-010
 > — reconciliation matching: external-statement matching + the F8 no-auto-close
-> discrepancy queue + emission) is specified by § Reconciliation + § Increment Scope.
-> Reconciliation period-lock, manual journal posting, and multi-currency remain
+> discrepancy queue + emission) is specified by § Reconciliation + § Increment Scope;
+> the **fifth increment** (TASK-FIN-BE-011 — manual journal posting: an operator-
+> initiated adjusting-entry REST endpoint funnelling through the existing guarded
+> write path) is specified by § Manual Journal Posting + § Increment Scope.
+> Reconciliation period-lock, multi-currency journals, and fuzzy / N:M matching remain
 > forward-declared (§ Increment Scope). The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
@@ -141,13 +144,38 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   via the **existing FIN-BE-009 outbox** (the generic `TopicResolver` covers the new
   event types — no relay change). See § Reconciliation.
 
+**Fifth increment — IN (TASK-FIN-BE-011, manual journal posting):**
+- An **operator-initiated** adjusting-entry write endpoint — the first journal
+  **mutation REST** surface (until now postings were event-driven only). A
+  `POST /api/finance/ledger/entries` accepts a balanced set of operator-supplied
+  lines and **funnels through the existing `PostJournalEntryUseCase.post`** — the
+  single guarded write path (architecture.md § boundary rules; Architecture Style
+  Rationale point 3 foresaw exactly this). The entry carries `SourceRef` type
+  **`MANUAL`** (provenance), is **immutable + reversal-only** (F3, same as
+  auto-journal), self-validates its balance (`LEDGER_ENTRY_UNBALANCED` /
+  `CURRENCY_MISMATCH` surface **synchronously** now, not just via a future endpoint),
+  is **closed-period-guarded** (a back-dated manual entry into a CLOSED period →
+  `LEDGER_PERIOD_CLOSED` 422, synchronous), and is **idempotent** on a client
+  `Idempotency-Key` (reuses the `processed_events` dedupe; replay returns the original
+  entry). It reuses the FIN-BE-009 outbox unchanged — a manual entry emits the same
+  `finance.ledger.entry.posted.v1` with `source.sourceType = "MANUAL"` (no new event).
+  See § Manual Journal Posting.
+- **Decision — referenced accounts must already exist (no operator-minted GL
+  accounts).** Unlike the auto-journal path (which lazily creates a
+  `CUSTOMER_WALLET:{accountId}` on first posting), the manual path **rejects** a line
+  referencing an unknown ledger account (`LEDGER_ACCOUNT_NOT_FOUND` 404) — an
+  operator adjusts existing accounts, never mints a new chart node via a posting.
+
 **Forward-declared — OUT (each a later task):**
 - **Reconciliation period lock** (`RECONCILIATION_PERIOD_LOCKED` — a discrepancy
   whose statement date is in a CLOSED accounting period is immutable; correction via
   the next period) + fuzzy / N:M matching + multi-currency statements.
-- **Manual journal posting API** (operator-initiated adjusting entries).
-- **Multi-currency journals** (first increment is single-currency per entry;
-  the chart + lines carry currency but cross-currency entries are rejected).
+- **Multi-currency journals** (each entry is single-currency per entry; the chart +
+  lines carry currency but cross-currency entries are rejected).
+- **Manual-posting body-hash idempotency conflict** (`IDEMPOTENCY_KEY_CONFLICT` 409
+  on a same-key/different-body replay — the 5th increment is replay-safe on the key
+  alone; storing the request hash for conflict detection is forward-declared) +
+  a maker/checker approval workflow for manual entries.
 
 ---
 
@@ -241,8 +269,8 @@ com.example.finance.ledger/
 │   │   ├── JournalLine.java               ← (ledgerAccountCode, direction DEBIT/CREDIT, Money)
 │   │   ├── EntryDirection.java            ← DEBIT / CREDIT
 │   │   ├── PostingPolicy.java             ← transaction-type → balanced lines (pure; § Posting Policy)
-│   │   ├── SourceRef.java                 ← (sourceType, sourceTxnId, sourceEventId) provenance
-│   │   └── repository/JournalRepository.java
+│   │   ├── SourceRef.java                 ← (sourceType, sourceTxnId, sourceEventId) provenance; (5th incr) ofManual(reference, idempotencyKey) → TYPE_MANUAL
+│   │   └── repository/JournalRepository.java   ← (5th incr) + findBySourceEventId (manual idempotent-replay return)
 │   ├── period/                           ← (2nd increment) accounting period
 │   │   ├── AccountingPeriod.java          ← aggregate; OPEN→CLOSED state machine; [from,to) covers(); non-overlap
 │   │   ├── PeriodStatus.java              ← OPEN / CLOSED
@@ -270,10 +298,12 @@ com.example.finance.ledger/
 │        AccountingPeriodOverlapException, AccountingPeriodAlreadyClosedException,
 │        AccountingPeriodInvalidWindowException;
 │        (4th incr) ReconciliationStatementNotFoundException, ReconciliationDiscrepancyNotFoundException,
-│        ReconciliationAlreadyResolvedException, ReconciliationAccountInvalidException)
+│        ReconciliationAlreadyResolvedException, ReconciliationAccountInvalidException;
+│        (5th incr) IdempotencyKeyRequiredException [handler guard → 400] — manual posting reuses LedgerEntryUnbalanced/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed, no new domain code)
 ├── application/                           ← use cases + outbound ports
-│   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit → (3rd incr) append entry.posted outbox row (one Tx)
+│   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit → (3rd incr) append entry.posted outbox row (one Tx); (5th incr) + post(entry, reason, actor) overload (operator audit actor; the no-actor overload delegates with the auto-journal default — net-zero)
 │   ├── PostFromTransactionUseCase.java    ← maps an account-service transaction envelope → PostJournalEntry (via PostingPolicy); idempotent on sourceEventId
+│   ├── PostManualJournalEntryUseCase.java ← (5th incr) @Transactional operator: require Idempotency-Key → replay-return via findBySourceEventId else markProcessed(manual:{key}) → validate each referenced account EXISTS (no lazy mint) → build JournalEntry.post(SourceRef.ofManual) → PostJournalEntryUseCase.post(entry, reason, actor)
 │   ├── QueryLedgerUseCase.java            ← read: entry detail / per-account entries + balance / trial balance
 │   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
 │   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit → (3rd incr) append period.closed outbox row
@@ -309,9 +339,10 @@ com.example.finance.ledger/
 │   └── EnvelopeToCommandMapper.java       ← envelope → PostFromTransaction command
 └── presentation/                          ← inbound web adapter
     ├── controller/LedgerController.java    ← /api/finance/ledger/** (reads)
+    ├── controller/JournalController.java    ← (5th incr) POST /api/finance/ledger/entries (manual posting; Idempotency-Key header; no @Transactional — funnels to PostManualJournalEntryUseCase)
     ├── controller/PeriodController.java     ← (2nd incr) /api/finance/ledger/periods/** (open/close/list/detail)
     ├── controller/ReconciliationController.java ← (4th incr) /api/finance/ledger/reconciliation/** (ingest/resolve/read)
-    ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes; (2nd incr) period codes)
+    ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes; (2nd incr) period codes; (5th incr) LEDGER_ENTRY_UNBALANCED/CURRENCY_MISMATCH/LEDGER_ACCOUNT_NOT_FOUND/LEDGER_PERIOD_CLOSED now surface synchronously + IDEMPOTENCY_KEY_REQUIRED handler guard)
     ├── dto/                                ← response DTOs (money as minor-units integer + currency)
     ├── filter/TenantClaimEnforcer.java
     └── security/PublicPaths.java
@@ -496,6 +527,69 @@ discrepancy) in the SAME Tx (transactional outbox, FIN-BE-009). **No auto-close.
 CLOSED accounting period is immutable, corrected via the next period); fuzzy / N:M
 matching; multi-currency statements.
 
+## Manual Journal Posting (fifth increment — TASK-FIN-BE-011)
+
+The first journal **mutation REST** surface. Until now journal entries were posted
+only by the auto-journal consumer; an operator now posts an **adjusting entry**
+(a correction, accrual, or write-off the event stream cannot express) directly. This
+is the realization of Architecture Style Rationale point 3 ("A future manual-posting
+REST endpoint … reuses the same command path") — the manual path adds **no** new
+write boundary: it builds a balanced `JournalEntry` and funnels it through the
+existing **`PostJournalEntryUseCase.post`** (the single guarded write path), so the
+balance identity, the closed-period guard, the audit row, and the `entry.posted`
+outbox append are all inherited unchanged.
+
+**Endpoint.** `POST /api/finance/ledger/entries` — request: an optional `postedAt`
+(defaults to now; a back-dated effective instant for an adjusting entry), an optional
+free-text `reference` + `memo` (operator narrative, recorded as the audit reason and
+the entry's `SourceRef.sourceTransactionId`), and a `lines[]` array of
+`{ ledgerAccountCode, direction: DEBIT|CREDIT, money: {amount, currency} }`. Requires
+a client **`Idempotency-Key`** header. `.authenticated()` + the dual-accept tenant
+gate — same posture as the period/reconciliation mutations (no new scope-authority
+axis; the operator caller arrives via the platform-console client). Returns `201`
+with the posted entry (the `ledger-api.md` § 1 entry shape, `source.sourceType =
+MANUAL`); an idempotent replay returns `200` with the original entry.
+
+**`PostManualJournalEntryUseCase`** (one `@Transactional`):
+1. **Idempotency (F1).** The key namespaces into the existing `processed_events`
+   dedupe (`manual:{idempotencyKey}`). A replay (key already processed) returns the
+   original entry via `JournalRepository.findBySourceEventId("manual:{key}", tenant)`
+   (200, no re-post). A first request `markProcessed`s the key in the SAME Tx as the
+   entry (the unique constraint makes a concurrent double-submit race-safe — the
+   loser finds the key present and returns the original). Missing header →
+   `IdempotencyKeyRequiredException` (400 `IDEMPOTENCY_KEY_REQUIRED`, handler guard).
+2. **Referenced accounts must already exist.** Each line's `ledgerAccountCode` is
+   checked with `ledgerAccountRepository.existsByCode` → `LedgerAccountNotFoundException`
+   (404 `LEDGER_ACCOUNT_NOT_FOUND`) if absent. **No lazy minting** via the operator
+   path (unlike the auto-journal consumer, which lazily creates a wallet account on
+   first posting) — an operator adjusts the existing chart, never creates a new GL
+   node by posting to it.
+3. **Build + post.** Construct the lines, build `JournalEntry.post(entryId, tenant,
+   postedAt, SourceRef.ofManual(reference, "manual:{key}"), lines)` — the factory
+   **self-validates** the balance (`Σ debit == Σ credit` → `LEDGER_ENTRY_UNBALANCED`),
+   the ≥2-line and single-currency rules (`CURRENCY_MISMATCH`) — then call
+   `PostJournalEntryUseCase.post(entry, reason, operatorSubject)`. That guarded path
+   re-checks the closed-period guard (a back-dated entry into a CLOSED period →
+   `LedgerPeriodClosedException`, **422 synchronous** here — not the consumer's DLT
+   route), writes the audit row with the **operator** as actor (the new
+   `post(entry, reason, actor)` overload; the auto-journal overload keeps the
+   `finance-ledger-service` default — net-zero), and appends the `entry.posted`
+   outbox row.
+
+**Immutability (F3).** A manual entry is as immutable as an auto-journal entry — no
+update/delete; a correction to a manual entry is itself another manual (or reversal)
+entry. The trial balance stays at zero (the factory rejects any unbalanced operator
+input before it can persist).
+
+**Emission.** A manual entry emits the **same** `finance.ledger.entry.posted.v1`
+(via the FIN-BE-009 outbox, no change) with `source.sourceType = "MANUAL"` — the GL/AP
+feed sees operator adjustments tagged by provenance. No new topic.
+
+**Deferred** (forward-declared): body-hash idempotency **conflict** detection
+(`IDEMPOTENCY_KEY_CONFLICT` 409 on same-key/different-body — this increment is
+replay-safe on the key alone); a maker/checker **approval** workflow for manual
+entries; bulk / multi-entry posting.
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):
@@ -534,6 +628,7 @@ All under `/api/finance/ledger/**`. Formal shapes → [`ledger-api.md`](../../co
 | `GET` | `/api/finance/ledger/accounts/{ledgerAccountCode}/entries` | JWT | paginated lines for a ledger account |
 | `GET` | `/api/finance/ledger/accounts/{ledgerAccountCode}/balance` | JWT | the account's running balance (Σdebit − Σcredit) |
 | `GET` | `/api/finance/ledger/trial-balance` | JWT | Σ over all accounts (== 0 invariant) |
+| `POST` | `/api/finance/ledger/entries` | JWT (authenticated) + `Idempotency-Key` | **(5th increment)** post a manual adjusting entry (balanced lines → guarded write path) |
 | `POST` | `/api/finance/ledger/periods` | JWT (authenticated) | **(2nd increment)** open an accounting period `{from, to}` |
 | `POST` | `/api/finance/ledger/periods/{periodId}/close` | JWT (authenticated) | **(2nd increment)** close a period → capture the trial-balance snapshot |
 | `GET` | `/api/finance/ledger/periods` | JWT | **(2nd increment)** list accounting periods |
@@ -546,8 +641,10 @@ All under `/api/finance/ledger/**`. Formal shapes → [`ledger-api.md`](../../co
 | `GET` | `/actuator/{health,info}` | none | probes |
 | `GET` | `/actuator/prometheus` | network-isolated | metrics |
 
-Auto-journal postings remain event-driven (no posting mutation endpoint). The
-**period mutations** (open/close) are the increment's only write endpoints —
+Auto-journal postings remain event-driven; the **(5th increment)** manual posting
+endpoint (`POST /entries`) is the first journal **mutation** REST surface, funnelling
+through the same guarded write path (§ Manual Journal Posting). The
+**period mutations** (open/close) are the 2nd increment's only write endpoints —
 `.authenticated()` + the dual-accept tenant gate (parity with the service's
 current posture; no new scope-authority axis — the operator caller arrives via the
 platform-console client). The `{ledgerAccountCode}` path segment carries the
@@ -607,9 +704,9 @@ owns `LedgerOutboxJpaEntity implements OutboxRow` (`ledger_outbox` table, MySQL
 
 | Rule | Status | Mechanism |
 |---|---|---|
-| **F1** idempotent + Tx-protected | ✅ | `processed_events` dedupe (source event id) in the posting `@Transactional`; at-most-once entry per event |
-| **F2** double-entry ledger | ✅ (this is it) | `JournalEntry` balanced invariant `Σdebit == Σcredit`; ledger is downstream of the wallet, never writes back |
-| **F3** posted entry immutable; reversal-only | ✅ | no UPDATE/DELETE of entries/lines; `REVERSAL` entry references the original |
+| **F1** idempotent + Tx-protected | ✅ | `processed_events` dedupe (source event id) in the posting `@Transactional`; at-most-once entry per event; **(5th incr)** manual posting reuses the same dedupe keyed by the client `Idempotency-Key` (`manual:{key}`) — replay returns the original entry |
+| **F2** double-entry ledger | ✅ (this is it) | `JournalEntry` balanced invariant `Σdebit == Σcredit`; ledger is downstream of the wallet, never writes back; **(5th incr)** operator manual entries pass the SAME factory balance gate before any persist |
+| **F3** posted entry immutable; reversal-only | ✅ | no UPDATE/DELETE of entries/lines; `REVERSAL` entry references the original; **(5th incr)** manual adjusting entries are equally immutable (a correction is another entry) |
 | **F5** money = minor-units, no float | ✅ | `Money(long, Currency)`; grep-zero float/double in `domain/money`; `CURRENCY_MISMATCH` guard |
 | **F6** immutable audit | ✅ | append-only `audit_log`, same Tx (audit-heavy) |
 | **F7** regulated PII encrypted/masked | N/A (first increment) | the ledger stores account ids + amounts, no new regulated PII (no KYC documents); reuses account-service-masked refs |
@@ -674,6 +771,10 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
 | 18 | **(4th incr)** Resolve an already-RESOLVED discrepancy | 409 `RECONCILIATION_ALREADY_RESOLVED` |
 | 19 | **(4th incr)** Ingest a statement for a non-clearing account | 422 `RECONCILIATION_ACCOUNT_INVALID` (only `CASH_CLEARING` / `SETTLEMENT_SUSPENSE` reconcile) |
 | 20 | **(4th incr)** Unknown statement / discrepancy id on read or resolve | 404 `RECONCILIATION_STATEMENT_NOT_FOUND` / `RECONCILIATION_DISCREPANCY_NOT_FOUND` |
+| 21 | **(5th incr)** Manual posting with unbalanced lines / cross-currency lines | 422 `LEDGER_ENTRY_UNBALANCED` / `CURRENCY_MISMATCH` (the `JournalEntry` factory rejects synchronously — nothing persists) |
+| 22 | **(5th incr)** Manual posting referencing an unknown ledger account | 404 `LEDGER_ACCOUNT_NOT_FOUND` (no lazy mint via the operator path) |
+| 23 | **(5th incr)** Manual posting whose `postedAt` falls in a CLOSED period | 422 `LEDGER_PERIOD_CLOSED` (the same closed-period guard, now surfaced synchronously on REST — not the consumer DLT route) |
+| 24 | **(5th incr)** Manual posting `Idempotency-Key` absent / replayed | absent → 400 `IDEMPOTENCY_KEY_REQUIRED`; replayed key → 200 returning the original entry (no second post — `processed_events` dedupe, F1) |
 
 ## Testing Strategy
 
@@ -728,6 +829,20 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
   ingest on a non-clearing account → 422 `RECONCILIATION_ACCOUNT_INVALID`. (The IT
   base `@BeforeEach` period cleanup also covers reconciliation tables to keep the
   static-container classes isolated.)
+- **Manual journal posting (5th increment)**: application —
+  `PostManualJournalEntryUseCaseTest` (balanced operator lines persist + emit
+  `entry.posted` with `sourceType=MANUAL`; unbalanced → `LEDGER_ENTRY_UNBALANCED`;
+  unknown account → `LEDGER_ACCOUNT_NOT_FOUND`, no lazy mint; back-dated into a CLOSED
+  period → `LEDGER_PERIOD_CLOSED`; replayed key returns the original entry — no second
+  post; operator subject recorded as the audit actor). Slice — `@WebMvcTest
+  JournalController` (201 happy, 400 missing `Idempotency-Key`, error envelopes).
+  Integration (Testcontainers, authoritative): `POST /entries` with a balanced manual
+  entry (DR `CASH_CLEARING` / CR `CUSTOMER_WALLET:{acct}` — accounts pre-existing) →
+  201 → the entry + its lines persist, trial balance still == 0, and
+  **`finance.ledger.entry.posted.v1` with `source.sourceType=MANUAL`** is consumed off
+  Kafka; replay with the same key → 200 the same entryId (one entry only); an
+  unbalanced body → 422 `LEDGER_ENTRY_UNBALANCED`; a back-dated entry into a closed
+  window → 422 `LEDGER_PERIOD_CLOSED`; a cross-tenant JWT → 403.
 
 ## Required Artifacts mapping (rules/domains/fintech.md § Required Artifacts)
 
