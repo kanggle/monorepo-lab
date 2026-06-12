@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-FIN-BE-007-ledger-service-bootstrap-first-increment.md` — bootstrap `ledger-service` (finance's 2nd service; the ADR-008 § D3 v2 double-entry ledger) as a **first increment**: event-driven auto-journal (consume account-service `finance.transaction.{completed,reversed}.v1` → balanced double-entry `JournalEntry` per a fixed Posting Policy; `Σdebit==Σcredit` invariant → `LEDGER_ENTRY_UNBALANCED`; immutable + reversal-only; dedupe) + read REST (entry / per-account balance / trial balance). `rest-api + event-consumer` dual-type, terminal consumer (erp read-model precedent). Period-close / GL-AP feed / reconciliation / manual posting / multi-currency forward-declared. Spec authored (architecture.md + ledger-api.md + finance-ledger-events.md + error-codes + PROJECT.md). Gate = Integration (finance-platform, Testcontainers).
+(empty)
 
 ## in-progress
 
