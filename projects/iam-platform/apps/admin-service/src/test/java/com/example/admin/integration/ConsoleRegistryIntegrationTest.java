@@ -254,8 +254,8 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(SUPER_ADMIN_UUID)))
                 .andExpect(status().isOk())
-                // exactly 5 products in catalog order
-                .andExpect(jsonPath("$.products.length()").value(5))
+                // exactly 6 products in catalog order (TASK-MONO-240 added ecommerce)
+                .andExpect(jsonPath("$.products.length()").value(6))
                 .andExpect(jsonPath("$.products[0].productKey").value("iam"))
                 .andExpect(jsonPath("$.products[0].displayName").value("Identity & Access Management"))
                 .andExpect(jsonPath("$.products[0].available").value(true))
@@ -275,7 +275,14 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.products[3].tenants.length()").value(0))
                 .andExpect(jsonPath("$.products[4].productKey").value("finance"))
                 .andExpect(jsonPath("$.products[4].available").value(true))
-                .andExpect(jsonPath("$.products[4].tenants.length()").value(0));
+                .andExpect(jsonPath("$.products[4].tenants.length()").value(0))
+                // ecommerce — V1 live (TASK-MONO-240); ecommerce slug not in this
+                // test's tenant list / subscription stub → available:true, tenants:[].
+                .andExpect(jsonPath("$.products[5].productKey").value("ecommerce"))
+                .andExpect(jsonPath("$.products[5].displayName").value("E-Commerce Marketplace"))
+                .andExpect(jsonPath("$.products[5].available").value(true))
+                .andExpect(jsonPath("$.products[5].baseRoute").value("/ecommerce"))
+                .andExpect(jsonPath("$.products[5].tenants.length()").value(0));
     }
 
     @Test
@@ -284,7 +291,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(WMS_OP_UUID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.products.length()").value(5))
+                .andExpect(jsonPath("$.products.length()").value(6))
                 // gap shows ONLY the operator's own tenant — not the full list
                 .andExpect(jsonPath("$.products[0].productKey").value("iam"))
                 .andExpect(jsonPath("$.products[0].tenants.length()").value(1))
@@ -294,9 +301,14 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                 // scm product → not selectable by a wms operator
                 .andExpect(jsonPath("$.products[2].productKey").value("scm"))
                 .andExpect(jsonPath("$.products[2].tenants.length()").value(0))
+                // ecommerce product → not selectable by a wms operator (own tenant
+                // is wms, not ecommerce) — present in catalog, tenants:[] (AC-6 ecommerce)
+                .andExpect(jsonPath("$.products[5].productKey").value("ecommerce"))
+                .andExpect(jsonPath("$.products[5].available").value(true))
+                .andExpect(jsonPath("$.products[5].tenants.length()").value(0))
                 // hard isolation assertion: NO product anywhere leaks another tenant
                 .andExpect(jsonPath(
-                        "$.products[*].tenants[?(@ == 'fan-platform' || @ == 'scm')]")
+                        "$.products[*].tenants[?(@ == 'fan-platform' || @ == 'scm' || @ == 'ecommerce')]")
                         .doesNotExist());
     }
 
@@ -342,7 +354,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("TASK-BE-304 (b) set case: finance_default_account_id=<uuid> → finance item carries operatorContext.defaultAccountId, other 4 items don't (AC-3)")
+    @DisplayName("TASK-BE-304 (b) set case: finance_default_account_id=<uuid> → finance item carries operatorContext.defaultAccountId, other 5 items don't (AC-3)")
     void operatorContext_setCase_emittedOnlyOnFinanceItem() throws Exception {
         // Seed a dedicated operator with finance_default_account_id set via
         // raw JDBC after Flyway runs (V0028 has provisioned the column).
@@ -387,7 +399,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(FINANCE_TENANT_OP_UUID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.products.length()").value(5))
+                .andExpect(jsonPath("$.products.length()").value(6))
                 // finance product: available=true, own tenant selectable
                 .andExpect(jsonPath("$.products[4].productKey").value("finance"))
                 .andExpect(jsonPath("$.products[4].available").value(true))
@@ -397,9 +409,13 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.products[3].productKey").value("erp"))
                 .andExpect(jsonPath("$.products[3].available").value(true))
                 .andExpect(jsonPath("$.products[3].tenants.length()").value(0))
+                // ecommerce product: available=true, finance operator can't select it
+                .andExpect(jsonPath("$.products[5].productKey").value("ecommerce"))
+                .andExpect(jsonPath("$.products[5].available").value(true))
+                .andExpect(jsonPath("$.products[5].tenants.length()").value(0))
                 // hard isolation: no product leaks another tenant's slug
                 .andExpect(jsonPath(
-                        "$.products[*].tenants[?(@ == 'wms' || @ == 'scm' || @ == 'erp')]")
+                        "$.products[*].tenants[?(@ == 'wms' || @ == 'scm' || @ == 'erp' || @ == 'ecommerce')]")
                         .doesNotExist());
     }
 
@@ -420,7 +436,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(ERP_TENANT_OP_UUID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.products.length()").value(5))
+                .andExpect(jsonPath("$.products.length()").value(6))
                 // erp product: available=true, own tenant selectable
                 .andExpect(jsonPath("$.products[3].productKey").value("erp"))
                 .andExpect(jsonPath("$.products[3].available").value(true))
@@ -430,9 +446,13 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.products[4].productKey").value("finance"))
                 .andExpect(jsonPath("$.products[4].available").value(true))
                 .andExpect(jsonPath("$.products[4].tenants.length()").value(0))
+                // ecommerce product: available=true, erp operator can't select it
+                .andExpect(jsonPath("$.products[5].productKey").value("ecommerce"))
+                .andExpect(jsonPath("$.products[5].available").value(true))
+                .andExpect(jsonPath("$.products[5].tenants.length()").value(0))
                 // hard isolation: no product leaks another tenant's slug
                 .andExpect(jsonPath(
-                        "$.products[*].tenants[?(@ == 'wms' || @ == 'scm' || @ == 'finance')]")
+                        "$.products[*].tenants[?(@ == 'wms' || @ == 'scm' || @ == 'finance' || @ == 'ecommerce')]")
                         .doesNotExist());
     }
 
@@ -507,11 +527,15 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(SUPER_ADMIN_UUID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.products.length()").value(5))
+                .andExpect(jsonPath("$.products.length()").value(6))
                 // finance product (index 4): acme-corp subscribed → must appear
                 .andExpect(jsonPath("$.products[4].productKey").value("finance"))
                 .andExpect(jsonPath("$.products[4].tenants",
                         org.hamcrest.Matchers.hasItem("acme-corp")))
+                // ecommerce product (index 5): acme-corp NOT subscribed → must be absent
+                .andExpect(jsonPath("$.products[5].productKey").value("ecommerce"))
+                .andExpect(jsonPath("$.products[5].tenants",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("acme-corp"))))
                 // wms product (index 1): acme-corp subscribed → must appear
                 .andExpect(jsonPath("$.products[1].productKey").value("wms"))
                 .andExpect(jsonPath("$.products[1].tenants",

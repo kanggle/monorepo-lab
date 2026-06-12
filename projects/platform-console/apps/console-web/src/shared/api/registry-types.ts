@@ -13,7 +13,7 @@ import { z } from 'zod';
  * schema is the runtime parser the contract test asserts against.
  */
 
-export const ProductKeySchema = z.enum(['iam', 'wms', 'scm', 'erp', 'finance']);
+export const ProductKeySchema = z.enum(['iam', 'wms', 'scm', 'erp', 'finance', 'ecommerce']);
 export type ProductKey = z.infer<typeof ProductKeySchema>;
 
 /**
@@ -22,7 +22,7 @@ export type ProductKey = z.infer<typeof ProductKeySchema>;
  * attribute is set (Jackson `@JsonInclude(NON_NULL)`) — `undefined` here,
  * never literal `null`. v1: only the `finance` product item populates
  * `defaultAccountId` (sourced from IAM `admin_operators.finance_default_account_id`);
- * the other 4 items always omit `operatorContext`. The schema is intentionally
+ * the other 5 items always omit `operatorContext`. The schema is intentionally
  * additive + optional so a v0 producer / unprovisioned operator parses cleanly.
  * See `console-integration-contract.md § 2.2` + `console-registry-api.md
  * § Per-operator profile attributes`.

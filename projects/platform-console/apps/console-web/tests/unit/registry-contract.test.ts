@@ -49,23 +49,42 @@ const PRODUCER_EXAMPLE = {
       tenants: [],
       baseRoute: '/finance',
     },
+    {
+      productKey: 'ecommerce',
+      displayName: 'E-Commerce Marketplace',
+      available: true,
+      tenants: ['ecommerce'],
+      baseRoute: '/ecommerce',
+    },
   ],
 };
 
 describe('registry contract (console-registry-api.md envelope)', () => {
   it('parses the verbatim producer 200 example', () => {
     const parsed = RegistryResponseSchema.parse(PRODUCER_EXAMPLE);
-    expect(parsed.products).toHaveLength(5);
+    expect(parsed.products).toHaveLength(6);
     expect(parsed.products.map((p) => p.productKey)).toEqual([
       'iam',
       'wms',
       'scm',
       'erp',
       'finance',
+      'ecommerce',
     ]);
     const erp = parsed.products.find((p) => p.productKey === 'erp')!;
     expect(erp.available).toBe(false);
     expect(erp.tenants).toEqual([]);
+  });
+
+  it('accepts the ecommerce productKey (TASK-MONO-240 catalog membership extension)', () => {
+    const parsed = RegistryProductSchema.parse({
+      productKey: 'ecommerce',
+      displayName: 'E-Commerce Marketplace',
+      available: true,
+      tenants: ['ecommerce'],
+      baseRoute: '/ecommerce',
+    });
+    expect(parsed.productKey).toBe('ecommerce');
   });
 
   it('rejects an unknown productKey (catalog membership is fixed)', () => {
