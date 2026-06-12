@@ -8,7 +8,7 @@ ecommerce 를 platform-console 의 6번째 **도메인-health 카드**로 노출
 
 # Status
 
-review
+done
 
 # Owner
 
