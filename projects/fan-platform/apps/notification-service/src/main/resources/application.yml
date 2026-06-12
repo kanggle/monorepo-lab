@@ -117,3 +117,17 @@ fanplatform:
       recipient-domain: ${NOTIFICATION_EMAIL_RECIPIENT_DOMAIN:fan-platform.example}
       connect-timeout-ms: ${NOTIFICATION_EMAIL_CONNECT_TIMEOUT_MS:2000}
       read-timeout-ms: ${NOTIFICATION_EMAIL_READ_TIMEOUT_MS:5000}
+    # PUSH channel mode (TASK-FAN-BE-017): `mock` (default) = LoggingPushChannelAdapter;
+    # `fcm` = HttpFcmPushChannelAdapter (real FCM HTTP v1 send). Mutually-exclusive
+    # @ConditionalOnProperty beans; default `mock` is net-zero. Targets the FCM
+    # *topic* `${topic-prefix}<accountId>` (no device-token registry — clients
+    # subscribe to their per-account topic). `api-key` = the bearer token (real FCM v1
+    # mints an OAuth2 service-account access token — out of scope).
+    push:
+      mode: ${NOTIFICATION_PUSH_MODE:mock}
+      fcm-base-url: ${NOTIFICATION_PUSH_FCM_BASE_URL:}
+      project-id: ${NOTIFICATION_PUSH_FCM_PROJECT_ID:}
+      api-key: ${NOTIFICATION_PUSH_FCM_API_KEY:}
+      topic-prefix: ${NOTIFICATION_PUSH_TOPIC_PREFIX:fan_}
+      connect-timeout-ms: ${NOTIFICATION_PUSH_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${NOTIFICATION_PUSH_READ_TIMEOUT_MS:5000}

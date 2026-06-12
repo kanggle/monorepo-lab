@@ -284,9 +284,37 @@ forbidden-dependency line still holds.
 - **No CI side effects.** The IT runs the default `mock` mode; the adapter unit test
   points RestClient at a MockWebServer — no real provider is contacted in CI.
 
-A real PUSH adapter (FCM/APNs) remains a future increment, wired the same way
-(`@ConditionalOnProperty` / profile), with the mock retained. The domain and
-use-case layers are unchanged by either swap.
+### Real PUSH channel — `fcm` mode (TASK-FAN-BE-017)
+
+The PUSH channel has the symmetric real alternative: `HttpFcmPushChannelAdapter`, a
+**Firebase Cloud Messaging (FCM) HTTP v1** integration. Selection is by property:
+
+- `fanplatform.notification.push.mode = mock` (default) → `LoggingPushChannelAdapter`.
+- `fanplatform.notification.push.mode = fcm` → `HttpFcmPushChannelAdapter`, which POSTs
+  `${fcm-base-url}/v1/projects/${project-id}/messages:send` with `Authorization: Bearer
+  ${api-key}` and the FCM v1 JSON `{"message":{"topic":"<prefix><accountId>",
+  "notification":{"title":…,"body":…}}}`, via a `ResilienceClientFactory` RestClient.
+  A 2xx `{"name":"projects/…/messages/<id>"}` is the delivered ref.
+
+Same invariants as the EMAIL adapter — exactly **one** PUSH `NotificationChannelPort`
+bean per mode (EMAIL selection independent); **best-effort/never-throw** (failures →
+`…{outcome=failed}`, no transaction rollback); **no real SDK** (plain RestClient).
+
+- **Topic targeting (not device tokens).** The event carries no device registration
+  token (only `accountId`) and cross-service reads are forbidden, so the adapter targets
+  the FCM **topic** `${topic-prefix}<accountId>` (clients subscribe to their per-account
+  topic) — no device-token registry is needed. Device-token targeting would need a
+  device registry / preferences lookup (out of scope). `accountId` is sanitized to the
+  FCM topic charset `[a-zA-Z0-9-_.~%]+`.
+- **Auth.** `Authorization: Bearer ${api-key}`. Real FCM v1 mints a short-lived OAuth2
+  access token from a Google service account; that minting is out of scope (a real
+  deployment supplies a current token).
+- **No CI side effects.** The IT runs the default `mock` mode; the unit test points
+  RestClient at a MockWebServer.
+
+A real **APNs** adapter remains a further increment, wired the same way
+(`@ConditionalOnProperty` / profile), with the mock retained. The domain and use-case
+layers are unchanged by any of these swaps.
 
 Delivery is **best-effort and decoupled from the inbox write**: the `Notification`
 row is the durable record (always created on a fresh event); a mock channel that
