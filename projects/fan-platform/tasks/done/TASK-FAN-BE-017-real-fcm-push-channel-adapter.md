@@ -1,6 +1,6 @@
 # TASK-FAN-BE-017 — Real FCM HTTP v1 push channel adapter (`NotificationChannelPort` real impl, PUSH)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FAN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (symmetric to TASK-FAN-BE-016; same port + resilience pattern)
@@ -69,3 +69,13 @@ It re-implements `NotificationChannelPort` behind the same port the v1 mock uses
 - **F2 — two PUSH beans (or zero)** — a mis-gated conditional would double-send or drop push. Guarded by AC-3/AC-4 (mutually-exclusive `@ConditionalOnProperty`, `matchIfMissing=true` on the mock) + a wiring assertion.
 - **F3 — net-zero regression** — if `push.mode` defaulted to `fcm`, every deployment without FCM configured would log `failed` for every notification. Guarded by AC-3 (`mode` defaults to `mock`).
 - **F4 — a real push in CI** — the IT runs the default `mock` mode and the unit test points RestClient at a MockWebServer; no real FCM endpoint is contacted in CI. Guarded by AC-5 (IT on mock) + the unit test's MockWebServer base-url.
+
+---
+
+## Closure
+
+- **Impl PR**: #1346 — squash `065f52ff36b6f104521606ddc89fd9a6e6c256f9` (merged 2026-06-12). 3-dim verified: (a) state=MERGED; (b) `origin/main` tip = the squash commit; (c) pre-merge checks = 20 SUCCESS + 1 SKIPPED, **0 failing required**.
+- **Delivered**: `HttpFcmPushChannelAdapter` (real FCM HTTP v1, `@ConditionalOnProperty(push.mode=fcm)`, topic targeting `${topic-prefix}<accountId>`, bearer auth, best-effort/never-throw, `outcome=delivered|failed` metric); `LoggingPushChannelAdapter` gated `mock`/`matchIfMissing=true` (exactly one PUSH bean per mode); `application.yml` `fanplatform.notification.push.*` (default `mock` = net-zero); `architecture.md` § Channel Mock Boundary (fcm mode + topic targeting + APNs-only future-increment line); `HttpFcmPushChannelAdapterTest` (MockWebServer, 5 tests).
+- **Verification**: `:notification-service:check` (new 5/5 + existing `LoggingChannelAdapterTest` 2/2 unchanged) + `integrationTest` (Testcontainers, default mock — full-context bean wiring) BUILD SUCCESSFUL locally; CI "Build & Test" + "Integration (fan-platform, Testcontainers)" + all frontend GREEN.
+- **AC**: AC-1…AC-5 all satisfied. **No new dependency, no Google SDK, no domain/use-case/consumer/inbox/EMAIL-channel/contract change.**
+- **Channel story**: real-channel future increment now closed for **both EMAIL (BE-016) and PUSH (BE-017)**. **Deferred (out of scope, follow-on)**: APNs adapter; real OAuth2 service-account access-token minting; device-token targeting + device registry; failed-send redelivery.
