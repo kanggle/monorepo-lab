@@ -16,8 +16,13 @@ public record IngestStatementRequest(
         LocalDate statementDate,
         List<Line> lines) {
 
-    /** One ingest line — externalRef + money (minor string) + direction + value date. */
+    /**
+     * One ingest line — externalRef + money (minor string) + direction + value date.
+     * (11th incr — TASK-FIN-BE-017, multi-currency) {@code baseAmount} is optional:
+     * the bank-reported base/KRW value for a foreign-currency line, omitted for a KRW
+     * / base-less line.
+     */
     public record Line(String externalRef, MoneyRequest money, String direction,
-                       LocalDate valueDate, String description) {
+                       LocalDate valueDate, String description, MoneyRequest baseAmount) {
     }
 }

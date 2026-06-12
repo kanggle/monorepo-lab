@@ -21,8 +21,12 @@ public record IngestStatementCommand(
         List<Line> lines,
         String actor) {
 
-    /** One ingest line (the request body's line shape, parsed). */
+    /**
+     * One ingest line (the request body's line shape, parsed). (11th incr —
+     * TASK-FIN-BE-017) the optional {@code baseAmount} is the bank-reported base/KRW
+     * value for a foreign-currency line ({@code null} for a KRW / base-less line).
+     */
     public record Line(String externalRef, Money money, EntryDirection direction,
-                       LocalDate valueDate, String description) {
+                       LocalDate valueDate, String description, Money baseAmount) {
     }
 }

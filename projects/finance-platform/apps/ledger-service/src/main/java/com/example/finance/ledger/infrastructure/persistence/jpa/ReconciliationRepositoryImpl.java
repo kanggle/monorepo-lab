@@ -101,7 +101,9 @@ public class ReconciliationRepositoryImpl implements ReconciliationRepository {
     }
 
     private InternalLine toInternalLine(JournalLine line) {
+        // (11th incr) carry the line's base/reporting-currency (KRW) value so the
+        // matcher's base (FX) leg compares against the booked carrying base.
         return new InternalLine(line.entryId(), line.ledgerAccountCode(),
-                line.direction(), line.money());
+                line.direction(), line.money(), line.baseMoney());
     }
 }

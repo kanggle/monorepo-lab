@@ -90,7 +90,7 @@ class IngestStatementUseCaseTest {
     }
 
     private static IngestStatementCommand.Line line(String ref, long amount, EntryDirection dir) {
-        return new IngestStatementCommand.Line(ref, krw(amount), dir, VALUE_DATE, null);
+        return new IngestStatementCommand.Line(ref, krw(amount), dir, VALUE_DATE, null, null);
     }
 
     @Test
@@ -103,8 +103,8 @@ class IngestStatementUseCaseTest {
         when(clock.now()).thenReturn(NOW);
         when(reconciliationRepository.saveStatement(any())).thenAnswer(i -> i.getArgument(0));
         when(reconciliationRepository.findUnmatchedInternalLines(TENANT, CODE)).thenReturn(List.of(
-                new InternalLine("entry-a", CODE, EntryDirection.DEBIT, krw(150_000)),
-                new InternalLine("entry-b", CODE, EntryDirection.DEBIT, krw(99_000))));
+                new InternalLine("entry-a", CODE, EntryDirection.DEBIT, krw(150_000), krw(150_000)),
+                new InternalLine("entry-b", CODE, EntryDirection.DEBIT, krw(99_000), krw(99_000))));
         when(reconciliationRepository.saveDiscrepancies(any())).thenAnswer(i -> i.getArgument(0));
 
         StatementView view = useCase.ingest(command(List.of(
@@ -143,7 +143,7 @@ class IngestStatementUseCaseTest {
         when(clock.now()).thenReturn(NOW);
         when(reconciliationRepository.saveStatement(any())).thenAnswer(i -> i.getArgument(0));
         when(reconciliationRepository.findUnmatchedInternalLines(TENANT, CODE)).thenReturn(List.of(
-                new InternalLine("entry-a", CODE, EntryDirection.DEBIT, krw(150_000))));
+                new InternalLine("entry-a", CODE, EntryDirection.DEBIT, krw(150_000), krw(150_000))));
         when(reconciliationRepository.saveDiscrepancies(any())).thenAnswer(i -> i.getArgument(0));
 
         StatementView view = useCase.ingest(command(List.of(

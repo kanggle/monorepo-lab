@@ -59,7 +59,8 @@ public class ReconciliationController {
                                 l.externalRef(),
                                 l.money() == null ? null : l.money().toMoney(),
                                 EntryDirection.valueOf(l.direction()),
-                                l.valueDate(), l.description()))
+                                l.valueDate(), l.description(),
+                                l.baseAmount() == null ? null : l.baseAmount().toMoney()))
                         .toList();
         IngestStatementCommand command = new IngestStatementCommand(
                 actor.tenantId(), request.ledgerAccountCode(),
