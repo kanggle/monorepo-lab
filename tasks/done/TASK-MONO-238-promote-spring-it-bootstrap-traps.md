@@ -8,7 +8,7 @@ Promote two repo-wide Spring integration-test bootstrap rules from project memor
 
 # Status
 
-ready
+done
 
 # Owner
 
