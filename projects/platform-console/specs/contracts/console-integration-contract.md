@@ -855,17 +855,67 @@ obligation and points at the owning finance specs.
   parallel to the `FINANCE_BASE_URL` / `FINANCE_TIMEOUT_MS` pair (per-service
   base+timeout convention).
 
-- **Read-only binding (normative — no mutation scaffolding at all)**: there is
-  **no** mutation anywhere in this section. **No** `Idempotency-Key`, **no**
-  `X-Operator-Reason`, **no** confirm dialogs, **no** ledger write call
-  (`POST /entries`, `/revaluations`, `/settlements`,
-  `/reconciliation/statements`, `/reconciliation/discrepancies/{id}/resolve`).
-  Carrying the FE-007 alert-ack scaffolding **or** the IAM § 2.4.1 mutation
-  scaffolding into this section is a **defect** (asserted absent by test —
-  same read discipline as §§ 2.4.6/2.4.7). Every ledger call is a pure `GET`.
-  `IDEMPOTENCY_KEY_REQUIRED` / `LEDGER_PERIOD_CLOSED` / the `…RATE_INVALID`
-  codes are **mutation-only** per `ledger-api.md` — reads never hit them
-  (recorded, not invented).
+- **Read binding + ONE mutation carve-out (normative)**: the six GET reads above
+  are **the entire read surface**. The section was **originally strictly
+  read-only** (TASK-PC-FE-072); **as of TASK-PC-FE-073 it gains exactly ONE
+  operator mutation — the reconciliation discrepancy *resolve*** (see the next
+  bullet), consuming the *existing* `reconciliation-api.md` § 2 endpoint, **not**
+  a new producer — the same read-only→single-write-pilot evolution the erp
+  § 2.4.8 department write followed. **Every OTHER ledger mutation stays out of
+  scope**: **no** `POST /entries` (manual posting), **no** `/revaluations`,
+  **no** `/settlements`, **no** `/reconciliation/statements` (ingest) — these are
+  journal-movement / statement-ingest operations (`Idempotency-Key`-gated,
+  fintech F1) that are **not** an operator-parity console surface. Carrying the
+  IAM § 2.4.1 destructive mutation scaffolding (typed-confirm, GDPR double-confirm)
+  into this section is a **defect** (asserted absent by test). The read calls
+  remain pure `GET`; `IDEMPOTENCY_KEY_REQUIRED` / `LEDGER_PERIOD_CLOSED` / the
+  `…RATE_INVALID` codes are **other-mutation-only** per `ledger-api.md` — neither
+  the reads nor the resolve mutation hit them (recorded, not invented).
+
+- **Reconciliation discrepancy *resolve* mutation (TASK-PC-FE-073 — the ledger
+  surface's first and only operator mutation)**: the console consumes the
+  *existing* finance
+  [`reconciliation-api.md`](../../../finance-platform/specs/contracts/http/reconciliation-api.md)
+  **§ 2** `POST /api/finance/ledger/reconciliation/discrepancies/{id}/resolve`
+  (**unchanged, consumed only** — finance owns it). An operator resolves an
+  **OPEN** discrepancy (the FX-difference `AMOUNT_MISMATCH` of the 11th increment,
+  or any unmatched discrepancy) — request body `{ "resolutionType": <…>, "note":
+  <…> }`, `resolutionType ∈ { MATCHED_MANUALLY, WRITTEN_OFF, ACCEPTED }`, `200` →
+  the discrepancy with `status: "RESOLVED"` + a `resolution` sub-object. This is
+  the F8-sanctioned operator review close — **never** an auto-resolve (the console
+  fabricates no auto-close; the discrepancy is closed only by an explicit operator
+  action with a recorded `note`).
+  - **Credential + tenant**: the **same** domain-facing IAM OIDC token
+    (`getDomainFacingToken()`, **never** `getOperatorToken()`) and **no**
+    `X-Tenant-Id` as the reads — the resolve is `.authenticated()` + the finance
+    dual-accept tenant gate (`reconciliation-api.md` mutation auth: no separate
+    scope-authority axis; the operator arrives via the platform-console client).
+  - **Header matrix (honest, producer-faithful)**: the reason rides in the
+    **body** `note` (a **required**, non-empty operator narrative — the audit
+    record), **NOT** an `X-Operator-Reason` header (the resolve producer defines
+    none — the same body-reason shape as the erp § 2.4.8 delegation *revoke*).
+    **NO `Idempotency-Key`**: `reconciliation-api.md` § 2 does **not** define an
+    `Idempotency-Key` for resolve (unlike the ledger `POST /entries`, which
+    **requires** one) — the console MUST **not** fabricate a header the producer
+    ignores (the same honest-difference discipline as the no-429 rule); the
+    **`409 RECONCILIATION_ALREADY_RESOLVED`** state guard is the double-submit
+    defence (resolve is idempotent-by-state, not by-key). **No** `X-Tenant-Id`,
+    **no** typed/GDPR destructive-confirm.
+  - **Confirm-gated + reason-required (normative)**: the resolve is a deliberate,
+    confirm-gated action (a `resolutionType` selection + a **required** non-empty
+    `note`; an empty `note` → **no** fetch, mirroring the erp delegation-revoke
+    reason gate). It is offered **only on an OPEN discrepancy** (a RESOLVED row
+    exposes no resolve affordance). On success the queue/detail reflects
+    `RESOLVED` + `resolution`.
+  - **Resilience (§ 2.5, resolve-specific)**: `200` → reflect RESOLVED;
+    `409 RECONCILIATION_ALREADY_RESOLVED` → inline "already resolved — refresh"
+    (a concurrent operator resolved it; refetch, do not crash);
+    `422 RECONCILIATION_PERIOD_LOCKED` → inline "the discrepancy's period is
+    closed — resolve in the next open period" (mirrors the producer's closed-month
+    freeze); `404 RECONCILIATION_DISCREPANCY_NOT_FOUND` → inline;
+    `400 VALIDATION_ERROR` → inline; `401` → whole-session re-login; `403` →
+    inline "not scoped"; `503` / timeout → the ledger section degrades (the
+    resolve affordance disabled), shell intact. No 429.
 
 - **fintech producer obligations surfacing (finance domain constraint,
   normative — reuses the § 2.4.7 fintech obligations, extended for the ledger
