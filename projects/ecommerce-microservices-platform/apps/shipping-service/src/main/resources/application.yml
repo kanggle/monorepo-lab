@@ -67,6 +67,20 @@ fulfillment:
   require-sku-mapping: ${FULFILLMENT_REQUIRE_SKU_MAPPING:false}
   sku-map: {}
 
+# External carrier tracking integration (TASK-BE-293, the v2 first increment).
+# mode=mock (default) = MockCarrierTrackingAdapter; with a blank mock-status the
+# carrier integration is OFF (a refresh is a no-op = the v1 admin-driven baseline).
+# mode=http = HttpCarrierTrackingAdapter (real provider GET ${base-url}/track). The
+# two are mutually-exclusive @ConditionalOnProperty beans.
+shipping:
+  carrier:
+    mode: ${SHIPPING_CARRIER_MODE:mock}
+    base-url: ${SHIPPING_CARRIER_BASE_URL:}
+    api-key: ${SHIPPING_CARRIER_API_KEY:}
+    mock-status: ${SHIPPING_CARRIER_MOCK_STATUS:}
+    connect-timeout-ms: ${SHIPPING_CARRIER_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${SHIPPING_CARRIER_READ_TIMEOUT_MS:5000}
+
 logging:
   level:
     com.example.shipping: INFO

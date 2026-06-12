@@ -4,6 +4,7 @@ import com.example.shipping.application.command.UpdateShippingStatusCommand;
 import com.example.shipping.application.result.ShippingResult;
 import com.example.shipping.application.result.ShippingSummary;
 import com.example.shipping.application.result.UpdateShippingStatusResult;
+import com.example.shipping.application.service.RefreshTrackingService;
 import com.example.shipping.application.service.ShippingCommandService;
 import com.example.shipping.application.service.ShippingQueryService;
 import com.example.common.page.PageQuery;
@@ -31,6 +32,7 @@ public class ShippingController {
 
     private final ShippingCommandService shippingCommandService;
     private final ShippingQueryService shippingQueryService;
+    private final RefreshTrackingService refreshTrackingService;
 
     @GetMapping("/orders/{orderId}")
     public ResponseEntity<ShippingResponse> getShippingByOrderId(
@@ -52,6 +54,21 @@ public class ShippingController {
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
                 shippingId, targetStatus, request.trackingNumber(), request.carrier(), userRole);
         UpdateShippingStatusResult result = shippingCommandService.updateStatus(command);
+        return ResponseEntity.ok(UpdateShippingStatusResponse.from(result));
+    }
+
+    /**
+     * Admin-triggered carrier tracking refresh (TASK-BE-293): fetch the shipment's
+     * carrier status and advance it forward accordingly. Best-effort — a carrier
+     * outage / unknown status leaves the shipment unchanged (200 with the current
+     * status). Default {@code shipping.carrier.mode=mock} = no-op.
+     */
+    @PostMapping("/{shippingId}/refresh-tracking")
+    public ResponseEntity<UpdateShippingStatusResponse> refreshTracking(
+            @RequestHeader("X-User-Role") @NotBlank(message = "X-User-Role header is required") String userRole,
+            @PathVariable String shippingId
+    ) {
+        UpdateShippingStatusResult result = refreshTrackingService.refreshFromCarrier(shippingId, userRole);
         return ResponseEntity.ok(UpdateShippingStatusResponse.from(result));
     }
 
