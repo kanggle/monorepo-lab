@@ -1,6 +1,6 @@
 # TASK-FAN-BE-016 — Real HTTP email channel adapter (`NotificationChannelPort` real implementation)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FAN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (adapter against an existing port; resilience/error-mapping is the established pattern)
@@ -63,3 +63,13 @@ This is the notification-service's first **real external integration** — until
 - **F2 — two EMAIL beans (or zero)** — a mis-gated conditional would inject two EMAIL adapters (double-send) or none (no email). Guarded by AC-3/AC-4 (mutually-exclusive `@ConditionalOnProperty`, `matchIfMissing=true` on the mock) + a wiring assertion.
 - **F3 — net-zero regression** — if `mode` defaulted to `http`, every deployment without a provider configured would log `failed` for every notification. Guarded by AC-3 (`mode` defaults to `mock`).
 - **F4 — leaking PII / a real send in CI** — the IT runs the default `mock` mode and the unit test points RestClient at a MockWebServer; no real provider is ever contacted in CI. Guarded by AC-5 (IT on mock) + the unit test's MockWebServer base-url.
+
+---
+
+## Closure
+
+- **Impl PR**: #1343 — squash `353a657b892d599c3c8459429eb514f9b727e5ad` (merged 2026-06-12). 3-dim verified: (a) `gh pr view` state=MERGED; (b) `origin/main` tip = the squash commit; (c) pre-merge checks = 20 SUCCESS + 1 SKIPPED, **0 failing required**.
+- **Delivered**: `HttpEmailChannelAdapter` (real provider-agnostic HTTP transactional-email, `@ConditionalOnProperty(email.mode=http)`, `ResilienceClientFactory` RestClient, API-key header, best-effort/never-throw, `outcome=delivered|failed` metric, synthetic `${accountId}@${recipient-domain}`); `LoggingEmailChannelAdapter` gated `mock`/`matchIfMissing=true` (exactly one EMAIL bean per mode); `application.yml` `fanplatform.notification.email.*` (default `mock` = net-zero); `architecture.md` § Channel Mock Boundary (http mode + best-effort + recipient limitation); `HttpEmailChannelAdapterTest` (MockWebServer, 4 tests).
+- **Verification**: `:notification-service:check` (unit/slice, incl. new 4/4 + existing `LoggingChannelAdapterTest` 2/2 unchanged) + `integrationTest` (Testcontainers, default mock — full-context bean wiring) BUILD SUCCESSFUL locally; CI "Build & Test" + "Integration (fan-platform, Testcontainers)" + all frontend GREEN.
+- **AC**: AC-1…AC-5 all satisfied. **No new dependency, no real SDK, no domain/use-case/consumer/inbox/contract change.**
+- **Deferred (out of scope, follow-on)**: real PUSH adapter (FCM/APNs); automatic redelivery of a failed real send; recipient enrichment via a preferences/profile lookup.
