@@ -48,7 +48,10 @@ Ingest an external statement for one clearing account and run matching. Request:
 ```
 Discrepancies are recorded **OPEN** and are **never auto-closed (F8)**. `422
 RECONCILIATION_ACCOUNT_INVALID` when `ledgerAccountCode` is not a reconcilable
-clearing account. Emits `finance.ledger.reconciliation.completed.v1` + one
+clearing account. **(7th increment)** `422 RECONCILIATION_PERIOD_LOCKED` when
+`statementDate` falls in a CLOSED accounting period — a closed month is closed to new
+reconciliation; the guard runs **before** any persist/match/emit (a locked ingest
+records nothing). Emits `finance.ledger.reconciliation.completed.v1` + one
 `finance.ledger.reconciliation.discrepancy.detected.v1` per discrepancy
 ([`../events/finance-ledger-events.md`](../events/finance-ledger-events.md)).
 
@@ -93,7 +96,7 @@ Discrepancy detail (incl. `resolution` when RESOLVED).
 | `RECONCILIATION_STATEMENT_NOT_FOUND` | 404 | statement id unknown / not in tenant |
 | `RECONCILIATION_DISCREPANCY_NOT_FOUND` | 404 | discrepancy id unknown / not in tenant |
 | `RECONCILIATION_ALREADY_RESOLVED` | 409 | resolve attempted on an already-RESOLVED discrepancy |
-| `RECONCILIATION_PERIOD_LOCKED` | 422 | **(6th incr)** resolve attempted on a discrepancy whose statement date is in a CLOSED accounting period (frozen with the books; mirrors `LEDGER_PERIOD_CLOSED`) |
+| `RECONCILIATION_PERIOD_LOCKED` | 422 | **(6th/7th incr)** resolve (6th) OR ingest (7th) of a statement whose statement date is in a CLOSED accounting period (frozen with the books; both sides; mirrors `LEDGER_PERIOD_CLOSED`) |
 | `TENANT_FORBIDDEN` | 403 | dual-accept gate rejects (both branches fail) |
 
 `RECONCILIATION_DISCREPANCY` (pre-registered, fintech F8) names the **recorded
@@ -102,8 +105,6 @@ response.
 
 ## Out of scope (forward-declared — later increments)
 
-- Reconciliation **ingest-time** period lock (reject ingesting a statement dated in a
-  CLOSED period — the 6th increment locks *resolution*, not *ingest*).
-- Fuzzy / N:M / split matching; multi-currency statements.
+- Fuzzy / N:M / split matching; multi-currency statements; period **reopen**.
 - An in-repo consumer of the reconciliation feed (this increment ships the producer
   + topics only).

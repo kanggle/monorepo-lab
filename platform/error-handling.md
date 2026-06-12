@@ -618,8 +618,10 @@ period close), **3rd** (TASK-FIN-BE-009 — GL/AP-feed outbox emission), **4th**
 endpoint, synchronous balance/account/closed-period guards + `Idempotency-Key`),
 **6th** (TASK-FIN-BE-012 — reconciliation period-lock: a discrepancy whose statement
 date is in a CLOSED period is immutable; `resolve` rejected with
-`RECONCILIATION_PERIOD_LOCKED`, mirroring `LEDGER_PERIOD_CLOSED`).
-Reconciliation **ingest-time** period-lock remains **v2-planned**.
+`RECONCILIATION_PERIOD_LOCKED`, mirroring `LEDGER_PERIOD_CLOSED`), **7th**
+(TASK-FIN-BE-013 — reconciliation *ingest-time* period-lock: ingesting a statement
+dated in a CLOSED period is rejected with the same code, before any persist/match/emit
+— a CLOSED period is closed to reconciliation on both sides).
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -636,7 +638,7 @@ Reconciliation **ingest-time** period-lock remains **v2-planned**.
 | RECONCILIATION_STATEMENT_NOT_FOUND | 404 | Reconciliation statement id unknown / not in tenant — `ledger-service` (`ReconciliationStatementNotFoundException`) |
 | RECONCILIATION_DISCREPANCY_NOT_FOUND | 404 | Reconciliation discrepancy id unknown / not in tenant — `ledger-service` (`ReconciliationDiscrepancyNotFoundException`) |
 | RECONCILIATION_ALREADY_RESOLVED | 409 | Resolve attempted on an already-RESOLVED discrepancy — `ledger-service` (`ReconciliationAlreadyResolvedException`) |
-| RECONCILIATION_PERIOD_LOCKED | 422 | Resolve attempted on a discrepancy whose statement date is in a CLOSED accounting period (F8 — frozen with the books; correct via the next period) — `ledger-service` (6th incr; `ReconciliationPeriodLockedException`; mirrors `LEDGER_PERIOD_CLOSED`; net-zero when no covering closed period). Ingest-time lock = **v2-planned** |
+| RECONCILIATION_PERIOD_LOCKED | 422 | Resolve (6th incr) OR ingest (7th incr) of a statement whose statement date is in a CLOSED accounting period (F8 — frozen with the books; correct via the next period) — `ledger-service` (`ReconciliationPeriodLockedException`; mirrors `LEDGER_PERIOD_CLOSED`; net-zero when no covering closed period; the ingest guard runs before any persist/match/emit) |
 
 ---
 
