@@ -41,6 +41,7 @@ public class GlobalExceptionHandler {
             Map.entry("RECONCILIATION_STATEMENT_NOT_FOUND", HttpStatus.NOT_FOUND),
             Map.entry("RECONCILIATION_DISCREPANCY_NOT_FOUND", HttpStatus.NOT_FOUND),
             Map.entry("RECONCILIATION_ALREADY_RESOLVED", HttpStatus.CONFLICT),
+            Map.entry("RECONCILIATION_PERIOD_LOCKED", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("IDEMPOTENCY_KEY_REQUIRED", HttpStatus.BAD_REQUEST),
             Map.entry("TENANT_FORBIDDEN", HttpStatus.FORBIDDEN));
 

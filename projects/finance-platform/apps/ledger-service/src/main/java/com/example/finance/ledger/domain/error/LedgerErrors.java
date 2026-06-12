@@ -127,6 +127,21 @@ public final class LedgerErrors {
         }
     }
 
+    // ---- Reconciliation period lock (6th increment — TASK-FIN-BE-012, F8) ----
+
+    /**
+     * A resolve attempted on a discrepancy whose owning statement's
+     * {@code statementDate} falls in a CLOSED accounting period — the closed month's
+     * reconciliation is frozen with the books (architecture.md § Reconciliation
+     * § Period lock; the analog of {@code LEDGER_PERIOD_CLOSED}). 422; correct via
+     * the next (open) period. Net-zero when no covering CLOSED period / no statement.
+     */
+    public static final class ReconciliationPeriodLockedException extends LedgerDomainException {
+        public ReconciliationPeriodLockedException(String message) {
+            super("RECONCILIATION_PERIOD_LOCKED", message);
+        }
+    }
+
     // ---- Manual journal posting (5th increment — TASK-FIN-BE-011, F1) ----
 
     /**
