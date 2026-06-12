@@ -8,7 +8,7 @@ ledger-service: partial / weighted-average FX settlement (12th increment)
 
 # Status
 
-ready
+done
 
 # Owner
 
