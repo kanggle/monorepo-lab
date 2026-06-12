@@ -67,22 +67,15 @@ public class RefreshTrackingService {
             return result(shipping);
         }
 
-        ShippingStatus original = shipping.getStatus();
-        ShippingStatus goal = target.get();
-        ShippingStatus[] chain = ShippingStatus.values();
-        ShippingStatus current = original;
-        while (current.ordinal() < goal.ordinal()) {
-            ShippingStatus next = chain[current.ordinal() + 1];
-            shipping.transitionTo(next, trackingNumber, carrier, clock);
-            current = next;
-        }
-
-        if (current == original) {
+        Optional<ShippingStatus> changedFrom =
+                ShippingForwardAdvancer.advanceForward(shipping, target.get(), clock);
+        if (changedFrom.isEmpty()) {
             log.info("Carrier status {} for shipping {} is not ahead of {}; refresh no-op",
-                    goal, shippingId, original);
+                    target.get(), shippingId, shipping.getStatus());
             return result(shipping);
         }
 
+        ShippingStatus original = changedFrom.get();
         Shipping saved = shippingRepository.save(shipping);
         shippingEventPublisher.publishShippingStatusChanged(
                 saved.getShippingId(), saved.getOrderId(), saved.getUserId(),

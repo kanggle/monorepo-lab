@@ -3,6 +3,7 @@ package com.example.shipping.interfaces.rest.controller;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.AccessDeniedException;
 import com.example.shipping.application.exception.UnauthorizedShippingAccessException;
+import com.example.shipping.application.exception.WebhookSignatureException;
 import com.example.shipping.domain.exception.InvalidShippingException;
 import com.example.shipping.domain.exception.InvalidStatusTransitionException;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
@@ -71,6 +72,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnauthorizedAccess(UnauthorizedShippingAccessException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of("ACCESS_DENIED", e.getMessage()));
+    }
+
+    @ExceptionHandler(WebhookSignatureException.class)
+    public ResponseEntity<ErrorResponse> handleWebhookSignature(WebhookSignatureException e) {
+        log.warn("Carrier webhook rejected: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorResponse.of("WEBHOOK_SIGNATURE_INVALID", "Webhook signature verification failed"));
     }
 
     @ExceptionHandler(ShippingNotFoundException.class)
