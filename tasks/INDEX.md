@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-230-adr-030-ecommerce-multivendor-saas-proposed.md` — **READY**. Author `ADR-MONO-030` (PROPOSED) — promote ecommerce from single-tenant/single-seller to a **multi-vendor marketplace SaaS** along two orthogonal axes: outer **tenant** axis (Shopify-style — ecommerce joins the existing platform federation as the **6th entitlement-trust domain**, reusing the ADR-MONO-019 customer-tenant machinery, row-level `tenant_id` M1-M7) + inner **seller** axis (Coupang-style — net-new ecommerce-local `seller` aggregate + `seller_id`, the `marketplace` scope `PROJECT.md` dropped). User-fixed forks (AskUserQuestion): vertical-slice-first (product+order) / row-level `tenant_id` / reuse platform IAM. D4 two-plane separation (consumers on ecommerce auth-service, tenant/seller-admin on platform IAM, ADR-023 precedent); D7 lifts `PROJECT.md` `multi-tenant`+`marketplace` out-of-scope (HARDSTOP-04, at ACCEPTED). Doc-only; ACCEPTED transition + execution (specs → outer axis → inner axis → deferred settlement/console/11-services/fulfillment-threading) are separate tasks. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
