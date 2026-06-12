@@ -8,7 +8,7 @@ shipping-service: 실 물류 중개 플랫폼 = Delivery Tracker GraphQL/OAuth2 
 
 # Status
 
-review
+done
 
 # Owner
 
