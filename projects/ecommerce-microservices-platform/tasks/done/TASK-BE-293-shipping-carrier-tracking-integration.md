@@ -1,6 +1,6 @@
 # TASK-BE-293 — Shipping carrier tracking integration (first increment)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (transactional status advance + external integration)
@@ -63,3 +63,14 @@ Reuses the proven real-HTTP-adapter pattern (provider-agnostic, `ResilienceClien
 - **F2 — shipment regression** — a carrier reporting an earlier status must never move a shipment backward. Guarded by AC-3 (ordinal forward-only) + the domain's unidirectional `canTransitionTo`.
 - **F3 — net-zero regression** — if `mode` defaulted to a non-empty status, every refresh would advance shipments unbidden. Guarded by AC-4 (`mock` + blank `mock-status` = no-op).
 - **F4 — two carrier beans (or zero)** — a mis-gated conditional. Guarded by the mutually-exclusive `@ConditionalOnProperty` (`matchIfMissing=true` on mock).
+
+---
+
+## Closure
+
+- **Impl PR**: #1356 — squash `233b2c2b354f9d291ab299a1ec11119fddde1e82` (merged 2026-06-12). 3-dim verified: (a) state=MERGED; (b) `origin/main` tip = the squash commit; (c) pre-merge checks = 20 SUCCESS + 1 SKIPPED, **0 failing required**.
+- **Delivered**: `CarrierTrackingPort` + `HttpCarrierTrackingAdapter` (real, `mode=http`, ResilienceClientFactory, best-effort/never-throw) + `MockCarrierTrackingAdapter` (`mock`/`matchIfMissing`, blank `mock-status` = OFF/net-zero) + `CarrierStatusMapper` (pure) + `RefreshTrackingService` (admin-gated, forward-only multi-step advance, consolidated event) + `POST /api/shippings/{id}/refresh-tracking` + `shipping.carrier.*` config + `build.gradle` mockwebserver/okhttp + `overview.md`.
+- **Verification**: `:shipping-service` unit + slice GREEN — `CarrierStatusMapperTest` 2/2, `HttpCarrierTrackingAdapterTest` 4/4, `RefreshTrackingServiceTest` 5/5, `ShippingControllerTest` 23/23 (+2 new). CI Build & Test (unit+slice, integration tags excluded) + all integration jobs GREEN; mergeState CLEAN.
+- **IT note**: the `@Tag("integration")` Testcontainers ITs were not runnable locally in this worktree — a **pre-existing** `"multiple @SpringBootConfiguration"` harness condition reproduces on a clean `origin/main` checkout (verified via `git stash`), unrelated to this change. There is no dedicated ecommerce integration CI job; Build & Test is the gate. Change is additive + default-mock net-zero.
+- **AC**: AC-1…AC-5 satisfied. **No domain/contract change; no carrier SDK.**
+- **Deferred (out of scope, follow-on)**: unattended auto-collect scheduler (poll in-flight shipments); carrier webhook ingestion; real provider (CJ대한통운 / Lotte) endpoint + credentials wiring.
