@@ -22,7 +22,12 @@
 - Enforce **strict unidirectional status transitions**: `PREPARING → SHIPPED → IN_TRANSIT → DELIVERED`.
 - Provide shipping status query by `orderId`.
 - Publish `ShippingStatusChanged` on every transition (consumed by `notification-service`).
-- (External carrier integration is v2 — current v1 = admin-driven manual transition.)
+- **External carrier integration (first increment, TASK-BE-293)**: an admin-triggered
+  `refresh-tracking` reads the shipment's carrier status via `CarrierTrackingPort` and
+  advances it forward. Default `shipping.carrier.mode=mock` (no-op = the v1 admin-driven
+  baseline, net-zero); `mode=http` uses the real provider adapter (`integration-heavy`
+  pattern: RestClient + resilience timeouts, best-effort/never-throw). The carrier-driven
+  **auto-collect scheduler** (poll all in-flight shipments) remains a later increment.
 
 ## Public surface
 
@@ -31,6 +36,7 @@
 | REST | `GET /api/shipping?orderId={id}` | JWT (owner / ROLE_ADMIN) | shipping status |
 | REST | `PUT /api/admin/shipping/{id}/status` | JWT + ROLE_ADMIN | manual status transition (v1) |
 | REST | `PUT /api/admin/shipping/{id}/tracking` | JWT + ROLE_ADMIN | set carrier + tracking number |
+| REST | `POST /api/shippings/{id}/refresh-tracking` | `X-User-Role: ADMIN` | carrier-driven status refresh (TASK-BE-293, best-effort) |
 | Kafka consume | `order.order.confirmed` | — | shipping record creation |
 | Kafka publish | `shipping.shipping.status-changed` | — | notification consumers |
 
@@ -64,5 +70,5 @@
 - Order processing — `order-service`.
 - Payment processing — `payment-service`.
 - Notification delivery — `notification-service`.
-- External carrier API 통합 (CJ대한통운 / Lotte 등 tracking 자동 수집) — v2 (`integration-heavy` trait pattern 적용 시).
+- External carrier API 통합 — **first increment done (TASK-BE-293)**: admin-triggered `refresh-tracking` + `CarrierTrackingPort` (mock/http). 잔여 v2 = 무인 자동수집 스케줄러(poll) + 실 제공사(CJ대한통운 / Lotte) 어댑터 배선 + webhook 수신.
 - Shipping cost calculation — order-service / promotion-service 가 처리.

@@ -6,6 +6,7 @@ import com.example.shipping.application.exception.UnauthorizedShippingAccessExce
 import com.example.shipping.application.result.ShippingResult;
 import com.example.shipping.application.result.ShippingSummary;
 import com.example.shipping.application.result.UpdateShippingStatusResult;
+import com.example.shipping.application.service.RefreshTrackingService;
 import com.example.shipping.application.service.ShippingCommandService;
 import com.example.shipping.application.service.ShippingQueryService;
 import com.example.shipping.domain.exception.InvalidShippingException;
@@ -47,6 +48,9 @@ class ShippingControllerTest {
 
     @MockitoBean
     private ShippingQueryService shippingQueryService;
+
+    @MockitoBean
+    private RefreshTrackingService refreshTrackingService;
 
     private static final Instant NOW = Instant.parse("2026-01-01T00:00:00Z");
 
@@ -119,6 +123,30 @@ class ShippingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shippingId").value("ship-1"))
                 .andExpect(jsonPath("$.status").value("SHIPPED"));
+    }
+
+    // ─── POST /api/shippings/{shippingId}/refresh-tracking (TASK-BE-293) ──
+
+    @Test
+    @DisplayName("carrier refresh 성공 시 200 + 갱신된 상태 반환")
+    void refreshTracking_admin_returns200() throws Exception {
+        UpdateShippingStatusResult result =
+                new UpdateShippingStatusResult("ship-1", ShippingStatus.DELIVERED, NOW);
+        given(refreshTrackingService.refreshFromCarrier(eq("ship-1"), eq("ADMIN"))).willReturn(result);
+
+        mockMvc.perform(post("/api/shippings/ship-1/refresh-tracking")
+                        .header("X-User-Role", "ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.shippingId").value("ship-1"))
+                .andExpect(jsonPath("$.status").value("DELIVERED"));
+    }
+
+    @Test
+    @DisplayName("carrier refresh X-User-Role 누락 시 401 반환")
+    void refreshTracking_missingUserRole_returns401() throws Exception {
+        mockMvc.perform(post("/api/shippings/ship-1/refresh-tracking"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 
     @Test
