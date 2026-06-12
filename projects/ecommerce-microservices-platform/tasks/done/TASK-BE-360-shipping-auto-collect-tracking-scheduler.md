@@ -8,7 +8,7 @@ shipping-service: 무인 auto-collect tracking 스케줄러 (ADR-007 D5-3, ShedL
 
 # Status
 
-review
+done
 
 # Owner
 
