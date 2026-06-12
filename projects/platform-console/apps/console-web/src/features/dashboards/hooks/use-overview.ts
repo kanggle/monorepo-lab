@@ -27,7 +27,17 @@ import { OperatorOverviewSchema, type OperatorOverview } from '../api/types';
  * authed state); the proxy maps a non-401 whole-fan-out failure to 503.
  */
 
-const OVERVIEW_KEY = ['operator-overview'] as const;
+// TASK-PC-FE-071 — this IAM-detail overview ({ accounts, audit, operators })
+// MUST use a distinct React Query key from the 5-domain cross-domain overview
+// ({ cards, asOf }) in features/operator-overview. Both render under the same
+// `(console)` layout (shared QueryClient), so a colliding key let the home
+// overview's cached `{ cards, asOf }` satisfy this hook on a client-side
+// soft-navigation (drill-down click), where `initialData` is ignored because a
+// cache entry already exists. `OperatorOverviewScreen` then destructured an
+// undefined `accounts`/`audit`/`operators` → `Cannot read properties of
+// undefined (reading 'status')` → route error boundary. A hard load worked
+// (fresh cache seeded by initialData); only the drilldown soft-nav crashed.
+const OVERVIEW_KEY = ['iam-detail-overview'] as const;
 
 async function fetchOverview(): Promise<OperatorOverview> {
   const raw = await apiClient.get<unknown>('/api/dashboards');

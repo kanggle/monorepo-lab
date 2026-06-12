@@ -8,7 +8,22 @@ Make the IAM domain-health card resolve to `data-status='ok'` in the Platform Co
 
 # Status
 
-ready
+review
+
+> **⚠️ Diagnosis reversed at runtime (2026-06-13).** The premise threaded through
+> this task (Title / Owner / Goal / Static Analysis Notes) — *"the IAM
+> domain-health card is `degraded` because of a probe of `/actuator/health`
+> (Kafka or, per the static notes, resilience4j `circuitBreakers`)"* — is
+> **WRONG**. The runtime e2e stack showed the IAM **card is already `ok`**
+> (`overview-consolidation.spec.ts:93` PASSES); the actual failure was a
+> console-web **client crash on the drill-down soft-navigation** (line 108),
+> caused by a **React Query `queryKey` collision** in `src/`. The correct fix is
+> therefore a 1-line **console-web `src/` change** — which AC-5 / Out-of-Scope
+> forbade *on the basis of the wrong diagnosis*. The user approved overriding
+> that constraint (the fix is a real product bugfix, **not** a spec relaxation).
+> See **§ Resolution (2026-06-13)** at the foot of this file for the full
+> evidence + AC reconciliation. The Goal / Static Analysis Notes below are
+> retained verbatim as the (now-superseded) investigation trail.
 
 # Owner
 
@@ -152,3 +167,41 @@ Worktree prepared: `mlab-pcfe071` on branch `task/pc-fe-071-iam-card-health-prob
 **AC-1 (do this FIRST in the dedicated session)** — bring up `projects/platform-console/docker-compose.e2e.yml`, then `curl -s http://localhost:<admin-mapped>/actuator/health` (admin-service container `:8085`; needs `management.endpoint.health.show-details` to see `components`). Identify the actual DOWN component(s) — expect `circuitBreakers`, NOT `kafka`. Also check whether the OPEN circuit is itself a real e2e gap (is account/security/auth-service reachable from admin in the overlay?).
 
 **Fix candidate (re-scoped from the task's option 1)** — if DOWN == `circuitBreakers`: add to `projects/iam-platform/apps/admin-service/src/main/resources/application-e2e.yml` (currently has NO `management:` block — inherits base) a scoped override, e.g. `management.health.circuitbreakers.enabled: false` (admin-service e2e profile ONLY → finance leg untouched = AC-6 safe), OR resolve why the circuit is OPEN (a genuinely-missing downstream). Probe target / profile confirmed: e2e compose `CONSOLE_BFF_OUTBOUND_IAM_BASE_URL=http://admin-service:8085`, admin-service `SPRING_PROFILES_ACTIVE=e2e`. Keep console-web `src/` and the BFF composition byte-unchanged (AC-5).
+
+---
+
+## Resolution (2026-06-13 — runtime diagnosis, fix verified)
+
+**Both the task's "Kafka" hypothesis AND the static notes' "circuitBreakers" re-scope were wrong.** Brought up `docker-compose.e2e.yml` (full stack + seed), drove the production OIDC login, and observed the real failure with a browser-console stack trace.
+
+### What actually happens
+
+1. **The IAM card is `ok`, not `degraded`.** `overview-consolidation.spec.ts:93` (`data-status='ok'`) **PASSES**, and the drill-down link renders + navigates. The card is fed by the **operator-overview composition** (`/api/console/dashboards/operator-overview` → `OperatorOverviewCompositionUseCase`, IAM leg = `GET /api/admin/accounts?page=0&size=1` with an operator token) — **not** `/actuator/health`. So the BFF actuator-probe / `circuitBreakers` indicator is irrelevant to this card (and a `management.health.circuitbreakers.enabled:false` toggle would NOT have changed the assertion). `cc`-chain + actuator were verified healthy at runtime.
+2. **The failing assertion is line 108** — after clicking the drill-down, the IAM-detail page (`/dashboards`) renders the `(console)/error.tsx` boundary ("문제가 발생했습니다") instead of the `IAM 상세 (계정 · 감사 · 운영자)` heading. Browser console:
+   `TypeError: Cannot read properties of undefined (reading 'status')`.
+3. **Root cause — React Query `queryKey` collision (a real console-web `src/` product bug):**
+   - `features/operator-overview/hooks/use-operator-overview.ts` → key `['operator-overview']`, data shape `{ cards, asOf }` (5-domain home).
+   - `features/dashboards/hooks/use-overview.ts` → key `['operator-overview']`, data shape `{ accounts, audit, operators }` (IAM detail).
+   - Both render under the same `(console)` layout (one shared `QueryClient`). On the home overview the `RetryButton`/`OverviewDegradeBanner` seed the cache at `['operator-overview']` with `{ cards, asOf }`. A **client soft-navigation** (the drill-down click) to `/dashboards` then lets the IAM-detail hook read that cached `{ cards, asOf }` (React Query ignores `initialData` when a cache entry already exists), so `OperatorOverviewScreen` destructures `undefined` `accounts/audit/operators` → `.status` throws → error boundary. A **hard load** of `/dashboards` works (fresh cache, `initialData` seeds the correct shape) — which is why earlier manual checks never caught it, and why only the spec's *click-through* path fails. This crash reproduces in **production** (any operator clicking the IAM card), so it is a genuine bug, not a test/harness artifact.
+
+### Fix
+
+One line — give the IAM-detail overview a distinct key (it does NOT share state with the 5-domain home overview):
+
+```
+- const OVERVIEW_KEY = ['operator-overview'] as const;     // collided
++ const OVERVIEW_KEY = ['iam-detail-overview'] as const;   // distinct
+```
+in `apps/console-web/src/features/dashboards/hooks/use-overview.ts` (local, non-exported const; self-contained). No BFF / admin-service / e2e-harness change.
+
+### Verification
+
+- `overview-consolidation.spec.ts` — **5/5 PASS** against the live stack (incl. the previously-failing IAM-card drill-down test, repeated green).
+- `next lint` clean · `tsc --noEmit` clean · `next build` (docker image) succeeds.
+- The other local e2e specs: 6/7 (the 1 failure is the pre-existing finance `operators-profile` flake — it fails at *different* steps across runs, is mechanically independent of this `src/` change [different feature/page/key], and passes in nightly per the task's own "6/7" baseline). **AC-4 nightly `Platform Console E2E` 7/7 is the authoritative post-merge check.**
+
+### AC reconciliation
+
+- **AC-5** ("no console-web `src/` change") and **Out of Scope** ("console-web `src/` behaviour change") were predicated on the *degraded-probe* misdiagnosis. With the real cause being a `src/` crash bug, the only correct fix is a `src/` change. The user explicitly approved overriding AC-5 (2026-06-13) — and this is **not** a spec relaxation (AC-3's drill-down assertions all run and pass; the spec is unchanged).
+- **AC-1/AC-2** (actuator/BFF probe confirmation) are recorded here as *negative* findings (the card was never degraded; the probe is not the cause).
+- **AC-3** satisfied (the drill-down test passes end-to-end). **AC-6** finance card / other specs not regressed by this change (the local finance flake is independent; nightly is authoritative). **AC-4** to be confirmed on the first nightly after merge.
