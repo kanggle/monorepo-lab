@@ -83,7 +83,8 @@ public class IngestStatementUseCase {
         Instant now = clock.now();
         List<ExternalStatement.RawLine> rawLines = command.lines().stream()
                 .map(l -> new ExternalStatement.RawLine(
-                        l.externalRef(), l.money(), l.direction(), l.valueDate(), l.description()))
+                        l.externalRef(), l.money(), l.direction(), l.valueDate(), l.description(),
+                        l.baseAmount()))
                 .toList();
         ExternalStatement statement = ExternalStatement.open(
                 null, tenantId, code, command.source(), command.statementDate(), now, rawLines);

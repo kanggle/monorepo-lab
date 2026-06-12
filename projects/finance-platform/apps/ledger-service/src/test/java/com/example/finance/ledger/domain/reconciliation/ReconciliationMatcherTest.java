@@ -31,13 +31,31 @@ class ReconciliationMatcherTest {
         return Money.of(m, Currency.KRW);
     }
 
+    private static Money usd(long m) {
+        return Money.of(m, Currency.USD);
+    }
+
     private static ExternalStatementLine ext(String ref, long amount, EntryDirection dir) {
         return ExternalStatementLine.of(null, STATEMENT, TENANT, ref, krw(amount), dir,
                 VALUE_DATE, null);
     }
 
+    /** A foreign (USD) external line with an optional declared base (KRW) value. */
+    private static ExternalStatementLine extUsd(String ref, long usdAmount, EntryDirection dir,
+                                                Long baseKrw) {
+        return ExternalStatementLine.of(null, STATEMENT, TENANT, ref, usd(usdAmount), dir,
+                VALUE_DATE, null, baseKrw == null ? null : krw(baseKrw));
+    }
+
+    /** A KRW internal line — base == amount. */
     private static InternalLine internal(String entryId, long amount, EntryDirection dir) {
-        return new InternalLine(entryId, CODE, dir, krw(amount));
+        return new InternalLine(entryId, CODE, dir, krw(amount), krw(amount));
+    }
+
+    /** A foreign (USD) internal line carrying a KRW base (the booked carrying value). */
+    private static InternalLine internalUsd(String entryId, long usdAmount, EntryDirection dir,
+                                            long baseKrw) {
+        return new InternalLine(entryId, CODE, dir, usd(usdAmount), krw(baseKrw));
     }
 
     @Test
@@ -170,6 +188,82 @@ class ReconciliationMatcherTest {
                 TENANT, STATEMENT, CODE, List.of(), List.of(), AT);
 
         assertThat(result.matchedCount()).isZero();
+        assertThat(result.discrepancyCount()).isZero();
+    }
+
+    // ---- 11th increment: base (FX) leg (TASK-FIN-BE-017, multi-currency) ----
+
+    @Test
+    @DisplayName("(AC-1) foreign line matches on txn leg but base differs → MATCHED + AMOUNT_MISMATCH "
+            + "(expected=internal base, actual=external base, currency=KRW, both refs set)")
+    void foreignBaseDiffersRecordsAmountMismatch() {
+        // USD 10000 DEBIT, internal carrying base 130000 KRW; bank reports 132000 KRW.
+        ExternalStatementLine e1 = extUsd("FX1", 10_000, EntryDirection.DEBIT, 132_000L);
+        List<InternalLine> internals = List.of(
+                internalUsd("entry-fx", 10_000, EntryDirection.DEBIT, 130_000L));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+
+        // Transaction leg STILL reconciled — the line is MATCHED and a match exists.
+        assertThat(e1.isMatched()).isTrue();
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.matches().get(0).journalEntryId()).isEqualTo("entry-fx");
+
+        // Base (FX) leg — exactly one AMOUNT_MISMATCH, OPEN, carrying both refs.
+        assertThat(result.discrepancyCount()).isEqualTo(1);
+        ReconciliationDiscrepancy d = result.discrepancies().get(0);
+        assertThat(d.type()).isEqualTo(DiscrepancyType.AMOUNT_MISMATCH);
+        assertThat(d.externalRef()).isEqualTo("FX1");
+        assertThat(d.journalEntryId()).isEqualTo("entry-fx");
+        assertThat(d.expectedMinor()).isEqualTo(130_000L); // internal carrying base
+        assertThat(d.actualMinor()).isEqualTo(132_000L);   // bank-reported base
+        assertThat(d.currency()).isEqualTo(Currency.KRW);
+        assertThat(d.status()).isEqualTo(DiscrepancyStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("(AC-2) foreign line whose external base EQUALS the internal base → MATCHED, no discrepancy")
+    void foreignBaseEqualNoDiscrepancy() {
+        ExternalStatementLine e1 = extUsd("FX1", 10_000, EntryDirection.DEBIT, 130_000L);
+        List<InternalLine> internals = List.of(
+                internalUsd("entry-fx", 10_000, EntryDirection.DEBIT, 130_000L));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+
+        assertThat(e1.isMatched()).isTrue();
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("(AC-2) KRW line (base == amount) → MATCHED, no base-leg discrepancy")
+    void krwLineNoBaseLegDiscrepancy() {
+        ExternalStatementLine e1 = ext("R1", 150_000, EntryDirection.DEBIT);
+        List<InternalLine> internals = List.of(
+                internal("entry-a", 150_000, EntryDirection.DEBIT));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+
+        assertThat(e1.isMatched()).isTrue();
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("(AC-2) foreign line WITHOUT a declared external base → MATCHED, no base-leg discrepancy")
+    void foreignLineWithoutBaseNoDiscrepancy() {
+        ExternalStatementLine e1 = extUsd("FX1", 10_000, EntryDirection.DEBIT, null);
+        List<InternalLine> internals = List.of(
+                internalUsd("entry-fx", 10_000, EntryDirection.DEBIT, 130_000L));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+
+        assertThat(e1.isMatched()).isTrue();
+        assertThat(result.matchedCount()).isEqualTo(1);
         assertThat(result.discrepancyCount()).isZero();
     }
 }

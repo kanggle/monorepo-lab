@@ -1,5 +1,6 @@
 package com.example.finance.ledger.domain.reconciliation;
 
+import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
 import com.example.finance.ledger.domain.money.Money;
 
 import java.time.Instant;
@@ -20,8 +21,20 @@ import java.util.List;
  * amount, actual = 0). After all external lines, every not-consumed internal line
  * → an {@code UNMATCHED_INTERNAL} discrepancy (expected = 0, actual = the internal
  * amount). The algorithm is <b>deterministic</b> (it consumes candidates in input
- * order). {@code AMOUNT_MISMATCH} is reserved for a later fuzzy-matching increment
- * — this increment classifies only the two UNMATCHED_* cases.
+ * order).
+ *
+ * <p><b>(11th incr — TASK-FIN-BE-017, multi-currency reconciliation) base (FX)
+ * leg.</b> When a foreign-currency external line matches an internal line on the
+ * transaction leg, the matcher additionally compares the bank-reported base (KRW)
+ * value to the internal line's carrying base. <b>Iff</b> {@code currency != KRW}
+ * AND the external {@code baseAmount} is present AND it differs from the internal
+ * {@code baseMoney}, it ALSO records an {@code AMOUNT_MISMATCH} discrepancy
+ * (expected = the internal carrying base, actual = the external base, currency =
+ * KRW, carrying BOTH the matched {@code externalRef} and {@code journalEntryId}).
+ * <b>The transaction-leg match is still recorded</b> — the settlement is identified;
+ * the discrepancy flags only the FX value gap. A KRW line, or a foreign line without
+ * a declared base amount, produces no base-leg discrepancy (net-zero — exact
+ * comparison; a configurable FX tolerance is forward-declared).
  *
  * <p><b>F8 — no auto-close.</b> The matcher only RECORDS discrepancies (always
  * OPEN); it never posts a balancing entry, mutates a journal entry, or
@@ -62,6 +75,19 @@ public final class ReconciliationMatcher {
                 matches.add(ReconciliationMatch.of(null, tenantId, ext.lineId(),
                         ext.externalRef(), internal.journalEntryId(), ledgerAccountCode,
                         ext.money(), at));
+                // (11th incr) base (FX) leg — a foreign line with a declared base whose
+                // bank-reported KRW value differs from the internal carrying base ALSO
+                // records an AMOUNT_MISMATCH (the match is still recorded; F8 — never
+                // auto-adjusted). KRW lines / base-less lines never fire (net-zero).
+                if (ext.currency() != LedgerReportingCurrency.BASE
+                        && ext.baseAmount() != null
+                        && ext.baseAmount().minorUnits() != internal.baseMoney().minorUnits()) {
+                    discrepancies.add(ReconciliationDiscrepancy.open(null, tenantId, statementId,
+                            ledgerAccountCode, DiscrepancyType.AMOUNT_MISMATCH,
+                            ext.externalRef(), internal.journalEntryId(),
+                            internal.baseMoney().minorUnits(), ext.baseAmount().minorUnits(),
+                            LedgerReportingCurrency.BASE, at));
+                }
             } else {
                 // UNMATCHED_EXTERNAL — expected = the external amount, actual = 0.
                 discrepancies.add(ReconciliationDiscrepancy.open(null, tenantId, statementId,

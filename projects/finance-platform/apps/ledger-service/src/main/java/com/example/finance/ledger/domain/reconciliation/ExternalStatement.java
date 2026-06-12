@@ -102,7 +102,8 @@ public class ExternalStatement {
         List<ExternalStatementLine> lines = new ArrayList<>(rawLines.size());
         for (RawLine raw : rawLines) {
             lines.add(ExternalStatementLine.of(null, id, tenantId, raw.externalRef(),
-                    raw.money(), raw.direction(), raw.valueDate(), raw.description()));
+                    raw.money(), raw.direction(), raw.valueDate(), raw.description(),
+                    raw.baseAmount()));
         }
         return new ExternalStatement(id, tenantId, ledgerAccountCode, source,
                 statementDate, ingestedAt, lines);
@@ -113,8 +114,12 @@ public class ExternalStatement {
         return Collections.unmodifiableList(lines);
     }
 
-    /** A raw ingest line (the use case's parsed request input). */
+    /**
+     * A raw ingest line (the use case's parsed request input). (11th incr —
+     * TASK-FIN-BE-017) the optional {@code baseAmount} is the bank-reported base/KRW
+     * value for a foreign-currency line ({@code null} for a KRW / base-less line).
+     */
     public record RawLine(String externalRef, Money money, EntryDirection direction,
-                          LocalDate valueDate, String description) {
+                          LocalDate valueDate, String description, Money baseAmount) {
     }
 }
