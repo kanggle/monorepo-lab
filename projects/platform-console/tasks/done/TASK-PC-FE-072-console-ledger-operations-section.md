@@ -8,7 +8,7 @@ console-web — finance ledger operations console section (read-only: trial bala
 
 # Status
 
-ready
+done
 
 # Owner
 
