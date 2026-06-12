@@ -9,6 +9,8 @@
 | [ADR-003](ADR-003-frontend-architecture-dual-strategy.md) | web-store(FSD) / admin-dashboard(Layered-by-Feature) 이원화 | Accepted |
 | [ADR-004](ADR-004-taxonomy-based-rule-system.md) | 분류(domain/trait) 기반 규칙 시스템을 도입한 이유 | Accepted |
 | [ADR-005](ADR-005-korean-search-analyzer.md) | Elasticsearch 한국어 analyzer로 nori 채택 | Accepted |
+| [ADR-006](ADR-006-at-least-once-delivery-policy.md) | At-Least-Once Delivery Policy (서비스별 outbox vs best-effort 결정) | Accepted |
+| [ADR-007](ADR-007-logistics-aggregator-carrier-integration.md) | 택배 연동을 단일 택배사 직연동이 아닌 물류 중개 플랫폼(aggregator)으로 수렴한 이유 | Proposed |
 
 ## ADR 작성 원칙
 
