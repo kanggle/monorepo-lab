@@ -9,6 +9,7 @@ import com.example.shipping.domain.model.Shipping;
 import com.example.shipping.domain.model.ShippingStatus;
 import com.example.shipping.domain.model.StatusHistoryEntry;
 import com.example.shipping.domain.repository.ShippingRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,12 +38,15 @@ class RefreshTrackingServiceTest {
     @Mock ShippingEventPublisher shippingEventPublisher;
     @Mock CarrierTrackingPort carrierTrackingPort;
 
+    private SimpleMeterRegistry meterRegistry;
     private RefreshTrackingService service;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         service = new RefreshTrackingService(
-                shippingRepository, shippingEventPublisher, carrierTrackingPort, clock);
+                shippingRepository, shippingEventPublisher, carrierTrackingPort,
+                new CarrierStatusObserver(meterRegistry), clock);
     }
 
     /** A SHIPPED shipment with tracking + carrier set (the realistic refresh subject). */
@@ -88,6 +92,43 @@ class RefreshTrackingServiceTest {
         verify(shippingRepository, never()).save(any());
         verify(shippingEventPublisher, never())
                 .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any());
+        // a blank/absent carrier signal carries no info → not counted as unmapped (net-zero)
+        assertThat(meterRegistry.find("carrier_status_unmapped").counter()).isNull();
+    }
+
+    @Test
+    void unmappedAggregatorStatus_isNoOp_andCountsUnmapped() {
+        Shipping shipping = shipped();
+        String id = shipping.getShippingId();
+        when(shippingRepository.findById(id)).thenReturn(Optional.of(shipping));
+        when(carrierTrackingPort.fetchLatest("CJ", "TRK-1"))
+                .thenReturn(Optional.of(new CarrierTrackingSnapshot("통관보류"))); // unmapped aggregator code
+
+        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
+
+        assertThat(result.status()).isEqualTo(ShippingStatus.SHIPPED);
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
+        verify(shippingRepository, never()).save(any());
+        verify(shippingEventPublisher, never())
+                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any());
+        assertThat(meterRegistry.get("carrier_status_unmapped")
+                .tags("source", "refresh", "raw_status", "통관보류").counter().count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void mappedAggregatorToken_advancesForward() {
+        Shipping shipping = shipped(); // SHIPPED
+        String id = shipping.getShippingId();
+        when(shippingRepository.findById(id)).thenReturn(Optional.of(shipping));
+        when(carrierTrackingPort.fetchLatest("CJ", "TRK-1"))
+                .thenReturn(Optional.of(new CarrierTrackingSnapshot("배송중"))); // aggregator Korean unified code
+        when(shippingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
+
+        assertThat(result.status()).isEqualTo(ShippingStatus.IN_TRANSIT);
+        assertThat(meterRegistry.find("carrier_status_unmapped").counter()).isNull();
     }
 
     @Test

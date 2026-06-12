@@ -1,6 +1,6 @@
 # Task ID
 
-TASK-BE-358
+TASK-BE-362
 
 # Title
 
@@ -8,7 +8,7 @@ shipping-service: 물류 중개 플랫폼(aggregator) 어댑터 매핑 + credent
 
 # Status
 
-ready
+review
 
 # Owner
 

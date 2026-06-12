@@ -150,3 +150,9 @@ Backward or skip transitions are not allowed.
 - Admin endpoints require admin role via `X-User-Role` header forwarded by gateway.
 - `trackingNumber` and `carrier` are required when transitioning to `SHIPPED` status.
 - Internal stack traces must not appear in error responses.
+- **Carrier integration provider = a logistics aggregator** (물류 중개 플랫폼, ADR-007 D2),
+  not a single-carrier-direct nor contract-partner-direct carrier API. `POST /api/shippings/{id}/refresh-tracking`
+  (admin, best-effort) pulls the aggregator's unified status; `POST /api/shippings/carrier-webhook`
+  (HMAC-SHA256 `X-Carrier-Signature: sha256=<hex>`, idempotent) ingests the aggregator's push.
+  The `carrier` field is the aggregator-internal carrier code (the aggregator may auto-assign);
+  shipment identity is keyed by `trackingNumber`/`shippingId`, not by the returned carrier code.
