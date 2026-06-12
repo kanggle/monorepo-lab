@@ -1,6 +1,6 @@
 # TASK-FIN-BE-015 — ledger-service FX gain/loss revaluation (9th increment: revalue a foreign-currency position at a closing rate, booking the base-carrying delta to FX_GAIN / FX_LOSS)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (fintech domain mechanic — a new pure revaluation policy with signed gain/loss polarity, a zero-amount base-adjustment line primitive, no-double-booking on re-revaluation, funnelling through the guarded write path; exhaustive net-zero for the existing paths)
