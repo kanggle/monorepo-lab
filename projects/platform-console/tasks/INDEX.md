@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## backlog
 
-(empty)
+- `TASK-PC-FE-071-console-e2e-iam-domain-card-health-probe.md` — **BACKLOG**. nightly `Platform Console E2E` 의 잔존 1/7 실패. PC-FE-070 이 login `globalSetup` 을 고쳐 suite 가 다시 돌자(0/7→6/7) 그동안 가려졌던 2차 실패 노출: `overview-consolidation.spec.ts:88` 의 IAM 카드 `data-status='ok'` 단언 실패. drill-down 링크가 `status==='ok'` 게이트(`DomainCard.tsx:242`)라 **spec 완화 불가** — e2e 스택에서 IAM domain-health 가 실제 `ok` 여야 함. 유력 근본원인: e2e IAM 서비스가 `KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999`(비라우팅)로 떠 `admin-service`(=`CONSOLE_BFF_OUTBOUND_IAM_BASE_URL` probe 대상) 의 aggregate `/actuator/health` Kafka 컴포넌트 DOWN → non-`UP` → BFF 가 `degraded` 분류. (compose healthcheck 는 liveness group 으로 통과하나 BFF 는 full health 읽음.) 수정=e2e 하니스 한정(compose IAM probe 대상 또는 IAM 서비스 e2e actuator health-group; console-web src 무변경). 검증=도커 e2e 스택 띄워 admin-service health 응답 확인(AC-1) → 머지 후 nightly 7/7. ⚠️Windows 호스트선 e2e 스택 무거워 전용 세션 권장. 분석=Opus 4.8 / 구현 권장=Opus 4.8. [[project_platform_console_adr_013]] [[project_adr023_plane_separation_fed_e2e]]
 
 ## ready
 
