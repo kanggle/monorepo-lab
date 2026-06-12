@@ -45,4 +45,25 @@ public interface JournalLineJpaRepository extends JpaRepository<JournalLine, Lon
             """)
     List<AccountTotalsRow> accountTotalsForCode(@Param("code") String code,
                                                 @Param("tenantId") String tenantId);
+
+    /**
+     * Per-account totals over lines with {@code postedAt < :to} — the close-time
+     * period snapshot. Same as {@link #accountTotals} bounded by the period's
+     * exclusive upper edge (half-open {@code [from, to)}).
+     */
+    @Query("""
+            select new com.example.finance.ledger.infrastructure.persistence.jpa.AccountTotalsRow(
+                l.ledgerAccountCode,
+                l.currency,
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.DEBIT
+                    then l.amountMinor else 0 end), 0),
+                coalesce(sum(case when l.direction = com.example.finance.ledger.domain.journal.EntryDirection.CREDIT
+                    then l.amountMinor else 0 end), 0))
+            from JournalLine l
+            where l.tenantId = :tenantId and l.postedAt < :to
+            group by l.ledgerAccountCode, l.currency
+            order by l.ledgerAccountCode
+            """)
+    List<AccountTotalsRow> accountTotalsUpTo(@Param("tenantId") String tenantId,
+                                             @Param("to") java.time.Instant to);
 }
