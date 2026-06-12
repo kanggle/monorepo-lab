@@ -1,6 +1,6 @@
 # TASK-BE-294 — Shipping carrier webhook ingestion (inbound leg)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (inbound idempotent integration + transactional status advance + signature auth)
@@ -113,3 +113,14 @@ refresh and this webhook share one implementation). The domain transition rules 
 - **F3 — regression** — a carrier reporting an earlier status moving a shipment backward. Guarded by AC-3 (forward-only) + the domain's unidirectional `canTransitionTo`.
 - **F4 — dedup marker leak on failure** — recording the delivery before a failed advance would wedge a stuck shipment. Guarded by AC-2 (dedup + advance share one transaction; rollback un-records).
 - **F5 — net-zero regression** — a default-on secret enabling unsigned mutation. Guarded by AC-4 (blank secret = reject all).
+
+---
+
+## Closure
+
+- **Impl PR**: #1359 — squash `422a7a410a8e021a79316c1f0adc05c52d952208` (merged 2026-06-12). 3-dim verified: (a) state=MERGED; (b) `origin/main` tip = the squash commit; (c) pre-merge checks = **20 SUCCESS + 1 SKIPPED, 0 failing required**; mergeState CLEAN (no parallel-session collision — the concurrent FIN-BE-009 close #1360 landed disjoint, no conflict).
+- **Delivered**: `ShippingForwardAdvancer` (shared forward-only advance; `RefreshTrackingService` refactored onto it, behaviour-identical) + `ProcessCarrierWebhookService` (dedup-first, resolve by our `shippingId`, forward-advance, consolidated event, outcome `{ADVANCED, IGNORED, DUPLICATE}`) + `WebhookDeliveryStore` port + `JpaWebhookDeliveryStore` over `processed_carrier_webhooks` (V5) + `CarrierWebhookVerifier` (HMAC-SHA256, constant-time, blank secret = fail-closed) + `CarrierWebhookController` (`POST /api/shippings/carrier-webhook`, 200/401/400) + `WebhookSignatureException`→401 handler + `shipping.carrier.webhook.secret` config + `overview.md`.
+- **Verification**: `:shipping-service:check` BUILD SUCCESSFUL — **114 tests** (4 new: `ShippingForwardAdvancerTest` 3, `CarrierWebhookVerifierTest` 4, `ProcessCarrierWebhookServiceTest` 6, `CarrierWebhookControllerTest` 5; existing `RefreshTrackingServiceTest` unchanged & green). CI Build & Test + all integration jobs GREEN.
+- **IT note**: the `@Tag("integration")` Testcontainers ITs remain non-runnable locally (pre-existing "multiple @SpringBootConfiguration" harness condition — see BE-293); Build & Test (unit+slice) is the CI gate. Change is additive + default fail-closed net-zero.
+- **AC**: AC-1…AC-5 satisfied. **No domain/contract change; no carrier SDK.**
+- **Deferred (out of scope, follow-on)**: unattended auto-collect scheduler (poll in-flight shipments); real provider (CJ대한통운 / Lotte) webhook payload mapping + credentials; gateway public-route config for the webhook path; webhook dedup-marker retention/cleanup sweep.
