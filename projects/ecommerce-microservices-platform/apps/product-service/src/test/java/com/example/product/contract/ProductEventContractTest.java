@@ -22,7 +22,7 @@ class ProductEventContractTest {
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     private static final String SPEC_REF = "specs/contracts/events/product-events.md";
-    private static final Set<String> ENVELOPE_FIELDS = Set.of("event_id", "event_type", "occurred_at", "source", "payload");
+    private static final Set<String> ENVELOPE_FIELDS = Set.of("event_id", "event_type", "occurred_at", "source", "tenant_id", "payload");
 
     // ─── ProductCreated ─────────────────────────────────────────────────
 

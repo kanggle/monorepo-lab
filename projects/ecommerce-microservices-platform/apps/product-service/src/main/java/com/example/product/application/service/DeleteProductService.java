@@ -24,7 +24,7 @@ public class DeleteProductService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "#productId")
+            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #productId")
     })
     public void delete(UUID productId) {
         productRepository.findById(productId)

@@ -27,7 +27,7 @@ public class UpdateProductService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "#command.productId()")
+            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #command.productId()")
     })
     public UUID update(UpdateProductCommand command) {
         Product product = productRepository.findById(command.productId())

@@ -1,5 +1,6 @@
 package com.example.product.presentation.controller;
 
+import com.example.product.ProductServiceApplication;
 import com.example.product.application.command.AdjustStockCommand;
 import com.example.product.application.command.RegisterProductCommand;
 import com.example.product.application.command.VariantCommand;
@@ -30,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(classes = ProductServiceApplication.class)
 @Tag("integration")
 @Testcontainers
 @DisplayName("재고 Optimistic Locking 통합 테스트")

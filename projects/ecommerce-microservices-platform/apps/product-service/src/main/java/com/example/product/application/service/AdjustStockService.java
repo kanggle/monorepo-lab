@@ -34,7 +34,7 @@ public class AdjustStockService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "#command.productId()")
+            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #command.productId()")
     })
     public AdjustStockResult adjust(AdjustStockCommand command) {
         validateQuantity(command);

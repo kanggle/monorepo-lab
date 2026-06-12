@@ -26,7 +26,7 @@ public class VariantManagementService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "#productId")
+            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #productId")
     })
     public VariantDetail addVariant(UUID productId, String optionName, int stock, long additionalPrice) {
         Product product = productRepository.findById(productId)
@@ -43,7 +43,7 @@ public class VariantManagementService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "#productId")
+            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #productId")
     })
     public VariantDetail updateVariant(UUID productId, UUID variantId, String optionName, long additionalPrice) {
         Product product = productRepository.findById(productId)
@@ -59,7 +59,7 @@ public class VariantManagementService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "#productId")
+            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #productId")
     })
     public void removeVariant(UUID productId, UUID variantId) {
         Product product = productRepository.findById(productId)

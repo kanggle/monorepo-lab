@@ -13,9 +13,19 @@ Consumers must not depend on fields not defined in this contract.
   "event_type": "string",
   "occurred_at": "string (ISO 8601)",
   "source": "product-service",
+  "tenant_id": "string",
   "payload": {}
 }
 ```
+
+`tenant_id` (multi-tenant async propagation — ADR-MONO-030 §2.3 M5,
+[multi-tenancy-and-marketplace.md](../../features/multi-tenancy-and-marketplace.md))
+identifies the owning tenant of the product the event concerns. It is derived
+from the request's tenant context (gateway `X-Tenant-Id`) at publish time;
+background/reconciliation-origin events (no request context) resolve to the
+default tenant (`ecommerce`) for net-zero with the pre-multi-tenant baseline.
+Consumers performing tenant-scoped processing must read this field; it is always
+present (never blank).
 
 ---
 

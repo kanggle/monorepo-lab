@@ -19,6 +19,9 @@ public class CategoryJpaEntity implements Persistable<UUID> {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(nullable = false, length = 100)
     private String name;
 
@@ -40,9 +43,10 @@ public class CategoryJpaEntity implements Persistable<UUID> {
         this.isNew = false;
     }
 
-    public static CategoryJpaEntity from(Category category) {
+    public static CategoryJpaEntity from(Category category, String tenantId) {
         CategoryJpaEntity entity = new CategoryJpaEntity();
         entity.id = category.getId();
+        entity.tenantId = tenantId;
         entity.name = category.getName();
         entity.parentId = category.getParentId();
         entity.isNew = true;

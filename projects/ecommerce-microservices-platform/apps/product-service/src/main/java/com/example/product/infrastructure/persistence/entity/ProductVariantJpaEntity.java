@@ -20,6 +20,9 @@ public class ProductVariantJpaEntity {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
     private ProductJpaEntity product;
@@ -42,6 +45,8 @@ public class ProductVariantJpaEntity {
     public static ProductVariantJpaEntity from(ProductVariant variant, ProductJpaEntity product) {
         ProductVariantJpaEntity entity = new ProductVariantJpaEntity();
         entity.id = variant.getId();
+        // A variant always belongs to the same tenant as its parent product.
+        entity.tenantId = product.getTenantId();
         entity.product = product;
         entity.optionName = variant.getOptionName();
         entity.stock = variant.getStock().value();

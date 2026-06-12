@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.persistence;
 
+import com.example.product.ProductServiceApplication;
 import com.example.product.domain.exception.VariantNotFoundException;
 import com.example.product.domain.model.*;
 import com.example.product.domain.repository.CategoryRepository;
@@ -27,7 +28,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SpringBootTest
+@SpringBootTest(classes = ProductServiceApplication.class)
 @Tag("integration")
 @Testcontainers
 @Transactional
