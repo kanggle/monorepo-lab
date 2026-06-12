@@ -1,11 +1,11 @@
 # ADR-007: 택배 연동을 단일 택배사 직연동이 아닌 물류 중개 플랫폼(aggregator)으로 수렴한 이유
 
-- **Status**: PROPOSED (2026-06-12)
+- **Status**: ACCEPTED (2026-06-12)
 - **Date**: 2026-06-12
 - **Authors**: backend (carrier-integration 회고 + aggregator 방향 결정)
 - **Supersedes**: —
 - **Superseded by**: —
-- **History**: PROPOSED 2026-06-12 — 사용자가 "중개 플랫폼을 끼우는 식이 좋을까?" 질문 + AskUserQuestion 에서 **"중개 플랫폼(aggregator) 채택"** 을 명시 선택. 본 ADR 은 (a) 이미 머지된 carrier 연동(TASK-BE-293/294)의 아키텍처를 **회고적으로 정리**하고 (b) 남은 v2 작업의 **방향을 aggregator 로 확정**하기 위해 PROPOSED 로 작성. 전체 ADR 검토 후 사용자 "진행" 시 ACCEPTED (self-ACCEPT 금지).
+- **History**: PROPOSED 2026-06-12 — 사용자가 "중개 플랫폼을 끼우는 식이 좋을까?" 질문 + AskUserQuestion 에서 **"중개 플랫폼(aggregator) 채택"** 을 명시 선택. 본 ADR 은 (a) 이미 머지된 carrier 연동(TASK-BE-293/294)의 아키텍처를 **회고적으로 정리**하고 (b) 남은 v2 작업의 **방향을 aggregator 로 확정**하기 위해 PROPOSED 로 작성. → **ACCEPTED 2026-06-12** — 사용자가 전체 ADR(D1–D5) 검토 후 "진행" 명시 intent. **NOT self-ACCEPT**: D2 aggregator 방향은 사용자 AskUserQuestion 선택이고 ACCEPTED 전환도 사용자 직접 지시(ADR-MONO-022 선례와 동형). follow-on TASK-BE-358~361 을 `tasks/ready/` 에 등록.
 
 ---
 
