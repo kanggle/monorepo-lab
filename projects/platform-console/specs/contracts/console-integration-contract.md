@@ -807,6 +807,8 @@ obligation and points at the owning finance specs.
   | 4 | journal entry (detail) | `GET /api/finance/ledger/entries/{entryId}` (lines: `money` + `exchangeRate` + `baseAmount`; `source.sourceType`; `balanced`) | read |
   | 5 | reconciliation discrepancies (queue) | `GET /api/finance/ledger/reconciliation/discrepancies` (`?status=OPEN\|RESOLVED`, paginated) | read |
   | 6 | reconciliation discrepancy (detail) | `GET /api/finance/ledger/reconciliation/discrepancies/{id}` (incl. `resolution` when RESOLVED) | read |
+  | 7 | account balance (drill) **(TASK-PC-FE-074)** | `GET /api/finance/ledger/accounts/{ledgerAccountCode}/balance` (`type`, `normalSide`, `debitTotal`, `creditTotal`, `balance`, `balanceSide`) | read |
+  | 8 | account entries (drill, paginated) **(TASK-PC-FE-074)** | `GET /api/finance/ledger/accounts/{ledgerAccountCode}/entries` (journal lines posted to one account, most-recent first: `entryId`, `postedAt`, `direction`, `money`, `counterpartyLines?`) | read |
 
   **Honest ledger read-surface constraint (recorded, not papered over)**:
   the trial balance and the period list are **index-style** browsable reads
@@ -814,12 +816,16 @@ obligation and points at the owning finance specs.
   read is **id-driven** (`GET /entries/{entryId}` — there is **no** list/search
   GET over entries at this increment, the same honest constraint as the
   finance § 2.4.7 account surface), and the discrepancy queue is a
-  **status-filtered list**. Account-level drill (`GET
-  /accounts/{ledgerAccountCode}/{balance,entries}`) and the statement-detail
-  read (`GET /reconciliation/statements/{id}`) exist in the producer but are
-  **forward-declared** for a follow-up surface (not fabricated here — the v1
-  ledger surface is trial-balance + periods + entry-by-id + discrepancy
-  queue). Fabricating any non-existent ledger endpoint is **forbidden**.
+  **status-filtered list**. The **account-level drill** (`GET
+  /accounts/{ledgerAccountCode}/{balance,entries}`, rows 7–8) is **now surfaced
+  (TASK-PC-FE-074)** — it is **id-driven by the account code** (there is **no**
+  account list/search GET; the **trial balance** is the browsable account
+  index, and a trial-balance row's `ledgerAccountCode` is the drill key — a
+  `CUSTOMER_WALLET:{accountId}` colon-form code is **URL-encoded** on the path
+  per `ledger-api.md` § Common shapes). The reconciliation **statement-detail**
+  read (`GET /reconciliation/statements/{id}`) **remains forward-declared** for
+  a follow-up surface (not fabricated here). Fabricating any non-existent
+  ledger endpoint is **forbidden**.
 
 - **Per-domain credential selection — reuse of the § 2.4.5 rule via the
   § 2.4.7 finance binding (do NOT re-derive, do NOT diverge)**: the
@@ -918,6 +924,45 @@ obligation and points at the owning finance specs.
     inline "not scoped"; `503` / timeout → the ledger section degrades (the
     resolve affordance disabled), shell intact. No 429.
 
+- **Account-level drill reads (TASK-PC-FE-074 — read-only, the forward-declared
+  pair now surfaced)**: the console consumes the *existing* finance
+  [`ledger-api.md`](../../../finance-platform/specs/contracts/http/ledger-api.md)
+  **§ 2** `GET /api/finance/ledger/accounts/{ledgerAccountCode}/entries`
+  (paginated journal lines posted to one account, most-recent first —
+  `{ entryId, postedAt, direction, money, counterpartyLines? }`) and **§ 3**
+  `GET /api/finance/ledger/accounts/{ledgerAccountCode}/balance` (the account's
+  running balance — `{ ledgerAccountCode, type, normalSide, debitTotal,
+  creditTotal, balance, balanceSide }`, `balance = |debitTotal − creditTotal|`).
+  Both are **unchanged, consumed read-only** (finance owns them). This **closes
+  the trial-balance UX loop**: a trial-balance row's `ledgerAccountCode` is the
+  drill key into that account's balance + ledger lines; the section also offers a
+  **direct account-code lookup** (id-driven — the ledger has **no** account
+  list/search GET, the same honest constraint as journal entries; the trial
+  balance is the browsable account index).
+  - **Credential + tenant**: the **same** domain-facing IAM OIDC token
+    (`getDomainFacingToken()`, **never** `getOperatorToken()`) and **no**
+    `X-Tenant-Id` as the other reads — pure `GET`, **no** body / `Idempotency-Key`
+    / `X-Operator-Reason` (this slice adds **no** mutation; the FE-073 discrepancy
+    resolve stays the ledger surface's only mutation, asserted by test).
+  - **Path encoding**: the `CUSTOMER_WALLET:{accountId}` colon-form
+    `{ledgerAccountCode}` is **URL-encoded** on the producer path (the colon is
+    encoded — `ledger-api.md` § Common shapes). The drill round-trips the exact
+    code.
+  - **F5 (multi-currency balance)**: the balance `debitTotal` / `creditTotal` /
+    `balance` and each entry `money` are minor-units **strings** rendered
+    scale-correct via `formatMoney` — **never** coerced to a float / JS `Number`
+    (the same F5 grep-assertion as the other ledger reads). `type` / `normalSide`
+    / `balanceSide` / `direction` are surfaced **honestly** (unknown / future
+    values degrade to a generic label, never a parser throw).
+  - **Resilience (§ 2.5, account-specific)**: `404 LEDGER_ACCOUNT_NOT_FOUND`
+    (the account code has no ledger account — typo / never-posted) → inline "no
+    such account" (the lookup stays mounted; no crash, no re-login); `401` →
+    whole-session re-login; `403` → inline "not scoped"; `503` / timeout → the
+    ledger section degrades, shell intact. **No 429** (the honest difference,
+    asserted absent). **F7**: the account code is **confidential** — the
+    sanitised `logPath` carries **no** account code (only `requestId` + the
+    route shape).
+
 - **fintech producer obligations surfacing (finance domain constraint,
   normative — reuses the § 2.4.7 fintech obligations, extended for the ledger
   multi-currency model — contract obligations, NOT UX niceties)**:
@@ -968,8 +1013,9 @@ obligation and points at the owning finance specs.
   authed state, consistent with §§ 2.4.5–2.4.8); `403 TENANT_FORBIDDEN`
   (token not finance-scoped) → inline "not available / not scoped";
   `404 JOURNAL_ENTRY_NOT_FOUND` / `404 ACCOUNTING_PERIOD_NOT_FOUND` /
-  `404 RECONCILIATION_DISCREPANCY_NOT_FOUND` → inline actionable "no such
-  entry / period / discrepancy" (no crash); `400` / `422` → inline actionable;
+  `404 RECONCILIATION_DISCREPANCY_NOT_FOUND` / `404 LEDGER_ACCOUNT_NOT_FOUND`
+  (**TASK-PC-FE-074**, the account drill) → inline actionable "no such
+  entry / period / discrepancy / account" (no crash); `400` / `422` → inline actionable;
   `503 SERVICE_UNAVAILABLE` / timeout / network → **only the ledger section
   degrades** (the console shell + the IAM / wms / scm / finance-account / erp
   sections stay intact). The ledger contracts document **no `429` /
