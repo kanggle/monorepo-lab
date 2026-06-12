@@ -186,14 +186,24 @@ DENIED row 기록과 403 응답은 **단일 트랜잭션**이어야 한다 ([rul
 
 > **다중 조건 AND 합성.** 4번째 게이트는 닫힌 조건 enum 을 **AND-only** 로 합성한다 — `SOURCE_IP`(위) **AND** `TIME_WINDOW`(ADR-MONO-028, `admin.access.time-window.*`) **AND** `RESOURCE_TAG`(ADR-MONO-029). 설정된 조건 중 **하나라도** 불충족이면 `403 ACCESS_CONDITION_UNMET`. 미설정 조건은 skip(net-zero) 이므로 합성은 "설정된 조건만"으로 깔끔히 degrade 한다.
 
-### Resource-Tag Access Condition modes (ADR-MONO-029, TASK-BE-353/BE-354)
+### Resource-Tag Access Condition modes + resources (ADR-MONO-029, TASK-BE-353/BE-354/BE-355)
 
-`RESOURCE_TAG` 은 **대상 리소스의 태그**(`OperatorResourceTagResolver` 가 `admin_operators.tags` 신뢰 컬럼에서 해석 — 요청 아님, anti-spoof)로 변이를 게이트하며 **두 모드**를 지원한다. 둘 다 빈 값(기본)이면 net-zero:
+`RESOURCE_TAG` 은 **대상 리소스의 태그**(요청 아님 — **신뢰 데이터**에서만 해석, anti-spoof § D2-C)로 변이를 게이트하며 **두 모드**를 지원한다. 둘 다 빈 값(기본)이면 net-zero:
 
 - **forbidden / deny-if-present** (`admin.access.resource-tag.forbidden`, env `ADMIN_ACCESS_RESOURCE_TAG_FORBIDDEN`) — 대상이 금지 태그(예: `protected`) 중 하나라도 보유하면 변이 거부 (TASK-BE-353).
 - **required / deny-if-absent** (`admin.access.resource-tag.required`, env `ADMIN_ACCESS_RESOURCE_TAG_REQUIRED`) — 대상이 요구 태그(예: `certified`)를 **전부** 보유할 때만 변이 허용 (TASK-BE-354).
 
-두 모드는 각각 별도의 `ResourceTagCondition` 빈(`forbidden(...)` / `required(...)`)으로, `RequiresPermissionAspect` 가 `ObjectProvider.orderedStream()` 로 **모든** 설정된 `ResourceTagCondition` 을 **AND-only** 평가한다(resolver 는 단일 결정 지점에서 1회만 호출). fail-safe: 미해석 태그(`null`)=deny; known-empty 태그셋=forbidden 하 허용·require 하 거부.
+두 모드는 각각 별도의 `ResourceTagCondition` 빈(`forbidden(...)` / `required(...)`)으로, `RequiresPermissionAspect` 가 `ObjectProvider.orderedStream()` 로 **모든** 설정된 `ResourceTagCondition` 을 **AND-only** 평가한다. fail-safe: 미해석 태그(`null`)=deny; known-empty 태그셋=forbidden 하 허용·require 하 거부.
+
+**리소스 (resolver) — 세 종류 (TASK-BE-355).** aspect 는 **모든** `ResourceTagResolver` 빈을 `orderedStream()` 로 조회한다(경로가 서로소라 요청당 최대 1개 적용; resolver 는 결정 지점에서만 호출). 태그는 전부 **admin-service 로컬 신뢰 컬럼**에서 읽으며(authz 핫패스에 cross-service 호출 없음), seed/admin-SQL 로만 설정한다(태그 set API 없음):
+
+| 리소스 | resolver | 적용 경로 | 태그 출처 |
+|---|---|---|---|
+| operator | `OperatorResourceTagResolver` | `PATCH/POST /api/admin/operators/{id}/{roles\|status\|profile}` | `admin_operators.tags` |
+| tenant | `TenantResourceTagResolver` | `PATCH /api/admin/tenants/{id}` | `admin_resource_tags(TENANT, id)` |
+| account | `AccountResourceTagResolver` | `POST /api/admin/accounts/{id}/{lock\|unlock}` | `admin_resource_tags(ACCOUNT, id)` |
+
+tenant/account 는 account-service 가 비즈니스 데이터를 소유하므로, anti-spoof 신뢰컬럼 불변식을 지키면서 cross-service 동기 호출을 피하기 위해 **admin-로컬 거버넌스 태그 테이블** `admin_resource_tags(resource_type, resource_id, tags)`(V0035) 를 둔다(operator 가 `admin_operators.tags` 를 로컬 보유하는 것과 동형). 컬렉션 변이(`POST /tenants`, `POST /accounts/bulk-lock`)는 단일 id 가 없어 미적용(skip).
 
 ### Target-Tenant Scope Confinement (ADR-MONO-024 D2)
 

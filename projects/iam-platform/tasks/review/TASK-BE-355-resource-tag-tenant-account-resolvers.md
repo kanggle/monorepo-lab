@@ -1,6 +1,6 @@
 # TASK-BE-355 — Extend RESOURCE_TAG to tenant + account resources (admin-local tag table)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (authorization enforcement — security-sensitive)
