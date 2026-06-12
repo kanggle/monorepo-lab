@@ -26,7 +26,7 @@ class TenantClaimValidatorTest {
     }
 
     @Test
-    @DisplayName("tenant_id=ecommerce → success")
+    @DisplayName("tenant_id=ecommerce (legacy slug, dual-accept) → success")
     void ecommerceTenantPasses() {
         OAuth2TokenValidatorResult r = validator.validate(
                 jwtWithClaim(TenantClaimValidator.CLAIM_TENANT_ID, "ecommerce"));
@@ -34,23 +34,21 @@ class TenantClaimValidatorTest {
     }
 
     @Test
-    @DisplayName("tenant_id=wms → tenant_mismatch")
-    void crossTenantWmsRejected() {
+    @DisplayName("tenant_id=globex (arbitrary entitled tenant) → success (entitlement-trust)")
+    void arbitraryTenantPasses() {
+        // ADR-MONO-030 § 2.4: the multi-tenant SaaS edge accepts any well-formed
+        // tenant_id from a verified token; entitlement is decided at IAM issuance.
         OAuth2TokenValidatorResult r = validator.validate(
-                jwtWithClaim(TenantClaimValidator.CLAIM_TENANT_ID, "wms"));
-        assertThat(r.hasErrors()).isTrue();
-        assertThat(r.getErrors()).anyMatch(
-                e -> TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(e.getErrorCode()));
+                jwtWithClaim(TenantClaimValidator.CLAIM_TENANT_ID, "globex"));
+        assertThat(r.hasErrors()).isFalse();
     }
 
     @Test
-    @DisplayName("tenant_id=fan-platform → tenant_mismatch")
-    void crossTenantFanPlatformRejected() {
+    @DisplayName("tenant_id=wms (formerly cross-tenant) → success under entitlement-trust")
+    void formerlyCrossTenantWmsNowPasses() {
         OAuth2TokenValidatorResult r = validator.validate(
-                jwtWithClaim(TenantClaimValidator.CLAIM_TENANT_ID, "fan-platform"));
-        assertThat(r.hasErrors()).isTrue();
-        assertThat(r.getErrors()).anyMatch(
-                e -> TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(e.getErrorCode()));
+                jwtWithClaim(TenantClaimValidator.CLAIM_TENANT_ID, "wms"));
+        assertThat(r.hasErrors()).isFalse();
     }
 
     @Test

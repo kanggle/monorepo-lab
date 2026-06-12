@@ -9,7 +9,7 @@
 
 ## Tenant Identity
 
-- `tenant_id` = `ecommerce`
+- `tenant_id` = `ecommerce` (레거시 단일 스토어 슬러그 = default-tenant). **ADR-MONO-030 Step 2 이후**: gateway 는 **entitlement-trust** 로 진화 — JWKS 검증 토큰의 **임의 well-formed `tenant_id`** 를 수용하고 row 로 격리한다 ([multi-tenancy-and-marketplace.md](../features/multi-tenancy-and-marketplace.md) §2.4). entitlement 결정은 IAM 발행 시점, ecommerce 는 row 격리만 집행 (두 권위, 무중첩).
 - `tenant_type` = `B2C` (self-service consumer 가입 + admin-provisioned operator 공존)
 - 일반 consumer 계정 (web-store) 은 IAM 의 self-service signup endpoint 로 생성된다.
 - operator 계정 (admin-dashboard) 은 IAM 의 [account internal provisioning API](../../../iam-platform/specs/contracts/http/internal/account-internal-provisioning.md) 또는 admin operator API 로 생성된다.
@@ -82,9 +82,9 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 2. **표준 클레임 검증** — `exp`, `nbf`, `iat` (`JwtTimestampValidator`).
 3. **Issuer 검증** — `AllowedIssuersValidator` 로 SAS issuer + legacy `iam-platform` 양쪽 허용 (D2-b deprecate 호환).
 4. **Audience 검증** — `audiences: ecommerce` 로 `aud` 클레임 검증 (Spring Security 자동).
-5. **Tenant 검증** — `TenantClaimValidator` 로 `tenant_id` claim 이 `ecommerce` 인 경우만 통과. `wms`, `fan-platform`, 향후 `erp` / `scm` / `mes` → `tenant_mismatch` → 403 `TENANT_FORBIDDEN`.
+5. **Tenant 검증** — `TenantClaimValidator` (entitlement-trust, ADR-MONO-030 §2.4) 로 **임의 well-formed `tenant_id`** 를 수용; **blank/missing 만** `tenant_mismatch` → 403 `TENANT_FORBIDDEN`. (레거시 고정슬러그 `ecommerce` = dual-accept 윈도우의 default-tenant. 도메인간 격리는 다운스트림 row 필터로 집행 — 게이트가 아님.)
 6. **Account-Type 강제** — `AccountTypeEnforcementFilter` (TASK-BE-131) 가 `/api/admin/**` 경로에 `account_type=OPERATOR` 강제, 그 외 인증 필요 경로에 `account_type=CONSUMER` 강제.
-7. **Header Enrichment** — `JwtHeaderEnrichmentFilter` (TASK-BE-131) 가 downstream 으로 `X-User-Id`, `X-User-Email`, `X-User-Role`, `X-Account-Type` 헤더 주입.
+7. **Header Enrichment** — `JwtHeaderEnrichmentFilter` (TASK-BE-131) 가 downstream 으로 `X-User-Id`, `X-User-Email`, `X-User-Role`, `X-Account-Type`, `X-Tenant-Id` (멀티테넌트 컨텍스트 전파, ADR-MONO-030 §2.2 M2 layer 2) 헤더 주입. 클라이언트가 위조한 동일 헤더는 `IdentityHeaderStripFilter` 가 먼저 제거.
 
 ---
 
@@ -95,7 +95,7 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 | Authorization 헤더 누락 / 만료 / 서명 불일치 | 401 | `UNAUTHORIZED` |
 | `iss` 가 allowed-issuers 미포함 | 401 | `UNAUTHORIZED` |
 | `aud` 가 `ecommerce` 아님 | 401 | `UNAUTHORIZED` |
-| `tenant_id != ecommerce` (cross-tenant) | 403 | `TENANT_FORBIDDEN` |
+| `tenant_id` blank / missing | 403 | `TENANT_FORBIDDEN` (entitlement-trust: 임의 well-formed `tenant_id` 는 통과) |
 | `/api/admin/**` 인데 `account_type != OPERATOR` | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
 | 일반 경로인데 `account_type != CONSUMER` | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
 | 유효 토큰이지만 도메인 권한 부족 | 403 | downstream 서비스가 결정 |

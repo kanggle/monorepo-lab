@@ -241,9 +241,10 @@ class GatewayIntegrationTest {
     //   ecommerce.oauth2.required-tenant-id = ecommerce
     //
     // Spring Security WebFlux surfaces all JWT validation failures
-    // (issuer mismatch, tenant_id mismatch, missing claim) as 401 via
+    // (issuer mismatch, missing/blank tenant_id) as 401 via
     // ServerAuthenticationEntryPoint — not 403 — because the token is
-    // rejected before authentication completes.
+    // rejected before authentication completes. Under entitlement-trust
+    // (ADR-MONO-030 § 2.4) a non-blank tenant_id no longer fails the gate.
     // -----------------------------------------------------------------------
 
     @Test
@@ -261,18 +262,20 @@ class GatewayIntegrationTest {
     }
 
     @Test
-    @DisplayName("tenant_id=wms (cross-tenant) → 401")
-    void protectedRoute_crossTenantWms_returns401() {
+    @DisplayName("tenant_id=globex (arbitrary entitled tenant) → JWT 필터 통과 (entitlement-trust)")
+    void protectedRoute_arbitraryTenant_passesJwtFilter() {
+        // ADR-MONO-030 § 2.4: the entitlement-trust edge accepts any well-formed
+        // tenant_id from a verified token (formerly a cross-tenant 401). Isolation is
+        // enforced at the row layer downstream, not by this gate.
         String token = jwtHelper.signTokenWithIssuerAndTenant(
-                "https://test.local/issuer", "wms");
+                "https://test.local/issuer", "globex");
 
         webTestClient.get()
                 .uri("/api/orders/123")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isUnauthorized()
-                .expectBody()
-                .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
     }
 
     @Test
