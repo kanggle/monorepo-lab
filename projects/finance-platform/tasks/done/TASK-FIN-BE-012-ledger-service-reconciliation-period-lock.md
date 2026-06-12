@@ -1,6 +1,6 @@
 # TASK-FIN-BE-012 — ledger-service reconciliation period-lock (6th increment: a discrepancy whose statement date is in a CLOSED period is immutable)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (cross-aggregate guard — period × reconciliation; the `LocalDate` → start-of-day-UTC instant boundary mapping; net-zero correctness on the operator-only F8 resolve path)
