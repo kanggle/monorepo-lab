@@ -8,7 +8,7 @@ Add a `/start-task` slash command (`.claude/commands/start-task.md`) that create
 
 # Status
 
-ready
+done
 
 # Owner
 
