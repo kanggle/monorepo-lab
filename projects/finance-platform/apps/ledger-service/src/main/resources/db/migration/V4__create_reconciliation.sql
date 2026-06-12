@@ -5,9 +5,10 @@
 -- currency, direction); anything unmatched → a ReconciliationDiscrepancy in an
 -- OPEN operator review queue. F8 — no auto-close: a discrepancy is RECORDED and
 -- surfaced; only the operator resolve use case flips OPEN→RESOLVED.
--- Money is BIGINT minor units + currency CHAR(3) (F5 — never a float).
--- String/CHAR(36) ids (the ledger id convention — journal_entry's VARCHAR(36)
--- form, NOT the V3 outbox UUID type). Multi-tenant: every table carries tenant_id.
+-- Money is BIGINT minor units + currency VARCHAR(3) (F5 — never a float).
+-- Ids are VARCHAR(36) plain Strings (the ledger id convention — journal_entry's
+-- form, NOT the V3 outbox UUID/CHAR type; the JPA entities map String ids, which
+-- Hibernate ddl-auto=validate checks as VARCHAR). Multi-tenant: every table has tenant_id.
 
 -- ---------------------------------------------------------------------------
 -- reconciliation_statement — a batch of external settlement lines for ONE
@@ -15,7 +16,7 @@
 -- match_status flips during matching). source ∈ {BANK,PG,OTHER}.
 -- ---------------------------------------------------------------------------
 CREATE TABLE reconciliation_statement (
-    statement_id        CHAR(36)     NOT NULL,
+    statement_id        VARCHAR(36)     NOT NULL,
     tenant_id           VARCHAR(64)  NOT NULL,
     ledger_account_code VARCHAR(100) NOT NULL,
     source              VARCHAR(10)  NOT NULL,
@@ -31,15 +32,15 @@ CREATE INDEX idx_recon_statement_tenant_account
 -- reconciliation_statement_line — one external settlement line. direction is
 -- relative to the reconciled account (a deposit credit ↔ the account's debit).
 -- match_status is UNMATCHED on ingest, flipped to MATCHED by the matcher. Money
--- is BIGINT minor units + currency CHAR(3) (F5).
+-- is BIGINT minor units + currency VARCHAR(3) (F5).
 -- ---------------------------------------------------------------------------
 CREATE TABLE reconciliation_statement_line (
-    line_id         CHAR(36)     NOT NULL,
-    statement_id    CHAR(36)     NOT NULL,
+    line_id         VARCHAR(36)     NOT NULL,
+    statement_id    VARCHAR(36)     NOT NULL,
     tenant_id       VARCHAR(64)  NOT NULL,
     external_ref    VARCHAR(128) NOT NULL,
     amount_minor    BIGINT       NOT NULL,
-    currency        CHAR(3)      NOT NULL,
+    currency        VARCHAR(3)    NOT NULL,
     direction       VARCHAR(10)  NOT NULL,
     value_date      DATE         NOT NULL,
     description     VARCHAR(256),
@@ -59,14 +60,14 @@ CREATE INDEX idx_recon_line_statement ON reconciliation_statement_line (statemen
 -- (a journal line whose entry is NOT already here is a matching candidate).
 -- ---------------------------------------------------------------------------
 CREATE TABLE reconciliation_match (
-    match_id            CHAR(36)     NOT NULL,
+    match_id            VARCHAR(36)     NOT NULL,
     tenant_id           VARCHAR(64)  NOT NULL,
-    statement_line_id   CHAR(36)     NOT NULL,
+    statement_line_id   VARCHAR(36)     NOT NULL,
     external_ref        VARCHAR(128) NOT NULL,
-    journal_entry_id    CHAR(36)     NOT NULL,
+    journal_entry_id    VARCHAR(36)     NOT NULL,
     ledger_account_code VARCHAR(100) NOT NULL,
     amount_minor        BIGINT       NOT NULL,
-    currency            CHAR(3)      NOT NULL,
+    currency            VARCHAR(3)    NOT NULL,
     matched_at          DATETIME(6)  NOT NULL,
     PRIMARY KEY (match_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -80,19 +81,19 @@ CREATE INDEX idx_recon_match_line ON reconciliation_match (tenant_id, statement_
 -- (F8 — never auto-closed); the operator resolve use case flips it to RESOLVED and
 -- stamps resolution_type / note / resolved_by / resolved_at. statement_id is the
 -- detection provenance (for the statement detail read). Money is BIGINT minor +
--- currency CHAR(3) (F5).
+-- currency VARCHAR(3) (F5).
 -- ---------------------------------------------------------------------------
 CREATE TABLE reconciliation_discrepancy (
-    discrepancy_id      CHAR(36)     NOT NULL,
+    discrepancy_id      VARCHAR(36)     NOT NULL,
     tenant_id           VARCHAR(64)  NOT NULL,
-    statement_id        CHAR(36),
+    statement_id        VARCHAR(36),
     ledger_account_code VARCHAR(100) NOT NULL,
     type                VARCHAR(20)  NOT NULL,
     external_ref        VARCHAR(128),
-    journal_entry_id    CHAR(36),
+    journal_entry_id    VARCHAR(36),
     expected_minor      BIGINT       NOT NULL,
     actual_minor        BIGINT       NOT NULL,
-    currency            CHAR(3)      NOT NULL,
+    currency            VARCHAR(3)    NOT NULL,
     status              VARCHAR(10)  NOT NULL,
     resolution_type     VARCHAR(20),
     note                VARCHAR(512),
