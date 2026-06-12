@@ -36,7 +36,7 @@ Consumers must not depend on fields not defined in this contract.
 
 Published when a new order is successfully created.
 
-**Consumers:** payment-service, promotion-service
+**Consumers:** payment-service, promotion-service, settlement-service (line snapshot — ADR-MONO-030 Step 4 facet b; see `settlement-subscriptions.md`)
 
 **Payload**
 ```json
