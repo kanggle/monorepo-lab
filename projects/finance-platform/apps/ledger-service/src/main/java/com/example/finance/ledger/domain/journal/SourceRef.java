@@ -24,6 +24,7 @@ public final class SourceRef {
 
     public static final String TYPE_TRANSACTION = "TRANSACTION";
     public static final String TYPE_MANUAL = "MANUAL";
+    public static final String TYPE_REVALUATION = "REVALUATION";
 
     @Column(name = "source_type", length = 30, nullable = false)
     private String sourceType;
@@ -58,6 +59,20 @@ public final class SourceRef {
         // sourceTransactionId is NOT NULL → fall back to sourceEventId when reference is blank
         String txnId = (reference != null && !reference.isBlank()) ? reference : sourceEventId;
         return new SourceRef(TYPE_MANUAL, txnId, sourceEventId);
+    }
+
+    /**
+     * Provenance for an operator-initiated FX revaluation (9th increment,
+     * TASK-FIN-BE-015 — mirrors {@link #ofManual}). {@code sourceEventId} is the
+     * namespaced dedupe key ({@code reval:{Idempotency-Key}}); {@code sourceTransactionId}
+     * carries the operator {@code reference} when present, falling back to the
+     * {@code sourceEventId} so the NOT-NULL column always has a value. The GL/AP feed
+     * sees the unrealized FX adjustment tagged {@code sourceType = "REVALUATION"}.
+     */
+    public static SourceRef ofRevaluation(String reference, String sourceEventId) {
+        Objects.requireNonNull(sourceEventId, "sourceEventId");
+        String txnId = (reference != null && !reference.isBlank()) ? reference : sourceEventId;
+        return new SourceRef(TYPE_REVALUATION, txnId, sourceEventId);
     }
 
     @Override

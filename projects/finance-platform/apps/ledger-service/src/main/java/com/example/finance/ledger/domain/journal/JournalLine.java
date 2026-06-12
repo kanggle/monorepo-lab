@@ -44,6 +44,13 @@ import java.util.Objects;
  * provenance and <b>never</b> used to re-derive the balance — F5 preserved: only
  * the rate is a decimal, money stays integer). A base-currency (KRW) line has
  * {@code baseAmount == money}, {@code exchangeRate == 1}.
+ *
+ * <p><b>(9th increment — FX revaluation, TASK-FIN-BE-015)</b> the
+ * {@link #baseAdjustment} factory builds a base-carrying adjustment line whose
+ * transaction {@code money} is <b>zero</b> in the position's foreign currency
+ * (the foreign quantity is unchanged) with a non-zero KRW {@code baseAmount} (the
+ * carrying delta). It is the <b>only</b> factory that permits a zero transaction
+ * amount; the positive-amount factories are unchanged.
  */
 @Entity
 @Table(name = "journal_line")
@@ -172,6 +179,54 @@ public class JournalLine {
         }
         return new BigDecimal(baseAmount.minorUnits())
                 .divide(new BigDecimal(money.minorUnits()), 8, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Base-carrying adjustment line (9th increment, TASK-FIN-BE-015 — FX
+     * revaluation). The transaction {@code money} is <b>zero</b> in the position's
+     * foreign {@code currency} (the foreign <b>quantity is unchanged</b> — a
+     * revaluation does not buy or sell currency), while {@code baseAmount} carries
+     * the KRW carrying delta (strictly positive, base/reporting currency). This is
+     * the <b>only</b> factory that permits a zero transaction amount; the positive
+     * {@code of}/{@code debit}/{@code credit} factories still reject {@code ≤ 0}.
+     * The {@code exchangeRate} is recorded as the applied {@code spotRate} for
+     * provenance (it is never used to re-derive the balance — the {@code baseAmount}
+     * is authoritative, F5).
+     *
+     * @throws CurrencyMismatchException if {@code baseAmount} is not the base
+     *         currency (KRW), or {@code currency} IS the base currency (a base-currency
+     *         position has no FX exposure to revalue)
+     * @throws IllegalArgumentException  if {@code baseAmount} is not strictly positive
+     *         (the delta is booked as a strictly-positive carrying adjustment per the
+     *         polarity table; the direction encodes the sign)
+     */
+    public static JournalLine baseAdjustment(String tenantId, String code, Currency currency,
+                                             EntryDirection direction, Money baseAmount,
+                                             BigDecimal spotRate) {
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(code, "ledgerAccountCode");
+        Objects.requireNonNull(currency, "currency");
+        Objects.requireNonNull(direction, "direction");
+        Objects.requireNonNull(baseAmount, "baseAmount");
+        Objects.requireNonNull(spotRate, "spotRate");
+        if (currency == LedgerReportingCurrency.BASE) {
+            throw new CurrencyMismatchException(
+                    "a base-currency (" + LedgerReportingCurrency.BASE
+                            + ") position has no FX exposure to revalue");
+        }
+        if (baseAmount.currency() != LedgerReportingCurrency.BASE) {
+            throw new CurrencyMismatchException(
+                    "base adjustment amount must be the reporting currency "
+                            + LedgerReportingCurrency.BASE + ", got " + baseAmount.currency());
+        }
+        if (!baseAmount.isPositive()) {
+            throw new IllegalArgumentException(
+                    "base adjustment amount must be positive: " + baseAmount);
+        }
+        // money = 0 in the foreign currency (quantity unchanged); base carries the
+        // KRW delta; rate = the applied spot rate (provenance only).
+        return new JournalLine(tenantId, code, direction, Money.zero(currency),
+                baseAmount, spotRate);
     }
 
     public static JournalLine debit(String tenantId, String code, Money money) {

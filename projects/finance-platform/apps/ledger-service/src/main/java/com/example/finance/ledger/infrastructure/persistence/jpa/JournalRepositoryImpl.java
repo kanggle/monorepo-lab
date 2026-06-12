@@ -65,6 +65,18 @@ public class JournalRepositoryImpl implements JournalRepository {
     }
 
     @Override
+    public Optional<AccountTotals> accountTotalsForCurrency(
+            String ledgerAccountCode,
+            com.example.finance.ledger.domain.money.Currency currency, String tenantId) {
+        // (9th incr) The existing per-(account, currency) JPQL already groups by
+        // currency; filter its rows to the requested currency (no new query, no
+        // migration). Empty when the account has no lines in that currency.
+        return lineJpa.accountTotalsForCode(ledgerAccountCode, tenantId).stream()
+                .filter(row -> row.currency() == currency)
+                .findFirst().map(this::toTotals);
+    }
+
+    @Override
     public List<AccountTotals> accountTotalsUpTo(String tenantId, java.time.Instant to) {
         return lineJpa.accountTotalsUpTo(tenantId, to).stream().map(this::toTotals).toList();
     }

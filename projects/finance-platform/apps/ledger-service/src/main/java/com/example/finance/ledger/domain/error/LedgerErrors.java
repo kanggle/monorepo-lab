@@ -156,4 +156,18 @@ public final class LedgerErrors {
             super("IDEMPOTENCY_KEY_REQUIRED", message);
         }
     }
+
+    // ---- FX gain/loss revaluation (9th increment — TASK-FIN-BE-015, F4) ----
+
+    /**
+     * An FX revaluation {@code closingRate} that is not strictly positive — a
+     * foreign position cannot be valued at a zero/negative spot rate
+     * (architecture.md § FX gain/loss revaluation; ledger-api.md § 10). 422; nothing
+     * persists. Thrown by {@code FxRevaluationPolicy} before any line is built.
+     */
+    public static final class RevaluationRateInvalidException extends LedgerDomainException {
+        public RevaluationRateInvalidException(String message) {
+            super("REVALUATION_RATE_INVALID", message);
+        }
+    }
 }
