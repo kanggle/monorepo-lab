@@ -7,6 +7,7 @@ import com.example.erp.notification.application.port.outbound.ClockPort;
 import com.example.erp.notification.application.port.outbound.IdGeneratorPort;
 import com.example.erp.notification.application.port.outbound.NotificationChannelPort;
 import com.example.erp.notification.application.port.outbound.NotificationMetricsPort;
+import com.example.erp.notification.config.ExternalNotificationProperties;
 import com.example.erp.notification.domain.delivery.DeliveryChannel;
 import com.example.erp.notification.domain.delivery.NotificationDelivery;
 import com.example.erp.notification.domain.delivery.repository.NotificationDeliveryRepository;
@@ -51,9 +52,12 @@ public class NotifyOnApprovalEventUseCase {
     private final ClockPort clock;
     private final NotificationMetricsPort metrics;
     private final List<NotificationChannelPort> channelPorts;
+    private final ExternalNotificationProperties externalProperties;
 
-    /** v1 channel: IN_APP only (external channels are v2 — green-wash forbidden). */
+    /** Synchronous v1 channel: IN_APP (the persist itself, immediately DELIVERED). */
     private static final DeliveryChannel V1_CHANNEL = DeliveryChannel.IN_APP;
+    /** v2.0 external channel created PENDING + due when external delivery is enabled. */
+    private static final DeliveryChannel EXTERNAL_CHANNEL = DeliveryChannel.SLACK;
 
     public NotifyOnApprovalEventUseCase(RecipientResolver recipientResolver,
                                         NotificationFactory factory,
@@ -63,7 +67,8 @@ public class NotifyOnApprovalEventUseCase {
                                         IdGeneratorPort idGenerator,
                                         ClockPort clock,
                                         NotificationMetricsPort metrics,
-                                        List<NotificationChannelPort> channelPorts) {
+                                        List<NotificationChannelPort> channelPorts,
+                                        ExternalNotificationProperties externalProperties) {
         this.recipientResolver = recipientResolver;
         this.factory = factory;
         this.notificationRepository = notificationRepository;
@@ -73,6 +78,7 @@ public class NotifyOnApprovalEventUseCase {
         this.clock = clock;
         this.metrics = metrics;
         this.channelPorts = List.copyOf(channelPorts);
+        this.externalProperties = externalProperties;
     }
 
     private NotificationChannelPort channelFor(DeliveryChannel channel) {
@@ -168,6 +174,17 @@ public class NotifyOnApprovalEventUseCase {
             delivery.markFailed(outcome.detail(), now);
         }
         deliveryRepository.save(delivery);
+
+        // v2.0 (TASK-ERP-BE-020): when external delivery is enabled, additionally persist a
+        // PENDING external (SLACK) delivery — immediately due — for the DeliveryRetryScheduler
+        // to attempt asynchronously. The external I/O is NEVER performed here (a slow/failed
+        // webhook must not roll back the in-app notification). Default off ⇒ net-zero (no row).
+        if (externalProperties.isEnabled()) {
+            NotificationDelivery external = NotificationDelivery.createPendingExternal(
+                    idGenerator.newDeliveryId(), tenantId, notification.id(),
+                    eventId, EXTERNAL_CHANNEL, now);
+            deliveryRepository.save(external);
+        }
 
         dedupeService.markProcessed(eventId, topic, sourceAggregateId);
 

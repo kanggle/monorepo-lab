@@ -42,6 +42,11 @@ public class NotificationRepositoryImpl implements NotificationRepository {
     }
 
     @Override
+    public Optional<Notification> findByIdInternal(String tenantId, String id) {
+        return jpa.findByIdAndTenantId(id, tenantId).map(this::toDomain);
+    }
+
+    @Override
     public List<Notification> findInbox(String tenantId, String recipientId, Boolean read,
                                         int page, int size) {
         return jpa.findInbox(tenantId, recipientId, read, PageRequest.of(page, size))

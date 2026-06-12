@@ -62,6 +62,24 @@ public final class NotificationDelivery {
                 DEFAULT_MAX_ATTEMPTS, DeliveryStatus.PENDING, 0, null, null, 0, now, now);
     }
 
+    /**
+     * Constructor for a fresh PENDING external-channel delivery (TASK-ERP-BE-020,
+     * v2.0). Unlike the IN_APP {@link #createPending} (delivered synchronously in
+     * the consume transaction), an external delivery is created <b>immediately
+     * due</b> ({@code scheduledRetryAt = now}) and left PENDING for the
+     * {@code DeliveryRetryScheduler} to attempt asynchronously — external I/O must
+     * never run in the Kafka consume transaction.
+     */
+    public static NotificationDelivery createPendingExternal(String id,
+                                                             String tenantId,
+                                                             String notificationId,
+                                                             String eventId,
+                                                             DeliveryChannel channel,
+                                                             Instant now) {
+        return new NotificationDelivery(id, tenantId, notificationId, eventId, channel,
+                DEFAULT_MAX_ATTEMPTS, DeliveryStatus.PENDING, 0, now, null, 0, now, now);
+    }
+
     /** Reconstruction constructor (persistence adapter). */
     public NotificationDelivery(String id,
                                 String tenantId,

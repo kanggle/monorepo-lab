@@ -4,20 +4,23 @@ import com.example.erp.notification.application.port.outbound.NotificationChanne
 import com.example.erp.notification.domain.delivery.DeliveryChannel;
 import com.example.erp.notification.domain.notification.Notification;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * v1 stub external channel (SLACK placeholder). <b>No-op — green-wash
+ * Default / no-op stub external channel (SLACK placeholder). <b>No-op — green-wash
  * forbidden</b>: it logs only and returns {@link DeliveryOutcome#noop()}, never
- * claiming an external delivery occurred. The v1 pipeline routes only to the
- * IN_APP channel, so this adapter is never selected; it exists so the v2
- * external channel (real Slack/SMTP + the exercised Category C
- * {@code DeliveryRetryScheduler}) binds against the same {@link
- * NotificationChannelPort} without touching the domain (wms notification-service
- * {@code ChannelPort} precedent).
+ * claiming an external delivery occurred. Active when
+ * {@code erpplatform.notification.external.mode} is unset or anything other than
+ * {@code slack} (the default, {@code matchIfMissing}), so it is the SLACK bean when
+ * the real {@link SlackWebhookChannelAdapter} is off — exactly one {@code SLACK}
+ * {@link NotificationChannelPort} per mode (net-zero default: no external delivery is
+ * even created unless {@code external.enabled=true}).
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "erpplatform.notification.external.mode",
+        havingValue = "noop", matchIfMissing = true)
 public class NoopExternalChannelAdapter implements NotificationChannelPort {
 
     @Override

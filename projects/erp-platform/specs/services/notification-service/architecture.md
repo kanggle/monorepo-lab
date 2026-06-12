@@ -74,6 +74,51 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`erp`) and
 > lesson applied up-front; `source_type DELEGATION` already allowed by V2). This is
 > the revoke symmetry of the v1.1 grant notification — **no new ADR**.
 
+> **v2.0 AMENDMENT (TASK-ERP-BE-020 — external channel + exercised Category C
+> `DeliveryRetryScheduler`; additive, the 6 consumers + IN_APP path UNCHANGED).**
+> This increment **exercises** the v2 external-channel delivery that this spec
+> reserved as deferred (§ Out-of-Scope "External channels", Failure Mode 7, the
+> Category C table). It **executes** the already-recorded ADR-MONO-005 Category C
+> escalation contract + the ADR-MONO-016 § D3 forward-declaration — **no new
+> ADR-level decision** (authored before implementation, HARDSTOP-09 satisfied;
+> mirrors the v1.1/v1.2 amendments). It introduces:
+> 1. A **real `SlackWebhookChannelAdapter`** (`infrastructure/channel`,
+>    `@ConditionalOnProperty(...external.mode=slack)`) — POSTs a rendered message to
+>    a configured Slack webhook via a `ResilienceClientFactory` RestClient,
+>    **best-effort / never-throw** (green-wash discipline: reports
+>    `DeliveryOutcome.ofDelivered()` **only** on a 2xx, else a non-delivered outcome
+>    carrying the error). `NoopExternalChannelAdapter` becomes the
+>    `@ConditionalOnProperty(mode=noop, matchIfMissing=true)` default (exactly one
+>    `SLACK` `NotificationChannelPort` per mode).
+> 2. A **`DeliveryRetryScheduler`** (`@ConditionalOnProperty(...retry.enabled)` +
+>    `@Scheduled(fixedDelay)`) → `RetryDeliveryService` (find due
+>    `status=PENDING ∧ scheduled_retry_at ≤ now` ids) → `DeliveryAttemptProcessor`
+>    (`@Transactional` **per delivery**: load → deliver (best-effort) →
+>    `markDelivered` / `markRetryable(backoff)` → save). Backoff is exponential
+>    `initial·2^(n-1)` capped, **±20% jitter** (`RetryBackoffPolicy`), terminal
+>    `FAILED` + `DELIVERY_RETRY_EXHAUSTED` at **cap 5** — the existing
+>    `NotificationDelivery` Category C machine, now exercised.
+> 3. **Gated external-delivery creation**: when
+>    `erpplatform.notification.external.enabled=true`, `NotifyOnApprovalEventUseCase.dispatch`
+>    **additionally** persists one PENDING `SLACK` delivery (`scheduledRetryAt=now`,
+>    immediately due) alongside the unchanged IN_APP DELIVERED row, in the **same**
+>    consume transaction (A7). External I/O is **never** in the consume transaction —
+>    the scheduler performs all webhook calls in its own per-delivery transaction
+>    (the async split keeps a slow/failed webhook from rolling back the in-app
+>    notification).
+>
+> **Default OFF = production net-zero**: `external.enabled` defaults `false`, so
+> dispatch creates only the IN_APP delivery exactly as v1 (the 6 consumers, the
+> dedupe, the inbox, and the IN_APP synchronous-DELIVERED path are byte-unchanged);
+> the scheduler bean is absent; the no-op SLACK adapter is the (unused) default.
+> **No schema migration** — the V1 schema already reserves `SLACK`/`SMTP` + the
+> Category C columns (`status`/`attempt_count`/`scheduled_retry_at`/`version`) + the
+> CHECK allow-lists. **Concurrency**: the single-instance `fixedDelay` scheduler is
+> non-reentrant; the persisted `version` (T5) column remains the seam for a future
+> multi-instance optimistic-lock (`@Version`/conditional-update) or ShedLock
+> enforcement — **not wired in this increment** (documented follow-on). **SMTP**,
+> notification preferences/routing, and the console bell UI stay deferred.
+
 ---
 
 ## Identity
@@ -834,12 +879,16 @@ and are unchanged by this increment.
 Named as deferred per the first-increment discipline (ADR-MONO-016 § D3 +
 read-model / approval precedent); these are **not** designed in depth here:
 
-- **External channels** (Slack / SMTP / push) — the `NoopExternalChannelAdapter`
+- ~~**External channels** (Slack / SMTP / push) — the `NoopExternalChannelAdapter`
   is a stub; the real adapter + the **exercised** Category C
   `DeliveryRetryScheduler` (exponential backoff ±20% jitter, cap 5, terminal
-  `FAILED` + `DELIVERY_RETRY_EXHAUSTED`, ADR-MONO-005 § D5) are v2. The v1 Category
-  C structure is present but only the IN_APP (synchronous, no-retry) path is
-  exercised.
+  `FAILED` + `DELIVERY_RETRY_EXHAUSTED`, ADR-MONO-005 § D5) are v2.~~ → **SLACK DONE
+  (TASK-ERP-BE-020, § v2.0 amendment)**: the real `SlackWebhookChannelAdapter`
+  (best-effort, property-gated) + the **exercised** Category C `DeliveryRetryScheduler`
+  (exponential ±20% jitter, cap 5, terminal `FAILED` + `DELIVERY_RETRY_EXHAUSTED`) ship
+  behind the same `NotificationChannelPort`, default-OFF (net-zero). **SMTP / push** stay
+  deferred (the enum reserves `SMTP`); multi-instance retry concurrency (the `version`
+  optimistic-lock / ShedLock enforcement) is a follow-on.
 - **Masterdata-change notifications** — consuming `erp.masterdata.*.changed.v1`
   (department/employee/jobgrade/costcenter changes). v2.
 - **Permission-change notifications** — consuming `erp.permission.*` (owned by v2
