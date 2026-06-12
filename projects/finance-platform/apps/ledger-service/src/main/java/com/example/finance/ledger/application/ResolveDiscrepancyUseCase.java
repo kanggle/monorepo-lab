@@ -5,6 +5,10 @@ import com.example.finance.ledger.application.view.DiscrepancyView;
 import com.example.finance.ledger.domain.audit.AuditLog;
 import com.example.finance.ledger.domain.audit.AuditLogRepository;
 import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationDiscrepancyNotFoundException;
+import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationPeriodLockedException;
+import com.example.finance.ledger.domain.period.PeriodStatus;
+import com.example.finance.ledger.domain.period.repository.AccountingPeriodRepository;
+import com.example.finance.ledger.domain.reconciliation.ExternalStatement;
 import com.example.finance.ledger.domain.reconciliation.ReconciliationDiscrepancy;
 import com.example.finance.ledger.domain.reconciliation.ResolutionType;
 import com.example.finance.ledger.domain.reconciliation.repository.ReconciliationRepository;
@@ -13,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Optional;
 
 /**
  * Operator resolution of a reconciliation discrepancy (architecture.md
@@ -34,6 +40,7 @@ public class ResolveDiscrepancyUseCase {
 
     private final ReconciliationRepository reconciliationRepository;
     private final AuditLogRepository auditLogRepository;
+    private final AccountingPeriodRepository accountingPeriodRepository;
     private final ClockPort clock;
 
     @Transactional
@@ -43,6 +50,10 @@ public class ResolveDiscrepancyUseCase {
                 reconciliationRepository.findDiscrepancyById(discrepancyId, tenantId)
                         .orElseThrow(() -> new ReconciliationDiscrepancyNotFoundException(
                                 "reconciliation discrepancy not found: " + discrepancyId));
+
+        // (6th incr) Period lock — before any mutation/save (a locked discrepancy
+        // stays OPEN, no audit row). Net-zero when no CLOSED period covers it.
+        guardPeriodLock(discrepancy, tenantId);
 
         Instant now = clock.now();
         // resolve() throws ReconciliationAlreadyResolvedException if not OPEN.
@@ -54,6 +65,38 @@ public class ResolveDiscrepancyUseCase {
                 actor, auditSummary(saved), "resolve reconciliation discrepancy", now));
 
         return DiscrepancyView.from(saved);
+    }
+
+    /**
+     * Period lock (architecture.md § Reconciliation § Period lock, F8 extended to
+     * the period boundary). If the discrepancy's owning statement's
+     * {@code statementDate} (a {@code LocalDate}, mapped to its start-of-day UTC
+     * instant) is covered by a CLOSED accounting period, the closed month's
+     * reconciliation is frozen → {@link ReconciliationPeriodLockedException}.
+     *
+     * <p><b>Net-zero</b>: no {@code statementId} OR the statement is absent OR
+     * {@code findCovering(..., CLOSED)} empty (an OPEN period does NOT lock — only
+     * CLOSED) → the guard does not fire and {@code resolve} proceeds byte-identically
+     * to FIN-BE-010. The half-open {@code [from, to)} parity matches the posting guard.
+     */
+    private void guardPeriodLock(ReconciliationDiscrepancy discrepancy, String tenantId) {
+        String statementId = discrepancy.statementId();
+        if (statementId == null) {
+            return; // net-zero: no resolvable period
+        }
+        Optional<ExternalStatement> statement =
+                reconciliationRepository.findStatementById(statementId, tenantId);
+        if (statement.isEmpty()) {
+            return; // net-zero: statement absent
+        }
+        Instant at = statement.get().statementDate()
+                .atStartOfDay(ZoneOffset.UTC).toInstant(); // LocalDate → start-of-day UTC instant
+        if (accountingPeriodRepository.findCovering(tenantId, at, PeriodStatus.CLOSED).isPresent()) {
+            throw new ReconciliationPeriodLockedException(
+                    "reconciliation discrepancy is in a CLOSED accounting period (statementDate="
+                            + statement.get().statementDate()
+                            + ", discrepancyId=" + discrepancy.discrepancyId() + ")");
+        }
     }
 
     private static String auditSummary(ReconciliationDiscrepancy d) {
