@@ -97,3 +97,23 @@ fanplatform:
     # drift — see membership-service application.yml for the rationale).
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:fan-platform}
+
+  notification:
+    # EMAIL channel mode (TASK-FAN-BE-016): `mock` (default) = LoggingEmailChannelAdapter
+    # (deterministic, no real I/O — used by dev + the Testcontainers IT); `http` =
+    # HttpEmailChannelAdapter (real provider-agnostic HTTP transactional-email send).
+    # The two are mutually-exclusive @ConditionalOnProperty beans; default `mock` is
+    # net-zero (identical to before this increment).
+    email:
+      mode: ${NOTIFICATION_EMAIL_MODE:mock}
+      # Active only when mode=http. provider-base-url + api-key target the email
+      # provider's send API (the adapter POSTs `${provider-base-url}/emails`).
+      provider-base-url: ${NOTIFICATION_EMAIL_PROVIDER_URL:}
+      api-key: ${NOTIFICATION_EMAIL_API_KEY:}
+      from-address: ${NOTIFICATION_EMAIL_FROM:no-reply@fan-platform.example}
+      # The event carries no recipient email (only accountId = IAM sub) and
+      # cross-service reads are forbidden, so the address is the synthetic
+      # `${accountId}@${recipient-domain}` (documented limitation).
+      recipient-domain: ${NOTIFICATION_EMAIL_RECIPIENT_DOMAIN:fan-platform.example}
+      connect-timeout-ms: ${NOTIFICATION_EMAIL_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${NOTIFICATION_EMAIL_READ_TIMEOUT_MS:5000}

@@ -245,19 +245,54 @@ Delivery side effects are abstracted behind `NotificationChannelPort`:
 DeliveryResult deliver(Notification notification) → { delivered, channel, ref }
 ```
 
-The v1 adapters `LoggingEmailChannelAdapter` + `LoggingPushChannelAdapter` are
-**deterministic logged mocks** — there is **no real external channel integration**
-in this increment. Each logs a structured delivery line + returns a synthetic
-`ref` (e.g. `mockmail_<uuid>`, `mockpush_<uuid>`) and increments a per-channel
-counter. A real channel adapter (FCM/APNs/SES) is a future increment: it
-re-implements `NotificationChannelPort`, wired via `@ConditionalOnMissingBean` /
-profile, with the mock retained for dev + integration tests. The domain and
-use-case layers are unchanged by that swap.
+The default adapters `LoggingEmailChannelAdapter` + `LoggingPushChannelAdapter` are
+**deterministic logged mocks** — each logs a structured delivery line + returns a
+synthetic `ref` (e.g. `mockmail_<uuid>`, `mockpush_<uuid>`) and increments a
+per-channel counter. The mocks are the default (dev + the Testcontainers IT) and
+perform no real I/O.
+
+### Real EMAIL channel — `http` mode (TASK-FAN-BE-016)
+
+The EMAIL channel has a **real** alternative: `HttpEmailChannelAdapter`, a
+provider-agnostic **HTTP** transactional-email integration (the service's first real
+external channel). Channel selection is by property:
+
+- `fanplatform.notification.email.mode = mock` (default) → `LoggingEmailChannelAdapter`.
+- `fanplatform.notification.email.mode = http` → `HttpEmailChannelAdapter`, which
+  POSTs `${provider-base-url}/emails` with an API-key auth header and a JSON
+  `{from, to, subject, body}`, via a `ResilienceClientFactory` RestClient (connect /
+  read timeouts). A 2xx `{ "id": … }` is a delivered ref.
+
+The two are mutually-exclusive `@ConditionalOnProperty` beans → exactly **one** EMAIL
+`NotificationChannelPort` bean under either mode; PUSH stays a mock (FCM/APNs is a
+separate future increment). No real SDK is added — the integration is plain RestClient
+over `libs:java-common` + `spring-boot-starter-web`, so the *no real push/email SDK*
+forbidden-dependency line still holds.
+
+- **Best-effort, never-throw.** The fan-out runs inside the use-case `@Transactional`;
+  a *real* delivery failure (non-2xx / transport / timeout / unparseable body) is
+  **caught**, recorded on `…{outcome=failed}`, logged `warn`, and returned as
+  `DeliveryResult(false, …)`. It MUST NOT throw — otherwise a transient email outage
+  would roll the transaction back and discard the durable in-app notification. (This
+  refines the earlier "a throwing channel rolls the unit back" note for real delivery;
+  v1 has no automatic redelivery of a failed real send — the inbox row is the record.)
+- **Recipient limitation.** The consumed event carries no recipient email (only
+  `accountId` = IAM `sub`), and cross-service table reads are forbidden, so the real
+  adapter sends to the deterministic synthetic `${accountId}@${recipient-domain}`. A
+  production version would enrich the address via a preferences/profile lookup
+  (out of scope).
+- **No CI side effects.** The IT runs the default `mock` mode; the adapter unit test
+  points RestClient at a MockWebServer — no real provider is contacted in CI.
+
+A real PUSH adapter (FCM/APNs) remains a future increment, wired the same way
+(`@ConditionalOnProperty` / profile), with the mock retained. The domain and
+use-case layers are unchanged by either swap.
 
 Delivery is **best-effort and decoupled from the inbox write**: the `Notification`
-row is the durable record (always created on a fresh event); a channel failure
-retries/DLQs the event but the inbox row, once written under the idempotency
-guard, is authoritative.
+row is the durable record (always created on a fresh event); a mock channel that
+throws a *simulated* transient error retries/DLQs the event, while the real EMAIL
+adapter is best-effort (never throws) so the inbox row, once written under the
+idempotency guard, stays authoritative.
 
 ---
 

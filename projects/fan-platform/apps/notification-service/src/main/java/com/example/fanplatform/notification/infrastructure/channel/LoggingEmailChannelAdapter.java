@@ -4,6 +4,7 @@ import com.example.fanplatform.notification.domain.channel.NotificationChannelPo
 import com.example.fanplatform.notification.domain.notification.Notification;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -12,12 +13,17 @@ import java.util.UUID;
  * Deterministic logged mock EMAIL channel — NO real email is sent
  * (architecture.md § Channel Mock Boundary). Logs a structured delivery line,
  * returns a synthetic {@code mockmail_<uuid>} ref, and increments
- * {@code notification_channel_deliveries_total{channel=EMAIL,outcome}}. A real
- * SES/SMTP adapter is a future increment that re-implements
- * {@link NotificationChannelPort}.
+ * {@code notification_channel_deliveries_total{channel=EMAIL,outcome}}.
+ *
+ * <p><b>Default EMAIL channel</b> ({@code fanplatform.notification.email.mode=mock},
+ * the default). The real {@link HttpEmailChannelAdapter} takes over when the mode is
+ * {@code http} — the two are mutually-exclusive {@code @ConditionalOnProperty} beans,
+ * so exactly one EMAIL {@link NotificationChannelPort} bean exists (TASK-FAN-BE-016).
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "fanplatform.notification.email.mode",
+        havingValue = "mock", matchIfMissing = true)
 public class LoggingEmailChannelAdapter implements NotificationChannelPort {
 
     static final String CHANNEL = "EMAIL";
