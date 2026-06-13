@@ -428,10 +428,12 @@ E5; v1 has no inbound enforcement surface here.)
 | `UNAUTHORIZED` | 401 | missing / invalid / expired JWT (Platform-Common Authentication) |
 | `CONCURRENT_MODIFICATION` | 409 | optimistic-lock conflict on revision append (Platform-Common Transactional Trait `CONFLICT` semantic; this surface uses the erp-specific name) |
 
-> `IDEMPOTENCY_STORE_UNAVAILABLE` (503) is **not v1-emitted** — v1 uses
+> `IDEMPOTENCY_STORE_UNAVAILABLE` (503) is **v1-emittable but rare** — v1 uses
 > the DB-table primary inside the mutation Tx (see architecture.md
-> § Idempotency). The code is reserved in the registry for the future
-> Redis-primary swap and is documented here for forward compatibility.
+> § Idempotency), so the common path never raises it; however the fail-CLOSED
+> store (`DbIdempotencyStore`) does throw it in v1 on the claim path's
+> `DataAccessException` (store-down) or unresolved-insert-race branch. The same
+> code is also reserved for the future Redis-primary swap.
 
 All erp codes registered in `platform/error-handling.md` under the
 `Master Data  [domain: erp]` and `Authorization  [domain: erp]` sections
