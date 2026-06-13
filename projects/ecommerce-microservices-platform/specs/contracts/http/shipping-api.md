@@ -139,7 +139,7 @@ in `shipping.carrier.webhook.secret`). Fail-closed: blank secret → 401 for eve
 | Status | Code | Reason |
 |---|---|---|
 | 400 | INVALID_SHIPPING_REQUEST | Malformed body / missing required fields |
-| 401 | UNAUTHORIZED | Missing, invalid, or misconfigured HMAC signature |
+| 401 | WEBHOOK_SIGNATURE_INVALID | Missing, invalid, or misconfigured HMAC signature (`WebhookSignatureException`) |
 
 ---
 
