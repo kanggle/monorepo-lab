@@ -8,7 +8,7 @@ Add an operator-facing **"택배사 동기화" (carrier sync / refresh-tracking)
 
 # Status
 
-review
+done
 
 # Owner
 
