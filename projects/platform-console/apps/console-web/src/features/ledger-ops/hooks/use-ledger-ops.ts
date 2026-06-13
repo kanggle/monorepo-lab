@@ -27,6 +27,8 @@ import {
   AccountEntriesResponseSchema,
   type AccountEntriesResponse,
   type AccountEntriesQueryParams,
+  StatementSchema,
+  type Statement,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from '../api/types';
@@ -356,6 +358,43 @@ export function useAccountEntries(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+// --- reconciliation statement read (id-driven; TASK-PC-FE-075) -----------
+
+export function statementKey(id: string | null) {
+  return [LEDGER_KEY, 'statement', id ?? ''] as const;
+}
+
+async function fetchStatement(id: string): Promise<Statement> {
+  const raw = await apiClient.get<unknown>(
+    `/api/ledger/reconciliation/statements/${encodeURIComponent(id)}`,
+  );
+  return StatementSchema.parse(raw);
+}
+
+/**
+ * `useStatement` — reads a reconciliation statement by id. READ-ONLY. The
+ * same-origin proxy attaches the domain-facing IAM OIDC access token
+ * server-side — NEVER the operator token (§ 2.4.7.1 reuse).
+ * `retry: false` / no-refetch-storm posture, same as the other ledger reads.
+ * `initialData` is used when the server-seeded `initial` matches the
+ * requested id (to avoid a double-fetch on SSR→CSR transition). No 429
+ * branch (the ledger has no documented 429). Adds NO mutation artifact.
+ */
+export function useStatement(id: string | null, initial?: Statement) {
+  const seeded = initial !== undefined && Boolean(id);
+  return useQuery({
+    queryKey: statementKey(id),
+    queryFn: () => fetchStatement(id as string),
+    enabled: Boolean(id && id.trim()),
+    initialData: seeded ? initial : undefined,
+    staleTime: 30_000,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchInterval: false,
     retry: false,

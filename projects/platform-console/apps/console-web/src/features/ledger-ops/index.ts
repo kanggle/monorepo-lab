@@ -35,6 +35,9 @@ export { DiscrepancyResolveDialog } from './components/DiscrepancyResolveDialog'
 // TASK-PC-FE-074 — account-level drill reads
 export { AccountLookup } from './components/AccountLookup';
 export { AccountDetail } from './components/AccountDetail';
+// TASK-PC-FE-075 — reconciliation statement-detail read
+export { StatementLookup } from './components/StatementLookup';
+export { StatementDetail } from './components/StatementDetail';
 export { getLedgerSectionState } from './api/ledger-state';
 export type { LedgerSectionState } from './api/ledger-state';
 export type {
@@ -58,6 +61,9 @@ export type {
   AccountEntryLine,
   AccountEntriesResponse,
   AccountEntriesQueryParams,
+  // TASK-PC-FE-075 — reconciliation statement-detail read types
+  Statement,
+  StatementMatch,
 } from './api/types';
 export {
   formatMoney,

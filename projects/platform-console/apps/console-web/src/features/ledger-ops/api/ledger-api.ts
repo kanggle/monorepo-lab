@@ -23,6 +23,8 @@ import {
   AccountEntriesResponseSchema,
   type AccountEntriesResponse,
   type AccountEntriesQueryParams,
+  StatementSchema,
+  type Statement,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from './types';
@@ -586,5 +588,51 @@ export async function getAccountEntries(
       logPath: '/api/finance/ledger/accounts/{code}/entries',
     },
     (json) => AccountEntriesResponseSchema.parse(json),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// reconciliation statement-detail — TASK-PC-FE-075
+//   GET /api/finance/ledger/reconciliation/statements/{id}
+//   reconciliation-api.md § 3 envelope = { data: Statement, meta }.
+//   STRICTLY READ-ONLY — this read adds NO mutation artifact. The statement
+//   view is id-driven (the ledger has no statement list/search GET — the
+//   honest constraint, same as entries + accounts).
+//
+//   Header matrix (honest, producer-faithful — § 2.4.7.1):
+//     - the SAME domain-facing IAM OIDC token (NEVER getOperatorToken());
+//     - GET only — NO body, NO Idempotency-Key, NO X-Operator-Reason,
+//       NO X-Tenant-Id (handled by callLedger).
+//     - No 429 branch (the ledger has no documented 429).
+//
+//   Errors (SAME taxonomy as the other reads):
+//     - 404 RECONCILIATION_STATEMENT_NOT_FOUND → ApiError (inline
+//       actionable; the lookup form stays mounted).
+//     - 503 / timeout → LedgerUnavailableError (ledger section degrades).
+//
+//   F7 (§ 2.4.7.1 confidential): the sanitised `logPath` carries NO
+//   statementId — only the `{id}` placeholder (consistent with the
+//   entryId / periodId / discrepancyId / accountCode sanitisation pattern).
+// ---------------------------------------------------------------------------
+
+/**
+ * `getStatement(statementId)` — reads the reconciliation statement detail.
+ * READ-ONLY. The domain-facing IAM OIDC access token is attached by
+ * `callLedger`; NEVER `getOperatorToken()`. Id-driven; `statementId` is
+ * `encodeURIComponent`-encoded on the path. The sanitised `logPath` carries
+ * NO statementId (F7). `404 RECONCILIATION_STATEMENT_NOT_FOUND` → ApiError;
+ * `503`/timeout → LedgerUnavailableError. Adds NO mutation artifact.
+ */
+export async function getStatement(statementId: string): Promise<Statement> {
+  return callLedger(
+    {
+      path: `/api/finance/ledger/reconciliation/statements/${encodeURIComponent(statementId)}`,
+      // confidential / F7 — the log path carries NO statementId.
+      logPath: '/api/finance/ledger/reconciliation/statements/{id}',
+    },
+    (json) => {
+      const env = (json ?? {}) as { data?: unknown };
+      return StatementSchema.parse(env.data);
+    },
   );
 }
