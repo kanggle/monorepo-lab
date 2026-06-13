@@ -8,7 +8,7 @@ IAM auth-service HTTP 에러코드 `CREDENTIALS_INVALID` → `INVALID_CREDENTIAL
 
 # Status
 
-review
+done
 
 # Owner
 
