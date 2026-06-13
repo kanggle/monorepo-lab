@@ -30,7 +30,7 @@ The architecture for each service must be declared in:
   1. Author the architecture spec under `<project>/specs/services/<service>/architecture.md` declaring the chosen style (Hexagonal / Layered / Clean / …) with rejected alternatives + reason; land the spec change before any code commit.
   2. If the decision is cross-service or irreversible, record it in `<project>/docs/adr/ADR-<scope>-XXX-<slug>.md` and PAUSE until ACCEPTED.
   3. If the decision is reversible and local, file a `tasks/ready/` follow-up task to backfill the architecture.md and reference its task ID in an inline code comment.
-[REFERENCE] platform/architecture-decision-rule.md § Mandatory Rule + CLAUDE.md § HARDSTOP-09
+[REFERENCE] platform/architecture-decision-rule.md § Mandatory Rule + platform/hardstop-rules.md § HARDSTOP-09
 ```
 
 ---

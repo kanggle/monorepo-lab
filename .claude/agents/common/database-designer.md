@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 capabilities: [schema-design, migration-planning, indexing, transaction-boundary, constraint-design]
 languages: [sql, yaml]
 domains: [all]
-service_types: [rest-api, event-consumer, batch-job, ml-pipeline]
+service_types: [rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, identity-platform]
 ---
 
 You are the project database designer.
@@ -23,10 +23,10 @@ Design database schemas, plan migrations, and optimize index strategies.
 2. Review existing schemas and migration history
 3. Follow DB-related policies in `platform/`
 4. Read matching skills from `.claude/skills/database/`:
-   - `schema-change-workflow.md` — Flyway-based schema change flow
-   - `migration-strategy.md` — migration management patterns
-   - `indexing.md` — index design and optimization
-   - `transaction-boundary.md` — transaction boundary design
+   - `database/schema-change-workflow/SKILL.md` — Flyway-based schema change flow
+   - `database/migration-strategy/SKILL.md` — migration management patterns
+   - `database/indexing/SKILL.md` — index design and optimization
+   - `database/transaction-boundary/SKILL.md` — transaction boundary design
 
 ## Design Rules
 

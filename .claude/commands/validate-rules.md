@@ -77,7 +77,7 @@ This section was added to support the `service-types` catalog and agent capabili
 - [ ] `platform/service-types/*.md` file set equals the catalog listed in `platform/service-types/INDEX.md` (drift = Critical)
 - [ ] Every `specs/services/<service>/architecture.md` declares a `Service Type` and the value is one of the catalog entries (missing or invalid = Critical)
 - [ ] Every entry in `skills/INDEX.md` "Default Skill Sets by Task Type" table resolves to an existing skill file (missing = Critical)
-- [ ] Every `.claude/agents/*.md` frontmatter contains all of `capabilities`, `languages`, `domains`, `service_types` fields (missing field = Warning)
+- [ ] Every `.claude/agents/**/*.md` (excluding `README.md`) frontmatter contains all of `capabilities`, `languages`, `domains`, `service_types` fields (missing field = Warning)
 - [ ] Every `service_types` value in agent frontmatter is one of the `platform/service-types/INDEX.md` catalog entries or the literal `all` (invalid value = Critical)
 - [ ] Every skill referenced from a service-type spec's "Default Skill Set" exists under `.claude/skills/` (missing = Critical)
 
