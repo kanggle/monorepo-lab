@@ -8,7 +8,7 @@ community-service membership-gate 스펙 drift 정정 — FAN-BE-010 이후 prod
 
 # Status
 
-review
+done
 
 # Owner
 
