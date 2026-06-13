@@ -215,7 +215,7 @@ posts by `visibility ∈ { PUBLIC, MEMBERS_ONLY, PREMIUM }`:
 
 - `PUBLIC` — any authenticated tenant member.
 - `MEMBERS_ONLY` — author + members confirmed by `MembershipChecker`.
-- `PREMIUM` — v1 always passes + WARN log + TODO. v2 will hard fail-close.
+- `PREMIUM` — gated by `MembershipChecker`, same as MEMBERS_ONLY. **Production** uses `HttpMembershipChecker` (membership-service call, fail-closed; FAN-BE-010). This live-trio e2e deliberately opts out via `COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false` (FAN-INT-002) so the inert `AlwaysAllowMembershipChecker` stub is selected — the scenarios below therefore assert the stub's always-pass + WARN behaviour, **not** the production gate (covered separately by `MembershipGateIntegrationTest` + federation-hardening-e2e).
 
 ### Sub-cases
 

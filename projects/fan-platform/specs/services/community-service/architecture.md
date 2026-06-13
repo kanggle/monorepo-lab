@@ -97,7 +97,7 @@ com.example.fanplatform.community/
     ├── jpa/                              ← Spring Data adapters per repository
     ├── outbox/CommunityOutboxPollingScheduler.java
     ├── cache/FeedCacheRepository.java    ← Redis (fail-open)
-    ├── membership/AlwaysAllowMembershipChecker.java + auto-config
+    ├── membership/HttpMembershipChecker.java (prod default, FAN-BE-010) + AlwaysAllowMembershipChecker.java (inert fallback) + auto-config
     └── security/                         ← service-level OAuth2 + tenant validators
 ```
 
@@ -114,7 +114,7 @@ com.example.fanplatform.community/
 - H2 / any in-memory DB (`platform/testing-strategy.md` — Postgres only).
 - `spring-cloud-starter-gateway` (community-service is a downstream service, not an edge gateway).
 - Direct Kafka usage outside the outbox path. Producers MUST go through `CommunityEventPublisher` → outbox → `CommunityOutboxPollingScheduler`.
-- Cross-service repository imports (community-service does not reach into artist-service / membership-service tables; v2 will use HTTP clients).
+- Cross-service repository imports (community-service does not reach into artist-service / membership-service tables; membership access goes over an HTTP client — `HttpMembershipChecker`, FAN-BE-010 — never a DB-level reach-in).
 
 ### Boundary rules
 
@@ -165,8 +165,8 @@ Every transition appends a row to `post_status_history` (append-only) AND emits 
 | Tier | Author | Same tenant non-author | Notes |
 |---|---|---|---|
 | PUBLIC | ✓ | ✓ | open to any authenticated actor in the tenant |
-| MEMBERS_ONLY | ✓ | only if `MembershipChecker.hasAccess(...)` returns true | v1 default = `AlwaysAllowMembershipChecker` (always true + WARN). Replace via `@ConditionalOnMissingBean(MembershipChecker.class)` in v2. |
-| PREMIUM | ✓ | always pass + WARN log + TODO | v1 has no membership-service. v2 will hard fail-closed. |
+| MEMBERS_ONLY | ✓ | only if `MembershipChecker.hasAccess(...)` returns true | Production default = `HttpMembershipChecker` (calls membership-service over workload-identity, **fail-closed** on error; FAN-BE-010). `AlwaysAllowMembershipChecker` (always true + WARN) is retained only as the `@ConditionalOnMissingBean` fallback for stacks without membership-service (e.g. the live-trio e2e via `community.membership-service.enabled=false`, FAN-INT-002). |
+| PREMIUM | ✓ | gated by `MembershipChecker.hasAccess(...)`, same as MEMBERS_ONLY | Production calls membership-service (fail-closed). The always-pass + WARN behaviour applies only under the inert fallback stub (e2e escape-hatch), not in production. |
 
 `PostAccessGuard` centralizes this logic. The feed (`GetFeedUseCase`)
 applies the same tiering at the row level — locked items are returned with

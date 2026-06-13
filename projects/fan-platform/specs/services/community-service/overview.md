@@ -60,6 +60,6 @@
 
 - artist-service (artist profile + fandom) — TASK-FAN-BE-003
 - 미디어 업로드 (S3/MinIO 통합) — v2
-- membership-service 통합 — v2 (현재는 PREMIUM 항상 통과 + TODO + WARN)
+- ~~membership-service 통합~~ — **v1 에 포함됨** (FAN-BE-010: `HttpMembershipChecker` 가 membership-service 를 호출, fail-closed). 더 이상 out-of-scope 아님; inert `AlwaysAllowMembershipChecker` 는 membership-service 부재 스택(live-trio e2e escape-hatch)용 fallback 으로만 잔존.
 - notification-service / search-service — v2
 - 모더레이션 워크플로 — v2 admin-service

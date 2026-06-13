@@ -8,7 +8,7 @@
 | Redis 7 | NO | feed read-through cache | fail-open — feed query bypasses cache and emits `community_feed_cache_unavailable_total` |
 | Kafka 3.7 | YES (eventual) | outbox relay target | outbox rows accumulate as PENDING; metric `community_outbox_publish_failures_total` increments; on broker recovery rows drain. Service writes still succeed. |
 | IAM IdP (OIDC) | YES | JWKS for JWT signature verification | service returns 5xx on token validation (cannot validate without JWKS). 5-minute JWKS cache mitigates short-lived blips. |
-| **membership-service** (v2) | NO (v1) | `MembershipChecker` real implementation | v1 ships with `AlwaysAllowMembershipChecker` (always true + WARN). v2 task replaces it via `@ConditionalOnMissingBean`. |
+| **membership-service** | YES (v1, FAN-BE-010) | `HttpMembershipChecker` — `MembershipChecker.hasAccess` over workload-identity HTTP | **fail-closed**: on error/timeout/unreachable, MEMBERS_ONLY & PREMIUM reads are denied (403 `MEMBERSHIP_REQUIRED`). Stacks without membership-service opt out via `community.membership-service.enabled=false` → inert `AlwaysAllowMembershipChecker` `@ConditionalOnMissingBean` fallback (live-trio e2e escape-hatch). |
 
 ## Build dependencies
 
