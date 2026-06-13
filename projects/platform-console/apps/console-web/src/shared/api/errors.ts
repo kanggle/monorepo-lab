@@ -606,6 +606,16 @@ const MESSAGES: Record<string, string> = {
   SUGGESTION_NOT_FOUND: '대상 보충 추천을 찾을 수 없습니다. 목록을 새로고침하세요.',
   SCM_REPLENISHMENT_NOT_ELIGIBLE:
     'scm 보충 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
+  // --- scm demand-planning seed/config (TASK-PC-FE-080 / §2.4.6.2) ---------
+  // POLICY_NOT_FOUND / MAPPING_NOT_FOUND are surfaced as a "not configured yet
+  // → create" EMPTY STATE (not an error toast); these messages back any other
+  // path that needs a label.
+  POLICY_NOT_FOUND:
+    '이 SKU 에는 아직 재주문 정책이 설정되어 있지 않습니다. 새로 생성하세요.',
+  MAPPING_NOT_FOUND:
+    '이 SKU 에는 아직 공급사 매핑이 설정되어 있지 않습니다. 새로 생성하세요.',
+  SCM_CONFIG_NOT_ELIGIBLE:
+    'scm 보충 설정 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
   // --- finance operations (TASK-PC-FE-009 / §2.4.7) -----------------------
   // (`ACCOUNT_NOT_FOUND` is shared verbatim with the IAM accounts surface —
   // finance reuses the existing entry; the producer code is identical.)
