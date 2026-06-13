@@ -1,6 +1,6 @@
 # TASK-MONO-251 — nightly-e2e.yml: add missing SETTLEMENT_DB_PASSWORD to .env
 
-Status: ready
+Status: done
 Type: chore (CI)
 Scope: monorepo-level (`.github/workflows/`)
 Analysis model: Opus 4.8 / Implementation model: Haiku (single-line CI omission)
