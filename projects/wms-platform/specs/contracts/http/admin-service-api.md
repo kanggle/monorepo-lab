@@ -346,7 +346,7 @@ Request: empty body (the endpoint sets `acknowledged_at = now()` and
 `acknowledged_by = X-Actor-Id`).
 
 Response `200`: the updated `AlertLog` row.
-Errors: `NOT_FOUND` (404) — no alert with that id;
+Errors: `ALERT_NOT_FOUND` (404) — no alert with that id;
 `STATE_TRANSITION_INVALID` (422) — alert already acknowledged;
 `DUPLICATE_REQUEST` (409).
 

@@ -130,6 +130,7 @@ Codes activated by the `content-heavy` trait declared in `PROJECT.md`. Expected 
 | NOT_FOUND | 404 | Requested resource does not exist (use only where a domain-specific `*_NOT_FOUND` does not apply) |
 | INTERNAL_ERROR | 500 | Unexpected server-side error |
 | DATA_INTEGRITY_VIOLATION | 409 | Generic DB constraint violation not covered by a domain-specific code. Catch-all surfaced by Spring `DataIntegrityViolationException` when no `*Exception.java` mapping applies. Prefer a domain code when a known constraint is hit |
+| ILLEGAL_STATE | 422 | Generic `IllegalStateException` caught at the controller boundary (aggregate invariant violated) — the unclassified fallback. Emitted by scm procurement + fan-platform services' `AbstractDomainExceptionHandler`. Prefer a domain-specific code or `STATE_TRANSITION_INVALID` (Transactional Trait) where the failure is a known state-machine transition |
 | DOWNSTREAM_ERROR | 502 | A downstream internal service returned 5xx/timed out after retries exhausted. **Intentional dual-status registration**: the Admin/saas section registers the same string at HTTP 503 for admin integration calls (distinct operator semantics) — see that section's `DOWNSTREAM_ERROR`. The 502/503 split is deliberate, not drift (TASK-MONO-244) |
 | CIRCUIT_OPEN | 503 | Downstream circuit breaker is OPEN; the call was rejected without reaching the dependency. Distinct from DOWNSTREAM_ERROR so dashboards can separate "we tried and it failed" from "we shed load" |
 | SERVICE_UNAVAILABLE | 503 | A required upstream service is unavailable |
@@ -242,6 +243,7 @@ Owned by `admin-service`. See `rules/domains/wms.md` and
 | ROLE_BUILTIN_IMMUTABLE | 422 | Built-in roles (`WMS_VIEWER` / `WMS_OPERATOR` / `WMS_ADMIN` / `WMS_SUPERADMIN`) cannot be deleted; only `permissionsJson` may be updated |
 | SETTING_VALIDATION_ERROR | 400 | Setting `valueJson` does not satisfy the persisted `schemaJson` |
 | SETTING_IMMUTABLE_FIELD | 422 | Attempted to change a Setting field that is immutable after creation (`key`, `scope`, `warehouseId`). Reuses `IMMUTABLE_FIELD` semantics with admin-specific naming |
+| ALERT_NOT_FOUND | 404 | Low-stock alert with the given id does not exist on the admin dashboard acknowledge endpoint (`AlertNotFoundException`). Admin-specific form of `NOT_FOUND` (ADR-MONO-027 alert surface) |
 
 ## Notification  `[domain: wms]`
 
@@ -442,6 +444,21 @@ Owned by `inventory-visibility-service`. Read-only cross-node visibility (eventu
 
 ---
 
+## Demand Planning  `[domain: scm]`
+
+Owned by `demand-planning-service` (ADR-MONO-027 reorder-suggestion loop). Optimistic-lock collisions surface as Platform-Common `CONCURRENT_MODIFICATION` (409).
+
+| Code | HTTP | Description |
+|---|---|---|
+| SUGGESTION_NOT_FOUND | 404 | Reorder suggestion does not exist (`SuggestionNotFoundException`) |
+| POLICY_NOT_FOUND | 404 | Reorder policy does not exist (`PolicyNotFoundException`) |
+| MAPPING_NOT_FOUND | 404 | SKU→supplier mapping does not exist (`MappingNotFoundException`) |
+| INVALID_SUGGESTION_STATE | 422 | Requested transition not allowed from the current suggestion state (`InvalidSuggestionStateException`) |
+| SKU_SUPPLIER_UNMAPPED | 422 | SKU has no supplier mapping; cannot generate a DRAFT PO (`SkuSupplierUnmappedException`) |
+| PROCUREMENT_UNAVAILABLE | 503 | Procurement DRAFT-PO leg unavailable; suggestion stays APPROVED, operator retries (idempotent on `sourceSuggestionId`) (`ProcurementUnavailableException`) |
+
+---
+
 ## Account  `[domain: saas]`
 
 Owned by `account-service` (Identity Platform — multi-tenant account lifecycle).
@@ -527,6 +544,7 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | ROLE_NOT_FOUND | 400 | Role identifier not recognized (`RoleNotFoundException`). Note HTTP 400 (not 404) — invalid identifier value, not missing resource |
 | SELF_SUSPEND_FORBIDDEN | 400 | Operator cannot suspend their own account (`SelfSuspendForbiddenException`) |
 | CURRENT_PASSWORD_MISMATCH | 400 | Current password does not match stored credential (`CurrentPasswordMismatchException`) |
+| SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH | 400 | Operator attempted to edit their own profile through the admin operator-management path; must use the self-service path instead (`SelfProfileUpdateForbiddenException`). Referenced by platform-console |
 
 ## Community  `[domain: saas]`
 
@@ -590,6 +608,18 @@ Owned by `artist-service` (artist identity / fandom metadata).
 | ALREADY_MEMBER | 422 | Account already a fandom member (`AlreadyMemberException`) |
 | FOLLOW_LIMIT_EXCEEDED | 429 | Per-account follow count threshold exceeded (v2-planned — no current exception class) |
 | FANDOM_METADATA_INVALID | 400 | Fandom metadata payload fails schema validation (v2-planned — currently handled via generic `VALIDATION_ERROR`) |
+
+## Membership  `[domain: fan-platform]`
+
+Owned by `membership-service` (fan subscription / tier lifecycle). Idempotency-key replays surface as the registered alias `IDEMPOTENCY_KEY_CONFLICT` (409).
+
+| Code | HTTP | Description |
+|---|---|---|
+| MEMBERSHIP_NOT_FOUND | 404 | Membership does not exist (missing / cross-account / cross-tenant — existence not leaked) (`MembershipNotFoundException`) |
+| PAYMENT_DECLINED | 422 | Subscription payment was declined (`PaymentDeclinedException`) |
+| MEMBERSHIP_TIER_INVALID | 422 | Requested membership tier is not a valid value (`MembershipTierInvalidException`) |
+| MEMBERSHIP_NOT_RENEWABLE | 422 | Membership is not in a renewable state (`MembershipNotRenewableException`) |
+| MEMBERSHIP_STATE_INVALID | 422 | Invalid membership status transition (`InvalidStateTransitionException`; payload carries `from`/`to`). Membership-service mapping of the same exception class that fan community-service maps to `POST_STATUS_TRANSITION_INVALID` |
 
 ## Account / Balance / Transaction  `[domain: fintech]`
 
