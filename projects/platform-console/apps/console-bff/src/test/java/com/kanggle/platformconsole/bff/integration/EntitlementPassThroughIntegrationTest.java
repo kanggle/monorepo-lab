@@ -75,6 +75,7 @@ class EntitlementPassThroughIntegrationTest extends AbstractConsoleBffIntegratio
     @SuppressWarnings("resource") static final MockWebServer SCM = new MockWebServer();
     @SuppressWarnings("resource") static final MockWebServer FINANCE = new MockWebServer();
     @SuppressWarnings("resource") static final MockWebServer ERP = new MockWebServer();
+    @SuppressWarnings("resource") static final MockWebServer ECOMMERCE = new MockWebServer();
 
     private static final String KID = "test-key-ep";
     /** Customer tenant for the entitlement-trust scenario. */
@@ -96,6 +97,7 @@ class EntitlementPassThroughIntegrationTest extends AbstractConsoleBffIntegratio
         SCM.start();
         FINANCE.start();
         ERP.start();
+        ECOMMERCE.start();
 
         rsaKey = new RSAKeyGenerator(2048).keyID(KID).generate();
         publishJwks("{\"keys\":[" + rsaKey.toPublicJWK().toJSONString() + "]}");
@@ -122,6 +124,7 @@ class EntitlementPassThroughIntegrationTest extends AbstractConsoleBffIntegratio
         SCM.shutdown();
         FINANCE.shutdown();
         ERP.shutdown();
+        ECOMMERCE.shutdown();
     }
 
     @DynamicPropertySource
@@ -131,6 +134,7 @@ class EntitlementPassThroughIntegrationTest extends AbstractConsoleBffIntegratio
         registry.add("consolebff.outbound.scm.base-url", () -> baseUrl(SCM));
         registry.add("consolebff.outbound.finance.base-url", () -> baseUrl(FINANCE));
         registry.add("consolebff.outbound.erp.base-url", () -> baseUrl(ERP));
+        registry.add("consolebff.outbound.ecommerce.base-url", () -> baseUrl(ECOMMERCE));
     }
 
     private static String baseUrl(MockWebServer server) {
@@ -162,6 +166,8 @@ class EntitlementPassThroughIntegrationTest extends AbstractConsoleBffIntegratio
         respond(SCM, 403, "{}");
         respond(FINANCE, 200, "{\"totalAmount\":\"9999\"}");
         respond(ERP, 403, "{}");
+        // ecommerce is un-entitled (not in entitled_domains) → producer 403.
+        respond(ECOMMERCE, 403, "{}");
 
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + operatorJwt);
@@ -243,6 +249,15 @@ class EntitlementPassThroughIntegrationTest extends AbstractConsoleBffIntegratio
                 .as("FINANCE: X-Tenant-Id must be forwarded verbatim (%s)", CUSTOMER_TENANT)
                 .isEqualTo(CUSTOMER_TENANT);
         verifyEntitlementClaimsPreserved("FINANCE", finReq);
+
+        // ECOMMERCE leg — un-entitled, fires 403 (producer-side authority);
+        // X-Tenant-Id + entitlement claims still forwarded verbatim (TASK-MONO-243).
+        RecordedRequest ecomReq = ECOMMERCE.takeRequest(2, TimeUnit.SECONDS);
+        assertThat(ecomReq).as("expected ECOMMERCE outbound request (no central BFF gate)").isNotNull();
+        assertThat(ecomReq.getHeader("X-Tenant-Id"))
+                .as("ECOMMERCE: X-Tenant-Id must be forwarded verbatim (%s)", CUSTOMER_TENANT)
+                .isEqualTo(CUSTOMER_TENANT);
+        verifyEntitlementClaimsPreserved("ECOMMERCE", ecomReq);
     }
 
     /**

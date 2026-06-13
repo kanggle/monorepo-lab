@@ -73,7 +73,7 @@ describe('DomainCard — ok branch (per-domain summaries)', () => {
     expect(link).toHaveAccessibleName(/IAM 계정/);
   });
 
-  it.each(['wms', 'scm', 'finance', 'erp'] as const)(
+  it.each(['wms', 'scm', 'finance', 'erp', 'ecommerce'] as const)(
     '%s ok → does NOT render a drill-down link (AC-6: IAM card only)',
     (domain) => {
       const card: Card = { domain, status: 'ok', data: {} };
@@ -165,6 +165,40 @@ describe('DomainCard — ok branch (per-domain summaries)', () => {
       screen.getByTestId('operator-overview-card-erp-departments'),
     ).toHaveTextContent('87');
   });
+
+  it('ecommerce ok → renders tenant product count from totalElements', () => {
+    const card: Card = {
+      domain: 'ecommerce',
+      status: 'ok',
+      data: { totalElements: 42 },
+    };
+    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+      wrapper: wrapper(),
+    });
+    expect(
+      screen.getByTestId('operator-overview-card-ecommerce'),
+    ).toHaveAttribute('data-status', 'ok');
+    expect(
+      screen.getByTestId('operator-overview-card-ecommerce-products'),
+    ).toHaveTextContent('42');
+  });
+
+  it('ecommerce ok → renders "0" for an empty catalog (totalElements: 0 NOT hidden)', () => {
+    const card: Card = {
+      domain: 'ecommerce',
+      status: 'ok',
+      data: { totalElements: 0 },
+    };
+    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+      wrapper: wrapper(),
+    });
+    // 0 is a valid empty catalog — surfaced as "0", NOT the "—" fallback.
+    const count = screen.getByTestId(
+      'operator-overview-card-ecommerce-products',
+    );
+    expect(count).toHaveTextContent('0');
+    expect(count).not.toHaveTextContent('—');
+  });
 });
 
 describe('DomainCard — degraded branch', () => {
@@ -174,6 +208,7 @@ describe('DomainCard — degraded branch', () => {
     ['scm', 'CIRCUIT_OPEN'],
     ['finance', 'DOWNSTREAM_ERROR'],
     ['erp', 'TIMEOUT'],
+    ['ecommerce', 'CIRCUIT_OPEN'],
   ] as const)(
     '%s degraded/%s → placeholder + reason + retry button',
     (domain, reason) => {
@@ -231,6 +266,7 @@ describe('DomainCard — forbidden branch', () => {
     ['wms', 'TENANT_FORBIDDEN'],
     ['scm', 'PERMISSION_DENIED'],
     ['erp', 'TENANT_FORBIDDEN'],
+    ['ecommerce', 'TENANT_FORBIDDEN'],
   ] as const)(
     '%s forbidden/%s → placeholder + reason, NO hint',
     (domain, reason) => {

@@ -71,7 +71,7 @@ class OperatorOverviewSliceTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("happy_200_envelope: 5-card all-ok envelope shape matches § 2.4.9.1")
+    @DisplayName("happy_200_envelope: 6-card all-ok envelope shape matches § 2.4.9.1")
     void happy_200_envelope() throws Exception {
         when(credentialContext.hasTenant()).thenReturn(true);
         when(credentialContext.getTenantId()).thenReturn("wms");
@@ -80,7 +80,8 @@ class OperatorOverviewSliceTest {
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.WMS), Map.of("snapshotTotal", 34)),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.SCM), Map.of("nodeCount", 5)),
                 CompositionLeg.ok(LegOutcome.ok(DomainTarget.FINANCE), Map.of("balance", 0)),
-                CompositionLeg.ok(LegOutcome.ok(DomainTarget.ERP), Map.of("meta", Map.of("totalElements", 9)))
+                CompositionLeg.ok(LegOutcome.ok(DomainTarget.ERP), Map.of("meta", Map.of("totalElements", 9))),
+                CompositionLeg.ok(LegOutcome.ok(DomainTarget.ECOMMERCE), Map.of("totalElements", 42))
         ));
 
         MvcResult result = mockMvc.perform(get("/api/console/dashboards/operator-overview")
@@ -98,19 +99,22 @@ class OperatorOverviewSliceTest {
                 .contains("\"domain\":\"wms\"")
                 .contains("\"domain\":\"scm\"")
                 .contains("\"domain\":\"finance\"")
-                .contains("\"domain\":\"erp\"");
+                .contains("\"domain\":\"erp\"")
+                .contains("\"domain\":\"ecommerce\"");
         // All cards ok status; no degrade reason on ok cards (NON_NULL elides).
         assertThat(body).as("body shape:\n%s", body).contains("\"status\":\"ok\"");
-        // Fixed order: gap before wms before scm before finance before erp.
+        // Fixed order: gap before wms before scm before finance before erp before ecommerce.
         int gapIdx = body.indexOf("\"domain\":\"iam\"");
         int wmsIdx = body.indexOf("\"domain\":\"wms\"");
         int scmIdx = body.indexOf("\"domain\":\"scm\"");
         int finIdx = body.indexOf("\"domain\":\"finance\"");
         int erpIdx = body.indexOf("\"domain\":\"erp\"");
+        int ecomIdx = body.indexOf("\"domain\":\"ecommerce\"");
         assertThat(gapIdx).as("body:\n%s", body).isLessThan(wmsIdx);
         assertThat(wmsIdx).isLessThan(scmIdx);
         assertThat(scmIdx).isLessThan(finIdx);
         assertThat(finIdx).isLessThan(erpIdx);
+        assertThat(erpIdx).isLessThan(ecomIdx);
     }
 
     // ------------------------------------------------------------------

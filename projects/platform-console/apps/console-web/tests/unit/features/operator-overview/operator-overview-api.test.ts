@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     console-bff directly; tokens stay HttpOnly on the server side);
  *   - GET only, no body, no `Idempotency-Key`, no `X-Operator-Reason`
  *     (READ-ONLY § 2.4.9 hard invariant);
- *   - parses the 5-card envelope per `OperatorOverviewSchema`;
+ *   - parses the 6-card envelope per `OperatorOverviewSchema`;
  *   - schema validation rejects a malformed envelope (wrong card
  *     count / missing domain / unknown status) — defensive against
  *     a BE drift;
@@ -99,6 +99,11 @@ const HAPPY_ENVELOPE = {
       status: 'ok',
       data: { meta: { totalElements: 87 } },
     },
+    {
+      domain: 'ecommerce',
+      status: 'ok',
+      data: { totalElements: 42 },
+    },
   ],
 };
 
@@ -107,9 +112,27 @@ beforeEach(() => {
 });
 
 describe('OperatorOverviewSchema — runtime validation', () => {
-  it('accepts the canonical 5-card envelope (mixed statuses)', () => {
+  it('accepts the canonical 6-card envelope (mixed statuses)', () => {
     const parsed = OperatorOverviewSchema.safeParse(HAPPY_ENVELOPE);
     expect(parsed.success).toBe(true);
+  });
+
+  it('accepts an ecommerce card with totalElements: 0 (empty catalog)', () => {
+    const env = {
+      ...HAPPY_ENVELOPE,
+      cards: HAPPY_ENVELOPE.cards.map((c) =>
+        c.domain === 'ecommerce' ? { ...c, data: { totalElements: 0 } } : c,
+      ),
+    };
+    expect(OperatorOverviewSchema.safeParse(env).success).toBe(true);
+  });
+
+  it('rejects a 5-card envelope (missing ecommerce)', () => {
+    const bad = {
+      ...HAPPY_ENVELOPE,
+      cards: HAPPY_ENVELOPE.cards.filter((c) => c.domain !== 'ecommerce'),
+    };
+    expect(OperatorOverviewSchema.safeParse(bad).success).toBe(false);
   });
 
   it('rejects a 4-card envelope (missing wms)', () => {
@@ -120,7 +143,7 @@ describe('OperatorOverviewSchema — runtime validation', () => {
     expect(OperatorOverviewSchema.safeParse(bad).success).toBe(false);
   });
 
-  it('rejects a 5-card envelope with a duplicate domain (no erp)', () => {
+  it('rejects a 6-card envelope with a duplicate domain (no erp)', () => {
     const bad = {
       ...HAPPY_ENVELOPE,
       cards: [
@@ -177,13 +200,14 @@ describe('fetchOperatorOverview — happy path', () => {
 
     // Envelope shape pass-through.
     expect(overview.asOf).toBe('2026-05-20T10:30:00Z');
-    expect(overview.cards).toHaveLength(5);
+    expect(overview.cards).toHaveLength(6);
     expect(overview.cards.map((c) => c.domain)).toEqual([
       'iam',
       'wms',
       'scm',
       'finance',
       'erp',
+      'ecommerce',
     ]);
   });
 });

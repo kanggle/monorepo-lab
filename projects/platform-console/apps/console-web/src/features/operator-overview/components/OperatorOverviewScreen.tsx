@@ -14,14 +14,15 @@ import { OverviewDegradeBanner } from './OverviewDegradeBanner';
  * Server component (architecture.md § Server vs Client Components;
  * AC-24). Receives the composed envelope from the page's SSR
  * `fetchOperatorOverview()` call and renders:
- *   - `<OverviewDegradeBanner>` if all 5 cards are non-`ok`
- *   - `<DomainCard>` × 5 in the FIXED `[gap, wms, scm, finance, erp]`
- *     order (a card-domain indexed map; defensive against any BE
- *     re-ordering — see comment below).
+ *   - `<OverviewDegradeBanner>` if all 6 cards are non-`ok`
+ *   - `<DomainCard>` × 6 in the FIXED
+ *     `[gap, wms, scm, finance, erp, ecommerce]` order (a card-domain
+ *     indexed map; defensive against any BE re-ordering — see comment
+ *     below).
  *
  * Fixed-order invariant (§ 2.4.9.1 envelope schema): the BE always
- * returns the 5 cards in `[gap, wms, scm, finance, erp]` order;
- * `OperatorOverviewSchema` already asserts "exactly 5, each domain
+ * returns the 6 cards in `[gap, wms, scm, finance, erp, ecommerce]`
+ * order; `OperatorOverviewSchema` already asserts "exactly 6, each domain
  * exactly once". The screen builds a `Map<domain, Card>` and walks
  * `CARD_ORDER` so the DOM order is INDEPENDENT of the BE array
  * order — a future BE re-ordering bug cannot break the UI.
@@ -52,8 +53,8 @@ export function OperatorOverviewScreen({
           운영자 통합 개요
         </h1>
         <p className="text-sm text-muted-foreground">
-          5개 도메인(IAM · WMS · SCM · Finance · ERP)의 상태를 한 번에
-          확인합니다. 각 카드는 독립적으로 동작하며, 한 도메인의 일시
+          6개 도메인(IAM · WMS · SCM · Finance · ERP · ecommerce)의 상태를 한
+          번에 확인합니다. 각 카드는 독립적으로 동작하며, 한 도메인의 일시
           장애가 다른 도메인이나 콘솔 전체에 영향을 주지 않습니다.
         </p>
         <p

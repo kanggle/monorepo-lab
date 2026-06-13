@@ -19,8 +19,8 @@ import java.util.List;
  * {@code § 2.4.9.X} BFF surface.
  *
  * <p>Endpoint: {@code GET /api/console/dashboards/operator-overview}.
- * Fans out across all 5 backend domains (GAP + wms + scm + finance + erp)
- * and renders the composed envelope per
+ * Fans out across all 6 backend domains (GAP + wms + scm + finance + erp +
+ * ecommerce) and renders the composed envelope per
  * {@code console-integration-contract.md} § 2.4.9.1.
  *
  * <p>Inbound validation (executes BEFORE any outbound leg fires):
@@ -43,7 +43,7 @@ import java.util.List;
  * </ul>
  *
  * <p>Output: HTTP 200 with the composed envelope. <b>All-down still emits
- * 200</b> with all 5 cards in {@code degraded}/{@code forbidden} states — the
+ * 200</b> with all 6 cards in {@code degraded}/{@code forbidden} states — the
  * route NEVER emits 503 (ADR-MONO-017 D5.B rejection, byte-unchanged).
  * Cross-leg 401 collapses to composition-level 401 (per § 2.4.4 D3 /
  * § 2.4.9.1 — tokens are shared across legs from the same inbound request).
@@ -76,8 +76,8 @@ public class OperatorOverviewController {
         //     Implementation guidance: NOT per-leg response time).
         Instant asOf = Instant.now();
 
-        // (3) Compose — use case fires 5 parallel legs, maps outcomes, emits
-        //     per-leg + degrade metrics, and returns the fixed-order 5 legs.
+        // (3) Compose — use case fires 6 parallel legs, maps outcomes, emits
+        //     per-leg + degrade metrics, and returns the fixed-order 6 legs.
         //     The optional X-Finance-Default-Account-Id header is forwarded
         //     verbatim to enable § 2.4.9.1 Option (a) activation on the
         //     finance leg (TASK-PC-FE-014); a null/blank value preserves the

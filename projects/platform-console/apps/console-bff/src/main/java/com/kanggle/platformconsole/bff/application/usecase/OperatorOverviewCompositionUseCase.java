@@ -2,6 +2,7 @@ package com.kanggle.platformconsole.bff.application.usecase;
 
 import com.kanggle.platformconsole.bff.application.composition.CompositionEngine;
 import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
+import com.kanggle.platformconsole.bff.application.port.outbound.EcommerceOverviewReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpDepartmentsReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceBalanceReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.IamAccountsReadPort;
@@ -34,12 +35,12 @@ import java.util.function.Supplier;
 /**
  * MVP "Operator Overview" composition use-case.
  *
- * <p>Fans out across all 5 backend domains in parallel via the shared
+ * <p>Fans out across all 6 backend domains in parallel via the shared
  * {@link CompositionEngine} (TASK-PC-BE-005 L6 extraction). Hard
  * invariants (byte-equal across the extraction): D4 per-domain credential
  * dispatch (sealed-switch on {@link OutboundCredential}), cross-leg 401
  * ⇒ {@link UpstreamUnauthorizedException}, fixed leg order, tenant
- * pass-through (D6.A), 5s composition timeout, all-down still emits 5
+ * pass-through (D6.A), 5s composition timeout, all-down still emits 6
  * legs (controller emits HTTP 200), finance Option (a) activation
  * (header-non-blank ⇒ {@code readBalances}; blank ⇒
  * {@code forbidden / MISSING_PREREQUISITE} with no outbound HTTP call).
@@ -54,19 +55,22 @@ public class OperatorOverviewCompositionUseCase {
 
     /**
      * Fixed leg order — § 2.4.9.1 envelope schema invariant. Owned by this
-     * use-case (TASK-MONO-241): the Operator Overview stays exactly 5 legs
-     * {@code [IAM, WMS, SCM, FINANCE, ERP]}. It deliberately does NOT include
-     * {@link DomainTarget#ECOMMERCE} — that domain has a public health leg
-     * (§ 2.4.9.2) but no operator-plane snapshot read yet (deferred facet
-     * a-후속-2). Previously this aliased {@code CompositionEngine.CARD_ORDER};
-     * decoupled so the Domain Health surface can independently be 6 cards.
+     * use-case: the Operator Overview is 6 legs
+     * {@code [IAM, WMS, SCM, FINANCE, ERP, ECOMMERCE]} (facet a-후속-2,
+     * TASK-MONO-243 — symmetry with the § 2.4.9.2 Domain Health 6-card surface
+     * restored). {@link DomainTarget#ECOMMERCE} is appended last (enum order,
+     * MONO-241) so the EnumMap iteration over the original 5 domains stays
+     * byte-stable. This use-case owns its own {@code CARD_ORDER} (decoupled from
+     * {@code CompositionEngine.CARD_ORDER}, MONO-241) so the overview and health
+     * surfaces evolve their card sets independently.
      */
     public static final List<DomainTarget> CARD_ORDER = List.of(
             DomainTarget.IAM,
             DomainTarget.WMS,
             DomainTarget.SCM,
             DomainTarget.FINANCE,
-            DomainTarget.ERP
+            DomainTarget.ERP,
+            DomainTarget.ECOMMERCE
     );
 
     private final CredentialSelectionPort credentialSelection;
@@ -76,6 +80,7 @@ public class OperatorOverviewCompositionUseCase {
     private final ScmInventoryReadPort scmPort;
     private final FinanceBalanceReadPort financePort;
     private final ErpDepartmentsReadPort erpPort;
+    private final EcommerceOverviewReadPort ecommercePort;
 
     public OperatorOverviewCompositionUseCase(
             CredentialSelectionPort credentialSelection,
@@ -85,7 +90,8 @@ public class OperatorOverviewCompositionUseCase {
             WmsInventoryReadPort wmsPort,
             ScmInventoryReadPort scmPort,
             FinanceBalanceReadPort financePort,
-            ErpDepartmentsReadPort erpPort) {
+            ErpDepartmentsReadPort erpPort,
+            EcommerceOverviewReadPort ecommercePort) {
         this.credentialSelection = credentialSelection;
         this.engine = new CompositionEngine(meterRegistry, tracer, ROUTE_LABEL);
         this.gapPort = gapPort;
@@ -93,6 +99,7 @@ public class OperatorOverviewCompositionUseCase {
         this.scmPort = scmPort;
         this.financePort = financePort;
         this.erpPort = erpPort;
+        this.ecommercePort = ecommercePort;
     }
 
     /** Backward-compatible 1-arg overload — equivalent to {@code compose(tenantId, null)}. */
@@ -101,7 +108,7 @@ public class OperatorOverviewCompositionUseCase {
     }
 
     /**
-     * Composes the operator overview by firing 5 parallel outbound legs.
+     * Composes the operator overview by firing 6 parallel outbound legs.
      *
      * @param tenantId                 active tenant forwarded verbatim on every leg (D6.A)
      * @param financeDefaultAccountId  optional operator finance default account id
@@ -136,6 +143,8 @@ public class OperatorOverviewCompositionUseCase {
                 cred -> callFinance(tenantId, cred, financeDefaultAccountId)));
         legBodies.put(DomainTarget.ERP, legBody(DomainTarget.ERP, earlyDecided, preResolved,
                 cred -> callRead(DomainTarget.ERP, tenantId, cred, erpPort::read)));
+        legBodies.put(DomainTarget.ECOMMERCE, legBody(DomainTarget.ECOMMERCE, earlyDecided, preResolved,
+                cred -> callRead(DomainTarget.ECOMMERCE, tenantId, cred, ecommercePort::read)));
 
         Map<DomainTarget, CompositionLeg> results = engine.fanOut(tenantId, legBodies);
 
@@ -159,7 +168,7 @@ public class OperatorOverviewCompositionUseCase {
             }
         }
         if (DegradePolicy.isAllDown(outcomesForPolicy)) {
-            LOG.warn("Operator-overview composition: all 5 legs non-ok (still emitting 200 per D5.A)");
+            LOG.warn("Operator-overview composition: all 6 legs non-ok (still emitting 200 per D5.A)");
         }
         return ordered;
     }

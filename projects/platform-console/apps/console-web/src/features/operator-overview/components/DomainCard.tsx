@@ -11,6 +11,7 @@ import {
   ScmDataSchema,
   FinanceDataSchema,
   ErpDataSchema,
+  EcommerceDataSchema,
 } from '../api/operator-overview-types';
 import { RetryButton } from './RetryButton';
 
@@ -45,6 +46,7 @@ const DOMAIN_TITLE: Record<DomainKey, string> = {
   scm: 'SCM 가시성',
   finance: 'Finance 잔액',
   erp: 'ERP 마스터',
+  ecommerce: 'ecommerce 상품',
 };
 
 const DEGRADED_COPY: Record<DegradedReason, string> = {
@@ -203,6 +205,29 @@ function ErpSummary({ data }: { data: unknown }): ReactNode {
   );
 }
 
+function EcommerceSummary({ data }: { data: unknown }): ReactNode {
+  // `totalElements` is the tenant's total product count (catalog size,
+  // status-unfiltered). `totalElements: 0` is a valid empty catalog —
+  // surface it as "0", NOT hidden. The explicit `=== null` check (NOT a
+  // truthiness gate) keeps 0 rendering as "0" rather than the "—" fallback.
+  const parsed = EcommerceDataSchema.safeParse(data);
+  const total =
+    parsed.success && typeof parsed.data.totalElements === 'number'
+      ? parsed.data.totalElements
+      : null;
+  return (
+    <dl>
+      <dt className="text-sm text-muted-foreground">상품 수</dt>
+      <dd
+        className="text-2xl font-semibold tabular-nums text-foreground"
+        data-testid="operator-overview-card-ecommerce-products"
+      >
+        {total === null ? '—' : total.toLocaleString()}
+      </dd>
+    </dl>
+  );
+}
+
 function OkSummary({ card }: { card: Card & { status: 'ok' } }): ReactNode {
   switch (card.domain) {
     case 'iam':
@@ -215,6 +240,8 @@ function OkSummary({ card }: { card: Card & { status: 'ok' } }): ReactNode {
       return <FinanceSummary data={card.data} />;
     case 'erp':
       return <ErpSummary data={card.data} />;
+    case 'ecommerce':
+      return <EcommerceSummary data={card.data} />;
   }
 }
 
