@@ -19,15 +19,16 @@ import java.util.List;
  *     { "domain": "wms",     "status": "ok",         "data": { ... } },
  *     { "domain": "scm",     "status": "degraded",   "reason": "DOWNSTREAM_ERROR" },
  *     { "domain": "finance", "status": "forbidden",  "reason": "TENANT_FORBIDDEN" },
- *     { "domain": "erp",     "status": "ok",         "data": { ... } }
+ *     { "domain": "erp",     "status": "ok",         "data": { ... } },
+ *     { "domain": "ecommerce","status": "ok",        "data": { ... } }
  *   ]
  * }
  * </pre>
  *
  * <p>Hard invariants:
  * <ul>
- *   <li>{@code cards} is always exactly 5 entries in fixed order
- *       {@code [gap, wms, scm, finance, erp]} regardless of which legs
+ *   <li>{@code cards} is always exactly 6 entries in fixed order
+ *       {@code [gap, wms, scm, finance, erp, ecommerce]} regardless of which legs
  *       succeeded.</li>
  *   <li>{@code asOf} is the server-side request entry timestamp (not per-leg).</li>
  *   <li>{@code data} is present only on {@code ok} cards; {@code reason} only on

@@ -7,9 +7,9 @@ import type { OperatorOverview } from '@/features/operator-overview';
 
 /**
  * `<OperatorOverviewScreen>` structure (TASK-PC-FE-011):
- *   - renders exactly 5 `<DomainCard>` children, in the FIXED order
- *     `[gap, wms, scm, finance, erp]` regardless of the BE `cards[]`
- *     array order (the screen indexes by domain, not position);
+ *   - renders exactly 6 `<DomainCard>` children, in the FIXED order
+ *     `[gap, wms, scm, finance, erp, ecommerce]` regardless of the BE
+ *     `cards[]` array order (the screen indexes by domain, not position);
  *   - surfaces the `asOf` server-side timestamp verbatim;
  *   - renders the all-degraded banner only when every card is
  *     non-`ok` (covered separately in OverviewDegradeBanner.test.tsx).
@@ -51,11 +51,16 @@ const HAPPY: OperatorOverview = {
       status: 'ok',
       data: { meta: { totalElements: 87 } },
     },
+    {
+      domain: 'ecommerce',
+      status: 'ok',
+      data: { totalElements: 42 },
+    },
   ],
 };
 
-describe('OperatorOverviewScreen — renders 5 cards in FIXED order', () => {
-  it('renders exactly 5 DomainCard children in [gap, wms, scm, finance, erp] order', () => {
+describe('OperatorOverviewScreen — renders 6 cards in FIXED order', () => {
+  it('renders exactly 6 DomainCard children in [gap, wms, scm, finance, erp, ecommerce] order', () => {
     render(<OperatorOverviewScreen overview={HAPPY} />, {
       wrapper: wrapper(),
     });
@@ -64,23 +69,25 @@ describe('OperatorOverviewScreen — renders 5 cards in FIXED order', () => {
     const cards = within(container).getAllByTestId(/^operator-overview-card-/);
     // Filter to top-level domain cards only (data-domain set on the
     // section). The inner sub-testids (e.g. -gap-total) also start
-    // with the prefix; isolate the 5 actual cards via the
+    // with the prefix; isolate the 6 actual cards via the
     // `data-domain` attribute.
     const cardSections = cards.filter((el) => el.hasAttribute('data-domain'));
-    expect(cardSections).toHaveLength(5);
+    expect(cardSections).toHaveLength(6);
     expect(cardSections.map((el) => el.getAttribute('data-domain'))).toEqual([
       'iam',
       'wms',
       'scm',
       'finance',
       'erp',
+      'ecommerce',
     ]);
   });
 
-  it('renders the 5 cards in FIXED order even when the BE returns them shuffled', () => {
+  it('renders the 6 cards in FIXED order even when the BE returns them shuffled', () => {
     const shuffled: OperatorOverview = {
       ...HAPPY,
       cards: [
+        HAPPY.cards[5]!, // ecommerce
         HAPPY.cards[4]!, // erp
         HAPPY.cards[2]!, // scm
         HAPPY.cards[0]!, // gap
@@ -101,6 +108,7 @@ describe('OperatorOverviewScreen — renders 5 cards in FIXED order', () => {
       'scm',
       'finance',
       'erp',
+      'ecommerce',
     ]);
   });
 

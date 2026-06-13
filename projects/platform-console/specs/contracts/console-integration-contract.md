@@ -1561,18 +1561,18 @@ logging, and edge-routing constraints declared in § 2.4.9 apply verbatim
 and are **not re-derived** here. ADR-MONO-013 § 3.3 "zero retrofit" — **sixth
 confirmation** (Phase 2/4/5/6/7-skeleton/7-MVP across the portfolio).
 
-> **Domain-set divergence from § 2.4.9.2 (TASK-MONO-241, 2026-06-13).** This
-> "Operator Overview" route stays **exactly 5 legs** `[iam, wms, scm, finance,
-> erp]` — it does **not** gain an `ecommerce` leg in this slice. The
-> Domain-Health Overview (§ 2.4.9.2) is intentionally a **6-card** surface
-> (adds `ecommerce`), because ecommerce exposes a public `/actuator/health`
-> (no producer retrofit) but has **no operator-plane tenant-scoped snapshot
-> read** yet (today `ecommerce` `AdminProductController` is write-only). The
-> ecommerce **overview snapshot leg** (a domain metric, e.g. active product
-> count) is a deferred follow-up (ADR-MONO-030 Step 4 facet a-후속-2) requiring
-> a net-new ecommerce operator-plane read endpoint. **health = 6, overview = 5
-> are two independent surfaces** — the shared `CompositionEngine` no longer
-> couples their card order (each use-case owns its own `CARD_ORDER`).
+> **Domain-set symmetry with § 2.4.9.2 (TASK-MONO-241 → TASK-MONO-243, 2026-06-13).**
+> This "Operator Overview" route is now **6 legs** `[iam, wms, scm, finance,
+> erp, ecommerce]` — symmetric with the § 2.4.9.2 Domain-Health Overview
+> 6-card surface. TASK-MONO-241 first added `ecommerce` to the **health**
+> surface only (it exposes a public `/actuator/health`, no producer retrofit),
+> leaving the overview at 5 because `ecommerce` `AdminProductController` was
+> write-only. TASK-MONO-243 landed the ecommerce **overview snapshot leg** (a
+> domain metric = tenant product count) by adding a net-new ecommerce
+> operator-plane read endpoint (`GET /api/admin/products?page=0&size=1`),
+> restoring symmetry. **health = 6, overview = 6** — still two independent
+> surfaces (the shared `CompositionEngine` does not couple their card order;
+> each use-case owns its own `CARD_ORDER`), now with the same domain set.
 >
 > **UI routing note (TASK-PC-FE-034, 2026-06-02; additive — composition body byte-unchanged).** This composition route is the console **landing/home** (the authenticated root `/` lands on `/dashboards/overview`; the single "개요" top-nav entry points here). The **IAM card** in the rendered envelope is an accessible **drill-down link to the IAM-only composed overview** (`/dashboards`, § 2.4.4 / ADR-MONO-015 D1-B) — the accounts/audit/operators 3-leg detail. This note governs **only** the consumer-side (`console-web`) landing + nav + IAM-card link wiring; the request headers, response envelope, per-card status discipline, auth flow, resilience, observability labels, and the read-only/no-mutation hard invariant of this route are **unchanged**. See ADR-MONO-017 § D8 amendment + ADR-MONO-015 § 6 amendment.
 
@@ -1580,7 +1580,7 @@ confirmation** (Phase 2/4/5/6/7-skeleton/7-MVP across the portfolio).
 
 | # | Method / Path | Purpose | Auth | Producer |
 |---|---|---|---|---|
-| 1 | `GET /api/console/dashboards/operator-overview` | Single composed cross-domain dashboard envelope; one card per backend domain (IAM + wms + scm + finance + erp); each card carries the per-leg outcome (`ok` / `degraded` / `forbidden`) per § 2.4.9 D5.A discipline | `Authorization: Bearer <iam-oidc-access-token>` (inbound principal, RS256 / IAM issuer) + `X-Operator-Token: <rfc8693-operator-token>` (request-scoped, for IAM leg) + `X-Tenant-Id: <active-tenant>` (forwarded verbatim) — all three set server-side by `console-web` 's SSR route, never by the browser. Absent any of the three → fail-closed (`400 NO_ACTIVE_TENANT` if `X-Tenant-Id` absent; otherwise `401 TOKEN_INVALID`) before any outbound leg | `console-bff` |
+| 1 | `GET /api/console/dashboards/operator-overview` | Single composed cross-domain dashboard envelope; one card per backend domain (IAM + wms + scm + finance + erp + ecommerce); each card carries the per-leg outcome (`ok` / `degraded` / `forbidden`) per § 2.4.9 D5.A discipline | `Authorization: Bearer <iam-oidc-access-token>` (inbound principal, RS256 / IAM issuer) + `X-Operator-Token: <rfc8693-operator-token>` (request-scoped, for IAM leg) + `X-Tenant-Id: <active-tenant>` (forwarded verbatim) — all three set server-side by `console-web` 's SSR route, never by the browser. Absent any of the three → fail-closed (`400 NO_ACTIVE_TENANT` if `X-Tenant-Id` absent; otherwise `401 TOKEN_INVALID`) before any outbound leg | `console-bff` |
 
 > The route is **GET only — read-only**. ADR-MONO-017 § 2.4.9 hard invariant
 > "no mutation at MVP" applies; therefore `Idempotency-Key`,
@@ -1589,12 +1589,13 @@ confirmation** (Phase 2/4/5/6/7-skeleton/7-MVP across the portfolio).
 > `§ 2.4.9.X` MVP dashboard route. Adding a mutation surface requires a
 > fresh ADR amendment to ADR-MONO-017.
 
-##### Composed producers (5 domains, reuse-only — D3.A / § 3.3 zero retrofit)
+##### Composed producers (6 domains, reuse-only — D3.A / § 3.3 zero retrofit)
 
 The composition route fans out across **existing** per-domain read
-endpoints — one card per domain, **no producer retrofit**. The producer
-contracts are authoritative in their respective files and are **not
-redefined here**:
+endpoints — one card per domain, **no producer retrofit** (the ecommerce
+6th leg, TASK-MONO-243, adds a net-new producer endpoint but retrofits no
+existing one). The producer contracts are authoritative in their respective
+files and are **not redefined here**:
 
 | # | Card | Composed producer endpoint | Domain credential (§ 2.4.9 D4) | Producer spec § (authoritative) | Read content surfaced |
 |---|---|---|---|---|---|
@@ -1603,12 +1604,17 @@ redefined here**:
 | 3 | scm procurement / inventory | `GET /api/inventory-visibility/snapshot` (snapshot) — inventory-visibility-service **direct** producer read (see scm-leg topology note below; § 2.4.6 / FE-008) | **IAM OIDC access token** — `getAccessToken()` (per § 2.4.6 verbatim) | scm [`gateway-public-routes.md`](../../../scm-platform/specs/contracts/http/gateway-public-routes.md) § *platform-console operator read consumer* (already bound by § 2.4.6 / FE-008) | inventory visibility snapshot (the producer-meta-warning S5 "Not for procurement decisions" MUST surface as a non-blocking hint, per § 2.4.6 invariant) |
 | 4 | finance balance health | `GET /api/finance/accounts/{operatorDefaultAccountId}/balances` (single account) | **IAM OIDC access token** — `getAccessToken()` (per § 2.4.7 verbatim) | finance [`account-api.md`](../../../finance-platform/specs/contracts/http/account-api.md) § Balances (already bound by § 2.4.7 / FE-009) | balance snapshot for the operator's default account; **honest constraint** (per § 2.4.7) — finance v1 has no list/search GET → an `operatorDefaultAccountId` resolution mechanism is required (registry-side or operator-profile-side; spec-first decided **at MVP impl** — see § Implementation guidance); if absent → that card renders `forbidden` (not a crash) |
 | 5 | erp masterdata snapshot | `GET /api/erp/masterdata/departments?active=true&page=0&size=1` (page total snapshot, asOf=now implicit) | **IAM OIDC access token** — `getAccessToken()` (per § 2.4.8 verbatim) | erp [`masterdata-api.md`](../../../erp-platform/specs/contracts/http/masterdata-api.md) § Departments (already bound by § 2.4.8 / FE-010) | active department count (snapshot, asOf=now — E3 effective-dating implicit) |
+| 6 | ecommerce product snapshot | `GET http://ecommerce.local/api/admin/products?page=0&size=1` (page total snapshot) — routed **through** the ecommerce gateway (see ecommerce-leg topology note below) | **IAM OIDC access token** — `getAccessToken()` (6-row sealed selector — `ECOMMERCE → IamOidcAccessToken`) | ecommerce [`product-api.md`](../../../ecommerce-microservices-platform/specs/contracts/http/product-api.md) § `GET /api/admin/products` (operator-plane read, TASK-MONO-243) | tenant product count (snapshot — `totalElements`) |
 
-**Producer immutability**: the 5 producer contracts above are **byte-unchanged
-spec-side and impl-side** (ADR-MONO-017 § 3.3 sixth confirmation). The
-console-bff composition use-case calls the existing GETs verbatim;
-no `/summary` / `/dashboard-card` aggregating endpoint is added to any
-producer (D3.B rejection).
+**Producer immutability**: the first 5 producer contracts above are
+**byte-unchanged spec-side and impl-side** (ADR-MONO-017 § 3.3 sixth
+confirmation). The 6th (ecommerce) leg, TASK-MONO-243, adds a **net-new**
+operator-plane read endpoint (`GET /api/admin/products`) to the ecommerce
+product-service — it does **not** retrofit an existing producer, and no
+`/summary` / `/dashboard-card` aggregating endpoint is added to any producer
+(D3.B rejection — the new read mirrors the public `GET /api/products` query
+path exactly, on the operator plane). The console-bff composition use-case
+calls the existing GETs verbatim.
 
 > **scm-leg topology (TASK-MONO-162 — ADR-MONO-020 D4 reconciliation).** Card 3
 > calls the inventory-visibility **producer service directly**
@@ -1631,28 +1637,51 @@ producer (D3.B rejection).
 > console path is a documented follow-up gated on retrofitting the gateway
 > validator with the same dual-accept.
 
+> **ecommerce-leg topology (TASK-MONO-243 — ADR-MONO-030 Step 4 facet a-후속-2).**
+> Unlike the other 5 overview legs (all **direct-to-producer** reads — see the
+> scm-leg topology note above), card 6 routes **through the ecommerce gateway**
+> (`ecommerce.local`, the same `ecommerceRestClient` / base-url used by the
+> § 2.4.9.2 health leg). Rationale: ecommerce `product-service` is a
+> **header-trust** service, **not** a JWT resource server — it reads a trusted
+> `X-Tenant-Id` injected upstream and does not itself validate bearer tokens.
+> The gateway is therefore the authorization boundary: it validates the IAM
+> OIDC access token, enforces `account_type=OPERATOR` for `/api/admin/**`
+> (`AccountTypeEnforcementFilter`), requires a non-blank `tenant_id`
+> (`TenantClaimValidator`), injects the trusted `X-Tenant-Id`
+> (`JwtHeaderEnrichmentFilter`), and strips inbound client headers. Routing the
+> console leg direct-to-`product-service` would force console-bff to fabricate
+> `X-Tenant-Id` / `X-User-*` and bypass the gateway's `account_type` + JWT
+> validation — a security smell. The `product-service` `GET /api/admin/products`
+> read deliberately does **not** require an ecommerce-local `ADMIN` role (the
+> operator's IAM OIDC token carries no such claim); authorization is the
+> gateway entitlement-trust + OPERATOR `account_type`, and tenant isolation is
+> the repo `WHERE tenant_id` chokepoint (Step 2 / M6). This mirrors the
+> erp/finance overview legs, which are likewise gated by federation
+> entitlement-trust without a domain-local admin role.
+
 ##### Response schema (`200 OK`)
 
 ```json
 {
   "asOf": "2026-05-20T10:30:00Z",
   "cards": [
-    { "domain": "iam",     "status": "ok",         "data": { "accountCount": 12345 } },
-    { "domain": "wms",     "status": "ok",         "data": { "inventorySnapshot": { … } } },
-    { "domain": "scm",     "status": "degraded",   "reason": "DOWNSTREAM_ERROR" },
-    { "domain": "finance", "status": "forbidden",  "reason": "TENANT_FORBIDDEN" },
-    { "domain": "erp",     "status": "ok",         "data": { "activeDepartmentCount": 87 } }
+    { "domain": "iam",       "status": "ok",         "data": { "accountCount": 12345 } },
+    { "domain": "wms",       "status": "ok",         "data": { "inventorySnapshot": { … } } },
+    { "domain": "scm",       "status": "degraded",   "reason": "DOWNSTREAM_ERROR" },
+    { "domain": "finance",   "status": "forbidden",  "reason": "TENANT_FORBIDDEN" },
+    { "domain": "erp",       "status": "ok",         "data": { "activeDepartmentCount": 87 } },
+    { "domain": "ecommerce", "status": "ok",         "data": { "totalElements": 42 } }
   ]
 }
 ```
 
 - `asOf`: composition request server-side timestamp (ISO-8601 UTC). Operators see "data as-of HH:MM:SS" in the UI.
-- `cards[]`: **exactly 5 entries** in **fixed order** `[iam, wms, scm, finance, erp]` (UI rendering ordering invariant; never reordered by status).
+- `cards[]`: **exactly 6 entries** in **fixed order** `[iam, wms, scm, finance, erp, ecommerce]` (UI rendering ordering invariant; never reordered by status).
 - `cards[i].status` ∈ `{ "ok", "degraded", "forbidden" }`:
   - `ok` → `data` is the card's composed payload (domain-specific shape, declared per row in the producer endpoint above).
   - `degraded` → `reason` ∈ `{ "DOWNSTREAM_ERROR", "TIMEOUT", "CIRCUIT_OPEN" }`; `data` absent. Card renders "data unavailable, retry pending" placeholder.
   - `forbidden` → `reason` ∈ `{ "PERMISSION_DENIED", "TENANT_FORBIDDEN", "MISSING_PREREQUISITE" }` (last covers e.g. finance's `operatorDefaultAccountId` absent); `data` absent. Card renders "not available to your role / tenant" placeholder.
-- **All-down envelope**: every leg can return non-`ok` simultaneously — the route still emits `200` with all 5 cards in `degraded`/`forbidden` states. The route NEVER emits `503` / blanks the response (D5.A discipline; D5.B rejection re-affirmed).
+- **All-down envelope**: every leg can return non-`ok` simultaneously — the route still emits `200` with all 6 cards in `degraded`/`forbidden` states. The route NEVER emits `503` / blanks the response (D5.A discipline; D5.B rejection re-affirmed).
 
 ##### Error envelope (composition-level errors, NOT per-leg)
 
@@ -1670,7 +1699,7 @@ For the inbound-validation errors **before** any outbound leg fires
 ##### Auth flow (verbatim from § 2.4.9, restated for cross-reference only)
 
 - **Inbound** (console-web SSR → console-bff): `Authorization` (IAM OIDC access token, inbound principal) + `X-Operator-Token` (RFC 8693 exchanged operator token, request-scoped via `OperatorCredentialContext`) + `X-Tenant-Id` (operator's selected active tenant). The browser **never** reaches console-bff directly.
-- **Outbound** (console-bff → each domain): per-domain credential dispatch (§ 2.4.9 D4 table, **6-row sealed selector** — `IAM → OperatorToken`, `{wms,scm,finance,erp,ecommerce} → IamOidcAccessToken`). NO fallback path. NO unified token. NO operator-token-only across all domains. `X-Tenant-Id` forwarded verbatim on every leg; producer's `TenantClaimValidator` is the authoritative gate. **Note (TASK-MONO-241)**: this **Operator Overview** route still fires only the **5** legs `{iam,wms,scm,finance,erp}` — the `ECOMMERCE → IamOidcAccessToken` selector row exists so the `DomainTarget` sealed switch stays exhaustive after the enum's 6th member was added for the § 2.4.9.2 health leg; it is **not** exercised by an overview leg until the deferred ecommerce overview snapshot (facet a-후속-2) lands.
+- **Outbound** (console-bff → each domain): per-domain credential dispatch (§ 2.4.9 D4 table, **6-row sealed selector** — `IAM → OperatorToken`, `{wms,scm,finance,erp,ecommerce} → IamOidcAccessToken`). NO fallback path. NO unified token. NO operator-token-only across all domains. `X-Tenant-Id` forwarded verbatim on every leg; producer's `TenantClaimValidator` is the authoritative gate. **Note (TASK-MONO-241 → TASK-MONO-243)**: this **Operator Overview** route now fires all **6** legs `{iam,wms,scm,finance,erp,ecommerce}`. The `ECOMMERCE → IamOidcAccessToken` selector row was first added (MONO-241) so the `DomainTarget` sealed switch stayed exhaustive for the § 2.4.9.2 health leg; TASK-MONO-243 now **exercises** it from the overview's ecommerce snapshot leg (the ecommerce leg routes through the ecommerce gateway — see the ecommerce-leg topology note above).
 
 ##### Resilience (verbatim from § 2.4.9, restated for cross-reference only)
 
@@ -1844,9 +1873,13 @@ endpoints verbatim. The 5 outbound `RestClient` beans (`gapRestClient` /
 registered for § 2.4.9.1 are **reused** here (same base URLs, same per-leg
 2s timeout); the **6th** `ecommerceRestClient` bean (base-url
 `consolebff.outbound.ecommerce.base-url` = `http://ecommerce.local`, same
-per-leg 2s timeout) is added by TASK-MONO-241 for the ecommerce health leg
-— this is the one health card that is NOT also an operator-overview leg
-(§ 2.4.9.1 stays 5; see the cross-reference note there).
+per-leg 2s timeout) was added by TASK-MONO-241 for the ecommerce health leg.
+As of TASK-MONO-243 the `ecommerceRestClient` is **shared** by two distinct
+adapters: this credential-LESS `/actuator/health` health leg, and the
+credential-FULL `/api/admin/products` operator-overview snapshot leg
+(§ 2.4.9.1 row 6) — same base URL / gateway, different path + authorization.
+The § 2.4.9.1 overview is now also 6 (symmetry restored; see the
+cross-reference note there).
 
 ##### Response schema (`200 OK`)
 

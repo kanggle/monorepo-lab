@@ -8,12 +8,12 @@ import { z } from 'zod';
  * The wire shape is byte-verbatim from the BE `OperatorOverviewResponse`
  * Java record landed by the BE half of this same task. This is the FIRST
  * concrete `§ 2.4.9.X` composition route — generalises the GAP-only
- * `features/dashboards` (ADR-MONO-015 D1-B) across 5 backend domains
- * (gap + wms + scm + finance + erp) via the new `console-bff`.
+ * `features/dashboards` (ADR-MONO-015 D1-B) across 6 backend domains
+ * (gap + wms + scm + finance + erp + ecommerce) via the new `console-bff`.
  *
  * Hard invariants (mirrored from § 2.4.9.1 + the BE Javadoc):
- *  - `cards[]` is ALWAYS exactly 5 entries in fixed order
- *    `[gap, wms, scm, finance, erp]`, regardless of which legs
+ *  - `cards[]` is ALWAYS exactly 6 entries in fixed order
+ *    `[gap, wms, scm, finance, erp, ecommerce]`, regardless of which legs
  *    succeeded. The screen re-sorts/maps defensively (the BE
  *    invariant is enforced; the FE re-sort is belt-and-braces).
  *  - `asOf` is the server-side composition request timestamp (NOT
@@ -32,7 +32,14 @@ import { z } from 'zod';
 // --- domain enum ----------------------------------------------------------
 
 /** Fixed render order — § 2.4.9.1 envelope schema invariant. */
-export const CARD_ORDER = ['iam', 'wms', 'scm', 'finance', 'erp'] as const;
+export const CARD_ORDER = [
+  'iam',
+  'wms',
+  'scm',
+  'finance',
+  'erp',
+  'ecommerce',
+] as const;
 export type DomainKey = (typeof CARD_ORDER)[number];
 
 const DomainKeySchema = z.enum(CARD_ORDER);
@@ -102,22 +109,22 @@ export type ForbiddenCard = z.infer<typeof ForbiddenCardSchema>;
 // --- envelope ------------------------------------------------------------
 
 /**
- * The composition envelope — fixed 5-card array + `asOf` request timestamp.
+ * The composition envelope — fixed 6-card array + `asOf` request timestamp.
  *
- * The BE invariant is "5 cards in fixed `[gap, wms, scm, finance, erp]`
- * order"; the schema only asserts "exactly 5 cards" + per-card shape +
- * "each declared domain appears exactly once". The screen does the
+ * The BE invariant is "6 cards in fixed `[gap, wms, scm, finance, erp,
+ * ecommerce]` order"; the schema only asserts "exactly 6 cards" + per-card
+ * shape + "each declared domain appears exactly once". The screen does the
  * re-sort/map defensively (it indexes by `domain` rather than positional
  * order), so a future re-ordering bug in the BE would not crash the UI.
  */
 export const OperatorOverviewSchema = z
   .object({
     asOf: z.string().min(1),
-    cards: z.array(CardSchema).length(5),
+    cards: z.array(CardSchema).length(CARD_ORDER.length),
   })
   .refine(
     (env) => {
-      // Each of the 5 declared domains appears exactly once (set equality).
+      // Each of the 6 declared domains appears exactly once (set equality).
       const seen = new Set(env.cards.map((c) => c.domain));
       if (seen.size !== CARD_ORDER.length) return false;
       for (const d of CARD_ORDER) if (!seen.has(d)) return false;
@@ -125,7 +132,7 @@ export const OperatorOverviewSchema = z
     },
     {
       message:
-        'cards[] MUST contain each of [gap,wms,scm,finance,erp] exactly once',
+        'cards[] MUST contain each of [gap,wms,scm,finance,erp,ecommerce] exactly once',
       path: ['cards'],
     },
   );
@@ -226,3 +233,18 @@ export const ErpDataSchema = z
   })
   .passthrough();
 export type ErpData = z.infer<typeof ErpDataSchema>;
+
+// ecommerce product catalog snapshot —
+// `GET http://ecommerce.local/api/admin/products?page=0&size=1`.
+// The producer body is a paged list (`content[]`, `page`, `size`,
+// `totalElements`); the card surfaces ONLY `totalElements` = the
+// tenant's total product count (catalog size). The remaining paged
+// fields are ignored (`.passthrough()`). `totalElements: 0` is a valid
+// empty catalog — surfaced as "0", NOT hidden (the renderer uses an
+// explicit null/undefined check, not truthiness).
+export const EcommerceDataSchema = z
+  .object({
+    totalElements: z.number().int().nonnegative().nullable().optional(),
+  })
+  .passthrough();
+export type EcommerceData = z.infer<typeof EcommerceDataSchema>;

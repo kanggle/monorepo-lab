@@ -146,6 +146,40 @@ class MultiTenantIsolationIntegrationTest {
     }
 
     @Test
+    @DisplayName("operator-plane read(GET /api/admin/products)도 테넌트 격리: A 상품은 B 컨텍스트 카운트에 안 잡힌다 (M6, TASK-MONO-243)")
+    void operatorPlaneRead_isScopedToTenant() throws Exception {
+        // The new operator-overview snapshot leg (TASK-MONO-243) calls
+        // GET /api/admin/products?page=0&size=1 — its totalElements must honour
+        // the same repo WHERE tenant_id chokepoint (no ADMIN role required).
+        String idA = registerProduct(TENANT_A, "운영자평면 격리 A");
+
+        // tenant B context — the new read must NOT count / surface tenant A's product.
+        MvcResult bView = mockMvc.perform(get("/api/admin/products")
+                        .header(TENANT_HEADER, TENANT_B)
+                        .param("page", "0")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode bNode = objectMapper.readTree(bView.getResponse().getContentAsString());
+        assertThat(bNode.get("totalElements").asLong())
+                .as("tenant B must not count tenant A's product")
+                .isZero();
+        assertThat(bView.getResponse().getContentAsString()).doesNotContain(idA);
+
+        // tenant A context sees its own product in the count (≥ 1).
+        MvcResult aView = mockMvc.perform(get("/api/admin/products")
+                        .header(TENANT_HEADER, TENANT_A)
+                        .param("page", "0")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode aNode = objectMapper.readTree(aView.getResponse().getContentAsString());
+        assertThat(aNode.get("totalElements").asLong())
+                .as("tenant A must count its own product")
+                .isGreaterThanOrEqualTo(1L);
+    }
+
+    @Test
     @DisplayName("테넌트 B는 테넌트 A 상품을 변경할 수 없다 (404, A 데이터 불변)")
     void crossTenantWrite_cannotReachOtherTenantRow() throws Exception {
         String idA = registerProduct(TENANT_A, "변경 격리 A");

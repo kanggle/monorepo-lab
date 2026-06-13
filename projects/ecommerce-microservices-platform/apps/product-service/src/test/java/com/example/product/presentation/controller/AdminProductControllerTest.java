@@ -2,6 +2,8 @@ package com.example.product.presentation.controller;
 
 import com.example.product.TestProductServiceApplication;
 import com.example.product.application.dto.AdjustStockResult;
+import com.example.product.application.dto.ProductListResult;
+import com.example.product.application.dto.ProductSummary;
 import com.example.product.application.service.AdjustStockService;
 import com.example.product.application.service.DeleteProductService;
 import com.example.product.application.service.ProductImageService;
@@ -11,6 +13,7 @@ import com.example.product.application.service.UpdateProductService;
 import com.example.product.application.service.VariantManagementService;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.exception.VariantNotFoundException;
+import com.example.product.domain.model.ProductStatus;
 import com.example.product.domain.port.MediaUrlResolver;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
@@ -24,13 +27,18 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -68,6 +76,58 @@ class AdminProductControllerTest {
 
     @MockitoBean
     private VariantManagementService variantManagementService;
+
+    // ─── GET /api/admin/products (operator-plane read — TASK-MONO-243) ──
+
+    @Test
+    @DisplayName("GET /api/admin/products - ADMIN-role 헤더 없이 200 + paged 요약 반환 (게이트 entitlement-trust, controller 미검사)")
+    void list_noRoleHeader_returns200WithPagedSummary() throws Exception {
+        UUID id = UUID.randomUUID();
+        ProductSummary summary = new ProductSummary(id, "상품", ProductStatus.ON_SALE, 10000L, null, null, "seller-a1");
+        ProductListResult result = new ProductListResult(List.of(summary), 0, 1, 42L);
+        given(queryProductService.findAll(any(), any(), anyInt(), anyInt())).willReturn(result);
+
+        // No X-User-Role header at all — the read MUST NOT require ADMIN (the
+        // operator-overview leg presents an IAM OIDC token with no ecommerce
+        // ADMIN role claim; authz is the gateway's OPERATOR + entitlement-trust).
+        mockMvc.perform(get("/api/admin/products")
+                        .param("page", "0")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content[0].id").value(id.toString()))
+                .andExpect(jsonPath("$.totalElements").value(42))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(1));
+    }
+
+    @Test
+    @DisplayName("GET /api/admin/products - status 필터 없이 ?page=0&size=1 호출 시 totalElements = tenant 총 상품 수")
+    void list_pageSize1_surfacesTotalCatalogCount() throws Exception {
+        // metric semantics: console-bff calls ?page=0&size=1 (no status filter);
+        // totalElements is the tenant's full catalog size.
+        ProductListResult result = new ProductListResult(List.of(), 0, 1, 7L);
+        given(queryProductService.findAll(isNull(), isNull(), eq(0), eq(1))).willReturn(result);
+
+        mockMvc.perform(get("/api/admin/products")
+                        .param("page", "0")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(7));
+    }
+
+    @Test
+    @DisplayName("GET /api/admin/products - size 가 MAX_PAGE_SIZE(100) 로 cap 된다 (공개 컨트롤러 미러)")
+    void list_oversizedPage_isCappedAt100() throws Exception {
+        ProductListResult result = new ProductListResult(List.of(), 0, 100, 0L);
+        given(queryProductService.findAll(isNull(), isNull(), eq(0), eq(100))).willReturn(result);
+
+        mockMvc.perform(get("/api/admin/products")
+                        .param("page", "0")
+                        .param("size", "9999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(100));
+    }
 
     // ─── POST /api/admin/products ─────────────────────────────────────
 

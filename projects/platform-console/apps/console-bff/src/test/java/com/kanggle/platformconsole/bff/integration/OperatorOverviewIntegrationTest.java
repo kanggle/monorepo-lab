@@ -37,16 +37,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration test for the operator-overview composition surface (AC-12+).
  *
  * <p>Extends {@link AbstractConsoleBffIntegrationTest} (reuses JWKS_SERVER +
- * spring.security.oauth2.resourceserver wiring). Adds 5 MockWebServer instances
- * stubbing the 5 backend domains (gap / wms / scm / finance / erp).
+ * spring.security.oauth2.resourceserver wiring). Adds 6 MockWebServer instances
+ * stubbing the 6 backend domains (gap / wms / scm / finance / erp / ecommerce).
+ * The ecommerce 6th leg (TASK-MONO-243) is a credential-FULL operator-plane
+ * snapshot read against {@code /api/admin/products?page=0&size=1}.
  *
  * <p>Coverage:
  * <ul>
- *   <li>Happy path 5-card all-ok with credential dispatch + tenant pass-through assertions.</li>
+ *   <li>Happy path 6-card all-ok with credential dispatch + tenant pass-through assertions.</li>
  *   <li>Per-leg degrade (wms 503 → DOWNSTREAM_ERROR).</li>
  *   <li>Per-leg forbidden (scm 403 → PERMISSION_DENIED).</li>
  *   <li>Per-leg timeout (erp delay &gt; 2s per-leg timeout → TIMEOUT).</li>
- *   <li>All-down 5x 503 → still 200 envelope with 5 degraded cards + 5x degrade counter.</li>
+ *   <li>All-down 6x 503 → still 200 envelope with degraded cards + degrade counter.</li>
  *   <li>Cross-leg 401 collapse → composition-level 401 TOKEN_INVALID.</li>
  *   <li>Inbound missing X-Tenant-Id → 400 NO_ACTIVE_TENANT (no outbound call fires).</li>
  *   <li>Inbound missing Authorization → 401 (Spring Security entry point; no outbound).</li>
@@ -61,6 +63,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     @SuppressWarnings("resource") static final MockWebServer SCM = new MockWebServer();
     @SuppressWarnings("resource") static final MockWebServer FINANCE = new MockWebServer();
     @SuppressWarnings("resource") static final MockWebServer ERP = new MockWebServer();
+    @SuppressWarnings("resource") static final MockWebServer ECOMMERCE = new MockWebServer();
 
     private static RSAKey rsaKey;
     private static String gapOidcJwt;
@@ -75,6 +78,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         SCM.start();
         FINANCE.start();
         ERP.start();
+        ECOMMERCE.start();
 
         rsaKey = new RSAKeyGenerator(2048).keyID("test-key-it").generate();
         String publicJwksJson = "{\"keys\":[" + rsaKey.toPublicJWK().toJSONString() + "]}";
@@ -103,6 +107,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         SCM.shutdown();
         FINANCE.shutdown();
         ERP.shutdown();
+        ECOMMERCE.shutdown();
     }
 
     @DynamicPropertySource
@@ -116,6 +121,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         registry.add("consolebff.outbound.scm.base-url", () -> baseUrl(SCM));
         registry.add("consolebff.outbound.finance.base-url", () -> baseUrl(FINANCE));
         registry.add("consolebff.outbound.erp.base-url", () -> baseUrl(ERP));
+        registry.add("consolebff.outbound.ecommerce.base-url", () -> baseUrl(ECOMMERCE));
     }
 
     private static String baseUrl(MockWebServer server) {
@@ -138,6 +144,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         resetMockServer(SCM);
         resetMockServer(FINANCE);
         resetMockServer(ERP);
+        resetMockServer(ECOMMERCE);
     }
 
     private static void resetMockServer(MockWebServer server) {
@@ -189,13 +196,14 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("happy_path_5_cards_all_ok: per-leg credential dispatch + tenant pass-through verified")
-    void happy_path_5_cards_all_ok_credential_dispatch_verified() throws Exception {
+    @DisplayName("happy_path_6_cards_all_ok: per-leg credential dispatch + tenant pass-through verified (ecommerce 6th leg)")
+    void happy_path_6_cards_all_ok_credential_dispatch_verified() throws Exception {
         respond(GAP, 200, "{\"page\":{\"totalElements\":12345}}");
         respond(WMS, 200, "{\"snapshotTotal\":42}");
         respond(SCM, 200, "{\"nodeCount\":3}");
         respond(FINANCE, 200, "{\"balance\":0}");
         respond(ERP, 200, "{\"meta\":{\"totalElements\":9}}");
+        respond(ECOMMERCE, 200, "{\"content\":[],\"page\":0,\"size\":1,\"totalElements\":42}");
 
         // FINANCE counter snapshot before invocation — MockWebServer.getRequestCount()
         // is lifetime-accumulated, so other tests in this class that DO fire FINANCE
@@ -220,7 +228,11 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
                 .contains("\"domain\":\"wms\"")
                 .contains("\"domain\":\"scm\"")
                 .contains("\"domain\":\"finance\"")
-                .contains("\"domain\":\"erp\"");
+                .contains("\"domain\":\"erp\"")
+                .contains("\"domain\":\"ecommerce\"");
+        // ecommerce card ok with the producer body's totalElements surfaced.
+        assertThat(body).as("body:\n%s", body)
+                .contains("\"totalElements\":42");
 
         // GAP leg — operator token bearer + tenant pass-through.
         RecordedRequest gapReq = GAP.takeRequest(2, TimeUnit.SECONDS);
@@ -230,8 +242,8 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
                 .isEqualTo("Bearer op-tok-abc");
         assertThat(gapReq.getHeader("X-Tenant-Id")).isEqualTo("iam");
 
-        // wms / scm / erp legs — GAP OIDC access token (inbound bearer) verbatim.
-        for (MockWebServer s : new MockWebServer[]{WMS, SCM, ERP}) {
+        // wms / scm / erp / ecommerce legs — GAP OIDC access token (inbound bearer) verbatim.
+        for (MockWebServer s : new MockWebServer[]{WMS, SCM, ERP, ECOMMERCE}) {
             RecordedRequest r = s.takeRequest(2, TimeUnit.SECONDS);
             assertThat(r).as("expected outbound request on stub %s", s.getPort()).isNotNull();
             assertThat(r.getHeader(HttpHeaders.AUTHORIZATION))
@@ -261,6 +273,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(WMS, 503, "{}");
         respond(SCM, 200, "{}");
         respond(ERP, 200, "{}");
+        respond(ECOMMERCE, 200, "{\"totalElements\":1}");
 
         ResponseEntity<String> response = callOverview(authHeaders());
         String body = response.getBody();
@@ -281,6 +294,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(WMS, 200, "{}");
         respond(SCM, 403, "{}");
         respond(ERP, 200, "{}");
+        respond(ECOMMERCE, 200, "{\"totalElements\":1}");
 
         ResponseEntity<String> response = callOverview(authHeaders());
         String body = response.getBody();
@@ -300,6 +314,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(GAP, 200, "{}");
         respond(WMS, 200, "{}");
         respond(SCM, 200, "{}");
+        respond(ECOMMERCE, 200, "{\"totalElements\":1}");
         // ERP delays 3s — exceeds the 2s per-leg read timeout (RestClientConfig).
         ERP.enqueue(new MockResponse()
                 .setResponseCode(200)
@@ -328,13 +343,14 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("all_down_5x_503: 200 envelope with all-down cards; degrade counter 5x")
-    void all_down_5x_503() {
+    @DisplayName("all_down_503: 200 envelope with all-down cards; degrade counter per non-ok leg")
+    void all_down_503() {
         respond(GAP, 503, "{}");
         respond(WMS, 503, "{}");
         respond(SCM, 503, "{}");
         // FINANCE never fires — MVP option (b)
         respond(ERP, 503, "{}");
+        respond(ECOMMERCE, 503, "{}");
 
         ResponseEntity<String> response = callOverview(authHeaders());
         String body = response.getBody();
@@ -342,7 +358,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         assertThat(response.getStatusCode())
                 .as("non-200 body:\n%s", body)
                 .isEqualTo(HttpStatus.OK);
-        // 4 degraded + 1 forbidden (finance MVP pin)
+        // 5 degraded + 1 forbidden (finance MVP pin)
         assertThat(body).as("body:\n%s", body).contains("\"status\":\"degraded\"");
         assertThat(body).as("body:\n%s", body)
                 .contains("\"domain\":\"finance\"")
@@ -371,6 +387,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(WMS, 401, "{}");
         respond(SCM, 200, "{}");
         respond(ERP, 200, "{}");
+        respond(ECOMMERCE, 200, "{\"totalElements\":1}");
 
         ResponseEntity<String> response = callOverview(authHeaders());
         String body = response.getBody();
@@ -433,10 +450,12 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         s.add(SCM.getRequestCount());
         s.add(FINANCE.getRequestCount());
         s.add(ERP.getRequestCount());
+        s.add(ECOMMERCE.getRequestCount());
         // HashSet collapses duplicates — to give a stable equality check
         // include the per-server sum as a separate signature.
         s.add(GAP.getRequestCount() + WMS.getRequestCount() + SCM.getRequestCount()
-                + FINANCE.getRequestCount() + ERP.getRequestCount() + 10_000);
+                + FINANCE.getRequestCount() + ERP.getRequestCount()
+                + ECOMMERCE.getRequestCount() + 10_000);
         return s;
     }
 
@@ -451,6 +470,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(WMS, 200, "{}");
         respond(SCM, 200, "{}");
         respond(ERP, 200, "{}");
+        respond(ECOMMERCE, 200, "{\"totalElements\":1}");
 
         ResponseEntity<String> overview = callOverview(authHeaders());
         assertThat(overview.getStatusCode())
@@ -492,6 +512,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(SCM, 200, "{\"nodeCount\":1}");
         // FINANCE intentionally NOT enqueued — assert below it never fires.
         respond(ERP, 200, "{\"meta\":{\"totalElements\":1}}");
+        respond(ECOMMERCE, 200, "{\"totalElements\":1}");
 
         int financeBefore = FINANCE.getRequestCount();
 
@@ -520,6 +541,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
         respond(SCM, 200, "{\"nodeCount\":1}");
         respond(FINANCE, 200, "{\"totalAmount\":\"1000\"}");
         respond(ERP, 200, "{\"meta\":{\"totalElements\":1}}");
+        respond(ECOMMERCE, 200, "{\"totalElements\":1}");
 
         int financeBefore = FINANCE.getRequestCount();
 
@@ -570,6 +592,7 @@ class OperatorOverviewIntegrationTest extends AbstractConsoleBffIntegrationTest 
                 .setHeadersDelay(1500, TimeUnit.MILLISECONDS));
         respond(SCM, 200, "{}");
         respond(ERP, 200, "{}");
+        respond(ECOMMERCE, 200, "{\"totalElements\":1}");
 
         long t0 = System.nanoTime();
         ResponseEntity<String> response = callOverview(authHeaders());

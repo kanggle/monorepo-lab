@@ -3,10 +3,10 @@ import { RetryButton } from './RetryButton';
 import type { OperatorOverview } from '../api/operator-overview-types';
 
 /**
- * Banner shown when EVERY one of the 5 cards is non-`ok`
+ * Banner shown when EVERY one of the 6 cards is non-`ok`
  * (TASK-PC-FE-011). Server component. The all-down state is the
  * BFF's D5.A discipline — composition still emits HTTP 200 with all
- * 5 cards in `degraded`/`forbidden` states; the console must not
+ * 6 cards in `degraded`/`forbidden` states; the console must not
  * blank the shell. This banner makes the operator aware that the
  * whole envelope is currently degraded and surfaces the explicit
  * retry affordance at the top.

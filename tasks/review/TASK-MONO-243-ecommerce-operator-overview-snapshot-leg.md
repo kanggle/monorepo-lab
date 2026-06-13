@@ -8,7 +8,7 @@ ecommerce 를 platform-console 의 **operator-overview 대시보드 6번째 스�
 
 # Status
 
-ready
+review
 
 # Owner
 

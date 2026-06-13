@@ -13,7 +13,7 @@ import type {
 
 /**
  * `<OverviewDegradeBanner>` (TASK-PC-FE-011) — renders ONLY when all
- * 5 cards are non-`ok`; absent when at least 1 card is `ok`.
+ * 6 cards are non-`ok`; absent when at least 1 card is `ok`.
  * Server component (no `'use client'`); the embedded `<RetryButton>`
  * is the only client surface.
  */
@@ -37,6 +37,7 @@ const ALL_DEGRADED: Card[] = [
   { domain: 'scm', status: 'degraded', reason: 'CIRCUIT_OPEN' },
   { domain: 'finance', status: 'forbidden', reason: 'MISSING_PREREQUISITE' },
   { domain: 'erp', status: 'forbidden', reason: 'TENANT_FORBIDDEN' },
+  { domain: 'ecommerce', status: 'degraded', reason: 'CIRCUIT_OPEN' },
 ];
 
 const MIXED: Card[] = [
@@ -45,6 +46,7 @@ const MIXED: Card[] = [
   { domain: 'scm', status: 'degraded', reason: 'CIRCUIT_OPEN' },
   { domain: 'finance', status: 'forbidden', reason: 'MISSING_PREREQUISITE' },
   { domain: 'erp', status: 'forbidden', reason: 'TENANT_FORBIDDEN' },
+  { domain: 'ecommerce', status: 'degraded', reason: 'CIRCUIT_OPEN' },
 ];
 
 describe('isAllDown helper', () => {
@@ -93,6 +95,7 @@ describe('OverviewDegradeBanner — rendering', () => {
       { domain: 'scm', status: 'ok', data: {} },
       { domain: 'finance', status: 'ok', data: {} },
       { domain: 'erp', status: 'ok', data: {} },
+      { domain: 'ecommerce', status: 'ok', data: { totalElements: 0 } },
     ];
     render(<OverviewDegradeBanner initial={envelope(allOk)} />, {
       wrapper: wrapper(),

@@ -4,7 +4,7 @@
 Published HTTP API for product-service.
 All endpoints are accessible through gateway-service only.
 Public endpoints (`/api/products/**`) do not require authentication.
-Admin endpoints (`/api/admin/products/**`) require an authenticated admin user (Bearer token, admin role).
+Admin **write** endpoints (`/api/admin/products/**` POST/PATCH/DELETE) require an authenticated admin user (Bearer token, `X-User-Role: ADMIN`). The operator-plane **read** `GET /api/admin/products` (TASK-MONO-243) is the exception — it is gated by gateway entitlement-trust + `account_type=OPERATOR` only, with NO ecommerce-local ADMIN role (see that endpoint's Authorization note).
 
 ---
 
@@ -50,6 +50,56 @@ seller within the tenant. On the CONSUMER plane it is **read-only display** (the
 shared catalog is never seller-narrowed — F5). When an OPERATOR request carries a
 seller-scope claim (gateway header `X-Seller-Scope`), the list is narrowed to that
 seller; an absent / `*` scope returns the full tenant catalog (net-zero, F1).
+
+---
+
+### GET /api/admin/products
+Operator-plane tenant-scoped product list (snapshot). Mirrors the public
+`GET /api/products` query path exactly (`content[]` / `page` / `size` /
+`totalElements`) but on the **operator plane** under `/api/admin/products`.
+Added by **TASK-MONO-243** (ADR-MONO-030 Step 4 facet a-후속-2) as the producer
+read behind the platform-console Operator Overview ecommerce snapshot leg
+(§ 2.4.9.1 row 6) — console-bff calls it with `?page=0&size=1` and surfaces
+`totalElements` as the tenant's product count.
+
+**Query Parameters** (all optional — mirror `GET /api/products`)
+- `categoryId` (optional) — filter by category (UUID)
+- `status` (optional) — filter by status: `ON_SALE`, `SOLD_OUT`, `HIDDEN`
+- `page` (default: 0) — page number
+- `size` (default: 20, capped at 100) — page size
+
+**Response 200**
+```json
+{
+  "content": [
+    {
+      "id": "string (UUID)",
+      "name": "string",
+      "status": "ON_SALE",
+      "price": 10000,
+      "thumbnailUrl": "string",
+      "categoryId": "string (UUID)",
+      "sellerId": "string (read-only — owning seller within the tenant)"
+    }
+  ],
+  "page": 0,
+  "size": 1,
+  "totalElements": 42
+}
+```
+
+**Authorization**: gateway **entitlement-trust + `account_type=OPERATOR`** only
+(the gateway's `AccountTypeEnforcementFilter` requires `OPERATOR` for
+`/api/admin/**`, and `TenantClaimValidator` requires a non-blank `tenant_id`).
+This GET deliberately does **NOT** require an ecommerce-local `ADMIN` role
+(`X-User-Role == ADMIN`) — unlike the write endpoints on `/api/admin/products/**`
+— because the caller is a platform-console operator presenting an IAM OIDC token
+with no ecommerce `ADMIN` role claim. **Read-only** (no mutation).
+
+**Tenant scoping**: the gateway injects the trusted `X-Tenant-Id`; the read is
+scoped automatically by the repository `WHERE tenant_id` chokepoint (Step 2 /
+M6) — tenant A's count never includes tenant B's products. Seller-scope
+(`X-Seller-Scope`) narrows the list when present (net-zero / F1 when absent).
 
 ---
 

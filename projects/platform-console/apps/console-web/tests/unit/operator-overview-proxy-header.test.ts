@@ -68,6 +68,7 @@ const HAPPY_ENVELOPE = {
       data: { balance: { amount: '0', currency: 'KRW' } },
     },
     { domain: 'erp', status: 'ok', data: { meta: { totalElements: 0 } } },
+    { domain: 'ecommerce', status: 'ok', data: { totalElements: 0 } },
   ],
 };
 

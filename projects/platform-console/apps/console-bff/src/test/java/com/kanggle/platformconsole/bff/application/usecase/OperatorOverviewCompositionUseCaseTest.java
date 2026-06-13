@@ -1,6 +1,7 @@
 package com.kanggle.platformconsole.bff.application.usecase;
 
 import com.kanggle.platformconsole.bff.application.composition.CompositionLeg;
+import com.kanggle.platformconsole.bff.application.port.outbound.EcommerceOverviewReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpDepartmentsReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceBalanceReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.IamAccountsReadPort;
@@ -45,18 +46,18 @@ import static org.mockito.Mockito.when;
  * Application unit test for {@link OperatorOverviewCompositionUseCase}.
  *
  * <p>Uses {@code @ExtendWith(MockitoExtension.class)} STRICT_STUBS per platform
- * testing-strategy.md. Mocks the 5 narrow outbound port interfaces and the
+ * testing-strategy.md. Mocks the 6 narrow outbound port interfaces and the
  * {@link CredentialSelectionPort}; uses a real {@link SimpleMeterRegistry} so
  * metric emission can be observed.
  *
- * <p>Scope (TASK-PC-FE-011 AC-4 / AC-7..AC-12):
+ * <p>Scope (TASK-PC-FE-011 AC-4 / AC-7..AC-12; ecommerce 6th leg TASK-MONO-243):
  * <ul>
- *   <li>Fixed leg order {@code [gap, wms, scm, finance, erp]}.</li>
+ *   <li>Fixed leg order {@code [gap, wms, scm, finance, erp, ecommerce]}.</li>
  *   <li>Per-leg outcome classification (ok / degraded / forbidden).</li>
  *   <li>Cross-leg 401 collapses to {@link UpstreamUnauthorizedException}.</li>
  *   <li>Finance MVP option (b) — {@code forbidden / MISSING_PREREQUISITE} without
  *       firing the outbound HTTP call.</li>
- *   <li>All-down still emits a 5-card envelope (controller emits HTTP 200).</li>
+ *   <li>All-down still emits a 6-card envelope (controller emits HTTP 200).</li>
  *   <li>Per-leg degrade-counter emission (one increment per non-ok leg).</li>
  *   <li>Per-leg latency timer emission for the happy path.</li>
  *   <li>Missing GAP operator token → {@link MissingCredentialException} per
@@ -90,6 +91,9 @@ class OperatorOverviewCompositionUseCaseTest {
     @Mock
     ErpDepartmentsReadPort erpPort;
 
+    @Mock
+    EcommerceOverviewReadPort ecommercePort;
+
     SimpleMeterRegistry meterRegistry;
     OperatorOverviewCompositionUseCase useCase;
 
@@ -98,7 +102,7 @@ class OperatorOverviewCompositionUseCaseTest {
         meterRegistry = new SimpleMeterRegistry();
         useCase = new OperatorOverviewCompositionUseCase(
                 credentialSelection, meterRegistry, Tracer.NOOP,
-                gapPort, wmsPort, scmPort, financePort, erpPort);
+                gapPort, wmsPort, scmPort, financePort, erpPort, ecommercePort);
     }
 
     private void stubAllCredentialsHappy() {
@@ -114,6 +118,8 @@ class OperatorOverviewCompositionUseCaseTest {
                 .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.ERP))
                 .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
+        lenient().when(credentialSelection.selectFor(DomainTarget.ECOMMERCE))
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
     }
 
     // ------------------------------------------------------------------
@@ -121,36 +127,42 @@ class OperatorOverviewCompositionUseCaseTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("happy_all_5_ok: every leg ok → 5 ok cards in fixed order [gap, wms, scm, finance, erp]")
-    void happy_all_5_ok() {
+    @DisplayName("happy_all_6: every leg ok → 6 cards in fixed order [gap, wms, scm, finance, erp, ecommerce]")
+    void happy_all_6() {
         stubAllCredentialsHappy();
         when(gapPort.read(anyString(), anyString())).thenReturn(Map.of("page", Map.of("totalElements", 12)));
         when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("snapshotTotal", 34));
         when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("nodeCount", 5));
         // Finance MVP option (b): use case short-circuits to MISSING_PREREQUISITE
         // BEFORE calling the port; the finance port is NEVER invoked in MVP. To
-        // exercise the "all 5 ok" happy shape we still assert that the finance
+        // exercise the "all ok" happy shape we still assert that the finance
         // card is forbidden/MISSING_PREREQUISITE (MVP-pinned). The "metric_emission_per_leg"
-        // test below tracks the per-domain timer assertions for the 4 legs that
+        // test below tracks the per-domain timer assertions for the legs that
         // actually fire.
         when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("meta", Map.of("totalElements", 9)));
+        // ecommerce leg (TASK-MONO-243) — producer body carries totalElements verbatim.
+        when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 42));
 
         List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
-        assertThat(legs).hasSize(5);
+        assertThat(legs).hasSize(6);
         // Fixed order invariant
         assertThat(legs.get(0).outcome().domain()).isEqualTo(DomainTarget.IAM);
         assertThat(legs.get(1).outcome().domain()).isEqualTo(DomainTarget.WMS);
         assertThat(legs.get(2).outcome().domain()).isEqualTo(DomainTarget.SCM);
         assertThat(legs.get(3).outcome().domain()).isEqualTo(DomainTarget.FINANCE);
         assertThat(legs.get(4).outcome().domain()).isEqualTo(DomainTarget.ERP);
-        // 4 legs ok (finance is MVP-pinned forbidden)
+        assertThat(legs.get(5).outcome().domain()).isEqualTo(DomainTarget.ECOMMERCE);
+        // 5 legs ok (finance is MVP-pinned forbidden)
         assertThat(legs.get(0).outcome().isOk()).isTrue();
         assertThat(legs.get(1).outcome().isOk()).isTrue();
         assertThat(legs.get(2).outcome().isOk()).isTrue();
         assertThat(legs.get(3).outcome().isForbidden()).isTrue();
         assertThat(legs.get(3).outcome().reason()).isEqualTo("MISSING_PREREQUISITE");
         assertThat(legs.get(4).outcome().isOk()).isTrue();
+        // ecommerce leg ok; card data is the producer body (carries totalElements).
+        assertThat(legs.get(5).outcome().isOk()).isTrue();
+        assertThat(legs.get(5).data()).isEqualTo(Map.of("totalElements", 42));
     }
 
     // ------------------------------------------------------------------
@@ -167,6 +179,7 @@ class OperatorOverviewCompositionUseCaseTest {
                         "boom", null, null, null));
         when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+        when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
 
         List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
@@ -192,6 +205,7 @@ class OperatorOverviewCompositionUseCaseTest {
         when(scmPort.read(anyString(), anyString()))
                 .thenThrow(HttpClientErrorException.create(HttpStatus.FORBIDDEN, "no", null, null, null));
         when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+        when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
 
         List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
@@ -201,6 +215,7 @@ class OperatorOverviewCompositionUseCaseTest {
         assertThat(legs.get(0).outcome().isOk()).isTrue();
         assertThat(legs.get(1).outcome().isOk()).isTrue();
         assertThat(legs.get(4).outcome().isOk()).isTrue();
+        assertThat(legs.get(5).outcome().isOk()).isTrue();
     }
 
     @Test
@@ -211,6 +226,7 @@ class OperatorOverviewCompositionUseCaseTest {
         when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+        when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
         // STRICT_STUBS: financePort.read is intentionally NOT stubbed; the use case
         // MUST short-circuit before invoking it. Any invocation would fail the test
         // via UnnecessaryStubbing (if stubbed) or NPE (if not stubbed and called).
@@ -224,7 +240,7 @@ class OperatorOverviewCompositionUseCaseTest {
     }
 
     @Test
-    @DisplayName("all_down_all_degraded: every leg 5xx → 5 degraded cards (NOT thrown; controller still emits 200)")
+    @DisplayName("all_down_all_degraded: every leg 5xx → 6 degraded cards (NOT thrown; controller still emits 200)")
     void all_down_all_degraded() {
         stubAllCredentialsHappy();
         HttpClientErrorException boom = HttpClientErrorException.create(
@@ -234,18 +250,20 @@ class OperatorOverviewCompositionUseCaseTest {
         when(scmPort.read(anyString(), anyString())).thenThrow(boom);
         // finance is MISSING_PREREQUISITE (forbidden) by MVP pin
         when(erpPort.read(anyString(), anyString())).thenThrow(boom);
+        when(ecommercePort.read(anyString(), anyString())).thenThrow(boom);
 
         List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
-        assertThat(legs).hasSize(5);
+        assertThat(legs).hasSize(6);
         assertThat(legs.get(0).outcome().isDegraded()).isTrue();
         assertThat(legs.get(1).outcome().isDegraded()).isTrue();
         assertThat(legs.get(2).outcome().isDegraded()).isTrue();
         // finance is forbidden by MVP pin — still non-ok (degrade-policy counts it)
         assertThat(legs.get(3).outcome().isForbidden()).isTrue();
         assertThat(legs.get(4).outcome().isDegraded()).isTrue();
+        assertThat(legs.get(5).outcome().isDegraded()).isTrue();
 
-        // 5 degrade-counter increments (one per non-ok leg)
+        // 6 degrade-counter increments (one per non-ok leg)
         double total = 0.0;
         for (DomainTarget d : DomainTarget.values()) {
             Counter c = meterRegistry.find("bff_aggregation_degrade_count")
@@ -256,7 +274,7 @@ class OperatorOverviewCompositionUseCaseTest {
                 total += c.count();
             }
         }
-        assertThat(total).isEqualTo(5.0);
+        assertThat(total).isEqualTo(6.0);
     }
 
     @Test
@@ -272,6 +290,8 @@ class OperatorOverviewCompositionUseCaseTest {
         when(erpPort.read(anyString(), anyString()))
                 .thenThrow(HttpClientErrorException.create(HttpStatus.BAD_GATEWAY,
                         "bad", null, null, null));
+        // ecommerce leg ok (regression guard: the new 6th leg is independent).
+        when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 7));
 
         List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
@@ -283,6 +303,8 @@ class OperatorOverviewCompositionUseCaseTest {
         assertThat(legs.get(3).outcome().isForbidden()).isTrue(); // MVP pin
         assertThat(legs.get(4).outcome().isDegraded()).isTrue();
         assertThat(legs.get(4).outcome().reason()).isEqualTo("DOWNSTREAM_ERROR");
+        assertThat(legs.get(5).outcome().isOk()).isTrue();
+        assertThat(legs.get(5).data()).isEqualTo(Map.of("totalElements", 7));
     }
 
     // ------------------------------------------------------------------
@@ -302,6 +324,7 @@ class OperatorOverviewCompositionUseCaseTest {
         lenient().when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         lenient().when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         lenient().when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+        lenient().when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
 
         assertThatThrownBy(() -> useCase.compose(TENANT, null))
                 .isInstanceOf(UpstreamUnauthorizedException.class)
@@ -321,9 +344,12 @@ class OperatorOverviewCompositionUseCaseTest {
                 .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(credentialSelection.selectFor(DomainTarget.ERP))
                 .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
+        lenient().when(credentialSelection.selectFor(DomainTarget.ECOMMERCE))
+                .thenReturn(new OutboundCredential.IamOidcAccessToken(GAP_OIDC_TOKEN));
         lenient().when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         lenient().when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         lenient().when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+        lenient().when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
 
         // The use case maps MissingCredentialException to per-card
         // forbidden/MISSING_PREREQUISITE (per the time() handler) — it does NOT
@@ -348,14 +374,15 @@ class OperatorOverviewCompositionUseCaseTest {
         when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
         when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+        when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
 
         List<CompositionLeg> legs = useCase.compose(TENANT, null);
-        assertThat(legs).hasSize(5);
+        assertThat(legs).hasSize(6);
 
-        // Per-leg latency timer registered for the 4 legs that actually fire.
+        // Per-leg latency timer registered for the 5 legs that actually fire.
         // Finance is short-circuited (MVP option b) and does NOT register a timer.
         for (DomainTarget d : List.of(DomainTarget.IAM, DomainTarget.WMS,
-                DomainTarget.SCM, DomainTarget.ERP)) {
+                DomainTarget.SCM, DomainTarget.ERP, DomainTarget.ECOMMERCE)) {
             Timer timer = meterRegistry.find("bff_fanout_latency")
                     .tag("domain", d.name().toLowerCase())
                     .tag("route", "operator-overview")
@@ -366,9 +393,9 @@ class OperatorOverviewCompositionUseCaseTest {
             assertThat(timer.count()).isGreaterThanOrEqualTo(1L);
         }
 
-        // No bff_fanout_errors counter for these 4 legs (happy path).
+        // No bff_fanout_errors counter for these 5 legs (happy path).
         for (DomainTarget d : List.of(DomainTarget.IAM, DomainTarget.WMS,
-                DomainTarget.SCM, DomainTarget.ERP)) {
+                DomainTarget.SCM, DomainTarget.ERP, DomainTarget.ECOMMERCE)) {
             // We allow registry-search to return null when no error happened; we
             // explicitly assert the meter was NOT registered with any error tag.
             assertThat(meterRegistry.find("bff_fanout_errors")
@@ -412,6 +439,7 @@ class OperatorOverviewCompositionUseCaseTest {
             when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
             when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
             when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
 
             List<CompositionLeg> legs = useCase.compose(TENANT, null);
 
@@ -432,6 +460,7 @@ class OperatorOverviewCompositionUseCaseTest {
             when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
             when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
             when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
 
             List<CompositionLeg> legs = useCase.compose(TENANT, "");
 
@@ -450,6 +479,7 @@ class OperatorOverviewCompositionUseCaseTest {
             when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
             when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
             when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
 
             List<CompositionLeg> legs = useCase.compose(TENANT, "   ");
 
@@ -468,6 +498,7 @@ class OperatorOverviewCompositionUseCaseTest {
             when(wmsPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
             when(scmPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
             when(erpPort.read(anyString(), anyString())).thenReturn(Map.of("ok", true));
+            when(ecommercePort.read(anyString(), anyString())).thenReturn(Map.of("totalElements", 1));
             when(financePort.readBalances(eq(TENANT), anyString(), eq("acc-uuid-7")))
                     .thenReturn(Map.of("totalAmount", "1000"));
 

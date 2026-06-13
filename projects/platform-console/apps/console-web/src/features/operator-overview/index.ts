@@ -37,6 +37,7 @@ export {
   ScmDataSchema,
   FinanceDataSchema,
   ErpDataSchema,
+  EcommerceDataSchema,
 } from './api/operator-overview-types';
 export type {
   OperatorOverview,
@@ -53,4 +54,5 @@ export type {
   ScmData,
   FinanceData,
   ErpData,
+  EcommerceData,
 } from './api/operator-overview-types';

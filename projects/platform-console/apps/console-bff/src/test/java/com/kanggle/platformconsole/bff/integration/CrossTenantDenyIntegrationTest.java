@@ -65,6 +65,7 @@ class CrossTenantDenyIntegrationTest extends AbstractConsoleBffIntegrationTest {
     @SuppressWarnings("resource") static final MockWebServer SCM = new MockWebServer();
     @SuppressWarnings("resource") static final MockWebServer FINANCE = new MockWebServer();
     @SuppressWarnings("resource") static final MockWebServer ERP = new MockWebServer();
+    @SuppressWarnings("resource") static final MockWebServer ECOMMERCE = new MockWebServer();
 
     private static final String KID = "test-key-d5";
     /** Operator's home tenant — the token claim. */
@@ -85,6 +86,7 @@ class CrossTenantDenyIntegrationTest extends AbstractConsoleBffIntegrationTest {
         SCM.start();
         FINANCE.start();
         ERP.start();
+        ECOMMERCE.start();
 
         rsaKey = new RSAKeyGenerator(2048).keyID(KID).generate();
         publishJwks("{\"keys\":[" + rsaKey.toPublicJWK().toJSONString() + "]}");
@@ -110,6 +112,7 @@ class CrossTenantDenyIntegrationTest extends AbstractConsoleBffIntegrationTest {
         SCM.shutdown();
         FINANCE.shutdown();
         ERP.shutdown();
+        ECOMMERCE.shutdown();
     }
 
     @DynamicPropertySource
@@ -119,6 +122,7 @@ class CrossTenantDenyIntegrationTest extends AbstractConsoleBffIntegrationTest {
         registry.add("consolebff.outbound.scm.base-url", () -> baseUrl(SCM));
         registry.add("consolebff.outbound.finance.base-url", () -> baseUrl(FINANCE));
         registry.add("consolebff.outbound.erp.base-url", () -> baseUrl(ERP));
+        registry.add("consolebff.outbound.ecommerce.base-url", () -> baseUrl(ECOMMERCE));
     }
 
     private static String baseUrl(MockWebServer server) {
@@ -147,6 +151,7 @@ class CrossTenantDenyIntegrationTest extends AbstractConsoleBffIntegrationTest {
         respond(WMS, 403);
         respond(SCM, 403);
         respond(ERP, 403);
+        respond(ECOMMERCE, 403);
 
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + operatorJwt);
@@ -176,7 +181,7 @@ class CrossTenantDenyIntegrationTest extends AbstractConsoleBffIntegrationTest {
         //     leg that fired — proves no central BFF tenant re-scoping. Taking a
         //     request from each stub also proves the outbound fired (no central
         //     gate short-circuit — producer-side authority).
-        for (MockWebServer leg : new MockWebServer[]{GAP, WMS, SCM, ERP}) {
+        for (MockWebServer leg : new MockWebServer[]{GAP, WMS, SCM, ERP, ECOMMERCE}) {
             RecordedRequest r = leg.takeRequest(2, TimeUnit.SECONDS);
             assertThat(r)
                     .as("expected outbound to fire on leg %s (no central tenant gate)", leg.getPort())

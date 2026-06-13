@@ -63,7 +63,7 @@ export default async function OperatorOverviewPage() {
             테넌트를 먼저 선택하세요.
           </p>
           <p>
-            5개 도메인 통합 개요는 테넌트 범위로 구성됩니다. 상단 테넌트
+            6개 도메인 통합 개요는 테넌트 범위로 구성됩니다. 상단 테넌트
             스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
           </p>
           <Link

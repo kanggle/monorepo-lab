@@ -10,11 +10,12 @@ import { createElement, type ReactNode } from 'react';
  * Pinned behaviour (matches the BFF read-only / bounded-fan-out
  * invariants in § 2.4.9):
  *   - seeded with `initialData` → does NOT auto-fetch on mount (one
- *     overview load per page render; no auto-poll storm into the 5
+ *     overview load per page render; no auto-poll storm into the 6
  *     producers via the BFF).
  *   - explicit `refetch()` triggers exactly ONE fetch.
  *   - no `refetchInterval` / no `refetchOnWindowFocus` / no
- *     `refetchOnReconnect` (the audit-respecting bounded fan-out).
+ *     `refetchOnReconnect` (the audit-respecting bounded fan-out into
+ *     the 6 producers via the BFF).
  *   - `retry: false` (failure does NOT auto-retry — operator decides).
  */
 
@@ -69,6 +70,7 @@ const ENVELOPE: OperatorOverview = {
     { domain: 'scm', status: 'ok', data: {} },
     { domain: 'finance', status: 'ok', data: {} },
     { domain: 'erp', status: 'ok', data: {} },
+    { domain: 'ecommerce', status: 'ok', data: { totalElements: 42 } },
   ],
 };
 
