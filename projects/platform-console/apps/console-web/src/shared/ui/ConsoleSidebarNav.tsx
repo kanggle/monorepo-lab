@@ -85,12 +85,25 @@ const GROUPS: NavGroup[] = [
         ],
       },
       { href: '/scm', label: 'SCM', testid: 'nav-scm' },
-      { href: '/finance', label: 'Finance', testid: 'nav-finance' },
-      // The finance ledger surface (TASK-PC-FE-072) — part of the finance
-      // product, on its own in-console route. A plain leaf link next to
-      // the finance entry, gated the same way (no nav-level gating; the
-      // page resolves finance eligibility from the registry).
-      { href: '/ledger', label: 'Finance Ledger', testid: 'nav-ledger' },
+      {
+        // Finance is ONE domain (finance-platform) with TWO bound console
+        // surfaces — account-service (운영: 계좌·잔액·거래) + ledger-service
+        // (원장: 시산표·기간·대조, TASK-PC-FE-072). They share the finance
+        // tenant gate + a single entitlement (entitled_domains ∋ finance gates
+        // BOTH), so they nest under one Finance drill parent — the SAME model
+        // as WMS (운영 + 출고), IAM, and ERP. TASK-PC-FE-078 (was two flat
+        // sibling leaves nav-finance + nav-ledger). The parent keeps the domain
+        // testid `nav-finance`; the former /finance leaf's destination is now
+        // the 운영 child (`nav-finance-ops`), mirroring the WMS nav-wms →
+        // nav-wms-ops move.
+        key: 'finance',
+        label: 'Finance',
+        testid: 'nav-finance',
+        children: [
+          { href: '/finance', label: '운영', testid: 'nav-finance-ops' },
+          { href: '/ledger', label: '원장', testid: 'nav-ledger' },
+        ],
+      },
       {
         // TASK-PC-FE-076 — ERP becomes a drill parent (same model as WMS):
         // the single dense `/erp` page split into 4 section routes. The
