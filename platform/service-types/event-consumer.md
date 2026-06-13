@@ -38,8 +38,8 @@ Typical candidates include notification services (react to business events to se
 
 ## Schema Versioning
 - Consumers MUST tolerate unknown fields (forward compatibility)
-- Consumers MUST branch on `schemaVersion` if semantics changed
-- Events with unsupported `schemaVersion` MUST be routed to DLQ, not silently dropped
+- Consumers MUST branch on `eventVersion` if semantics changed
+- Events with unsupported `eventVersion` MUST be routed to DLQ, not silently dropped
 
 ## Trace Propagation
 - OTel context MUST be propagated from Kafka headers via `KafkaPropagator`

@@ -57,10 +57,13 @@ Services that return additional context (trace/request ids, structured `details`
 | Resource not found | 404 Not Found |
 | Conflict (duplicate resource, optimistic lock collision, idempotency replay mismatch) | 409 Conflict |
 | Unprocessable business rule violation (state transition, reference integrity) | 422 Unprocessable Entity |
+| Resource locked / suspended (account locked, tenant suspended) | 423 Locked |
 | Rate limit exceeded | 429 Too Many Requests |
 | Internal server error | 500 Internal Server Error |
 | Upstream returned an error response (e.g. external ERP/TMS) | 502 Bad Gateway |
 | Upstream dependency unavailable | 503 Service Unavailable |
+
+> This table is the **default** mapping. A domain registry below MAY map a specific code to a different status where the semantics differ — e.g. a state-transition violation that is fundamentally a concurrency/persisted-state conflict registers as **409** rather than the default **422**. Such overrides MUST be explicit in the domain section's HTTP-status column; the per-code value in the domain registry is authoritative for that code.
 
 ---
 
