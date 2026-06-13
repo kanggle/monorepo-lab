@@ -8,7 +8,7 @@ console-web — finance ledger account-level drill reads (trial-balance account 
 
 # Status
 
-ready
+done
 
 # Owner
 
