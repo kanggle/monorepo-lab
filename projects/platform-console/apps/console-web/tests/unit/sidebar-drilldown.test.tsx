@@ -31,7 +31,13 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     expect(screen.queryByTestId('nav-wms-outbound')).toBeNull();
     // Sibling leaves are plain links and remain visible.
     expect(screen.getByTestId('nav-scm')).toHaveAttribute('href', '/scm');
-    expect(screen.getByTestId('nav-finance')).toHaveAttribute('href', '/finance');
+    // Finance is now ALSO a drill parent (운영 + 원장, TASK-PC-FE-078) — a
+    // toggle button, not a link, with its submenus collapsed until opened.
+    const finance = screen.getByTestId('nav-finance');
+    expect(finance.tagName).toBe('BUTTON');
+    expect(finance).not.toHaveAttribute('href');
+    expect(screen.queryByTestId('nav-finance-ops')).toBeNull();
+    expect(screen.queryByTestId('nav-ledger')).toBeNull();
   });
 
   it('clicking WMS drills in: pins WMS at top and reveals 운영 + 출고; other top-level items disappear', () => {
@@ -89,16 +95,60 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     );
   });
 
-  it('leaf domains (SCM/Finance) stay direct links — no drill', () => {
+  it('leaf domains (SCM) stay direct links — no drill', () => {
+    // After TASK-PC-FE-078 (Finance → drill parent) and TASK-PC-FE-076
+    // (ERP → drill parent), SCM is the only remaining leaf domain.
     render(<ConsoleSidebarNav />);
-    for (const [testid, href] of [
-      ['nav-scm', '/scm'],
-      ['nav-finance', '/finance'],
-    ] as const) {
+    for (const [testid, href] of [['nav-scm', '/scm']] as const) {
       const el = screen.getByTestId(testid);
       expect(el.tagName).toBe('A');
       expect(el).toHaveAttribute('href', href);
     }
+  });
+
+  // --- Finance drill parent (TASK-PC-FE-078) — mirrors the WMS tests above ---
+
+  it('clicking Finance drills in: reveals 운영 + 원장 with their destinations', () => {
+    render(<ConsoleSidebarNav />);
+    fireEvent.click(screen.getByTestId('nav-finance'));
+
+    expect(screen.getByTestId('nav-finance-ops')).toHaveAttribute(
+      'href',
+      '/finance',
+    );
+    expect(screen.getByTestId('nav-ledger')).toHaveAttribute('href', '/ledger');
+    // Pinned parent is the first focusable nav control.
+    const nav = screen.getByRole('navigation');
+    expect(nav.querySelector('a,button')).toHaveAttribute(
+      'data-testid',
+      'nav-finance',
+    );
+    // The drill replaces the top-level list — sibling domains are gone.
+    expect(screen.queryByTestId('nav-scm')).toBeNull();
+  });
+
+  it('a deep link to /ledger auto-opens the Finance drill with 원장 active and 운영 inactive', () => {
+    mockPath = '/ledger';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-ledger')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-finance-ops')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('a deep link to /finance auto-opens the Finance drill with 운영 active and 원장 inactive', () => {
+    mockPath = '/finance';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-finance-ops')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-ledger')).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 });
 
