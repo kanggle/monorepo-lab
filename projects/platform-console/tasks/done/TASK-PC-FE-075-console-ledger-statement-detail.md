@@ -8,7 +8,7 @@ console-web â€” finance ledger reconciliation statement-detail read (statement â
 
 # Status
 
-ready
+done
 
 # Owner
 
