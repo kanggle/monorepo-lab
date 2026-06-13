@@ -809,6 +809,7 @@ obligation and points at the owning finance specs.
   | 6 | reconciliation discrepancy (detail) | `GET /api/finance/ledger/reconciliation/discrepancies/{id}` (incl. `resolution` when RESOLVED) | read |
   | 7 | account balance (drill) **(TASK-PC-FE-074)** | `GET /api/finance/ledger/accounts/{ledgerAccountCode}/balance` (`type`, `normalSide`, `debitTotal`, `creditTotal`, `balance`, `balanceSide`) | read |
   | 8 | account entries (drill, paginated) **(TASK-PC-FE-074)** | `GET /api/finance/ledger/accounts/{ledgerAccountCode}/entries` (journal lines posted to one account, most-recent first: `entryId`, `postedAt`, `direction`, `money`, `counterpartyLines?`) | read |
+  | 9 | reconciliation statement (detail) **(TASK-PC-FE-075)** | `GET /api/finance/ledger/reconciliation/statements/{id}` (`statementId`, `ledgerAccountCode`, `source`, `statementDate`, `matchedCount`, `discrepancyCount`, `matches[]` {`statementLineExternalRef`, `journalEntryId`, `money`}, `discrepancies[]`) | read |
 
   **Honest ledger read-surface constraint (recorded, not papered over)**:
   the trial balance and the period list are **index-style** browsable reads
@@ -817,15 +818,18 @@ obligation and points at the owning finance specs.
   GET over entries at this increment, the same honest constraint as the
   finance § 2.4.7 account surface), and the discrepancy queue is a
   **status-filtered list**. The **account-level drill** (`GET
-  /accounts/{ledgerAccountCode}/{balance,entries}`, rows 7–8) is **now surfaced
-  (TASK-PC-FE-074)** — it is **id-driven by the account code** (there is **no**
-  account list/search GET; the **trial balance** is the browsable account
-  index, and a trial-balance row's `ledgerAccountCode` is the drill key — a
-  `CUSTOMER_WALLET:{accountId}` colon-form code is **URL-encoded** on the path
-  per `ledger-api.md` § Common shapes). The reconciliation **statement-detail**
-  read (`GET /reconciliation/statements/{id}`) **remains forward-declared** for
-  a follow-up surface (not fabricated here). Fabricating any non-existent
-  ledger endpoint is **forbidden**.
+  /accounts/{ledgerAccountCode}/{balance,entries}`, rows 7–8) is **surfaced
+  (TASK-PC-FE-074)** — id-driven by the account code (no account list/search
+  GET; the **trial balance** is the browsable account index; a
+  `CUSTOMER_WALLET:{accountId}` colon-form code is **URL-encoded**). The
+  reconciliation **statement-detail** read (`GET /reconciliation/statements/{id}`,
+  row 9) is **now surfaced (TASK-PC-FE-075)** — also **id-driven** (there is
+  **no** statement list/search GET; statement ids originate from the ingest the
+  operator's integration ran — ingest is out of console scope). **With row 9 no
+  producer read remains forward-declared** — only the **non-existent** ledger
+  endpoints (a statement/account list/search) and the **out-of-scope** ledger
+  mutations beyond the FE-073 resolve. Fabricating any non-existent ledger
+  endpoint is **forbidden**.
 
 - **Per-domain credential selection — reuse of the § 2.4.5 rule via the
   § 2.4.7 finance binding (do NOT re-derive, do NOT diverge)**: the
@@ -963,6 +967,45 @@ obligation and points at the owning finance specs.
     sanitised `logPath` carries **no** account code (only `requestId` + the
     route shape).
 
+- **Reconciliation statement-detail read (TASK-PC-FE-075 — read-only, the last
+  forward-declared read now surfaced)**: the console consumes the *existing*
+  finance
+  [`reconciliation-api.md`](../../../finance-platform/specs/contracts/http/reconciliation-api.md)
+  **§ 3** `GET /api/finance/ledger/reconciliation/statements/{id}` (statement
+  detail + its matches + discrepancies — the § 1 ingest `data` shape:
+  `{ statementId, ledgerAccountCode, source, statementDate, matchedCount,
+  discrepancyCount, matches: [ { statementLineExternalRef, journalEntryId,
+  money } ], discrepancies: [ <discrepancy> ] }`). **Unchanged, consumed
+  read-only** (finance owns it). The statement view is the **reconciliation
+  source hub**: a matched line's `journalEntryId` drills into the journal-entry
+  view (the existing FE-072 entry read), and a recorded discrepancy drills into
+  the discrepancy detail (where the FE-073 resolve affordance lives — incl. the
+  11th-increment FX-difference `AMOUNT_MISMATCH` carrying both `externalRef` +
+  `journalEntryId`).
+  - **Credential + tenant**: the **same** domain-facing IAM OIDC token
+    (`getDomainFacingToken()`, **never** `getOperatorToken()`) and **no**
+    `X-Tenant-Id` as the other reads — pure `GET`, **no** body / `Idempotency-Key`
+    / `X-Operator-Reason` (this slice adds **no** mutation; the FE-073 discrepancy
+    resolve stays the ledger surface's only mutation, asserted by test).
+  - **Id-driven (honest constraint)**: there is **no** statement list/search GET
+    — the operator looks a statement up by id (ids originate from the ingest the
+    operator's integration ran; **ingest is out of console scope**). The `{id}` is
+    **URL-encoded** on the producer path. Fabricating a statement list endpoint is
+    **forbidden** (the same honesty as the entry / account id-driven reads).
+  - **F5 + honest surfacing**: each match `money` is a minor-units **string**
+    rendered scale-correct via `formatMoney` — **never** coerced to a float / JS
+    `Number` (the same F5 grep-assertion). The matched/discrepancy counts and the
+    `matches` / `discrepancies` arrays are surfaced **honestly** (a fully-reconciled
+    statement shows `discrepancyCount: 0`; an all-unmatched statement shows
+    `matchedCount: 0`); discrepancy `type` / `status` stay tolerant free strings.
+  - **Resilience (§ 2.5, statement-specific)**: `404
+    RECONCILIATION_STATEMENT_NOT_FOUND` (the id is unknown / not in tenant) →
+    inline "no such statement" (the lookup stays mounted; no crash, no re-login);
+    `401` → whole-session re-login; `403` → inline "not scoped"; `503` / timeout →
+    the ledger section degrades, shell intact. **No 429** (the honest difference,
+    asserted absent). **F7**: the statementId is **confidential** — the sanitised
+    `logPath` carries **no** statementId (only `requestId` + the route shape).
+
 - **fintech producer obligations surfacing (finance domain constraint,
   normative — reuses the § 2.4.7 fintech obligations, extended for the ledger
   multi-currency model — contract obligations, NOT UX niceties)**:
@@ -1014,8 +1057,9 @@ obligation and points at the owning finance specs.
   (token not finance-scoped) → inline "not available / not scoped";
   `404 JOURNAL_ENTRY_NOT_FOUND` / `404 ACCOUNTING_PERIOD_NOT_FOUND` /
   `404 RECONCILIATION_DISCREPANCY_NOT_FOUND` / `404 LEDGER_ACCOUNT_NOT_FOUND`
-  (**TASK-PC-FE-074**, the account drill) → inline actionable "no such
-  entry / period / discrepancy / account" (no crash); `400` / `422` → inline actionable;
+  (**TASK-PC-FE-074**, the account drill) / `404 RECONCILIATION_STATEMENT_NOT_FOUND`
+  (**TASK-PC-FE-075**, the statement detail) → inline actionable "no such
+  entry / period / discrepancy / account / statement" (no crash); `400` / `422` → inline actionable;
   `503 SERVICE_UNAVAILABLE` / timeout / network → **only the ledger section
   degrades** (the console shell + the IAM / wms / scm / finance-account / erp
   sections stay intact). The ledger contracts document **no `429` /
