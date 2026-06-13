@@ -231,7 +231,7 @@
 
 | Status | Code | 조건 |
 |---|---|---|
-| 401 | `CREDENTIALS_INVALID` | 패스워드 재인증 실패 |
+| 401 | `INVALID_CREDENTIALS` | 패스워드 재인증 실패 |
 | 400 | `STATE_TRANSITION_INVALID` | 이미 DELETED 상태 |
 
 **Side Effects**:

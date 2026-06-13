@@ -18,8 +18,12 @@ public class AuthExceptionHandler extends CommonGlobalExceptionHandler {
 
     @ExceptionHandler(CredentialsInvalidException.class)
     public ResponseEntity<ErrorResponse> handleCredentialsInvalid(CredentialsInvalidException e) {
+        // HTTP response code is the platform-common canonical INVALID_CREDENTIALS
+        // (TASK-MONO-246). NOTE: the login-failed EVENT failureReason enum keeps the
+        // distinct value "CREDENTIALS_INVALID" (auth-events.md, consumed by
+        // security-service) — the HTTP code and the event enum are separate contracts.
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ErrorResponse.of("CREDENTIALS_INVALID", "Invalid email or password"));
+                .body(ErrorResponse.of("INVALID_CREDENTIALS", "Invalid email or password"));
     }
 
     @ExceptionHandler(LoginTenantAmbiguousException.class)
@@ -47,7 +51,7 @@ public class AuthExceptionHandler extends CommonGlobalExceptionHandler {
     @ExceptionHandler(CurrentPasswordMismatchException.class)
     public ResponseEntity<ErrorResponse> handleCurrentPasswordMismatch(CurrentPasswordMismatchException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("CREDENTIALS_INVALID", "Current password does not match"));
+                .body(ErrorResponse.of("INVALID_CREDENTIALS", "Current password does not match"));
     }
 
     @ExceptionHandler(PasswordPolicyViolationException.class)

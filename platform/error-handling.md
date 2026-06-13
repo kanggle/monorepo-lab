@@ -459,7 +459,6 @@ Owned by `auth-service` (Spring Authorization Server).
 | OAUTH_INSUFFICIENT_SCOPE | 403 | Token scope does not cover the requested resource |
 | LOGIN_RATE_LIMITED | 429 | Per-IP / per-account login attempt threshold exceeded |
 | LOGIN_TENANT_AMBIGUOUS | 400 | Login identifier matches accounts across multiple tenants without disambiguator |
-| CREDENTIALS_INVALID | 401 | IAM auth-service credentials invalid (email/password login) (`CredentialsInvalidException`). Registered intentional alias of Platform-Common `INVALID_CREDENTIALS` (401) — both strings are live-emitted (`INVALID_CREDENTIALS`: ecommerce auth + IAM admin-service; `CREDENTIALS_INVALID`: IAM auth-service), so neither can be dropped without a coordinated code+contract change. Unifying to a single string is a deferred per-service follow-up, not floating drift (TASK-MONO-244) |
 | PASSWORD_RESET_TOKEN_INVALID | 400 | Password-reset token unknown, expired, or already consumed (`PasswordResetTokenInvalidException`) |
 | CREDENTIAL_ALREADY_EXISTS | 409 | Credential row already exists for account (e.g. social re-link attempt) (`CredentialAlreadyExistsException`) |
 | SESSION_REVOKED | 401 | Active session has been administratively revoked (`SessionRevokedException`) |

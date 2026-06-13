@@ -56,8 +56,8 @@
 - **AF-1**: hash_algorithm이 구버전이면 로그인 성공 후 새 알고리즘으로 rehash (lazy migration)
 
 ### Exception Flow
-- **EF-1**: 이메일 미존재 → 401 `CREDENTIALS_INVALID` (이메일 존재 여부 미노출)
-- **EF-2**: 패스워드 불일치 → 401 `CREDENTIALS_INVALID` + 실패 카운터 증가
+- **EF-1**: 이메일 미존재 → 401 `INVALID_CREDENTIALS` (이메일 존재 여부 미노출)
+- **EF-2**: 패스워드 불일치 → 401 `INVALID_CREDENTIALS` + 실패 카운터 증가
 - **EF-3**: 실패 카운터 5회 초과 → 429 `LOGIN_RATE_LIMITED`
 - **EF-4**: 계정 LOCKED → 403 `ACCOUNT_LOCKED`
 - **EF-5**: 계정 DORMANT → 403 `ACCOUNT_DORMANT`

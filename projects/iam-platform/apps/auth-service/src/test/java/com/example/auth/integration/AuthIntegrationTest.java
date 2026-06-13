@@ -162,7 +162,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                                 {"email":"%s","password":"wrongpassword1"}
                                 """.formatted(TEST_EMAIL)))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("CREDENTIALS_INVALID"));
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
 
     @Test
@@ -175,7 +175,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                                 {"email":"unknown@example.com","password":"password123"}
                                 """))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("CREDENTIALS_INVALID"));
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
 
     @Test
