@@ -146,16 +146,31 @@ export default async function EcommercePage() {
         )}
       </div>
 
+      {/* 상품 운영 (TASK-PC-FE-081 — § 2.4.10 product CRUD). */}
+      <div className="mb-8">
+        <h2 className="mb-3 text-lg font-semibold text-foreground">운영</h2>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/ecommerce/products"
+            data-testid="ecommerce-products-link"
+            className="rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            상품 운영 →
+          </Link>
+        </div>
+      </div>
+
       <div
         data-testid="ecommerce-ops-coming-soon"
         className="rounded-md border border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground"
       >
         <p className="mb-1 font-medium text-foreground">
-          상세 운영 표면 준비중
+          추가 운영 표면 준비중
         </p>
         <p>
-          상품 · 주문 · 셀러 관리 운영 화면은 후속 작업에서 제공됩니다. 현재는
-          도메인 헬스 가시성까지 지원합니다.
+          주문 · 셀러 관리 운영 화면은 후속 작업에서 제공됩니다. 상품 운영(목록 ·
+          상세 · 등록 · 수정 · 삭제 · 옵션 · 재고)은 위 “상품 운영”에서 사용할 수
+          있습니다.
         </p>
       </div>
     </section>

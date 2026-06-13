@@ -521,6 +521,55 @@ export class ErpUnavailableError extends Error {
   }
 }
 
+/**
+ * ecommerce `product-service` operations surface degrade signal
+ * (console-integration-contract § 2.4.10 / § 2.5). The FIRST ecommerce
+ * **write** federated domain section (where § 2.4.9.1/§ 2.4.9.2 bind
+ * ecommerce only as console-bff READ legs). Sibling of
+ * {@link WmsOutboundUnavailableError} (the wms-outbound § 2.4.5.1 precedent:
+ * console-web → domain gateway DIRECT, NO console-bff write leg, ADR-MONO-017
+ * D2.A). A `503 SERVICE_UNAVAILABLE` / `503 STORAGE_UNAVAILABLE` / timeout /
+ * network failure on an ecommerce call degrades ONLY the ecommerce section
+ * (the console shell + every other section stay intact). Auth failures
+ * (`401` — the IAM OIDC session expired) are raised as {@link ApiError} so the
+ * caller forces a clean WHOLE-SESSION re-login (no partial authed state — NOT
+ * a per-section degrade). Inline-recoverable producer errors
+ * (`403 FORBIDDEN`/`ACCESS_DENIED`/`TENANT_FORBIDDEN`,
+ * `404 PRODUCT_NOT_FOUND`/`VARIANT_NOT_FOUND`,
+ * `400|422 VALIDATION_ERROR`/`INVALID_CATEGORY`/`INSUFFICIENT_STOCK`,
+ * `409 CONFLICT` optimistic-lock concurrent modification) are raised as
+ * {@link ApiError} so the UI renders an inline actionable message without
+ * crashing (the `409 CONFLICT` path drives a refetch + retry-prompt, never a
+ * silent auto-retry).
+ *
+ * NOTE the credential reuse: like the wms + scm + finance + erp siblings (NOT
+ * the IAM ones), the ecommerce credential is the domain-facing IAM OIDC access
+ * token itself (`getDomainFacingToken()`) — NEVER the IAM operator token (the
+ * ecommerce gateway requires `account_type=OPERATOR` on the IAM OIDC token;
+ * the #569 invariant is GAP-domain-scoped — § 2.4.10). The console sends NO
+ * `X-Tenant-Id` (the gateway `TenantClaimValidator` injects the trusted tenant
+ * from the JWT claim). The ecommerce error envelope is **flat**
+ * `{ code, message, timestamp }` (the shared `ErrorResponse.of` shape — same
+ * wire shape as scm/finance/erp, a DISTINCT producer error-code vocabulary;
+ * NOT wms's nested `{ error: { code } }`). The producer defines NO
+ * `Idempotency-Key`/`version` — confirm-gate + producer state guards are the
+ * double-submit defence. No token / PII is ever placed in this error.
+ */
+export class EcommerceUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: EcommerceUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'EcommerceUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -637,6 +686,15 @@ const MESSAGES: Record<string, string> = {
     'erp 는 내부 전용 경계입니다. 콘솔의 SSO 세션을 통해서만 조회할 수 있습니다.',
   ERP_NOT_ELIGIBLE:
     'erp 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
+  // --- ecommerce product operations (TASK-PC-FE-081 / §2.4.10) -------------
+  PRODUCT_NOT_FOUND: '대상 상품을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  VARIANT_NOT_FOUND: '대상 옵션(variant)을 찾을 수 없습니다. 상세를 새로고침하세요.',
+  INVALID_CATEGORY: '존재하지 않는 카테고리입니다. 카테고리를 다시 선택하세요.',
+  INSUFFICIENT_STOCK:
+    '재고가 부족하여 요청한 수량만큼 차감할 수 없습니다. 현재 재고를 확인하세요.',
+  ACCESS_DENIED: '이 작업을 수행할 권한이 없습니다.',
+  ECOMMERCE_NOT_ELIGIBLE:
+    'ecommerce 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {

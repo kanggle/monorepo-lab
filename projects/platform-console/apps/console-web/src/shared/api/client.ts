@@ -111,4 +111,12 @@ export const apiClient = {
   // handler is PUT-only (full-replace of the assignment's org_scope).
   put: <T = unknown>(path: string, body?: unknown, opts: ApiRequestOptions = {}) =>
     apiFetch<T>(path, { ...opts, method: 'PUT', body }),
+  // PATCH — partial-update mutations (ecommerce product/variant update + stock
+  // adjust, TASK-PC-FE-081, whose route handlers are PATCH).
+  patch: <T = unknown>(path: string, body?: unknown, opts: ApiRequestOptions = {}) =>
+    apiFetch<T>(path, { ...opts, method: 'PATCH', body }),
+  // DELETE — resource removal (ecommerce product/variant delete,
+  // TASK-PC-FE-081). The route handler returns 204 → `undefined`.
+  delete: <T = unknown>(path: string, opts: ApiRequestOptions = {}) =>
+    apiFetch<T>(path, { ...opts, method: 'DELETE' }),
 };

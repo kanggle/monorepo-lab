@@ -190,6 +190,38 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for erp operations calls
    *  (integration-heavy I1 — same convention as FINANCE_TIMEOUT_MS). */
   ERP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** ecommerce gateway ADMIN base for the product operator surface
+   *  (TASK-PC-FE-081 / § 2.4.10). The product admin CRUD endpoints hang off
+   *  `${ECOMMERCE_ADMIN_BASE_URL}/products/...` (list / register / update /
+   *  delete / variants / stock) — request/response/error owned by ecommerce
+   *  `AdminProductController` (authoritative, consumed only; BE-366
+   *  operator-plane). The ecommerce gateway hostname is `ecommerce.local`;
+   *  the admin path subtree is `/api/admin/**` (gateway
+   *  `AccountTypeEnforcementFilter` requires `account_type=OPERATOR`). This is
+   *  the SAME gateway + IAM-OIDC credential the § 2.4.9.1 ecommerce snapshot
+   *  leg routes through. NOT the IAM operator token — reached with the
+   *  domain-facing IAM OIDC token directly (§ 2.4.10 per-domain credential
+   *  rule; the #569 invariant is GAP-domain-scoped). Tenant rides in the JWT
+   *  `tenant_id ∈ {ecommerce,*}` claim — the console sends NO `X-Tenant-Id`. */
+  ECOMMERCE_ADMIN_BASE_URL: z
+    .string()
+    .url()
+    .default('http://ecommerce.local/api/admin'),
+  /** ecommerce gateway PUBLIC base for the product DETAIL read
+   *  (TASK-PC-FE-081 / § 2.4.10 #2). `AdminProductController` has no
+   *  `GET /{id}` — the detail is the public `ProductController` read path
+   *  `${ECOMMERCE_PUBLIC_BASE_URL}/products/{id}` (contract row #2: "public
+   *  `/products/{id}` read path"). Same `ecommerce.local` gateway + same
+   *  domain-facing IAM OIDC token + same `tenant_id` JWT-claim isolation
+   *  (`TenantContextFilter` WHERE tenant_id chokepoint) as the admin base, on
+   *  the `/api/**` (non-admin) path prefix. */
+  ECOMMERCE_PUBLIC_BASE_URL: z
+    .string()
+    .url()
+    .default('http://ecommerce.local/api'),
+  /** Outbound timeout (ms) for ecommerce product operations calls
+   *  (integration-heavy I1 — same convention as ERP_TIMEOUT_MS). */
+  ECOMMERCE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
 });
@@ -227,6 +259,9 @@ export function getServerEnv(): ServerEnv {
     LEDGER_TIMEOUT_MS: process.env.LEDGER_TIMEOUT_MS,
     ERP_BASE_URL: process.env.ERP_BASE_URL,
     ERP_TIMEOUT_MS: process.env.ERP_TIMEOUT_MS,
+    ECOMMERCE_ADMIN_BASE_URL: process.env.ECOMMERCE_ADMIN_BASE_URL,
+    ECOMMERCE_PUBLIC_BASE_URL: process.env.ECOMMERCE_PUBLIC_BASE_URL,
+    ECOMMERCE_TIMEOUT_MS: process.env.ECOMMERCE_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });
