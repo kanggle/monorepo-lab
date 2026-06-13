@@ -81,6 +81,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 **필드 노트** (TASK-BE-248):
 - `tenantId`: 항상 required. consumer는 누락 시 DLQ로 라우팅한다. VelocityRule은 `(tenantId, accountId)` 단위로 카운터를 분리한다.
+- `failureReason`: 이 enum의 `CREDENTIALS_INVALID` 값은 **HTTP 응답 code와 별개 계약**이다. 자격 증명 실패의 HTTP code는 `INVALID_CREDENTIALS`로 통일되었으나(TASK-MONO-246, platform-common canonical), 본 `failureReason` enum은 security-service가 소비하는 독립 Kafka 계약이므로 `CREDENTIALS_INVALID`를 유지한다. **두 문자열을 통일하지 말 것** — 동일하게 보여도 다른 네임스페이스다(HTTP 응답 vs 이벤트 enum).
 
 **Consumers**: security-service (VelocityRule 평가)
 
