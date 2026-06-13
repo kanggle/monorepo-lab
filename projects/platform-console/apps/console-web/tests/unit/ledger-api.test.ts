@@ -351,7 +351,8 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
     }
     // The api module exports the six read functions + EXACTLY ONE mutation
     // (`resolveDiscrepancy` — TASK-PC-FE-073) + two account-drill reads
-    // (TASK-PC-FE-074: `getAccountBalance` + `getAccountEntries`). No OTHER
+    // (TASK-PC-FE-074: `getAccountBalance` + `getAccountEntries`) + one
+    // statement-detail read (TASK-PC-FE-075: `getStatement`). No OTHER
     // ledger write (manual posting / revaluation / settlement / statement
     // ingest), no entry list/search (id-driven).
     const mod = await import('@/features/ledger-ops/api/ledger-api');
@@ -367,6 +368,8 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
         // TASK-PC-FE-074 — account-level drill reads (read-only, GET only)
         'getAccountBalance',
         'getAccountEntries',
+        // TASK-PC-FE-075 — reconciliation statement-detail read (read-only, GET only)
+        'getStatement',
       ].sort(),
     );
   });

@@ -8,6 +8,7 @@ import type {
   JournalEntry,
   AccountBalance,
   AccountEntriesResponse,
+  Statement,
 } from '../api/types';
 import { TrialBalanceTable } from './TrialBalanceTable';
 import { PeriodsTable } from './PeriodsTable';
@@ -18,7 +19,9 @@ import { DiscrepancyQueue } from './DiscrepancyQueue';
 import { DiscrepancyDetail } from './DiscrepancyDetail';
 import { AccountLookup } from './AccountLookup';
 import { AccountDetail } from './AccountDetail';
-import { useJournalEntry, useAccountBalance, useAccountEntries } from '../hooks/use-ledger-ops';
+import { StatementLookup } from './StatementLookup';
+import { StatementDetail } from './StatementDetail';
+import { useJournalEntry, useAccountBalance, useAccountEntries, useStatement } from '../hooks/use-ledger-ops';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 
 /**
@@ -84,6 +87,14 @@ export interface LedgerOpsScreenProps {
   /** True when the seeded accountCode 404'd (LEDGER_ACCOUNT_NOT_FOUND) —
    *  rendered inline in the Account tab; the lookup stays mounted. */
   initialAccountNotFound?: boolean;
+  /** The server-seeded statement id (TASK-PC-FE-075). */
+  initialStatementId?: string | null;
+  /** The server-seeded statement detail (TASK-PC-FE-075). */
+  initialStatement?: Statement | null;
+  /** True when the seeded statementId 404'd
+   *  (RECONCILIATION_STATEMENT_NOT_FOUND) — rendered inline in the 대사
+   *  tab; the lookup stays mounted (TASK-PC-FE-075). */
+  initialStatementNotFound?: boolean;
 }
 
 export function LedgerOpsScreen({
@@ -97,13 +108,18 @@ export function LedgerOpsScreen({
   initialAccountBalance = null,
   initialAccountEntries = null,
   initialAccountNotFound = false,
+  initialStatementId = null,
+  initialStatement = null,
+  initialStatementNotFound = false,
 }: LedgerOpsScreenProps) {
   const [active, setActive] = useState<TabKey>(
     initialAccountCode
       ? 'account'
       : initialEntryId
         ? 'entry'
-        : 'trial-balance',
+        : initialStatementId
+          ? 'reconciliation'
+          : 'trial-balance',
   );
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
@@ -159,6 +175,26 @@ export function LedgerOpsScreen({
     accountApiErr?.status === 404 ||
     (initialAccountNotFound && selectedAccountCode === initialAccountCode);
 
+  // Statement — reconciliation statement id-driven (TASK-PC-FE-075).
+  // Seeded from the server when a ?statementId= query param is supplied.
+  const [selectedStatementId, setSelectedStatementId] = useState<string | null>(
+    initialStatementId,
+  );
+  const statementQ = useStatement(
+    selectedStatementId,
+    selectedStatementId === initialStatementId
+      ? (initialStatement ?? undefined)
+      : undefined,
+  );
+  const statement: Statement | null =
+    statementQ.data ??
+    (selectedStatementId === initialStatementId ? initialStatement : null);
+  const statementApiErr =
+    statementQ.error instanceof ApiError ? statementQ.error : null;
+  const statementNotFound =
+    statementApiErr?.status === 404 ||
+    (initialStatementNotFound && selectedStatementId === initialStatementId);
+
   /** Called when the operator clicks a trial-balance account code. */
   function handleSelectAccount(code: string) {
     setSelectedAccountCode(code);
@@ -166,7 +202,8 @@ export function LedgerOpsScreen({
   }
 
   /** Called when the operator clicks an entry's entryId in the account
-   *  entries table — drills into the Journal Entry tab. */
+   *  entries table OR a statement match-row journalEntryId — drills into
+   *  the Journal Entry tab. */
   function handleSelectEntry(eid: string) {
     setEntryId(eid);
     setActive('entry');
@@ -344,6 +381,30 @@ export function LedgerOpsScreen({
         hidden={active !== 'reconciliation'}
         data-testid="ledger-panel-reconciliation"
       >
+        {/* Statement lookup + detail (TASK-PC-FE-075) — ABOVE the discrepancy
+            queue. No new tab — wired into the existing 대사 tab. */}
+        <StatementLookup
+          initialStatementId={selectedStatementId ?? undefined}
+          onSubmit={setSelectedStatementId}
+        />
+        {selectedStatementId ? (
+          statementNotFound ? (
+            <div
+              role="status"
+              data-testid="ledger-statement-not-found"
+              className="mb-6 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+            >
+              {messageForCode('RECONCILIATION_STATEMENT_NOT_FOUND')}
+            </div>
+          ) : (
+            <StatementDetail
+              statement={statement}
+              onSelectEntry={handleSelectEntry}
+              onSelectDiscrepancy={setSelectedDiscrepancyId}
+            />
+          )
+        ) : null}
+
         {discrepancies ? (
           <>
             <DiscrepancyQueue

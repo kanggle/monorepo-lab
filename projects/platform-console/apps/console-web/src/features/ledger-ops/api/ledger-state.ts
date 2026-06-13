@@ -7,6 +7,7 @@ import {
   getJournalEntry,
   getAccountBalance,
   getAccountEntries,
+  getStatement,
 } from './ledger-api';
 import type {
   TrialBalance,
@@ -15,6 +16,7 @@ import type {
   JournalEntry,
   AccountBalance,
   AccountEntriesResponse,
+  Statement,
 } from './types';
 
 /**
@@ -84,6 +86,13 @@ export interface LedgerSectionState {
   /** True on a 404 LEDGER_ACCOUNT_NOT_FOUND for the supplied `accountCode`
    *  — inline actionable (TASK-PC-FE-074, mirrors `notFound` for entries). */
   accountNotFound: boolean;
+  /** The reconciliation statement-detail — seeded ONLY when a `statementId`
+   *  is supplied AND the fetch succeeded (TASK-PC-FE-075). */
+  statement: Statement | null;
+  /** True on a 404 RECONCILIATION_STATEMENT_NOT_FOUND for the supplied
+   *  `statementId` — inline actionable (TASK-PC-FE-075, mirrors
+   *  `accountNotFound` / `notFound` for other id-driven reads). */
+  statementNotFound: boolean;
   /** True when the operator is not finance-eligible (no finance
    *  product/tenant in their registry) — actionable block, no ledger call
    *  fabricated. */
@@ -106,6 +115,8 @@ const EMPTY: LedgerSectionState = {
   accountBalance: null,
   accountEntries: null,
   accountNotFound: false,
+  statement: null,
+  statementNotFound: false,
   notEligible: false,
   forbidden: false,
   notFound: false,
@@ -124,11 +135,17 @@ const EMPTY: LedgerSectionState = {
  *   (TASK-PC-FE-074). A `404 LEDGER_ACCOUNT_NOT_FOUND` on the seeded code
  *   returns `{ ...EMPTY, accountNotFound: true }` (mirrors `notFound` for
  *   entries). When absent, `accountBalance`/`accountEntries` are `null`.
+ * @param statementId   optional reconciliation statement id — when provided,
+ *   the section additionally seeds the statement detail (TASK-PC-FE-075).
+ *   A `404 RECONCILIATION_STATEMENT_NOT_FOUND` on the seeded id returns
+ *   `{ ...EMPTY, statementNotFound: true }` (mirrors `accountNotFound` /
+ *   `notFound`). When absent, `statement` is `null`.
  */
 export async function getLedgerSectionState(
   eligible: boolean,
   entryId?: string | null,
   accountCode?: string | null,
+  statementId?: string | null,
 ): Promise<LedgerSectionState> {
   if (!eligible) {
     // Not finance-eligible — never fabricate a cross-tenant call.
@@ -137,6 +154,7 @@ export async function getLedgerSectionState(
 
   const id = entryId?.trim() || null;
   const code = accountCode?.trim() || null;
+  const sid = statementId?.trim() || null;
 
   try {
     // Build the base browsable index reads (always seeded when eligible).
@@ -146,82 +164,41 @@ export async function getLedgerSectionState(
       listDiscrepancies({ status: 'OPEN', page: 0, size: 20 }),
     ] as const;
 
-    if (id && code) {
-      const [trialBalance, periods, discrepancies, entry, accountBalance, accountEntries] =
-        await Promise.all([
-          ...baseReads,
-          getJournalEntry(id),
-          getAccountBalance(code),
-          getAccountEntries(code, { page: 0, size: 20 }),
-        ]);
-      return {
-        trialBalance,
-        periods,
-        discrepancies,
-        entry,
-        accountBalance,
-        accountEntries,
-        accountNotFound: false,
-        notEligible: false,
-        forbidden: false,
-        notFound: false,
-        degraded: false,
-      };
-    }
-
-    if (id) {
-      const [trialBalance, periods, discrepancies, entry] = await Promise.all([
-        ...baseReads,
-        getJournalEntry(id),
-      ]);
-      return {
-        trialBalance,
-        periods,
-        discrepancies,
-        entry,
-        accountBalance: null,
-        accountEntries: null,
-        accountNotFound: false,
-        notEligible: false,
-        forbidden: false,
-        notFound: false,
-        degraded: false,
-      };
-    }
-
+    // Collect the id-driven reads (entry, account balance/entries, statement)
+    // alongside the base reads in a single Promise.all to minimise latency.
+    const idReads: Promise<unknown>[] = [];
+    if (id) idReads.push(getJournalEntry(id));
     if (code) {
-      const [trialBalance, periods, discrepancies, accountBalance, accountEntries] =
-        await Promise.all([
-          ...baseReads,
-          getAccountBalance(code),
-          getAccountEntries(code, { page: 0, size: 20 }),
-        ]);
-      return {
-        trialBalance,
-        periods,
-        discrepancies,
-        entry: null,
-        accountBalance,
-        accountEntries,
-        accountNotFound: false,
-        notEligible: false,
-        forbidden: false,
-        notFound: false,
-        degraded: false,
-      };
+      idReads.push(getAccountBalance(code));
+      idReads.push(getAccountEntries(code, { page: 0, size: 20 }));
     }
+    if (sid) idReads.push(getStatement(sid));
 
-    const [trialBalance, periods, discrepancies] = await Promise.all([
-      ...baseReads,
-    ]);
+    const results = await Promise.all([...baseReads, ...idReads]);
+    const [trialBalance, periods, discrepancies, ...idResults] = results as [
+      Awaited<ReturnType<typeof getTrialBalance>>,
+      Awaited<ReturnType<typeof listPeriods>>,
+      Awaited<ReturnType<typeof listDiscrepancies>>,
+      ...unknown[]
+    ];
+
+    // Unpack id-driven results in the same order they were pushed.
+    let cursor = 0;
+    const entry = id ? (idResults[cursor++] as Awaited<ReturnType<typeof getJournalEntry>>) : null;
+    const accountBalance = code ? (idResults[cursor++] as Awaited<ReturnType<typeof getAccountBalance>>) : null;
+    const accountEntries = code ? (idResults[cursor++] as Awaited<ReturnType<typeof getAccountEntries>>) : null;
+    const statement = sid ? (idResults[cursor++] as Awaited<ReturnType<typeof getStatement>>) : null;
+
     return {
       trialBalance,
       periods,
       discrepancies,
-      entry: null,
-      accountBalance: null,
-      accountEntries: null,
+      entry,
+      accountBalance,
+      accountEntries,
       accountNotFound: false,
+      statement,
+      statementNotFound: false,
       notEligible: false,
       forbidden: false,
       notFound: false,
@@ -242,13 +219,18 @@ export async function getLedgerSectionState(
       (err.code === 'JOURNAL_ENTRY_NOT_FOUND' ||
         err.code === 'ACCOUNTING_PERIOD_NOT_FOUND' ||
         err.code === 'RECONCILIATION_DISCREPANCY_NOT_FOUND' ||
+        err.code === 'RECONCILIATION_STATEMENT_NOT_FOUND' ||
         err.code === 'LEDGER_ACCOUNT_NOT_FOUND' ||
         err.code.startsWith('HTTP_404'))
     ) {
       // Inline "no such resource" — actionable, no crash. The specific 404
-      // flag (notFound vs accountNotFound) is determined by the code.
+      // flag (notFound vs accountNotFound vs statementNotFound) is determined
+      // by the code.
       if (err.code === 'LEDGER_ACCOUNT_NOT_FOUND') {
         return { ...EMPTY, accountNotFound: true };
+      }
+      if (err.code === 'RECONCILIATION_STATEMENT_NOT_FOUND') {
+        return { ...EMPTY, statementNotFound: true };
       }
       return { ...EMPTY, notFound: true };
     }

@@ -23,6 +23,7 @@ import type {
   Period,
   AccountBalance,
   AccountEntriesResponse,
+  Statement,
 } from '@/features/ledger-ops';
 import { runAxe } from '../a11y/axe-helper';
 
@@ -982,6 +983,165 @@ describe('LedgerOpsScreen — WCAG AA (axe-clean)', () => {
       />,
       { wrapper: wrapper() },
     );
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-075 — LedgerOpsScreen 대사 tab statement detail
+// ---------------------------------------------------------------------------
+
+const STATEMENT: Statement = {
+  statementId: 'stmt-1',
+  ledgerAccountCode: 'CUSTOMER_WALLET:acc-1',
+  source: 'BANK_FEED',
+  statementDate: '2026-06-13',
+  matchedCount: 1,
+  discrepancyCount: 1,
+  matches: [
+    {
+      statementLineExternalRef: 'ext-ref-001',
+      journalEntryId: 'je-123',
+      money: { amount: '9007199254740993', currency: 'KRW' }, // > 2^53 — F5
+    },
+  ],
+  discrepancies: [
+    {
+      discrepancyId: 'd-stmt-1',
+      type: 'AMOUNT_MISMATCH',
+      externalRef: 'ext-ref-001',
+      journalEntryId: 'je-123',
+      expectedMinor: '9007199254740993',
+      actualMinor: '9007199254740990',
+      currency: 'KRW',
+      status: 'OPEN',
+    },
+  ],
+};
+
+describe('LedgerOpsScreen — 대사 tab statement (TASK-PC-FE-075)', () => {
+  function renderRecon(overrides: Partial<Parameters<typeof LedgerOpsScreen>[0]> = {}) {
+    return render(
+      <LedgerOpsScreen
+        initialEntryId={null}
+        trialBalance={TRIAL_BALANCE}
+        periods={PERIODS}
+        discrepancies={DISCREPANCIES}
+        initialEntry={null}
+        {...overrides}
+      />,
+      { wrapper: wrapper() },
+    );
+  }
+
+  it('the 대사 tab contains the StatementLookup input (NO new tab added)', () => {
+    renderRecon();
+    fireEvent.click(screen.getByTestId('ledger-tab-reconciliation'));
+    expect(screen.getByTestId('ledger-statement-input')).toBeInTheDocument();
+    // Exactly the same tab count (4 original + account = 5 total; NO 6th).
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs).toHaveLength(5);
+  });
+
+  it('a seeded statementId opens on the 대사 tab with StatementDetail rendered (F5 header values)', () => {
+    renderRecon({
+      initialStatementId: 'stmt-1',
+      initialStatement: STATEMENT,
+    });
+    // Screen opens on the reconciliation tab.
+    expect(screen.getByTestId('ledger-tab-reconciliation')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('ledger-statement-header')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('ledger-statement-account-code').textContent,
+    ).toContain('CUSTOMER_WALLET:acc-1');
+    expect(screen.getByTestId('ledger-statement-source').textContent).toContain(
+      'BANK_FEED',
+    );
+    expect(
+      screen.getByTestId('ledger-statement-matched-count').textContent,
+    ).toBe('1');
+    expect(
+      screen.getByTestId('ledger-statement-discrepancy-count').textContent,
+    ).toBe('1');
+  });
+
+  it('match-row money is rendered via formatMoney (F5 — large KRW minor string, no Number coercion)', () => {
+    renderRecon({
+      initialStatementId: 'stmt-1',
+      initialStatement: STATEMENT,
+    });
+    const matchRow = screen.getByTestId('ledger-statement-match-row-0');
+    // amount '9007199254740993' KRW (scale 0) → numeric portion present.
+    expect(matchRow.textContent).toContain('9007199254740993');
+    // externalRef present.
+    expect(matchRow.textContent).toContain('ext-ref-001');
+  });
+
+  it('clicking a match-row journalEntryId button switches to the 분개 조회 tab (handleSelectEntry)', () => {
+    renderRecon({
+      initialStatementId: 'stmt-1',
+      initialStatement: STATEMENT,
+    });
+    fireEvent.click(screen.getByTestId('ledger-statement-match-entry-0'));
+    // Now on the 분개 조회 tab.
+    expect(screen.getByTestId('ledger-tab-entry')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('ledger-entry-input')).toBeInTheDocument();
+  });
+
+  it('clicking a discrepancy-row link selects that discrepancy in the DiscrepancyDetail (stays on 대사 tab)', () => {
+    renderRecon({
+      initialStatementId: 'stmt-1',
+      initialStatement: STATEMENT,
+    });
+    // The discrepancy table in the statement.
+    const disc0 = screen.getByTestId('ledger-statement-disc-link-0');
+    expect(disc0.textContent).toContain('d-stmt-1');
+    fireEvent.click(disc0);
+    // Still on the 대사 tab (disc link does NOT switch tabs).
+    expect(screen.getByTestId('ledger-tab-reconciliation')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('a seeded statementId that 404\'d renders the not-found notice inline (lookup form stays mounted)', () => {
+    renderRecon({
+      initialStatementId: 'nope',
+      initialStatementNotFound: true,
+    });
+    // Screen opens on the reconciliation tab.
+    expect(screen.getByTestId('ledger-tab-reconciliation')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('ledger-statement-not-found')).toBeInTheDocument();
+    // Lookup form stays mounted after a 404.
+    expect(screen.getByTestId('ledger-statement-input')).toBeInTheDocument();
+    // StatementDetail NOT rendered.
+    expect(screen.queryByTestId('ledger-statement-header')).toBeNull();
+  });
+
+  it('discrepancy queue (DiscrepancyQueue) is still rendered below the statement section', () => {
+    renderRecon({
+      initialStatementId: 'stmt-1',
+      initialStatement: STATEMENT,
+    });
+    // The existing discrepancy queue must still be present.
+    expect(screen.getByTestId('ledger-recon-table')).toBeInTheDocument();
+  });
+
+  it('the 대사 tab with a statement is axe-clean (WCAG AA)', async () => {
+    const { container } = renderRecon({
+      initialStatementId: 'stmt-1',
+      initialStatement: STATEMENT,
+    });
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
   });

@@ -562,6 +562,9 @@ const MESSAGES: Record<string, string> = {
     '대상 대사 차이(reconciliation discrepancy)를 찾을 수 없습니다.',
   // --- finance ledger account-drill reads (TASK-PC-FE-074 / §2.4.7.1) ------
   LEDGER_ACCOUNT_NOT_FOUND: '해당 계정을 찾을 수 없습니다.',
+  // --- finance ledger statement-detail read (TASK-PC-FE-075 / §2.4.7.1) ----
+  RECONCILIATION_STATEMENT_NOT_FOUND:
+    '해당 대사 statement 를 찾을 수 없습니다.',
   // --- finance ledger reconciliation RESOLVE (TASK-PC-FE-073 / §2.4.7.1) ---
   RECONCILIATION_ALREADY_RESOLVED:
     '이미 해소된 대사 차이입니다. 새로고침 후 확인하세요.',

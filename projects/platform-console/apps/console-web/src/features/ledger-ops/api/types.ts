@@ -530,3 +530,68 @@ export interface AccountEntriesQueryParams {
   page?: number;
   size?: number;
 }
+
+// ---------------------------------------------------------------------------
+// Reconciliation statement-detail — TASK-PC-FE-075
+//   § 3 GET /api/finance/ledger/reconciliation/statements/{id}
+//   (reconciliation-api.md § 1 + § 3). STRICTLY READ-ONLY.
+//   No list/search GET over statements (id-driven — the honest ledger
+//   constraint, same as entries + accounts; statement ids come from the
+//   ingest the operator's integration ran — ingest is out of console scope).
+//
+// F5 MONEY: the `money` field on each `StatementMatch` is the SAME F5 Money
+// shape — string minor-units, NEVER a number. `formatMoney(...)` is the
+// only sanctioned render path.
+//
+// TOLERANCE: `source` is a free string (no closed enum in the producer
+// contract — new sources render generically, never throw).
+//
+// The `discrepancies` array reuses the EXISTING `DiscrepancySchema`
+// verbatim (the statement's discrepancies are the same shape as the § 4/§ 5
+// discrepancy reads — do NOT redefine).
+// ---------------------------------------------------------------------------
+
+/**
+ * StatementMatch — one matched line in a reconciliation statement
+ * (`reconciliation-api.md` § 1 `matches` array element).
+ *
+ * `statementLineExternalRef` — the external ref the source system supplied
+ * for this line (links back to the bank/external statement).
+ * `journalEntryId` — the ledger journal entry matched to this line; used by
+ * the console to drill into the Journal Entry tab.
+ * `money` — the matched amount (F5 — string minor-units, NEVER a float).
+ */
+export const StatementMatchSchema = z
+  .object({
+    statementLineExternalRef: z.string(),
+    journalEntryId: z.string(),
+    money: MoneySchema, // F5 — REQUIRED, precision-preserving
+  })
+  .passthrough();
+export type StatementMatch = z.infer<typeof StatementMatchSchema>;
+
+/**
+ * Statement — `reconciliation-api.md` § 3 `GET .../statements/{id}` 200
+ * body `data` sub-object.
+ *
+ * `source` is a free string (tolerant — no closed enum; new values render
+ * generically, no throw). `statementDate` is optional (nullable from the
+ * producer). `matchedCount` + `discrepancyCount` are non-negative integers
+ * (the summary; the actual rows are in `matches` / `discrepancies`).
+ * `discrepancies` reuses the existing `DiscrepancySchema` (the statement's
+ * discrepancies are the SAME shape as the § 4/§ 5 discrepancy reads).
+ */
+export const StatementSchema = z
+  .object({
+    statementId: z.string(),
+    ledgerAccountCode: z.string(),
+    // tolerant free string — no closed enum in the producer contract.
+    source: z.string(),
+    statementDate: z.string().optional(),
+    matchedCount: z.number().int().nonnegative(),
+    discrepancyCount: z.number().int().nonnegative(),
+    matches: z.array(StatementMatchSchema),
+    discrepancies: z.array(DiscrepancySchema), // reuse — do NOT redefine
+  })
+  .passthrough();
+export type Statement = z.infer<typeof StatementSchema>;

@@ -45,7 +45,7 @@ export const dynamic = 'force-dynamic';
 export default async function LedgerPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ entryId?: string; accountCode?: string }>;
+  searchParams?: Promise<{ entryId?: string; accountCode?: string; statementId?: string }>;
 }) {
   // Eligibility pre-flight from the data-driven registry (§ 2.2). A
   // registry 401 → whole-session re-login (no partial authed state); a
@@ -85,8 +85,9 @@ export default async function LedgerPage({
   const sp = (await searchParams) ?? {};
   const entryId = sp.entryId?.trim() || null;
   const accountCode = sp.accountCode?.trim() || null;
+  const statementId = sp.statementId?.trim() || null;
 
-  const state = await getLedgerSectionState(eligible, entryId, accountCode);
+  const state = await getLedgerSectionState(eligible, entryId, accountCode, statementId);
 
   if (state.notEligible) {
     return (
@@ -153,10 +154,10 @@ export default async function LedgerPage({
     );
   }
 
-  // notFound (the seeded entryId 404'd) and accountNotFound (the seeded
-  // accountCode 404'd) are rendered by the LedgerOpsScreen inline inside
-  // their respective tabs (so the lookup form stays mounted), not as
-  // whole-section blocks.
+  // notFound (the seeded entryId 404'd), accountNotFound (the seeded
+  // accountCode 404'd), and statementNotFound (the seeded statementId 404'd)
+  // are rendered by the LedgerOpsScreen inline inside their respective
+  // tab panels (so the lookup forms stay mounted), not as whole-section blocks.
   return (
     <LedgerOpsScreen
       initialEntryId={entryId}
@@ -169,6 +170,9 @@ export default async function LedgerPage({
       initialAccountBalance={state.accountBalance}
       initialAccountEntries={state.accountEntries}
       initialAccountNotFound={state.accountNotFound}
+      initialStatementId={statementId}
+      initialStatement={state.statement}
+      initialStatementNotFound={state.statementNotFound}
     />
   );
 }
