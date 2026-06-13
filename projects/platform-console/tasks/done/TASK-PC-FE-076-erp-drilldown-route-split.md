@@ -8,7 +8,7 @@ console-web ERP: split the single-page ERP operations surface into a 4-way sideb
 
 # Status
 
-review
+done
 
 # Owner
 
