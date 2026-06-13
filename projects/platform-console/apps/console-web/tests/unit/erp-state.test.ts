@@ -1,23 +1,33 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * `features/erp-ops/api/erp-state.ts` — the server-side section
- * state (TASK-PC-FE-010 / § 2.4.8):
- *   - not erp-eligible → `notEligible` block, NO erp call
- *     fabricated (no cross-tenant call; the console never sends a
- *     tenant — erp resolves it from the JWT claim);
- *   - eligible → seeds first-page snapshots of every master
- *     (departments / employees / job-grades / cost-centers /
- *     business-partners) in parallel (IAM OIDC token, server-side);
- *   - eligible + asOf → asOf threads through to every leg
- *     verbatim (the CORE E3 invariant);
+ * `features/erp-ops/api/erp-state.ts` — the FOUR per-route state
+ * loaders (TASK-PC-FE-010 surface; TASK-PC-FE-076 drill-in split).
+ * The monolithic `getErpSectionState` (one page, 9 legs) is replaced
+ * by 4 focused loaders, each fetching ONLY its route's slice:
+ *   - `getErpMastersState`    — 5 masters (`/erp`);
+ *   - `getErpOrgViewState`    — read-model org-view (`/erp/orgview`);
+ *   - `getErpApprovalState`   — requests + inbox (`/erp/approval`);
+ *   - `getErpDelegationState` — delegation facts (`/erp/delegation`).
+ *
+ * Per loader (§ 2.4.8 / § 2.5):
+ *   - not erp-eligible → `notEligible` block, NO erp call fabricated
+ *     (the console never sends a tenant — erp resolves it from the
+ *     JWT claim);
+ *   - eligible → seeds first-page snapshot(s) of its slice in
+ *     parallel (IAM OIDC token, server-side);
+ *   - eligible + asOf → asOf threads through verbatim (the CORE E3
+ *     invariant) on the masters + org-view loaders; approval +
+ *     delegation have no asOf concept;
  *   - 403 → `forbidden` (inline, no crash);
- *   - 503 / timeout → `degraded` (finance section only — shell
- *     intact);
+ *   - 503 / timeout → `degraded` (this route only — shell intact);
  *   - **no 429 / Retry-After branch** — a stray 429 lands as a
  *     generic ApiError → `degraded` (no fabricated backoff path).
+ *   - 401 → whole-session re-login (redirect).
  *
- * 401 → whole-session re-login (redirect) is exercised here too.
+ * Per-route degrade ISOLATION (the point of the split): an
+ * approval-service outage degrades `/erp/approval` ONLY — the masters
+ * route is unaffected (it does not call the approval legs at all).
  *
  * The queryKey factories (also exported from `erp-state.ts`) are
  * unit-tested separately to pin the key shape (which the cache
@@ -70,7 +80,10 @@ vi.mock('@/shared/config/env', () => ({
 }));
 
 import {
-  getErpSectionState,
+  getErpMastersState,
+  getErpOrgViewState,
+  getErpApprovalState,
+  getErpDelegationState,
   departmentsListKey,
   departmentDetailKey,
   employeesListKey,
@@ -110,63 +123,23 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', () => {
+describe('getErpMastersState — `/erp` masters slice (§ 2.4.8 / PC-FE-076)', () => {
   it('not eligible → notEligible block, NO erp call fabricated', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const state = await getErpSectionState(false);
+    const state = await getErpMastersState(false);
     expect(state.notEligible).toBe(true);
     expect(state.departments).toBeNull();
     expect(state.employees).toBeNull();
     expect(state.jobGrades).toBeNull();
     expect(state.costCenters).toBeNull();
     expect(state.businessPartners).toBeNull();
-    // TASK-PC-FE-049: org-view is also null when not eligible.
-    expect(state.employeeOrgViews).toBeNull();
-    // TASK-PC-FE-051: approval legs also absent (no fabricated call).
-    expect(state.approvalRequests).toBeNull();
-    expect(state.approvalInbox).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('eligible → seeds all 5 masters + read-model org-view + approval legs in parallel (IAM OIDC token)', async () => {
-    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
-    // Each call must return a FRESH Response (Response bodies are
-    // one-shot; the parallel legs would otherwise share a consumed
-    // body and the second leg onward would throw).
-    const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
-      Promise.resolve(jsonResponse(listEnv())),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const state = await getErpSectionState(true);
-    expect(state.notEligible).toBe(false);
-    expect(state.degraded).toBe(false);
-    expect(state.departments).not.toBeNull();
-    expect(state.employees).not.toBeNull();
-    expect(state.jobGrades).not.toBeNull();
-    expect(state.costCenters).not.toBeNull();
-    expect(state.businessPartners).not.toBeNull();
-    // TASK-PC-FE-049: read-model org-view seeded.
-    expect(state.employeeOrgViews).not.toBeNull();
-    // TASK-PC-FE-051: approval requests + inbox seeded.
-    expect(state.approvalRequests).not.toBeNull();
-    expect(state.approvalInbox).not.toBeNull();
-    // TASK-PC-FE-055: delegation-fact read-model leg seeded.
-    expect(state.delegationFacts).not.toBeNull();
-    // 9 legs: 5 masterdata + 1 read-model org-view (FE-049) + 2 approval
-    // (FE-051 — requests list + inbox) + 1 delegation-fact read-model (FE-055).
-    expect(fetchMock.mock.calls.length).toBe(9);
-    for (const [, init] of fetchMock.mock.calls) {
-      const h = (init as RequestInit).headers as Record<string, string>;
-      expect(h.Authorization).toBe('Bearer GAP-ACCESS');
-      expect(h['X-Tenant-Id']).toBeUndefined();
-    }
-  });
-
-  it('eligible + asOf → asOf threads through to every masterdata/read-model leg verbatim (E3 CORE invariant); approval legs are exempt (no asOf concept)', async () => {
+  it('eligible → seeds ONLY the 5 masters in parallel (IAM OIDC token; no org-view/approval/delegation legs)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     // Fresh Response per call (one-shot body).
     const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
@@ -174,24 +147,39 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await getErpSectionState(true, '2025-01-01');
-    // 9 legs total (6 asOf-bearing masterdata + 1 read-model org-view + 2 approval + 1 delegation-fact).
-    // The delegation-fact leg does NOT thread asOf (it uses page/size only at seed; no asOf concept).
-    expect(fetchMock.mock.calls.length).toBe(9);
-    for (const [url] of fetchMock.mock.calls) {
+    const state = await getErpMastersState(true);
+    expect(state.notEligible).toBe(false);
+    expect(state.degraded).toBe(false);
+    expect(state.departments).not.toBeNull();
+    expect(state.employees).not.toBeNull();
+    expect(state.jobGrades).not.toBeNull();
+    expect(state.costCenters).not.toBeNull();
+    expect(state.businessPartners).not.toBeNull();
+    // EXACTLY 5 legs — the masters route fetches ONLY its slice
+    // (the old monolith made 9; PC-FE-076 isolates each route).
+    expect(fetchMock.mock.calls.length).toBe(5);
+    for (const [url, init] of fetchMock.mock.calls) {
       const u = new URL(String(url));
-      if (u.pathname.includes('/approval/')) {
-        // approval-service has no asOf (single-stage workflow, not an
-        // effective-dated master read) — exempt from the E3 thread-through.
-        expect(u.searchParams.get('asOf')).toBeNull();
-      } else if (u.pathname.includes('/read-model/delegations')) {
-        // TASK-PC-FE-055: delegation-fact read-model has no asOf at the seed level
-        // (the delegation-fact list uses page/size filters; asOf is not a producer-
-        // defined filter for this endpoint — it's not an effective-dated master).
-        expect(u.searchParams.get('asOf')).toBeNull();
-      } else {
-        expect(u.searchParams.get('asOf')).toBe('2025-01-01');
-      }
+      // No approval / read-model legs on the masters route.
+      expect(u.pathname).not.toContain('/approval/');
+      expect(u.pathname).not.toContain('/read-model/');
+      const h = (init as RequestInit).headers as Record<string, string>;
+      expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+      expect(h['X-Tenant-Id']).toBeUndefined();
+    }
+  });
+
+  it('eligible + asOf → asOf threads through to every master leg verbatim (E3 CORE invariant)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
+      Promise.resolve(jsonResponse(listEnv())),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getErpMastersState(true, '2025-01-01');
+    expect(fetchMock.mock.calls.length).toBe(5);
+    for (const [url] of fetchMock.mock.calls) {
+      expect(new URL(String(url)).searchParams.get('asOf')).toBe('2025-01-01');
     }
   });
 
@@ -201,52 +189,20 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
       'fetch',
       vi.fn(() => Promise.resolve(erpError('TENANT_FORBIDDEN', 403))),
     );
-    const state = await getErpSectionState(true);
+    const state = await getErpMastersState(true);
     expect(state.forbidden).toBe(true);
     expect(state.degraded).toBe(false);
   });
 
-  it('503 → degraded (erp section only — shell + GAP/wms/scm/finance sections intact)', async () => {
+  it('503 → degraded (erp masters route only)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.resolve(erpError('SERVICE_UNAVAILABLE', 503))),
     );
-    const state = await getErpSectionState(true);
+    const state = await getErpMastersState(true);
     expect(state.degraded).toBe(true);
     expect(state.notEligible).toBe(false);
-  });
-
-  it('read-model org-view leg fails alone → section NOT degraded, only org-view card empty (TASK-PC-FE-069 best-effort isolation)', async () => {
-    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
-    // Only the read-model employee org-view leg fails (503); every
-    // masterdata + approval + delegation leg succeeds. The org-view is a
-    // best-effort SECONDARY projection — its failure MUST NOT degrade the
-    // authoritative masterdata section.
-    const fetchMock = vi.fn((url: string) => {
-      if (String(url).includes('/api/erp/read-model/employees')) {
-        return Promise.resolve(erpError('SERVICE_UNAVAILABLE', 503));
-      }
-      return Promise.resolve(jsonResponse(listEnv()));
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const state = await getErpSectionState(true);
-    // Section stays up — the masterdata legs are the sole degrade authority.
-    expect(state.degraded).toBe(false);
-    expect(state.forbidden).toBe(false);
-    expect(state.notEligible).toBe(false);
-    // Authoritative masters render.
-    expect(state.departments).not.toBeNull();
-    expect(state.employees).not.toBeNull();
-    expect(state.jobGrades).not.toBeNull();
-    expect(state.costCenters).not.toBeNull();
-    expect(state.businessPartners).not.toBeNull();
-    // Only the org-view card is empty (best-effort caught to null).
-    expect(state.employeeOrgViews).toBeNull();
-    // The other best-effort legs (unaffected) still seed.
-    expect(state.approvalRequests).not.toBeNull();
-    expect(state.delegationFacts).not.toBeNull();
   });
 
   it('a stray 429 (no documented erp 429) → degraded (NOT a fabricated backoff)', async () => {
@@ -256,23 +212,14 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
         JSON.stringify({ code: 'RATE_LIMIT_EXCEEDED', message: 'x' }),
         {
           status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': '1',
-          },
+          headers: { 'Content-Type': 'application/json', 'Retry-After': '1' },
         },
       ),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const state = await getErpSectionState(true);
-    // A 429 lands as an ApiError, which erp-state treats as a
-    // degrade (any-other-error → degrade), NOT a retry storm.
+    const state = await getErpMastersState(true);
     expect(state.degraded).toBe(true);
-    // Each leg attempted exactly once (no retry from a 429 honour;
-    // 6 asOf legs + 2 approval legs + 1 delegation-fact leg = 9 fetches max —
-    // TASK-PC-FE-049 adds the read-model leg, TASK-PC-FE-051 the 2 approval
-    // legs, TASK-PC-FE-055 the delegation-fact leg).
-    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(9);
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(5);
     for (const [, init] of fetchMock.mock.calls) {
       expect((init as RequestInit).method).toBe('GET');
     }
@@ -284,9 +231,166 @@ describe('getErpSectionState — eligibility + asOf thread-through (§ 2.4.8)', 
       'fetch',
       vi.fn(() => Promise.resolve(erpError('UNAUTHORIZED', 401))),
     );
-    const err = await getErpSectionState(true).catch((e) => e);
+    const err = await getErpMastersState(true).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).toBe('REDIRECT:/login');
+  });
+});
+
+describe('getErpOrgViewState — `/erp/orgview` read-model slice (PC-FE-076)', () => {
+  it('not eligible → block, NO call', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const state = await getErpOrgViewState(false);
+    expect(state.notEligible).toBe(true);
+    expect(state.employeeOrgViews).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('eligible → seeds ONLY the read-model org-view leg (1 fetch); asOf threads through', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn((_u: string) =>
+      Promise.resolve(jsonResponse(listEnv())),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const state = await getErpOrgViewState(true, '2025-01-01');
+    expect(state.employeeOrgViews).not.toBeNull();
+    expect(state.degraded).toBe(false);
+    expect(fetchMock.mock.calls.length).toBe(1);
+    const u = new URL(String(fetchMock.mock.calls[0]![0]));
+    expect(u.pathname).toContain('/read-model/employees');
+    expect(u.searchParams.get('asOf')).toBe('2025-01-01');
+  });
+
+  it('503 → degraded (the read-model leg IS this route degrade authority now — no longer best-effort)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(erpError('SERVICE_UNAVAILABLE', 503))),
+    );
+    const state = await getErpOrgViewState(true);
+    expect(state.degraded).toBe(true);
+    expect(state.employeeOrgViews).toBeNull();
+  });
+
+  it('403 → forbidden', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(erpError('TENANT_FORBIDDEN', 403))),
+    );
+    const state = await getErpOrgViewState(true);
+    expect(state.forbidden).toBe(true);
+  });
+});
+
+describe('getErpApprovalState — `/erp/approval` slice (PC-FE-076)', () => {
+  it('not eligible → block, NO call', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const state = await getErpApprovalState(false);
+    expect(state.notEligible).toBe(true);
+    expect(state.approvalRequests).toBeNull();
+    expect(state.approvalInbox).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('eligible → seeds ONLY the 2 approval legs (requests + inbox); no asOf concept', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn((_u: string) =>
+      Promise.resolve(jsonResponse(listEnv())),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const state = await getErpApprovalState(true);
+    expect(state.approvalRequests).not.toBeNull();
+    expect(state.approvalInbox).not.toBeNull();
+    expect(fetchMock.mock.calls.length).toBe(2);
+    for (const [url] of fetchMock.mock.calls) {
+      const u = new URL(String(url));
+      expect(u.pathname).toContain('/approval/');
+      // approval is not effective-dated — never carries asOf.
+      expect(u.searchParams.get('asOf')).toBeNull();
+    }
+  });
+
+  it('503 → degraded (the approval legs ARE this route degrade authority now)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(erpError('SERVICE_UNAVAILABLE', 503))),
+    );
+    const state = await getErpApprovalState(true);
+    expect(state.degraded).toBe(true);
+  });
+});
+
+describe('getErpDelegationState — `/erp/delegation` slice (PC-FE-076)', () => {
+  it('not eligible → block, NO call', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const state = await getErpDelegationState(false);
+    expect(state.notEligible).toBe(true);
+    expect(state.delegationFacts).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('eligible → seeds ONLY the delegation-fact read-model leg (1 fetch)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn((_u: string) =>
+      Promise.resolve(jsonResponse(listEnv())),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const state = await getErpDelegationState(true);
+    expect(state.delegationFacts).not.toBeNull();
+    expect(fetchMock.mock.calls.length).toBe(1);
+    expect(
+      new URL(String(fetchMock.mock.calls[0]![0])).pathname,
+    ).toContain('/read-model/delegations');
+  });
+
+  it('503 → degraded', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(erpError('SERVICE_UNAVAILABLE', 503))),
+    );
+    const state = await getErpDelegationState(true);
+    expect(state.degraded).toBe(true);
+  });
+});
+
+describe('per-route degrade ISOLATION (the point of the PC-FE-076 split)', () => {
+  it('an approval-service outage degrades the approval route ONLY — masters/orgview/delegation unaffected', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    // Route by URL: ONLY the approval endpoints 503; everything else 200.
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).includes('/approval/')) {
+        return Promise.resolve(erpError('SERVICE_UNAVAILABLE', 503));
+      }
+      return Promise.resolve(jsonResponse(listEnv()));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const [masters, orgview, approval, delegation] = await Promise.all([
+      getErpMastersState(true),
+      getErpOrgViewState(true),
+      getErpApprovalState(true),
+      getErpDelegationState(true),
+    ]);
+
+    // Approval is the only degraded route.
+    expect(approval.degraded).toBe(true);
+    // The other three routes are healthy — under the old single page a
+    // down approval-service was swallowed; now it is cleanly isolated.
+    expect(masters.degraded).toBe(false);
+    expect(masters.departments).not.toBeNull();
+    expect(orgview.degraded).toBe(false);
+    expect(orgview.employeeOrgViews).not.toBeNull();
+    expect(delegation.degraded).toBe(false);
+    expect(delegation.delegationFacts).not.toBeNull();
   });
 });
 

@@ -14,7 +14,9 @@ import { test, expect } from '@playwright/test';
  *     entry is gone;
  *   - "도메인 상태" has NO sidebar entry (TASK-PC-FE-068) — reached from the
  *     개요 "도메인 상태 요약" card "전체 보기 →"; the page has a back link;
- *   - a new "ERP 운영" (nav-erp → /erp) entry renders the ERP ops screen;
+ *   - the ERP sidebar entry is a drill parent (TASK-PC-FE-076): nav-erp is a
+ *     toggle; drilling in reveals 마스터 (nav-erp-masters → /erp) which renders
+ *     the ERP 마스터 screen;
  *   - the home IAM card is an accessible drill-down link to `/dashboards`;
  *     activating it renders the GAP-only composed overview (re-framed as
  *     "IAM 상세 …") with a back link to /dashboards/overview.
@@ -70,18 +72,37 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
     await page.waitForURL('**/dashboards/overview', { timeout: 15_000 });
   });
 
-  test('new "ERP 운영" nav entry → /erp renders the ERP ops screen', async ({
+  test('ERP drill parent (nav-erp toggle) → 마스터 child renders the ERP 마스터 screen (TASK-PC-FE-076)', async ({
     page,
   }) => {
     await page.goto('/dashboards/overview');
+    // ERP is now a drill TOGGLE (button), not a direct link (PC-FE-076).
     const erp = page.getByTestId('nav-erp');
     await expect(erp).toBeVisible();
-    await expect(erp).toHaveAttribute('href', '/erp');
     await expect(erp).toHaveText('ERP');
+    await expect(erp).not.toHaveAttribute('href', '/erp');
+    // Drill in → the 4 section children appear.
     await erp.click();
+    const masters = page.getByTestId('nav-erp-masters');
+    await expect(masters).toBeVisible();
+    await expect(masters).toHaveAttribute('href', '/erp');
+    await expect(page.getByTestId('nav-erp-orgview')).toHaveAttribute(
+      'href',
+      '/erp/orgview',
+    );
+    await expect(page.getByTestId('nav-erp-approval')).toHaveAttribute(
+      'href',
+      '/erp/approval',
+    );
+    await expect(page.getByTestId('nav-erp-delegation')).toHaveAttribute(
+      'href',
+      '/erp/delegation',
+    );
+    // The 마스터 child navigates to /erp and renders the masters screen.
+    await masters.click();
     await page.waitForURL('**/erp', { timeout: 15_000 });
     await expect(
-      page.getByRole('heading', { name: 'ERP 운영' }),
+      page.getByRole('heading', { name: 'ERP 마스터' }),
     ).toBeVisible();
   });
 

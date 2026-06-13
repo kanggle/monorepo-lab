@@ -31,7 +31,21 @@
  * **list-driven with effective-dating first-class**; do NOT
  * force-fit the finance account-id-driven shape.
  */
-export { ErpOpsScreen } from './components/ErpOpsScreen';
+// TASK-PC-FE-076 — the four drill-in section screens (replacing the single
+// `ErpOpsScreen`): 마스터 / 통합 조회 / 결재함 / 위임.
+export { ErpMastersScreen } from './components/ErpMastersScreen';
+export type { ErpMastersScreenProps } from './components/ErpMastersScreen';
+export { ErpOrgViewScreen } from './components/ErpOrgViewScreen';
+export type { ErpOrgViewScreenProps } from './components/ErpOrgViewScreen';
+export { ErpApprovalScreen } from './components/ErpApprovalScreen';
+export type { ErpApprovalScreenProps } from './components/ErpApprovalScreen';
+export { ErpDelegationScreen } from './components/ErpDelegationScreen';
+export type { ErpDelegationScreenProps } from './components/ErpDelegationScreen';
+// TASK-PC-FE-076 — shared route eligibility pre-flight + notice.
+export { resolveErpEligibility } from './api/erp-eligibility';
+export type { ErpEligibility } from './api/erp-eligibility';
+export { ErpSectionNotice } from './components/ErpSectionNotice';
+export type { ErpNoticeKind } from './components/ErpSectionNotice';
 export { EmployeeOrgViewCard } from './components/EmployeeOrgViewCard';
 // TASK-PC-FE-055 — delegation facts read-only card (위임 현황).
 export { DelegationFactCard } from './components/DelegationFactCard';
@@ -82,8 +96,20 @@ export { CostCenterList } from './components/CostCenterList';
 export { CostCenterDetail } from './components/CostCenterDetail';
 export { BusinessPartnerList } from './components/BusinessPartnerList';
 export { BusinessPartnerDetail } from './components/BusinessPartnerDetail';
-export { getErpSectionState } from './api/erp-state';
-export type { ErpSectionState } from './api/erp-state';
+// TASK-PC-FE-076 — the four per-route state loaders (replacing the single
+// `getErpSectionState`); each fetches ONLY its route's slice.
+export {
+  getErpMastersState,
+  getErpOrgViewState,
+  getErpApprovalState,
+  getErpDelegationState,
+} from './api/erp-state';
+export type {
+  ErpMastersState,
+  ErpOrgViewState,
+  ErpApprovalState,
+  ErpDelegationState,
+} from './api/erp-state';
 export {
   ERP_KEY,
   normaliseAsOf,

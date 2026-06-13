@@ -91,7 +91,26 @@ const GROUPS: NavGroup[] = [
       // the finance entry, gated the same way (no nav-level gating; the
       // page resolves finance eligibility from the registry).
       { href: '/ledger', label: 'Finance Ledger', testid: 'nav-ledger' },
-      { href: '/erp', label: 'ERP', testid: 'nav-erp' },
+      {
+        // TASK-PC-FE-076 — ERP becomes a drill parent (same model as WMS):
+        // the single dense `/erp` page split into 4 section routes. The
+        // parent route `/erp` doubles as the first child (마스터), exactly
+        // as `/wms` is WMS's 운영 child. `nav-erp` now denotes the parent
+        // toggle; `nav-erp-masters` is the new child testid for `/erp`.
+        key: 'erp',
+        label: 'ERP',
+        testid: 'nav-erp',
+        children: [
+          { href: '/erp', label: '마스터', testid: 'nav-erp-masters' },
+          { href: '/erp/orgview', label: '통합 조회', testid: 'nav-erp-orgview' },
+          { href: '/erp/approval', label: '결재함', testid: 'nav-erp-approval' },
+          {
+            href: '/erp/delegation',
+            label: '위임',
+            testid: 'nav-erp-delegation',
+          },
+        ],
+      },
     ],
   },
 ];
