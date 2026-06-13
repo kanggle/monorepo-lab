@@ -1,6 +1,6 @@
 # TASK-MONO-249 — Error-registry Warning reconciliation sweep
 
-Status: review
+Status: done
 Type: monorepo-level (shared `platform/error-handling.md` + cross-project spec adaptation)
 Scope class: doc-only (zero production code)
 
