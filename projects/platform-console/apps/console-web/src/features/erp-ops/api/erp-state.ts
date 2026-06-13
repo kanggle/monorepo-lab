@@ -26,226 +26,233 @@ import type {
 import type { ApprovalListResponse } from './approval-types';
 
 /**
- * Server-side erp operations section state for the `(console)/erp`
- * route (TASK-PC-FE-010 — the FOURTH non-IAM federation; the FIRST
- * internal-system-primary). STRICTLY READ-ONLY — no mutation ever.
+ * Server-side erp operations state for the FOUR `(console)/erp/**`
+ * routes (TASK-PC-FE-010 surface; TASK-PC-FE-076 drill-in split).
+ * The single monolithic `getErpSectionState` (one page, 9 parallel
+ * legs) is replaced by four FOCUSED loaders — one per sidebar drill
+ * destination — so each route fetches ONLY its own slice:
+ *
+ *   - `/erp`            → {@link getErpMastersState}    (5 masters)
+ *   - `/erp/orgview`    → {@link getErpOrgViewState}    (read-model org-view)
+ *   - `/erp/approval`   → {@link getErpApprovalState}   (requests + inbox)
+ *   - `/erp/delegation` → {@link getErpDelegationState} (delegation facts)
+ *
+ * STRICTLY READ-ONLY — no mutation ever (the masterdata write
+ * affordances + the approval/delegation mutations are client-driven
+ * through the same-origin proxy; this seed only reads).
  *
  * Eligibility gate (console-integration-contract § 2.4.8, reusing
  * the § 2.4.5 tenant-model divergence): erp resolves the operator's
  * tenant from the JWT `tenant_id ∈ {erp,*}` claim producer-side —
- * the console does NOT send a tenant. To avoid fabricating a
- * cross-tenant call, the `(console)/erp` PAGE (the app layer — the
- * layer allowed to compose `features/*`) first resolves the
- * operator's erp eligibility from the data-driven registry (§ 2.2,
- * `getCatalog()`) and passes it in here. If not eligible the section
- * blocks with an actionable "no erp-scoped access" state and NO erp
- * call is ever made. erp still rejects cross-tenant producer-side
- * regardless (`403 TENANT_FORBIDDEN`, never weakened here).
+ * the console does NOT send a tenant. Each route first resolves erp
+ * eligibility from the data-driven registry (via
+ * `resolveErpEligibility()` in `./erp-eligibility`) and passes it in
+ * here. If not eligible the loader blocks with `notEligible` and NO
+ * erp call is ever made.
  *
- * List-driven + E3 first-class (§ 2.4.8, honest erp constraint —
- * the INVERSE of FE-009 finance which was account-id-driven): erp
- * v1 exposes both list and detail GETs for every master, all
- * supporting `?asOf=<ISO-8601>` point-in-time read. The section
- * therefore opens directly to the master list views with an
- * `<AsOfPicker>` (URL-bound) controlling the point-in-time read for
- * every list / detail query. This state seed fetches a first-page
- * snapshot of each master so the operator's landing page is
- * populated.
- *
- * Resilience boundary (§ 2.4.8 / § 2.5, mirrors `finance-state.ts`):
+ * Resilience boundary (§ 2.4.8 / § 2.5, unchanged per loader):
  *   - `401` (IAM OIDC session expired) → `redirect('/login')` — a
- *     WHOLE-SESSION re-login, NOT a per-section degrade (no partial
- *     authed state; consistent with the FE-002..009 401 discipline).
- *   - `403` (token not erp-scoped / insufficient scope / outside
- *     org subtree per E6 / external traffic at internal-only
- *     boundary per E7) → a non-crashing inline "not available /
- *     not scoped" state.
- *   - `503` / timeout / network → DEGRADED — ONLY the erp section
- *     renders a degraded notice; the console shell + the IAM / wms
- *     / scm / finance sections stay intact.
+ *     WHOLE-SESSION re-login, NOT a per-section degrade.
+ *   - `403` (token not erp-scoped / outside org subtree / external
+ *     traffic at internal-only boundary) → inline `forbidden`.
+ *   - `503` / timeout / network ({@link ErpUnavailableError}) →
+ *     `degraded` — ONLY this route degrades; the console shell + the
+ *     other erp routes + the IAM / wms / scm / finance sections stay.
  *   - **no 429 handling** (§ 2.4.8 — identical to finance § 2.4.7):
- *     erp has no documented 429; a 429 would land as an unexpected
- *     ApiError → degrade rather than crash (no fabricated backoff).
- *   - any other producer error → degrade rather than crash.
+ *     a stray 429 lands as a generic ApiError → degrade (no
+ *     fabricated backoff).
+ *
+ * Per-route degrade authority change vs the old single page: under
+ * the monolith the org-view / approval / delegation legs were
+ * "best-effort behind the masters" (caught to `null` so a single
+ * outage could not degrade the masters). With the split each of
+ * those slices is its OWN route, so each leg is now the SOLE degrade
+ * authority for its route — an approval-service outage degrades
+ * `/erp/approval` only, never the masters route.
  */
-export interface ErpSectionState {
-  /** First-page list snapshots of every master (success path). All
-   *  five are fetched in parallel server-side so the operator's
-   *  landing page is populated; subsequent navigation (a different
-   *  asOf / page / filter / master detail) goes through the client
-   *  hooks behind the proxy. `null` for any leg whose snapshot
-   *  failed but the section overall did NOT degrade. */
-  departments: DepartmentListResponse | null;
-  employees: EmployeeListResponse | null;
-  jobGrades: JobGradeListResponse | null;
-  costCenters: CostCenterListResponse | null;
-  businessPartners: BusinessPartnerListResponse | null;
-  /** TASK-PC-FE-049 — read-model employee org-view first-page
-   *  snapshot. Eventually-consistent (E5); `null` when the leg
-   *  failed individually (the section overall may still be
-   *  non-degraded — the masterdata legs are independent). */
-  employeeOrgViews: EmployeeOrgViewListResponse | null;
-  /** TASK-PC-FE-051 — approval workflow first-page snapshots
-   *  (requests list + the caller's inbox). `null` when the leg failed
-   *  individually OR the approval-service is not yet reachable (the
-   *  section overall may still render — the approval legs are
-   *  independent / best-effort, NOT a hard section degrade). */
-  approvalRequests: ApprovalListResponse | null;
-  approvalInbox: ApprovalListResponse | null;
-  /** TASK-PC-FE-055 — read-model delegation-fact first-page snapshot.
-   *  Eventually-consistent (E5); `null` when the leg failed
-   *  individually (best-effort — the section overall may still
-   *  render; the masterdata + approval legs are independent). */
-  delegationFacts: DelegationFactListResponse | null;
+
+/** Shared base flags for every per-route state. */
+interface ErpRouteFlags {
   /** True when the operator is not erp-eligible (no erp
    *  product/tenant in their registry) — actionable block, no erp
    *  call fabricated. */
   notEligible: boolean;
-  /** True on a 403 (token not erp-scoped / insufficient scope) —
-   *  inline. */
+  /** True on a 403 (token not erp-scoped / insufficient scope) — inline. */
   forbidden: boolean;
-  /** True on 503 / timeout / network — erp section degrades only. */
+  /** True on 503 / timeout / network — this route degrades only. */
   degraded: boolean;
 }
 
-const EMPTY: ErpSectionState = {
-  departments: null,
-  employees: null,
-  jobGrades: null,
-  costCenters: null,
-  businessPartners: null,
-  employeeOrgViews: null,
-  approvalRequests: null,
-  approvalInbox: null,
-  delegationFacts: null,
+const BLOCKED: ErpRouteFlags = {
   notEligible: false,
   forbidden: false,
   degraded: false,
 };
 
+/** Maps a thrown producer error to the § 2.5 per-route taxonomy.
+ *  401 redirects (never returns); 403 → forbidden; everything else
+ *  (incl. {@link ErpUnavailableError} + a stray 429) → degraded. */
+function flagsForError(err: unknown): ErpRouteFlags {
+  if (err instanceof ApiError && err.status === 401) {
+    // No partial authed state → clean WHOLE-SESSION re-login.
+    redirect('/login');
+  }
+  if (err instanceof ApiError && err.status === 403) {
+    return { ...BLOCKED, forbidden: true };
+  }
+  // ErpUnavailableError (503 / timeout / network) + any other
+  // producer error (incl. an undocumented 429) → degrade, never crash.
+  return { ...BLOCKED, degraded: true };
+}
+
+// ---------------------------------------------------------------------------
+// `/erp` — masterdata route (TASK-PC-FE-076; was the masters slice of the old
+// single page). The 5 masters are the SOLE degrade authority for this route.
+// ---------------------------------------------------------------------------
+
+export interface ErpMastersState extends ErpRouteFlags {
+  departments: DepartmentListResponse | null;
+  employees: EmployeeListResponse | null;
+  jobGrades: JobGradeListResponse | null;
+  costCenters: CostCenterListResponse | null;
+  businessPartners: BusinessPartnerListResponse | null;
+}
+
+const EMPTY_MASTERS: ErpMastersState = {
+  ...BLOCKED,
+  departments: null,
+  employees: null,
+  jobGrades: null,
+  costCenters: null,
+  businessPartners: null,
+};
+
 /**
- * @param eligible  whether the operator is erp-eligible, resolved
- *   by the page from the data-driven registry. `false` ⇒ block (no
- *   erp call).
- * @param asOf      optional E3 point-in-time read — when supplied
- *   it threads through verbatim to every list query (the producer
- *   returns the state-at-that-instant). When omitted the producer
- *   resolves to "today" (UTC).
+ * @param eligible whether the operator is erp-eligible (resolved by
+ *   the page from the data-driven registry). `false` ⇒ block (no call).
+ * @param asOf optional E3 point-in-time read — threaded through every
+ *   master list query verbatim (producer returns the state-at-that-
+ *   instant). Omitted ⇒ producer resolves to "today" (UTC).
  */
-export async function getErpSectionState(
+export async function getErpMastersState(
   eligible: boolean,
   asOf?: string | null,
-): Promise<ErpSectionState> {
-  if (!eligible) {
-    // Not erp-eligible — never fabricate a cross-tenant call.
-    return { ...EMPTY, notEligible: true };
-  }
+): Promise<ErpMastersState> {
+  if (!eligible) return { ...EMPTY_MASTERS, notEligible: true };
 
-  // E3 — thread `asOf` through every leg verbatim. Producer-side
-  // returns the state-at-that-instant for each master (NOT current
-  // state); the rendered UI matches the asOf-instant response. We
-  // deliberately omit `active` so retired rows are NOT hidden at
-  // the consumer (E2 honesty — visually distinct but rendered).
-  const params: ErpListQueryParams = {
-    page: 0,
-    size: 20,
-  };
+  // E3 — thread `asOf` through every leg verbatim. `active` deliberately
+  // omitted so retired rows are NOT hidden (E2 honesty).
+  const params: ErpListQueryParams = { page: 0, size: 20 };
   if (asOf) params.asOf = asOf;
 
-  // read-model org-view params (TASK-PC-FE-049): same asOf; `status`
-  // not specified → producer default (ACTIVE). `departmentId` not
-  // filtered at the section seed level — operator can filter via the
-  // card's own controls later.
-  const orgViewParams = { page: 0, size: 20, ...(asOf ? { asOf } : {}) };
-
-  // TASK-PC-FE-051 — approval legs are best-effort / independent: a single
-  // approval failure (e.g. the approval-service not yet reachable, or a
-  // transient error) must NOT degrade the masterdata section. They are
-  // caught to `null` here so the section still renders; the client hooks
-  // re-fetch behind the proxy and surface their own inline errors. A 401
-  // would already be raised by the masterdata legs (shared IAM session).
-  const approvalRequestsP = listApprovalRequests({ page: 0, size: 20 }).catch(
-    () => null,
-  );
-  const approvalInboxP = listApprovalInbox({ page: 0, size: 20 }).catch(
-    () => null,
-  );
-  // TASK-PC-FE-055 — delegation-fact read-model leg is best-effort / independent:
-  // a failure on this leg (e.g. ERP-BE-015 not yet reachable) must NOT degrade
-  // the masterdata section. Caught to `null` here; client hooks re-fetch behind
-  // the proxy and surface their own inline errors.
-  const delegationFactsP = listDelegationFacts({ page: 0, size: 20 }).catch(
-    () => null,
-  );
-  // TASK-PC-FE-069 — the read-model org-view leg is ALSO best-effort /
-  // independent (§ 2.4.8 *Integrated read-model binding* resilience). The
-  // read-model is an eventually-consistent SECONDARY projection of the
-  // authoritative masterdata masters — its availability MUST NOT gate the
-  // authoritative reads. A failure here (read-model unavailable / 503 /
-  // timeout) degrades ONLY the org-view card, NOT the whole section; the
-  // masterdata legs below remain the sole section-degrade authority. Caught
-  // to `null` here (parity with the approval + delegation legs); a 401 still
-  // surfaces via the shared-token masterdata legs (whole-session re-login).
-  const employeeOrgViewsP = listEmployeeOrgViews(orgViewParams).catch(
-    () => null,
-  );
-
   try {
-    const [
-      departments,
-      employees,
-      jobGrades,
-      costCenters,
-      businessPartners,
-    ] = await Promise.all([
+    const [departments, employees, jobGrades, costCenters, businessPartners] =
+      await Promise.all([
         listDepartments(params),
         listEmployees(params),
         listJobGrades(params),
         listCostCenters(params),
         listBusinessPartners(params),
       ]);
-    const [employeeOrgViews, approvalRequests, approvalInbox, delegationFacts] =
-      await Promise.all([
-        employeeOrgViewsP,
-        approvalRequestsP,
-        approvalInboxP,
-        delegationFactsP,
-      ]);
     return {
+      ...BLOCKED,
       departments,
       employees,
       jobGrades,
       costCenters,
       businessPartners,
-      employeeOrgViews,
-      approvalRequests,
-      approvalInbox,
-      delegationFacts,
-      notEligible: false,
-      forbidden: false,
-      degraded: false,
     };
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
-      // No partial authed state → clean WHOLE-SESSION re-login.
-      redirect('/login');
-    }
-    if (err instanceof ApiError && err.status === 403) {
-      // Token not erp-scoped / outside org subtree / external
-      // traffic at internal-only boundary → inline "not available
-      // / not scoped".
-      return { ...EMPTY, forbidden: true };
-    }
-    if (err instanceof ErpUnavailableError) {
-      // Degrade ONLY the erp section — shell + IAM / wms / scm /
-      // finance sections intact.
-      return { ...EMPTY, degraded: true };
-    }
-    // Any other producer error (incl. an unexpected 429 — erp has
-    // no documented rate-limit, identical to finance, so it falls
-    // here, not into a fabricated backoff path) → degrade rather
-    // than crash.
-    return { ...EMPTY, degraded: true };
+    return { ...EMPTY_MASTERS, ...flagsForError(err) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// `/erp/orgview` — read-model employee org-view (TASK-PC-FE-049/069). The
+// single read-model leg IS this route's degrade authority (no longer a
+// best-effort leg behind the masters).
+// ---------------------------------------------------------------------------
+
+export interface ErpOrgViewState extends ErpRouteFlags {
+  employeeOrgViews: EmployeeOrgViewListResponse | null;
+}
+
+const EMPTY_ORGVIEW: ErpOrgViewState = { ...BLOCKED, employeeOrgViews: null };
+
+export async function getErpOrgViewState(
+  eligible: boolean,
+  asOf?: string | null,
+): Promise<ErpOrgViewState> {
+  if (!eligible) return { ...EMPTY_ORGVIEW, notEligible: true };
+
+  const orgViewParams = { page: 0, size: 20, ...(asOf ? { asOf } : {}) };
+  try {
+    const employeeOrgViews = await listEmployeeOrgViews(orgViewParams);
+    return { ...BLOCKED, employeeOrgViews };
+  } catch (err) {
+    return { ...EMPTY_ORGVIEW, ...flagsForError(err) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// `/erp/approval` — approval workflow (TASK-PC-FE-051). Requests list + the
+// caller's inbox, fetched in parallel; together the route's degrade authority.
+// (approval has no asOf concept — single-stage workflow, not an effective-
+// dated master read.)
+// ---------------------------------------------------------------------------
+
+export interface ErpApprovalState extends ErpRouteFlags {
+  approvalRequests: ApprovalListResponse | null;
+  approvalInbox: ApprovalListResponse | null;
+}
+
+const EMPTY_APPROVAL: ErpApprovalState = {
+  ...BLOCKED,
+  approvalRequests: null,
+  approvalInbox: null,
+};
+
+export async function getErpApprovalState(
+  eligible: boolean,
+): Promise<ErpApprovalState> {
+  if (!eligible) return { ...EMPTY_APPROVAL, notEligible: true };
+
+  try {
+    const [approvalRequests, approvalInbox] = await Promise.all([
+      listApprovalRequests({ page: 0, size: 20 }),
+      listApprovalInbox({ page: 0, size: 20 }),
+    ]);
+    return { ...BLOCKED, approvalRequests, approvalInbox };
+  } catch (err) {
+    return { ...EMPTY_APPROVAL, ...flagsForError(err) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// `/erp/delegation` — delegation 관리(write, client-driven `<DelegationScreen>`,
+// no server seed) + 현황 (read-model delegation facts, TASK-PC-FE-055). Only
+// the read-model fact list is seeded here; it is the route's degrade authority.
+// ---------------------------------------------------------------------------
+
+export interface ErpDelegationState extends ErpRouteFlags {
+  delegationFacts: DelegationFactListResponse | null;
+}
+
+const EMPTY_DELEGATION: ErpDelegationState = {
+  ...BLOCKED,
+  delegationFacts: null,
+};
+
+export async function getErpDelegationState(
+  eligible: boolean,
+): Promise<ErpDelegationState> {
+  if (!eligible) return { ...EMPTY_DELEGATION, notEligible: true };
+
+  try {
+    const delegationFacts = await listDelegationFacts({ page: 0, size: 20 });
+    return { ...BLOCKED, delegationFacts };
+  } catch (err) {
+    return { ...EMPTY_DELEGATION, ...flagsForError(err) };
   }
 }
 

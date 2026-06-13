@@ -17,7 +17,7 @@ vi.mock('next/navigation', () => ({
   },
 }));
 
-import { ErpOpsScreen } from '@/features/erp-ops';
+import { ErpMastersScreen } from '@/features/erp-ops';
 
 /**
  * Regression (TASK-PC-FE-010 AC): the `/erp` surface is an
@@ -112,9 +112,9 @@ describe('erp nav — additive, does not disturb catalog routing (FE-001/002/007
     expect(resolveConsoleRoute(erpUnavailable)).toBe('/erp');
   });
 
-  it('the erp section mounts as an in-console destination (read-only, list-driven)', () => {
+  it('the erp masters section mounts as an in-console destination (read-only, list-driven)', () => {
     render(
-      <ErpOpsScreen
+      <ErpMastersScreen
         initialDepartments={{
           data: [],
           meta: { page: 0, size: 20, totalElements: 0, timestamp: 'x' },
@@ -139,7 +139,7 @@ describe('erp nav — additive, does not disturb catalog routing (FE-001/002/007
       { wrapper: wrapper() },
     );
     expect(
-      screen.getByRole('heading', { name: 'ERP 운영' }),
+      screen.getByRole('heading', { name: 'ERP 마스터' }),
     ).toBeInTheDocument();
     // The AsOfPicker renders as a first-class E3 control.
     expect(screen.getByTestId('erp-asof-input')).toBeInTheDocument();
