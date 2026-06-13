@@ -84,7 +84,23 @@ const GROUPS: NavGroup[] = [
           { href: '/wms/outbound', label: '출고', testid: 'nav-wms-outbound' },
         ],
       },
-      { href: '/scm', label: 'SCM', testid: 'nav-scm' },
+      {
+        // SCM is a drill-in parent (same model as WMS): 운영(/scm — the
+        // FE-008 read section) + 보충(/scm/replenishment — the FE-077
+        // replenishment operator gate). The /scm destination lives on the
+        // 운영 child (nav-scm-ops); nav-scm is the pinned parent back-toggle.
+        key: 'scm',
+        label: 'SCM',
+        testid: 'nav-scm',
+        children: [
+          { href: '/scm', label: '운영', testid: 'nav-scm-ops' },
+          {
+            href: '/scm/replenishment',
+            label: '보충',
+            testid: 'nav-scm-replenishment',
+          },
+        ],
+      },
       {
         // Finance is ONE domain (finance-platform) with TWO bound console
         // surfaces — account-service (운영: 계좌·잔액·거래) + ledger-service

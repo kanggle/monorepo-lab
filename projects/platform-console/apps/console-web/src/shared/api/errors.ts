@@ -324,6 +324,53 @@ export class ScmRateLimitedError extends Error {
 }
 
 /**
+ * scm `demand-planning-service` replenishment operator surface degrade signal
+ * (console-integration-contract § 2.4.6.1 / § 2.5). The SECOND scm service
+ * section (the `demand-planning-service` alongside the § 2.4.6
+ * procurement/inventory-visibility read surface) — and the FIRST scm
+ * operator-MUTATION surface (approve / dismiss), mirroring how
+ * {@link WmsOutboundUnavailableError} (§ 2.4.5.1) binds a second wms service.
+ * A `503 SERVICE_UNAVAILABLE` / timeout / network failure on a demand-planning
+ * call degrades ONLY the replenishment section (the console shell + the GAP /
+ * wms / scm-ops read / finance / erp sections stay intact). Auth failures
+ * (`401` — the IAM OIDC session expired) are raised as {@link ApiError} so the
+ * caller forces a clean WHOLE-SESSION re-login (no partial authed state — NOT a
+ * per-section degrade). Inline-recoverable producer errors
+ * (`403 TENANT_FORBIDDEN`/`FORBIDDEN`, `404 SUGGESTION_NOT_FOUND`,
+ * `422 SKU_SUPPLIER_UNMAPPED` / `INVALID_SUGGESTION_STATE`,
+ * `409 SUGGESTION_ALREADY_MATERIALIZED`, `400|422 VALIDATION_ERROR`) are raised
+ * as {@link ApiError} so the UI renders an inline actionable message without
+ * crashing.
+ *
+ * `429 RATE_LIMIT_EXCEEDED` carries a `Retry-After` and is modeled by
+ * {@link ScmRateLimitedError} (a bounded backoff, NOT a degrade) — reused
+ * verbatim from the § 2.4.6 scm read surface (the same rate-limited scm
+ * gateway; the console must not auto-retry-storm it).
+ *
+ * NOTE the credential reuse: like the § 2.4.6 scm read surface (NOT the IAM
+ * ones), the demand-planning credential is the domain-facing IAM OIDC access
+ * token itself (`getDomainFacingToken()`) — the § 2.4.5 / § 2.4.6 per-domain
+ * credential rule reused verbatim (the #569 invariant is GAP-domain-scoped —
+ * § 2.4.6.1; scm has NO operator-token exchange). The scm error envelope is
+ * **flat** `{ code, message, details?, timestamp }` (DISTINCT from wms's nested
+ * `{ error: { code } }`). No token / PII is ever placed in this error.
+ */
+export class ScmReplenishmentUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: ScmReplenishmentUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ScmReplenishmentUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
+/**
  * finance `account-service` operations surface degrade signal
  * (console-integration-contract § 2.4.7 / § 2.5). Sibling of
  * {@link ScmUnavailableError} / {@link WmsUnavailableError} — the THIRD
@@ -549,6 +596,16 @@ const MESSAGES: Record<string, string> = {
     'scm 게이트웨이 요청이 일시적으로 제한되었습니다. 잠시 후 자동으로 다시 시도합니다.',
   SCM_NOT_ELIGIBLE:
     'scm 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
+  // --- scm demand-planning replenishment (TASK-PC-FE-077 / §2.4.6.1) -------
+  SKU_SUPPLIER_UNMAPPED:
+    '이 SKU 에 매핑된 공급사가 없어 보충 발주를 생성할 수 없습니다. (sku_supplier_map 미설정) 추천은 SUGGESTED 상태로 유지됩니다.',
+  INVALID_SUGGESTION_STATE:
+    '현재 추천 상태에서는 이 작업을 수행할 수 없습니다. 목록을 새로고침한 뒤 확인하세요.',
+  SUGGESTION_ALREADY_MATERIALIZED:
+    '이미 발주(DRAFT PO)가 생성된 추천입니다. 기존 PO 를 확인하세요.',
+  SUGGESTION_NOT_FOUND: '대상 보충 추천을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  SCM_REPLENISHMENT_NOT_ELIGIBLE:
+    'scm 보충 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
   // --- finance operations (TASK-PC-FE-009 / §2.4.7) -----------------------
   // (`ACCOUNT_NOT_FOUND` is shared verbatim with the IAM accounts surface —
   // finance reuses the existing entry; the producer code is identical.)

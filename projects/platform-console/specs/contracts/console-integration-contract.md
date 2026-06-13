@@ -570,6 +570,127 @@ verbatim here, not re-derived).
 > its producer, per the § 2.4.5 rule — not a guess copied from another
 > domain).
 
+#### 2.4.6.1 scm demand-planning replenishment-suggestions operator surface (TASK-PC-FE-077 — cross-reference, not a redefinition)
+
+A **second scm service** bound by the console — the
+**`demand-planning-service`** alongside the § 2.4.6
+procurement/inventory-visibility read surface — exactly as § 2.4.5.1 binds a
+**second wms service** (`outbound-service`) alongside the § 2.4.5
+`admin-service`, and § 2.4.7.1 binds the finance `ledger-service` alongside the
+§ 2.4.7 `account-service`. The console's `features/scm-replenishment` renders,
+**server-side and tenant-scoped**, the scm demand-planning gateway's existing
+reorder-**suggestion** surface: the operator reviews `SUGGESTED` reorder
+suggestions and **approves** (→ a **DRAFT** PO) or **dismisses** them. This is
+the on-screen **human operator gate** of the wms→scm replenishment loop
+(**ADR-MONO-027 § D2/D5**): a wms low-stock alert auto-creates a `SUGGESTED`
+reorder suggestion; this screen is the human gate that turns it into a DRAFT
+PO. It is the **FIRST scm operator-MUTATION surface** (the § 2.4.6 read
+foundation had none — scm had no `admin-service` at v1). The producer contract
+is **authoritative and unchanged** — this section only states the consumer
+obligation and points at the owning scm spec.
+
+This sub-binding **inherits every scm cross-cutting rule already stated in
+§ 2.4.6** and does not restate them: the **credential** (the domain-facing IAM
+OIDC access token — `getDomainFacingToken()`, **never** `getOperatorToken()`;
+scm has NO token-exchange — the #569 invariant is GAP-domain-scoped); the
+**tenant model** (tenant rides in the JWT `tenant_id ∈ {scm,*}` claim — **no**
+`X-Tenant-Id` header; registry-`productKey=scm` eligibility gates the section,
+non-eligible → actionable "no scm-scoped access", no cross-tenant call
+fabricated); the **flat scm error envelope** `{ code, message, details?,
+timestamp }` (DISTINCT from wms's nested `{ error: { code } }`); the **429
+`Retry-After` bounded backoff** (the SAME rate-limited scm gateway as § 2.4.6 —
+reused verbatim, ONE bounded retry, no storm); the **resilience** taxonomy
+(401 → whole-session IAM re-login; 403 → inline "not scoped"; 503/timeout →
+only this section degrades; AbortController hard timeout; tokens/PII never
+logged); and the **§ 3 parity matrix is NOT mutated** (additive domain scope,
+no § 3 row).
+
+- **Authoritative producer (owned by scm, do NOT redefine here — consumed
+  unchanged)**: scm
+  [`demand-planning-api.md`](../../../scm-platform/specs/contracts/http/demand-planning-api.md)
+  — **unchanged, consumed only**. Consumed via the scm gateway at
+  `/api/v1/demand-planning/**` (base URL `SCM_GATEWAY_BASE_URL`, default
+  `http://scm.local` — the SAME scm gateway as the § 2.4.6 read surface). The
+  console consumes exactly these endpoints:
+
+  | # | Operation | Producer endpoint (`demand-planning-api.md` §) | Kind |
+  |---|---|---|---|
+  | 1 | list reorder suggestions | `GET /api/v1/demand-planning/suggestions` (`?status=SUGGESTED\|APPROVED\|MATERIALIZED\|DISMISSED`, `?skuCode`, paginated) | read |
+  | 2 | suggestion detail | `GET /api/v1/demand-planning/suggestions/{id}` | read |
+  | 3 | **approve** | `POST /api/v1/demand-planning/suggestions/{id}/approve` (→ resolves `sku_supplier_map` → DRAFT PO → `MATERIALIZED`) | **mutation** |
+  | 4 | **dismiss** | `POST /api/v1/demand-planning/suggestions/{id}/dismiss` (`* → DISMISSED`) | **mutation** |
+
+  The demand-planning **`policies`** (`GET\|PUT /policies/{skuCode}`) and
+  **`sku-supplier-map`** (`GET\|PUT /sku-supplier-map/{skuCode}`) **seed** routes
+  are an admin-seed surface, **NOT** the operator gate — they are **explicitly
+  out of scope** (not silently dropped). The console v1 replenishment surface =
+  the suggestion read set + the approve/dismiss operator gate.
+
+- **Mutation discipline (the net-new part — record what `demand-planning-api.md`
+  ACTUALLY requires, do NOT cargo-cult IAM § 2.4.1)**: approve/dismiss are
+  `POST` with an **OPTIONAL** JSON body (`{ note }` / `{ reason }`). The
+  producer is **server-side idempotent by suggestion state** (re-approve
+  returns the existing `poId`; re-dismiss is a no-op) — so a client
+  `Idempotency-Key` header is **NOT** required by the contract and is **NOT**
+  attached (do not invent one), and the operator reason rides in the **body**,
+  **NOT** an `X-Operator-Reason` header (the producer defines neither header;
+  carrying IAM's § 2.4.1 scaffolding over is a defect — a test asserts **both**
+  absent). Both actions are **confirm-gated** in the UI (they mutate domain
+  state). The same domain-facing IAM OIDC credential serves the reads **and**
+  the two actions (no stronger credential — the gate is server-side `tenant_id`
+  validation + the producer's DRAFT-PO-only invariant). This mirrors the
+  body-carried-reason / no-invented-key discipline of the § 2.4.7.1 finance
+  ledger reconciliation *resolve* and the § 2.4.8.1 erp delegation *revoke*.
+
+- **Operator-gate invariant surfaced in UI (normative)**: approve materialises a
+  **DRAFT** PO only — the screen MUST show the resulting `poId` + `poStatus:
+  DRAFT` and make explicit that submission is a **separate** Procurement step
+  (this screen NEVER issues a PO submit/confirm/cancel call — a test asserts
+  this; the DRAFT PO is dispatched via procurement's existing `DRAFT →
+  SUBMITTED` flow, reachable from the § 2.4.6 scm-ops PO surface). This is the
+  ADR-MONO-027 D5 human-gate invariant made visible. Each suggestion row shows
+  the `triggerAvailableQty` that explains **why** it was suggested.
+
+- **Resilience (§ 2.5) — action-specific producer errors mapped to actionable
+  inline states (flat scm envelope)**:
+  - `SKU_SUPPLIER_UNMAPPED` (422) → inline "no supplier mapping; cannot
+    reorder"; the suggestion stays `SUGGESTED` (no optimistic transition).
+  - `INVALID_SUGGESTION_STATE` (422) → inline (e.g. cannot approve a
+    `DISMISSED` one / dismiss a `MATERIALIZED` one); the action button is also
+    state-disabled, the inline error is the backstop.
+  - `SUGGESTION_ALREADY_MATERIALIZED` (409 / 200-idempotent) → the idempotent
+    200 is treated as **success** showing the existing `poId` (no duplicate-PO
+    assumption, no error toast); a hard 409 is a benign "already materialized"
+    notice with the existing `poId`.
+  - `SUGGESTION_NOT_FOUND` (404) → inline.
+  - Plus the shared § 2.4.6 mappings: `401 UNAUTHORIZED` → forced whole-session
+    IAM re-login; `403 TENANT_FORBIDDEN`/`FORBIDDEN` → inline "not scoped";
+    `429 RATE_LIMIT_EXCEEDED` (`Retry-After: 1`) → bounded backoff (no storm);
+    `503`/timeout → only this section degrades (the console shell + the § 2.4.6
+    scm read section stay intact). Successful mutations invalidate the list +
+    detail (the `SUGGESTED → MATERIALIZED|DISMISSED` transition reflects without
+    a manual reload). Unknown/future suggestion `status` or `source` enum values
+    degrade to a generic label — the consumer parser is tolerant and never
+    throws (the same tolerant-parser discipline as the § 2.4.6 PO/node status).
+
+- **Producer immutability**: this is a **cross-reference only**. Any change to
+  the scm demand-planning producer contract is an scm project-internal
+  spec-first change in `demand-planning-api.md`; this section follows it, never
+  redefines it (§ 5 Change Rule). The scm-side acknowledgment of this console
+  operator-**action** consumer is the merged scm `gateway-public-routes.md`
+  § *platform-console operator action consumer* (TASK-SCM-BE-027) — the
+  spec-first basis for this binding (the operator-action analog of the § 2.4.6
+  read consumer TASK-SCM-BE-015).
+
+> **Not a § 3 parity row** (same as § 2.4.6): the scm replenishment surface is
+> additive federated **domain** scope, not a IAM `admin-web` parity capability;
+> it adds no § 3 row and changes none. It is the SECOND scm service binding (the
+> scm analog of the § 2.4.5 + § 2.4.5.1 wms pair and the § 2.4.7 + § 2.4.7.1
+> finance pair) and the **first scm operator mutation** — confirming the
+> § 2.4.5/§ 2.4.6 per-domain credential rule holds for a non-IAM **write**
+> surface (the gate is server-side `tenant_id` + the producer DRAFT-PO-only
+> invariant, NOT a stronger credential).
+
 #### 2.4.7 finance operations surface (TASK-PC-FE-009 — cross-reference, not a redefinition)
 
 The **third non-IAM** per-domain binding of § 2.4 (ADR-MONO-013 Phase 5 —

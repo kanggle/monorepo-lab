@@ -8,7 +8,7 @@ console-web — scm replenishment-suggestions operator screen (demand-planning: 
 
 # Status
 
-ready
+review
 
 # Owner
 
