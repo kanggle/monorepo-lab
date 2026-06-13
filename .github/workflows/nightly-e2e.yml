@@ -219,6 +219,7 @@ jobs:
           REVIEW_DB_PASSWORD=ci_review_pass
           PROMOTION_DB_PASSWORD=ci_promotion_pass
           NOTIFICATION_DB_PASSWORD=ci_notification_pass
+          SETTLEMENT_DB_PASSWORD=ci_settlement_pass
           TOSS_PAYMENTS_SECRET_KEY=test_sk_ci_placeholder
           NEXT_PUBLIC_TOSS_CLIENT_KEY=test_ck_ci_placeholder
           MINIO_ROOT_USER=minioadmin
