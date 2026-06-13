@@ -86,6 +86,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-073 | **REVIEW (impl PR open)**. 운영자 admin-dashboard 배송관리 **"택배사 동기화" (refresh-tracking) 버튼** — 무인 스케줄러(BE-360) 안 기다리고 운영자가 즉시 aggregator(Delivery Tracker, ADR-007) 상태 pull. 기존 admin 엔드포인트 `POST /api/shippings/{id}/refresh-tracking`(BE-293, ADMIN-only, best-effort) wiring만. FE-only: `@repo/api-client` `refreshTracking` + admin `use-refresh-tracking` 훅 + `RefreshTrackingButton`(gate=`{SHIPPED,IN_TRANSIT}`∧trackingNumber) + ShippingList(combined isPending). **계약/백엔드 무변경**. UX/latency affordance(correctness는 스케줄러가 이미 커버). 검증=tsc clean+next lint clean(로컬); vitest는 로컬 Node24 vs 프로젝트 Node20 비호환→CI(Node20)가 authoritative. 분석=Opus 4.8 / 구현=Opus 4.8(직접, subagent 경로함정 회피). | admin-dashboard, api-client | code, test |
 
 ## done
 

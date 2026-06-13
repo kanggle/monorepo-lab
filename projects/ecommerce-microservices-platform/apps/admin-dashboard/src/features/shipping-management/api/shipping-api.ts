@@ -24,3 +24,10 @@ export async function updateShippingStatus(
 ): Promise<UpdateShippingStatusResponse> {
   return adminShippingApi.updateStatus(shippingId, data);
 }
+
+// TASK-FE-073 — operator on-demand carrier sync (refresh-tracking, BE-293).
+export async function refreshTracking(
+  shippingId: string,
+): Promise<UpdateShippingStatusResponse> {
+  return adminShippingApi.refreshTracking(shippingId);
+}

@@ -5,14 +5,20 @@ import { DataTable, StatusBadge, FilterBar, ListError, ConfirmDialog } from '@/s
 import type { ColumnDef } from '@/shared/ui';
 import { useShippings } from '../hooks/use-shippings';
 import { useUpdateShippingStatus } from '../hooks/use-update-shipping-status';
+import { useRefreshTracking } from '../hooks/use-refresh-tracking';
 import { SHIPPING_STATUS_OPTIONS } from '@/shared/lib/status-options';
 import { ShipFormDialog } from './ShipFormDialog';
 import { StatusActionButton } from './StatusActionButton';
+import { RefreshTrackingButton } from './RefreshTrackingButton';
 import type { ShippingSummary, ShippingStatus } from '@repo/types';
 
 export function ShippingList() {
   const { data, isLoading, isError, refetch, pagination, filters } = useShippings();
   const mutation = useUpdateShippingStatus();
+  const refreshMutation = useRefreshTracking();
+  // Shared pending guard so a status transition and a carrier sync cannot be
+  // double-submitted across the two mutations (TASK-FE-073 edge case).
+  const isAnyPending = mutation.isPending || refreshMutation.isPending;
 
   const [shipFormTarget, setShipFormTarget] = useState<ShippingSummary | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<{ shipping: ShippingSummary; target: ShippingStatus } | null>(null);
@@ -39,6 +45,10 @@ export function ShippingList() {
       { shippingId: confirmTarget.shipping.shippingId, data: { status: confirmTarget.target } },
       { onSuccess: () => setConfirmTarget(null) },
     );
+  }
+
+  function handleSync(shipping: ShippingSummary) {
+    refreshMutation.mutate({ shippingId: shipping.shippingId });
   }
 
   const columns: ColumnDef<ShippingSummary>[] = [
@@ -73,7 +83,10 @@ export function ShippingList() {
       key: 'actions',
       header: '상태 변경',
       render: (item: ShippingSummary) => (
-        <StatusActionButton shipping={item} isPending={mutation.isPending} onAction={handleAction} />
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <StatusActionButton shipping={item} isPending={isAnyPending} onAction={handleAction} />
+          <RefreshTrackingButton shipping={item} isPending={isAnyPending} onSync={handleSync} />
+        </div>
       ),
     },
   ];
