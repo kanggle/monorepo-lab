@@ -11,30 +11,42 @@ import com.example.order.presentation.dto.AdminOrderDetailResponse;
 import com.example.order.presentation.dto.AdminOrderListResponse;
 import com.example.order.presentation.dto.AdminOrderStatusChangeRequest;
 import com.example.order.presentation.dto.AdminOrderStatusChangeResponse;
-import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Operator-plane order administration (ADR-MONO-031 Phase 1a, TASK-BE-366).
+ *
+ * <p><b>Authorization is enforced at the ecommerce gateway, not in this
+ * controller</b> (extension of the read-leg pattern established in
+ * TASK-MONO-243 for {@code AdminProductController.list}, applied here to both
+ * read and write endpoints):
+ * {@code AccountTypeEnforcementFilter} requires {@code account_type=OPERATOR}
+ * for {@code /api/admin/**}, {@code TenantClaimValidator} requires a non-blank
+ * {@code tenant_id}, and the repository {@code WHERE tenant_id} chokepoint
+ * (Step 2 / M6) enforces tenant isolation. The platform-console OPERATOR
+ * presents an IAM OIDC token with no ecommerce-local {@code ADMIN} role claim,
+ * so ecommerce-local RBAC is intentionally not applied to any endpoint here
+ * — reads ({@code getOrders}/{@code getOrder}) are open to the operator just
+ * like the product list, and the write leg ({@code changeStatus}) follows the
+ * same write-plane rationale.
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/admin/orders")
 public class AdminOrderController {
-
-    private static final String ROLE_ADMIN = "ADMIN";
 
     private final OrderQueryService orderQueryService;
     private final AdminOrderStatusService adminOrderStatusService;
 
     @GetMapping
     public ResponseEntity<AdminOrderListResponse> getOrders(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String status
     ) {
-        validateAdminRole(userRole);
         PageQuery pageQuery = OrderControllerUtils.buildPageQuery(page, size, status);
         PageResult<AdminOrderSummary> result = orderQueryService.getAllOrders(OrderControllerUtils.parseStatus(status), pageQuery);
         return ResponseEntity.ok(AdminOrderListResponse.from(result));
@@ -42,29 +54,19 @@ public class AdminOrderController {
 
     @GetMapping("/{orderId}")
     public ResponseEntity<AdminOrderDetailResponse> getOrder(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String orderId
     ) {
-        validateAdminRole(userRole);
         AdminOrderDetail detail = orderQueryService.getOrderForAdmin(orderId);
         return ResponseEntity.ok(AdminOrderDetailResponse.from(detail));
     }
 
     @PostMapping("/{orderId}/status")
     public ResponseEntity<AdminOrderStatusChangeResponse> changeStatus(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String orderId,
             @Valid @RequestBody AdminOrderStatusChangeRequest request
     ) {
-        validateAdminRole(userRole);
         AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, request.status());
         return ResponseEntity.ok(new AdminOrderStatusChangeResponse(result.orderId(), result.status()));
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!ROLE_ADMIN.equalsIgnoreCase(userRole)) {
-            throw new AccessDeniedException();
-        }
     }
 
 }

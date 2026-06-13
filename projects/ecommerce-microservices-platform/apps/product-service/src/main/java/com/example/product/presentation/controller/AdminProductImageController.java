@@ -11,7 +11,6 @@ import com.example.product.presentation.dto.PresignedUrlResponse;
 import com.example.product.presentation.dto.RegisterImageRequest;
 import com.example.product.presentation.dto.RegisterImageResponse;
 import com.example.product.presentation.dto.UpdateImageRequest;
-import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,28 +21,37 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Operator-plane product-image administration (ADR-MONO-031 Phase 1a, TASK-BE-366).
+ *
+ * <p><b>Authorization is enforced at the ecommerce gateway, not in this
+ * controller</b> (write-plane extension of the read-leg pattern established in
+ * TASK-MONO-243 for {@code AdminProductController.list}):
+ * {@code AccountTypeEnforcementFilter} requires {@code account_type=OPERATOR}
+ * for {@code /api/admin/**}, {@code TenantClaimValidator} requires a non-blank
+ * {@code tenant_id}, and the repository {@code WHERE tenant_id} chokepoint
+ * (Step 2 / M6) enforces tenant isolation. The platform-console OPERATOR
+ * presents an IAM OIDC token with no ecommerce-local {@code ADMIN} role claim,
+ * so write-plane ecommerce-local RBAC is intentionally not applied to any
+ * endpoint here.
+ */
 @RestController
 @RequestMapping("/api/admin/products/{productId}/images")
 @RequiredArgsConstructor
 public class AdminProductImageController {
-
-    private static final String ROLE_ADMIN = "ADMIN";
 
     private final ProductImageService productImageService;
     private final MediaUrlResolver mediaUrlResolver;
 
     @GetMapping
     public ResponseEntity<ImageListResponse> listImages(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId) {
-        validateAdminRole(userRole);
         List<ProductImage> images = productImageService.getImages(productId);
         List<ImageResponse> responses = images.stream()
                 .map(img -> ImageResponse.from(img, mediaUrlResolver.resolve(img.getObjectKey())))
@@ -53,10 +61,8 @@ public class AdminProductImageController {
 
     @PostMapping("/upload-url")
     public ResponseEntity<PresignedUrlResponse> generateUploadUrl(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @Valid @RequestBody PresignedUrlRequest request) {
-        validateAdminRole(userRole);
         PresignedUploadResult result = productImageService.generateUploadUrl(
                 productId, request.contentType(), request.contentLength());
         return ResponseEntity.ok(PresignedUrlResponse.from(result));
@@ -64,10 +70,8 @@ public class AdminProductImageController {
 
     @PostMapping
     public ResponseEntity<RegisterImageResponse> registerImage(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @Valid @RequestBody RegisterImageRequest request) {
-        validateAdminRole(userRole);
         ProductImage image = productImageService.registerImage(
                 productId, request.objectKey(), request.sortOrder(), request.isPrimary());
         String resolvedUrl = mediaUrlResolver.resolve(image.getObjectKey());
@@ -77,11 +81,9 @@ public class AdminProductImageController {
 
     @PatchMapping("/{imageId}")
     public ResponseEntity<ImageResponse> updateImage(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @PathVariable UUID imageId,
             @Valid @RequestBody UpdateImageRequest request) {
-        validateAdminRole(userRole);
         ProductImage image = productImageService.updateImage(
                 productId, imageId, request.sortOrder(), request.isPrimary());
         String resolvedUrl = mediaUrlResolver.resolve(image.getObjectKey());
@@ -90,17 +92,9 @@ public class AdminProductImageController {
 
     @DeleteMapping("/{imageId}")
     public ResponseEntity<Void> deleteImage(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @PathVariable UUID imageId) {
-        validateAdminRole(userRole);
         productImageService.deleteImage(productId, imageId);
         return ResponseEntity.noContent().build();
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!ROLE_ADMIN.equalsIgnoreCase(userRole)) {
-            throw new AccessDeniedException();
-        }
     }
 }

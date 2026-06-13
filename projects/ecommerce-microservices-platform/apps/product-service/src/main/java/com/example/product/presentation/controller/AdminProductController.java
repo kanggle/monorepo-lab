@@ -18,7 +18,6 @@ import com.example.product.presentation.dto.RegisterProductResponse;
 import com.example.product.presentation.dto.UpdateProductRequest;
 import com.example.product.presentation.dto.UpdateVariantRequest;
 import com.example.product.application.dto.VariantDetail;
-import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,7 +28,6 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,8 +38,6 @@ import java.util.UUID;
 @RequestMapping("/api/admin/products")
 @RequiredArgsConstructor
 public class AdminProductController {
-
-    private static final String ROLE_ADMIN = "ADMIN";
 
     /** Page-size cap mirrored from the public {@link ProductController}. */
     private static final int MAX_PAGE_SIZE = 100;
@@ -68,10 +64,10 @@ public class AdminProductController {
      * is {@code ON_SALE|SOLD_OUT|HIDDEN}, with no boolean "active", so a status
      * count would be ambiguous during catalog setup).
      *
-     * <p><b>Authorization — deliberately does NOT call {@link #validateAdminRole}.</b>
-     * The write endpoints on this controller require {@code X-User-Role == ADMIN};
-     * this read MUST NOT. Rationale (consistent with the erp/finance Operator
-     * Overview legs, which are gated purely by federation entitlement-trust):
+     * <p><b>Authorization — deliberately does NOT apply any ecommerce-local RBAC.</b>
+     * This read MUST NOT require an ecommerce-local {@code ADMIN} role. Rationale
+     * (consistent with the erp/finance Operator Overview legs, which are gated
+     * purely by federation entitlement-trust):
      * <ol>
      *   <li>The caller is a platform-console <b>OPERATOR</b> presenting an IAM
      *       OIDC token (no ecommerce-local {@code ADMIN} role claim) — requiring
@@ -103,80 +99,103 @@ public class AdminProductController {
         return ProductListResponse.from(result);
     }
 
+    /**
+     * Operator-plane product registration (ADR-MONO-031 Phase 1a, TASK-BE-366).
+     *
+     * <p><b>Authorization is enforced at the ecommerce gateway, not here</b>
+     * (write-plane mirror of {@link #list}'s rationale, extended from the
+     * read leg established in TASK-MONO-243):
+     * {@code AccountTypeEnforcementFilter} requires {@code account_type=OPERATOR}
+     * for {@code /api/admin/**}, {@code TenantClaimValidator} requires a non-blank
+     * {@code tenant_id}, and the repository {@code WHERE tenant_id} chokepoint
+     * (Step 2 / M6) enforces tenant isolation. The platform-console OPERATOR
+     * presents an IAM OIDC token with no ecommerce-local {@code ADMIN} role claim,
+     * so write-plane ecommerce-local RBAC is intentionally not applied.
+     */
     @PostMapping
     public ResponseEntity<RegisterProductResponse> register(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @Valid @RequestBody RegisterProductRequest request) {
-        validateAdminRole(userRole);
         UUID id = registerProductService.register(request.toCommand());
         return ResponseEntity.status(HttpStatus.CREATED).body(RegisterProductResponse.from(id));
     }
 
+    /**
+     * Operator-plane product update — authorization at the gateway
+     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
+     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     */
     @PatchMapping("/{productId}")
     public ResponseEntity<RegisterProductResponse> update(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @Valid @RequestBody UpdateProductRequest request) {
-        validateAdminRole(userRole);
         UUID id = updateProductService.update(request.toCommand(productId));
         return ResponseEntity.ok(RegisterProductResponse.from(id));
     }
 
+    /**
+     * Operator-plane product deletion — authorization at the gateway
+     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
+     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     */
     @DeleteMapping("/{productId}")
     public ResponseEntity<Void> delete(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId) {
-        validateAdminRole(userRole);
         deleteProductService.delete(productId);
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Operator-plane variant addition — authorization at the gateway
+     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
+     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     */
     @PostMapping("/{productId}/variants")
     public ResponseEntity<VariantDetail> addVariant(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @Valid @RequestBody AddVariantRequest request) {
-        validateAdminRole(userRole);
         VariantDetail variant = variantManagementService.addVariant(
                 productId, request.optionName(), request.stock(), request.additionalPrice());
         return ResponseEntity.status(HttpStatus.CREATED).body(variant);
     }
 
+    /**
+     * Operator-plane variant update — authorization at the gateway
+     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
+     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     */
     @PatchMapping("/{productId}/variants/{variantId}")
     public ResponseEntity<VariantDetail> updateVariant(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @PathVariable UUID variantId,
             @Valid @RequestBody UpdateVariantRequest request) {
-        validateAdminRole(userRole);
         VariantDetail variant = variantManagementService.updateVariant(
                 productId, variantId, request.optionName(), request.additionalPrice());
         return ResponseEntity.ok(variant);
     }
 
+    /**
+     * Operator-plane variant deletion — authorization at the gateway
+     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
+     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     */
     @DeleteMapping("/{productId}/variants/{variantId}")
     public ResponseEntity<Void> deleteVariant(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @PathVariable UUID variantId) {
-        validateAdminRole(userRole);
         variantManagementService.removeVariant(productId, variantId);
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Operator-plane stock adjustment — authorization at the gateway
+     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
+     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     */
     @PatchMapping("/{productId}/stock")
     public ResponseEntity<AdjustStockResponse> adjustStock(
-            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @Valid @RequestBody AdjustStockRequest request) {
-        validateAdminRole(userRole);
         AdjustStockResult result = adjustStockService.adjust(request.toCommand(productId));
         return ResponseEntity.ok(AdjustStockResponse.from(result));
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!ROLE_ADMIN.equalsIgnoreCase(userRole)) {
-            throw new AccessDeniedException();
-        }
     }
 }
