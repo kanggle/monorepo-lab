@@ -130,7 +130,7 @@ Codes activated by the `content-heavy` trait declared in `PROJECT.md`. Expected 
 | NOT_FOUND | 404 | Requested resource does not exist (use only where a domain-specific `*_NOT_FOUND` does not apply) |
 | INTERNAL_ERROR | 500 | Unexpected server-side error |
 | DATA_INTEGRITY_VIOLATION | 409 | Generic DB constraint violation not covered by a domain-specific code. Catch-all surfaced by Spring `DataIntegrityViolationException` when no `*Exception.java` mapping applies. Prefer a domain code when a known constraint is hit |
-| DOWNSTREAM_ERROR | 502 | A downstream internal service returned 5xx/timed out after retries exhausted. The Admin/saas section emits the same string at HTTP 503 for admin integration calls — see that section's `DOWNSTREAM_ERROR` |
+| DOWNSTREAM_ERROR | 502 | A downstream internal service returned 5xx/timed out after retries exhausted. **Intentional dual-status registration**: the Admin/saas section registers the same string at HTTP 503 for admin integration calls (distinct operator semantics) — see that section's `DOWNSTREAM_ERROR`. The 502/503 split is deliberate, not drift (TASK-MONO-244) |
 | CIRCUIT_OPEN | 503 | Downstream circuit breaker is OPEN; the call was rejected without reaching the dependency. Distinct from DOWNSTREAM_ERROR so dashboards can separate "we tried and it failed" from "we shed load" |
 | SERVICE_UNAVAILABLE | 503 | A required upstream service is unavailable |
 
@@ -405,7 +405,7 @@ Owned by `procurement-service`. PO state machine + supplier integration.
 | SUPPLIER_INACTIVE | 422 | Supplier is deactivated; cannot create new PO |
 | SUPPLIER_UNAVAILABLE | 503 | Supplier integration endpoint unreachable after Resilience4j retry / circuit-breaker / bulkhead exhaustion (`SupplierUnavailableException`, S2 / ADR-MONO-005 § D4 Category B reference) |
 | CATALOG_SKU_UNKNOWN | 422 | SKU referenced in a PO line does not exist in the product catalog (`CatalogSkuUnknownException`) |
-| IDEMPOTENCY_KEY_MISMATCH | 422 | `Idempotency-Key` matches an existing request but the request body hash differs (`IdempotencyKeyMismatchException`). Cf. Platform-Common `DUPLICATE_REQUEST` (409) — scm procurement uses 422 for this specific shape |
+| IDEMPOTENCY_KEY_MISMATCH | 422 | `Idempotency-Key` matches an existing request but the request body hash differs (`IdempotencyKeyMismatchException`). Registered intentional alias of Platform-Common `DUPLICATE_REQUEST` (409); scm procurement deliberately maps this body-hash-mismatch shape to **422** (unprocessable semantic variant) rather than the default 409 conflict — the status difference is intentional, not drift (TASK-MONO-244) |
 | SETTLEMENT_PERIOD_LOCKED | 422 | Settlement period is locked; cannot modify PO line in this period (S3 immutability) — **v2-planned**, no `SettlementPeriodLockedException` class yet (deferred to v2 settlement-service) |
 | ASN_OVERRECEIPT | 422 | ASN reports more units than the PO line ordered (per spec deviation policy) |
 | RECONCILIATION_DISCREPANCY_OPEN | 422 | Discrepancy exists; manual operator review required (S8 — auto-close forbidden) — **v2-planned**, no exception class yet (deferred to v2 settlement-service) |
@@ -459,7 +459,7 @@ Owned by `auth-service` (Spring Authorization Server).
 | OAUTH_INSUFFICIENT_SCOPE | 403 | Token scope does not cover the requested resource |
 | LOGIN_RATE_LIMITED | 429 | Per-IP / per-account login attempt threshold exceeded |
 | LOGIN_TENANT_AMBIGUOUS | 400 | Login identifier matches accounts across multiple tenants without disambiguator |
-| CREDENTIALS_INVALID | 401 | IAM auth credentials invalid (email/password login) (`CredentialsInvalidException`). Semantic alias of ecommerce-local `INVALID_CREDENTIALS` — two strings retained intentionally pending future standardization |
+| CREDENTIALS_INVALID | 401 | IAM auth-service credentials invalid (email/password login) (`CredentialsInvalidException`). Registered intentional alias of Platform-Common `INVALID_CREDENTIALS` (401) — both strings are live-emitted (`INVALID_CREDENTIALS`: ecommerce auth + IAM admin-service; `CREDENTIALS_INVALID`: IAM auth-service), so neither can be dropped without a coordinated code+contract change. Unifying to a single string is a deferred per-service follow-up, not floating drift (TASK-MONO-244) |
 | PASSWORD_RESET_TOKEN_INVALID | 400 | Password-reset token unknown, expired, or already consumed (`PasswordResetTokenInvalidException`) |
 | CREDENTIAL_ALREADY_EXISTS | 409 | Credential row already exists for account (e.g. social re-link attempt) (`CredentialAlreadyExistsException`) |
 | SESSION_REVOKED | 401 | Active session has been administratively revoked (`SessionRevokedException`) |
@@ -501,11 +501,11 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | INVALID_RECOVERY_CODE | 401 | 2FA recovery code is invalid (`InvalidRecoveryCodeException`) |
 | ENROLLMENT_REQUIRED | 401 | Operator must complete 2FA enrollment before login (`EnrollmentRequiredException`) |
 | TOKEN_INVALID | 401 | Operator JWT absent, malformed, or signature-invalid (`OperatorUnauthorizedException`) |
-| DOWNSTREAM_ERROR | 503 | Downstream service unavailable on an admin integration call (`DownstreamFailureException`). HTTP 503 (admin-specific) — distinct from Platform-Common General `DOWNSTREAM_ERROR` (502) |
+| DOWNSTREAM_ERROR | 503 | Downstream service unavailable on an admin integration call (`DownstreamFailureException`). HTTP 503 (admin-specific) — intentional dual-status partner of Platform-Common General `DOWNSTREAM_ERROR` (502); the 502/503 split (internal 5xx vs admin-integration unavailable) is deliberate, not drift (TASK-MONO-244) |
 | CIRCUIT_OPEN | 503 | Resilience4j circuit breaker is OPEN (R4j `CallNotPermittedException`). Same string as Platform-Common General — admin-service emission |
 | AUDIT_FAILURE | 500 | Audit write failed; command aborted (fail-closed) (`AuditFailureException`) |
 | BATCH_SIZE_EXCEEDED | 422 | Admin batch operation exceeds size limit (`BatchSizeExceededException`) |
-| IDEMPOTENCY_KEY_CONFLICT | 409 | `Idempotency-Key` already used by a different operation (`IdempotencyKeyConflictException`). Variant of Platform-Common `DUPLICATE_REQUEST` (409) — admin-specific naming |
+| IDEMPOTENCY_KEY_CONFLICT | 409 | `Idempotency-Key` already used by a different operation (`IdempotencyKeyConflictException`). Registered intentional alias of Platform-Common `DUPLICATE_REQUEST` (409) — admin-specific descriptive name, same 409 conflict shape (TASK-MONO-244) |
 | OPERATOR_EMAIL_CONFLICT | 409 | Operator email already exists (`OperatorEmailConflictException`) |
 | OPERATOR_NOT_FOUND | 404 | Operator account not found (`OperatorNotFoundException`) |
 | ROLE_NOT_FOUND | 400 | Role identifier not recognized (`RoleNotFoundException`). Note HTTP 400 (not 404) — invalid identifier value, not missing resource |
@@ -545,8 +545,8 @@ Owned by `community-service` (post / comment / reaction / follow).
 | Code | HTTP | Description |
 |---|---|---|
 | POST_NOT_FOUND | 404 | Post does not exist (or cross-tenant — see `multi-tenant.md` M3) |
-| POST_INVALID_STATE | 422 | Requested transition not allowed from current post state (DRAFT/PUBLISHED/HIDDEN/DELETED) |
-| POST_STATUS_TRANSITION_INVALID | 422 | Same semantic as `POST_INVALID_STATE` — current code emits this string (`InvalidStateTransitionException`); cross-shared with IAM community-service |
+| POST_INVALID_STATE | 422 | Requested transition not allowed from current post state (DRAFT/PUBLISHED/HIDDEN/DELETED). **Not emitted by current code** — repo-wide `src/main` grep finds zero emissions; `POST_STATUS_TRANSITION_INVALID` (next row) is the canonical emitted string. Retained as a registered descriptive alias for historical contract reference; removal is a deferred fan-platform follow-up (TASK-MONO-244) |
+| POST_STATUS_TRANSITION_INVALID | 422 | **Canonical** emitted string for an illegal post-state transition (`InvalidStateTransitionException`); cross-shared with IAM community-service. `POST_INVALID_STATE` (previous row) is its registered, currently-unemitted alias (TASK-MONO-244) |
 | MEMBERSHIP_TIER_INSUFFICIENT | 403 | Caller membership tier below required (PUBLIC < FOLLOWERS < MEMBERS_ONLY < SUBSCRIBERS_ONLY) |
 | MEMBERSHIP_REQUIRED | 403 | Caller's membership tier insufficient for this content (`MembershipRequiredException`). Cross-project alias — see `Community  [domain: saas]` |
 | COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch (`CommentNotFoundException`) |
@@ -592,7 +592,7 @@ Owned by `account-service`. Account lifecycle + available/ledger balance + fund-
 | TRANSACTION_NOT_FOUND | 404 | Transaction does not exist (`TransactionNotFoundException`) |
 | TRANSACTION_STATUS_TRANSITION_INVALID | 409 | Disallowed transaction state-machine transition (`TransactionStatusTransitionInvalidException`) |
 | TRANSACTION_ALREADY_SETTLED | 409 | Mutation of a SETTLED/COMPLETED transaction; correction is reversal-only (`TransactionAlreadySettledException`) (F3) |
-| IDEMPOTENCY_KEY_CONFLICT | 409 | `Idempotency-Key` matches a prior request but the payload differs (`IdempotencyKeyConflictException`) (F1). Cf. Platform-Common `DUPLICATE_REQUEST` (409); scm procurement uses `IDEMPOTENCY_KEY_MISMATCH` (422) for its variant — fintech uses 409 conflict semantics |
+| IDEMPOTENCY_KEY_CONFLICT | 409 | `Idempotency-Key` matches a prior request but the payload differs (`IdempotencyKeyConflictException`) (F1). Registered intentional alias of Platform-Common `DUPLICATE_REQUEST` (409), same 409 conflict shape; the scm `IDEMPOTENCY_KEY_MISMATCH` (422) variant is the only deliberate status divergence in this family (TASK-MONO-244) |
 | CURRENCY_MISMATCH | 422 | Mixed-currency operation or unsupported currency (`CurrencyMismatchException`) (F5) |
 | AMOUNT_INVALID | 422 | Amount ≤ 0, scale violation, or minor-units violation (`AmountInvalidException`) (F5) |
 | IDEMPOTENCY_STORE_UNAVAILABLE | 503 | Redis primary and DB-fallback idempotency store both unavailable (fail-CLOSED, F1) |
