@@ -545,8 +545,7 @@ Owned by `community-service` (post / comment / reaction / follow).
 | Code | HTTP | Description |
 |---|---|---|
 | POST_NOT_FOUND | 404 | Post does not exist (or cross-tenant — see `multi-tenant.md` M3) |
-| POST_INVALID_STATE | 422 | Requested transition not allowed from current post state (DRAFT/PUBLISHED/HIDDEN/DELETED). **Not emitted by current code** — repo-wide `src/main` grep finds zero emissions; `POST_STATUS_TRANSITION_INVALID` (next row) is the canonical emitted string. Retained as a registered descriptive alias for historical contract reference; removal is a deferred fan-platform follow-up (TASK-MONO-244) |
-| POST_STATUS_TRANSITION_INVALID | 422 | **Canonical** emitted string for an illegal post-state transition (`InvalidStateTransitionException`); cross-shared with IAM community-service. `POST_INVALID_STATE` (previous row) is its registered, currently-unemitted alias (TASK-MONO-244) |
+| POST_STATUS_TRANSITION_INVALID | 422 | Illegal post-state transition (DRAFT/PUBLISHED/HIDDEN/DELETED) (`InvalidStateTransitionException`); cross-shared with IAM community-service |
 | MEMBERSHIP_TIER_INSUFFICIENT | 403 | Caller membership tier below required (PUBLIC < FOLLOWERS < MEMBERS_ONLY < SUBSCRIBERS_ONLY) |
 | MEMBERSHIP_REQUIRED | 403 | Caller's membership tier insufficient for this content (`MembershipRequiredException`). Cross-project alias — see `Community  [domain: saas]` |
 | COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch (`CommentNotFoundException`) |
