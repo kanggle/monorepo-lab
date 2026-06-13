@@ -17,13 +17,26 @@ import { formatMoney, type TrialBalance } from '../api/types';
  * out-of-balance trial balance is shown as such (a danger badge), never
  * hidden or silently "corrected".
  *
+ * TASK-PC-FE-074: the optional `onSelectAccount` prop makes each
+ * `ledgerAccountCode` cell a focusable button that drills into the Account
+ * tab. When absent, the cell stays plain text (FE-072 callers are
+ * UNAFFECTED — no breaking change). All existing testids are preserved.
+ *
  * STRICTLY READ-ONLY — no mutation affordance.
  */
 export interface TrialBalanceTableProps {
   trialBalance: TrialBalance;
+  /** Optional drill-in callback (TASK-PC-FE-074). When provided, each
+   *  account code cell becomes a focusable button that calls
+   *  `onSelectAccount(code)`. When absent the cell stays plain text —
+   *  FE-072 callers are unaffected. */
+  onSelectAccount?: (code: string) => void;
 }
 
-export function TrialBalanceTable({ trialBalance }: TrialBalanceTableProps) {
+export function TrialBalanceTable({
+  trialBalance,
+  onSelectAccount,
+}: TrialBalanceTableProps) {
   const tb = trialBalance;
   return (
     <section aria-labelledby="ledger-tb-heading" className="mb-8">
@@ -82,7 +95,18 @@ export function TrialBalanceTable({ trialBalance }: TrialBalanceTableProps) {
                 className="border-b border-border"
               >
                 <td className="p-2" data-testid={`ledger-tb-code-${i}`}>
-                  {a.ledgerAccountCode}
+                  {onSelectAccount ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectAccount(a.ledgerAccountCode)}
+                      data-testid={`ledger-tb-code-link-${i}`}
+                      className="underline text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      {a.ledgerAccountCode}
+                    </button>
+                  ) : (
+                    a.ledgerAccountCode
+                  )}
                 </td>
                 <td className="p-2" data-testid={`ledger-tb-debit-${i}`}>
                   {formatMoney(a.debitTotal)}

@@ -560,6 +560,8 @@ const MESSAGES: Record<string, string> = {
   ACCOUNTING_PERIOD_NOT_FOUND: '대상 회계 기간을 찾을 수 없습니다.',
   RECONCILIATION_DISCREPANCY_NOT_FOUND:
     '대상 대사 차이(reconciliation discrepancy)를 찾을 수 없습니다.',
+  // --- finance ledger account-drill reads (TASK-PC-FE-074 / §2.4.7.1) ------
+  LEDGER_ACCOUNT_NOT_FOUND: '해당 계정을 찾을 수 없습니다.',
   // --- finance ledger reconciliation RESOLVE (TASK-PC-FE-073 / §2.4.7.1) ---
   RECONCILIATION_ALREADY_RESOLVED:
     '이미 해소된 대사 차이입니다. 새로고침 후 확인하세요.',

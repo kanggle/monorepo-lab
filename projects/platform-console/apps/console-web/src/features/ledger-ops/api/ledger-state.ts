@@ -5,12 +5,16 @@ import {
   listPeriods,
   listDiscrepancies,
   getJournalEntry,
+  getAccountBalance,
+  getAccountEntries,
 } from './ledger-api';
 import type {
   TrialBalance,
   PeriodsResponse,
   DiscrepanciesResponse,
   JournalEntry,
+  AccountBalance,
+  AccountEntriesResponse,
 } from './types';
 
 /**
@@ -70,6 +74,16 @@ export interface LedgerSectionState {
    *  supplied AND the fetch succeeded (id-driven; the ledger has no
    *  entry list/search GET). */
   entry: JournalEntry | null;
+  /** The looked-up account balance — seeded ONLY when an `accountCode` is
+   *  supplied AND the fetch succeeded (TASK-PC-FE-074). */
+  accountBalance: AccountBalance | null;
+  /** The first page of entries for the looked-up account — seeded ONLY
+   *  when an `accountCode` is supplied AND the fetch succeeded
+   *  (TASK-PC-FE-074). */
+  accountEntries: AccountEntriesResponse | null;
+  /** True on a 404 LEDGER_ACCOUNT_NOT_FOUND for the supplied `accountCode`
+   *  — inline actionable (TASK-PC-FE-074, mirrors `notFound` for entries). */
+  accountNotFound: boolean;
   /** True when the operator is not finance-eligible (no finance
    *  product/tenant in their registry) — actionable block, no ledger call
    *  fabricated. */
@@ -89,6 +103,9 @@ const EMPTY: LedgerSectionState = {
   periods: null,
   discrepancies: null,
   entry: null,
+  accountBalance: null,
+  accountEntries: null,
+  accountNotFound: false,
   notEligible: false,
   forbidden: false,
   notFound: false,
@@ -96,16 +113,22 @@ const EMPTY: LedgerSectionState = {
 };
 
 /**
- * @param eligible whether the operator is finance-eligible (the ledger is
- *   part of the finance product), resolved by the page from the
+ * @param eligible      whether the operator is finance-eligible (the ledger
+ *   is part of the finance product), resolved by the page from the
  *   data-driven registry. `false` ⇒ block (no ledger call).
- * @param entryId  optional journal entryId — when provided, the section
+ * @param entryId       optional journal entryId — when provided, the section
  *   additionally seeds that entry (id-driven). When absent, only the
  *   browsable index reads are seeded; the JournalEntryLookup renders empty.
+ * @param accountCode   optional ledger account code — when provided, the
+ *   section additionally seeds the account balance + first page of entries
+ *   (TASK-PC-FE-074). A `404 LEDGER_ACCOUNT_NOT_FOUND` on the seeded code
+ *   returns `{ ...EMPTY, accountNotFound: true }` (mirrors `notFound` for
+ *   entries). When absent, `accountBalance`/`accountEntries` are `null`.
  */
 export async function getLedgerSectionState(
   eligible: boolean,
   entryId?: string | null,
+  accountCode?: string | null,
 ): Promise<LedgerSectionState> {
   if (!eligible) {
     // Not finance-eligible — never fabricate a cross-tenant call.
@@ -113,13 +136,42 @@ export async function getLedgerSectionState(
   }
 
   const id = entryId?.trim() || null;
+  const code = accountCode?.trim() || null;
 
   try {
+    // Build the base browsable index reads (always seeded when eligible).
+    const baseReads = [
+      getTrialBalance(),
+      listPeriods({ page: 0, size: 20 }),
+      listDiscrepancies({ status: 'OPEN', page: 0, size: 20 }),
+    ] as const;
+
+    if (id && code) {
+      const [trialBalance, periods, discrepancies, entry, accountBalance, accountEntries] =
+        await Promise.all([
+          ...baseReads,
+          getJournalEntry(id),
+          getAccountBalance(code),
+          getAccountEntries(code, { page: 0, size: 20 }),
+        ]);
+      return {
+        trialBalance,
+        periods,
+        discrepancies,
+        entry,
+        accountBalance,
+        accountEntries,
+        accountNotFound: false,
+        notEligible: false,
+        forbidden: false,
+        notFound: false,
+        degraded: false,
+      };
+    }
+
     if (id) {
       const [trialBalance, periods, discrepancies, entry] = await Promise.all([
-        getTrialBalance(),
-        listPeriods({ page: 0, size: 20 }),
-        listDiscrepancies({ status: 'OPEN', page: 0, size: 20 }),
+        ...baseReads,
         getJournalEntry(id),
       ]);
       return {
@@ -127,22 +179,49 @@ export async function getLedgerSectionState(
         periods,
         discrepancies,
         entry,
+        accountBalance: null,
+        accountEntries: null,
+        accountNotFound: false,
         notEligible: false,
         forbidden: false,
         notFound: false,
         degraded: false,
       };
     }
+
+    if (code) {
+      const [trialBalance, periods, discrepancies, accountBalance, accountEntries] =
+        await Promise.all([
+          ...baseReads,
+          getAccountBalance(code),
+          getAccountEntries(code, { page: 0, size: 20 }),
+        ]);
+      return {
+        trialBalance,
+        periods,
+        discrepancies,
+        entry: null,
+        accountBalance,
+        accountEntries,
+        accountNotFound: false,
+        notEligible: false,
+        forbidden: false,
+        notFound: false,
+        degraded: false,
+      };
+    }
+
     const [trialBalance, periods, discrepancies] = await Promise.all([
-      getTrialBalance(),
-      listPeriods({ page: 0, size: 20 }),
-      listDiscrepancies({ status: 'OPEN', page: 0, size: 20 }),
+      ...baseReads,
     ]);
     return {
       trialBalance,
       periods,
       discrepancies,
       entry: null,
+      accountBalance: null,
+      accountEntries: null,
+      accountNotFound: false,
       notEligible: false,
       forbidden: false,
       notFound: false,
@@ -163,10 +242,14 @@ export async function getLedgerSectionState(
       (err.code === 'JOURNAL_ENTRY_NOT_FOUND' ||
         err.code === 'ACCOUNTING_PERIOD_NOT_FOUND' ||
         err.code === 'RECONCILIATION_DISCREPANCY_NOT_FOUND' ||
+        err.code === 'LEDGER_ACCOUNT_NOT_FOUND' ||
         err.code.startsWith('HTTP_404'))
     ) {
-      // Inline "no such entry" — actionable, no crash (the id-driven
-      // entry read is the only seed that can 404).
+      // Inline "no such resource" — actionable, no crash. The specific 404
+      // flag (notFound vs accountNotFound) is determined by the code.
+      if (err.code === 'LEDGER_ACCOUNT_NOT_FOUND') {
+        return { ...EMPTY, accountNotFound: true };
+      }
       return { ...EMPTY, notFound: true };
     }
     if (err instanceof LedgerUnavailableError) {

@@ -248,3 +248,145 @@ describe('getLedgerSectionState — eligibility + id gates (§ 2.4.7.1)', () => 
     expect((err as Error).message).toBe('REDIRECT:/login');
   });
 });
+
+// ===========================================================================
+// TASK-PC-FE-074 — account-code branch (§ 2.4.7.1 account-level drill reads)
+// ===========================================================================
+
+const BALANCE_ENV = {
+  data: {
+    ledgerAccountCode: 'CUSTOMER_WALLET:acc-1',
+    type: 'LIABILITY',
+    normalSide: 'CREDIT',
+    debitTotal: M('1234567890123'),
+    creditTotal: M('9876543210987'),
+    balance: M('8641975320864'),
+    balanceSide: 'CREDIT',
+  },
+  meta: { timestamp: 'x' },
+};
+const ENTRIES_ENV = {
+  data: [
+    {
+      entryId: 'je-acct-1',
+      postedAt: '2026-06-13T10:00:00Z',
+      direction: 'CREDIT',
+      money: M('13500', 'USD'),
+    },
+  ],
+  meta: { page: 0, size: 20, totalElements: 1, timestamp: 'x' },
+};
+
+/** A router-aware fetch mock that handles balance + entries + the 3 index reads. */
+function routedWithAccount() {
+  return vi.fn((url: string, _init?: RequestInit) => {
+    const u = String(url);
+    // account-balance: /accounts/{code}/balance (no query params)
+    if (u.includes('/accounts/') && u.includes('/balance'))
+      return Promise.resolve(jsonResponse(BALANCE_ENV));
+    // account-entries: /accounts/{code}/entries?page=0&size=20
+    if (u.includes('/accounts/') && u.includes('/entries'))
+      return Promise.resolve(jsonResponse(ENTRIES_ENV));
+    // journal entry: /entries/{entryId}  — no /accounts/ prefix
+    if (u.includes('/entries/') && !u.includes('/accounts/'))
+      return Promise.resolve(
+        jsonResponse({
+          data: { entryId: 'je-1', source: { sourceType: 'TRANSACTION' }, lines: [], balanced: true },
+          meta: { timestamp: 'x' },
+        }),
+      );
+    if (u.includes('/periods')) return Promise.resolve(jsonResponse(PERIODS_ENV));
+    if (u.includes('/discrepancies')) return Promise.resolve(jsonResponse(DISC_ENV));
+    return Promise.resolve(jsonResponse(TB_ENV));
+  });
+}
+
+describe('getLedgerSectionState — TASK-PC-FE-074 accountCode branch', () => {
+  it('eligible + accountCode (no entryId) → seeds balance + entries alongside the 3 browsable index reads', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = routedWithAccount();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const state = await getLedgerSectionState(true, null, 'CUSTOMER_WALLET:acc-1');
+
+    expect(state.notEligible).toBe(false);
+    expect(state.accountBalance).not.toBeNull();
+    expect(state.accountEntries).not.toBeNull();
+    expect(state.accountNotFound).toBe(false);
+    // accountBalance F5: amount is a string.
+    expect(state.accountBalance?.balance.amount).toBe('8641975320864');
+    expect(typeof state.accountBalance?.balance.amount).toBe('string');
+    // entry is null (no entryId supplied).
+    expect(state.entry).toBeNull();
+    // 5 fetches total: 3 index + balance + entries.
+    expect(fetchMock.mock.calls.length).toBe(5);
+  });
+
+  it('eligible + both entryId AND accountCode → seeds all 6 reads (3 index + entry + balance + entries)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = routedWithAccount();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const state = await getLedgerSectionState(true, 'je-1', 'CUSTOMER_WALLET:acc-1');
+
+    expect(state.entry).not.toBeNull();
+    expect(state.accountBalance).not.toBeNull();
+    expect(state.accountEntries).not.toBeNull();
+    expect(state.notFound).toBe(false);
+    expect(state.accountNotFound).toBe(false);
+    // 6 fetches: 3 index + entry + balance + entries.
+    expect(fetchMock.mock.calls.length).toBe(6);
+  });
+
+  it('eligible (no accountCode) → accountBalance + accountEntries are null', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal('fetch', routedWithAccount());
+
+    const state = await getLedgerSectionState(true, null, null);
+
+    expect(state.accountBalance).toBeNull();
+    expect(state.accountEntries).toBeNull();
+    expect(state.accountNotFound).toBe(false);
+  });
+
+  it('404 LEDGER_ACCOUNT_NOT_FOUND → accountNotFound: true (NOT notFound, NOT degraded)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const u = String(url);
+        // account balance or entries — 404
+        if (u.includes('/accounts/'))
+          return Promise.resolve(ledgerError('LEDGER_ACCOUNT_NOT_FOUND', 404));
+        if (u.includes('/periods')) return Promise.resolve(jsonResponse(PERIODS_ENV));
+        if (u.includes('/discrepancies'))
+          return Promise.resolve(jsonResponse(DISC_ENV));
+        return Promise.resolve(jsonResponse(TB_ENV));
+      }),
+    );
+
+    const state = await getLedgerSectionState(true, null, 'CUSTOMER_WALLET:nope');
+
+    expect(state.accountNotFound).toBe(true);
+    expect(state.notFound).toBe(false);
+    expect(state.degraded).toBe(false);
+    expect(state.forbidden).toBe(false);
+  });
+
+  it('the accountCode is URL-encoded in the upstream path (colon → %3A)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = routedWithAccount();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getLedgerSectionState(true, null, 'CUSTOMER_WALLET:acc-1');
+
+    const accountCalls = fetchMock.mock.calls.filter(([u]) =>
+      String(u).includes('/accounts/'),
+    );
+    expect(accountCalls.length).toBe(2); // balance + entries
+    for (const [u] of accountCalls) {
+      expect(String(u)).toContain('CUSTOMER_WALLET%3Aacc-1');
+      expect(String(u)).not.toContain('CUSTOMER_WALLET:acc-1');
+    }
+  });
+});
