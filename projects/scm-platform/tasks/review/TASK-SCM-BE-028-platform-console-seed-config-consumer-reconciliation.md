@@ -8,7 +8,7 @@ scm-side spec reconciliation — recognise platform-console as a sanctioned oper
 
 # Status
 
-ready
+review
 
 # Owner
 

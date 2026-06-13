@@ -100,11 +100,11 @@ the demand-planning operator-action routes (TASK-SCM-BE-027):
 |---|---|
 | `POST /api/v1/demand-planning/suggestions/{id}/approve`, `POST /api/v1/demand-planning/suggestions/{id}/dismiss` | [`demand-planning-api.md`](./demand-planning-api.md) |
 
-- **Out (not console-consumed).** The `GET\|PUT /api/v1/demand-planning/policies/{skuCode}`
-  and `GET\|PUT /api/v1/demand-planning/sku-supplier-map/{skuCode}` routes are
-  **operator/admin seed** surface, **not** the operator gate. They are **not**
-  console-consumed by this acknowledgment (no console seeding screen is specced;
-  if one ever is, it is a separate task).
+- **Not part of *this* (action) acknowledgment.** The `GET\|PUT /api/v1/demand-planning/policies/{skuCode}`
+  and `GET\|PUT /api/v1/demand-planning/sku-supplier-map/{skuCode}` routes are the
+  **operator config (seed)** surface, **not** the suggestion operator gate. They are
+  acknowledged separately as a console **config** consumer in the next subsection
+  (TASK-SCM-BE-028) — they are **not** consumed by this *action* binding.
 - **Credential — unchanged, same as the read consumer.** The console calls the
   actions **server-side** with the **same** human-operator **IAM
   `platform-console-web` OIDC access token** (RS256, ADR-001) the reads already
@@ -132,6 +132,51 @@ the demand-planning operator-action routes (TASK-SCM-BE-027):
   specified in platform-console
   [`console-integration-contract.md`](../../../../platform-console/specs/contracts/console-integration-contract.md)
   § 2.4.6.1 (authored by `TASK-PC-FE-077`), reusing the § 2.4.6 per-domain
+  credential rule.
+
+### platform-console operator config (seed) consumer — demand-planning reorder-policy + sku-supplier-map (ADR-MONO-027)
+
+The action subsection above (TASK-SCM-BE-027) deliberately left the
+demand-planning **seed** routes out. The replenishment operator gate needs an
+operational fix-path: when `approve` fails `SKU_SUPPLIER_UNMAPPED` (no
+`sku_supplier_map` row), the operator must be able to add the mapping (and tune
+the `reorder_policy`) **from the console** rather than out-of-band. ADR-MONO-027
+§ rest-api facet already lists "CRUD the `reorder_policy` / `sku_supplier_map`
+seed" as part of the **same operator rest-api surface** as approve. This
+subsection acknowledges `platform-console` as a sanctioned **operator config
+(seed)** consumer of those routes (TASK-SCM-BE-028):
+
+| Consumed (operator config — the net-new acknowledgment) | scm contract |
+|---|---|
+| `GET\|PUT /api/v1/demand-planning/policies/{skuCode}` | [`demand-planning-api.md`](./demand-planning-api.md) |
+| `GET\|PUT /api/v1/demand-planning/sku-supplier-map/{skuCode}` | [`demand-planning-api.md`](./demand-planning-api.md) |
+
+- **Credential — unchanged, same as the read + action consumers.** The console
+  calls these **server-side** with the **same** human-operator **IAM
+  `platform-console-web` OIDC access token** the reads/actions use, validated by
+  the **already-existing** gateway chain (`AllowedIssuersValidator` +
+  `TenantClaimValidator` `tenant_id ∈ { scm, * }` + `JwtHeaderEnrichmentFilter`
+  `X-Token-Type=user`). "operator/admin seed" in
+  [`demand-planning-api.md`](./demand-planning-api.md) names the *surface*, **not**
+  a stronger credential: scm has **no** operator/admin-token split, so config
+  rides the same operator token. **No new scm OAuth client, no new gateway route,
+  no new gateway code, no new role/scope, no auth-model change.**
+- **Config-surface invariant (why exposing this write is safe).** These are
+  **upsert (PUT) / inspect (GET) per-SKU** seed rows (`reorder_policy`:
+  reorderPoint/safetyStock/reorderQty; `sku_supplier_map`:
+  supplierId/defaultOrderQty/leadTimeDays/currency) that feed **future**
+  suggestion evaluation only. Editing them does **not** mutate existing
+  suggestions or POs, does **not** dispatch anything, and does **not** bypass the
+  operator gate. There is **no list route** — access is per-`{skuCode}` GET/PUT.
+- **Single-org preserved.** scm remains single-organization — the
+  `multi-tenant` non-declaration in [`PROJECT.md`](../../../PROJECT.md) is
+  **unaffected**.
+- **Consumer-only.** Authoritative shapes/error codes
+  (`POLICY_NOT_FOUND`/`MAPPING_NOT_FOUND`/`VALIDATION_ERROR`) stay in
+  [`demand-planning-api.md`](./demand-planning-api.md) (**unchanged**). The
+  console-side obligation is specified in platform-console
+  [`console-integration-contract.md`](../../../../platform-console/specs/contracts/console-integration-contract.md)
+  § 2.4.6.2 (authored by `TASK-PC-FE-080`), reusing the § 2.4.6 per-domain
   credential rule.
 
 ## Error envelope
@@ -230,13 +275,15 @@ gate — `approve` materialises a **DRAFT** PO only (never auto-SUBMIT):
 | GET | `/api/v1/demand-planning/suggestions/{id}` | operator read | n/a |
 | POST | `/api/v1/demand-planning/suggestions/{id}/approve` | operator action | server-side by suggestion state (re-approve → existing `poId`) |
 | POST | `/api/v1/demand-planning/suggestions/{id}/dismiss` | operator action | server-side by suggestion state (re-dismiss = no-op) |
-| GET\|PUT | `/api/v1/demand-planning/policies/{skuCode}` | operator/admin seed | upsert |
-| GET\|PUT | `/api/v1/demand-planning/sku-supplier-map/{skuCode}` | operator/admin seed | upsert |
+| GET\|PUT | `/api/v1/demand-planning/policies/{skuCode}` | operator config (console-consumed) | upsert |
+| GET\|PUT | `/api/v1/demand-planning/sku-supplier-map/{skuCode}` | operator config (console-consumed) | upsert |
 
 > The `suggestions` read + `approve`/`dismiss` action routes are the
-> **platform-console operator-action consumer** surface acknowledged above
-> (TASK-SCM-BE-027). The `policies` / `sku-supplier-map` seed routes are
-> operator/admin-seed, **not** console-consumed.
+> **platform-console operator-action consumer** surface (TASK-SCM-BE-027); the
+> `policies` / `sku-supplier-map` per-SKU seed routes are the **platform-console
+> operator config (seed) consumer** surface (TASK-SCM-BE-028). Both are
+> acknowledged in the subsections above and ride the same operator IAM OIDC
+> token; there is no list route for the seed pair (per-`{skuCode}` only).
 
 ### Local management endpoints
 
@@ -271,3 +318,4 @@ These appear once the v2 services bootstrap (separate tasks):
 - TASK-SCM-BE-002 / TASK-SCM-BE-003 — downstream service bootstraps
 - TASK-SCM-BE-024 — demand-planning-service bootstrap (ADR-MONO-027 Phase 1; activated the `/api/v1/demand-planning/**` route)
 - TASK-SCM-BE-027 — platform-console operator-**action** consumer acknowledgment (demand-planning replenishment gate) + route-catalogue reconciliation
+- TASK-SCM-BE-028 — platform-console operator-**config (seed)** consumer acknowledgment (demand-planning reorder-policy + sku-supplier-map)
