@@ -8,7 +8,7 @@ ecommerce **marketplace settlement / commission slice** — ADR-MONO-030 **Step 
 
 # Status
 
-review
+done
 
 # Owner
 
