@@ -29,10 +29,15 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     // Submenus are collapsed until the parent is opened.
     expect(screen.queryByTestId('nav-wms-ops')).toBeNull();
     expect(screen.queryByTestId('nav-wms-outbound')).toBeNull();
-    // Sibling leaves are plain links and remain visible.
-    expect(screen.getByTestId('nav-scm')).toHaveAttribute('href', '/scm');
-    // Finance is now ALSO a drill parent (운영 + 원장, TASK-PC-FE-078) — a
-    // toggle button, not a link, with its submenus collapsed until opened.
+    // SCM is ALSO a drill-in parent (TASK-PC-FE-077 added 보충): a toggle
+    // button, not a link, with its submenus collapsed at the top level.
+    const scm = screen.getByTestId('nav-scm');
+    expect(scm.tagName).toBe('BUTTON');
+    expect(scm).not.toHaveAttribute('href');
+    expect(screen.queryByTestId('nav-scm-ops')).toBeNull();
+    expect(screen.queryByTestId('nav-scm-replenishment')).toBeNull();
+    // Finance is ALSO a drill parent (운영 + 원장, TASK-PC-FE-078) — a toggle
+    // button, not a link, with its submenus collapsed until opened.
     const finance = screen.getByTestId('nav-finance');
     expect(finance.tagName).toBe('BUTTON');
     expect(finance).not.toHaveAttribute('href');
@@ -54,7 +59,9 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     const nav = screen.getByRole('navigation');
     const firstControl = nav.querySelector('a,button');
     expect(firstControl).toHaveAttribute('data-testid', 'nav-wms');
-    // The drill replaces the top-level list — sibling domains are gone.
+    // The drill replaces the top-level list — sibling domains are gone (SCM is
+    // a sibling drill parent; its toggle button is also hidden inside the WMS
+    // drill).
     expect(screen.queryByTestId('nav-scm')).toBeNull();
     expect(screen.queryByTestId('nav-dashboards')).toBeNull();
   });
@@ -65,9 +72,10 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     expect(screen.getByTestId('nav-wms-outbound')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('nav-wms')); // out
-    // Submenus collapsed, the full top-level list restored.
+    // Submenus collapsed, the full top-level list restored. SCM is restored as
+    // its (collapsed) drill-in parent toggle button (no href).
     expect(screen.queryByTestId('nav-wms-outbound')).toBeNull();
-    expect(screen.getByTestId('nav-scm')).toHaveAttribute('href', '/scm');
+    expect(screen.getByTestId('nav-scm').tagName).toBe('BUTTON');
     expect(screen.getByTestId('nav-dashboards')).toBeInTheDocument();
   });
 
@@ -95,15 +103,51 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     );
   });
 
-  it('leaf domains (SCM) stay direct links — no drill', () => {
-    // After TASK-PC-FE-078 (Finance → drill parent) and TASK-PC-FE-076
-    // (ERP → drill parent), SCM is the only remaining leaf domain.
+  // After TASK-PC-FE-076 (ERP → drill parent), TASK-PC-FE-077 (SCM → drill
+  // parent), and TASK-PC-FE-078 (Finance → drill parent), every 도메인 운영
+  // item is a drill parent — no leaf domain links remain to assert.
+
+  // --- SCM drill parent (TASK-PC-FE-077) — mirrors the WMS tests above ---
+
+  it('clicking SCM drills in: pins SCM at top and reveals 운영 + 보충', () => {
     render(<ConsoleSidebarNav />);
-    for (const [testid, href] of [['nav-scm', '/scm']] as const) {
-      const el = screen.getByTestId(testid);
-      expect(el.tagName).toBe('A');
-      expect(el).toHaveAttribute('href', href);
-    }
+    fireEvent.click(screen.getByTestId('nav-scm'));
+
+    expect(screen.getByTestId('nav-scm-ops')).toHaveAttribute('href', '/scm');
+    expect(screen.getByTestId('nav-scm-replenishment')).toHaveAttribute(
+      'href',
+      '/scm/replenishment',
+    );
+    const nav = screen.getByRole('navigation');
+    const firstControl = nav.querySelector('a,button');
+    expect(firstControl).toHaveAttribute('data-testid', 'nav-scm');
+    // The drill replaces the top-level list — sibling domains are gone.
+    expect(screen.queryByTestId('nav-wms')).toBeNull();
+    expect(screen.queryByTestId('nav-finance')).toBeNull();
+  });
+
+  it('a deep link to /scm/replenishment auto-opens the SCM drill with 보충 active and 운영 inactive', () => {
+    mockPath = '/scm/replenishment';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-scm-replenishment')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-scm-ops')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('a deep link to /scm auto-opens the SCM drill with 운영 active and 보충 inactive', () => {
+    mockPath = '/scm';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-scm-ops')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-scm-replenishment')).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 
   // --- Finance drill parent (TASK-PC-FE-078) — mirrors the WMS tests above ---
@@ -206,7 +250,8 @@ describe('sidebar drill-in — ERP parent (TASK-PC-FE-076)', () => {
 
     fireEvent.click(screen.getByTestId('nav-erp')); // out
     expect(screen.queryByTestId('nav-erp-orgview')).toBeNull();
-    expect(screen.getByTestId('nav-scm')).toHaveAttribute('href', '/scm');
+    // SCM is restored as its (collapsed) drill-in parent toggle button.
+    expect(screen.getByTestId('nav-scm').tagName).toBe('BUTTON');
     expect(screen.getByTestId('nav-dashboards')).toBeInTheDocument();
   });
 
