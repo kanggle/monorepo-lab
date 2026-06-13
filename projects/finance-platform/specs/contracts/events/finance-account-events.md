@@ -93,6 +93,8 @@ Domain rules: [`rules/domains/fintech.md`](../../../../../rules/domains/fintech.
   "failureCode": "...?" }
 ```
 
+> **`failureCode`** (present only when `status: FAILED`): carries the **fintech HTTP error-code string** identifying the rejection cause — it **reuses the HTTP error-code vocabulary**, it is NOT a separate event enum. Current values: `SANCTION_HIT`, `AML_SCREENING_REQUIRED` (both also 422 codes in `platform/error-handling.md`, set via `Transaction.markFailed(...)`). Consumers may map `failureCode` 1:1 to the HTTP error-code registry; any new value must be a registered fintech HTTP error code. (Contrast: iam `auth.login.failed` `failureReason` is a *distinct* enum deliberately diverging from its HTTP code — see TASK-MONO-246. Finance is the aligned-reuse case.)
+
 `finance.transaction.reversed`:
 ```json
 { "transactionId": "<reversal-txn>", "reversalOfTransactionId": "<original>",
