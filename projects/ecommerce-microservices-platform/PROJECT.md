@@ -35,7 +35,7 @@ taxonomy_version: 0.1
 
 명시적으로 선언하지 않은 분류:
 
-- **marketplace**: 단일 판매자 구조 — 셀러 온보딩/정산/수수료 없음
+- **marketplace — 슬라이스 적용(ADR-MONO-030 Step 3/4)**: 더 이상 순수 단일 판매자 구조 아님. **안쪽 `seller_id` 축**(product/order 라인 귀속, Step 3 / TASK-BE-363) + **셀러 정산/수수료**(신규 `settlement-service` — order/payment 이벤트 소비 → order-line 단위 플랫폼 수수료 vs 셀러 순수익 accrual + 환불 reversal, ADR-MONO-030 Step 4 facet b / TASK-BE-365)가 적용됨. trait 으로 선언하진 않음(taxonomy 미보유 태그) — net-zero degrade(플랫폼 기본율 0 = 단일 스토어 경제 동치, D8)로 기존 동작 보존. **여전히 out**: 기간마감/payout/셀러 뱅킹·지급, 부분/비례 환불 clawback, multi-currency, 티어/카테고리 수수료, 셀러 온보딩/실 IAM provisioning(토큰 claim 신뢰) — ADR-MONO-030 §3.4 Step 4 나머지 facet.
 - **regulated**: PCI-DSS 카드 정보 직접 처리 안 함 (PG 위임). GDPR/PIPA 등 컴플라이언스 프레임워크는 아직 미적용
 - **audit-heavy**: 감사 로그 의무화된 도메인 아님. 변경 이력 보관은 기술적 옵션이지 규제 요구는 아님
 - **multi-tenant — 슬라이스 적용(ADR-MONO-030 Step 2)**: 더 이상 단일 테넌트 아님. **product-service + order-service 는 row-level `tenant_id` 격리 적용 완료**(M1; trait 활성). 나머지 11개 서비스(cart/payment/promotion/shipping/review/search/notification/user/auth/admin-dashboard/web-store)는 **in-migration** — named backlog (ADR-MONO-030 §3.4 Step 4). 안쪽 `seller_id` 마켓플레이스 축도 미적용(Step 3 / TASK-BE-358). 슬라이스 밖 서비스는 멀티테넌트 가드 부재 — 신규 작업 시 본 trait 의 M1-M7 을 적용할 것.

@@ -584,6 +584,31 @@ services:
     networks:
       - ecommerce-net
 
+  settlement-postgres:
+    image: postgres:16-alpine
+    container_name: ecommerce-settlement-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: settlement_db
+      POSTGRES_USER: settlement_user
+      POSTGRES_PASSWORD: ${SETTLEMENT_DB_PASSWORD}
+    expose:
+      - "5432"
+    volumes:
+      - settlement-postgres-data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U settlement_user -d settlement_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ecommerce-net
+
   # ──────────────────────────────────────────────
   # 백엔드 서비스
   # auth-service removed by TASK-BE-132 — replaced by GAP OIDC (TASK-MONO-027).
@@ -1000,6 +1025,47 @@ services:
     networks:
       - ecommerce-net
 
+  settlement-service:
+    build:
+      context: .
+      dockerfile: apps/settlement-service/Dockerfile
+    container_name: ecommerce-settlement-service
+    init: true
+    restart: unless-stopped
+    environment:
+      - DB_URL=jdbc:postgresql://settlement-postgres:5432/settlement_db
+      - DB_USERNAME=settlement_user
+      - DB_PASSWORD=${SETTLEMENT_DB_PASSWORD}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SERVER_PORT=8094
+      - SETTLEMENT_DEFAULT_RATE_BPS=${SETTLEMENT_DEFAULT_RATE_BPS:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=settlement-service
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+      - SPRING_PROFILES_ACTIVE=prod
+    expose:
+      - "8094"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    depends_on:
+      settlement-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8094/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 360s
+    networks:
+      - ecommerce-net
+
   gateway-service:
     build:
       context: .
@@ -1030,6 +1096,7 @@ services:
       - REVIEW_SERVICE_URL=http://review-service:8091
       - PROMOTION_SERVICE_URL=http://promotion-service:8092
       - NOTIFICATION_SERVICE_URL=http://notification-service:8093
+      - SETTLEMENT_SERVICE_URL=http://settlement-service:8094
       - SERVER_PORT=8080
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_SERVICE_NAME=gateway-service
@@ -1065,6 +1132,8 @@ services:
       promotion-service:
         condition: service_healthy
       notification-service:
+        condition: service_healthy
+      settlement-service:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
@@ -1174,6 +1243,7 @@ volumes:
   review-postgres-data:
   promotion-postgres-data:
   notification-postgres-data:
+  settlement-postgres-data:
   elasticsearch-data:
   loki-data:
   promtail-data:

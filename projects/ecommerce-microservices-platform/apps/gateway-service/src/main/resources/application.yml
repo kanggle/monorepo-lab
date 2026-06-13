@@ -144,6 +144,19 @@ spring:
                 redis-rate-limiter.burstCapacity: 200
                 key-resolver: "#{@ipKeyResolver}"
 
+        # TASK-BE-365 (ADR-MONO-030 Step 4 facet b): settlement-service —
+        # operator-plane marketplace settlement read + commission-rate admin.
+        - id: settlement-service
+          uri: ${SETTLEMENT_SERVICE_URL:http://localhost:8094}
+          predicates:
+            - Path=/api/admin/settlements/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+                key-resolver: "#{@ipKeyResolver}"
+
 management:
   endpoints:
     web:

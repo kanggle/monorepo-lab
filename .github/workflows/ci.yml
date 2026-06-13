@@ -308,6 +308,7 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:promotion-service:check
           :projects:ecommerce-microservices-platform:apps:review-service:check
           :projects:ecommerce-microservices-platform:apps:search-service:check
+          :projects:ecommerce-microservices-platform:apps:settlement-service:check
           :projects:ecommerce-microservices-platform:apps:shipping-service:check
           :projects:ecommerce-microservices-platform:apps:user-service:check
           --no-daemon --stacktrace
@@ -497,6 +498,7 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:promotion-service:bootJar
           :projects:ecommerce-microservices-platform:apps:review-service:bootJar
           :projects:ecommerce-microservices-platform:apps:search-service:bootJar
+          :projects:ecommerce-microservices-platform:apps:settlement-service:bootJar
           :projects:ecommerce-microservices-platform:apps:shipping-service:bootJar
           :projects:ecommerce-microservices-platform:apps:user-service:bootJar
           --no-daemon --stacktrace
@@ -520,6 +522,7 @@ jobs:
             projects/ecommerce-microservices-platform/apps/promotion-service/build/libs/promotion-service.jar
             projects/ecommerce-microservices-platform/apps/review-service/build/libs/review-service.jar
             projects/ecommerce-microservices-platform/apps/search-service/build/libs/search-service.jar
+            projects/ecommerce-microservices-platform/apps/settlement-service/build/libs/settlement-service.jar
             projects/ecommerce-microservices-platform/apps/shipping-service/build/libs/shipping-service.jar
             projects/ecommerce-microservices-platform/apps/user-service/build/libs/user-service.jar
           retention-days: 1
