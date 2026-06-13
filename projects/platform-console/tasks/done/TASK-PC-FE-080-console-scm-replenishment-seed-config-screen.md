@@ -8,7 +8,7 @@ console-web — scm replenishment seed/config operator screen (demand-planning: 
 
 # Status
 
-review
+done
 
 # Owner
 
