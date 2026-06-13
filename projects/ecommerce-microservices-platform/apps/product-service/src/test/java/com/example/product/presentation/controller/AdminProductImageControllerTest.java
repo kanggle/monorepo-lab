@@ -61,20 +61,15 @@ class AdminProductImageControllerTest {
     // ─── GET / (listImages) ──────────────────────────────────────────────
 
     @Test
-    @DisplayName("GET / - USER 역할 시 403 반환")
-    void listImages_userRole_returns403() throws Exception {
-        mockMvc.perform(get("/api/admin/products/{productId}/images", productId)
-                        .header("X-User-Role", "USER"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-    }
+    @DisplayName("GET / - X-User-Role 헤더 없이 200 (operator-plane, 게이트 위임)")
+    void listImages_noRoleHeader_returns200() throws Exception {
+        given(productImageService.getImages(productId)).willReturn(java.util.List.of());
 
-    @Test
-    @DisplayName("GET / - X-User-Role 헤더 미포함 시 403 반환")
-    void listImages_missingRoleHeader_returns403() throws Exception {
+        // No X-User-Role header — operator-plane: authz is the gateway's
+        // OPERATOR + tenant_id + WHERE tenant_id, not this controller.
         mockMvc.perform(get("/api/admin/products/{productId}/images", productId))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.images").isArray());
     }
 
     // ─── POST /upload-url ────────────────────────────────────────────────
@@ -88,7 +83,6 @@ class AdminProductImageControllerTest {
                 .willReturn(new PresignedUploadResult("https://s3.example.com/presigned", objectKey, expiresAt));
 
         mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId)
-                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "contentType": "image/jpeg", "contentLength": 1024 }
@@ -100,38 +94,12 @@ class AdminProductImageControllerTest {
     }
 
     @Test
-    @DisplayName("POST /upload-url - USER 역할 시 403 반환")
-    void generateUploadUrl_userRole_returns403() throws Exception {
-        mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId)
-                        .header("X-User-Role", "USER")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                { "contentType": "image/jpeg", "contentLength": 1024 }
-                                """))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-    }
-
-    @Test
-    @DisplayName("POST /upload-url - X-User-Role 헤더 미포함 시 403 반환")
-    void generateUploadUrl_missingRoleHeader_returns403() throws Exception {
-        mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                { "contentType": "image/jpeg", "contentLength": 1024 }
-                                """))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-    }
-
-    @Test
     @DisplayName("POST /upload-url - 허용되지 않은 contentType 시 400")
     void generateUploadUrl_invalidContentType_returns400() throws Exception {
         given(productImageService.generateUploadUrl(eq(productId), eq("application/pdf"), anyLong()))
                 .willThrow(new MediaValidationException("Unsupported content type"));
 
         mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId)
-                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "contentType": "application/pdf", "contentLength": 1024 }
@@ -147,7 +115,6 @@ class AdminProductImageControllerTest {
                 .willThrow(new StorageUnavailableException("S3 down", new RuntimeException()));
 
         mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId)
-                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "contentType": "image/jpeg", "contentLength": 1024 }
@@ -168,7 +135,6 @@ class AdminProductImageControllerTest {
         given(mediaUrlResolver.resolve(objectKey)).willReturn("http://cdn/img.jpg");
 
         mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
-                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "objectKey": "%s", "sortOrder": 0, "isPrimary": true }
@@ -180,35 +146,6 @@ class AdminProductImageControllerTest {
     }
 
     @Test
-    @DisplayName("POST / - USER 역할 시 403 반환")
-    void registerImage_userRole_returns403() throws Exception {
-        String objectKey = "products/" + productId + "/0-abc.jpg";
-
-        mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
-                        .header("X-User-Role", "USER")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                { "objectKey": "%s", "sortOrder": 0, "isPrimary": true }
-                                """.formatted(objectKey)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-    }
-
-    @Test
-    @DisplayName("POST / - X-User-Role 헤더 미포함 시 403 반환")
-    void registerImage_missingRoleHeader_returns403() throws Exception {
-        String objectKey = "products/" + productId + "/0-abc.jpg";
-
-        mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                { "objectKey": "%s", "sortOrder": 0, "isPrimary": true }
-                                """.formatted(objectKey)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-    }
-
-    @Test
     @DisplayName("POST / - objectKey HEAD 실패 시 404 MEDIA_NOT_FOUND")
     void registerImage_mediaNotFound_returns404() throws Exception {
         String objectKey = "products/" + productId + "/0-abc.jpg";
@@ -216,7 +153,6 @@ class AdminProductImageControllerTest {
                 .willThrow(new MediaNotFoundException(objectKey));
 
         mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
-                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "objectKey": "%s", "sortOrder": 0, "isPrimary": false }
@@ -233,7 +169,6 @@ class AdminProductImageControllerTest {
                 .willThrow(new ImageLimitExceededException(productId));
 
         mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
-                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "objectKey": "%s", "sortOrder": 0, "isPrimary": false }
@@ -255,38 +190,12 @@ class AdminProductImageControllerTest {
         given(mediaUrlResolver.resolve(objectKey)).willReturn("http://cdn/img.jpg");
 
         mockMvc.perform(patch("/api/admin/products/{productId}/images/{imageId}", productId, imageId)
-                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "sortOrder": 5, "isPrimary": true }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sortOrder").value(5));
-    }
-
-    @Test
-    @DisplayName("PATCH /{imageId} - USER 역할 시 403 반환")
-    void updateImage_userRole_returns403() throws Exception {
-        mockMvc.perform(patch("/api/admin/products/{productId}/images/{imageId}", productId, UUID.randomUUID())
-                        .header("X-User-Role", "USER")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                { "sortOrder": 5, "isPrimary": true }
-                                """))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-    }
-
-    @Test
-    @DisplayName("PATCH /{imageId} - X-User-Role 헤더 미포함 시 403 반환")
-    void updateImage_missingRoleHeader_returns403() throws Exception {
-        mockMvc.perform(patch("/api/admin/products/{productId}/images/{imageId}", productId, UUID.randomUUID())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                { "sortOrder": 5, "isPrimary": true }
-                                """))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
 
     // ─── DELETE /{imageId} ──────────────────────────────────────────────
@@ -297,26 +206,8 @@ class AdminProductImageControllerTest {
         UUID imageId = UUID.randomUUID();
         willDoNothing().given(productImageService).deleteImage(productId, imageId);
 
-        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, imageId)
-                        .header("X-User-Role", "ADMIN"))
+        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, imageId))
                 .andExpect(status().isNoContent());
-    }
-
-    @Test
-    @DisplayName("DELETE /{imageId} - USER 역할 시 403 반환")
-    void deleteImage_userRole_returns403() throws Exception {
-        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, UUID.randomUUID())
-                        .header("X-User-Role", "USER"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-    }
-
-    @Test
-    @DisplayName("DELETE /{imageId} - X-User-Role 헤더 미포함 시 403 반환")
-    void deleteImage_missingRoleHeader_returns403() throws Exception {
-        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, UUID.randomUUID()))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
 
     @Test
@@ -326,8 +217,7 @@ class AdminProductImageControllerTest {
         willThrow(new ImageNotFoundException(imageId))
                 .given(productImageService).deleteImage(productId, imageId);
 
-        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, imageId)
-                        .header("X-User-Role", "ADMIN"))
+        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, imageId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("IMAGE_NOT_FOUND"));
     }
@@ -340,7 +230,6 @@ class AdminProductImageControllerTest {
                 .willThrow(new ProductNotFoundException(productId));
 
         mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
-                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "objectKey": "%s", "sortOrder": 0, "isPrimary": false }
