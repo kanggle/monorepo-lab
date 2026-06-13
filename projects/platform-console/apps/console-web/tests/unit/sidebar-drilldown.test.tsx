@@ -109,7 +109,7 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
 
   // --- SCM drill parent (TASK-PC-FE-077) — mirrors the WMS tests above ---
 
-  it('clicking SCM drills in: pins SCM at top and reveals 운영 + 보충', () => {
+  it('clicking SCM drills in: pins SCM at top and reveals 운영 + 보충 + 설정', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-scm'));
 
@@ -117,6 +117,12 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     expect(screen.getByTestId('nav-scm-replenishment')).toHaveAttribute(
       'href',
       '/scm/replenishment',
+    );
+    // TASK-PC-FE-080 — 설정 is the THIRD SCM child (seed/config operator
+    // surface), mirroring the 보충 child above.
+    expect(screen.getByTestId('nav-scm-config')).toHaveAttribute(
+      'href',
+      '/scm/config',
     );
     const nav = screen.getByRole('navigation');
     const firstControl = nav.querySelector('a,button');
@@ -126,7 +132,7 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     expect(screen.queryByTestId('nav-finance')).toBeNull();
   });
 
-  it('a deep link to /scm/replenishment auto-opens the SCM drill with 보충 active and 운영 inactive', () => {
+  it('a deep link to /scm/replenishment auto-opens the SCM drill with 보충 active and 운영/설정 inactive', () => {
     mockPath = '/scm/replenishment';
     render(<ConsoleSidebarNav />);
     expect(screen.getByTestId('nav-scm-replenishment')).toHaveAttribute(
@@ -136,9 +142,27 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     expect(screen.getByTestId('nav-scm-ops')).not.toHaveAttribute(
       'aria-current',
     );
+    expect(screen.getByTestId('nav-scm-config')).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 
-  it('a deep link to /scm auto-opens the SCM drill with 운영 active and 보충 inactive', () => {
+  it('a deep link to /scm/config auto-opens the SCM drill with 설정 active and 운영/보충 inactive (TASK-PC-FE-080)', () => {
+    mockPath = '/scm/config';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-scm-config')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-scm-ops')).not.toHaveAttribute(
+      'aria-current',
+    );
+    expect(screen.getByTestId('nav-scm-replenishment')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('a deep link to /scm auto-opens the SCM drill with 운영 active and 보충/설정 inactive (longest-prefix)', () => {
     mockPath = '/scm';
     render(<ConsoleSidebarNav />);
     expect(screen.getByTestId('nav-scm-ops')).toHaveAttribute(
@@ -146,6 +170,11 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
       'page',
     );
     expect(screen.getByTestId('nav-scm-replenishment')).not.toHaveAttribute(
+      'aria-current',
+    );
+    // `/scm` (운영) must NOT also light up on the deeper /scm/config route — but
+    // here the path IS /scm, so 설정 stays inactive.
+    expect(screen.getByTestId('nav-scm-config')).not.toHaveAttribute(
       'aria-current',
     );
   });

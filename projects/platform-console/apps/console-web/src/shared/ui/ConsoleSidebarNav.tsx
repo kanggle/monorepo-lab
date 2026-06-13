@@ -87,8 +87,11 @@ const GROUPS: NavGroup[] = [
       {
         // SCM is a drill-in parent (same model as WMS): 운영(/scm — the
         // FE-008 read section) + 보충(/scm/replenishment — the FE-077
-        // replenishment operator gate). The /scm destination lives on the
-        // 운영 child (nav-scm-ops); nav-scm is the pinned parent back-toggle.
+        // replenishment operator gate) + 설정(/scm/config — the FE-080
+        // seed/config operator surface: per-SKU reorder-policy + sku-supplier-map
+        // upsert, the operational fix-path for the 보충 SKU_SUPPLIER_UNMAPPED
+        // gap). The /scm destination lives on the 운영 child (nav-scm-ops);
+        // nav-scm is the pinned parent back-toggle.
         key: 'scm',
         label: 'SCM',
         testid: 'nav-scm',
@@ -99,6 +102,7 @@ const GROUPS: NavGroup[] = [
             label: '보충',
             testid: 'nav-scm-replenishment',
           },
+          { href: '/scm/config', label: '설정', testid: 'nav-scm-config' },
         ],
       },
       {

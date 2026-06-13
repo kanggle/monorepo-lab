@@ -691,6 +691,113 @@ no § 3 row).
 > surface (the gate is server-side `tenant_id` + the producer DRAFT-PO-only
 > invariant, NOT a stronger credential).
 
+#### 2.4.6.2 scm demand-planning reorder-policy + sku-supplier-map seed/config operator surface (TASK-PC-FE-080 — cross-reference, not a redefinition)
+
+A **third scm binding** by the console — the `demand-planning-service`'s per-SKU
+**seed/config** routes (`policies` + `sku-supplier-map`), the **operator config
+arm** of the same `demand-planning-service` whose suggestion-gate § 2.4.6.1
+binds. It is the on-screen **operational fix-path** for the § 2.4.6.1 gap: when
+approve fails `SKU_SUPPLIER_UNMAPPED` (422, no `sku_supplier_map` row), the
+operator today has no console way to add the mapping. The console's
+`features/scm-config` renders, **server-side and tenant-scoped**, a
+**SKU-code-driven** inspect (GET) + upsert (PUT) surface over those routes, so an
+operator can set the per-SKU reorder policy + SKU→supplier mapping that drive
+**future** reorder evaluation, then return to 보충 (§ 2.4.6.1) and approve. The
+producer contract is **authoritative and unchanged** — this section only states
+the consumer obligation and points at the owning scm spec.
+
+This sub-binding **inherits every scm cross-cutting rule already stated in
+§ 2.4.6 / § 2.4.6.1** and does not restate them: the **credential** (the
+domain-facing IAM OIDC access token — `getDomainFacingToken()`, **never**
+`getOperatorToken()`; scm has NO token-exchange — the #569 invariant is
+GAP-domain-scoped; same credential as the read + action + config surfaces); the
+**tenant model** (tenant rides in the JWT `tenant_id ∈ {scm,*}` claim — **no**
+`X-Tenant-Id` header; registry-`productKey=scm` eligibility gates the section,
+non-eligible → actionable "no scm-scoped access", no cross-tenant call
+fabricated); the **flat scm error envelope** `{ code, message, details?,
+timestamp }` (DISTINCT from wms's nested `{ error: { code } }`); the **429
+`Retry-After` bounded backoff** (the SAME rate-limited scm gateway — reused
+verbatim, ONE bounded retry, no storm); the **resilience** taxonomy (401 →
+whole-session IAM re-login; 403 → inline "not scoped"; 503/timeout → only this
+section degrades; AbortController hard timeout; tokens/PII never logged); and the
+**§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
+
+- **Authoritative producer (owned by scm, do NOT redefine here — consumed
+  unchanged)**: scm
+  [`demand-planning-api.md`](../../../scm-platform/specs/contracts/http/demand-planning-api.md)
+  — **unchanged, consumed only**. Consumed via the scm gateway at
+  `/api/v1/demand-planning/**` (base URL `SCM_GATEWAY_BASE_URL`, default
+  `http://scm.local` — the SAME scm gateway as the § 2.4.6 / § 2.4.6.1 surfaces).
+  The console consumes exactly these endpoints:
+
+  | # | Operation | Producer endpoint (`demand-planning-api.md` §) | Kind |
+  |---|---|---|---|
+  | 1 | inspect reorder policy | `GET /api/v1/demand-planning/policies/{skuCode}` (`200` row · `404 POLICY_NOT_FOUND`) | read |
+  | 2 | **upsert reorder policy** | `PUT /api/v1/demand-planning/policies/{skuCode}` (body `{ reorderPoint, safetyStock, reorderQty }` → `200` upserted) | **mutation** |
+  | 3 | inspect sku→supplier map | `GET /api/v1/demand-planning/sku-supplier-map/{skuCode}` (`200` row · `404 MAPPING_NOT_FOUND`) | read |
+  | 4 | **upsert sku→supplier map** | `PUT /api/v1/demand-planning/sku-supplier-map/{skuCode}` (body `{ supplierId, defaultOrderQty, leadTimeDays, currency }` → `200` upserted) | **mutation** |
+
+  **No list route**: the producer exposes ONLY per-`{skuCode}` GET/PUT (there is
+  **no** "list all policies/mappings"). The console surface is therefore
+  **SKU-code-driven** — the operator enters a SKU code, the screen GETs both rows
+  and lets them upsert each. The scm-side acknowledgment of this console operator
+  **config (seed)** consumer is the merged scm `gateway-public-routes.md`
+  § *platform-console operator config (seed) consumer* (TASK-SCM-BE-028) — the
+  spec-first basis for this binding (the seed analog of the § 2.4.6.1 action
+  consumer TASK-SCM-BE-027, which deliberately fenced the seed routes OUT).
+
+- **Mutation discipline (the net-new part — record what `demand-planning-api.md`
+  ACTUALLY requires, do NOT cargo-cult IAM § 2.4.1 nor the § 2.4.6.1 action
+  scaffolding)**: PUT is an **idempotent upsert** — the request **body IS the
+  FULL row** (full-row replace). A confirm step is **required UX** (it mutates
+  seed state), but there is **NO** invented `Idempotency-Key` header and **NO**
+  IAM `X-Operator-Reason` header (the producer defines NEITHER — the body is the
+  row; carrying either over is a defect, a test asserts **both** absent on PUT).
+  The same domain-facing IAM OIDC credential serves the GET inspect **and** the
+  PUT upsert (no stronger credential — the gate is server-side `tenant_id`
+  validation). `supplierId` is a **free-text/uuid** input in v1 — there is no
+  supplier master to resolve against (the `sku_supplier_map` is the deliberate
+  minimal stand-in per ADR-MONO-027 D3); the console validates shape only.
+
+- **Config-surface invariant surfaced in UI (normative)**: editing the seed rows
+  affects **future** reorder-suggestion evaluation only — the screen MUST make
+  clear it does **not** retroactively change existing suggestions or POs and does
+  **not** dispatch anything (a test asserts the screen issues **no**
+  suggestion/PO/dispatch call — only `policies` / `sku-supplier-map` GET/PUT). A
+  GET `404` (`POLICY_NOT_FOUND` / `MAPPING_NOT_FOUND`) is **not** an error — it is
+  "not configured yet", a first-time **create** via PUT (rendered as an
+  actionable empty state, NEVER an error toast; a test pins this).
+
+- **Resilience (§ 2.5) — seed-specific producer states mapped to actionable
+  inline states (flat scm envelope)**:
+  - `POLICY_NOT_FOUND` / `MAPPING_NOT_FOUND` (404) → "not configured yet → create"
+    empty state (NOT an error); a subsequent PUT creates the row.
+  - `VALIDATION_ERROR` (422, e.g. a negative qty) → inline field errors; the
+    screen does not lose the entered values.
+  - Plus the shared § 2.4.6 mappings: `401 UNAUTHORIZED` → forced whole-session
+    IAM re-login; `403 TENANT_FORBIDDEN`/`FORBIDDEN` → inline "not scoped";
+    `429 RATE_LIMIT_EXCEEDED` (`Retry-After: 1`) → bounded backoff (no storm);
+    `503`/timeout → only this section degrades (the console shell + the § 2.4.6
+    운영 read section + the § 2.4.6.1 보충 action section stay intact). A
+    successful PUT invalidates the corresponding read (the not-configured →
+    configured transition reflects without a manual reload). A
+    forward-compatible producer extra field degrades gracefully — the consumer
+    parser is tolerant and never throws.
+
+- **Producer immutability**: this is a **cross-reference only**. Any change to
+  the scm demand-planning producer contract is an scm project-internal spec-first
+  change in `demand-planning-api.md`; this section follows it, never redefines it
+  (§ 5 Change Rule). scm remains single-organization — this binding adds no
+  multi-tenant declaration to scm.
+
+> **Not a § 3 parity row** (same as § 2.4.6 / § 2.4.6.1): the scm seed/config
+> surface is additive federated **domain** scope, not a IAM `admin-web` parity
+> capability; it adds no § 3 row and changes none. It is the THIRD scm binding
+> (운영 read § 2.4.6 + 보충 action § 2.4.6.1 + 설정 config here) and the **first
+> scm config-mutation** — confirming the § 2.4.5/§ 2.4.6 per-domain credential
+> rule holds for a non-IAM **upsert** surface (the gate is server-side
+> `tenant_id`, NOT a stronger credential).
+
 #### 2.4.7 finance operations surface (TASK-PC-FE-009 — cross-reference, not a redefinition)
 
 The **third non-IAM** per-domain binding of § 2.4 (ADR-MONO-013 Phase 5 —
