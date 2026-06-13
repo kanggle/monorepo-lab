@@ -149,4 +149,7 @@ Errors: [list with reasons]
 - Fix tasks go to `tasks/ready/` for future implementation
 - Proceed without asking confirmation questions (unless `--dry-run`)
 - In batch mode, always use `isolation: "worktree"` when launching review agents
-- In batch mode, always merge worktree branches after all agents complete
+- In batch mode, after all review agents complete, merge each successful agent's worktree branch into main with an explicit command, then verify main builds before proceeding (mirrors implement-task.md Phase 5 step 3):
+```
+git merge <worktree-branch> --no-ff -m "Merge review {taskId}: {title}"
+```

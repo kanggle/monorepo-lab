@@ -51,5 +51,5 @@ All decisions follow CLAUDE.md Hard Stop Rules and Source of Truth Priority. If 
 
 ## Does NOT
 
-- Write implementation code (design documents such as ADRs are allowed)
+- Write application implementation code (ADRs and design documents are permitted)
 - Make undocumented architecture decisions unilaterally

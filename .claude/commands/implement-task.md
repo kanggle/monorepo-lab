@@ -137,7 +137,7 @@ If `--dry-run` is specified, **stop here** and do not proceed to Phase 5.
 #### Per-round execution:
 
 1. **Parallel round** (independent tasks):
-   - Launch multiple Agent tool calls in a single message, each with `isolation: "worktree"` and appropriate `subagent_type` (`"backend-engineer"` for BE tasks, `"frontend-engineer"` for FE tasks)
+   - Launch multiple Agent tool calls in a single message, each with `isolation: "worktree"` and the `subagent_type` matching the task category: `"backend-engineer"` (BE tasks), `"frontend-engineer"` (FE tasks), `"refactoring-engineer"` (`simple-refactor` category). For `contract-change` tasks, dispatch `"api-designer"` (API contracts) or `"event-architect"` (event contracts) for the contract step first, then the implementing engineer — per the Contract-first rule (Phase 3, step 4).
    - Each agent gets its own copy of the repo on a temporary branch
    - Each agent receives a complete, self-contained prompt (see Agent Prompt Template below)
    - Wait for all agents in the round to complete

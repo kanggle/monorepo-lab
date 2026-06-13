@@ -23,7 +23,7 @@ Examples:
 
 ## Procedure
 
-1. Follow `platform/entrypoint.md` Step 0 — read `PROJECT.md` then load `rules/common.md` plus any `rules/domains/<domain>.md` and `rules/traits/<trait>.md` that match the declared classification. Trait files such as `transactional.md`, `integration-heavy.md`, or `real-time.md` contain event-specific mandates (idempotency, DLQ, ordering) that must be honored in the contract design.
+1. Follow `platform/entrypoint.md` Step 0 — read `PROJECT.md` then load `rules/common.md` plus any `rules/domains/<domain>.md` and `rules/traits/<trait>.md` that match the declared classification. Trait files such as `transactional.md` or `integration-heavy.md` contain event-specific mandates (idempotency, DLQ, ordering) that must be honored in the contract design.
 2. Read `platform/event-driven-policy.md` (envelope, naming, consumer rules)
 3. Read `platform/naming-conventions.md` (event topic naming)
 4. Read `platform/versioning-policy.md` (event versioning)
