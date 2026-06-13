@@ -1,6 +1,6 @@
 # TASK-MONO-250 — nightly-e2e.yml: add missing settlement-service boot jar
 
-Status: ready
+Status: done
 Type: chore (CI)
 Scope: monorepo-level (`.github/workflows/`)
 Analysis model: Opus 4.8 / Implementation model: Haiku (single-file CI omission)
