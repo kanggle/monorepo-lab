@@ -18,6 +18,11 @@ import {
   type DiscrepanciesResponse,
   type DiscrepanciesQueryParams,
   type ResolveDiscrepancyBody,
+  AccountBalanceSchema,
+  type AccountBalance,
+  AccountEntriesResponseSchema,
+  type AccountEntriesResponse,
+  type AccountEntriesQueryParams,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from './types';
@@ -523,5 +528,63 @@ export async function resolveDiscrepancy(
       const env = (json ?? {}) as { data?: unknown };
       return DiscrepancySchema.parse(env.data);
     },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// account balance — GET /api/finance/ledger/accounts/{ledgerAccountCode}/balance
+//   ledger-api.md § 3 envelope = { data: AccountBalance, meta }. READ-ONLY.
+//   Id-driven (the colon-form code is URL-encoded on the path). 404
+//   LEDGER_ACCOUNT_NOT_FOUND. This read adds NO mutation artifact.
+//
+//   F7 (§ 2.4.7.1 confidential / TASK-PC-FE-074): the account code is
+//   confidential — the sanitised `logPath` carries NO account code (only
+//   the `{code}` placeholder, consistent with the entryId / periodId /
+//   discrepancyId / accountCode sanitisation pattern).
+//
+//   STRICTLY GET — NO method/body, NO Idempotency-Key, NO X-Operator-Reason,
+//   NO X-Tenant-Id (all handled by `callLedger`). No 429 branch (the ledger
+//   has no documented 429 — the no-429 honesty, TASK-PC-FE-072 / § 2.4.7.1).
+// ---------------------------------------------------------------------------
+
+export async function getAccountBalance(
+  ledgerAccountCode: string,
+): Promise<AccountBalance> {
+  return callLedger(
+    {
+      path: `/api/finance/ledger/accounts/${encodeURIComponent(ledgerAccountCode)}/balance`,
+      // confidential / F7 — the log path carries NO account code.
+      logPath: '/api/finance/ledger/accounts/{code}/balance',
+    },
+    (json) => {
+      const env = (json ?? {}) as { data?: unknown };
+      return AccountBalanceSchema.parse(env.data);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// account entries — GET /api/finance/ledger/accounts/{ledgerAccountCode}/entries
+//   ledger-api.md § 2 envelope = { data: [ AccountEntryLine ], meta }.
+//   Paginated, most-recent first. READ-ONLY. Id-driven (code URL-encoded).
+//   404 LEDGER_ACCOUNT_NOT_FOUND. This read adds NO mutation artifact.
+//
+//   F7: the sanitised `logPath` carries NO account code.
+//   STRICTLY GET — same honesty constraints as `getAccountBalance`.
+// ---------------------------------------------------------------------------
+
+export async function getAccountEntries(
+  ledgerAccountCode: string,
+  params: AccountEntriesQueryParams = {},
+): Promise<AccountEntriesResponse> {
+  const qs = new URLSearchParams();
+  pageParams(qs, params.page, params.size);
+  return callLedger(
+    {
+      path: `/api/finance/ledger/accounts/${encodeURIComponent(ledgerAccountCode)}/entries?${qs.toString()}`,
+      // confidential / F7 — the log path carries NO account code.
+      logPath: '/api/finance/ledger/accounts/{code}/entries',
+    },
+    (json) => AccountEntriesResponseSchema.parse(json),
   );
 }

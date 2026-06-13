@@ -6,6 +6,8 @@ import type {
   PeriodsResponse,
   DiscrepanciesResponse,
   JournalEntry,
+  AccountBalance,
+  AccountEntriesResponse,
 } from '../api/types';
 import { TrialBalanceTable } from './TrialBalanceTable';
 import { PeriodsTable } from './PeriodsTable';
@@ -14,7 +16,9 @@ import { JournalEntryLookup } from './JournalEntryLookup';
 import { JournalEntryDetail } from './JournalEntryDetail';
 import { DiscrepancyQueue } from './DiscrepancyQueue';
 import { DiscrepancyDetail } from './DiscrepancyDetail';
-import { useJournalEntry } from '../hooks/use-ledger-ops';
+import { AccountLookup } from './AccountLookup';
+import { AccountDetail } from './AccountDetail';
+import { useJournalEntry, useAccountBalance, useAccountEntries } from '../hooks/use-ledger-ops';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 
 /**
@@ -58,6 +62,7 @@ const TABS = [
   { key: 'periods', label: '회계 기간' },
   { key: 'entry', label: '분개 조회' },
   { key: 'reconciliation', label: '대사' },
+  { key: 'account', label: '계정' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -70,6 +75,15 @@ export interface LedgerOpsScreenProps {
   /** True when the seeded entryId 404'd (JOURNAL_ENTRY_NOT_FOUND) —
    *  rendered inline in the Journal Entry tab; the lookup stays mounted. */
   initialNotFound?: boolean;
+  /** The server-seeded account code (TASK-PC-FE-074). */
+  initialAccountCode?: string | null;
+  /** The server-seeded account balance (TASK-PC-FE-074). */
+  initialAccountBalance?: AccountBalance | null;
+  /** The server-seeded account entries (TASK-PC-FE-074). */
+  initialAccountEntries?: AccountEntriesResponse | null;
+  /** True when the seeded accountCode 404'd (LEDGER_ACCOUNT_NOT_FOUND) —
+   *  rendered inline in the Account tab; the lookup stays mounted. */
+  initialAccountNotFound?: boolean;
 }
 
 export function LedgerOpsScreen({
@@ -79,9 +93,17 @@ export function LedgerOpsScreen({
   discrepancies,
   initialEntry,
   initialNotFound = false,
+  initialAccountCode = null,
+  initialAccountBalance = null,
+  initialAccountEntries = null,
+  initialAccountNotFound = false,
 }: LedgerOpsScreenProps) {
   const [active, setActive] = useState<TabKey>(
-    initialEntryId ? 'entry' : 'trial-balance',
+    initialAccountCode
+      ? 'account'
+      : initialEntryId
+        ? 'entry'
+        : 'trial-balance',
   );
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
@@ -106,6 +128,49 @@ export function LedgerOpsScreen({
     entryApiErr?.status === 404 ||
     (initialNotFound && entryId === initialEntryId);
   const entryForbidden = entryApiErr?.status === 403;
+
+  // Account — account-code-driven (TASK-PC-FE-074). Seeded from the server
+  // when an `?accountCode=` query param is supplied.
+  const [selectedAccountCode, setSelectedAccountCode] = useState<string | null>(
+    initialAccountCode,
+  );
+  const accountBalanceQ = useAccountBalance(
+    selectedAccountCode,
+    selectedAccountCode === initialAccountCode
+      ? (initialAccountBalance ?? undefined)
+      : undefined,
+  );
+  const accountEntriesQ = useAccountEntries(
+    selectedAccountCode,
+    { page: 0, size: 20 },
+    selectedAccountCode === initialAccountCode
+      ? (initialAccountEntries ?? undefined)
+      : undefined,
+  );
+  const accountBalance: AccountBalance | null =
+    accountBalanceQ.data ??
+    (selectedAccountCode === initialAccountCode ? initialAccountBalance : null);
+  const accountEntries: AccountEntriesResponse | null =
+    accountEntriesQ.data ??
+    (selectedAccountCode === initialAccountCode ? initialAccountEntries : null);
+  const accountApiErr =
+    accountBalanceQ.error instanceof ApiError ? accountBalanceQ.error : null;
+  const accountNotFound =
+    accountApiErr?.status === 404 ||
+    (initialAccountNotFound && selectedAccountCode === initialAccountCode);
+
+  /** Called when the operator clicks a trial-balance account code. */
+  function handleSelectAccount(code: string) {
+    setSelectedAccountCode(code);
+    setActive('account');
+  }
+
+  /** Called when the operator clicks an entry's entryId in the account
+   *  entries table — drills into the Journal Entry tab. */
+  function handleSelectEntry(eid: string) {
+    setEntryId(eid);
+    setActive('entry');
+  }
 
   function onTabKeyDown(e: React.KeyboardEvent, idx: number) {
     let next = idx;
@@ -174,7 +239,10 @@ export function LedgerOpsScreen({
         data-testid="ledger-panel-trial-balance"
       >
         {trialBalance ? (
-          <TrialBalanceTable trialBalance={trialBalance} />
+          <TrialBalanceTable
+            trialBalance={trialBalance}
+            onSelectAccount={handleSelectAccount}
+          />
         ) : (
           <p
             className="text-sm text-muted-foreground"
@@ -301,6 +369,42 @@ export function LedgerOpsScreen({
           >
             대사 차이를 불러올 수 없습니다.
           </p>
+        )}
+      </div>
+
+      {/* Account panel (TASK-PC-FE-074) */}
+      <div
+        role="tabpanel"
+        id="ledger-panel-account"
+        aria-labelledby="ledger-tab-account"
+        hidden={active !== 'account'}
+        data-testid="ledger-panel-account"
+      >
+        <AccountLookup
+          initialCode={selectedAccountCode ?? undefined}
+          onSubmit={setSelectedAccountCode}
+        />
+        {!selectedAccountCode ? (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="ledger-account-none"
+          >
+            조회할 계정 코드를 입력하거나 시산표의 계정 코드를 클릭하세요.
+          </p>
+        ) : accountNotFound ? (
+          <div
+            role="status"
+            data-testid="ledger-account-not-found"
+            className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          >
+            {messageForCode('LEDGER_ACCOUNT_NOT_FOUND')}
+          </div>
+        ) : (
+          <AccountDetail
+            balance={accountBalance}
+            entries={accountEntries}
+            onSelectEntry={handleSelectEntry}
+          />
         )}
       </div>
     </section>

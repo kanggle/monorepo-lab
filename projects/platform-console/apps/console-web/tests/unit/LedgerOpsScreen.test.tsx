@@ -14,12 +14,15 @@ import { PeriodDetail } from '@/features/ledger-ops/components/PeriodDetail';
 import { JournalEntryDetail } from '@/features/ledger-ops/components/JournalEntryDetail';
 import { DiscrepancyQueue } from '@/features/ledger-ops/components/DiscrepancyQueue';
 import { DiscrepancyDetail } from '@/features/ledger-ops/components/DiscrepancyDetail';
+import { AccountDetail } from '@/features/ledger-ops/components/AccountDetail';
 import type {
   TrialBalance,
   PeriodsResponse,
   DiscrepanciesResponse,
   JournalEntry,
   Period,
+  AccountBalance,
+  AccountEntriesResponse,
 } from '@/features/ledger-ops';
 import { runAxe } from '../a11y/axe-helper';
 
@@ -650,6 +653,290 @@ describe('DiscrepancyDetail — resolve mutation (PC-FE-073)', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-074 — AccountDetail component (F5 + tolerant enum parsing)
+// ---------------------------------------------------------------------------
+
+const ACCOUNT_BALANCE: AccountBalance = {
+  ledgerAccountCode: 'CUSTOMER_WALLET:acc-1',
+  type: 'LIABILITY',
+  normalSide: 'CREDIT',
+  debitTotal: M('1234567890123'),
+  creditTotal: M('9876543210987'),
+  balance: M('8641975320864'),
+  balanceSide: 'CREDIT',
+};
+
+const ACCOUNT_ENTRIES: AccountEntriesResponse = {
+  data: [
+    {
+      entryId: 'je-acct-1',
+      postedAt: '2026-06-13T10:00:00Z',
+      direction: 'CREDIT',
+      money: M('13500', 'USD'),
+    },
+    {
+      entryId: 'je-acct-2',
+      postedAt: '2026-06-12T08:00:00Z',
+      direction: 'DEBIT',
+      money: M('200'),
+    },
+  ],
+  meta: { page: 0, size: 20, totalElements: 2 },
+};
+
+describe('AccountDetail — F5 money + tolerant enum + drill-in (TASK-PC-FE-074)', () => {
+  it('renders the balance card with formatMoney-scaled amounts + direction + normalSide (F5, no Number coercion)', () => {
+    render(<AccountDetail balance={ACCOUNT_BALANCE} entries={ACCOUNT_ENTRIES} />, {
+      wrapper: wrapper(),
+    });
+    const card = screen.getByTestId('ledger-account-balance');
+    // Large KRW minor-units — formatMoney should include the integer portion
+    // 1234567890123 minor KRW (scale 0) = ₩1,234,567,890,123 or similar.
+    expect(card.textContent).toContain('1234567890123');
+    expect(card.textContent).toContain('LIABILITY');
+    expect(card.textContent).toContain('CREDIT');
+  });
+
+  it('renders the entries table with entryId + direction + formatMoney money (F5 round-trip)', () => {
+    render(<AccountDetail balance={ACCOUNT_BALANCE} entries={ACCOUNT_ENTRIES} />, {
+      wrapper: wrapper(),
+    });
+    const table = screen.getByTestId('ledger-account-entries-table');
+    const row0 = within(table).getByTestId('ledger-account-entry-row-0');
+    // money: USD minor units 13500 → scale 2 → 135.00 USD
+    expect(row0.textContent).toContain('135.00');
+    expect(row0.textContent).toContain('CREDIT');
+    const row1 = within(table).getByTestId('ledger-account-entry-row-1');
+    expect(row1.textContent).toContain('200');
+    expect(row1.textContent).toContain('DEBIT');
+  });
+
+  it('clicking an entryId cell calls onSelectEntry with the exact id', () => {
+    const onSelectEntry = vi.fn();
+    render(
+      <AccountDetail
+        balance={ACCOUNT_BALANCE}
+        entries={ACCOUNT_ENTRIES}
+        onSelectEntry={onSelectEntry}
+      />,
+      { wrapper: wrapper() },
+    );
+    const table = screen.getByTestId('ledger-account-entries-table');
+    fireEvent.click(within(table).getByTestId('ledger-account-entry-id-0'));
+    expect(onSelectEntry).toHaveBeenCalledWith('je-acct-1');
+    expect(onSelectEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it('without onSelectEntry the entryId cell is a span (plain text, no interactive element)', () => {
+    render(<AccountDetail balance={ACCOUNT_BALANCE} entries={ACCOUNT_ENTRIES} />, {
+      wrapper: wrapper(),
+    });
+    const table = screen.getByTestId('ledger-account-entries-table');
+    const cell = within(table).getByTestId('ledger-account-entry-id-0');
+    expect(cell.tagName.toLowerCase()).toBe('span');
+  });
+
+  it('unknown future type / normalSide / balanceSide / direction render as-is (tolerant — no throw)', () => {
+    const futureBalance: AccountBalance = {
+      ...ACCOUNT_BALANCE,
+      type: 'FUTURE_TYPE',
+      normalSide: 'FUTURE_SIDE',
+      balanceSide: 'FUTURE_SIDE',
+    };
+    const futureEntries: AccountEntriesResponse = {
+      ...ACCOUNT_ENTRIES,
+      data: [{ ...ACCOUNT_ENTRIES.data[0], direction: 'FUTURE_DIRECTION' }],
+    };
+    expect(() =>
+      render(<AccountDetail balance={futureBalance} entries={futureEntries} />, {
+        wrapper: wrapper(),
+      }),
+    ).not.toThrow();
+    const card = screen.getByTestId('ledger-account-balance');
+    expect(card.textContent).toContain('FUTURE_TYPE');
+    expect(card.textContent).toContain('FUTURE_SIDE');
+  });
+
+  it('balance null → balance-none placeholder (no crash)', () => {
+    render(<AccountDetail balance={null} entries={ACCOUNT_ENTRIES} />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.getByTestId('ledger-account-balance-none')).toBeInTheDocument();
+    expect(screen.queryByTestId('ledger-account-balance')).toBeNull();
+  });
+
+  it('entries null → entries-none placeholder (no crash)', () => {
+    render(<AccountDetail balance={ACCOUNT_BALANCE} entries={null} />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.getByTestId('ledger-account-entries-none')).toBeInTheDocument();
+    expect(screen.queryByTestId('ledger-account-entries-table')).toBeNull();
+  });
+
+  it('empty entries array → empty placeholder (no crash)', () => {
+    render(
+      <AccountDetail
+        balance={ACCOUNT_BALANCE}
+        entries={{ data: [], meta: { page: 0, size: 20, totalElements: 0 } }}
+      />,
+      { wrapper: wrapper() },
+    );
+    expect(screen.getByTestId('ledger-account-entries-empty')).toBeInTheDocument();
+    expect(screen.queryByTestId('ledger-account-entries-table')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-074 — TrialBalanceTable onSelectAccount drill (backward compat)
+// ---------------------------------------------------------------------------
+
+describe('TrialBalanceTable — onSelectAccount drill (TASK-PC-FE-074 backward compat)', () => {
+  it('without onSelectAccount the account code cell stays plain text (FE-072 callers unaffected)', () => {
+    render(<TrialBalanceTable trialBalance={TRIAL_BALANCE} />);
+    const code = screen.getByTestId('ledger-tb-code-0');
+    expect(code.textContent).toContain('1000');
+    expect(screen.queryByTestId('ledger-tb-code-link-0')).toBeNull();
+  });
+
+  it('with onSelectAccount the code cell renders a button (ledger-tb-code-link-0) and calls back', () => {
+    const onSelectAccount = vi.fn();
+    render(
+      <TrialBalanceTable
+        trialBalance={TRIAL_BALANCE}
+        onSelectAccount={onSelectAccount}
+      />,
+    );
+    const btn = screen.getByTestId('ledger-tb-code-link-0');
+    expect(btn.tagName.toLowerCase()).toBe('button');
+    fireEvent.click(btn);
+    expect(onSelectAccount).toHaveBeenCalledWith('1000');
+    expect(onSelectAccount).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-074 — LedgerOpsScreen 계정 tab (5th tab, account-code driven)
+// ---------------------------------------------------------------------------
+
+describe('LedgerOpsScreen — 계정 tab (TASK-PC-FE-074)', () => {
+  function renderScreen(
+    overrides: Partial<Parameters<typeof LedgerOpsScreen>[0]> = {},
+  ) {
+    return render(
+      <LedgerOpsScreen
+        initialEntryId={null}
+        trialBalance={TRIAL_BALANCE}
+        periods={PERIODS}
+        discrepancies={DISCREPANCIES}
+        initialEntry={null}
+        {...overrides}
+      />,
+      { wrapper: wrapper() },
+    );
+  }
+
+  it('the fifth tab "계정" is present and labelled', () => {
+    renderScreen();
+    expect(screen.getByTestId('ledger-tab-account')).toBeInTheDocument();
+    expect(screen.getByTestId('ledger-tab-account').textContent).toContain('계정');
+  });
+
+  it('clicking the 계정 tab reveals the account lookup form (no code → "none" placeholder)', () => {
+    renderScreen();
+    fireEvent.click(screen.getByTestId('ledger-tab-account'));
+    expect(screen.getByTestId('ledger-account-input')).toBeInTheDocument();
+    expect(screen.getByTestId('ledger-account-none')).toBeInTheDocument();
+  });
+
+  it('a seeded accountCode opens the screen on the 계정 tab with AccountDetail populated (F5 scale)', () => {
+    renderScreen({
+      initialAccountCode: 'CUSTOMER_WALLET:acc-1',
+      initialAccountBalance: ACCOUNT_BALANCE,
+      initialAccountEntries: ACCOUNT_ENTRIES,
+    });
+    // Should start on the 계정 tab (because initialAccountCode is set).
+    expect(screen.getByTestId('ledger-tab-account')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('ledger-account-detail')).toBeInTheDocument();
+    const card = screen.getByTestId('ledger-account-balance');
+    // F5: large minor-unit amount rendered via formatMoney.
+    expect(card.textContent).toContain('1234567890123');
+    // entries table present.
+    expect(screen.getByTestId('ledger-account-entries-table')).toBeInTheDocument();
+  });
+
+  it('a seeded accountCode that 404\'d renders the not-found notice inline (lookup form stays mounted)', () => {
+    renderScreen({
+      initialAccountCode: 'CUSTOMER_WALLET:nope',
+      initialAccountNotFound: true,
+    });
+    expect(screen.getByTestId('ledger-account-not-found')).toBeInTheDocument();
+    // lookup form stays mounted.
+    expect(screen.getByTestId('ledger-account-input')).toBeInTheDocument();
+    expect(screen.queryByTestId('ledger-account-detail')).toBeNull();
+  });
+
+  it('clicking a trial-balance account code drills into the 계정 tab (handleSelectAccount)', () => {
+    renderScreen();
+    // The trial-balance tab is visible by default.
+    expect(screen.getByTestId('ledger-tab-trial-balance')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    // Click the account code link in the trial-balance table.
+    fireEvent.click(screen.getByTestId('ledger-tb-code-link-0'));
+    // Now the screen should have switched to the 계정 tab.
+    expect(screen.getByTestId('ledger-tab-account')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    // The account panel is now visible (the account lookup form is mounted).
+    expect(screen.getByTestId('ledger-account-input')).toBeInTheDocument();
+    // The panel no longer shows the "none" placeholder since a code was
+    // selected — the detail component or a loading state is rendered.
+    // (The lookup input's internal state is initialized once — we assert
+    // the tab switch, not the input's displayed value.)
+  });
+
+  it('clicking an entryId in the account entries table switches to the 분개 조회 tab (handleSelectEntry)', () => {
+    renderScreen({
+      initialAccountCode: 'CUSTOMER_WALLET:acc-1',
+      initialAccountBalance: ACCOUNT_BALANCE,
+      initialAccountEntries: ACCOUNT_ENTRIES,
+    });
+    // Should be on the 계정 tab.
+    const table = screen.getByTestId('ledger-account-entries-table');
+    // The entry id cells are buttons when onSelectEntry is wired.
+    const entryIdBtn = within(table).getByTestId('ledger-account-entry-id-0');
+    fireEvent.click(entryIdBtn);
+    // Should switch to the 분개 조회 tab.
+    expect(screen.getByTestId('ledger-tab-entry')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    // The entry tab is now visible with the lookup form mounted.
+    expect(screen.getByTestId('ledger-entry-input')).toBeInTheDocument();
+    // (The JournalEntryLookup internal state is initialized once; we assert
+    // the tab switch, not the input's displayed value.)
+  });
+
+  it('the 계정 tab has no mutation affordance (STRICTLY READ-ONLY)', () => {
+    const { container } = renderScreen({
+      initialAccountCode: 'CUSTOMER_WALLET:acc-1',
+      initialAccountBalance: ACCOUNT_BALANCE,
+      initialAccountEntries: ACCOUNT_ENTRIES,
+    });
+    expect(container.querySelector('[data-testid*="resolve"]')).toBeNull();
+    expect(container.querySelector('[data-testid*="post-entry"]')).toBeNull();
+    expect(container.querySelector('[data-testid*="close-period"]')).toBeNull();
+    expect(container.querySelector('[data-testid*="reason"]')).toBeNull();
+    expect(container.querySelector('[data-testid*="idempotency"]')).toBeNull();
+  });
+});
+
 describe('LedgerOpsScreen — WCAG AA (axe-clean)', () => {
   it('a fully populated section has zero axe violations', async () => {
     const { container } = render(
@@ -674,6 +961,24 @@ describe('LedgerOpsScreen — WCAG AA (axe-clean)', () => {
         periods={PERIODS}
         discrepancies={DISCREPANCIES}
         initialEntry={MULTI_CURRENCY_ENTRY}
+      />,
+      { wrapper: wrapper() },
+    );
+    const violations = await runAxe(container);
+    expect(violations).toEqual([]);
+  });
+
+  it('the 계정 tab (with AccountDetail seeded) is axe-clean (TASK-PC-FE-074)', async () => {
+    const { container } = render(
+      <LedgerOpsScreen
+        initialEntryId={null}
+        trialBalance={TRIAL_BALANCE}
+        periods={PERIODS}
+        discrepancies={DISCREPANCIES}
+        initialEntry={null}
+        initialAccountCode="CUSTOMER_WALLET:acc-1"
+        initialAccountBalance={ACCOUNT_BALANCE}
+        initialAccountEntries={ACCOUNT_ENTRIES}
       />,
       { wrapper: wrapper() },
     );

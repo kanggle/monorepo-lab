@@ -59,6 +59,11 @@ import { GET as discrepancyGET } from '@/app/api/ledger/reconciliation/discrepan
 import { POST as resolvePOST } from '@/app/api/ledger/reconciliation/discrepancies/[id]/resolve/route';
 import * as resolveRoute from '@/app/api/ledger/reconciliation/discrepancies/[id]/resolve/route';
 import * as discrepancyRoute from '@/app/api/ledger/reconciliation/discrepancies/[id]/route';
+// TASK-PC-FE-074 — account-level drill proxy routes (two new GET-only routes)
+import { GET as accountBalanceGET } from '@/app/api/ledger/accounts/[ledgerAccountCode]/balance/route';
+import * as accountBalanceRoute from '@/app/api/ledger/accounts/[ledgerAccountCode]/balance/route';
+import { GET as accountEntriesGET } from '@/app/api/ledger/accounts/[ledgerAccountCode]/entries/route';
+import * as accountEntriesRoute from '@/app/api/ledger/accounts/[ledgerAccountCode]/entries/route';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(
@@ -299,6 +304,215 @@ const RESOLVED = {
     resolvedAt: '2026-05-20T00:00:00Z',
   },
 };
+
+// ===========================================================================
+// TASK-PC-FE-074 — GET /api/ledger/accounts/{code}/balance proxy
+// ===========================================================================
+
+const M_BALANCE_ENV = {
+  data: {
+    ledgerAccountCode: 'CUSTOMER_WALLET:acc-1',
+    type: 'LIABILITY',
+    normalSide: 'CREDIT',
+    debitTotal: { amount: '1234567890123', currency: 'KRW' },
+    creditTotal: { amount: '9876543210987', currency: 'KRW' },
+    balance: { amount: '8641975320864', currency: 'KRW' },
+    balanceSide: 'CREDIT',
+  },
+  meta: { timestamp: 'x' },
+};
+const M_ENTRIES_ENV = {
+  data: [
+    {
+      entryId: 'je-acct-1',
+      postedAt: '2026-06-13T10:00:00Z',
+      direction: 'CREDIT',
+      money: { amount: '13500', currency: 'USD' },
+      counterpartyLines: null,
+    },
+  ],
+  meta: { page: 0, size: 20, totalElements: 1, timestamp: 'x' },
+};
+
+describe('GET /api/ledger/accounts/{code}/balance proxy (TASK-PC-FE-074, read-only)', () => {
+  it('returns the upstream payload and uses the domain-facing token (NOT the operator token)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(M_BALANCE_ENV));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await accountBalanceGET(
+      new Request('http://console.local/api/ledger/accounts/CUSTOMER_WALLET%3Aacc-1/balance'),
+      { params: Promise.resolve({ ledgerAccountCode: 'CUSTOMER_WALLET:acc-1' }) },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ledgerAccountCode).toBe('CUSTOMER_WALLET:acc-1');
+    // F5: amount is preserved as a string.
+    expect(body.balance.amount).toBe('8641975320864');
+    expect(typeof body.balance.amount).toBe('string');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['X-Tenant-Id']).toBeUndefined();
+    expect(h['Idempotency-Key']).toBeUndefined();
+    expect(h['X-Operator-Reason']).toBeUndefined();
+    expect((init as RequestInit).method).toBe('GET');
+    // The colon-form code is re-encoded on the upstream path.
+    expect(String(url)).toContain('CUSTOMER_WALLET%3Aacc-1');
+  });
+
+  it('404 LEDGER_ACCOUNT_NOT_FOUND → 404 passthrough (inline actionable)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ledgerError('LEDGER_ACCOUNT_NOT_FOUND', 404)),
+    );
+    const res = await accountBalanceGET(
+      new Request('http://console.local/api/ledger/accounts/CUSTOMER_WALLET%3Anope/balance'),
+      { params: Promise.resolve({ ledgerAccountCode: 'CUSTOMER_WALLET:nope' }) },
+    );
+    expect(res.status).toBe(404);
+    const b = await res.json();
+    expect(b.code).toBe('LEDGER_ACCOUNT_NOT_FOUND');
+  });
+
+  it('503 → 503 (ledger section degrades)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ledgerError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await accountBalanceGET(
+      new Request('http://console.local/api/ledger/accounts/ASSET%3A1000/balance'),
+      { params: Promise.resolve({ ledgerAccountCode: 'ASSET:1000' }) },
+    );
+    expect(res.status).toBe(503);
+  });
+
+  it('no IAM session → 401 (no upstream call)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await accountBalanceGET(
+      new Request('http://console.local/api/ledger/accounts/ASSET%3A1000/balance'),
+      { params: Promise.resolve({ ledgerAccountCode: 'ASSET:1000' }) },
+    );
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('GET-only: the route exports no POST/PUT/PATCH/DELETE', () => {
+    expect(typeof accountBalanceRoute.GET).toBe('function');
+    expect((accountBalanceRoute as Record<string, unknown>).POST).toBeUndefined();
+    expect((accountBalanceRoute as Record<string, unknown>).PUT).toBeUndefined();
+    expect((accountBalanceRoute as Record<string, unknown>).PATCH).toBeUndefined();
+    expect((accountBalanceRoute as Record<string, unknown>).DELETE).toBeUndefined();
+  });
+});
+
+// ===========================================================================
+// TASK-PC-FE-074 — GET /api/ledger/accounts/{code}/entries proxy (paginated)
+// ===========================================================================
+
+describe('GET /api/ledger/accounts/{code}/entries proxy (TASK-PC-FE-074, paginated, read-only)', () => {
+  it('returns the upstream paginated payload; uses domain-facing token, GET, no mutation artifacts', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(M_ENTRIES_ENV));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await accountEntriesGET(
+      new Request(
+        'http://console.local/api/ledger/accounts/CUSTOMER_WALLET%3Aacc-1/entries?page=0&size=20',
+      ),
+      { params: Promise.resolve({ ledgerAccountCode: 'CUSTOMER_WALLET:acc-1' }) },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data[0].entryId).toBe('je-acct-1');
+    // F5: money.amount is preserved as a string.
+    expect(body.data[0].money.amount).toBe('13500');
+    expect(typeof body.data[0].money.amount).toBe('string');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect((init as RequestInit).method).toBe('GET');
+    expect((init as RequestInit).body).toBeUndefined();
+    expect(h['Idempotency-Key']).toBeUndefined();
+    expect(h['X-Operator-Reason']).toBeUndefined();
+    expect(h['X-Tenant-Id']).toBeUndefined();
+    // colon encoded upstream
+    expect(String(url)).toContain('CUSTOMER_WALLET%3Aacc-1');
+  });
+
+  it('pagination params are forwarded — page + size appear in the upstream call', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(M_ENTRIES_ENV));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await accountEntriesGET(
+      new Request(
+        'http://console.local/api/ledger/accounts/ASSET%3A1000/entries?page=2&size=50',
+      ),
+      { params: Promise.resolve({ ledgerAccountCode: 'ASSET:1000' }) },
+    );
+
+    const upstream = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(upstream.searchParams.get('page')).toBe('2');
+    expect(upstream.searchParams.get('size')).toBe('50');
+  });
+
+  it('404 LEDGER_ACCOUNT_NOT_FOUND → 404 passthrough (inline actionable)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ledgerError('LEDGER_ACCOUNT_NOT_FOUND', 404)),
+    );
+    const res = await accountEntriesGET(
+      new Request('http://console.local/api/ledger/accounts/ASSET%3Anope/entries'),
+      { params: Promise.resolve({ ledgerAccountCode: 'ASSET:nope' }) },
+    );
+    expect(res.status).toBe(404);
+    const b = await res.json();
+    expect(b.code).toBe('LEDGER_ACCOUNT_NOT_FOUND');
+  });
+
+  it('503 → 503', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ledgerError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await accountEntriesGET(
+      new Request('http://console.local/api/ledger/accounts/ASSET%3A1000/entries'),
+      { params: Promise.resolve({ ledgerAccountCode: 'ASSET:1000' }) },
+    );
+    expect(res.status).toBe(503);
+  });
+
+  it('no IAM session → 401 (no upstream call)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await accountEntriesGET(
+      new Request('http://console.local/api/ledger/accounts/ASSET%3A1000/entries'),
+      { params: Promise.resolve({ ledgerAccountCode: 'ASSET:1000' }) },
+    );
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('GET-only: the route exports no POST/PUT/PATCH/DELETE', () => {
+    expect(typeof accountEntriesRoute.GET).toBe('function');
+    expect((accountEntriesRoute as Record<string, unknown>).POST).toBeUndefined();
+    expect((accountEntriesRoute as Record<string, unknown>).PUT).toBeUndefined();
+    expect((accountEntriesRoute as Record<string, unknown>).PATCH).toBeUndefined();
+    expect((accountEntriesRoute as Record<string, unknown>).DELETE).toBeUndefined();
+  });
+});
 
 describe('discrepancy resolve proxy — method exposure', () => {
   it('the discrepancy-by-id route stays GET-only (the resolve is a SEPARATE sub-route)', () => {

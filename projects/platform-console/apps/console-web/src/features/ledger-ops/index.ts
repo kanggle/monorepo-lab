@@ -32,6 +32,9 @@ export { JournalEntryDetail } from './components/JournalEntryDetail';
 export { DiscrepancyQueue } from './components/DiscrepancyQueue';
 export { DiscrepancyDetail } from './components/DiscrepancyDetail';
 export { DiscrepancyResolveDialog } from './components/DiscrepancyResolveDialog';
+// TASK-PC-FE-074 — account-level drill reads
+export { AccountLookup } from './components/AccountLookup';
+export { AccountDetail } from './components/AccountDetail';
 export { getLedgerSectionState } from './api/ledger-state';
 export type { LedgerSectionState } from './api/ledger-state';
 export type {
@@ -50,6 +53,11 @@ export type {
   ResolutionType,
   Money,
   LedgerMeta,
+  // TASK-PC-FE-074 — account-level drill read types
+  AccountBalance,
+  AccountEntryLine,
+  AccountEntriesResponse,
+  AccountEntriesQueryParams,
 } from './api/types';
 export {
   formatMoney,
