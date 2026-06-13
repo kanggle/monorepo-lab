@@ -202,7 +202,7 @@ Owned by `inventory-service`. See `rules/domains/wms.md` and
 | ADJUSTMENT_NOT_FOUND | 404 | Inventory adjustment with given id does not exist |
 | ADJUSTMENT_REASON_REQUIRED | 400 | Inventory adjustment submitted without a reason |
 | TRANSFER_NOT_FOUND | 404 | Stock transfer with given id does not exist |
-| TRANSFER_SAME_LOCATION | 400 | Source and destination location are the same |
+| TRANSFER_SAME_LOCATION | 422 | Source and destination location are the same (`TransferSameLocationException` → `inventory-service` `GlobalExceptionHandler` `UNPROCESSABLE_ENTITY`; `inventory-service-api.md` agrees at 422 — registry corrected from 400, TASK-MONO-249) |
 | RESERVATION_NOT_FOUND | 404 | Reservation with given id does not exist |
 | RESERVATION_QUANTITY_MISMATCH | 422 | Release/consume quantity exceeds the reservation's reserved quantity |
 
@@ -390,7 +390,7 @@ Owned by `shipping-service`.
 | INVALID_SHIPPING_REQUEST | 400 | Shipping request is invalid (missing or invalid fields) |
 | SHIPPING_NOT_FOUND | 404 | Shipping record does not exist |
 | INVALID_STATUS_TRANSITION | 422 | Shipping status transition is not allowed |
-| WEBHOOK_SIGNATURE_INVALID | 401 | Carrier webhook HMAC signature missing, malformed, or mismatched on `POST /api/shippings/carrier-webhook` (`WebhookSignatureException`). Cross-domain reuse of the same string as the wms Inbound (ERP webhook) code — identical HMAC-rejection semantic. |
+| WEBHOOK_SIGNATURE_INVALID | 401 | Carrier webhook HMAC signature missing, malformed, or mismatched on `POST /api/shippings/carrier-webhook` (`WebhookSignatureException`). Cross-domain reuse of the same string as the wms Inbound (ERP webhook) code and scm `procurement-service` (supplier webhook, `WebhookSignatureVerifier` → 401) — identical HMAC-rejection semantic across all three. |
 
 ---
 
@@ -438,7 +438,7 @@ Owned by `inventory-visibility-service`. Read-only cross-node visibility (eventu
 | Code | HTTP | Description |
 |---|---|---|
 | NODE_NOT_FOUND | 404 | Inventory node does not exist |
-| SNAPSHOT_NOT_FOUND | 404 | Snapshot for the requested key does not exist |
+| SNAPSHOT_NOT_FOUND | 404 | Snapshot for the requested key does not exist. No current v1 emitter in `inventory-visibility-service` — designed read-surface code, reserved (TASK-MONO-249) |
 | NODE_UNREACHABLE | 503 | Inventory node is unreachable (network partition or node down) (`NodeUnreachableException`) |
 | SNAPSHOT_STALE | 200 (warning body) | Snapshot data is older than the configured staleness threshold; response includes stale data with `meta.staleness` warning and `meta.warning: "Not for procurement decisions"` (S5). Not an HTTP error — documented for caller awareness (`SnapshotStaleException`). Replaces the prior `STALENESS_THRESHOLD_EXCEEDED` catalog name |
 
@@ -524,7 +524,7 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | Code | HTTP | Description |
 |---|---|---|
 | REASON_REQUIRED | 400 | `X-Operator-Reason` header missing on an audited admin action (`ReasonRequiredException`) |
-| PERMISSION_DENIED | 403 | Operator or account lacks required permission/role (`PermissionDeniedException`). Cross-service: also emitted by IAM community + membership services with identical semantics |
+| PERMISSION_DENIED | 403 | Operator or account lacks required permission/role (`PermissionDeniedException`). Cross-service: also emitted by IAM community + membership services, and by scm `procurement-service` / `demand-planning-service` / `inventory-visibility-service` (Spring Security `AccessDeniedHandler` → 403), with identical semantics |
 | INVALID_BOOTSTRAP_TOKEN | 401 | Bootstrap token missing, expired, or already consumed (`InvalidBootstrapTokenException`) |
 | INVALID_2FA_CODE | 401 | TOTP code is invalid or expired (`InvalidTwoFaCodeException`) |
 | TOTP_NOT_ENROLLED | 404 | TOTP enrollment required before recovery-code regeneration (`TotpNotEnrolledException`) |
@@ -572,6 +572,19 @@ Owned by `membership-service`.
 | SUBSCRIPTION_NOT_ACTIVE | 409 | Operation requires an active subscription (`SubscriptionNotActiveException`) |
 | PLAN_NOT_FOUND | 404 | Subscription plan not found (`PlanNotFoundException`) |
 
+## Console BFF  `[domain: saas]`
+
+Owned by `console-bff` (unified operator console aggregation layer, ADR-013). Composes
+downstream domain reads; most failure surfaces are degraded-card `reason` values inside a
+`200 OK` envelope (governed by `console-integration-contract.md`, a distinct namespace
+from this HTTP-error-code registry — e.g. `TIMEOUT`, `DOWNSTREAM_ERROR`, `MISSING_PREREQUISITE`).
+The HTTP-level error surface reuses Platform-Common auth codes (`TOKEN_INVALID` 401,
+`TOKEN_REVOKED` 401); the one net-new console-specific HTTP code is below.
+
+| Code | HTTP | Description |
+|---|---|---|
+| NO_ACTIVE_TENANT | 400 | `X-Tenant-Id` header absent or blank on a tenant-scoped console request; dispatch fails closed (`MissingTenantException` → `GlobalExceptionHandler` `BAD_REQUEST`). Frontend message-mapped (TASK-MONO-249) |
+
 ## Community  `[domain: fan-platform]`
 
 Owned by `community-service` (post / comment / reaction / follow).
@@ -580,7 +593,7 @@ Owned by `community-service` (post / comment / reaction / follow).
 |---|---|---|
 | POST_NOT_FOUND | 404 | Post does not exist (or cross-tenant — see `multi-tenant.md` M3) |
 | POST_STATUS_TRANSITION_INVALID | 422 | Illegal post-state transition (DRAFT/PUBLISHED/HIDDEN/DELETED) (`InvalidStateTransitionException`); cross-shared with IAM community-service |
-| MEMBERSHIP_TIER_INSUFFICIENT | 403 | Caller membership tier below required (PUBLIC < FOLLOWERS < MEMBERS_ONLY < SUBSCRIBERS_ONLY) |
+| MEMBERSHIP_TIER_INSUFFICIENT | 403 | Caller membership tier below required (PUBLIC < FOLLOWERS < MEMBERS_ONLY < SUBSCRIBERS_ONLY). No current emitter — the live content-gate emits `MEMBERSHIP_REQUIRED` (below); this finer-grained tier code is reserved (TASK-MONO-249) |
 | MEMBERSHIP_REQUIRED | 403 | Caller's membership tier insufficient for this content (`MembershipRequiredException`). Cross-project alias — see `Community  [domain: saas]` |
 | COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch (`CommentNotFoundException`) |
 | SELF_FOLLOW_FORBIDDEN | 422 | Account cannot follow itself (`SelfFollowForbiddenException`) |
@@ -597,7 +610,7 @@ Owned by `artist-service` (artist identity / fandom metadata).
 | Code | HTTP | Description |
 |---|---|---|
 | ARTIST_NOT_FOUND | 404 | Artist does not exist OR cross-tenant OR DRAFT/ARCHIVED (non-admin → 404 not 403, per content-heavy display rule) |
-| ARTIST_INVALID_STATE | 422 | Requested transition not allowed from current artist state (DRAFT/PUBLISHED/ARCHIVED) |
+| ARTIST_INVALID_STATE | 422 | Requested transition not allowed from current artist state (DRAFT/PUBLISHED/ARCHIVED). No current emitter — the live artist-service surfaces the specific guards `ARTIST_NOT_PUBLISHED`/`ARTIST_ARCHIVED` instead; this generic transition code is reserved (TASK-MONO-249) |
 | ARTIST_NOT_PUBLISHED | 422 | Artist is not in PUBLISHED state; operation rejected (`ArtistNotPublishedException`) |
 | ARTIST_ARCHIVED | 422 | Artist is ARCHIVED; operation rejected (`ArtistArchivedException`) |
 | ARTIST_GROUP_NOT_FOUND | 404 | Artist group not found (`ArtistGroupNotFoundException`) |
@@ -769,7 +782,7 @@ before any repository call); fail-CLOSED on missing role/scope (E6·E7).
 | Code | HTTP | Description |
 |---|---|---|
 | PERMISSION_DENIED | 403 | Caller lacks the required role for the requested use case (`PermissionDeniedException`) (E6). Cross-project: same string as IAM admin-service `PermissionDeniedException` — erp-local emission. |
-| DATA_SCOPE_FORBIDDEN | 403 | Caller has the required role but the target row's owning department is outside the caller's organization scope (descendant departments only) (`DataScopeForbiddenException`) (E6) |
+| DATA_SCOPE_FORBIDDEN | 403 | Caller has the required role but the target row's owning department is outside the caller's organization scope (descendant departments only) (`DataScopeForbiddenException`) (E6). Cross-project: also emitted by wms `master-service` (`DataScopeForbiddenException` → 403) with the identical role-OK-but-scope-denied semantic |
 | EXTERNAL_TRAFFIC_REJECTED | 403 | External (non-internal-network) traffic reached the application layer. Primary enforcement is at the Traefik / network layer (`internal: true` Docker network); this code is the application-layer fallback surface (E7) |
 
 > `TENANT_FORBIDDEN` (403, cross-tenant JWT) — see `Tenant  [domain: saas]`

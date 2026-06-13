@@ -703,9 +703,11 @@ store in v1** — masterdata mutation traffic is operator-scale (low TPS),
 the DB-table primary is sufficient, and removing Redis from the critical
 path simplifies the fail-CLOSED matrix. If Redis is later added as primary
 the port stays unchanged. Both-store-down would surface as
-`IDEMPOTENCY_STORE_UNAVAILABLE` (503), but the v1 DB-table primary is
-unconditionally reachable inside the same Tx as the mutation; the 503
-shape is documented but not v1-emitted.
+`IDEMPOTENCY_STORE_UNAVAILABLE` (503). The v1 DB-table primary is
+reachable inside the same Tx as the mutation, so the common path never
+raises it — but the fail-CLOSED store (`DbIdempotencyStore`) does emit
+the 503 in v1 on the claim path's `DataAccessException` or
+unresolved-insert-race branch (rare, but genuine v1 behaviour).
 
 Same key + identical payload → first stored response replayed (no
 re-mutation). Same key + different payload → 409
