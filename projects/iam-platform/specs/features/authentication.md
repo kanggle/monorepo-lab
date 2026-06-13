@@ -48,7 +48,7 @@
 - 패스워드 해시: argon2id (memory=65536, iterations=3, parallelism=1)
 - JWT 서명: RS256. 키 rotation은 [gateway-to-auth.md](../contracts/http/internal/gateway-to-auth.md) 참조
 - 토큰 재사용 탐지 시 **해당 계정의 모든 세션 즉시 무효화** (zero tolerance)
-- 에러 응답에 실패 원인 구체적 노출 금지 (credential stuffing 방지) — 일관되게 `CREDENTIALS_INVALID`
+- 에러 응답에 실패 원인 구체적 노출 금지 (credential stuffing 방지) — 일관되게 `INVALID_CREDENTIALS` (platform-common canonical; admin-service 와 통일, TASK-MONO-246. 단 login-failed 이벤트 `failureReason` enum 은 별도 계약으로 `CREDENTIALS_INVALID` 유지)
 
 ## Related Contracts
 

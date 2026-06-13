@@ -30,7 +30,7 @@ import java.time.Instant;
  *       enumeration of which side mismatched per {@code auth-api.md})</li>
  *   <li>{@code currentPassword} does not match stored hash →
  *       {@link CurrentPasswordMismatchException} (mapped to 400
- *       {@code CREDENTIALS_INVALID})</li>
+ *       {@code INVALID_CREDENTIALS})</li>
  *   <li>{@code newPassword} fails {@link PasswordPolicy} →
  *       {@code PasswordPolicyViolationException} (mapped to 400
  *       {@code PASSWORD_POLICY_VIOLATION})</li>

@@ -249,7 +249,7 @@ class LoginUseCaseTest {
     }
 
     @Test
-    @DisplayName("Login with specific unknown tenant → CREDENTIALS_INVALID (not AMBIGUOUS)")
+    @DisplayName("Login with specific unknown tenant → INVALID_CREDENTIALS (not AMBIGUOUS)")
     void loginWithSpecificTenantNotFound() {
         when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
         when(credentialRepository.findByTenantIdAndEmail("wms", EMAIL)).thenReturn(Optional.empty());
