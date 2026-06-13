@@ -8,7 +8,7 @@ TASK-MONO-245
 
 # Status
 
-review
+done
 
 # Owner
 
