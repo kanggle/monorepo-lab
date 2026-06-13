@@ -114,7 +114,7 @@ export default async function WmsPage() {
     );
   }
 
-  if (state.degraded || !state.inventory || !state.alerts) {
+  if (state.degraded || !state.inventory || !state.alerts || !state.shipments) {
     return (
       <section aria-labelledby="wms-heading">
         <h1 id="wms-heading" className="mb-6 text-2xl font-semibold">
@@ -136,6 +136,7 @@ export default async function WmsPage() {
     <WmsOpsScreen
       inventory={state.inventory}
       alerts={state.alerts}
+      shipments={state.shipments}
       lagSeconds={state.lagSeconds}
     />
   );

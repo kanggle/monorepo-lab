@@ -97,14 +97,35 @@ export type Throughput = z.infer<typeof ThroughputSchema>;
 
 // --- 1.3 orders / shipments ----------------------------------------------
 // OrderSummary / ShipmentSummary live in wms domain-model.md; the console
-// renders them generically (a federated read view, not a wms model owner).
+// renders them as a federated read view (not a wms model owner).
 
 export const GenericRowSchema = z.record(z.string(), z.unknown());
 export type GenericRow = z.infer<typeof GenericRowSchema>;
 
 export const OrderPageSchema = wmsPage(GenericRowSchema);
 export type OrderPage = z.infer<typeof OrderPageSchema>;
-export const ShipmentPageSchema = wmsPage(GenericRowSchema);
+
+// ShipmentSummary (admin-service domain-model.md § 9) — projected from
+// `outbound.shipping.confirmed`. Typed (vs. generic) so the UI can render the
+// carrier fields the operator needs, but TOLERANT (§ 2.4.5 tolerance
+// invariant): only `shipmentId` is required; `carrierCode`/`trackingNo` are
+// NULLABLE (a shipment confirmed before a carrier is assigned); every other
+// field is optional and unknown/future fields pass through (never throws).
+export const ShipmentRowSchema = z
+  .object({
+    shipmentId: z.string(),
+    orderId: z.string().optional(),
+    orderNo: z.string().nullable().optional(),
+    warehouseId: z.string().optional(),
+    shipmentNo: z.string().nullable().optional(),
+    carrierCode: z.string().nullable().optional(),
+    trackingNo: z.string().nullable().optional(),
+    shippedAt: z.string().nullable().optional(),
+    totalQty: z.number().nullable().optional(),
+  })
+  .passthrough();
+export type ShipmentRow = z.infer<typeof ShipmentRowSchema>;
+export const ShipmentPageSchema = wmsPage(ShipmentRowSchema);
 export type ShipmentPage = z.infer<typeof ShipmentPageSchema>;
 
 // --- 1.4 asns + inspection -----------------------------------------------
@@ -203,6 +224,13 @@ export interface AlertQueryParams {
   alertType?: string;
   warehouseId?: string;
   acknowledged?: boolean;
+  page?: number;
+  size?: number;
+}
+
+export interface ShipmentQueryParams {
+  warehouseId?: string;
+  carrierCode?: string;
   page?: number;
   size?: number;
 }

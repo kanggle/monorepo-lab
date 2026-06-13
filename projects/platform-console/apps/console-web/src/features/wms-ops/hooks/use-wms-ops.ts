@@ -13,6 +13,9 @@ import {
   AlertPageSchema,
   type AlertPage,
   type AlertQueryParams,
+  ShipmentPageSchema,
+  type ShipmentPage,
+  type ShipmentQueryParams,
   AckResultSchema,
   type AckResult,
   WMS_DEFAULT_PAGE_SIZE,
@@ -165,6 +168,60 @@ export function useWmsAlerts(
     queryKey: alertsKey(params),
     queryFn: () => fetchAlerts(params),
     initialData: seeded ? initial : undefined,
+    staleTime: seeded ? 30_000 : 0,
+    refetchOnMount: seeded ? false : true,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+  });
+}
+
+// --- shipments read (carrier code / tracking no) -------------------------
+
+export function shipmentsKey(params: ShipmentQueryParams) {
+  return [
+    WMS_KEY,
+    'shipments',
+    params.warehouseId ?? null,
+    params.carrierCode ?? null,
+    Math.max(0, params.page ?? 0),
+    clampSize(params.size),
+  ] as const;
+}
+
+export function buildShipmentsQs(params: ShipmentQueryParams): string {
+  const qs = new URLSearchParams();
+  if (params.warehouseId) qs.set('warehouseId', params.warehouseId);
+  if (params.carrierCode) qs.set('carrierCode', params.carrierCode);
+  qs.set('page', String(Math.max(0, params.page ?? 0)));
+  qs.set('size', String(clampSize(params.size)));
+  return qs.toString();
+}
+
+async function fetchShipments(
+  params: ShipmentQueryParams,
+): Promise<ShipmentPage> {
+  const raw = await apiClient.get<unknown>(
+    `/api/wms/shipments?${buildShipmentsQs(params)}`,
+  );
+  return ShipmentPageSchema.parse(raw);
+}
+
+export function useWmsShipments(
+  params: ShipmentQueryParams,
+  initial?: ShipmentPage,
+) {
+  const seeded =
+    initial !== undefined &&
+    (params.page ?? 0) === 0 &&
+    !params.warehouseId &&
+    !params.carrierCode;
+  return useQuery({
+    queryKey: shipmentsKey(params),
+    queryFn: () => fetchShipments(params),
+    initialData: seeded ? initial : undefined,
+    // Seeded page-0 ⇒ fresh; a filter/page change is a new queryKey → one
+    // fresh proxy call. NO refetch interval / window-focus — the read-model
+    // lag is surfaced, not polled-around (§ 2.4.5).
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
     refetchOnWindowFocus: false,
