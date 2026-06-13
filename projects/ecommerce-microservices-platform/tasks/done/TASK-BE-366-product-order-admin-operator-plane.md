@@ -8,7 +8,7 @@ ecommerce product/order **admin 컨트롤러 operator-plane authorization 전환
 
 # Status
 
-ready
+done
 
 # Owner
 
