@@ -37,6 +37,11 @@ include(
     'projects:ecommerce-microservices-platform:apps:review-service',
     'projects:ecommerce-microservices-platform:apps:search-service',
     'projects:ecommerce-microservices-platform:apps:shipping-service',
+    // TASK-BE-365 (ADR-MONO-030 Step 4 facet b): settlement-service — marketplace
+    // seller settlement / commission. Hybrid event-consumer + rest-api; terminal
+    // consumer (no outbox). Consumes order.order.placed / payment.payment.completed
+    // / payment.payment.refunded; appends an append-only commission-accrual ledger.
+    'projects:ecommerce-microservices-platform:apps:settlement-service',
     'projects:ecommerce-microservices-platform:apps:user-service',
     // TASK-MONO-195 (ADR-MONO-022 §D7): cross-project fulfillment loop e2e —
     // boots order-service + shipping-service, synthesises the wms boundary event.
