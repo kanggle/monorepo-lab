@@ -8,7 +8,7 @@ ADR-MONO-031 Phase 0 — ecommerce 운영자 UI 콘솔 일원화 진입: **ADR-0
 
 # Status
 
-ready
+done
 
 # Owner
 
