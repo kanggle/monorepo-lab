@@ -1,6 +1,6 @@
 ---
 status: live
-last_updated: 2026-05-19
+last_updated: 2026-06-13
 owners: scm-platform/backend
 ---
 
@@ -80,6 +80,60 @@ a **sanctioned external read consumer** of scm's existing read surface:
   is **unrelated** — the console uses IAM's **own** `platform-console-web`
   client, never an scm-registered client.
 
+### platform-console operator action consumer — demand-planning replenishment gate (ADR-MONO-027)
+
+The read-consumer subsection above (TASK-SCM-BE-015) is explicitly **read-only**.
+The ADR-MONO-027 replenishment loop adds a human **operator gate** — an operator
+approves a `SUGGESTED` reorder (which materialises a **DRAFT** PO) or dismisses
+it — and that gate is the console's natural operational surface. Per
+[ADR-MONO-027](../../../../../docs/adr/ADR-MONO-027-wms-scm-replenishment-loop.md)
+§ D2/D5 and ADR-MONO-013 § D1 Model B / § D6, the `platform-console` project is a
+**sanctioned external operator-action consumer** of demand-planning's
+suggestion surface. This **widens** the SCM-BE-015 read acknowledgment to cover
+the demand-planning operator-action routes (TASK-SCM-BE-027):
+
+| Consumed (operator read) | scm contract |
+|---|---|
+| `GET /api/v1/demand-planning/suggestions`, `GET /api/v1/demand-planning/suggestions/{id}` | [`demand-planning-api.md`](./demand-planning-api.md) |
+
+| Consumed (operator action — the net-new acknowledgment) | scm contract |
+|---|---|
+| `POST /api/v1/demand-planning/suggestions/{id}/approve`, `POST /api/v1/demand-planning/suggestions/{id}/dismiss` | [`demand-planning-api.md`](./demand-planning-api.md) |
+
+- **Out (not console-consumed).** The `GET\|PUT /api/v1/demand-planning/policies/{skuCode}`
+  and `GET\|PUT /api/v1/demand-planning/sku-supplier-map/{skuCode}` routes are
+  **operator/admin seed** surface, **not** the operator gate. They are **not**
+  console-consumed by this acknowledgment (no console seeding screen is specced;
+  if one ever is, it is a separate task).
+- **Credential — unchanged, same as the read consumer.** The console calls the
+  actions **server-side** with the **same** human-operator **IAM
+  `platform-console-web` OIDC access token** (RS256, ADR-001) the reads already
+  use — validated by the **already-existing** gateway chain
+  (`AllowedIssuersValidator` + `TenantClaimValidator` `tenant_id ∈ { scm, * }` +
+  `JwtHeaderEnrichmentFilter` `X-Token-Type=user`). Actions ride the **same**
+  token, **not** a privileged exchange: **no new scm OAuth client, no new gateway
+  route, no new gateway code, no auth-model change.** scm has no
+  operator-token-exchange (unlike IAM's admin-service); the gate is server-side
+  `tenant_id=scm` validation plus the DRAFT-PO-only invariant below, not a
+  stronger credential.
+- **Operator-gate invariant (why exposing this write is safe).** `approve`
+  materialises a **DRAFT** PO only (ADR-MONO-027 D5) — **never** an auto-SUBMIT;
+  the console action does **not** bypass procurement's existing
+  `DRAFT → SUBMITTED` operator step. `dismiss` only releases the open-suggestion
+  guard. Both are server-side **idempotent by suggestion state** (re-approve
+  returns the existing `poId`, no duplicate PO; re-dismiss is a no-op).
+- **Single-org preserved.** scm remains single-organization — the deliberate
+  `multi-tenant` non-declaration in [`PROJECT.md`](../../../PROJECT.md) is
+  **unaffected**. Tenant scoping stays the IAM `tenant_id` claim enforced by the
+  **existing** producer-side `TenantClaimValidator`.
+- **Consumer-only.** scm owns [`demand-planning-api.md`](./demand-planning-api.md)
+  (authoritative — suggestion read + approve/dismiss shapes, idempotency, error
+  codes; **unchanged** by this acknowledgment). The console-side obligation is
+  specified in platform-console
+  [`console-integration-contract.md`](../../../../platform-console/specs/contracts/console-integration-contract.md)
+  § 2.4.6.1 (authored by `TASK-PC-FE-077`), reusing the § 2.4.6 per-domain
+  credential rule.
+
 ## Error envelope
 
 All gateway-emitted errors follow `platform/error-handling.md`:
@@ -155,6 +209,35 @@ the `meta.warning: "Not for procurement decisions (S5)"` envelope:
 | GET | `/api/v1/inventory-visibility/staleness` | node-by-node staleness status (FRESH / STALE / UNREACHABLE) |
 | GET | `/api/v1/inventory-visibility/nodes` | node list with status (id, externalId, type, name, status) — **public** per TASK-SCM-BE-008 decision (ops dashboard prerequisite) |
 
+### `demand-planning-service` (TASK-SCM-BE-024, shipped — ADR-MONO-027 Phase 1)
+
+| Field | Value |
+|---|---|
+| External path predicate | `Path=/api/v1/demand-planning/**` |
+| Internal target | `${DEMAND_PLANNING_SERVICE_URI:http://demand-planning-service:8080}` |
+| RewritePath | `/api/v1/demand-planning/(?<segment>.*) → /api/demand-planning/${segment}` |
+| Auth | required (JWT) for all endpoints |
+| Rate limit | `replenishRate=1`, `burstCapacity=120`, key = `accountKeyResolver` |
+| Status | live |
+
+Live v1 endpoints (formal contract:
+[`demand-planning-api.md`](./demand-planning-api.md)). The ADR-MONO-027 operator
+gate — `approve` materialises a **DRAFT** PO only (never auto-SUBMIT):
+
+| Method | External path | Publicity | Idempotency |
+|---|---|---|---|
+| GET | `/api/v1/demand-planning/suggestions` | operator read | n/a (list) |
+| GET | `/api/v1/demand-planning/suggestions/{id}` | operator read | n/a |
+| POST | `/api/v1/demand-planning/suggestions/{id}/approve` | operator action | server-side by suggestion state (re-approve → existing `poId`) |
+| POST | `/api/v1/demand-planning/suggestions/{id}/dismiss` | operator action | server-side by suggestion state (re-dismiss = no-op) |
+| GET\|PUT | `/api/v1/demand-planning/policies/{skuCode}` | operator/admin seed | upsert |
+| GET\|PUT | `/api/v1/demand-planning/sku-supplier-map/{skuCode}` | operator/admin seed | upsert |
+
+> The `suggestions` read + `approve`/`dismiss` action routes are the
+> **platform-console operator-action consumer** surface acknowledged above
+> (TASK-SCM-BE-027). The `policies` / `sku-supplier-map` seed routes are
+> operator/admin-seed, **not** console-consumed.
+
 ### Local management endpoints
 
 | Path | Auth | Description |
@@ -174,7 +257,6 @@ These appear once the v2 services bootstrap (separate tasks):
 | External path | Owner | Bootstrap task |
 |---|---|---|
 | `/api/v1/suppliers/**` | supplier-service | deferred |
-| `/api/v1/demand-planning/**` | demand-planning-service | **route reserved (ADR-MONO-027)** — activated by TASK-SCM-BE-024 impl; contract [`demand-planning-api.md`](./demand-planning-api.md) |
 | `/api/v1/logistics/**` | logistics-service | deferred |
 | `/api/v1/settlement/**` | settlement-service | deferred |
 | `/api/v1/admin/**` | admin-service | deferred |
@@ -187,3 +269,5 @@ These appear once the v2 services bootstrap (separate tasks):
 - `platform/error-handling.md`
 - TASK-SCM-BE-001 — gateway-service bootstrap (this catalogue's authoring task)
 - TASK-SCM-BE-002 / TASK-SCM-BE-003 — downstream service bootstraps
+- TASK-SCM-BE-024 — demand-planning-service bootstrap (ADR-MONO-027 Phase 1; activated the `/api/v1/demand-planning/**` route)
+- TASK-SCM-BE-027 — platform-console operator-**action** consumer acknowledgment (demand-planning replenishment gate) + route-catalogue reconciliation
