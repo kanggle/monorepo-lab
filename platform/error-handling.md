@@ -388,6 +388,23 @@ Owned by `shipping-service`.
 | INVALID_SHIPPING_REQUEST | 400 | Shipping request is invalid (missing or invalid fields) |
 | SHIPPING_NOT_FOUND | 404 | Shipping record does not exist |
 | INVALID_STATUS_TRANSITION | 422 | Shipping status transition is not allowed |
+| WEBHOOK_SIGNATURE_INVALID | 401 | Carrier webhook HMAC signature missing, malformed, or mismatched on `POST /api/shippings/carrier-webhook` (`WebhookSignatureException`). Cross-domain reuse of the same string as the wms Inbound (ERP webhook) code — identical HMAC-rejection semantic. |
+
+---
+
+## Settlement  `[domain: ecommerce]`
+
+Owned by `settlement-service` (ADR-MONO-030 marketplace settlement / commission, BE-365).
+
+| Code | HTTP | Description |
+|---|---|---|
+| SETTLEMENT_NOT_FOUND | 404 | Settlement record does not exist. Also returned when a seller-scope / cross-tenant access is rejected, so existence is not leaked (`SettlementNotFoundException` / `SellerScopeForbiddenException`). |
+| COMMISSION_RATE_INVALID | 422 | Commission rate value is outside the allowed range on `PUT /commission-rates/{sellerId}` (`InvalidCommissionRateException`). |
+
+> `TENANT_FORBIDDEN` (403, cross-tenant JWT) — see `Tenant  [domain: saas]`
+> section; ecommerce gateway-service + settlement-service consume the same
+> string under the outer tenant axis (ADR-MONO-030), defense-in-depth via the
+> entitlement-trust gate.
 
 ---
 

@@ -157,7 +157,7 @@ Used by review-service for purchase verification before review creation.
 **Error responses**
 | Status | Code | Reason |
 |---|---|---|
-| 400 | INVALID_REQUEST | Missing or invalid productId |
+| 400 | VALIDATION_ERROR | Missing or invalid productId |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 
 ---
