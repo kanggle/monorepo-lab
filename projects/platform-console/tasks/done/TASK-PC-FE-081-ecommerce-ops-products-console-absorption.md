@@ -8,7 +8,7 @@ ADR-MONO-031 Phase 1b — console-web `features/ecommerce-ops` **products** 흡�
 
 # Status
 
-ready
+done
 
 # Owner
 
