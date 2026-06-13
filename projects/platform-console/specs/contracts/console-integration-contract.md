@@ -2072,6 +2072,118 @@ carries `bff.domain` + `bff.route="domain-health"` attributes.
 > **Not a § 3 parity row**: composition routes are additive to the operator
 > surface, never replace a § 3 row. § 3 count remains **16** post-merge.
 
+#### 2.4.10 ecommerce operations surface — product/order operator CRUD (TASK-MONO-252 contract / ADR-MONO-031 Phase 0 — first console **write** binding for ecommerce)
+
+The **first ecommerce operations (CRUD) binding** federated by the console, and
+the contract base for **sunsetting the standalone `admin-dashboard`**
+([ADR-MONO-031](../../../../docs/adr/ADR-MONO-031-ecommerce-operator-ui-console-consolidation.md),
+executing [ADR-MONO-030](../../../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md)
+§ 3.4 Step 4 facet a-후속-2). Where § 2.4.9.1/§ 2.4.9.2 bind ecommerce only as a
+**console-bff read leg** (operator-overview snapshot + domain-health card), this
+sub-binding renders the ecommerce **product** and **order** operator surfaces so
+an operator can manage the catalog and drive order lifecycle **from inside the
+console** — the console equivalent of the `admin-dashboard` product/order
+screens. Per **ADR-MONO-017 D2.A**, this surface is **console-web → ecommerce
+gateway direct** (Next.js Route Handlers); it adds **NO console-bff write leg**
+(the BFF stays cross-domain-read-aggregation only — the wms-outbound § 2.4.5.1 /
+erp-approval / ledger-resolve precedent).
+
+This sub-binding **inherits the non-IAM domain cross-cutting rules** and does
+not restate them: the **credential** (the domain-facing IAM OIDC access token —
+`getDomainFacingToken()`, **never** `getOperatorToken()`, ADR-MONO-017 D4); the
+**tenant model** (tenant rides in the JWT `tenant_id ∈ {ecommerce,*}` claim —
+**no** `X-Tenant-Id` header on the direct call; ecommerce gateway
+`TenantClaimValidator` is the authoritative gate, ADR-MONO-019 D5 / ADR-MONO-030
+Step 2 entitlement-trust); **eligibility** (registry `productKey=ecommerce`
+available + tenants, reused from TASK-MONO-240 — **no** new `productKey`/enum);
+the **resilience** taxonomy (401 → whole-session IAM re-login; 403 → inline "not
+available to your role"; 503/timeout → only this section degrades; tokens/PII
+never logged); and the **§ 3 parity matrix is NOT mutated** (additive domain
+scope, no § 3 row — attestation count stays **16**).
+
+- **Tenant-isolation precondition (the absorption-order crux — normative)**:
+  **only `product-service` + `order-service` carry row-level `tenant_id`**
+  (ADR-MONO-030 Step 2/3) and are therefore the **only** ecommerce areas safe to
+  federate into a multi-tenant operator console at this contract revision.
+  Absorbing a not-yet-isolated area (users/promotions/shippings/notifications)
+  would let a tenant-scoped operator read cross-tenant rows (ADR-MONO-030 M1/M6
+  violation). Those 4 areas are added in **§ 2.4.10.1+** (one sub-section each),
+  **each gated on that area's backend `tenant_id` migration** (ADR-MONO-030
+  Step 4) landing first. This is a named staged backlog, not a silent omission.
+
+- **Authoritative producer (owned by ecommerce, consumed only — do NOT redefine
+  here)**: ecommerce `product-service` (`AdminProductController` +
+  `AdminProductImageController`) and `order-service` (`AdminOrderController`),
+  consumed via the ecommerce gateway admin path `/api/admin/**` (base URL
+  `ECOMMERCE_ADMIN_BASE_URL`, default the ecommerce gateway hostname e.g.
+  `http://ecommerce.local/api/admin` — the same gateway + IAM-OIDC credential the
+  § 2.4.9.1 ecommerce snapshot leg already routes through):
+
+  | # | Operation | Producer endpoint | Kind |
+  |---|---|---|---|
+  | 1 | list products | `GET /admin/products?categoryId&status&page&size` | read |
+  | 2 | product detail | `GET /admin/products/{id}` (public `/products/{id}` read path) | read |
+  | 3 | **register product** | `POST /admin/products` | mutation |
+  | 4 | **update product** | `PATCH /admin/products/{id}` | mutation |
+  | 5 | **delete product** | `DELETE /admin/products/{id}` | mutation |
+  | 6 | **add variant** | `POST /admin/products/{id}/variants` | mutation |
+  | 7 | **update variant** | `PATCH /admin/products/{id}/variants/{variantId}` | mutation |
+  | 8 | **delete variant** | `DELETE /admin/products/{id}/variants/{variantId}` | mutation |
+  | 9 | **adjust stock** | `PATCH /admin/products/{id}/stock` | mutation |
+  | 10 | list images | `GET /admin/products/{id}/images` | read |
+  | 11 | **presigned upload url** | `POST /admin/products/{id}/images/upload-url` | mutation |
+  | 12 | **register image** | `POST /admin/products/{id}/images` | mutation |
+  | 13 | **update image** | `PATCH /admin/products/{id}/images/{imageId}` | mutation |
+  | 14 | **delete image** | `DELETE /admin/products/{id}/images/{imageId}` | mutation |
+  | 15 | list orders | `GET /admin/orders?status&page&size` | read |
+  | 16 | order detail | `GET /admin/orders/{id}` | read |
+  | 17 | **change order status** | `POST /admin/orders/{id}/status` | mutation |
+
+  **Out of this binding (deferred, not silently dropped)**: seller admin
+  (`AdminSellerController POST /admin/sellers`) and search reindex
+  (`SearchAdminController POST /search/admin/reindex`) — separate seller/search
+  facets. The `admin-dashboard` **dashboard KPI** widgets are partially covered
+  by the § 2.4.9.1 ecommerce overview snapshot (TASK-MONO-243); any residual KPI
+  is a later facet.
+
+- **Mutation discipline (Phase-1 producer-verify gated)**: every mutation
+  (#3–9, #11–14, #17) is **confirm-gated** in the UI and carries the
+  domain-facing OIDC credential. Two ecommerce-specific items **MUST be verified
+  against the producer in Phase 1 before the write Route Handlers ship** (the
+  ecommerce admin API is less formalised than wms-outbound, so this contract
+  names the gaps rather than fabricating semantics):
+  1. **Operator role mapping** — `AdminProductController` register/update/delete
+     require an `X-User-Role: ADMIN` header today. The console operator carries
+     an IAM OIDC token, not `X-User-Role`. Phase 1 MUST resolve how the ecommerce
+     gateway maps the OIDC operator identity → the producer's role gate (gateway
+     header injection vs producer accepting the OIDC scope) — **no** raw
+     client-supplied `X-User-Role` from the browser.
+  2. **Idempotency / optimistic concurrency** — unlike wms-outbound (§ 2.4.5.1,
+     per-call `Idempotency-Key` + `version`), the ecommerce product/order admin
+     API does not document an `Idempotency-Key` or `version`/ETag. Phase 1 MUST
+     confirm the producer's double-submit/conflict story; absent a producer
+     idempotency key, the console relies on **confirm-gate + producer state
+     guards** (e.g. order `status` transition validation → `409/422` surfaced
+     actionably), and MUST NOT fabricate an `Idempotency-Key` the producer
+     ignores. The write Route Handler shape otherwise mirrors
+     `wms/outbound/[orderId]/ship/route.ts` (`runtime='nodejs'`, Zod body parse,
+     `makeProxyErrorMapper('ecommerce', …)` → 401/403/404/409/422/503).
+
+- **Error envelope**: the ecommerce producer error shape (product/order
+  `GlobalExceptionHandler`) is **consumed, its exact schema pinned in Phase 1**
+  with a dedicated parser (do not assume the wms nested or scm/finance flat shape
+  — verify). `X-Operator-Reason` is **not** defined by this surface (asserted
+  absent, same as wms-outbound).
+
+- **Producer immutability**: cross-reference only. Any change to the ecommerce
+  product/order admin contract is an ecommerce project-internal spec-first change
+  in its service API spec; this section follows it, never redefines it (§ 5
+  Change Rule).
+
+> **Not a § 3 parity row**: the ecommerce operations surface is additive
+> federated **domain** scope, not an IAM `admin-web` parity capability; it adds
+> no § 3 row and changes none (count stays **16**).
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
