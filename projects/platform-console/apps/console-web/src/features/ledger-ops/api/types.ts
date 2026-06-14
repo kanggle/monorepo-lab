@@ -595,3 +595,104 @@ export const StatementSchema = z
   })
   .passthrough();
 export type Statement = z.infer<typeof StatementSchema>;
+
+// ---------------------------------------------------------------------------
+// FX position open-lots drill — TASK-PC-FE-091
+//   § 12 GET /api/finance/ledger/settlements/{ledgerAccountCode}/{currency}/lots
+//   (ledger-api.md § 12 — the 20th increment, FIN-BE-028). STRICTLY READ-ONLY.
+//   id-driven by (ledgerAccountCode, currency) — the colon-form account code
+//   is `encodeURIComponent`-encoded on the producer path; `currency` is a
+//   3-letter ISO-4217 code. An empty position → 200 with `lots: []`, all
+//   totals `"0"`, `lotCount: 0` (NOT a 404 — an empty-state, never an error).
+//
+// F5 MONEY (CONTRACT obligation — § 2.4.7.1): EVERY `*Minor` field
+// (`originalForeignMinor`, `remainingForeignMinor`, `originalBaseMinor`,
+// `carryingBaseMinor`, `totalRemainingForeignMinor`, `totalCarryingBaseMinor`)
+// is a precision-exact **string** of integer minor units — NEVER a number.
+// The console MUST render these from the string ONLY (no float / `Number(...)`
+// / `parseFloat(...)` / `parseInt(...)` — a test grep-asserts this); `seq` and
+// `lotCount` ARE numbers (lot index / count, not money — the F5 invariant is
+// amount-only). `acquiredAt` is an ISO-8601 string.
+//
+// TOLERANCE: only the fields the UI strictly needs are required; everything
+// else is passthrough (forward-compatible with later producer fields).
+// ---------------------------------------------------------------------------
+
+/**
+ * One open FX acquisition lot (`ledger-api.md` § 12 `lots` array element).
+ *
+ * `originalForeignMinor` + `originalBaseMinor` are the acquisition-time
+ * values (never change); `remainingForeignMinor` + `carryingBaseMinor`
+ * reflect FIFO consumption (17th incr) + revaluation mark-to-spot (18th
+ * incr). `sourceJournalEntryId` is the journal entry that created the lot
+ * (acquisition provenance — drill key into the entry view). Every `*Minor`
+ * field is an F5 minor-units **string** (NEVER a number); `seq` is the
+ * lot's per-`acquiredAt` ordering index (a number, NOT money).
+ */
+export const PositionLotSchema = z
+  .object({
+    lotId: z.string(),
+    currency: z.string().min(3).max(3),
+    acquiredAt: z.string(),
+    // ordering index within an `acquiredAt` — a number, NOT money (F5 is
+    // amount-only). Tolerant: a non-integer/absent value degrades to 0.
+    seq: z.number().int().nonnegative().optional().default(0),
+    // F5 — minor-units STRINGS, never coerced to a number.
+    originalForeignMinor: z
+      .string()
+      .regex(/^-?\d+$/, 'originalForeignMinor must be an integer string (F5)'),
+    remainingForeignMinor: z
+      .string()
+      .regex(/^-?\d+$/, 'remainingForeignMinor must be an integer string (F5)'),
+    originalBaseMinor: z
+      .string()
+      .regex(/^-?\d+$/, 'originalBaseMinor must be an integer string (F5)'),
+    carryingBaseMinor: z
+      .string()
+      .regex(/^-?\d+$/, 'carryingBaseMinor must be an integer string (F5)'),
+    sourceJournalEntryId: z.string(),
+  })
+  .passthrough();
+export type PositionLot = z.infer<typeof PositionLotSchema>;
+
+/**
+ * PositionLotsResponse — § 12 `GET .../settlements/{code}/{currency}/lots`
+ * 200 body `data` sub-object: the open lots + the position summary
+ * (Σremaining foreign, Σcarrying base, lot count). An empty position →
+ * `lots: []`, totals `"0"`, `lotCount: 0` (an empty-state — never a 404 /
+ * error). The two `total*Minor` fields are F5 minor-units **strings**;
+ * `lotCount` is a number.
+ */
+export const PositionLotsResponseSchema = z
+  .object({
+    lots: z.array(PositionLotSchema),
+    totalRemainingForeignMinor: z
+      .string()
+      .regex(/^-?\d+$/, 'totalRemainingForeignMinor must be an integer string (F5)'),
+    totalCarryingBaseMinor: z
+      .string()
+      .regex(/^-?\d+$/, 'totalCarryingBaseMinor must be an integer string (F5)'),
+    lotCount: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type PositionLotsResponse = z.infer<typeof PositionLotsResponseSchema>;
+
+/**
+ * Materialises a lot's `remainingForeignMinor` (foreign currency) +
+ * `carryingBaseMinor` (KRW base) strings as Money objects for rendering via
+ * `formatMoney(...)`. Pure string transformation — NO `Number(...)`. The
+ * base leg is always KRW (the fixed base currency, v1).
+ */
+export function positionLotMoney(lot: PositionLot): {
+  originalForeign: Money;
+  remainingForeign: Money;
+  originalBase: Money;
+  carryingBase: Money;
+} {
+  return {
+    originalForeign: { amount: lot.originalForeignMinor, currency: lot.currency },
+    remainingForeign: { amount: lot.remainingForeignMinor, currency: lot.currency },
+    originalBase: { amount: lot.originalBaseMinor, currency: 'KRW' },
+    carryingBase: { amount: lot.carryingBaseMinor, currency: 'KRW' },
+  };
+}

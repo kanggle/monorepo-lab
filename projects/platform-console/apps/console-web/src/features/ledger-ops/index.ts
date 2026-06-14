@@ -38,6 +38,9 @@ export { AccountDetail } from './components/AccountDetail';
 // TASK-PC-FE-075 — reconciliation statement-detail read
 export { StatementLookup } from './components/StatementLookup';
 export { StatementDetail } from './components/StatementDetail';
+// TASK-PC-FE-091 — FX position open-lots drill read
+export { PositionLotsLookup } from './components/PositionLotsLookup';
+export { PositionLotsTable } from './components/PositionLotsTable';
 export { getLedgerSectionState } from './api/ledger-state';
 export type { LedgerSectionState } from './api/ledger-state';
 export type {
@@ -64,10 +67,14 @@ export type {
   // TASK-PC-FE-075 — reconciliation statement-detail read types
   Statement,
   StatementMatch,
+  // TASK-PC-FE-091 — FX position open-lots drill read types
+  PositionLot,
+  PositionLotsResponse,
 } from './api/types';
 export {
   formatMoney,
   discrepancyMoney,
+  positionLotMoney,
   KNOWN_SOURCE_TYPES,
   KNOWN_DIRECTIONS,
   KNOWN_PERIOD_STATUSES,

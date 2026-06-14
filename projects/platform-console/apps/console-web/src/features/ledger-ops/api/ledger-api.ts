@@ -25,6 +25,8 @@ import {
   type AccountEntriesQueryParams,
   StatementSchema,
   type Statement,
+  PositionLotsResponseSchema,
+  type PositionLotsResponse,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from './types';
@@ -633,6 +635,64 @@ export async function getStatement(statementId: string): Promise<Statement> {
     (json) => {
       const env = (json ?? {}) as { data?: unknown };
       return StatementSchema.parse(env.data);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FX position open-lots drill — TASK-PC-FE-091
+//   § 12 GET /api/finance/ledger/settlements/{ledgerAccountCode}/{currency}/lots
+//   ledger-api.md § 12 envelope = { data: { lots[], totalRemainingForeignMinor,
+//   totalCarryingBaseMinor, lotCount }, meta }. STRICTLY READ-ONLY — this read
+//   adds NO mutation. id-driven by (ledgerAccountCode, currency): the
+//   colon-form account code (e.g. `CUSTOMER_WALLET:acc-1`) is
+//   `encodeURIComponent`-encoded on the producer path; `currency` is a
+//   3-letter ISO-4217 code, also `encodeURIComponent`-encoded for safety.
+//
+//   Header matrix (honest, producer-faithful — § 2.4.7.1):
+//     - the SAME domain-facing IAM OIDC token (NEVER getOperatorToken());
+//     - GET only — NO body, NO Idempotency-Key, NO X-Operator-Reason,
+//       NO X-Tenant-Id (handled by callLedger).
+//     - No 429 branch (the ledger has no documented 429).
+//
+//   Errors (SAME taxonomy as the other reads):
+//     - empty position → 200 with lots: [] / totals "0" / lotCount 0 (the
+//       producer's empty-state — NOT a 404; the UI renders an empty-state
+//       message, never an error).
+//     - 400 VALIDATION_ERROR (unsupported currency) → ApiError (inline
+//       actionable; the lookup form stays mounted).
+//     - 403 TENANT_FORBIDDEN → ApiError (inline "not scoped").
+//     - 503 / timeout → LedgerUnavailableError (ledger section degrades).
+//
+//   F7 (§ 2.4.7.1 confidential): the sanitised `logPath` carries NEITHER the
+//   account code NOR the currency — only the `{code}/{currency}` placeholder
+//   (consistent with the accountCode / statementId sanitisation pattern).
+// ---------------------------------------------------------------------------
+
+/**
+ * `getPositionLots(ledgerAccountCode, currency)` — reads the open FX
+ * acquisition lots for one `(account, currency)` position. READ-ONLY. The
+ * domain-facing IAM OIDC access token is attached by `callLedger`; NEVER
+ * `getOperatorToken()`. id-driven; both the account code AND the currency are
+ * `encodeURIComponent`-encoded on the path. The sanitised `logPath` carries
+ * NEITHER the account code NOR the currency (F7). An empty position is a
+ * normal `200` (`lots: []`, totals `"0"`); `400 VALIDATION_ERROR` (bad
+ * currency) → ApiError; `503`/timeout → LedgerUnavailableError. Adds NO
+ * mutation artifact. All `*Minor` fields survive as F5 minor-units STRINGS.
+ */
+export async function getPositionLots(
+  ledgerAccountCode: string,
+  currency: string,
+): Promise<PositionLotsResponse> {
+  return callLedger(
+    {
+      path: `/api/finance/ledger/settlements/${encodeURIComponent(ledgerAccountCode)}/${encodeURIComponent(currency)}/lots`,
+      // confidential / F7 — the log path carries NEITHER account code NOR currency.
+      logPath: '/api/finance/ledger/settlements/{code}/{currency}/lots',
+    },
+    (json) => {
+      const env = (json ?? {}) as { data?: unknown };
+      return PositionLotsResponseSchema.parse(env.data);
     },
   );
 }
