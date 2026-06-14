@@ -1,16 +1,22 @@
 package com.example.product.infrastructure.persistence;
 
+import com.example.product.application.dto.SellerListResult;
+import com.example.product.application.dto.SellerSummary;
+import com.example.product.application.port.SellerQueryPort;
 import com.example.product.domain.model.Seller;
 import com.example.product.domain.repository.SellerRepository;
 import com.example.product.domain.tenant.TenantContext;
 import com.example.product.infrastructure.persistence.entity.SellerJpaEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
 @Repository
-class SellerRepositoryImpl implements SellerRepository {
+class SellerRepositoryImpl implements SellerRepository, SellerQueryPort {
 
     private final SellerJpaRepository jpaRepository;
 
@@ -38,6 +44,22 @@ class SellerRepositoryImpl implements SellerRepository {
     @Transactional(readOnly = true)
     public boolean existsById(String sellerId) {
         return jpaRepository.existsByTenantIdAndSellerId(TenantContext.currentTenant(), sellerId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SellerListResult findAll(int page, int size) {
+        Page<SellerJpaEntity> result = jpaRepository.findByTenantId(
+                TenantContext.currentTenant(),
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
+        return new SellerListResult(
+                result.getContent().stream()
+                        .map(SellerJpaEntity::toDomain)
+                        .map(SellerSummary::from)
+                        .toList(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements());
     }
 
     @Override
