@@ -1,6 +1,6 @@
 # TASK-FIN-BE-029 — Per-account FX cost-flow method override
 
-- **Status**: ready
+- **Status**: done
 - **Project**: finance-platform
 - **Service**: ledger-service
 - **Domain / traits**: fintech / [transactional, regulated, audit-heavy]
