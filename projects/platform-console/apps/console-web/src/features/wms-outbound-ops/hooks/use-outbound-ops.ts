@@ -171,3 +171,35 @@ export function usePackAction() {
 export function useShipAction() {
   return useOutboundAction('ship');
 }
+
+// --- cancel (TASK-PC-FE-085 — reason-required, NOT the reason-free forward
+//     ActionArgs). The proxy reads the order version server-side. -----------
+
+interface CancelArgs {
+  orderId: string;
+  /** REQUIRED operator reason (3..500) — validated in the cancel dialog. */
+  reason: string;
+  /** Stable per the confirmed cancel; fresh per a new confirmed attempt. */
+  idempotencyKey: string;
+}
+
+export function useCancelOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, reason, idempotencyKey }: CancelArgs) => {
+      // The reason rides in the body (the proxy adds the Idempotency-Key +
+      // resolves the order version server-side). NO X-Operator-Reason header.
+      const raw = await apiClient.post<unknown>(
+        `/api/wms/outbound/${encodeURIComponent(orderId)}/cancel`,
+        { reason, idempotencyKey },
+      );
+      return raw;
+    },
+    onSuccess: (_data, { orderId }) => {
+      // Refetch the orders list + the drilled order so the CANCELLED status +
+      // (possibly async) saga state reflect.
+      qc.invalidateQueries({ queryKey: [OUTBOUND_KEY, 'orders'] });
+      qc.invalidateQueries({ queryKey: [OUTBOUND_KEY, 'drill', orderId] });
+    },
+  });
+}

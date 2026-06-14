@@ -428,3 +428,215 @@ describe('OutboundOpsScreen — degrade & a11y', () => {
     );
   });
 });
+
+describe('OutboundOpsScreen — cancel action (TASK-PC-FE-085)', () => {
+  async function drillInto(
+    user: ReturnType<typeof userEvent.setup>,
+    seedStatus: string,
+  ) {
+    render(
+      <OutboundOpsScreen
+        orders={{ ...ORDERS, content: [order({ status: seedStatus })] }}
+      />,
+      { wrapper: wrapper() },
+    );
+    await user.click(screen.getByTestId('outbound-drill-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-drill')).toBeInTheDocument(),
+    );
+  }
+
+  it('shows the cancel button for a cancellable order (PICKING)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(drillEnvelope('PICKING', 'RESERVED'))),
+    );
+    const user = userEvent.setup();
+    await drillInto(user, 'PICKING');
+    expect(
+      screen.getByTestId('outbound-action-cancel-order'),
+    ).toBeInTheDocument();
+    // Pre-pick (PICKING) → no admin note.
+    expect(
+      screen.queryByTestId('outbound-cancel-admin-note'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the cancel button for a SHIPPED (terminal) order', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED')),
+      ),
+    );
+    const user = userEvent.setup();
+    await drillInto(user, 'SHIPPED');
+    expect(
+      screen.queryByTestId('outbound-action-cancel-order'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the OUTBOUND_ADMIN hint for a post-pick (PACKED) cancel', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(drillEnvelope('PACKED', 'PACKING_CONFIRMED')),
+      ),
+    );
+    const user = userEvent.setup();
+    await drillInto(user, 'PACKED');
+    expect(screen.getByTestId('outbound-action-cancel-order')).toBeInTheDocument();
+    expect(screen.getByTestId('outbound-cancel-admin-note')).toBeInTheDocument();
+  });
+
+  it('requires a reason (3..500) — confirm disabled until valid, no producer call', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(drillEnvelope('PICKING', 'RESERVED')));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await drillInto(user, 'PICKING');
+
+    await user.click(screen.getByTestId('outbound-action-cancel-order'));
+    expect(screen.getByTestId('outbound-cancel-dialog')).toBeInTheDocument();
+    const confirm = screen.getByTestId('outbound-cancel-confirm');
+    expect(confirm).toBeDisabled(); // empty reason
+    await user.type(screen.getByTestId('outbound-cancel-reason'), 'ab');
+    expect(confirm).toBeDisabled(); // 2 chars < 3
+    await user.type(screen.getByTestId('outbound-cancel-reason'), 'c');
+    expect(confirm).toBeEnabled(); // 3 chars
+    // No cancel producer call was fabricated (only the drill read happened).
+    expect(
+      fetchMock.mock.calls.some((c) => String(c[0]).includes('/cancel')),
+    ).toBe(false);
+  });
+
+  it('confirming cancel posts { reason } + Idempotency-Key to the cancel proxy', async () => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
+      Promise.resolve(
+        String(url).includes('/cancel')
+          ? jsonResponse({
+              orderId: 'o-1',
+              status: 'CANCELLED',
+              sagaState: 'CANCELLATION_REQUESTED',
+            })
+          : jsonResponse(drillEnvelope('PICKING', 'RESERVED')),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await drillInto(user, 'PICKING');
+
+    await user.click(screen.getByTestId('outbound-action-cancel-order'));
+    await user.type(
+      screen.getByTestId('outbound-cancel-reason'),
+      '고객 주문 취소 요청',
+    );
+    await user.click(screen.getByTestId('outbound-cancel-confirm'));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => String(c[0]).includes('/cancel')),
+      ).toBe(true),
+    );
+    const call = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/cancel'),
+    )!;
+    const init = call[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string);
+    expect(body.reason).toBe('고객 주문 취소 요청');
+    expect(body.idempotencyKey).toBeTruthy();
+  });
+
+  it('422 ORDER_ALREADY_SHIPPED → inline cancel error (no crash)', async () => {
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(
+        String(url).includes('/cancel')
+          ? new Response(
+              JSON.stringify({ code: 'ORDER_ALREADY_SHIPPED', message: 'x' }),
+              { status: 422, headers: { 'Content-Type': 'application/json' } },
+            )
+          : jsonResponse(drillEnvelope('PACKED', 'PACKING_CONFIRMED')),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await drillInto(user, 'PACKED');
+
+    await user.click(screen.getByTestId('outbound-action-cancel-order'));
+    await user.type(screen.getByTestId('outbound-cancel-reason'), '취소 사유');
+    await user.click(screen.getByTestId('outbound-cancel-confirm'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-cancel-error')).toHaveTextContent(
+        '이미 출고된',
+      ),
+    );
+    expect(
+      screen.getByRole('heading', { name: 'WMS 출고 운영' }),
+    ).toBeInTheDocument();
+  });
+
+  it('403 FORBIDDEN (post-pick, no admin) → inline permission message', async () => {
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(
+        String(url).includes('/cancel')
+          ? new Response(JSON.stringify({ code: 'FORBIDDEN', message: 'x' }), {
+              status: 403,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          : jsonResponse(drillEnvelope('PACKED', 'PACKING_CONFIRMED')),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await drillInto(user, 'PACKED');
+
+    await user.click(screen.getByTestId('outbound-action-cancel-order'));
+    await user.type(screen.getByTestId('outbound-cancel-reason'), '취소 사유');
+    await user.click(screen.getByTestId('outbound-cancel-confirm'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-cancel-error')).toHaveTextContent(
+        '권한',
+      ),
+    );
+  });
+
+  it('async cancel: after success the CANCELLATION_REQUESTED release-pending hint shows', async () => {
+    let drillCalls = 0;
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).includes('/cancel')) {
+        return Promise.resolve(
+          jsonResponse({
+            orderId: 'o-1',
+            status: 'CANCELLED',
+            sagaState: 'CANCELLATION_REQUESTED',
+          }),
+        );
+      }
+      drillCalls += 1;
+      // First drill = PICKING; the post-cancel invalidation refetch = CANCELLED
+      // with the saga still releasing inventory (async).
+      return Promise.resolve(
+        drillCalls === 1
+          ? jsonResponse(drillEnvelope('PICKING', 'RESERVED'))
+          : jsonResponse(drillEnvelope('CANCELLED', 'CANCELLATION_REQUESTED')),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await drillInto(user, 'PICKING');
+
+    await user.click(screen.getByTestId('outbound-action-cancel-order'));
+    await user.type(screen.getByTestId('outbound-cancel-reason'), '취소 사유');
+    await user.click(screen.getByTestId('outbound-cancel-confirm'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('outbound-cancel-pending-hint'),
+      ).toBeInTheDocument(),
+    );
+  });
+});

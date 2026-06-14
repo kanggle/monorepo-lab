@@ -17,6 +17,8 @@ import {
   type PackingUnit,
   ShipmentSchema,
   type Shipment,
+  CancelResultSchema,
+  type CancelResult,
   type OutboundListParams,
   OUTBOUND_DEFAULT_PAGE_SIZE,
   OUTBOUND_MAX_PAGE_SIZE,
@@ -421,5 +423,33 @@ export function confirmShipping(
       body: { carrierCode, version },
     },
     (j) => ShipmentSchema.parse(j),
+  );
+}
+
+/**
+ * 1.4 — POST /orders/{id}:cancel (cancel order, reason-required,
+ * version-checked). TASK-PC-FE-085.
+ *
+ * Diverges from the reason-free forward mutations: a **REQUIRED `reason`**
+ * (3..500, producer § 1.4) rides in the JSON body (NOT a header — the wms
+ * surface still has no `X-Operator-Reason`). Role is producer-enforced
+ * (`OUTBOUND_WRITE` for PICKING / `OUTBOUND_ADMIN` post-pick) — a 403 maps
+ * inline; the console never pre-gates on role. Note the `:cancel` action
+ * suffix on the path (not a `/cancel` sub-resource).
+ */
+export function cancelOrder(
+  orderId: string,
+  version: number,
+  reason: string,
+  idempotencyKey: string,
+): Promise<CancelResult> {
+  return callOutbound(
+    {
+      method: 'POST',
+      path: `/orders/${encodeURIComponent(orderId)}:cancel`,
+      idempotencyKey,
+      body: { reason, version },
+    },
+    (j) => CancelResultSchema.parse(j),
   );
 }

@@ -359,12 +359,40 @@ the **§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
   | 6 | **create packing unit** | `POST /orders/{id}/packing-units` (§ 3.1) | **mutation** | `OUTBOUND_WRITE` |
   | 7 | **seal packing unit** | `PATCH /packing-units/{id}` (§ 3.2, `seal:true`) | **mutation** | `OUTBOUND_WRITE` |
   | 8 | **confirm shipping** | `POST /orders/{id}/shipments` (§ 4.1) | **mutation** | `OUTBOUND_WRITE` |
+  | 9 | **cancel order** | `POST /orders/{id}:cancel` (§ 1.4) | **mutation** | `OUTBOUND_WRITE` (PICKING) / `OUTBOUND_ADMIN` (post-pick) |
 
-  The wms outbound **manual order-create** (`POST /orders`, § 1.1),
-  **cancel** (§ 1.4, post-pick needs `OUTBOUND_ADMIN`), and **TMS retry**
-  (§ 4.3, `OUTBOUND_ADMIN`) are **out of v1 console scope** — deferred, not
-  silently dropped. The console v1 outbound surface = the read set + the
-  forward pick→pack→ship lifecycle advance.
+  The wms outbound **manual order-create** (`POST /orders`, § 1.1) and **TMS
+  retry** (§ 4.3, `OUTBOUND_ADMIN`) remain **out of v1 console scope** —
+  deferred, not silently dropped (manual create contradicts the auto-create-
+  from-ecommerce model; TMS retry is a separate admin op). The console outbound
+  surface = the read set + the forward pick→pack→ship lifecycle advance + the
+  cancel action (op 9, TASK-PC-FE-085).
+
+  **Cancel (op 9 — the one NON-forward action; TASK-PC-FE-085) mutation shape**
+  (consumes producer § 1.4 unchanged; diverges from the reason-free ops 5–8 in
+  three producer-defined ways — record what § 1.4 requires, do NOT cargo-cult):
+  - **reason is REQUIRED** (3..500 chars) — UNLIKE the reason-free forward
+    actions. It rides in the producer JSON body `{ reason, version }`, **NOT** a
+    header (the wms surface still has no `X-Operator-Reason`). The console
+    validates 3..500 client-side (the producer is still the final authority).
+  - **`Idempotency-Key`** (UUID, stable per a confirmed cancel / fresh per a new
+    attempt — same posture as ship) + the order **`version`** (optimistic lock;
+    the proxy reads `GET /orders/{id}` for it server-side, exactly like ship).
+  - **role escalation** — `OUTBOUND_WRITE` for `PICKING` (pre-pick),
+    `OUTBOUND_ADMIN` for `PICKED`/`PACKING`/`PACKED` (post-pick). The console
+    does **NOT** pre-gate on role (it does not hold the operator's wms role
+    catalog) — it attempts and maps a `403 FORBIDDEN` to an inline actionable
+    state, plus a pre-emptive "needs admin" hint for post-pick orders.
+  - allowed only for `status ∈ {PICKING,PICKED,PACKING,PACKED}`; `SHIPPED → 422
+    ORDER_ALREADY_SHIPPED`; a re-cancel with the same `Idempotency-Key` is an
+    idempotent no-op, otherwise `STATE_TRANSITION_INVALID`.
+  - **async** — the response `sagaState` is `CANCELLATION_REQUESTED` (NOT yet
+    terminal `CANCELLED`) when a reservation was held; it transitions to
+    `CANCELLED` later once `inventory.released` is consumed. The UI surfaces a
+    non-blocking "재고 해제 대기" hint, never asserting a synchronous terminal.
+
+  § 3 parity matrix **not** mutated (additive non-IAM domain mutation, like the
+  rest of § 2.4.5.1).
 
 - **"Confirm as planned" semantics (the correctness crux — normative)**: the
   console does **not** invent warehouse master data. Each lifecycle-advance

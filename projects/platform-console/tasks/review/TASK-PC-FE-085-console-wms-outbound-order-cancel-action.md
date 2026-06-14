@@ -8,7 +8,7 @@ console-web — wms outbound **order cancel** operator action (reason-required, 
 
 # Status
 
-ready
+review
 
 # Owner
 

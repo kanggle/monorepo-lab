@@ -233,6 +233,26 @@ export const ShipmentSchema = z
   .passthrough();
 export type Shipment = z.infer<typeof ShipmentSchema>;
 
+// --- 1.4 cancel response (TASK-PC-FE-085) --------------------------------
+// Tolerant: `status`/`previousStatus`/`sagaState` kept as plain strings. The
+// async-cancel hint reads `sagaState === 'CANCELLATION_REQUESTED'` (eventual
+// `CANCELLED` once `inventory.released` is consumed).
+
+export const CancelResultSchema = z
+  .object({
+    orderId: z.string().optional(),
+    orderNo: z.string().optional(),
+    status: z.string().optional(),
+    previousStatus: z.string().optional(),
+    cancelledReason: z.string().nullable().optional(),
+    cancelledAt: z.string().nullable().optional(),
+    cancelledBy: z.string().nullable().optional(),
+    sagaState: z.string().optional(),
+    version: z.number().optional(),
+  })
+  .passthrough();
+export type CancelResult = z.infer<typeof CancelResultSchema>;
+
 // --- query params + pagination defaults ----------------------------------
 
 export const OUTBOUND_DEFAULT_PAGE_SIZE = 20;
@@ -264,4 +284,22 @@ export function canPack(status: string | undefined): boolean {
 /** Ship is reachable only when order `PACKED`. */
 export function canShip(status: string | undefined): boolean {
   return status === 'PACKED';
+}
+
+/** Cancel is reachable for any non-terminal lifecycle status
+ *  (`PICKING|PICKED|PACKING|PACKED`). `SHIPPED`/`CANCELLED`/`BACKORDERED` are
+ *  NOT cancellable here (producer returns 422 on SHIPPED — still handled
+ *  inline). Tolerant: an unknown status gates the action off. */
+const CANCELLABLE_STATES = new Set(['PICKING', 'PICKED', 'PACKING', 'PACKED']);
+export function canCancel(status: string | undefined): boolean {
+  return status !== undefined && CANCELLABLE_STATES.has(status);
+}
+
+/** Post-pick statuses whose cancel the producer gates behind `OUTBOUND_ADMIN`
+ *  (`PICKED|PACKING|PACKED`). The console does NOT pre-gate on role — it shows
+ *  a pre-emptive hint and maps a 403 inline. `PICKING` cancel needs only
+ *  `OUTBOUND_WRITE`. */
+const POST_PICK_STATES = new Set(['PICKED', 'PACKING', 'PACKED']);
+export function cancelNeedsAdmin(status: string | undefined): boolean {
+  return status !== undefined && POST_PICK_STATES.has(status);
 }
