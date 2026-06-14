@@ -284,6 +284,9 @@ public class RequiresPermissionAspect {
             if ("createOperator".equals(name)) return ActionCode.OPERATOR_CREATE;
             if ("patchRoles".equals(name)) return ActionCode.OPERATOR_ROLE_CHANGE;
             if ("patchStatus".equals(name)) return ActionCode.OPERATOR_STATUS_CHANGE;
+            // TASK-BE-373 (ADR-MONO-034 U3) — operator↔identity link/unlink DENIED row target semantics.
+            if ("linkIdentity".equals(name)) return ActionCode.OPERATOR_IDENTITY_LINK;
+            if ("unlinkIdentity".equals(name)) return ActionCode.OPERATOR_IDENTITY_UNLINK;
             // listOperators / currentOperator are reads; fall through to null
         }
         if ("TenantAdminController".equals(simple)) {

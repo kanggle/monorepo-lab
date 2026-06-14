@@ -112,6 +112,34 @@ public class AccountServiceClient {
         return callGet("/internal/accounts/" + accountId, null, AccountDetailResponse.class);
     }
 
+    /**
+     * TASK-BE-373 / ADR-MONO-034 U3 (step 3c) — resolve a consumer account's central
+     * {@code identity_id} via the step-3b internal EP
+     * {@code GET /internal/tenants/{tenantId}/accounts/{accountId}/identity}
+     * (TASK-BE-372). The EP is enumeration-safe: a foreign/missing account, or an
+     * account with no identity yet, returns 200 with {@code identityId = null}.
+     *
+     * <p><b>Fail-CLOSED for the link decision.</b> Unlike the issuance fail-soft, the
+     * operator-link is an authorization decision at link time, so any downstream
+     * failure (account-service unavailable / errors) propagates as
+     * {@link DownstreamFailureException} (or {@link NonRetryableDownstreamException}
+     * for 4xx) — the use case treats that as a HARD FAILURE and does NOT link
+     * (§ 1.3 no-silent-merge). A successful 200 with {@code identityId == null} is
+     * also a link-fail (no resolvable identity) — but that is the use case's
+     * decision, not an exception here.
+     *
+     * @return the resolved {@code identityId}, or {@code null} when the account has
+     *         no central identity (200 + null).
+     */
+    @Retry(name = "accountService")
+    @CircuitBreaker(name = "accountService")
+    public String resolveIdentity(String tenantId, String accountId) {
+        AccountIdentityResponse resp = callGetWithTenant(
+                "/internal/tenants/" + tenantId + "/accounts/" + accountId + "/identity",
+                tenantId, AccountIdentityResponse.class);
+        return resp == null ? null : resp.identityId();
+    }
+
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
     public LockResponse lock(String accountId,
@@ -172,6 +200,44 @@ public class AccountServiceClient {
                         if (operatorId != null) h.add("X-Operator-ID", operatorId);
                         // TASK-BE-318b: authenticate via GAP client_credentials Bearer JWT
                         // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
+                        h.setBearerAuth(tokenProvider.currentBearer());
+                    })
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
+                        throw HttpClientErrorException.create(
+                                resp.getStatusCode(), resp.getStatusText(),
+                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
+                    })
+                    .body(responseType);
+        } catch (RestClientResponseException e) {
+            log.warn("account-service returned {} on {}: {}", e.getStatusCode(), path, e.getMessage());
+            if (e.getStatusCode().is4xxClientError()) {
+                String code = extractErrorCode(e.getResponseBodyAsByteArray());
+                throw new NonRetryableDownstreamException(
+                        "account-service error " + e.getStatusCode().value(), e,
+                        e.getStatusCode().value(), code);
+            }
+            throw new DownstreamFailureException(
+                    "account-service error " + e.getStatusCode().value(), e);
+        } catch (Exception e) {
+            log.error("account-service call failed on {}", path, e);
+            throw new DownstreamFailureException("account-service unavailable", e);
+        }
+    }
+
+    /**
+     * GET variant that stamps the {@code X-Tenant-Id} header (defense-in-depth tenant
+     * scope re-check at the receiver, mirroring {@code AccountIdentityController}). The
+     * client_credentials Bearer JWT is still attached. Error semantics identical to
+     * {@link #callGet}: 4xx → {@link NonRetryableDownstreamException}, other failures →
+     * {@link DownstreamFailureException} (the fail-closed signal for the link use case).
+     */
+    private <T> T callGetWithTenant(String path, String tenantId, Class<T> responseType) {
+        try {
+            return restClient.get()
+                    .uri(path)
+                    .headers(h -> {
+                        if (tenantId != null) h.add("X-Tenant-Id", tenantId);
                         h.setBearerAuth(tokenProvider.currentBearer());
                     })
                     .retrieve()
@@ -267,6 +333,19 @@ public class AccountServiceClient {
     public record AccountDetailProfile(
             String displayName,
             String phoneMasked
+    ) {}
+
+    /**
+     * TASK-BE-373 / ADR-MONO-034 U3 — response shape of the step-3b identity-resolve
+     * EP ({@code GET /internal/tenants/{tenantId}/accounts/{accountId}/identity},
+     * TASK-BE-372). {@code identityId} is {@code null} when the account has no central
+     * identity (or does not exist in the tenant — enumeration-safe 200).
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record AccountIdentityResponse(
+            String accountId,
+            String tenantId,
+            String identityId
     ) {}
 
     public record AccountSearchResponse(

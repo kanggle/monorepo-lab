@@ -132,6 +132,24 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
         operatorRepository.saveAndFlush(entity); // TASK-BE-335: explicit flush (see changeStatus)
     }
 
+    @Override
+    public void linkIdentity(long operatorInternalId, String identityId, Instant at) {
+        AdminOperatorJpaEntity entity = operatorRepository.findById(operatorInternalId)
+                .orElseThrow(() -> new OperatorNotFoundException(
+                        "admin_operators row not found for internalId=" + operatorInternalId));
+        entity.linkIdentity(identityId, at);
+        operatorRepository.saveAndFlush(entity); // TASK-BE-335: explicit flush (see changeStatus)
+    }
+
+    @Override
+    public void unlinkIdentity(long operatorInternalId, Instant at) {
+        AdminOperatorJpaEntity entity = operatorRepository.findById(operatorInternalId)
+                .orElseThrow(() -> new OperatorNotFoundException(
+                        "admin_operators row not found for internalId=" + operatorInternalId));
+        entity.unlinkIdentity(at);
+        operatorRepository.saveAndFlush(entity); // TASK-BE-335: explicit flush (see changeStatus)
+    }
+
     // ---------- Roles ----------
 
     @Override
@@ -241,7 +259,8 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
                 e.getLastLoginAt(),
                 e.getCreatedAt(),
                 e.getUpdatedAt(),
-                e.getFinanceDefaultAccountId());
+                e.getFinanceDefaultAccountId(),
+                e.getIdentityId());
     }
 
     private static RoleView toView(AdminRoleJpaEntity r) {

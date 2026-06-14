@@ -55,7 +55,7 @@ class OperatorAssignmentCheckUseCaseTest {
     private AdminOperatorPort.OperatorView operator(String tenantId, String status, long internalId) {
         return new AdminOperatorPort.OperatorView(
                 internalId, OIDC_SUBJECT, tenantId, "op@example.com", "hash",
-                "Op", status, null, null, Instant.now(), Instant.now(), null);
+                "Op", status, null, null, Instant.now(), Instant.now(), null, null);
     }
 
     @Test

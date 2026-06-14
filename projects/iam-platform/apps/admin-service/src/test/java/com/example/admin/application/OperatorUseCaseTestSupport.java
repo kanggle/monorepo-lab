@@ -63,6 +63,20 @@ final class OperatorUseCaseTestSupport {
         Instant created = Instant.parse("2026-01-01T00:00:00Z");
         return new AdminOperatorPort.OperatorView(
                 id, uuid, tenantId, email, "hash", "Display", status,
-                null, null, created, created, financeDefaultAccountId);
+                null, null, created, created, financeDefaultAccountId, null);
+    }
+
+    /**
+     * TASK-BE-373 — overload accepting an explicit {@code identityId} so the
+     * link/unlink use case tests can construct already-linked / unlinked fixtures.
+     */
+    static AdminOperatorPort.OperatorView operator(long id, String uuid, String email,
+                                                   String status, String tenantId,
+                                                   String financeDefaultAccountId,
+                                                   String identityId) {
+        Instant created = Instant.parse("2026-01-01T00:00:00Z");
+        return new AdminOperatorPort.OperatorView(
+                id, uuid, tenantId, email, "hash", "Display", status,
+                null, null, created, created, financeDefaultAccountId, identityId);
     }
 }

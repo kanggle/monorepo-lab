@@ -48,7 +48,7 @@ class TokenExchangeServiceTest {
         return new AdminOperatorPort.OperatorView(
                 42L, OPERATOR_UUID, tenantId,
                 "op@example.com", "hash", "Op",
-                status, null, null, Instant.now(), Instant.now(), null);
+                status, null, null, Instant.now(), Instant.now(), null, null);
     }
 
     @Test

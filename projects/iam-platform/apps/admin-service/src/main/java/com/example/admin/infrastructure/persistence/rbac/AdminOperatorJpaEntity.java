@@ -77,6 +77,17 @@ public class AdminOperatorJpaEntity {
     @Column(name = "finance_default_account_id", length = 36)
     private String financeDefaultAccountId;
 
+    // TASK-BE-373 / ADR-MONO-034 U3 (step 3c): the central identities.identity_id
+    // (account_db registry, step 3a) this operator is linked to. Value-convention
+    // cross-DB reference (admin_db ≠ account_db → no FK possible; mirrors how
+    // `oidc_subject` already references a consumer account_id). NULL = unlinked
+    // (the default for every existing row; V0036 adds no backfill — the link is
+    // opt-in/audited/reversible per U3). Set only via the link surface; cleared by
+    // unlink. NOT a tenant-scope axis and NOT a role axis (identity ≠ authorization,
+    // U5) — pure identity correlation.
+    @Column(name = "identity_id", length = 36)
+    private String identityId;
+
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
@@ -169,6 +180,31 @@ public class AdminOperatorJpaEntity {
      */
     public void changeFinanceDefaultAccountId(String newValue, Instant at) {
         this.financeDefaultAccountId = newValue;
+        this.updatedAt = at;
+    }
+
+    /**
+     * TASK-BE-373 / ADR-MONO-034 U3 — link this operator to a central identity by
+     * setting {@code identity_id}. Invoked by the opt-in audited link surface
+     * ({@code PATCH /api/admin/operators/{operatorId}/identity:link}). Bumps
+     * {@code updated_at}; {@code @Version} drives the optimistic-lock surface on a
+     * stale row. The caller (use case) is responsible for the U3 authorization
+     * checks (email-match necessary-not-sufficient, fail-closed identity resolve,
+     * idempotency) — the entity only records the resolved link.
+     */
+    public void linkIdentity(String identityId, Instant at) {
+        this.identityId = identityId;
+        this.updatedAt = at;
+    }
+
+    /**
+     * TASK-BE-373 / ADR-MONO-034 U3 — reverse the link by clearing
+     * {@code identity_id} (the U6 "reversible until step 4" invariant). Invoked by
+     * {@code PATCH /api/admin/operators/{operatorId}/identity:unlink}. Bumps
+     * {@code updated_at}.
+     */
+    public void unlinkIdentity(Instant at) {
+        this.identityId = null;
         this.updatedAt = at;
     }
 }

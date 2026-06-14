@@ -186,7 +186,7 @@ class OperatorQueryServiceTest {
         AdminOperatorPort.OperatorView op = new AdminOperatorPort.OperatorView(
                 10L, "op-uuid", "fan-platform", "op@example.com", "hash", "Display", "ACTIVE",
                 enrolled, null, Instant.parse("2026-01-01T00:00:00Z"),
-                Instant.parse("2026-01-01T00:00:00Z"), null);
+                Instant.parse("2026-01-01T00:00:00Z"), null, null);
         when(operatorPort.findByOperatorId("op-uuid")).thenReturn(Optional.of(op));
         when(operatorPort.findRolesForOperator(10L)).thenReturn(List.of());
 

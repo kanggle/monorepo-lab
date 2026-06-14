@@ -61,5 +61,13 @@ public enum ActionCode {
     // target_id=external operator_id (UUID v7), target_tenant_id=assigned tenant,
     // permission_used=operator.manage.
     OPERATOR_ASSIGNMENT_CREATE,
-    OPERATOR_ASSIGNMENT_DELETE
+    OPERATOR_ASSIGNMENT_DELETE,
+    // TASK-BE-373 (ADR-MONO-034 U3 / step 3c): opt-in, audited, reversible operator↔
+    // central-identity link. target_type=OPERATOR, target_id=external operator_id
+    // (UUID v7), target_tenant_id=operator's home tenant, permission_used=operator.manage.
+    // LINK sets admin_operators.identity_id (after email-match-necessary + fail-closed
+    // identity resolve); UNLINK clears it (reversibility). Idempotent re-link to the
+    // same identity is a no-op SUCCESS and still audited.
+    OPERATOR_IDENTITY_LINK,
+    OPERATOR_IDENTITY_UNLINK
 }

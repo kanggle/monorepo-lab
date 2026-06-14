@@ -88,6 +88,10 @@ class OperatorAdminControllerTest {
     @MockitoBean ChangeMyPasswordUseCase changeMyPasswordUseCase;
     @MockitoBean UpdateOwnOperatorProfileUseCase updateOwnOperatorProfileUseCase;
     @MockitoBean com.example.admin.application.UpdateOperatorProfileUseCase updateOperatorProfileUseCase;
+    // TASK-BE-373 (ADR-MONO-034 step 3c): operator↔identity link/unlink use cases
+    // wired into OperatorAdminController — mocked so the WebMvc slice context loads.
+    @MockitoBean com.example.admin.application.LinkOperatorIdentityUseCase linkOperatorIdentityUseCase;
+    @MockitoBean com.example.admin.application.UnlinkOperatorIdentityUseCase unlinkOperatorIdentityUseCase;
 
     @MockitoBean
     PermissionEvaluator permissionEvaluator;

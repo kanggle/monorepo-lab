@@ -10,6 +10,10 @@ import com.example.admin.application.PatchOperatorRoleUseCase;
 import com.example.admin.application.PatchOperatorRoleUseCase.PatchRolesResult;
 import com.example.admin.application.PatchOperatorStatusUseCase;
 import com.example.admin.application.PatchOperatorStatusUseCase.PatchStatusResult;
+import com.example.admin.application.LinkOperatorIdentityUseCase;
+import com.example.admin.application.LinkOperatorIdentityUseCase.LinkResult;
+import com.example.admin.application.UnlinkOperatorIdentityUseCase;
+import com.example.admin.application.UnlinkOperatorIdentityUseCase.UnlinkResult;
 import com.example.admin.application.UpdateOperatorProfileUseCase;
 import com.example.admin.application.UpdateOwnOperatorProfileUseCase;
 import com.example.admin.application.exception.InvalidRequestException;
@@ -22,6 +26,9 @@ import com.example.admin.presentation.dto.ChangeMyPasswordRequest;
 import com.example.admin.presentation.dto.UpdateOperatorProfileRequest;
 import com.example.admin.presentation.dto.CreateOperatorRequest;
 import com.example.admin.presentation.dto.CreateOperatorResponse;
+import com.example.admin.presentation.dto.LinkOperatorIdentityRequest;
+import com.example.admin.presentation.dto.LinkOperatorIdentityResponse;
+import com.example.admin.presentation.dto.UnlinkOperatorIdentityResponse;
 import com.example.admin.presentation.dto.OperatorListResponse;
 import com.example.admin.presentation.dto.OperatorSummaryResponse;
 import com.example.admin.presentation.dto.PatchOperatorRolesRequest;
@@ -61,6 +68,8 @@ public class OperatorAdminController {
     private final ChangeMyPasswordUseCase changeMyPasswordUseCase;
     private final UpdateOwnOperatorProfileUseCase updateOwnOperatorProfileUseCase;
     private final UpdateOperatorProfileUseCase updateOperatorProfileUseCase;
+    private final LinkOperatorIdentityUseCase linkOperatorIdentityUseCase;
+    private final UnlinkOperatorIdentityUseCase unlinkOperatorIdentityUseCase;
 
     @GetMapping("/me")
     public ResponseEntity<OperatorSummaryResponse> currentOperator() {
@@ -208,6 +217,64 @@ public class OperatorAdminController {
                 OperatorContextHolder.require(),
                 reason);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * TASK-BE-373 (ADR-MONO-034 U3 / step 3c) — opt-in, audited, reversible
+     * operator↔central-identity LINK
+     * ({@code PATCH /api/admin/operators/{operatorId}/identity:link}, AIP-136
+     * colon-verb).
+     *
+     * <p>Authorized by {@code operator.manage} (same gate + acting-operator source +
+     * {@code X-Operator-Reason} as the other operator mutations); audited
+     * ({@code OPERATOR_IDENTITY_LINK}). Sets {@code admin_operators.identity_id} to
+     * the central identity of the target consumer account ONLY when the operator's
+     * email equals the account's email (necessary-not-sufficient) and the account
+     * resolves to a non-null central identity (fail-CLOSED on downstream
+     * unavailability / null identity). Idempotent on re-link to the same identity;
+     * 409 when already linked to a different identity.
+     */
+    @PatchMapping("/operators/{operatorId}/identity:link")
+    @RequiresPermission(Permission.OPERATOR_MANAGE)
+    public ResponseEntity<LinkOperatorIdentityResponse> linkIdentity(
+            @PathVariable String operatorId,
+            @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
+            @Valid @RequestBody LinkOperatorIdentityRequest body) {
+
+        String reason = requireReason(headerReason);
+
+        LinkResult result = linkOperatorIdentityUseCase.link(
+                operatorId,
+                body.accountId(),
+                body.tenantId(),
+                OperatorContextHolder.require(),
+                reason);
+
+        return ResponseEntity.ok(new LinkOperatorIdentityResponse(
+                result.operatorId(), result.identityId(), result.alreadyLinked()));
+    }
+
+    /**
+     * TASK-BE-373 (ADR-MONO-034 U3 / step 3c) — reverse the link
+     * ({@code PATCH /api/admin/operators/{operatorId}/identity:unlink}), clearing
+     * {@code admin_operators.identity_id} (U6 reversibility). Same auth + audit
+     * ({@code OPERATOR_IDENTITY_UNLINK}). Idempotent when already unlinked.
+     */
+    @PatchMapping("/operators/{operatorId}/identity:unlink")
+    @RequiresPermission(Permission.OPERATOR_MANAGE)
+    public ResponseEntity<UnlinkOperatorIdentityResponse> unlinkIdentity(
+            @PathVariable String operatorId,
+            @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason) {
+
+        String reason = requireReason(headerReason);
+
+        UnlinkResult result = unlinkOperatorIdentityUseCase.unlink(
+                operatorId,
+                OperatorContextHolder.require(),
+                reason);
+
+        return ResponseEntity.ok(new UnlinkOperatorIdentityResponse(
+                result.operatorId(), result.previousIdentityId(), result.alreadyUnlinked()));
     }
 
     @PatchMapping("/operators/me/password")
