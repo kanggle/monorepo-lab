@@ -1441,6 +1441,59 @@ backfill is a **no-op**; it exists for real deployments carrying open positions 
 **No new error code / status / event / contract** — lots are domain-internal persisted state; the
 `entry.posted` outbox payload is unchanged (lots are a separate table, not exposed on the event).
 
+### FIFO settlement consumption (seventeenth increment — TASK-FIN-BE-025)
+
+ADR-001 D3 (§ 2 D3 + § 3.1 step 3): when a tenant's cost-flow method is `FIFO`, a settlement
+derives the settled carrying `C_settle` by **consuming the open lots oldest-first** (lot-exact)
+instead of the weighted-average pool share. `WEIGHTED_AVERAGE` (and unset — absence ⇒
+`WEIGHTED_AVERAGE`) stays **byte-identical** to the 12th increment (net-zero); only the carrying
+basis differs, never the entry shape.
+
+**`FxSettlementPolicy` (pure) — core extraction.** A shared private `settleCore(F, F_settle,
+C_settle, rate, …)` builds `proceedsBase = round(F_settle × rate)`, `realized = proceedsBase −
+C_settle`, and the same balanced 3-line (or 2-line when `realized == 0`) base-currency entry — the
+carrying-removal line carries `money = |F_settle| {currency}`, `baseAmount = |C_settle| KRW`. The
+existing weighted-average `settle(...)` overload computes `C_settle = round(C × |F_settle|/|F|)`
+then calls the core (output unchanged). A **new** public `settleWithCarrying(…, long
+carryingSettledMinor, …)` takes a **pre-computed** `C_settle` and calls the SAME core — the FIFO
+path supplies it. The policy stays pure (no repository / no Spring); the lot walk lives in the use
+case (it needs the repository).
+
+**`SettleForeignPositionUseCase` — the FIFO branch.** After **all** the existing guards (idempotent
+replay, base-currency reject, proceeds-account-exists, no-position / zero-foreign no-op, and the
+sign / zero / over-settle `resolveSettleForeignMinor` bound → `SETTLEMENT_AMOUNT_INVALID`) — so FIFO
+and weighted-average share the identical guard surface — it resolves the method via
+`FxCostFlowConfigRepository.findByTenantId(tenant)` (absent ⇒ `WEIGHTED_AVERAGE`):
+
+- **`WEIGHTED_AVERAGE` / unset** → the pre-existing `FxSettlementPolicy.settle(…)` path (byte-identical).
+- **`FIFO`** → load `FxPositionLotRepository.findOpenLots(tenant, code, currency)` (`remaining > 0`,
+  ordered `(acquired_at, seq)` ASC) and **walk** `needed = |F_settle|` oldest-first: per lot
+  `consume = min(lot.remaining, needed)`, `slice = round(lot.carrying × consume / lot.remaining,
+  HALF_UP)` (when a lot is fully consumed `consume == lot.remaining` ⇒ `slice = lot.carrying`
+  exactly — no drift, the per-lot analogue of the weighted-average self-correction);
+  `C_settle_fifo += slice`; `needed -= consume`; `lot.consume(consume, slice)`. The consumed lots'
+  decremented `remaining/carrying` are **saved in the same `@Transactional`** (atomic with the
+  entry), then `FxSettlementPolicy.settleWithCarrying(…, C_settle_fifo, …)` builds the entry. The
+  residual `(F − F_settle, C − C_settle_fifo)` is the use case's existing subtraction — lot-exact
+  automatically because `settleWithCarrying` returns `carryingSettledMinor == C_settle_fifo`.
+
+**Safe fallback (invariant).** The walk is computed **first** (no persistence) and lots are saved
+**only after** `needed` reaches 0. When the open lots are absent or short
+(`Σ remaining < |F_settle|` — e.g. a non-settlement reduction's shadow desync, or a pre-lot
+position) the walk returns a shortfall signal: the use case **discards** the in-memory lot mutations
+(persists none) and **falls back to the weighted-average** carrying (no net-non-zero — the
+settlement always books), logging `FX_FIFO_LOT_SHORTFALL`.
+
+**D4 boundary.** FIFO carrying is exact only when `Σ (open-lot carrying) == position carrying C` —
+true after acquisition + backfill with **no interleaved revaluation**. Revaluation mutates `C` but
+not the lots, so a revalue-then-FIFO-settle would diverge; redistributing the revaluation delta
+across open lots (keeping the invariant) is **FIN-BE-026** (out of scope here). The IT therefore
+asserts lot-exactness only on non-revaluation scenarios.
+
+**No new error code / status / event / contract** — the settlement entry + `entry.posted` outbox
+payload shape are unchanged (only the internally-derived `C_settle` differs); lot consumption is
+domain-internal persisted state.
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):

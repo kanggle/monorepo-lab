@@ -12,11 +12,16 @@ import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoun
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementAmountInvalidException;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
+import com.example.finance.ledger.domain.journal.CostFlowMethod;
 import com.example.finance.ledger.domain.journal.EntryDirection;
+import com.example.finance.ledger.domain.journal.FxCostFlowConfig;
+import com.example.finance.ledger.domain.journal.FxPositionLot;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.Outcome;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
 import com.example.finance.ledger.domain.journal.SourceRef;
+import com.example.finance.ledger.domain.journal.repository.FxCostFlowConfigRepository;
+import com.example.finance.ledger.domain.journal.repository.FxPositionLotRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
 import com.example.finance.ledger.domain.money.Currency;
@@ -41,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,6 +75,8 @@ class SettleForeignPositionUseCaseTest {
     @Mock LedgerAccountRepository ledgerAccountRepository;
     @Mock ProcessedEventStore processedEventStore;
     @Mock PostJournalEntryUseCase postJournalEntryUseCase;
+    @Mock FxCostFlowConfigRepository fxCostFlowConfigRepository;
+    @Mock FxPositionLotRepository fxPositionLotRepository;
     @Mock ClockPort clock;
 
     SettleForeignPositionUseCase useCase;
@@ -76,7 +84,14 @@ class SettleForeignPositionUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new SettleForeignPositionUseCase(journalRepository, ledgerAccountRepository,
-                processedEventStore, postJournalEntryUseCase, clock);
+                processedEventStore, postJournalEntryUseCase, fxCostFlowConfigRepository,
+                fxPositionLotRepository, clock);
+        // The cost-flow config is resolved after the guards on every settle that reaches the
+        // policy call; absence → WEIGHTED_AVERAGE (the existing tests all assert the
+        // weighted-average path). Lenient so the early-reject tests (which never reach the
+        // branch) don't trip STRICT_STUBS.
+        lenient().when(fxCostFlowConfigRepository.findByTenantId(TENANT))
+                .thenReturn(Optional.empty());
     }
 
     private static SettleForeignPositionCommand cmd(String rate) {
@@ -407,6 +422,78 @@ class SettleForeignPositionUseCaseTest {
         verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
         verify(processedEventStore, never()).markProcessed(anyString(), anyString(),
                 anyString(), anyString(), any());
+    }
+
+    // ---- FIFO lot consumption (17th increment — TASK-FIN-BE-025, ADR-001 D3) ----
+
+    @Test
+    @DisplayName("FIFO config + 2 lots → C_settle from the FIFO walk (lot-exact), consumed lots saved")
+    void fifoConsumesOldestFirst() {
+        // Position F = 2000 USD, pool carrying C = 2,700,000 (avg 1350/USD). Two lots:
+        // lot1 1000@1,300,000, lot2 1000@1,400,000. Settle 1500 @ spot 1500 (proceeds 2,250,000).
+        // FIFO C_settle = 1,300,000 (lot1 full) + round(1,400,000×500/1000)=700,000 = 2,000,000.
+        // Weighted-average would be round(2,700,000×1500/2000)=2,025,000 → DIFFERS (branch matters).
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(2_000L, 2_700_000L)));
+        when(fxCostFlowConfigRepository.findByTenantId(TENANT))
+                .thenReturn(Optional.of(FxCostFlowConfig.of(TENANT, CostFlowMethod.FIFO, "op", NOW)));
+        FxPositionLot lot1 = openLot(1L, 1_000L, 1_300_000L);
+        FxPositionLot lot2 = openLot(2L, 1_000L, 1_400_000L);
+        when(fxPositionLotRepository.findOpenLots(TENANT, CASH, Currency.USD))
+                .thenReturn(java.util.List.of(lot1, lot2));
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Result result = useCase.settle(partialCmd("1500", 1_500L));
+
+        assertThat(result.settled()).isTrue();
+        assertThat(result.proceedsBaseMinor()).isEqualTo(2_250_000L);
+        // realized = proceeds − C_settle_fifo = 2,250,000 − 2,000,000 = 250,000 (FIFO, not 225,000 avg).
+        assertThat(result.realizedBaseMinor()).isEqualTo(250_000L);
+        assertThat(result.outcome()).isEqualTo(Outcome.FX_GAIN);
+        // residual carrying = C − C_settle_fifo = 2,700,000 − 2,000,000 = 700,000 (lot-exact: lot2's remaining).
+        assertThat(result.residualForeignMinor()).isEqualTo(500L);
+        assertThat(result.residualCarryingBaseMinor()).isEqualTo(700_000L);
+        // Both consumed lots persisted (lot1 fully, lot2 partially).
+        verify(fxPositionLotRepository).save(lot1);
+        verify(fxPositionLotRepository).save(lot2);
+        assertThat(lot1.remainingForeignMinor()).isZero();
+        assertThat(lot2.remainingForeignMinor()).isEqualTo(500L);
+    }
+
+    @Test
+    @DisplayName("FIFO config but lots absent/short → safe fallback to weighted-average, no lot saved")
+    void fifoShortfallFallsBackToWeightedAverage() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(10_000L, 130_000L)));
+        when(fxCostFlowConfigRepository.findByTenantId(TENANT))
+                .thenReturn(Optional.of(FxCostFlowConfig.of(TENANT, CostFlowMethod.FIFO, "op", NOW)));
+        // No open lots for the position → Σremaining 0 < |F_settle| → fallback.
+        when(fxPositionLotRepository.findOpenLots(TENANT, CASH, Currency.USD))
+                .thenReturn(java.util.List.of());
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // Full settle @ 13.7 — weighted-average C_settle == C == 130000; realized 7000.
+        Result result = useCase.settle(cmd("13.7"));
+
+        assertThat(result.settled()).isTrue();
+        assertThat(result.realizedBaseMinor()).isEqualTo(7_000L);   // weighted-average outcome
+        assertThat(result.proceedsBaseMinor()).isEqualTo(137_000L);
+        verify(fxPositionLotRepository, never()).save(any());        // no lot mutation persisted
+    }
+
+    /** A fully-open lot for FIFO-walk stubbing (acquired_at ordered by seq). */
+    private static FxPositionLot openLot(long seq, long foreignMinor, long baseMinor) {
+        return FxPositionLot.acquire(TENANT, CASH, Currency.USD,
+                Instant.parse("2026-06-01T00:00:00Z").plusSeconds(seq), seq,
+                foreignMinor, baseMinor, "entry-" + seq, NOW);
     }
 
     private static List<JournalLine> settlementLines() {

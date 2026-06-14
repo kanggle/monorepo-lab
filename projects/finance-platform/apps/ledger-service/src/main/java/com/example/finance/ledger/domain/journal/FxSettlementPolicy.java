@@ -59,7 +59,18 @@ import java.util.Optional;
  * the position at its weighted-average unit cost: the settled carrying is the
  * proportional share {@code C_settle = round(C × |F_settle|/|F|)} (HALF_UP, signed) and
  * the residual {@code (F − F_settle, C − C_settle)} simply remains OPEN (double-entry
- * leaves it — no extra line). The full-settle overload delegates with
+ * leaves it — no extra line). The full-settle overload delegates with the same portion.
+ *
+ * <p><b>17th increment (TASK-FIN-BE-025) — FIFO lot consumption.</b> A shared private
+ * {@code settleCore} now builds the proceeds / realized / 3-line entry from a settled
+ * carrying {@code C_settle} <b>parameter</b>. The weighted-average {@code settle(...)}
+ * overload computes {@code C_settle} from the pool average then calls the core
+ * (byte-identical output — net-zero). A new public {@code settleWithCarrying(...)} takes a
+ * <b>pre-computed</b> {@code C_settle} (the sum of the FIFO-consumed lots' carrying slices,
+ * walked in the use case) and calls the SAME core — so the FIFO entry shape is identical;
+ * only the carrying basis differs. The policy stays pure (the lot walk lives in the use case).
+ *
+ * <p>The original full-settle overload delegates with
  * {@code F_settle == F} → byte-identical output (net-zero, AC-2).
  */
 public final class FxSettlementPolicy {
@@ -169,11 +180,7 @@ public final class FxSettlementPolicy {
                                                     long carryingBaseMinor, long settleForeignMinor,
                                                     BigDecimal settlementRate,
                                                     String proceedsAccountCode) {
-        Objects.requireNonNull(tenantId, "tenantId");
-        Objects.requireNonNull(ledgerAccountCode, "ledgerAccountCode");
-        Objects.requireNonNull(currency, "currency");
         Objects.requireNonNull(settlementRate, "settlementRate");
-        Objects.requireNonNull(proceedsAccountCode, "proceedsAccountCode");
         if (settlementRate.signum() <= 0) {
             throw new SettlementRateInvalidException(
                     "settlementRate must be strictly positive: " + settlementRate.toPlainString());
@@ -192,6 +199,65 @@ public final class FxSettlementPolicy {
                         .multiply(new BigDecimal(Math.abs(settleForeignMinor)))
                         .divide(new BigDecimal(Math.abs(foreignBalanceMinor)), 0, RoundingMode.HALF_UP)
                         .longValueExact();
+
+        return settleCore(tenantId, ledgerAccountCode, currency, foreignBalanceMinor,
+                settleForeignMinor, carryingSettledMinor, settlementRate, proceedsAccountCode);
+    }
+
+    /**
+     * Settle a portion {@code F_settle} of the position with a <b>pre-computed</b> settled
+     * carrying {@code C_settle} (17th increment — TASK-FIN-BE-025, FIFO consumption). Where the
+     * weighted-average {@code settle(...)} overload derives {@code C_settle} from the pool
+     * average, the FIFO path computes it in the use case by walking the open lots
+     * {@code (acquired_at, seq)} ASC — {@code C_settle = Σ round(lot.carrying × consumed /
+     * lot.remaining)} — and passes the sum here. The carrying-removal / proceeds / realized FX
+     * lines are then built by the SAME private {@code settleCore}, so the entry shape is
+     * byte-identical to a weighted-average settle; only the carrying basis (which lots are
+     * realized) differs. The policy stays pure — the lot walk is the use case's responsibility
+     * (it needs the repository).
+     *
+     * <p>{@code foreignBalanceMinor} is still required (its sign drives the asset-vs-liability
+     * polarity); {@code carryingSettledMinor} ({@code C_settle}) carries the same sign as
+     * {@code F}.
+     *
+     * @param carryingSettledMinor the pre-computed settled carrying {@code C_settle} (the sum of
+     *                             the consumed lots' carrying slices; same sign as {@code F})
+     * @return the 3-line (or 2-line when realized == 0) settlement entry, or
+     *         {@link Optional#empty()} when there is no position ({@code F == 0})
+     * @throws SettlementRateInvalidException if {@code settlementRate ≤ 0}
+     */
+    public static Optional<SettlementResult> settleWithCarrying(
+            String tenantId, String ledgerAccountCode, Currency currency,
+            long foreignBalanceMinor, long settleForeignMinor, long carryingSettledMinor,
+            BigDecimal settlementRate, String proceedsAccountCode) {
+        Objects.requireNonNull(settlementRate, "settlementRate");
+        if (settlementRate.signum() <= 0) {
+            throw new SettlementRateInvalidException(
+                    "settlementRate must be strictly positive: " + settlementRate.toPlainString());
+        }
+        if (foreignBalanceMinor == 0L) {
+            return Optional.empty();
+        }
+        return settleCore(tenantId, ledgerAccountCode, currency, foreignBalanceMinor,
+                settleForeignMinor, carryingSettledMinor, settlementRate, proceedsAccountCode);
+    }
+
+    /**
+     * The shared settlement core (17th increment — TASK-FIN-BE-025): given the settled foreign
+     * portion {@code F_settle} and its settled carrying {@code C_settle} (however derived —
+     * weighted-average pool share or FIFO lot walk), build {@code proceedsBase},
+     * {@code realized} and the balanced 3-line (or 2-line when {@code realized == 0})
+     * base-currency entry. Pure — no repository, no Spring. Callers validate
+     * {@code settlementRate > 0} and {@code F != 0} before delegating here.
+     */
+    private static Optional<SettlementResult> settleCore(
+            String tenantId, String ledgerAccountCode, Currency currency,
+            long foreignBalanceMinor, long settleForeignMinor, long carryingSettledMinor,
+            BigDecimal settlementRate, String proceedsAccountCode) {
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(ledgerAccountCode, "ledgerAccountCode");
+        Objects.requireNonNull(currency, "currency");
+        Objects.requireNonNull(proceedsAccountCode, "proceedsAccountCode");
 
         // proceedsBase = round(F_settle × settlementRate), HALF_UP, signed integer KRW minor
         // (F5: the only decimal is the rate; the result is exact integer minor units).

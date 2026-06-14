@@ -166,10 +166,11 @@ class LedgerFxPositionLotIntegrationTest extends AbstractLedgerIntegrationTest {
         // Still exactly 3 lots — the reducing CREDIT line created none (shadow desync; FIN-BE-025).
         assertThat(lotsFor(FX_ACCOUNT, "USD")).hasSize(3);
 
-        // (AC-4 net-zero) settlement stays weighted-average even with a FIFO cost-flow
-        //        config — the lots are NOT consumed in this increment. Select FIFO, then
-        //        settle the FX_LOT_USD_WALLET USD position and assert the realized result
-        //        is the weighted-average outcome (lots untouched by settlement).
+        // (AC-4) Select FIFO, then settle the FX_LOT_USD_WALLET USD position. As of
+        //        FIN-BE-025 a FIFO config DOES walk + consume the open lots, but here every
+        //        lot shares the same 13.0/USD rate, so the FIFO slice cost equals the
+        //        weighted-average share (C_settle_fifo == C_settle_avg) and the realized
+        //        result is identical — the assertions below hold under either method.
         //        Net foreign position now = 10000 + 5000 + 3000 - 2000 = 16000 USD,
         //        net carrying = 130000 + 65000 + 39000 - 26000 = 208000 KRW (avg 13.0/USD).
         jdbcTemplate.update(

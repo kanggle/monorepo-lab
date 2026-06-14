@@ -137,4 +137,41 @@ public class FxPositionLot {
                 foreignMinor, baseMinor, foreignMinor, baseMinor,
                 sourceJournalEntryId, createdAt);
     }
+
+    /**
+     * Consume part (or all) of this open lot on a FIFO settlement (17th increment —
+     * TASK-FIN-BE-025). Decrements the still-open {@code remaining_foreign_minor} by
+     * {@code foreignMinor} and {@code carrying_base_minor} by {@code baseMinor} (the slice
+     * of this lot's carrying realized by the settlement). The use case computes the slice
+     * (HALF_UP) and walks lots {@code (acquired_at, seq)} ASC; when this lot is fully
+     * consumed ({@code foreignMinor == remaining}) both decrements zero it out exactly.
+     * Mutation + {@code save} is intentional here — settlement IS a state change of the
+     * lot (unlike the immutable journal lines). Guards keep both balances non-negative
+     * (the DB CHECK mirrors this); over-consumption is a programming error.
+     *
+     * @param foreignMinor the positive foreign quantity consumed from this lot
+     *                     ({@code 0 < foreignMinor <= remaining_foreign_minor})
+     * @param baseMinor    the non-negative carrying slice removed
+     *                     ({@code 0 <= baseMinor <= carrying_base_minor})
+     */
+    public void consume(long foreignMinor, long baseMinor) {
+        if (foreignMinor <= 0L) {
+            throw new IllegalArgumentException(
+                    "consumed foreign quantity must be positive: " + foreignMinor);
+        }
+        if (baseMinor < 0L) {
+            throw new IllegalArgumentException(
+                    "consumed carrying slice must be non-negative: " + baseMinor);
+        }
+        if (foreignMinor > remainingForeignMinor) {
+            throw new IllegalArgumentException("over-consume: " + foreignMinor
+                    + " > remaining " + remainingForeignMinor);
+        }
+        if (baseMinor > carryingBaseMinor) {
+            throw new IllegalArgumentException("over-consume carrying: " + baseMinor
+                    + " > carrying " + carryingBaseMinor);
+        }
+        this.remainingForeignMinor -= foreignMinor;
+        this.carryingBaseMinor -= baseMinor;
+    }
 }
