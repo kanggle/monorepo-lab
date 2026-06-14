@@ -8,7 +8,7 @@ Author **ADR-001 (finance-platform) PROPOSED → ACCEPTED** — 외화 포지션
 
 # Status
 
-ready
+done
 
 # Owner
 
