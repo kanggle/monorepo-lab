@@ -1,6 +1,6 @@
 # TASK-BE-369 — shipping-service row-level tenant_id (ADR-030 Step 4)
 
-**Status:** review
+**Status:** done
 **Domain:** ecommerce · **Service:** shipping-service · **Type:** backend tenant isolation
 **Parent:** ADR-MONO-030 Step 4 (per-service tenant_id migration) · ADR-MONO-031 Phase 4a (shipping console-absorption precondition)
 

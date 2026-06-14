@@ -1,6 +1,6 @@
 # TASK-PC-FE-088 — console ecommerce **shippings** operator surface (ADR-031 Phase 4b)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Feature:** `features/ecommerce-ops` (shippings slice)
 **Parent:** ADR-MONO-031 Phase 4 (absorb ecommerce admin-dashboard shipping surface into the unified console)
 **Precondition:** TASK-BE-369 (shipping-service row-level `tenant_id`) — the §2.4.10 tenant-isolation gate.
