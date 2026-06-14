@@ -199,8 +199,31 @@ token 검증 정책을 규정한다. operator token **발급**은 기존 login-s
 
 ---
 
+## Operator Credential Convergence (TASK-BE-377 / ADR-MONO-035 § O2 — step 4c)
+
+ADR-MONO-032 D5 step 4 는 운영자를 **통합 IAM OIDC credential** 로 수렴시킨다. 운영자의
+**PRIMARY 로그인**은 OIDC base 로그인(`platform-console-web`) + 이미 배선된 ADR-MONO-014
+`POST /api/admin/auth/token-exchange`(OIDC → operator token)이다. 로컬 비밀번호 로그인
+(`POST /api/admin/auth/login`)은 **break-glass**(비상 로컬 로그인 — IdP/OIDC 경로 불가용 시)로만
+잔존한다.
+
+- **`admin_operators.password_hash` 는 NULLABLE 로 강등**(제거 아님 — O6 가용성 불변식; 완전
+  제거는 OIDC-only admin 로그인 입증 후 후속). `NULL` = OIDC-only 운영자(로컬 비밀번호 없음).
+- **break-glass 의미**: `AdminLoginService` 는 `password_hash == NULL` 인 운영자의 비밀번호 로그인을
+  **fail-closed**(타이밍 완화 dummy verify 후 `401 INVALID_CREDENTIALS`)한다 — 그런 운영자는 OIDC
+  로만 인증한다. `password_hash` 가 있는 운영자는 break-glass 비밀번호 로그인이 그대로 동작한다.
+- **프로비저닝**: `POST /api/admin/operators` 의 `password` 는 **선택**이다 — 누락 시 OIDC-only
+  운영자(`password_hash=NULL`), 제공 시 hash 되어 break-glass 로 잔존(제공 시 정책 강제).
+- **OIDC↔operator 링크 키는 `oidc_subject` 불변**(data-model §OIDC Subject ↔ Operator Link Key);
+  token-exchange 가 OIDC subject → operator 를 결정적·fail-closed 로 해석한다. 비밀번호 강등이 이
+  해석 경로를 넓히지 않는다.
+- **TOTP/2FA 는 admin-service-internal 불변**(`admin_operator_totp`; O4) — step 4 에서 OIDC base
+  로그인에 접히지 않는다(OIDC-side step-up 은 ADR-032 D4-B deferred).
+
+---
+
 ## Out of Scope
 
-- password at-rest hashing(operator 로그인 비밀번호): `libs/java-security.PasswordHasher` canonical Argon2id 사용. rbac.md 및 regulated R2에서 이미 규정됨.
+- password at-rest hashing(operator 로그인 비밀번호): `libs/java-security.PasswordHasher` canonical Argon2id 사용. rbac.md 및 regulated R2에서 이미 규정됨. **TASK-BE-377**: 비밀번호는 break-glass(nullable)로 강등됐으나 해싱 알고리즘 자체는 불변.
 - WebAuthn/passkey, hardware token 관리
 - KMS/Vault 구체 선정 및 연동 구현(Phase C 별도 ADR + 태스크)

@@ -361,4 +361,71 @@ class CreateOperatorUseCaseTest {
 
         verify(accountServiceClient).resolveOrCreateIdentity("fan-platform", "nullflag@example.com", false);
     }
+
+    // ── TASK-BE-377 (ADR-MONO-035 O2 / step 4c): optional password = OIDC-only ──
+
+    @Test
+    @DisplayName("BE-377: password null → OIDC-only 운영자 (passwordHash=NULL, hasher 미호출)")
+    void createOperator_nullPassword_createsOidcOnlyOperator() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "oidc@example.com")).thenReturn(false);
+        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
+        when(operatorPort.createOperator(any(AdminOperatorPort.NewOperator.class)))
+                .thenReturn(createdView(80L, "fan-platform", "oidc@example.com", "Oidc Only"));
+        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
+        when(auditor.newAuditId()).thenReturn("audit-oidc");
+
+        useCase.createOperator(
+                "oidc@example.com", "Oidc Only", null,
+                List.of(), actor(), "provisioning", "fan-platform", false);
+
+        // The hasher is NEVER called and the persisted row carries a NULL password_hash.
+        verify(passwordHasher, never()).hash(anyString());
+        ArgumentCaptor<AdminOperatorPort.NewOperator> captor =
+                ArgumentCaptor.forClass(AdminOperatorPort.NewOperator.class);
+        verify(operatorPort).createOperator(captor.capture());
+        assertThat(captor.getValue().passwordHash()).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-377: password blank → OIDC-only 운영자 (passwordHash=NULL)")
+    void createOperator_blankPassword_createsOidcOnlyOperator() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "blank@example.com")).thenReturn(false);
+        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
+        when(operatorPort.createOperator(any(AdminOperatorPort.NewOperator.class)))
+                .thenReturn(createdView(81L, "fan-platform", "blank@example.com", "Blank Pw"));
+        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
+        when(auditor.newAuditId()).thenReturn("audit-blank");
+
+        useCase.createOperator(
+                "blank@example.com", "Blank Pw", "   ",
+                List.of(), actor(), "provisioning", "fan-platform", false);
+
+        verify(passwordHasher, never()).hash(anyString());
+        ArgumentCaptor<AdminOperatorPort.NewOperator> captor =
+                ArgumentCaptor.forClass(AdminOperatorPort.NewOperator.class);
+        verify(operatorPort).createOperator(captor.capture());
+        assertThat(captor.getValue().passwordHash()).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-377: password 제공 → break-glass hash 저장 (기존 동작 유지)")
+    void createOperator_withPassword_hashesBreakGlass() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "bg@example.com")).thenReturn(false);
+        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
+        when(passwordHasher.hash("StrongPass1!")).thenReturn("bg-hash");
+        when(operatorPort.createOperator(any(AdminOperatorPort.NewOperator.class)))
+                .thenReturn(createdView(82L, "fan-platform", "bg@example.com", "Break Glass"));
+        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
+        when(auditor.newAuditId()).thenReturn("audit-bg");
+
+        useCase.createOperator(
+                "bg@example.com", "Break Glass", "StrongPass1!",
+                List.of(), actor(), "provisioning", "fan-platform", false);
+
+        verify(passwordHasher, times(1)).hash("StrongPass1!");
+        ArgumentCaptor<AdminOperatorPort.NewOperator> captor =
+                ArgumentCaptor.forClass(AdminOperatorPort.NewOperator.class);
+        verify(operatorPort).createOperator(captor.capture());
+        assertThat(captor.getValue().passwordHash()).isEqualTo("bg-hash");
+    }
 }

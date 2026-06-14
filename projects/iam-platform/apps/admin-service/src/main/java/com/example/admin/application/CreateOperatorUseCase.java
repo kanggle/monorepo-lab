@@ -91,7 +91,14 @@ public class CreateOperatorUseCase {
 
         Instant now = Instant.now();
         String operatorUuid = UuidV7.randomString();
-        String passwordHash = passwordHasher.hash(password);
+        // TASK-BE-377 / ADR-MONO-035 O2 (4c): the password is OPTIONAL. When omitted,
+        // the operator is created OIDC-only (password_hash = NULL) — their primary login
+        // is the unified IAM OIDC credential via the ADR-014 token-exchange. When
+        // supplied, it is hashed and retained as a break-glass local login (the policy
+        // is enforced at the DTO via @Size/@Pattern when present).
+        String passwordHash = (password == null || password.isBlank())
+                ? null
+                : passwordHasher.hash(password);
 
         AdminOperatorPort.OperatorView created = operatorPort.createOperator(
                 new AdminOperatorPort.NewOperator(
