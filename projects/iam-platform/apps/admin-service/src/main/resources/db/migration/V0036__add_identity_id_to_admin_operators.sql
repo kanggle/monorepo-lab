@@ -18,8 +18,12 @@
 -- Net-zero: additive nullable column + non-unique index; existing operators are all
 -- unlinked until the U3 link operation is explicitly invoked.
 
+-- MySQL column_definition order: the COMMENT clause must precede the column
+-- position (AFTER) clause — `... NULL COMMENT '...' AFTER col`, NOT
+-- `... NULL AFTER col COMMENT '...'` (the latter is a SQLSyntaxError).
 ALTER TABLE admin_operators
-    ADD COLUMN identity_id VARCHAR(36) NULL AFTER oidc_subject
-        COMMENT 'ADR-034 U3 (TASK-BE-373): central identities.identity_id this operator is linked to (value-convention cross-DB ref to account_db; NULL = unlinked). Set/cleared only via the opt-in audited link/unlink surface.';
+    ADD COLUMN identity_id VARCHAR(36) NULL
+        COMMENT 'ADR-034 U3 (TASK-BE-373): central identities.identity_id this operator is linked to (value-convention cross-DB ref to account_db; NULL = unlinked). Set/cleared only via the opt-in audited link/unlink surface.'
+        AFTER oidc_subject;
 
 CREATE INDEX idx_admin_operators_identity_id ON admin_operators (identity_id);
