@@ -8,7 +8,7 @@ platform-console **ecommerce-ops users absorption** — ADR-MONO-031 **Phase 2b*
 
 # Status
 
-review
+done
 
 # Owner
 

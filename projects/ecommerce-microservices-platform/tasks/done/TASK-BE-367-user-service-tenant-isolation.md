@@ -8,7 +8,7 @@ ecommerce **user-service tenant isolation** — ADR-MONO-030 **Step 4** (per-are
 
 # Status
 
-review
+done
 
 # Owner
 
