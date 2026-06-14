@@ -240,6 +240,10 @@ public abstract class AbstractLedgerIntegrationTest {
         // (16th incr — TASK-FIN-BE-024) the FX acquisition lots. Write-only shadow rows; a
         // leftover lot would poison a sibling class's lot-count / backfill assertions.
         jdbcTemplate.execute("DELETE FROM fx_position_lot");
+        // (23rd incr — TASK-FIN-BE-031) the FX rate quote cache. Shadow rows loaded by the feed
+        // poller; a leftover quote would change the row-count the feed IT asserts (no operator path
+        // reads it, so other classes are unaffected — cleaned for the feed IT's determinism).
+        jdbcTemplate.execute("DELETE FROM fx_rate_quote");
     }
 
     // ------------------------------------------------------------------------

@@ -1686,6 +1686,59 @@ currency reuses the existing error code (same as cost-flow-config PUT). The `CUR
 (422) path is NOT used here — an unknown path variable is a client input parse failure, not a
 domain currency-mismatch. Existing ITs stay GREEN (net-zero).
 
+### FX rate feed (ADR-002, shadow) (twenty-third increment — TASK-FIN-BE-031)
+
+ADR-002 D1/D2/D5/D6 execution step 1: introduce an outbound FX-rate **port + config-gated adapters
++ a `fx_rate_quote` cache table + a scheduled poller** in **shadow** — the cache is loaded only; no
+operator path reads it in this increment. This is finance's first external HTTP integration.
+**net-zero is the governing property** (AC-1): `SettleForeignPositionUseCase` /
+`RevalueForeignBalanceUseCase` / `FxSettlementPolicy` / `FxRevaluationPolicy` and every other
+operator path are unchanged byte-for-byte; the cache-fallback consumption + staleness guard +
+`FX_RATE_UNAVAILABLE` are FIN-BE-032 (D3/D4).
+
+**Outbound port.** `FxRateProviderPort.latestQuote(Currency base, Currency foreign) →
+Optional<RateQuote>` (application layer; `application/port/outbound/`). The nested value
+`record RateQuote(BigDecimal rate, Instant asOf, String source)` carries the rate in the **same
+unit convention** as `closingRate` / `settlementRate` (base-minor-per-foreign-minor, exact
+`BigDecimal`). A failed call / unsupported pair / disabled feed → `Optional.empty()`; the port
+never throws.
+
+**Three adapters** (`infrastructure/fxrate/`), exactly one active per
+`financeplatform.ledger.fxrate.mode` (disjoint `@ConditionalOnProperty havingValue`; only the noop
+carries `matchIfMissing`):
+
+| `mode` | Adapter | Behaviour |
+|---|---|---|
+| `noop` (default, `matchIfMissing=true`) | `NoopFxRateProviderAdapter` | always `empty()` — zero external calls (net-zero) |
+| `stub` | `StubFxRateProviderAdapter` | fixed rate from `…fxrate.stub.rates` keyed by foreign code; `asOf=clock.now()`, `source="stub"`; absent pair → empty |
+| `http` | `HttpFxRateProviderAdapter` | `GET <baseUrl>/<base>/<foreign>` (JSON `{"rate":"…","asOf":"<ISO>"}`) via `ResilienceClientFactory.buildRestClient` (libs/java-common — never `new RestTemplate()`); **best-effort never-throw**: non-2xx / connection-refused / timeout / parse-failure / blank baseUrl → `empty()`; `source="http:<host>"` |
+
+**Cache table + domain.** `V12__add_fx_rate_quote.sql` creates the **new** `fx_rate_quote` table
+only (composite PK `(base_currency, foreign_currency)`; `rate DECIMAL(20,8)` exact, `as_of` /
+`fetched_at DATETIME(6)`, `source VARCHAR(64)`), additive, no backfill — an empty cache means
+"auto-apply unavailable" = manual rate entry preserved = net-zero. Entity
+`domain/journal/FxRateQuote` (`@IdClass FxRateQuoteId`), port `FxRateQuoteRepository`
+(`findLatest` / `save` upsert / `findAll`), JPA adapter + Spring Data repo. **Not per-tenant** — a
+market rate is tenant-agnostic (the PK has no `tenant_id`).
+
+**Load use-case + poller.** `RefreshFxRateQuotesUseCase` (`@Transactional`) iterates the configured
+`pairs` (base fixed to KRW = `LedgerReportingCurrency.BASE`), calls the port, and upserts each
+present quote (`fetched_at=clock.now()`); per-pair try/catch so one failure does not abort the rest
+(AC-6); returns the upserted count. `FxRateFeedPoller` (`infrastructure/fxrate/`) is
+`@Scheduled(fixedDelayString="${…poll-interval-ms:60000}", initialDelayString="${…initial-delay-ms:5000}")`
+gated by `@ConditionalOnProperty(name="financeplatform.ledger.fxrate.enabled", havingValue="true")`
+with **no `matchIfMissing`** → the poller bean exists only when explicitly enabled (default OFF =
+net-zero). The tick wraps the use-case in a catch-all (never throws; the scheduler survives). No
+ShedLock single-leader guard in this service (ADR-002 D4's "ShedLock" is a sketch; deferred).
+
+**Config** (`infrastructure/fxrate/FxRateFeedProperties`, `@ConfigurationProperties(
+"financeplatform.ledger.fxrate")`, registered via `@EnableConfigurationProperties` on
+`FxRateFeedConfig`): `enabled` (default `false`), `mode` (default `noop`), `pollIntervalMs`,
+`pairs` (foreign legs, base KRW), `stub.rates` (code→rate map), `http` (`baseUrl`,
+`connectTimeoutMs=2000`, `readTimeoutMs=5000`). **No REST endpoint / no event / no contract
+change** — the external channel is outbound, recorded here in architecture only (ledger-api.md
+unchanged).
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):
