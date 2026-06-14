@@ -58,6 +58,7 @@ class PostJournalEntryUseCaseGuardTest {
     @Mock AuditLogRepository auditLogRepository;
     @Mock AccountingPeriodRepository accountingPeriodRepository;
     @Mock LedgerEventPublisher ledgerEventPublisher;
+    @Mock RecordFxAcquisitionLots recordFxAcquisitionLots;
     @Mock ClockPort clock;
 
     PostJournalEntryUseCase useCase;
@@ -65,7 +66,8 @@ class PostJournalEntryUseCaseGuardTest {
     @BeforeEach
     void setUp() {
         useCase = new PostJournalEntryUseCase(journalRepository, ledgerAccountRepository,
-                auditLogRepository, accountingPeriodRepository, ledgerEventPublisher, clock);
+                auditLogRepository, accountingPeriodRepository, ledgerEventPublisher,
+                recordFxAcquisitionLots, clock);
     }
 
     private static JournalEntry entry() {
@@ -110,9 +112,12 @@ class PostJournalEntryUseCaseGuardTest {
         verify(auditLogRepository).save(any());
         // AC-1: every posted entry appends exactly one entry.posted outbox row,
         // after the entry+audit save, in the same transaction.
+        // (16th incr) the FX acquisition-lot hook fires AFTER the entry save and
+        // BEFORE the audit + outbox append, in the same transaction (atomic with the entry).
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
-                journalRepository, auditLogRepository, ledgerEventPublisher);
+                journalRepository, recordFxAcquisitionLots, auditLogRepository, ledgerEventPublisher);
         inOrder.verify(journalRepository).save(saved);
+        inOrder.verify(recordFxAcquisitionLots).record(saved);
         inOrder.verify(auditLogRepository).save(any());
         inOrder.verify(ledgerEventPublisher).publishEntryPosted(saved);
     }

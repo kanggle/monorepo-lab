@@ -1386,6 +1386,61 @@ JPA adapter — mirror `ReconciliationFxToleranceConfig` / its repository exactl
 platform-standard `VALIDATION_ERROR` (400) exactly like `FxToleranceInvalidException`;
 no new Kafka topic or outbox row.
 
+### FX position lots (acquisition / backfill) (sixteenth increment — TASK-FIN-BE-024)
+
+ADR-001 D2 (lot model) + D5 (additive migration / backfill), § 3.1 step 2: materialize each
+foreign-currency **acquisition** as a `fx_position_lot` row so FIN-BE-025 can walk open lots
+FIFO on settlement. This increment is the **foundation** — lots are created (acquisition hook)
+and backfilled (existing positions) but **nobody consumes them yet**.
+
+**Shadow / net-zero.** Lots are **write-only** in this increment. `SettleForeignPositionUseCase`
+/ `FxSettlementPolicy` / `FxRevaluationPolicy` are **not modified** — settlement continues to use
+the weighted-average proportional carrying regardless of the lots (and of the cost-flow config
+from the 15th increment). Every existing settlement / revaluation / reconciliation result is
+byte-identical. FIN-BE-025 will read the cost-flow config and walk these lots when `FIFO` is set;
+FIN-BE-026 will redistribute open-lot carrying on revaluation.
+
+**`FxPositionLot` aggregate** (`domain/journal/`, JPA entity — the allowed domain↔framework
+exception, exactly like `JournalLine` / `FxCostFlowConfig`). Columns: `lot_id VARCHAR(36) PK`
+(UUID), `tenant_id`, `ledger_account_code`, `currency`, `acquired_at DATETIME(6)`, `seq BIGINT`
+(the source `journal_line.id`), `original_foreign_minor` / `original_base_minor` (the acquired
+quantity + its KRW cost), `remaining_foreign_minor` / `carrying_base_minor` (the still-open
+portion — equal to the originals in this increment; FIN-BE-025 decrements them), `source_journal_entry_id
+VARCHAR(36) NULL` (the acquiring entry; NULL for a synthetic backfill lot), `created_at`. A static
+`acquire(...)` factory builds a fully-open lot (`remaining == original`, `carrying == original_base`).
+Repository port `FxPositionLotRepository` (`save` + `findOpenLots(tenant, code, currency)` =
+`remaining_foreign_minor > 0` ordered FIFO by `(acquired_at, seq)` — defined now for FIN-BE-025,
+only `save` is exercised here) + JPA adapter — mirror `FxCostFlowConfigRepository` / its adapter.
+
+**Acquisition hook (shadow).** A separate component `RecordFxAcquisitionLots` is invoked from
+`PostJournalEntryUseCase.post(...)` **immediately after** `journalRepository.save(entry)` and
+**inside the same `@Transactional`** boundary (lot creation is atomic with the entry — a
+guard-rejected posting threw earlier → no lots). For each line of the saved entry it creates **one**
+lot iff the line is an **acquisition** — all three hold: (1) `currency != KRW` (foreign);
+(2) `amountMinor > 0` (excludes the zero-amount `baseAdjustment` revaluation line); (3) the line's
+`direction` is the account's **position-increasing** side (`direction == typeForCode(code).normalSide()`
+— DEBIT on an ASSET/EXPENSE account, CREDIT on a LIABILITY/INCOME/EQUITY account). The lot's `seq`
+is `line.id()` (the IDENTITY id, assigned by the post-`save` flush), so lots within one position are
+FIFO-ordered by `(acquired_at, seq)`. A position-**reducing** foreign line (the opposite side) creates
+**no** lot — its consumption is the FIFO settlement path (FIN-BE-025). This is the known **shadow
+desync** for non-settlement reductions, accepted in this increment.
+
+**Persistence + backfill.** Additive Flyway `V10__add_fx_position_lot.sql` — a **new** table
+`fx_position_lot` (InnoDB/utf8mb4; `KEY idx_fx_lot_position (tenant_id, ledger_account_code, currency,
+acquired_at, seq)`; CHECK constraints `original_foreign_minor > 0`, `original_base_minor >= 0`,
+`remaining_foreign_minor >= 0`, `remaining_foreign_minor <= original_foreign_minor`, `carrying_base_minor
+>= 0`). **No** change to any existing table / row / CHECK. The same migration **backfills** every open
+pre-existing foreign position as **one synthetic lot**: group `journal_line` by `(tenant_id,
+ledger_account_code, currency)` where `currency <> 'KRW'`, signed foreign sum (`DEBIT +amount`,
+`CREDIT -amount`) `<> 0` (`HAVING`); the synthetic lot's `original_foreign = remaining_foreign =
+ABS(Σ signed amount)`, `original_base = carrying_base = ABS(Σ signed base)` — **exactly** the position's
+current pool carrying (D5: zero double-count), `acquired_at = MIN(posted_at)`, `seq = MIN(journal_line.id)`,
+`lot_id = UUID()`, `source_journal_entry_id = NULL`. A fresh CI / test DB has no pre-V10 lines → the
+backfill is a **no-op**; it exists for real deployments carrying open positions at migration time.
+
+**No new error code / status / event / contract** — lots are domain-internal persisted state; the
+`entry.posted` outbox payload is unchanged (lots are a separate table, not exposed on the event).
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):
