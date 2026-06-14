@@ -8,7 +8,7 @@ platform-console **ecommerce-ops promotions absorption** — ADR-MONO-031 **Phas
 
 # Status
 
-ready
+review
 
 # Owner
 
