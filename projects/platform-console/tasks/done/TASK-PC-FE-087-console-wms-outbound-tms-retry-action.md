@@ -8,7 +8,7 @@ console-web — wms outbound **manual TMS retry** operator action (admin-gated, 
 
 # Status
 
-review
+done
 
 # Owner
 
