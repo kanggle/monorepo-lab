@@ -8,7 +8,9 @@ Unified new-operator provisioning — operator creation resolves/creates a centr
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: PR #1565 squash `69beadc66` — 통합 operator 프로비저닝 (ADR-MONO-034 U6 step 3d / U4, **link-first scope 완결**). account-service: `POST /internal/tenants/{tid}/identities:resolveOrCreate`(CREATED/REUSED/EXISTS_NOT_REUSED, no-silent-merge, race=DataIntegrityViolation 재읽기) + ResolveOrCreateIdentityUseCase/Controller/DTO. admin-service: CreateOperatorRequest.reuseExistingIdentity + AccountServiceClient.resolveOrCreateIdentity(**fail-soft**=3c와 반대) + CreateOperatorUseCase('*'skip+linkIdentity, backward-compat default false). U5 불변, **마이그레이션 없음**(3a 테이블·3c 컬럼). 3-dim verified(MERGED·`69beadc66`·**Integration iam Testcontainers 3m23s**). 오케스트레이터 broad Docker-free 재검증(account 239+admin 439, 0 fail)+핵심 로직 직접 리뷰. **ADR-034 link-first 3a~3d 전부 종결** → 다음=ADR-032 step4(legacy account_type drop + operator login/credential 수렴 + credentials.identity_id + password_hash 제거)→step5 e2e. 분석=Opus 4.8 / 구현=Opus(서브에이전트)+오케스트레이터 검증.
 
 # Owner
 
