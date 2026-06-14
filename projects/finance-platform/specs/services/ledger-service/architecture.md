@@ -390,12 +390,13 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   settlement § Partial settlement.
 
 **Forward-declared — OUT (each a later task):**
-- Fuzzy / N:M / split matching; period **reopen**; **foreign-external → KRW-internal** cross
-  matching (the reverse direction). *(A **configurable FX tolerance** — the 11th was an exact base
-  comparison — is now **done**: the 13th increment, TASK-FIN-BE-020, § FX reconciliation tolerance.
-  **Cross-currency base-leg matching** — a base-currency [KRW] external statement matched against
-  foreign internal lines by their carrying base — is now **done**: the 14th increment,
-  TASK-FIN-BE-021, § Cross-currency base-leg matching.)* Per-currency-pair / per-account tolerance
+- Fuzzy / N:M / split matching; period **reopen**. *(A **configurable FX tolerance** — the 11th was
+  an exact base comparison — is now **done**: the 13th increment, TASK-FIN-BE-020, § FX reconciliation
+  tolerance. **Cross-currency base-leg matching** — a base-currency [KRW] external statement matched
+  against foreign internal lines by their carrying base — is now **done**: the 14th increment,
+  TASK-FIN-BE-021, § Cross-currency base-leg matching. The **foreign-external → KRW-internal** reverse
+  direction is now **done** too: the 19th increment, TASK-FIN-BE-027, § Reverse cross-currency matching
+  — cross-currency matching is bidirectionally symmetric.)* Per-currency-pair / per-account tolerance
   granularity stays forward-declared (v1 is per-tenant).
 - **FIFO / lot-level settlement cost basis** — the 12th increment (TASK-FIN-BE-018) settles a
   *portion* of a `(account, currency)` position under a **weighted-average** carrying basis (a
@@ -877,11 +878,12 @@ reconciles byte-identically to FIN-BE-010 (the base-leg check never fires). The 
 UNMATCHED_* classification, the F8 no-auto-close invariant, the period lock, and the
 transaction-leg matching are all unchanged.
 
-**Deferred** (forward-declared): fuzzy / N:M / split matching; period **reopen**;
-**foreign-external → KRW-internal** cross matching (the reverse direction). *(The **configurable FX
-tolerance** is now **done** — the 13th increment below. **Cross-currency base-leg matching** — a
+**Deferred** (forward-declared): fuzzy / N:M / split matching; period **reopen**. *(The **configurable
+FX tolerance** is now **done** — the 13th increment below. **Cross-currency base-leg matching** — a
 base-currency [KRW] external statement matched against foreign internal lines by their carrying base
-— is now **done**: the 14th increment, TASK-FIN-BE-021, § Cross-currency base-leg matching below.)*
+— is now **done**: the 14th increment, TASK-FIN-BE-021, § Cross-currency base-leg matching below. The
+**foreign-external → KRW-internal** reverse direction is now **done** too: the 19th increment,
+TASK-FIN-BE-027, § Reverse cross-currency matching below.)*
 
 ### FX reconciliation tolerance (thirteenth increment — TASK-FIN-BE-020)
 
@@ -980,9 +982,52 @@ on every `matches[]` entry (the additive `crossCurrency` field, § reconciliatio
 ingest request shape is unchanged. **F8** preserved — the matcher only records matches/discrepancies;
 it never posts or mutates a journal entry.
 
-**Deferred** (forward-declared): **foreign-external → KRW-internal** cross matching (the reverse
-direction — this increment ships base-external → foreign-internal only); FIFO / lot-level cost basis;
-fuzzy / N:M / split matching; period **reopen**; per-currency-pair / per-account tolerance granularity.
+**Deferred** (forward-declared): the **foreign-external → KRW-internal** reverse direction was
+forward-declared here and is now **done** — the 19th increment, TASK-FIN-BE-027, § Reverse
+cross-currency matching below. FIFO / lot-level cost basis; fuzzy / N:M / split matching; period
+**reopen**; per-currency-pair / per-account tolerance granularity remain deferred.
+
+### Reverse cross-currency matching (nineteenth increment — TASK-FIN-BE-027)
+
+The exact **mirror** of the 14th increment, in the opposite direction. The 14th increment paired a
+**base-currency (KRW)** external line with a **foreign** internal line by carrying base. But a bank
+also frequently settles a position **in a foreign currency (USD)** — reporting the bank-side base
+(KRW) value on the statement line — while the ledger booked that settlement as a **base-currency
+(KRW)** internal line. Under the same-currency matcher that foreign external line finds no
+same-currency candidate → `UNMATCHED_EXTERNAL`, and the KRW internal line → `UNMATCHED_INTERNAL` —
+**two spurious discrepancies for one real settlement**, the symmetric gap to FIN-BE-021. This
+increment closes it with a second, mutually-exclusive **cross-currency fallback**.
+
+**Matcher fallback rule.** `ReconciliationMatcher.match(...)`: when the existing same-currency
+`findCandidate` returns **no** candidate, the else-branch resolves the cross candidate across **both**
+directions, same-currency-first and mutually exclusive: a **base-currency** external
+(`ext.currency() == LedgerReportingCurrency.BASE`, KRW) keeps using the 14th-increment
+`findCrossCurrencyCandidate` (byte-unchanged); a **foreign** external (`ext.currency() != BASE`) that
+carries a declared `baseAmount` runs the new `findReverseCrossCurrencyCandidate(...)` — the **FIRST**
+not-consumed internal line with `direction == ext.direction()` **AND** `money().currency() == KRW` (a
+**base-currency** line) **AND** `tolerance.isWithinTolerance(internal.money().minorUnits(),
+ext.baseAmount().minorUnits())` (the internal KRW amount vs the external's bank-reported base). On a
+hit the KRW internal is consumed, the external line is marked `MATCHED`, and a `ReconciliationMatch`
+carrying the external **foreign** `money` + the internal `journalEntryId` is recorded, flagged
+**`crossCurrency = true`**. As in the 14th increment the base comparison **is** the match key — within
+tolerance → a clean match with **NO** `AMOUNT_MISMATCH`; beyond tolerance, or no declared
+`baseAmount`, → not a candidate → the line falls through to `UNMATCHED_EXTERNAL` exactly as before.
+
+**Precedence + determinism + net-zero.** Same-currency `findCandidate` runs **first** and is
+byte-unchanged; the two cross-currency passes are strict fallbacks and **mutually exclusive** by the
+external currency (KRW external → forward pass; foreign external → reverse pass). Both consume
+candidates in **input order** (deterministic). Under `EXACT` (the default) the band is 0 ⇒ the
+reverse fallback requires **exact** KRW-amount equality. Every existing reconciliation — same-currency,
+the FIN-BE-017 base-leg `AMOUNT_MISMATCH`, the FIN-BE-020 tolerance, and the FIN-BE-021 KRW-external
+fallback — is **byte-identical** (net-zero). The matcher stays **pure** (it reuses the `FxTolerance`
+already passed in; it never reads a repository).
+
+**No migration / no new error code / status / event / REST.** The reverse match reuses the existing
+`reconciliation_match.cross_currency` flag (V8) and the existing external `base_amount_minor` column
+(V6) — **no** schema change. A reverse cross-currency match emits no discrepancy; the ingest request
+shape is unchanged. **F8** preserved — the matcher only records matches/discrepancies; it never posts
+or mutates a journal entry. With this increment cross-currency matching is **bidirectionally
+symmetric**.
 
 ## Manual Journal Posting (fifth increment — TASK-FIN-BE-011)
 
