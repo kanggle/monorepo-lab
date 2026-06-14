@@ -2596,6 +2596,71 @@ console-bff write leg.
 > **Not a § 3 parity row**: additive federated **domain** scope; adds no § 3 row
 > (count stays **16**).
 
+#### 2.4.10.3 ecommerce shippings operator surface (TASK-PC-FE-088 / ADR-MONO-031 Phase 4b — console absorption of the `admin-dashboard` shipping-management area)
+
+The **fourth** ecommerce operations sub-binding (the third of the § 2.4.10 staged
+backlog areas), unblocked now that **shipping-service carries row-level
+`tenant_id`** (TASK-BE-369, ADR-MONO-030 Step 4). This is a **list + status-machine
++ refresh-tracking** surface — the console equivalent of the `admin-dashboard`
+shipping-management screens (list / linear status transitions / operator-triggered
+carrier sync). It mirrors the § 2.4.10 promotions write binding model (non-admin
+path, direct gateway).
+
+This sub-binding **inherits § 2.4.10's cross-cutting rules verbatim** and does not
+restate them: the **credential** (domain-facing IAM OIDC access token —
+`getDomainFacingToken()`, **never** `getOperatorToken()`); the **tenant model**
+(tenant rides in the JWT `tenant_id ∈ {ecommerce,*}` claim — **no** `X-Tenant-Id`
+header; shipping-service `TenantContextFilter` + persistence `WHERE tenant_id`,
+TASK-BE-369); **eligibility** (registry `productKey=ecommerce` — **no** new
+`productKey`/enum); the **mutation discipline** (confirm-gated UI; **no**
+`Idempotency-Key` — the producer defines none; producer state-guards `400`/`409`/`422`
+surfaced inline); the **resilience** taxonomy (401 → whole-session IAM re-login;
+403 → inline "not available to your role"; 404 → notFound empty-state; 503/timeout
+→ only this section degrades; tokens never logged); and the **§ 3 parity matrix is
+NOT mutated** (count stays **16**). Per ADR-MONO-017 D2.A this is **console-web →
+ecommerce gateway direct** (Next.js Route Handlers); **NO** console-bff write leg.
+
+- **Authoritative producer (owned by ecommerce, consumed — do NOT redefine
+  here)**: ecommerce `shipping-service` `ShippingController`, consumed via the
+  ecommerce gateway **non-admin** path `/api/shippings/**` (base URL
+  `ECOMMERCE_PUBLIC_BASE_URL`, same gateway + IAM-OIDC credential as § 2.4.10,
+  distinct from the `/api/admin/**` admin subtree — shipping has NO admin path):
+
+  | # | Operation | Producer endpoint | Kind |
+  |---|---|---|---|
+  | 1 | list shippings | `GET /api/shippings?page=&size=&status=` | read |
+  | 2 | **status transition** | `PUT /api/shippings/{shippingId}/status` (`{status, trackingNumber?, carrier?}`) | mutation |
+  | 3 | **refresh tracking** | `POST /api/shippings/{shippingId}/refresh-tracking` (empty body, best-effort) | mutation |
+
+  Shipping fields: `shippingId, orderId, userId, status (PREPARING|SHIPPED|IN_TRANSIT|DELIVERED),
+  trackingNumber?, carrier?, statusHistory[], createdAt, updatedAt?`. Error envelope =
+  the same flat ecommerce shape `{code, message, timestamp}` (400 `InvalidShipping`
+  [SHIPPED without carrier/tracking] / `INVALID_STATUS`, 404 `SHIPPING_NOT_FOUND`,
+  409/422 `INVALID_TRANSITION`), consumed with the § 2.4.10 ecommerce parser.
+
+- **State-gated mutation (linear machine; SHIPPED requires carrier+tracking)**:
+  The state machine is **strictly linear, single successor each**:
+  `PREPARING → SHIPPED → IN_TRANSIT → DELIVERED`. `DELIVERED` is terminal.
+  The UI must expose only the one allowed forward transition per current status
+  (no skips, no backward moves). The `PREPARING → SHIPPED` transition opens a
+  form dialog requiring **carrier + tracking number** (producer rejects SHIPPED
+  without them — 400 `InvalidShipping`; surfaced inline). All other transitions
+  are confirm-gated only. `refresh-tracking` is best-effort: the producer returns
+  200 with unchanged status when the carrier mode is mock or the carrier is
+  unreachable (no error surfaced).
+
+- **Out of this binding (deferred / out of scope)**: create/delete of shipments
+  (created by the OrderConfirmed flow — not operator-initiated); the consumer
+  tracking surface (shopper-plane — not operator). notifications remain
+  § 2.4.10.4+ (gated on its backend `tenant_id` migration).
+
+- **Producer immutability**: cross-reference only — any change to the ecommerce
+  shipping contract is an ecommerce project-internal spec-first change; this
+  section follows, never redefines it (§ 5 Change Rule).
+
+> **Not a § 3 parity row**: additive federated **domain** scope; adds no § 3 row
+> (count stays **16**).
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).

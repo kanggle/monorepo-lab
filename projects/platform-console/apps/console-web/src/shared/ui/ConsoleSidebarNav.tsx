@@ -177,6 +177,11 @@ const GROUPS: NavGroup[] = [
             label: '프로모션',
             testid: 'nav-ecommerce-promotions',
           },
+          {
+            href: '/ecommerce/shippings',
+            label: '배송',
+            testid: 'nav-ecommerce-shippings',
+          },
         ],
       },
     ],
