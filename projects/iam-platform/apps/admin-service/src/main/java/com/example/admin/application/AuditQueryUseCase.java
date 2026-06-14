@@ -1,7 +1,5 @@
 package com.example.admin.application;
 
-import com.example.admin.application.exception.TenantScopeDeniedException;
-import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.infrastructure.client.SecurityServiceClient;
 import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
@@ -25,12 +23,16 @@ import java.util.UUID;
  *
  * Meta-audit: the act of querying is itself recorded as AUDIT_QUERY in admin_actions.
  *
- * <p>TASK-BE-249: tenant-scope enforcement added.
+ * <p>TASK-BE-249/BE-326: tenant-scope enforcement.
  * <ul>
- *   <li>Normal operators: can only query their own {@code tenantId}.</li>
+ *   <li>Normal operators: can only query a tenant in their effective scope (home ∪ assignments).</li>
  *   <li>SUPER_ADMIN (tenantId='*'): may query any tenant via {@code tenantId=*}
  *       (returns cross-tenant rows) or a specific {@code tenantId}.</li>
  * </ul>
+ *
+ * <p>TASK-BE-357: the resolve+gate step is extracted to the shared
+ * {@link QueryTenantScopeGate} so this surface and {@code GET /api/admin/accounts}
+ * cannot drift on scope semantics.
  */
 @Service
 @RequiredArgsConstructor
@@ -39,49 +41,19 @@ public class AuditQueryUseCase {
     private final AdminActionJpaRepository adminActionRepo;
     private final SecurityServiceClient securityServiceClient;
     private final AdminActionAuditor auditor;
-    private final OperatorLookupPort operatorLookupPort;
-    private final TenantScopeResolver tenantScopeResolver;
+    private final QueryTenantScopeGate queryTenantScopeGate;
 
     public AuditQueryResult query(QueryAuditCommand cmd) {
-        // Authorization is enforced by RequiresPermissionAspect on the
-        // controller (base audit.read + conditional security.event.read for
-        // security-event sources). This use-case is invoked only after grant.
+        // Authorization is enforced by RequiresPermissionAspect on the controller
+        // (base audit.read + conditional security.event.read for security-event
+        // sources). This use-case is invoked only after grant.
 
-        // --- TASK-BE-249: resolve operator tenantId then enforce scope ---
-        OperatorLookupPort.OperatorSummary opSummary = operatorLookupPort
-                .findByOperatorId(cmd.operator().operatorId())
-                .orElseThrow(() -> new TenantScopeDeniedException(
-                        "Operator not found: " + cmd.operator().operatorId()));
-
-        String operatorTenantId = opSummary.tenantId();
-        boolean isPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(operatorTenantId);
-
-        // TASK-BE-326: dual-read effective tenant scope (assignment rows ∪ home
-        // tenant). NET-ZERO with no assignments → {home tenant} → the membership
-        // check below reduces to the legacy `operatorTenantId.equals(requested)`.
-        java.util.Set<String> effectiveTenants = tenantScopeResolver
-                .resolveEffectiveTenantScope(opSummary.internalId(), operatorTenantId);
-
-        // Resolve effective tenantId for the query
-        String requestedTenantId = cmd.tenantId();
-        if (requestedTenantId == null || requestedTenantId.isBlank()) {
-            // Default: operator's own tenant
-            requestedTenantId = operatorTenantId;
-        }
-
-        // Tenant-scope gate: non-platform-scope operators may only query their own tenant.
-        // TASK-BE-262: record a best-effort DENIED audit row before throwing.
-        if (!isPlatformScope && !effectiveTenants.contains(requestedTenantId)) {
-            auditor.recordCrossTenantDenied(
-                    cmd.operator(),
-                    operatorTenantId,
-                    ActionCode.AUDIT_QUERY,
-                    "audit.read",
-                    requestedTenantId);
-            throw new TenantScopeDeniedException(
-                    "Operator tenantId=" + operatorTenantId
-                            + " cannot query tenantId=" + requestedTenantId);
-        }
+        // TASK-BE-249/BE-326/BE-357: resolve the operator's query tenant and enforce
+        // the dual-read effective-scope gate (shared with GET /api/admin/accounts).
+        QueryTenantScopeGate.Resolved scope = queryTenantScopeGate.resolve(
+                cmd.operator(), cmd.tenantId(), ActionCode.AUDIT_QUERY, "audit.read");
+        String requestedTenantId = scope.tenantId();
+        boolean isPlatformScope = scope.isPlatformScope();
 
         int size = Math.min(Math.max(cmd.size(), 1), 100);
         int page = Math.max(cmd.page(), 0);

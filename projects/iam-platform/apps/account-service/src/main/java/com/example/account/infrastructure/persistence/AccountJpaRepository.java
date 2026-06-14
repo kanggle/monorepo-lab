@@ -14,6 +14,13 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
 
     Optional<AccountJpaEntity> findByTenantIdAndEmail(String tenantId, String email);
 
+    /**
+     * TASK-BE-357: cross-tenant exact email match (SUPER_ADMIN {@code tenantId='*'} only).
+     * The same email may exist under multiple tenants — {@code (tenant_id, email)} is the
+     * unique index, so {@code email} alone is not unique → returns a list.
+     */
+    List<AccountJpaEntity> findByEmail(String email);
+
     Optional<AccountJpaEntity> findByTenantIdAndId(String tenantId, String id);
 
     boolean existsByTenantIdAndEmail(String tenantId, String email);

@@ -99,6 +99,8 @@ class MultiResolverTagConditionEnforcementTest {
     @MockitoBean AccountServiceClient accountServiceClient;
     @MockitoBean PermissionEvaluator permissionEvaluator;
     @MockitoBean AdminActionAuditor auditor;
+    // TASK-BE-357: AccountAdminController now depends on the shared read-tenant gate.
+    @MockitoBean com.example.admin.application.QueryTenantScopeGate queryTenantScopeGate;
     /** The trusted admin-local tag source the account resolver reads. */
     @MockitoBean AdminResourceTagJpaRepository resourceTagRepository;
 

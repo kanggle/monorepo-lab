@@ -93,6 +93,8 @@ class AdminTimeWindowConditionEnforcementTest {
     @MockitoBean AccountServiceClient accountServiceClient;
     @MockitoBean PermissionEvaluator permissionEvaluator;
     @MockitoBean AdminActionAuditor auditor;
+    // TASK-BE-357: AccountAdminController now depends on the shared read-tenant gate.
+    @MockitoBean com.example.admin.application.QueryTenantScopeGate queryTenantScopeGate;
     /** The request clock the aspect resolves for TIME_WINDOW — stubbed per test. */
     @MockitoBean Clock clock;
 

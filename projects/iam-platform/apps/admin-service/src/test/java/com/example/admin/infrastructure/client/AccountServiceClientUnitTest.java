@@ -56,7 +56,7 @@ class AccountServiceClientUnitTest {
                                 "\"status\":\"ACTIVE\",\"createdAt\":\"2026-01-01T00:00:00Z\"}]," +
                                 "\"totalElements\":1,\"page\":0,\"size\":20,\"totalPages\":1}")));
 
-        AccountServiceClient.AccountSearchResponse resp = client.search("foo@example.com");
+        AccountServiceClient.AccountSearchResponse resp = client.search("fan-platform", "foo@example.com");
 
         assertThat(resp.content()).hasSize(1);
         assertThat(resp.content().get(0).id()).isEqualTo("acc-1");
@@ -69,7 +69,7 @@ class AccountServiceClientUnitTest {
         wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))
                 .willReturn(aResponse().withStatus(503)));
 
-        assertThatThrownBy(() -> client.search("foo@example.com"))
+        assertThatThrownBy(() -> client.search("fan-platform", "foo@example.com"))
                 .isInstanceOf(DownstreamFailureException.class)
                 .isNotInstanceOf(NonRetryableDownstreamException.class);
     }

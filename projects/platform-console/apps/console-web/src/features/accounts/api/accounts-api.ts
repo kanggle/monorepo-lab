@@ -265,6 +265,15 @@ export async function searchAccounts(
     qs.set('page', String(params.page ?? 0));
     qs.set('size', String(params.size ?? 20));
   }
+  // TASK-BE-357: scope the search/list to the active tenant (mirror of the audit
+  // view — `audit-api.ts` TASK-PC-FE-043). The producer scopes by this `tenantId`
+  // query param (NOT `X-Tenant-Id`) and gates it against the operator's effective
+  // scope (403 TENANT_SCOPE_DENIED → surfaced inline by the accounts screen). An
+  // explicit `params.tenantId` (SUPER_ADMIN cross-tenant) overrides. A missing
+  // active tenant is blocked in `callGapAdmin` (400 NO_ACTIVE_TENANT) before fetch.
+  const tenant = await getActiveTenant();
+  const scopeTenant = params.tenantId ?? tenant;
+  if (scopeTenant) qs.set('tenantId', scopeTenant);
   return callGapAdmin(
     { method: 'GET', path: `${ADMIN_PREFIX}/accounts?${qs.toString()}` },
     (json) => AccountPageSchema.parse(json),

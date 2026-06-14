@@ -4,6 +4,7 @@ import com.example.account.application.result.AccountDetailResult;
 import com.example.account.application.result.AccountSearchResult;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -11,12 +12,30 @@ import java.util.Optional;
  * not supported by the domain repository interfaces.
  *
  * <p>Implemented by infrastructure layer ({@code AccountQueryPortImpl}).</p>
+ *
+ * <p>TASK-BE-357: search/list are tenant-scoped. {@code tenantId} is the concrete
+ * tenant the (already effective-scope-gated) admin-service resolved; account-service
+ * filters strictly by it. The platform sentinel {@code "*"} widens to all tenants
+ * (reachable only by a SUPER_ADMIN whose gate admin-service has already enforced).
  */
 public interface AccountQueryPort {
 
-    AccountSearchResult findAll(Pageable pageable);
+    /**
+     * Tenant-scoped paginated account listing.
+     *
+     * @param tenantId concrete tenant; {@code "*"} → all tenants (platform scope)
+     */
+    AccountSearchResult findAll(String tenantId, Pageable pageable);
 
-    Optional<AccountSearchResult.Item> findByEmail(String email);
+    /**
+     * Exact email lookup within a tenant (the {@code (tenant_id, email)} unique
+     * index — NOT a partial/LIKE search).
+     *
+     * @param tenantId concrete tenant → 0 or 1 row; {@code "*"} → all tenants
+     *                 (the same email may exist under multiple tenants → 0..N rows)
+     * @return matching items (possibly empty, never null)
+     */
+    List<AccountSearchResult.Item> findByEmail(String tenantId, String email);
 
     Optional<AccountDetailResult> findDetailById(String accountId);
 }

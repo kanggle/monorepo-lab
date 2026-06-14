@@ -1,7 +1,6 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.TenantScopeDeniedException;
-import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.infrastructure.client.SecurityServiceClient;
 import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
@@ -19,7 +18,6 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,6 +29,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * TASK-BE-249 → TASK-BE-357: the tenant resolve+gate is now the shared
+ * {@link QueryTenantScopeGate} (covered by {@code QueryTenantScopeGateTest}); these
+ * cases mock the gate and focus on this use-case's own responsibilities — the
+ * source/finder branching, size/page clamping, and meta-audit.
+ */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("AuditQueryUseCase 단위 테스트")
@@ -43,29 +47,18 @@ class AuditQueryUseCaseTest {
     @Mock
     private AdminActionAuditor auditor;
     @Mock
-    private OperatorLookupPort operatorLookupPort;
-    @Mock
-    private TenantScopeResolver tenantScopeResolver;
+    private QueryTenantScopeGate queryTenantScopeGate;
 
     private AuditQueryUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new AuditQueryUseCase(adminActionRepo, securityServiceClient, auditor,
-                operatorLookupPort, tenantScopeResolver);
+        useCase = new AuditQueryUseCase(adminActionRepo, securityServiceClient, auditor, queryTenantScopeGate);
 
-        // Default: normal operator in "fan-platform" (non-platform-scope)
-        when(operatorLookupPort.findByOperatorId("op-1"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(1L, "op-1", "fan-platform")));
+        // Default: normal operator resolves to its own non-platform tenant "fan-platform".
+        when(queryTenantScopeGate.resolve(any(), any(), eq(ActionCode.AUDIT_QUERY), eq("audit.read")))
+                .thenReturn(new QueryTenantScopeGate.Resolved("fan-platform", false));
         when(auditor.reserveAuditId()).thenReturn("meta-audit-id");
-
-        // TASK-BE-326 NET-ZERO default: no assignments → effective scope = {home tenant}.
-        when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("fan-platform")))
-                .thenReturn(java.util.Set.of("fan-platform"));
-        when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("*")))
-                .thenReturn(java.util.Set.of("*"));
-
-        // Default admin-action repo response for tenant-scoped finder
         when(adminActionRepo.findByTenantId(anyString(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
     }
@@ -154,19 +147,12 @@ class AuditQueryUseCaseTest {
         assertThat(captor.getValue().actionCode()).isEqualTo(ActionCode.AUDIT_QUERY);
     }
 
-    // ── TASK-BE-249: 테넌트 스코프 분기 ──────────────────────────────────────────
+    // ── finder 분기 (gate 결과에 따른 admin_actions 조회 경로) ────────────────────
 
     @Test
-    @DisplayName("TASK-BE-249: 일반 운영자가 다른 tenant 조회 시 TenantScopeDeniedException")
-    void query_normalOperator_crossTenantRequest_throwsTenantScopeDenied() {
-        // "op-1" is fan-platform; requesting tenantId="other-platform" → denied
-        assertThatThrownBy(() -> useCase.query(cmd("op-1", "acc-1", "admin", 0, 20, "other-platform")))
-                .isInstanceOf(TenantScopeDeniedException.class);
-    }
-
-    @Test
-    @DisplayName("TASK-BE-249: 일반 운영자가 자기 tenant 조회 시 성공 — findByTenantId 사용")
-    void query_normalOperator_ownTenant_usesFindByTenantId() {
+    @DisplayName("일반 운영자(non-platform) → findByTenantId 사용, searchCrossTenant 미사용")
+    void query_normalOperator_usesFindByTenantId() {
+        // default gate → Resolved("fan-platform", false)
         useCase.query(cmd("op-1", "acc-1", "admin", 0, 20, "fan-platform"));
 
         verify(adminActionRepo).findByTenantId(eq("fan-platform"), any(), any(), any(), any(), any(Pageable.class));
@@ -174,10 +160,10 @@ class AuditQueryUseCaseTest {
     }
 
     @Test
-    @DisplayName("TASK-BE-249: SUPER_ADMIN이 tenantId=* 요청 시 platform 행 조회")
-    void query_superAdmin_platformScopeRequest_usesFindByTenantId_star() {
-        when(operatorLookupPort.findByOperatorId("super-op"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "super-op", "*")));
+    @DisplayName("SUPER_ADMIN이 tenantId=* (platform scope) → findByTenantId('*') 사용")
+    void query_superAdmin_platformScope_usesFindByTenantId_star() {
+        when(queryTenantScopeGate.resolve(any(), any(), eq(ActionCode.AUDIT_QUERY), eq("audit.read")))
+                .thenReturn(new QueryTenantScopeGate.Resolved("*", true));
         when(adminActionRepo.findByTenantId(eq("*"), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
@@ -188,10 +174,10 @@ class AuditQueryUseCaseTest {
     }
 
     @Test
-    @DisplayName("TASK-BE-249: SUPER_ADMIN이 특정 tenant 조회 시 searchCrossTenant 사용")
-    void query_superAdmin_specificTenantRequest_usesSearchCrossTenant() {
-        when(operatorLookupPort.findByOperatorId("super-op"))
-                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "super-op", "*")));
+    @DisplayName("SUPER_ADMIN이 특정 tenant (platform scope) → searchCrossTenant 사용")
+    void query_superAdmin_specificTenant_usesSearchCrossTenant() {
+        when(queryTenantScopeGate.resolve(any(), any(), eq(ActionCode.AUDIT_QUERY), eq("audit.read")))
+                .thenReturn(new QueryTenantScopeGate.Resolved("fan-platform", true));
         when(adminActionRepo.searchCrossTenant(eq("fan-platform"), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
@@ -201,50 +187,17 @@ class AuditQueryUseCaseTest {
         verify(adminActionRepo, never()).findByTenantId(anyString(), any(), any(), any(), any(), any(Pageable.class));
     }
 
-    @Test
-    @DisplayName("TASK-BE-249: 존재하지 않는 operator → TenantScopeDeniedException")
-    void query_unknownOperator_throwsTenantScopeDenied() {
-        when(operatorLookupPort.findByOperatorId("unknown-op"))
-                .thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> useCase.query(cmd("unknown-op", null, "admin", 0, 20, null)))
-                .isInstanceOf(TenantScopeDeniedException.class)
-                .hasMessageContaining("Operator not found");
-    }
-
-    // ── TASK-BE-326: dual-read assigned (non-home) tenant ─────────────────────
+    // ── gate 거부 전파 ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("TASK-BE-326: 일반 운영자가 배정(assignment)된 비-home tenant 조회 시 허용 — findByTenantId(assigned)")
-    void query_normalOperator_assignedNonHomeTenant_allowed_usesFindByTenantId() {
-        // op-1 home = fan-platform, but has an assignment to "wms" → effective
-        // scope {fan-platform, wms}. Querying "wms" must NOT be denied (legacy
-        // single-equality would deny) and must query the assigned tenant's rows.
-        when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("fan-platform")))
-                .thenReturn(java.util.Set.of("fan-platform", "wms"));
-        when(adminActionRepo.findByTenantId(eq("wms"), any(), any(), any(), any(), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of()));
+    @DisplayName("gate가 TenantScopeDenied 던지면 전파 + 메타-감사 미기록")
+    void query_gateDenies_propagates_noMetaAudit() {
+        when(queryTenantScopeGate.resolve(any(), any(), eq(ActionCode.AUDIT_QUERY), eq("audit.read")))
+                .thenThrow(new TenantScopeDeniedException("out of scope"));
 
-        useCase.query(cmd("op-1", "acc-1", "admin", 0, 20, "wms"));
-
-        verify(adminActionRepo).findByTenantId(eq("wms"), any(), any(), any(), any(), any(Pageable.class));
-        verify(adminActionRepo, never()).searchCrossTenant(anyString(), any(), any(), any(), any(), any(Pageable.class));
-        verify(auditor, never()).recordCrossTenantDenied(any(), anyString(), any(), anyString(), anyString());
-    }
-
-    // ── TASK-BE-262: cross-tenant deny audit row ──────────────────────────────
-
-    @Test
-    @DisplayName("TASK-BE-262: cross-tenant request denied → auditor.recordCrossTenantDenied() 호출")
-    void query_crossTenantRequest_denied_calls_auditor_recordCrossTenantDenied() {
-        // "op-1" belongs to "fan-platform" — requesting "other-platform" → denied
-        assertThatThrownBy(() -> useCase.query(cmd("op-1", "acc-1", "admin", 0, 20, "other-platform")))
+        assertThatThrownBy(() -> useCase.query(cmd("op-1", "acc-1", "admin", 0, 20, "ecommerce")))
                 .isInstanceOf(TenantScopeDeniedException.class);
 
-        verify(auditor).recordCrossTenantDenied(
-                any(), anyString(),
-                any(ActionCode.class), anyString(), anyString());
-        // meta-audit must NOT be recorded (deny happened before the query executed)
         verify(auditor, never()).record(any());
         verify(auditor, never()).reserveAuditId();
     }

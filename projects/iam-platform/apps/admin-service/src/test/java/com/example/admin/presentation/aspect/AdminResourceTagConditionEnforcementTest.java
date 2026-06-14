@@ -85,6 +85,8 @@ class AdminResourceTagConditionEnforcementTest {
     @MockitoBean AccountServiceClient accountServiceClient;
     @MockitoBean PermissionEvaluator permissionEvaluator;
     @MockitoBean AdminActionAuditor auditor;
+    // TASK-BE-357: AccountAdminController now depends on the shared read-tenant gate.
+    @MockitoBean com.example.admin.application.QueryTenantScopeGate queryTenantScopeGate;
     /** The seam resolver — stubbed per test to report the target's tags. */
     @MockitoBean ResourceTagResolver resourceTagResolver;
 

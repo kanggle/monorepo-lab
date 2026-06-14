@@ -88,12 +88,14 @@ base path: `/api/admin`
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
 | `email` | string (optional) | 이메일로 단건 검색. 없으면 전체 목록 반환 |
+| `tenantId` | string (optional) | **TASK-BE-357** — 검색/목록 대상 테넌트. 생략 시 운영자의 활성/자기 테넌트. `*`는 SUPER_ADMIN 전용 (전 테넌트). 일반 운영자가 effective scope(home ∪ 배정, TASK-BE-326) 밖의 값을 지정하면 `403 TENANT_SCOPE_DENIED`. (`GET /api/admin/audit` 의 `tenantId` 와 동일 시맨틱.) |
 | `page` | int (default 0) | 전체 목록 조회 시 페이지 번호 |
 | `size` | int (default 20, max 100) | 전체 목록 조회 시 페이지 크기 |
 
 **동작 규칙**:
-- `email` 파라미터 있음 → 이메일로 단건 검색. `account.read` 권한 불필요 (기존 동작 유지).
-- `email` 파라미터 없음 + `account.read` 권한 보유 → 전체 계정 목록 페이지네이션 반환.
+- 모든 분기는 먼저 `tenantId` 를 effective scope 게이트(TASK-BE-249/BE-326 audit 와 동일 경로 재사용)로 해석·검증한다. 생략 시 운영자 자신의 테넌트. out-of-scope → `403 TENANT_SCOPE_DENIED`. **TASK-BE-357** 이전에는 이메일 검색이 `fan-platform` 에 하드코딩돼 있고(다른 테넌트 계정 미검색) 전체 목록은 테넌트 무필터(cross-tenant 노출)였다 — 둘 다 본 task 에서 테넌트 스코프로 정정.
+- `email` 파라미터 있음 → 해석된 테넌트 내 이메일 정확 일치 검색. `account.read` 권한 불필요 (기존 동작 유지) — 단 SUPPORT_LOCK 운영자도 테넌트 스코프를 벗어나 이메일 probe 할 수 없다.
+- `email` 파라미터 없음 + `account.read` 권한 보유 → 해석된 테넌트의 계정 목록 페이지네이션 반환.
 - `email` 파라미터 없음 + `account.read` 권한 미보유 → **403 `PERMISSION_DENIED`** (DENIED `admin_actions` 1행 기록). TASK-MONO-202 — 이전엔 빈 목록 200을 반환했으나, 이는 "권한 없음"과 "계정 0건"을 같은 응답으로 합쳐 소비자(콘솔)가 둘을 구분할 수 없게 만들었다. 이제 무권한은 403, 빈 목록 200은 **권한 보유 + 계정 0건**만 의미한다.
 - `size` > 100 → 400 `VALIDATION_ERROR`.
 
@@ -132,9 +134,12 @@ base path: `/api/admin`
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | email 없음 + `account.read` 권한 미보유 (전체 목록 조회). email 단건 검색은 무권한 허용 |
+| 403 | `TENANT_SCOPE_DENIED` | **TASK-BE-357** — 일반 운영자가 effective scope(home ∪ 배정) 밖의 `tenantId` 를 지정한 경우 (email/목록 양 분기 공통) |
 | 400 | `VALIDATION_ERROR` | size > 100 |
 | 503 | `DOWNSTREAM_ERROR` | account-service 호출 실패 |
 | 503 | `CIRCUIT_OPEN` | account-service circuit breaker OPEN |
+
+**Side Effects** (TASK-BE-357, BE-262 미러링): `403 TENANT_SCOPE_DENIED` 응답 시 `admin_actions` 에 `action_code=ACCOUNT_SEARCH`, `outcome=DENIED`, `tenant_id=operator's`, `target_tenant_id=operator's`, `downstream_detail` 에 시도한 대상 테넌트 기록 — best-effort 쓰기. 실패해도 403 자체는 정상 반환되며 `admin.audit.cross_tenant_deny_failure` 메트릭이 증가한다.
 
 ---
 

@@ -32,58 +32,86 @@ class AccountSearchQueryServiceTest {
     private AccountSearchQueryService service;
 
     @Test
+    @DisplayName("TASK-BE-357: tenantId blank — IllegalArgumentException (fail-closed)")
+    void search_blankTenantId_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> service.search("  ", null, 0, 20))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("tenantId");
+        assertThatThrownBy(() -> service.search(null, "a@example.com", 0, 20))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("tenantId");
+    }
+
+    @Test
     @DisplayName("size > 100 — IllegalArgumentException")
     void search_sizeExceedsMax_throwsIllegalArgumentException() {
-        assertThatThrownBy(() -> service.search(null, 0, 101))
+        assertThatThrownBy(() -> service.search("fan-platform", null, 0, 101))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("100");
     }
 
     @Test
-    @DisplayName("email blank — findAll() 위임")
+    @DisplayName("email blank — findAll(tenantId) 위임")
     void search_blankEmail_delegatesToFindAll() {
         AccountSearchResult expected = new AccountSearchResult(List.of(), 0, 0, 20, 0);
-        when(accountQueryPort.findAll(PageRequest.of(0, 20))).thenReturn(expected);
+        when(accountQueryPort.findAll("fan-platform", PageRequest.of(0, 20))).thenReturn(expected);
 
-        AccountSearchResult result = service.search("  ", 0, 20);
+        AccountSearchResult result = service.search("fan-platform", "  ", 0, 20);
 
         assertThat(result).isEqualTo(expected);
-        verify(accountQueryPort).findAll(PageRequest.of(0, 20));
+        verify(accountQueryPort).findAll("fan-platform", PageRequest.of(0, 20));
     }
 
     @Test
-    @DisplayName("email null — findAll() 위임")
+    @DisplayName("email null — findAll(tenantId) 위임")
     void search_nullEmail_delegatesToFindAll() {
         AccountSearchResult expected = new AccountSearchResult(List.of(), 0, 0, 10, 0);
-        when(accountQueryPort.findAll(PageRequest.of(0, 10))).thenReturn(expected);
+        when(accountQueryPort.findAll("ecommerce", PageRequest.of(0, 10))).thenReturn(expected);
 
-        AccountSearchResult result = service.search(null, 0, 10);
+        AccountSearchResult result = service.search("ecommerce", null, 0, 10);
 
         assertThat(result).isEqualTo(expected);
     }
 
     @Test
-    @DisplayName("email 있고 계정 존재 — 단건 결과 반환")
+    @DisplayName("email 있고 계정 존재 — 단건 결과 반환 (tenant-scoped)")
     void search_emailFound_returnsSingleItemResult() {
         AccountSearchResult.Item item = new AccountSearchResult.Item(
                 "acc-1", "found@example.com", "ACTIVE", Instant.now());
-        when(accountQueryPort.findByEmail("found@example.com")).thenReturn(Optional.of(item));
+        when(accountQueryPort.findByEmail("ecommerce", "found@example.com")).thenReturn(List.of(item));
 
-        AccountSearchResult result = service.search("found@example.com", 0, 20);
+        AccountSearchResult result = service.search("ecommerce", "found@example.com", 0, 20);
 
         assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.totalPages()).isEqualTo(1);
         assertThat(result.content()).containsExactly(item);
     }
 
     @Test
     @DisplayName("email 있고 계정 없음 — 빈 결과 반환")
     void search_emailNotFound_returnsEmptyResult() {
-        when(accountQueryPort.findByEmail("missing@example.com")).thenReturn(Optional.empty());
+        when(accountQueryPort.findByEmail("fan-platform", "missing@example.com")).thenReturn(List.of());
 
-        AccountSearchResult result = service.search("missing@example.com", 0, 20);
+        AccountSearchResult result = service.search("fan-platform", "missing@example.com", 0, 20);
 
         assertThat(result.totalElements()).isZero();
+        assertThat(result.totalPages()).isZero();
         assertThat(result.content()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("email 있고 '*' 크로스테넌트 다건 매칭 — 전부 반환")
+    void search_emailStar_returnsAllTenantMatches() {
+        AccountSearchResult.Item a = new AccountSearchResult.Item(
+                "acc-fan", "dup@example.com", "ACTIVE", Instant.now());
+        AccountSearchResult.Item b = new AccountSearchResult.Item(
+                "acc-ecom", "dup@example.com", "ACTIVE", Instant.now());
+        when(accountQueryPort.findByEmail("*", "dup@example.com")).thenReturn(List.of(a, b));
+
+        AccountSearchResult result = service.search("*", "dup@example.com", 0, 20);
+
+        assertThat(result.totalElements()).isEqualTo(2);
+        assertThat(result.content()).containsExactly(a, b);
     }
 
     @Test

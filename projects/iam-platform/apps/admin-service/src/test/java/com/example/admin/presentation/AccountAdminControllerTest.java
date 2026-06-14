@@ -4,6 +4,8 @@ import com.example.admin.application.AccountAdminUseCase;
 import com.example.admin.application.AdminActionAuditor;
 import com.example.admin.application.BulkLockAccountUseCase;
 import com.example.admin.application.LockAccountResult;
+import com.example.admin.application.QueryTenantScopeGate;
+import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.domain.rbac.PermissionEvaluator;
 import com.example.admin.infrastructure.client.AccountServiceClient;
 import com.example.admin.presentation.advice.AdminExceptionHandler;
@@ -32,6 +34,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -82,10 +85,16 @@ class AccountAdminControllerTest {
     @MockitoBean
     AdminActionAuditor auditor;
 
+    @MockitoBean
+    QueryTenantScopeGate queryTenantScopeGate;
+
     @BeforeEach
     void grantAll() {
         when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
         when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(true);
+        // TASK-BE-357: default — resolve to the operator's own non-platform tenant.
+        when(queryTenantScopeGate.resolve(any(), any(), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("fan-platform", false));
     }
 
     private String bearer() {
@@ -164,7 +173,7 @@ class AccountAdminControllerTest {
                 "acc-1", "a@example.com", "ACTIVE", Instant.parse("2026-01-01T00:00:00Z")));
         var page = new AccountServiceClient.AccountSearchResponse(items, 1L, 0, 20, 1);
         when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
-        when(accountServiceClient.listAll(anyInt(), anyInt())).thenReturn(page);
+        when(accountServiceClient.listAll(anyString(), anyInt(), anyInt())).thenReturn(page);
 
         mockMvc.perform(get("/api/admin/accounts")
                         .header("Authorization", bearer()))
@@ -195,11 +204,24 @@ class AccountAdminControllerTest {
         var items = List.of(new AccountServiceClient.AccountSummaryItem(
                 "acc-1", "a@example.com", "ACTIVE", Instant.parse("2026-01-01T00:00:00Z")));
         var result = new AccountServiceClient.AccountSearchResponse(items, 1L, 0, 20, 1);
-        when(accountServiceClient.search("a@example.com")).thenReturn(result);
+        when(accountServiceClient.search(anyString(), eq("a@example.com"))).thenReturn(result);
 
         mockMvc.perform(get("/api/admin/accounts?email=a@example.com")
                         .header("Authorization", bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].email").value("a@example.com"));
+    }
+
+    @Test
+    void search_outOfScopeTenant_returns_403_tenant_scope_denied() throws Exception {
+        // TASK-BE-357: a non-platform operator requesting a tenant outside its effective
+        // scope is rejected by the shared gate (403 TENANT_SCOPE_DENIED) BEFORE any branch.
+        when(queryTenantScopeGate.resolve(any(), any(), any(), anyString()))
+                .thenThrow(new TenantScopeDeniedException("out of scope"));
+
+        mockMvc.perform(get("/api/admin/accounts?tenantId=ecommerce")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
     }
 }

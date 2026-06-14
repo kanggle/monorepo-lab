@@ -53,12 +53,13 @@ public class AccountServiceClient {
 
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
-    public AccountSearchResponse search(String email) {
+    public AccountSearchResponse search(String tenantId, String email) {
         try {
             return restClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/internal/accounts")
                             .queryParam("email", email)
+                            .queryParam("tenantId", tenantId)  // TASK-BE-357: tenant-scoped (was fan-platform hard-coded)
                             .build())
                     .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
@@ -79,11 +80,12 @@ public class AccountServiceClient {
 
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
-    public AccountSearchResponse listAll(int page, int size) {
+    public AccountSearchResponse listAll(String tenantId, int page, int size) {
         try {
             return restClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/internal/accounts")
+                            .queryParam("tenantId", tenantId)  // TASK-BE-357: tenant-scoped (was unscoped all-tenant scan)
                             .queryParam("page", page)
                             .queryParam("size", size)
                             .build())
