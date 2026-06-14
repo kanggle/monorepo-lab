@@ -50,13 +50,19 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
                 .filter(JwtAuthenticationToken.class::isInstance)
                 .cast(JwtAuthenticationToken.class)
                 .flatMap(auth -> {
-                    String accountType = auth.getToken().getClaimAsString("account_type");
+                    org.springframework.security.oauth2.jwt.Jwt token = auth.getToken();
+                    java.util.List<String> roles = token.getClaimAsStringList("roles");
+                    String accountType = token.getClaimAsString("account_type");
                     boolean isAdmin = path.startsWith("/api/admin/");
                     if (isAdmin) {
-                        boolean allowed = "OPERATOR".equals(accountType);
+                        // Role-based admission (ADR-MONO-032): an admin-family role grants
+                        // access; the legacy account_type=OPERATOR is accepted only during
+                        // the dual-read migration window (jwt-standard-claims § Migration
+                        // Compatibility) and is removed at D5 step 4.
+                        boolean allowed = hasRole(roles, "ADMIN") || "OPERATOR".equals(accountType);
                         return Mono.just(allowed);
                     } else {
-                        boolean allowed = "CONSUMER".equals(accountType);
+                        boolean allowed = hasRole(roles, "CUSTOMER") || "CONSUMER".equals(accountType);
                         return Mono.just(allowed);
                     }
                 })
@@ -75,6 +81,10 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
     @Override
     public int getOrder() {
         return ORDER;
+    }
+
+    private static boolean hasRole(java.util.List<String> roles, String role) {
+        return roles != null && roles.contains(role);
     }
 
     private Mono<Void> writeForbidden(ServerWebExchange exchange, String message) {
