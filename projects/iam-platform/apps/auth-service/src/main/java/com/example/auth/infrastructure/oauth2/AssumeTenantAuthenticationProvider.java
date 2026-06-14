@@ -95,7 +95,6 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // --- 1. Validate the subject token (auth-service's own JWKS) — fail-closed. ---
         String oidcSubject;
         String operatorAccountType;
-        java.util.List<String> operatorRoles;
         try {
             Jwt subjectJwt = subjectTokenDecoder.decode(exchange.getSubjectToken());
             oidcSubject = subjectJwt.getSubject();
@@ -104,12 +103,11 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
             // operator's base GAP OIDC token, which carries account_type=OPERATOR).
             // Mirrors how the selected tenant_type is carried onto the resolved grant.
             operatorAccountType = subjectJwt.getClaimAsString("account_type");
-            // TASK-BE-370 (ADR-MONO-033 S4): preserve the operator's roles from the
-            // validated subject token onto the assumed token — the operator is one
-            // identity; their roles travel with them (verbatim, no re-resolve / no
-            // account-service call). After TASK-BE-369 the base token carries `roles`.
-            // null-safe: getClaimAsStringList returns null when the claim is absent.
-            operatorRoles = subjectJwt.getClaimAsStringList("roles");
+            // TASK-BE-376 (ADR-MONO-035 O1 / step 4a): the operator's domain roles are
+            // no longer preserved from the subject token (TASK-BE-370) — the base
+            // operator token has no domain-role set to preserve. The customizer's
+            // assume-tenant branch now DERIVES the `roles` from the SELECTED tenant's
+            // entitled domains (OperatorRoleDerivation), so no roles are extracted here.
         } catch (JwtException e) {
             log.debug("assume-tenant: subject_token validation failed (fail-closed): {}", e.toString());
             throw invalidGrant("subject_token is invalid");
@@ -145,13 +143,15 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // TASK-BE-338: carry the resolved org_scope (null ⟺ ["*"] net-zero) on the
         // grant so the customizer's assume-tenant branch injects the ACTUAL
         // data-scope rather than the hardcoded ["*"] (TASK-BE-337 bridge).
-        // TASK-BE-370: also carry the operator's roles (preserved verbatim from the
-        // validated subject token) so the customizer's assume-tenant branch injects
-        // the `roles` claim — the operator is one identity; their roles travel with
-        // them (ADR-MONO-033 S4). No account-service call on this path.
+        // TASK-BE-376 (ADR-MONO-035 O1 / step 4a): the operator's `roles` are no longer
+        // threaded from the subject token — the customizer's assume-tenant branch
+        // DERIVES them from the selected tenant's entitled domains
+        // (OperatorRoleDerivation), reusing the existing entitled_domains fetch (no
+        // extra account-service call). account_type (BE-329) + org_scope (BE-338) plumbing
+        // is unchanged.
         AssumeTenantAuthenticationToken resolvedGrant = new AssumeTenantAuthenticationToken(
                 clientPrincipal, exchange.getSubjectToken(), exchange.getSubjectTokenType(),
-                selectedTenantId, CUSTOMER_TENANT_TYPE, operatorAccountType, orgScope, operatorRoles);
+                selectedTenantId, CUSTOMER_TENANT_TYPE, operatorAccountType, orgScope);
 
         // TASK-BE-336: propagate the client's REGISTERED scopes into the
         // domain-facing token's `scope` claim (was Set.of() — empty). This is
