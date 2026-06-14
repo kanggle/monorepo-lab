@@ -575,4 +575,184 @@ class ReconciliationMatcherTest {
         assertThat(result.matches().get(1).journalEntryId()).isEqualTo("entry-fx-b");
         assertThat(result.matches()).allMatch(ReconciliationMatch::crossCurrency);
     }
+
+    // ---- 19th increment: reverse cross-currency matching (TASK-FIN-BE-027) ----
+    // The MIRROR of the 14th increment. A FOREIGN external line (currency != KRW) carrying a
+    // declared baseAmount, with NO same-currency candidate, falls back to a BASE-currency (KRW)
+    // internal line whose KRW amount (money) is within tolerance of the external's baseAmount.
+    // Same-currency matching takes precedence; the base comparison is the match key (no
+    // AMOUNT_MISMATCH); a foreign external without a baseAmount, or beyond tolerance →
+    // UNMATCHED_EXTERNAL. The two cross passes are mutually exclusive (KRW external vs foreign).
+
+    @Test
+    @DisplayName("(AC-1) foreign external (USD, baseAmount 130000) + a KRW internal (money 130000, "
+            + "same direction) → reverse cross match (crossCurrency=true, NO discrepancy), both consumed")
+    void reverseCrossCurrencyMatchOnEqualBase() {
+        // No USD internal; one KRW internal 130000. USD external 10000 carrying base 130000 KRW.
+        ExternalStatementLine e1 = extUsd("FXEXT", 10_000, EntryDirection.DEBIT, 130_000L);
+        List<InternalLine> internals = List.of(
+                internal("entry-krw", 130_000, EntryDirection.DEBIT));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
+
+        assertThat(e1.isMatched()).isTrue();
+        assertThat(result.matchedCount()).isEqualTo(1);
+        // No AMOUNT_MISMATCH / UNMATCHED — the base comparison IS the match key.
+        assertThat(result.discrepancyCount()).isZero();
+        ReconciliationMatch m = result.matches().get(0);
+        assertThat(m.journalEntryId()).isEqualTo("entry-krw");
+        assertThat(m.crossCurrency()).isTrue();
+        // The match carries the external USD money (not the internal KRW amount).
+        assertThat(m.money()).isEqualTo(usd(10_000));
+    }
+
+    @Test
+    @DisplayName("(AC-2) foreign external WITHIN a configured tolerance of the KRW internal amount "
+            + "→ reverse cross match, no discrepancy")
+    void reverseCrossCurrencyMatchWithinTolerance() {
+        FxTolerance tol = new FxTolerance(100, 0L); // 1% of 130000 = 1300 band
+        // External base 131200 vs KRW internal 130000 → diff 1200 <= 1300 → within.
+        ExternalStatementLine e1 = extUsd("FXEXT", 10_000, EntryDirection.DEBIT, 131_200L);
+        List<InternalLine> internals = List.of(
+                internal("entry-krw", 130_000, EntryDirection.DEBIT));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, tol, AT);
+
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero();
+        assertThat(result.matches().get(0).crossCurrency()).isTrue();
+        assertThat(result.matches().get(0).money()).isEqualTo(usd(10_000));
+    }
+
+    @Test
+    @DisplayName("(AC-2) foreign external BEYOND tolerance of the KRW internal amount → NO reverse "
+            + "match → UNMATCHED_EXTERNAL + the KRW internal → UNMATCHED_INTERNAL")
+    void reverseCrossCurrencyBeyondToleranceFallsThrough() {
+        FxTolerance tol = new FxTolerance(100, 0L); // band 1300 on 130000
+        // External base 131301 vs KRW internal 130000 → diff 1301 > 1300 → beyond.
+        ExternalStatementLine e1 = extUsd("FXEXT", 10_000, EntryDirection.DEBIT, 131_301L);
+        List<InternalLine> internals = List.of(
+                internal("entry-krw", 130_000, EntryDirection.DEBIT));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, tol, AT);
+
+        assertThat(e1.isMatched()).isFalse();
+        assertThat(result.matchedCount()).isZero();
+        assertThat(result.discrepancyCount()).isEqualTo(2);
+        assertThat(result.discrepancies()).extracting(ReconciliationDiscrepancy::type)
+                .containsExactlyInAnyOrder(
+                        DiscrepancyType.UNMATCHED_EXTERNAL, DiscrepancyType.UNMATCHED_INTERNAL);
+    }
+
+    @Test
+    @DisplayName("(EXACT default) reverse cross requires EXACT KRW-amount equality — 1 unit off "
+            + "→ NO reverse match → UNMATCHED_EXTERNAL + UNMATCHED_INTERNAL")
+    void reverseCrossCurrencyExactRequiresEquality() {
+        ExternalStatementLine e1 = extUsd("FXEXT", 10_000, EntryDirection.DEBIT, 130_001L); // 1 off
+        List<InternalLine> internals = List.of(
+                internal("entry-krw", 130_000, EntryDirection.DEBIT));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
+
+        assertThat(result.matchedCount()).isZero();
+        assertThat(result.discrepancyCount()).isEqualTo(2);
+        assertThat(result.discrepancies()).extracting(ReconciliationDiscrepancy::type)
+                .containsExactlyInAnyOrder(
+                        DiscrepancyType.UNMATCHED_EXTERNAL, DiscrepancyType.UNMATCHED_INTERNAL);
+    }
+
+    @Test
+    @DisplayName("(AC-3) a foreign external WITHOUT a declared baseAmount never enters the reverse "
+            + "pass (no match key) → UNMATCHED_EXTERNAL + the KRW internal → UNMATCHED_INTERNAL")
+    void reverseCrossCurrencyRequiresBaseAmount() {
+        // USD external 10000, NO baseAmount; a KRW internal whose amount (10000) equals the
+        // USD external's USD amount numerically — must NOT match (no base key).
+        ExternalStatementLine e1 = extUsd("FXEXT", 10_000, EntryDirection.DEBIT, null);
+        List<InternalLine> internals = List.of(
+                internal("entry-krw", 10_000, EntryDirection.DEBIT));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
+
+        assertThat(e1.isMatched()).isFalse();
+        assertThat(result.matchedCount()).isZero();
+        assertThat(result.discrepancyCount()).isEqualTo(2);
+        assertThat(result.discrepancies()).extracting(ReconciliationDiscrepancy::type)
+                .containsExactlyInAnyOrder(
+                        DiscrepancyType.UNMATCHED_EXTERNAL, DiscrepancyType.UNMATCHED_INTERNAL);
+    }
+
+    @Test
+    @DisplayName("(precedence) a foreign external with BOTH a same-currency USD internal and a "
+            + "base-matching KRW internal → the same-currency USD match wins (crossCurrency=false)")
+    void sameCurrencyTakesPrecedenceOverReverseCrossCurrency() {
+        // USD external 10000 carrying base 130000. A KRW internal (130000) would reverse-match,
+        // but a same-currency USD internal (10000) exists → same-currency pass must win first.
+        ExternalStatementLine e1 = extUsd("FXEXT", 10_000, EntryDirection.DEBIT, 130_000L);
+        List<InternalLine> internals = List.of(
+                internal("entry-krw", 130_000, EntryDirection.DEBIT),
+                internalUsd("entry-usd", 10_000, EntryDirection.DEBIT, 130_000L));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
+
+        assertThat(e1.isMatched()).isTrue();
+        assertThat(result.matchedCount()).isEqualTo(1);
+        ReconciliationMatch m = result.matches().get(0);
+        assertThat(m.journalEntryId()).isEqualTo("entry-usd"); // same-currency wins
+        assertThat(m.crossCurrency()).isFalse();
+        // The KRW internal is NOT consumed by the USD external → it stays unmatched.
+        assertThat(result.discrepancyCount()).isEqualTo(1);
+        ReconciliationDiscrepancy d = result.discrepancies().get(0);
+        assertThat(d.type()).isEqualTo(DiscrepancyType.UNMATCHED_INTERNAL);
+        assertThat(d.journalEntryId()).isEqualTo("entry-krw");
+    }
+
+    @Test
+    @DisplayName("(mutual exclusion) a KRW external still uses the FIN-BE-021 forward pass only — a "
+            + "base-matching foreign internal cross-matches, the reverse pass is never entered")
+    void krwExternalStillUsesForwardCrossCurrencyPass() {
+        // KRW external 130000; one foreign (USD) internal carrying base 130000. This is the
+        // FIN-BE-021 path (KRW-external → foreign-internal), byte-unchanged — NOT the reverse.
+        ExternalStatementLine e1 = ext("KRWEXT", 130_000, EntryDirection.DEBIT);
+        List<InternalLine> internals = List.of(
+                internalUsd("entry-fx", 10_000, EntryDirection.DEBIT, 130_000L));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
+
+        assertThat(e1.isMatched()).isTrue();
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero();
+        ReconciliationMatch m = result.matches().get(0);
+        assertThat(m.journalEntryId()).isEqualTo("entry-fx");
+        assertThat(m.crossCurrency()).isTrue();
+        // The match carries the external KRW money (FIN-BE-021), not the internal USD amount.
+        assertThat(m.money()).isEqualTo(krw(130_000));
+    }
+
+    @Test
+    @DisplayName("reverse cross determinism — first not-consumed KRW internal by input order")
+    void reverseCrossCurrencyDeterministicFirstNotConsumed() {
+        // Two foreign externals each carrying base 130000; two KRW internals each 130000.
+        ExternalStatementLine e1 = extUsd("FXEXT-1", 10_000, EntryDirection.DEBIT, 130_000L);
+        ExternalStatementLine e2 = extUsd("FXEXT-2", 11_000, EntryDirection.DEBIT, 130_000L);
+        List<InternalLine> internals = List.of(
+                internal("entry-krw-a", 130_000, EntryDirection.DEBIT),
+                internal("entry-krw-b", 130_000, EntryDirection.DEBIT));
+
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1, e2), internals, EXACT, AT);
+
+        assertThat(result.matchedCount()).isEqualTo(2);
+        assertThat(result.discrepancyCount()).isZero();
+        // e1 consumes the first KRW internal, e2 the next (deterministic, input order).
+        assertThat(result.matches().get(0).journalEntryId()).isEqualTo("entry-krw-a");
+        assertThat(result.matches().get(1).journalEntryId()).isEqualTo("entry-krw-b");
+        assertThat(result.matches()).allMatch(ReconciliationMatch::crossCurrency);
+    }
 }
