@@ -6,6 +6,7 @@ import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useWmsInventory,
   useWmsAlerts,
+  useWmsShipments,
   useAcknowledgeAlert,
 } from '../hooks/use-wms-ops';
 import {
@@ -14,6 +15,8 @@ import {
   type AlertPage,
   type AlertRow,
   type InventoryQueryParams,
+  type ShipmentPage,
+  type ShipmentQueryParams,
 } from '../api/types';
 import { AcknowledgeAlertDialog } from './AcknowledgeAlertDialog';
 
@@ -42,6 +45,7 @@ import { AcknowledgeAlertDialog } from './AcknowledgeAlertDialog';
 export interface WmsOpsScreenProps {
   inventory: InventoryPage;
   alerts: AlertPage;
+  shipments: ShipmentPage;
   /** NON-blocking eventual-consistency hint (seconds), or null. */
   lagSeconds: number | null;
 }
@@ -58,6 +62,16 @@ const EMPTY_INV_FILTERS: InvFilterState = {
   lowStockOnly: false,
 };
 
+interface ShipFilterState {
+  warehouseId: string;
+  carrierCode: string;
+}
+
+const EMPTY_SHIP_FILTERS: ShipFilterState = {
+  warehouseId: '',
+  carrierCode: '',
+};
+
 function alertLabel(a: AlertRow): string {
   return a.alertType ? `${a.alertType} (${a.alertId})` : a.alertId;
 }
@@ -65,11 +79,14 @@ function alertLabel(a: AlertRow): string {
 export function WmsOpsScreen({
   inventory,
   alerts,
+  shipments,
   lagSeconds,
 }: WmsOpsScreenProps) {
   const whFid = useId();
   const skuFid = useId();
   const lowFid = useId();
+  const shipWhFid = useId();
+  const shipCarrierFid = useId();
 
   const [invFilters, setInvFilters] =
     useState<InvFilterState>(EMPTY_INV_FILTERS);
@@ -95,6 +112,43 @@ export function WmsOpsScreen({
   const invForbidden = invApiError?.status === 403;
   const invDegraded =
     inv.isError && (!invApiError || invApiError.status >= 500) && !invForbidden;
+
+  // ── Shipments (택배/출고 read — carrier code / tracking no) ─────────────
+  const [shipFilters, setShipFilters] =
+    useState<ShipFilterState>(EMPTY_SHIP_FILTERS);
+  const [shipQuery, setShipQuery] = useState<ShipmentQueryParams>({
+    page: 0,
+    size: shipments.page.size || WMS_DEFAULT_PAGE_SIZE,
+  });
+
+  const shipSeeded =
+    (shipQuery.page ?? 0) === 0 &&
+    !shipQuery.warehouseId &&
+    !shipQuery.carrierCode;
+
+  const ship = useWmsShipments(shipQuery, shipSeeded ? shipments : undefined);
+  const shipData = ship.data ?? shipments;
+
+  const shipApiError =
+    ship.error instanceof ApiError ? (ship.error as ApiError) : null;
+  const shipForbidden = shipApiError?.status === 403;
+  const shipDegraded =
+    ship.isError &&
+    (!shipApiError || shipApiError.status >= 500) &&
+    !shipForbidden;
+
+  function submitShipFilters(e: React.FormEvent) {
+    e.preventDefault();
+    setShipQuery({
+      warehouseId: shipFilters.warehouseId.trim() || undefined,
+      carrierCode: shipFilters.carrierCode.trim() || undefined,
+      page: 0,
+      size: shipments.page.size || WMS_DEFAULT_PAGE_SIZE,
+    });
+  }
+
+  const shipRows = shipData.content;
+  const shipTotalPages = Math.max(1, shipData.page.totalPages);
 
   // The alerts list is not paginated in this slice's UI (only inventory
   // is). It is seeded page-0; the only re-fetch is the post-ack
@@ -379,6 +433,173 @@ export function WmsOpsScreen({
                 setInvQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
               }
               data-testid="wms-inv-next"
+            >
+              다음
+            </Button>
+          </nav>
+        </>
+      )}
+
+      {/* ── Shipments (택배/출고 read — carrier code / tracking no) ─────── */}
+      <h2 className="mb-3 text-lg font-medium text-foreground">택배 / 출고</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        출고 확정된 화물의 택배사 · 운송장번호 · 출고시각 (읽기 전용 — 출고
+        확정은 출고 운영 화면에서 수행합니다).
+      </p>
+      <form
+        onSubmit={submitShipFilters}
+        className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        role="search"
+        aria-label="택배/출고 필터"
+      >
+        <div>
+          <label
+            htmlFor={shipWhFid}
+            className="block text-sm font-medium text-foreground"
+          >
+            창고 ID
+          </label>
+          <input
+            id={shipWhFid}
+            type="text"
+            value={shipFilters.warehouseId}
+            onChange={(e) =>
+              setShipFilters((f) => ({ ...f, warehouseId: e.target.value }))
+            }
+            data-testid="wms-ship-filter-warehouse"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor={shipCarrierFid}
+            className="block text-sm font-medium text-foreground"
+          >
+            택배사 코드
+          </label>
+          <input
+            id={shipCarrierFid}
+            type="text"
+            value={shipFilters.carrierCode}
+            onChange={(e) =>
+              setShipFilters((f) => ({ ...f, carrierCode: e.target.value }))
+            }
+            data-testid="wms-ship-filter-carrier"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          />
+        </div>
+        <div className="flex items-end">
+          <Button type="submit" data-testid="wms-ship-filter-submit">
+            조회
+          </Button>
+        </div>
+      </form>
+
+      {shipForbidden ? (
+        <div
+          role="status"
+          data-testid="wms-ship-forbidden"
+          className="mb-8 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+        >
+          {messageForCode('FORBIDDEN')}
+        </div>
+      ) : shipDegraded ? (
+        <div
+          role="status"
+          data-testid="wms-ship-degraded"
+          className="mb-8 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+        >
+          wms 출고/택배 정보를 일시적으로 불러올 수 없습니다. 콘솔의 다른
+          기능은 계속 사용할 수 있습니다.
+        </div>
+      ) : shipRows.length === 0 ? (
+        <p
+          className="mb-8 text-sm text-muted-foreground"
+          data-testid="wms-ship-empty"
+        >
+          표시할 출고/택배 내역이 없습니다.
+        </p>
+      ) : (
+        <>
+          <table className="mb-3 data-table" data-testid="wms-ship-table">
+            <caption className="sr-only">출고/택배 내역</caption>
+            <thead>
+              <tr className="border-b border-border text-left">
+                <th scope="col" className="p-2">
+                  출고번호
+                </th>
+                <th scope="col" className="p-2">
+                  주문번호
+                </th>
+                <th scope="col" className="p-2">
+                  택배사
+                </th>
+                <th scope="col" className="p-2">
+                  운송장번호
+                </th>
+                <th scope="col" className="p-2">
+                  출고시각 (UTC)
+                </th>
+                <th scope="col" className="p-2">
+                  수량
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {shipRows.map((s, i) => (
+                <tr
+                  key={s.shipmentId}
+                  data-testid={`wms-ship-row-${i}`}
+                  className="border-b border-border"
+                >
+                  <td className="p-2">{s.shipmentNo ?? '—'}</td>
+                  <td className="p-2">{s.orderNo ?? '—'}</td>
+                  <td className="p-2">
+                    {s.carrierCode ? (
+                      <span data-testid={`wms-ship-carrier-${i}`}>
+                        {s.carrierCode}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td className="p-2">{s.trackingNo ?? '—'}</td>
+                  <td className="p-2">{s.shippedAt ?? '—'}</td>
+                  <td className="p-2">{s.totalQty ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <nav
+            className="mb-8 flex items-center justify-between"
+            aria-label="출고/택배 페이지 이동"
+          >
+            <Button
+              variant="secondary"
+              disabled={(shipQuery.page ?? 0) <= 0}
+              onClick={() =>
+                setShipQuery((q) => ({
+                  ...q,
+                  page: Math.max(0, (q.page ?? 0) - 1),
+                }))
+              }
+              data-testid="wms-ship-prev"
+            >
+              이전
+            </Button>
+            <span
+              className="text-sm text-muted-foreground"
+              data-testid="wms-ship-pageinfo"
+            >
+              {`${shipData.page.number + 1} / ${shipTotalPages} 페이지 · 총 ${shipData.page.totalElements}건`}
+            </span>
+            <Button
+              variant="secondary"
+              disabled={shipData.page.number + 1 >= shipData.page.totalPages}
+              onClick={() =>
+                setShipQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
+              }
+              data-testid="wms-ship-next"
             >
               다음
             </Button>

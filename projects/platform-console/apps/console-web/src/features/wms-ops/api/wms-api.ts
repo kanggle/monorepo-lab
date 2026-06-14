@@ -14,6 +14,7 @@ import {
   type OrderPage,
   ShipmentPageSchema,
   type ShipmentPage,
+  type ShipmentQueryParams,
   AsnPageSchema,
   type AsnPage,
   InspectionSchema,
@@ -407,7 +408,7 @@ export function listOrders(
 // ---------------------------------------------------------------------------
 
 export function listShipments(
-  params: { warehouseId?: string; carrierCode?: string; page?: number; size?: number } = {},
+  params: ShipmentQueryParams = {},
 ): Promise<WmsResult<ShipmentPage>> {
   const qs = new URLSearchParams();
   if (params.warehouseId) qs.set('warehouseId', params.warehouseId);

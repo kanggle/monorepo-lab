@@ -48,6 +48,7 @@ vi.mock('@/shared/config/env', () => ({
 }));
 
 import { GET as inventoryGET } from '@/app/api/wms/inventory/route';
+import { GET as shipmentsGET } from '@/app/api/wms/shipments/route';
 import { GET as alertsGET } from '@/app/api/wms/alerts/route';
 import { POST as ackPOST } from '@/app/api/wms/alerts/[alertId]/acknowledge/route';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
@@ -143,6 +144,57 @@ describe('GET /api/wms/inventory proxy', () => {
     );
     const res = await inventoryGET(
       new Request('http://console.local/api/wms/inventory'),
+    );
+    expect(res.status).toBe(503);
+  });
+});
+
+describe('GET /api/wms/shipments proxy (TASK-PC-FE-079)', () => {
+  it('attaches the IAM OIDC access token (NOT the operator token), forwards warehouse + carrier filters, caps size, no mutation artifacts', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(INV));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await shipmentsGET(
+      new Request(
+        'http://console.local/api/wms/shipments?warehouseId=wh-1&carrierCode=CJ-LOGISTICS&size=999',
+      ),
+    );
+    expect(res.status).toBe(200);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['X-Tenant-Id']).toBeUndefined();
+    expect(h['Idempotency-Key']).toBeUndefined();
+    expect(h['X-Operator-Reason']).toBeUndefined();
+    const upstream = new URL(String(url));
+    expect(upstream.pathname).toContain('/dashboard/shipments');
+    expect(upstream.searchParams.get('warehouseId')).toBe('wh-1');
+    expect(upstream.searchParams.get('carrierCode')).toBe('CJ-LOGISTICS');
+    expect(upstream.searchParams.get('size')).toBe('100'); // capped
+  });
+
+  it('no IAM session → 401 (no upstream call)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await shipmentsGET(
+      new Request('http://console.local/api/wms/shipments'),
+    );
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('503 from wms → 503 (wms section degrades only)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(wmsError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await shipmentsGET(
+      new Request('http://console.local/api/wms/shipments'),
     );
     expect(res.status).toBe(503);
   });

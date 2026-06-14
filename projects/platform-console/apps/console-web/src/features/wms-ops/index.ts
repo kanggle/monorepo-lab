@@ -19,9 +19,12 @@ export type {
   InventoryRow,
   AlertPage,
   AlertRow,
+  ShipmentPage,
+  ShipmentRow,
   AckResult,
   Throughput,
   ProjectionStatus,
   InventoryQueryParams,
   AlertQueryParams,
+  ShipmentQueryParams,
 } from './api/types';

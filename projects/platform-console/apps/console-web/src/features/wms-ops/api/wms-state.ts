@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { ApiError, WmsUnavailableError } from '@/shared/api/errors';
-import { listInventory, listAlerts } from './wms-api';
-import type { InventoryPage, AlertPage } from './types';
+import { listInventory, listAlerts, listShipments } from './wms-api';
+import type { InventoryPage, AlertPage, ShipmentPage } from './types';
 
 /**
  * Server-side wms operations section state for the `(console)/wms` route
@@ -38,6 +38,9 @@ import type { InventoryPage, AlertPage } from './types';
 export interface WmsSectionState {
   inventory: InventoryPage | null;
   alerts: AlertPage | null;
+  /** Shipment read-model rows (carrier code / tracking no), seeded page-0.
+   *  Projected from `outbound.shipping.confirmed` (admin-service § 9). */
+  shipments: ShipmentPage | null;
   /** True when the operator is not wms-eligible (no wms product/tenant in
    *  their registry) — actionable block, no wms call fabricated. */
   notEligible: boolean;
@@ -53,6 +56,7 @@ export interface WmsSectionState {
 const EMPTY: WmsSectionState = {
   inventory: null,
   alerts: null,
+  shipments: null,
   notEligible: false,
   forbidden: false,
   degraded: false,
@@ -72,14 +76,20 @@ export async function getWmsSectionState(
   }
 
   try {
-    const [inv, alerts] = await Promise.all([
+    const [inv, alerts, shipments] = await Promise.all([
       listInventory({ page: 0, size: 20 }),
       listAlerts({ page: 0, size: 20 }),
+      listShipments({ page: 0, size: 20 }),
     ]);
-    const lagSeconds = Math.max(inv.lagSeconds ?? 0, alerts.lagSeconds ?? 0);
+    const lagSeconds = Math.max(
+      inv.lagSeconds ?? 0,
+      alerts.lagSeconds ?? 0,
+      shipments.lagSeconds ?? 0,
+    );
     return {
       inventory: inv.data,
       alerts: alerts.data,
+      shipments: shipments.data,
       notEligible: false,
       forbidden: false,
       degraded: false,

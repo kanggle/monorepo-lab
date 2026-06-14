@@ -114,7 +114,9 @@ describe('getWmsSectionState — eligibility gate (§ 2.4.5)', () => {
     expect(state.degraded).toBe(false);
     expect(state.inventory).not.toBeNull();
     expect(state.alerts).not.toBeNull();
-    // Both seeded reads carry the IAM OIDC access token.
+    // TASK-PC-FE-079: shipments is now part of the seeded fan-out.
+    expect(state.shipments).not.toBeNull();
+    // All three seeded reads carry the IAM OIDC access token.
     const h = (fetchMock.mock.calls[0][1] as RequestInit)
       .headers as Record<string, string>;
     expect(h.Authorization).toBe('Bearer GAP-ACCESS');
