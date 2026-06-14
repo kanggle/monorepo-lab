@@ -8,8 +8,10 @@ Author **ADR-MONO-035 PROPOSED** — Operator authentication unification + opera
 
 # Status
 
-ready
+done
 
+> **완료 (2026-06-14, close-chore TASK-MONO-264)**: ADR-MONO-035 ACCEPTED, PR #1572 squash `9ba66e6d3`, 3-dim verified (state=MERGED, mergeCommit=origin/main tip, doc-only path-filter SKIPPED+SUCCESS). ready→done.
+>
 > **PROPOSED → ACCEPTED delivered in this PR (2026-06-14), user-explicit ACCEPT gate honored.** The PROPOSED O1-O6 decisions were **presented for review first** (the explicitly-required gate, self-ACCEPT prohibited); the user then gave explicit intent *"진행"* → ADR-MONO-035 flipped PROPOSED → ACCEPTED in the same PR (Status + § 6 ACCEPTED row + § 3.3 UNPAUSED), ADR-003a audit rows #39 (PROPOSED) + #40 (ACCEPTED) appended (sibling ADR-033/MONO-257 + ADR-034/MONO-258 same-PR pattern). Authored worktree-isolated on `task/mono-260-operator-auth-unification-adr` (main parked). Doc-only (no `apps/` code, no `platform/contracts/` change, no migrations). **Lifecycle close (ready → done) follows merge + 3-dim verification** (sibling MONO-258's #1541 close-chore pattern). § 3.3 execution roadmap UNPAUSED — next = 4a operator domain-role derivation (O1, the `account_type`-drop unblocker), iam BE-376+ (avoid BE-375 held by the concurrent ecommerce session).
 
 # Owner

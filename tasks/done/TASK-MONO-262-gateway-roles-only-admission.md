@@ -8,7 +8,9 @@ ADR-MONO-035 **4b-2a** (ADR-032 D5 step 4 / D3) — drop the now-dead `account_t
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14, close-chore TASK-MONO-264)**: PR #1580 squash `2e57fd5e6`, 3-dim verified (state=MERGED, mergeCommit=origin/main tip, Build & Test + all 7 Integration jobs GREEN). 4 gateways roles-only; X-Account-Type dropped.
 
 # Owner
 

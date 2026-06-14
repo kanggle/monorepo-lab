@@ -8,7 +8,9 @@ ADR-MONO-035 **O1 / step 4a** — operator JWT domain-role issuance: derive the 
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14, close-chore TASK-MONO-264)**: PR #1574 squash `ef5a44bf3`, 3-dim verified (state=MERGED, mergeCommit=origin/main tip, Build & Test + iam Testcontainers IT pass 3m2s). Operator assumed-token roles derived from selected tenant's entitled_domains; unblocked the account_type drop (4b).
 
 # Owner
 
