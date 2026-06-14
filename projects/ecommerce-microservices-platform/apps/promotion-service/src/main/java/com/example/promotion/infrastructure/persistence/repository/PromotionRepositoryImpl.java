@@ -4,6 +4,7 @@ import com.example.common.page.PageResult;
 import com.example.promotion.domain.promotion.Promotion;
 import com.example.promotion.domain.promotion.PromotionRepository;
 import com.example.promotion.domain.promotion.PromotionStatus;
+import com.example.promotion.domain.tenant.TenantContext;
 import com.example.promotion.infrastructure.persistence.entity.PromotionJpaEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,18 +25,24 @@ public class PromotionRepositoryImpl implements PromotionRepository {
 
     @Override
     public Promotion save(Promotion promotion) {
-        Optional<PromotionJpaEntity> existing = jpaRepository.findById(promotion.getPromotionId());
+        // Update path is tenant-scoped: a cross-tenant id resolves to empty so the
+        // insert branch stamps the CURRENT tenant — but the command service always
+        // loads (tenant-scoped) before update, so a cross-tenant write 404s upstream.
+        Optional<PromotionJpaEntity> existing = jpaRepository
+                .findByPromotionIdAndTenantId(promotion.getPromotionId(), TenantContext.currentTenant());
         if (existing.isPresent()) {
             existing.get().updateFrom(promotion);
             return existing.get().toDomain();
         }
-        PromotionJpaEntity entity = PromotionJpaEntity.fromDomain(promotion);
+        PromotionJpaEntity entity = PromotionJpaEntity.fromDomain(promotion, TenantContext.currentTenant());
         return jpaRepository.save(entity).toDomain();
     }
 
     @Override
     public Optional<Promotion> findById(String promotionId) {
-        return jpaRepository.findById(promotionId).map(PromotionJpaEntity::toDomain);
+        // Tenant-scoped (HTTP admin detail read): cross-tenant id → empty → 404 (M3).
+        return jpaRepository.findByPromotionIdAndTenantId(promotionId, TenantContext.currentTenant())
+                .map(PromotionJpaEntity::toDomain);
     }
 
     @Override
@@ -43,25 +50,36 @@ public class PromotionRepositoryImpl implements PromotionRepository {
         if (promotionIds.isEmpty()) {
             return List.of();
         }
+        // Operator-facing enrichment (coupon list → promotion names): tenant-scope it
+        // so it can never surface a cross-tenant promotion's name. The ids already
+        // belong to in-tenant coupons, so the filter is net-zero in practice.
+        String tenantId = TenantContext.currentTenant();
         return jpaRepository.findAllById(promotionIds).stream()
+                .filter(e -> tenantId.equals(e.getTenantId()))
                 .map(PromotionJpaEntity::toDomain)
                 .toList();
     }
 
     @Override
     public Optional<Promotion> findByIdForUpdate(String promotionId) {
-        return jpaRepository.findByIdForUpdate(promotionId).map(PromotionJpaEntity::toDomain);
+        // PESSIMISTIC_WRITE before issue/update: tenant-scoped so a cross-tenant
+        // write cannot reach (or lock) the row → 404 (M3).
+        return jpaRepository.findByIdForUpdate(promotionId, TenantContext.currentTenant())
+                .map(PromotionJpaEntity::toDomain);
     }
 
     @Override
     public void deleteById(String promotionId) {
+        // The command service loads the promotion tenant-scoped (findById → 404 on a
+        // cross-tenant id) before calling delete, so this PK delete can only ever
+        // reach an in-tenant row.
         jpaRepository.deleteById(promotionId);
     }
 
     @Override
     public PageResult<Promotion> findAll(int page, int size) {
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<PromotionJpaEntity> result = jpaRepository.findAll(pageRequest);
+        Page<PromotionJpaEntity> result = jpaRepository.findByTenantId(TenantContext.currentTenant(), pageRequest);
         return toPageResult(result, page, size);
     }
 
@@ -69,11 +87,12 @@ public class PromotionRepositoryImpl implements PromotionRepository {
     public PageResult<Promotion> findAllByStatus(PromotionStatus status, int page, int size, Clock clock) {
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Instant now = Instant.now(clock);
+        String tenantId = TenantContext.currentTenant();
 
         Page<PromotionJpaEntity> result = switch (status) {
-            case ACTIVE -> jpaRepository.findActive(now, pageRequest);
-            case SCHEDULED -> jpaRepository.findScheduled(now, pageRequest);
-            case ENDED -> jpaRepository.findEnded(now, pageRequest);
+            case ACTIVE -> jpaRepository.findActive(tenantId, now, pageRequest);
+            case SCHEDULED -> jpaRepository.findScheduled(tenantId, now, pageRequest);
+            case ENDED -> jpaRepository.findEnded(tenantId, now, pageRequest);
         };
 
         return toPageResult(result, page, size);

@@ -15,18 +15,32 @@ import java.util.Optional;
 
 public interface CouponJpaRepository extends JpaRepository<CouponJpaEntity, String> {
 
+    // ---- Tenant-scoped HTTP paths (ADR-MONO-030 M3; TASK-BE-368) ----------------
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT c FROM CouponJpaEntity c WHERE c.couponId = :couponId")
-    Optional<CouponJpaEntity> findByIdForUpdate(String couponId);
+    @Query("SELECT c FROM CouponJpaEntity c WHERE c.couponId = :couponId AND c.tenantId = :tenantId")
+    Optional<CouponJpaEntity> findByIdForUpdate(String couponId, String tenantId);
 
-    Page<CouponJpaEntity> findByUserId(String userId, Pageable pageable);
+    Page<CouponJpaEntity> findByTenantIdAndUserId(String tenantId, String userId, Pageable pageable);
 
-    Page<CouponJpaEntity> findByUserIdAndStatus(String userId, CouponStatus status, Pageable pageable);
+    Page<CouponJpaEntity> findByTenantIdAndUserIdAndStatus(
+            String tenantId, String userId, CouponStatus status, Pageable pageable);
 
+    boolean existsByPromotionId(String promotionId);
+
+    @Query("SELECT c.tenantId FROM CouponJpaEntity c WHERE c.couponId = :couponId")
+    Optional<String> findTenantIdByCouponId(String couponId);
+
+    // ---- System / batch paths — intentionally TENANT-AGNOSTIC --------------------
+    // Mirror order-service findByIdAcrossTenants: keyed off globally-unique ids or a
+    // global operational sweep, so they must find the row regardless of ambient
+    // context and can never reach the wrong tenant. The mutated row's tenant_id is
+    // immutable (updatable=false), and the published event carries that row's tenant.
+
+    /** Global expiry sweep — runs on a scheduler thread with no request tenant. */
     @Query("SELECT c FROM CouponJpaEntity c WHERE c.status = 'ISSUED' AND c.expiresAt <= :now ORDER BY c.expiresAt ASC")
     List<CouponJpaEntity> findExpiredIssuedCoupons(Instant now, Pageable pageable);
 
+    /** OrderCancelled recovery — orderId is globally unique (system saga path). */
     List<CouponJpaEntity> findByOrderIdAndStatus(String orderId, CouponStatus status);
-
-    boolean existsByPromotionId(String promotionId);
 }

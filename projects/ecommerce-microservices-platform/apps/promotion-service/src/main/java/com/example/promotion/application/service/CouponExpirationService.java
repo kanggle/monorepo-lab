@@ -33,9 +33,14 @@ public class CouponExpirationService {
             coupon.expire(clock);
             couponRepository.save(coupon);
 
+            // The expiry sweep is tenant-agnostic (global operational batch), but the
+            // CouponExpired envelope must ride the expiring coupon's OWN row tenant
+            // (M5) — not the ambient context (the scheduler thread has none). Resolve
+            // it from the persisted row by id; null → default tenant (net-zero, D8).
+            String tenantId = couponRepository.findTenantIdByCouponId(coupon.getCouponId());
             CouponExpiredEvent event = CouponExpiredEvent.of(
                     coupon.getCouponId(), coupon.getPromotionId(),
-                    coupon.getUserId(), clock
+                    coupon.getUserId(), tenantId, clock
             );
             eventPublisher.publishCouponExpired(event);
         }

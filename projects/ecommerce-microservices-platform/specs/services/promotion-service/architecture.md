@@ -109,6 +109,52 @@ Key domain concepts:
 - Publishes: `CouponUsed`, `CouponExpired`
 - Consumes: `OrderCancelled` (from order-service, restores USED coupons to ISSUED)
 
+## Multi-Tenancy (ADR-MONO-030 Step 4 / TASK-BE-368)
+
+promotion-service adopts the platform's `multi-tenant` trait
+([`rules/traits/multi-tenant.md`](../../../../../rules/traits/multi-tenant.md) M1-M7),
+inheriting the outer-axis tenant-isolation pattern proven in product-service /
+order-service (TASK-BE-357) and user-service (TASK-BE-367). The `seller_id` inner
+axis does **not** apply — promotion/coupon are tenant-scoped operator entities, not
+seller-attributed catalog data.
+
+- **M1 — row-level `tenant_id`**: `promotions` and `coupons` carry
+  `tenant_id VARCHAR(64) NOT NULL`, stamped once at insert and immutable
+  (`updatable=false`). `outbox` / `processed_events` stay column-free — tenant
+  rides on the event envelope (M5). Lives in the persistence + event layers only;
+  the clean `Promotion` / `Coupon` domain aggregates are unchanged.
+- **M2 — 3-layer isolation**: (1) the gateway entitlement-trust gate + `X-Tenant-Id`
+  header are owned by **gateway-service** (TASK-BE-357), reused; (2)
+  `TenantContextFilter` (`HIGHEST_PRECEDENCE`) binds the header into a request-scoped
+  framework-free `TenantContext` ThreadLocal; (3) every operator/consumer repository
+  read filters `WHERE tenant_id = currentTenant()` (incl. the `findByIdForUpdate`
+  pessimistic-lock paths) and every write stamps it.
+- **M3 — 404-over-403**: a cross-tenant single-resource read or write
+  (`GET /api/promotions/{id}`, update/delete/issue, coupon apply for another
+  tenant's row) resolves to empty → **404** (existence hidden), never 403.
+- **M5 — async propagation (outbox)**: `CouponUsed` / `CouponExpired` outbox
+  envelopes carry `tenant_id` (see
+  [promotion-events.md](../../contracts/events/promotion-events.md)). The consumed
+  `OrderCancelled` envelope's `tenant_id` (optional until order-service migrates) is
+  bound to the context for the coupon-restore; absent → default tenant.
+- **System/batch paths stay tenant-agnostic** (mirrors order-service
+  `findByIdAcrossTenants`): the coupon-expiration sweep (`findExpiredIssuedCoupons`)
+  and the `OrderCancelled` recovery (`findByOrderIdAndStatus`, `orderId` globally
+  unique) operate across tenants by unique id, preserve the mutated row's
+  `tenant_id`, and stamp the published event with that row's tenant.
+- **M6 — cross-tenant-leak regression IT**: `MultiTenantIsolationIntegrationTest`
+  (Testcontainers PostgreSQL) proves tenant A's promotions/coupons are invisible to
+  a tenant B context (list exclusion + 404 single-read) and that a missing
+  `X-Tenant-Id` resolves to the default tenant.
+- **net-zero / standalone (D8)**: the V6 migration backfills all pre-existing rows
+  to the default tenant `'ecommerce'`; an unset context resolves to that default —
+  single-store behavior byte-identical. Multi-tenancy is additive; **fail-closed is
+  prohibited**.
+
+> The operator-plane reads (`/api/promotions`) are now tenant-scoped — the backend
+> prerequisite (ADR-MONO-031 Phase 3a) that gates the platform-console
+> promotions-area absorption (Phase 3b, full CRUD).
+
 ## Testing Expectations
 Required emphasis:
 - aggregate and domain rule tests
