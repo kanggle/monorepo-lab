@@ -203,3 +203,33 @@ export function useCancelOrder() {
     },
   });
 }
+
+// --- TMS retry (TASK-PC-FE-087 — reason-free admin action). The proxy
+//     resolves the shipmentId server-side from the admin read-model. ---------
+
+interface RetryTmsArgs {
+  orderId: string;
+  /** Stable per the confirmed retry; fresh per a new confirmed attempt. */
+  idempotencyKey: string;
+}
+
+export function useRetryTms() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, idempotencyKey }: RetryTmsArgs) => {
+      // Reason-free (re-notify only). The proxy resolves the shipmentId from
+      // the admin read-model, then POSTs the retry with the Idempotency-Key.
+      const raw = await apiClient.post<unknown>(
+        `/api/wms/outbound/${encodeURIComponent(orderId)}/retry-tms`,
+        { idempotencyKey },
+      );
+      return raw;
+    },
+    onSuccess: (_data, { orderId }) => {
+      // Refetch the orders list + the drilled order so the recovered saga
+      // (SHIPPED_NOT_NOTIFIED → COMPLETED) + tmsStatus reflect.
+      qc.invalidateQueries({ queryKey: [OUTBOUND_KEY, 'orders'] });
+      qc.invalidateQueries({ queryKey: [OUTBOUND_KEY, 'drill', orderId] });
+    },
+  });
+}

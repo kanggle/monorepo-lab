@@ -56,6 +56,7 @@ import { POST as pickPOST } from '@/app/api/wms/outbound/[orderId]/pick/route';
 import { POST as packPOST } from '@/app/api/wms/outbound/[orderId]/pack/route';
 import { POST as shipPOST } from '@/app/api/wms/outbound/[orderId]/ship/route';
 import { POST as cancelPOST } from '@/app/api/wms/outbound/[orderId]/cancel/route';
+import { POST as retryPOST } from '@/app/api/wms/outbound/[orderId]/retry-tms/route';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -506,6 +507,127 @@ describe('POST /api/wms/outbound/{orderId}:cancel (TASK-PC-FE-085)', () => {
       cancelReq({ reason: '취소 사유', idempotencyKey: 'k' }),
       { params: Promise.resolve({ orderId: 'o-1' }) },
     );
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('POST /api/wms/outbound/{orderId}/retry-tms (TASK-PC-FE-087)', () => {
+  function retryReq(body: unknown) {
+    return new Request('http://console.local/api/wms/outbound/o-1/retry-tms', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  const SHIPMENT_PAGE = {
+    content: [{ shipmentId: 'shp-1' }],
+    page: { number: 0, size: 1, totalElements: 1, totalPages: 1 },
+  };
+
+  it('resolves the shipmentId from the admin read-model THEN POSTs the retry (domain-facing token, Idempotency-Key, reason-free)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).includes(':retry-tms-notify') && init?.method === 'POST') {
+        return Promise.resolve(
+          jsonResponse({
+            shipmentId: 'shp-1',
+            tmsStatus: 'NOTIFIED',
+            sagaState: 'COMPLETED',
+          }),
+        );
+      }
+      // admin read-model shipment lookup
+      return Promise.resolve(jsonResponse(SHIPMENT_PAGE));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await retryPOST(retryReq({ idempotencyKey: 'idem-retry-1' }), {
+      params: Promise.resolve({ orderId: 'o-1' }),
+    });
+    expect(res.status).toBe(200);
+
+    // (1) the admin lookup hits /api/v1/admin/dashboard/shipments?orderId=o-1
+    const adminCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/dashboard/shipments'),
+    )!;
+    expect(adminCall).toBeDefined();
+    const adminUrl = new URL(String(adminCall[0]));
+    expect(adminUrl.pathname).toContain('/api/v1/admin/dashboard/shipments');
+    expect(adminUrl.searchParams.get('orderId')).toBe('o-1');
+    const adminH = (adminCall[1] as RequestInit).headers as Record<string, string>;
+    expect(adminH.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(adminH['Idempotency-Key']).toBeUndefined(); // it's a read
+
+    // (2) the retry hits the OUTBOUND base, shipment-keyed, with the key
+    const retryCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes(':retry-tms-notify'),
+    )!;
+    expect(retryCall).toBeDefined();
+    expect(String(retryCall[0])).toContain(
+      '/api/v1/outbound/shipments/shp-1:retry-tms-notify',
+    );
+    const init = retryCall[1] as RequestInit;
+    const h = init.headers as Record<string, string>;
+    expect(init.method).toBe('POST');
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['Idempotency-Key']).toBe('idem-retry-1');
+    expect(h['X-Operator-Reason']).toBeUndefined();
+  });
+
+  it('no shipment resolves for the order → 404 SHIPMENT_NOT_FOUND (NO outbound retry POST)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ content: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await retryPOST(retryReq({ idempotencyKey: 'k' }), {
+      params: Promise.resolve({ orderId: 'o-1' }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.code).toBe('SHIPMENT_NOT_FOUND');
+    expect(
+      fetchMock.mock.calls.some((c) =>
+        String(c[0]).includes(':retry-tms-notify'),
+      ),
+    ).toBe(false);
+  });
+
+  it('no IAM session → 401 (no upstream call)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await retryPOST(retryReq({ idempotencyKey: 'k' }), {
+      params: Promise.resolve({ orderId: 'o-1' }),
+    });
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('a body without idempotencyKey → 422 (no upstream call)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await retryPOST(retryReq({}), {
+      params: Promise.resolve({ orderId: 'o-1' }),
+    });
+    expect(res.status).toBe(422);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('403 FORBIDDEN (needs OUTBOUND_ADMIN) → 403 passthrough', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn((url: string, init?: RequestInit) =>
+      String(url).includes(':retry-tms-notify') && init?.method === 'POST'
+        ? Promise.resolve(wmsError('FORBIDDEN', 403))
+        : Promise.resolve(jsonResponse(SHIPMENT_PAGE)),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await retryPOST(retryReq({ idempotencyKey: 'k' }), {
+      params: Promise.resolve({ orderId: 'o-1' }),
+    });
     expect(res.status).toBe(403);
   });
 });

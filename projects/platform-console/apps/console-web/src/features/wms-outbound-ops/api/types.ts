@@ -253,6 +253,39 @@ export const CancelResultSchema = z
   .passthrough();
 export type CancelResult = z.infer<typeof CancelResultSchema>;
 
+// --- 4.3 manual TMS retry response (TASK-PC-FE-087) -----------------------
+// Tolerant: every field optional + passthrough. On success the producer
+// returns `tmsStatus: NOTIFIED` + `sagaState: COMPLETED` (recovery); a still-
+// failed retry leaves `tmsStatus: NOTIFY_FAILED` (saga stays
+// `SHIPPED_NOT_NOTIFIED`) — the UI reads these to reflect the outcome.
+export const TmsRetryResultSchema = z
+  .object({
+    shipmentId: z.string().optional(),
+    tmsStatus: z.string().optional(),
+    tmsNotifiedAt: z.string().nullable().optional(),
+    trackingNo: z.string().nullable().optional(),
+    sagaState: z.string().optional(),
+    retriedAt: z.string().nullable().optional(),
+    retriedBy: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type TmsRetryResult = z.infer<typeof TmsRetryResultSchema>;
+
+// --- admin shipment-id resolver shape (TASK-PC-FE-087) -------------------
+// TMS retry operates on a `shipmentId`, but the outbound order-centric reads
+// carry none (§ 1.2 detail = create-response shape; no `GET /orders/{id}/
+// shipments`). The id is resolved from the admin read-model
+// `GET /api/v1/admin/dashboard/shipments?orderId={id}` (admin-service-api.md
+// § 1.3 — same wms gateway + IAM-OIDC credential, distinct path prefix).
+// Minimal + tolerant: only `shipmentId` matters; unknown fields pass through.
+export const AdminShipmentRefSchema = z
+  .object({ shipmentId: z.string() })
+  .passthrough();
+export const AdminShipmentRefPageSchema = z
+  .object({ content: z.array(AdminShipmentRefSchema) })
+  .passthrough();
+export type AdminShipmentRefPage = z.infer<typeof AdminShipmentRefPageSchema>;
+
 // --- query params + pagination defaults ----------------------------------
 
 export const OUTBOUND_DEFAULT_PAGE_SIZE = 20;
@@ -302,4 +335,18 @@ export function canCancel(status: string | undefined): boolean {
 const POST_PICK_STATES = new Set(['PICKED', 'PACKING', 'PACKED']);
 export function cancelNeedsAdmin(status: string | undefined): boolean {
   return status !== undefined && POST_PICK_STATES.has(status);
+}
+
+/** Manual TMS retry (TASK-PC-FE-087) is reachable ONLY for a SHIPPED order
+ *  whose saga is `SHIPPED_NOT_NOTIFIED` (the producer allows § 4.3 only when
+ *  `Shipment.tmsStatus == NOTIFY_FAILED`; the saga state is the order-level
+ *  read signal — the admin `ShipmentSummary` read-model does not project
+ *  `tmsStatus`). A healthy SHIPPED order (saga `COMPLETED`) and any non-SHIPPED
+ *  status gate the action off. Producer is the final authority (a 422
+ *  STATE_TRANSITION_INVALID is still handled inline). */
+export function canRetryTms(
+  status: string | undefined,
+  saga: string | null | undefined,
+): boolean {
+  return status === 'SHIPPED' && saga === 'SHIPPED_NOT_NOTIFIED';
 }

@@ -360,13 +360,14 @@ the **§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
   | 7 | **seal packing unit** | `PATCH /packing-units/{id}` (§ 3.2, `seal:true`) | **mutation** | `OUTBOUND_WRITE` |
   | 8 | **confirm shipping** | `POST /orders/{id}/shipments` (§ 4.1) | **mutation** | `OUTBOUND_WRITE` |
   | 9 | **cancel order** | `POST /orders/{id}:cancel` (§ 1.4) | **mutation** | `OUTBOUND_WRITE` (PICKING) / `OUTBOUND_ADMIN` (post-pick) |
+  | 10 | **retry TMS notify** | `POST /shipments/{id}:retry-tms-notify` (§ 4.3) | **mutation** | `OUTBOUND_ADMIN` |
 
-  The wms outbound **manual order-create** (`POST /orders`, § 1.1) and **TMS
-  retry** (§ 4.3, `OUTBOUND_ADMIN`) remain **out of v1 console scope** —
-  deferred, not silently dropped (manual create contradicts the auto-create-
-  from-ecommerce model; TMS retry is a separate admin op). The console outbound
+  The wms outbound **manual order-create** (`POST /orders`, § 1.1) remains
+  **out of v1 console scope** — deferred, not silently dropped (manual create
+  contradicts the auto-create-from-ecommerce model). The console outbound
   surface = the read set + the forward pick→pack→ship lifecycle advance + the
-  cancel action (op 9, TASK-PC-FE-085).
+  cancel action (op 9, TASK-PC-FE-085) + the TMS-retry recovery action
+  (op 10, TASK-PC-FE-087).
 
   **Cancel (op 9 — the one NON-forward action; TASK-PC-FE-085) mutation shape**
   (consumes producer § 1.4 unchanged; diverges from the reason-free ops 5–8 in
@@ -390,6 +391,40 @@ the **§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
     terminal `CANCELLED`) when a reservation was held; it transitions to
     `CANCELLED` later once `inventory.released` is consumed. The UI surfaces a
     non-blocking "재고 해제 대기" hint, never asserting a synchronous terminal.
+
+  **TMS retry (op 10 — the recovery admin action; TASK-PC-FE-087) mutation
+  shape** (consumes producer § 4.3 unchanged; the recovery sibling to cancel —
+  re-triggers the carrier notification for a shipped order whose TMS notify
+  failed):
+  - **trigger signal** — surfaced ONLY for an order with `status=SHIPPED` AND
+    saga **`SHIPPED_NOT_NOTIFIED`** (producer allows § 4.3 only when the
+    shipment `tmsStatus == NOTIFY_FAILED`; the order saga state is the
+    order-level read signal — the admin `ShipmentSummary` read-model does NOT
+    project `tmsStatus`, so the saga (op 3) is authoritative for "needs retry").
+  - **shipment-id resolution (the net-new mechanic — NOT a producer change)** —
+    § 4.3 is **shipment-keyed**, but the outbound order-centric reads carry no
+    `shipmentId` (§ 1.2 order detail = create-response shape; there is no
+    `GET /orders/{id}/shipments`). The proxy resolves it server-side from the
+    **admin read-model** `GET /api/v1/admin/dashboard/shipments?orderId={id}`
+    (admin-service-api.md § 1.3 — the `orderId` filter is contracted) → first
+    `shipmentId`. This reads `WMS_ADMIN_BASE_URL` (§ 2.4.5) with the **SAME**
+    IAM-OIDC domain-facing credential as the outbound mutation — same wms
+    gateway, distinct `/api/v1/admin` vs `/api/v1/outbound` path prefix. No
+    shipment resolves → `404 SHIPMENT_NOT_FOUND` inline (NO outbound retry POST
+    is fired).
+  - **reason-free** — re-notifies the carrier only (stock already consumed),
+    UNLIKE cancel's required reason. Empty/`{}` body + an `Idempotency-Key`
+    (UUID, stable per a confirmed retry / fresh per a new attempt). NO
+    `X-Operator-Reason` (the wms surface still has none).
+  - **role** — producer-enforced **`OUTBOUND_ADMIN`** (no escalation matrix,
+    UNLIKE cancel). The console does NOT pre-gate on role — it attempts and maps
+    a `403 FORBIDDEN` to an inline actionable state, plus a pre-emptive "needs
+    OUTBOUND_ADMIN" hint.
+  - **outcomes** — success: `tmsStatus → NOTIFIED`, `sagaState → COMPLETED`
+    (recovery). Not in `NOTIFY_FAILED` → `422 STATE_TRANSITION_INVALID`. Same
+    `Idempotency-Key` re-retry → `409 DUPLICATE_REQUEST` (idempotent no-op — no
+    double carrier notification). A still-failing carrier leaves the shipment
+    `NOTIFY_FAILED` / saga `SHIPPED_NOT_NOTIFIED` → the action stays available.
 
   § 3 parity matrix **not** mutated (additive non-IAM domain mutation, like the
   rest of § 2.4.5.1).

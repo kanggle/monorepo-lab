@@ -640,3 +640,149 @@ describe('OutboundOpsScreen — cancel action (TASK-PC-FE-085)', () => {
     );
   });
 });
+
+describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
+  async function drillInto(
+    user: ReturnType<typeof userEvent.setup>,
+    seedStatus: string,
+  ) {
+    render(
+      <OutboundOpsScreen
+        orders={{ ...ORDERS, content: [order({ status: seedStatus })] }}
+      />,
+      { wrapper: wrapper() },
+    );
+    await user.click(screen.getByTestId('outbound-drill-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-drill')).toBeInTheDocument(),
+    );
+  }
+
+  it('shows the TMS retry action ONLY for SHIPPED + SHIPPED_NOT_NOTIFIED (with admin note)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED')),
+      ),
+    );
+    const user = userEvent.setup();
+    await drillInto(user, 'SHIPPED');
+    expect(screen.getByTestId('outbound-action-retry-tms')).toBeInTheDocument();
+    expect(screen.getByTestId('outbound-retry-admin-note')).toBeInTheDocument();
+    // It is the recovery action — the cancel button is absent for SHIPPED.
+    expect(
+      screen.queryByTestId('outbound-action-cancel-order'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the TMS retry action for a healthy SHIPPED order (saga COMPLETED)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(drillEnvelope('SHIPPED', 'COMPLETED'))),
+    );
+    const user = userEvent.setup();
+    await drillInto(user, 'SHIPPED');
+    expect(
+      screen.queryByTestId('outbound-action-retry-tms'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the TMS retry action for a non-SHIPPED order (PACKED)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(drillEnvelope('PACKED', 'PACKING_CONFIRMED')),
+      ),
+    );
+    const user = userEvent.setup();
+    await drillInto(user, 'PACKED');
+    expect(
+      screen.queryByTestId('outbound-action-retry-tms'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('confirming retry posts (reason-free) to the retry-tms proxy with an Idempotency-Key', async () => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
+      Promise.resolve(
+        String(url).includes('/retry-tms')
+          ? jsonResponse({ tmsStatus: 'NOTIFIED', sagaState: 'COMPLETED' })
+          : jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED')),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await drillInto(user, 'SHIPPED');
+
+    await user.click(screen.getByTestId('outbound-action-retry-tms'));
+    expect(screen.getByTestId('outbound-action-dialog')).toBeInTheDocument();
+    await user.click(screen.getByTestId('outbound-action-confirm'));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => String(c[0]).includes('/retry-tms')),
+      ).toBe(true),
+    );
+    const call = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/retry-tms'),
+    )!;
+    const init = call[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string);
+    expect(body.idempotencyKey).toBeTruthy();
+    // Reason-free — the retry surface carries no reason.
+    expect(body.reason).toBeUndefined();
+  });
+
+  it('404 SHIPMENT_NOT_FOUND → inline error (no crash)', async () => {
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(
+        String(url).includes('/retry-tms')
+          ? new Response(
+              JSON.stringify({ code: 'SHIPMENT_NOT_FOUND', message: 'x' }),
+              { status: 404, headers: { 'Content-Type': 'application/json' } },
+            )
+          : jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED')),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await drillInto(user, 'SHIPPED');
+
+    await user.click(screen.getByTestId('outbound-action-retry-tms'));
+    await user.click(screen.getByTestId('outbound-action-confirm'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-action-error')).toHaveTextContent(
+        '출고 건을 찾을 수 없습니다',
+      ),
+    );
+    expect(
+      screen.getByRole('heading', { name: 'WMS 출고 운영' }),
+    ).toBeInTheDocument();
+  });
+
+  it('403 FORBIDDEN (non-admin) → inline permission message', async () => {
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(
+        String(url).includes('/retry-tms')
+          ? new Response(JSON.stringify({ code: 'FORBIDDEN', message: 'x' }), {
+              status: 403,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          : jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED')),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await drillInto(user, 'SHIPPED');
+
+    await user.click(screen.getByTestId('outbound-action-retry-tms'));
+    await user.click(screen.getByTestId('outbound-action-confirm'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-action-error')).toHaveTextContent(
+        '권한',
+      ),
+    );
+  });
+});

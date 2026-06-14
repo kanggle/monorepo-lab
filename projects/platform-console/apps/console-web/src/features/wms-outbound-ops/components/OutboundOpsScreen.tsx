@@ -10,6 +10,7 @@ import {
   usePackAction,
   useShipAction,
   useCancelOrder,
+  useRetryTms,
 } from '../hooks/use-outbound-ops';
 import {
   OUTBOUND_DEFAULT_PAGE_SIZE,
@@ -18,6 +19,7 @@ import {
   canShip,
   canCancel,
   cancelNeedsAdmin,
+  canRetryTms,
   type OutboundOrderPage,
   type OutboundListParams,
 } from '../api/types';
@@ -103,6 +105,23 @@ function cancelErrorMessage(code: string): string {
   }
 }
 
+/** TMS-retry-specific producer error → inline operator message (§ 4.3 +
+ *  the proxy's SHIPMENT_NOT_FOUND). */
+function retryTmsErrorMessage(code: string): string {
+  switch (code) {
+    case 'SHIPMENT_NOT_FOUND':
+      return '출고 건을 찾을 수 없습니다. TMS 재전송 대상이 없습니다.';
+    case 'STATE_TRANSITION_INVALID':
+      return '이미 정상 통보되었거나 재전송 대상 상태가 아닙니다. 목록을 새로고침하세요.';
+    case 'FORBIDDEN':
+      return 'TMS 재전송 권한이 없습니다. 관리자(OUTBOUND_ADMIN) 권한이 필요합니다.';
+    case 'DUPLICATE_REQUEST':
+      return '이미 재전송 요청이 접수되었습니다 (중복 무시).';
+    default:
+      return messageForCode(code, 'TMS 재전송을 처리하지 못했습니다.');
+  }
+}
+
 export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
   const statusFid = useId();
 
@@ -157,6 +176,15 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
   } | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelConflict, setCancelConflict] = useState(false);
+
+  // --- TMS retry dialog (reason-free admin action; shipment-id resolved
+  //     server-side from the admin read-model) -------------------------------
+  const retry = useRetryTms();
+  const [retryTarget, setRetryTarget] = useState<{
+    orderId: string;
+    idempotencyKey: string;
+  } | null>(null);
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   const activeMutation =
     action?.kind === 'pick' ? pick : action?.kind === 'pack' ? pack : ship;
@@ -250,6 +278,31 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
     );
   }
 
+  function openRetry(orderId: string) {
+    setRetryError(null);
+    // A fresh confirmed attempt → a fresh Idempotency-Key.
+    setRetryTarget({ orderId, idempotencyKey: crypto.randomUUID() });
+  }
+
+  function confirmRetry() {
+    if (!retryTarget) return;
+    retry.mutate(
+      { orderId: retryTarget.orderId, idempotencyKey: retryTarget.idempotencyKey },
+      {
+        onSuccess: () => {
+          // The drill refetch reflects the recovered saga (→ COMPLETED) /
+          // tmsStatus; if it stayed NOT_NOTIFIED the action re-appears.
+          setRetryTarget(null);
+          setRetryError(null);
+        },
+        onError: (e) => {
+          const code = e instanceof ApiError ? e.code : 'SERVICE_UNAVAILABLE';
+          setRetryError(retryTmsErrorMessage(code));
+        },
+      },
+    );
+  }
+
   function submitStatusFilter(e: React.FormEvent) {
     e.preventDefault();
     setQuery({
@@ -274,6 +327,11 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
   const packEnabled = useMemo(() => canPack(drillStatus), [drillStatus]);
   const shipEnabled = useMemo(() => canShip(drillStatus), [drillStatus]);
   const cancelVisible = useMemo(() => canCancel(drillStatus), [drillStatus]);
+  // TMS retry: SHIPPED order whose saga is stuck at SHIPPED_NOT_NOTIFIED.
+  const retryVisible = useMemo(
+    () => canRetryTms(drillStatus, drillSagaState),
+    [drillStatus, drillSagaState],
+  );
   // Async-cancel hint: order CANCELLED but the saga still releasing inventory.
   const cancelPending = useMemo(
     () =>
@@ -611,6 +669,28 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
                   {`취소 요청됨 · 예약 재고 해제 대기 (saga: ${drillSaga.state}).`}
                 </p>
               )}
+
+              {/* TMS retry — the recovery admin action for a shipped order whose
+                  carrier notification failed (saga SHIPPED_NOT_NOTIFIED). */}
+              {retryVisible && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => openRetry(drillDetail.orderId)}
+                    disabled={retry.isPending}
+                    data-testid="outbound-action-retry-tms"
+                  >
+                    TMS 재전송
+                  </Button>
+                  <span
+                    className="text-xs text-muted-foreground"
+                    data-testid="outbound-retry-admin-note"
+                  >
+                    출고는 완료됐지만 택배사 통보가 실패했습니다. 재전송은
+                    관리자(OUTBOUND_ADMIN) 권한이 필요합니다.
+                  </span>
+                </div>
+              )}
               {!pickEnabled && drillStatus === 'PICKING' && (
                 <p
                   className="mt-2 text-xs text-muted-foreground"
@@ -653,6 +733,21 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
           setCancelTarget(null);
           setCancelError(null);
           setCancelConflict(false);
+        }}
+      />
+
+      {/* TMS retry confirm — reason-free (reuse the generic action dialog). */}
+      <OutboundActionDialog
+        open={retryTarget !== null}
+        title="TMS 재전송을 시도할까요?"
+        description="택배사(TMS) 통보를 다시 시도합니다. 재고는 이미 차감되어 있고, 통보만 재전송됩니다. 성공하면 saga 가 COMPLETED 로 회복됩니다. 관리자(OUTBOUND_ADMIN) 권한이 필요합니다."
+        confirmLabel="TMS 재전송"
+        pending={retry.isPending}
+        errorMessage={retryError}
+        onConfirm={confirmRetry}
+        onCancel={() => {
+          setRetryTarget(null);
+          setRetryError(null);
         }}
       />
     </section>
