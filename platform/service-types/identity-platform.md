@@ -71,10 +71,10 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 ## Access Token
 
 - Format: signed JWT (RS256 or stronger; HS256 forbidden for cross-service use)
-- Lifetime: **5 to 15 minutes** depending on account type
-  - OPERATOR: 5 minutes (short-lived; high-privilege)
-  - CONSUMER: 15 minutes
-- Required claims: `iss`, `sub`, `aud`, `iat`, `exp`, `kid` (in JOSE header), `jti`, `account_type`, `scope`
+- Lifetime: **5 to 15 minutes** depending on the requested surface's capability
+  - operator-facing platforms (wms, erp, mes, scm, ecommerce admin surface): 5 minutes (short-lived; high-privilege)
+  - consumer-facing surfaces (ecommerce customer, fan-platform): 15 minutes
+- Required claims: `iss`, `sub`, `aud`, `iat`, `exp`, `kid` (in JOSE header), `jti`, `roles`, `scope`. (`account_type` is **deprecated** — migration-only per ADR-MONO-032; see the JWT Standard Claims contract § Migration Compatibility. `roles` is the authorization axis.)
 - The `aud` claim MUST identify the target platform (e.g., `wms`, `ecommerce`). A token issued for one platform is invalid for another.
 - Access tokens are NOT stored server-side. Validation is stateless via JWKS.
 
@@ -82,8 +82,8 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 
 - Format: opaque, server-side stored (NOT a self-contained JWT). The platform MUST be able to revoke a single refresh token without rotating signing keys.
 - Lifetime:
-  - OPERATOR: 8 hours maximum (short session)
-  - CONSUMER: 30 days, sliding via rotation
+  - operator-facing surfaces: 8 hours maximum (short session)
+  - consumer-facing surfaces: 30 days, sliding via rotation
 - Refresh tokens MUST rotate on every use. The previous token in the rotation chain MUST be invalidated atomically with the issuance of the new one.
 - **Reuse detection**: if a refresh token is presented after it has already been rotated, the entire refresh-token family MUST be revoked and the user re-prompted to authenticate. This event MUST be audited and alerted.
 
@@ -126,37 +126,34 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 
 ---
 
-# Account Type Rules
+# Identity & Role Capability Rules
 
-The platform recognizes two mutually exclusive account types. The `account_type` claim is set at issuance and is immutable for the life of the account.
+> **Unified identity model (ADR-MONO-032, ACCEPTED 2026-06-14).** The platform has a **single kind of account** — an identity (`sub`) authorized by a **set of roles**. There is no immutable account-type partition. The former CONSUMER/OPERATOR account types are now **role capabilities** an identity may hold, and one identity may hold **both**. The `account_type` claim is deprecated (migration-only); `roles` is the authorization axis. See the JWT Standard Claims contract § Identity Model.
 
-## CONSUMER
+## Consumer-facing capability
 
-- Represents end users of the downstream platforms.
+- Roles such as ecommerce `CUSTOMER`, fan-platform `FAN`/`PREMIUM_MEMBER`. Represent end users of the downstream platforms.
 - MAY authenticate via social-login providers (Google, Apple, Kakao, etc.) in addition to local credentials.
-- Long-lived sessions (refresh token up to 30 days, sliding).
-- Lower-privilege scopes; cannot access OPERATOR-scoped resources regardless of token validity.
+- Long-lived sessions (refresh token up to 30 days, sliding) for consumer-facing surfaces.
 
-## OPERATOR
+## Operator-facing capability
 
-- Represents internal staff (admins, support, warehouse operators, finance, etc.).
-- MUST authenticate with local credentials (or enterprise SSO via OIDC federation, NOT consumer-grade social login).
-- Short-lived sessions (refresh token 8 hours; access token 5 minutes).
-- MUST require multi-factor authentication for sensitive scopes.
-- All authentication and high-privilege actions MUST be audited with elevated retention.
+- Roles such as `WMS_OPERATOR`, ecommerce `ADMIN`, `TENANT_ADMIN`, finance/support roles. Represent internal staff.
+- For operator-facing surfaces: MUST authenticate with local credentials (or enterprise SSO via OIDC federation, NOT consumer-grade social login); MUST require multi-factor authentication for sensitive scopes; short-lived sessions (refresh 8h; access 5min); all authentication and high-privilege actions MUST be audited with elevated retention.
 
-## Cross-Type Prohibitions
+## One identity, both capabilities
 
-- A single account MUST be exactly one type. Type cannot be changed; a new account is created.
-- Tokens issued for CONSUMER MUST NOT be accepted by OPERATOR-only resources, and vice versa. Relying parties enforce this on the `account_type` claim.
+- A single identity MAY hold both consumer-facing and operator-facing roles (e.g., a staff member who also shops on the e-commerce platform). This is **one account**, not two — the former "must provision separate accounts" rule is removed.
+- Per-token least privilege is preserved by `aud`-scoping: each token is for one platform and carries only that platform's roles. Relying parties authorize by **role presence** for the requested surface (they check `roles`, not `account_type`).
+- Operator-facing surfaces remain protected by their role requirement + MFA + RBAC/ABAC defense-in-depth; a consumer-facing token (different `aud`, consumer roles) cannot reach them.
 
 ---
 
 # SSO Scope Rules
 
-- SSO is permitted **within an account type** across multiple platforms. A CONSUMER signing in to platform A MAY receive a token for platform B in the same browser session, subject to consent and `aud` scoping.
-- SSO is forbidden **across account types**. A CONSUMER session MUST NOT yield an OPERATOR token, and an OPERATOR session MUST NOT yield a CONSUMER token, even for the same human identity.
-- An OPERATOR who is also a CONSUMER (e.g., a staff member who shops on the e-commerce platform) MUST hold two separate accounts and authenticate independently for each.
+- SSO is scoped by **role possession on the target platform**. An identity MAY receive a token for any platform on which it holds ≥ 1 role, in the same browser session, subject to consent and `aud` scoping.
+- There is **no cross-type SSO prohibition** (removed by ADR-MONO-032). The unified identity holds whatever capabilities its roles grant, and each `aud` token is independently `aud`-scoped to that platform's roles.
+- A staff member who also shops uses **one account** and MAY hold both an operator-facing token (for their work platform) and a consumer-facing token (for the storefront) in one session — each token carries only its own platform's roles.
 
 ---
 
@@ -198,12 +195,12 @@ Every event below MUST produce an immutable audit record. Audit records MUST be 
 
 | Event | Required Fields |
 |---|---|
-| Login attempt (success and failure) | `accountId` (if known), `accountType`, `clientId`, `ip`, `userAgent`, `outcome`, `failureReason` |
+| Login attempt (success and failure) | `accountId` (if known), `roles`, `clientId`, `ip`, `userAgent`, `outcome`, `failureReason` |
 | Token issuance | `accountId`, `aud`, `scope`, `tokenType`, `kid`, `jti`, `expiresAt` |
 | Token refresh | `accountId`, `previousJti`, `newJti`, `aud` |
 | Refresh-token reuse detection | `accountId`, `familyId`, all `jti`s revoked, originating `ip`/`userAgent` |
 | Token revocation | `accountId`, `jti`, `reason` |
-| Account creation / modification / deactivation | `accountId`, `actorId`, `accountType`, changed fields |
+| Account creation / modification / deactivation | `accountId`, `actorId`, `roles`, changed fields |
 | Key rotation | `previousKid`, `newKid`, `rotationReason`, `actorId` |
 | Admin action against an account (lock, unlock, force-logout) | `accountId`, `actorId`, `action`, `justification` |
 
@@ -224,13 +221,13 @@ A relying party MUST:
 1. Resolve the JWKS URL from the OIDC discovery document at startup.
 2. Cache the JWKS response (recommended TTL: 1 hour) and refresh on `kid`-not-found.
 3. Validate every incoming bearer token: signature (via `kid`), `iss`, `aud` (matches its own platform), `exp`, `nbf` (if present).
-4. Reject tokens whose `account_type` does not match the resource policy (CONSUMER tokens MUST NOT pass OPERATOR-only routes).
+4. Authorize by **role presence** for the requested surface: admit iff `roles` contains a role valid for the route, otherwise reject (403). (During the ADR-MONO-032 migration window a relying party MAY accept legacy `account_type`-based OR role-based admission — see the JWT Standard Claims contract § Migration Compatibility. `account_type` is deprecated and MUST NOT be the sole gate once role-based admission is deployed.)
 5. For high-privilege endpoints, OPTIONALLY call `/v1/oauth/introspect` to confirm the refresh-token family has not been revoked. Document this on a per-endpoint basis in the relying party's service spec.
 
 ## How the Gateway Integrates
 
 - The `gateway-service` of each downstream platform performs JWT validation at the edge using JWKS.
-- The gateway propagates the validated `accountId`, `accountType`, and `scope` claims as trusted internal headers (e.g., `X-User-Id`, `X-Account-Type`) to downstream services. Downstream services trust these headers ONLY when received via the gateway, never when received directly from the public internet.
+- The gateway propagates the validated `accountId`, `roles`, and `scope` as trusted internal headers (e.g., `X-User-Id`, `X-User-Role`) to downstream services. Downstream services trust these headers ONLY when received via the gateway, never when received directly from the public internet. (`X-Account-Type` is no longer injected — the claim is deprecated per ADR-MONO-032; downstream services derive any consumer-vs-operator distinction from `X-User-Role`.)
 - The gateway MUST NOT mint tokens. It is purely a relying party.
 
 ## Federated / External Identity Providers
