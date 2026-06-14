@@ -1,6 +1,6 @@
 # TASK-PC-FE-089 — console ecommerce **notification template** operator surface (ADR-031 Phase 5b)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Feature:** `features/ecommerce-ops` (notifications slice)
 **Parent:** ADR-MONO-031 Phase 5 (absorb ecommerce admin-dashboard notification surface into the unified console)
 **Precondition:** TASK-BE-373 (notification-service row-level `tenant_id` + `GET /templates/{id}` gap-fill) — the §2.4.10 tenant-isolation gate.
