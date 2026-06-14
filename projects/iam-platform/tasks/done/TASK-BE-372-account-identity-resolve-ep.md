@@ -8,7 +8,9 @@ account-service internal **identity resolve** read EP (`GET /internal/tenants/{t
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: PR #1550 squash `37a5bf6b1` — account-service identity resolve EP `GET /internal/tenants/{tid}/accounts/{aid}/identity` (ADR-MONO-034 U6 step 3b). AccountJpaRepository native projection(`identity_id` unmapped→merge-overwrite 0) + AccountRepository.findIdentityId + GetAccountIdentityUseCase + AccountIdentityController/Response(enumeration-safe 200 null) + 계약 문서화. **net-zero**(caller 0=3c가 첫 소비). **re-sequencing**: credentials.identity_id→step4 이동(U2 충실, login-path 작업). 3-dim verified(MERGED·`37a5bf6b1`·origin/main tip 일치·**Integration iam Testcontainers 2m16s**=native 쿼리 V0023 검증). Docker-free GetAccountIdentityUseCaseTest GREEN. 다음=step 3c(admin_operators.identity_id + opt-in 링크 surface). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
