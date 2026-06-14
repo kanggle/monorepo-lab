@@ -8,7 +8,7 @@ TASK-FIN-BE-027
 
 # Status
 
-ready
+done
 
 # Owner
 
