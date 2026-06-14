@@ -83,11 +83,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## in-progress
 
-- `TASK-PC-FE-079-console-wms-shipments-carrier-read-surface.md` — surfaces the already-contracted (§ 2.4.5 row 5) wms shipments / 택배 read on `/wms` (carrier code · tracking no · shipped-at). Read-only; no contract/mutation change. Impl + tests complete on `task/pc-fe-079-wms-shipments-console-surface` (console-web tsc/lint/vitest GREEN — 1442 unit).
+(empty)
 
 ## review
 
-(empty)
+- `TASK-PC-FE-079-console-wms-shipments-carrier-read-surface.md` — surfaces the already-contracted (§ 2.4.5 row 5) wms shipments / 택배 read on `/wms` (carrier code · tracking no · shipped-at). Read-only; no contract/mutation change. Impl + tests on `task/pc-fe-079-wms-shipments-console-surface` (rebased onto current main; console-web tsc/lint/vitest GREEN — 1442 unit).
 
 ## done
 
