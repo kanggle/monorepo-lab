@@ -10,9 +10,13 @@ import NextAuth, { type NextAuthConfig } from 'next-auth';
  *                    http://web.ecommerce.local/api/auth/callback/iam
  *   - scopes:        openid profile email tenant.read ecommerce.consumer
  *
- * web-store is the consumer-facing storefront. The `account_type` claim from
- * GAP must be `CONSUMER`; an `OPERATOR` who completes GAP login is rejected at
- * the session callback and redirected to `/login?error=account_type_mismatch`.
+ * web-store is the consumer-facing storefront. The token's `roles` must include
+ * `CUSTOMER`; an operator (whose ecommerce token carries `ADMIN` / no `CUSTOMER`)
+ * is rejected at the sign-in + session callbacks and redirected to
+ * `/login?error=account_type_mismatch`. ADR-MONO-035 (4b-1): the storefront guard
+ * is **role-based** — the legacy `account_type` claim is being removed in
+ * ADR-MONO-032 D5 step 4, so consumer-vs-operator is decided by role presence
+ * (`CUSTOMER`), not the deprecated `account_type` partition.
  *
  * Token storage: HttpOnly JWT cookie. The bearer token is exposed only via the
  * server-side `getSession()` helper in `./session.ts`. Client components
@@ -39,7 +43,18 @@ interface IamOidcProfile {
   roles?: string[];
 }
 
-const ALLOWED_ACCOUNT_TYPE = 'CONSUMER';
+/**
+ * ADR-MONO-035 (4b-1): the storefront requires the `CUSTOMER` role. Consumers
+ * carry it (RoleSeedPolicy `ecommerce → CUSTOMER`, or a stored `account_roles`
+ * grant); operators carry `ADMIN` / no `CUSTOMER`. Role-based replaces the
+ * legacy `account_type === 'CONSUMER'` check (ADR-MONO-032 D5 step 4 removes
+ * `account_type`).
+ */
+const REQUIRED_CONSUMER_ROLE = 'CUSTOMER';
+
+function hasConsumerRole(roles: string[] | undefined | null): boolean {
+  return Array.isArray(roles) && roles.includes(REQUIRED_CONSUMER_ROLE);
+}
 
 export const authConfig: NextAuthConfig = {
   // Self-hosted (no Vercel) — honor `AUTH_TRUST_HOST=true` for non-Vercel
@@ -81,14 +96,17 @@ export const authConfig: NextAuthConfig = {
   ],
   callbacks: {
     /**
-     * Cross-app account_type guard. Reject the sign-in *before* a valid JWT
-     * is issued so NextAuth redirects through the configured `pages.error` URL
-     * with the AccessDenied error param. session() callback also keeps a
-     * defense-in-depth degraded-session branch for stale cookies.
+     * Cross-app role guard (ADR-MONO-035 4b-1). Reject the sign-in *before* a
+     * valid JWT is issued (so NextAuth redirects through the configured
+     * `pages.error` URL) unless the GAP token carries the `CUSTOMER` role. An
+     * operator's ecommerce token carries `ADMIN` / no `CUSTOMER` → rejected.
+     * session() also keeps a defense-in-depth degraded-session branch for stale
+     * cookies. (Role-based: the `account_type` claim is removed in ADR-032 D5
+     * step 4 — gating on its absence would no-op and admit operators.)
      */
     async signIn({ profile }) {
       const p = profile as IamOidcProfile | undefined;
-      if (p?.account_type && p.account_type !== ALLOWED_ACCOUNT_TYPE) {
+      if (!hasConsumerRole(p?.roles)) {
         return '/login?error=account_type_mismatch';
       }
       return true;
@@ -129,15 +147,17 @@ export const authConfig: NextAuthConfig = {
      * server-only helpers (see `./session.ts`) read it via `auth()` so client
      * components never receive the bearer token.
      *
-     * If the resolved `account_type` is not CONSUMER, return `null` so
-     * NextAuth treats the session as anonymous. Combined with the `/login`
-     * error page, the user sees the account_type_mismatch banner.
+     * If the token's `roles` do not include `CUSTOMER`, return a degraded
+     * (anonymous) session so NextAuth treats it as unauthenticated. Combined
+     * with the `/login` error page, the user sees the mismatch banner.
+     * (ADR-MONO-035 4b-1: role-based — replaces the `account_type !== CONSUMER`
+     * check, which would no-op once `account_type` is dropped.)
      */
     async session({ session, token }) {
-      if (token.accountType && token.accountType !== ALLOWED_ACCOUNT_TYPE) {
+      if (!hasConsumerRole(token.roles as string[] | undefined)) {
         // Surface as anonymous — middleware will redirect to /login.
-        // (Returning the augmented session anyway would let an OPERATOR
-        // browse the storefront with backend rejecting every API call.)
+        // (Returning the augmented session anyway would let an operator
+        // browse the storefront with the backend rejecting every API call.)
         return {
           ...session,
           user: undefined as unknown as typeof session.user,
@@ -145,7 +165,7 @@ export const authConfig: NextAuthConfig = {
           tenantId: null,
           roles: [],
           accessToken: undefined,
-          accountType: token.accountType as string,
+          accountType: (token.accountType as string | null | undefined) ?? null,
         };
       }
       session.tenantId = (token.tenantId as string | null | undefined) ?? null;
