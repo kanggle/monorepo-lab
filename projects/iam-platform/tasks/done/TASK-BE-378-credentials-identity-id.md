@@ -8,7 +8,9 @@ ADR-MONO-035 **O3 / step 4d** — add `credentials.identity_id` (the ADR-MONO-03
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-15, close-chore TASK-MONO-265)**: PR #1586 squash `e91255e1e`, 3-dim verified (state=MERGED, mergeCommit=origin/main tip, Build & Test 4m37s + iam Testcontainers IT 3m42s pass). `credentials.identity_id` VARCHAR(36) NULL (V0026); value-convention cross-DB ref, unmapped, additive net-zero (backfill deferred — auth_db≠account_db).
 
 # Owner
 
