@@ -106,9 +106,14 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * stays unchanged.
      *
      * <p>TASK-BE-370 (ADR-MONO-033 S4 assume-tenant — completes ADR-MONO-032 D5 step 2):
-     * also emitted on the {@code token_exchange} (assume-tenant) path, where it is
-     * PRESERVED verbatim from the operator's validated subject token (no re-resolve /
-     * no seed / no union — see {@link #customizeForAssumeTenant}).
+     * also emitted on the {@code token_exchange} (assume-tenant) path.
+     *
+     * <p>TASK-BE-376 (ADR-MONO-035 O1 / step 4a): on the assume-tenant path the
+     * {@code roles} are now DERIVED from the SELECTED tenant's ACTIVE entitled domains
+     * ({@link OperatorRoleDerivation}) rather than preserved from the operator's base
+     * token — the base operator token has no domain-role set to preserve (it is
+     * {@code aud=platform-console}, {@code tenant_id='gap'}). See
+     * {@link #customizeForAssumeTenant}.
      */
     private static final String CLAIM_ROLES = "roles";
 
@@ -298,13 +303,11 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         String selectedTenantType = null;
         String operatorAccountType = null;
         java.util.List<String> orgScope = null;
-        java.util.List<String> operatorRoles = null;
         if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
             selectedTenantId = grant.getSelectedTenantId();
             selectedTenantType = grant.getSelectedTenantType();
             operatorAccountType = grant.getOperatorAccountType();
             orgScope = grant.getOrgScope();
-            operatorRoles = grant.getOperatorRoles();
         }
 
         if (selectedTenantId == null || selectedTenantId.isBlank()
@@ -345,24 +348,30 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         log.debug("TenantClaimTokenCustomizer: assume-tenant — injected org_scope={} "
                 + "(membership-derived; null/empty → [*] net-zero)", effectiveOrgScope);
 
-        // TASK-BE-370 (ADR-MONO-033 S4 assume-tenant): PRESERVE the operator's roles
-        // (their identity-level role set), carried on the grant from the operator's
-        // validated subject token (AssumeTenantAuthenticationProvider). The operator
-        // is one identity; their roles travel with them onto the assumed token,
-        // VERBATIM — no re-resolve, no seed (the assume-tenant path has no clean
-        // platform to seed against; the selected tenant is a customer slug), no union
-        // across other assignments (least-privilege). NET-ZERO: null/empty → omit the
-        // claim (the gateway then 403s where it role-gates — correct). Only ADD the
-        // roles claim; the tenant_id/tenant_type/account_type/org_scope/entitled_domains
-        // injection above is untouched (BE-329/BE-338).
-        if (operatorRoles != null && !operatorRoles.isEmpty()) {
-            context.getClaims().claim(CLAIM_ROLES, operatorRoles);
-            log.debug("TenantClaimTokenCustomizer: assume-tenant — preserved operator roles={} "
-                    + "from the validated subject token (verbatim)", operatorRoles);
-        }
-
         // D3: SELECTED tenant's ACTIVE subscriptions ONLY (no union). Reused verbatim.
-        populateEntitledDomains(context, selectedTenantId);
+        // The fetch ALSO drives the operator `roles` derivation below (one call:
+        // entitled_domains + roles ride the same account-service result).
+        java.util.List<String> entitled = populateEntitledDomains(context, selectedTenantId);
+
+        // TASK-BE-376 (ADR-MONO-035 O1 / step 4a): DERIVE the operator's domain roles
+        // from the SELECTED tenant's ACTIVE entitled domains (the operator-role mirror
+        // of RoleSeedPolicy). Replaces TASK-BE-370's preserve-from-base: the base
+        // operator token (aud=platform-console, tenant_id='gap') structurally has no
+        // domain-role set to preserve — domain roles are meaningful only per assumed
+        // tenant. The operator (already fail-closed-verified as assigned) gets the
+        // operator role(s) for everything the selected tenant is entitled to, so the
+        // domain gateway's `roles` leg admits them. Derives ONLY from entitled domains
+        // (never admin_operator_roles — ADR-033 S2 / ADR-034 U5 disjointness). NET-ZERO:
+        // empty/all-unknown/failed fetch → both entitled_domains AND roles omitted (the
+        // gateway then 403s — least-privilege; ADR-033 S5 fail-soft). Only ADD the roles
+        // claim; the tenant_id/tenant_type/account_type/org_scope injection above is
+        // untouched (BE-329/BE-338).
+        java.util.List<String> derived = OperatorRoleDerivation.fromEntitledDomains(entitled);
+        if (!derived.isEmpty()) {
+            context.getClaims().claim(CLAIM_ROLES, derived);
+            log.debug("TenantClaimTokenCustomizer: assume-tenant — derived operator roles={} "
+                    + "from the selected tenant's entitled_domains={}", derived, entitled);
+        }
     }
 
     /**
@@ -379,13 +388,14 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * the legacy {@code tenant_id} gate (net-zero). Token issuance must never depend on
      * account-service availability, so the exception is swallowed (logged at WARN).
      */
-    private void populateEntitledDomains(JwtEncodingContext context, String tenantId) {
+    private java.util.List<String> populateEntitledDomains(JwtEncodingContext context, String tenantId) {
         try {
             java.util.List<String> entitled = accountServicePort.listEntitledDomains(tenantId);
             if (entitled != null && !entitled.isEmpty()) {
                 context.getClaims().claim(CLAIM_ENTITLED_DOMAINS, entitled);
                 log.debug("TenantClaimTokenCustomizer: injected entitled_domains={} for tenant_id={}",
                         entitled, tenantId);
+                return entitled;
             }
         } catch (RuntimeException e) {
             // fail-soft (ADR-MONO-019 keystone): token issuance must not depend on
@@ -395,6 +405,10 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                             + "omitting claim (fail-soft): {}",
                     tenantId, e.toString());
         }
+        // TASK-BE-376: return the fetched list so the assume-tenant branch can derive
+        // the operator `roles` from the SAME fetch (entitled_domains + roles ride one
+        // call). Empty on failure/empty (the authorization_code callers ignore it).
+        return java.util.List.of();
     }
 
     /**
