@@ -27,6 +27,13 @@ import java.util.UUID;
  *
  * <p>JPA annotations are the allowed domain↔framework exception; the match id is
  * a {@code CHAR(36)} String (the ledger id convention).
+ *
+ * <p><b>(14th incr — TASK-FIN-BE-021, cross-currency base-leg matching)</b> the match
+ * gains a {@code crossCurrency} audit flag — {@code true} iff this is a base-currency
+ * (KRW) external line matched to a <b>foreign</b> internal line by its carrying base
+ * (a regulated-ledger audit-transparency marker — "this KRW bank line matched a foreign
+ * ledger position by carrying base"). Every same-currency match sets it {@code false}
+ * (the additive {@code V8} column defaults {@code FALSE} — net-zero for existing rows).
  */
 @Entity
 @Table(name = "reconciliation_match")
@@ -65,9 +72,16 @@ public class ReconciliationMatch {
     @Column(name = "matched_at", nullable = false)
     private Instant matchedAt;
 
+    // (14th incr — TASK-FIN-BE-021) audit flag: true iff a base-currency (KRW) external
+    // line matched a FOREIGN internal line by its carrying base. Same-currency = false
+    // (the additive V8 column defaults FALSE — net-zero for existing rows).
+    @Column(name = "cross_currency", nullable = false)
+    private boolean crossCurrency;
+
     private ReconciliationMatch(String matchId, String tenantId, String statementLineId,
                                 String externalRef, String journalEntryId,
-                                String ledgerAccountCode, Money money, Instant matchedAt) {
+                                String ledgerAccountCode, Money money, boolean crossCurrency,
+                                Instant matchedAt) {
         this.matchId = matchId;
         this.tenantId = tenantId;
         this.statementLineId = statementLineId;
@@ -76,12 +90,27 @@ public class ReconciliationMatch {
         this.ledgerAccountCode = ledgerAccountCode;
         this.amountMinor = money.minorUnits();
         this.currency = money.currency();
+        this.crossCurrency = crossCurrency;
         this.matchedAt = matchedAt;
     }
 
+    /** A same-currency match (the dominant path) — {@code crossCurrency = false}. */
     public static ReconciliationMatch of(String matchId, String tenantId, String statementLineId,
                                          String externalRef, String journalEntryId,
                                          String ledgerAccountCode, Money money, Instant matchedAt) {
+        return of(matchId, tenantId, statementLineId, externalRef, journalEntryId,
+                ledgerAccountCode, money, false, matchedAt);
+    }
+
+    /**
+     * (14th incr — TASK-FIN-BE-021) A match with an explicit {@code crossCurrency} flag
+     * ({@code true} for a base-currency external matched to a foreign internal by its
+     * carrying base; {@code false} for every same-currency match).
+     */
+    public static ReconciliationMatch of(String matchId, String tenantId, String statementLineId,
+                                         String externalRef, String journalEntryId,
+                                         String ledgerAccountCode, Money money,
+                                         boolean crossCurrency, Instant matchedAt) {
         Objects.requireNonNull(tenantId, "tenantId");
         Objects.requireNonNull(statementLineId, "statementLineId");
         Objects.requireNonNull(externalRef, "externalRef");
@@ -91,7 +120,7 @@ public class ReconciliationMatch {
         Objects.requireNonNull(matchedAt, "matchedAt");
         String id = matchId != null ? matchId : UUID.randomUUID().toString();
         return new ReconciliationMatch(id, tenantId, statementLineId, externalRef,
-                journalEntryId, ledgerAccountCode, money, matchedAt);
+                journalEntryId, ledgerAccountCode, money, crossCurrency, matchedAt);
     }
 
     public Money money() {
