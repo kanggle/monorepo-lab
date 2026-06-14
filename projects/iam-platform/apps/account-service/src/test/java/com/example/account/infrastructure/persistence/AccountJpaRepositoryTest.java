@@ -11,6 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -174,6 +176,45 @@ class AccountJpaRepositoryTest {
         assertThat(accountRepo.existsByTenantIdAndEmail(TENANT_FAN, sharedEmail)).isFalse();
         // wms 테넌트에서는 존재해야 함
         assertThat(accountRepo.existsByTenantIdAndEmail(TENANT_WMS, sharedEmail)).isTrue();
+    }
+
+    // ── TASK-BE-357: tenant-scoped search/list (AC-1 email, AC-2 list) ───────────
+
+    @Test
+    @DisplayName("TASK-BE-357: findByEmail(email) — '*' 크로스테넌트, 모든 테넌트의 동일 이메일 행을 반환")
+    void findByEmail_starCrossTenant_returnsAllTenantsForSharedEmail() {
+        insertWmsTenant();
+        String sharedEmail = "dup@example.com";
+        String fanId = UUID.randomUUID().toString();
+        String wmsId = UUID.randomUUID().toString();
+        insertAccount(TENANT_FAN, fanId, sharedEmail);
+        insertAccount(TENANT_WMS, wmsId, sharedEmail);
+
+        List<AccountJpaEntity> all = accountRepo.findByEmail(sharedEmail);
+
+        // SUPER_ADMIN tenantId='*' email path — both tenants' rows surface (the same
+        // email is NOT globally unique, only (tenant_id, email) is).
+        assertThat(all).extracting(AccountJpaEntity::getId)
+                .containsExactlyInAnyOrder(fanId, wmsId);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-357: findByTenantIdWithStatusFilter(tenantId, null) — 해당 테넌트 행만 (list 격리, AC-2)")
+    void findByTenantIdWithStatusFilter_nullStatus_isolatesTenant() {
+        insertWmsTenant();
+        String fanId = UUID.randomUUID().toString();
+        String wmsId = UUID.randomUUID().toString();
+        insertAccount(TENANT_FAN, fanId, "fan-list@example.com");
+        insertAccount(TENANT_WMS, wmsId, "wms-list@example.com");
+
+        Page<AccountJpaEntity> fanPage = accountRepo.findByTenantIdWithStatusFilter(
+                TENANT_FAN, null, PageRequest.of(0, 20));
+
+        // The list path (status=null → all statuses) returns ONLY the queried tenant's
+        // rows — a tenant-A operator never pages tenant-B accounts (was unscoped pre-357).
+        assertThat(fanPage.getContent()).extracting(AccountJpaEntity::getId)
+                .contains(fanId).doesNotContain(wmsId);
+        assertThat(fanPage.getContent()).allMatch(e -> TENANT_FAN.equals(e.getTenantId()));
     }
 
     // ── findActiveDormantCandidates ─────────────────────────────────────────

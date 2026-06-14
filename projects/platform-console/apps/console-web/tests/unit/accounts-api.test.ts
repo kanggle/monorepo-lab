@@ -109,6 +109,24 @@ describe('accounts-api — operator-token trust boundary (#569 invariant)', () =
     expect(String(url)).toContain('/api/admin/accounts');
   });
 
+  it('TASK-BE-357: defaults the tenantId query param to the active tenant; explicit params.tenantId overrides', async () => {
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
+    cookieJar.set(TENANT_COOKIE, 'ecommerce');
+    // Fresh Response per call — a Response body is single-use; this test fetches twice.
+    const fetchMock = vi.fn().mockImplementation(() => jsonResponse(PAGE_200));
+    vi.stubGlobal('fetch', fetchMock);
+
+    // default → active tenant (so the 계정 운영 search follows the tenant switcher,
+    // and an ecommerce operator finds ecommerce accounts — the producer scopes by
+    // this query param, not X-Tenant-Id).
+    await searchAccounts({ email: 'who@ex.com' });
+    expect(String(fetchMock.mock.calls[0][0])).toContain('tenantId=ecommerce');
+
+    // explicit override (SUPER_ADMIN cross-tenant)
+    await searchAccounts({ tenantId: 'globex-corp' });
+    expect(String(fetchMock.mock.calls[1][0])).toContain('tenantId=globex-corp');
+  });
+
   it('throws 401 with NO fetch when the operator token is absent (no IAM fallback)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-only');
     cookieJar.set(TENANT_COOKIE, 'wms');
@@ -278,6 +296,17 @@ describe('accounts-api — §2.5 resilience error mapping', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(403);
     expect(err.code).toBe('PERMISSION_DENIED');
+  });
+
+  it('TASK-BE-357: 403 TENANT_SCOPE_DENIED → ApiError(403) inline (no crash)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ code: 'TENANT_SCOPE_DENIED' }, 403)),
+    );
+    const err = await searchAccounts().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(403);
+    expect(err.code).toBe('TENANT_SCOPE_DENIED');
   });
 
   it('503 CIRCUIT_OPEN → AccountsUnavailableError(circuit_open) — section degrades only', async () => {

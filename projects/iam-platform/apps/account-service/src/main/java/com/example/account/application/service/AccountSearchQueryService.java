@@ -19,19 +19,27 @@ public class AccountSearchQueryService {
 
     private final AccountQueryPort accountQueryPort;
 
+    /**
+     * TASK-BE-357: tenant-scoped search/list. {@code tenantId} is the concrete tenant
+     * admin-service already resolved + effective-scope-gated. Fail-closed: a blank
+     * {@code tenantId} throws {@code IllegalArgumentException} (→ 400 VALIDATION_ERROR)
+     * rather than degrading to an implicit cross-tenant scan.
+     */
     @Transactional(readOnly = true)
-    public AccountSearchResult search(String email, int page, int size) {
+    public AccountSearchResult search(String tenantId, String email, int page, int size) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("tenantId is required");
+        }
         if (size > MAX_PAGE_SIZE) {
             throw new IllegalArgumentException("size must be ≤ " + MAX_PAGE_SIZE);
         }
 
         if (email == null || email.isBlank()) {
-            return accountQueryPort.findAll(PageRequest.of(page, size));
+            return accountQueryPort.findAll(tenantId, PageRequest.of(page, size));
         }
 
-        return accountQueryPort.findByEmail(email.trim())
-                .map(item -> new AccountSearchResult(List.of(item), 1, 0, size, 1))
-                .orElseGet(() -> new AccountSearchResult(List.of(), 0, 0, size, 0));
+        List<AccountSearchResult.Item> items = accountQueryPort.findByEmail(tenantId, email.trim());
+        return new AccountSearchResult(items, items.size(), 0, size, items.isEmpty() ? 0 : 1);
     }
 
     @Transactional(readOnly = true)

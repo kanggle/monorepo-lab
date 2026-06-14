@@ -5,6 +5,10 @@ public enum ActionCode {
     ACCOUNT_UNLOCK,
     SESSION_REVOKE,
     AUDIT_QUERY,
+    // TASK-BE-357: operator account search/list (GET /api/admin/accounts). Used only
+    // for the best-effort DENIED row when a cross-tenant `tenantId` is rejected
+    // (403 TENANT_SCOPE_DENIED) — the success path is a read and is not audited.
+    ACCOUNT_SEARCH,
     // TASK-BE-029-2: operator self 2FA enrollment + verify. target_type=OPERATOR.
     OPERATOR_2FA_ENROLL,
     OPERATOR_2FA_VERIFY,

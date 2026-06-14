@@ -43,6 +43,13 @@ export interface AccountSearchParams {
   email?: string;
   page?: number;
   size?: number;
+  /**
+   * TASK-BE-357 — explicit tenant scope (SUPER_ADMIN cross-tenant). When omitted
+   * the api layer defaults it to the active tenant (mirror of the audit view),
+   * so the 계정 운영 search follows the tenant switcher. The producer gates it
+   * against the operator's effective scope (403 TENANT_SCOPE_DENIED).
+   */
+  tenantId?: string;
 }
 
 // --- lock / unlock --------------------------------------------------------

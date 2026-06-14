@@ -10,12 +10,13 @@ admin-service가 운영자 명령으로 account-service에 계정 상태 변경(
 
 ## GET /internal/accounts
 
-전체 계정 목록 페이지네이션 조회. admin-service가 `account.read` 권한 보유 운영자의 요청을 대리하여 호출한다.
+테넌트 스코프 계정 목록 페이지네이션 조회. admin-service가 `account.read` 권한 보유 운영자의 요청을 대리하여 호출한다.
 
 **Query Parameters**:
 
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
+| `tenantId` | string (**required**, TASK-BE-357) | 조회 대상 테넌트. account-service는 이 값으로만 필터한다 (effective-scope 게이트는 admin-service가 호출 전 수행 — lock/unlock 과 동일한 internal-trust 자세). `*` (SUPER_ADMIN 전용, admin-service에서 게이트됨) → 전 테넌트 목록. 누락/공백 → `400 VALIDATION_ERROR` (암묵적 cross-tenant 스캔 금지, fail-closed). |
 | `page` | int (default 0) | 페이지 번호 |
 | `size` | int (default 20, max 100) | 페이지 크기 |
 
@@ -37,17 +38,22 @@ admin-service가 운영자 명령으로 account-service에 계정 상태 변경(
 }
 ```
 
-**Errors**: 400 `VALIDATION_ERROR` (size > 100)
+**Errors**: 400 `VALIDATION_ERROR` (size > 100, 또는 `tenantId` 누락/공백)
 
 ---
 
 ## GET /internal/accounts?email=
 
-이메일로 단건 계정 조회 (기존 동작).
+테넌트 내 이메일 단건 조회. TASK-BE-357 이전에는 `tenant_id='fan-platform'` 에 하드코딩돼 있어 다른 테넌트(예: ecommerce) 계정이 이메일로 검색되지 않았다 — 이제 `tenantId` 로 스코프된다.
 
-**Query Parameters**: `email` (string, required)
+**Query Parameters**:
 
-**Response 200**:
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `email` | string (required) | 조회할 이메일 (정확 일치 — `(tenant_id, email)` 유니크 인덱스, 부분/LIKE 검색 아님) |
+| `tenantId` | string (**required**, TASK-BE-357) | 조회 대상 테넌트. 특정 테넌트 → 해당 테넌트 내 정확 일치(0 또는 1행). `*` (SUPER_ADMIN 전용) → 전 테넌트에서 동일 이메일 매칭(테넌트마다 별도 행이 있을 수 있어 0..N행). 누락/공백 → `400 VALIDATION_ERROR`. |
+
+**Response 200** (특정 테넌트 단건 매칭):
 ```json
 {
   "content": [
@@ -64,6 +70,8 @@ admin-service가 운영자 명령으로 account-service에 계정 상태 변경(
   "totalPages": 1
 }
 ```
+
+**Errors**: 400 `VALIDATION_ERROR` (`tenantId` 누락/공백)
 
 ---
 

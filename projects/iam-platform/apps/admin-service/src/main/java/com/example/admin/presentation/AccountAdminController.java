@@ -1,7 +1,10 @@
 package com.example.admin.presentation;
 
 import com.example.admin.application.AccountAdminUseCase;
+import com.example.admin.application.ActionCode;
 import com.example.admin.application.AdminActionAuditor;
+import com.example.admin.application.OperatorContext;
+import com.example.admin.application.QueryTenantScopeGate;
 import com.example.admin.application.BulkLockAccountCommand;
 import com.example.admin.application.BulkLockAccountResult;
 import com.example.admin.application.BulkLockAccountUseCase;
@@ -54,18 +57,30 @@ public class AccountAdminController {
     private final AccountServiceClient accountServiceClient;
     private final PermissionEvaluator permissionEvaluator;
     private final AdminActionAuditor auditor;
+    private final QueryTenantScopeGate queryTenantScopeGate;
 
     @GetMapping
     public ResponseEntity<AccountServiceClient.AccountSearchResponse> search(
             @RequestParam(required = false) String email,
+            @RequestParam(required = false) String tenantId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
             HttpServletRequest request) {
 
+        // TASK-BE-357: resolve + effective-scope-gate the query tenant for BOTH
+        // branches (shared read gate with GET /api/admin/audit). Omitted tenantId →
+        // operator's own tenant; out-of-scope → 403 TENANT_SCOPE_DENIED (best-effort
+        // DENIED admin_actions row). This closes the previous gaps: email search was
+        // hard-coded to fan-platform (ecommerce un-findable) and list was unscoped
+        // (cross-tenant leak).
+        OperatorContext op = OperatorContextHolder.require();
+        String resolvedTenant = queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ).tenantId();
+
         // Single-account lookup by email needs NO account.read (a SUPPORT_LOCK
-        // operator may look one up to lock it — admin-api.md). Unchanged.
+        // operator may look one up to lock it — admin-api.md), but is still tenant-scoped.
         if (email != null && !email.isBlank()) {
-            return ResponseEntity.ok(accountServiceClient.search(email));
+            return ResponseEntity.ok(accountServiceClient.search(resolvedTenant, email));
         }
 
         // Unfiltered list REQUIRES account.read. Absent ⇒ 403 PERMISSION_DENIED
@@ -76,8 +91,7 @@ public class AccountAdminController {
         // the email branch above is permission-free): record the DENIED
         // admin_actions row centrally, then throw → AdminExceptionHandler maps it
         // to 403 {code:PERMISSION_DENIED}.
-        String operatorId = OperatorContextHolder.require().operatorId();
-        if (!permissionEvaluator.hasPermission(operatorId, Permission.ACCOUNT_READ)) {
+        if (!permissionEvaluator.hasPermission(op.operatorId(), Permission.ACCOUNT_READ)) {
             auditor.recordDenied(
                     null, Permission.ACCOUNT_READ,
                     request.getRequestURI(), request.getMethod(), null);
@@ -85,7 +99,7 @@ public class AccountAdminController {
                     "Operator lacks required permission: " + Permission.ACCOUNT_READ);
         }
 
-        return ResponseEntity.ok(accountServiceClient.listAll(page, size));
+        return ResponseEntity.ok(accountServiceClient.listAll(resolvedTenant, page, size));
     }
 
     @GetMapping("/{accountId}")
