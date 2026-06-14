@@ -8,7 +8,7 @@ ledger-service — configurable FX reconciliation tolerance (thirteenth incremen
 
 # Status
 
-review
+done
 
 # Owner
 
