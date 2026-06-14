@@ -8,7 +8,9 @@ ADR-MONO-035 **4b-2b** (ADR-032 D5 step 4) — stop emitting the `account_type` 
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14, close-chore TASK-MONO-264)**: PR #1581 squash `9177b63c2`, 3-dim verified (state=MERGED, mergeCommit=origin/main tip, Build & Test + iam Testcontainers IT GREEN). account_type claim/column/contract removed. iam IT 1회 RED→fix (roles claim List.of→ArrayList, SAS allowlist; feedback_spring_boot_diagnostic_patterns §23).
 
 # Owner
 

@@ -8,7 +8,9 @@ ADR-MONO-035 **4b-1** (ADR-032 D5 step 4) — rewrite the web-store cross-type S
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14, close-chore TASK-MONO-264)**: PR #1577 squash `9fcbfba27`, 3-dim verified (state=MERGED, mergeCommit=origin/main tip, Frontend lint&build + unit + E2E smoke all GREEN). web-store SSO guard now CUSTOMER-role-based.
 
 # Owner
 
