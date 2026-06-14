@@ -394,4 +394,60 @@ public class AccountServiceClient implements AccountServicePort {
             throw new RuntimeException("Account service communication error", e);
         }
     }
+
+    @Override
+    public List<String> listAccountRoles(String tenantId, String accountId) {
+        Supplier<List<String>> supplier = () -> doListAccountRoles(tenantId, accountId);
+
+        Supplier<List<String>> retryingSupplier =
+                Retry.decorateSupplier(retry, supplier);
+        Supplier<List<String>> resilientSupplier =
+                CircuitBreaker.decorateSupplier(circuitBreaker, retryingSupplier);
+
+        try {
+            return resilientSupplier.get();
+        } catch (HttpClientErrorException e) {
+            // ADR-MONO-033 S2: any 4xx is treated as an account-service failure;
+            // the caller (future TenantClaimTokenCustomizer roles leg) fail-softs
+            // and omits the roles claim so token issuance is never blocked.
+            log.warn("Account service roles lookup returned client error {}: {}",
+                    e.getStatusCode(), e.getMessage());
+            throw new AccountServiceUnavailableException(
+                    "Account service roles lookup failed", e);
+        } catch (RuntimeException e) {
+            log.error("Account service roles lookup failed after retries: "
+                            + "msg={} type={} cause={} causeType={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getMessage(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
+            throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> doListAccountRoles(String tenantId, String accountId) {
+        try {
+            // account-service returns { "accountId", "tenantId", "roles": ["ROLE_A", ...] }
+            Map<String, Object> body = restClient().get()
+                    .uri("/internal/tenants/{tid}/accounts/{aid}/roles", tenantId, accountId)
+                    // TASK-BE-318c: GAP client_credentials Bearer JWT.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    .retrieve()
+                    .body(Map.class);
+
+            List<String> roles = new ArrayList<>();
+            if (body != null && body.get("roles") instanceof List<?> rawRoles) {
+                for (Object item : rawRoles) {
+                    if (item instanceof String role && !role.isBlank()) {
+                        roles.add(role);
+                    }
+                }
+            }
+            return roles;
+        } catch (HttpClientErrorException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Account service communication error", e);
+        }
+    }
 }

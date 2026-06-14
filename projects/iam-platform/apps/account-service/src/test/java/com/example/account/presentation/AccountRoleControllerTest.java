@@ -5,6 +5,7 @@ import com.example.account.application.command.RemoveAccountRoleCommand;
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.result.AccountRoleMutationResult;
 import com.example.account.application.service.AddAccountRoleUseCase;
+import com.example.account.application.service.GetAccountRolesUseCase;
 import com.example.account.application.service.RemoveAccountRoleUseCase;
 import com.example.account.infrastructure.config.SecurityConfig;
 import com.example.account.presentation.advice.GlobalExceptionHandler;
@@ -24,6 +25,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -45,6 +47,7 @@ class AccountRoleControllerTest {
 
     @MockitoBean private AddAccountRoleUseCase addAccountRoleUseCase;
     @MockitoBean private RemoveAccountRoleUseCase removeAccountRoleUseCase;
+    @MockitoBean private GetAccountRolesUseCase getAccountRolesUseCase;
 
     // ─── PATCH /roles:add ──────────────────────────────────────────────────────
 
@@ -244,5 +247,59 @@ class AccountRoleControllerTest {
                                 """.formatted(operatorId)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    // ─── GET /roles ────────────────────────────────────────────────────────────
+
+    /**
+     * TASK-BE-368: GET roles — account has two roles → 200 with roles array.
+     */
+    @Test
+    @DisplayName("GET /roles — 계정 보유 roles 반환 → 200 + roles 배열")
+    void getRoles_success_returnsRoles() throws Exception {
+        given(getAccountRolesUseCase.execute(TENANT_ID, ACCOUNT_ID))
+                .willReturn(List.of("WAREHOUSE_ADMIN", "INBOUND_OPERATOR"));
+
+        mockMvc.perform(get("/internal/tenants/{tenantId}/accounts/{accountId}/roles",
+                        TENANT_ID, ACCOUNT_ID)
+                        .header("X-Tenant-Id", TENANT_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value(ACCOUNT_ID))
+                .andExpect(jsonPath("$.tenantId").value(TENANT_ID))
+                .andExpect(jsonPath("$.roles[0]").value("WAREHOUSE_ADMIN"))
+                .andExpect(jsonPath("$.roles[1]").value("INBOUND_OPERATOR"));
+    }
+
+    /**
+     * TASK-BE-368: GET roles — account with no roles → 200 with empty array
+     * (enumeration-safe; foreign/missing accounts are treated identically).
+     */
+    @Test
+    @DisplayName("GET /roles — role 없는 계정 → 200 + 빈 배열")
+    void getRoles_noRoles_returnsEmptyList() throws Exception {
+        given(getAccountRolesUseCase.execute(TENANT_ID, ACCOUNT_ID))
+                .willReturn(List.of());
+
+        mockMvc.perform(get("/internal/tenants/{tenantId}/accounts/{accountId}/roles",
+                        TENANT_ID, ACCOUNT_ID)
+                        .header("X-Tenant-Id", TENANT_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value(ACCOUNT_ID))
+                .andExpect(jsonPath("$.tenantId").value(TENANT_ID))
+                .andExpect(jsonPath("$.roles").isArray())
+                .andExpect(jsonPath("$.roles").isEmpty());
+    }
+
+    /**
+     * TASK-BE-368: GET roles — X-Tenant-Id present but mismatches path → 403.
+     */
+    @Test
+    @DisplayName("GET /roles — tenant scope mismatch → 403 TENANT_SCOPE_DENIED")
+    void getRoles_tenantScopeMismatch_returns403() throws Exception {
+        mockMvc.perform(get("/internal/tenants/{tenantId}/accounts/{accountId}/roles",
+                        TENANT_ID, ACCOUNT_ID)
+                        .header("X-Tenant-Id", "fan-platform"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
     }
 }

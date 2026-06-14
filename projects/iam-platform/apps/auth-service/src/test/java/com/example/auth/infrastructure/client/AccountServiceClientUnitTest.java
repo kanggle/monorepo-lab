@@ -4,6 +4,8 @@ import com.example.auth.application.exception.AccountServiceUnavailableException
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
+
+import java.util.List;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.http.Fault;
 import org.junit.jupiter.api.AfterEach;
@@ -223,6 +225,56 @@ class AccountServiceClientUnitTest {
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
         assertThatThrownBy(() -> client.getAccountProfile("acc-err"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    // ── listAccountRoles ───────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("listAccountRoles — 200 응답 + roles 배열 → role 이름 목록 반환")
+    void listAccountRoles_200_returnsRoles() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/wms/accounts/acc-1/roles"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"tenantId\":\"wms\",\"roles\":[\"CUSTOMER\"]}")));
+
+        List<String> roles = client.listAccountRoles("wms", "acc-1");
+
+        assertThat(roles).containsExactly("CUSTOMER");
+    }
+
+    @Test
+    @DisplayName("listAccountRoles — 200 응답 + 빈 roles → 빈 목록 반환")
+    void listAccountRoles_200_emptyRoles_returnsEmptyList() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/wms/accounts/acc-no-role/roles"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-no-role\",\"tenantId\":\"wms\",\"roles\":[]}")));
+
+        List<String> roles = client.listAccountRoles("wms", "acc-no-role");
+
+        assertThat(roles).isEmpty();
+    }
+
+    @Test
+    @DisplayName("listAccountRoles — 500 응답 → AccountServiceUnavailableException")
+    void listAccountRoles_500_throwsAccountServiceUnavailable() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/wms/accounts/acc-err/roles"))
+                .willReturn(aResponse().withStatus(500)));
+
+        assertThatThrownBy(() -> client.listAccountRoles("wms", "acc-err"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("listAccountRoles — 네트워크 오류 → AccountServiceUnavailableException (retry 후)")
+    void listAccountRoles_networkFault_throwsAccountServiceUnavailable() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/wms/accounts/acc-fault/roles"))
+                .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+        assertThatThrownBy(() -> client.listAccountRoles("wms", "acc-fault"))
                 .isInstanceOf(AccountServiceUnavailableException.class);
     }
 }
