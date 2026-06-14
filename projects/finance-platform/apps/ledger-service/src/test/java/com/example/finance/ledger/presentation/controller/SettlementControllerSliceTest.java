@@ -2,12 +2,15 @@ package com.example.finance.ledger.presentation.controller;
 
 import com.example.finance.ledger.application.ActorContext;
 import com.example.finance.ledger.application.GetFxCostFlowConfigUseCase;
+import com.example.finance.ledger.application.GetFxPositionLotsUseCase;
 import com.example.finance.ledger.application.SetFxCostFlowConfigCommand;
 import com.example.finance.ledger.application.SetFxCostFlowConfigUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.NoOpReason;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.Result;
 import com.example.finance.ledger.application.view.FxCostFlowConfigView;
+import com.example.finance.ledger.application.view.FxPositionLotView;
+import com.example.finance.ledger.application.view.FxPositionLotsView;
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.error.LedgerErrors.CostFlowMethodInvalidException;
 import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
@@ -15,6 +18,7 @@ import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoun
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
 import com.example.finance.ledger.domain.journal.CostFlowMethod;
+import com.example.finance.ledger.domain.money.Currency;
 import com.example.finance.ledger.domain.journal.EntryDirection;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.Outcome;
 import com.example.finance.ledger.domain.journal.JournalEntry;
@@ -81,6 +85,7 @@ class SettlementControllerSliceTest {
     @MockitoBean SettleForeignPositionUseCase settleForeignPosition;
     @MockitoBean GetFxCostFlowConfigUseCase getFxCostFlowConfig;
     @MockitoBean SetFxCostFlowConfigUseCase setFxCostFlowConfig;
+    @MockitoBean GetFxPositionLotsUseCase getFxPositionLots;
 
     @BeforeEach
     void setUp() {
@@ -322,6 +327,66 @@ class SettlementControllerSliceTest {
         mockMvc.perform(put("/api/finance/ledger/settlements/cost-flow-config")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"method\":\"LIFO\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    // ---- 20th increment: FX position lots read (TASK-FIN-BE-028) ----
+
+    @Test
+    @DisplayName("GET /{account}/USD/lots → 200 with lots and summary, money as strings")
+    void getPositionLotsReturnsTwoLots() throws Exception {
+        Instant acq1 = Instant.parse("2026-01-01T00:00:00Z");
+        Instant acq2 = Instant.parse("2026-01-02T00:00:00Z");
+        FxPositionLotView lot1 = new FxPositionLotView(
+                "lot-1", "USD", acq1, 1L,
+                1_000L, 1_000L, 1_300_000L, 1_300_000L, "entry-1");
+        FxPositionLotView lot2 = new FxPositionLotView(
+                "lot-2", "USD", acq2, 2L,
+                500L, 500L, 700_000L, 700_000L, "entry-2");
+        FxPositionLotsView view = new FxPositionLotsView(
+                java.util.List.of(lot1, lot2), 1_500L, 2_000_000L, 2);
+
+        when(getFxPositionLots.get("finance", "FX_LOTS_WALLET", Currency.USD))
+                .thenReturn(view);
+
+        mockMvc.perform(get("/api/finance/ledger/settlements/FX_LOTS_WALLET/USD/lots"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.lotCount").value(2))
+                .andExpect(jsonPath("$.data.totalRemainingForeignMinor").value("1500"))
+                .andExpect(jsonPath("$.data.totalCarryingBaseMinor").value("2000000"))
+                .andExpect(jsonPath("$.data.lots.length()").value(2))
+                .andExpect(jsonPath("$.data.lots[0].lotId").value("lot-1"))
+                .andExpect(jsonPath("$.data.lots[0].currency").value("USD"))
+                .andExpect(jsonPath("$.data.lots[0].originalForeignMinor").value("1000"))
+                .andExpect(jsonPath("$.data.lots[0].remainingForeignMinor").value("1000"))
+                .andExpect(jsonPath("$.data.lots[0].originalBaseMinor").value("1300000"))
+                .andExpect(jsonPath("$.data.lots[0].carryingBaseMinor").value("1300000"))
+                .andExpect(jsonPath("$.data.lots[0].sourceJournalEntryId").value("entry-1"))
+                .andExpect(jsonPath("$.data.lots[1].lotId").value("lot-2"))
+                .andExpect(jsonPath("$.meta.timestamp").exists());
+    }
+
+    @Test
+    @DisplayName("GET /{account}/USD/lots → tenant from ActorContext (finance), 200")
+    void getPositionLotsUsesTenantFromActorContext() throws Exception {
+        FxPositionLotsView empty = new FxPositionLotsView(
+                java.util.List.of(), 0L, 0L, 0);
+        when(getFxPositionLots.get("finance", "ANY_ACCOUNT", Currency.USD))
+                .thenReturn(empty);
+
+        mockMvc.perform(get("/api/finance/ledger/settlements/ANY_ACCOUNT/USD/lots"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.lotCount").value(0))
+                .andExpect(jsonPath("$.data.lots").isEmpty())
+                .andExpect(jsonPath("$.data.totalRemainingForeignMinor").value("0"))
+                .andExpect(jsonPath("$.data.totalCarryingBaseMinor").value("0"));
+    }
+
+    @Test
+    @DisplayName("GET /{account}/XYZ/lots → 400 VALIDATION_ERROR (unknown currency)")
+    void getPositionLotsUnknownCurrency400() throws Exception {
+        mockMvc.perform(get("/api/finance/ledger/settlements/FX_LOTS_WALLET/XYZ/lots"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }

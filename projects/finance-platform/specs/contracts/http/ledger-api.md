@@ -427,6 +427,39 @@ incremental movement — no double-count.
 
 ---
 
+## 12. GET `/api/finance/ledger/settlements/{ledgerAccountCode}/{currency}/lots`
+
+**(20th increment — TASK-FIN-BE-028)** Read-only surface exposing the open FX acquisition
+lots for one `(ledgerAccountCode, currency)` position. `currency` is a 3-letter ISO-4217
+code (`USD`, `EUR`, `JPY`, `KRW`). Tenant-scoped (`ActorContext`). No `Idempotency-Key`.
+
+`200` — ordered `(acquired_at, seq)` ASC; money minor units as **strings** (F5):
+```json
+{ "data": {
+    "lots": [
+      { "lotId": "...", "currency": "USD", "acquiredAt": "2026-01-01T00:00:00Z", "seq": 1,
+        "originalForeignMinor": "1000", "remainingForeignMinor": "1000",
+        "originalBaseMinor": "1300000", "carryingBaseMinor": "1300000",
+        "sourceJournalEntryId": "..." }
+    ],
+    "totalRemainingForeignMinor": "1000",
+    "totalCarryingBaseMinor": "1300000",
+    "lotCount": 1
+  }, "meta": { "timestamp": "..." } }
+```
+Empty position → `200` with `lots: []`, all totals `"0"`, `lotCount: 0` (not 404).
+
+- `400 VALIDATION_ERROR` when `currency` is not a supported code (`KRW/USD/EUR/JPY`).
+- `403 TENANT_FORBIDDEN` when the dual-accept gate rejects.
+
+Fields: `originalForeignMinor` + `originalBaseMinor` are the acquisition-time values (never
+change); `remainingForeignMinor` + `carryingBaseMinor` reflect FIFO consumption (17th incr)
+and revaluation mark-to-spot (18th incr). `sourceJournalEntryId` is the journal entry that
+created the lot (acquisition provenance). Closed lots (`remainingForeignMinor == 0`) are
+excluded — only open lots appear.
+
+---
+
 ## Error codes (this contract → `platform/error-handling.md`)
 
 | Code | HTTP | Meaning |
