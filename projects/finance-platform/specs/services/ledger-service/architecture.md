@@ -393,7 +393,9 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
 - Fuzzy / N:M / split matching; period **reopen**; **cross-currency base-leg matching** (the
   11th increment matches same-foreign-currency lines + the base-leg FX check; matching a
   base-currency [KRW] external statement against foreign internal lines by their carrying base is
-  forward-declared) + a **configurable FX tolerance** (the 11th is an exact base comparison).
+  forward-declared). *(A **configurable FX tolerance** — the 11th was an exact base comparison — is
+  now **done**: the 13th increment, TASK-FIN-BE-020, § FX reconciliation tolerance.)* Per-currency-pair
+  / per-account tolerance granularity stays forward-declared (v1 is per-tenant).
 - **FIFO / lot-level settlement cost basis** — the 12th increment (TASK-FIN-BE-018) settles a
   *portion* of a `(account, currency)` position under a **weighted-average** carrying basis (a
   proportional share `round(C × |F_settle|/|F|)`, residual OPEN position); a **FIFO / lot-level**
@@ -859,8 +861,10 @@ internal line's `baseMoney`, it records an **`AMOUNT_MISMATCH`** discrepancy
 `currency` = KRW, carrying BOTH the matched `externalRef` and `journalEntryId`). **The
 transaction-leg match is still recorded** — the settlement IS identified; the
 discrepancy flags only the value gap. A KRW line, or a foreign line without an external
-base amount, produces **no** base-leg discrepancy (net-zero — exact comparison, a
-configurable FX tolerance is forward-declared).
+base amount, produces **no** base-leg discrepancy (net-zero). **(13th increment —
+TASK-FIN-BE-020)** the exact base comparison is now gated by a per-tenant configurable
+`FxTolerance` (see § FX reconciliation tolerance below); under the `EXACT` default (no
+configured row) the matcher is byte-identical to this 11th-increment behaviour.
 
 **No new error code / no new status / no new event** — `AMOUNT_MISMATCH` is an existing
 `DiscrepancyType` (already in the events `type` enum + the V4 CHECK allow-list); it is
@@ -875,8 +879,60 @@ transaction-leg matching are all unchanged.
 **Deferred** (forward-declared): **cross-currency base-leg matching** (a base-currency
 [KRW] external statement matched against foreign internal lines by their carrying base —
 the 11th increment matches same-foreign-currency lines and adds the base-leg FX check);
-a **configurable FX tolerance** (this increment is an exact base comparison); fuzzy /
-N:M / split matching; period **reopen**.
+fuzzy / N:M / split matching; period **reopen**. *(The **configurable FX tolerance** that
+was forward-declared here is now **done** — the 13th increment below.)*
+
+### FX reconciliation tolerance (thirteenth increment — TASK-FIN-BE-020)
+
+The 11th increment compared the base (FX) leg **exactly**: any non-zero difference between
+the bank-reported base (KRW) value and the internal carrying base on an otherwise-matched
+foreign line raised an `AMOUNT_MISMATCH`. Banks routinely report the base value at **their**
+FX rate, a few minor units off the ledger's carrying rate; under an exact compare every such
+settlement becomes an operator-review discrepancy, drowning the genuine value gaps. The 13th
+increment makes the base-leg threshold a **per-tenant configurable tolerance** so within-band
+FX-rounding differences match cleanly while larger gaps still flag.
+
+**`FxTolerance` value object** (`domain/reconciliation/`, pure — NO Spring/JPA, mirroring the
+`FxRevaluationPolicy` / `FxSettlementPolicy` style). Fields: `toleranceBps` (int, basis points /
+万분율 of the internal carrying-base magnitude) + `absoluteFloorMinor` (long, an absolute floor in
+base/KRW minor units), both `≥ 0`. `static FxTolerance EXACT = (0, 0)`. The allowed band is the
+**looser** (larger) of the bps-derived term `round_half_up(|expected| × toleranceBps / 10000)`
+and the floor; `isWithinTolerance(expected, actual) ⇔ |expected − actual| ≤ band` (**inclusive**
+`≤`). The bps term scales with amount; the floor backstops tiny amounts. Under `EXACT` the band is
+`max(0, 0) = 0`, so within ⇔ `expected == actual` — **net-zero**, byte-identical to FIN-BE-017.
+
+**Matcher threading.** `ReconciliationMatcher.match(...)` gains an `FxTolerance tolerance`
+parameter; the base-leg condition becomes `!tolerance.isWithinTolerance(internal.baseMoney,
+ext.baseAmount)`. Everything else is byte-unchanged — the matcher stays **pure** (the use case
+resolves the tolerance and passes it in; the matcher never reads a repository). Tolerance applies
+**only** to the base (KRW) leg; the transaction (foreign) leg stays an exact `(amount, currency,
+direction)` match.
+
+**F8 invariant preserved.** A within-tolerance match **still records the transaction-leg match**
+(the settlement IS identified) — tolerance suppresses only the base-leg *discrepancy*, never the
+match, and it never auto-posts an FX correction or mutates a journal entry. A KRW line / base-less
+foreign line never fires regardless of tolerance.
+
+**Persistence.** Additive Flyway `V7__add_reconciliation_fx_tolerance.sql` — a **new** table
+`reconciliation_fx_tolerance` (`tenant_id` PK, `tolerance_bps INT NOT NULL DEFAULT 0` CHECK `≥ 0`,
+`floor_minor BIGINT NOT NULL DEFAULT 0` CHECK `≥ 0`, `updated_by` / `updated_at` audit columns).
+**No** change to any existing table, **no** CHECK change (`AMOUNT_MISMATCH` stays in the V4
+allow-list). **No row → `EXACT`** (the use case treats absence as the exact compare; no backfill —
+net-zero for existing tenants). A domain aggregate `ReconciliationFxToleranceConfig` + repository
+port + JPA adapter mirror the existing simple period/config aggregates (Hexagonal layer rules).
+
+**Application + REST.** `IngestStatementUseCase` resolves the tenant's `FxTolerance` (repo lookup;
+absent → `EXACT`) and passes it to the matcher. A `GetFxTolerance` + `SetFxTolerance` (upsert)
+use-case pair; `SetFxTolerance` audits `updated_by` = the `ActorContext` identity (`actor.subject()
+?? actor.tenantId()`, same rule as the journal/period mutations) and validates `bps ≥ 0` /
+`floor ≥ 0` (→ `VALIDATION_ERROR`, 400). `GET` + `PUT /api/finance/ledger/reconciliation/fx-tolerance`
+are tenant-scoped (`actor.tenantId()`); GET returns the EXACT default `{0, 0}` when unset; PUT
+upserts (last-write-wins) + audits (§ reconciliation-api.md § 6/§ 7).
+
+**No new error code / status / event** — within-tolerance simply does not emit; exceeds emits the
+existing `AMOUNT_MISMATCH` on the existing `finance.ledger.reconciliation.discrepancy.detected.v1`;
+the only new code is the platform-standard `VALIDATION_ERROR` on the config PUT. The ingest request
+shape is unchanged.
 
 ## Manual Journal Posting (fifth increment — TASK-FIN-BE-011)
 

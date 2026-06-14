@@ -10,11 +10,14 @@ import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationPeriod
 import com.example.finance.ledger.domain.period.PeriodStatus;
 import com.example.finance.ledger.domain.period.repository.AccountingPeriodRepository;
 import com.example.finance.ledger.domain.reconciliation.ExternalStatement;
+import com.example.finance.ledger.domain.reconciliation.FxTolerance;
+import com.example.finance.ledger.domain.reconciliation.ReconciliationFxToleranceConfig;
 import com.example.finance.ledger.domain.reconciliation.InternalLine;
 import com.example.finance.ledger.domain.reconciliation.ReconciliationDiscrepancy;
 import com.example.finance.ledger.domain.reconciliation.ReconciliationMatcher;
 import com.example.finance.ledger.domain.reconciliation.ReconciliationResult;
 import com.example.finance.ledger.domain.reconciliation.repository.ReconciliationAccounts;
+import com.example.finance.ledger.domain.reconciliation.repository.ReconciliationFxToleranceRepository;
 import com.example.finance.ledger.domain.reconciliation.repository.ReconciliationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -64,6 +67,7 @@ public class IngestStatementUseCase {
     private final LedgerEventPublisher ledgerEventPublisher;
     private final ClockPort clock;
     private final AccountingPeriodRepository accountingPeriodRepository;
+    private final ReconciliationFxToleranceRepository fxToleranceRepository;
 
     @Transactional
     public StatementView ingest(IngestStatementCommand command) {
@@ -95,8 +99,16 @@ public class IngestStatementUseCase {
         List<InternalLine> internalLines =
                 reconciliationRepository.findUnmatchedInternalLines(tenantId, code);
 
+        // (13th incr — TASK-FIN-BE-020) Resolve the tenant's base-leg FX tolerance and
+        // pass it into the PURE matcher (the matcher never reads the repo). Absence of
+        // a config row → FxTolerance.EXACT (the band is 0 ⇒ byte-identical to
+        // FIN-BE-017; the dominant net-zero path).
+        FxTolerance tolerance = fxToleranceRepository.findByTenantId(tenantId)
+                .map(ReconciliationFxToleranceConfig::tolerance)
+                .orElse(FxTolerance.EXACT);
+
         ReconciliationResult result = ReconciliationMatcher.match(
-                tenantId, saved.statementId(), code, saved.lines(), internalLines, now);
+                tenantId, saved.statementId(), code, saved.lines(), internalLines, tolerance, now);
 
         // Re-save the statement so the matched lines' flipped matchStatus persists
         // (cascade), then the matches + OPEN discrepancies.

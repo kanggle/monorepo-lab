@@ -69,6 +69,16 @@ records nothing). Emits `finance.ledger.reconciliation.completed.v1` + one
 carrying base, `actualMinor` = the bank's base value, `currency": "KRW"`; the corresponding
 line still appears in `matches` (the transaction leg reconciled).
 
+**(13th increment — configurable FX tolerance, TASK-FIN-BE-020)** the base-leg compare is
+gated by the tenant's configured **`FxTolerance`** (see § 6). A base difference **within** the
+tolerance band matches cleanly — the line still appears in `matches` (the settlement is
+identified) but **no** `AMOUNT_MISMATCH` discrepancy is recorded; a difference **above** the band
+records the `AMOUNT_MISMATCH` exactly as the 11th increment. The default (no configured row) is
+`EXACT` `(0, 0)` → byte-identical to the 11th increment (any non-zero base diff → discrepancy).
+Tolerance applies **only** to the base (KRW) leg; the transaction (foreign) leg stays an exact
+`(amount, currency, direction)` match. Tolerance **never** auto-posts an FX correction or mutates
+a journal entry (F8) — it suppresses only the base-leg *discrepancy*.
+
 ## 2. POST `/api/finance/ledger/reconciliation/discrepancies/{id}/resolve`
 
 Operator resolves an OPEN discrepancy. Request:
@@ -100,6 +110,39 @@ The discrepancy review queue. `?status=OPEN|RESOLVED` (default all), paginated
 Discrepancy detail (incl. `resolution` when RESOLVED).
 `404 RECONCILIATION_DISCREPANCY_NOT_FOUND` when unknown.
 
+## 6. GET `/api/finance/ledger/reconciliation/fx-tolerance`
+
+**(13th increment — TASK-FIN-BE-020)** The tenant's base-leg FX reconciliation tolerance.
+Tenant-scoped. `200`:
+```json
+{ "data": { "toleranceBps": 100, "floorMinor": "200",
+            "updatedBy": "operator-1", "updatedAt": "2026-02-01T10:00:00Z" },
+  "meta": { "timestamp": "..." } }
+```
+When the tenant has **no** configured row, returns the **EXACT default** with the audit fields
+omitted:
+```json
+{ "data": { "toleranceBps": 0, "floorMinor": "0" }, "meta": { "timestamp": "..." } }
+```
+`toleranceBps` is basis points (万분율) of the internal carrying-base magnitude; `floorMinor` is
+an absolute floor in base/KRW minor units (string, F5). The allowed band is the **looser**
+(larger) of `round_half_up(|carryingBase| × toleranceBps / 10000)` and `floorMinor`; a base
+difference is within tolerance iff `|expected − actual| ≤ band` (inclusive). `EXACT` `(0, 0)` ⇒
+band 0 ⇒ within iff `expected == actual`.
+
+## 7. PUT `/api/finance/ledger/reconciliation/fx-tolerance`
+
+**(13th increment — TASK-FIN-BE-020)** Operator upsert (last-write-wins) of the tenant's FX
+tolerance. Tenant-scoped + audited. Request:
+```json
+{ "toleranceBps": 100, "floorMinor": 200 }
+```
+`200`: the persisted config (the § 6 `data` shape, audit fields populated — `updatedBy` = the
+JWT subject else the tenant; `updatedAt` = the server clock). `400 VALIDATION_ERROR` when
+`toleranceBps < 0` or `floorMinor < 0` (a DB CHECK is the structural backstop). **No new error
+code / status / event** beyond `VALIDATION_ERROR`; the config is consulted at ingest time and
+only ever suppresses the base-leg discrepancy (F8 — never auto-posts a correction).
+
 ---
 
 ## Error codes (this contract → `platform/error-handling.md`)
@@ -111,6 +154,7 @@ Discrepancy detail (incl. `resolution` when RESOLVED).
 | `RECONCILIATION_DISCREPANCY_NOT_FOUND` | 404 | discrepancy id unknown / not in tenant |
 | `RECONCILIATION_ALREADY_RESOLVED` | 409 | resolve attempted on an already-RESOLVED discrepancy |
 | `RECONCILIATION_PERIOD_LOCKED` | 422 | **(6th/7th incr)** resolve (6th) OR ingest (7th) of a statement whose statement date is in a CLOSED accounting period (frozen with the books; both sides; mirrors `LEDGER_PERIOD_CLOSED`) |
+| `VALIDATION_ERROR` | 400 | **(13th incr)** `PUT /fx-tolerance` with a negative `toleranceBps` / `floorMinor` (platform-standard code; not a new reconciliation code) |
 | `TENANT_FORBIDDEN` | 403 | dual-accept gate rejects (both branches fail) |
 
 `RECONCILIATION_DISCREPANCY` (pre-registered, fintech F8) names the **recorded
@@ -119,6 +163,9 @@ response.
 
 ## Out of scope (forward-declared — later increments)
 
-- Fuzzy / N:M / split matching; multi-currency statements; period **reopen**.
+- Fuzzy / N:M / split matching; period **reopen**.
+- **Cross-currency base-leg matching** (a KRW external statement matched against foreign internal
+  lines by their carrying base) — a separate increment.
+- Per-currency-pair / per-account FX tolerance granularity — v1 is **per-tenant**.
 - An in-repo consumer of the reconciliation feed (this increment ships the producer
   + topics only).

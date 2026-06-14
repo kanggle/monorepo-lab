@@ -1,14 +1,19 @@
 package com.example.finance.ledger.presentation.controller;
 
 import com.example.finance.ledger.application.ActorContext;
+import com.example.finance.ledger.application.GetFxToleranceUseCase;
 import com.example.finance.ledger.application.IngestStatementCommand;
 import com.example.finance.ledger.application.IngestStatementUseCase;
 import com.example.finance.ledger.application.QueryReconciliationUseCase;
 import com.example.finance.ledger.application.ResolveDiscrepancyUseCase;
+import com.example.finance.ledger.application.SetFxToleranceCommand;
+import com.example.finance.ledger.application.SetFxToleranceUseCase;
 import com.example.finance.ledger.application.view.DiscrepancyPageView;
 import com.example.finance.ledger.application.view.DiscrepancyView;
+import com.example.finance.ledger.application.view.FxToleranceView;
 import com.example.finance.ledger.application.view.ReconciliationMatchView;
 import com.example.finance.ledger.application.view.StatementView;
+import com.example.finance.ledger.domain.error.LedgerErrors.FxToleranceInvalidException;
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationAccountInvalidException;
 import com.example.finance.ledger.domain.error.LedgerErrors.ReconciliationAlreadyResolvedException;
@@ -45,6 +50,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -69,6 +75,8 @@ class ReconciliationControllerSliceTest {
     @MockitoBean IngestStatementUseCase ingestStatement;
     @MockitoBean ResolveDiscrepancyUseCase resolveDiscrepancy;
     @MockitoBean QueryReconciliationUseCase queryReconciliation;
+    @MockitoBean GetFxToleranceUseCase getFxTolerance;
+    @MockitoBean SetFxToleranceUseCase setFxTolerance;
 
     @BeforeEach
     void setUp() {
@@ -213,5 +221,61 @@ class ReconciliationControllerSliceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.statementId").value("stmt-1"))
                 .andExpect(jsonPath("$.data.source").value("BANK"));
+    }
+
+    // ---- 13th increment: FX tolerance config (TASK-FIN-BE-020) ----
+
+    @Test
+    @DisplayName("GET /fx-tolerance unset → 200 EXACT default {0,0}, no audit fields")
+    void getFxToleranceDefault() throws Exception {
+        when(getFxTolerance.get("finance")).thenReturn(FxToleranceView.exact());
+
+        mockMvc.perform(get("/api/finance/ledger/reconciliation/fx-tolerance"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.toleranceBps").value(0))
+                .andExpect(jsonPath("$.data.floorMinor").value(0))
+                .andExpect(jsonPath("$.data.updatedBy").doesNotExist())
+                .andExpect(jsonPath("$.data.updatedAt").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /fx-tolerance configured → 200 with bps/floor + audit fields")
+    void getFxToleranceConfigured() throws Exception {
+        when(getFxTolerance.get("finance")).thenReturn(new FxToleranceView(
+                100, 50L, "user-1", Instant.parse("2026-02-01T10:00:00Z")));
+
+        mockMvc.perform(get("/api/finance/ledger/reconciliation/fx-tolerance"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.toleranceBps").value(100))
+                .andExpect(jsonPath("$.data.floorMinor").value(50))
+                .andExpect(jsonPath("$.data.updatedBy").value("user-1"));
+    }
+
+    @Test
+    @DisplayName("PUT /fx-tolerance → 200 persisted config, audited (updatedBy = actor)")
+    void putFxToleranceOk() throws Exception {
+        when(setFxTolerance.set(any(SetFxToleranceCommand.class))).thenReturn(new FxToleranceView(
+                100, 50L, "user-1", Instant.parse("2026-02-01T10:00:00Z")));
+
+        mockMvc.perform(put("/api/finance/ledger/reconciliation/fx-tolerance")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"toleranceBps\":100,\"floorMinor\":50}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.toleranceBps").value(100))
+                .andExpect(jsonPath("$.data.floorMinor").value(50))
+                .andExpect(jsonPath("$.data.updatedBy").value("user-1"));
+    }
+
+    @Test
+    @DisplayName("PUT /fx-tolerance negative bps → 400 VALIDATION_ERROR")
+    void putFxToleranceNegative() throws Exception {
+        when(setFxTolerance.set(any(SetFxToleranceCommand.class)))
+                .thenThrow(new FxToleranceInvalidException("toleranceBps must be >= 0: -1"));
+
+        mockMvc.perform(put("/api/finance/ledger/reconciliation/fx-tolerance")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"toleranceBps\":-1,\"floorMinor\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 }
