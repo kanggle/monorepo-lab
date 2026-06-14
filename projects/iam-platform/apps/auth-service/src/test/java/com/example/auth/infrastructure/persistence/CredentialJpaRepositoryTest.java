@@ -102,6 +102,49 @@ class CredentialJpaRepositoryTest {
     // — the account_type round-trip slice tests (TASK-BE-329) are deleted. The
     // V0025 Flyway DROP + JPA validate is exercised by the CI iam Testcontainers IT.
 
+    // ── TASK-BE-378 (ADR-MONO-035 O3): credentials.identity_id additive net-zero ──
+
+    @Test
+    @DisplayName("BE-378: credentials.identity_id 컬럼은 VARCHAR(36) NULLABLE (V0026)")
+    void identityIdColumn_isNullableVarchar36() {
+        // The migration ran (this @DataJpaTest boots Flyway); assert the additive column's
+        // shape via INFORMATION_SCHEMA. NULLABLE + VARCHAR(36) value-convention cross-DB ref.
+        String nullable = jdbc.queryForObject(
+                "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS "
+                        + "WHERE TABLE_NAME = 'credentials' AND COLUMN_NAME = 'identity_id'",
+                String.class);
+        assertThat(nullable).as("identity_id must be NULLABLE (additive net-zero)").isEqualTo("YES");
+
+        Long maxLen = jdbc.queryForObject(
+                "SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS "
+                        + "WHERE TABLE_NAME = 'credentials' AND COLUMN_NAME = 'identity_id'",
+                Long.class);
+        assertThat(maxLen).as("identity_id must be VARCHAR(36)").isEqualTo(36L);
+    }
+
+    @Test
+    @DisplayName("BE-378: credential 은 identity_id 없이 INSERT 되어도(NULL) 정상 — 미매핑·net-zero")
+    void credential_insertsWithNullIdentityId_andIsReadable() {
+        // The standard insert path does not set identity_id → it stays NULL (no
+        // creation path is wired to it). The entity (which does NOT map identity_id)
+        // still round-trips the row, proving ddl-auto=validate tolerates the extra column.
+        String accountId = uuid();
+        insertCredential(accountId, null);
+
+        assertThat(repo.findByAccountId(accountId)).isPresent();
+        String identityId = jdbc.queryForObject(
+                "SELECT identity_id FROM credentials WHERE account_id = ?", String.class, accountId);
+        assertThat(identityId).as("new credential carries NULL identity_id (no creation path wired)").isNull();
+
+        // An externally-populated identity_id (the deferred consolidation backfill) is
+        // preserved — the unmapped column is never nulled by a JPA credential update.
+        String idy = uuid();
+        jdbc.update("UPDATE credentials SET identity_id = ? WHERE account_id = ?", idy, accountId);
+        String readBack = jdbc.queryForObject(
+                "SELECT identity_id FROM credentials WHERE account_id = ?", String.class, accountId);
+        assertThat(readBack).isEqualTo(idy);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private void insertCredential(String accountId, String email) {

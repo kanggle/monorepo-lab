@@ -14,6 +14,7 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 |---|---|---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT | internal | — |
 | `account_id` | VARCHAR(36) | UNIQUE, NOT NULL | internal | account-service의 account.id 참조 (FK 없음 — 서비스 간 FK 금지) |
+| `identity_id` | VARCHAR(36) | NULL | internal | **신규 (TASK-BE-378, V0026 / ADR-MONO-035 O3 = ADR-034 U6 step 3b)** — 중앙 `identities` 레지스트리(account_db, ADR-034 3a)의 person identity 참조. **value-convention cross-DB ref** (identities 는 account_db, auth_db 는 FK 불가 — `account_id` 와 동일 패턴; admin_operators.identity_id 3c 와 동형). 개념적 backfill = `credentials.identity_id := accounts.identity_id` (공유 `account_id` 경유)이나 auth_db≠account_db 라 단일 마이그레이션이 cross-DB read 불가 → 후속 consolidation step 에서 채움(현재 caller 없음 = additive net-zero). **CredentialJpaEntity 에 미매핑**(ADR-034 3a accounts.identity_id 와 동일) — Hibernate 가 credential update 시 쓰지/null 처리하지 않아 외부 주입값 보존, `ddl-auto=validate` 는 extra 컬럼 무시로 통과 |
 | `email` | VARCHAR(320) | NULL | confidential | V0006 (TASK-BE-063)에서 추가. 로그인 식별자 — auth-service가 email→credential 조회를 자체 수행해 account-service 왕복 제거. 소스 오브 트루스는 여전히 account-service.accounts.email; 본 컬럼은 역정규화 사본. NULL 허용 (백필 전 row 대응) |
 | `tenant_id` | VARCHAR(32) | NOT NULL | internal | (R8) cross-tenant 격리 키. V0007에서 `DEFAULT 'fan-platform'` 백필 후 DROP DEFAULT (NOT NULL 유지). TASK-BE-229 multi-tenant Phase 2/3 |
 | `credential_hash` | VARCHAR(255) | NOT NULL | **restricted** | argon2id 해시. 평문 저장 금지 (R2) |
@@ -103,6 +104,8 @@ provider 연결 목록을 보여줄 때 `account_id` 인덱스로 조회.
 - V0014: `refresh_tokens.jti` / `rotated_from` VARCHAR(36)→VARCHAR(255) widening (TASK-MONO-046-1 Cluster A — SAS 96-byte URL-safe base64 RT 수용)
 - V0015: `platform-console-web` public OIDC client 시드 (TASK-BE-296)
 - V0016: V0011/V0012 의 `client_settings.settings.client.post-logout-redirect-uris` 를 SAS default-typed `["java.util.ArrayList",[...]]` 형태로 교정 (TASK-BE-297 — plain JSON array 가 `SecurityJackson2Modules.enableDefaultTyping` 하에서 `InvalidTypeIdException` 유발하던 잠재 production 결함. forward-only / 조건부 idempotent / 영향 행 3개만 갱신, clean client 무변경). **`client_settings` 는 MySQL native `JSON` 컬럼이므로** 교정은 `JSON_SET` + `JSON_EXTRACT` (parsed-tree 구조 변형)로 수행한다 — pre-normalization 문자열 리터럴 `REPLACE()` 는 MySQL 의 JSON 저장 정규화(키 재정렬·`:`/`,` 뒤 공백 재삽입·숫자 재정규화) 때문에 stored text 와 불일치하여 silent no-op 이 된다 (PR #571 에서 IT 3건으로 표면화된 1차 시도의 실패 원인). Flyway 는 본 서비스에서 MySQL 8.0 에만 적용된다 (유일한 H2 슬라이스 테스트 `OAuth2AuthorizationServerSliceTest` 는 `spring.flyway.enabled=false`); 따라서 MySQL 전용 JSON 함수 사용은 portable 하다. no-op 회귀는 `V0016MigrationShapeTest` (non-Docker) 가 즉시 차단한다.
+- V0022 / V0025: `credentials.account_type` 추가(BE-329) 후 제거(MONO-263 — ADR-032 D5 step 4b, roles 단일 축)
+- V0026: `credentials.identity_id` VARCHAR(36) NULL 추가 (TASK-BE-378 / ADR-MONO-035 O3 — 중앙 identity 상관키, value-convention cross-DB ref, additive net-zero, 미매핑·미백필)
 - PII 마스킹 컬럼 (`credential_hash`, `device_fingerprint`) 변경 시 down migration 금지 — 단방향만 허용
 
 ---
