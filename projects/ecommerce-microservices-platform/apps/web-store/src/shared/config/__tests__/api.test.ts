@@ -1,8 +1,8 @@
 /**
  * Unit tests for web-store apiClient baseURL determination.
  *
- * Added by TASK-FE-068 to prevent drift regression between web-store and
- * admin-dashboard baseURL logic. Mirrors admin-dashboard equivalent test.
+ * Added by TASK-FE-068 to lock web-store apiClient baseURL logic against
+ * regression.
  *
  * Key constraint (Edge Case #5 in TASK-FE-068):
  *   `baseURL` is a module-level const captured at import time.

@@ -81,7 +81,7 @@ describe('LoginForm (GAP)', () => {
     mockSearchParams.value = new URLSearchParams('error=account_type_mismatch');
     renderLoginForm();
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/admin 계정으로는 web-store/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/operator 계정으로는 web-store/);
   });
 
   it('?error=Configuration 이면 인증 서버 안내 메시지를 표시한다', () => {

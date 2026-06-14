@@ -29,8 +29,6 @@ docker compose ps | grep "healthy\|Up"
 | 2 | `02-product-detail.png` | http://localhost:3000/products/b0000000-0000-0000-0000-000000000004 | 맥북 상품 상세 (옵션/리뷰 포함) |
 | 3 | `03-checkout.png` | http://localhost:3000/checkout | 체크아웃 페이지 (장바구니 → 결제 진입) |
 | 4 | `04-my-orders.png` | http://localhost:3000/my/orders | 주문 내역 (상태 추적) |
-| 5 | `05-admin-dashboard.png` | http://localhost:3001/dashboard | 관리자 홈 (KPI 카드) |
-| 6 | `06-admin-products.png` | http://localhost:3001/products | 상품 관리 화면 |
 | 7 | `07-grafana.png` | http://localhost:3100/ | Grafana 대시보드 (서비스 메트릭) |
 
 ### 캡처 규격

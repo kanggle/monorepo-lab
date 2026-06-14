@@ -1153,7 +1153,7 @@ services:
 
   # ──────────────────────────────────────────────
   # 프론트엔드 애플리케이션
-  # web-store / admin-dashboard 는 Traefik 아래의 별도 서브도메인으로 노출.
+  # web-store 는 Traefik 아래의 서브도메인으로 노출.
   # NEXT_PUBLIC_API_URL 은 브라우저에서 접근하는 절대 URL 이므로
   # Traefik 진입점인 http://ecommerce.local 로 지정한다.
   # ──────────────────────────────────────────────
@@ -1187,44 +1187,6 @@ services:
       - "traefik.http.services.ecommerce-web.loadbalancer.server.port=3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://0.0.0.0:3000/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - ecommerce-net
-      - traefik-net
-
-  admin-dashboard:
-    build:
-      context: .
-      dockerfile: apps/admin-dashboard/Dockerfile
-      args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://ecommerce.local}
-        - NEXT_PUBLIC_USE_MOCK=true
-    container_name: ecommerce-admin-dashboard
-    init: true
-    restart: unless-stopped
-    environment:
-      - API_URL_INTERNAL=http://gateway-service:8080
-    expose:
-      - "3001"
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-    depends_on:
-      gateway-service:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.ecommerce-admin.rule=Host(`admin.ecommerce.local`)"
-      - "traefik.http.routers.ecommerce-admin.entrypoints=web"
-      - "traefik.http.services.ecommerce-admin.loadbalancer.server.port=3001"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://0.0.0.0:3001/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

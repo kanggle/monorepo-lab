@@ -82,7 +82,7 @@
 | Fulfillment | `shipping-service`, `notification-service` |
 | Engagement | `review-service` |
 | Async | `batch-worker` |
-| Frontend | `web-store` (Next.js 15), `admin-dashboard` |
+| Frontend | `web-store` (Next.js 15) — operator UI absorbed into `platform-console` (ADR-MONO-031 Phase 6) |
 
 - **stack**: Java 21 / Spring Boot 3.4 / Postgres / Kafka / Redis / Elasticsearch / MinIO
 - **IAM migration**: 향후 (TASK-MONO-020) — 현재 자체 auth-service.
@@ -311,7 +311,7 @@ traits/<declared-trait>.md for each trait (if present)
 
 **CI**: [.github/workflows/ci.yml](../.github/workflows/ci.yml) — `dorny/paths-filter@v3` 기반 path-filtered build (TASK-MONO-045 적용). chore PR ~19초 (baseline 15분 대비 47x).
 
-**Frontend Docker 빌드 캐시 (2026-06-02, PC-FE-035 / FE-072)**: Next.js standalone Docker 빌드에 BuildKit `.next/cache` + pnpm store 캐시 마운트 — console-web 229→91s (60%↓), ecommerce web-store/admin-dashboard 445→79s (82%↓); 이미지 크기 불변. (fan-platform-web 은 Dockerfile 미보유 = 대상 외; 공유 base Dockerfile 추출은 미착수 nicety.)
+**Frontend Docker 빌드 캐시 (2026-06-02, PC-FE-035 / FE-072)**: Next.js standalone Docker 빌드에 BuildKit `.next/cache` + pnpm store 캐시 마운트 — console-web 229→91s (60%↓), ecommerce web-store 445→79s (82%↓; admin-dashboard 는 ADR-MONO-031 Phase 6 로 제거되어 web-store 단독); 이미지 크기 불변. (fan-platform-web 은 Dockerfile 미보유 = 대상 외; 공유 base Dockerfile 추출은 미착수 nicety.)
 
 ---
 

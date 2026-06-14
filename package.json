@@ -8,7 +8,6 @@
     "ecommerce:build": "pnpm --dir projects/ecommerce-microservices-platform build",
     "ecommerce:lint": "pnpm --dir projects/ecommerce-microservices-platform lint",
     "ecommerce:web-store": "pnpm --dir projects/ecommerce-microservices-platform --filter web-store dev",
-    "ecommerce:admin": "pnpm --dir projects/ecommerce-microservices-platform --filter admin-dashboard dev",
     "ecommerce:up": "docker compose --project-directory projects/ecommerce-microservices-platform up -d",
     "ecommerce:down": "docker compose --project-directory projects/ecommerce-microservices-platform down",
     "ecommerce:ps": "docker compose --project-directory projects/ecommerce-microservices-platform ps",

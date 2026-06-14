@@ -13,7 +13,7 @@ applying these manifests will fail with `CreateContainerConfigError`.
 
 - Token validation: `gateway-service` reads RS256 JWTs from GAP via
   `OIDC_ISSUER_URL` + `OIDC_JWK_SET_URI` (TASK-MONO-027 / PR #145).
-- User-facing sign-in: `web-store` and `admin-dashboard` use NextAuth v5
+- User-facing sign-in: `web-store` uses NextAuth v5
   with the GAP OIDC provider (TASK-FE-067 / PR #148).
 - Spec: `projects/ecommerce-microservices-platform/specs/integration/iam-integration.md`.
 

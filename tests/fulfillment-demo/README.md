@@ -14,7 +14,7 @@ cross-project event.
 ## What runs
 
 The **ecommerce** `docker-compose.yml` provides the bulk of the stack (broker `kafka`,
-`redis`, per-service postgres, `order/payment/shipping-service`, `admin-dashboard`). This
+`redis`, per-service postgres, `order/payment/shipping-service`, `web-store`). This
 overlay (`docker-compose.fulfillment-demo.yml`) adds the **one missing cross-project
 piece** on the same broker:
 
@@ -43,7 +43,7 @@ docker compose \
   -f projects/ecommerce-microservices-platform/docker-compose.yml \
   -f tests/fulfillment-demo/docker-compose.fulfillment-demo.yml \
   up -d --build \
-  order-service payment-service shipping-service admin-dashboard outbound-service
+  order-service payment-service shipping-service outbound-service
 ```
 
 (`depends_on` pulls in `kafka`, `redis`, and the per-service postgres automatically.
@@ -121,7 +121,7 @@ printf '{"event_id":"demo-evt-1","event_type":"StockChanged","occurred_at":"2026
 **(a) ecommerce — order CONFIRMED** (UI or REST):
 ```bash
 curl -fsS http://localhost:8086/api/orders/$ORDER_ID -H 'X-User-Id: demo-user-1'
-# status: "CONFIRMED"   (admin-dashboard at http://localhost:3001 also lists it)
+# status: "CONFIRMED"   (platform-console ecommerce-ops orders surface also lists it)
 ```
 
 **(b) broker — the forward event + the wms reaction** (any Kafka consumer; e.g. exec into
@@ -207,7 +207,7 @@ a real failure risk; the code itself is CI-gated, so correctness does not depend
    emits `wms.outbound.shipping.confirmed.v1`.
 4. The return leg flips the ecommerce side: `shipping-service` → Shipping `SHIPPED` →
    `order-service` → Order **SHIPPED**. Observe in **web-store `/my/orders/{id}`** and
-   **admin-dashboard `/orders/{id}` + `/shippings`**.
+   the **platform-console ecommerce-ops orders + shippings surfaces**.
 
 The backorder auto-cancel/refund (ADR-MONO-022 v2(a)) + inventory reconciliation (v2(b))
 legs are likewise observable once IAM + inventory are wired (each has its own return-leg

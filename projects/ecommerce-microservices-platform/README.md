@@ -58,17 +58,8 @@
   <em>주문 내역 — 주문 상태 추적 (PENDING → CONFIRMED → SHIPPED → DELIVERED)</em>
 </p>
 
-### Admin Dashboard (관리자)
-
-<p align="center">
-  <img src="docs/screenshots/05-admin-dashboard.png" width="900" alt="관리자 홈"><br>
-  <em>관리자 대시보드 — 주요 KPI · 최근 주문</em>
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/06-admin-products.png" width="900" alt="상품 관리"><br>
-  <em>상품 관리 — ProductCreated 이벤트 발행 → Search 인덱스 실시간 반영</em>
-</p>
+> 운영자(operator) UI 는 ADR-MONO-031 Phase 6 로 통합 콘솔(platform-console, hub)에 흡수되었다.
+> 독립 admin-dashboard 앱은 제거되었고, standalone 배포본은 web-store 단독 프론트엔드로 운영된다.
 
 ### Observability
 
@@ -84,7 +75,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                           Clients                                   │
-│                  Web Store (3000)  Admin Dashboard (3001)            │
+│                          Web Store (3000)                           │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
                     ┌──────▼──────┐
@@ -142,7 +133,8 @@
 | App | Port | Architecture | 역할 |
 |-----|------|-------------|------|
 | **Web Store** | 3000 | Feature-Sliced Design | 고객 쇼핑 (검색, 장바구니, 주문, 결제) |
-| **Admin Dashboard** | 3001 | Feature-based Layered | 관리자 (상품/주문/프로모션/알림 관리) |
+
+> 운영자(operator) UI 는 ADR-MONO-031 Phase 6 로 통합 콘솔(platform-console, hub)에 흡수되었다 (상품·주문·이미지·사용자·프로모션·배송·알림). 독립 admin-dashboard 앱은 제거되었다.
 
 ---
 
@@ -240,7 +232,6 @@ Order Service                  Kafka                    Downstream
 
 | App | Lines | Statements | Functions | Branches | Tests |
 |-----|-------|-----------|-----------|----------|-------|
-| `admin-dashboard` | **84.33 %** | 80.89 % | 73.29 % | 79.09 % | 420 |
 | `web-store` | **81.15 %** | 80.07 % | 77.01 % | 81.38 % | — |
 
 생성 방법: `pnpm --filter <app> test:coverage` — v8 provider 기반, `src/**/*.test.{ts,tsx}` 제외. HTML 리포트는 `apps/<app>/coverage/index.html`에서 확인.
@@ -419,7 +410,6 @@ pnpm ecommerce:up                    # docker compose up -d 의 단축 명령
 # 3) 브라우저 접속
 #   http://ecommerce.local/          → gateway (API)
 #   http://web.ecommerce.local/      → web-store
-#   http://admin.ecommerce.local/    → admin-dashboard
 
 # 프론트엔드만 개발 모드
 pnpm dev
@@ -467,8 +457,7 @@ ecommerce-microservices-platform/
 │   ├── promotion-service/      # 프로모션 서비스
 │   ├── notification-service/   # 알림 서비스
 │   ├── batch-worker/           # 배치 처리
-│   ├── web-store/              # 고객 웹 (Next.js)
-│   └── admin-dashboard/        # 관리자 대시보드 (Next.js)
+│   └── web-store/              # 고객 웹 (Next.js)
 ├── libs/                       # 공유 라이브러리 (Java)
 ├── packages/                   # 공유 패키지 (TypeScript)
 ├── specs/                      # 스펙 문서 (Source of Truth)

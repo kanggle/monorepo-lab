@@ -12,7 +12,8 @@ import { useAuth } from '../model/auth-context';
  *
  * Error surfaces:
  *   - `?error=account_type_mismatch` → an OPERATOR completed GAP login but is
- *     not allowed to enter web-store. Tell them to use the admin dashboard.
+ *     not allowed to enter web-store. Tell them to use the operator console
+ *     (platform-console on the hub; the standalone deployment has no console).
  *   - `?error=Configuration` / `?error=...` → NextAuth-internal errors (most
  *     commonly "discovery doc fetch failed" when GAP is down). Generic
  *     fallback message.
@@ -32,7 +33,7 @@ function resolveCallbackUrl(raw: string | null): string {
 function describeError(code: string | null): string | null {
   if (!code) return null;
   if (code === 'account_type_mismatch' || code === 'AccountTypeMismatch') {
-    return 'admin 계정으로는 web-store 에 접근할 수 없습니다. admin dashboard 로 이동해 주세요.';
+    return 'operator 계정으로는 web-store 에 접근할 수 없습니다. 운영자 콘솔을 이용해 주세요.';
   }
   if (code === 'Configuration') {
     return '인증 서버 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.';

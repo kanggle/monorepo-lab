@@ -242,7 +242,7 @@ Apache Kafka 사용
 
 | 이벤트명 | 발행 조건 | 소비자 | 핵심 페이로드 필드 |
 |---|---|---|---|
-| `UserProfileUpdated` | 사용자가 프로필을 수정함 | admin-dashboard(미래), notification-service(미래) | `userId`, `nickname`, `phone`, `profileImageUrl`, `updatedAt` |
+| `UserProfileUpdated` | 사용자가 프로필을 수정함 | platform-console(미래), notification-service(미래) | `userId`, `nickname`, `phone`, `profileImageUrl`, `updatedAt` |
 | `UserWithdrawn` | 회원 탈퇴 처리 완료 | order-service, auth-service | `userId`, `withdrawnAt` |
 
 ---

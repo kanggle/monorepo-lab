@@ -12,7 +12,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 | ~~auth-service~~ | ~~Publishes UserSignedUp event to trigger initial profile creation; consumes UserWithdrawn event to invalidate authentication credentials~~ **REMOVED by TASK-BE-132 — IAM (iam-platform) is now the identity source. Profile creation triggers from IAM `AccountSignedUp` events; credential invalidation is IAM-internal.** |
 | order-service | Consumes UserWithdrawn event to cancel active orders |
 | web-store | Customer-facing profile view/edit, address management UI |
-| admin-dashboard | Admin user list and detail view |
+| platform-console | Admin user list and detail view |
 | gateway-service | Request routing, user identity injection (X-User-Id header) |
 
 ## User Flows
@@ -77,5 +77,5 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 | Event | Publisher | Consumers |
 |---|---|---|
 | UserSignedUp | IAM (iam-platform) | user-service |
-| UserProfileUpdated | user-service | admin-dashboard (future), notification-service (future) |
+| UserProfileUpdated | user-service | platform-console (future), notification-service (future) |
 | UserWithdrawn | user-service | order-service, IAM (credential/session invalidation, IAM-internal) |

@@ -24,8 +24,7 @@ specs/
 │   ├── user-service/
 │   ├── gateway-service/
 │   ├── batch-worker/
-│   ├── web-store/
-│   └── admin-dashboard/
+│   └── web-store/
 ├── features/          # 기능 스펙
 └── use-cases/         # 유스케이스
 ```
@@ -97,7 +96,6 @@ specs/
 | `search-service` | Hexagonal | 상품 검색 인덱스, 검색 쿼리 API |
 | `batch-worker` | Layered | 스케줄드/배치 처리 |
 | `web-store` | Feature-Sliced Design | 고객용 쇼핑몰 (Next.js) |
-| `admin-dashboard` | Layered by Feature | 내부 운영 대시보드 (Next.js) |
 
 ### 아키텍처 결정 규칙 (architecture-decision-rule.md)
 
@@ -227,7 +225,6 @@ specs/
 | `payment-service` | OrderPlaced/OrderCancelled 이벤트 수신으로 결제/환불 처리 (현재 시뮬레이션 모드) |
 | `search-service` | 상품 이벤트 소비로 Elasticsearch 인덱스 유지, 키워드/필터/정렬/패싯 검색 API |
 | `batch-worker` | 만료 세션 정리, 미처리 주문 자동 취소, 일별 매출 집계, Elasticsearch 정합성 검증 |
-| `admin-dashboard` | 관리자 전용 상품/주문/사용자 관리 내부 운영 대시보드 (Next.js) |
 | `web-store` | 고객용 쇼핑몰 프론트엔드 (Next.js) |
 
 ---

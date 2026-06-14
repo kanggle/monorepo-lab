@@ -18,7 +18,7 @@
 #   docker compose \
 #     -f projects/ecommerce-microservices-platform/docker-compose.yml \
 #     -f tests/fulfillment-demo/docker-compose.fulfillment-demo.yml \
-#     up -d --build order-service payment-service shipping-service admin-dashboard \
+#     up -d --build order-service payment-service shipping-service \
 #                   outbound-service
 #   # then apply the read-model seed (see README) and place an order.
 #

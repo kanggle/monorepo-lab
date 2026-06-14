@@ -1,6 +1,6 @@
 # 프론트엔드 ↔ 백엔드 통합 검증 가이드
 
-이 문서는 docker compose 환경에서 web-store, admin-dashboard가 gateway-service를 통해 백엔드 API와 정상 연동되는지 수동 검증하는 절차를 정의한다.
+이 문서는 docker compose 환경에서 web-store가 gateway-service를 통해 백엔드 API와 정상 연동되는지 수동 검증하는 절차를 정의한다. (운영자 UI 는 platform-console(hub)로 흡수 — ADR-MONO-031 Phase 6.)
 
 ---
 
@@ -39,7 +39,6 @@ docker-compose ps
 | order-service | 8086 | http://localhost:8086/actuator/health |
 | payment-service | 8087 | http://localhost:8087/actuator/health |
 | web-store | 3000 | http://localhost:3000/ |
-| admin-dashboard | 3001 | http://localhost:3001/ |
 
 ---
 
@@ -56,7 +55,6 @@ docker-compose ps
 
 gateway-service는 다음 오리진을 허용한다:
 - `http://localhost:3000` (web-store)
-- `http://localhost:3001` (admin-dashboard)
 
 검증 방법:
 1. 브라우저에서 web-store(http://localhost:3000) 접속
@@ -109,27 +107,7 @@ curl -v http://localhost:8080/api/users/me
 
 ---
 
-## admin-dashboard 연동 검증
-
-### 1. 상품 관리 (CRUD)
-
-- [ ] http://localhost:3001 접속 및 관리자 로그인
-- [ ] 상품 목록 조회 (GET /api/products)
-- [ ] 상품 등록 (POST /api/admin/products)
-- [ ] 상품 수정 (PATCH /api/admin/products/{id})
-- [ ] 재고 조정 (PATCH /api/admin/products/{id}/stock)
-
-### 2. 주문 관리
-
-- [ ] 주문 목록 조회 (GET /api/orders)
-- [ ] 주문 상세 조회 (GET /api/orders/{id})
-- [ ] 주문 취소 처리 (POST /api/orders/{id}/cancel)
-
-### 3. 사용자 관리
-
-- [ ] 사용자 목록 조회 (GET /api/admin/users)
-- [ ] 사용자 상세 조회 (GET /api/admin/users/{id})
-- [ ] 필터링/페이지네이션 동작 확인
+> 운영자(operator) 연동 검증은 통합 콘솔(platform-console, hub)로 이관되었다 (ADR-MONO-031 Phase 6). 독립 admin-dashboard 앱은 제거되었다.
 
 ---
 
@@ -194,7 +172,6 @@ docker-compose restart gateway-service
 | 구분 | 서비스 | 호스트 포트 |
 |---|---|---|
 | Frontend | web-store | 3000 |
-| Frontend | admin-dashboard | 3001 |
 | Gateway | gateway-service | 8080 |
 | Backend | auth-service | 8081 |
 | Backend | product-service | 8082 |
