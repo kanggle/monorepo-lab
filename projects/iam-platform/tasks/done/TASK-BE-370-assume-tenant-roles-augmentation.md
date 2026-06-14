@@ -8,7 +8,9 @@ assume-tenant **roles augmentation** — preserve the operator's `roles` from th
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: PR #1535 squash `2302f21a7` (CI 전건 green incl. iam Testcontainers IT 3m6s = assume-tenant exchange wiring 권위검증; 3-dim verified). **ADR-032 step2 완결** — assumed(token_exchange) 토큰도 operator `roles` 운반(base+assumed 양쪽 roles-only issuance 동작). 설계=검증된 subject token 의 roles 를 verbatim 보존(operatorAccountType BE-329·org_scope BE-338 동일 패턴; 재조회·시드·account-service 호출 0, fail-CLOSED 게이트 무가용성-의존 특성 유지). `AssumeTenantAuthenticationToken.operatorRoles`+provider `getClaimAsStringList("roles")` 보존+customizer assume-tenant 브랜치 주입(빈값 omit). 기존 tenant_id/account_type/org_scope/entitled_domains 불변. 구현=Opus 서브에이전트+오케스트레이터 diff 직접검증. 다음 phase=ADR-032 step3(account unify, Flyway).
 
 # Owner
 
