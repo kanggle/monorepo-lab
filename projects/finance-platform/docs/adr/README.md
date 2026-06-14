@@ -4,7 +4,7 @@
 
 | # | 제목 | 상태 |
 |---|---|---|
-| [ADR-001](ADR-001-fx-cost-flow-method-fifo-lot-tracking.md) | 외화 포지션 원가흐름을 가중평균에서 FIFO 로트 추적으로(per-tenant 설정·opt-in) | Proposed |
+| [ADR-001](ADR-001-fx-cost-flow-method-fifo-lot-tracking.md) | 외화 포지션 원가흐름을 가중평균에서 FIFO 로트 추적으로(per-tenant 설정·opt-in) | Accepted |
 
 ## ADR 작성 원칙
 

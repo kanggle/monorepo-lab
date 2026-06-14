@@ -1,11 +1,11 @@
 # ADR-001: 외화 포지션 원가흐름(cost-flow)을 가중평균에서 FIFO 로트(lot) 추적으로 — per-tenant 설정·opt-in
 
-- **Status**: PROPOSED (2026-06-14)
+- **Status**: ACCEPTED (2026-06-14)
 - **Date**: 2026-06-14
 - **Authors**: architecture (ledger-service 15번째 증분 방향 — finance-platform 첫 프로젝트 ADR)
 - **Supersedes**: —
 - **Superseded by**: —
-- **History**: PROPOSED 2026-06-14 — 사용자가 ledger 후속 작업으로 **"FIFO/lot cost-basis 설계"** 를 명시 선택(ADR-MONO-033 staged-child 패턴 직후, 충돌 없는 finance 평면 방향). 14증분(FIN-BE-007~021)까지 외화 결제는 **가중평균 pool** 으로 처분원가를 산정해 왔고, 처분된 외화가 **어느 취득분(lot)** 이었는지는 회계상 소실된다. 본 ADR 은 (a) 현 가중평균 모델을 회고적으로 기록하고 (b) **취득 로트별 원가추적(FIFO)** 으로의 전환을 per-tenant 설정·opt-in·net-zero 로 결정한다. cost-flow method(FIFO vs 가중평균)는 **실현손익 숫자를 바꾸는 회계정책 결정**이므로 코드로 묵시 결정하면 HARDSTOP-09 + 기존 테넌트 reconciliation 드리프트 → 결정을 먼저 기록하고 PAUSE. **ACCEPTED 전환 + 구현은 별도 user-explicit-intent 태스크**(sibling ADR-MONO-019/020/032/033 staged-child 패턴). **Self-ACCEPT 금지.**
+- **History**: PROPOSED 2026-06-14 — 사용자가 ledger 후속 작업으로 **"FIFO/lot cost-basis 설계"** 를 명시 선택(ADR-MONO-033 staged-child 패턴 직후, 충돌 없는 finance 평면 방향). 14증분(FIN-BE-007~021)까지 외화 결제는 **가중평균 pool** 으로 처분원가를 산정해 왔고, 처분된 외화가 **어느 취득분(lot)** 이었는지는 회계상 소실된다. 본 ADR 은 (a) 현 가중평균 모델을 회고적으로 기록하고 (b) **취득 로트별 원가추적(FIFO)** 으로의 전환을 per-tenant 설정·opt-in·net-zero 로 결정한다. cost-flow method(FIFO vs 가중평균)는 **실현손익 숫자를 바꾸는 회계정책 결정**이므로 코드로 묵시 결정하면 HARDSTOP-09 + 기존 테넌트 reconciliation 드리프트 → 결정을 먼저 기록하고 PAUSE. **ACCEPTED 전환 + 구현은 별도 user-explicit-intent 태스크**(sibling ADR-MONO-019/020/032/033 staged-child 패턴). **Self-ACCEPT 금지.** · ACCEPTED 2026-06-14 — 사용자가 PROPOSED ADR(D1~D5) 검토 후 AskUserQuestion "ADR-001 진행" = **"ACCEPTED 승급 + 구현 시작"** 명시 선택(sibling ADR-MONO-032/033 동일-세션 PROPOSED→ACCEPTED, ADR-007 검토-후-진행 선례). D1~D5 CHOSEN-PROPOSED 방향 **byte-unchanged 확정** — ACCEPTED 는 *확정*이지 재결정이 아님; § 1 Context + § 2 Decisions + § 3 Consequences + § 4 Alternatives + § 5 byte-identical, flip = Status + 본 절 + § 6 ACCEPTED row + § 3.1 실행 로드맵 UNPAUSED. **PROPOSED 와 동일 PR(FIN-BE-022)에서 전환** — 사용자가 PROPOSED 가 독립 머지되기 전에 ACCEPTED 했으므로 staged-child governance trail 을 PR *내*에 보존(§ 6 PROPOSED+ACCEPTED 2행). 실행(§ 3.1: FIN-BE-023 설정 → 024 로트테이블+backfill → 025 FIFO 소비 → 026 재평가분배)은 별도 post-ACCEPTED 태스크 — 본 PR 에 코드 없음. **NOT self-ACCEPT** — ACCEPTED 전환이 사용자 직접 지시.
 
 ---
 
@@ -176,8 +176,9 @@ realized = proceedsBase − C_settle_fifo
 | Date | Transition | Decision summary | Trigger | PR |
 |---|---|---|---|---|
 | 2026-06-14 | created PROPOSED | D1 = per-tenant cost-flow 설정, 기본 WEIGHTED_AVERAGE net-zero, FIFO opt-in(전역교체 B·LIFO C·이동평균 D 거부). D2 = materialized `fx_position_lot`(취득시 생성·shadow·remaining 차감; on-the-fly B·event-sourced C 거부). D3 = FIFO 로트 walk 으로 `C_settle` 산정, 엔트리 shape·불변식 불변. D4 = revaluation 델타를 열린 로트 carrying 에 pro-rata 분배(D4-a, 이중계상 회피; 권장=1차 포함). D5 = additive V9 + synthetic 로트 backfill, net-zero. | 사용자 명시 선택 — ledger 후속 "FIFO/lot cost-basis 설계" (2026-06-14, ADR-MONO-033 직후 충돌 없는 finance 방향) | (this) |
+| 2026-06-14 | PROPOSED → ACCEPTED | D1~D5 CHOSEN-PROPOSED 방향 **byte-unchanged 확정**(ACCEPTED 는 확정이지 재결정 아님); § 1~5 byte-identical, flip = Status + History ACCEPTED 절 + 본 row + § 3.1 실행 로드맵 UNPAUSED. PROPOSED 와 동일 PR(FIN-BE-022)에서 전환(사용자가 PROPOSED 독립 머지 전 ACCEPTED) — governance trail PR 내 보존(2행). 코드 없음. | "ACCEPTED 승급 + 구현 시작" (사용자 AskUserQuestion "ADR-001 진행" 명시 선택; sibling ADR-MONO-032/033 동일-세션 PROPOSED→ACCEPTED) | (this) |
 
-> **PROPOSED only.** ACCEPTED 전환 + § 3.1 실행 로드맵 착수는 별도 user-explicit-intent 태스크(staged-child 패턴, ADR-MONO-032/033 sibling). Self-ACCEPT 금지.
+> **ACCEPTED 2026-06-14.** § 3.1 실행 로드맵이 **UNPAUSED** — FIN-BE-023~026 이 본 ACCEPTED main 에서 의존-correct 순서로 진행한다. 각 단계는 별도 태스크이며 D1~D5 는 확정·실행 시 재결정하지 않는다. ADR-MONO-008 의 도메인/trait 는 재결정되지 않는다(본 ADR 은 ledger 내부 cost-flow 만 결정).
 
 ### 3.1 실행 로드맵 (post-ACCEPTED; sketch, ACCEPTED 시 확정)
 
