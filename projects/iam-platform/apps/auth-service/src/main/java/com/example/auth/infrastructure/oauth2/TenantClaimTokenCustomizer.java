@@ -46,6 +46,12 @@ import org.springframework.stereotype.Component;
  *
  * <p>TASK-BE-251 — Phase 2a initial implementation.
  * TASK-BE-252 — Option B: reads tenant info from ClientSettings instead of clientName.
+ * TASK-BE-369 (ADR-MONO-033 S4 base + S3) — adds the signed {@code roles} claim on the
+ * {@code authorization_code}/{@code refresh_token} path: stored {@code account_roles}
+ * (via {@link AccountServicePort#listAccountRoles}) emitted verbatim if present, else the
+ * aud-default seed ({@link RoleSeedPolicy}) keyed on (client-platform, account_type).
+ * Net-positive (the {@code account_type} leg is unchanged); fail-soft + recursion-safe,
+ * mirroring {@link #populateEntitledDomains} — NEVER reachable on {@code client_credentials}.
  */
 @Slf4j
 @Component
@@ -89,6 +95,17 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * TASK-ERP-BE-008).
      */
     private static final String CLAIM_ORG_SCOPE = "org_scope";
+
+    /**
+     * TASK-BE-369 (ADR-MONO-033 S4 base + S3 / ADR-MONO-032 D5 step 2): the signed
+     * {@code roles} claim. Emitted ONLY on account-bearing grants
+     * ({@code authorization_code} / {@code refresh_token}) — sourced from the stored
+     * {@code account_roles} if present, else the aud-default seed
+     * ({@link RoleSeedPolicy}). Omitted for {@code client_credentials} (a workload is
+     * not an identity — recursion guard) and not (yet) added on assume-tenant
+     * (TASK-BE-370). Net-positive: the {@code account_type} leg stays unchanged.
+     */
+    private static final String CLAIM_ROLES = "roles";
 
     /**
      * TASK-BE-324: account-service port used to resolve {@code entitled_domains} at
@@ -213,6 +230,12 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             // CredentialAuthenticationProvider from the credential). Mirrors tenant_id.
             injectAccountTypeFromPrincipal(context, principal);
             populateEntitledDomains(context, tenantId);
+            // TASK-BE-369 (ADR-MONO-033 S4 base + S3): roles leg. Platform = the
+            // CLIENT's tenant_id (ClientSettings); claim tenant = the resolved
+            // tenant_id used for the account_roles lookup key.
+            TenantInfo clientInfo = extractTenantFromClientSettings(context.getRegisteredClient());
+            String platform = clientInfo != null ? clientInfo.tenantId() : tenantId;
+            populateRoles(context, principal, tenantId, platform);
         } else {
             // Fallback: client metadata from ClientSettings (Option B) or clientName (legacy)
             RegisteredClient client = context.getRegisteredClient();
@@ -228,6 +251,13 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                 log.debug("TenantClaimTokenCustomizer: authorization_code — fallback to client " +
                         "tenant metadata tenant_id={} for clientId={}", tenantInfo.tenantId(), clientId);
                 populateEntitledDomains(context, tenantInfo.tenantId());
+                // TASK-BE-369: roles leg on the client-metadata fallback path. The
+                // platform = the client's tenant_id (== tenantInfo.tenantId() here,
+                // since this branch resolved tenant from client metadata). With no
+                // principal account_id, populateRoles finds stored empty → seeds by
+                // (platform, account_type); account_type is typically null on this
+                // path → seed [] → roles omitted (the correct graceful behaviour).
+                populateRoles(context, principal, tenantInfo.tenantId(), tenantInfo.tenantId());
             } else {
                 log.error("SECURITY: authorization_code token issued without tenant metadata. " +
                         "clientId={}, principal={}", clientId, principal.getName());
@@ -341,6 +371,63 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             log.warn("TenantClaimTokenCustomizer: entitled_domains lookup failed for tenant_id={}, "
                             + "omitting claim (fail-soft): {}",
                     tenantId, e.toString());
+        }
+    }
+
+    /**
+     * TASK-BE-369 (ADR-MONO-033 S4 base + S3 / ADR-MONO-032 D5 step 2): populates the
+     * signed {@code roles} claim. Sourced from the authoritative {@code account_roles}
+     * store (via {@link AccountServicePort#listAccountRoles}) when present, else the
+     * aud-default {@link RoleSeedPolicy} seed keyed on (client-platform, account_type).
+     * Stored roles are emitted <b>verbatim</b> — never unioned with the seed.
+     *
+     * <p>Invoked ONLY from {@code customizeForAuthorizationCode} (which also serves
+     * {@code refresh_token}). It is NEVER reachable from {@code client_credentials} —
+     * same recursion guard as {@link #populateEntitledDomains}: a cc issuance is what
+     * mints the Bearer used to call account-service, so a cc-path lookup would
+     * re-invoke this customizer → infinite recursion. A workload is also not an
+     * identity, so it must carry no domain roles (ADR-033 S4).
+     *
+     * <p><b>fail-soft</b> (ADR-033 S5): any failure (account-service down / circuit-open /
+     * timeout / exception) → fall to the seed; if the seed is also empty → the claim is
+     * omitted and issuance proceeds. Token issuance must never depend on account-service
+     * availability — the exception is swallowed (logged at WARN), never rethrown.
+     *
+     * @param context          the encoding context whose claims receive {@code roles}
+     * @param principal        the authenticated principal (carries {@code account_id} +
+     *                         {@code account_type} in its details map)
+     * @param claimTenantId    the resolved tenant_id (the {@code account_roles} lookup key)
+     * @param platformTenantId the registered client's tenant_id (the platform, for the seed)
+     */
+    private void populateRoles(JwtEncodingContext context, Authentication principal,
+                               String claimTenantId, String platformTenantId) {
+        String accountId = extractTenantAttribute(principal, "account_id");
+        String accountType = extractTenantAttribute(principal, CLAIM_ACCOUNT_TYPE);
+
+        java.util.List<String> stored = java.util.List.of();
+        try {
+            if (accountId != null) {
+                stored = accountServicePort.listAccountRoles(claimTenantId, accountId);
+            }
+        } catch (RuntimeException e) {
+            // fail-soft (ADR-MONO-033 S5): token issuance must not depend on
+            // account-service availability. Fall to the seed below. Do NOT propagate.
+            log.warn("TenantClaimTokenCustomizer: account_roles lookup failed for tenant_id={}, "
+                            + "account_id={}, falling to seed (fail-soft): {}",
+                    claimTenantId, accountId, e.toString());
+            stored = java.util.List.of();
+        }
+
+        java.util.List<String> roles = (stored != null && !stored.isEmpty())
+                ? stored
+                : RoleSeedPolicy.seed(platformTenantId, accountType);
+
+        if (roles != null && !roles.isEmpty()) {
+            context.getClaims().claim(CLAIM_ROLES, roles);
+            log.debug("TenantClaimTokenCustomizer: injected roles={} (platform={}, account_type={}, "
+                            + "source={})",
+                    roles, platformTenantId, accountType,
+                    (stored != null && !stored.isEmpty()) ? "stored" : "seed");
         }
     }
 

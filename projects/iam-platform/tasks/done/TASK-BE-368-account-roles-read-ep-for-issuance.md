@@ -8,7 +8,9 @@ account-service internal **roles read EP** + auth-service `AccountServicePort` e
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: PR #1528 squash `b8780c54` (CI 전건 green incl. iam Testcontainers IT, 3-dim verified). account-service `GET /internal/tenants/{tid}/accounts/{aid}/roles`(least-data, read-only, missing/foreign→200 {roles:[]}, 403 tenant-mismatch) + `GetAccountRolesUseCase`+`AccountRolesResponse`; auth `AccountServicePort.listAccountRoles`+`AccountServiceClient`(listEntitledDomains 미러, 4xx/5xx→AccountServiceUnavailableException). additive net-zero(커스터마이저 미배선). 계약-first. close-chore(ready→done)=후속 TASK-BE-369 PR 과 동반. 구현=Sonnet 서브에이전트 + 오케스트레이터 검증.
 
 # Owner
 
