@@ -105,6 +105,41 @@ export type {
 export { USER_STATUS_VALUES } from './api/user-types';
 
 // ---------------------------------------------------------------------------
+// Promotions facet (TASK-PC-FE-086 — ADR-031 Phase 3b — FULL CRUD)
+// ---------------------------------------------------------------------------
+export { PromotionsScreen } from './components/PromotionsScreen';
+export { PromotionDetail } from './components/PromotionDetail';
+export { PromotionForm } from './components/PromotionForm';
+export { CouponIssueDialog } from './components/CouponIssueDialog';
+
+export {
+  getPromotionsSectionState,
+  getPromotionDetailSectionState,
+} from './api/promotions-state';
+export type {
+  PromotionsSectionState,
+  PromotionDetailSectionState,
+} from './api/promotions-state';
+
+export type {
+  PromotionSummary,
+  PromotionList,
+  PromotionDetail as PromotionDetailData,
+  PromotionMutationResponse,
+  IssueCouponResponse,
+  PromotionListParams,
+  CreatePromotionBody,
+  UpdatePromotionBody,
+  IssueCouponBody,
+  PromotionStatus,
+  DiscountType,
+} from './api/types';
+export {
+  PROMOTION_STATUS_VALUES,
+  DISCOUNT_TYPE_VALUES,
+} from './api/types';
+
+// ---------------------------------------------------------------------------
 // Image facet (TASK-PC-FE-082 — ADR-MONO-031 Phase 1b CLOSING slice). The
 // product-image management surface is embedded in `ProductDetail` (no separate
 // route / sidebar leaf); `ImageManager` is exported for completeness/tests.

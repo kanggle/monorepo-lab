@@ -9,6 +9,9 @@ import {
   AddVariantBodySchema,
   UpdateVariantBodySchema,
   AdjustStockBodySchema,
+  CreatePromotionBodySchema,
+  UpdatePromotionBodySchema,
+  IssueCouponBodySchema,
 } from '@/features/ecommerce-ops/api/types';
 import {
   PresignedUrlBodySchema,
@@ -61,6 +64,10 @@ export {
   PresignedUrlBodySchema,
   RegisterImageBodySchema,
   UpdateImageBodySchema,
+  // promotions facet (TASK-PC-FE-086 — ADR-031 Phase 3b)
+  CreatePromotionBodySchema,
+  UpdatePromotionBodySchema,
+  IssueCouponBodySchema,
   newRequestId,
 };
 
