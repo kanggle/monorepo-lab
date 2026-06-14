@@ -162,6 +162,38 @@ export {
 } from './api/shipping-types';
 
 // ---------------------------------------------------------------------------
+// Notifications facet (TASK-PC-FE-089 — ADR-031 Phase 5b — list + create + edit)
+// ---------------------------------------------------------------------------
+export { NotificationsScreen } from './components/NotificationsScreen';
+export { TemplateForm } from './components/TemplateForm';
+
+export {
+  getNotificationsSectionState,
+  getNotificationDetailSectionState,
+} from './api/notifications-state';
+export type {
+  NotificationsSectionState,
+  NotificationDetailSectionState,
+} from './api/notifications-state';
+
+export type {
+  NotificationTemplateSummary,
+  NotificationTemplateList,
+  NotificationTemplateDetail,
+  NotificationMutationResponse,
+  NotificationTemplateListParams,
+  CreateTemplateBody,
+  UpdateTemplateBody,
+  TemplateType,
+  NotificationChannel,
+} from './api/notification-types';
+export {
+  TEMPLATE_TYPE_VALUES,
+  TEMPLATE_TYPE_LABELS,
+  NOTIFICATION_CHANNEL_VALUES,
+} from './api/notification-types';
+
+// ---------------------------------------------------------------------------
 // Image facet (TASK-PC-FE-082 — ADR-MONO-031 Phase 1b CLOSING slice). The
 // product-image management surface is embedded in `ProductDetail` (no separate
 // route / sidebar leaf); `ImageManager` is exported for completeness/tests.

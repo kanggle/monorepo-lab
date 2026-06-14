@@ -2661,6 +2661,64 @@ ecommerce gateway direct** (Next.js Route Handlers); **NO** console-bff write le
 > **Not a § 3 parity row**: additive federated **domain** scope; adds no § 3 row
 > (count stays **16**).
 
+#### 2.4.10.4 ecommerce notifications template operator surface (TASK-PC-FE-089 / ADR-MONO-031 Phase 5b — console absorption of the `admin-dashboard` notification-template-management area)
+
+The **fifth and final** ecommerce operations sub-binding (the fourth and last of
+the § 2.4.10 staged backlog areas), unblocked by **TASK-BE-373** (notification-service
+row-level `tenant_id` + the `GET /templates/{id}` detail endpoint gap-fill —
+ADR-MONO-030 Step 4). This is a **list + create + edit** surface — the console
+equivalent of the `admin-dashboard` notification-template management screens.
+No delete (producer defines none).
+
+With this binding **all 6 ecommerce operator areas** (products / orders / image /
+users / promotions / shippings / notifications) are absorbed into the console.
+**ADR-MONO-031 Phase 6 app-deletion gate is now unblocked.**
+
+This sub-binding **inherits § 2.4.10's cross-cutting rules verbatim** and does
+not restate them: the **credential** (domain-facing IAM OIDC access token —
+`getDomainFacingToken()`, **never** `getOperatorToken()`); the **tenant model**
+(JWT `tenant_id` claim — NO `X-Tenant-Id` header); the **error envelope** (flat
+`{ code, message, timestamp }`); the **resilience taxonomy** (401 → re-login /
+403 → inline / 503 → section degrades only); the **proxy model** (console-web
+same-origin route handlers → ecommerce gateway direct, NO console-bff write leg
+— ADR-MONO-017 D2.A); **NO `Idempotency-Key`** (producer defines none).
+
+- **Authoritative producer surface** (do NOT redefine here): ecommerce
+  `notification-service` `TemplateController`, consumed via the ecommerce
+  gateway **non-admin** path `/api/notifications/templates` (base URL
+  `ECOMMERCE_PUBLIC_BASE_URL`, same gateway + IAM-OIDC credential as § 2.4.10,
+  same model as promotions/shippings — NOT the `/api/admin/**` subtree):
+
+| # | Method | Path | Purpose |
+|---|--------|------|---------|
+| 1 | `GET` | `/api/notifications/templates?page=&size=` | paginated template list (summary: templateId, type, channel, subject, createdAt) |
+| 2 | `GET` | `/api/notifications/templates/{templateId}` | template detail (full, incl. body, createdAt, updatedAt) — **TASK-BE-373 gap-fill endpoint** |
+| 3 | `POST` | `/api/notifications/templates` | create; body `{type, channel, subject, body}` → 201 `{templateId}` |
+| 4 | `PUT` | `/api/notifications/templates/{templateId}` | update; body `{subject, body}` only — **type/channel are immutable after creation** |
+
+  Error envelope = the same flat ecommerce shape `{code, message, timestamp}`
+  (400 `VALIDATION_ERROR`, 403 `ACCESS_DENIED`, 404 `TEMPLATE_NOT_FOUND`,
+  409 `TEMPLATE_ALREADY_EXISTS` [duplicate type+channel within tenant]),
+  consumed with the § 2.4.10 ecommerce parser.
+
+- **Type/channel immutability**: `type` (ORDER_PLACED / PAYMENT_COMPLETED /
+  SHIPPING_STATUS_CHANGED / WELCOME) and `channel` (EMAIL / SMS / PUSH) are
+  set at creation and immutable thereafter. The producer PUT body accepts ONLY
+  `{ subject, body }`. The UI keeps them read-only on the edit form and NEVER
+  sends type/channel in the update request body.
+
+- **No delete** (producer defines none — this is not a silent omission; the
+  producer `TemplateController` exposes no DELETE endpoint).
+
+- **Producer immutability**: cross-reference only — any change to the ecommerce
+  notification contract is an ecommerce project-internal spec-first change;
+  this section follows, never redefines it (§ 5 Change Rule).
+
+> **Not a § 3 parity row**: additive federated **domain** scope; adds no § 3 row
+> and changes none (count stays **16**). This is the **final § 2.4.10.x** area —
+> all 6 operator areas (products/orders/image/users/promotions/shippings/notifications)
+> are now absorbed → ADR-MONO-031 Phase 6 app-deletion gate unblocked.
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
