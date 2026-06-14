@@ -8,7 +8,9 @@ Author **ADR-MONO-032 PROPOSED** — Unified identity model (single account → 
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: impl PR #1513. ADR-MONO-032 PROPOSED publish — 통합 identity 모델 결정 기록(`account_type` CONSUMER/OPERATOR xor 파티션 제거 → 기존 `roles` set 이 유일 authz 축; Google-IAM "one identity + role bindings"). **동기**: `jwt-standard-claims.md` L21 이 한 사람의 customer+operator 겸직을 구조적으로 금지(*"must provision separate accounts"*) + L85-92 no-cross-type-SSO → 사용자 명시 요청(Google식 통합 identity, AskUserQuestion D1=roles 집합/option A). 6-decision(D1-D6, CHOSEN-PROPOSED): D1 roles-set 유일 축(multi-value type·single-active-role-switch[AWS AssumeRole] 기각) / D2 aud-scoped roles 유지·account_type drop·role-scoped SSO / D3 gateway role-based admission / D4 isolation=aud-scope+role-presence / D5 backward-compat staged dual-read(zero mis-auth window) / D6 one-account-many-roles. **Supersedes ADR-021**(ACCEPTED 시점 발효). `jwt-standard-claims.md` breaking amend 는 contract-first 로 post-ACCEPTED 실행(D5 step0). doc-only(apps/·contracts/ 0). ADR-003a audit row #33(append-only). 후속(user-gated)=ADR-032 ACCEPTED transition(별 task, sibling MONO-165) → 구현 6-step(계약 rewrite → dual-read gateways → roles-only issuance → account unify → drop legacy → e2e). 분석=Opus 4.8 / 구현 권장=Opus.
 
 # Owner
 
