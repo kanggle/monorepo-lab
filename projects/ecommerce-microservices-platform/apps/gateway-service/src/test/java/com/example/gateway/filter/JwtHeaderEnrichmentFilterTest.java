@@ -16,6 +16,10 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+/**
+ * Tests for {@link JwtHeaderEnrichmentFilter} — ADR-MONO-035 4b-2a.
+ * {@code X-Account-Type} is no longer injected; tests assert its absence.
+ */
 class JwtHeaderEnrichmentFilterTest {
 
     private final JwtHeaderEnrichmentFilter filter = new JwtHeaderEnrichmentFilter();
@@ -30,7 +34,7 @@ class JwtHeaderEnrichmentFilterTest {
                 .subject("user-42")
                 .claim("email", "user@example.com")
                 .claim("role", "BUYER")
-                .claim("account_type", "CONSUMER")
+                .claim("account_type", "CONSUMER")  // still present on token, but not forwarded
                 .build();
 
         HttpHeaders headers = runAndCaptureHeaders(jwt);
@@ -38,7 +42,33 @@ class JwtHeaderEnrichmentFilterTest {
         assertThat(headers.getFirst("X-User-Id")).isEqualTo("user-42");
         assertThat(headers.getFirst("X-User-Email")).isEqualTo("user@example.com");
         assertThat(headers.getFirst("X-User-Role")).isEqualTo("BUYER");
-        assertThat(headers.getFirst("X-Account-Type")).isEqualTo("CONSUMER");
+        // X-Account-Type must NOT be injected (ADR-MONO-035 4b-2a)
+        assertThat(headers.getFirst("X-Account-Type")).isNull();
+    }
+
+    @Test
+    void doesNotInjectAccountTypeEvenWhenClaimPresent() {
+        // Explicit assertion that the injection leg is gone.
+        Jwt jwt = jwtBuilder()
+                .subject("user-42")
+                .claim("account_type", "CONSUMER")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-Account-Type")).isNull();
+    }
+
+    @Test
+    void doesNotInjectAccountTypeForOperatorClaim() {
+        Jwt jwt = jwtBuilder()
+                .subject("user-42")
+                .claim("account_type", "OPERATOR")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-Account-Type")).isNull();
     }
 
     @Test
@@ -106,29 +136,6 @@ class JwtHeaderEnrichmentFilterTest {
     }
 
     @Test
-    void omitsAccountTypeHeaderWhenClaimAbsent() {
-        Jwt jwt = jwtBuilder()
-                .subject("user-42")
-                .build();
-
-        HttpHeaders headers = runAndCaptureHeaders(jwt);
-
-        assertThat(headers.getFirst("X-Account-Type")).isNull();
-    }
-
-    @Test
-    void injectsAccountTypeHeader() {
-        Jwt jwt = jwtBuilder()
-                .subject("user-42")
-                .claim("account_type", "CONSUMER")
-                .build();
-
-        HttpHeaders headers = runAndCaptureHeaders(jwt);
-
-        assertThat(headers.getFirst("X-Account-Type")).isEqualTo("CONSUMER");
-    }
-
-    @Test
     void injectsTenantIdHeader() {
         Jwt jwt = jwtBuilder()
                 .subject("user-42")
@@ -179,6 +186,7 @@ class JwtHeaderEnrichmentFilterTest {
         assertThat(forwarded.getFirst("X-User-Id")).isNull();
         assertThat(forwarded.getFirst("X-User-Email")).isNull();
         assertThat(forwarded.getFirst("X-User-Role")).isNull();
+        assertThat(forwarded.getFirst("X-Account-Type")).isNull();
     }
 
     // -----------------------------------------------------------------------

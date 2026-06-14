@@ -19,12 +19,16 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 /**
- * Enforces account_type constraints per route:
+ * Enforces role-based admission per route (ADR-MONO-035 4b-2a / ADR-032 D3):
  * <ul>
- *   <li>{@code /api/admin/**} → requires {@code account_type: OPERATOR}; CONSUMER → 403</li>
- *   <li>All other authenticated routes → requires {@code account_type: CONSUMER}; OPERATOR → 403</li>
+ *   <li>{@code /api/admin/**} → requires the {@code ADMIN} role; any other token → 403</li>
+ *   <li>All other authenticated routes → requires the {@code CUSTOMER} role; any other token → 403</li>
  *   <li>Public routes (no security context) → passes through unchanged</li>
  * </ul>
+ *
+ * <p>The legacy {@code account_type} OR-branch has been removed (4b-2a): operators now
+ * carry domain roles (post-4a), consumers carry {@code CUSTOMER}, so the {@code account_type}
+ * claim is no longer consulted at the gateway for admission decisions.
  *
  * <p>Uses a Boolean intermediate value to avoid the {@code switchIfEmpty(chain.filter())}
  * anti-pattern: {@code Mono<Void>} completes empty on success, which makes it
@@ -52,17 +56,12 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
                 .flatMap(auth -> {
                     org.springframework.security.oauth2.jwt.Jwt token = auth.getToken();
                     java.util.List<String> roles = token.getClaimAsStringList("roles");
-                    String accountType = token.getClaimAsString("account_type");
                     boolean isAdmin = path.startsWith("/api/admin/");
                     if (isAdmin) {
-                        // Role-based admission (ADR-MONO-032): an admin-family role grants
-                        // access; the legacy account_type=OPERATOR is accepted only during
-                        // the dual-read migration window (jwt-standard-claims § Migration
-                        // Compatibility) and is removed at D5 step 4.
-                        boolean allowed = hasRole(roles, "ADMIN") || "OPERATOR".equals(accountType);
+                        boolean allowed = hasRole(roles, "ADMIN");
                         return Mono.just(allowed);
                     } else {
-                        boolean allowed = hasRole(roles, "CUSTOMER") || "CONSUMER".equals(accountType);
+                        boolean allowed = hasRole(roles, "CUSTOMER");
                         return Mono.just(allowed);
                     }
                 })

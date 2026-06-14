@@ -16,20 +16,24 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+/**
+ * Tests for {@link AccountTypeEnforcementFilter} — roles-only admission (ADR-MONO-035 4b-2a).
+ * The legacy {@code account_type} OR-branch is gone: only the {@code roles} claim decides.
+ */
 class AccountTypeEnforcementFilterTest {
 
     private final AccountTypeEnforcementFilter filter =
             new AccountTypeEnforcementFilter(new ObjectMapper());
 
     // -----------------------------------------------------------------------
-    // Consumer routes (non-admin)
+    // Consumer routes (non-admin) — CUSTOMER role required
     // -----------------------------------------------------------------------
 
     @Test
-    void consumerRoute_consumerToken_passesThrough() {
+    void consumerRoute_customerRole_passesThrough() {
         MockServerWebExchange exchange = exchangeFor("/api/orders/123");
         CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWith("CONSUMER");
+        Jwt jwt = jwtWithRoles("CUSTOMER");
 
         run(exchange, chain, jwt);
 
@@ -38,10 +42,11 @@ class AccountTypeEnforcementFilterTest {
     }
 
     @Test
-    void consumerRoute_operatorToken_returns403() {
+    void consumerRoute_adminRoleOnly_returns403() {
+        // ADMIN without CUSTOMER cannot reach consumer routes.
         MockServerWebExchange exchange = exchangeFor("/api/orders/123");
         CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWith("OPERATOR");
+        Jwt jwt = jwtWithRoles("ADMIN");
 
         run(exchange, chain, jwt);
 
@@ -50,10 +55,24 @@ class AccountTypeEnforcementFilterTest {
     }
 
     @Test
-    void consumerRoute_missingAccountTypeClaim_returns403() {
+    void consumerRoute_noRole_returns403() {
+        // A token with no roles (e.g. issuance outage) → 403 at gateway.
         MockServerWebExchange exchange = exchangeFor("/api/orders/123");
         CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWithoutAccountType();
+        Jwt jwt = jwtWithoutRoles();
+
+        run(exchange, chain, jwt);
+
+        assertThat(chain.called).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void consumerRoute_accountTypeOnlyNoRole_returns403() {
+        // The legacy account_type=CONSUMER leg is gone — no role → 403.
+        MockServerWebExchange exchange = exchangeFor("/api/orders/123");
+        CapturingChain chain = new CapturingChain();
+        Jwt jwt = jwtWithAccountTypeOnly("CONSUMER");
 
         run(exchange, chain, jwt);
 
@@ -62,14 +81,14 @@ class AccountTypeEnforcementFilterTest {
     }
 
     // -----------------------------------------------------------------------
-    // Admin routes
+    // Admin routes — ADMIN role required
     // -----------------------------------------------------------------------
 
     @Test
-    void adminRoute_operatorToken_passesThrough() {
+    void adminRoute_adminRole_passesThrough() {
         MockServerWebExchange exchange = exchangeFor("/api/admin/products/42");
         CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWith("OPERATOR");
+        Jwt jwt = jwtWithRoles("ADMIN");
 
         run(exchange, chain, jwt);
 
@@ -78,10 +97,10 @@ class AccountTypeEnforcementFilterTest {
     }
 
     @Test
-    void adminRoute_consumerToken_returns403() {
+    void adminRoute_customerRoleOnly_returns403() {
         MockServerWebExchange exchange = exchangeFor("/api/admin/products/42");
         CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWith("CONSUMER");
+        Jwt jwt = jwtWithRoles("CUSTOMER");
 
         run(exchange, chain, jwt);
 
@@ -90,10 +109,23 @@ class AccountTypeEnforcementFilterTest {
     }
 
     @Test
-    void adminRoute_missingAccountTypeClaim_returns403() {
+    void adminRoute_noRole_returns403() {
         MockServerWebExchange exchange = exchangeFor("/api/admin/users");
         CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWithoutAccountType();
+        Jwt jwt = jwtWithoutRoles();
+
+        run(exchange, chain, jwt);
+
+        assertThat(chain.called).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void adminRoute_accountTypeOnlyNoRole_returns403() {
+        // The legacy account_type=OPERATOR leg is gone — no role → 403.
+        MockServerWebExchange exchange = exchangeFor("/api/admin/products/42");
+        CapturingChain chain = new CapturingChain();
+        Jwt jwt = jwtWithAccountTypeOnly("OPERATOR");
 
         run(exchange, chain, jwt);
 
@@ -102,7 +134,7 @@ class AccountTypeEnforcementFilterTest {
     }
 
     // -----------------------------------------------------------------------
-    // Role-based admission (ADR-MONO-032 dual-read) — roles claim, no account_type
+    // Role-based admission — roles claim, with or without account_type
     // -----------------------------------------------------------------------
 
     @Test
@@ -127,18 +159,6 @@ class AccountTypeEnforcementFilterTest {
 
         assertThat(chain.called).isTrue();
         assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
-    }
-
-    @Test
-    void adminRoute_customerRoleOnly_returns403() {
-        MockServerWebExchange exchange = exchangeFor("/api/admin/products/42");
-        CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWithRoles("CUSTOMER");
-
-        run(exchange, chain, jwt);
-
-        assertThat(chain.called).isFalse();
-        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
@@ -187,7 +207,19 @@ class AccountTypeEnforcementFilterTest {
         return MockServerWebExchange.from(MockServerHttpRequest.get(path).build());
     }
 
-    private static Jwt jwtWith(String accountType) {
+    /** JWT with no roles claim and no account_type. */
+    private static Jwt jwtWithoutRoles() {
+        return Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("user-1")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .claims(c -> c.putAll(Map.of("iss", "test")))
+                .build();
+    }
+
+    /** JWT with account_type but no roles — tests that the dead leg is truly gone. */
+    private static Jwt jwtWithAccountTypeOnly(String accountType) {
         return Jwt.withTokenValue("token")
                 .header("alg", "none")
                 .subject("user-1")
@@ -197,16 +229,6 @@ class AccountTypeEnforcementFilterTest {
                     c.put("iss", "test");
                     c.put("account_type", accountType);
                 })
-                .build();
-    }
-
-    private static Jwt jwtWithoutAccountType() {
-        return Jwt.withTokenValue("token")
-                .header("alg", "none")
-                .subject("user-1")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(300))
-                .claims(c -> c.putAll(Map.of("iss", "test")))
                 .build();
     }
 

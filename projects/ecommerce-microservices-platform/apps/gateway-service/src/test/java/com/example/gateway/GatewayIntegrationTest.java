@@ -125,9 +125,13 @@ class GatewayIntegrationTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("유효한 CONSUMER JWT로 보호된 경로 요청 시 JWT 필터를 통과한다 (다운스트림 불가 → 5xx)")
+    @DisplayName("유효한 CONSUMER JWT(CUSTOMER role)로 보호된 경로 요청 시 JWT+admission 필터를 통과한다 (다운스트림 불가 → 5xx)")
     void protectedRoute_validConsumerToken_passesJwtFilter() {
-        String token = jwtHelper.signConsumerToken("user-123", List.of("BUYER"));
+        // ADR-MONO-035 4b-2a: admission is role-based — a storefront consumer must
+        // carry the CUSTOMER role (the account_type leg is removed). BUYER alone
+        // would now 403 at AccountTypeEnforcementFilter, so use CUSTOMER to assert
+        // genuine pass-through to the (unavailable) downstream.
+        String token = jwtHelper.signConsumerToken("user-123", List.of("CUSTOMER"));
 
         webTestClient.get()
                 .uri("/api/orders/123")

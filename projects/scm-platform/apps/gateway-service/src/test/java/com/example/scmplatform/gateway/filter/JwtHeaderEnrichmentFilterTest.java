@@ -158,6 +158,24 @@ class JwtHeaderEnrichmentFilterTest {
     }
 
     @Test
+    void doesNotInjectAccountTypeEvenWhenClaimPresent() {
+        // ADR-MONO-035 4b-2a: X-Account-Type must not be forwarded by the enrichment filter.
+        Jwt jwt = jwtBuilder()
+                .subject("user-42")
+                .claim("email", "user@example.com")
+                .claim("account_type", "OPERATOR")
+                .claim("tenant_id", "scm")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-Account-Type")).isNull();
+        // Other headers must still be present.
+        assertThat(headers.getFirst("X-User-Id")).isEqualTo("user-42");
+        assertThat(headers.getFirst("X-Tenant-Id")).isEqualTo("scm");
+    }
+
+    @Test
     void passesThroughWhenNoSecurityContext() {
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/procurement/po").build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);

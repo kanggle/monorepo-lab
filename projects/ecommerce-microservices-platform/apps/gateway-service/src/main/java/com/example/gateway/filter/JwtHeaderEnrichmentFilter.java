@@ -14,12 +14,15 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 /**
- * Adds verified identity headers derived from the authenticated JWT:
+ * Adds verified identity headers derived from the authenticated JWT (ADR-MONO-035 4b-2a):
  * {@code X-User-Id} ← {@code sub}, {@code X-User-Email} ← {@code email},
  * {@code X-User-Role} ← {@code roles} array (comma-joined) or {@code role} string,
- * {@code X-Account-Type} ← {@code account_type},
  * {@code X-Tenant-Id} ← {@code tenant_id} (multi-tenant context propagation,
  * ADR-MONO-030 § 2.2 M2 layer 2).
+ * <p>
+ * {@code X-Account-Type} is no longer injected — no downstream service reads it
+ * (verified ADR-032 D3), and the {@link IdentityHeaderStripFilter} strip entry remains
+ * as inert defense-in-depth.
  * <p>
  * Runs after Spring Security has populated the security context. If no JWT is
  * present (public routes), the filter becomes a no-op. Any client-supplied copies
@@ -54,11 +57,6 @@ public class JwtHeaderEnrichmentFilter implements GlobalFilter, Ordered {
         // Always set X-User-Role. When no role claim is present, emit "" (empty
         // string) — downstream services must treat this as "no authorized role".
         builder.header("X-User-Role", role);
-
-        String accountType = jwt.getClaimAsString("account_type");
-        if (accountType != null) {
-            builder.header("X-Account-Type", accountType);
-        }
 
         // Multi-tenant context propagation (ADR-MONO-030 § 2.2 M2 layer 2): downstream
         // services read X-Tenant-Id as the request's tenant context. The gate has
