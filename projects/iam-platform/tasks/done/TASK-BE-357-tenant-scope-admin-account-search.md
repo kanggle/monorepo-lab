@@ -1,6 +1,6 @@
 # TASK-BE-357 — Tenant-scope the admin account search/list (remove FAN_PLATFORM hardcode; mirror audit dual-read scope)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (multi-tenant data-isolation / authorization — security-sensitive)
