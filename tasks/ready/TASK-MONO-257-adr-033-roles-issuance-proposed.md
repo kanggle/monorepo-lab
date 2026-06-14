@@ -4,7 +4,7 @@ TASK-MONO-257
 
 # Title
 
-Author **ADR-MONO-033 PROPOSED** — Roles-issuance resolution model (where the `roles` claim's values come from at token-issue time; ADR-MONO-032 D5 step 2 mechanics). Records the **source + aud-scoping + failure-policy** of the `roles` claim that ADR-032 D5 step 2 requires but D6-A left underspecified. Investigation at base `632f88206` found D6-A's "assemble from the account's grants (RBAC store)" assertion is factually incomplete — there is **no store mapping an identity → its domain-platform roles** (`WMS_OPERATOR`, …), `roles` is **never emitted today**, and three disjoint identity/role stores exist. Choosing the source in code would bake the issuance model → HARDSTOP-09. Doc-only; ACCEPTED + implementation are separate user-explicit-intent tasks (sibling ADR-019/020/021/023/024/032 staged-child pattern).
+Author **ADR-MONO-033 PROPOSED → ACCEPTED** (same-session, same PR #1524, user-explicit *"진행"*) — Roles-issuance resolution model (where the `roles` claim's values come from at token-issue time; ADR-MONO-032 D5 step 2 mechanics). Records the **source + aud-scoping + failure-policy** of the `roles` claim that ADR-032 D5 step 2 requires but D6-A left underspecified. Investigation at base `632f88206` found D6-A's "assemble from the account's grants (RBAC store)" assertion is factually incomplete — there is **no store mapping an identity → its domain-platform roles** (`WMS_OPERATOR`, …), `roles` is **never emitted today**, and three disjoint identity/role stores exist. Choosing the source in code would bake the issuance model → HARDSTOP-09. Doc-only; ACCEPTED + implementation are separate user-explicit-intent tasks (sibling ADR-019/020/021/023/024/032 staged-child pattern).
 
 # Status
 
@@ -46,8 +46,9 @@ Publish ADR-MONO-033 PROPOSED so ADR-032 D5 step 2 (roles-only issuance) can be 
 - **AC-2** The decision driver names the concrete gap (no store maps an identity → its domain-platform roles; `roles` never emitted; D6-A's "from the account's grants" incomplete) + the step-1 gateways' role-presence expectation + the user-explicit option-A selection.
 - **AC-3** S1-B (convention-only) and S1-C (new per-platform RBAC store) are recorded as rejected with reasons.
 - **AC-4** ADR-033 explicitly positions itself as a **child of ADR-032** (resolves D5-step-2 / D6-A roles-source gap; does NOT re-decide D1-D6) and records that it does **not** amend `jwt-standard-claims.md` (claim shape unchanged).
-- **AC-5** ADR-003a § 3 audit row #35 appended (append-only; rows #1-#34 byte-unchanged).
+- **AC-5** ADR-003a § 3 audit rows #35 (PROPOSED) + #36 (ACCEPTED) appended (append-only; rows #1-#35 byte-unchanged before #36).
 - **AC-6** Doc-only diff (no `apps/` code, no `platform/contracts/` change, no migrations).
+- **AC-7** ADR-033 lands as **ACCEPTED** in this PR (Status ACCEPTED + § 6 PROPOSED + ACCEPTED rows + § 3.3 UNPAUSED), the ACCEPTED gate satisfied by the user-explicit *"진행"* (sibling ADR-032/MONO-254). Execution (§ 3.3: account-service read EP → customizer roles leg → assume-tenant → e2e) remains separate post-ACCEPTED tasks — **no code in this PR**.
 
 # Related Specs
 
