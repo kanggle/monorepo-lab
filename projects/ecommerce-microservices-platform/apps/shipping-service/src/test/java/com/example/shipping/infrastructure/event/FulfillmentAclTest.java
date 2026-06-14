@@ -35,12 +35,13 @@ class FulfillmentAclTest {
     @Test
     @DisplayName("camelCase 봉투 + wms-shaped payload를 빌드한다 (identity SKU)")
     void toFulfillmentRequested_buildsWmsEnvelope() {
-        FulfillmentRequestedMessage msg = acl(false, Map.of()).toFulfillmentRequested(order());
+        FulfillmentRequestedMessage msg = acl(false, Map.of()).toFulfillmentRequested("tenant-a", order());
 
         assertThat(msg.eventType()).isEqualTo("ecommerce.fulfillment.requested");
         assertThat(msg.aggregateType()).isEqualTo("fulfillment");
         assertThat(msg.aggregateId()).isEqualTo("order-1");
         assertThat(msg.occurredAt()).isEqualTo("2026-06-08T10:00:00Z");
+        assertThat(msg.tenantId()).isEqualTo("tenant-a"); // M5: envelope tenant_id
 
         FulfillmentRequestedMessage.Payload p = msg.payload();
         assertThat(p.orderNo()).isEqualTo("order-1");
@@ -61,7 +62,7 @@ class FulfillmentAclTest {
     @DisplayName("SKU 매핑이 있으면 wms SKU 코드로 변환한다")
     void toFulfillmentRequested_appliesSkuMap() {
         FulfillmentRequestedMessage msg = acl(false, Map.of("v1", "WMS-SKU-A"))
-                .toFulfillmentRequested(order());
+                .toFulfillmentRequested("tenant-a", order());
 
         assertThat(msg.payload().lines().get(0).skuCode()).isEqualTo("WMS-SKU-A");
         assertThat(msg.payload().lines().get(1).skuCode()).isEqualTo("v2"); // unmapped → identity
@@ -70,7 +71,7 @@ class FulfillmentAclTest {
     @Test
     @DisplayName("require-sku-mapping=true에서 미매핑 SKU면 UnmappedSkuException")
     void toFulfillmentRequested_requireMappingAndMissing_throws() {
-        assertThatThrownBy(() -> acl(true, Map.of("v1", "WMS-SKU-A")).toFulfillmentRequested(order()))
+        assertThatThrownBy(() -> acl(true, Map.of("v1", "WMS-SKU-A")).toFulfillmentRequested("tenant-a", order()))
                 .isInstanceOf(UnmappedSkuException.class)
                 .hasMessageContaining("v2");
     }
@@ -82,7 +83,7 @@ class FulfillmentAclTest {
                 "order-2", "user-2", "2026-06-08T10:00:00Z",
                 List.of(new OrderConfirmedEvent.Line("v1", "p1", "v1", 1)), null);
 
-        FulfillmentRequestedMessage msg = acl(false, Map.of()).toFulfillmentRequested(order);
+        FulfillmentRequestedMessage msg = acl(false, Map.of()).toFulfillmentRequested("tenant-a", order);
 
         assertThat(msg.payload().shipTo()).isNull();
     }
@@ -93,7 +94,7 @@ class FulfillmentAclTest {
         OrderConfirmedEvent.OrderConfirmedPayload order = new OrderConfirmedEvent.OrderConfirmedPayload(
                 "order-3", "user-3", "2026-06-08T10:00:00Z", null, null);
 
-        FulfillmentRequestedMessage msg = acl(false, Map.of()).toFulfillmentRequested(order);
+        FulfillmentRequestedMessage msg = acl(false, Map.of()).toFulfillmentRequested("tenant-a", order);
 
         assertThat(msg.payload().lines()).isEmpty();
     }

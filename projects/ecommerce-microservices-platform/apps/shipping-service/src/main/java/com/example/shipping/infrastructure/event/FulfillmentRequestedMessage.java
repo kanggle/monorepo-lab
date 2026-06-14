@@ -17,6 +17,7 @@ public record FulfillmentRequestedMessage(
         String occurredAt,
         String aggregateType,
         String aggregateId,
+        String tenantId,
         Payload payload
 ) {
     public record Payload(

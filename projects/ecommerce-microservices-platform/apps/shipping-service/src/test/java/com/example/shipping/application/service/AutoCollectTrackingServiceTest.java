@@ -55,7 +55,7 @@ class AutoCollectTrackingServiceTest {
 
     /** A SHIPPED shipment with tracking + carrier (the realistic in-flight sweep subject). */
     private Shipping shipped(String orderId, String trackingNumber) {
-        Shipping s = Shipping.create(orderId, "user-" + orderId, clock);
+        Shipping s = Shipping.create("tenant-a", orderId, "user-" + orderId, clock);
         s.transitionTo(ShippingStatus.SHIPPED, trackingNumber, "CJ", clock);
         return s;
     }
@@ -84,7 +84,7 @@ class AutoCollectTrackingServiceTest {
         assertThat(result).isEqualTo(new SweepResult(1, 1, 0, 0));
         assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.DELIVERED);
         verify(shippingEventPublisher).publishShippingStatusChanged(
-                eq(shipping.getShippingId()), eq("order-1"), eq("user-order-1"),
+                eq("tenant-a"), eq(shipping.getShippingId()), eq("order-1"), eq("user-order-1"),
                 eq(ShippingStatus.SHIPPED), eq(ShippingStatus.DELIVERED), eq("TRK-1"), eq("CJ"));
         assertThat(meterRegistry.get("carrier_auto_collect_processed")
                 .tags("outcome", "advanced").counter().count()).isEqualTo(1.0);
@@ -103,7 +103,7 @@ class AutoCollectTrackingServiceTest {
         assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
         verify(shippingRepository, never()).save(any());
         verify(shippingEventPublisher, never())
-                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any());
+                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

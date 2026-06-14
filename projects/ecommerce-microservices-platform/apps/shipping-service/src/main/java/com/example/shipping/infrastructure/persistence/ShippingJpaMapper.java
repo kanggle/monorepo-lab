@@ -16,6 +16,7 @@ public class ShippingJpaMapper {
 
         return Shipping.reconstitute(
                 entity.getShippingId(),
+                entity.getTenantId(),
                 entity.getOrderId(),
                 entity.getUserId(),
                 entity.getStatus(),
@@ -30,6 +31,7 @@ public class ShippingJpaMapper {
     public ShippingJpaEntity toEntity(Shipping shipping) {
         ShippingJpaEntity entity = ShippingJpaEntity.create(
                 shipping.getShippingId(),
+                shipping.getTenantId(),
                 shipping.getOrderId(),
                 shipping.getUserId(),
                 shipping.getStatus(),

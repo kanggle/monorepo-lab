@@ -87,7 +87,7 @@ public class ProcessCarrierWebhookService {
         ShippingStatus original = changedFrom.get();
         Shipping saved = shippingRepository.save(shipping);
         shippingEventPublisher.publishShippingStatusChanged(
-                saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
+                saved.getTenantId(), saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
                 original, saved.getStatus(), saved.getTrackingNumber(), saved.getCarrier());
         log.info("Shipping {} advanced {} -> {} via carrier webhook {}",
                 command.shippingId(), original, saved.getStatus(), command.deliveryId());

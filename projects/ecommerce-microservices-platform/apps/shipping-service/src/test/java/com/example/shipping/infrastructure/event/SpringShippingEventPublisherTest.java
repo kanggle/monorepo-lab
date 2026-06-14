@@ -40,7 +40,7 @@ class SpringShippingEventPublisherTest {
     @DisplayName("ShippingStatusChanged 이벤트를 outbox에 저장한다")
     void publishShippingStatusChanged_savesToOutbox() {
         publisher.publishShippingStatusChanged(
-                "ship-1", "order-1", "user-1",
+                "tenant-a", "ship-1", "order-1", "user-1",
                 ShippingStatus.PREPARING, ShippingStatus.SHIPPED,
                 "TRK-001", "CJ대한통운");
 
@@ -53,5 +53,7 @@ class SpringShippingEventPublisherTest {
         assertThat(payload).contains("\"previousStatus\":\"PREPARING\"");
         assertThat(payload).contains("\"newStatus\":\"SHIPPED\"");
         assertThat(payload).contains("\"trackingNumber\":\"TRK-001\"");
+        // M5: tenant_id stamped on the envelope top-level.
+        assertThat(payload).contains("\"tenant_id\":\"tenant-a\"");
     }
 }

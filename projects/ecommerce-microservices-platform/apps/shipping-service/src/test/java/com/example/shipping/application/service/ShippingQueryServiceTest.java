@@ -40,7 +40,7 @@ class ShippingQueryServiceTest {
     @Test
     @DisplayName("주문 ID로 배송 조회 성공")
     void getShippingByOrderId_validOwner_returnsResult() {
-        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
         given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
 
         ShippingResult result = shippingQueryService.getShippingByOrderId("order-1", "user-1");
@@ -61,7 +61,7 @@ class ShippingQueryServiceTest {
     @Test
     @DisplayName("다른 사용자의 배송 조회 시 접근 거부")
     void getShippingByOrderId_differentUser_throws() {
-        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
         given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
 
         assertThatThrownBy(() -> shippingQueryService.getShippingByOrderId("order-1", "user-other"))
@@ -71,7 +71,7 @@ class ShippingQueryServiceTest {
     @Test
     @DisplayName("배송 목록 조회 성공")
     void listShippings_noFilter_returnsList() {
-        Shipping s1 = Shipping.create("order-1", "user-1", fixedClock);
+        Shipping s1 = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
         PageResult<Shipping> page = new PageResult<>(List.of(s1), 0, 20, 1, 1);
         PageQuery pageQuery = new PageQuery(0, 20, "createdAt", "DESC");
         given(shippingRepository.findAll(pageQuery)).willReturn(page);

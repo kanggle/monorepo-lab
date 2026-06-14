@@ -24,7 +24,7 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
     private final Clock clock;
 
     @Override
-    public void publishShippingStatusChanged(String shippingId, String orderId, String userId,
+    public void publishShippingStatusChanged(String tenantId, String shippingId, String orderId, String userId,
                                               ShippingStatus previousStatus, ShippingStatus newStatus,
                                               String trackingNumber, String carrier) {
         ShippingStatusChangedMessage message = new ShippingStatusChangedMessage(
@@ -32,6 +32,7 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
                 "ShippingStatusChanged",
                 Instant.now(clock).toString(),
                 "shipping-service",
+                tenantId,
                 new ShippingStatusChangedMessage.Payload(
                         shippingId, orderId, userId,
                         previousStatus.name(), newStatus.name(),
@@ -62,6 +63,7 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
             @JsonProperty("event_type") String eventType,
             @JsonProperty("occurred_at") String occurredAt,
             String source,
+            @JsonProperty("tenant_id") String tenantId,
             Payload payload
     ) {
         record Payload(

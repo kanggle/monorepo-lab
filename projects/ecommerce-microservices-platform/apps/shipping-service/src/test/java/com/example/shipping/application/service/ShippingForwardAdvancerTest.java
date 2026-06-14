@@ -17,7 +17,7 @@ class ShippingForwardAdvancerTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-06-12T00:00:00Z"), ZoneOffset.UTC);
 
     private Shipping shipped() {
-        Shipping s = Shipping.create("order-1", "user-1", clock);
+        Shipping s = Shipping.create("tenant-a", "order-1", "user-1", clock);
         s.transitionTo(ShippingStatus.SHIPPED, "TRK-1", "CJ", clock);
         return s;
     }

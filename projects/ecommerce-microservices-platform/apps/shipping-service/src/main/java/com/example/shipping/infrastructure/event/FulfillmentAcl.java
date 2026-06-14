@@ -37,12 +37,16 @@ public class FulfillmentAcl {
     private final Clock clock;
 
     /**
-     * Builds the fulfillment message for the given confirmed order.
+     * Builds the fulfillment message for the given confirmed order. {@code tenantId}
+     * (bound by the consumer from the OrderConfirmed envelope, default {@code ecommerce})
+     * is stamped on the envelope top-level (M5) so the wms outbound consumer binds the
+     * originating tenant.
      *
      * @throws UnmappedSkuException when {@code require-sku-mapping=true} and a line
      *                              SKU is absent from the SKU map.
      */
-    public FulfillmentRequestedMessage toFulfillmentRequested(OrderConfirmedEvent.OrderConfirmedPayload order) {
+    public FulfillmentRequestedMessage toFulfillmentRequested(String tenantId,
+                                                              OrderConfirmedEvent.OrderConfirmedPayload order) {
         List<FulfillmentRequestedMessage.Line> lines = mapLines(order);
 
         return new FulfillmentRequestedMessage(
@@ -51,6 +55,7 @@ public class FulfillmentAcl {
                 Instant.now(clock).toString(),
                 AGGREGATE_TYPE,
                 order.orderId(),
+                tenantId,
                 new FulfillmentRequestedMessage.Payload(
                         order.orderId(),
                         CUSTOMER_PARTNER_CODE,

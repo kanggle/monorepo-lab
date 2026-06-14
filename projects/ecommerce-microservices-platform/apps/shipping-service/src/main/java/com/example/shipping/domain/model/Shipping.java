@@ -15,6 +15,7 @@ import java.util.UUID;
 public class Shipping {
 
     private String shippingId;
+    private String tenantId;
     private String orderId;
     private String userId;
     private ShippingStatus status;
@@ -27,7 +28,7 @@ public class Shipping {
     private Shipping() {
     }
 
-    public static Shipping create(String orderId, String userId, Clock clock) {
+    public static Shipping create(String tenantId, String orderId, String userId, Clock clock) {
         if (orderId == null || orderId.isBlank()) {
             throw new InvalidShippingException("Order ID must not be null or blank");
         }
@@ -37,6 +38,9 @@ public class Shipping {
 
         Shipping shipping = new Shipping();
         shipping.shippingId = UUID.randomUUID().toString();
+        shipping.tenantId = (tenantId == null || tenantId.isBlank())
+                ? com.example.shipping.domain.tenant.TenantContext.DEFAULT_TENANT_ID
+                : tenantId;
         shipping.orderId = orderId;
         shipping.userId = userId;
         shipping.status = ShippingStatus.PREPARING;
@@ -47,12 +51,13 @@ public class Shipping {
         return shipping;
     }
 
-    public static Shipping reconstitute(String shippingId, String orderId, String userId,
+    public static Shipping reconstitute(String shippingId, String tenantId, String orderId, String userId,
                                          ShippingStatus status, String trackingNumber, String carrier,
                                          List<StatusHistoryEntry> statusHistory,
                                          Instant createdAt, Instant updatedAt) {
         Shipping shipping = new Shipping();
         shipping.shippingId = shippingId;
+        shipping.tenantId = tenantId;
         shipping.orderId = orderId;
         shipping.userId = userId;
         shipping.status = status;
