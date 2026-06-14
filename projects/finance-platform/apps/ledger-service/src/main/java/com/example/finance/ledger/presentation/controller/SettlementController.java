@@ -2,21 +2,27 @@ package com.example.finance.ledger.presentation.controller;
 
 import com.example.finance.ledger.application.ActorContext;
 import com.example.finance.ledger.application.GetFxCostFlowConfigUseCase;
+import com.example.finance.ledger.application.GetFxPositionLotsUseCase;
 import com.example.finance.ledger.application.SetFxCostFlowConfigCommand;
 import com.example.finance.ledger.application.SetFxCostFlowConfigUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.Result;
 import com.example.finance.ledger.application.view.FxCostFlowConfigView;
+import com.example.finance.ledger.application.view.FxPositionLotsView;
+import com.example.finance.ledger.domain.error.LedgerErrors.FxToleranceInvalidException;
+import com.example.finance.ledger.domain.money.Currency;
 import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
 import com.example.finance.ledger.presentation.dto.FxCostFlowConfigRequest;
 import com.example.finance.ledger.presentation.dto.FxCostFlowConfigResponse;
+import com.example.finance.ledger.presentation.dto.FxPositionLotsResponse;
 import com.example.finance.ledger.presentation.dto.SettlementRequest;
 import com.example.finance.ledger.presentation.dto.SettlementResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -42,6 +48,11 @@ import org.springframework.web.bind.annotation.RestController;
  * /cost-flow-config} for the per-tenant FX cost-flow method config (shadow — settlement
  * still uses weighted-average; FIN-BE-025 wires FIFO consumption). Tenant-scoped via
  * {@link ActorContext} exactly like the reconciliation fx-tolerance endpoints.
+ *
+ * <p><b>20th increment (TASK-FIN-BE-028)</b>: adds {@code GET
+ * /{ledgerAccountCode}/{currency}/lots} — read-only surface exposing the tenant's
+ * open FX acquisition lots for one {@code (account, currency)} position, ordered
+ * {@code (acquired_at, seq)} ASC, plus a summary. Pure read; net-zero; no migration.
  */
 @RestController
 @RequestMapping("/api/finance/ledger/settlements")
@@ -51,6 +62,7 @@ public class SettlementController {
     private final SettleForeignPositionUseCase settleForeignPosition;
     private final GetFxCostFlowConfigUseCase getFxCostFlowConfig;
     private final SetFxCostFlowConfigUseCase setFxCostFlowConfig;
+    private final GetFxPositionLotsUseCase getFxPositionLots;
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<SettlementResponse>> settle(
@@ -90,6 +102,44 @@ public class SettlementController {
                 actor.tenantId(), request.method(), actorIdentity(actor));
         FxCostFlowConfigView view = setFxCostFlowConfig.set(command);
         return ResponseEntity.ok(ApiEnvelope.of(FxCostFlowConfigResponse.from(view)));
+    }
+
+    /**
+     * Read the tenant's open FX acquisition lots for one {@code (ledgerAccountCode,
+     * currency)} position (20th increment — TASK-FIN-BE-028). Returns the lots ordered
+     * {@code (acquired_at, seq)} ASC and a summary (Σ remaining foreign, Σ carrying
+     * base, lot count). An empty position returns an empty list + zero summary (200,
+     * not 404 — AC-3). An unknown {@code currency} string returns 400
+     * {@code VALIDATION_ERROR} (AC-4). No idempotency key — pure read.
+     */
+    @GetMapping("/{ledgerAccountCode}/{currency}/lots")
+    public ResponseEntity<ApiEnvelope<FxPositionLotsResponse>> getPositionLots(
+            @PathVariable String ledgerAccountCode,
+            @PathVariable String currency) {
+        ActorContext actor = ActorContextResolver.currentOrThrow();
+        Currency resolved = parseCurrencyOrValidationError(currency);
+        FxPositionLotsView view = getFxPositionLots.get(actor.tenantId(), ledgerAccountCode, resolved);
+        return ResponseEntity.ok(ApiEnvelope.of(FxPositionLotsResponse.from(view)));
+    }
+
+    /**
+     * Parse the currency path variable to the supported {@link Currency} enum, mapping
+     * an unsupported/unknown code to {@code 400 VALIDATION_ERROR} (AC-4 — consistent
+     * with the {@link com.example.finance.ledger.domain.error.LedgerErrors.CostFlowMethodInvalidException}
+     * pattern used by the cost-flow-config PUT). The existing
+     * {@link Currency.UnsupportedCurrencyException} from {@link Currency#of} would map
+     * to 422 {@code CURRENCY_MISMATCH} via the global handler — wrapping it here gives
+     * the read-path the correct 400 {@code VALIDATION_ERROR} semantics (a path variable
+     * that cannot be parsed is a client input error, not a domain currency-mismatch).
+     */
+    private static Currency parseCurrencyOrValidationError(String currencyCode) {
+        try {
+            return Currency.of(currencyCode);
+        } catch (Currency.UnsupportedCurrencyException e) {
+            throw new FxToleranceInvalidException(
+                    "unknown currency: " + currencyCode
+                            + " — supported: KRW, USD, EUR, JPY");
+        }
     }
 
     /** The actor identity recorded as the audit actor — the JWT subject, else the tenant. */

@@ -1591,6 +1591,55 @@ constraint).
 `fx_position_lot.carrying_base_minor` values are updated. The revaluation entry + `entry.posted`
 outbox payload shape are unchanged.
 
+### FX position lots read endpoint (twentieth increment — TASK-FIN-BE-028)
+
+ADR-001 § 3.1 deferred("lot 콘솔 drill-in") backend surface. Exposes the FIFO/lot state
+built by the 16th–18th increments (acquisition, FIFO consumption, revaluation mark-to-spot)
+as a **read-only** `GET` on the existing `SettlementController`. Pure read; net-zero;
+**no migration**.
+
+**Endpoint.** `GET /api/finance/ledger/settlements/{ledgerAccountCode}/{currency}/lots`
+(20th increment; `SettlementController` handler `getPositionLots`). Returns the tenant's
+**open lots** (`remaining_foreign_minor > 0`) for the given `(ledgerAccountCode, currency)`
+position, ordered `(acquired_at, seq)` ASC (the FIFO walk order, deterministic tiebreak),
+plus a summary. Tenant-scoped via `ActorContext` (the same `ActorContextResolver.currentOrThrow()`
+pattern). An unknown `currency` string (outside `{KRW,USD,EUR,JPY}`) returns `400
+VALIDATION_ERROR` (client input error, not domain mismatch — wrapped before delegation
+to distinguish from the 422 `CURRENCY_MISMATCH` used by write paths). An empty position
+returns `200` with an empty list and zero-summary — not `404` (net-zero, AC-3).
+
+**Response shape (F5 wire form).** All four monetary fields
+(`originalForeignMinor`, `remainingForeignMinor`, `originalBaseMinor`, `carryingBaseMinor`)
+and the summary totals (`totalRemainingForeignMinor`, `totalCarryingBaseMinor`) are
+serialised as **strings** (F5 — `long` → `String`, consistent with all other money wire
+forms in this service). `acquiredAt` is an ISO-8601 instant. `lotCount` is an integer.
+
+```json
+{ "data": {
+    "lots": [
+      { "lotId": "...", "currency": "USD", "acquiredAt": "2026-01-01T00:00:00Z", "seq": 1,
+        "originalForeignMinor": "1000", "remainingForeignMinor": "1000",
+        "originalBaseMinor": "1300000", "carryingBaseMinor": "1300000",
+        "sourceJournalEntryId": "..." },
+      { ... }
+    ],
+    "totalRemainingForeignMinor": "1500",
+    "totalCarryingBaseMinor": "2000000",
+    "lotCount": 2
+  }, "meta": { "timestamp": "..." } }
+```
+
+**Application layer.** `GetFxPositionLotsUseCase` (`@Transactional(readOnly=true)`) calls
+`FxPositionLotRepository.findOpenLots(tenantId, ledgerAccountCode, currency)` (existing port;
+no new method) and projects the result into `FxPositionLotsView` (+ per-lot `FxPositionLotView`).
+The presentation layer maps to `FxPositionLotsResponse` / `FxPositionLotResponse` (string minor
+units). No write path is touched.
+
+**No new error code / event / migration.** Pure read; `VALIDATION_ERROR` (400) for unknown
+currency reuses the existing error code (same as cost-flow-config PUT). The `CURRENCY_MISMATCH`
+(422) path is NOT used here — an unknown path variable is a client input parse failure, not a
+domain currency-mismatch. Existing ITs stay GREEN (net-zero).
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):
