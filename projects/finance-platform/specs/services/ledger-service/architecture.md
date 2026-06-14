@@ -1487,12 +1487,64 @@ settlement always books), logging `FX_FIFO_LOT_SHORTFALL`.
 **D4 boundary.** FIFO carrying is exact only when `Σ (open-lot carrying) == position carrying C` —
 true after acquisition + backfill with **no interleaved revaluation**. Revaluation mutates `C` but
 not the lots, so a revalue-then-FIFO-settle would diverge; redistributing the revaluation delta
-across open lots (keeping the invariant) is **FIN-BE-026** (out of scope here). The IT therefore
-asserts lot-exactness only on non-revaluation scenarios.
+across open lots (keeping the invariant) is **FIN-BE-026** (delivered below — § Revaluation lot
+carrying distribution). The 17th-increment IT therefore asserts lot-exactness only on
+non-revaluation scenarios; the 18th-increment IT closes the revaluation-touched case.
 
 **No new error code / status / event / contract** — the settlement entry + `entry.posted` outbox
 payload shape are unchanged (only the internally-derived `C_settle` differs); lot consumption is
 domain-internal persisted state.
+
+### Revaluation lot carrying distribution (eighteenth increment — TASK-FIN-BE-026)
+
+ADR-001 **D4(D4-a)** + § 3.1 step 4 — the task that **closes the D4 double-count hazard** the 17th
+increment flagged. FX revaluation (9th increment) trues the **aggregate** position carrying to spot
+(`revaluedBase = C + delta`) but leaves the open lots at their acquisition carrying. A subsequent
+FIFO settlement (17th increment) would then consume the *stale* lot carrying — `Σ (open-lot
+carrying) ≠ revaluedBase` → double-count / understatement. This increment re-marks every open lot's
+carrying to spot **immediately after** the revaluation post so the invariant `Σ (open-lot carrying)
+== revaluedBase` holds again, making FIFO settlement lot-exact independent of revaluation history.
+
+**Where.** Inside `RevalueForeignBalanceUseCase.revalue(...)`, in the **same `@Transactional`**,
+**after** `postJournalEntryUseCase.post(...)` succeeds (atomic with the revaluation entry). Applied
+on the success path **only** — the no-op `REPLAY` / `NO_POSITION` / `AT_SPOT` returns (no `delta`)
+never reach the distribution. `FxRevaluationPolicy`, the 2-line revaluation entry, the signed
+`delta`, the aggregate carrying, the `reval:{key}` idempotency, and the closed-period guard are all
+**byte-unchanged** — only `fx_position_lot.carrying_base_minor` values are updated.
+
+**Mark-to-spot + last-lot residual.** Load `FxPositionLotRepository.findOpenLots(tenant, code,
+currency)` (`remaining > 0`, `(acquired_at, seq)` ASC). The new aggregate carrying magnitude is
+`|revaluedBase| = |C + delta|`. For **every lot but the last**, `newCarrying = round(lot.remaining ×
+closingRate, HALF_UP)` (the lot's own foreign-at-spot value, magnitude). The **last lot absorbs the
+rounding residual**: `last.newCarrying = |revaluedBase| − Σ(prior newCarrying)` — forcing `Σ
+(open-lot carrying) == |revaluedBase|` **exactly** (a single lot therefore receives `|revaluedBase|`
+exactly). `remaining_foreign_minor` is untouched (a revaluation removes no foreign quantity); a new
+`FxPositionLot.markCarrying(newCarrying)` mutator sets the carrying (guarded `>= 0`, mirroring the
+`ck_fx_lot_carrying_base_nonneg` CHECK) and the lots are saved in the same Tx. The arithmetic is an
+extracted pure helper `markToSpot(openLots, closingRate, revaluedBase)` (unit-covered).
+
+**Non-negativity.** Each non-last `newCarrying = round(remaining × closingRate)` is non-negative
+(`closingRate > 0`, `remaining >= 0`); a loss revaluation (`delta < 0`) merely yields smaller
+magnitudes, never negative. The last-lot residual is **clamped at 0** for an extreme shadow-desync
+where the prior lots already overshoot `|revaluedBase|` — a documented edge a normal position never
+hits (it keeps the CHECK satisfied).
+
+**Always-apply / net-zero.** The distribution runs **regardless of the tenant's cost-flow config**
+(lots are always created at acquisition, so they are kept universally consistent — no branch on the
+config). It is **net-zero for non-FIFO tenants**: weighted-average settlement derives `C_settle`
+from the **aggregate** carrying (`accountTotalsForCurrency`), **not** the lots — so re-marking
+`lot.carrying` does not change weighted-average settlement results (`WEIGHTED_AVERAGE` / unset stay
+byte-identical). Only the FIFO path reads the lots, where the re-mark is exactly the D4 fix.
+
+**Edge cases.** No open lots → distribution **skips** (the aggregate revaluation is already posted;
+weighted-average settlement unaffected). Shadow desync (`Σ remaining ≠ |F|`) → the last-lot
+absorption still forces `Σ carrying == revaluedBase` (compatible with the 17th increment's safe
+fallback), though an individual lot may then differ from its own `foreign × spot` (a known
+constraint).
+
+**No new error code / status / event / contract / migration** — code-only; only existing
+`fx_position_lot.carrying_base_minor` values are updated. The revaluation entry + `entry.posted`
+outbox payload shape are unchanged.
 
 ## Idempotency / dedupe (F1)
 

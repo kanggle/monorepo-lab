@@ -5,10 +5,12 @@ import com.example.finance.ledger.application.port.outbound.ProcessedEventStore;
 import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
 import com.example.finance.ledger.domain.error.LedgerErrors.IdempotencyKeyRequiredException;
 import com.example.finance.ledger.domain.error.LedgerErrors.JournalEntryNotFoundException;
+import com.example.finance.ledger.domain.journal.FxPositionLot;
 import com.example.finance.ledger.domain.journal.FxRevaluationPolicy;
 import com.example.finance.ledger.domain.journal.FxRevaluationPolicy.RevaluationResult;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.SourceRef;
+import com.example.finance.ledger.domain.journal.repository.FxPositionLotRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
@@ -17,7 +19,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,6 +55,7 @@ public class RevalueForeignBalanceUseCase {
     private final JournalRepository journalRepository;
     private final ProcessedEventStore processedEventStore;
     private final PostJournalEntryUseCase postJournalEntryUseCase;
+    private final FxPositionLotRepository fxPositionLotRepository;
     private final ClockPort clock;
 
     /** Why a revaluation booked nothing ({@code revalued=false}). */
@@ -140,7 +146,80 @@ public class RevalueForeignBalanceUseCase {
         processedEventStore.markProcessed(dedupeKey, cmd.tenantId(), DEDUPE_TOPIC,
                 entry.source().getSourceTransactionId(), clock.now());
         JournalEntry posted = postJournalEntryUseCase.post(entry, reason(cmd), cmd.operatorSubject());
+
+        // (6) Lot carrying distribution (18th increment — TASK-FIN-BE-026, ADR-001 D4-a).
+        //     Revaluation has just trued the AGGREGATE position carrying to spot
+        //     (revaluedBase = carryingBaseMinor + delta). To preserve the D4 invariant
+        //     "Σ open-lot carrying == aggregate carrying" — so FIN-BE-025 FIFO settlement
+        //     stays lot-exact even on a revaluation-touched position — re-mark each open
+        //     lot's carrying to its own foreign-at-spot value (the LAST lot absorbing the
+        //     rounding residual so Σ == |revaluedBase| exactly). Applied in the SAME Tx,
+        //     on the success path only (the no-op REPLAY/NO_POSITION/AT_SPOT returns above
+        //     never reach here). Always-apply / net-zero: lots are universally consistent
+        //     regardless of cost-flow config; weighted-average settlement reads the
+        //     aggregate carrying (NOT the lots), so re-marking lots leaves non-FIFO
+        //     settlement results byte-unchanged.
+        long revaluedBase = carryingBaseMinor + result.delta();
+        distributeRevaluationToLots(cmd, revaluedBase);
+
         return Result.revalued(result, posted);
+    }
+
+    /**
+     * Mark each open lot's carrying to its foreign-at-spot value, with the LAST lot
+     * absorbing the rounding residual so {@code Σ open-lot carrying == |revaluedBase|}
+     * (= the new aggregate carrying magnitude). Loads the open lots {@code (acquired_at,
+     * seq)} ASC; an empty set → skip (the aggregate revaluation already posted;
+     * weighted-average settlement is unaffected). For every lot but the last,
+     * {@code newCarrying = round(remaining × closingRate, HALF_UP)} (magnitude); the last
+     * lot takes {@code |revaluedBase| − Σ(prior)} to force the invariant exactly. Each
+     * marked carrying is non-negative (closingRate > 0, remaining >= 0); the last-lot
+     * residual is clamped at 0 for an extreme shadow-desync (documented edge — a normal
+     * position never hits it). Persists in the caller's {@code @Transactional}.
+     */
+    private void distributeRevaluationToLots(RevalueForeignBalanceCommand cmd, long revaluedBase) {
+        List<FxPositionLot> openLots = fxPositionLotRepository.findOpenLots(
+                cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency());
+        if (openLots.isEmpty()) {
+            return; // no lots → aggregate revaluation already posted; net-zero on settlement
+        }
+        long[] marks = markToSpot(openLots, cmd.closingRate(), revaluedBase);
+        for (int i = 0; i < openLots.size(); i++) {
+            FxPositionLot lot = openLots.get(i);
+            lot.markCarrying(marks[i]);
+            fxPositionLotRepository.save(lot);
+        }
+    }
+
+    /**
+     * Pure mark-to-spot arithmetic (extracted for unit coverage). Returns the new
+     * carrying magnitude for each open lot, FIFO-ordered, such that {@code Σ == |
+     * revaluedBase|}. For every lot but the last,
+     * {@code round(remaining × closingRate, HALF_UP)}; the last lot absorbs the residual
+     * ({@code |revaluedBase| − Σ(prior)}), clamped at {@code 0} (extreme shadow-desync
+     * edge). A single lot therefore receives exactly {@code |revaluedBase|}. Magnitudes
+     * throughout (FIN-BE-024/025 store positive lot magnitudes).
+     */
+    static long[] markToSpot(List<FxPositionLot> openLots, BigDecimal closingRate, long revaluedBase) {
+        long target = Math.abs(revaluedBase);
+        int n = openLots.size();
+        long[] marks = new long[n];
+        long running = 0L;
+        for (int i = 0; i < n; i++) {
+            if (i < n - 1) {
+                long newCarrying = new BigDecimal(openLots.get(i).remainingForeignMinor())
+                        .multiply(closingRate)
+                        .setScale(0, RoundingMode.HALF_UP)
+                        .longValueExact();
+                marks[i] = newCarrying;
+                running += newCarrying;
+            } else {
+                // LAST lot absorbs the residual so Σ == target exactly. Clamp at 0 for an
+                // extreme desync where the prior lots already overshoot target.
+                marks[i] = Math.max(0L, target - running);
+            }
+        }
+        return marks;
     }
 
     private static String reason(RevalueForeignBalanceCommand cmd) {
