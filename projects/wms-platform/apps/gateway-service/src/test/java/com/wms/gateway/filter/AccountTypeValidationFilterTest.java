@@ -17,14 +17,20 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+/**
+ * Tests for {@link AccountTypeValidationFilter} — roles-only admission (ADR-MONO-035 4b-2a).
+ * WMS is operator-only; a non-empty {@code roles} set is the sole admission criterion.
+ * The legacy {@code account_type=OPERATOR} OR-branch has been removed.
+ */
 class AccountTypeValidationFilterTest {
 
     private final GatewayErrorHandler errorHandler = new GatewayErrorHandler(new ObjectMapper());
     private final AccountTypeValidationFilter filter = new AccountTypeValidationFilter(errorHandler);
 
     @Test
-    void allowsOperatorAccountType() {
-        Jwt jwt = buildJwt("OPERATOR");
+    void allowsNonEmptyRoles() {
+        // Any non-empty roles set → admitted (operator).
+        Jwt jwt = jwtWithRoles("WMS_OPERATOR");
         CapturingChain chain = new CapturingChain();
 
         runFilter(jwt, chain);
@@ -33,8 +39,19 @@ class AccountTypeValidationFilterTest {
     }
 
     @Test
-    void rejectsConsumerAccountTypeWith403() {
-        Jwt jwt = buildJwt("CONSUMER");
+    void allowsMultipleRoles() {
+        Jwt jwt = jwtWithRoles("WMS_OPERATOR", "WMS_ADMIN");
+        CapturingChain chain = new CapturingChain();
+
+        runFilter(jwt, chain);
+
+        assertThat(chain.called).isTrue();
+    }
+
+    @Test
+    void rejectsEmptyRolesWith403() {
+        // Empty roles list → not an operator → 403.
+        Jwt jwt = jwtWithRoles(); // empty roles, no account_type
         CapturingChain chain = new CapturingChain();
 
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/master/warehouses").build();
@@ -50,7 +67,8 @@ class AccountTypeValidationFilterTest {
     }
 
     @Test
-    void rejectsMissingAccountTypeClaimWith403() {
+    void rejectsNoRoleClaimWith403() {
+        // Token with no roles claim at all → not an operator → 403.
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "none")
                 .issuedAt(Instant.now())
@@ -72,21 +90,9 @@ class AccountTypeValidationFilterTest {
     }
 
     @Test
-    void allowsOperatorRole_noAccountType() {
-        // ADR-MONO-032 dual-read: a wms-scoped token carrying a role is an operator,
-        // even without the legacy account_type claim.
-        Jwt jwt = jwtWithRoles("WMS_OPERATOR");
-        CapturingChain chain = new CapturingChain();
-
-        runFilter(jwt, chain);
-
-        assertThat(chain.called).isTrue();
-    }
-
-    @Test
-    void rejectsNoRoleNoAccountTypeWith403() {
-        // Neither a role nor the legacy account_type → not an operator → 403.
-        Jwt jwt = jwtWithRoles(); // empty roles, no account_type
+    void rejectsAccountTypeOnlyNoRoleWith403() {
+        // The legacy account_type=OPERATOR leg is gone — account_type alone → 403.
+        Jwt jwt = jwtWithAccountTypeOnly("OPERATOR");
         CapturingChain chain = new CapturingChain();
 
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/master/warehouses").build();
@@ -124,7 +130,8 @@ class AccountTypeValidationFilterTest {
                 .block();
     }
 
-    private static Jwt buildJwt(String accountType) {
+    /** JWT with account_type only, no roles claim — tests that the dead leg is truly gone. */
+    private static Jwt jwtWithAccountTypeOnly(String accountType) {
         return Jwt.withTokenValue("token")
                 .header("alg", "none")
                 .issuedAt(Instant.now())

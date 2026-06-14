@@ -13,9 +13,13 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 /**
- * Adds verified identity headers derived from the authenticated JWT:
+ * Adds verified identity headers derived from the authenticated JWT (ADR-MONO-035 4b-2a):
  * {@code X-User-Id} ← {@code sub}, {@code X-User-Role} ← {@code role}/{@code roles},
  * {@code X-User-Email} ← {@code email}, {@code X-Actor-Id} ← {@code sub}.
+ * <p>
+ * {@code X-Account-Type} is no longer injected — no downstream service reads it
+ * (verified ADR-032 D3), and the {@code IdentityHeaderStripFilter} strip entry remains
+ * as inert defense-in-depth.
  * <p>
  * Runs after Spring Security has populated the security context. If no JWT is
  * present (public routes), the filter becomes a no-op.
@@ -49,10 +53,6 @@ public class JwtHeaderEnrichmentFilter implements GlobalFilter, Ordered {
         // and deny access; leaving the header absent would let a buggy service
         // fall through to a default.
         builder.header("X-User-Role", role);
-        String accountType = jwt.getClaimAsString("account_type");
-        if (accountType != null) {
-            builder.header("X-Account-Type", accountType);
-        }
         return exchange.mutate().request(builder.build()).build();
     }
 

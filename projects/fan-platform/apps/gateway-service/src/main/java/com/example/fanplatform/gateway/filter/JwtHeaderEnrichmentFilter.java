@@ -24,8 +24,11 @@ import reactor.core.publisher.Mono;
  *   <li>{@code X-User-Email} ← {@code email}</li>
  *   <li>{@code X-User-Role} / {@code X-Roles} ← {@code role}/{@code roles}</li>
  *   <li>{@code X-Tenant-Id} ← {@code tenant_id}</li>
- *   <li>{@code X-Account-Type} ← {@code account_type} (when present)</li>
  * </ul>
+ *
+ * <p>{@code X-Account-Type} is no longer injected (ADR-MONO-035 4b-2a / ADR-032 D3) —
+ * no downstream service reads it; the {@code IdentityHeaderStripFilter} strip entry
+ * remains as inert defense-in-depth.
  *
  * <p>This filter satisfies both the "TenantGateFilter" and "HeaderEnrichmentFilter"
  * roles described in TASK-FAN-BE-001. Tenant gating itself is enforced upstream
@@ -74,10 +77,6 @@ public class JwtHeaderEnrichmentFilter implements GlobalFilter, Ordered {
         // service fall through to a default.
         builder.header("X-User-Role", role);
         builder.header("X-Roles", role);
-        String accountType = jwt.getClaimAsString("account_type");
-        if (accountType != null) {
-            builder.header("X-Account-Type", accountType);
-        }
         return exchange.mutate().request(builder.build()).build();
     }
 

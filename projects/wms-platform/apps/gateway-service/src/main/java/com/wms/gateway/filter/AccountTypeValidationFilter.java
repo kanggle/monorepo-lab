@@ -11,8 +11,10 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 /**
- * Rejects requests whose JWT {@code account_type} claim is not {@code OPERATOR}.
- * Runs after Spring Security populates the security context but before header enrichment.
+ * Rejects requests that do not carry at least one role in the JWT (ADR-MONO-035 4b-2a /
+ * ADR-032 D3). WMS is an operator-only platform; a non-empty {@code roles} set is the
+ * sole admission criterion — the legacy {@code account_type=OPERATOR} OR-branch has been
+ * removed. Runs after Spring Security populates the security context but before header enrichment.
  *
  * <p>Uses a Boolean intermediate Mono to distinguish "proceed" from "reject" without
  * relying on switchIfEmpty, which always fires on Mono&lt;Void&gt; completions.
@@ -38,15 +40,13 @@ public class AccountTypeValidationFilter implements GlobalFilter, Ordered {
     }
 
     /**
-     * Role-based admission (ADR-MONO-032): wms is an operator-only platform, so a token
-     * scoped to {@code aud=wms} carrying at least one role is an operator. The legacy
-     * {@code account_type=OPERATOR} is accepted only during the dual-read migration window
-     * (jwt-standard-claims § Migration Compatibility) and is removed at D5 step 4.
+     * Role-based admission (ADR-MONO-035 4b-2a / ADR-032 D3): wms is an operator-only platform,
+     * so a token carrying at least one role is an operator. The legacy {@code account_type=OPERATOR}
+     * OR-branch has been removed — roles are the sole admission criterion.
      */
     private static boolean isOperator(org.springframework.security.oauth2.jwt.Jwt jwt) {
         java.util.List<String> roles = jwt.getClaimAsStringList("roles");
-        boolean hasRole = roles != null && !roles.isEmpty();
-        return hasRole || "OPERATOR".equals(jwt.getClaimAsString("account_type"));
+        return roles != null && !roles.isEmpty();
     }
 
     @Override
