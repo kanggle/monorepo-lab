@@ -7,6 +7,7 @@ import {
   type DelegationFactListQueryParams,
 } from '../api/types';
 import { useDelegationFacts } from '../hooks/use-erp-ops';
+import { fmtDateTime } from './format-datetime';
 
 /**
  * ERP "위임 현황" read-only card (TASK-PC-FE-055 — ADR-MONO-013 §D3.1).
@@ -200,11 +201,11 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
                   </td>
                   {/* validFrom: NON_NULL-absent → graceful "—" */}
                   <td className="p-2 text-sm" data-testid={`delegation-fact-validFrom-${i}`}>
-                    {fact.validFrom ?? '—'}
+                    {fmtDateTime(fact.validFrom)}
                   </td>
                   {/* validTo: NON_NULL-absent → "무기한" (open-ended) */}
                   <td className="p-2 text-sm" data-testid={`delegation-fact-validTo-${i}`}>
-                    {fact.validTo ?? '무기한'}
+                    {fmtDateTime(fact.validTo, '무기한')}
                   </td>
                   {/* reason: NON_NULL-absent → hidden (empty cell) */}
                   <td className="p-2 text-sm" data-testid={`delegation-fact-reason-${i}`}>
@@ -212,7 +213,7 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
                   </td>
                   {/* revokedAt: NON_NULL-absent → hidden (empty cell; only relevant when REVOKED) */}
                   <td className="p-2 text-sm" data-testid={`delegation-fact-revokedAt-${i}`}>
-                    {fact.revokedAt ?? ''}
+                    {fmtDateTime(fact.revokedAt, '')}
                   </td>
                 </tr>
               ))}

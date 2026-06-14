@@ -11,6 +11,7 @@ import {
   useRevokeDelegation,
 } from '../hooks/use-erp-ops';
 import { approvalErrorMessage } from './approval-error';
+import { fmtDateTime } from './format-datetime';
 
 /**
  * ERP "위임(대결) 관리" screen (TASK-PC-FE-054 — PC-FE-053 follow-up;
@@ -50,7 +51,7 @@ function newIdemKey(): string {
 }
 
 function fmt(ts: string | undefined): string {
-  return ts ?? '—';
+  return fmtDateTime(ts);
 }
 
 // ---------------------------------------------------------------------------
