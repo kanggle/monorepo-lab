@@ -19,7 +19,7 @@ class UserProfileUpdatedEventSerializationTest {
     @DisplayName("envelope 필드가 snake_case로 직렬화된다")
     void serialize_envelopeFields_areSnakeCase() throws Exception {
         UserProfileUpdatedEvent event = new UserProfileUpdatedEvent(
-                UUID.randomUUID(), "UserProfileUpdated", Instant.now(), "user-service",
+                UUID.randomUUID(), "UserProfileUpdated", Instant.now(), "user-service", "ecommerce",
                 new UserProfileUpdatedEvent.Payload(UUID.randomUUID(), "닉네임", "010-1234-5678", null, Instant.now())
         );
 

@@ -12,6 +12,7 @@ import com.example.common.page.PageResult;
 import com.example.user.domain.model.ProfileStatus;
 import com.example.user.domain.model.UserProfile;
 import com.example.user.domain.repository.UserProfileRepository;
+import com.example.user.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -62,7 +63,8 @@ public class UserProfileService {
                     saved.getNickname(),
                     saved.getPhone(),
                     saved.getProfileImageUrl(),
-                    saved.getUpdatedAt()
+                    saved.getUpdatedAt(),
+                    TenantContext.currentTenant()
             ));
         }
 
@@ -115,7 +117,8 @@ public class UserProfileService {
 
         applicationEventPublisher.publishEvent(new UserWithdrawnSpringEvent(
                 profile.getUserId(),
-                profile.getUpdatedAt()
+                profile.getUpdatedAt(),
+                TenantContext.currentTenant()
         ));
     }
 }

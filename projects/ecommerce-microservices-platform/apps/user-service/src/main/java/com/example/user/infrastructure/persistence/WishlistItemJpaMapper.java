@@ -1,6 +1,7 @@
 package com.example.user.infrastructure.persistence;
 
 import com.example.user.domain.model.WishlistItem;
+import com.example.user.domain.tenant.TenantContext;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -16,6 +17,6 @@ class WishlistItemJpaMapper {
     }
 
     WishlistItemJpaEntity toEntity(WishlistItem item) {
-        return WishlistItemJpaEntity.fromDomain(item);
+        return WishlistItemJpaEntity.fromDomain(item, TenantContext.currentTenant());
     }
 }

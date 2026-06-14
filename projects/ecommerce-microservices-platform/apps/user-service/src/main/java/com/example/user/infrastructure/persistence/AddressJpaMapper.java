@@ -1,6 +1,7 @@
 package com.example.user.infrastructure.persistence;
 
 import com.example.user.domain.model.Address;
+import com.example.user.domain.tenant.TenantContext;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,6 +24,6 @@ class AddressJpaMapper {
     }
 
     AddressJpaEntity toEntity(Address address) {
-        return AddressJpaEntity.fromDomain(address);
+        return AddressJpaEntity.fromDomain(address, TenantContext.currentTenant());
     }
 }

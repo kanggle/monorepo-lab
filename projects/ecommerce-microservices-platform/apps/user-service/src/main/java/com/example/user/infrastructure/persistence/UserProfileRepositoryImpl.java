@@ -5,6 +5,7 @@ import com.example.common.page.PageResult;
 import com.example.user.domain.model.ProfileStatus;
 import com.example.user.domain.model.UserProfile;
 import com.example.user.domain.repository.UserProfileRepository;
+import com.example.user.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,7 +33,7 @@ class UserProfileRepositoryImpl implements UserProfileRepository {
 
     @Override
     public Optional<UserProfile> findByUserId(UUID userId) {
-        return jpaRepository.findByUserId(userId).map(mapper::toDomain);
+        return jpaRepository.findByUserIdAndTenantId(userId, TenantContext.currentTenant()).map(mapper::toDomain);
     }
 
     @Override
@@ -43,28 +44,28 @@ class UserProfileRepositoryImpl implements UserProfileRepository {
     @Override
     public PageResult<UserProfile> findByStatusAndEmailContaining(ProfileStatus status, String email, PageQuery pageQuery) {
         Pageable pageable = toPageable(pageQuery);
-        Page<UserProfileJpaEntity> page = jpaRepository.findByStatusAndEmailContaining(status, email, pageable);
+        Page<UserProfileJpaEntity> page = jpaRepository.findByTenantIdAndStatusAndEmailContaining(TenantContext.currentTenant(), status, email, pageable);
         return toPageResult(page, pageQuery);
     }
 
     @Override
     public PageResult<UserProfile> findByStatus(ProfileStatus status, PageQuery pageQuery) {
         Pageable pageable = toPageable(pageQuery);
-        Page<UserProfileJpaEntity> page = jpaRepository.findByStatus(status, pageable);
+        Page<UserProfileJpaEntity> page = jpaRepository.findByTenantIdAndStatus(TenantContext.currentTenant(), status, pageable);
         return toPageResult(page, pageQuery);
     }
 
     @Override
     public PageResult<UserProfile> findByEmailContaining(String email, PageQuery pageQuery) {
         Pageable pageable = toPageable(pageQuery);
-        Page<UserProfileJpaEntity> page = jpaRepository.findByEmailContaining(email, pageable);
+        Page<UserProfileJpaEntity> page = jpaRepository.findByTenantIdAndEmailContaining(TenantContext.currentTenant(), email, pageable);
         return toPageResult(page, pageQuery);
     }
 
     @Override
     public PageResult<UserProfile> findAll(PageQuery pageQuery) {
         Pageable pageable = toPageable(pageQuery);
-        Page<UserProfileJpaEntity> page = jpaRepository.findAll(pageable);
+        Page<UserProfileJpaEntity> page = jpaRepository.findByTenantId(TenantContext.currentTenant(), pageable);
         return toPageResult(page, pageQuery);
     }
 

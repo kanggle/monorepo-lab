@@ -24,7 +24,7 @@ class UserEventContractTest {
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     private static final String SPEC_REF = "specs/contracts/events/user-events.md";
-    private static final Set<String> ENVELOPE_FIELDS = Set.of("event_id", "event_type", "occurred_at", "source", "payload");
+    private static final Set<String> ENVELOPE_FIELDS = Set.of("event_id", "event_type", "occurred_at", "source", "tenant_id", "payload");
 
     // ─── UserProfileUpdated ─────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ class UserEventContractTest {
     @DisplayName("UserProfileUpdated envelope은 스펙 정의 필드만 포함한다")
     void userProfileUpdated_envelope_matchesSpec() throws Exception {
         UserProfileUpdatedEvent event = new UserProfileUpdatedEvent(
-                UUID.randomUUID(), "UserProfileUpdated", Instant.now(), "user-service",
+                UUID.randomUUID(), "UserProfileUpdated", Instant.now(), "user-service", "ecommerce",
                 new UserProfileUpdatedEvent.Payload(UUID.randomUUID(), "길동이", "010-1234-5678", "https://img.example.com/photo.jpg", Instant.now())
         );
 
@@ -44,7 +44,7 @@ class UserEventContractTest {
     @DisplayName("UserProfileUpdated payload는 {userId, nickname, phone, profileImageUrl, updatedAt}만 포함한다")
     void userProfileUpdated_payload_matchesSpec() throws Exception {
         UserProfileUpdatedEvent event = new UserProfileUpdatedEvent(
-                UUID.randomUUID(), "UserProfileUpdated", Instant.now(), "user-service",
+                UUID.randomUUID(), "UserProfileUpdated", Instant.now(), "user-service", "ecommerce",
                 new UserProfileUpdatedEvent.Payload(UUID.randomUUID(), "길동이", "010-1234-5678", "https://img.example.com/photo.jpg", Instant.now())
         );
 
@@ -59,7 +59,7 @@ class UserEventContractTest {
     @DisplayName("UserWithdrawn envelope은 스펙 정의 필드만 포함한다")
     void userWithdrawn_envelope_matchesSpec() throws Exception {
         UserWithdrawnEvent event = new UserWithdrawnEvent(
-                UUID.randomUUID(), "UserWithdrawn", Instant.now(), "user-service",
+                UUID.randomUUID(), "UserWithdrawn", Instant.now(), "user-service", "ecommerce",
                 new UserWithdrawnEvent.Payload(UUID.randomUUID(), Instant.now())
         );
 
@@ -71,7 +71,7 @@ class UserEventContractTest {
     @DisplayName("UserWithdrawn payload는 {userId, withdrawnAt}만 포함한다")
     void userWithdrawn_payload_matchesSpec() throws Exception {
         UserWithdrawnEvent event = new UserWithdrawnEvent(
-                UUID.randomUUID(), "UserWithdrawn", Instant.now(), "user-service",
+                UUID.randomUUID(), "UserWithdrawn", Instant.now(), "user-service", "ecommerce",
                 new UserWithdrawnEvent.Payload(UUID.randomUUID(), Instant.now())
         );
 

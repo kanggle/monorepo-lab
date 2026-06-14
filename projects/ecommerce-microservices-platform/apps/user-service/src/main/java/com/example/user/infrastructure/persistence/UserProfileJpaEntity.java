@@ -20,6 +20,14 @@ class UserProfileJpaEntity {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
+    /**
+     * Outer-axis tenant owning this user (ADR-MONO-030 Step 4, M1; TASK-BE-367).
+     * Stamped once at insert from the request tenant context; immutable afterward.
+     * Not part of the clean {@code UserProfile} domain model — persistence/event layers only.
+     */
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(nullable = false, unique = true, columnDefinition = "uuid")
     private UUID userId;
 
@@ -48,9 +56,10 @@ class UserProfileJpaEntity {
     @Column(nullable = false)
     private Instant updatedAt;
 
-    static UserProfileJpaEntity fromDomain(UserProfile profile) {
+    static UserProfileJpaEntity fromDomain(UserProfile profile, String tenantId) {
         UserProfileJpaEntity entity = new UserProfileJpaEntity();
         entity.id = profile.getId();
+        entity.tenantId = tenantId;
         entity.userId = profile.getUserId();
         entity.email = profile.getEmail().value();
         entity.name = profile.getName();

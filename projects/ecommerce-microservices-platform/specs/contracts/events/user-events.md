@@ -34,9 +34,19 @@ multi-word event suffixes use hyphens (mirroring `shipping.shipping.status-chang
   "event_type": "string",
   "occurred_at": "string (ISO 8601)",
   "source": "user-service",
+  "tenant_id": "string (owning tenant; default 'ecommerce')",
   "payload": {}
 }
 ```
+
+> **`tenant_id` (ADR-MONO-030 Step 4 / TASK-BE-367, M5).** The outer-axis tenant
+> that owns the user the event concerns. Carried on the envelope (not the payload)
+> so consumers can route/scope per tenant across the async boundary without parsing
+> the payload. Derived from the request's tenant context (gateway `X-Tenant-Id`,
+> entitlement-trust gate of TASK-BE-357) at publish time. A standalone deployment or
+> a pre-multi-tenant user resolves to the default tenant `'ecommerce'` (net-zero, D8).
+> It is always present (never blank). Consumers performing tenant-scoped processing
+> must read this field; consumers not yet tenant-aware may ignore it (additive).
 
 ---
 

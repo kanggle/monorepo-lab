@@ -8,5 +8,6 @@ public record UserProfileUpdatedSpringEvent(
         String nickname,
         String phone,
         String profileImageUrl,
-        Instant updatedAt
+        Instant updatedAt,
+        String tenantId
 ) {}

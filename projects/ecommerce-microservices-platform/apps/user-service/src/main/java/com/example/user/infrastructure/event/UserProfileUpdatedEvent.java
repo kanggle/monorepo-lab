@@ -10,6 +10,7 @@ public record UserProfileUpdatedEvent(
         @JsonProperty("event_type") String eventType,
         @JsonProperty("occurred_at") Instant occurredAt,
         String source,
+        @JsonProperty("tenant_id") String tenantId,
         Payload payload
 ) {
     public record Payload(
