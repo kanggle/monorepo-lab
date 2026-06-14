@@ -105,6 +105,27 @@ public interface AdminOperatorPort {
      */
     void changeFinanceDefaultAccountId(long operatorInternalId, String newValue, Instant at);
 
+    /**
+     * TASK-BE-373 / ADR-MONO-034 U3 (step 3c) — set {@code admin_operators.identity_id}
+     * on the row identified by {@code operatorInternalId} (link the operator to a
+     * central identity). Bumps {@code updated_at}.
+     *
+     * <p>This is the persistence side of the opt-in audited link operation; the
+     * authorization decision (email-match necessary-not-sufficient, fail-closed
+     * identity resolve, idempotency) is made by the use case BEFORE this call. The
+     * load-modify-{@code saveAndFlush} pattern mirrors {@link #changeStatus} so the
+     * managed-entity UPDATE flushes WITHIN the request transaction (see the adapter
+     * for the TASK-BE-335 explicit-flush rationale).
+     */
+    void linkIdentity(long operatorInternalId, String identityId, Instant at);
+
+    /**
+     * TASK-BE-373 / ADR-MONO-034 U3 — clear {@code admin_operators.identity_id}
+     * (reverse the link, U6 reversibility). Bumps {@code updated_at}. Same
+     * load-modify-{@code saveAndFlush} pattern as {@link #changeStatus}.
+     */
+    void unlinkIdentity(long operatorInternalId, Instant at);
+
     // ---------- Roles ----------
 
     /**
@@ -179,7 +200,14 @@ public interface AdminOperatorPort {
             Instant lastLoginAt,
             Instant createdAt,
             Instant updatedAt,
-            String financeDefaultAccountId
+            String financeDefaultAccountId,
+            /**
+             * TASK-BE-373 / ADR-MONO-034 U3 — the central identities.identity_id this
+             * operator is linked to (value-convention cross-DB ref), or {@code null}
+             * when unlinked. Read by the link/unlink use cases for the idempotency /
+             * already-linked-to-different checks.
+             */
+            String identityId
     ) {}
 
     /** Value used to INSERT a new operator row. */

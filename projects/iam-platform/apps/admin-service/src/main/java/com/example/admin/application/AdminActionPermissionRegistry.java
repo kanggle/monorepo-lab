@@ -69,6 +69,9 @@ public class AdminActionPermissionRegistry {
         // TASK-BE-347 (ADR-MONO-024 D3-i) — operator↔tenant assignment create/remove
         map.put(ActionCode.OPERATOR_ASSIGNMENT_CREATE, "OPERATOR");
         map.put(ActionCode.OPERATOR_ASSIGNMENT_DELETE, "OPERATOR");
+        // TASK-BE-373 (ADR-MONO-034 U3) — operator↔identity link/unlink
+        map.put(ActionCode.OPERATOR_IDENTITY_LINK, "OPERATOR");
+        map.put(ActionCode.OPERATOR_IDENTITY_UNLINK, "OPERATOR");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -125,7 +128,9 @@ public class AdminActionPermissionRegistry {
             case OPERATOR_CREATE, OPERATOR_ROLE_CHANGE, OPERATOR_STATUS_CHANGE,
                  OPERATOR_ORG_SCOPE_UPDATE,
                  // TASK-BE-347 (ADR-MONO-024 D3-i) — assignment create/remove gate on operator.manage
-                 OPERATOR_ASSIGNMENT_CREATE, OPERATOR_ASSIGNMENT_DELETE -> Permission.OPERATOR_MANAGE;
+                 OPERATOR_ASSIGNMENT_CREATE, OPERATOR_ASSIGNMENT_DELETE,
+                 // TASK-BE-373 (ADR-MONO-034 U3) — operator↔identity link/unlink gate on operator.manage
+                 OPERATOR_IDENTITY_LINK, OPERATOR_IDENTITY_UNLINK -> Permission.OPERATOR_MANAGE;
             // TASK-BE-250 — tenant lifecycle management
             case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE -> Permission.TENANT_MANAGE;
             // TASK-BE-343 (ADR-MONO-023 D3) — subscription lifecycle management

@@ -155,6 +155,71 @@ class AdminOperatorJpaRepositoryTest {
         assertThat(page.getTotalElements()).isZero();
     }
 
+    // ── TASK-BE-373 (ADR-MONO-034 U3 / step 3c) — identity_id column (V0036) ────
+    //
+    // These assert: (1) the V0036 column physically exists and the entity mapping
+    // validates against it (ddl-auto=validate is active above — a missing/mismatched
+    // column would fail context startup, not just these assertions); (2) link sets
+    // identity_id and unlink clears it; (3) a managed-entity update of ANOTHER field
+    // (changeStatus) does NOT clobber identity_id (the load-modify-saveAndFlush
+    // pattern preserves unrelated columns).
+
+    @Test
+    @DisplayName("identity_id — 신규 오퍼레이터는 기본 NULL (V0036 backfill 없음)")
+    void identityId_defaultsToNull() {
+        AdminOperatorJpaEntity saved = repo.saveAndFlush(operator("link0@example.com", "ACTIVE"));
+
+        AdminOperatorJpaEntity reloaded = repo.findById(saved.getId()).orElseThrow();
+        assertThat(reloaded.getIdentityId())
+                .as("V0036 adds NO backfill — every existing/new row is unlinked")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("linkIdentity → identity_id 영속 / unlinkIdentity → NULL 로 복원")
+    void linkIdentity_then_unlink_persists() {
+        AdminOperatorJpaEntity saved = repo.saveAndFlush(operator("link1@example.com", "ACTIVE"));
+        Instant t1 = Instant.now();
+
+        // link
+        AdminOperatorJpaEntity managed = repo.findById(saved.getId()).orElseThrow();
+        managed.linkIdentity("idy-abc-123", t1);
+        repo.saveAndFlush(managed);
+
+        AdminOperatorJpaEntity afterLink = repo.findById(saved.getId()).orElseThrow();
+        assertThat(afterLink.getIdentityId()).isEqualTo("idy-abc-123");
+
+        // unlink (reversibility)
+        AdminOperatorJpaEntity managed2 = repo.findById(saved.getId()).orElseThrow();
+        managed2.unlinkIdentity(Instant.now());
+        repo.saveAndFlush(managed2);
+
+        AdminOperatorJpaEntity afterUnlink = repo.findById(saved.getId()).orElseThrow();
+        assertThat(afterUnlink.getIdentityId()).isNull();
+    }
+
+    @Test
+    @DisplayName("changeStatus 같은 다른 필드 업데이트가 identity_id 를 덮어쓰지 않음")
+    void changeStatus_doesNotClobberIdentityId() {
+        AdminOperatorJpaEntity saved = repo.saveAndFlush(operator("link2@example.com", "ACTIVE"));
+
+        // establish the link first
+        AdminOperatorJpaEntity managed = repo.findById(saved.getId()).orElseThrow();
+        managed.linkIdentity("idy-keep-me", Instant.now());
+        repo.saveAndFlush(managed);
+
+        // now mutate a DIFFERENT field via the same managed-entity pattern
+        AdminOperatorJpaEntity managed2 = repo.findById(saved.getId()).orElseThrow();
+        managed2.changeStatus("SUSPENDED", Instant.now());
+        repo.saveAndFlush(managed2);
+
+        AdminOperatorJpaEntity reloaded = repo.findById(saved.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo("SUSPENDED");
+        assertThat(reloaded.getIdentityId())
+                .as("a changeStatus update must NOT clobber the previously-linked identity_id")
+                .isEqualTo("idy-keep-me");
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static AdminOperatorJpaEntity operator(String email, String status) {

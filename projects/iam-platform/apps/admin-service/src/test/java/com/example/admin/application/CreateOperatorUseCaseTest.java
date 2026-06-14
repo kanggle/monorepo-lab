@@ -61,7 +61,7 @@ class CreateOperatorUseCaseTest {
         Instant now = Instant.parse("2026-01-01T00:00:00Z");
         return new AdminOperatorPort.OperatorView(
                 id, "new-op-uuid", tenantId, email, "hash-value", displayName, "ACTIVE",
-                null, null, now, now, null);
+                null, null, now, now, null, null);
     }
 
     @Test

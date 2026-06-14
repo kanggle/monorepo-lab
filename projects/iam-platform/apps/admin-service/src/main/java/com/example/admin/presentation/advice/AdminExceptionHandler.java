@@ -260,6 +260,33 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("OPERATOR_NOT_FOUND", e.getMessage()));
     }
 
+    // TASK-BE-373 (ADR-MONO-034 U3) — operator↔identity link errors.
+    // Email-match is necessary-not-sufficient: a mismatch is a semantically-invalid
+    // request (422, mirroring BATCH_SIZE_EXCEEDED's 422 family for unprocessable input).
+    @ExceptionHandler(com.example.admin.application.exception.IdentityLinkEmailMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleIdentityLinkEmailMismatch(
+            com.example.admin.application.exception.IdentityLinkEmailMismatchException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("IDENTITY_LINK_EMAIL_MISMATCH", e.getMessage()));
+    }
+
+    // Fail-closed: the account resolves to no central identity (200 + null). Not a
+    // downstream failure (that is 503 DOWNSTREAM_ERROR) — an unprocessable link target.
+    @ExceptionHandler(com.example.admin.application.exception.AccountIdentityUnresolvableException.class)
+    public ResponseEntity<ErrorResponse> handleAccountIdentityUnresolvable(
+            com.example.admin.application.exception.AccountIdentityUnresolvableException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("ACCOUNT_IDENTITY_UNRESOLVABLE", e.getMessage()));
+    }
+
+    // Already linked to a DIFFERENT identity → conflict (mirror OPERATOR_EMAIL_CONFLICT 409).
+    @ExceptionHandler(com.example.admin.application.exception.OperatorAlreadyLinkedException.class)
+    public ResponseEntity<ErrorResponse> handleOperatorAlreadyLinked(
+            com.example.admin.application.exception.OperatorAlreadyLinkedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("OPERATOR_ALREADY_LINKED", e.getMessage()));
+    }
+
     @ExceptionHandler(RoleNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleRoleNotFound(RoleNotFoundException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

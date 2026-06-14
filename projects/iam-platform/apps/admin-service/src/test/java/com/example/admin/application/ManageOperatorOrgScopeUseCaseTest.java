@@ -64,7 +64,7 @@ class ManageOperatorOrgScopeUseCaseTest {
     private AdminOperatorPort.OperatorView operatorView() {
         return new AdminOperatorPort.OperatorView(
                 OP_INTERNAL_ID, OP_PUBLIC_ID, TENANT, "op@example.com", "hash",
-                "Op", "ACTIVE", null, null, Instant.now(), Instant.now(), null);
+                "Op", "ACTIVE", null, null, Instant.now(), Instant.now(), null, null);
     }
 
     // ───────────────────────────── listAssignments ─────────────────────────────
