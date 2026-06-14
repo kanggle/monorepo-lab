@@ -357,7 +357,13 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // (BE-338).
         java.util.List<String> derived = OperatorRoleDerivation.fromEntitledDomains(entitled);
         if (!derived.isEmpty()) {
-            context.getClaims().claim(CLAIM_ROLES, derived);
+            // The claim value flows into the JdbcOAuth2AuthorizationService store,
+            // which serializes via SecurityJackson2Modules' strict allowlist. An
+            // ImmutableCollections list (List.of/List.copyOf) is NOT allowlisted and
+            // breaks the authorization read-back (userinfo/refresh/revoke). Wrap in a
+            // mutable ArrayList (allowlisted) — same reasoning as the HashMap details
+            // map in CredentialAuthenticationProvider.
+            context.getClaims().claim(CLAIM_ROLES, new java.util.ArrayList<>(derived));
             log.debug("TenantClaimTokenCustomizer: assume-tenant — derived operator roles={} "
                     + "from the selected tenant's entitled_domains={}", derived, entitled);
         }
@@ -449,7 +455,14 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                 : RoleSeedPolicy.seed(platformTenantId);
 
         if (roles != null && !roles.isEmpty()) {
-            context.getClaims().claim(CLAIM_ROLES, roles);
+            // SecurityJackson2Modules allowlist: the seed returns an
+            // ImmutableCollections list (List.of), which is NOT allowlisted by the
+            // JdbcOAuth2AuthorizationService store and breaks the authorization
+            // read-back (userinfo/refresh/revoke). Wrap in a mutable ArrayList
+            // (allowlisted) — mirrors the HashMap details map in
+            // CredentialAuthenticationProvider. (Stored account_roles are already an
+            // ArrayList from Jackson; the seed path is the one that needs this.)
+            context.getClaims().claim(CLAIM_ROLES, new java.util.ArrayList<>(roles));
             log.debug("TenantClaimTokenCustomizer: injected roles={} (platform={}, source={})",
                     roles, platformTenantId,
                     (stored != null && !stored.isEmpty()) ? "stored" : "seed");
