@@ -8,7 +8,7 @@ ADR-MONO-031 Phase 1b(orders) — console-web `features/ecommerce-ops` **orders*
 
 # Status
 
-review
+done
 
 # Owner
 
