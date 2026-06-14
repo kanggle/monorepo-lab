@@ -25,6 +25,20 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
 
     boolean existsByTenantIdAndEmail(String tenantId, String email);
 
+    /**
+     * TASK-BE-372 (ADR-MONO-034 U6 step 3b): resolve the account's central
+     * identity_id (V0023). Read as a native column projection so {@code identity_id}
+     * stays UNMAPPED on {@link AccountJpaEntity} — Hibernate never touches the
+     * column on an account update, preserving the step-3a backfilled value
+     * (the merge-overwrite hazard). Returns empty when the account does not exist
+     * in this tenant; returns a row whose value may be NULL when the account has
+     * no identity yet (a row created before step 3d wires provisioning).
+     */
+    @Query(value = "SELECT identity_id FROM accounts WHERE tenant_id = :tenantId AND id = :accountId",
+            nativeQuery = true)
+    Optional<String> findIdentityIdByTenantIdAndId(@Param("tenantId") String tenantId,
+                                                   @Param("accountId") String accountId);
+
     @Query("SELECT a FROM AccountJpaEntity a")
     Page<AccountJpaEntity> findAllAccounts(Pageable pageable);
 

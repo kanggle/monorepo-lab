@@ -42,6 +42,11 @@ public class AccountRepositoryImpl implements AccountRepository {
     }
 
     @Override
+    public Optional<String> findIdentityId(TenantId tenantId, String accountId) {
+        return jpaRepository.findIdentityIdByTenantIdAndId(tenantId.value(), accountId);
+    }
+
+    @Override
     public ProvisioningPage<Account> findAllByTenantId(TenantId tenantId, AccountStatus status, int page, int size) {
         Page<AccountJpaEntity> jpaPage = jpaRepository.findByTenantIdWithStatusFilter(
                 tenantId.value(), status, PageRequest.of(page, size));
