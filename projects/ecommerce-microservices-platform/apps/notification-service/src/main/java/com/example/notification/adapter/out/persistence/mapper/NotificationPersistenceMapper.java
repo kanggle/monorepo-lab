@@ -10,6 +10,7 @@ public class NotificationPersistenceMapper {
     public Notification toDomain(NotificationJpaEntity entity) {
         return Notification.reconstitute(
                 entity.getNotificationId(),
+                entity.getTenantId(),
                 entity.getUserId(),
                 entity.getChannel(),
                 entity.getSubject(),
@@ -25,6 +26,7 @@ public class NotificationPersistenceMapper {
     public NotificationJpaEntity toEntity(Notification notification) {
         NotificationJpaEntity entity = new NotificationJpaEntity();
         entity.setNotificationId(notification.getNotificationId());
+        entity.setTenantId(notification.getTenantId());
         entity.setUserId(notification.getUserId());
         entity.setChannel(notification.getChannel());
         entity.setSubject(notification.getSubject());

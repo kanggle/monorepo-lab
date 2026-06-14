@@ -32,12 +32,13 @@ class UserSignedUpEventConsumerTest {
     @DisplayName("유효한 UserSignedUp 이벤트를 처리하면 WELCOME 알림을 발송한다")
     void handle_validEvent_sendsNotification() {
         UserSignedUpEvent event = new UserSignedUpEvent(
-                "event-1", "UserSignedUp", "2026-03-28T00:00:00Z", "auth-service",
+                "event-1", "UserSignedUp", "2026-03-28T00:00:00Z", "auth-service", "tenant-x",
                 new UserSignedUpEvent.UserSignedUpPayload("user-1", "test@example.com", "John"));
 
         consumer.handle(event);
 
         verify(notificationSendService).sendNotification(argThat(cmd ->
+                cmd.tenantId().equals("tenant-x") &&
                 cmd.userId().equals("user-1") &&
                 cmd.templateType() == TemplateType.WELCOME));
     }
@@ -46,7 +47,7 @@ class UserSignedUpEventConsumerTest {
     @DisplayName("payload가 null이면 알림을 발송하지 않는다")
     void handle_nullPayload_skips() {
         UserSignedUpEvent event = new UserSignedUpEvent(
-                "event-1", "UserSignedUp", "2026-03-28T00:00:00Z", "auth-service", null);
+                "event-1", "UserSignedUp", "2026-03-28T00:00:00Z", "auth-service", null, null);
 
         consumer.handle(event);
 

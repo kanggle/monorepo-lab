@@ -38,4 +38,15 @@ public class PreferenceService implements ManagePreferenceUseCase {
                     return preferenceRepository.save(defaultPref);
                 });
     }
+
+    @Override
+    @Transactional
+    public UserNotificationPreference getOrCreatePreference(String userId, String tenantId) {
+        return preferenceRepository.findByUserId(userId, tenantId)
+                .orElseGet(() -> {
+                    UserNotificationPreference defaultPref =
+                            UserNotificationPreference.createDefault(userId, tenantId);
+                    return preferenceRepository.save(defaultPref);
+                });
+    }
 }

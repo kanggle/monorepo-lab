@@ -9,6 +9,13 @@ import com.example.notification.domain.model.NotificationTemplate;
 
 public interface ManageTemplateUseCase {
     PageResult<NotificationTemplate> getTemplates(PageQuery pageQuery);
+
+    /**
+     * Tenant-scoped single-template detail (TASK-BE-372 gap-fill). A cross-tenant or
+     * missing {@code templateId} → 404 ({@code TemplateNotFoundException}).
+     */
+    NotificationTemplate getTemplate(String templateId);
+
     TemplateResult createTemplate(CreateTemplateCommand command);
     TemplateResult updateTemplate(UpdateTemplateCommand command);
 }

@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "notification_templates",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"type", "channel"}))
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_template_tenant_type_channel",
+                columnNames = {"tenant_id", "type", "channel"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,6 +22,9 @@ public class NotificationTemplateJpaEntity {
     @Id
     @Column(name = "template_id")
     private String templateId;
+
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false)

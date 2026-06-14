@@ -33,12 +33,13 @@ class OrderPlacedEventConsumerTest {
     @DisplayName("유효한 OrderPlaced 이벤트를 처리하면 알림을 발송한다")
     void handle_validEvent_sendsNotification() {
         OrderPlacedEvent event = new OrderPlacedEvent(
-                "event-1", "OrderPlaced", "2026-03-28T00:00:00Z", "order-service",
+                "event-1", "OrderPlaced", "2026-03-28T00:00:00Z", "order-service", "tenant-x",
                 new OrderPlacedEvent.OrderPlacedPayload("order-1", "user-1", 50000L));
 
         consumer.handle(event);
 
         verify(notificationSendService).sendNotification(argThat(cmd ->
+                cmd.tenantId().equals("tenant-x") &&
                 cmd.userId().equals("user-1") &&
                 cmd.eventId().equals("event-1") &&
                 cmd.templateType() == TemplateType.ORDER_PLACED));
@@ -48,7 +49,7 @@ class OrderPlacedEventConsumerTest {
     @DisplayName("payload가 null이면 알림을 발송하지 않는다")
     void handle_nullPayload_skips() {
         OrderPlacedEvent event = new OrderPlacedEvent(
-                "event-1", "OrderPlaced", "2026-03-28T00:00:00Z", "order-service", null);
+                "event-1", "OrderPlaced", "2026-03-28T00:00:00Z", "order-service", null, null);
 
         consumer.handle(event);
 
@@ -59,7 +60,7 @@ class OrderPlacedEventConsumerTest {
     @DisplayName("userId가 null이면 알림을 발송하지 않는다")
     void handle_nullUserId_skips() {
         OrderPlacedEvent event = new OrderPlacedEvent(
-                "event-1", "OrderPlaced", "2026-03-28T00:00:00Z", "order-service",
+                "event-1", "OrderPlaced", "2026-03-28T00:00:00Z", "order-service", null,
                 new OrderPlacedEvent.OrderPlacedPayload("order-1", null, 50000L));
 
         consumer.handle(event);

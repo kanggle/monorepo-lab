@@ -1,5 +1,7 @@
 package com.example.notification.domain.model;
 
+import com.example.notification.domain.tenant.TenantContext;
+
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -11,6 +13,7 @@ public class NotificationTemplate {
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{(\\w+)}}");
 
     private String templateId;
+    private String tenantId;
     private TemplateType type;
     private NotificationChannel channel;
     private String subject;
@@ -21,10 +24,17 @@ public class NotificationTemplate {
     private NotificationTemplate() {
     }
 
+    /**
+     * Creates a template owned by the current request's tenant (TASK-BE-372 M3). Template
+     * management is an HTTP admin path, so the tenant is taken from {@link TenantContext}
+     * (gateway-injected {@code X-Tenant-Id}); an unset context resolves to the default
+     * tenant (D8 net-zero). Uniqueness is enforced per (tenant_id, type, channel).
+     */
     public static NotificationTemplate create(TemplateType type, NotificationChannel channel,
                                                String subject, String body) {
         NotificationTemplate template = new NotificationTemplate();
         template.templateId = UUID.randomUUID().toString();
+        template.tenantId = TenantContext.currentTenant();
         template.type = type;
         template.channel = channel;
         template.subject = subject;
@@ -34,13 +44,14 @@ public class NotificationTemplate {
         return template;
     }
 
-    public static NotificationTemplate reconstitute(String templateId, TemplateType type,
+    public static NotificationTemplate reconstitute(String templateId, String tenantId, TemplateType type,
                                                      NotificationChannel channel,
                                                      String subject, String body,
                                                      LocalDateTime createdAt,
                                                      LocalDateTime updatedAt) {
         NotificationTemplate template = new NotificationTemplate();
         template.templateId = templateId;
+        template.tenantId = tenantId;
         template.type = type;
         template.channel = channel;
         template.subject = subject;
@@ -78,6 +89,10 @@ public class NotificationTemplate {
 
     public String getTemplateId() {
         return templateId;
+    }
+
+    public String getTenantId() {
+        return tenantId;
     }
 
     public TemplateType getType() {

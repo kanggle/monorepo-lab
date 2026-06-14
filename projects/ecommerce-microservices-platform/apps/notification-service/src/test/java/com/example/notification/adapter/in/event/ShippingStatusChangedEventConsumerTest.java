@@ -32,7 +32,7 @@ class ShippingStatusChangedEventConsumerTest {
     @DisplayName("유효한 ShippingStatusChanged 이벤트를 처리하면 알림을 발송한다")
     void handle_validEvent_sendsNotification() {
         ShippingStatusChangedEvent event = new ShippingStatusChangedEvent(
-                "event-1", "ShippingStatusChanged", "2026-04-06T00:00:00Z", "shipping-service",
+                "event-1", "ShippingStatusChanged", "2026-04-06T00:00:00Z", "shipping-service", "tenant-x",
                 new ShippingStatusChangedEvent.ShippingStatusChangedPayload(
                         "shipping-1", "order-1", "user-1",
                         "IN_TRANSIT", "DELIVERED", "TRACK-123", "CJ", "2026-04-06T10:00:00Z"));
@@ -40,6 +40,7 @@ class ShippingStatusChangedEventConsumerTest {
         consumer.handle(event);
 
         verify(notificationSendService).sendNotification(argThat(cmd ->
+                cmd.tenantId().equals("tenant-x") &&
                 cmd.userId().equals("user-1") &&
                 cmd.eventId().equals("event-1") &&
                 cmd.templateType() == TemplateType.SHIPPING_STATUS_CHANGED &&
@@ -53,7 +54,7 @@ class ShippingStatusChangedEventConsumerTest {
     @DisplayName("payload가 null이면 알림을 발송하지 않는다")
     void handle_nullPayload_skips() {
         ShippingStatusChangedEvent event = new ShippingStatusChangedEvent(
-                "event-1", "ShippingStatusChanged", "2026-04-06T00:00:00Z", "shipping-service", null);
+                "event-1", "ShippingStatusChanged", "2026-04-06T00:00:00Z", "shipping-service", null, null);
 
         consumer.handle(event);
 
@@ -64,7 +65,7 @@ class ShippingStatusChangedEventConsumerTest {
     @DisplayName("userId가 null이면 알림을 발송하지 않는다")
     void handle_nullUserId_skips() {
         ShippingStatusChangedEvent event = new ShippingStatusChangedEvent(
-                "event-1", "ShippingStatusChanged", "2026-04-06T00:00:00Z", "shipping-service",
+                "event-1", "ShippingStatusChanged", "2026-04-06T00:00:00Z", "shipping-service", null,
                 new ShippingStatusChangedEvent.ShippingStatusChangedPayload(
                         "shipping-1", "order-1", null,
                         "IN_TRANSIT", "DELIVERED", "TRACK-123", "CJ", "2026-04-06T10:00:00Z"));
@@ -78,7 +79,7 @@ class ShippingStatusChangedEventConsumerTest {
     @DisplayName("payload 필드가 null이면 빈 문자열로 변환하여 알림을 발송한다")
     void handle_nullPayloadFields_sendsWithEmptyStrings() {
         ShippingStatusChangedEvent event = new ShippingStatusChangedEvent(
-                "event-2", "ShippingStatusChanged", "2026-04-06T00:00:00Z", "shipping-service",
+                "event-2", "ShippingStatusChanged", "2026-04-06T00:00:00Z", "shipping-service", null,
                 new ShippingStatusChangedEvent.ShippingStatusChangedPayload(
                         "shipping-1", null, "user-1",
                         null, null, null, null, null));

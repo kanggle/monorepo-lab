@@ -10,6 +10,7 @@ public class TemplatePersistenceMapper {
     public NotificationTemplate toDomain(NotificationTemplateJpaEntity entity) {
         return NotificationTemplate.reconstitute(
                 entity.getTemplateId(),
+                entity.getTenantId(),
                 entity.getType(),
                 entity.getChannel(),
                 entity.getSubject(),
@@ -22,6 +23,7 @@ public class TemplatePersistenceMapper {
     public NotificationTemplateJpaEntity toEntity(NotificationTemplate template) {
         NotificationTemplateJpaEntity entity = new NotificationTemplateJpaEntity();
         entity.setTemplateId(template.getTemplateId());
+        entity.setTenantId(template.getTenantId());
         entity.setType(template.getType());
         entity.setChannel(template.getChannel());
         entity.setSubject(template.getSubject());

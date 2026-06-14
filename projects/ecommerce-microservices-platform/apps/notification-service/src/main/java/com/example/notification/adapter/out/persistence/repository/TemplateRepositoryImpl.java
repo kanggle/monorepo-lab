@@ -7,6 +7,7 @@ import com.example.notification.application.port.out.TemplateRepository;
 import com.example.notification.domain.model.NotificationChannel;
 import com.example.notification.domain.model.NotificationTemplate;
 import com.example.notification.domain.model.TemplateType;
+import com.example.notification.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,23 +31,28 @@ public class TemplateRepositoryImpl implements TemplateRepository {
 
     @Override
     public Optional<NotificationTemplate> findById(String templateId) {
-        return jpaRepository.findById(templateId).map(mapper::toDomain);
+        return jpaRepository.findByTemplateIdAndTenantId(templateId, TenantContext.currentTenant())
+                .map(mapper::toDomain);
     }
 
     @Override
-    public Optional<NotificationTemplate> findByTypeAndChannel(TemplateType type, NotificationChannel channel) {
-        return jpaRepository.findByTypeAndChannel(type, channel).map(mapper::toDomain);
+    public Optional<NotificationTemplate> findByTypeAndChannel(TemplateType type, NotificationChannel channel,
+                                                               String tenantId) {
+        return jpaRepository.findByTypeAndChannelAndTenantId(type, channel, TenantContext.resolveOrDefault(tenantId))
+                .map(mapper::toDomain);
     }
 
     @Override
     public boolean existsByTypeAndChannel(TemplateType type, NotificationChannel channel) {
-        return jpaRepository.existsByTypeAndChannel(type, channel);
+        return jpaRepository.existsByTypeAndChannelAndTenantId(type, channel, TenantContext.currentTenant());
     }
 
     @Override
     public PageResult<NotificationTemplate> findAll(PageQuery pageQuery) {
         PageRequest pageable = PageRequest.of(pageQuery.page(), pageQuery.size());
-        Page<NotificationTemplate> page = jpaRepository.findAll(pageable).map(mapper::toDomain);
+        Page<NotificationTemplate> page = jpaRepository
+                .findByTenantId(TenantContext.currentTenant(), pageable)
+                .map(mapper::toDomain);
         return new PageResult<>(
                 page.getContent(),
                 page.getNumber(),

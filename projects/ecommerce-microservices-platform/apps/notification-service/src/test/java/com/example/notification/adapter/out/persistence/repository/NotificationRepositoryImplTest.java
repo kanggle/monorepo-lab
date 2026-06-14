@@ -43,14 +43,14 @@ class NotificationRepositoryImplTest {
     void findByUserId_convertsPageQueryToPageableAndReturnsPageResult() {
         NotificationJpaEntity entity = mock(NotificationJpaEntity.class);
         Notification notification = Notification.reconstitute(
-                "noti-1", "user-1", NotificationChannel.EMAIL,
+                "noti-1", "ecommerce", "user-1", NotificationChannel.EMAIL,
                 "Subject", "Body", NotificationStatus.SENT,
                 "event-1", 0, null, null);
 
         Page<NotificationJpaEntity> jpaPage = new PageImpl<>(
                 List.of(entity), PageRequest.of(0, 20), 1L);
 
-        given(jpaRepository.findByUserIdOrderByCreatedAtDesc(eq("user-1"), any()))
+        given(jpaRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(eq("ecommerce"), eq("user-1"), any()))
                 .willReturn(jpaPage);
         given(mapper.toDomain(entity)).willReturn(notification);
 
@@ -70,7 +70,7 @@ class NotificationRepositoryImplTest {
         Page<NotificationJpaEntity> emptyPage = new PageImpl<>(
                 List.of(), PageRequest.of(0, 20), 0L);
 
-        given(jpaRepository.findByUserIdOrderByCreatedAtDesc(eq("user-1"), any()))
+        given(jpaRepository.findByTenantIdAndUserIdOrderByCreatedAtDesc(eq("ecommerce"), eq("user-1"), any()))
                 .willReturn(emptyPage);
 
         PageQuery pageQuery = new PageQuery(0, 20, null, null);

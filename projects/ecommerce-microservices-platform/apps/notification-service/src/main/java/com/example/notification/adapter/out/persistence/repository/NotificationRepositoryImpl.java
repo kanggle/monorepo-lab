@@ -5,6 +5,7 @@ import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.notification.application.port.out.NotificationRepository;
 import com.example.notification.domain.model.Notification;
+import com.example.notification.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,13 +29,15 @@ public class NotificationRepositoryImpl implements NotificationRepository {
 
     @Override
     public Optional<Notification> findById(String notificationId) {
-        return jpaRepository.findById(notificationId).map(mapper::toDomain);
+        return jpaRepository.findByNotificationIdAndTenantId(notificationId, TenantContext.currentTenant())
+                .map(mapper::toDomain);
     }
 
     @Override
     public PageResult<Notification> findByUserId(String userId, PageQuery pageQuery) {
         PageRequest pageable = PageRequest.of(pageQuery.page(), pageQuery.size());
-        Page<Notification> page = jpaRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+        Page<Notification> page = jpaRepository
+                .findByTenantIdAndUserIdOrderByCreatedAtDesc(TenantContext.currentTenant(), userId, pageable)
                 .map(mapper::toDomain);
         return new PageResult<>(
                 page.getContent(),
@@ -46,7 +49,7 @@ public class NotificationRepositoryImpl implements NotificationRepository {
     }
 
     @Override
-    public boolean existsByEventId(String eventId) {
-        return jpaRepository.existsByEventId(eventId);
+    public boolean existsByEventId(String eventId, String tenantId) {
+        return jpaRepository.existsByEventIdAndTenantId(eventId, TenantContext.resolveOrDefault(tenantId));
     }
 }
