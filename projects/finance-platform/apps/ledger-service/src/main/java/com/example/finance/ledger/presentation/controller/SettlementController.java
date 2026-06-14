@@ -1,18 +1,26 @@
 package com.example.finance.ledger.presentation.controller;
 
 import com.example.finance.ledger.application.ActorContext;
+import com.example.finance.ledger.application.DeleteFxCostFlowAccountConfigUseCase;
+import com.example.finance.ledger.application.GetFxCostFlowAccountConfigsUseCase;
 import com.example.finance.ledger.application.GetFxCostFlowConfigUseCase;
 import com.example.finance.ledger.application.GetFxPositionLotsUseCase;
+import com.example.finance.ledger.application.SetFxCostFlowAccountConfigCommand;
+import com.example.finance.ledger.application.SetFxCostFlowAccountConfigUseCase;
 import com.example.finance.ledger.application.SetFxCostFlowConfigCommand;
 import com.example.finance.ledger.application.SetFxCostFlowConfigUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.Result;
+import com.example.finance.ledger.application.view.FxCostFlowAccountConfigView;
 import com.example.finance.ledger.application.view.FxCostFlowConfigView;
 import com.example.finance.ledger.application.view.FxPositionLotsView;
 import com.example.finance.ledger.domain.error.LedgerErrors.FxToleranceInvalidException;
 import com.example.finance.ledger.domain.money.Currency;
 import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
+import com.example.finance.ledger.presentation.dto.FxCostFlowAccountConfigDeleteResponse;
+import com.example.finance.ledger.presentation.dto.FxCostFlowAccountConfigRequest;
+import com.example.finance.ledger.presentation.dto.FxCostFlowAccountConfigResponse;
 import com.example.finance.ledger.presentation.dto.FxCostFlowConfigRequest;
 import com.example.finance.ledger.presentation.dto.FxCostFlowConfigResponse;
 import com.example.finance.ledger.presentation.dto.FxPositionLotsResponse;
@@ -21,6 +29,7 @@ import com.example.finance.ledger.presentation.dto.SettlementResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,6 +38,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * FX settlement REST endpoint (ledger-api.md § 11, 10th increment — TASK-FIN-BE-016).
@@ -53,6 +64,14 @@ import org.springframework.web.bind.annotation.RestController;
  * /{ledgerAccountCode}/{currency}/lots} — read-only surface exposing the tenant's
  * open FX acquisition lots for one {@code (account, currency)} position, ordered
  * {@code (acquired_at, seq)} ASC, plus a summary. Pure read; net-zero; no migration.
+ *
+ * <p><b>21st increment (TASK-FIN-BE-029)</b>: adds {@code GET /cost-flow-config/accounts},
+ * {@code PUT /cost-flow-config/accounts/{ledgerAccountCode}}, and {@code DELETE
+ * /cost-flow-config/accounts/{ledgerAccountCode}} — per-account FX cost-flow method overrides
+ * layered on the per-tenant default (precedence {@code account override > tenant default >
+ * WEIGHTED_AVERAGE}). Tenant-scoped + audited. The settlement path now resolves the effective
+ * method via the per-account override ahead of the tenant default (net-zero when no override
+ * row exists).
  */
 @RestController
 @RequestMapping("/api/finance/ledger/settlements")
@@ -62,6 +81,9 @@ public class SettlementController {
     private final SettleForeignPositionUseCase settleForeignPosition;
     private final GetFxCostFlowConfigUseCase getFxCostFlowConfig;
     private final SetFxCostFlowConfigUseCase setFxCostFlowConfig;
+    private final GetFxCostFlowAccountConfigsUseCase getFxCostFlowAccountConfigs;
+    private final SetFxCostFlowAccountConfigUseCase setFxCostFlowAccountConfig;
+    private final DeleteFxCostFlowAccountConfigUseCase deleteFxCostFlowAccountConfig;
     private final GetFxPositionLotsUseCase getFxPositionLots;
 
     @PostMapping
@@ -102,6 +124,59 @@ public class SettlementController {
                 actor.tenantId(), request.method(), actorIdentity(actor));
         FxCostFlowConfigView view = setFxCostFlowConfig.set(command);
         return ResponseEntity.ok(ApiEnvelope.of(FxCostFlowConfigResponse.from(view)));
+    }
+
+    /**
+     * List the tenant's per-account FX cost-flow method overrides (21st increment —
+     * TASK-FIN-BE-029). Returns the configured override rows ordered by {@code ledger_account_code}
+     * ASC (empty array when none) — an account with no override inherits the tenant default at
+     * settlement time and does NOT appear here. Tenant-scoped. The literal {@code /accounts}
+     * prefix is matched ahead of the {@code /{ledgerAccountCode}/{currency}/lots} pattern, so
+     * there is no route ambiguity.
+     */
+    @GetMapping("/cost-flow-config/accounts")
+    public ResponseEntity<ApiEnvelope<List<FxCostFlowAccountConfigResponse>>> getCostFlowAccountConfigs() {
+        ActorContext actor = ActorContextResolver.currentOrThrow();
+        List<FxCostFlowAccountConfigResponse> body = getFxCostFlowAccountConfigs.list(actor.tenantId())
+                .stream()
+                .map(FxCostFlowAccountConfigResponse::from)
+                .toList();
+        return ResponseEntity.ok(ApiEnvelope.of(body));
+    }
+
+    /**
+     * Upsert a per-account FX cost-flow method override (operator config; 21st increment —
+     * TASK-FIN-BE-029). The override layers on top of the per-tenant default with the precedence
+     * {@code account override > tenant default > WEIGHTED_AVERAGE}; it can upgrade OR downgrade.
+     * Tenant-scoped + audited ({@code updated_by} = the actor identity). Unknown method (e.g.
+     * {@code "LIFO"}) → {@code 400 VALIDATION_ERROR}, nothing persisted. The account is NOT
+     * validated to exist (parity with the per-tenant config).
+     */
+    @PutMapping("/cost-flow-config/accounts/{ledgerAccountCode}")
+    public ResponseEntity<ApiEnvelope<FxCostFlowAccountConfigResponse>> setCostFlowAccountConfig(
+            @PathVariable String ledgerAccountCode,
+            @RequestBody FxCostFlowAccountConfigRequest request) {
+        ActorContext actor = ActorContextResolver.currentOrThrow();
+        SetFxCostFlowAccountConfigCommand command = new SetFxCostFlowAccountConfigCommand(
+                actor.tenantId(), ledgerAccountCode, request.method(), actorIdentity(actor));
+        FxCostFlowAccountConfigView view = setFxCostFlowAccountConfig.set(command);
+        return ResponseEntity.ok(ApiEnvelope.of(FxCostFlowAccountConfigResponse.from(view)));
+    }
+
+    /**
+     * Remove a per-account FX cost-flow method override (21st increment — TASK-FIN-BE-029). The
+     * account falls back to the per-tenant default. Idempotent — deleting a non-existent override
+     * is a 200 no-op ({@code cleared=false}), not a 404. Tenant-scoped + audited
+     * ({@code FX_COST_FLOW_ACCOUNT_METHOD_CLEARED}, written only when a row actually existed).
+     */
+    @DeleteMapping("/cost-flow-config/accounts/{ledgerAccountCode}")
+    public ResponseEntity<ApiEnvelope<FxCostFlowAccountConfigDeleteResponse>> deleteCostFlowAccountConfig(
+            @PathVariable String ledgerAccountCode) {
+        ActorContext actor = ActorContextResolver.currentOrThrow();
+        boolean cleared = deleteFxCostFlowAccountConfig.clear(
+                actor.tenantId(), ledgerAccountCode, actorIdentity(actor));
+        return ResponseEntity.ok(ApiEnvelope.of(
+                new FxCostFlowAccountConfigDeleteResponse(ledgerAccountCode, cleared)));
     }
 
     /**

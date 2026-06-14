@@ -1,13 +1,18 @@
 package com.example.finance.ledger.presentation.controller;
 
 import com.example.finance.ledger.application.ActorContext;
+import com.example.finance.ledger.application.DeleteFxCostFlowAccountConfigUseCase;
+import com.example.finance.ledger.application.GetFxCostFlowAccountConfigsUseCase;
 import com.example.finance.ledger.application.GetFxCostFlowConfigUseCase;
 import com.example.finance.ledger.application.GetFxPositionLotsUseCase;
+import com.example.finance.ledger.application.SetFxCostFlowAccountConfigCommand;
+import com.example.finance.ledger.application.SetFxCostFlowAccountConfigUseCase;
 import com.example.finance.ledger.application.SetFxCostFlowConfigCommand;
 import com.example.finance.ledger.application.SetFxCostFlowConfigUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.NoOpReason;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.Result;
+import com.example.finance.ledger.application.view.FxCostFlowAccountConfigView;
 import com.example.finance.ledger.application.view.FxCostFlowConfigView;
 import com.example.finance.ledger.application.view.FxPositionLotView;
 import com.example.finance.ledger.application.view.FxPositionLotsView;
@@ -45,6 +50,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -86,6 +92,9 @@ class SettlementControllerSliceTest {
     @MockitoBean GetFxCostFlowConfigUseCase getFxCostFlowConfig;
     @MockitoBean SetFxCostFlowConfigUseCase setFxCostFlowConfig;
     @MockitoBean GetFxPositionLotsUseCase getFxPositionLots;
+    @MockitoBean GetFxCostFlowAccountConfigsUseCase getFxCostFlowAccountConfigs;
+    @MockitoBean SetFxCostFlowAccountConfigUseCase setFxCostFlowAccountConfig;
+    @MockitoBean DeleteFxCostFlowAccountConfigUseCase deleteFxCostFlowAccountConfig;
 
     @BeforeEach
     void setUp() {
@@ -389,5 +398,88 @@ class SettlementControllerSliceTest {
         mockMvc.perform(get("/api/finance/ledger/settlements/FX_LOTS_WALLET/XYZ/lots"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    // ---- 21st increment: per-account FX cost-flow override (TASK-FIN-BE-029) ----
+
+    @Test
+    @DisplayName("GET /cost-flow-config/accounts → 200 list of overrides for the tenant")
+    void listCostFlowAccountOverrides() throws Exception {
+        when(getFxCostFlowAccountConfigs.list("finance")).thenReturn(List.of(
+                new FxCostFlowAccountConfigView("FX_USD_WALLET", CostFlowMethod.FIFO,
+                        "operator-7", Instant.parse("2026-02-01T10:00:00Z")),
+                new FxCostFlowAccountConfigView("FX_EUR_WALLET", CostFlowMethod.WEIGHTED_AVERAGE,
+                        "operator-7", Instant.parse("2026-02-02T10:00:00Z"))));
+
+        mockMvc.perform(get("/api/finance/ledger/settlements/cost-flow-config/accounts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].ledgerAccountCode").value("FX_USD_WALLET"))
+                .andExpect(jsonPath("$.data[0].method").value("FIFO"))
+                .andExpect(jsonPath("$.data[1].method").value("WEIGHTED_AVERAGE"));
+    }
+
+    @Test
+    @DisplayName("GET /cost-flow-config/accounts → 200 empty array when no overrides")
+    void listCostFlowAccountOverridesEmpty() throws Exception {
+        when(getFxCostFlowAccountConfigs.list("finance")).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/finance/ledger/settlements/cost-flow-config/accounts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    @DisplayName("PUT /cost-flow-config/accounts/{code} FIFO → 200 override, audited (updatedBy = actor)")
+    void putCostFlowAccountOverrideFifoOk() throws Exception {
+        when(setFxCostFlowAccountConfig.set(any(SetFxCostFlowAccountConfigCommand.class)))
+                .thenReturn(new FxCostFlowAccountConfigView("FX_USD_WALLET", CostFlowMethod.FIFO,
+                        "operator-7", Instant.parse("2026-02-01T10:00:00Z")));
+
+        mockMvc.perform(put("/api/finance/ledger/settlements/cost-flow-config/accounts/FX_USD_WALLET")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"method\":\"FIFO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ledgerAccountCode").value("FX_USD_WALLET"))
+                .andExpect(jsonPath("$.data.method").value("FIFO"))
+                .andExpect(jsonPath("$.data.updatedBy").value("operator-7"));
+    }
+
+    @Test
+    @DisplayName("PUT /cost-flow-config/accounts/{code} unknown method (LIFO) → 400 VALIDATION_ERROR")
+    void putCostFlowAccountOverrideInvalidMethod() throws Exception {
+        when(setFxCostFlowAccountConfig.set(any(SetFxCostFlowAccountConfigCommand.class)))
+                .thenThrow(new CostFlowMethodInvalidException(
+                        "method must be one of WEIGHTED_AVERAGE, FIFO — got: LIFO"));
+
+        mockMvc.perform(put("/api/finance/ledger/settlements/cost-flow-config/accounts/FX_USD_WALLET")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"method\":\"LIFO\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("DELETE /cost-flow-config/accounts/{code} existing → 200 cleared:true")
+    void deleteCostFlowAccountOverrideCleared() throws Exception {
+        when(deleteFxCostFlowAccountConfig.clear("finance", "FX_USD_WALLET", "operator-7"))
+                .thenReturn(true);
+
+        mockMvc.perform(delete("/api/finance/ledger/settlements/cost-flow-config/accounts/FX_USD_WALLET"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ledgerAccountCode").value("FX_USD_WALLET"))
+                .andExpect(jsonPath("$.data.cleared").value(true));
+    }
+
+    @Test
+    @DisplayName("DELETE /cost-flow-config/accounts/{code} non-existent → 200 cleared:false (idempotent)")
+    void deleteCostFlowAccountOverrideNoOp() throws Exception {
+        when(deleteFxCostFlowAccountConfig.clear("finance", "FX_UNKNOWN", "operator-7"))
+                .thenReturn(false);
+
+        mockMvc.perform(delete("/api/finance/ledger/settlements/cost-flow-config/accounts/FX_UNKNOWN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cleared").value(false));
     }
 }

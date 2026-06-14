@@ -233,6 +233,10 @@ public abstract class AbstractLedgerIntegrationTest {
         // (15th incr — TASK-FIN-BE-023) the per-tenant FX cost-flow method config. A leftover
         // row would influence a sibling class's effective method (absence = WEIGHTED_AVERAGE).
         jdbcTemplate.execute("DELETE FROM fx_cost_flow_config");
+        // (21st incr — TASK-FIN-BE-029) the per-account FX cost-flow method override. A leftover
+        // row would pin a sibling class's account to a method it did not configure (absence =
+        // fall through to the per-tenant default, else WEIGHTED_AVERAGE).
+        jdbcTemplate.execute("DELETE FROM fx_cost_flow_account_config");
         // (16th incr — TASK-FIN-BE-024) the FX acquisition lots. Write-only shadow rows; a
         // leftover lot would poison a sibling class's lot-count / backfill assertions.
         jdbcTemplate.execute("DELETE FROM fx_position_lot");
