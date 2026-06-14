@@ -147,10 +147,11 @@ const GROUPS: NavGroup[] = [
       {
         // ecommerce is a drill-in parent (same model as WMS): 운영(/ecommerce —
         // the MONO-241 health/section page) + 상품(/ecommerce/products — the
-        // PC-FE-081 product operator CRUD surface, § 2.4.10). The /ecommerce
-        // destination lives on the 운영 child (nav-ecommerce-ops); nav-ecommerce
-        // is the pinned parent back-toggle. Orders/image are later facets
-        // (PC-FE-082/083) — added as new children when those land.
+        // PC-FE-081 product operator CRUD surface, § 2.4.10) + 주문
+        // (/ecommerce/orders — the PC-FE-083 order operator surface, § 2.4.10).
+        // The /ecommerce destination lives on the 운영 child (nav-ecommerce-ops);
+        // nav-ecommerce is the pinned parent back-toggle. Image (presigned) is a
+        // later facet (PC-FE-082).
         key: 'ecommerce',
         label: 'E-Commerce',
         testid: 'nav-ecommerce',
@@ -160,6 +161,11 @@ const GROUPS: NavGroup[] = [
             href: '/ecommerce/products',
             label: '상품',
             testid: 'nav-ecommerce-products',
+          },
+          {
+            href: '/ecommerce/orders',
+            label: '주문',
+            testid: 'nav-ecommerce-orders',
           },
         ],
       },
