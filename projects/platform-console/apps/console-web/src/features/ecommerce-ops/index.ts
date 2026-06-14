@@ -81,6 +81,30 @@ export type {
 export { allowedTransitions, ORDER_STATUS_VALUES } from './api/order-types';
 
 // ---------------------------------------------------------------------------
+// Users facet (TASK-PC-FE-084 — ADR-MONO-031 Phase 2b — READ-ONLY)
+// ---------------------------------------------------------------------------
+export { UsersScreen } from './components/UsersScreen';
+export { UserDetail } from './components/UserDetail';
+
+export {
+  getUsersSectionState,
+  getUserDetailSectionState,
+} from './api/users-state';
+export type {
+  UsersSectionState,
+  UserDetailSectionState,
+} from './api/users-state';
+
+export type {
+  UserSummary,
+  UserList,
+  UserDetail as UserDetailData,
+  UserListParams,
+  UserStatus,
+} from './api/user-types';
+export { USER_STATUS_VALUES } from './api/user-types';
+
+// ---------------------------------------------------------------------------
 // Image facet (TASK-PC-FE-082 — ADR-MONO-031 Phase 1b CLOSING slice). The
 // product-image management surface is embedded in `ProductDetail` (no separate
 // route / sidebar leaf); `ImageManager` is exported for completeness/tests.
