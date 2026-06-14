@@ -8,7 +8,7 @@ console-web — wms shipments / 택배(carrier) read surface (carrier code · tr
 
 # Status
 
-review
+done
 
 # Owner
 
