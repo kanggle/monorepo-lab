@@ -49,7 +49,7 @@ flagged for operator review — F8, never auto-adjusted). A KRW line, or a forei
     "statementDate": "2026-01-31",
     "matchedCount": 1, "discrepancyCount": 1,
     "matches": [ { "statementLineExternalRef": "BANKTXN-001", "journalEntryId": "...",
-                   "money": { "amount": "150000", "currency": "KRW" } } ],
+                   "money": { "amount": "150000", "currency": "KRW" }, "crossCurrency": false } ],
     "discrepancies": [
       { "discrepancyId": "...", "type": "UNMATCHED_EXTERNAL", "externalRef": "BANKTXN-002",
         "expectedMinor": "99000", "actualMinor": "0", "currency": "KRW", "status": "OPEN" }
@@ -78,6 +78,24 @@ records the `AMOUNT_MISMATCH` exactly as the 11th increment. The default (no con
 Tolerance applies **only** to the base (KRW) leg; the transaction (foreign) leg stays an exact
 `(amount, currency, direction)` match. Tolerance **never** auto-posts an FX correction or mutates
 a journal entry (F8) — it suppresses only the base-leg *discrepancy*.
+
+**(14th increment — cross-currency base-leg matching, TASK-FIN-BE-021)** when a **base-currency
+(KRW)** external line finds **no same-currency candidate**, the matcher runs a strict **fallback**:
+it pairs the line with the FIRST not-consumed **foreign** internal line (same direction; currency
+≠ KRW) whose **carrying base** (`baseMoney`) is **within** the tenant's `FxTolerance` of the
+external KRW amount. A bank often settles a foreign position **in KRW** while the ledger booked the
+underlying as a foreign line carrying a KRW base; without this fallback the KRW external →
+`UNMATCHED_EXTERNAL` and the foreign internal → `UNMATCHED_INTERNAL` (two spurious discrepancies for
+one settlement). On a hit the line appears in `matches` with `"crossCurrency": true` and the match
+`money` is the external **KRW** value; for a cross-currency match the carrying-base comparison **is**
+the match key — **no** `AMOUNT_MISMATCH` is recorded (within tolerance → clean match; beyond
+tolerance → not a candidate → the line stays `UNMATCHED_EXTERNAL` as before). **Precedence**:
+same-currency matching runs **first** and is byte-unchanged; the cross-currency pass is a strict
+fallback (net-zero for every existing reconciliation). The direction is **base-external →
+foreign-internal only** — a foreign external line never enters the cross-currency pass. Under
+`EXACT` (the default) the fallback requires **exact** carrying-base equality. Every `matches` entry
+carries the additive boolean **`crossCurrency`** (`true` only for a cross-currency match; `false`
+for every same-currency match). No new error code / status / event.
 
 ## 2. POST `/api/finance/ledger/reconciliation/discrepancies/{id}/resolve`
 
@@ -164,8 +182,10 @@ response.
 ## Out of scope (forward-declared — later increments)
 
 - Fuzzy / N:M / split matching; period **reopen**.
-- **Cross-currency base-leg matching** (a KRW external statement matched against foreign internal
-  lines by their carrying base) — a separate increment.
+- **Foreign-external → KRW-internal** cross matching (the reverse direction) — the 14th increment
+  (TASK-FIN-BE-021) ships **base-external → foreign-internal** only; the reverse is a separate
+  forward-declarable increment.
+- FIFO / lot-level cost basis — a separate, larger increment.
 - Per-currency-pair / per-account FX tolerance granularity — v1 is **per-tenant**.
 - An in-repo consumer of the reconciliation feed (this increment ships the producer
   + topics only).

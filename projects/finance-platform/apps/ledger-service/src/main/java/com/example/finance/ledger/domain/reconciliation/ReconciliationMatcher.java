@@ -46,6 +46,30 @@ import java.util.List;
  * band is 0 and the matcher is byte-identical to FIN-BE-017 (net-zero). The matcher
  * stays pure — the tolerance is passed in; it never reads a repository.
  *
+ * <p><b>(14th incr — TASK-FIN-BE-021, cross-currency base-leg matching) base-external
+ * → foreign-internal fallback.</b> When a <b>base-currency (KRW)</b> external line
+ * finds <b>no same-currency candidate</b> via {@link #findCandidate} (which stays the
+ * unchanged, first-precedence exact {@code (amount, currency, direction)} pass), the
+ * matcher runs a strict <b>fallback</b> {@link #findCrossCurrencyCandidate}: the FIRST
+ * not-consumed <b>foreign</b> internal line (same direction; {@code currency != KRW})
+ * whose carrying base ({@code baseMoney}) is <b>within</b> the per-tenant
+ * {@link FxTolerance} of the external KRW amount. A bank often settles a foreign
+ * position <b>in the base currency (KRW)</b> while the ledger booked the underlying as
+ * a foreign line carrying a KRW base; under the same-currency-only matcher that KRW
+ * external → {@code UNMATCHED_EXTERNAL} and the foreign internal → {@code UNMATCHED_INTERNAL}
+ * (two spurious discrepancies for one settlement). The fallback pairs them: it consumes
+ * the foreign internal, marks the external matched, and records a {@link ReconciliationMatch}
+ * (carrying the external KRW {@code money} + the internal {@code journalEntryId}) flagged
+ * {@code crossCurrency=true}. For a cross-currency match the carrying-base comparison
+ * <b>is</b> the match key — within tolerance → a clean match with <b>NO</b>
+ * {@code AMOUNT_MISMATCH}; beyond tolerance → not a candidate → the line falls through to
+ * {@code UNMATCHED_EXTERNAL} exactly as before. <b>Precedence + net-zero</b>: same-currency
+ * matching runs first and is byte-unchanged; the cross-currency pass is a strict fallback
+ * that fires only for a KRW external with no KRW candidate but a carrying-base-matching
+ * foreign internal — every existing same-currency / same-foreign-currency reconciliation
+ * is unaffected. A <b>foreign</b> external line NEVER enters the cross-currency pass (the
+ * direction is base-external → foreign-internal only). The matcher stays pure.
+ *
  * <p><b>F8 — no auto-close.</b> The matcher only RECORDS discrepancies (always
  * OPEN); it never posts a balancing entry, mutates a journal entry, or
  * auto-resolves a difference.
@@ -85,9 +109,10 @@ public final class ReconciliationMatcher {
                 consumed[candidate] = true;
                 ext.markMatched();
                 InternalLine internal = internalLines.get(candidate);
+                // Same-currency match (precedence) — never cross-currency (crossCurrency=false).
                 matches.add(ReconciliationMatch.of(null, tenantId, ext.lineId(),
                         ext.externalRef(), internal.journalEntryId(), ledgerAccountCode,
-                        ext.money(), at));
+                        ext.money(), false, at));
                 // (11th incr) base (FX) leg — a foreign line with a declared base whose
                 // bank-reported KRW value differs from the internal carrying base ALSO
                 // records an AMOUNT_MISMATCH (the match is still recorded; F8 — never
@@ -107,11 +132,30 @@ public final class ReconciliationMatcher {
                             LedgerReportingCurrency.BASE, at));
                 }
             } else {
-                // UNMATCHED_EXTERNAL — expected = the external amount, actual = 0.
-                discrepancies.add(ReconciliationDiscrepancy.open(null, tenantId, statementId,
-                        ledgerAccountCode, DiscrepancyType.UNMATCHED_EXTERNAL,
-                        ext.externalRef(), null,
-                        ext.amountMinor(), 0L, ext.currency(), at));
+                // (14th incr — TASK-FIN-BE-021) cross-currency base-leg FALLBACK. Only a
+                // BASE-currency (KRW) external with no same-currency candidate falls back to
+                // a foreign internal line whose carrying base (baseMoney) is within tolerance
+                // of the external KRW amount. The base comparison IS the match key — within
+                // tolerance → a clean match (crossCurrency=true, NO AMOUNT_MISMATCH); beyond
+                // tolerance → not a candidate → UNMATCHED_EXTERNAL as before (net-zero for
+                // every non-KRW external and every KRW external with no carrying-base match).
+                int crossCandidate = ext.currency() == LedgerReportingCurrency.BASE
+                        ? findCrossCurrencyCandidate(internalLines, consumed, ext, tolerance)
+                        : -1;
+                if (crossCandidate >= 0) {
+                    consumed[crossCandidate] = true;
+                    ext.markMatched();
+                    InternalLine internal = internalLines.get(crossCandidate);
+                    matches.add(ReconciliationMatch.of(null, tenantId, ext.lineId(),
+                            ext.externalRef(), internal.journalEntryId(), ledgerAccountCode,
+                            ext.money(), true, at));
+                } else {
+                    // UNMATCHED_EXTERNAL — expected = the external amount, actual = 0.
+                    discrepancies.add(ReconciliationDiscrepancy.open(null, tenantId, statementId,
+                            ledgerAccountCode, DiscrepancyType.UNMATCHED_EXTERNAL,
+                            ext.externalRef(), null,
+                            ext.amountMinor(), 0L, ext.currency(), at));
+                }
             }
         }
 
@@ -142,6 +186,34 @@ public final class ReconciliationMatcher {
             if (internal.direction() == ext.direction()
                     && internal.money().currency() == ext.currency()
                     && internal.money().minorUnits() == ext.amountMinor()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * (14th incr — TASK-FIN-BE-021) The index of the FIRST not-consumed <b>foreign</b>
+     * internal line (same direction; {@code currency != KRW}) whose carrying base
+     * ({@code baseMoney}) is within {@code tolerance} of the base-currency (KRW)
+     * external amount. The caller guarantees {@code ext} is a base-currency line; the
+     * external KRW amount ({@code ext.amountMinor()}) is the base amount compared
+     * against the internal carrying base ({@code internal.baseMoney().minorUnits()}).
+     * Under {@link FxTolerance#EXACT} the band is 0 ⇒ exact carrying-base equality.
+     * Returns {@code -1} when no foreign internal carries a within-tolerance base.
+     */
+    private static int findCrossCurrencyCandidate(List<InternalLine> internalLines,
+                                                  boolean[] consumed, ExternalStatementLine ext,
+                                                  FxTolerance tolerance) {
+        for (int i = 0; i < internalLines.size(); i++) {
+            if (consumed[i]) {
+                continue;
+            }
+            InternalLine internal = internalLines.get(i);
+            if (internal.direction() == ext.direction()
+                    && internal.money().currency() != LedgerReportingCurrency.BASE
+                    && tolerance.isWithinTolerance(
+                            internal.baseMoney().minorUnits(), ext.amountMinor())) {
                 return i;
             }
         }
