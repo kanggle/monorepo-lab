@@ -49,8 +49,7 @@ public class InternalCredentialController {
                         request.accountId(),
                         request.email(),
                         request.password(),
-                        request.tenantId(),    // TASK-BE-229: pass optional tenant context
-                        request.accountType()  // TASK-BE-330: pass optional account_type (D2)
+                        request.tenantId()    // TASK-BE-229: pass optional tenant context
                 )
         );
         HttpStatus status = result.wasIdempotent() ? HttpStatus.OK : HttpStatus.CREATED;

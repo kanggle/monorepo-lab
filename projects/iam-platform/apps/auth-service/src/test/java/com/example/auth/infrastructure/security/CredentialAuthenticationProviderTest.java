@@ -22,10 +22,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link CredentialAuthenticationProvider} focused on TASK-BE-329
- * (ADR-MONO-021 D1/D3): the authenticated principal's details map must carry the
- * per-account {@code account_type} alongside {@code tenant_id}/{@code tenant_type}/
- * {@code account_id}, so {@code TenantClaimTokenCustomizer} can emit the claim.
+ * Unit tests for {@link CredentialAuthenticationProvider}.
+ *
+ * <p>TASK-MONO-263 (ADR-032 D5 step 4): the authenticated principal's details map
+ * carries {@code tenant_id}/{@code tenant_type}/{@code account_id} but NO LONGER
+ * carries {@code account_type} — the claim is removed entirely.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -43,16 +44,16 @@ class CredentialAuthenticationProviderTest {
     private static final String EMAIL = "user@example.com";
     private static final String PASSWORD = "secret123";
 
-    private Credential credential(String accountType) {
+    private Credential credential() {
         Instant now = Instant.parse("2026-06-02T00:00:00Z");
         return new Credential(
-                1L, "acc-1", "acme-corp", accountType, EMAIL,
+                1L, "acc-1", "acme-corp", EMAIL,
                 "$argon2id$stored-hash", "argon2id", now, now, 0);
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> authenticateAndGetDetails(String accountType) {
-        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credential(accountType)));
+    private Map<String, Object> authenticateAndGetDetails() {
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credential()));
         when(passwordHasher.verify(PASSWORD, "$argon2id$stored-hash")).thenReturn(true);
 
         Authentication result = provider.authenticate(
@@ -62,22 +63,13 @@ class CredentialAuthenticationProviderTest {
     }
 
     @Test
-    @DisplayName("details map carries account_type=OPERATOR from the resolved credential")
-    void detailsMap_carriesOperatorAccountType() {
-        Map<String, Object> details = authenticateAndGetDetails("OPERATOR");
+    @DisplayName("details map carries tenant + account_id, but NOT account_type (MONO-263)")
+    void detailsMap_noAccountType() {
+        Map<String, Object> details = authenticateAndGetDetails();
 
-        assertThat(details).containsEntry("account_type", "OPERATOR");
-        // existing keys preserved
+        assertThat(details).doesNotContainKey("account_type");
         assertThat(details).containsEntry("tenant_id", "acme-corp");
         assertThat(details).containsKey("tenant_type");
         assertThat(details).containsEntry("account_id", "acc-1");
-    }
-
-    @Test
-    @DisplayName("details map carries account_type=CONSUMER for a consumer credential")
-    void detailsMap_carriesConsumerAccountType() {
-        Map<String, Object> details = authenticateAndGetDetails("CONSUMER");
-
-        assertThat(details).containsEntry("account_type", "CONSUMER");
     }
 }

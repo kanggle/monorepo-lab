@@ -66,9 +66,8 @@ public class AuthServiceClient implements AuthServicePort {
     }
 
     @Override
-    public void createCredential(String accountId, String email, String password, String tenantId,
-                                 String accountType) {
-        Runnable op = () -> doCreateCredential(accountId, email, password, tenantId, accountType);
+    public void createCredential(String accountId, String email, String password, String tenantId) {
+        Runnable op = () -> doCreateCredential(accountId, email, password, tenantId);
         Runnable retrying = Retry.decorateRunnable(retry, op);
         Runnable resilient = CircuitBreaker.decorateRunnable(circuitBreaker, retrying);
 
@@ -88,22 +87,18 @@ public class AuthServiceClient implements AuthServicePort {
         }
     }
 
-    private void doCreateCredential(String accountId, String email, String password, String tenantId,
-                                    String accountType) {
+    private void doCreateCredential(String accountId, String email, String password, String tenantId) {
         // TASK-BE-313: omit tenantId from body when null so auth-service applies its
         // own fallback ("fan-platform"); when non-null, include it so the credential
         // row matches the account row's tenant scope.
-        // TASK-BE-330 (ADR-MONO-021 D2): same conditional-include for accountType —
-        // when null, auth-service applies the CONSUMER default (step-1 migration default).
+        // TASK-MONO-263 (ADR-032 D5 step 4): accountType is no longer sent — the
+        // account_type claim/column is gone.
         Map<String, String> body = new LinkedHashMap<>();
         body.put("accountId", accountId);
         body.put("email", email);
         body.put("password", password);
         if (tenantId != null) {
             body.put("tenantId", tenantId);
-        }
-        if (accountType != null) {
-            body.put("accountType", accountType);
         }
         restClient.post()
                 .uri(CREDENTIALS_PATH)

@@ -108,9 +108,9 @@ class ProvisionAccountUseCaseTest {
         verify(accountRoleRepository).save(any(AccountRole.class));
         verify(historyRepository).save(any());
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(String.class), any(String.class));
-        // TASK-BE-330 (ADR-MONO-021 D2): enterprise provisioning carries account_type=OPERATOR.
+        // TASK-MONO-263 (ADR-032 D5 step 4): createCredential no longer carries accountType.
         verify(authServicePort).createCredential(any(), eq("user@example.com"), eq("Password1!"),
-                any(), eq(AuthServicePort.ACCOUNT_TYPE_OPERATOR));
+                any());
     }
 
     @Test

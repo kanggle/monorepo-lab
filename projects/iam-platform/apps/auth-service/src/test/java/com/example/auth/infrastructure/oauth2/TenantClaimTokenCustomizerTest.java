@@ -260,16 +260,17 @@ class TenantClaimTokenCustomizerTest {
     }
 
     // -----------------------------------------------------------------------
-    // TASK-BE-329 (ADR-MONO-021 D3) — account_type claim
+    // TASK-MONO-263 (ADR-032 D5 step 4) — account_type claim REMOVED
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("authorization_code: account_type from principal details → injected into access_token")
-    void authorizationCode_accountType_injectedIntoAccessToken() {
+    @DisplayName("TASK-MONO-263 authorization_code: NO account_type claim even if principal details carry it")
+    void authorizationCode_noAccountTypeClaim() {
         RegisteredClient client = buildClientWithGrantType(
                 "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
+        // Even a stale principal detail carrying account_type must NOT surface as a claim.
         Map<String, Object> details = Map.of(
                 "tenant_id", "fan-platform",
                 "tenant_type", "B2C",
@@ -285,57 +286,9 @@ class TenantClaimTokenCustomizerTest {
         customizer.customize(context);
 
         JwtClaimsSet built = claimsBuilder.build();
-        assertThat((String) built.getClaim("account_type")).isEqualTo("CONSUMER");
-    }
-
-    @Test
-    @DisplayName("authorization_code: account_type=OPERATOR honoured from principal details")
-    void authorizationCode_operatorAccountType_injected() {
-        RegisteredClient client = buildClientWithGrantType(
-                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
-        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
-
-        Map<String, Object> details = Map.of(
-                "tenant_id", "acme-corp",
-                "tenant_type", "B2B_ENTERPRISE",
-                "account_type", "OPERATOR");
-        when(principal.getDetails()).thenReturn(details);
-
-        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
-        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
-        when(context.getRegisteredClient()).thenReturn(client);
-        when(context.getPrincipal()).thenReturn(principal);
-        when(context.getClaims()).thenReturn(claimsBuilder);
-
-        customizer.customize(context);
-
-        JwtClaimsSet built = claimsBuilder.build();
-        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
-    }
-
-    @Test
-    @DisplayName("authorization_code: id_token also receives account_type")
-    void authorizationCode_idToken_receivesAccountType() {
-        RegisteredClient client = buildClientWithGrantType(
-                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
-        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
-
-        Map<String, Object> details = Map.of(
-                "tenant_id", "fan-platform",
-                "tenant_type", "B2C",
-                "account_type", "CONSUMER");
-        when(principal.getDetails()).thenReturn(details);
-
-        when(context.getTokenType()).thenReturn(new OAuth2TokenType("id_token"));
-        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
-        when(context.getRegisteredClient()).thenReturn(client);
-        when(context.getPrincipal()).thenReturn(principal);
-        when(context.getClaims()).thenReturn(claimsBuilder);
-
-        customizer.customize(context);
-
-        JwtClaimsSet built = claimsBuilder.build();
-        assertThat((String) built.getClaim("account_type")).isEqualTo("CONSUMER");
+        assertThat(built.getClaims()).doesNotContainKey("account_type");
+        // tenant claims still emitted (net-zero apart from account_type removal).
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("fan-platform");
     }
 
     @Test
@@ -572,36 +525,29 @@ class TenantClaimTokenCustomizerTest {
     }
 
     private AssumeTenantAuthenticationToken assumeGrant(
-            String tenantId, String tenantType, String operatorAccountType) {
+            String tenantId, String tenantType, List<String> orgScope) {
         return new AssumeTenantAuthenticationToken(
                 null, "subject", "urn:ietf:params:oauth:token-type:access_token",
-                tenantId, tenantType, operatorAccountType);
-    }
-
-    private AssumeTenantAuthenticationToken assumeGrant(
-            String tenantId, String tenantType, String operatorAccountType, List<String> orgScope) {
-        return new AssumeTenantAuthenticationToken(
-                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
-                tenantId, tenantType, operatorAccountType, orgScope);
+                tenantId, tenantType, orgScope);
     }
 
     @Test
-    @DisplayName("assume-tenant: PRESERVES the operator's account_type=OPERATOR on the assumed token")
-    void assumeTenant_preservesOperatorAccountType() {
+    @DisplayName("TASK-MONO-263 assume-tenant: NO account_type claim emitted on the assumed token")
+    void assumeTenant_noAccountType() {
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR"));
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE"));
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("finance"));
         when(context.getClaims()).thenReturn(claimsBuilder);
 
         customizer.customize(context);
 
         JwtClaimsSet built = claimsBuilder.build();
-        // The operator stays OPERATOR while acting for a customer (ADR-MONO-021 D3).
-        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+        // ADR-032 D5 step 4: account_type is removed entirely.
+        assertThat(built.getClaims()).doesNotContainKey("account_type");
         assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
     }
 
@@ -676,7 +622,7 @@ class TenantClaimTokenCustomizerTest {
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR",
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE",
                         List.of("dept-sales", "dept-ops")));
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("erp"));
         when(context.getClaims()).thenReturn(claimsBuilder);
@@ -696,7 +642,7 @@ class TenantClaimTokenCustomizerTest {
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR", List.of()));
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", List.of()));
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("erp"));
         when(context.getClaims()).thenReturn(claimsBuilder);
 
@@ -735,7 +681,6 @@ class TenantClaimTokenCustomizerTest {
         Map<String, Object> details = Map.of(
                 "tenant_id", "wms-tenant",
                 "tenant_type", "B2B",
-                "account_type", "OPERATOR",
                 "account_id", "acc-1");
         when(principal.getDetails()).thenReturn(details);
         when(accountServicePort.listEntitledDomains("wms-tenant")).thenReturn(List.of());
@@ -754,13 +699,13 @@ class TenantClaimTokenCustomizerTest {
         // stored set emitted verbatim — the explicitly-granted OUTBOUND_MANAGER flows through.
         assertThat(built.<List<String>>getClaim("roles"))
                 .containsExactly("WMS_OPERATOR", "OUTBOUND_MANAGER");
-        // account_type leg untouched (net-positive).
-        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+        // TASK-MONO-263: no account_type claim.
+        assertThat(built.getClaims()).doesNotContainKey("account_type");
     }
 
     @Test
-    @DisplayName("BE-369 authorization_code: ecommerce + CONSUMER + empty stored → seed [CUSTOMER]")
-    void authorizationCode_emptyStored_ecommerceConsumer_seedsCustomer() {
+    @DisplayName("BE-369/MONO-263 authorization_code: ecommerce + empty stored → seed [CUSTOMER] (platform-keyed)")
+    void authorizationCode_emptyStored_ecommerce_seedsCustomer() {
         RegisteredClient client = buildClientWithTenantSettings(
                 "ecommerce", "B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
@@ -768,7 +713,6 @@ class TenantClaimTokenCustomizerTest {
         Map<String, Object> details = Map.of(
                 "tenant_id", "ecommerce",
                 "tenant_type", "B2C",
-                "account_type", "CONSUMER",
                 "account_id", "acc-2");
         when(principal.getDetails()).thenReturn(details);
         when(accountServicePort.listEntitledDomains("ecommerce")).thenReturn(List.of());
@@ -787,36 +731,8 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
-    @DisplayName("BE-369 authorization_code: ecommerce + OPERATOR + empty stored → seed [ADMIN]")
-    void authorizationCode_emptyStored_ecommerceOperator_seedsAdmin() {
-        RegisteredClient client = buildClientWithTenantSettings(
-                "ecommerce", "B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
-        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
-
-        Map<String, Object> details = Map.of(
-                "tenant_id", "ecommerce",
-                "tenant_type", "B2C",
-                "account_type", "OPERATOR",
-                "account_id", "acc-3");
-        when(principal.getDetails()).thenReturn(details);
-        when(accountServicePort.listEntitledDomains("ecommerce")).thenReturn(List.of());
-        when(accountServicePort.listAccountRoles("ecommerce", "acc-3")).thenReturn(List.of());
-
-        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
-        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
-        when(context.getRegisteredClient()).thenReturn(client);
-        when(context.getPrincipal()).thenReturn(principal);
-        when(context.getClaims()).thenReturn(claimsBuilder);
-
-        customizer.customize(context);
-
-        JwtClaimsSet built = claimsBuilder.build();
-        assertThat(built.<List<String>>getClaim("roles")).containsExactly("ADMIN");
-    }
-
-    @Test
-    @DisplayName("BE-369 authorization_code: wms + OPERATOR + empty stored → seed [WMS_OPERATOR]")
-    void authorizationCode_emptyStored_wmsOperator_seedsWmsOperator() {
+    @DisplayName("MONO-263 authorization_code: wms + empty stored → NO roles claim (seed is consumer-only, no wms consumer)")
+    void authorizationCode_emptyStored_wms_omitsRoles() {
         RegisteredClient client = buildClientWithTenantSettings(
                 "wms", "B2B", AuthorizationGrantType.AUTHORIZATION_CODE);
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
@@ -824,7 +740,6 @@ class TenantClaimTokenCustomizerTest {
         Map<String, Object> details = Map.of(
                 "tenant_id", "wms-tenant",
                 "tenant_type", "B2B",
-                "account_type", "OPERATOR",
                 "account_id", "acc-4");
         when(principal.getDetails()).thenReturn(details);
         when(accountServicePort.listEntitledDomains("wms-tenant")).thenReturn(List.of());
@@ -839,12 +754,14 @@ class TenantClaimTokenCustomizerTest {
         customizer.customize(context);
 
         JwtClaimsSet built = claimsBuilder.build();
-        assertThat(built.<List<String>>getClaim("roles")).containsExactly("WMS_OPERATOR");
+        // platform-keyed consumer seed has no wms entry → roles omitted (operators
+        // get domain roles at assume-tenant, BE-376).
+        assertThat(built.getClaims()).doesNotContainKey("roles");
     }
 
     @Test
-    @DisplayName("BE-369 authorization_code: fan-platform + CONSUMER + empty stored → seed [FAN]")
-    void authorizationCode_emptyStored_fanConsumer_seedsFan() {
+    @DisplayName("BE-369/MONO-263 authorization_code: fan-platform + empty stored → seed [FAN]")
+    void authorizationCode_emptyStored_fan_seedsFan() {
         RegisteredClient client = buildClientWithTenantSettings(
                 "fan-platform", "B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
@@ -852,7 +769,6 @@ class TenantClaimTokenCustomizerTest {
         Map<String, Object> details = Map.of(
                 "tenant_id", "fan-platform",
                 "tenant_type", "B2C",
-                "account_type", "CONSUMER",
                 "account_id", "acc-5");
         when(principal.getDetails()).thenReturn(details);
         when(accountServicePort.listEntitledDomains("fan-platform")).thenReturn(List.of());
@@ -871,20 +787,19 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
-    @DisplayName("BE-369 authorization_code: account-service throws → fail-soft falls to seed (no throw)")
+    @DisplayName("BE-369/MONO-263 authorization_code: account-service throws → fail-soft falls to seed (ecommerce → CUSTOMER)")
     void authorizationCode_rolesLookupThrows_failSoftToSeed() {
         RegisteredClient client = buildClientWithTenantSettings(
-                "wms", "B2B", AuthorizationGrantType.AUTHORIZATION_CODE);
+                "ecommerce", "B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
         Map<String, Object> details = Map.of(
-                "tenant_id", "wms-tenant",
-                "tenant_type", "B2B",
-                "account_type", "OPERATOR",
+                "tenant_id", "ecommerce",
+                "tenant_type", "B2C",
                 "account_id", "acc-6");
         when(principal.getDetails()).thenReturn(details);
-        when(accountServicePort.listEntitledDomains("wms-tenant")).thenReturn(List.of());
-        when(accountServicePort.listAccountRoles("wms-tenant", "acc-6"))
+        when(accountServicePort.listEntitledDomains("ecommerce")).thenReturn(List.of());
+        when(accountServicePort.listAccountRoles("ecommerce", "acc-6"))
                 .thenThrow(new AccountServiceUnavailableException("account down", new RuntimeException()));
 
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
@@ -893,12 +808,12 @@ class TenantClaimTokenCustomizerTest {
         when(context.getPrincipal()).thenReturn(principal);
         when(context.getClaims()).thenReturn(claimsBuilder);
 
-        // must not throw (fail-soft) — falls to the seed keyed on (wms, OPERATOR).
+        // must not throw (fail-soft) — falls to the platform-keyed seed (ecommerce → CUSTOMER).
         customizer.customize(context);
 
         JwtClaimsSet built = claimsBuilder.build();
-        assertThat(built.<List<String>>getClaim("roles")).containsExactly("WMS_OPERATOR");
-        assertThat((String) built.getClaim("tenant_id")).isEqualTo("wms-tenant");
+        assertThat(built.<List<String>>getClaim("roles")).containsExactly("CUSTOMER");
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("ecommerce");
     }
 
     @Test
@@ -932,7 +847,7 @@ class TenantClaimTokenCustomizerTest {
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR",
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE",
                         List.of("dept-sales")));
         // The selected tenant's ACTIVE entitled domains drive the operator roles.
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("finance", "wms"));
@@ -946,9 +861,10 @@ class TenantClaimTokenCustomizerTest {
                 .containsExactly("FINANCE_OPERATOR", "WMS_OPERATOR");
         // entitled_domains rides the same fetch.
         assertThat(built.<List<String>>getClaim("entitled_domains")).containsExactly("finance", "wms");
-        // existing assume-tenant assertions still pass alongside (BE-329/BE-338 untouched).
+        // existing assume-tenant assertions still pass alongside (BE-338 untouched).
         assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
-        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+        // TASK-MONO-263: no account_type claim.
+        assertThat(built.getClaims()).doesNotContainKey("account_type");
         assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("dept-sales");
     }
 
@@ -960,7 +876,7 @@ class TenantClaimTokenCustomizerTest {
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR"));
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE"));
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("ecommerce"));
         when(context.getClaims()).thenReturn(claimsBuilder);
 
@@ -978,7 +894,7 @@ class TenantClaimTokenCustomizerTest {
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR"));
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE"));
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of());
         when(context.getClaims()).thenReturn(claimsBuilder);
 
@@ -989,7 +905,8 @@ class TenantClaimTokenCustomizerTest {
         assertThat(built.getClaims()).doesNotContainKey("entitled_domains");
         // the existing assume-tenant injection is byte-unchanged.
         assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
-        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+        // TASK-MONO-263: no account_type claim.
+        assertThat(built.getClaims()).doesNotContainKey("account_type");
         assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("*");
     }
 
@@ -1001,7 +918,7 @@ class TenantClaimTokenCustomizerTest {
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR",
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE",
                         List.of("dept-sales")));
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("gap"));
         when(context.getClaims()).thenReturn(claimsBuilder);
@@ -1025,7 +942,7 @@ class TenantClaimTokenCustomizerTest {
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR"));
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE"));
         when(accountServicePort.listEntitledDomains("acme-corp"))
                 .thenThrow(new AccountServiceUnavailableException("account down", new RuntimeException()));
         when(context.getClaims()).thenReturn(claimsBuilder);
@@ -1036,9 +953,9 @@ class TenantClaimTokenCustomizerTest {
         JwtClaimsSet built = claimsBuilder.build();
         assertThat(built.getClaims()).doesNotContainKey("roles");
         assertThat(built.getClaims()).doesNotContainKey("entitled_domains");
-        // token still issued with tenant_id/account_type/org_scope (net-zero).
+        // token still issued with tenant_id/org_scope (net-zero); no account_type (MONO-263).
         assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
-        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+        assertThat(built.getClaims()).doesNotContainKey("account_type");
         assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("*");
     }
 

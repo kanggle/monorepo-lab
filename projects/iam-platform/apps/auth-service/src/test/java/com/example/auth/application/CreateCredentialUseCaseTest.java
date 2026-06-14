@@ -60,18 +60,16 @@ class CreateCredentialUseCaseTest {
         assertThat(saved.getEmail()).isEqualTo("test@example.com");
         assertThat(saved.getCredentialHash()).isEqualTo("$argon2id$v=19$hashed");
         assertThat(saved.getHashAlgorithm()).isEqualTo("argon2id");
-        // TASK-BE-330 (ADR-MONO-021 D2): 3-arg legacy command → accountType defaults to CONSUMER.
-        assertThat(saved.getAccountType()).isEqualTo("CONSUMER");
 
         assertThat(result.accountId()).isEqualTo("acc-1");
         assertThat(result.createdAt()).isNotNull();
     }
 
     @Test
-    @DisplayName("Explicit accountType=OPERATOR is carried onto the credential (TASK-BE-330 D2)")
-    void createsOperatorCredential() {
+    @DisplayName("Explicit tenantId is carried onto the credential (4-arg command)")
+    void createsTenantScopedCredential() {
         CreateCredentialCommand cmd = new CreateCredentialCommand(
-                "acc-op", "operator@example.com", "password123", "acme-corp", "OPERATOR");
+                "acc-op", "operator@example.com", "password123", "acme-corp");
         given(credentialRepository.existsByAccountId("acc-op")).willReturn(false);
         given(passwordHasher.hash("password123")).willReturn("$argon2id$op");
         given(credentialRepository.save(org.mockito.ArgumentMatchers.any(Credential.class)))
@@ -82,7 +80,6 @@ class CreateCredentialUseCaseTest {
         ArgumentCaptor<Credential> captor = ArgumentCaptor.forClass(Credential.class);
         verify(credentialRepository).save(captor.capture());
         Credential saved = captor.getValue();
-        assertThat(saved.getAccountType()).isEqualTo("OPERATOR");
         assertThat(saved.getTenantId()).isEqualTo("acme-corp");
     }
 

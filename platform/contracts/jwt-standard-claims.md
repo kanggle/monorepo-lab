@@ -7,7 +7,9 @@ This contract defines the standard JWT structure, claims, and validation rules t
 - Single Sign-On (SSO) across every platform an identity is entitled to
 - Cryptographic verification via asymmetric signing (RSA)
 
-> **Unified identity model (ADR-MONO-032, ACCEPTED 2026-06-14).** This contract was rewritten to remove the former `account_type` CONSUMER/OPERATOR partition. There is **one account = one identity**, authorized by a **set of roles**. A single identity MAY simultaneously hold consumer-facing roles (`CUSTOMER`, `FAN`) and operator-facing roles (`WMS_OPERATOR`, …) — the same person can be both a customer and an operator without provisioning separate accounts. This supersedes the partition decided by ADR-MONO-021 (now SUPERSEDED). The `account_type` claim is **deprecated** and survives only through the migration window (§ Migration Compatibility); the `roles` set is the **sole authorization axis**.
+> **Unified identity model (ADR-MONO-032, ACCEPTED 2026-06-14).** This contract was rewritten to remove the former `account_type` CONSUMER/OPERATOR partition. There is **one account = one identity**, authorized by a **set of roles**. A single identity MAY simultaneously hold consumer-facing roles (`CUSTOMER`, `FAN`) and operator-facing roles (`WMS_OPERATOR`, …) — the same person can be both a customer and an operator without provisioning separate accounts. This supersedes the partition decided by ADR-MONO-021 (now SUPERSEDED). The `roles` set is the **sole authorization axis**.
+>
+> **`account_type` removed (TASK-MONO-263 / ADR-MONO-035 4b-2b / ADR-032 D5 step 4, 2026-06-14).** The migration is complete: the IdP no longer emits the `account_type` claim, the `auth_db.credentials.account_type` column is dropped, and gateways gate on `roles` only. The `account_type` claim is **no longer part of any token**. The § Migration Compatibility table below is retained as a historical record of the staged rollout.
 
 ---
 
@@ -58,7 +60,8 @@ All access tokens issued by the identity-platform service MUST include the follo
 | `exp` | number | Yes | Expiry time (Unix epoch seconds) — gateways must reject expired tokens | `1746003600` |
 | `jti` | string | Recommended | JWT ID (unique token identifier for revocation and audit) | UUID |
 | `kid` | string | Recommended | Key ID (version identifier for key rotation) | `key-v1` |
-| `account_type` | `CONSUMER` \| `OPERATOR` | **Deprecated** | **Migration-only** (§ Migration Compatibility). Emitted during the dual-read window for backward compatibility; **gateways MUST NOT gate on it** once role-based admission is in place; **removed at migration completion** (D5 step 4). Not part of the target model. | `CONSUMER` |
+
+> **`account_type` — REMOVED (TASK-MONO-263, D5 step 4).** The former `account_type` (`CONSUMER`\|`OPERATOR`) claim is no longer emitted on any token and is no longer part of this contract. It is not in the standard-claims table above. Any token observed carrying it is legacy; gateways MUST ignore it. `roles` is the sole authorization axis.
 
 Additional custom claims MAY be added by the identity service but MUST NOT conflict with standard OIDC claims. Gateways that do not recognize a claim MUST ignore it.
 
@@ -124,7 +127,7 @@ Every platform gateway MUST implement the following validation and injection log
 
    This preserves the isolation that matters: a `CUSTOMER`-only token still fails the `/api/admin/**` role check, and a consumer-surface token never carries operator roles for a different `aud` (different token, § Role Strategy). Defense-in-depth (RBAC, ABAC data scope, access conditions) is unchanged and remains the primary gate on sensitive surfaces.
 
-   **Migration window (dual-read).** During the ADR-MONO-032 D5 transition (§ Migration Compatibility), a gateway MAY accept a request that satisfies **either** the legacy `account_type` partition **or** role-based admission — whichever passes. This lets legacy tokens (still carrying `account_type`) and new roles-only tokens coexist with **no mis-authorization window**. Once issuance is roles-only and the legacy claim is dropped (D5 step 4), gateways gate on roles only and ignore `account_type`.
+   **Roles-only (end state).** The ADR-MONO-032 D5 migration is complete (TASK-MONO-263 / D5 step 4): issuance is roles-only and the `account_type` claim is dropped. Gateways gate on `roles` only and **ignore `account_type` if seen** on a legacy token. The dual-read window (§ Migration Compatibility) is historical.
 
 ## Post-Validation Injection
 
@@ -146,16 +149,16 @@ Every platform gateway MUST implement the following validation and injection log
 
 # Migration Compatibility
 
-The move from the `account_type` partition to roles-only follows the ADR-MONO-032 D5 staged migration. This contract defines the **target** model (roles-only) plus the **compatibility window** so the implementation steps land without a mis-authorization gap:
+The move from the `account_type` partition to roles-only followed the ADR-MONO-032 D5 staged migration. **The migration is complete** (all stages landed, TASK-MONO-263 = D5 step 4). This table is retained as a historical record of the staged rollout:
 
-| Stage | Issuance | Gateways | `account_type` |
-|---|---|---|---|
-| **Dual-read** (D5 step 1) | still emits `account_type` (legacy) | accept **legacy account-type OR role-based** admission (whichever passes) | present (legacy) |
-| **Roles-only issuance** (D5 step 2) | stops requiring `account_type`; emits roles-only; one identity may obtain a token for any `aud` it holds roles for; consumer capability seeded as `CUSTOMER`/`FAN` roles | role-based admission (dual-read leg still tolerant) | optional/absent |
-| **Account unify** (D5 step 3) | one account = one credential = role-grant set; existing separate accounts opt-in-linked (not force-merged) | role-based | optional/absent |
-| **Drop legacy** (D5 step 4) | `account_type` removed entirely | role-based only; ignore `account_type` if seen | removed |
+| Stage | Issuance | Gateways | `account_type` | Status |
+|---|---|---|---|---|
+| **Dual-read** (D5 step 1) | still emits `account_type` (legacy) | accept **legacy account-type OR role-based** admission (whichever passes) | present (legacy) | done |
+| **Roles-only issuance** (D5 step 2) | stops requiring `account_type`; emits roles-only; one identity may obtain a token for any `aud` it holds roles for; consumer capability seeded as `CUSTOMER`/`FAN` roles | role-based admission (dual-read leg still tolerant) | optional/absent | done |
+| **Account unify** (D5 step 3) | one account = one credential = role-grant set; existing separate accounts opt-in-linked (not force-merged) | role-based | optional/absent | done |
+| **Drop legacy** (D5 step 4, TASK-MONO-263) | `account_type` removed entirely; `auth_db.credentials.account_type` column dropped | role-based only; ignore `account_type` if seen | **removed** | **done** |
 
-Gateways MUST treat `account_type` as advisory-only once role-based admission is deployed, and MUST NOT reject a request solely because `account_type` is absent.
+The end state is roles-only: `account_type` is not emitted on any token. Gateways gate on `roles` only and ignore `account_type` if seen on a legacy token.
 
 ---
 
@@ -327,6 +330,7 @@ Any change to the JWT structure, standard claims, signing strategy, or gateway e
 
 **Change log:**
 
+- **2026-06-14 (ADR-MONO-035 4b-2b / ADR-MONO-032 D5 step 4, TASK-MONO-263) — `account_type` removed (breaking, finalizes the migration).** The IdP no longer emits the `account_type` claim on any grant; the `auth_db.credentials.account_type` column is dropped (auth-service V0025); `RoleSeedPolicy` seeds consumer roles by platform only (`ecommerce → CUSTOMER`, `fan-platform → FAN`); the credential-provisioning API (`auth-internal.md`) carries no `accountType`. Operators get domain roles at assume-tenant (OperatorRoleDerivation, BE-376); consumers carry their platform seed role. Gateways gate on `roles` only and ignore `account_type` if seen on a legacy token. Completes the ADR-032 D5 staged migration (§ Migration Compatibility).
 - **2026-06-14 (ADR-MONO-032, TASK-MONO-255) — unified identity model (breaking).** Removed the `account_type` CONSUMER/OPERATOR account-level partition; `roles` is now the sole authorization axis (one identity may hold consumer-facing + operator-facing roles). `account_type` demoted from Required to Deprecated (migration-only, removed at completion). Gateway enforcement changed from account-type partition to role-based admission; `X-Account-Type` injection removed. Cross-type SSO lifted (SSO scoped by role-possession). The coordinated rollout is the ADR-032 D5 staged migration (§ Migration Compatibility): dual-read gateways → roles-only issuance → account unify → drop legacy → e2e. Supersedes the `account_type` Required claim of ADR-MONO-021.
 
 ---

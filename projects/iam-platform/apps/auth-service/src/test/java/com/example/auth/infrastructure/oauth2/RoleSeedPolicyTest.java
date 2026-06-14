@@ -7,98 +7,71 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for {@link RoleSeedPolicy} — the ADR-MONO-033 S3 aud-default seed table
- * (TASK-BE-369). Each seed-table cell + null-safety + unknown platform → {@code []}.
+ * (TASK-BE-369). TASK-MONO-263 (ADR-032 D5 step 4): decoupled from {@code account_type}
+ * — the seed is now keyed on platform only and returns the CONSUMER role
+ * ({@code ecommerce → CUSTOMER}, {@code fan-platform → FAN}, else {@code []}). The
+ * OPERATOR branch is removed (operators get domain roles at assume-tenant, BE-376).
  */
 class RoleSeedPolicyTest {
 
     // -----------------------------------------------------------------------
-    // CONSUMER surface
+    // Consumer seed (platform-keyed)
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("ecommerce + CONSUMER → [CUSTOMER]")
-    void ecommerceConsumer() {
-        assertThat(RoleSeedPolicy.seed("ecommerce", "CONSUMER")).containsExactly("CUSTOMER");
+    @DisplayName("ecommerce → [CUSTOMER]")
+    void ecommerce() {
+        assertThat(RoleSeedPolicy.seed("ecommerce")).containsExactly("CUSTOMER");
     }
 
     @Test
-    @DisplayName("fan-platform + CONSUMER → [FAN]")
-    void fanConsumer() {
-        assertThat(RoleSeedPolicy.seed("fan-platform", "CONSUMER")).containsExactly("FAN");
-    }
-
-    @Test
-    @DisplayName("wms + CONSUMER → [] (no consumer surface on wms)")
-    void wmsConsumer_empty() {
-        assertThat(RoleSeedPolicy.seed("wms", "CONSUMER")).isEmpty();
-    }
-
-    @Test
-    @DisplayName("scm + CONSUMER → []")
-    void scmConsumer_empty() {
-        assertThat(RoleSeedPolicy.seed("scm", "CONSUMER")).isEmpty();
+    @DisplayName("fan-platform → [FAN]")
+    void fan() {
+        assertThat(RoleSeedPolicy.seed("fan-platform")).containsExactly("FAN");
     }
 
     // -----------------------------------------------------------------------
-    // OPERATOR surface
+    // Non-consumer platforms → [] (operators seeded at assume-tenant, BE-376)
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("ecommerce + OPERATOR → [ADMIN]")
-    void ecommerceOperator() {
-        assertThat(RoleSeedPolicy.seed("ecommerce", "OPERATOR")).containsExactly("ADMIN");
+    @DisplayName("wms → [] (no consumer surface; operators via assume-tenant)")
+    void wms_empty() {
+        assertThat(RoleSeedPolicy.seed("wms")).isEmpty();
     }
 
     @Test
-    @DisplayName("wms + OPERATOR → [WMS_OPERATOR]")
-    void wmsOperator() {
-        assertThat(RoleSeedPolicy.seed("wms", "OPERATOR")).containsExactly("WMS_OPERATOR");
+    @DisplayName("scm → []")
+    void scm_empty() {
+        assertThat(RoleSeedPolicy.seed("scm")).isEmpty();
     }
 
     @Test
-    @DisplayName("scm + OPERATOR → [SCM_OPERATOR]")
-    void scmOperator() {
-        assertThat(RoleSeedPolicy.seed("scm", "OPERATOR")).containsExactly("SCM_OPERATOR");
+    @DisplayName("erp → []")
+    void erp_empty() {
+        assertThat(RoleSeedPolicy.seed("erp")).isEmpty();
     }
 
     @Test
-    @DisplayName("erp + OPERATOR → [ERP_OPERATOR]")
-    void erpOperator() {
-        assertThat(RoleSeedPolicy.seed("erp", "OPERATOR")).containsExactly("ERP_OPERATOR");
+    @DisplayName("mes → []")
+    void mes_empty() {
+        assertThat(RoleSeedPolicy.seed("mes")).isEmpty();
     }
 
     @Test
-    @DisplayName("mes + OPERATOR → [MES_OPERATOR]")
-    void mesOperator() {
-        assertThat(RoleSeedPolicy.seed("mes", "OPERATOR")).containsExactly("MES_OPERATOR");
-    }
-
-    @Test
-    @DisplayName("fan-platform + OPERATOR → [FAN]")
-    void fanOperator() {
-        assertThat(RoleSeedPolicy.seed("fan-platform", "OPERATOR")).containsExactly("FAN");
+    @DisplayName("gap (operator base login platform) → [] (operators get roles at assume-tenant)")
+    void gap_empty() {
+        assertThat(RoleSeedPolicy.seed("gap")).isEmpty();
     }
 
     // -----------------------------------------------------------------------
-    // Unknown platform / account_type → []
+    // Unknown platform → []
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("unknown platform + OPERATOR → []")
-    void unknownPlatformOperator_empty() {
-        assertThat(RoleSeedPolicy.seed("finance", "OPERATOR")).isEmpty();
-    }
-
-    @Test
-    @DisplayName("unknown platform + CONSUMER → []")
-    void unknownPlatformConsumer_empty() {
-        assertThat(RoleSeedPolicy.seed("finance", "CONSUMER")).isEmpty();
-    }
-
-    @Test
-    @DisplayName("known platform + unknown account_type → []")
-    void unknownAccountType_empty() {
-        assertThat(RoleSeedPolicy.seed("ecommerce", "SERVICE")).isEmpty();
+    @DisplayName("unknown platform → []")
+    void unknownPlatform_empty() {
+        assertThat(RoleSeedPolicy.seed("finance")).isEmpty();
     }
 
     // -----------------------------------------------------------------------
@@ -108,42 +81,24 @@ class RoleSeedPolicyTest {
     @Test
     @DisplayName("null platform → []")
     void nullPlatform_empty() {
-        assertThat(RoleSeedPolicy.seed(null, "OPERATOR")).isEmpty();
+        assertThat(RoleSeedPolicy.seed(null)).isEmpty();
     }
 
     @Test
     @DisplayName("blank platform → []")
     void blankPlatform_empty() {
-        assertThat(RoleSeedPolicy.seed("   ", "OPERATOR")).isEmpty();
-    }
-
-    @Test
-    @DisplayName("null account_type → []")
-    void nullAccountType_empty() {
-        assertThat(RoleSeedPolicy.seed("ecommerce", null)).isEmpty();
-    }
-
-    @Test
-    @DisplayName("blank account_type → []")
-    void blankAccountType_empty() {
-        assertThat(RoleSeedPolicy.seed("ecommerce", "  ")).isEmpty();
-    }
-
-    @Test
-    @DisplayName("both null → []")
-    void bothNull_empty() {
-        assertThat(RoleSeedPolicy.seed(null, null)).isEmpty();
+        assertThat(RoleSeedPolicy.seed("   ")).isEmpty();
     }
 
     @Test
     @DisplayName("seed never returns null (immutable empty on miss)")
     void neverNull() {
-        assertThat(RoleSeedPolicy.seed("nope", "nope")).isNotNull().isEmpty();
+        assertThat(RoleSeedPolicy.seed("nope")).isNotNull().isEmpty();
     }
 
     @Test
     @DisplayName("platform value is trimmed before lookup")
     void platformTrimmed() {
-        assertThat(RoleSeedPolicy.seed("  wms  ", "OPERATOR")).containsExactly("WMS_OPERATOR");
+        assertThat(RoleSeedPolicy.seed("  ecommerce  ")).containsExactly("CUSTOMER");
     }
 }

@@ -49,9 +49,15 @@ import org.springframework.stereotype.Component;
  * TASK-BE-369 (ADR-MONO-033 S4 base + S3) — adds the signed {@code roles} claim on the
  * {@code authorization_code}/{@code refresh_token} path: stored {@code account_roles}
  * (via {@link AccountServicePort#listAccountRoles}) emitted verbatim if present, else the
- * aud-default seed ({@link RoleSeedPolicy}) keyed on (client-platform, account_type).
- * Net-positive (the {@code account_type} leg is unchanged); fail-soft + recursion-safe,
- * mirroring {@link #populateEntitledDomains} — NEVER reachable on {@code client_credentials}.
+ * aud-default seed ({@link RoleSeedPolicy}) keyed on the client-platform. Fail-soft +
+ * recursion-safe, mirroring {@link #populateEntitledDomains} — NEVER reachable on
+ * {@code client_credentials}.
+ *
+ * <p>TASK-MONO-263 (ADR-MONO-035 4b-2b / ADR-032 D5 step 4) — stops emitting the
+ * {@code account_type} claim on every grant (the column is dropped, no consumer remains)
+ * and decouples {@link RoleSeedPolicy} from {@code account_type} (consumer seed keyed on
+ * platform only). Operators get domain roles at assume-tenant (BE-376), consumers carry
+ * {@code CUSTOMER}/{@code FAN} (seed) — neither needs {@code account_type}.
  */
 @Slf4j
 @Component
@@ -68,14 +74,6 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * Must match the domain-side gates' {@code CLAIM_ENTITLED_DOMAINS} exactly.
      */
     private static final String CLAIM_ENTITLED_DOMAINS = "entitled_domains";
-
-    /**
-     * TASK-BE-329 (ADR-MONO-021 D3): the platform-required {@code account_type} claim
-     * (CONSUMER|OPERATOR — jwt-standard-claims.md L46). Injected on the access + id
-     * token for account-bearing grants (authorization_code / refresh_token /
-     * assume-tenant). Omitted for client_credentials (a workload is not an account).
-     */
-    private static final String CLAIM_ACCOUNT_TYPE = "account_type";
 
     /**
      * TASK-BE-337 / TASK-BE-338: the {@code org_scope} data-scope claim the erp
@@ -102,8 +100,9 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * ({@code authorization_code} / {@code refresh_token}) — sourced from the stored
      * {@code account_roles} if present, else the aud-default seed
      * ({@link RoleSeedPolicy}). Omitted for {@code client_credentials} (a workload is
-     * not an identity — recursion guard). Net-positive: the {@code account_type} leg
-     * stays unchanged.
+     * not an identity — recursion guard). TASK-MONO-263: the {@code account_type} claim
+     * is no longer emitted (ADR-032 D5 step 4); {@code roles} is the sole authorization
+     * surface.
      *
      * <p>TASK-BE-370 (ADR-MONO-033 S4 assume-tenant — completes ADR-MONO-032 D5 step 2):
      * also emitted on the {@code token_exchange} (assume-tenant) path.
@@ -236,9 +235,6 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                     .claim("tenant_type", tenantType);
             log.debug("TenantClaimTokenCustomizer: authorization_code — injected tenant_id={}, " +
                     "tenant_type={} from principal for clientId={}", tenantId, tenantType, clientId);
-            // TASK-BE-329 (D3): account_type from the principal details (set by
-            // CredentialAuthenticationProvider from the credential). Mirrors tenant_id.
-            injectAccountTypeFromPrincipal(context, principal);
             populateEntitledDomains(context, tenantId);
             // TASK-BE-369 (ADR-MONO-033 S4 base + S3): roles leg. Platform = the
             // CLIENT's tenant_id (ClientSettings); claim tenant = the resolved
@@ -265,8 +261,8 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                 // platform = the client's tenant_id (== tenantInfo.tenantId() here,
                 // since this branch resolved tenant from client metadata). With no
                 // principal account_id, populateRoles finds stored empty → seeds by
-                // (platform, account_type); account_type is typically null on this
-                // path → seed [] → roles omitted (the correct graceful behaviour).
+                // platform; a non-consumer platform → seed [] → roles omitted (the
+                // correct graceful behaviour).
                 populateRoles(context, principal, tenantInfo.tenantId(), tenantInfo.tenantId());
             } else {
                 log.error("SECURITY: authorization_code token issued without tenant metadata. " +
@@ -301,12 +297,10 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // it does NOT copy).
         String selectedTenantId = null;
         String selectedTenantType = null;
-        String operatorAccountType = null;
         java.util.List<String> orgScope = null;
         if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
             selectedTenantId = grant.getSelectedTenantId();
             selectedTenantType = grant.getSelectedTenantType();
-            operatorAccountType = grant.getOperatorAccountType();
             orgScope = grant.getOrgScope();
         }
 
@@ -323,11 +317,6 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                 .claim("tenant_type", selectedTenantType);
         log.debug("TenantClaimTokenCustomizer: assume-tenant — injected tenant_id={}, tenant_type={}",
                 selectedTenantId, selectedTenantType);
-
-        // TASK-BE-329 (D3): PRESERVE the operator's account_type (the operator stays
-        // OPERATOR while acting for a customer). Carried on the grant from the operator's
-        // validated subject token (AssumeTenantAuthenticationProvider). Mirrors tenant.
-        injectAccountType(context, operatorAccountType);
 
         // TASK-BE-338 (ADR-MONO-020 D3 amendment): membership-derived data-scope —
         // the v2 replacement for the TASK-BE-337 hardcoded ["*"] bridge. The
@@ -364,11 +353,17 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // (never admin_operator_roles — ADR-033 S2 / ADR-034 U5 disjointness). NET-ZERO:
         // empty/all-unknown/failed fetch → both entitled_domains AND roles omitted (the
         // gateway then 403s — least-privilege; ADR-033 S5 fail-soft). Only ADD the roles
-        // claim; the tenant_id/tenant_type/account_type/org_scope injection above is
-        // untouched (BE-329/BE-338).
+        // claim; the tenant_id/tenant_type/org_scope injection above is untouched
+        // (BE-338).
         java.util.List<String> derived = OperatorRoleDerivation.fromEntitledDomains(entitled);
         if (!derived.isEmpty()) {
-            context.getClaims().claim(CLAIM_ROLES, derived);
+            // The claim value flows into the JdbcOAuth2AuthorizationService store,
+            // which serializes via SecurityJackson2Modules' strict allowlist. An
+            // ImmutableCollections list (List.of/List.copyOf) is NOT allowlisted and
+            // breaks the authorization read-back (userinfo/refresh/revoke). Wrap in a
+            // mutable ArrayList (allowlisted) — same reasoning as the HashMap details
+            // map in CredentialAuthenticationProvider.
+            context.getClaims().claim(CLAIM_ROLES, new java.util.ArrayList<>(derived));
             log.debug("TenantClaimTokenCustomizer: assume-tenant — derived operator roles={} "
                     + "from the selected tenant's entitled_domains={}", derived, entitled);
         }
@@ -415,8 +410,9 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * TASK-BE-369 (ADR-MONO-033 S4 base + S3 / ADR-MONO-032 D5 step 2): populates the
      * signed {@code roles} claim. Sourced from the authoritative {@code account_roles}
      * store (via {@link AccountServicePort#listAccountRoles}) when present, else the
-     * aud-default {@link RoleSeedPolicy} seed keyed on (client-platform, account_type).
-     * Stored roles are emitted <b>verbatim</b> — never unioned with the seed.
+     * aud-default {@link RoleSeedPolicy} seed keyed on the client-platform (TASK-MONO-263:
+     * consumer-only, decoupled from {@code account_type}). Stored roles are emitted
+     * <b>verbatim</b> — never unioned with the seed.
      *
      * <p>Invoked ONLY from {@code customizeForAuthorizationCode} (which also serves
      * {@code refresh_token}). It is NEVER reachable from {@code client_credentials} —
@@ -431,15 +427,14 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * availability — the exception is swallowed (logged at WARN), never rethrown.
      *
      * @param context          the encoding context whose claims receive {@code roles}
-     * @param principal        the authenticated principal (carries {@code account_id} +
-     *                         {@code account_type} in its details map)
+     * @param principal        the authenticated principal (carries {@code account_id}
+     *                         in its details map)
      * @param claimTenantId    the resolved tenant_id (the {@code account_roles} lookup key)
      * @param platformTenantId the registered client's tenant_id (the platform, for the seed)
      */
     private void populateRoles(JwtEncodingContext context, Authentication principal,
                                String claimTenantId, String platformTenantId) {
         String accountId = extractTenantAttribute(principal, "account_id");
-        String accountType = extractTenantAttribute(principal, CLAIM_ACCOUNT_TYPE);
 
         java.util.List<String> stored = java.util.List.of();
         try {
@@ -457,13 +452,19 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
 
         java.util.List<String> roles = (stored != null && !stored.isEmpty())
                 ? stored
-                : RoleSeedPolicy.seed(platformTenantId, accountType);
+                : RoleSeedPolicy.seed(platformTenantId);
 
         if (roles != null && !roles.isEmpty()) {
-            context.getClaims().claim(CLAIM_ROLES, roles);
-            log.debug("TenantClaimTokenCustomizer: injected roles={} (platform={}, account_type={}, "
-                            + "source={})",
-                    roles, platformTenantId, accountType,
+            // SecurityJackson2Modules allowlist: the seed returns an
+            // ImmutableCollections list (List.of), which is NOT allowlisted by the
+            // JdbcOAuth2AuthorizationService store and breaks the authorization
+            // read-back (userinfo/refresh/revoke). Wrap in a mutable ArrayList
+            // (allowlisted) — mirrors the HashMap details map in
+            // CredentialAuthenticationProvider. (Stored account_roles are already an
+            // ArrayList from Jackson; the seed path is the one that needs this.)
+            context.getClaims().claim(CLAIM_ROLES, new java.util.ArrayList<>(roles));
+            log.debug("TenantClaimTokenCustomizer: injected roles={} (platform={}, source={})",
+                    roles, platformTenantId,
                     (stored != null && !stored.isEmpty()) ? "stored" : "seed");
         }
     }
@@ -500,33 +501,6 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             }
         }
         return null;
-    }
-
-    /**
-     * TASK-BE-329 (D3): injects the {@code account_type} claim from the authenticated
-     * principal's details map (set by
-     * {@link com.example.auth.infrastructure.security.CredentialAuthenticationProvider}
-     * from the credential). Exact mirror of the {@code tenant_id} principal-details
-     * read. If the principal carries no account_type (e.g. a client-metadata fallback
-     * path with no credential principal), the claim is omitted — the gateways already
-     * tolerate a missing claim by rejecting, and this path is not the credential
-     * form-login path that the contract targets.
-     */
-    private void injectAccountTypeFromPrincipal(JwtEncodingContext context, Authentication principal) {
-        injectAccountType(context, extractTenantAttribute(principal, CLAIM_ACCOUNT_TYPE));
-    }
-
-    /**
-     * TASK-BE-329 (D3): injects a resolved {@code account_type} value (CONSUMER|OPERATOR)
-     * onto the token claims when present and non-blank. Shared by the
-     * authorization_code/refresh_token path (read from principal details) and the
-     * assume-tenant path (carried on the grant — operator's preserved type).
-     */
-    private void injectAccountType(JwtEncodingContext context, String accountType) {
-        if (accountType != null && !accountType.isBlank()) {
-            context.getClaims().claim(CLAIM_ACCOUNT_TYPE, accountType);
-            log.debug("TenantClaimTokenCustomizer: injected account_type={}", accountType);
-        }
     }
 
     /**

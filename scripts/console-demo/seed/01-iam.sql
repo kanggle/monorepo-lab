@@ -28,23 +28,23 @@
 
 -- ---------------------------------------------------------------------------
 -- auth_db — operator credential rows (Argon2id hash of 'devpassword123!').
---   account_type='OPERATOR' (ADR-MONO-021 D4 — without it the V0022 column
---   DEFAULT 'CONSUMER' mis-types these as CONSUMER).
+--   TASK-MONO-263 (ADR-032 D5 step 4): account_type column dropped (V0025) —
+--   operators get domain roles at assume-tenant (BE-376), not from a stored type.
 -- ---------------------------------------------------------------------------
 USE `auth_db`;
 
 INSERT IGNORE INTO credentials (
-    tenant_id, account_type, account_id, email,
+    tenant_id, account_id, email,
     credential_hash, hash_algorithm, created_at, updated_at, version
 ) VALUES
 (
-    '*', 'OPERATOR', '01928c4a-7e9f-7c00-9a40-d2b1f5e8c100',
+    '*', '01928c4a-7e9f-7c00-9a40-d2b1f5e8c100',
     'e2e-super-admin@example.com',
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
     'argon2id', NOW(6), NOW(6), 0
 ),
 (
-    'acme-corp', 'OPERATOR', '01928c4a-7e9f-7c00-9a40-d2b1f5e8c300',
+    'acme-corp', '01928c4a-7e9f-7c00-9a40-d2b1f5e8c300',
     'multi-operator@example.com',
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
     'argon2id', NOW(6), NOW(6), 0

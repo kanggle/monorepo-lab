@@ -45,32 +45,21 @@ class AuthServiceClientUnitTest {
                 .willReturn(aResponse().withStatus(200)));
 
         assertThatNoException().isThrownBy(() ->
-                client.createCredential("acc-1", "user@example.com", "pass123", "fan-platform", "CONSUMER"));
+                client.createCredential("acc-1", "user@example.com", "pass123", "fan-platform"));
     }
 
     @Test
-    @DisplayName("createCredential — 요청 바디에 accountType + tenantId 포함 (TASK-BE-330 D2)")
-    void createCredential_bodyCarriesAccountTypeAndTenant() {
+    @DisplayName("createCredential — 요청 바디에 tenantId 포함, accountType 미포함 (TASK-MONO-263)")
+    void createCredential_bodyCarriesTenant_noAccountType() {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withStatus(201)));
 
-        client.createCredential("acc-op", "operator@example.com", "pass123", "acme-corp", "OPERATOR");
+        client.createCredential("acc-op", "operator@example.com", "pass123", "acme-corp");
 
         wireMockServer.verify(postRequestedFor(urlEqualTo(CREDENTIALS_PATH))
-                .withRequestBody(matchingJsonPath("$[?(@.accountType == 'OPERATOR')]"))
                 .withRequestBody(matchingJsonPath("$[?(@.tenantId == 'acme-corp')]"))
-                .withRequestBody(matchingJsonPath("$[?(@.accountId == 'acc-op')]")));
-    }
-
-    @Test
-    @DisplayName("createCredential — accountType null 이면 바디에서 생략 (auth-service 가 CONSUMER 기본값 적용)")
-    void createCredential_nullAccountType_omittedFromBody() {
-        wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
-                .willReturn(aResponse().withStatus(201)));
-
-        client.createCredential("acc-x", "x@example.com", "pass123", "fan-platform", null);
-
-        wireMockServer.verify(postRequestedFor(urlEqualTo(CREDENTIALS_PATH))
+                .withRequestBody(matchingJsonPath("$[?(@.accountId == 'acc-op')]"))
+                // TASK-MONO-263: accountType is never sent.
                 .withRequestBody(matchingJsonPath("$[?(!@.accountType)]")));
     }
 
@@ -80,7 +69,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withStatus(409)));
 
-        assertThatThrownBy(() -> client.createCredential("acc-2", "dup@example.com", "pass123", "fan-platform", "CONSUMER"))
+        assertThatThrownBy(() -> client.createCredential("acc-2", "dup@example.com", "pass123", "fan-platform"))
                 .isInstanceOf(AuthServicePort.CredentialAlreadyExistsConflict.class);
     }
 
@@ -90,7 +79,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withStatus(422)));
 
-        assertThatThrownBy(() -> client.createCredential("acc-3", "user@example.com", "pass123", "fan-platform", "CONSUMER"))
+        assertThatThrownBy(() -> client.createCredential("acc-3", "user@example.com", "pass123", "fan-platform"))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
     }
 
@@ -100,7 +89,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
-        assertThatThrownBy(() -> client.createCredential("acc-err", "user@example.com", "pass123", "fan-platform", "CONSUMER"))
+        assertThatThrownBy(() -> client.createCredential("acc-err", "user@example.com", "pass123", "fan-platform"))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
     }
 }

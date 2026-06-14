@@ -11,14 +11,11 @@ package com.example.account.application.port;
  */
 public interface AuthServicePort {
 
-    /** Self-registered B2C account — the {@code account_type} JWT claim value for self-service signup. */
-    String ACCOUNT_TYPE_CONSUMER = "CONSUMER";
-
-    /** Company-provisioned B2B account — the {@code account_type} JWT claim value for enterprise provisioning. */
-    String ACCOUNT_TYPE_OPERATOR = "OPERATOR";
-
     /**
      * Create a credential row for a freshly-persisted account.
+     *
+     * <p>TASK-MONO-263 (ADR-032 D5 step 4): the {@code accountType} parameter
+     * (TASK-BE-330) is removed — the {@code account_type} claim/column is gone.</p>
      *
      * @param accountId   the account UUID (must match {@code accounts.id})
      * @param email       lower-cased email (credential lookup key)
@@ -30,17 +27,10 @@ public interface AuthServicePort {
      *                    credentials always to fall back to {@code "fan-platform"}
      *                    regardless of the account's actual tenant scope — which
      *                    broke multi-tenant login flows (TenantProvisioningE2ETest).
-     * @param accountType the per-account-immutable classification
-     *                    ({@link #ACCOUNT_TYPE_CONSUMER} | {@link #ACCOUNT_TYPE_OPERATOR}) the
-     *                    provisioning path decided (ADR-MONO-021 D2: self-service signup → CONSUMER,
-     *                    enterprise provisioning → OPERATOR). Carried so the credential row records
-     *                    the contract-required {@code account_type} JWT claim at the moment the
-     *                    account is born; when {@code null}, auth-service defaults to CONSUMER
-     *                    (the step-1 migration default).
      * @throws CredentialAlreadyExistsConflict if auth-service reports 409 (concurrent signup)
      * @throws AuthServiceUnavailable          if auth-service is unreachable / 5xx / timeout
      */
-    void createCredential(String accountId, String email, String password, String tenantId, String accountType);
+    void createCredential(String accountId, String email, String password, String tenantId);
 
     /** Thrown when auth-service reports 409 — concurrent signup created the credential. */
     final class CredentialAlreadyExistsConflict extends RuntimeException {

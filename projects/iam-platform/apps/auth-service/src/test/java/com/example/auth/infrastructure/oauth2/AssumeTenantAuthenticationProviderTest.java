@@ -136,36 +136,9 @@ class AssumeTenantAuthenticationProviderTest {
         assertThat(token.getRefreshToken()).isNull();
     }
 
-    @Test
-    @DisplayName("TASK-BE-329: operator's account_type from subject token carried onto the resolved grant")
-    void preservesOperatorAccountType_onResolvedGrant() {
-        Jwt operatorSubject = Jwt.withTokenValue(SUBJECT_TOKEN)
-                .header("alg", "RS256")
-                .subject(OIDC_SUBJECT)
-                .claim("tenant_id", "acme-corp")
-                .claim("account_type", "OPERATOR")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(300))
-                .build();
-        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(operatorSubject);
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
-                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
-        Jwt minted = Jwt.withTokenValue("assumed-token")
-                .header("alg", "RS256").subject(OIDC_SUBJECT)
-                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
-        doReturn(minted).when(tokenGenerator).generate(any());
-
-        provider.authenticate(exchange());
-
-        org.mockito.ArgumentCaptor<org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext> captor =
-                org.mockito.ArgumentCaptor.forClass(
-                        org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext.class);
-        verify(tokenGenerator).generate(captor.capture());
-        Object grant = captor.getValue().getAuthorizationGrant();
-        assertThat(grant).isInstanceOf(AssumeTenantAuthenticationToken.class);
-        // The operator stays OPERATOR while acting for the customer (ADR-MONO-021 D3).
-        assertThat(((AssumeTenantAuthenticationToken) grant).getOperatorAccountType()).isEqualTo("OPERATOR");
-    }
+    // TASK-MONO-263 (ADR-032 D5 step 4): the operator's account_type is no longer
+    // read from the subject token or carried onto the resolved grant — the
+    // preservesOperatorAccountType_onResolvedGrant test (TASK-BE-329) is deleted.
 
     @Test
     @DisplayName("TASK-BE-338: resolved org_scope carried onto the resolved grant")
@@ -217,9 +190,9 @@ class AssumeTenantAuthenticationProviderTest {
     @DisplayName("TASK-BE-376: subject token roles NOT extracted/threaded — roles derived at customizer from entitled domains")
     void doesNotThreadSubjectRoles_onResolvedGrant() {
         // The subject token may carry `roles` from a prior leg, but TASK-BE-376 no
-        // longer preserves them — the resolved grant carries only account_type +
-        // org_scope; the customizer DERIVES roles from the selected tenant's
-        // entitled domains. The grant's account_type/org_scope plumbing is intact.
+        // longer preserves them — the resolved grant carries only org_scope (BE-338);
+        // the customizer DERIVES roles from the selected tenant's entitled domains.
+        // TASK-MONO-263: account_type is no longer read/threaded either.
         Jwt operatorSubject = Jwt.withTokenValue(SUBJECT_TOKEN)
                 .header("alg", "RS256")
                 .subject(OIDC_SUBJECT)
@@ -247,8 +220,7 @@ class AssumeTenantAuthenticationProviderTest {
         Object grant = captor.getValue().getAuthorizationGrant();
         assertThat(grant).isInstanceOf(AssumeTenantAuthenticationToken.class);
         AssumeTenantAuthenticationToken resolved = (AssumeTenantAuthenticationToken) grant;
-        // account_type (BE-329) + org_scope (BE-338) plumbing fully intact.
-        assertThat(resolved.getOperatorAccountType()).isEqualTo("OPERATOR");
+        // org_scope (BE-338) plumbing fully intact (account_type removed — MONO-263).
         assertThat(resolved.getOrgScope()).containsExactly("dept-sales");
     }
 
