@@ -722,6 +722,204 @@ class TenantClaimTokenCustomizerTest {
     }
 
     // -----------------------------------------------------------------------
+    // TASK-BE-369 (ADR-MONO-033 S4 base + S3) — roles claim leg
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-369 authorization_code: stored account_roles present → emitted verbatim (no seed)")
+    void authorizationCode_storedRoles_emittedVerbatim() {
+        RegisteredClient client = buildClientWithTenantSettings(
+                "wms", "B2B", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of(
+                "tenant_id", "wms-tenant",
+                "tenant_type", "B2B",
+                "account_type", "OPERATOR",
+                "account_id", "acc-1");
+        when(principal.getDetails()).thenReturn(details);
+        when(accountServicePort.listEntitledDomains("wms-tenant")).thenReturn(List.of());
+        when(accountServicePort.listAccountRoles("wms-tenant", "acc-1"))
+                .thenReturn(List.of("WMS_OPERATOR", "OUTBOUND_MANAGER"));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        // stored set emitted verbatim — the explicitly-granted OUTBOUND_MANAGER flows through.
+        assertThat(built.<List<String>>getClaim("roles"))
+                .containsExactly("WMS_OPERATOR", "OUTBOUND_MANAGER");
+        // account_type leg untouched (net-positive).
+        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+    }
+
+    @Test
+    @DisplayName("BE-369 authorization_code: ecommerce + CONSUMER + empty stored → seed [CUSTOMER]")
+    void authorizationCode_emptyStored_ecommerceConsumer_seedsCustomer() {
+        RegisteredClient client = buildClientWithTenantSettings(
+                "ecommerce", "B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of(
+                "tenant_id", "ecommerce",
+                "tenant_type", "B2C",
+                "account_type", "CONSUMER",
+                "account_id", "acc-2");
+        when(principal.getDetails()).thenReturn(details);
+        when(accountServicePort.listEntitledDomains("ecommerce")).thenReturn(List.of());
+        when(accountServicePort.listAccountRoles("ecommerce", "acc-2")).thenReturn(List.of());
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.<List<String>>getClaim("roles")).containsExactly("CUSTOMER");
+    }
+
+    @Test
+    @DisplayName("BE-369 authorization_code: ecommerce + OPERATOR + empty stored → seed [ADMIN]")
+    void authorizationCode_emptyStored_ecommerceOperator_seedsAdmin() {
+        RegisteredClient client = buildClientWithTenantSettings(
+                "ecommerce", "B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of(
+                "tenant_id", "ecommerce",
+                "tenant_type", "B2C",
+                "account_type", "OPERATOR",
+                "account_id", "acc-3");
+        when(principal.getDetails()).thenReturn(details);
+        when(accountServicePort.listEntitledDomains("ecommerce")).thenReturn(List.of());
+        when(accountServicePort.listAccountRoles("ecommerce", "acc-3")).thenReturn(List.of());
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.<List<String>>getClaim("roles")).containsExactly("ADMIN");
+    }
+
+    @Test
+    @DisplayName("BE-369 authorization_code: wms + OPERATOR + empty stored → seed [WMS_OPERATOR]")
+    void authorizationCode_emptyStored_wmsOperator_seedsWmsOperator() {
+        RegisteredClient client = buildClientWithTenantSettings(
+                "wms", "B2B", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of(
+                "tenant_id", "wms-tenant",
+                "tenant_type", "B2B",
+                "account_type", "OPERATOR",
+                "account_id", "acc-4");
+        when(principal.getDetails()).thenReturn(details);
+        when(accountServicePort.listEntitledDomains("wms-tenant")).thenReturn(List.of());
+        when(accountServicePort.listAccountRoles("wms-tenant", "acc-4")).thenReturn(List.of());
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.<List<String>>getClaim("roles")).containsExactly("WMS_OPERATOR");
+    }
+
+    @Test
+    @DisplayName("BE-369 authorization_code: fan-platform + CONSUMER + empty stored → seed [FAN]")
+    void authorizationCode_emptyStored_fanConsumer_seedsFan() {
+        RegisteredClient client = buildClientWithTenantSettings(
+                "fan-platform", "B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of(
+                "tenant_id", "fan-platform",
+                "tenant_type", "B2C",
+                "account_type", "CONSUMER",
+                "account_id", "acc-5");
+        when(principal.getDetails()).thenReturn(details);
+        when(accountServicePort.listEntitledDomains("fan-platform")).thenReturn(List.of());
+        when(accountServicePort.listAccountRoles("fan-platform", "acc-5")).thenReturn(List.of());
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.<List<String>>getClaim("roles")).containsExactly("FAN");
+    }
+
+    @Test
+    @DisplayName("BE-369 authorization_code: account-service throws → fail-soft falls to seed (no throw)")
+    void authorizationCode_rolesLookupThrows_failSoftToSeed() {
+        RegisteredClient client = buildClientWithTenantSettings(
+                "wms", "B2B", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        Map<String, Object> details = Map.of(
+                "tenant_id", "wms-tenant",
+                "tenant_type", "B2B",
+                "account_type", "OPERATOR",
+                "account_id", "acc-6");
+        when(principal.getDetails()).thenReturn(details);
+        when(accountServicePort.listEntitledDomains("wms-tenant")).thenReturn(List.of());
+        when(accountServicePort.listAccountRoles("wms-tenant", "acc-6"))
+                .thenThrow(new AccountServiceUnavailableException("account down", new RuntimeException()));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        // must not throw (fail-soft) — falls to the seed keyed on (wms, OPERATOR).
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.<List<String>>getClaim("roles")).containsExactly("WMS_OPERATOR");
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("wms-tenant");
+    }
+
+    @Test
+    @DisplayName("BE-369 client_credentials: listAccountRoles NEVER called + no roles claim (recursion guard)")
+    void clientCredentials_rolesNeverLookedUp() {
+        RegisteredClient client = buildClient("fan-platform|B2C");
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        verify(accountServicePort, never()).listAccountRoles(any(), any());
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.getClaims()).doesNotContainKey("roles");
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
