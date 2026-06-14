@@ -1,6 +1,6 @@
 # TASK-PC-FE-090 — console ecommerce **sellers** operator surface (ADR-031 §2.4.10 — 7th area)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Feature:** `features/ecommerce-ops` (sellers slice)
 **Parent:** ADR-MONO-030 Step 4 facet f (marketplace seller operator surface) · ADR-MONO-031 §2.4.10 console-absorption pattern (7th operator area — net-new, no admin-dashboard parity).
 **Precondition:** TASK-BE-375 (seller admin read surface: `GET /api/admin/sellers` list + `GET /{id}` detail).
