@@ -216,4 +216,20 @@ public final class LedgerErrors {
             super("VALIDATION_ERROR", message);
         }
     }
+
+    // ---- FX cost-flow method config (15th increment — TASK-FIN-BE-023) ----
+
+    /**
+     * A {@code PUT /settlements/cost-flow-config} body with an unknown {@code method}
+     * string (i.e. not {@code "WEIGHTED_AVERAGE"} or {@code "FIFO"}, or null/blank) —
+     * architecture.md § FX cost-flow method config; ADR-001 D1 ({@code LIFO} is
+     * IFRS-prohibited and excluded). 400; nothing persists. No new error code — reuses
+     * the platform-standard {@code VALIDATION_ERROR} exactly like
+     * {@link FxToleranceInvalidException}.
+     */
+    public static final class CostFlowMethodInvalidException extends LedgerDomainException {
+        public CostFlowMethodInvalidException(String message) {
+            super("VALIDATION_ERROR", message);
+        }
+    }
 }

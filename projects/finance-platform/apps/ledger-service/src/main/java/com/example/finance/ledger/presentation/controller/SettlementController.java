@@ -1,16 +1,24 @@
 package com.example.finance.ledger.presentation.controller;
 
 import com.example.finance.ledger.application.ActorContext;
+import com.example.finance.ledger.application.GetFxCostFlowConfigUseCase;
+import com.example.finance.ledger.application.SetFxCostFlowConfigCommand;
+import com.example.finance.ledger.application.SetFxCostFlowConfigUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.Result;
+import com.example.finance.ledger.application.view.FxCostFlowConfigView;
 import com.example.finance.ledger.infrastructure.security.ActorContextResolver;
 import com.example.finance.ledger.presentation.dto.ApiEnvelope;
+import com.example.finance.ledger.presentation.dto.FxCostFlowConfigRequest;
+import com.example.finance.ledger.presentation.dto.FxCostFlowConfigResponse;
 import com.example.finance.ledger.presentation.dto.SettlementRequest;
 import com.example.finance.ledger.presentation.dto.SettlementResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,6 +37,11 @@ import org.springframework.web.bind.annotation.RestController;
  * position) or an idempotent replay returns {@code 200} ({@code settled:false}).
  * {@code .authenticated()} + the dual-accept tenant gate (parity with revaluation /
  * manual posting — no new scope-authority axis).
+ *
+ * <p><b>15th increment (TASK-FIN-BE-023)</b>: adds {@code GET} + {@code PUT
+ * /cost-flow-config} for the per-tenant FX cost-flow method config (shadow — settlement
+ * still uses weighted-average; FIN-BE-025 wires FIFO consumption). Tenant-scoped via
+ * {@link ActorContext} exactly like the reconciliation fx-tolerance endpoints.
  */
 @RestController
 @RequestMapping("/api/finance/ledger/settlements")
@@ -36,6 +49,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class SettlementController {
 
     private final SettleForeignPositionUseCase settleForeignPosition;
+    private final GetFxCostFlowConfigUseCase getFxCostFlowConfig;
+    private final SetFxCostFlowConfigUseCase setFxCostFlowConfig;
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<SettlementResponse>> settle(
@@ -47,6 +62,34 @@ public class SettlementController {
         SettlementResponse body = SettlementResponse.from(result);
         HttpStatus status = result.settled() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(ApiEnvelope.of(body));
+    }
+
+    /**
+     * Read the tenant's FX cost-flow method config (15th increment — TASK-FIN-BE-023).
+     * Returns the persisted config or the {@code WEIGHTED_AVERAGE} default when unset.
+     * Tenant-scoped.
+     */
+    @GetMapping("/cost-flow-config")
+    public ResponseEntity<ApiEnvelope<FxCostFlowConfigResponse>> getCostFlowConfig() {
+        ActorContext actor = ActorContextResolver.currentOrThrow();
+        FxCostFlowConfigView view = getFxCostFlowConfig.get(actor.tenantId());
+        return ResponseEntity.ok(ApiEnvelope.of(FxCostFlowConfigResponse.from(view)));
+    }
+
+    /**
+     * Upsert the tenant's FX cost-flow method config (operator config; 15th increment —
+     * TASK-FIN-BE-023). Tenant-scoped + audited ({@code updated_by} = the actor identity).
+     * Unknown method (e.g. {@code "LIFO"}) → {@code 400 VALIDATION_ERROR}. Shadow:
+     * settlement computation is not changed — FIN-BE-025 wires FIFO consumption.
+     */
+    @PutMapping("/cost-flow-config")
+    public ResponseEntity<ApiEnvelope<FxCostFlowConfigResponse>> setCostFlowConfig(
+            @RequestBody FxCostFlowConfigRequest request) {
+        ActorContext actor = ActorContextResolver.currentOrThrow();
+        SetFxCostFlowConfigCommand command = new SetFxCostFlowConfigCommand(
+                actor.tenantId(), request.method(), actorIdentity(actor));
+        FxCostFlowConfigView view = setFxCostFlowConfig.set(command);
+        return ResponseEntity.ok(ApiEnvelope.of(FxCostFlowConfigResponse.from(view)));
     }
 
     /** The actor identity recorded as the audit actor — the JWT subject, else the tenant. */
