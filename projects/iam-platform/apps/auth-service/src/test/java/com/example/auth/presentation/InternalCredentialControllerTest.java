@@ -71,8 +71,8 @@ class InternalCredentialControllerTest {
     }
 
     @Test
-    @DisplayName("POST /internal/auth/credentials — accountType=OPERATOR is mapped onto the command (TASK-BE-330 D2)")
-    void createCredential_carriesAccountType() throws Exception {
+    @DisplayName("POST /internal/auth/credentials — tenantId is mapped onto the command")
+    void createCredential_carriesTenantId() throws Exception {
         Instant createdAt = Instant.parse("2026-06-02T10:00:00Z");
         given(createCredentialUseCase.execute(any(CreateCredentialCommand.class)))
                 .willReturn(new CreateCredentialResult("acc-op", createdAt));
@@ -84,8 +84,7 @@ class InternalCredentialControllerTest {
                                   "accountId": "acc-op",
                                   "email": "operator@example.com",
                                   "password": "password123",
-                                  "tenantId": "acme-corp",
-                                  "accountType": "OPERATOR"
+                                  "tenantId": "acme-corp"
                                 }
                                 """))
                 .andExpect(status().isCreated());
@@ -94,13 +93,19 @@ class InternalCredentialControllerTest {
                 ArgumentCaptor.forClass(CreateCredentialCommand.class);
         verify(createCredentialUseCase).execute(captor.capture());
         CreateCredentialCommand cmd = captor.getValue();
-        assertThat(cmd.accountType()).isEqualTo("OPERATOR");
+        // TASK-MONO-263: accountType field is gone; tenantId still maps through.
         assertThat(cmd.tenantId()).isEqualTo("acme-corp");
     }
 
     @Test
-    @DisplayName("Invalid accountType (not CONSUMER|OPERATOR) → 400 VALIDATION_ERROR")
-    void invalidAccountTypeReturns400() throws Exception {
+    @DisplayName("TASK-MONO-263: an accountType field in the body is ignored (201, no validation error)")
+    void accountTypeFieldIgnored() throws Exception {
+        Instant createdAt = Instant.parse("2026-06-02T10:00:00Z");
+        given(createCredentialUseCase.execute(any(CreateCredentialCommand.class)))
+                .willReturn(new CreateCredentialResult("acc-1", createdAt));
+
+        // accountType is no longer a request field — an unknown property is ignored
+        // (Jackson default FAIL_ON_UNKNOWN_PROPERTIES=false), so this still succeeds.
         mockMvc.perform(post("/internal/auth/credentials")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -111,8 +116,7 @@ class InternalCredentialControllerTest {
                                   "accountType": "SUPERUSER"
                                 }
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(status().isCreated());
     }
 
     @Test

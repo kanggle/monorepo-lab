@@ -206,16 +206,16 @@ class FormLoginIntegrationTest extends AbstractIntegrationTest {
                 .as("tenant_type claim must be present (set by CredentialAuthenticationProvider)")
                 .isTrue();
 
-        // TASK-BE-329 (ADR-MONO-021 AC-1): a CONSUMER credential (default) carries
-        // account_type=CONSUMER on BOTH the access token and the id_token.
-        assertThat(accessPayload.get("account_type").asText())
-                .as("access_token must carry account_type=CONSUMER (un-breaks the gateway 403-on-absent)")
-                .isEqualTo("CONSUMER");
+        // TASK-MONO-263 (ADR-032 D5 step 4): the account_type claim is removed
+        // entirely — it must NOT appear on either the access token or the id_token.
+        assertThat(accessPayload.has("account_type"))
+                .as("access_token must NOT carry account_type (claim removed, roles-only model)")
+                .isFalse();
 
         JsonNode idPayload = decodeJwtPayload(tokenResponse.get("id_token").asText());
-        assertThat(idPayload.get("account_type").asText())
-                .as("id_token must carry account_type=CONSUMER (NextAuth profile reads it)")
-                .isEqualTo("CONSUMER");
+        assertThat(idPayload.has("account_type"))
+                .as("id_token must NOT carry account_type (claim removed)")
+                .isFalse();
     }
 
     // ------------------------------------------------------------------

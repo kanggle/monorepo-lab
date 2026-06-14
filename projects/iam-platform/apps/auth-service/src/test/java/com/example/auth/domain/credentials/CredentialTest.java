@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CredentialTest {
 
@@ -72,81 +71,20 @@ class CredentialTest {
         assertThat(updated.getVersion()).isEqualTo(1);
     }
 
-    // ── TASK-BE-329 (ADR-MONO-021 D1): account_type ──────────────────────────
+    // TASK-MONO-263 (ADR-032 D5 step 4): the account_type field/constructor-arg
+    // (TASK-BE-329) is removed — the corresponding tests are deleted.
 
     @Test
-    @DisplayName("account_type round-trips through the canonical constructor (OPERATOR)")
-    void accountType_roundTrips() {
-        Instant now = Instant.parse("2026-06-02T00:00:00Z");
-        Credential c = new Credential(
-                1L, "acc-op", "acme-corp", "OPERATOR", "op@example.com",
-                "hash", "argon2id", now, now, 0);
-
-        assertThat(c.getAccountType()).isEqualTo("OPERATOR");
-    }
-
-    @Test
-    @DisplayName("account_type defaults to CONSUMER when absent (null/blank/legacy ctor)")
-    void accountType_defaultsToConsumer() {
-        Instant now = Instant.parse("2026-06-02T00:00:00Z");
-
-        // null → default
-        Credential viaNull = new Credential(
-                1L, "acc", "fan-platform", null, "u@example.com", "h", "argon2id", now, now, 0);
-        assertThat(viaNull.getAccountType()).isEqualTo("CONSUMER");
-
-        // blank → default
-        Credential viaBlank = new Credential(
-                1L, "acc", "fan-platform", "  ", "u@example.com", "h", "argon2id", now, now, 0);
-        assertThat(viaBlank.getAccountType()).isEqualTo("CONSUMER");
-
-        // legacy (tenant-only) ctor → default
-        Credential viaLegacy = new Credential(
-                1L, "acc", "fan-platform", "u@example.com", "h", "argon2id", now, now, 0);
-        assertThat(viaLegacy.getAccountType()).isEqualTo("CONSUMER");
-    }
-
-    @Test
-    @DisplayName("account_type is normalized (trim + upper-case)")
-    void accountType_normalized() {
-        Instant now = Instant.parse("2026-06-02T00:00:00Z");
-        Credential c = new Credential(
-                1L, "acc", "fan-platform", "  operator ", "u@example.com", "h", "argon2id", now, now, 0);
-        assertThat(c.getAccountType()).isEqualTo("OPERATOR");
-    }
-
-    @Test
-    @DisplayName("account_type rejects values outside CONSUMER|OPERATOR (contract restriction)")
-    void accountType_rejectsInvalid() {
-        Instant now = Instant.parse("2026-06-02T00:00:00Z");
-        assertThatThrownBy(() -> new Credential(
-                1L, "acc", "fan-platform", "ADMIN", "u@example.com", "h", "argon2id", now, now, 0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("CONSUMER or OPERATOR");
-    }
-
-    @Test
-    @DisplayName("create(...) defaults account_type to CONSUMER; explicit overload carries OPERATOR")
-    void create_accountTypeFactory() {
+    @DisplayName("create(...) builds a credential with the normalized email")
+    void create_normalizesEmail() {
         Instant now = Instant.parse("2026-06-02T00:00:00Z");
         CredentialHash hash = CredentialHash.argon2id("h");
 
-        Credential def = Credential.create("acc", "fan-platform", "u@example.com", hash, now);
-        assertThat(def.getAccountType()).isEqualTo("CONSUMER");
+        Credential c = Credential.create("acc", "fan-platform", "  U@Example.COM ", hash, now);
 
-        Credential op = Credential.create("acc", "acme-corp", "OPERATOR", "u@example.com", hash, now);
-        assertThat(op.getAccountType()).isEqualTo("OPERATOR");
-    }
-
-    @Test
-    @DisplayName("changePassword preserves account_type")
-    void changePassword_preservesAccountType() {
-        Instant now = Instant.parse("2026-06-02T00:00:00Z");
-        Credential original = new Credential(
-                1L, "acc", "acme-corp", "OPERATOR", "op@example.com", "old", "argon2id", now, now, 0);
-
-        Credential updated = original.changePassword(CredentialHash.argon2id("new"), now);
-
-        assertThat(updated.getAccountType()).isEqualTo("OPERATOR");
+        assertThat(c.getEmail()).isEqualTo("u@example.com");
+        assertThat(c.getTenantId()).isEqualTo("fan-platform");
+        assertThat(c.getAccountId()).isEqualTo("acc");
+        assertThat(c.getVersion()).isZero();
     }
 }

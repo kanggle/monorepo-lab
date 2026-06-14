@@ -1,0 +1,17 @@
+-- TASK-MONO-263 (ADR-MONO-035 4b-2b / ADR-032 D5 step 4)
+-- auth-service: drop account_type from credentials.
+--
+-- account_type was the legacy platform-required JWT claim (CONSUMER | OPERATOR),
+-- denormalized onto auth_db.credentials by V0022 (TASK-BE-329) so the SAS
+-- form-login path could emit it. ADR-032 D5 collapses the account_type×tenant
+-- partition into a roles-only model: after 4b-1 (web-store role-based guard) and
+-- 4b-2a (gateways roles-only), nothing consumes the account_type claim, so the
+-- IdP stops emitting it and the column is dropped.
+--
+-- Consumers keep their seed role (CUSTOMER/FAN, RoleSeedPolicy keyed on platform);
+-- operators get domain roles at assume-tenant (OperatorRoleDerivation, BE-376).
+-- Neither needs account_type.
+--
+-- Simple DROP (no COMMENT/AFTER ordering concern). CredentialJpaEntity no longer
+-- maps account_type, so Hibernate ddl-auto=validate passes after this migration.
+ALTER TABLE credentials DROP COLUMN account_type;

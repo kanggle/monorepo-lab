@@ -65,9 +65,9 @@ class SignupUseCaseTest {
         SignupResult result = signupUseCase.execute(sampleCommand());
 
         assertThat(result.accountId()).isEqualTo("acc-1");
-        // TASK-BE-330 (ADR-MONO-021 D2): self-service signup carries account_type=CONSUMER.
+        // TASK-MONO-263 (ADR-032 D5 step 4): createCredential no longer carries accountType.
         verify(authServicePort).createCredential(eq("acc-1"), eq("new@example.com"), eq("password123!"),
-                any(), eq(AuthServicePort.ACCOUNT_TYPE_CONSUMER));
+                any());
         verify(profileRepository).save(any(Profile.class));
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
     }
@@ -78,7 +78,7 @@ class SignupUseCaseTest {
         given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
         given(accountRepository.save(any(Account.class))).willReturn(sampleSavedAccount());
         willThrow(new AuthServicePort.CredentialAlreadyExistsConflict("acc-1"))
-                .given(authServicePort).createCredential(any(), any(), any(), any(), any());
+                .given(authServicePort).createCredential(any(), any(), any(), any());
 
         assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
                 .isInstanceOf(AccountAlreadyExistsException.class);
@@ -92,7 +92,7 @@ class SignupUseCaseTest {
         given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
         given(accountRepository.save(any(Account.class))).willReturn(sampleSavedAccount());
         willThrow(new AuthServicePort.AuthServiceUnavailable("down", new RuntimeException()))
-                .given(authServicePort).createCredential(any(), any(), any(), any(), any());
+                .given(authServicePort).createCredential(any(), any(), any(), any());
 
         assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
@@ -110,6 +110,6 @@ class SignupUseCaseTest {
         assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
                 .isInstanceOf(AccountAlreadyExistsException.class);
 
-        verify(authServicePort, never()).createCredential(any(), any(), any(), any(), any());
+        verify(authServicePort, never()).createCredential(any(), any(), any(), any());
     }
 }

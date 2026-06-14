@@ -25,7 +25,6 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
     private final String subjectTokenType;
     private final String selectedTenantId;
     private final String selectedTenantType;
-    private final String operatorAccountType;
     private final List<String> orgScope;
 
     /**
@@ -53,37 +52,21 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
     }
 
     /**
-     * Provider-side constructor (TASK-BE-329) — additionally carries the operator's
-     * {@code account_type} (OPERATOR), read from the validated subject token, so the
-     * customizer's token-exchange branch can PRESERVE it on the assumed token (the
-     * operator stays OPERATOR while acting for a customer — ADR-MONO-021 D3). It rides
-     * the same {@code getAuthorizationGrant()} copy path as {@code selectedTenantType}.
-     */
-    public AssumeTenantAuthenticationToken(Authentication clientPrincipal,
-                                           String subjectToken,
-                                           String subjectTokenType,
-                                           String selectedTenantId,
-                                           String selectedTenantType,
-                                           String operatorAccountType) {
-        this(clientPrincipal, subjectToken, subjectTokenType, selectedTenantId,
-                selectedTenantType, operatorAccountType, null);
-    }
-
-    /**
      * Provider-side constructor (TASK-BE-338, ADR-MONO-020 D3 amendment) —
      * additionally carries the resolved per-assignment {@code org_scope} (the
      * department subtree-root ids the operator may act under within the assumed
      * tenant). Rides the same {@code getAuthorizationGrant()} copy path as
-     * {@code selectedTenantType} / {@code operatorAccountType}. {@code null} ⟺
-     * {@code ["*"]} = whole tenant (net-zero) — the customizer maps
-     * {@code null}/empty → {@code ["*"]}.
+     * {@code selectedTenantType}. {@code null} ⟺ {@code ["*"]} = whole tenant
+     * (net-zero) — the customizer maps {@code null}/empty → {@code ["*"]}.
+     *
+     * <p>TASK-MONO-263 (ADR-032 D5 step 4): the operator's {@code account_type} is no
+     * longer carried — the claim is removed entirely.
      */
     public AssumeTenantAuthenticationToken(Authentication clientPrincipal,
                                            String subjectToken,
                                            String subjectTokenType,
                                            String selectedTenantId,
                                            String selectedTenantType,
-                                           String operatorAccountType,
                                            List<String> orgScope) {
         super(Collections.emptyList());
         this.clientPrincipal = clientPrincipal;
@@ -91,7 +74,6 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
         this.subjectTokenType = subjectTokenType;
         this.selectedTenantId = selectedTenantId;
         this.selectedTenantType = selectedTenantType;
-        this.operatorAccountType = operatorAccountType;
         this.orgScope = orgScope;
         setAuthenticated(false);
     }
@@ -124,15 +106,6 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
 
     public String getSelectedTenantType() {
         return selectedTenantType;
-    }
-
-    /**
-     * TASK-BE-329 — the operator's {@code account_type} (OPERATOR), carried from the
-     * validated subject token so it is PRESERVED on the assumed token (ADR-MONO-021 D3).
-     * Null on the converter-side token (resolved by the provider).
-     */
-    public String getOperatorAccountType() {
-        return operatorAccountType;
     }
 
     /**

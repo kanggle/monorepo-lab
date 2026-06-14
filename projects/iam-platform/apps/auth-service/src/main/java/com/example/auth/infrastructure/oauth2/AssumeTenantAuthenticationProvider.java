@@ -94,20 +94,16 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
 
         // --- 1. Validate the subject token (auth-service's own JWKS) — fail-closed. ---
         String oidcSubject;
-        String operatorAccountType;
         try {
             Jwt subjectJwt = subjectTokenDecoder.decode(exchange.getSubjectToken());
             oidcSubject = subjectJwt.getSubject();
-            // TASK-BE-329 (ADR-MONO-021 D3): preserve the operator's account_type
-            // through the exchange — read it from the validated subject token (the
-            // operator's base GAP OIDC token, which carries account_type=OPERATOR).
-            // Mirrors how the selected tenant_type is carried onto the resolved grant.
-            operatorAccountType = subjectJwt.getClaimAsString("account_type");
             // TASK-BE-376 (ADR-MONO-035 O1 / step 4a): the operator's domain roles are
             // no longer preserved from the subject token (TASK-BE-370) — the base
             // operator token has no domain-role set to preserve. The customizer's
             // assume-tenant branch now DERIVES the `roles` from the SELECTED tenant's
             // entitled domains (OperatorRoleDerivation), so no roles are extracted here.
+            // TASK-MONO-263 (ADR-032 D5 step 4): the operator's account_type is no
+            // longer read or preserved — the claim is removed entirely.
         } catch (JwtException e) {
             log.debug("assume-tenant: subject_token validation failed (fail-closed): {}", e.toString());
             throw invalidGrant("subject_token is invalid");
@@ -147,11 +143,11 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // threaded from the subject token — the customizer's assume-tenant branch
         // DERIVES them from the selected tenant's entitled domains
         // (OperatorRoleDerivation), reusing the existing entitled_domains fetch (no
-        // extra account-service call). account_type (BE-329) + org_scope (BE-338) plumbing
-        // is unchanged.
+        // extra account-service call). org_scope (BE-338) plumbing is unchanged.
+        // TASK-MONO-263 (ADR-032 D5 step 4): account_type is no longer carried.
         AssumeTenantAuthenticationToken resolvedGrant = new AssumeTenantAuthenticationToken(
                 clientPrincipal, exchange.getSubjectToken(), exchange.getSubjectTokenType(),
-                selectedTenantId, CUSTOMER_TENANT_TYPE, operatorAccountType, orgScope);
+                selectedTenantId, CUSTOMER_TENANT_TYPE, orgScope);
 
         // TASK-BE-336: propagate the client's REGISTERED scopes into the
         // domain-facing token's `scope` claim (was Set.of() — empty). This is
