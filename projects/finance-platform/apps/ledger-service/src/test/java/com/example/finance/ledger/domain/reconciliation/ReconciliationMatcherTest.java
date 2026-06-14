@@ -18,6 +18,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * matcher only RECORDS, never resolves). 1:1 by (amount, currency, direction);
  * unmatched-external → UNMATCHED_EXTERNAL; unmatched-internal → UNMATCHED_INTERNAL;
  * direction discriminates; multi-line determinism. No Spring/JPA.
+ *
+ * <p>The pre-13th-increment cases pass {@link FxTolerance#EXACT} so the base-leg
+ * compare is byte-identical to FIN-BE-017 (net-zero). The 13th-increment block
+ * (TASK-FIN-BE-020) exercises a non-zero tolerance: within → match, no discrepancy;
+ * at-edge → within; above → AMOUNT_MISMATCH; looser-of bps-vs-floor.
  */
 class ReconciliationMatcherTest {
 
@@ -26,6 +31,8 @@ class ReconciliationMatcherTest {
     private static final String CODE = LedgerAccountCodes.CASH_CLEARING;
     private static final Instant AT = Instant.parse("2026-01-31T00:00:00Z");
     private static final LocalDate VALUE_DATE = LocalDate.parse("2026-01-15");
+    /** The net-zero default used by the FIN-BE-010/017 cases (exact compare). */
+    private static final FxTolerance EXACT = FxTolerance.EXACT;
 
     private static Money krw(long m) {
         return Money.of(m, Currency.KRW);
@@ -68,7 +75,7 @@ class ReconciliationMatcherTest {
                 internal("entry-b", 70_000, EntryDirection.DEBIT));
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1, e2), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1, e2), internals, EXACT, AT);
 
         assertThat(result.matchedCount()).isEqualTo(2);
         assertThat(result.discrepancyCount()).isZero();
@@ -87,7 +94,7 @@ class ReconciliationMatcherTest {
                 internal("entry-a", 150_000, EntryDirection.DEBIT));
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1, e2), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1, e2), internals, EXACT, AT);
 
         assertThat(result.matchedCount()).isEqualTo(1);
         assertThat(result.discrepancyCount()).isEqualTo(1);
@@ -110,7 +117,7 @@ class ReconciliationMatcherTest {
                 internal("entry-b", 88_000, EntryDirection.DEBIT));
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
 
         assertThat(result.matchedCount()).isEqualTo(1);
         assertThat(result.discrepancyCount()).isEqualTo(1);
@@ -133,7 +140,7 @@ class ReconciliationMatcherTest {
                 internal("entry-b", 99_000, EntryDirection.DEBIT));            // no external
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1, e2), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1, e2), internals, EXACT, AT);
 
         assertThat(result.matchedCount()).isEqualTo(1);
         assertThat(result.discrepancyCount()).isEqualTo(2);
@@ -151,7 +158,7 @@ class ReconciliationMatcherTest {
                 internal("entry-a", 150_000, EntryDirection.CREDIT));
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
 
         assertThat(result.matchedCount()).isZero();
         assertThat(result.discrepancyCount()).isEqualTo(2);
@@ -170,7 +177,7 @@ class ReconciliationMatcherTest {
                 internal("entry-b", 50_000, EntryDirection.DEBIT));
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1, e2), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1, e2), internals, EXACT, AT);
 
         assertThat(result.matchedCount()).isEqualTo(2);
         assertThat(result.discrepancyCount()).isZero();
@@ -185,7 +192,7 @@ class ReconciliationMatcherTest {
     @DisplayName("empty statement, no internal lines → zero matches, zero discrepancies")
     void emptyStatement() {
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(), List.of(), AT);
+                TENANT, STATEMENT, CODE, List.of(), List.of(), EXACT, AT);
 
         assertThat(result.matchedCount()).isZero();
         assertThat(result.discrepancyCount()).isZero();
@@ -203,7 +210,7 @@ class ReconciliationMatcherTest {
                 internalUsd("entry-fx", 10_000, EntryDirection.DEBIT, 130_000L));
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
 
         // Transaction leg STILL reconciled — the line is MATCHED and a match exists.
         assertThat(e1.isMatched()).isTrue();
@@ -230,7 +237,7 @@ class ReconciliationMatcherTest {
                 internalUsd("entry-fx", 10_000, EntryDirection.DEBIT, 130_000L));
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
 
         assertThat(e1.isMatched()).isTrue();
         assertThat(result.matchedCount()).isEqualTo(1);
@@ -245,7 +252,7 @@ class ReconciliationMatcherTest {
                 internal("entry-a", 150_000, EntryDirection.DEBIT));
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
 
         assertThat(e1.isMatched()).isTrue();
         assertThat(result.matchedCount()).isEqualTo(1);
@@ -260,9 +267,136 @@ class ReconciliationMatcherTest {
                 internalUsd("entry-fx", 10_000, EntryDirection.DEBIT, 130_000L));
 
         ReconciliationResult result = ReconciliationMatcher.match(
-                TENANT, STATEMENT, CODE, List.of(e1), internals, AT);
+                TENANT, STATEMENT, CODE, List.of(e1), internals, EXACT, AT);
 
         assertThat(e1.isMatched()).isTrue();
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero();
+    }
+
+    // ---- 13th increment: configurable base-leg FX tolerance (TASK-FIN-BE-020) ----
+
+    /** Runs the matcher for one USD line (base diff) under {@code tolerance}. */
+    private static ReconciliationResult matchUsd(long internalBase, Long externalBase,
+                                                 FxTolerance tolerance) {
+        ExternalStatementLine e1 = extUsd("FX1", 10_000, EntryDirection.DEBIT, externalBase);
+        List<InternalLine> internals = List.of(
+                internalUsd("entry-fx", 10_000, EntryDirection.DEBIT, internalBase));
+        return ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, tolerance, AT);
+    }
+
+    @Test
+    @DisplayName("(AC-2) EXACT reproduces FIN-BE-017 — any non-zero base diff → AMOUNT_MISMATCH")
+    void exactReproducesFinBe017() {
+        // 1 minor unit of difference under EXACT still raises AMOUNT_MISMATCH (net-zero
+        // iff expected == actual; the band is max(0,0) == 0).
+        ReconciliationResult result = matchUsd(130_000L, 130_001L, FxTolerance.EXACT);
+
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isEqualTo(1);
+        assertThat(result.discrepancies().get(0).type()).isEqualTo(DiscrepancyType.AMOUNT_MISMATCH);
+        assertThat(result.discrepancies().get(0).expectedMinor()).isEqualTo(130_000L);
+        assertThat(result.discrepancies().get(0).actualMinor()).isEqualTo(130_001L);
+    }
+
+    @Test
+    @DisplayName("(AC-2) EXACT with equal base → MATCHED, no discrepancy (net-zero)")
+    void exactEqualBaseNoDiscrepancy() {
+        ReconciliationResult result = matchUsd(130_000L, 130_000L, FxTolerance.EXACT);
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("base diff WITHIN the bps band → MATCHED, no discrepancy (txn match still recorded)")
+    void withinBpsBandSuppressesDiscrepancy() {
+        // 100 bps of 130000 = 1300 band. A 1200 diff (132000-130800... use 130000 vs 131200) is within.
+        FxTolerance tol = new FxTolerance(100, 0L); // 1% band → 1300 on 130000
+        ReconciliationResult result = matchUsd(130_000L, 131_200L, tol); // diff 1200 <= 1300
+
+        // F8 — the transaction-leg match is STILL recorded; tolerance suppresses only the base discrepancy.
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.matches().get(0).journalEntryId()).isEqualTo("entry-fx");
+        assertThat(result.discrepancyCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("base diff EXACTLY at the bps band edge → WITHIN (<=, inclusive) → no discrepancy")
+    void atBandEdgeIsWithin() {
+        FxTolerance tol = new FxTolerance(100, 0L); // 1% of 130000 = 1300 exactly
+        ReconciliationResult result = matchUsd(130_000L, 131_300L, tol); // diff == 1300 == band
+
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("base diff ABOVE the bps band → AMOUNT_MISMATCH (expected/actual/currency as FIN-BE-017)")
+    void aboveBandRecordsAmountMismatch() {
+        FxTolerance tol = new FxTolerance(100, 0L); // band 1300 on 130000
+        ReconciliationResult result = matchUsd(130_000L, 131_301L, tol); // diff 1301 > 1300
+
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isEqualTo(1);
+        ReconciliationDiscrepancy d = result.discrepancies().get(0);
+        assertThat(d.type()).isEqualTo(DiscrepancyType.AMOUNT_MISMATCH);
+        assertThat(d.externalRef()).isEqualTo("FX1");
+        assertThat(d.journalEntryId()).isEqualTo("entry-fx");
+        assertThat(d.expectedMinor()).isEqualTo(130_000L);
+        assertThat(d.actualMinor()).isEqualTo(131_301L);
+        assertThat(d.currency()).isEqualTo(Currency.KRW);
+        assertThat(d.status()).isEqualTo(DiscrepancyStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("looser-of — small amount where the floor exceeds the bps band → floor wins (within)")
+    void floorWinsOnSmallAmount() {
+        // 100 bps of 1000 = 10 (bps band); floor = 50. A 40 diff is above the bps band
+        // but within the floor → looser (floor=50) wins → no discrepancy.
+        FxTolerance tol = new FxTolerance(100, 50L);
+        ExternalStatementLine e1 = extUsd("FX1", 100, EntryDirection.DEBIT, 1_040L);
+        List<InternalLine> internals = List.of(
+                internalUsd("entry-fx", 100, EntryDirection.DEBIT, 1_000L)); // diff 40
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, tol, AT);
+
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero(); // 40 <= max(50, 10) = 50
+    }
+
+    @Test
+    @DisplayName("looser-of — large amount where the bps band exceeds the floor → bps wins (within)")
+    void bpsWinsOnLargeAmount() {
+        // 100 bps of 1000000 = 10000 (bps band); floor = 50. A 9000 diff is within the
+        // bps band though far above the floor → looser (bps=10000) wins → no discrepancy.
+        FxTolerance tol = new FxTolerance(100, 50L);
+        ReconciliationResult result = matchUsd(1_000_000L, 1_009_000L, tol); // diff 9000 <= 10000
+
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("tolerance never fires on a KRW line regardless of band (base-leg only)")
+    void krwLineUnaffectedByTolerance() {
+        FxTolerance tol = new FxTolerance(100, 1_000L);
+        ExternalStatementLine e1 = ext("R1", 150_000, EntryDirection.DEBIT);
+        List<InternalLine> internals = List.of(
+                internal("entry-a", 150_000, EntryDirection.DEBIT));
+        ReconciliationResult result = ReconciliationMatcher.match(
+                TENANT, STATEMENT, CODE, List.of(e1), internals, tol, AT);
+
+        assertThat(result.matchedCount()).isEqualTo(1);
+        assertThat(result.discrepancyCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("tolerance never fires on a base-less foreign line regardless of band")
+    void baseLessLineUnaffectedByTolerance() {
+        FxTolerance tol = new FxTolerance(100, 1_000L);
+        ReconciliationResult result = matchUsd(130_000L, null, tol);
+
         assertThat(result.matchedCount()).isEqualTo(1);
         assertThat(result.discrepancyCount()).isZero();
     }

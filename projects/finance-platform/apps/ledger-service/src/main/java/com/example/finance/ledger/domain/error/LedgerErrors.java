@@ -201,4 +201,19 @@ public final class LedgerErrors {
             super("SETTLEMENT_AMOUNT_INVALID", message);
         }
     }
+
+    // ---- Configurable FX reconciliation tolerance (13th increment — TASK-FIN-BE-020) ----
+
+    /**
+     * A {@code PUT /reconciliation/fx-tolerance} body with a negative {@code toleranceBps}
+     * or {@code floorMinor} — both must be {@code >= 0} (architecture.md § FX
+     * reconciliation tolerance; reconciliation-api.md). 400; nothing persists. The DB
+     * CHECK ({@code ck_recon_fx_tolerance_bps} / {@code _floor}) is the structural
+     * backstop. No new error code — reuses the platform-standard {@code VALIDATION_ERROR}.
+     */
+    public static final class FxToleranceInvalidException extends LedgerDomainException {
+        public FxToleranceInvalidException(String message) {
+            super("VALIDATION_ERROR", message);
+        }
+    }
 }

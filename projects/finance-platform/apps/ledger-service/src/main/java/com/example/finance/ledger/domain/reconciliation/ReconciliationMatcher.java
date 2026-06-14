@@ -33,8 +33,18 @@ import java.util.List;
  * KRW, carrying BOTH the matched {@code externalRef} and {@code journalEntryId}).
  * <b>The transaction-leg match is still recorded</b> — the settlement is identified;
  * the discrepancy flags only the FX value gap. A KRW line, or a foreign line without
- * a declared base amount, produces no base-leg discrepancy (net-zero — exact
- * comparison; a configurable FX tolerance is forward-declared).
+ * a declared base amount, produces no base-leg discrepancy (net-zero).
+ *
+ * <p><b>(13th incr — TASK-FIN-BE-020, configurable FX tolerance) base-leg tolerance.</b>
+ * The base-leg difference is no longer compared with an exact {@code !=}; it is passed
+ * through an {@link FxTolerance} value object resolved per-tenant by the use case. A
+ * difference <b>within</b> the tolerance band matches cleanly (no discrepancy — the
+ * transaction match is STILL recorded; tolerance suppresses only the base-leg
+ * discrepancy, never the match, and never auto-posts a correction — F8). A difference
+ * <b>above</b> the band records the {@code AMOUNT_MISMATCH} exactly as FIN-BE-017.
+ * Under {@link FxTolerance#EXACT} (no configured tolerance — the dominant path) the
+ * band is 0 and the matcher is byte-identical to FIN-BE-017 (net-zero). The matcher
+ * stays pure — the tolerance is passed in; it never reads a repository.
  *
  * <p><b>F8 — no auto-close.</b> The matcher only RECORDS discrepancies (always
  * OPEN); it never posts a balancing entry, mutates a journal entry, or
@@ -55,12 +65,15 @@ public final class ReconciliationMatcher {
      * @param ledgerAccountCode the reconciled clearing account
      * @param externalLines     the ingested statement lines (mutated: matchStatus)
      * @param internalLines     the unmatched internal ledger lines on the account
+     * @param tolerance         the tenant's base-leg FX tolerance (13th incr — resolved
+     *                          by the use case; {@link FxTolerance#EXACT} = net-zero)
      * @param at                the run instant (matchedAt / detectedAt)
      */
     public static ReconciliationResult match(String tenantId, String statementId,
                                              String ledgerAccountCode,
                                              List<ExternalStatementLine> externalLines,
                                              List<InternalLine> internalLines,
+                                             FxTolerance tolerance,
                                              Instant at) {
         List<ReconciliationMatch> matches = new ArrayList<>();
         List<ReconciliationDiscrepancy> discrepancies = new ArrayList<>();
@@ -79,9 +92,14 @@ public final class ReconciliationMatcher {
                 // bank-reported KRW value differs from the internal carrying base ALSO
                 // records an AMOUNT_MISMATCH (the match is still recorded; F8 — never
                 // auto-adjusted). KRW lines / base-less lines never fire (net-zero).
+                // (13th incr) the exact compare is gated through the per-tenant
+                // FxTolerance — within the band → no discrepancy (match still recorded);
+                // above → AMOUNT_MISMATCH as FIN-BE-017. EXACT band == 0 ⇒ net-zero.
                 if (ext.currency() != LedgerReportingCurrency.BASE
                         && ext.baseAmount() != null
-                        && ext.baseAmount().minorUnits() != internal.baseMoney().minorUnits()) {
+                        && !tolerance.isWithinTolerance(
+                                internal.baseMoney().minorUnits(),
+                                ext.baseAmount().minorUnits())) {
                     discrepancies.add(ReconciliationDiscrepancy.open(null, tenantId, statementId,
                             ledgerAccountCode, DiscrepancyType.AMOUNT_MISMATCH,
                             ext.externalRef(), internal.journalEntryId(),

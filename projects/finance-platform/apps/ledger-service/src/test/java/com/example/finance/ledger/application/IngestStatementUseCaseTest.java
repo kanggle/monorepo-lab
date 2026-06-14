@@ -19,6 +19,7 @@ import com.example.finance.ledger.domain.reconciliation.ExternalStatement;
 import com.example.finance.ledger.domain.reconciliation.InternalLine;
 import com.example.finance.ledger.domain.reconciliation.ReconciliationDiscrepancy;
 import com.example.finance.ledger.domain.reconciliation.StatementSource;
+import com.example.finance.ledger.domain.reconciliation.repository.ReconciliationFxToleranceRepository;
 import com.example.finance.ledger.domain.reconciliation.repository.ReconciliationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -62,6 +63,7 @@ class IngestStatementUseCaseTest {
     @Mock LedgerEventPublisher ledgerEventPublisher;
     @Mock ClockPort clock;
     @Mock AccountingPeriodRepository accountingPeriodRepository;
+    @Mock ReconciliationFxToleranceRepository fxToleranceRepository;
 
     IngestStatementUseCase useCase;
 
@@ -69,7 +71,7 @@ class IngestStatementUseCaseTest {
     void setUp() {
         useCase = new IngestStatementUseCase(
                 reconciliationRepository, auditLogRepository, ledgerEventPublisher, clock,
-                accountingPeriodRepository);
+                accountingPeriodRepository, fxToleranceRepository);
     }
 
     /** Builds a closed AccountingPeriod covering {@code at} (from=at, to=at+1day). */
@@ -105,6 +107,7 @@ class IngestStatementUseCaseTest {
         when(reconciliationRepository.findUnmatchedInternalLines(TENANT, CODE)).thenReturn(List.of(
                 new InternalLine("entry-a", CODE, EntryDirection.DEBIT, krw(150_000), krw(150_000)),
                 new InternalLine("entry-b", CODE, EntryDirection.DEBIT, krw(99_000), krw(99_000))));
+        when(fxToleranceRepository.findByTenantId(TENANT)).thenReturn(Optional.empty()); // → EXACT
         when(reconciliationRepository.saveDiscrepancies(any())).thenAnswer(i -> i.getArgument(0));
 
         StatementView view = useCase.ingest(command(List.of(
@@ -144,6 +147,7 @@ class IngestStatementUseCaseTest {
         when(reconciliationRepository.saveStatement(any())).thenAnswer(i -> i.getArgument(0));
         when(reconciliationRepository.findUnmatchedInternalLines(TENANT, CODE)).thenReturn(List.of(
                 new InternalLine("entry-a", CODE, EntryDirection.DEBIT, krw(150_000), krw(150_000))));
+        when(fxToleranceRepository.findByTenantId(TENANT)).thenReturn(Optional.empty()); // → EXACT
         when(reconciliationRepository.saveDiscrepancies(any())).thenAnswer(i -> i.getArgument(0));
 
         StatementView view = useCase.ingest(command(List.of(
@@ -205,6 +209,7 @@ class IngestStatementUseCaseTest {
         when(clock.now()).thenReturn(NOW);
         when(reconciliationRepository.saveStatement(any())).thenAnswer(i -> i.getArgument(0));
         when(reconciliationRepository.findUnmatchedInternalLines(TENANT, CODE)).thenReturn(List.of());
+        when(fxToleranceRepository.findByTenantId(TENANT)).thenReturn(Optional.empty()); // → EXACT
         when(reconciliationRepository.saveDiscrepancies(any())).thenAnswer(i -> i.getArgument(0));
 
         StatementView view = useCase.ingest(command(List.of(

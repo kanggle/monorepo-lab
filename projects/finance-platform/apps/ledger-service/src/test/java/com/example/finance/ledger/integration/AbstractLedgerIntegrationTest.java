@@ -226,6 +226,10 @@ public abstract class AbstractLedgerIntegrationTest {
         jdbcTemplate.execute("DELETE FROM period_balance_snapshot");
         jdbcTemplate.execute("DELETE FROM accounting_period");
         jdbcTemplate.execute("DELETE FROM ledger_outbox");
+        // (13th incr — TASK-FIN-BE-020) the per-tenant FX tolerance config. A leftover
+        // row would loosen a sibling class's base-leg compare (its absence = EXACT),
+        // so it is cleaned per-test like the other transactional tables.
+        jdbcTemplate.execute("DELETE FROM reconciliation_fx_tolerance");
     }
 
     // ------------------------------------------------------------------------
