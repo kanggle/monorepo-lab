@@ -76,4 +76,17 @@ public interface AccountServicePort {
      * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
      */
     List<String> listEntitledDomains(String tenantId);
+
+    /**
+     * ADR-MONO-033 S2: roles source for JWT issuance, called by the (future)
+     * TenantClaimTokenCustomizer roles leg.
+     * GET /internal/tenants/{tid}/accounts/{aid}/roles, extracts roles[].
+     * Throws AccountServiceUnavailableException on failure — the caller fail-softs (ADR-033 S5).
+     *
+     * @param tenantId  the tenant scope
+     * @param accountId the account whose roles to resolve
+     * @return the role names assigned to the account (possibly empty)
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
+     */
+    List<String> listAccountRoles(String tenantId, String accountId);
 }

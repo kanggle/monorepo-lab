@@ -353,6 +353,49 @@ Remove a single role from the account.
 
 ---
 
+## GET /internal/tenants/{tenantId}/accounts/{accountId}/roles
+
+> **TASK-BE-368 (ADR-MONO-033 S2 / ADR-MONO-032 D5 step 2)**: read-only roles lookup for **JWT issuance**. auth-service calls this at `authorization_code`/`refresh_token` token-issue time to populate the signed `roles` claim (the unified-identity authorization axis — `jwt-standard-claims.md`). A **least-data** projection — returns only the account's role names, **NOT** the full account (no `email`/`displayName` PII pulled into the issuance hot path, unlike `GET .../accounts/{accountId}`).
+
+Return the account's role names within the tenant.
+
+**Path Parameters**:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `tenantId` | string (slug) | Target tenant. Pattern `^[a-z][a-z0-9-]{1,31}$` |
+| `accountId` | string (UUID) | Account identifier |
+
+**Response 200 OK**:
+```json
+{
+  "accountId": "01923abc-def0-7890-abcd-ef0123456789",
+  "tenantId": "wms",
+  "roles": ["WAREHOUSE_ADMIN", "INBOUND_OPERATOR"]
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `accountId` | string | Echoes the path `{accountId}` |
+| `tenantId` | string | Echoes the path `{tenantId}` |
+| `roles` | string[] | The account's role names within this tenant (possibly empty `[]`). Tenant-scoped: a foreign account (`accountId` belongs to a different tenant) resolves to `[]` — the tenant-scoped repository read returns nothing (enumeration-safe). |
+
+**Side Effect**: none (read-only — no `account_status_history` row, no outbox event).
+
+**Errors**:
+
+| Status | Condition |
+|---|---|
+| 403 `TENANT_SCOPE_DENIED` | Caller's `X-Tenant-Id` / JWT `tenant_id` does not match path `{tenantId}` (defense-in-depth, mirrors the sibling provisioning EPs) |
+| 401 `UNAUTHORIZED` | `Authorization: Bearer` IAM `client_credentials` JWT missing/invalid |
+
+> **No `404 ACCOUNT_NOT_FOUND`** — a missing or foreign account returns `200 {"roles": []}` (enumeration defense + the caller fail-softs anyway; the read-only edge does not distinguish existence beyond the role set, unlike the mutating `.../roles` EPs).
+
+**Caller constraints (auth-service — fail-SOFT)**: timeouts/retry/circuit-breaker identical to the `entitled_domains` edge. On **any** failure (4xx / 5xx / timeout / circuit-open / IO) auth-service omits the lookup result and **seeds the aud-default role** (ADR-MONO-033 S5) — issuance proceeds. This edge is **never fail-closed**: a `roles`-less or seed-only token is rejected at the gateway (positive role check), so a degraded token is *less*-privileged, never over-privileged. This is the **opposite** of the `auth-to-admin` assume-tenant assignment gate (fail-CLOSED) — that is an authorization decision at issuance; this is claim population whose authorization is deferred to the gateway. Mirrors the `entitled_domains` keystone (`account-tenant-domain-subscriptions.md`).
+
+---
+
 ## PATCH /internal/tenants/{tenantId}/accounts/{accountId}/status
 
 Change the account status. Follows `AccountStatusMachine` transition rules.

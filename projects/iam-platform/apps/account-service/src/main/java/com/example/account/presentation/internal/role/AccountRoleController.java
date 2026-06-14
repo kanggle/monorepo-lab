@@ -5,18 +5,23 @@ import com.example.account.application.command.RemoveAccountRoleCommand;
 import com.example.account.application.exception.TenantScopeDeniedException;
 import com.example.account.application.result.AccountRoleMutationResult;
 import com.example.account.application.service.AddAccountRoleUseCase;
+import com.example.account.application.service.GetAccountRolesUseCase;
 import com.example.account.application.service.RemoveAccountRoleUseCase;
 import com.example.account.presentation.dto.request.SingleRoleMutationRequest;
 import com.example.account.presentation.dto.response.AccountRoleMutationResponse;
+import com.example.account.presentation.dto.response.AccountRolesResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * TASK-BE-255: Single-role add/remove endpoints for the internal provisioning API.
@@ -41,6 +46,7 @@ public class AccountRoleController {
 
     private final AddAccountRoleUseCase addAccountRoleUseCase;
     private final RemoveAccountRoleUseCase removeAccountRoleUseCase;
+    private final GetAccountRolesUseCase getAccountRolesUseCase;
 
     /**
      * PATCH /internal/tenants/{tenantId}/accounts/{accountId}/roles:add
@@ -78,6 +84,27 @@ public class AccountRoleController {
                 tenantId, accountId, request.roleName(), request.operatorId());
         AccountRoleMutationResult result = removeAccountRoleUseCase.execute(command);
         return ResponseEntity.ok(AccountRoleMutationResponse.from(result));
+    }
+
+    /**
+     * GET /internal/tenants/{tenantId}/accounts/{accountId}/roles
+     *
+     * <p>TASK-BE-368 (ADR-MONO-033 S2 / ADR-032 step 2.1): Read-only roles lookup
+     * used by auth-service to populate the {@code roles} claim during token issuance.
+     *
+     * <p>Returns an empty list for a foreign or missing account (enumeration-safe —
+     * no 404). Net-zero: no audit row, no outbox event, no mutation.
+     */
+    @GetMapping("/roles")
+    public ResponseEntity<AccountRolesResponse> getRoles(
+            @PathVariable String tenantId,
+            @PathVariable String accountId,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String callerTenantId) {
+
+        validateTenantScope(callerTenantId, tenantId);
+
+        List<String> roles = getAccountRolesUseCase.execute(tenantId, accountId);
+        return ResponseEntity.ok(AccountRolesResponse.of(accountId, tenantId, roles));
     }
 
     /**

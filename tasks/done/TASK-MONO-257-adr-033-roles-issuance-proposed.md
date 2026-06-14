@@ -8,7 +8,9 @@ Author **ADR-MONO-033 PROPOSED → ACCEPTED** (same-session, same PR #1524, user
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: PR #1524 squash `61a3c7209` — ADR-MONO-033 PROPOSED→ACCEPTED (same-session, user-explicit *"진행"*; sibling ADR-032/MONO-254). Roles-issuance resolution model: `roles` 클레임 발급-시점 source(account_roles authoritative) + aud-scoping(role→aud convention + aud-default seed) + failure-policy(fail-soft). 3개 분리 스토어 발견(account_roles=소비자 소스·read EP 없음 / admin_operator_roles=admin-console RBAC 네임스페이스 / 도메인롤 WMS_OPERATOR류 소스 부재→D6-A incomplete) → S1-S6 결정. doc-only(apps/·contracts/ code 0). ADR-003a audit row #35(PROPOSED)+#36(ACCEPTED). § 3.3 execution roadmap UNPAUSED — 1번째 실행 = **TASK-BE-368**(account-service roles read EP + auth port, 본 PR 과 동반). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
