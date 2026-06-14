@@ -3,6 +3,7 @@ package com.example.shipping.infrastructure.event;
 import com.example.shipping.application.command.CreateShippingCommand;
 import com.example.shipping.application.port.ShippingEventPublisher;
 import com.example.shipping.application.service.ShippingCommandService;
+import com.example.shipping.domain.tenant.TenantContext;
 import com.example.shipping.infrastructure.config.FulfillmentProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,9 +54,17 @@ public class OrderConfirmedEventConsumer {
             return;
         }
 
-        shippingCommandService.createShipping(new CreateShippingCommand(orderId, userId));
+        // Bind the order's tenant from the consumed OrderConfirmed envelope (M4). A
+        // producer that predates BE-357 (null/blank tenant) resolves to the default tenant
+        // (net-zero, D8). The consumer is not an HTTP request, so the tenant is passed
+        // explicitly (CreateShippingCommand / FulfillmentAcl) rather than via TenantContext.
+        String tenantId = (event.tenantId() == null || event.tenantId().isBlank())
+                ? TenantContext.DEFAULT_TENANT_ID
+                : event.tenantId();
 
-        publishFulfillmentRequested(event.payload());
+        shippingCommandService.createShipping(new CreateShippingCommand(tenantId, orderId, userId));
+
+        publishFulfillmentRequested(tenantId, event.payload());
     }
 
     /**
@@ -64,7 +73,7 @@ public class OrderConfirmedEventConsumer {
      * (D8 standalone degradation). An unmapped SKU under {@code require-sku-mapping}
      * blocks publish for this order with an ops alert (no silent drop).
      */
-    private void publishFulfillmentRequested(OrderConfirmedEvent.OrderConfirmedPayload order) {
+    private void publishFulfillmentRequested(String tenantId, OrderConfirmedEvent.OrderConfirmedPayload order) {
         if (!fulfillmentProperties.enabled()) {
             log.debug("Fulfillment publish disabled (fulfillment.enabled=false), skipping. orderId={}",
                     order.orderId());
@@ -72,7 +81,7 @@ public class OrderConfirmedEventConsumer {
         }
 
         try {
-            FulfillmentRequestedMessage message = fulfillmentAcl.toFulfillmentRequested(order);
+            FulfillmentRequestedMessage message = fulfillmentAcl.toFulfillmentRequested(tenantId, order);
             shippingEventPublisher.publishFulfillmentRequested(
                     order.orderId(), objectMapper.writeValueAsString(message));
             log.info("Fulfillment requested published: orderId={}, lines={}",

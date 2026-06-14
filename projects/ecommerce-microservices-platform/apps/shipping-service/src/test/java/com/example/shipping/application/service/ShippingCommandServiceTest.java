@@ -53,7 +53,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.existsByOrderId("order-1")).willReturn(false);
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
-        shippingCommandService.createShipping(new CreateShippingCommand("order-1", "user-1"));
+        shippingCommandService.createShipping(new CreateShippingCommand("tenant-a", "order-1", "user-1"));
 
         verify(shippingRepository).save(any(Shipping.class));
     }
@@ -63,7 +63,7 @@ class ShippingCommandServiceTest {
     void createShipping_duplicateOrderId_skips() {
         given(shippingRepository.existsByOrderId("order-1")).willReturn(true);
 
-        shippingCommandService.createShipping(new CreateShippingCommand("order-1", "user-1"));
+        shippingCommandService.createShipping(new CreateShippingCommand("tenant-a", "order-1", "user-1"));
 
         verify(shippingRepository, never()).save(any());
     }
@@ -71,8 +71,8 @@ class ShippingCommandServiceTest {
     @Test
     @DisplayName("배송 상태 업데이트 성공 및 이벤트 발행")
     void updateStatus_validTransition_updatesAndPublishesEvent() {
-        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
-        given(shippingRepository.findById(shipping.getShippingId())).willReturn(Optional.of(shipping));
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
+        given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
@@ -82,7 +82,7 @@ class ShippingCommandServiceTest {
 
         assertThat(result.status()).isEqualTo(ShippingStatus.SHIPPED);
         verify(shippingEventPublisher).publishShippingStatusChanged(
-                eq(shipping.getShippingId()), eq("order-1"), eq("user-1"),
+                eq("tenant-a"), eq(shipping.getShippingId()), eq("order-1"), eq("user-1"),
                 eq(ShippingStatus.PREPARING), eq(ShippingStatus.SHIPPED),
                 eq("TRK-001"), eq("CJ대한통운"));
     }
@@ -90,7 +90,7 @@ class ShippingCommandServiceTest {
     @Test
     @DisplayName("존재하지 않는 배송 ID로 상태 업데이트 시 예외")
     void updateStatus_shippingNotFound_throws() {
-        given(shippingRepository.findById("nonexistent")).willReturn(Optional.empty());
+        given(shippingRepository.findByIdForTenant("nonexistent")).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
                 new UpdateShippingStatusCommand("nonexistent", ShippingStatus.SHIPPED, "TRK", "CJ", "ADMIN")))
@@ -100,8 +100,8 @@ class ShippingCommandServiceTest {
     @Test
     @DisplayName("잘못된 전이 시도 시 예외")
     void updateStatus_invalidTransition_throws() {
-        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
-        given(shippingRepository.findById(shipping.getShippingId())).willReturn(Optional.of(shipping));
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
+        given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
 
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
                 new UpdateShippingStatusCommand(shipping.getShippingId(), ShippingStatus.DELIVERED, null, null, "ADMIN")))
@@ -119,7 +119,7 @@ class ShippingCommandServiceTest {
     @Test
     @DisplayName("markShippedByOrderId: orderNo로 조회해 PREPARING -> SHIPPED 전이 + 이벤트 발행")
     void markShippedByOrderId_preparing_transitionsToShipped() {
-        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
         given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
@@ -129,7 +129,7 @@ class ShippingCommandServiceTest {
         assertThat(shipping.getTrackingNumber()).isEqualTo("SHP-001");
         assertThat(shipping.getCarrier()).isEqualTo("CJ-LOGISTICS");
         verify(shippingEventPublisher).publishShippingStatusChanged(
-                eq(shipping.getShippingId()), eq("order-1"), eq("user-1"),
+                eq("tenant-a"), eq(shipping.getShippingId()), eq("order-1"), eq("user-1"),
                 eq(ShippingStatus.PREPARING), eq(ShippingStatus.SHIPPED),
                 eq("SHP-001"), eq("CJ-LOGISTICS"));
     }
@@ -137,7 +137,7 @@ class ShippingCommandServiceTest {
     @Test
     @DisplayName("markShippedByOrderId: 이미 SHIPPED면 멱등 처리 (no-op)")
     void markShippedByOrderId_alreadyShipped_idempotent() {
-        Shipping shipping = Shipping.create("order-1", "user-1", fixedClock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
         shipping.transitionTo(ShippingStatus.SHIPPED, "OLD-TRK", "OLD-CARRIER", fixedClock);
         given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
 
@@ -146,7 +146,7 @@ class ShippingCommandServiceTest {
         assertThat(shipping.getTrackingNumber()).isEqualTo("OLD-TRK");
         verify(shippingRepository, never()).save(any());
         verify(shippingEventPublisher, never()).publishShippingStatusChanged(
-                any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

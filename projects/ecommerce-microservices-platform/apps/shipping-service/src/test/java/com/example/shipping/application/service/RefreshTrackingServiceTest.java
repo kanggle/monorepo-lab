@@ -52,7 +52,7 @@ class RefreshTrackingServiceTest {
 
     /** A SHIPPED shipment with tracking + carrier set (the realistic refresh subject). */
     private Shipping shipped() {
-        Shipping s = Shipping.create("order-1", "user-1", clock);
+        Shipping s = Shipping.create("tenant-a", "order-1", "user-1", clock);
         s.transitionTo(ShippingStatus.SHIPPED, "TRK-1", "CJ", clock);
         return s;
     }
@@ -61,7 +61,7 @@ class RefreshTrackingServiceTest {
     void advancesForwardToCarrierStatus_andPublishesNetChange() {
         Shipping shipping = shipped();
         String id = shipping.getShippingId();
-        when(shippingRepository.findById(id)).thenReturn(Optional.of(shipping));
+        when(shippingRepository.findByIdForTenant(id)).thenReturn(Optional.of(shipping));
         when(carrierTrackingPort.fetchLatest("CJ", "TRK-1"))
                 .thenReturn(Optional.of(new CarrierTrackingSnapshot("DELIVERED")));
         when(shippingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -75,7 +75,7 @@ class RefreshTrackingServiceTest {
                 .containsSubsequence(ShippingStatus.SHIPPED, ShippingStatus.IN_TRANSIT, ShippingStatus.DELIVERED);
         verify(shippingRepository).save(shipping);
         verify(shippingEventPublisher).publishShippingStatusChanged(
-                eq(id), eq("order-1"), eq("user-1"),
+                eq("tenant-a"), eq(id), eq("order-1"), eq("user-1"),
                 eq(ShippingStatus.SHIPPED), eq(ShippingStatus.DELIVERED), eq("TRK-1"), eq("CJ"));
     }
 
@@ -83,7 +83,7 @@ class RefreshTrackingServiceTest {
     void carrierUnavailable_isNoOp() {
         Shipping shipping = shipped();
         String id = shipping.getShippingId();
-        when(shippingRepository.findById(id)).thenReturn(Optional.of(shipping));
+        when(shippingRepository.findByIdForTenant(id)).thenReturn(Optional.of(shipping));
         when(carrierTrackingPort.fetchLatest("CJ", "TRK-1")).thenReturn(Optional.empty());
 
         UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
@@ -92,7 +92,7 @@ class RefreshTrackingServiceTest {
         assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
         verify(shippingRepository, never()).save(any());
         verify(shippingEventPublisher, never())
-                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any());
+                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any(), any());
         // a blank/absent carrier signal carries no info → not counted as unmapped (net-zero)
         assertThat(meterRegistry.find("carrier_status_unmapped").counter()).isNull();
     }
@@ -101,7 +101,7 @@ class RefreshTrackingServiceTest {
     void unmappedAggregatorStatus_isNoOp_andCountsUnmapped() {
         Shipping shipping = shipped();
         String id = shipping.getShippingId();
-        when(shippingRepository.findById(id)).thenReturn(Optional.of(shipping));
+        when(shippingRepository.findByIdForTenant(id)).thenReturn(Optional.of(shipping));
         when(carrierTrackingPort.fetchLatest("CJ", "TRK-1"))
                 .thenReturn(Optional.of(new CarrierTrackingSnapshot("통관보류"))); // unmapped aggregator code
 
@@ -111,7 +111,7 @@ class RefreshTrackingServiceTest {
         assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
         verify(shippingRepository, never()).save(any());
         verify(shippingEventPublisher, never())
-                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any());
+                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any(), any());
         assertThat(meterRegistry.get("carrier_status_unmapped")
                 .tags("source", "refresh", "raw_status", "통관보류").counter().count())
                 .isEqualTo(1.0);
@@ -121,7 +121,7 @@ class RefreshTrackingServiceTest {
     void mappedAggregatorToken_advancesForward() {
         Shipping shipping = shipped(); // SHIPPED
         String id = shipping.getShippingId();
-        when(shippingRepository.findById(id)).thenReturn(Optional.of(shipping));
+        when(shippingRepository.findByIdForTenant(id)).thenReturn(Optional.of(shipping));
         when(carrierTrackingPort.fetchLatest("CJ", "TRK-1"))
                 .thenReturn(Optional.of(new CarrierTrackingSnapshot("배송중"))); // aggregator Korean unified code
         when(shippingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -136,7 +136,7 @@ class RefreshTrackingServiceTest {
     void carrierStatusNotAhead_isNoOp() {
         Shipping shipping = shipped(); // current SHIPPED
         String id = shipping.getShippingId();
-        when(shippingRepository.findById(id)).thenReturn(Optional.of(shipping));
+        when(shippingRepository.findByIdForTenant(id)).thenReturn(Optional.of(shipping));
         when(carrierTrackingPort.fetchLatest("CJ", "TRK-1"))
                 .thenReturn(Optional.of(new CarrierTrackingSnapshot("SHIPPED"))); // == current
 
@@ -145,14 +145,14 @@ class RefreshTrackingServiceTest {
         assertThat(result.status()).isEqualTo(ShippingStatus.SHIPPED);
         verify(shippingRepository, never()).save(any());
         verify(shippingEventPublisher, never())
-                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any());
+                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void noTrackingYet_isNoOp_andCarrierNotCalled() {
-        Shipping preparing = Shipping.create("order-2", "user-2", clock); // PREPARING, no tracking
+        Shipping preparing = Shipping.create("tenant-a", "order-2", "user-2", clock); // PREPARING, no tracking
         String id = preparing.getShippingId();
-        when(shippingRepository.findById(id)).thenReturn(Optional.of(preparing));
+        when(shippingRepository.findByIdForTenant(id)).thenReturn(Optional.of(preparing));
 
         UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
 
@@ -165,6 +165,6 @@ class RefreshTrackingServiceTest {
     void nonAdmin_isRejected() {
         assertThatThrownBy(() -> service.refreshFromCarrier("any-id", "USER"))
                 .isInstanceOf(AccessDeniedException.class);
-        verify(shippingRepository, never()).findById(any());
+        verify(shippingRepository, never()).findByIdForTenant(any());
     }
 }

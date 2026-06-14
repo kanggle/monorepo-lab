@@ -45,7 +45,8 @@ public class RefreshTrackingService {
         if (!"ADMIN".equalsIgnoreCase(userRole)) {
             throw new AccessDeniedException("Admin role required");
         }
-        Shipping shipping = shippingRepository.findById(shippingId)
+        // Tenant-scoped lookup (admin mutation): a cross-tenant shippingId → 404 (M3).
+        Shipping shipping = shippingRepository.findByIdForTenant(shippingId)
                 .orElseThrow(() -> new ShippingNotFoundException(shippingId));
 
         String trackingNumber = shipping.getTrackingNumber();

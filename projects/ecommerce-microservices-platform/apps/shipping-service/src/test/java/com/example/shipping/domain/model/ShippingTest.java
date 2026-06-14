@@ -19,7 +19,7 @@ class ShippingTest {
     @Test
     @DisplayName("배송을 생성하면 PREPARING 상태이고 상태 히스토리에 기록된다")
     void create_validInput_preparingStatus() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
 
         assertThat(shipping.getShippingId()).isNotBlank();
         assertThat(shipping.getOrderId()).isEqualTo("order-1");
@@ -29,26 +29,35 @@ class ShippingTest {
         assertThat(shipping.getStatusHistory().get(0).status()).isEqualTo(ShippingStatus.PREPARING);
         assertThat(shipping.getCreatedAt()).isNotNull();
         assertThat(shipping.getUpdatedAt()).isNotNull();
+        assertThat(shipping.getTenantId()).isEqualTo("tenant-a");
+    }
+
+    @Test
+    @DisplayName("tenantId가 blank/null이면 기본 테넌트(ecommerce)로 stamp된다 (net-zero, D8)")
+    void create_blankTenant_defaultsToEcommerce() {
+        Shipping shipping = Shipping.create(" ", "order-1", "user-1", clock);
+
+        assertThat(shipping.getTenantId()).isEqualTo("ecommerce");
     }
 
     @Test
     @DisplayName("orderId가 null이면 생성 실패")
     void create_nullOrderId_throws() {
-        assertThatThrownBy(() -> Shipping.create(null, "user-1", clock))
+        assertThatThrownBy(() -> Shipping.create("tenant-a", null, "user-1", clock))
                 .isInstanceOf(InvalidShippingException.class);
     }
 
     @Test
     @DisplayName("userId가 blank이면 생성 실패")
     void create_blankUserId_throws() {
-        assertThatThrownBy(() -> Shipping.create("order-1", " ", clock))
+        assertThatThrownBy(() -> Shipping.create("tenant-a", "order-1", " ", clock))
                 .isInstanceOf(InvalidShippingException.class);
     }
 
     @Test
     @DisplayName("PREPARING -> SHIPPED 전이 성공 (trackingNumber, carrier 필수)")
     void transition_preparingToShipped_success() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
 
         ShippingStatus previous = shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", clock);
 
@@ -62,7 +71,7 @@ class ShippingTest {
     @Test
     @DisplayName("SHIPPED 전이 시 trackingNumber가 없으면 실패")
     void transition_toShipped_noTrackingNumber_throws() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
 
         assertThatThrownBy(() -> shipping.transitionTo(ShippingStatus.SHIPPED, null, "CJ대한통운", clock))
                 .isInstanceOf(InvalidShippingException.class)
@@ -72,7 +81,7 @@ class ShippingTest {
     @Test
     @DisplayName("SHIPPED 전이 시 carrier가 없으면 실패")
     void transition_toShipped_noCarrier_throws() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
 
         assertThatThrownBy(() -> shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "", clock))
                 .isInstanceOf(InvalidShippingException.class)
@@ -82,7 +91,7 @@ class ShippingTest {
     @Test
     @DisplayName("SHIPPED -> IN_TRANSIT 전이 성공")
     void transition_shippedToInTransit_success() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
         shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", clock);
 
         ShippingStatus previous = shipping.transitionTo(ShippingStatus.IN_TRANSIT, null, null, clock);
@@ -95,7 +104,7 @@ class ShippingTest {
     @Test
     @DisplayName("IN_TRANSIT -> DELIVERED 전이 성공")
     void transition_inTransitToDelivered_success() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
         shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", clock);
         shipping.transitionTo(ShippingStatus.IN_TRANSIT, null, null, clock);
 
@@ -109,7 +118,7 @@ class ShippingTest {
     @Test
     @DisplayName("역방향 전이 불가: SHIPPED -> PREPARING")
     void transition_shippedToPreparing_throws() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
         shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", clock);
 
         assertThatThrownBy(() -> shipping.transitionTo(ShippingStatus.PREPARING, null, null, clock))
@@ -119,7 +128,7 @@ class ShippingTest {
     @Test
     @DisplayName("건너뛰기 전이 불가: PREPARING -> IN_TRANSIT")
     void transition_preparingToInTransit_throws() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
 
         assertThatThrownBy(() -> shipping.transitionTo(ShippingStatus.IN_TRANSIT, null, null, clock))
                 .isInstanceOf(InvalidStatusTransitionException.class);
@@ -128,7 +137,7 @@ class ShippingTest {
     @Test
     @DisplayName("건너뛰기 전이 불가: PREPARING -> DELIVERED")
     void transition_preparingToDelivered_throws() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
 
         assertThatThrownBy(() -> shipping.transitionTo(ShippingStatus.DELIVERED, null, null, clock))
                 .isInstanceOf(InvalidStatusTransitionException.class);
@@ -137,7 +146,7 @@ class ShippingTest {
     @Test
     @DisplayName("DELIVERED 상태에서 어떤 전이도 불가")
     void transition_delivered_noTransition() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
         shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", clock);
         shipping.transitionTo(ShippingStatus.IN_TRANSIT, null, null, clock);
         shipping.transitionTo(ShippingStatus.DELIVERED, null, null, clock);
@@ -149,7 +158,7 @@ class ShippingTest {
     @Test
     @DisplayName("statusHistory는 불변 리스트")
     void getStatusHistory_returnsUnmodifiableList() {
-        Shipping shipping = Shipping.create("order-1", "user-1", clock);
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
 
         assertThatThrownBy(() -> shipping.getStatusHistory().add(
                 new StatusHistoryEntry(ShippingStatus.SHIPPED, Instant.now())))

@@ -33,7 +33,7 @@ public class ShippingCommandService {
             return;
         }
 
-        Shipping shipping = Shipping.create(command.orderId(), command.userId(), clock);
+        Shipping shipping = Shipping.create(command.tenantId(), command.orderId(), command.userId(), clock);
         shippingRepository.save(shipping);
         log.info("Shipping created: shippingId={}, orderId={}", shipping.getShippingId(), command.orderId());
     }
@@ -66,7 +66,7 @@ public class ShippingCommandService {
         Shipping saved = shippingRepository.save(shipping);
 
         shippingEventPublisher.publishShippingStatusChanged(
-                saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
+                saved.getTenantId(), saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
                 previousStatus, saved.getStatus(),
                 saved.getTrackingNumber(), saved.getCarrier());
 
@@ -77,7 +77,8 @@ public class ShippingCommandService {
     @Transactional
     public UpdateShippingStatusResult updateStatus(UpdateShippingStatusCommand command) {
         validateAdminRole(command.userRole());
-        Shipping shipping = shippingRepository.findById(command.shippingId())
+        // Tenant-scoped lookup (admin mutation): a cross-tenant shippingId → 404 (M3).
+        Shipping shipping = shippingRepository.findByIdForTenant(command.shippingId())
                 .orElseThrow(() -> new ShippingNotFoundException(command.shippingId()));
 
         ShippingStatus previousStatus = shipping.transitionTo(
@@ -86,7 +87,7 @@ public class ShippingCommandService {
         Shipping saved = shippingRepository.save(shipping);
 
         shippingEventPublisher.publishShippingStatusChanged(
-                saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
+                saved.getTenantId(), saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
                 previousStatus, saved.getStatus(),
                 saved.getTrackingNumber(), saved.getCarrier());
 

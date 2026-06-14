@@ -20,6 +20,9 @@ public class ShippingJpaEntity {
     @Column(name = "shipping_id", nullable = false)
     private String shippingId;
 
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "order_id", nullable = false, unique = true)
     private String orderId;
 
@@ -46,11 +49,12 @@ public class ShippingJpaEntity {
     @OrderBy("changedAt ASC")
     private List<StatusHistoryJpaEntity> statusHistory = new ArrayList<>();
 
-    static ShippingJpaEntity create(String shippingId, String orderId, String userId,
+    static ShippingJpaEntity create(String shippingId, String tenantId, String orderId, String userId,
                                      ShippingStatus status, String trackingNumber, String carrier,
                                      Instant createdAt, Instant updatedAt) {
         ShippingJpaEntity entity = new ShippingJpaEntity();
         entity.shippingId = shippingId;
+        entity.tenantId = tenantId;
         entity.orderId = orderId;
         entity.userId = userId;
         entity.status = status;

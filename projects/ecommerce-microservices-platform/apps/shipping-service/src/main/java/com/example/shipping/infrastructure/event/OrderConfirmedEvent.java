@@ -18,6 +18,7 @@ public record OrderConfirmedEvent(
         @JsonProperty("event_type") String eventType,
         @JsonProperty("occurred_at") String occurredAt,
         String source,
+        @JsonProperty("tenant_id") String tenantId,
         OrderConfirmedPayload payload
 ) {
     public record OrderConfirmedPayload(

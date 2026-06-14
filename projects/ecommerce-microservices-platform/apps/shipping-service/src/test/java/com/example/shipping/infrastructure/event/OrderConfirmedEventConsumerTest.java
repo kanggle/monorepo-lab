@@ -55,7 +55,7 @@ class OrderConfirmedEventConsumerTest {
 
     private OrderConfirmedEvent event(String eventId, String orderId, String userId) {
         return new OrderConfirmedEvent(
-                eventId, "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service",
+                eventId, "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service", "tenant-a",
                 new OrderConfirmedEvent.OrderConfirmedPayload(
                         orderId, userId, "2026-06-08T10:00:00Z",
                         List.of(new OrderConfirmedEvent.Line("v1", "p1", "v1", 2)),
@@ -66,7 +66,7 @@ class OrderConfirmedEventConsumerTest {
     private FulfillmentRequestedMessage fulfillmentMessage(String orderId) {
         return new FulfillmentRequestedMessage(
                 "evt-fulfill", "ecommerce.fulfillment.requested", "2026-06-08T10:00:00Z",
-                "fulfillment", orderId,
+                "fulfillment", orderId, "tenant-a",
                 new FulfillmentRequestedMessage.Payload(
                         orderId, "ECOMMERCE-STORE", "WH-MAIN", null, null,
                         List.of(new FulfillmentRequestedMessage.Line(1, "v1", null, 2)))
@@ -79,12 +79,12 @@ class OrderConfirmedEventConsumerTest {
         OrderConfirmedEvent event = event("evt-1", "order-1", "user-1");
         given(eventDeduplicationChecker.isDuplicate("evt-1", "OrderConfirmed")).willReturn(false);
         given(fulfillmentProperties.enabled()).willReturn(true);
-        given(fulfillmentAcl.toFulfillmentRequested(any())).willReturn(fulfillmentMessage("order-1"));
+        given(fulfillmentAcl.toFulfillmentRequested(any(), any())).willReturn(fulfillmentMessage("order-1"));
         given(objectMapper.writeValueAsString(any())).willReturn("{\"json\":true}");
 
         consumer.handle(event);
 
-        verify(shippingCommandService).createShipping(new CreateShippingCommand("order-1", "user-1"));
+        verify(shippingCommandService).createShipping(new CreateShippingCommand("tenant-a", "order-1", "user-1"));
         verify(shippingEventPublisher).publishFulfillmentRequested(eq("order-1"), eq("{\"json\":true}"));
     }
 
@@ -97,7 +97,7 @@ class OrderConfirmedEventConsumerTest {
 
         consumer.handle(event);
 
-        verify(shippingCommandService).createShipping(new CreateShippingCommand("order-1", "user-1"));
+        verify(shippingCommandService).createShipping(new CreateShippingCommand("tenant-a", "order-1", "user-1"));
         verify(shippingEventPublisher, never()).publishFulfillmentRequested(any(), any());
     }
 
@@ -107,12 +107,12 @@ class OrderConfirmedEventConsumerTest {
         OrderConfirmedEvent event = event("evt-unmapped", "order-1", "user-1");
         given(eventDeduplicationChecker.isDuplicate("evt-unmapped", "OrderConfirmed")).willReturn(false);
         given(fulfillmentProperties.enabled()).willReturn(true);
-        given(fulfillmentAcl.toFulfillmentRequested(any()))
+        given(fulfillmentAcl.toFulfillmentRequested(any(), any()))
                 .willThrow(new UnmappedSkuException("no mapping for v1"));
 
         consumer.handle(event);
 
-        verify(shippingCommandService).createShipping(new CreateShippingCommand("order-1", "user-1"));
+        verify(shippingCommandService).createShipping(new CreateShippingCommand("tenant-a", "order-1", "user-1"));
         verify(shippingEventPublisher, never()).publishFulfillmentRequested(any(), any());
     }
 
@@ -132,7 +132,7 @@ class OrderConfirmedEventConsumerTest {
     @DisplayName("payload가 null이면 무시된다")
     void handle_nullPayload_skips() {
         OrderConfirmedEvent event = new OrderConfirmedEvent(
-                "evt-2", "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service", null);
+                "evt-2", "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service", "tenant-a", null);
         given(eventDeduplicationChecker.isDuplicate("evt-2", "OrderConfirmed")).willReturn(false);
 
         consumer.handle(event);
@@ -166,8 +166,9 @@ class OrderConfirmedEventConsumerTest {
     @DisplayName("enriched payload 없이도(빈 lines) 무리없이 처리된다 — Map.of 직렬화 라운드트립")
     void handle_minimalPayload_stillProcesses() {
         // Ensures the consumer tolerates a producer that hasn't enriched lines/address.
+        // No envelope tenant_id (pre-BE-357 producer) → defaults to ecommerce (net-zero, D8).
         OrderConfirmedEvent event = new OrderConfirmedEvent(
-                "evt-min", "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service",
+                "evt-min", "OrderConfirmed", "2026-06-08T10:00:00Z", "order-service", null,
                 new OrderConfirmedEvent.OrderConfirmedPayload(
                         "order-min", "user-min", "2026-06-08T10:00:00Z", null, null));
         given(eventDeduplicationChecker.isDuplicate("evt-min", "OrderConfirmed")).willReturn(false);
@@ -175,7 +176,7 @@ class OrderConfirmedEventConsumerTest {
 
         consumer.handle(event);
 
-        verify(shippingCommandService).createShipping(new CreateShippingCommand("order-min", "user-min"));
+        verify(shippingCommandService).createShipping(new CreateShippingCommand("ecommerce", "order-min", "user-min"));
     }
 
     @Test

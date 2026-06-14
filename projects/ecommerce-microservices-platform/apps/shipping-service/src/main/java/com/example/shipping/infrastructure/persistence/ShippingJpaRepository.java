@@ -17,6 +17,21 @@ public interface ShippingJpaRepository extends JpaRepository<ShippingJpaEntity, 
 
     boolean existsByOrderId(String orderId);
 
+    /**
+     * Tenant-scoped single-row lookup backing the admin/operator mutations
+     * (updateStatus / refreshFromCarrier — M3). A cross-tenant {@code shippingId}
+     * resolves to empty so the caller 404s (existence hidden, M3 cross-tenant-read-is-
+     * not-found). NOT used by the system/consumer/webhook paths, which use the
+     * tenant-agnostic {@link #findById(Object)} on a globally-unique key.
+     */
+    Optional<ShippingJpaEntity> findByShippingIdAndTenantId(String shippingId, String tenantId);
+
+    /** Tenant-scoped admin list (no status filter) — backs {@code findAll}. */
+    Page<ShippingJpaEntity> findByTenantId(String tenantId, Pageable pageable);
+
+    /** Tenant-scoped admin list filtered by status — backs {@code findByStatus}. */
+    Page<ShippingJpaEntity> findByTenantIdAndStatus(String tenantId, ShippingStatus status, Pageable pageable);
+
     Page<ShippingJpaEntity> findByStatus(ShippingStatus status, Pageable pageable);
 
     /**

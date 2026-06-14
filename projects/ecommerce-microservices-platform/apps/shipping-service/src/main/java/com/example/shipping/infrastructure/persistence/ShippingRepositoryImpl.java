@@ -6,6 +6,7 @@ import com.example.shipping.domain.model.Shipping;
 import com.example.shipping.domain.model.ShippingStatus;
 import com.example.shipping.domain.model.StatusHistoryEntry;
 import com.example.shipping.domain.repository.ShippingRepository;
+import com.example.shipping.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -50,30 +51,47 @@ public class ShippingRepositoryImpl implements ShippingRepository {
 
     @Override
     public Optional<Shipping> findById(String shippingId) {
+        // Tenant-AGNOSTIC (system carrier-webhook path): globally-unique shippingId, no
+        // request tenant context; the located row keeps its own tenant (M3 system-path).
         return jpaRepository.findById(shippingId).map(mapper::toDomain);
     }
 
     @Override
+    public Optional<Shipping> findByIdForTenant(String shippingId) {
+        // Tenant-SCOPED (admin/operator mutation lookup): a cross-tenant id → empty → 404
+        // (existence hidden, M3 cross-tenant-read-is-not-found).
+        return jpaRepository.findByShippingIdAndTenantId(shippingId, TenantContext.currentTenant())
+                .map(mapper::toDomain);
+    }
+
+    @Override
     public Optional<Shipping> findByOrderId(String orderId) {
+        // Tenant-AGNOSTIC (consumer read + wms-confirm return leg): globally-unique
+        // orderId, system flows; the located row keeps its own tenant (M3 system-path).
         return jpaRepository.findByOrderId(orderId).map(mapper::toDomain);
     }
 
     @Override
     public boolean existsByOrderId(String orderId) {
+        // Tenant-AGNOSTIC (createShipping idempotency dedup): must see a pre-existing row
+        // in ANY tenant so a re-delivered OrderConfirmed cannot duplicate (M3 system-path).
         return jpaRepository.existsByOrderId(orderId);
     }
 
     @Override
     public PageResult<Shipping> findAll(PageQuery pageQuery) {
+        // Tenant-SCOPED admin list (current request tenant).
         PageRequest pageable = toPageRequest(pageQuery);
-        Page<ShippingJpaEntity> page = jpaRepository.findAll(pageable);
+        Page<ShippingJpaEntity> page = jpaRepository.findByTenantId(TenantContext.currentTenant(), pageable);
         return toPageResult(page);
     }
 
     @Override
     public PageResult<Shipping> findByStatus(ShippingStatus status, PageQuery pageQuery) {
+        // Tenant-SCOPED admin list filtered by status (current request tenant).
         PageRequest pageable = toPageRequest(pageQuery);
-        Page<ShippingJpaEntity> page = jpaRepository.findByStatus(status, pageable);
+        Page<ShippingJpaEntity> page =
+                jpaRepository.findByTenantIdAndStatus(TenantContext.currentTenant(), status, pageable);
         return toPageResult(page);
     }
 

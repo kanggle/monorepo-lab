@@ -48,7 +48,7 @@ class ProcessCarrierWebhookServiceTest {
     }
 
     private Shipping shipped() {
-        Shipping s = Shipping.create("order-1", "user-1", clock);
+        Shipping s = Shipping.create("tenant-a", "order-1", "user-1", clock);
         s.transitionTo(ShippingStatus.SHIPPED, "TRK-1", "CJ", clock);
         return s;
     }
@@ -72,7 +72,7 @@ class ProcessCarrierWebhookServiceTest {
         assertThat(shipping.getStatusHistory()).extracting(StatusHistoryEntry::status)
                 .containsSubsequence(ShippingStatus.SHIPPED, ShippingStatus.IN_TRANSIT, ShippingStatus.DELIVERED);
         verify(shippingEventPublisher).publishShippingStatusChanged(
-                eq(id), eq("order-1"), eq("user-1"),
+                eq("tenant-a"), eq(id), eq("order-1"), eq("user-1"),
                 eq(ShippingStatus.SHIPPED), eq(ShippingStatus.DELIVERED), eq("TRK-1"), eq("CJ"));
     }
 
@@ -86,7 +86,7 @@ class ProcessCarrierWebhookServiceTest {
         verify(shippingRepository, never()).findById(any());
         verify(shippingRepository, never()).save(any());
         verify(shippingEventPublisher, never())
-                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any());
+                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -133,7 +133,7 @@ class ProcessCarrierWebhookServiceTest {
 
     @Test
     void shipmentWithoutTrackingYet_isNoOp() {
-        Shipping preparing = Shipping.create("order-2", "user-2", clock); // PREPARING, no tracking
+        Shipping preparing = Shipping.create("tenant-a", "order-2", "user-2", clock); // PREPARING, no tracking
         String id = preparing.getShippingId();
         when(webhookDeliveryStore.registerIfFirst("delivery-1")).thenReturn(true);
         when(shippingRepository.findById(id)).thenReturn(Optional.of(preparing));
@@ -157,6 +157,6 @@ class ProcessCarrierWebhookServiceTest {
         assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
         verify(shippingRepository, never()).save(any());
         verify(shippingEventPublisher, never())
-                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any());
+                .publishShippingStatusChanged(any(), any(), any(), any(), any(), any(), any(), any());
     }
 }
