@@ -98,12 +98,17 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
 
     /**
      * TASK-BE-369 (ADR-MONO-033 S4 base + S3 / ADR-MONO-032 D5 step 2): the signed
-     * {@code roles} claim. Emitted ONLY on account-bearing grants
+     * {@code roles} claim. Emitted on account-bearing grants
      * ({@code authorization_code} / {@code refresh_token}) — sourced from the stored
      * {@code account_roles} if present, else the aud-default seed
      * ({@link RoleSeedPolicy}). Omitted for {@code client_credentials} (a workload is
-     * not an identity — recursion guard) and not (yet) added on assume-tenant
-     * (TASK-BE-370). Net-positive: the {@code account_type} leg stays unchanged.
+     * not an identity — recursion guard). Net-positive: the {@code account_type} leg
+     * stays unchanged.
+     *
+     * <p>TASK-BE-370 (ADR-MONO-033 S4 assume-tenant — completes ADR-MONO-032 D5 step 2):
+     * also emitted on the {@code token_exchange} (assume-tenant) path, where it is
+     * PRESERVED verbatim from the operator's validated subject token (no re-resolve /
+     * no seed / no union — see {@link #customizeForAssumeTenant}).
      */
     private static final String CLAIM_ROLES = "roles";
 
@@ -293,11 +298,13 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         String selectedTenantType = null;
         String operatorAccountType = null;
         java.util.List<String> orgScope = null;
+        java.util.List<String> operatorRoles = null;
         if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
             selectedTenantId = grant.getSelectedTenantId();
             selectedTenantType = grant.getSelectedTenantType();
             operatorAccountType = grant.getOperatorAccountType();
             orgScope = grant.getOrgScope();
+            operatorRoles = grant.getOperatorRoles();
         }
 
         if (selectedTenantId == null || selectedTenantId.isBlank()
@@ -337,6 +344,22 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         context.getClaims().claim(CLAIM_ORG_SCOPE, effectiveOrgScope);
         log.debug("TenantClaimTokenCustomizer: assume-tenant — injected org_scope={} "
                 + "(membership-derived; null/empty → [*] net-zero)", effectiveOrgScope);
+
+        // TASK-BE-370 (ADR-MONO-033 S4 assume-tenant): PRESERVE the operator's roles
+        // (their identity-level role set), carried on the grant from the operator's
+        // validated subject token (AssumeTenantAuthenticationProvider). The operator
+        // is one identity; their roles travel with them onto the assumed token,
+        // VERBATIM — no re-resolve, no seed (the assume-tenant path has no clean
+        // platform to seed against; the selected tenant is a customer slug), no union
+        // across other assignments (least-privilege). NET-ZERO: null/empty → omit the
+        // claim (the gateway then 403s where it role-gates — correct). Only ADD the
+        // roles claim; the tenant_id/tenant_type/account_type/org_scope/entitled_domains
+        // injection above is untouched (BE-329/BE-338).
+        if (operatorRoles != null && !operatorRoles.isEmpty()) {
+            context.getClaims().claim(CLAIM_ROLES, operatorRoles);
+            log.debug("TenantClaimTokenCustomizer: assume-tenant — preserved operator roles={} "
+                    + "from the validated subject token (verbatim)", operatorRoles);
+        }
 
         // D3: SELECTED tenant's ACTIVE subscriptions ONLY (no union). Reused verbatim.
         populateEntitledDomains(context, selectedTenantId);

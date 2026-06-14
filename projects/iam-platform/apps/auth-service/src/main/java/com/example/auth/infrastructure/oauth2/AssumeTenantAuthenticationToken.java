@@ -27,6 +27,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
     private final String selectedTenantType;
     private final String operatorAccountType;
     private final List<String> orgScope;
+    private final List<String> operatorRoles;
 
     /**
      * Converter-side constructor — the selected tenant_type is not yet known at
@@ -85,6 +86,30 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
                                            String selectedTenantType,
                                            String operatorAccountType,
                                            List<String> orgScope) {
+        this(clientPrincipal, subjectToken, subjectTokenType, selectedTenantId,
+                selectedTenantType, operatorAccountType, orgScope, null);
+    }
+
+    /**
+     * Provider-side constructor (TASK-BE-370, ADR-MONO-033 S4 assume-tenant) —
+     * additionally carries the operator's {@code roles} (their identity-level role
+     * set), read from the validated subject token (the operator's base GAP OIDC
+     * token, which carries {@code roles} after TASK-BE-369). The operator is one
+     * identity; their roles travel with them onto the assumed token, PRESERVED
+     * verbatim (no re-resolve, no union — ADR-MONO-033 S4 "selected tenant only").
+     * Rides the same {@code getAuthorizationGrant()} copy path as
+     * {@code operatorAccountType} / {@code orgScope}. {@code null} on the
+     * converter-side token (resolved by the provider); null/empty ⟺ no {@code roles}
+     * claim (net-zero).
+     */
+    public AssumeTenantAuthenticationToken(Authentication clientPrincipal,
+                                           String subjectToken,
+                                           String subjectTokenType,
+                                           String selectedTenantId,
+                                           String selectedTenantType,
+                                           String operatorAccountType,
+                                           List<String> orgScope,
+                                           List<String> operatorRoles) {
         super(Collections.emptyList());
         this.clientPrincipal = clientPrincipal;
         this.subjectToken = subjectToken;
@@ -93,6 +118,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
         this.selectedTenantType = selectedTenantType;
         this.operatorAccountType = operatorAccountType;
         this.orgScope = orgScope;
+        this.operatorRoles = operatorRoles;
         setAuthenticated(false);
     }
 
@@ -145,5 +171,17 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
      */
     public List<String> getOrgScope() {
         return orgScope;
+    }
+
+    /**
+     * TASK-BE-370 (ADR-MONO-033 S4 assume-tenant): the operator's {@code roles}
+     * (their identity-level role set), carried from the validated subject token so
+     * the customizer's token-exchange branch PRESERVES them on the assumed token —
+     * the operator is one identity whose roles travel with them (verbatim, no
+     * re-resolve / no union). {@code null}/empty ⟺ no {@code roles} claim (net-zero).
+     * Null on the converter-side token (resolved by the provider).
+     */
+    public List<String> getOperatorRoles() {
+        return operatorRoles;
     }
 }

@@ -214,6 +214,63 @@ class AssumeTenantAuthenticationProviderTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-370: operator's roles from subject token carried onto the resolved grant")
+    void preservesOperatorRoles_onResolvedGrant() {
+        Jwt operatorSubject = Jwt.withTokenValue(SUBJECT_TOKEN)
+                .header("alg", "RS256")
+                .subject(OIDC_SUBJECT)
+                .claim("tenant_id", "iam")
+                .claim("account_type", "OPERATOR")
+                .claim("roles", java.util.List.of("ERP_OPERATOR"))
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(operatorSubject);
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
+        Jwt minted = Jwt.withTokenValue("assumed-token")
+                .header("alg", "RS256").subject(OIDC_SUBJECT)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
+        doReturn(minted).when(tokenGenerator).generate(any());
+
+        provider.authenticate(exchange());
+
+        org.mockito.ArgumentCaptor<org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext> captor =
+                org.mockito.ArgumentCaptor.forClass(
+                        org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext.class);
+        verify(tokenGenerator).generate(captor.capture());
+        Object grant = captor.getValue().getAuthorizationGrant();
+        assertThat(grant).isInstanceOf(AssumeTenantAuthenticationToken.class);
+        // The operator is one identity — their roles travel with them onto the assumed token (ADR-033 S4).
+        assertThat(((AssumeTenantAuthenticationToken) grant).getOperatorRoles())
+                .containsExactly("ERP_OPERATOR");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-370 graceful: subject token with no roles → resolved grant operatorRoles null")
+    void noSubjectRoles_resolvedGrantRolesNull() {
+        // validSubjectJwt() carries no `roles` claim.
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
+        Jwt minted = Jwt.withTokenValue("assumed-token")
+                .header("alg", "RS256").subject(OIDC_SUBJECT)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
+        doReturn(minted).when(tokenGenerator).generate(any());
+
+        provider.authenticate(exchange());
+
+        org.mockito.ArgumentCaptor<org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext> captor =
+                org.mockito.ArgumentCaptor.forClass(
+                        org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext.class);
+        verify(tokenGenerator).generate(captor.capture());
+        AssumeTenantAuthenticationToken grant =
+                (AssumeTenantAuthenticationToken) captor.getValue().getAuthorizationGrant();
+        // Null/empty subject roles → null on the grant → customizer omits the claim (net-zero).
+        assertThat(grant.getOperatorRoles()).isNull();
+    }
+
+    @Test
     @DisplayName("subject token 무효 → invalid_grant (admin 미호출, mint 없음)")
     void invalidSubjectToken_invalidGrant_noAdminCall() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN))
