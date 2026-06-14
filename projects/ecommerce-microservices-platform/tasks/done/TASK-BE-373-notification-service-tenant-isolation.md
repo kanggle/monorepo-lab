@@ -1,6 +1,6 @@
 ﻿# TASK-BE-373 — notification-service row-level tenant_id + template-detail gap (ADR-030 Step 4)
 
-**Status:** review
+**Status:** done
 **Domain:** ecommerce · **Service:** notification-service · **Type:** backend tenant isolation + API gap-fill
 **Parent:** ADR-MONO-030 Step 4 (per-service tenant_id migration) · ADR-MONO-031 Phase 5a (notification console-absorption precondition)
 
