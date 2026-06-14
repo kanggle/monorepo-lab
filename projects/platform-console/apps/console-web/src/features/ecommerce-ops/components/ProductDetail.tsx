@@ -10,6 +10,7 @@ import type { ProductDetail as ProductDetailType, Variant } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { VariantEditor } from './VariantEditor';
 import { StockAdjustDialog } from './StockAdjustDialog';
+import { ImageManager } from './ImageManager';
 
 /**
  * ecommerce product detail section (TASK-PC-FE-081 — § 2.4.10 #2). The console
@@ -109,6 +110,10 @@ export function ProductDetail({ product }: ProductDetailProps) {
       <div className="mb-8">
         <VariantEditor productId={data.id} variants={data.variants} />
       </div>
+
+      {/* Image management (#10-14, TASK-PC-FE-082) — presigned upload + list +
+          set-primary + delete. Degrades only this section on failure. */}
+      <ImageManager productId={data.id} />
 
       {/* Per-variant stock adjust (#9). */}
       <div className="mb-8" data-testid="stock-adjust-section">

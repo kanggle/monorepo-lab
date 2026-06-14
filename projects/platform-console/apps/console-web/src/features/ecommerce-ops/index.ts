@@ -16,8 +16,9 @@
  * confirm-gate + producer state guards.
  *
  * v1 scope = products (list/detail/register/update/delete + variant + stock)
- * + orders (list/detail/status-change, TASK-PC-FE-083). Image (presigned) is
- * out of scope (PC-FE-082).
+ * + orders (list/detail/status-change, TASK-PC-FE-083) + product images
+ * (list/presigned-upload/register/update/delete, TASK-PC-FE-082 — the Phase 1b
+ * CLOSING facet, embedded in the product detail).
  */
 export { ProductsScreen } from './components/ProductsScreen';
 export { ProductDetail } from './components/ProductDetail';
@@ -78,3 +79,28 @@ export type {
   OrderStatus,
 } from './api/order-types';
 export { allowedTransitions, ORDER_STATUS_VALUES } from './api/order-types';
+
+// ---------------------------------------------------------------------------
+// Image facet (TASK-PC-FE-082 — ADR-MONO-031 Phase 1b CLOSING slice). The
+// product-image management surface is embedded in `ProductDetail` (no separate
+// route / sidebar leaf); `ImageManager` is exported for completeness/tests.
+// ---------------------------------------------------------------------------
+export { ImageManager } from './components/ImageManager';
+export { ImageUploadField } from './components/ImageUploadField';
+
+export type {
+  ImageItem,
+  ImageList,
+  PresignedUrlResponse,
+  RegisterImageResponse,
+  PresignedUrlBody,
+  RegisterImageBody,
+  UpdateImageBody,
+  ImageContentType,
+} from './api/image-types';
+export {
+  IMAGE_ALLOWED_CONTENT_TYPES,
+  IMAGE_MAX_BYTES,
+  IMAGE_MAX_PER_PRODUCT,
+  isAllowedImageContentType,
+} from './api/image-types';
