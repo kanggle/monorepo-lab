@@ -72,6 +72,36 @@ class AccountTypeValidationFilterTest {
     }
 
     @Test
+    void allowsOperatorRole_noAccountType() {
+        // ADR-MONO-032 dual-read: a wms-scoped token carrying a role is an operator,
+        // even without the legacy account_type claim.
+        Jwt jwt = jwtWithRoles("WMS_OPERATOR");
+        CapturingChain chain = new CapturingChain();
+
+        runFilter(jwt, chain);
+
+        assertThat(chain.called).isTrue();
+    }
+
+    @Test
+    void rejectsNoRoleNoAccountTypeWith403() {
+        // Neither a role nor the legacy account_type → not an operator → 403.
+        Jwt jwt = jwtWithRoles(); // empty roles, no account_type
+        CapturingChain chain = new CapturingChain();
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/master/warehouses").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt);
+
+        filter.filter(exchange, chain)
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth))
+                .block();
+
+        assertThat(chain.called).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
     void passesWhenNoSecurityContext() {
         CapturingChain chain = new CapturingChain();
 
@@ -103,6 +133,19 @@ class AccountTypeValidationFilterTest {
                     c.put("iss", "test");
                     c.put("sub", "user-42");
                     c.put("account_type", accountType);
+                })
+                .build();
+    }
+
+    private static Jwt jwtWithRoles(String... roles) {
+        return Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .claims(c -> {
+                    c.put("iss", "test");
+                    c.put("sub", "user-42");
+                    c.put("roles", java.util.List.of(roles));
                 })
                 .build();
     }

@@ -29,12 +29,24 @@ public class AccountTypeValidationFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         return ReactiveJwtAccess.currentJwt()
-                .map(jwt -> "OPERATOR".equals(jwt.getClaimAsString("account_type")))
+                .map(AccountTypeValidationFilter::isOperator)
                 .defaultIfEmpty(Boolean.TRUE) // no JWT security context → public path → proceed
                 .flatMap(proceed -> proceed
                         ? chain.filter(exchange)
                         : errorHandler.write(exchange, HttpStatus.FORBIDDEN,
-                                "FORBIDDEN", "WMS access requires OPERATOR account"));
+                                "FORBIDDEN", "WMS access requires an operator role"));
+    }
+
+    /**
+     * Role-based admission (ADR-MONO-032): wms is an operator-only platform, so a token
+     * scoped to {@code aud=wms} carrying at least one role is an operator. The legacy
+     * {@code account_type=OPERATOR} is accepted only during the dual-read migration window
+     * (jwt-standard-claims § Migration Compatibility) and is removed at D5 step 4.
+     */
+    private static boolean isOperator(org.springframework.security.oauth2.jwt.Jwt jwt) {
+        java.util.List<String> roles = jwt.getClaimAsStringList("roles");
+        boolean hasRole = roles != null && !roles.isEmpty();
+        return hasRole || "OPERATOR".equals(jwt.getClaimAsString("account_type"));
     }
 
     @Override

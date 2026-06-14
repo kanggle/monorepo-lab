@@ -102,6 +102,62 @@ class AccountTypeEnforcementFilterTest {
     }
 
     // -----------------------------------------------------------------------
+    // Role-based admission (ADR-MONO-032 dual-read) — roles claim, no account_type
+    // -----------------------------------------------------------------------
+
+    @Test
+    void consumerRoute_customerRole_noAccountType_passesThrough() {
+        MockServerWebExchange exchange = exchangeFor("/api/orders/123");
+        CapturingChain chain = new CapturingChain();
+        Jwt jwt = jwtWithRoles("CUSTOMER");
+
+        run(exchange, chain, jwt);
+
+        assertThat(chain.called).isTrue();
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void adminRoute_adminRole_noAccountType_passesThrough() {
+        MockServerWebExchange exchange = exchangeFor("/api/admin/products/42");
+        CapturingChain chain = new CapturingChain();
+        Jwt jwt = jwtWithRoles("ADMIN");
+
+        run(exchange, chain, jwt);
+
+        assertThat(chain.called).isTrue();
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void adminRoute_customerRoleOnly_returns403() {
+        MockServerWebExchange exchange = exchangeFor("/api/admin/products/42");
+        CapturingChain chain = new CapturingChain();
+        Jwt jwt = jwtWithRoles("CUSTOMER");
+
+        run(exchange, chain, jwt);
+
+        assertThat(chain.called).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void dualCapability_customerAndAdminRoles_passBothSurfaces() {
+        // The unified-identity defining case: one account holds CUSTOMER + ADMIN.
+        Jwt jwt = jwtWithRoles("CUSTOMER", "ADMIN");
+
+        MockServerWebExchange consumer = exchangeFor("/api/orders/123");
+        CapturingChain consumerChain = new CapturingChain();
+        run(consumer, consumerChain, jwt);
+        assertThat(consumerChain.called).isTrue();
+
+        MockServerWebExchange admin = exchangeFor("/api/admin/products/42");
+        CapturingChain adminChain = new CapturingChain();
+        run(admin, adminChain, jwt);
+        assertThat(adminChain.called).isTrue();
+    }
+
+    // -----------------------------------------------------------------------
     // Public routes (no security context)
     // -----------------------------------------------------------------------
 
@@ -151,6 +207,19 @@ class AccountTypeEnforcementFilterTest {
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(300))
                 .claims(c -> c.putAll(Map.of("iss", "test")))
+                .build();
+    }
+
+    private static Jwt jwtWithRoles(String... roles) {
+        return Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("user-1")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .claims(c -> {
+                    c.put("iss", "test");
+                    c.put("roles", java.util.List.of(roles));
+                })
                 .build();
     }
 
