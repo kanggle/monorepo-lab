@@ -386,11 +386,15 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
                 .as("4b: the operator admits at the domain gateway via roles ONLY (no account_type)")
                 .isFalse();
 
-        // One identity, two role-bindings: the consumer login token and the operator
-        // domain token belong to the SAME subject (account), obtained in one session.
-        assertThat(assumed.get("sub").asText())
-                .as("both tokens belong to the SAME account (unified identity)")
-                .isEqualTo(basePayload.get("sub").asText());
+        // One identity, two role-bindings, one session: the consumer login token is the
+        // ACCOUNT's (sub = the account), and the operator domain token is derived FROM that
+        // same base token (it is the subject_token of the assume-tenant exchange above).
+        // The assumed token's own sub is the acting console client (platform-console-web)
+        // per the RFC 8693 flow — the account linkage is the validated subject token, not a
+        // sub claim on the assumed token.
+        assertThat(basePayload.get("sub").asText())
+                .as("the consumer login token belongs to the account (its subject_token drives the operator exchange)")
+                .isEqualTo(account);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
