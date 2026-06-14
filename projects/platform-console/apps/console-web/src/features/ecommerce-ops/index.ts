@@ -15,8 +15,9 @@
  * `X-Tenant-Id` header). NO `Idempotency-Key` (producer defines none) —
  * confirm-gate + producer state guards.
  *
- * v1 scope = list / detail / register / update / delete + variant inline CRUD
- * + stock adjust. Image (presigned) + orders are out of scope (PC-FE-082/083).
+ * v1 scope = products (list/detail/register/update/delete + variant + stock)
+ * + orders (list/detail/status-change, TASK-PC-FE-083). Image (presigned) is
+ * out of scope (PC-FE-082).
  */
 export { ProductsScreen } from './components/ProductsScreen';
 export { ProductDetail } from './components/ProductDetail';
@@ -48,3 +49,32 @@ export type {
   AdjustStockBody,
   ProductStatus,
 } from './api/types';
+
+// ---------------------------------------------------------------------------
+// Orders facet (TASK-PC-FE-083 — ADR-MONO-031 Phase 1b orders slice)
+// ---------------------------------------------------------------------------
+export { OrdersScreen } from './components/OrdersScreen';
+export { OrderDetail } from './components/OrderDetail';
+export { OrderStatusDialog } from './components/OrderStatusDialog';
+
+export {
+  getOrdersSectionState,
+  getOrderDetailSectionState,
+} from './api/orders-state';
+export type {
+  OrdersSectionState,
+  OrderDetailSectionState,
+} from './api/orders-state';
+
+export type {
+  OrderSummary,
+  OrderList,
+  OrderDetail as OrderDetailData,
+  OrderItem,
+  ShippingAddress,
+  OrderStatusChangeBody,
+  OrderStatusChangeResponse,
+  OrderListParams,
+  OrderStatus,
+} from './api/order-types';
+export { allowedTransitions, ORDER_STATUS_VALUES } from './api/order-types';
