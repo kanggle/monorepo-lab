@@ -6,9 +6,11 @@ import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.domain.rbac.Permission;
+import com.example.admin.infrastructure.client.AccountServiceClient;
 import com.example.common.id.UuidV7;
 import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CreateOperatorUseCase {
@@ -29,6 +32,7 @@ public class CreateOperatorUseCase {
     private final OperatorLookupPort operatorLookupPort;
     private final TenantScopeGuard tenantScopeGuard;
     private final RoleGrantGuard roleGrantGuard;
+    private final AccountServiceClient accountServiceClient;
 
     /**
      * Creates a new operator.
@@ -44,7 +48,8 @@ public class CreateOperatorUseCase {
                                                List<String> roleNames,
                                                OperatorContext actor,
                                                String reason,
-                                               String tenantId) {
+                                               String tenantId,
+                                               Boolean reuseExistingIdentity) {
         // --- TASK-BE-249: resolve actor's tenantId for scope guard ---
         String actorTenantId = operatorLookupPort.findByOperatorId(actor.operatorId())
                 .map(OperatorLookupPort.OperatorSummary::tenantId)
@@ -102,6 +107,25 @@ public class CreateOperatorUseCase {
         }
         operatorPort.saveOperatorRoles(bindings);
 
+        // ADR-MONO-034 U4 (step 3d): attach the new operator to a central identity so
+        // post-step-3 operators stop the identity divergence. Fail-soft (the OPPOSITE
+        // of the 3c link's fail-closed): the operator-create must NOT hard-fail on
+        // identity-infra unavailability — the operator can be linked later via the
+        // explicit 3c surface.
+        //
+        // Platform-scope ('*') operators are SKIPPED: there is no account_db tenant
+        // row for '*', so the central identities FK (within account_db) would have no
+        // tenant to anchor — platform operators stay unlinked (link manually via 3c if
+        // ever needed).
+        if (!AdminOperator.PLATFORM_TENANT_ID.equals(tenantId)) {
+            String identityId = accountServiceClient.resolveOrCreateIdentity(
+                    tenantId, normalizedEmail,
+                    reuseExistingIdentity != null && reuseExistingIdentity);  // fail-soft → may be null
+            if (identityId != null) {
+                operatorPort.linkIdentity(created.internalId(), identityId, now);
+            }
+        }
+
         String auditId = auditor.newAuditId();
         auditor.record(new AdminActionAuditor.AuditRecord(
                 auditId,
@@ -132,6 +156,25 @@ public class CreateOperatorUseCase {
     }
 
     /**
+     * Backward-compat overload for call sites predating TASK-BE-374
+     * ({@code reuseExistingIdentity} added). Defaults the identity-reuse opt-in to
+     * {@code false} (no silent merge — ADR-034 U3).
+     *
+     * @deprecated Supply {@code reuseExistingIdentity} explicitly (TASK-BE-374).
+     */
+    @Deprecated
+    @Transactional
+    public CreateOperatorResult createOperator(String email,
+                                               String displayName,
+                                               String password,
+                                               List<String> roleNames,
+                                               OperatorContext actor,
+                                               String reason,
+                                               String tenantId) {
+        return createOperator(email, displayName, password, roleNames, actor, reason, tenantId, false);
+    }
+
+    /**
      * Backward-compat overload for call sites predating TASK-BE-249.
      * Defaults {@code tenantId} to {@code "fan-platform"}.
      *
@@ -145,7 +188,7 @@ public class CreateOperatorUseCase {
                                                List<String> roleNames,
                                                OperatorContext actor,
                                                String reason) {
-        return createOperator(email, displayName, password, roleNames, actor, reason, "fan-platform");
+        return createOperator(email, displayName, password, roleNames, actor, reason, "fan-platform", false);
     }
 
     public record CreateOperatorResult(
