@@ -23,6 +23,7 @@ import {
   CreateTemplateBodySchema,
   UpdateTemplateBodySchema,
 } from '@/features/ecommerce-ops/api/notification-types';
+import { RegisterSellerBodySchema } from '@/features/ecommerce-ops/api/seller-types';
 
 /**
  * Shared error → HTTP mapping + body validators for the ecommerce-ops product
@@ -78,6 +79,8 @@ export {
   // notifications facet (TASK-PC-FE-089 — ADR-031 Phase 5b)
   CreateTemplateBodySchema,
   UpdateTemplateBodySchema,
+  // sellers facet (TASK-PC-FE-090 — ADR-031 § 2.4.10 7th area)
+  RegisterSellerBodySchema,
   newRequestId,
 };
 

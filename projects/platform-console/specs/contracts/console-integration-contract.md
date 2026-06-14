@@ -2715,9 +2715,62 @@ same-origin route handlers → ecommerce gateway direct, NO console-bff write le
   this section follows, never redefines it (§ 5 Change Rule).
 
 > **Not a § 3 parity row**: additive federated **domain** scope; adds no § 3 row
-> and changes none (count stays **16**). This is the **final § 2.4.10.x** area —
-> all 6 operator areas (products/orders/image/users/promotions/shippings/notifications)
-> are now absorbed → ADR-MONO-031 Phase 6 app-deletion gate unblocked.
+> and changes none (count stays **16**).
+
+#### 2.4.10.5 ecommerce sellers operator surface (TASK-PC-FE-090 / ADR-MONO-031 § 2.4.10 7th area — net-new marketplace seller management, unblocked by TASK-BE-375)
+
+The **seventh ecommerce operations area** (the sixth § 2.4.10 sub-binding, a
+net-new operator surface with no `admin-dashboard` parity counterpart — ADR-MONO-030
+Step 4 facet f, marketplace seller axis). Unblocked by **TASK-BE-375**
+(`AdminSellerController` operator plane: `GET /api/admin/sellers` list +
+`GET /api/admin/sellers/{sellerId}` detail + `POST /api/admin/sellers` register).
+This is a **list + detail + register** surface (MVP); no deactivate/suspend
+(ADR-030 v1 — the backend exposes only those three endpoints).
+
+This sub-binding **inherits § 2.4.10's cross-cutting rules verbatim** and does
+not restate them: the **credential** (domain-facing IAM OIDC access token —
+`getDomainFacingToken()`, **never** `getOperatorToken()`); the **tenant model**
+(JWT `tenant_id` claim — NO `X-Tenant-Id` header); the **error envelope** (flat
+`{ code, message, timestamp }`); the **resilience taxonomy** (401 → re-login /
+403 → inline / 503 → section degrades only); the **proxy model** (console-web
+same-origin route handlers → ecommerce gateway direct, NO console-bff write leg
+— ADR-MONO-017 D2.A); **NO `Idempotency-Key`** (producer defines none).
+
+- **Authoritative producer surface** (do NOT redefine here): ecommerce
+  `product-service` `AdminSellerController`, consumed via the ecommerce
+  gateway **admin** path `/api/admin/sellers` (base URL
+  `ECOMMERCE_ADMIN_BASE_URL` = `http://ecommerce.local/api/admin`, same gateway
+  + IAM-OIDC credential as § 2.4.10 products/orders/users — **NOT**
+  `ECOMMERCE_PUBLIC_BASE_URL` which promotions/notifications/shippings use;
+  sellers live under the `/api/admin/**` subtree requiring `account_type=OPERATOR`):
+
+| # | Method | Path | Purpose |
+|---|--------|------|---------|
+| 1 | `GET` | `/api/admin/sellers?page=&size=` | paginated list (rows: `sellerId, displayName, status, createdAt`) |
+| 2 | `GET` | `/api/admin/sellers/{sellerId}` | seller detail (full); missing/cross-tenant → 404 |
+| 3 | `POST` | `/api/admin/sellers` | register; body `{sellerId, displayName}` → 201 `{sellerId}` |
+
+  Error envelope = the same flat ecommerce shape `{ code, message, timestamp }`
+  (400 `VALIDATION_ERROR`, 403 `ACCESS_DENIED`, 404 `SELLER_NOT_FOUND`,
+  409 `CONFLICT` [duplicate `sellerId` within tenant]),
+  consumed with the § 2.4.10 ecommerce parser.
+
+- **status=ACTIVE only** (v1). The backend exposes no suspend/deactivate
+  endpoint; the console does not attempt any status mutation. Per-tenant
+  `default` seller appears in the list as a real ACTIVE row — expected.
+
+- **No update, no delete** (producer defines none — ADR-030 v1; this is not
+  a silent omission). The console's register form validates `sellerId` ≤ 64
+  chars non-blank, `displayName` non-blank; 409 `CONFLICT` (duplicate
+  `sellerId`) surfaced inline.
+
+- **Producer immutability**: cross-reference only — any change to the ecommerce
+  seller contract is an ecommerce project-internal spec-first change;
+  this section follows, never redefines it (§ 5 Change Rule).
+
+> **Not a § 3 parity row**: additive net-new federated **domain** scope (no
+> `admin-dashboard` counterpart for sellers); adds no § 3 row and changes none
+> (count stays **16**).
 
 ### 2.5 Resilience
 

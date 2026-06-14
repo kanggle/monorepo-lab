@@ -194,6 +194,33 @@ export {
 } from './api/notification-types';
 
 // ---------------------------------------------------------------------------
+// Sellers facet (TASK-PC-FE-090 — ADR-MONO-031 § 2.4.10 7th area — list + detail + register)
+// ---------------------------------------------------------------------------
+export { SellersScreen } from './components/SellersScreen';
+export { SellerDetail } from './components/SellerDetail';
+export { SellerRegisterForm } from './components/SellerRegisterForm';
+
+export {
+  getSellersSectionState,
+  getSellerDetailSectionState,
+} from './api/sellers-state';
+export type {
+  SellersSectionState,
+  SellerDetailSectionState,
+} from './api/sellers-state';
+
+export type {
+  SellerSummary,
+  SellerList,
+  SellerDetail as SellerDetailData,
+  RegisterSellerBody,
+  RegisterSellerResponse,
+  SellerListParams,
+  SellerStatus,
+} from './api/seller-types';
+export { SELLER_STATUS_VALUES } from './api/seller-types';
+
+// ---------------------------------------------------------------------------
 // Image facet (TASK-PC-FE-082 — ADR-MONO-031 Phase 1b CLOSING slice). The
 // product-image management surface is embedded in `ProductDetail` (no separate
 // route / sidebar leaf); `ImageManager` is exported for completeness/tests.
