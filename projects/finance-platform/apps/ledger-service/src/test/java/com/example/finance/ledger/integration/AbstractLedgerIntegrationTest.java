@@ -230,6 +230,9 @@ public abstract class AbstractLedgerIntegrationTest {
         // row would loosen a sibling class's base-leg compare (its absence = EXACT),
         // so it is cleaned per-test like the other transactional tables.
         jdbcTemplate.execute("DELETE FROM reconciliation_fx_tolerance");
+        // (15th incr — TASK-FIN-BE-023) the per-tenant FX cost-flow method config. A leftover
+        // row would influence a sibling class's effective method (absence = WEIGHTED_AVERAGE).
+        jdbcTemplate.execute("DELETE FROM fx_cost_flow_config");
     }
 
     // ------------------------------------------------------------------------

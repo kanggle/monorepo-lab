@@ -1348,6 +1348,44 @@ to zero carrying with no rounding drift (F2).
 the idempotency key is not consumed (F1/F4). `FxSettlementPolicy.settle(...)` delegates and trusts
 the validated bounds.
 
+### FX cost-flow method config (fifteenth increment — TASK-FIN-BE-023)
+
+ADR-001 D1 step 1: store the operator-selected FX cost-flow method per tenant so
+FIN-BE-025 can branch on it. Only two methods are supported — `WEIGHTED_AVERAGE`
+(default, the existing behaviour) and `FIFO`; `LIFO` is excluded by ADR-001 D1 (IFRS
+prohibition).
+
+**Shadow / net-zero.** This increment adds **config storage and read surface only**.
+`SettleForeignPositionUseCase` / `FxSettlementPolicy` are **not modified** — settlement
+continues to use the weighted-average proportional carrying regardless of the stored
+method. An absent row is equivalent to `WEIGHTED_AVERAGE`. FIN-BE-025 will read this
+config and route to the FIFO lot-consumption path.
+
+**`CostFlowMethod` enum** (`domain/journal/`, pure Java). Values: `WEIGHTED_AVERAGE`,
+`FIFO`. `static CostFlowMethod fromString(String)` performs exact-match uppercase; an
+unknown/null/blank value throws `CostFlowMethodInvalidException` (`VALIDATION_ERROR`,
+400) before any persist — mirrors `FxTolerance` validation placement.
+
+**Persistence.** Additive Flyway `V9__add_fx_cost_flow_config.sql` — a **new** table
+`fx_cost_flow_config` (`tenant_id VARCHAR(64) PK`, `method VARCHAR(20) NOT NULL DEFAULT
+'WEIGHTED_AVERAGE'` with `CHECK (method IN ('WEIGHTED_AVERAGE','FIFO'))`, `updated_by` /
+`updated_at` audit columns). **No** change to any existing table, **no** existing CHECK
+change, **no** backfill — net-zero for all existing tenants. A domain aggregate
+`FxCostFlowConfig` (JPA entity) + repository port `FxCostFlowConfigRepository` +
+JPA adapter — mirror `ReconciliationFxToleranceConfig` / its repository exactly.
+
+**Application + REST.** `GetFxCostFlowConfigUseCase` (repo lookup; absent →
+`FxCostFlowConfigView.weightedAverageDefault()`) + `SetFxCostFlowConfigUseCase`
+(validate method via `CostFlowMethod.fromString` **before** any persist →
+`VALIDATION_ERROR` 400 on unknown; upsert last-write-wins; write audit row
+`FX_COST_FLOW_METHOD_SET` in the **same `@Transactional`** — regulated/audit-heavy).
+`GET` + `PUT /api/finance/ledger/settlements/cost-flow-config` are tenant-scoped via
+`ActorContext` (same idiom as the reconciliation fx-tolerance endpoints).
+
+**No new error code / status / event** — `CostFlowMethodInvalidException` reuses the
+platform-standard `VALIDATION_ERROR` (400) exactly like `FxToleranceInvalidException`;
+no new Kafka topic or outbox row.
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):

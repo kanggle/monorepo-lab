@@ -1,14 +1,20 @@
 package com.example.finance.ledger.presentation.controller;
 
 import com.example.finance.ledger.application.ActorContext;
+import com.example.finance.ledger.application.GetFxCostFlowConfigUseCase;
+import com.example.finance.ledger.application.SetFxCostFlowConfigCommand;
+import com.example.finance.ledger.application.SetFxCostFlowConfigUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.NoOpReason;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.Result;
+import com.example.finance.ledger.application.view.FxCostFlowConfigView;
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
+import com.example.finance.ledger.domain.error.LedgerErrors.CostFlowMethodInvalidException;
 import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
+import com.example.finance.ledger.domain.journal.CostFlowMethod;
 import com.example.finance.ledger.domain.journal.EntryDirection;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.Outcome;
 import com.example.finance.ledger.domain.journal.JournalEntry;
@@ -35,7 +41,9 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -71,6 +79,8 @@ class SettlementControllerSliceTest {
     MockMvc mockMvc;
 
     @MockitoBean SettleForeignPositionUseCase settleForeignPosition;
+    @MockitoBean GetFxCostFlowConfigUseCase getFxCostFlowConfig;
+    @MockitoBean SetFxCostFlowConfigUseCase setFxCostFlowConfig;
 
     @BeforeEach
     void setUp() {
@@ -258,5 +268,61 @@ class SettlementControllerSliceTest {
                         .content(BODY))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("LEDGER_PERIOD_CLOSED"));
+    }
+
+    // ---- 15th increment: FX cost-flow method config (TASK-FIN-BE-023) ----
+
+    @Test
+    @DisplayName("GET /cost-flow-config unset → 200 WEIGHTED_AVERAGE default, no audit fields")
+    void getCostFlowConfigDefault() throws Exception {
+        when(getFxCostFlowConfig.get("finance"))
+                .thenReturn(FxCostFlowConfigView.weightedAverageDefault());
+
+        mockMvc.perform(get("/api/finance/ledger/settlements/cost-flow-config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.method").value("WEIGHTED_AVERAGE"))
+                .andExpect(jsonPath("$.data.updatedBy").doesNotExist())
+                .andExpect(jsonPath("$.data.updatedAt").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /cost-flow-config configured → 200 with method + audit fields")
+    void getCostFlowConfigured() throws Exception {
+        when(getFxCostFlowConfig.get("finance")).thenReturn(new FxCostFlowConfigView(
+                CostFlowMethod.FIFO, "user-1", Instant.parse("2026-02-01T10:00:00Z")));
+
+        mockMvc.perform(get("/api/finance/ledger/settlements/cost-flow-config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.method").value("FIFO"))
+                .andExpect(jsonPath("$.data.updatedBy").value("user-1"));
+    }
+
+    @Test
+    @DisplayName("PUT /cost-flow-config FIFO → 200 persisted config, audited (updatedBy = actor)")
+    void putCostFlowConfigFifoOk() throws Exception {
+        when(setFxCostFlowConfig.set(any(SetFxCostFlowConfigCommand.class)))
+                .thenReturn(new FxCostFlowConfigView(
+                        CostFlowMethod.FIFO, "operator-7", Instant.parse("2026-02-01T10:00:00Z")));
+
+        mockMvc.perform(put("/api/finance/ledger/settlements/cost-flow-config")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"method\":\"FIFO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.method").value("FIFO"))
+                .andExpect(jsonPath("$.data.updatedBy").value("operator-7"));
+    }
+
+    @Test
+    @DisplayName("PUT /cost-flow-config unknown method (LIFO) → 400 VALIDATION_ERROR")
+    void putCostFlowConfigInvalidMethod() throws Exception {
+        when(setFxCostFlowConfig.set(any(SetFxCostFlowConfigCommand.class)))
+                .thenThrow(new CostFlowMethodInvalidException(
+                        "method must be one of WEIGHTED_AVERAGE, FIFO — got: LIFO"));
+
+        mockMvc.perform(put("/api/finance/ledger/settlements/cost-flow-config")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"method\":\"LIFO\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 }
