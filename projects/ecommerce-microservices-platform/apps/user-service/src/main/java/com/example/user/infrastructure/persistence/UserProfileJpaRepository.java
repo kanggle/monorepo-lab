@@ -10,13 +10,19 @@ import java.util.UUID;
 
 interface UserProfileJpaRepository extends JpaRepository<UserProfileJpaEntity, UUID> {
 
-    Optional<UserProfileJpaEntity> findByUserId(UUID userId);
+    Optional<UserProfileJpaEntity> findByUserIdAndTenantId(UUID userId, String tenantId);
 
+    // Tenant-agnostic on purpose (ADR-MONO-030 Step 4, M1; TASK-BE-367): the
+    // UserSignedUp consumer/system dedup path keys off user_id, which is globally
+    // unique (uq_user_profiles_user_id) — an IAM user belongs to one tenant. Mirrors
+    // order-service findByIdAcrossTenants: identity dedup must not be tenant-scoped.
     boolean existsByUserId(UUID userId);
 
-    Page<UserProfileJpaEntity> findByStatusAndEmailContaining(ProfileStatus status, String email, Pageable pageable);
+    Page<UserProfileJpaEntity> findByTenantIdAndStatusAndEmailContaining(String tenantId, ProfileStatus status, String email, Pageable pageable);
 
-    Page<UserProfileJpaEntity> findByStatus(ProfileStatus status, Pageable pageable);
+    Page<UserProfileJpaEntity> findByTenantIdAndStatus(String tenantId, ProfileStatus status, Pageable pageable);
 
-    Page<UserProfileJpaEntity> findByEmailContaining(String email, Pageable pageable);
+    Page<UserProfileJpaEntity> findByTenantIdAndEmailContaining(String tenantId, String email, Pageable pageable);
+
+    Page<UserProfileJpaEntity> findByTenantId(String tenantId, Pageable pageable);
 }

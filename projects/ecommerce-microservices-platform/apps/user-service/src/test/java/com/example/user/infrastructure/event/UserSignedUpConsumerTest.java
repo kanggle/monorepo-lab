@@ -79,7 +79,7 @@ class UserSignedUpConsumerTest {
         @DisplayName("payload가 null이면 핸들러를 호출하지 않는다")
         void handle_nullPayload_skips() {
             UserSignedUpEvent event = new UserSignedUpEvent(
-                    UUID.randomUUID(), "UserSignedUp", Instant.now(), "auth-service", null);
+                    UUID.randomUUID(), "UserSignedUp", Instant.now(), "auth-service", "ecommerce", null);
 
             consumer.handle(event);
 
@@ -90,7 +90,7 @@ class UserSignedUpConsumerTest {
         @DisplayName("userId가 null이면 핸들러를 호출하지 않는다")
         void handle_nullUserId_skips() {
             UserSignedUpEvent event = new UserSignedUpEvent(
-                    UUID.randomUUID(), "UserSignedUp", Instant.now(), "auth-service",
+                    UUID.randomUUID(), "UserSignedUp", Instant.now(), "auth-service", "ecommerce",
                     new UserSignedUpEvent.Payload(null, "test@example.com", "홍길동"));
 
             consumer.handle(event);
@@ -102,7 +102,7 @@ class UserSignedUpConsumerTest {
         @DisplayName("email이 null이면 핸들러를 호출하지 않는다")
         void handle_nullEmail_skips() {
             UserSignedUpEvent event = new UserSignedUpEvent(
-                    UUID.randomUUID(), "UserSignedUp", Instant.now(), "auth-service",
+                    UUID.randomUUID(), "UserSignedUp", Instant.now(), "auth-service", "ecommerce",
                     new UserSignedUpEvent.Payload(UUID.randomUUID(), null, "홍길동"));
 
             consumer.handle(event);
@@ -115,7 +115,7 @@ class UserSignedUpConsumerTest {
         void handle_nullName_callsHandler() {
             UUID userId = UUID.randomUUID();
             UserSignedUpEvent event = new UserSignedUpEvent(
-                    UUID.randomUUID(), "UserSignedUp", Instant.now(), "auth-service",
+                    UUID.randomUUID(), "UserSignedUp", Instant.now(), "auth-service", "ecommerce",
                     new UserSignedUpEvent.Payload(userId, "test@example.com", null));
 
             consumer.handle(event);

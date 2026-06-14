@@ -9,11 +9,13 @@ import java.util.UUID;
 
 interface WishlistItemJpaRepository extends JpaRepository<WishlistItemJpaEntity, UUID> {
 
-    boolean existsByUserIdAndProductId(UUID userId, UUID productId);
+    boolean existsByUserIdAndProductIdAndTenantId(UUID userId, UUID productId, String tenantId);
 
-    Optional<WishlistItemJpaEntity> findByUserIdAndProductId(UUID userId, UUID productId);
+    Optional<WishlistItemJpaEntity> findByUserIdAndProductIdAndTenantId(UUID userId, UUID productId, String tenantId);
 
-    Page<WishlistItemJpaEntity> findAllByUserId(UUID userId, Pageable pageable);
+    Page<WishlistItemJpaEntity> findAllByUserIdAndTenantId(UUID userId, String tenantId, Pageable pageable);
 
-    void deleteAllByUserId(UUID userId);
+    Optional<WishlistItemJpaEntity> findByIdAndTenantId(UUID id, String tenantId);
+
+    void deleteAllByUserIdAndTenantId(UUID userId, String tenantId);
 }

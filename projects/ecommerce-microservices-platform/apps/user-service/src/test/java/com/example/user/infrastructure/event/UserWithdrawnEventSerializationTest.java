@@ -19,7 +19,7 @@ class UserWithdrawnEventSerializationTest {
     @DisplayName("envelope 필드가 snake_case로 직렬화된다")
     void serialize_envelopeFields_areSnakeCase() throws Exception {
         UserWithdrawnEvent event = new UserWithdrawnEvent(
-                UUID.randomUUID(), "UserWithdrawn", Instant.now(), "user-service",
+                UUID.randomUUID(), "UserWithdrawn", Instant.now(), "user-service", "ecommerce",
                 new UserWithdrawnEvent.Payload(UUID.randomUUID(), Instant.now())
         );
 
@@ -64,7 +64,7 @@ class UserWithdrawnEventSerializationTest {
         UUID userId = UUID.randomUUID();
         Instant withdrawnAt = Instant.now();
         UserWithdrawnEvent event = new UserWithdrawnEvent(
-                UUID.randomUUID(), "UserWithdrawn", Instant.now(), "user-service",
+                UUID.randomUUID(), "UserWithdrawn", Instant.now(), "user-service", "ecommerce",
                 new UserWithdrawnEvent.Payload(userId, withdrawnAt)
         );
 

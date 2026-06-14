@@ -4,6 +4,7 @@ import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.user.domain.model.WishlistItem;
 import com.example.user.domain.repository.WishlistItemRepository;
+import com.example.user.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,24 +30,24 @@ class WishlistItemRepositoryImpl implements WishlistItemRepository {
 
     @Override
     public Optional<WishlistItem> findById(UUID id) {
-        return jpaRepository.findById(id).map(mapper::toDomain);
+        return jpaRepository.findByIdAndTenantId(id, TenantContext.currentTenant()).map(mapper::toDomain);
     }
 
     @Override
     public boolean existsByUserIdAndProductId(UUID userId, UUID productId) {
-        return jpaRepository.existsByUserIdAndProductId(userId, productId);
+        return jpaRepository.existsByUserIdAndProductIdAndTenantId(userId, productId, TenantContext.currentTenant());
     }
 
     @Override
     public Optional<WishlistItem> findByUserIdAndProductId(UUID userId, UUID productId) {
-        return jpaRepository.findByUserIdAndProductId(userId, productId).map(mapper::toDomain);
+        return jpaRepository.findByUserIdAndProductIdAndTenantId(userId, productId, TenantContext.currentTenant()).map(mapper::toDomain);
     }
 
     @Override
     public PageResult<WishlistItem> findAllByUserId(UUID userId, PageQuery pageQuery) {
         Sort sort = Sort.by(Sort.Direction.fromString(pageQuery.sortDirection()), pageQuery.sortBy());
         PageRequest pageRequest = PageRequest.of(pageQuery.page(), pageQuery.size(), sort);
-        Page<WishlistItemJpaEntity> page = jpaRepository.findAllByUserId(userId, pageRequest);
+        Page<WishlistItemJpaEntity> page = jpaRepository.findAllByUserIdAndTenantId(userId, TenantContext.currentTenant(), pageRequest);
 
         return new PageResult<>(
                 page.getContent().stream().map(mapper::toDomain).toList(),
@@ -65,6 +66,6 @@ class WishlistItemRepositoryImpl implements WishlistItemRepository {
 
     @Override
     public void deleteAllByUserId(UUID userId) {
-        jpaRepository.deleteAllByUserId(userId);
+        jpaRepository.deleteAllByUserIdAndTenantId(userId, TenantContext.currentTenant());
     }
 }

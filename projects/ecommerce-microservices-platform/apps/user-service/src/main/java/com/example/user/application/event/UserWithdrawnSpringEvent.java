@@ -5,5 +5,6 @@ import java.util.UUID;
 
 public record UserWithdrawnSpringEvent(
         UUID userId,
-        Instant withdrawnAt
+        Instant withdrawnAt,
+        String tenantId
 ) {}

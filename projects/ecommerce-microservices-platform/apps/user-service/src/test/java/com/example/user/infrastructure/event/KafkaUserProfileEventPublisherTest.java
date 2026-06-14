@@ -61,7 +61,7 @@ class KafkaUserProfileEventPublisherTest {
 
     private UserProfileUpdatedSpringEvent sampleSpringEvent() {
         return new UserProfileUpdatedSpringEvent(
-                UUID.randomUUID(), "닉네임", "010-1234-5678", "https://img.example.com/a.png", Instant.now());
+                UUID.randomUUID(), "닉네임", "010-1234-5678", "https://img.example.com/a.png", Instant.now(), "ecommerce");
     }
 
     @Test

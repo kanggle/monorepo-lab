@@ -66,7 +66,7 @@ class KafkaUserProfileEventPublisherSuccessTest {
     void handleProfileUpdated_success_sendsToCorrectTopicWithUserIdKey() {
         UUID userId = UUID.randomUUID();
         var springEvent = new UserProfileUpdatedSpringEvent(
-                userId, "닉네임", "010-1234-5678", "https://img.example.com/a.png", Instant.now());
+                userId, "닉네임", "010-1234-5678", "https://img.example.com/a.png", Instant.now(), "ecommerce");
         given(kafkaTemplate.send(any(), any(), any())).willReturn(CompletableFuture.completedFuture(null));
 
         publisher.handleProfileUpdated(springEvent);
@@ -86,7 +86,7 @@ class KafkaUserProfileEventPublisherSuccessTest {
     void handleProfileUpdated_success_logsInfo() {
         UUID userId = UUID.randomUUID();
         var springEvent = new UserProfileUpdatedSpringEvent(
-                userId, "닉네임", "010-1234-5678", null, Instant.now());
+                userId, "닉네임", "010-1234-5678", null, Instant.now(), "ecommerce");
         given(kafkaTemplate.send(any(), any(), any())).willReturn(CompletableFuture.completedFuture(null));
 
         publisher.handleProfileUpdated(springEvent);
@@ -100,7 +100,7 @@ class KafkaUserProfileEventPublisherSuccessTest {
     @DisplayName("탈퇴 이벤트가 올바른 토픽으로 전송된다")
     void handleUserWithdrawn_success_sendsToCorrectTopic() {
         UUID userId = UUID.randomUUID();
-        var springEvent = new UserWithdrawnSpringEvent(userId, Instant.now());
+        var springEvent = new UserWithdrawnSpringEvent(userId, Instant.now(), "ecommerce");
         given(kafkaTemplate.send(any(), any(), any())).willReturn(CompletableFuture.completedFuture(null));
 
         publisher.handleUserWithdrawn(springEvent);
@@ -112,7 +112,7 @@ class KafkaUserProfileEventPublisherSuccessTest {
     @DisplayName("탈퇴 이벤트 전송 시 메시지에 UserWithdrawn 타입이 포함된다")
     void handleUserWithdrawn_success_messageContainsEventType() {
         UUID userId = UUID.randomUUID();
-        var springEvent = new UserWithdrawnSpringEvent(userId, Instant.now());
+        var springEvent = new UserWithdrawnSpringEvent(userId, Instant.now(), "ecommerce");
         given(kafkaTemplate.send(any(), any(), any())).willReturn(CompletableFuture.completedFuture(null));
 
         publisher.handleUserWithdrawn(springEvent);
@@ -130,7 +130,7 @@ class KafkaUserProfileEventPublisherSuccessTest {
         KafkaUserProfileEventPublisher brokenPublisher =
                 new KafkaUserProfileEventPublisher(kafkaTemplate, brokenMapper, userMetrics);
 
-        brokenPublisher.handleUserWithdrawn(new UserWithdrawnSpringEvent(UUID.randomUUID(), Instant.now()));
+        brokenPublisher.handleUserWithdrawn(new UserWithdrawnSpringEvent(UUID.randomUUID(), Instant.now(), "ecommerce"));
 
         then(userMetrics).should().incrementEventPublishFailure("UserWithdrawn");
     }

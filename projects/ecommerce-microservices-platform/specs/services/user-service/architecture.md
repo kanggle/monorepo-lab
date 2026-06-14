@@ -101,6 +101,43 @@ Package organization may follow package-by-layer or package-by-feature if the la
 - Consumes: `UserSignedUp` (from auth-service) — triggers initial profile creation
 - Publishes: `UserProfileUpdated`, `UserWithdrawn`
 
+## Multi-Tenancy (ADR-MONO-030 Step 4 / TASK-BE-367)
+
+user-service adopts the platform's `multi-tenant` trait
+([`rules/traits/multi-tenant.md`](../../../../../rules/traits/multi-tenant.md) M1-M7),
+inheriting the outer-axis tenant-isolation pattern proven in product-service /
+order-service (TASK-BE-357). The `seller_id` inner axis does **not** apply —
+user-service owns consumer/profile data, not seller-attributed catalog data.
+
+- **M1 — row-level `tenant_id`**: every persistent entity (`user_profiles`,
+  `user_addresses`, `wishlist_items`) carries `tenant_id VARCHAR(64) NOT NULL`,
+  stamped once at insert and immutable thereafter (`updatable=false`). It lives in
+  the persistence + event layers only; the clean domain model is unchanged.
+- **M2 — 3-layer isolation**: (1) the gateway `TenantClaimValidator` entitlement-trust
+  gate + `X-Tenant-Id` header injection are owned by **gateway-service** (TASK-BE-357),
+  reused unchanged; (2) `TenantContextFilter` (`HIGHEST_PRECEDENCE`) binds the header
+  into a request-scoped framework-free `TenantContext` ThreadLocal; (3) every
+  repository read filters `WHERE tenant_id = currentTenant()` and every write stamps it.
+- **M3 — 404-over-403**: a cross-tenant single-resource read (e.g. `GET /api/admin/users/{id}`
+  for another tenant's user) resolves to empty → **404** (existence hidden), never 403.
+- **M5 — async propagation**: `UserProfileUpdated` / `UserWithdrawn` envelopes carry
+  `tenant_id` (see [user-events.md](../../contracts/events/user-events.md)). The consumed
+  `UserSignedUp` envelope's `tenant_id` (optional until auth-service migrates) is bound to
+  the context for profile creation; absent → default tenant.
+- **M6 — cross-tenant-leak regression IT**: `MultiTenantIsolationIntegrationTest`
+  (Testcontainers PostgreSQL) proves tenant A's users/profiles are invisible to a tenant B
+  context (list exclusion + 404 single-read) and that a missing `X-Tenant-Id` resolves to
+  the default tenant.
+- **net-zero / standalone (D8)**: the V4 migration backfills all pre-existing rows to the
+  default tenant `'ecommerce'`; an unset context (standalone deploy, background consumer,
+  unit test) resolves to that default — so the single-store behavior is byte-identical.
+  Multi-tenancy is additive, never a hard runtime dependency. **fail-closed is prohibited**
+  (an empty/missing tenant context must resolve to the default, not reject).
+
+> The operator-plane read `GET /api/admin/users` is now tenant-scoped — this is the
+> backend prerequisite (ADR-MONO-031 Phase 2a) that gates the platform-console
+> users-area absorption (Phase 2b).
+
 ## Testing Expectations
 Required emphasis:
 - controller/API tests

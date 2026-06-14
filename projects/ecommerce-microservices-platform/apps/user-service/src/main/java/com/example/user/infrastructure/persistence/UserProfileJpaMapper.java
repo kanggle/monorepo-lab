@@ -1,6 +1,7 @@
 package com.example.user.infrastructure.persistence;
 
 import com.example.user.domain.model.UserProfile;
+import com.example.user.domain.tenant.TenantContext;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,6 +23,6 @@ class UserProfileJpaMapper {
     }
 
     UserProfileJpaEntity toEntity(UserProfile profile) {
-        return UserProfileJpaEntity.fromDomain(profile);
+        return UserProfileJpaEntity.fromDomain(profile, TenantContext.currentTenant());
     }
 }

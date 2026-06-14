@@ -19,6 +19,14 @@ class AddressJpaEntity {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
+    /**
+     * Owning tenant (ADR-MONO-030 Step 4, M1; TASK-BE-367) — denormalized from the
+     * parent user profile. Stamped once at insert; immutable afterward. Not part of
+     * the clean {@code Address} domain model — persistence/event layers only.
+     */
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(nullable = false, columnDefinition = "uuid")
     private UUID userId;
 
@@ -49,9 +57,10 @@ class AddressJpaEntity {
     @Column(nullable = false)
     private Instant updatedAt;
 
-    static AddressJpaEntity fromDomain(Address address) {
+    static AddressJpaEntity fromDomain(Address address, String tenantId) {
         AddressJpaEntity entity = new AddressJpaEntity();
         entity.id = address.getId();
+        entity.tenantId = tenantId;
         entity.userId = address.getUserId();
         entity.label = address.getLabel();
         entity.recipientName = address.getRecipientName();

@@ -72,6 +72,7 @@ class UserSignedUpConsumerIntegrationTest {
                 "UserSignedUp",
                 Instant.now(),
                 "auth-service",
+                "ecommerce",
                 new UserSignedUpEvent.Payload(userId, email, name)
         );
 
@@ -99,6 +100,7 @@ class UserSignedUpConsumerIntegrationTest {
                 "UserSignedUp",
                 Instant.now(),
                 "auth-service",
+                "ecommerce",
                 new UserSignedUpEvent.Payload(userId, email, name)
         );
 

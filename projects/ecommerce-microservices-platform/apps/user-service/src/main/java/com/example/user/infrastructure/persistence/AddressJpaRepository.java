@@ -11,13 +11,13 @@ import java.util.UUID;
 
 interface AddressJpaRepository extends JpaRepository<AddressJpaEntity, UUID> {
 
-    Optional<AddressJpaEntity> findByIdAndUserId(UUID id, UUID userId);
+    Optional<AddressJpaEntity> findByIdAndUserIdAndTenantId(UUID id, UUID userId, String tenantId);
 
-    List<AddressJpaEntity> findAllByUserId(UUID userId);
+    List<AddressJpaEntity> findAllByUserIdAndTenantId(UUID userId, String tenantId);
 
-    int countByUserId(UUID userId);
+    int countByUserIdAndTenantId(UUID userId, String tenantId);
 
     @Modifying
-    @Query("UPDATE AddressJpaEntity a SET a.isDefault = false WHERE a.userId = :userId AND a.isDefault = true")
-    void unmarkDefaultByUserId(@Param("userId") UUID userId);
+    @Query("UPDATE AddressJpaEntity a SET a.isDefault = false WHERE a.userId = :userId AND a.tenantId = :tenantId AND a.isDefault = true")
+    void unmarkDefaultByUserId(@Param("userId") UUID userId, @Param("tenantId") String tenantId);
 }

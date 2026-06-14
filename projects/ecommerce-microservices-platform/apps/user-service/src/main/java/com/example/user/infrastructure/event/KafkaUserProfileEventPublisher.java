@@ -38,6 +38,7 @@ public class KafkaUserProfileEventPublisher {
                 EVENT_TYPE_PROFILE_UPDATED,
                 Instant.now(),
                 "user-service",
+                springEvent.tenantId(),
                 new UserProfileUpdatedEvent.Payload(
                         springEvent.userId(),
                         springEvent.nickname(),
@@ -57,6 +58,7 @@ public class KafkaUserProfileEventPublisher {
                 EVENT_TYPE_USER_WITHDRAWN,
                 Instant.now(),
                 "user-service",
+                springEvent.tenantId(),
                 new UserWithdrawnEvent.Payload(
                         springEvent.userId(),
                         springEvent.withdrawnAt()
