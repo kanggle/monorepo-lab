@@ -2,23 +2,30 @@
 
 This contract defines the standard JWT structure, claims, and validation rules that all platform gateways and services must follow when processing tokens issued by the identity-platform service. It enables:
 
-- Unified authentication across multiple platforms and account types
+- Unified authentication across multiple platforms
 - Consistent role-based authorization within each platform
-- Single Sign-On (SSO) scoping by account type
+- Single Sign-On (SSO) across every platform an identity is entitled to
 - Cryptographic verification via asymmetric signing (RSA)
+
+> **Unified identity model (ADR-MONO-032, ACCEPTED 2026-06-14).** This contract was rewritten to remove the former `account_type` CONSUMER/OPERATOR partition. There is **one account = one identity**, authorized by a **set of roles**. A single identity MAY simultaneously hold consumer-facing roles (`CUSTOMER`, `FAN`) and operator-facing roles (`WMS_OPERATOR`, …) — the same person can be both a customer and an operator without provisioning separate accounts. This supersedes the partition decided by ADR-MONO-021 (now SUPERSEDED). The `account_type` claim is **deprecated** and survives only through the migration window (§ Migration Compatibility); the `roles` set is the **sole authorization axis**.
 
 ---
 
-# Account Types
+# Identity Model
 
-Two distinct account types exist within the same identity service:
+There is a single kind of account: an **identity** (globally unique `sub`), authorized by a **set of platform-scoped roles**.
 
-| Type | Purpose | Examples | Social Login | Session | Target Platforms |
-|---|---|---|---|---|---|
-| `CONSUMER` | Self-registered B2C users | Ecommerce shoppers, fan-site members | Allowed (Google, Naver, etc.) | Long-lived refresh tokens | ecommerce (customer), fan-platform |
-| `OPERATOR` | Company-provisioned B2B users | Warehouse staff, ERP clerks, MES operators, ecommerce admins | Not allowed | Short sessions | wms, erp, mes, scm, ecommerce (admin) |
+- **No account-type partition.** An identity is not classified as "consumer" or "operator" at the account level. Capability is expressed entirely by the roles the identity holds.
+- **Roles carry capability.** Some roles are *consumer-facing* (e.g. ecommerce `CUSTOMER`, fan-platform `FAN`/`PREMIUM_MEMBER`); others are *operator-facing* (e.g. `WMS_OPERATOR`, `SCM_OPERATOR`, ecommerce `ADMIN`). "Consumer-facing" vs "operator-facing" describes the *role*, not the *person*.
+- **One identity may hold both.** A marketplace MD who also shops, a seller who also buys, a warehouse lead who is also a fan member — each is **one account** holding both consumer-facing and operator-facing roles. (Under the former model these required two separate accounts; that constraint is removed.)
+- **Per-token least privilege is preserved.** A token is always for exactly one platform (`aud`) and carries only that platform's roles (§ Role Strategy). The "one person, both capabilities" fact lives in the identity's *role grants*; any single token stays narrowly scoped.
 
-**Constraint:** A single account cannot hold both account types. One person requiring both roles must provision separate accounts.
+| Capability family | Example roles | Target platforms |
+|---|---|---|
+| Consumer-facing | `CUSTOMER` (ecommerce), `FAN` / `PREMIUM_MEMBER` (fan-platform) | ecommerce (customer surface), fan-platform |
+| Operator-facing | `WMS_OPERATOR`, `OUTBOUND_MANAGER`, `SCM_OPERATOR`, `BUYER`, `ADMIN`, `TENANT_ADMIN`, … | wms, erp, mes, scm, ecommerce (admin surface) |
+
+Self-service signup grants consumer-facing roles; operator/admin provisioning grants operator-facing roles onto the same identity model (no separate account type). Role assignment and delegation follow the RBAC / assignment / ABAC decisions (ADR-MONO-002 lineage, ADR-MONO-020, ADR-MONO-024, ADR-MONO-025, ADR-MONO-026), unchanged.
 
 ---
 
@@ -43,15 +50,15 @@ All access tokens issued by the identity-platform service MUST include the follo
 | Claim | Type | Required | Description | Example |
 |---|---|---|---|---|
 | `sub` | UUID string | Yes | Account ID (globally unique, immutable across all platforms) | `550e8400-e29b-41d4-a716-446655440000` |
-| `account_type` | `CONSUMER` \| `OPERATOR` | Yes | Account classification — determines platform eligibility | `CONSUMER` |
 | `aud` | string | Yes | Target platform audience — must match gateway's own platform | `ecommerce`, `fan`, `wms`, `erp`, `mes`, `scm` |
-| `roles` | string[] | Yes | Platform-scoped roles for the `aud` platform (may be empty, minimum `[]`) | `["CUSTOMER"]` or `["WMS_OPERATOR", "OUTBOUND_MANAGER"]` |
+| `roles` | string[] | Yes | Platform-scoped roles for the `aud` platform — **the sole authorization axis** (may span consumer-facing and operator-facing roles; may be empty, minimum `[]`) | `["CUSTOMER"]`, `["CUSTOMER","ADMIN"]`, `["WMS_OPERATOR","OUTBOUND_MANAGER"]` |
 | `email` | string | Yes | Account email address | `user@example.com` |
 | `iss` | string | Yes | Issuer URI of the identity-platform service | `https://account.example.com` |
 | `iat` | number | Yes | Issued at (Unix epoch seconds) | `1746000000` |
 | `exp` | number | Yes | Expiry time (Unix epoch seconds) — gateways must reject expired tokens | `1746003600` |
 | `jti` | string | Recommended | JWT ID (unique token identifier for revocation and audit) | UUID |
 | `kid` | string | Recommended | Key ID (version identifier for key rotation) | `key-v1` |
+| `account_type` | `CONSUMER` \| `OPERATOR` | **Deprecated** | **Migration-only** (§ Migration Compatibility). Emitted during the dual-read window for backward compatibility; **gateways MUST NOT gate on it** once role-based admission is in place; **removed at migration completion** (D5 step 4). Not part of the target model. | `CONSUMER` |
 
 Additional custom claims MAY be added by the identity service but MUST NOT conflict with standard OIDC claims. Gateways that do not recognize a claim MUST ignore it.
 
@@ -59,42 +66,34 @@ Additional custom claims MAY be added by the identity service but MUST NOT confl
 
 # Role Strategy
 
-Roles are platform-scoped and define authorization within the target `aud` platform.
+Roles are platform-scoped and define authorization within the target `aud` platform. **`roles` is the only authorization axis** — there is no account-type gate above it.
 
-## CONSUMER Roles
-
-- **ecommerce:** `CUSTOMER` (single, immutable)
-- **fan-platform:** `FAN` (base role); may also include `PREMIUM_MEMBER` when an active membership subscription exists
-- **Other CONSUMER platforms:** Domain-specific role (e.g., `SUBSCRIBER`)
-
-CONSUMER accounts have only one active role per platform. Multi-role support is not required for CONSUMER platforms.
-
-## OPERATOR Roles
-
-- Operators may hold multiple roles on a single platform
-- A single operator account may have roles on multiple platforms (e.g., `wms` + `scm`)
-- Platform administrators define and assign roles; the identity service does not prescribe a role catalog per platform
-- Examples:
+- **A token carries only its `aud` platform's roles** (aud-scoped). A `wms` token carries the identity's wms roles; an `ecommerce` token carries its ecommerce roles. Roles are **not** flattened across platforms into a single token — this preserves per-token least privilege.
+- **An identity may hold roles on multiple platforms** (e.g. `wms` + `scm`), and may hold **both consumer-facing and operator-facing roles** — on the same platform (ecommerce `["CUSTOMER","ADMIN"]`) or across platforms (ecommerce `CUSTOMER` + wms `WMS_OPERATOR`).
+- **Multiple roles per platform are supported for every platform** (the former "CONSUMER single-role" restriction is removed). A consumer surface typically issues one role (`CUSTOMER`) but the model does not forbid more.
+- Platform administrators define and assign roles; the identity service does not prescribe a role catalog per platform. Examples:
   - WMS: `["WMS_OPERATOR", "OUTBOUND_MANAGER"]`
   - SCM: `["SCM_OPERATOR", "BUYER"]`
-  - ecommerce (admin): `["ADMIN"]`
-  - An operator with both: `aud: wms` token has `roles: ["WMS_OPERATOR"]`; same account with `aud: scm` has `roles: ["SCM_OPERATOR"]`
+  - ecommerce consumer surface: `["CUSTOMER"]`
+  - ecommerce admin surface: `["ADMIN"]`
+  - ecommerce, an account that both shops and administers: `["CUSTOMER", "ADMIN"]` (gateway path-routes on role — see § Gateway Enforcement)
+  - fan-platform: `["FAN"]`, or `["FAN", "PREMIUM_MEMBER"]` when an active membership subscription exists
 
 ---
 
 # Single Sign-On (SSO) Scope
 
-SSO is scoped by account type, not globally:
+SSO is scoped by **role possession on the target platform**, not by account type:
 
-- **CONSUMER SSO:** ecommerce and fan-platform share the same account. When a user logs in once, they can request tokens for either platform without re-entering credentials.
-- **OPERATOR SSO:** WMS, ERP, MES, and SCM share the same account. A provisioned operator can request tokens for any assigned platform.
-- **No Cross-Type SSO:** A CONSUMER account and an OPERATOR account never share credentials or tokens, even if held by the same person.
+- An identity may request an access token for **any platform (`aud`) on which it holds ≥ 1 role**, without re-entering credentials.
+- A single login therefore spans every entitled platform — consumer-facing and operator-facing alike. The same identity can hold a `CUSTOMER` token for ecommerce and a `WMS_OPERATOR` token for wms in one session.
+- **No cross-type restriction.** The former rule that consumer and operator surfaces could never share a session is removed — the unified identity holds both capabilities, and each `aud` token is independently scoped to that platform's roles.
 
 ---
 
 # Gateway Enforcement Rules
 
-Every platform gateway MUST implement the following validation and injection logic:
+Every platform gateway MUST implement the following validation and injection logic.
 
 ## Pre-Validation Cleanup
 
@@ -116,12 +115,16 @@ Every platform gateway MUST implement the following validation and injection log
 
 5. **Validate audience:** Reject if `aud` does not match the gateway's own platform identifier
 
-6. **Validate account type:**
-   - fan gateway: reject if `account_type != CONSUMER`
-   - ecommerce gateway: path-based account type enforcement:
-     - `/api/admin/**` paths: reject if `account_type != OPERATOR`
-     - All other paths: reject if `account_type != CONSUMER`
-   - wms, erp, mes, scm gateways: reject if `account_type != OPERATOR`
+6. **Validate authorization (role-based admission):** Admit iff the token carries ≥ 1 role valid for the requested surface; otherwise respond `403 Forbidden`. Authorization is a positive check against a closed role set.
+   - **fan gateway:** require a FAN-family role (e.g. `FAN`)
+   - **ecommerce gateway (path-based):**
+     - `/api/admin/**` paths: require an admin-family role (e.g. `ADMIN`)
+     - All other paths: require a consumer role (e.g. `CUSTOMER`)
+   - **wms, erp, mes, scm gateways:** require an operator role for that platform (e.g. `WMS_OPERATOR`)
+
+   This preserves the isolation that matters: a `CUSTOMER`-only token still fails the `/api/admin/**` role check, and a consumer-surface token never carries operator roles for a different `aud` (different token, § Role Strategy). Defense-in-depth (RBAC, ABAC data scope, access conditions) is unchanged and remains the primary gate on sensitive surfaces.
+
+   **Migration window (dual-read).** During the ADR-MONO-032 D5 transition (§ Migration Compatibility), a gateway MAY accept a request that satisfies **either** the legacy `account_type` partition **or** role-based admission — whichever passes. This lets legacy tokens (still carrying `account_type`) and new roles-only tokens coexist with **no mis-authorization window**. Once issuance is roles-only and the legacy claim is dropped (D5 step 4), gateways gate on roles only and ignore `account_type`.
 
 ## Post-Validation Injection
 
@@ -129,15 +132,30 @@ Every platform gateway MUST implement the following validation and injection log
    - `X-User-Id` ← `sub`
    - `X-User-Role` ← comma-separated `roles` array (e.g., `WMS_OPERATOR,OUTBOUND_MANAGER`)
    - `X-User-Email` ← `email`
-   - `X-Account-Type` ← `account_type`
+   - `X-Account-Type` is **no longer injected** (the claim is deprecated). Downstream services that need a consumer-vs-operator distinction derive it from `X-User-Role` (the presence of a consumer-facing vs operator-facing role).
 
 ## Error Handling
 
 - Invalid or missing JWT: respond with HTTP 401 Unauthorized
 - Expired token: respond with HTTP 401 Unauthorized
 - Signature mismatch: respond with HTTP 401 Unauthorized
-- Wrong `aud` or `account_type`: respond with HTTP 403 Forbidden (authenticated but not authorized for this platform)
+- Wrong `aud`, or no role valid for the requested surface: respond with HTTP 403 Forbidden (authenticated but not authorized for this surface)
 - JWKS endpoint unreachable: log error and respond with HTTP 503 Service Unavailable (do not fall back to cached keys older than 1 hour)
+
+---
+
+# Migration Compatibility
+
+The move from the `account_type` partition to roles-only follows the ADR-MONO-032 D5 staged migration. This contract defines the **target** model (roles-only) plus the **compatibility window** so the implementation steps land without a mis-authorization gap:
+
+| Stage | Issuance | Gateways | `account_type` |
+|---|---|---|---|
+| **Dual-read** (D5 step 1) | still emits `account_type` (legacy) | accept **legacy account-type OR role-based** admission (whichever passes) | present (legacy) |
+| **Roles-only issuance** (D5 step 2) | stops requiring `account_type`; emits roles-only; one identity may obtain a token for any `aud` it holds roles for; consumer capability seeded as `CUSTOMER`/`FAN` roles | role-based admission (dual-read leg still tolerant) | optional/absent |
+| **Account unify** (D5 step 3) | one account = one credential = role-grant set; existing separate accounts opt-in-linked (not force-merged) | role-based | optional/absent |
+| **Drop legacy** (D5 step 4) | `account_type` removed entirely | role-based only; ignore `account_type` if seen | removed |
+
+Gateways MUST treat `account_type` as advisory-only once role-based admission is deployed, and MUST NOT reject a request solely because `account_type` is absent.
 
 ---
 
@@ -169,12 +187,11 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 
 # Token Examples
 
-## Example 1: ecommerce CONSUMER
+## Example 1: ecommerce consumer
 
 ```json
 {
   "sub": "550e8400-e29b-41d4-a716-446655440000",
-  "account_type": "CONSUMER",
   "aud": "ecommerce",
   "roles": ["CUSTOMER"],
   "email": "shopper@example.com",
@@ -186,16 +203,16 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 }
 ```
 
-**Gateway Behavior (ecommerce):**
-- Validate signature, expiry, issuer, `aud = "ecommerce"`, `account_type = CONSUMER` ✓
-- Inject: `X-User-Id: 550e8400-e29b-41d4-a716-446655440000`, `X-User-Role: CUSTOMER`, `X-User-Email: shopper@example.com`, `X-Account-Type: CONSUMER`
+**Gateway Behavior (ecommerce, `/api/products` path):**
+- Validate signature, expiry, issuer, `aud = "ecommerce"` ✓
+- Path is not `/api/admin/**` → require a consumer role; `roles` contains `CUSTOMER` ✓
+- Inject: `X-User-Id: 550e8400-…`, `X-User-Role: CUSTOMER`, `X-User-Email: shopper@example.com`
 
-## Example 2: fan-platform CONSUMER with Premium Membership
+## Example 2: fan-platform consumer with Premium Membership
 
 ```json
 {
   "sub": "550e8400-e29b-41d4-a716-446655440000",
-  "account_type": "CONSUMER",
   "aud": "fan",
   "roles": ["FAN", "PREMIUM_MEMBER"],
   "email": "shopper@example.com",
@@ -208,16 +225,14 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 ```
 
 **Gateway Behavior (fan-platform):**
-- Validate signature, expiry, issuer, `aud = "fan"`, `account_type = CONSUMER` ✓
-- Inject: `X-User-Id: 550e8400-e29b-41d4-a716-446655440000`, `X-User-Role: FAN,PREMIUM_MEMBER`, `X-User-Email: shopper@example.com`, `X-Account-Type: CONSUMER`
-- Authorization: services may check `X-User-Role` for `PREMIUM_MEMBER` to enable premium features
+- Validate signature, expiry, issuer, `aud = "fan"`; require a FAN-family role; `roles` contains `FAN` ✓
+- Inject: `X-User-Role: FAN,PREMIUM_MEMBER`. Services may check for `PREMIUM_MEMBER` to enable premium features.
 
-## Example 3: WMS OPERATOR with Multiple Roles
+## Example 3: WMS operator with multiple roles
 
 ```json
 {
   "sub": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-  "account_type": "OPERATOR",
   "aud": "wms",
   "roles": ["WMS_OPERATOR", "OUTBOUND_MANAGER"],
   "email": "warehouse-lead@company.com",
@@ -230,17 +245,39 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 ```
 
 **Gateway Behavior (WMS):**
-- Validate signature, expiry, issuer, `aud = "wms"`, `account_type = OPERATOR` ✓
-- Inject: `X-User-Id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8`, `X-User-Role: WMS_OPERATOR,OUTBOUND_MANAGER`, `X-User-Email: warehouse-lead@company.com`, `X-Account-Type: OPERATOR`
-- Authorization: services may check `X-User-Role` for `OUTBOUND_MANAGER` to enable outbound-specific operations
+- Validate signature, expiry, issuer, `aud = "wms"`; require an operator role; `roles` contains `WMS_OPERATOR` ✓
+- Inject: `X-User-Role: WMS_OPERATOR,OUTBOUND_MANAGER`. Services may check for `OUTBOUND_MANAGER` to enable outbound-specific operations.
 
-## Example 4: Invalid Token (Wrong Audience)
+## Example 4: dual-capability identity (same person is both a customer and an admin)
+
+The unified model's defining case: **one account** holds both a consumer-facing and an operator-facing role. Each `aud` token is still scoped to that platform's roles.
+
+```json
+// token for aud=ecommerce — the account both shops and administers
+{
+  "sub": "7f3d2c1b-0000-4abc-8def-111122223333",
+  "aud": "ecommerce",
+  "roles": ["CUSTOMER", "ADMIN"],
+  "email": "md-who-also-shops@company.com",
+  "iss": "https://account.example.com",
+  "iat": 1746000000,
+  "exp": 1746001800,
+  "jti": "token-uuid-4",
+  "kid": "key-v1"
+}
+```
+
+**Gateway Behavior (ecommerce):**
+- `/api/products` (consumer path) → requires a consumer role; `roles` contains `CUSTOMER` ✓ → admitted
+- `/api/admin/products` (admin path) → requires an admin-family role; `roles` contains `ADMIN` ✓ → admitted
+- The same identity is authorized on both surfaces from one token, yet each path independently checks the role it requires. Under the former model this required two separate accounts.
+
+## Example 5: invalid token (wrong audience)
 
 ```json
 {
   "sub": "550e8400-e29b-41d4-a716-446655440000",
-  "account_type": "CONSUMER",
-  "aud": "wms",  // mismatch for ecommerce gateway
+  "aud": "wms",
   "roles": ["CUSTOMER"],
   "email": "shopper@example.com",
   "iss": "https://account.example.com",
@@ -250,42 +287,19 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 ```
 
 **Gateway Behavior (ecommerce):**
-- Validate signature, expiry, issuer ✓
-- Validate `aud = "wms"` against expected `"ecommerce"` ✗
-- Respond: HTTP 403 Forbidden — token is for a different platform
+- Validate `aud = "wms"` against expected `"ecommerce"` ✗ → HTTP 403 Forbidden (token is for a different platform)
 
-## Example 5: Invalid Token (Wrong Account Type — non-admin path)
+## Example 6: invalid token (no role for the requested surface)
 
 ```json
 {
   "sub": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-  "account_type": "OPERATOR",  // mismatch for ecommerce non-admin path (CONSUMER required)
   "aud": "ecommerce",
-  "roles": ["WMS_OPERATOR"],
-  "email": "operator@company.com",
+  "roles": ["CUSTOMER"],
+  "email": "shopper@example.com",
   "iss": "https://account.example.com",
   "iat": 1746000000,
-  "exp": 1746003600
-}
-```
-
-**Gateway Behavior (ecommerce — `/api/products` path):**
-- Validate signature, expiry, issuer, `aud = "ecommerce"` ✓
-- Path is not `/api/admin/**` → validate `account_type = CONSUMER` (got `OPERATOR`) ✗
-- Respond: HTTP 403 Forbidden — operator accounts cannot access consumer paths
-
-## Example 6: ecommerce OPERATOR (Admin)
-
-```json
-{
-  "sub": "7f3d2c1b-0000-4abc-8def-111122223333",
-  "account_type": "OPERATOR",
-  "aud": "ecommerce",
-  "roles": ["ADMIN"],
-  "email": "admin@company.com",
-  "iss": "https://account.example.com",
-  "iat": 1746000000,
-  "exp": 1746001800,
+  "exp": 1746003600,
   "jti": "token-uuid-6",
   "kid": "key-v1"
 }
@@ -293,30 +307,8 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 
 **Gateway Behavior (ecommerce — `/api/admin/products` path):**
 - Validate signature, expiry, issuer, `aud = "ecommerce"` ✓
-- Path `/api/admin/**` → validate `account_type = OPERATOR` (got `OPERATOR`) ✓
-- Inject: `X-User-Id: 7f3d2c1b-0000-4abc-8def-111122223333`, `X-User-Role: ADMIN`, `X-User-Email: admin@company.com`, `X-Account-Type: OPERATOR`
-
-## Example 7: Invalid Token (CONSUMER accessing admin path)
-
-```json
-{
-  "sub": "550e8400-e29b-41d4-a716-446655440000",
-  "account_type": "CONSUMER",
-  "aud": "ecommerce",
-  "roles": ["CUSTOMER"],
-  "email": "shopper@example.com",
-  "iss": "https://account.example.com",
-  "iat": 1746000000,
-  "exp": 1746003600,
-  "jti": "token-uuid-7",
-  "kid": "key-v1"
-}
-```
-
-**Gateway Behavior (ecommerce — `/api/admin/products` path):**
-- Validate signature, expiry, issuer, `aud = "ecommerce"` ✓
-- Path `/api/admin/**` → validate `account_type = OPERATOR` (got `CONSUMER`) ✗
-- Respond: HTTP 403 Forbidden — consumer accounts cannot access admin paths
+- Path `/api/admin/**` → require an admin-family role; `roles` is `["CUSTOMER"]`, no admin role ✗
+- Respond: HTTP 403 Forbidden — this token lacks an admin role for the admin surface (the account would need an `ADMIN` grant; see Example 4).
 
 ---
 
@@ -324,7 +316,7 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 
 - **Graceful Key Rotation:** When a new key version is deployed, the old key remains valid for 24 hours to allow tokens signed with the old key to complete in-flight requests.
 - **Clock Skew:** Gateways SHOULD allow up to 60 seconds of clock skew when validating `iat` and `exp` to tolerate minor time synchronization issues.
-- **Audit Logging:** Log all validation failures (signature, expiry, account type, audience) with the `jti` claim for audit trails.
+- **Audit Logging:** Log all validation failures (signature, expiry, authorization, audience) with the `jti` claim for audit trails.
 - **Token Refresh:** Access tokens are not refreshed in-place; clients must use the refresh token endpoint to obtain a new access token.
 
 ---
@@ -332,6 +324,10 @@ Gateways SHOULD cache this endpoint for up to 1 hour and refresh on-demand if a 
 # Change Rule
 
 Any change to the JWT structure, standard claims, signing strategy, or gateway enforcement rules defined in this contract — new claim, claim type change, signature algorithm change, validation rule, header injection — must be documented in this file **before** any project's identity-platform service emits the change or any project's gateway enforces it. Breaking changes (claim rename, claim removal, validation tightening) require a coordinated rollout across all consuming projects (each project's gateway + downstream services), and the contract update MUST precede the implementation PR.
+
+**Change log:**
+
+- **2026-06-14 (ADR-MONO-032, TASK-MONO-255) — unified identity model (breaking).** Removed the `account_type` CONSUMER/OPERATOR account-level partition; `roles` is now the sole authorization axis (one identity may hold consumer-facing + operator-facing roles). `account_type` demoted from Required to Deprecated (migration-only, removed at completion). Gateway enforcement changed from account-type partition to role-based admission; `X-Account-Type` injection removed. Cross-type SSO lifted (SSO scoped by role-possession). The coordinated rollout is the ADR-032 D5 staged migration (§ Migration Compatibility): dual-read gateways → roles-only issuance → account unify → drop legacy → e2e. Supersedes the `account_type` Required claim of ADR-MONO-021.
 
 ---
 
