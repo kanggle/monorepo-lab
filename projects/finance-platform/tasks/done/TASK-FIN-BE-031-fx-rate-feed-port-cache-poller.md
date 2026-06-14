@@ -1,6 +1,6 @@
 # TASK-FIN-BE-031 — FX rate feed: provider port + quote cache + scheduled poller (shadow)
 
-- **Status**: ready
+- **Status**: done
 - **Project**: finance-platform
 - **Service**: ledger-service
 - **Domain / traits**: fintech / [transactional, regulated, audit-heavy]
