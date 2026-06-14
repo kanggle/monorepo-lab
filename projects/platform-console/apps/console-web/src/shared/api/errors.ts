@@ -705,6 +705,16 @@ const MESSAGES: Record<string, string> = {
   ACCESS_DENIED: '이 작업을 수행할 권한이 없습니다.',
   ECOMMERCE_NOT_ELIGIBLE:
     'ecommerce 운영 화면에 접근할 권한(테넌트 스코프)이 없습니다. 운영자에게 문의하세요.',
+  // --- ecommerce product images (TASK-PC-FE-082 / §2.4.10 #10-14) ----------
+  IMAGE_NOT_FOUND: '대상 이미지를 찾을 수 없습니다. 목록을 새로고침하세요.',
+  IMAGE_LIMIT_EXCEEDED:
+    '상품당 등록할 수 있는 이미지 수를 초과했습니다. 기존 이미지를 삭제한 뒤 추가하세요.',
+  MEDIA_NOT_FOUND:
+    '업로드된 파일을 찾을 수 없습니다. 파일 업로드가 완료된 뒤 다시 시도하세요.',
+  MEDIA_VALIDATION_FAILED:
+    '이미지 형식 또는 크기가 올바르지 않습니다 (JPEG·PNG·WebP, 5MB 이하).',
+  STORAGE_UNAVAILABLE:
+    '이미지 저장소가 일시적으로 응답할 수 없습니다. 잠시 후 다시 시도하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {

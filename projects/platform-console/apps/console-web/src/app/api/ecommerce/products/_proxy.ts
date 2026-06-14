@@ -10,6 +10,11 @@ import {
   UpdateVariantBodySchema,
   AdjustStockBodySchema,
 } from '@/features/ecommerce-ops/api/types';
+import {
+  PresignedUrlBodySchema,
+  RegisterImageBodySchema,
+  UpdateImageBodySchema,
+} from '@/features/ecommerce-ops/api/image-types';
 
 /**
  * Shared error → HTTP mapping + body validators for the ecommerce-ops product
@@ -52,6 +57,10 @@ export {
   AddVariantBodySchema,
   UpdateVariantBodySchema,
   AdjustStockBodySchema,
+  // image facet (TASK-PC-FE-082 — § 2.4.10 #11/#12/#13)
+  PresignedUrlBodySchema,
+  RegisterImageBodySchema,
+  UpdateImageBodySchema,
   newRequestId,
 };
 
