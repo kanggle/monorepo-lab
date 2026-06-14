@@ -3,6 +3,7 @@ package com.example.notification.adapter.out.persistence.repository;
 import com.example.notification.adapter.out.persistence.mapper.PreferencePersistenceMapper;
 import com.example.notification.application.port.out.PreferenceRepository;
 import com.example.notification.domain.model.UserNotificationPreference;
+import com.example.notification.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -24,6 +25,12 @@ public class PreferenceRepositoryImpl implements PreferenceRepository {
 
     @Override
     public Optional<UserNotificationPreference> findByUserId(String userId) {
-        return jpaRepository.findById(userId).map(mapper::toDomain);
+        return findByUserId(userId, TenantContext.currentTenant());
+    }
+
+    @Override
+    public Optional<UserNotificationPreference> findByUserId(String userId, String tenantId) {
+        return jpaRepository.findByUserIdAndTenantId(userId, TenantContext.resolveOrDefault(tenantId))
+                .map(mapper::toDomain);
     }
 }

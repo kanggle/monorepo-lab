@@ -3,6 +3,7 @@ package com.example.notification.adapter.in.event;
 import com.example.notification.application.command.SendNotificationCommand;
 import com.example.notification.application.port.in.SendNotificationUseCase;
 import com.example.notification.domain.model.TemplateType;
+import com.example.notification.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +40,11 @@ public class UserSignedUpEventConsumer {
             return;
         }
 
+        // auth-service emits tenant_id on signup (user-service already reads it); a
+        // blank/missing value defaults to 'ecommerce' (D8 net-zero). Threaded via the
+        // command since this Kafka thread has no HTTP TenantContext (M4).
         SendNotificationCommand command = new SendNotificationCommand(
+                TenantContext.resolveOrDefault(event.tenantId()),
                 userId,
                 event.eventId(),
                 TemplateType.WELCOME,

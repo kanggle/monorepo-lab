@@ -32,13 +32,14 @@ class PaymentCompletedEventConsumerTest {
     @DisplayName("유효한 PaymentCompleted 이벤트를 처리하면 알림을 발송한다")
     void handle_validEvent_sendsNotification() {
         PaymentCompletedEvent event = new PaymentCompletedEvent(
-                "event-1", "PaymentCompleted", "2026-03-28T00:00:00Z", "payment-service",
+                "event-1", "PaymentCompleted", "2026-03-28T00:00:00Z", "payment-service", "tenant-x",
                 new PaymentCompletedEvent.PaymentCompletedPayload(
                         "pay-1", "order-1", "user-1", 50000L, "2026-03-28T00:00:00Z"));
 
         consumer.handle(event);
 
         verify(notificationSendService).sendNotification(argThat(cmd ->
+                cmd.tenantId().equals("tenant-x") &&
                 cmd.userId().equals("user-1") &&
                 cmd.templateType() == TemplateType.PAYMENT_COMPLETED));
     }
@@ -47,7 +48,7 @@ class PaymentCompletedEventConsumerTest {
     @DisplayName("payload가 null이면 알림을 발송하지 않는다")
     void handle_nullPayload_skips() {
         PaymentCompletedEvent event = new PaymentCompletedEvent(
-                "event-1", "PaymentCompleted", "2026-03-28T00:00:00Z", "payment-service", null);
+                "event-1", "PaymentCompleted", "2026-03-28T00:00:00Z", "payment-service", null, null);
 
         consumer.handle(event);
 

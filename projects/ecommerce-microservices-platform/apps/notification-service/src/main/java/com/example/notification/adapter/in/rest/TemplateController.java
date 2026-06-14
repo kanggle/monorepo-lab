@@ -2,6 +2,7 @@ package com.example.notification.adapter.in.rest;
 
 import com.example.notification.adapter.in.rest.dto.request.CreateTemplateRequest;
 import com.example.notification.adapter.in.rest.dto.request.UpdateTemplateRequest;
+import com.example.notification.adapter.in.rest.dto.response.TemplateDetailResponse;
 import com.example.notification.adapter.in.rest.dto.response.TemplateIdResponse;
 import com.example.notification.adapter.in.rest.dto.response.TemplateListResponse;
 import com.example.notification.application.command.CreateTemplateCommand;
@@ -38,6 +39,16 @@ public class TemplateController {
         validateAdminRole(userRole);
         PageResult<NotificationTemplate> templates = templateService.getTemplates(new PageQuery(Math.max(page, 0), size < 1 ? 20 : Math.min(size, PageQuery.MAX_SIZE), null, null));
         return ResponseEntity.ok(TemplateListResponse.from(templates));
+    }
+
+    @GetMapping("/{templateId}")
+    public ResponseEntity<TemplateDetailResponse> getTemplate(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @PathVariable String templateId
+    ) {
+        validateAdminRole(userRole);
+        NotificationTemplate template = templateService.getTemplate(templateId);
+        return ResponseEntity.ok(TemplateDetailResponse.from(template));
     }
 
     @PostMapping

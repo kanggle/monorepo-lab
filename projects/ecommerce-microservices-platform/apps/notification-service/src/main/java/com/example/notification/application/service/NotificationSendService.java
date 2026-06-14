@@ -45,12 +45,17 @@ public class NotificationSendService implements SendNotificationUseCase {
 
     @Transactional
     public void sendNotification(SendNotificationCommand command) {
-        if (notificationRepository.existsByEventId(command.eventId())) {
+        // The send path runs on a Kafka thread (no HTTP TenantContext); the originating
+        // tenant is bound on the event envelope and threaded explicitly via the command so
+        // dedup, preference resolution, template resolution and the created notification all
+        // scope to it (TASK-BE-372 M4).
+        if (notificationRepository.existsByEventId(command.eventId(), command.tenantId())) {
             log.info("Duplicate event detected, skipping. eventId={}", command.eventId());
             return;
         }
 
-        UserNotificationPreference preference = managePreferenceUseCase.getOrCreatePreference(command.userId());
+        UserNotificationPreference preference =
+                managePreferenceUseCase.getOrCreatePreference(command.userId(), command.tenantId());
 
         for (NotificationChannel channel : NotificationChannel.values()) {
             sendViaChannel(command, channel, preference, senderMap);
@@ -71,7 +76,7 @@ public class NotificationSendService implements SendNotificationUseCase {
             return;
         }
 
-        templateRepository.findByTypeAndChannel(command.templateType(), channel)
+        templateRepository.findByTypeAndChannel(command.templateType(), channel, command.tenantId())
                 .ifPresent(template -> renderAndSend(command, channel, template, sender));
     }
 
@@ -81,7 +86,7 @@ public class NotificationSendService implements SendNotificationUseCase {
         String renderedBody = template.renderBody(command.variables());
 
         Notification notification = Notification.create(
-                command.userId(), channel, renderedSubject, renderedBody, command.eventId());
+                command.tenantId(), command.userId(), channel, renderedSubject, renderedBody, command.eventId());
 
         try {
             sender.send(command.userId(), renderedSubject, renderedBody);

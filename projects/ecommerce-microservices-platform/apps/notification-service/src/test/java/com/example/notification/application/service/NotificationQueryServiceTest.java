@@ -38,7 +38,7 @@ class NotificationQueryServiceTest {
     @DisplayName("사용자별 알림 목록을 조회하면 result DTO를 반환한다")
     void getNotifications_returnsResultDto() {
         Notification notification = Notification.reconstitute(
-                "noti-1", "user-1", NotificationChannel.EMAIL,
+                "noti-1", "ecommerce", "user-1", NotificationChannel.EMAIL,
                 "Subject", "Body", NotificationStatus.SENT,
                 "event-1", 0, null, null);
         PageQuery pageQuery = new PageQuery(0, 20, null, null);
@@ -59,7 +59,7 @@ class NotificationQueryServiceTest {
     @DisplayName("알림 상세 조회 시 GetNotificationResult를 반환한다")
     void getNotificationDetail_returnsResultDto() {
         Notification notification = Notification.reconstitute(
-                "noti-1", "user-1", NotificationChannel.EMAIL,
+                "noti-1", "ecommerce", "user-1", NotificationChannel.EMAIL,
                 "Subject", "Body", NotificationStatus.SENT,
                 "event-1", 0, null, null);
         given(notificationRepository.findById("noti-1")).willReturn(Optional.of(notification));
@@ -84,7 +84,7 @@ class NotificationQueryServiceTest {
     @DisplayName("다른 사용자의 알림을 조회하면 권한 예외가 발생한다")
     void getNotificationDetail_wrongUser_throws() {
         Notification notification = Notification.reconstitute(
-                "noti-1", "user-2", NotificationChannel.EMAIL,
+                "noti-1", "ecommerce", "user-2", NotificationChannel.EMAIL,
                 "Subject", "Body", NotificationStatus.SENT,
                 "event-1", 0, null, null);
         given(notificationRepository.findById("noti-1")).willReturn(Optional.of(notification));

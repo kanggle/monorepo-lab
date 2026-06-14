@@ -3,6 +3,7 @@ package com.example.notification.adapter.in.event;
 import com.example.notification.application.command.SendNotificationCommand;
 import com.example.notification.application.port.in.SendNotificationUseCase;
 import com.example.notification.domain.model.TemplateType;
+import com.example.notification.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +40,10 @@ public class PaymentCompletedEventConsumer {
             return;
         }
 
+        // Bind the originating tenant from the envelope (defensive — default 'ecommerce'
+        // when the payment-service producer has not migrated; D8 net-zero). M4.
         SendNotificationCommand command = new SendNotificationCommand(
+                TenantContext.resolveOrDefault(event.tenantId()),
                 userId,
                 event.eventId(),
                 TemplateType.PAYMENT_COMPLETED,

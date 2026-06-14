@@ -57,6 +57,46 @@ class TemplateControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/notifications/templates/{id} - 템플릿 상세 조회 성공 (body 포함)")
+    void getTemplate_returns200WithBody() throws Exception {
+        NotificationTemplate template = NotificationTemplate.create(
+                TemplateType.ORDER_PLACED, NotificationChannel.EMAIL,
+                "Order {{orderId}}", "Your order {{orderId}} placed.");
+        given(templateService.getTemplate(template.getTemplateId()))
+                .willReturn(template);
+
+        mockMvc.perform(get("/api/notifications/templates/" + template.getTemplateId())
+                        .header("X-User-Role", "ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.templateId").value(template.getTemplateId()))
+                .andExpect(jsonPath("$.type").value("ORDER_PLACED"))
+                .andExpect(jsonPath("$.channel").value("EMAIL"))
+                .andExpect(jsonPath("$.subject").value("Order {{orderId}}"))
+                .andExpect(jsonPath("$.body").value("Your order {{orderId}} placed."));
+    }
+
+    @Test
+    @DisplayName("GET /api/notifications/templates/{id} - 존재하지/다른 테넌트 템플릿이면 404")
+    void getTemplate_notFound_returns404() throws Exception {
+        given(templateService.getTemplate("template-999"))
+                .willThrow(new TemplateNotFoundException("template-999"));
+
+        mockMvc.perform(get("/api/notifications/templates/template-999")
+                        .header("X-User-Role", "ADMIN"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TEMPLATE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("GET /api/notifications/templates/{id} - 비관리자 역할(USER)로 요청 시 403 반환")
+    void getTemplate_nonAdminRole_returns403() throws Exception {
+        mockMvc.perform(get("/api/notifications/templates/template-1")
+                        .header("X-User-Role", "USER"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
     @DisplayName("POST /api/notifications/templates - 템플릿 생성 성공")
     void createTemplate_returns201() throws Exception {
         given(templateService.createTemplate(any()))

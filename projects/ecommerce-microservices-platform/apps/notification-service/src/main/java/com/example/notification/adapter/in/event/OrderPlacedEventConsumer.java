@@ -3,6 +3,7 @@ package com.example.notification.adapter.in.event;
 import com.example.notification.application.command.SendNotificationCommand;
 import com.example.notification.application.port.in.SendNotificationUseCase;
 import com.example.notification.domain.model.TemplateType;
+import com.example.notification.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +40,11 @@ public class OrderPlacedEventConsumer {
             return;
         }
 
+        // Bind the originating tenant from the envelope (defensive — the order-service
+        // producer may not emit tenant_id yet → default 'ecommerce', D8 net-zero). Threaded
+        // explicitly because this runs on a Kafka thread with no HTTP TenantContext (M4).
         SendNotificationCommand command = new SendNotificationCommand(
+                TenantContext.resolveOrDefault(event.tenantId()),
                 userId,
                 event.eventId(),
                 TemplateType.ORDER_PLACED,

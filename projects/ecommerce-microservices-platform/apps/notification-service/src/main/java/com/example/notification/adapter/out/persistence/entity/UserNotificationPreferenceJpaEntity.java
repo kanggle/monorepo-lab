@@ -18,6 +18,9 @@ public class UserNotificationPreferenceJpaEntity {
     @Column(name = "user_id")
     private String userId;
 
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "email_enabled", nullable = false)
     private boolean emailEnabled;
 

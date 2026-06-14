@@ -10,8 +10,23 @@ import java.util.Optional;
 
 public interface TemplateRepository {
     NotificationTemplate save(NotificationTemplate template);
+
+    /**
+     * Tenant-scoped admin template detail / update lookup (tenant from
+     * {@code TenantContext}). Cross-tenant {@code templateId} → empty (caller 404s).
+     */
     Optional<NotificationTemplate> findById(String templateId);
-    Optional<NotificationTemplate> findByTypeAndChannel(TemplateType type, NotificationChannel channel);
+
+    /**
+     * Tenant-scoped send-path template resolution. The send path runs on a Kafka thread
+     * with no {@code TenantContext}, so the notification's bound tenant is passed
+     * explicitly.
+     */
+    Optional<NotificationTemplate> findByTypeAndChannel(TemplateType type, NotificationChannel channel, String tenantId);
+
+    /** Tenant-scoped admin create dedup (tenant from {@code TenantContext}). */
     boolean existsByTypeAndChannel(TemplateType type, NotificationChannel channel);
+
+    /** Tenant-scoped admin template list (tenant from {@code TenantContext}). */
     PageResult<NotificationTemplate> findAll(PageQuery pageQuery);
 }

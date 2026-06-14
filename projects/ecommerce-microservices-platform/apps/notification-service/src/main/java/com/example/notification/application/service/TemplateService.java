@@ -25,6 +25,14 @@ public class TemplateService implements ManageTemplateUseCase {
         return templateRepository.findAll(pageQuery);
     }
 
+    @Override
+    public NotificationTemplate getTemplate(String templateId) {
+        // findById is tenant-scoped (TenantContext) — a cross-tenant or missing id resolves
+        // to empty → 404 (existence hidden, cross-tenant-read-is-not-found).
+        return templateRepository.findById(templateId)
+                .orElseThrow(() -> new TemplateNotFoundException(templateId));
+    }
+
     @Transactional
     public TemplateResult createTemplate(CreateTemplateCommand command) {
         if (templateRepository.existsByTypeAndChannel(command.type(), command.channel())) {

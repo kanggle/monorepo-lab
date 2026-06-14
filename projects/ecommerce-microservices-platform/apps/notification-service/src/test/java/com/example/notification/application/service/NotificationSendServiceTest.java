@@ -43,13 +43,15 @@ class NotificationSendServiceTest {
     @InjectMocks
     private NotificationSendService notificationSendService;
 
+    private static final String TENANT = "ecommerce";
+
     @Test
     @DisplayName("중복 이벤트 수신 시 알림을 발송하지 않는다")
     void sendNotification_duplicateEvent_skips() {
-        given(notificationRepository.existsByEventId("event-1")).willReturn(true);
+        given(notificationRepository.existsByEventId("event-1", TENANT)).willReturn(true);
 
         SendNotificationCommand command = new SendNotificationCommand(
-                "user-1", "event-1", TemplateType.ORDER_PLACED, Map.of());
+                TENANT, "user-1", "event-1", TemplateType.ORDER_PLACED, Map.of());
 
         notificationSendService.sendNotification(command);
 
@@ -59,15 +61,15 @@ class NotificationSendServiceTest {
     @Test
     @DisplayName("사용자 설정이 없으면 기본 설정을 생성하고 알림을 발송한다")
     void sendNotification_noPreference_createsDefault() {
-        given(notificationRepository.existsByEventId("event-1")).willReturn(false);
+        given(notificationRepository.existsByEventId("event-1", TENANT)).willReturn(false);
 
-        UserNotificationPreference defaultPref = UserNotificationPreference.createDefault("user-1");
-        given(managePreferenceUseCase.getOrCreatePreference("user-1")).willReturn(defaultPref);
+        UserNotificationPreference defaultPref = UserNotificationPreference.createDefault("user-1", TENANT);
+        given(managePreferenceUseCase.getOrCreatePreference("user-1", TENANT)).willReturn(defaultPref);
 
         NotificationTemplate emailTemplate = NotificationTemplate.create(
                 TemplateType.ORDER_PLACED, NotificationChannel.EMAIL,
                 "Order {{orderId}}", "Your order {{orderId}} placed.");
-        given(templateRepository.findByTypeAndChannel(TemplateType.ORDER_PLACED, NotificationChannel.EMAIL))
+        given(templateRepository.findByTypeAndChannel(TemplateType.ORDER_PLACED, NotificationChannel.EMAIL, TENANT))
                 .willReturn(Optional.of(emailTemplate));
 
         given(emailSender.supportedChannel()).willReturn(NotificationChannel.EMAIL);
@@ -78,7 +80,7 @@ class NotificationSendServiceTest {
                 notificationRepository, templateRepository, managePreferenceUseCase, List.of(emailSender));
 
         SendNotificationCommand command = new SendNotificationCommand(
-                "user-1", "event-1", TemplateType.ORDER_PLACED, Map.of("orderId", "ORD-1"));
+                TENANT, "user-1", "event-1", TemplateType.ORDER_PLACED, Map.of("orderId", "ORD-1"));
 
         notificationSendService.sendNotification(command);
 
@@ -89,11 +91,11 @@ class NotificationSendServiceTest {
     @Test
     @DisplayName("비활성화된 채널로는 알림을 발송하지 않는다")
     void sendNotification_disabledChannel_skips() {
-        given(notificationRepository.existsByEventId("event-1")).willReturn(false);
+        given(notificationRepository.existsByEventId("event-1", TENANT)).willReturn(false);
 
-        UserNotificationPreference pref = UserNotificationPreference.createDefault("user-1");
+        UserNotificationPreference pref = UserNotificationPreference.createDefault("user-1", TENANT);
         pref.update(false, false, false); // all disabled
-        given(managePreferenceUseCase.getOrCreatePreference("user-1")).willReturn(pref);
+        given(managePreferenceUseCase.getOrCreatePreference("user-1", TENANT)).willReturn(pref);
 
         given(emailSender.supportedChannel()).willReturn(NotificationChannel.EMAIL);
 
@@ -101,7 +103,7 @@ class NotificationSendServiceTest {
                 notificationRepository, templateRepository, managePreferenceUseCase, List.of(emailSender));
 
         SendNotificationCommand command = new SendNotificationCommand(
-                "user-1", "event-1", TemplateType.ORDER_PLACED, Map.of());
+                TENANT, "user-1", "event-1", TemplateType.ORDER_PLACED, Map.of());
 
         notificationSendService.sendNotification(command);
 
@@ -111,15 +113,15 @@ class NotificationSendServiceTest {
     @Test
     @DisplayName("발송 실패 시 FAILED 상태로 저장된다")
     void sendNotification_sendFails_markedFailed() {
-        given(notificationRepository.existsByEventId("event-1")).willReturn(false);
+        given(notificationRepository.existsByEventId("event-1", TENANT)).willReturn(false);
 
-        UserNotificationPreference pref = UserNotificationPreference.createDefault("user-1");
-        given(managePreferenceUseCase.getOrCreatePreference("user-1")).willReturn(pref);
+        UserNotificationPreference pref = UserNotificationPreference.createDefault("user-1", TENANT);
+        given(managePreferenceUseCase.getOrCreatePreference("user-1", TENANT)).willReturn(pref);
 
         NotificationTemplate emailTemplate = NotificationTemplate.create(
                 TemplateType.ORDER_PLACED, NotificationChannel.EMAIL,
                 "Subject", "Body");
-        given(templateRepository.findByTypeAndChannel(TemplateType.ORDER_PLACED, NotificationChannel.EMAIL))
+        given(templateRepository.findByTypeAndChannel(TemplateType.ORDER_PLACED, NotificationChannel.EMAIL, TENANT))
                 .willReturn(Optional.of(emailTemplate));
 
         given(emailSender.supportedChannel()).willReturn(NotificationChannel.EMAIL);
@@ -130,7 +132,7 @@ class NotificationSendServiceTest {
                 notificationRepository, templateRepository, managePreferenceUseCase, List.of(emailSender));
 
         SendNotificationCommand command = new SendNotificationCommand(
-                "user-1", "event-1", TemplateType.ORDER_PLACED, Map.of());
+                TENANT, "user-1", "event-1", TemplateType.ORDER_PLACED, Map.of());
 
         notificationSendService.sendNotification(command);
 

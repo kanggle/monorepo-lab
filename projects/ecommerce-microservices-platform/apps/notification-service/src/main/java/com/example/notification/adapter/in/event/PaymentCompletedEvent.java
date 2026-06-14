@@ -8,6 +8,7 @@ public record PaymentCompletedEvent(
         @JsonProperty("event_type") @JsonAlias("eventType") String eventType,
         @JsonProperty("occurred_at") @JsonAlias("occurredAt") String occurredAt,
         String source,
+        @JsonProperty("tenant_id") @JsonAlias("tenantId") String tenantId,
         PaymentCompletedPayload payload
 ) {
     public record PaymentCompletedPayload(

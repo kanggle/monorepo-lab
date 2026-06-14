@@ -20,6 +20,9 @@ public class NotificationJpaEntity {
     @Column(name = "notification_id")
     private String notificationId;
 
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "user_id", nullable = false)
     private String userId;
 

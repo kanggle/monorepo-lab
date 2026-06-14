@@ -10,6 +10,7 @@ public class PreferencePersistenceMapper {
     public UserNotificationPreference toDomain(UserNotificationPreferenceJpaEntity entity) {
         return UserNotificationPreference.reconstitute(
                 entity.getUserId(),
+                entity.getTenantId(),
                 entity.isEmailEnabled(),
                 entity.isSmsEnabled(),
                 entity.isPushEnabled(),
@@ -21,6 +22,7 @@ public class PreferencePersistenceMapper {
     public UserNotificationPreferenceJpaEntity toEntity(UserNotificationPreference preference) {
         UserNotificationPreferenceJpaEntity entity = new UserNotificationPreferenceJpaEntity();
         entity.setUserId(preference.getUserId());
+        entity.setTenantId(preference.getTenantId());
         entity.setEmailEnabled(preference.isEmailEnabled());
         entity.setSmsEnabled(preference.isSmsEnabled());
         entity.setPushEnabled(preference.isPushEnabled());

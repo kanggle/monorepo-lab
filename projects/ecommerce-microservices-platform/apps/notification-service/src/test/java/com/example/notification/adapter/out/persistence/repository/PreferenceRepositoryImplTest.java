@@ -35,11 +35,11 @@ class PreferenceRepositoryImplTest {
     void save_validPreference_returnsSavedDomainObject() {
         LocalDateTime now = LocalDateTime.of(2026, 4, 6, 12, 0);
         UserNotificationPreference preference = UserNotificationPreference.reconstitute(
-                "user-1", true, false, true, now, now);
+                "user-1", "ecommerce", true, false, true, now, now);
         UserNotificationPreferenceJpaEntity entity = mock(UserNotificationPreferenceJpaEntity.class);
         UserNotificationPreferenceJpaEntity savedEntity = mock(UserNotificationPreferenceJpaEntity.class);
         UserNotificationPreference savedPreference = UserNotificationPreference.reconstitute(
-                "user-1", true, false, true, now, now);
+                "user-1", "ecommerce", true, false, true, now, now);
 
         given(mapper.toEntity(preference)).willReturn(entity);
         given(jpaRepository.save(entity)).willReturn(savedEntity);
@@ -59,9 +59,9 @@ class PreferenceRepositoryImplTest {
         UserNotificationPreferenceJpaEntity entity = mock(UserNotificationPreferenceJpaEntity.class);
         LocalDateTime now = LocalDateTime.of(2026, 4, 6, 12, 0);
         UserNotificationPreference preference = UserNotificationPreference.reconstitute(
-                "user-1", true, true, false, now, now);
+                "user-1", "ecommerce", true, true, false, now, now);
 
-        given(jpaRepository.findById("user-1")).willReturn(Optional.of(entity));
+        given(jpaRepository.findByUserIdAndTenantId("user-1", "ecommerce")).willReturn(Optional.of(entity));
         given(mapper.toDomain(entity)).willReturn(preference);
 
         Optional<UserNotificationPreference> result = repositoryImpl.findByUserId("user-1");
@@ -76,7 +76,7 @@ class PreferenceRepositoryImplTest {
     @Test
     @DisplayName("존재하지 않는 userId로 조회하면 빈 Optional을 반환한다")
     void findByUserId_nonExistingUser_returnsEmpty() {
-        given(jpaRepository.findById("unknown-user")).willReturn(Optional.empty());
+        given(jpaRepository.findByUserIdAndTenantId("unknown-user", "ecommerce")).willReturn(Optional.empty());
 
         Optional<UserNotificationPreference> result = repositoryImpl.findByUserId("unknown-user");
 
