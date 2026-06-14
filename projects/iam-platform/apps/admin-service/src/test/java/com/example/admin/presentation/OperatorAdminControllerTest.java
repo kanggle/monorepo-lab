@@ -235,7 +235,7 @@ class OperatorAdminControllerTest {
     void create_operator_returns_201() throws Exception {
         // TASK-BE-249: use 7-arg method signature
         when(createOperatorUseCase.createOperator(
-                anyString(), anyString(), anyString(), any(), any(), anyString(), anyString()))
+                anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any()))
                 .thenReturn(new CreateOperatorUseCase.CreateOperatorResult(
                         "op-new", "new@example.com", "New", "ACTIVE",
                         List.of("SUPPORT_LOCK"), false,
@@ -266,7 +266,7 @@ class OperatorAdminControllerTest {
     void create_operator_duplicate_email_returns_409() throws Exception {
         doThrow(new OperatorEmailConflictException("dup"))
                 .when(createOperatorUseCase).createOperator(
-                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any());
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
@@ -290,7 +290,7 @@ class OperatorAdminControllerTest {
     void create_operator_unknown_role_returns_400() throws Exception {
         doThrow(new RoleNotFoundException("GHOST"))
                 .when(createOperatorUseCase).createOperator(
-                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any());
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
@@ -355,7 +355,7 @@ class OperatorAdminControllerTest {
         // TASK-BE-249: non-platform-scope actor trying to create tenantId='*' → 403
         doThrow(new com.example.admin.application.exception.TenantScopeDeniedException("platform-scope only"))
                 .when(createOperatorUseCase).createOperator(
-                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any());
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())

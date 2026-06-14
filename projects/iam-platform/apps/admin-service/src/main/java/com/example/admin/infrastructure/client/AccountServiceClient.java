@@ -140,6 +140,48 @@ public class AccountServiceClient {
         return resp == null ? null : resp.identityId();
     }
 
+    /**
+     * TASK-BE-374 / ADR-MONO-034 U4 (step 3d) — resolve-or-create the central
+     * {@code identity_id} for a (tenant, email) via the account-service EP
+     * {@code POST /internal/tenants/{tenantId}/identities:resolveOrCreate}
+     * (TASK-BE-374). Used by unified new-operator provisioning so every operator
+     * born after step 3 is linked to a central identity.
+     *
+     * <p><b>FAIL-SOFT for provisioning</b> — the OPPOSITE of the 3c link's
+     * fail-closed. Operator creation must NOT hard-fail on identity-infra
+     * unavailability: any {@link DownstreamFailureException} /
+     * {@link NonRetryableDownstreamException} (account-service down / errors) is
+     * swallowed → returns {@code null} + {@code log.warn}. The operator is created
+     * UNLINKED and can be linked later via the explicit step-3c surface.
+     *
+     * <p>The {@code reuseExisting} flag carries the no-silent-merge opt-in (U3): a
+     * {@code 200 EXISTS_NOT_REUSED} (identity exists but caller did not opt in) also
+     * yields {@code null} — the use case treats null identically (no link).
+     *
+     * @return the resolved/created {@code identityId}, or {@code null} when no
+     *         identity was created/reused OR the downstream call failed (fail-soft).
+     */
+    @Retry(name = "accountService")
+    @CircuitBreaker(name = "accountService")
+    public String resolveOrCreateIdentity(String tenantId, String email, boolean reuseExisting) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("email", email);
+        body.put("reuseExisting", reuseExisting);
+        try {
+            ResolveOrCreateIdentityResponse resp = callPostWithTenant(
+                    "/internal/tenants/" + tenantId + "/identities:resolveOrCreate",
+                    body, tenantId, ResolveOrCreateIdentityResponse.class);
+            return resp == null ? null : resp.identityId();
+        } catch (DownstreamFailureException e) {
+            // FAIL-SOFT: provisioning must not block on identity-infra unavailability.
+            // NonRetryableDownstreamException (4xx) is a subclass, so this single catch
+            // covers both the retryable (5xx/timeout) and non-retryable (4xx) signals.
+            log.warn("resolve-or-create identity failed (fail-soft, operator left unlinked) "
+                    + "tenant={}: {}", tenantId, e.getMessage());
+            return null;
+        }
+    }
+
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
     public LockResponse lock(String accountId,
@@ -300,6 +342,50 @@ public class AccountServiceClient {
     }
 
     /**
+     * POST variant that stamps {@code X-Tenant-Id} (defense-in-depth tenant-scope
+     * re-check at the receiver, mirroring {@link #callGetWithTenant}) plus the
+     * client_credentials Bearer JWT. No {@code Idempotency-Key}/{@code X-Operator-ID}
+     * (the resolve-or-create EP is an idempotent provisioning primitive keyed by
+     * {@code uk_identities_tenant_email}). Error semantics identical to
+     * {@link #callPost}: 4xx → {@link NonRetryableDownstreamException}, other failures
+     * → {@link DownstreamFailureException} — the CALLER decides fail-soft vs
+     * fail-closed.
+     */
+    private <T> T callPostWithTenant(String path, Map<String, Object> body,
+                                     String tenantId, Class<T> responseType) {
+        try {
+            return restClient.post()
+                    .uri(path)
+                    .headers(h -> {
+                        if (tenantId != null) h.add("X-Tenant-Id", tenantId);
+                        h.setBearerAuth(tokenProvider.currentBearer());
+                        h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+                    })
+                    .body(body)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
+                        throw HttpClientErrorException.create(
+                                resp.getStatusCode(), resp.getStatusText(),
+                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
+                    })
+                    .body(responseType);
+        } catch (RestClientResponseException e) {
+            log.warn("account-service returned {} on {}: {}", e.getStatusCode(), path, e.getMessage());
+            if (e.getStatusCode().is4xxClientError()) {
+                String code = extractErrorCode(e.getResponseBodyAsByteArray());
+                throw new NonRetryableDownstreamException(
+                        "account-service error " + e.getStatusCode().value(), e,
+                        e.getStatusCode().value(), code);
+            }
+            throw new DownstreamFailureException(
+                    "account-service error " + e.getStatusCode().value(), e);
+        } catch (Exception e) {
+            log.error("account-service call failed on {}", path, e);
+            throw new DownstreamFailureException("account-service unavailable", e);
+        }
+    }
+
+    /**
      * Extract {@code code} (or nested {@code error.code}) from a downstream
      * error body. Returns {@code null} when the body is empty or unparseable —
      * callers must not depend on this being non-null.
@@ -346,6 +432,18 @@ public class AccountServiceClient {
             String accountId,
             String tenantId,
             String identityId
+    ) {}
+
+    /**
+     * TASK-BE-374 / ADR-MONO-034 U4 — response shape of the step-3d resolve-or-create
+     * EP ({@code POST /internal/tenants/{tenantId}/identities:resolveOrCreate}).
+     * {@code identityId} is {@code null} when {@code outcome=EXISTS_NOT_REUSED} (an
+     * identity exists but the caller did not opt in — no link, no merge per U3).
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record ResolveOrCreateIdentityResponse(
+            String identityId,
+            String outcome
     ) {}
 
     public record AccountSearchResponse(

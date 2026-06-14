@@ -5,6 +5,7 @@ import com.example.admin.application.exception.RoleNotFoundException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorLookupPort;
+import com.example.admin.infrastructure.client.AccountServiceClient;
 import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,8 +28,11 @@ import static com.example.admin.application.OperatorUseCaseTestSupport.role;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -44,13 +48,15 @@ class CreateOperatorUseCaseTest {
     @Mock OperatorLookupPort operatorLookupPort;
     @Mock TenantScopeGuard tenantScopeGuard;
     @Mock RoleGrantGuard roleGrantGuard;
+    @Mock AccountServiceClient accountServiceClient;
 
     CreateOperatorUseCase useCase;
 
     @BeforeEach
     void initUseCase() {
         useCase = new CreateOperatorUseCase(
-                operatorPort, auditor, passwordHasher, operatorLookupPort, tenantScopeGuard, roleGrantGuard);
+                operatorPort, auditor, passwordHasher, operatorLookupPort, tenantScopeGuard, roleGrantGuard,
+                accountServiceClient);
 
         // Default: actor is fan-platform (non-platform-scope)
         when(operatorLookupPort.findByOperatorId("actor-uuid"))
@@ -242,5 +248,117 @@ class CreateOperatorUseCaseTest {
                 any(), anyString(),
                 any(ActionCode.class), anyString(), anyString());
         verify(operatorPort, never()).createOperator(any());
+    }
+
+    // ── TASK-BE-374 (ADR-MONO-034 U4 / step 3d): unified new-operator provisioning ──
+
+    @Test
+    @DisplayName("BE-374: 신규 운영자 → resolve-or-create identity + linkIdentity (created+linked)")
+    void createOperator_resolvesIdentity_andLinks() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "linked@example.com")).thenReturn(false);
+        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
+        when(passwordHasher.hash(anyString())).thenReturn("h");
+        when(operatorPort.createOperator(any(AdminOperatorPort.NewOperator.class)))
+                .thenReturn(createdView(42L, "fan-platform", "linked@example.com", "Linked"));
+        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
+        when(auditor.newAuditId()).thenReturn("audit-link");
+        // identity resolves to a non-null id → must link
+        when(accountServiceClient.resolveOrCreateIdentity("fan-platform", "linked@example.com", false))
+                .thenReturn("idy-123");
+
+        useCase.createOperator(
+                "linked@example.com", "Linked", "StrongPass1!",
+                List.of(), actor(), "provisioning", "fan-platform", false);
+
+        verify(accountServiceClient).resolveOrCreateIdentity("fan-platform", "linked@example.com", false);
+        verify(operatorPort).linkIdentity(eq(42L), eq("idy-123"), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("BE-374: platform-scope '*' 운영자 → identity 생성/링크 완전 SKIP (account_db tenant 행 없음)")
+    void createOperator_platformScope_skipsIdentityEntirely() {
+        // actor must be platform-scope to create a '*' operator
+        when(operatorLookupPort.findByOperatorId("actor-uuid"))
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "*")));
+        when(operatorPort.existsByTenantIdAndEmail("*", "super@example.com")).thenReturn(false);
+        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
+        when(passwordHasher.hash(anyString())).thenReturn("h");
+        when(operatorPort.createOperator(any(AdminOperatorPort.NewOperator.class)))
+                .thenReturn(createdView(100L, "*", "super@example.com", "Super"));
+        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
+        when(auditor.newAuditId()).thenReturn("audit-sa");
+
+        useCase.createOperator(
+                "super@example.com", "Super", "StrongPass1!",
+                List.of(), actor(), "bootstrap", "*", false);
+
+        verify(accountServiceClient, never()).resolveOrCreateIdentity(anyString(), anyString(), anyBoolean());
+        verify(operatorPort, never()).linkIdentity(anyLong(), anyString(), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("BE-374: identity infra 불가용(downstream 실패→null) → fail-soft: 운영자는 생성, link 없음")
+    void createOperator_identityFailSoft_operatorCreated_noLink() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "soft@example.com")).thenReturn(false);
+        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
+        when(passwordHasher.hash(anyString())).thenReturn("h");
+        when(operatorPort.createOperator(any(AdminOperatorPort.NewOperator.class)))
+                .thenReturn(createdView(50L, "fan-platform", "soft@example.com", "Soft"));
+        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
+        when(auditor.newAuditId()).thenReturn("audit-soft");
+        // client method is fail-soft internally → returns null on downstream failure
+        when(accountServiceClient.resolveOrCreateIdentity("fan-platform", "soft@example.com", false))
+                .thenReturn(null);
+
+        CreateOperatorUseCase.CreateOperatorResult result = useCase.createOperator(
+                "soft@example.com", "Soft", "StrongPass1!",
+                List.of(), actor(), "provisioning", "fan-platform", false);
+
+        // operator IS created (no hard-fail), audit recorded, but NO link
+        assertThat(result.email()).isEqualTo("soft@example.com");
+        verify(operatorPort).createOperator(any());
+        verify(auditor).record(any());
+        verify(operatorPort, never()).linkIdentity(anyLong(), anyString(), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("BE-374: reuseExistingIdentity=true → resolve-or-create 에 reuse=true 로 전달")
+    void createOperator_reuseExistingIdentity_passthrough() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "reuse@example.com")).thenReturn(false);
+        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
+        when(passwordHasher.hash(anyString())).thenReturn("h");
+        when(operatorPort.createOperator(any(AdminOperatorPort.NewOperator.class)))
+                .thenReturn(createdView(60L, "fan-platform", "reuse@example.com", "Reuse"));
+        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
+        when(auditor.newAuditId()).thenReturn("audit-reuse");
+        when(accountServiceClient.resolveOrCreateIdentity("fan-platform", "reuse@example.com", true))
+                .thenReturn("idy-reused");
+
+        useCase.createOperator(
+                "reuse@example.com", "Reuse", "StrongPass1!",
+                List.of(), actor(), "provisioning", "fan-platform", true);
+
+        verify(accountServiceClient).resolveOrCreateIdentity("fan-platform", "reuse@example.com", true);
+        verify(operatorPort).linkIdentity(eq(60L), eq("idy-reused"), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("BE-374: reuseExistingIdentity=null → reuse=false 로 전달 (no silent merge 기본값)")
+    void createOperator_nullReuseFlag_treatedAsFalse() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "nullflag@example.com")).thenReturn(false);
+        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
+        when(passwordHasher.hash(anyString())).thenReturn("h");
+        when(operatorPort.createOperator(any(AdminOperatorPort.NewOperator.class)))
+                .thenReturn(createdView(70L, "fan-platform", "nullflag@example.com", "NullFlag"));
+        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
+        when(auditor.newAuditId()).thenReturn("audit-nullflag");
+        when(accountServiceClient.resolveOrCreateIdentity("fan-platform", "nullflag@example.com", false))
+                .thenReturn(null);
+
+        useCase.createOperator(
+                "nullflag@example.com", "NullFlag", "StrongPass1!",
+                List.of(), actor(), "provisioning", "fan-platform", null);
+
+        verify(accountServiceClient).resolveOrCreateIdentity("fan-platform", "nullflag@example.com", false);
     }
 }

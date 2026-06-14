@@ -437,6 +437,64 @@ Return the account's central identity id within the tenant.
 
 ---
 
+## POST /internal/tenants/{tenantId}/identities:resolveOrCreate
+
+> **TASK-BE-374 (ADR-MONO-034 U4 / U6 step 3d)**: resolve-or-create the central `identity` for a `(tenant, email)` — the **provisioning primitive** unified new-operator creation (admin-service `CreateOperatorUseCase`) calls so every operator born after step 3 is linked to a central identity. AIP-136 colon-verb. It IS a write (may create an identity) — a normal `/internal/**` mutating EP on the `X-Internal-Token`/client_credentials chain. **No silent merge (U3 / § 1.3)**: an existing identity is reused only on explicit `reuseExisting=true`; never merged, never mutated.
+
+**Path Parameters**:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `tenantId` | string (slug) | Target tenant. Pattern `^[a-z][a-z0-9-]{1,31}$` |
+
+**Request**:
+```json
+{
+  "email": "person@example.com",
+  "reuseExisting": false
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `email` | string | Yes | Valid email. Validated + normalized (lowercase) by the `Email` value object (lookup + insert use the normalized form). |
+| `reuseExisting` | boolean | No | Opt-in to REUSE an existing identity for `(tenant, email)`. **`null`/absent → `false`** (conservative; never reuse without an explicit opt-in — no silent merge). |
+
+**Behavior** (`uk_identities_tenant_email`-aware):
+
+1. identity does NOT exist for `(tenant, email)` → **CREATE** a fresh identity (new UUID, distinct from any account id) → `{identityId, "CREATED"}`.
+2. exists AND `reuseExisting=true` → return the existing identity, **no mutation** → `{identityId, "REUSED"}`.
+3. exists AND `reuseExisting=false` → `{identityId: null, "EXISTS_NOT_REUSED"}` — **no mutation, no merge**; the caller leaves the operator unlinked (explicit linking is the step-3c surface).
+
+**Race / idempotency**: on a fresh create, a concurrent insert may win the `uk_identities_tenant_email` race → `DataIntegrityViolationException` is caught, the row is re-read by `(tenant, email)`, and returned as `REUSED` (if `reuseExisting`) or `EXISTS_NOT_REUSED` — two concurrent provisioning calls converge on the single registry row without a constraint error escaping.
+
+**Response 200 OK**:
+```json
+{
+  "identityId": "1f0a2b3c-4d5e-6f70-8901-23456789abcd",
+  "outcome": "CREATED"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `identityId` | string \| null | The central identity for `(tenant, email)`. Non-null for `CREATED`/`REUSED`; **`null`** for `EXISTS_NOT_REUSED` (exists but caller did not opt in — no link, no merge). |
+| `outcome` | string | `CREATED` \| `REUSED` \| `EXISTS_NOT_REUSED`. |
+
+**Side Effect**: may INSERT one `identities` row (CREATED). **No audit row** (provisioning primitive) and **no outbox event** — pure identity correlation (U5). REUSED/EXISTS_NOT_REUSED mutate nothing.
+
+**Errors**:
+
+| Status | Code | Condition |
+|---|---|---|
+| 403 | `TENANT_SCOPE_DENIED` | Caller's `X-Tenant-Id` / JWT `tenant_id` does not match path `{tenantId}` (defense-in-depth, mirrors the sibling EPs) |
+| 400 | `VALIDATION_ERROR` | `email` missing or invalid format |
+| 401 | `UNAUTHORIZED` | `Authorization: Bearer` IAM `client_credentials` JWT (or `X-Internal-Token`) missing/invalid |
+
+> **Caller fail-soft note**: admin-service `CreateOperatorUseCase` treats ANY non-`CREATED`/`REUSED` outcome (incl. a `null` identityId or a downstream failure) as "no link" and creates the operator UNLINKED — operator provisioning must not hard-fail on identity-infra unavailability (the OPPOSITE of the 3c link's fail-closed). `tenantId='*'` (platform scope) is skipped entirely by the caller (no `account_db` tenant row for `*`).
+
+---
+
 ## PATCH /internal/tenants/{tenantId}/accounts/{accountId}/status
 
 Change the account status. Follows `AccountStatusMachine` transition rules.

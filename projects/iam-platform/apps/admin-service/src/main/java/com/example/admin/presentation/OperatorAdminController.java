@@ -123,7 +123,8 @@ public class OperatorAdminController {
                 body.roles(),
                 OperatorContextHolder.require(),
                 reason,
-                body.tenantId());  // TASK-BE-249
+                body.tenantId(),                  // TASK-BE-249
+                body.reuseExistingIdentity());    // TASK-BE-374 (ADR-034 U4 — identity reuse opt-in)
 
         CreateOperatorResponse response = new CreateOperatorResponse(
                 result.operatorId(),

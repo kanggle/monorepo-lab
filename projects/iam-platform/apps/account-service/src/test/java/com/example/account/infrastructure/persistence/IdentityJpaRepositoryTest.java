@@ -211,4 +211,43 @@ class IdentityJpaRepositoryTest {
                 "SELECT identity_id FROM accounts WHERE identity_id IS NOT NULL", String.class);
         assertThat(linkedIdentityIds).doesNotHaveDuplicates().hasSize(2);
     }
+
+    // ── TASK-BE-374 (step 3d) resolve-or-create round-trip: create + unique + reuse ──
+
+    @Test
+    @DisplayName("BE-374: resolve-or-create — 미존재 시 create, 재조회 시 같은 행 (reuse 토대)")
+    void resolveOrCreate_createsThenReReadsSameRow() {
+        Identity created = Identity.create(TenantId.FAN_PLATFORM, "be374@example.com");
+        identityRepo.save(IdentityJpaEntity.fromDomain(created));
+        identityRepo.flush();
+
+        // The provisioning primitive re-reads by (tenant, email) — must return the
+        // identity just created (the REUSE / race-re-read foundation).
+        Optional<IdentityJpaEntity> reread =
+                identityRepo.findByTenantIdAndPrimaryEmail(TENANT_FAN, "be374@example.com");
+        assertThat(reread).isPresent();
+        assertThat(reread.get().getIdentityId()).isEqualTo(created.getIdentityId());
+    }
+
+    @Test
+    @DisplayName("BE-374: resolve-or-create — 동일 (tenant,email) 두 번째 create 는 unique 위반 (race → re-read 경로)")
+    void resolveOrCreate_secondCreateHitsUniqueConstraint() {
+        String email = "be374-race@example.com";
+        identityRepo.save(IdentityJpaEntity.fromDomain(Identity.create(TenantId.FAN_PLATFORM, email)));
+        identityRepo.flush();
+
+        // A concurrent provisioning call that lost the race attempts a second insert
+        // for the same (tenant, email) → DataIntegrityViolationException; the use case
+        // catches it and re-reads (asserted above).
+        assertThatThrownBy(() -> {
+            identityRepo.save(IdentityJpaEntity.fromDomain(Identity.create(TenantId.FAN_PLATFORM, email)));
+            identityRepo.flush();
+        }).isInstanceOf(DataIntegrityViolationException.class);
+
+        // Exactly one row survives — convergence on the single registry row.
+        Integer cnt = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM identities WHERE tenant_id = ? AND primary_email = ?",
+                Integer.class, TENANT_FAN, email);
+        assertThat(cnt).isEqualTo(1);
+    }
 }

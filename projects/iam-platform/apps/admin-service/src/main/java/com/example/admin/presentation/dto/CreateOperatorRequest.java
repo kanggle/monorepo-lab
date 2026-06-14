@@ -45,5 +45,16 @@ public record CreateOperatorRequest(
          */
         @NotBlank
         @Size(min = 1, max = 32)
-        String tenantId
+        String tenantId,
+
+        /**
+         * TASK-BE-374 (ADR-MONO-034 U4 / U6 step 3d): opt-in to REUSE an existing
+         * central identity when one already exists for this (tenant, email), rather
+         * than creating a fresh one. Nullable — a missing flag is treated as
+         * {@code false} (no silent merge, ADR-034 U3): if an identity already exists
+         * and this flag is absent/false, the operator is created UNLINKED (link
+         * later via the explicit step-3c surface). Identity provisioning is fail-soft
+         * for operator creation, so this never blocks the create.
+         */
+        Boolean reuseExistingIdentity
 ) {}
