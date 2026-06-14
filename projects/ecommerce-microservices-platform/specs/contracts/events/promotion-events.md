@@ -13,9 +13,20 @@ Consumers must not depend on fields not defined in this contract.
   "event_type": "string",
   "occurred_at": "string (ISO 8601)",
   "source": "promotion-service",
+  "tenant_id": "string (owning tenant; default 'ecommerce')",
   "payload": {}
 }
 ```
+
+> **`tenant_id` (ADR-MONO-030 Step 4 / TASK-BE-368, M5).** The outer-axis tenant
+> that owns the promotion/coupon the event concerns. Carried on the **outbox**
+> envelope (not the payload) so consumers can route/scope per tenant across the
+> async boundary without parsing the payload. For request-originated events
+> (`CouponUsed`) it is the request tenant; for the batch-origin `CouponExpired` it
+> is the **expiring coupon's row tenant**. A standalone deployment or a
+> pre-multi-tenant promotion resolves to the default tenant `'ecommerce'`
+> (net-zero, D8). Always present (never blank); tenant-unaware consumers may ignore
+> it (additive).
 
 ---
 

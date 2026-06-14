@@ -76,7 +76,7 @@ class CouponRestoreIntegrationTest {
         // OrderCancelled 이벤트 처리 (consumer 직접 호출)
         OrderCancelledPayload payload = new OrderCancelledPayload(orderId, userId, "2026-03-28T12:00:00Z");
         OrderCancelledEvent event = new OrderCancelledEvent(
-                "evt-" + System.nanoTime(), "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", payload);
+                "evt-" + System.nanoTime(), "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", "ecommerce", payload);
         orderCancelledEventConsumer.handle(event);
 
         // 쿠폰 상태 ISSUED로 복원 확인
@@ -93,7 +93,7 @@ class CouponRestoreIntegrationTest {
         // consumer 호출해도 복원 대상이 없음
         OrderCancelledPayload payload = new OrderCancelledPayload(orderId, userId, "2026-03-28T12:00:00Z");
         OrderCancelledEvent event = new OrderCancelledEvent(
-                "evt-" + System.nanoTime(), "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", payload);
+                "evt-" + System.nanoTime(), "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", "ecommerce", payload);
 
         // 예외 없이 정상 처리됨 (복원 대상 없음)
         orderCancelledEventConsumer.handle(event);
@@ -114,7 +114,7 @@ class CouponRestoreIntegrationTest {
         // 동일 이벤트를 두 번 처리
         OrderCancelledPayload payload = new OrderCancelledPayload(orderId, userId, "2026-03-28T12:00:00Z");
         OrderCancelledEvent event = new OrderCancelledEvent(
-                "evt-" + System.nanoTime(), "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", payload);
+                "evt-" + System.nanoTime(), "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", "ecommerce", payload);
 
         orderCancelledEventConsumer.handle(event);
         orderCancelledEventConsumer.handle(event);

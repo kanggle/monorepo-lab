@@ -35,7 +35,7 @@ class OrderCancelledEventConsumerTest {
         OrderCancelledPayload payload = new OrderCancelledPayload(
                 "order-1", "user-1", "2026-03-28T12:00:00Z");
         OrderCancelledEvent event = new OrderCancelledEvent(
-                "event-1", "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", payload);
+                "event-1", "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", "ecommerce", payload);
 
         consumer.handle(event);
 
@@ -46,7 +46,7 @@ class OrderCancelledEventConsumerTest {
     @DisplayName("payload가 null인 이벤트는 무시한다")
     void handle_nullPayload_skips() {
         OrderCancelledEvent event = new OrderCancelledEvent(
-                "event-2", "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", null);
+                "event-2", "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", "ecommerce", null);
 
         consumer.handle(event);
 
@@ -59,7 +59,7 @@ class OrderCancelledEventConsumerTest {
         OrderCancelledPayload payload = new OrderCancelledPayload(
                 null, "user-1", "2026-03-28T12:00:00Z");
         OrderCancelledEvent event = new OrderCancelledEvent(
-                "event-3", "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", payload);
+                "event-3", "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", "ecommerce", payload);
 
         consumer.handle(event);
 
@@ -72,7 +72,7 @@ class OrderCancelledEventConsumerTest {
         OrderCancelledPayload payload = new OrderCancelledPayload(
                 "   ", "user-1", "2026-03-28T12:00:00Z");
         OrderCancelledEvent event = new OrderCancelledEvent(
-                "event-4", "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", payload);
+                "event-4", "OrderCancelled", "2026-03-28T12:00:00Z", "order-service", "ecommerce", payload);
 
         consumer.handle(event);
 

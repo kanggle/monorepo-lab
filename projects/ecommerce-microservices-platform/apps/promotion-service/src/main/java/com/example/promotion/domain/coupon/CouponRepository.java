@@ -25,4 +25,13 @@ public interface CouponRepository {
     List<Coupon> findByOrderIdAndStatus(String orderId, CouponStatus status);
 
     boolean existsByPromotionId(String promotionId);
+
+    /**
+     * Resolves a coupon row's outer-axis tenant by its (globally-unique) id, for the
+     * batch expiry path to stamp the CouponExpired envelope with the coupon's own
+     * tenant (M5). Tenant is a persistence/event concern — it is surfaced as a bare
+     * {@code String} so the {@code Coupon} domain aggregate stays tenant-free. Returns
+     * {@code null} when the coupon is absent (caller maps null → default tenant).
+     */
+    String findTenantIdByCouponId(String couponId);
 }

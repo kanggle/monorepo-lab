@@ -19,6 +19,16 @@ public class CouponJpaEntity {
     @Column(name = "coupon_id")
     private String couponId;
 
+    /**
+     * Outer-axis tenant owning this coupon (ADR-MONO-030 Step 4, M1; TASK-BE-368).
+     * Stamped once at issue from the request tenant context; immutable afterward, so
+     * an apply/restore/expire update preserves the coupon's tenant — and the batch
+     * expiry sweep reads it back to stamp the CouponExpired envelope (M5). Not part
+     * of the clean {@code Coupon} domain model — persistence/event layers only.
+     */
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "promotion_id", nullable = false)
     private String promotionId;
 
@@ -44,9 +54,10 @@ public class CouponJpaEntity {
     @Column(name = "order_id")
     private String orderId;
 
-    public static CouponJpaEntity fromDomain(Coupon coupon) {
+    public static CouponJpaEntity fromDomain(Coupon coupon, String tenantId) {
         CouponJpaEntity entity = new CouponJpaEntity();
         entity.couponId = coupon.getCouponId();
+        entity.tenantId = tenantId;
         entity.promotionId = coupon.getPromotionId();
         entity.userId = coupon.getUserId();
         entity.status = coupon.getStatus();

@@ -1,6 +1,7 @@
 package com.example.promotion.interfaces.event;
 
 import com.example.promotion.application.service.CouponCommandService;
+import com.example.promotion.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,17 @@ public class OrderCancelledEventConsumer {
         }
 
         log.info("Processing OrderCancelled event: orderId={}, eventId={}", orderId, event.eventId());
-        couponCommandService.restoreCouponsByOrderId(orderId);
+        // Bind the order's tenant from the consumed envelope (M5) so the restore stays
+        // within the tenant boundary. The restore reads by globally-unique orderId
+        // (tenant-agnostic) and updates preserve each coupon's own tenant_id
+        // (updatable=false); a pre-multi-tenant envelope (null tenant) resolves to the
+        // default tenant (net-zero, D8). Cleared in finally so the pooled listener
+        // thread leaks no context to the next message.
+        try {
+            TenantContext.set(event.tenantId());
+            couponCommandService.restoreCouponsByOrderId(orderId);
+        } finally {
+            TenantContext.clear();
+        }
     }
 }
