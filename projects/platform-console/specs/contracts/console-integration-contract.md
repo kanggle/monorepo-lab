@@ -2469,6 +2469,70 @@ Handlers); **NO** console-bff leg.
 > **Not a § 3 parity row**: additive federated **domain** scope; adds no § 3 row
 > (count stays **16**).
 
+#### 2.4.10.2 ecommerce promotions operator CRUD (TASK-PC-FE-086 / ADR-MONO-031 Phase 3b — console absorption of the `admin-dashboard` promotion-management area)
+
+The **third** ecommerce operations sub-binding (the second of the § 2.4.10 staged
+backlog areas), unblocked now that **promotion-service carries row-level
+`tenant_id`** (TASK-BE-368, ADR-MONO-030 Step 4). Unlike § 2.4.10.1 (users,
+read-only), this is a **full-CRUD** surface — the console equivalent of the
+`admin-dashboard` promotion-management screens (list / detail / create / update /
+delete + coupon-issue). It mirrors the § 2.4.10 product write binding (the
+mutation template), NOT the read-only users binding.
+
+This sub-binding **inherits § 2.4.10's cross-cutting rules verbatim** and does not
+restate them: the **credential** (domain-facing IAM OIDC access token —
+`getDomainFacingToken()`, **never** `getOperatorToken()`); the **tenant model**
+(tenant rides in the JWT `tenant_id ∈ {ecommerce,*}` claim — **no** `X-Tenant-Id`
+header; promotion-service `TenantContextFilter` + persistence `WHERE tenant_id`,
+TASK-BE-368); **eligibility** (registry `productKey=ecommerce` — **no** new
+`productKey`/enum); the **mutation discipline** (confirm-gated UI; **no**
+`Idempotency-Key` — the producer defines none; producer state-guards
+`409`/`422` surfaced inline); the **resilience** taxonomy (401 → whole-session IAM
+re-login; 403 → inline "not available to your role"; 404 → notFound empty-state;
+503/timeout → only this section degrades; tokens never logged); and the **§ 3
+parity matrix is NOT mutated** (count stays **16**). Per ADR-MONO-017 D2.A this is
+**console-web → ecommerce gateway direct** (Next.js Route Handlers); **NO**
+console-bff write leg.
+
+- **Authoritative producer (owned by ecommerce, consumed — do NOT redefine
+  here)**: ecommerce `promotion-service` `PromotionController`, consumed via the
+  ecommerce gateway admin path `/api/**` (base URL `ECOMMERCE_ADMIN_BASE_URL`, same
+  gateway + IAM-OIDC credential as § 2.4.10). Producer contract: ecommerce
+  [`promotion-api.md`](../../../ecommerce-microservices-platform/specs/contracts/http/promotion-api.md):
+
+  | # | Operation | Producer endpoint | Kind |
+  |---|---|---|---|
+  | 1 | list promotions | `GET /api/promotions?status&page&size` | read |
+  | 2 | promotion detail | `GET /api/promotions/{id}` | read |
+  | 3 | **create promotion** | `POST /api/promotions` | mutation |
+  | 4 | **update promotion** | `PUT /api/promotions/{id}` (full replace — **PUT**, not PATCH) | mutation |
+  | 5 | **delete promotion** | `DELETE /api/promotions/{id}` | mutation |
+  | 6 | **issue coupons** | `POST /api/promotions/{id}/coupons/issue` (`{userIds:[]}`) | mutation |
+
+  Promotion fields: `promotionId, name, description, discountType (FIXED|PERCENTAGE),
+  discountValue, maxDiscountAmount, maxIssuanceCount, issuedCount, startDate,
+  endDate, status (ACTIVE|SCHEDULED|ENDED), createdAt, updatedAt`. Error envelope =
+  the same flat ecommerce shape `{code, message, timestamp}` (400 `VALIDATION_ERROR`,
+  403 `ACCESS_DENIED`, 404 `PROMOTION_NOT_FOUND`, 422 `PROMOTION_ALREADY_ENDED` /
+  `PROMOTION_HAS_ISSUED_COUPONS` / `PROMOTION_NOT_ACTIVE` / `COUPON_LIMIT_EXCEEDED`),
+  consumed with the § 2.4.10 ecommerce parser.
+
+- **State-gated mutations**: update is offered only while `status != ENDED`
+  (producer `422 PROMOTION_ALREADY_ENDED`); coupon-issue only while
+  `status == ACTIVE` (`422 PROMOTION_NOT_ACTIVE`); delete is blocked when coupons
+  were issued (`422 PROMOTION_HAS_ISSUED_COUPONS`) — surfaced inline, not crashed.
+
+- **Out of this binding (deferred)**: the consumer coupon surface (`/api/coupons/me`,
+  shopper-plane — not an operator surface). shippings / notifications remain
+  § 2.4.10.3+ (each gated on its backend `tenant_id` migration).
+
+- **Producer immutability**: cross-reference only — any change to the ecommerce
+  promotion admin contract is an ecommerce project-internal spec-first change; this
+  section follows, never redefines it (§ 5 Change Rule).
+
+> **Not a § 3 parity row**: additive federated **domain** scope; adds no § 3 row
+> (count stays **16**).
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
