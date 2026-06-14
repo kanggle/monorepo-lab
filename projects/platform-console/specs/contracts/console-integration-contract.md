@@ -1101,6 +1101,7 @@ obligation and points at the owning finance specs.
   | 7 | account balance (drill) **(TASK-PC-FE-074)** | `GET /api/finance/ledger/accounts/{ledgerAccountCode}/balance` (`type`, `normalSide`, `debitTotal`, `creditTotal`, `balance`, `balanceSide`) | read |
   | 8 | account entries (drill, paginated) **(TASK-PC-FE-074)** | `GET /api/finance/ledger/accounts/{ledgerAccountCode}/entries` (journal lines posted to one account, most-recent first: `entryId`, `postedAt`, `direction`, `money`, `counterpartyLines?`) | read |
   | 9 | reconciliation statement (detail) **(TASK-PC-FE-075)** | `GET /api/finance/ledger/reconciliation/statements/{id}` (`statementId`, `ledgerAccountCode`, `source`, `statementDate`, `matchedCount`, `discrepancyCount`, `matches[]` {`statementLineExternalRef`, `journalEntryId`, `money`}, `discrepancies[]`) | read |
+  | 10 | FX position open-lots (drill) **(TASK-PC-FE-091)** | `GET /api/finance/ledger/settlements/{ledgerAccountCode}/{currency}/lots` (open FX acquisition lots for one `(account, currency)` position: `lots[]` {`lotId`, `currency`, `acquiredAt`, `seq`, `originalForeignMinor`, `remainingForeignMinor`, `originalBaseMinor`, `carryingBaseMinor`, `sourceJournalEntryId`} + summary `totalRemainingForeignMinor`, `totalCarryingBaseMinor`, `lotCount`; all `*Minor` = F5 minor-units **strings**; empty position → `200` `lots: []` / totals `"0"` / `lotCount 0`, NOT a 404) — consumes `ledger-api.md` § 12 (FIN-BE-028, the 20th increment) | read |
 
   **Honest ledger read-surface constraint (recorded, not papered over)**:
   the trial balance and the period list are **index-style** browsable reads
@@ -1116,11 +1117,21 @@ obligation and points at the owning finance specs.
   reconciliation **statement-detail** read (`GET /reconciliation/statements/{id}`,
   row 9) is **now surfaced (TASK-PC-FE-075)** — also **id-driven** (there is
   **no** statement list/search GET; statement ids originate from the ingest the
-  operator's integration ran — ingest is out of console scope). **With row 9 no
-  producer read remains forward-declared** — only the **non-existent** ledger
-  endpoints (a statement/account list/search) and the **out-of-scope** ledger
-  mutations beyond the FE-073 resolve. Fabricating any non-existent ledger
-  endpoint is **forbidden**.
+  operator's integration ran — ingest is out of console scope). The **FX position
+  open-lots** read (`GET /settlements/{ledgerAccountCode}/{currency}/lots`, row
+  10) is **now surfaced (TASK-PC-FE-091)** — **id-driven by the
+  `(ledgerAccountCode, currency)` pair** (no position list/search GET; the
+  colon-form code is **URL-encoded**, the currency is a 3-letter ISO-4217 code),
+  consuming the producer read `ledger-api.md` § 12 (FIN-BE-028, the 20th
+  increment, added after FE-075). An **empty position** is the producer's `200`
+  empty-state (`lots: []` / totals `"0"` / `lotCount 0`) — **rendered as an
+  empty-state message, never a 404 / error**; an **unsupported currency** →
+  `400 VALIDATION_ERROR` → inline. **The only forward-declared ledger producer
+  read that remains is whatever later FIN-BE increments add** — every read the
+  producer exposes today (rows 1–10) is surfaced. Only the **non-existent**
+  ledger endpoints (a statement/account/position list/search) and the
+  **out-of-scope** ledger mutations beyond the FE-073 resolve remain off the
+  console. Fabricating any non-existent ledger endpoint is **forbidden**.
 
 - **Per-domain credential selection — reuse of the § 2.4.5 rule via the
   § 2.4.7 finance binding (do NOT re-derive, do NOT diverge)**: the

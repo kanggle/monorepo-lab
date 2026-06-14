@@ -29,6 +29,8 @@ import {
   type AccountEntriesQueryParams,
   StatementSchema,
   type Statement,
+  PositionLotsResponseSchema,
+  type PositionLotsResponse,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from '../api/types';
@@ -393,6 +395,51 @@ export function useStatement(id: string | null, initial?: Statement) {
     queryFn: () => fetchStatement(id as string),
     enabled: Boolean(id && id.trim()),
     initialData: seeded ? initial : undefined,
+    staleTime: 30_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+// --- FX position open-lots read (id-driven; TASK-PC-FE-091) ---------------
+
+export function positionLotsKey(code: string | null, currency: string | null) {
+  return [LEDGER_KEY, 'position-lots', code ?? '', currency ?? ''] as const;
+}
+
+async function fetchPositionLots(
+  code: string,
+  currency: string,
+): Promise<PositionLotsResponse> {
+  const raw = await apiClient.get<unknown>(
+    `/api/ledger/settlements/${encodeURIComponent(code)}/${encodeURIComponent(currency)}/lots`,
+  );
+  return PositionLotsResponseSchema.parse(raw);
+}
+
+/**
+ * `usePositionLots` — reads the open FX acquisition lots for one
+ * `(account, currency)` position. READ-ONLY. The same-origin proxy attaches
+ * the domain-facing IAM OIDC access token server-side — NEVER the operator
+ * token (§ 2.4.7.1 reuse). `enabled`-gated: the query only fires once BOTH a
+ * non-empty account code AND a non-empty currency are supplied (the lookup
+ * form submit gates it). `retry: false` / no-refetch-storm posture, same as
+ * the other ledger reads. No 429 branch (the ledger has no documented 429).
+ * Adds NO mutation artifact. An empty position is a normal success
+ * (`lots: []`) — never an error.
+ */
+export function usePositionLots(
+  code: string | null,
+  currency: string | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: positionLotsKey(code, currency),
+    queryFn: () => fetchPositionLots(code as string, currency as string),
+    enabled:
+      enabled && Boolean(code && code.trim() && currency && currency.trim()),
     staleTime: 30_000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,

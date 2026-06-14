@@ -21,7 +21,15 @@ import { AccountLookup } from './AccountLookup';
 import { AccountDetail } from './AccountDetail';
 import { StatementLookup } from './StatementLookup';
 import { StatementDetail } from './StatementDetail';
-import { useJournalEntry, useAccountBalance, useAccountEntries, useStatement } from '../hooks/use-ledger-ops';
+import { PositionLotsLookup } from './PositionLotsLookup';
+import { PositionLotsTable } from './PositionLotsTable';
+import {
+  useJournalEntry,
+  useAccountBalance,
+  useAccountEntries,
+  useStatement,
+  usePositionLots,
+} from '../hooks/use-ledger-ops';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 
 /**
@@ -66,6 +74,7 @@ const TABS = [
   { key: 'entry', label: '분개 조회' },
   { key: 'reconciliation', label: '대사' },
   { key: 'account', label: '계정' },
+  { key: 'lots', label: 'FX 포지션 로트' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -194,6 +203,22 @@ export function LedgerOpsScreen({
   const statementNotFound =
     statementApiErr?.status === 404 ||
     (initialStatementNotFound && selectedStatementId === initialStatementId);
+
+  // FX position lots — (account, currency)-driven (TASK-PC-FE-091). Purely
+  // client-driven: the lookup form submit gates the query (no server seed).
+  const [lotsAccountCode, setLotsAccountCode] = useState<string | null>(null);
+  const [lotsCurrency, setLotsCurrency] = useState<string | null>(null);
+  const lotsQ = usePositionLots(lotsAccountCode, lotsCurrency, true);
+  const lotsApiErr = lotsQ.error instanceof ApiError ? lotsQ.error : null;
+  const lotsForbidden = lotsApiErr?.status === 403;
+  // A 400 (unsupported currency) is the only producer 4xx for this read; an
+  // empty position is a 200 (lots: []), NOT a 404. Surface 400 inline.
+  const lotsBadRequest = lotsApiErr?.status === 400;
+
+  function handleSubmitLots(code: string, currency: string) {
+    setLotsAccountCode(code);
+    setLotsCurrency(currency);
+  }
 
   /** Called when the operator clicks a trial-balance account code. */
   function handleSelectAccount(code: string) {
@@ -464,6 +489,58 @@ export function LedgerOpsScreen({
           <AccountDetail
             balance={accountBalance}
             entries={accountEntries}
+            onSelectEntry={handleSelectEntry}
+          />
+        )}
+      </div>
+
+      {/* FX position lots panel (TASK-PC-FE-091) */}
+      <div
+        role="tabpanel"
+        id="ledger-panel-lots"
+        aria-labelledby="ledger-tab-lots"
+        hidden={active !== 'lots'}
+        data-testid="ledger-panel-lots"
+      >
+        <PositionLotsLookup
+          initialCode={lotsAccountCode ?? undefined}
+          initialCurrency={lotsCurrency ?? undefined}
+          onSubmit={handleSubmitLots}
+        />
+        {!lotsAccountCode || !lotsCurrency ? (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="ledger-lots-none-input"
+          >
+            조회할 계정 코드와 통화를 입력하세요.
+          </p>
+        ) : lotsForbidden ? (
+          <div
+            role="status"
+            data-testid="ledger-lots-forbidden"
+            className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          >
+            {messageForCode('TENANT_FORBIDDEN')}
+          </div>
+        ) : lotsBadRequest ? (
+          <div
+            role="status"
+            data-testid="ledger-lots-bad-request"
+            className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          >
+            {messageForCode('VALIDATION_ERROR')}
+          </div>
+        ) : lotsApiErr ? (
+          <div
+            role="status"
+            data-testid="ledger-lots-error"
+            className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          >
+            {messageForCode(lotsApiErr.code)}
+          </div>
+        ) : (
+          <PositionLotsTable
+            lots={lotsQ.data ?? null}
             onSelectEntry={handleSelectEntry}
           />
         )}
