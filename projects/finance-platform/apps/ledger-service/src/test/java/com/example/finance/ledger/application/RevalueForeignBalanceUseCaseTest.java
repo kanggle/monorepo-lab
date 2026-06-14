@@ -9,10 +9,12 @@ import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchExce
 import com.example.finance.ledger.domain.error.LedgerErrors.IdempotencyKeyRequiredException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
 import com.example.finance.ledger.domain.error.LedgerErrors.RevaluationRateInvalidException;
+import com.example.finance.ledger.domain.journal.FxPositionLot;
 import com.example.finance.ledger.domain.journal.FxRevaluationPolicy.Outcome;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
 import com.example.finance.ledger.domain.journal.SourceRef;
+import com.example.finance.ledger.domain.journal.repository.FxPositionLotRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
 import com.example.finance.ledger.domain.money.Currency;
@@ -63,6 +65,7 @@ class RevalueForeignBalanceUseCaseTest {
     @Mock JournalRepository journalRepository;
     @Mock ProcessedEventStore processedEventStore;
     @Mock PostJournalEntryUseCase postJournalEntryUseCase;
+    @Mock FxPositionLotRepository fxPositionLotRepository;
     @Mock ClockPort clock;
 
     RevalueForeignBalanceUseCase useCase;
@@ -70,7 +73,8 @@ class RevalueForeignBalanceUseCaseTest {
     @BeforeEach
     void setUp() {
         useCase = new RevalueForeignBalanceUseCase(
-                journalRepository, processedEventStore, postJournalEntryUseCase, clock);
+                journalRepository, processedEventStore, postJournalEntryUseCase,
+                fxPositionLotRepository, clock);
     }
 
     private static RevalueForeignBalanceCommand cmd(String rate) {
@@ -93,6 +97,8 @@ class RevalueForeignBalanceUseCaseTest {
         when(clock.now()).thenReturn(NOW);
         when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
+        when(fxPositionLotRepository.findOpenLots(TENANT, CASH, Currency.USD))
+                .thenReturn(List.of());
 
         Result result = useCase.revalue(cmd("13.5"));
 
@@ -120,6 +126,8 @@ class RevalueForeignBalanceUseCaseTest {
         when(clock.now()).thenReturn(NOW);
         when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
+        when(fxPositionLotRepository.findOpenLots(TENANT, CASH, Currency.USD))
+                .thenReturn(List.of());
 
         Result result = useCase.revalue(cmd("13.0"));
 
@@ -259,6 +267,85 @@ class RevalueForeignBalanceUseCaseTest {
         assertThatThrownBy(() -> useCase.revalue(cmd("0")))
                 .isInstanceOf(RevaluationRateInvalidException.class);
         verify(postJournalEntryUseCase, never()).post(any(), anyString(), anyString());
+    }
+
+    // ------------------------------------------------------------------------
+    // markToSpot — the lot carrying distribution arithmetic (18th increment,
+    // TASK-FIN-BE-026). Pure helper: mark-to-spot per lot, last-lot residual
+    // absorption, single-lot exact, and the Σ == |revaluedBase| invariant.
+    // ------------------------------------------------------------------------
+
+    private static FxPositionLot lot(long remainingForeignMinor, long carryingBaseMinor) {
+        // A fully-open lot whose remaining is the relevant input to mark-to-spot.
+        // original == remaining (the factory's open invariant); carrying is set to the
+        // pre-revaluation value but markToSpot reads only remaining + the rate.
+        return FxPositionLot.acquire(TENANT, CASH, Currency.USD, NOW, 1L,
+                remainingForeignMinor, carryingBaseMinor, "src-entry", NOW);
+    }
+
+    @Test
+    @DisplayName("markToSpot: a single lot receives exactly |revaluedBase| (exact, no residual split)")
+    void markToSpotSingleLotExact() {
+        // 10000 USD @ closing 13.5 → revaluedBase 135000; the lone lot absorbs it whole.
+        long[] marks = RevalueForeignBalanceUseCase.markToSpot(
+                List.of(lot(10_000L, 130_000L)), new BigDecimal("13.5"), 135_000L);
+
+        assertThat(marks).containsExactly(135_000L);
+    }
+
+    @Test
+    @DisplayName("markToSpot: each lot marks to round(remaining × rate); the LAST absorbs the residual so Σ == |revaluedBase|")
+    void markToSpotTwoLotResidualAbsorption() {
+        // lot1 1000 USD, lot2 1000 USD, closing 1350.5 → per-lot round = 1,350,500 each.
+        // revaluedBase = round(2000 × 1350.5) = 2,701,000. lot1 = 1,350,500;
+        // lot2(last) = 2,701,000 − 1,350,500 = 1,350,500. Σ == 2,701,000 exactly.
+        long[] marks = RevalueForeignBalanceUseCase.markToSpot(
+                List.of(lot(1_000L, 1_300_000L), lot(1_000L, 1_400_000L)),
+                new BigDecimal("1350.5"), 2_701_000L);
+
+        assertThat(marks[0]).isEqualTo(1_350_500L);
+        assertThat(marks[1]).isEqualTo(1_350_500L);
+        assertThat(marks[0] + marks[1]).isEqualTo(2_701_000L);
+    }
+
+    @Test
+    @DisplayName("markToSpot: an odd rate forces a non-zero residual onto the last lot — Σ still == |revaluedBase|")
+    void markToSpotResidualOntoLastLot() {
+        // lot1 333 USD, lot2 667 USD, closing 3.0001 → revaluedBase = round(1000 × 3.0001) = 3000.
+        // lot1 = round(333 × 3.0001) = round(999.0333) = 999; lot2(last) = 3000 − 999 = 2001
+        // (NOT round(667 × 3.0001) = 2001.0667 → 2001 here too, but the last-lot rule guarantees Σ).
+        long[] marks = RevalueForeignBalanceUseCase.markToSpot(
+                List.of(lot(333L, 400_000L), lot(667L, 600_000L)),
+                new BigDecimal("3.0001"), 3_000L);
+
+        assertThat(marks[0]).isEqualTo(999L);
+        assertThat(marks[1]).isEqualTo(2_001L);
+        assertThat(marks[0] + marks[1]).isEqualTo(3_000L);
+    }
+
+    @Test
+    @DisplayName("markToSpot: a loss revaluation (negative revaluedBase magnitude handling) keeps marks non-negative and Σ == |revaluedBase|")
+    void markToSpotLossNonNegative() {
+        // Loss: aggregate carrying falls. revaluedBase is the new (smaller) magnitude.
+        // 1000 USD @ closing 1000 → revaluedBase 1,000,000; single lot → exact 1,000,000.
+        long[] marks = RevalueForeignBalanceUseCase.markToSpot(
+                List.of(lot(1_000L, 1_400_000L)), new BigDecimal("1000"), 1_000_000L);
+
+        assertThat(marks).containsExactly(1_000_000L);
+        assertThat(marks[0]).isNotNegative();
+    }
+
+    @Test
+    @DisplayName("markToSpot: an extreme shadow-desync where prior lots overshoot clamps the last lot at 0 (never negative)")
+    void markToSpotClampsLastLotAtZero() {
+        // Contrived desync: two lots whose round(remaining × rate) prior-sum already exceeds
+        // a tiny revaluedBase → last lot clamps to 0 (non-negative CHECK preserved).
+        long[] marks = RevalueForeignBalanceUseCase.markToSpot(
+                List.of(lot(1_000L, 1_000L), lot(1_000L, 1_000L)),
+                new BigDecimal("1000"), 500_000L); // prior lot1 marks 1,000,000 > 500,000
+
+        assertThat(marks[0]).isEqualTo(1_000_000L);
+        assertThat(marks[1]).isEqualTo(0L); // clamped — never negative
     }
 
     private static List<JournalLine> revaluationLines() {

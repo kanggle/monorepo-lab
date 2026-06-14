@@ -174,4 +174,28 @@ public class FxPositionLot {
         this.remainingForeignMinor -= foreignMinor;
         this.carryingBaseMinor -= baseMinor;
     }
+
+    /**
+     * Mark this open lot's {@code carrying_base_minor} to spot on an FX revaluation
+     * (18th increment — TASK-FIN-BE-026, ADR-001 D4-a). Revaluation trues the
+     * <i>aggregate</i> position carrying up to spot ({@code revaluedBase}); to keep the
+     * D4 invariant {@code Σ open-lot carrying == aggregate carrying}, each open lot's
+     * carrying is re-marked to its own foreign-at-spot value (the LAST lot absorbing the
+     * rounding residual). Only the carrying changes — {@code remaining_foreign_minor} is
+     * untouched (a revaluation removes no foreign quantity). The new carrying must stay
+     * non-negative (the {@code ck_fx_lot_carrying_base_nonneg} CHECK mirrors this);
+     * because {@code closingRate > 0} and {@code remaining >= 0} a marked carrying is
+     * inherently non-negative, and the last-lot residual is clamped at {@code 0} for an
+     * extreme shadow-desync (documented edge — a normal position never hits it).
+     *
+     * @param newCarryingBaseMinor the lot's re-marked base carrying magnitude
+     *                             ({@code >= 0})
+     */
+    public void markCarrying(long newCarryingBaseMinor) {
+        if (newCarryingBaseMinor < 0L) {
+            throw new IllegalArgumentException(
+                    "marked carrying must be non-negative: " + newCarryingBaseMinor);
+        }
+        this.carryingBaseMinor = newCarryingBaseMinor;
+    }
 }
