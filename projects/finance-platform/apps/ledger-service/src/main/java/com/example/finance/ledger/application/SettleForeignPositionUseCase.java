@@ -8,10 +8,15 @@ import com.example.finance.ledger.domain.error.LedgerErrors.IdempotencyKeyRequir
 import com.example.finance.ledger.domain.error.LedgerErrors.JournalEntryNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementAmountInvalidException;
+import com.example.finance.ledger.domain.journal.CostFlowMethod;
+import com.example.finance.ledger.domain.journal.FxCostFlowConfig;
+import com.example.finance.ledger.domain.journal.FxPositionLot;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.SettlementResult;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.SourceRef;
+import com.example.finance.ledger.domain.journal.repository.FxCostFlowConfigRepository;
+import com.example.finance.ledger.domain.journal.repository.FxPositionLotRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository.AccountTotals;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
@@ -20,7 +25,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -56,6 +65,8 @@ public class SettleForeignPositionUseCase {
     private final LedgerAccountRepository ledgerAccountRepository;
     private final ProcessedEventStore processedEventStore;
     private final PostJournalEntryUseCase postJournalEntryUseCase;
+    private final FxCostFlowConfigRepository fxCostFlowConfigRepository;
+    private final FxPositionLotRepository fxPositionLotRepository;
     private final ClockPort clock;
 
     /** Why a settlement booked nothing ({@code settled=false}). */
@@ -149,11 +160,27 @@ public class SettleForeignPositionUseCase {
         // (5) Compute. settlementRate ≤ 0 → SETTLEMENT_RATE_INVALID (422). A position
         //     always books an entry (even realized == 0 — a 2-line removal+proceeds).
         //     F_settle == F → full settlement (residual exactly 0); F_settle < |F| →
-        //     weighted-average partial, residual (F − F_settle, C − C_settle) stays OPEN.
-        Optional<SettlementResult> computed = FxSettlementPolicy.settle(
-                cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
-                foreignBalanceMinor, carryingBaseMinor, settleForeignMinor,
-                cmd.settlementRate(), cmd.proceedsAccountCode());
+        //     partial, residual (F − F_settle, C − C_settle) stays OPEN.
+        //
+        //     The carrying basis C_settle is chosen by the tenant's cost-flow method
+        //     (17th increment — TASK-FIN-BE-025, ADR-001 D3). Resolved AFTER all the
+        //     guards above so FIFO and weighted-average share the identical guard surface.
+        //       - WEIGHTED_AVERAGE / unset: the pre-existing weighted-average path —
+        //         byte-identical, net-zero (FxSettlementPolicy.settle derives C_settle
+        //         from the pool average).
+        //       - FIFO: walk the open lots (acquired_at, seq) ASC, summing each lot's
+        //         carrying slice into C_settle_fifo, then build the SAME entry shape via
+        //         FxSettlementPolicy.settleWithCarrying(C_settle_fifo). Lots absent/short
+        //         (Σremaining < |F_settle|) → SAFE FALLBACK to weighted-average (no
+        //         net-non-zero), with NO lot mutation persisted.
+        CostFlowMethod method = fxCostFlowConfigRepository.findByTenantId(cmd.tenantId())
+                .map(FxCostFlowConfig::method).orElse(CostFlowMethod.WEIGHTED_AVERAGE);
+        Optional<SettlementResult> computed = (method == CostFlowMethod.FIFO)
+                ? computeFifo(cmd, foreignBalanceMinor, carryingBaseMinor, settleForeignMinor)
+                : FxSettlementPolicy.settle(
+                        cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
+                        foreignBalanceMinor, carryingBaseMinor, settleForeignMinor,
+                        cmd.settlementRate(), cmd.proceedsAccountCode());
         if (computed.isEmpty()) {
             // F == 0 was already handled above; this is defensive.
             return Result.noOp(NoOpReason.NO_POSITION, null);
@@ -203,6 +230,106 @@ public class SettleForeignPositionUseCase {
                     "settleForeignAmount exceeds the position's foreign balance (over-settle)");
         }
         return fSettle;
+    }
+
+    /**
+     * Compute the settlement under the FIFO cost-flow method (17th increment —
+     * TASK-FIN-BE-025, ADR-001 D3). Loads the open lots {@code (acquired_at, seq)} ASC and
+     * walks them via {@link #walkFifo(List, long)} to derive the lot-exact settled carrying
+     * {@code C_settle_fifo}. On success it persists the consumed lots' decremented
+     * remaining/carrying in the SAME {@code @Transactional} (atomic with the entry) and
+     * builds the entry via {@link FxSettlementPolicy#settleWithCarrying} (same shape as
+     * weighted-average; only the carrying basis differs).
+     *
+     * <p><b>Safe fallback</b> — when the open lots are absent or short
+     * ({@code Σremaining < |F_settle|}, e.g. a non-settlement reduction created a shadow
+     * desync, or a pre-lot position), it does <b>not</b> mutate/persist any lot and falls
+     * back to the weighted-average path (no net-non-zero), logging {@code FX_FIFO_LOT_SHORTFALL}.
+     * The walk is computed first (no mutation), and lots are consumed + saved only after the
+     * shortfall check passes — so a fallback leaves every lot untouched.
+     */
+    private Optional<SettlementResult> computeFifo(SettleForeignPositionCommand cmd,
+                                                   long foreignBalanceMinor, long carryingBaseMinor,
+                                                   long settleForeignMinor) {
+        List<FxPositionLot> openLots = fxPositionLotRepository.findOpenLots(
+                cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency());
+        FifoWalk walk = walkFifo(openLots, Math.abs(settleForeignMinor));
+        if (walk == null) {
+            // Σ open-lot remaining < |F_settle| — lots absent/short. Fall back to the
+            // weighted-average carrying basis; persist NO lot mutation (net-non-zero avoided).
+            log.warn("FX_FIFO_LOT_SHORTFALL tenant={} account={} currency={} settleForeign={} "
+                            + "openLots={} — falling back to weighted-average carrying",
+                    cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
+                    settleForeignMinor, openLots.size());
+            return FxSettlementPolicy.settle(
+                    cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
+                    foreignBalanceMinor, carryingBaseMinor, settleForeignMinor,
+                    cmd.settlementRate(), cmd.proceedsAccountCode());
+        }
+
+        // C_settle carries the same sign as F (the policy expects a signed C_settle); the
+        // walk summed magnitudes, so re-apply sign(F).
+        long carryingSettledFifo = foreignBalanceMinor < 0L
+                ? -walk.carryingSettledMinor() : walk.carryingSettledMinor();
+
+        // Persist the consumed lots' decrements in the SAME Tx (atomic with the entry).
+        for (FxPositionLot consumed : walk.consumedLots()) {
+            fxPositionLotRepository.save(consumed);
+        }
+
+        return FxSettlementPolicy.settleWithCarrying(
+                cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
+                foreignBalanceMinor, settleForeignMinor, carryingSettledFifo,
+                cmd.settlementRate(), cmd.proceedsAccountCode());
+    }
+
+    /** The result of a FIFO walk: the summed settled carrying (magnitude) + the mutated lots. */
+    record FifoWalk(long carryingSettledMinor, List<FxPositionLot> consumedLots) {
+    }
+
+    /**
+     * Walk the open lots oldest-first, consuming {@code neededForeign} (a positive
+     * magnitude {@code |F_settle|}) and summing each lot's carrying slice. The lots are
+     * already ordered {@code (acquired_at, seq)} ASC by the repository. For each lot the
+     * consumed quantity is {@code min(lot.remaining, needed)} and its carrying slice is
+     * {@code round(lot.carrying × consumed / lot.remaining, HALF_UP)} — when a lot is fully
+     * consumed ({@code consumed == lot.remaining}) the slice is exactly its whole carrying
+     * (drift 0). It <b>mutates</b> the lot objects (via {@link FxPositionLot#consume}) and
+     * collects them; the caller persists them only after this returns non-{@code null}.
+     *
+     * <p>Returns {@code null} when the open lots cannot cover {@code neededForeign}
+     * ({@code Σremaining < neededForeign}) — the shortfall signal for the safe fallback. In
+     * that case any in-memory mutations are discarded (the lot entities are managed but the
+     * caller does NOT {@code save} them; they are not reloaded for the fallback path).
+     */
+    static FifoWalk walkFifo(List<FxPositionLot> openLots, long neededForeign) {
+        long needed = neededForeign;
+        long carryingSettled = 0L;
+        List<FxPositionLot> consumedLots = new ArrayList<>();
+        for (FxPositionLot lot : openLots) {
+            if (needed == 0L) {
+                break;
+            }
+            long remaining = lot.remainingForeignMinor();
+            if (remaining <= 0L) {
+                continue;
+            }
+            long consume = Math.min(remaining, needed);
+            long slice = (consume == remaining)
+                    ? lot.carryingBaseMinor() // fully consumed → exact whole carrying (no drift)
+                    : new BigDecimal(lot.carryingBaseMinor())
+                            .multiply(new BigDecimal(consume))
+                            .divide(new BigDecimal(remaining), 0, RoundingMode.HALF_UP)
+                            .longValueExact();
+            lot.consume(consume, slice);
+            consumedLots.add(lot);
+            carryingSettled += slice;
+            needed -= consume;
+        }
+        if (needed > 0L) {
+            return null; // Σ open-lot remaining < neededForeign — shortfall
+        }
+        return new FifoWalk(carryingSettled, consumedLots);
     }
 
     private static String reason(SettleForeignPositionCommand cmd) {

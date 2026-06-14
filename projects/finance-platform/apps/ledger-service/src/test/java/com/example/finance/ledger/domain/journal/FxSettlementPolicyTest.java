@@ -348,4 +348,63 @@ class FxSettlementPolicyTest {
         assertThat(c3).isEqualTo(cRem2);                               // residual fully removed
         assertThat(c1 + c2 + c3).isEqualTo(130_000L);                  // sums to C, no drift
     }
+
+    // ---- settleWithCarrying — FIFO pre-computed C_settle (17th increment — TASK-FIN-BE-025) ----
+
+    @Test
+    @DisplayName("settleWithCarrying builds the same shape from a pre-computed C_settle (FIFO basis)")
+    void settleWithCarryingUsesProvidedBasis() {
+        // F = 2000 USD, settle 1500 @ 1500; FIFO C_settle = 2,000,000 (vs pool avg 2,025,000).
+        SettlementResult r = FxSettlementPolicy.settleWithCarrying(
+                TENANT, CASH, USD, 2_000L, 1_500L, 2_000_000L,
+                new BigDecimal("1500"), PROCEEDS).orElseThrow();
+
+        assertThat(r.settledForeignMinor()).isEqualTo(1_500L);
+        assertThat(r.carryingSettledMinor()).isEqualTo(2_000_000L);   // the pre-computed FIFO basis
+        assertThat(r.proceedsBase()).isEqualTo(2_250_000L);           // 1500 × 1500
+        assertThat(r.realized()).isEqualTo(250_000L);                 // 2,250,000 − 2,000,000
+        assertThat(r.outcome()).isEqualTo(Outcome.FX_GAIN);
+        assertThat(r.lines()).hasSize(3);
+
+        JournalLine removal = r.lines().get(0);
+        assertThat(removal.isCredit()).isTrue();                      // asset removed by CREDIT
+        assertThat(removal.money().minorUnits()).isEqualTo(1_500L);   // |F_settle|
+        assertThat(removal.baseAmountMinor()).isEqualTo(2_000_000L);  // |C_settle|
+        assertThat(entryOf(r).isBalanced()).isTrue();
+    }
+
+    @Test
+    @DisplayName("settleWithCarrying matching the pool C_settle is byte-identical to the weighted-average settle")
+    void settleWithCarryingEqualsWeightedAverageWhenBasisMatches() {
+        // When C_settle equals the pool's weighted-average share, the FIFO core output
+        // is line-for-line identical to the weighted-average overload (net-zero proof).
+        long fifoBasis = FxSettlementPolicy.settle(TENANT, CASH, USD, 10_000L, 130_000L, 4_000L,
+                new BigDecimal("13.7"), PROCEEDS).orElseThrow().carryingSettledMinor();
+        SettlementResult viaCarrying = FxSettlementPolicy.settleWithCarrying(
+                TENANT, CASH, USD, 10_000L, 4_000L, fifoBasis,
+                new BigDecimal("13.7"), PROCEEDS).orElseThrow();
+        SettlementResult viaAvg = settlePartialOrThrow(10_000L, 130_000L, 4_000L, "13.7");
+
+        assertThat(viaCarrying.realized()).isEqualTo(viaAvg.realized());
+        assertThat(viaCarrying.proceedsBase()).isEqualTo(viaAvg.proceedsBase());
+        assertThat(viaCarrying.carryingSettledMinor()).isEqualTo(viaAvg.carryingSettledMinor());
+        for (int i = 0; i < viaAvg.lines().size(); i++) {
+            JournalLine a = viaAvg.lines().get(i);
+            JournalLine b = viaCarrying.lines().get(i);
+            assertThat(b.ledgerAccountCode()).isEqualTo(a.ledgerAccountCode());
+            assertThat(b.isDebit()).isEqualTo(a.isDebit());
+            assertThat(b.money()).isEqualTo(a.money());
+            assertThat(b.baseMoney()).isEqualTo(a.baseMoney());
+        }
+    }
+
+    @Test
+    @DisplayName("settleWithCarrying: F == 0 → empty; rate ≤ 0 → SettlementRateInvalidException")
+    void settleWithCarryingGuards() {
+        assertThat(FxSettlementPolicy.settleWithCarrying(
+                TENANT, CASH, USD, 0L, 0L, 0L, new BigDecimal("13.7"), PROCEEDS)).isEmpty();
+        assertThatThrownBy(() -> FxSettlementPolicy.settleWithCarrying(
+                TENANT, CASH, USD, 10_000L, 4_000L, 52_000L, new BigDecimal("0"), PROCEEDS))
+                .isInstanceOf(SettlementRateInvalidException.class);
+    }
 }
