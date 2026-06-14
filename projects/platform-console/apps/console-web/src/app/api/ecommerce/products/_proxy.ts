@@ -19,6 +19,10 @@ import {
   RegisterImageBodySchema,
   UpdateImageBodySchema,
 } from '@/features/ecommerce-ops/api/image-types';
+import {
+  CreateTemplateBodySchema,
+  UpdateTemplateBodySchema,
+} from '@/features/ecommerce-ops/api/notification-types';
 
 /**
  * Shared error → HTTP mapping + body validators for the ecommerce-ops product
@@ -71,6 +75,9 @@ export {
   IssueCouponBodySchema,
   // shippings facet (TASK-PC-FE-088 — ADR-031 Phase 4b)
   UpdateShippingStatusBodySchema,
+  // notifications facet (TASK-PC-FE-089 — ADR-031 Phase 5b)
+  CreateTemplateBodySchema,
+  UpdateTemplateBodySchema,
   newRequestId,
 };
 

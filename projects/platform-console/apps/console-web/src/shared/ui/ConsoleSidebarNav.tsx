@@ -182,6 +182,11 @@ const GROUPS: NavGroup[] = [
             label: '배송',
             testid: 'nav-ecommerce-shippings',
           },
+          {
+            href: '/ecommerce/notifications/templates',
+            label: '알림',
+            testid: 'nav-ecommerce-notifications',
+          },
         ],
       },
     ],
