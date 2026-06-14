@@ -7,6 +7,7 @@ import com.example.product.domain.exception.InvalidCategoryException;
 import com.example.product.domain.exception.MediaNotFoundException;
 import com.example.product.domain.exception.MediaValidationException;
 import com.example.product.domain.exception.ProductNotFoundException;
+import com.example.product.domain.exception.SellerNotFoundException;
 import com.example.product.domain.exception.StorageUnavailableException;
 import com.example.product.domain.exception.VariantNotFoundException;
 import com.example.web.dto.ErrorResponse;
@@ -70,6 +71,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ErrorResponse handleVariantNotFound(VariantNotFoundException ex) {
         return ErrorResponse.of("VARIANT_NOT_FOUND", ex.getMessage());
+    }
+
+    @ExceptionHandler(SellerNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse handleSellerNotFound(SellerNotFoundException ex) {
+        return ErrorResponse.of("SELLER_NOT_FOUND", ex.getMessage());
     }
 
     @ExceptionHandler(InsufficientStockException.class)
