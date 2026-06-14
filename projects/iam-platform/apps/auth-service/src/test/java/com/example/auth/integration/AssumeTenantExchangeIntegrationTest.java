@@ -327,6 +327,76 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
         assertThat(payload.get("iss")).isNotNull();
     }
 
+    /**
+     * TASK-MONO-265 — ADR-MONO-032 D5 <b>step 5</b> end-to-end (the converged state after
+     * 4a/4b/4c/4d): a SINGLE account obtains, in one session, BOTH a consumer login token
+     * (a {@code roles}-only base token carrying the consumer role) AND, by assume-tenant,
+     * an operator domain token (carrying the operator domain roles <i>derived</i> from the
+     * selected tenant's entitled domains, BE-376). The operator admits at the domain
+     * gateway via {@code roles} ONLY — NEITHER token carries an {@code account_type} claim
+     * (dropped at 4b / V0025). This is the unified-identity model: one identity, two
+     * role-bindings (consumer + operator), the sole authorization axis being {@code roles}.
+     *
+     * <p>Scope note: the operator↔central-identity LINK (ADR-034) is asserted by the
+     * admin-service operator-identity-link ITs (TASK-BE-373/374); the gateway roles-only
+     * ADMISSION by the gateway ITs (TASK-MONO-262). This IT is the <b>issuance</b>
+     * authority — it proves the IdP emits exactly the converged token shapes those
+     * consumers rely on.
+     */
+    @Test
+    @DisplayName("STEP 5 (ADR-032 D5): one account → consumer login token + operator domain token in one session; roles-only, NO account_type on either")
+    void step5_unifiedIdentity_oneAccount_consumerAndOperatorTokens_rolesOnly() throws Exception {
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
+        // The selected tenant is entitled to wms + ecommerce → the operator's derived
+        // domain roles are WMS_OPERATOR + ADMIN (OperatorRoleDerivation, BE-376 / 4a).
+        stubEntitledDomains("wms", "ecommerce");
+
+        String account = "unified-identity-step5-001";
+
+        // TOKEN #1 — the consumer login token (authorization_code, demo-spa-client =
+        // tenant_id 'fan-platform'). The consumer role FAN is seeded (RoleSeedPolicy,
+        // fail-soft). The roles set is the sole authorization axis — NO account_type.
+        String base = mintBaseToken(account);
+        JsonNode basePayload = decodeJwtPayload(base);
+        assertThat(basePayload.get("roles")).as("consumer login token must carry a roles claim").isNotNull();
+        assertThat(basePayload.get("roles").toString())
+                .as("consumer capability: the base token carries the seeded consumer role")
+                .contains("FAN");
+        assertThat(basePayload.has("account_type"))
+                .as("4b/V0025: the consumer login token carries NO account_type claim (roles-only model)")
+                .isFalse();
+
+        // TOKEN #2 — the SAME account assumes an operator-assigned tenant → operator
+        // domain token, in the same session (its subject token is the base token above).
+        MvcResult result = assumeTenant(base, SELECTED_TENANT);
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode assumed = decodeJwtPayload(
+                objectMapper.readTree(result.getResponse().getContentAsString())
+                        .get("access_token").asText());
+
+        // 4a (BE-376): operator domain roles DERIVED from the selected tenant's entitled domains.
+        assertThat(assumed.get("roles")).as("operator domain token must carry a roles claim").isNotNull();
+        assertThat(assumed.get("roles").toString())
+                .as("operator capability: domain roles derived from entitled wms+ecommerce")
+                .contains("WMS_OPERATOR").contains("ADMIN");
+        // 4b: roles-only ADMISSION — the operator admits at the domain gateway via roles
+        // ALONE; NO account_type leg remains on the operator token either.
+        assertThat(assumed.has("account_type"))
+                .as("4b: the operator admits at the domain gateway via roles ONLY (no account_type)")
+                .isFalse();
+
+        // One identity, two role-bindings, one session: the consumer login token is the
+        // ACCOUNT's (sub = the account), and the operator domain token is derived FROM that
+        // same base token (it is the subject_token of the assume-tenant exchange above).
+        // The assumed token's own sub is the acting console client (platform-console-web)
+        // per the RFC 8693 flow — the account linkage is the validated subject token, not a
+        // sub claim on the assumed token.
+        assertThat(basePayload.get("sub").asText())
+                .as("the consumer login token belongs to the account (its subject_token drives the operator exchange)")
+                .isEqualTo(account);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private String extractParam(String url, String paramName) {

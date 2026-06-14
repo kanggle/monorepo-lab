@@ -8,7 +8,9 @@ ADR-MONO-035 **O2 / step 4c** — operator login/credential convergence: the uni
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-15, close-chore TASK-MONO-265)**: PR #1585 squash `c69c02df7`, 3-dim verified (state=MERGED, mergeCommit=origin/main tip, Build & Test 5m14s + iam Testcontainers IT 3m3s pass). `admin_operators.password_hash` → nullable break-glass (V0037); operator-create password optional (OIDC-only); OIDC token-exchange is the primary operator login. TOTP/break-glass preserved.
 
 # Owner
 
