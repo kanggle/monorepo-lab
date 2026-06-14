@@ -42,6 +42,7 @@ public class PostJournalEntryUseCase {
     private final AuditLogRepository auditLogRepository;
     private final AccountingPeriodRepository accountingPeriodRepository;
     private final LedgerEventPublisher ledgerEventPublisher;
+    private final RecordFxAcquisitionLots recordFxAcquisitionLots;
     private final ClockPort clock;
 
     /**
@@ -73,6 +74,14 @@ public class PostJournalEntryUseCase {
             ensureAccountExists(line.ledgerAccountCode(), entry.tenantId(), now);
         }
         JournalEntry saved = journalRepository.save(entry);
+        // (16th incr — TASK-FIN-BE-024, ADR-001 D2) Materialize an FX acquisition
+        // lot per position-increasing foreign line, in THIS transaction — atomic
+        // with the entry. Shadow / write-only: lots are created here (and backfilled
+        // by V10) but nothing consumes them yet (FIN-BE-025). The lines' IDENTITY
+        // ids exist now (post-save), so each lot's seq is the line id. A KRW line,
+        // a zero-amount revaluation line, or a position-reducing foreign line
+        // produces no lot (the 3-clause predicate in RecordFxAcquisitionLots).
+        recordFxAcquisitionLots.record(saved);
         auditLogRepository.save(AuditLog.of(
                 entry.tenantId(), AGGREGATE_TYPE, entry.entryId(), "POSTED",
                 actor, auditSummary(entry), reason, now));
