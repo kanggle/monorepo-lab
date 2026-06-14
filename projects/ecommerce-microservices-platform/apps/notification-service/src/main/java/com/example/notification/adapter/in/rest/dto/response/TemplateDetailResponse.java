@@ -6,8 +6,8 @@ import com.example.notification.domain.model.NotificationTemplate;
  * Single-template detail response (TASK-BE-372 gap-fill). Unlike
  * {@link TemplateListResponse.TemplateSummary} (which omits {@code body} for the list
  * view), this carries the full template — including {@code body} — for the admin /
- * console template-edit page. Field shape mirrors what admin-dashboard's
- * {@code getTemplate} consumes.
+ * console template-edit page. Field shape mirrors what the platform-console
+ * template-edit surface's {@code getTemplate} consumes.
  */
 public record TemplateDetailResponse(
         String templateId,

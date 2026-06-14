@@ -80,7 +80,7 @@ auth:
     inactivity-timeout: ${AUTH_SESSION_INACTIVITY_TIMEOUT:604800}
 
 oauth:
-  callback-allowlist: ${OAUTH_CALLBACK_ALLOWLIST:http://localhost:3000/oauth/callback,http://localhost:3001/oauth/callback}
+  callback-allowlist: ${OAUTH_CALLBACK_ALLOWLIST:http://localhost:3000/oauth/callback}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
     client-secret: ${GOOGLE_CLIENT_SECRET:}

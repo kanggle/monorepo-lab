@@ -4,7 +4,7 @@
 >
 > TASK-MONO-027 / TASK-FE-067 / TASK-BE-132 으로 ecommerce 자체 auth-service 가
 > 폐기되었다. 회원가입·로그인·토큰 갱신·로그아웃은 IAM (iam-platform)
-> OIDC 가 소유한다 (web-store / admin-dashboard 는 NextAuth v5 + IAM OIDC).
+> OIDC 가 소유한다 (web-store 는 NextAuth v5 + IAM OIDC).
 >
 > 권위 있는 출처:
 > - `specs/integration/iam-integration.md`

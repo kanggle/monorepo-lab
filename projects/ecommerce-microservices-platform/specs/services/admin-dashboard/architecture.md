@@ -1,5 +1,7 @@
 # admin-dashboard — Architecture
 
+> **RETIRED (ADR-MONO-031 Phase 6, TASK-MONO-259).** Absorbed into platform-console. See projects/platform-console/specs/contracts/console-integration-contract.md § 2.4.10.
+
 This document declares the internal architecture of `admin-dashboard`.
 All implementation tasks targeting this service must follow this declaration
 and `platform/architecture-decision-rule.md`.

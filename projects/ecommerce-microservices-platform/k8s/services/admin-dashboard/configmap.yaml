@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: admin-dashboard-config
-  namespace: ecommerce
-data:
-  NEXT_PUBLIC_API_URL: "https://api.example.com"

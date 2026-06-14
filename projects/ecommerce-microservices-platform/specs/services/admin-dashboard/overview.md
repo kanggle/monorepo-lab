@@ -1,5 +1,7 @@
 # admin-dashboard — Overview
 
+> **RETIRED (ADR-MONO-031 Phase 6, TASK-MONO-259).** Absorbed into platform-console. See projects/platform-console/specs/contracts/console-integration-contract.md § 2.4.10.
+
 > 1-pager: responsibilities, public surface (pages), key invariants.
 
 ## Service identity

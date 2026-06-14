@@ -12,7 +12,7 @@ Manages the order lifecycle from placement through delivery or cancellation. Coo
 | payment-service | Consumes OrderPlaced to process payment; consumes OrderCancelled to process refund |
 | product-service | Publishes StockChanged (ORDER_RESERVED) consumed by order-service for stock confirmation |
 | web-store | Customer-facing order creation, order history, order detail UI |
-| admin-dashboard | Admin order list, detail view, status management, cancellation |
+| platform-console | Admin order list, detail view, status management, cancellation |
 | gateway-service | Request routing, user identity injection |
 
 ## User Flows

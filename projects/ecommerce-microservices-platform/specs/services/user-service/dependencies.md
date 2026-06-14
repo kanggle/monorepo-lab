@@ -32,7 +32,7 @@
 
 | Topic | Contract | Purpose |
 |---|---|---|
-| `user.user.profile-updated` | `specs/contracts/events/user-events.md` (Topics table) | Notify downstream services (admin-dashboard, future notification-service) of profile changes |
+| `user.user.profile-updated` | `specs/contracts/events/user-events.md` (Topics table) | Notify downstream services (platform-console, future notification-service) of profile changes |
 | `user.user.withdrawn` | `specs/contracts/events/user-events.md` (Topics table) | Notify downstream services (order-service, auth-service) when a user withdraws their account |
 
 ## Forbidden Dependencies

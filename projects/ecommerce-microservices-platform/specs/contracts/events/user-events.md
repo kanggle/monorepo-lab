@@ -14,7 +14,7 @@ multi-word event suffixes use hyphens (mirroring `shipping.shipping.status-chang
 
 | Event | Kafka topic | Status |
 |---|---|---|
-| `UserProfileUpdated` | `user.user.profile-updated` | live (no production consumer in v1; declared for admin-dashboard / notification-service future use) |
+| `UserProfileUpdated` | `user.user.profile-updated` | live (no production consumer in v1; declared for platform-console / notification-service future use) |
 | `UserWithdrawn` | `user.user.withdrawn` | live (consumed by order-service + auth-service) |
 
 > **Renaming history (TASK-BE-134, 2026-05-11)**: prior to this task the
@@ -54,7 +54,7 @@ multi-word event suffixes use hyphens (mirroring `shipping.shipping.status-chang
 
 Published when a user updates their profile information.
 
-**Consumers:** admin-dashboard (future), notification-service (future)
+**Consumers:** platform-console (future), notification-service (future)
 
 **Payload**
 ```json

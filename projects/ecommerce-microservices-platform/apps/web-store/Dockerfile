@@ -8,7 +8,6 @@ RUN corepack enable pnpm
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web-store/package.json apps/web-store/
-COPY apps/admin-dashboard/package.json apps/admin-dashboard/
 COPY packages/ packages/
 # pnpm store cache mount — persists the content-addressable store across builds
 # so a lockfile change (deps-layer cache miss) re-links from cache instead of

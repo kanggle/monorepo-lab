@@ -132,7 +132,6 @@ echo ""
 # 프론트엔드 서비스 체크
 echo "── 프론트엔드 서비스 ──"
 check_http_health "web-store" "http://localhost:3000/" || true
-check_http_health "admin-dashboard" "http://localhost:3001/" || true
 echo ""
 
 # ── 결과 요약 ─────────────────────────────────────────────────

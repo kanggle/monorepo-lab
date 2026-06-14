@@ -10,7 +10,7 @@ Provides product catalog management for the platform. Covers product registratio
 |---|---|
 | product-service | Primary owner — product CRUD, variant management, inventory stock adjustment, event publishing |
 | search-service | Consumes product events to maintain denormalized search index |
-| admin-dashboard | Admin UI for product CRUD and inventory management |
+| platform-console | Admin UI for product CRUD and inventory management |
 | gateway-service | Request routing and admin role authorization |
 
 ## User Flows

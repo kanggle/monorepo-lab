@@ -69,4 +69,4 @@ batch-worker 는 **HTTP API 0**. 다음 채널만 보유:
 - Business domain ownership — 다른 service 의 데이터를 published contract 로만 read.
 - User-facing functionality — admin / customer UI 부재.
 - Cross-service DB sweep — service-boundaries 위반, HTTP / event 경유.
-- Manual job trigger UI — v2 (admin-dashboard 에 추가 시).
+- Manual job trigger UI — v2 (platform-console 에 추가 시).

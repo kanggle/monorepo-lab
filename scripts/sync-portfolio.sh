@@ -134,13 +134,8 @@ apps/web-store/src/app/api/auth \
 apps/web-store/.env.local.example \
 apps/web-store/e2e/helpers/auth.ts \
 apps/web-store/e2e/account-type-guard.spec.ts \
-apps/admin-dashboard/src/shared/auth \
-apps/admin-dashboard/src/middleware.ts \
-apps/admin-dashboard/src/app/api/auth \
-apps/admin-dashboard/.env.local.example \
 specs/integration/iam-integration.md \
 specs/services/web-store/architecture.md \
-specs/services/admin-dashboard/architecture.md \
 docker-compose.yml \
 docker-compose.ci.yml \
 docker-compose.bootrun.yml \

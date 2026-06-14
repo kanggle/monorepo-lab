@@ -23,7 +23,6 @@ spec:
     - hosts:
         - api.example.com
         - store.example.com
-        - admin.example.com
       secretName: ecommerce-tls
   rules:
     - host: api.example.com
@@ -46,13 +45,3 @@ spec:
                 name: web-store
                 port:
                   number: 3000
-    - host: admin.example.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: admin-dashboard
-                port:
-                  number: 3001

@@ -76,7 +76,7 @@ middleware-gated paths 외엔 `/login` 으로 redirect.
 ## Out of scope (v1)
 
 - Backend business logic — owned by backend services.
-- Admin operations — owned by `admin-dashboard`.
+- Admin operations — owned by `platform-console` (hub).
 - SEO for non-product pages — not critical for v1.
 - Marketplace / seller UI — single-seller 구조, `PROJECT.md` § Out of Scope (marketplace).
 - Native mobile app — web-only v1; React Native / Flutter v2+.

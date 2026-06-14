@@ -357,9 +357,9 @@
       <div class="desc">DDD · Hexagonal · Layered — 도메인 복잡도에 따라 선택 적용</div>
     </div>
     <div class="card">
-      <div class="label">Test Coverage (admin)</div>
-      <div class="value">84.3%</div>
-      <div class="desc">admin-dashboard 라인 커버리지 (Vitest + RTL, 420 tests)</div>
+      <div class="label">Test Coverage (web-store)</div>
+      <div class="value">81.2%</div>
+      <div class="desc">web-store 라인 커버리지 (Vitest + RTL)</div>
     </div>
     <div class="card">
       <div class="label">Lighthouse (web-store)</div>
@@ -398,7 +398,6 @@
 graph TB
     subgraph Clients
         WS[Web Store<br/>Next.js 15 :3000]
-        AD[Admin Dashboard<br/>Next.js 15 :3001]
     end
 
     subgraph Gateway
@@ -432,7 +431,6 @@ graph TB
     end
 
     WS --> GW
-    AD --> GW
     GW --> AUTH
     GW --> PRODUCT
     GW --> USER
@@ -465,7 +463,7 @@ graph TB
 
   <h2>레이어별 역할</h2>
   <ul>
-    <li><strong>Clients</strong> — 고객용 Web Store와 운영자용 Admin Dashboard, 둘 다 Next.js 15 + React 19로 구현되며 같은 게이트웨이를 공유합니다.</li>
+    <li><strong>Clients</strong> — 고객용 Web Store (Next.js 15 + React 19). 운영자 UI 는 통합 콘솔(platform-console, hub)로 흡수되었습니다 (ADR-MONO-031 Phase 6).</li>
     <li><strong>Gateway</strong> — 모든 외부 트래픽의 단일 진입점. JWT 검증, Redis 기반 IP 토큰 버킷 Rate Limiting, 라우팅을 담당.</li>
     <li><strong>Core / Integration / Support</strong> — 도메인 책임에 따라 분류. 외부 시스템 의존이 큰 서비스는 Hexagonal로 격리.</li>
     <li><strong>Infrastructure</strong> — Kafka(이벤트 버스) · Redis(캐시/세션/Rate Limit) · Elasticsearch(검색).</li>
@@ -509,7 +507,6 @@ graph TB
     </thead>
     <tbody>
       <tr><td><strong>Web Store</strong></td><td>3000</td><td>Feature-Sliced Design</td><td>고객 쇼핑 (검색, 장바구니, 주문, 결제)</td></tr>
-      <tr><td><strong>Admin Dashboard</strong></td><td>3001</td><td>Feature-based Layered</td><td>관리자 (상품·주문·프로모션·알림 관리)</td></tr>
     </tbody>
   </table>
 
@@ -789,7 +786,6 @@ graph TB
             ORDER_POD[Order + PDB]
             PAY_POD[Payment + PDB]
             WS_POD[Web Store + PDB]
-            AD_POD[Admin Dashboard + PDB]
         end
         NP[NetworkPolicy<br/>Default Deny + Per-Service Allow]
         subgraph External
@@ -841,7 +837,6 @@ graph TB
   <table>
     <thead><tr><th>App</th><th>Lines</th><th>Statements</th><th>Functions</th><th>Branches</th><th>Tests</th></tr></thead>
     <tbody>
-      <tr><td><code>admin-dashboard</code></td><td><strong>84.33%</strong></td><td>80.89%</td><td>73.29%</td><td>79.09%</td><td>420</td></tr>
       <tr><td><code>web-store</code></td><td><strong>81.15%</strong></td><td>80.07%</td><td>77.01%</td><td>81.38%</td><td>—</td></tr>
     </tbody>
   </table>
@@ -977,17 +972,9 @@ graph TB
 <section class="page">
   <div class="page-header"><span>E-Commerce Microservices Platform</span><span class="right">10 · 화면</span></div>
   <span class="section-num">Section 10 · 계속</span>
-  <h1 class="section">화면 — Admin & Observability</h1>
+  <h1 class="section">화면 — Observability</h1>
 
-  <div class="screenshot">
-    <img src="../screenshots/05-admin-dashboard.png" alt="관리자 홈">
-    <div class="caption">관리자 대시보드 — 주요 KPI · 최근 주문</div>
-  </div>
-
-  <div class="screenshot">
-    <img src="../screenshots/06-admin-products.png" alt="상품 관리">
-    <div class="caption">상품 관리 — <code>ProductCreated</code> 이벤트 발행 → Search 인덱스 실시간 반영</div>
-  </div>
+  <p class="note">운영자(operator) UI 는 통합 콘솔(platform-console, hub)로 흡수되었습니다 (ADR-MONO-031 Phase 6). 독립 admin-dashboard 앱 및 해당 화면은 제거되었습니다.</p>
 
   <div class="screenshot">
     <img src="../screenshots/07-grafana.png" alt="Grafana 대시보드">
