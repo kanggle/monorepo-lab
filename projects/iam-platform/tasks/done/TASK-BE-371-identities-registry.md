@@ -8,7 +8,9 @@ Central `identities` registry + one-identity-per-account backfill (ADR-MONO-034 
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: PR #1547 squash `1d3072204` — 중앙 `identities` 레지스트리 + one-identity-per-account backfill (ADR-MONO-034 U6 step 3a / ADR-032 D5 step 3 / D6-A). account-service `account_db`: V0023(identities 테이블 + nullable `accounts.identity_id` + fresh-UUID backfill[U1-A=account.id 재사용 안 함] + FK) + 도메인 Identity/IdentityId/IdentityStatus(roles-free U5) + IdentityRepository + JPA. **net-zero**(creation 경로·AccountJpaEntity 미변경; identity_id unmapped→update 시 backfill 값 보존). 3-dim verified(state=MERGED·origin/main tip `1d3072204`·pre-merge 전건 pass incl. **Integration iam Testcontainers 2m25s**=V0023 적용+FK+backfill SQL+schema validate 권위). 로컬 Docker-free IdentityTest GREEN. 다음=step 3b(cross-store identity_id on credentials+admin_operators, oidc_subject backfill). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
