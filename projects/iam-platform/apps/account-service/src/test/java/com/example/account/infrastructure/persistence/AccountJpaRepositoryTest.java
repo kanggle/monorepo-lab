@@ -72,6 +72,7 @@ class AccountJpaRepositoryTest {
         jdbc.execute("SET FOREIGN_KEY_CHECKS=0");
         jdbc.update("DELETE FROM profiles");
         jdbc.update("DELETE FROM accounts");
+        jdbc.update("DELETE FROM identities"); // TASK-BE-372: identity_id resolve tests insert identities
         // Ensure wms tenant exists for cross-tenant tests (fan-platform is seeded by V0009)
         jdbc.update("DELETE FROM tenants WHERE tenant_id = ?", TENANT_WMS);
         jdbc.execute("SET FOREIGN_KEY_CHECKS=1");
@@ -107,6 +108,43 @@ class AccountJpaRepositoryTest {
         assertThat(result).isPresent();
         assertThat(result.get().getEmail()).isEqualTo("test@example.com");
         assertThat(result.get().getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    // ── TASK-BE-372 (ADR-MONO-034 step 3b): identity_id native resolve ───────
+
+    @Test
+    @DisplayName("findIdentityIdByTenantIdAndId — identity 링크된 계정 → identity_id 반환 (native projection)")
+    void findIdentityId_linkedAccount_returnsIdentityId() {
+        // an identity must exist for the FK (fk_accounts_identity_id, V0023)
+        String identityId = UUID.randomUUID().toString();
+        jdbc.update(
+                "INSERT INTO identities (identity_id, tenant_id, primary_email, status, created_at, updated_at, version) " +
+                "VALUES (?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)",
+                identityId, TENANT_FAN, "linked@example.com");
+        String accountId = UUID.randomUUID().toString();
+        jdbc.update(
+                "INSERT INTO accounts (id, identity_id, tenant_id, email, status, created_at, updated_at, version) " +
+                "VALUES (?, ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)",
+                accountId, identityId, TENANT_FAN, "linked@example.com");
+
+        Optional<String> result = accountRepo.findIdentityIdByTenantIdAndId(TENANT_FAN, accountId);
+
+        assertThat(result).contains(identityId);
+    }
+
+    @Test
+    @DisplayName("findIdentityIdByTenantIdAndId — 없는 계정 / cross-tenant → empty (enumeration-safe)")
+    void findIdentityId_missingOrCrossTenant_returnsEmpty() {
+        insertWmsTenant();
+        String wmsAccountId = UUID.randomUUID().toString();
+        insertAccount(TENANT_WMS, wmsAccountId, "wms-id@example.com"); // identity_id NULL
+
+        // missing account
+        assertThat(accountRepo.findIdentityIdByTenantIdAndId(TENANT_FAN, "ghost")).isEmpty();
+        // cross-tenant (wms account looked up under fan) → empty
+        assertThat(accountRepo.findIdentityIdByTenantIdAndId(TENANT_FAN, wmsAccountId)).isEmpty();
+        // existing account but identity_id NULL (new-account window) → empty
+        assertThat(accountRepo.findIdentityIdByTenantIdAndId(TENANT_WMS, wmsAccountId)).isEmpty();
     }
 
     @Test

@@ -42,6 +42,14 @@ public interface AccountRepository {
     boolean existsByEmail(TenantId tenantId, String email);
 
     /**
+     * TASK-BE-372 (ADR-MONO-034 U6 step 3b): resolve the account's central
+     * identity_id (the registry from step 3a). Returns empty when the account
+     * does not exist in this tenant OR has no identity yet (enumeration-safe;
+     * the caller fail-softs). Read-only.
+     */
+    Optional<String> findIdentityId(TenantId tenantId, String accountId);
+
+    /**
      * TASK-BE-231: Tenant-scoped paginated account list with optional status filter.
      * Used by the internal provisioning API.
      *

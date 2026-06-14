@@ -396,6 +396,47 @@ Return the account's role names within the tenant.
 
 ---
 
+## GET /internal/tenants/{tenantId}/accounts/{accountId}/identity
+
+> **TASK-BE-372 (ADR-MONO-034 U6 step 3b / ADR-MONO-032 D5 step 3)**: read-only resolution of an account's **central `identity_id`** (the per-person identity registry introduced in step 3a, V0023). This is the cross-store resolution foundation the operator-link surface (step 3c) and unified provisioning (step 3d) build on — e.g. resolving an operator's `oidc_subject` (a consumer `account_id`) to the central identity it belongs to. A **least-data** projection — returns only the `identity_id`, no PII.
+
+Return the account's central identity id within the tenant.
+
+**Path Parameters**:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `tenantId` | string (slug) | Target tenant. Pattern `^[a-z][a-z0-9-]{1,31}$` |
+| `accountId` | string (UUID) | Account identifier |
+
+**Response 200 OK**:
+```json
+{
+  "accountId": "01923abc-def0-7890-abcd-ef0123456789",
+  "tenantId": "wms",
+  "identityId": "1f0a2b3c-4d5e-6f70-8901-23456789abcd"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `accountId` | string | Echoes the path `{accountId}` |
+| `tenantId` | string | Echoes the path `{tenantId}` |
+| `identityId` | string \| null | The account's central identity id. **`null`** when the account does not exist in this tenant (foreign/missing — enumeration-safe) OR has no identity yet (a row created before step 3d wires provisioning). The `identity_id` is a fresh UUID, distinct from `accountId` (ADR-034 U1-A). |
+
+**Side Effect**: none (read-only — no `account_status_history` row, no outbox event).
+
+**Errors**:
+
+| Status | Condition |
+|---|---|
+| 403 `TENANT_SCOPE_DENIED` | Caller's `X-Tenant-Id` / JWT `tenant_id` does not match path `{tenantId}` (defense-in-depth, mirrors the sibling EPs) |
+| 401 `UNAUTHORIZED` | `Authorization: Bearer` IAM `client_credentials` JWT missing/invalid |
+
+> **No `404 ACCOUNT_NOT_FOUND`** — a missing or foreign account returns `200 {"identityId": null}` (enumeration defense + the caller fail-softs). The caller treats a `null` identity the same as a failed lookup (no resolvable identity).
+
+---
+
 ## PATCH /internal/tenants/{tenantId}/accounts/{accountId}/status
 
 Change the account status. Follows `AccountStatusMachine` transition rules.
