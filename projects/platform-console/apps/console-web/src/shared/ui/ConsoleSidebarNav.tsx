@@ -167,6 +167,11 @@ const GROUPS: NavGroup[] = [
             label: '주문',
             testid: 'nav-ecommerce-orders',
           },
+          {
+            href: '/ecommerce/users',
+            label: '사용자',
+            testid: 'nav-ecommerce-users',
+          },
         ],
       },
     ],

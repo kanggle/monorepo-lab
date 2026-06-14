@@ -2412,6 +2412,63 @@ scope, no § 3 row — attestation count stays **16**).
 > federated **domain** scope, not an IAM `admin-web` parity capability; it adds
 > no § 3 row and changes none (count stays **16**).
 
+#### 2.4.10.1 ecommerce users operator list/detail (TASK-PC-FE-084 / ADR-MONO-031 Phase 2b — console absorption of the `admin-dashboard` user-management area)
+
+The **second** ecommerce operations sub-binding (the first of the four § 2.4.10
+"named staged backlog" areas), unblocked now that **user-service carries
+row-level `tenant_id`** (TASK-BE-367, ADR-MONO-030 Step 4 — the
+tenant-isolation precondition § 2.4.10 made normative). It renders the
+ecommerce **user** operator surface (operator browses the tenant's customer
+profiles) — the console equivalent of the `admin-dashboard` user-management
+list/detail screens. This sub-binding is **read-only**: the producer exposes no
+admin user mutation, and the console adds none (no status-change/delete leg).
+
+This sub-binding **inherits § 2.4.10's cross-cutting rules verbatim** and does
+not restate them: the **credential** (domain-facing IAM OIDC access token —
+`getDomainFacingToken()`, **never** `getOperatorToken()`); the **tenant model**
+(tenant rides in the JWT `tenant_id ∈ {ecommerce,*}` claim — **no**
+`X-Tenant-Id` header; the user-service `TenantContextFilter` reads the
+gateway-injected `X-Tenant-Id` and the persistence layer filters
+`WHERE tenant_id`, TASK-BE-367); **eligibility** (registry `productKey=ecommerce`
+available + tenants — **no** new `productKey`/enum); the **resilience** taxonomy
+(401 → whole-session IAM re-login; 403 → inline "not available to your role";
+404 → notFound empty-state; 503/timeout → only this section degrades; **tokens
+and customer PII — email / phone / profileImageUrl — never logged**); and the
+**§ 3 parity matrix is NOT mutated** (count stays **16**). Per ADR-MONO-017
+D2.A this is **console-web → ecommerce gateway direct** (Next.js Route
+Handlers); **NO** console-bff leg.
+
+- **Authoritative producer (owned by ecommerce, consumed read-only — do NOT
+  redefine here)**: ecommerce `user-service` `AdminUserController`, consumed via
+  the ecommerce gateway admin path `/api/admin/**` (base URL
+  `ECOMMERCE_ADMIN_BASE_URL`, same gateway + IAM-OIDC credential as § 2.4.10).
+  Producer contract: ecommerce
+  [`user-api.md` § Admin endpoints](../../../ecommerce-microservices-platform/specs/contracts/http/user-api.md):
+
+  | # | Operation | Producer endpoint | Kind |
+  |---|---|---|---|
+  | 1 | list users | `GET /admin/users?status&email&page&size` | read |
+  | 2 | user detail | `GET /admin/users/{userId}` | read |
+
+  List item fields: `userId, email, name, nickname, status, createdAt`; detail
+  adds `phone, profileImageUrl, updatedAt`. `status ∈ {ACTIVE, SUSPENDED,
+  WITHDRAWN}`. Error envelope = the same flat ecommerce shape
+  `{code, message, timestamp}` (401 / 403 / 404 `USER_PROFILE_NOT_FOUND`),
+  consumed with the § 2.4.10 ecommerce parser.
+
+- **Out of this binding (deferred, not silently dropped)**: user **mutations**
+  (status change / suspend / GDPR delete) — the producer exposes no admin write
+  endpoint; a later facet if/when one lands. Address & wishlist sub-resources are
+  consumer-plane, not operator surfaces. promotions / shippings / notifications
+  remain § 2.4.10.2+ (each gated on its own backend `tenant_id` migration).
+
+- **Producer immutability**: cross-reference only — any change to the ecommerce
+  user admin contract is an ecommerce project-internal spec-first change; this
+  section follows, never redefines it (§ 5 Change Rule).
+
+> **Not a § 3 parity row**: additive federated **domain** scope; adds no § 3 row
+> (count stays **16**).
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
