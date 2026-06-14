@@ -1,6 +1,6 @@
 # TASK-MONO-259 — retire ecommerce admin-dashboard app (ADR-031 Phase 6)
 
-**Status:** review
+**Status:** done
 **Level:** monorepo-level (root) — touches root `package.json`, root `docs/`, ecommerce app/specs/docs/infra.
 **Parent:** ADR-MONO-031 Phase 6 (admin-dashboard app deletion, D7 parity gate — all 6 operator areas absorbed into platform-console: products·orders·image·users·promotions·shippings·notifications).
 
