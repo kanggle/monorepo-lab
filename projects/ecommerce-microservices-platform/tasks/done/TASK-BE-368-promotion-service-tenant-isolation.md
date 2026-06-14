@@ -8,7 +8,7 @@ ecommerce **promotion-service tenant isolation** — ADR-MONO-030 **Step 4** / A
 
 # Status
 
-review
+done
 
 # Owner
 
