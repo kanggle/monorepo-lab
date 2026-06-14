@@ -8,7 +8,9 @@ Operator↔central-identity **opt-in link surface** + `admin_operators.identity_
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: PR #1555 squash `889d12524` — operator↔central-identity opt-in 링크 surface + `admin_operators.identity_id` (ADR-MONO-034 U6 step 3c / U3). admin-service: V0036(identity_id nullable+index, no backfill) + AdminOperatorJpaEntity link/unlink mutators(managed-entity saveAndFlush) + AccountServiceClient.resolveIdentity(fail-closed) + Link/UnlinkOperatorIdentityUseCase(email-match necessary-not-sufficient·fail-closed·idempotent·tenant-scope operator.manage·audit) + OperatorAdminController `:link`/`:unlink` + ActionCode/permission registry + AdminExceptionHandler(422/422/409) + admin-api.md 계약. **CI 2회 실패→수정**: ①V0036 `COMMENT`가 `AFTER` 뒤=SQLSyntaxError(Flyway 붕괴→admin @DataJpaTest 전건 실패) → COMMENT를 AFTER 앞으로. ②OperatorAdminControllerTest WebMvc 슬라이스에 신규 use case `@MockitoBean` 누락=NoSuchBeanDefinition → 추가. **교훈**: 로컬 Mockio/타깃 테스트는 마이그레이션 SQL·WebMvc bean-wiring 못 잡음; CI `:check`(Linux Docker로 @DataJpaTest Flyway + 전체 Docker-free unit)가 권위. 3-dim verified(MERGED·`889d12524`·**Integration iam Testcontainers 3m4s**=V0036+매핑validate+link/unlink영속+changeStatus-no-clobber). 보안 로직 오케스트레이터 직접 리뷰. 다음=step 3d 통합 프로비저닝. 분석=Opus 4.8 / 구현=Opus(서브에이전트)+오케스트레이터 검증.
 
 # Owner
 
