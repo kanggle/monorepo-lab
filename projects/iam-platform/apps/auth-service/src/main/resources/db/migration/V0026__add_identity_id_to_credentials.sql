@@ -1,0 +1,29 @@
+-- TASK-BE-378 (ADR-MONO-035 O3 / ADR-MONO-034 U6 step 3b — re-sequenced to step 4):
+-- add the central-identity correlation reference to auth_db.credentials.
+--
+-- ADR-034 3a created the central `identities` registry in account_db and added
+-- accounts.identity_id; 3c added admin_operators.identity_id (admin_db). This is the
+-- third store: credentials.identity_id (auth_db). Together they correlate the consumer
+-- account, the operator extension, and the login credential to one central identity.
+--
+-- VALUE-CONVENTION CROSS-DB REFERENCE (no FK): the central `identities` table lives in
+-- account_db; auth_db cannot FK to it (cross-service FK forbidden — saas.md S1, same as
+-- credentials.account_id already references accounts.id without an FK). This mirrors
+-- admin_operators.identity_id (ADR-034 3c), which is likewise a value-convention ref.
+--
+-- ADDITIVE + NET-ZERO:
+--   * NULLABLE — no credential-creation path is wired to it (CreateCredentialUseCase is
+--     unchanged); new credentials carry NULL identity_id.
+--   * NO BACKFILL HERE — the source value lives in account_db.accounts.identity_id, which
+--     a single auth_db migration cannot read (auth_db != account_db). The conceptual
+--     backfill is "credentials.identity_id := accounts.identity_id via the shared
+--     account_id" and is performed by a later consolidation step (the column has no
+--     caller until then, ADR-035 O3).
+--   * identity_id is deliberately NOT mapped on CredentialJpaEntity in this step (mirror
+--     ADR-034 3a accounts.identity_id), so Hibernate never writes/nulls it on a credential
+--     update — any externally-populated value is preserved. Hibernate ddl-auto=validate
+--     passes (validate ignores EXTRA table columns; an unmapped column is allowed).
+--
+-- Plain ADD COLUMN, no COMMENT clause (so no COMMENT/AFTER ordering concern, diagnostic §22).
+ALTER TABLE credentials
+    ADD COLUMN identity_id VARCHAR(36) NULL AFTER account_id;
