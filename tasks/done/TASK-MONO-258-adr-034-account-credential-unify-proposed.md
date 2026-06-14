@@ -8,7 +8,9 @@ Author **ADR-MONO-034 PROPOSED → ACCEPTED** (same-session, same PR #1538, user
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: PR #1538 squash `2b64b8827` — ADR-MONO-034 PROPOSED→ACCEPTED (same-session, same PR, user-explicit *"진행"*; sibling ADR-033/MONO-257). Account/credential unification model (ADR-032 D5 step 3 / D6-A). **base `c6d754922` 조사 결정타**: 세 신원 스토어 = 물리적으로 분리된 3개 MySQL DB(auth_db/account_db/admin_db, cross-DB FK 불가) + 셋 잇는 공유 신원 키 부재 → 소비자 쌍은 이미 통합(one credential), 진짜 disjoint = operator(독립 UUID + 자체 password_hash + 자체 login/OperatorAccessTokenIssuer 경로, 유일 브릿지=nullable oidc_subject). U1-U7 결정(U1 신규 중앙 identities 레지스트리 / U2 link-first[login수렴 step4 연기] / U3 opt-in·audited·reversible·email-match-necessary-not-sufficient / U4 통합 프로비저닝 / U5 identity통합≠role병합[ADR-033 disjoint 재확인] / U6 3DB additive net-zero / U7 safety invariants). Child of ADR-032 + sibling of ADR-033. jwt-standard-claims.md 미amend(identity storage=IdP-internal). doc-only(apps/·contracts/ code 0, migration 0). ADR-003a audit row #37(PROPOSED)+#38(ACCEPTED). 3-dim verified(state=MERGED·mergeCommit 2b64b8827·origin/main tip 일치·pre-merge 필수체크 실패 0[doc-only path-filter 전부 skipping + changes pass]). § 3.3 execution roadmap UNPAUSED — 1번째 실행 = identities 레지스트리+backfill(U6 step 3a, iam BE-371+). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 # Owner
 
