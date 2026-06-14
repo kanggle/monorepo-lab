@@ -1431,6 +1431,52 @@ JPA adapter — mirror `ReconciliationFxToleranceConfig` / its repository exactl
 platform-standard `VALIDATION_ERROR` (400) exactly like `FxToleranceInvalidException`;
 no new Kafka topic or outbox row.
 
+#### Per-account override (twenty-first increment — TASK-FIN-BE-029)
+
+ADR-001 D1 follow-up: generalise the per-tenant method config to **per ledger account**. An
+operator may keep most accounts on the weighted-average default but pin a specific FX clearing
+account to `FIFO` (or vice-versa). `SettleForeignPositionUseCase` resolves the effective method
+with the precedence:
+
+```
+account override (tenant, ledgerAccountCode)  >  tenant default (tenant)  >  WEIGHTED_AVERAGE
+```
+
+The override can both **upgrade** (weighted-average tenant → FIFO account) and **downgrade** (FIFO
+tenant → weighted-average account). The precedence is extracted into a **pure** static helper
+`SettleForeignPositionUseCase.resolveCostFlowMethod(Optional<CostFlowMethod> accountOverride,
+Optional<CostFlowMethod> tenantDefault)` = `accountOverride.or(() -> tenantDefault)
+.orElse(WEIGHTED_AVERAGE)` so it is unit-testable without Testcontainers.
+
+**Net-zero.** When no account override row exists the resolution is identical to FIN-BE-028 (the
+tenant default, else `WEIGHTED_AVERAGE`) — no behaviour change. The weighted-average / FIFO math is
+**unchanged**; only *which* config row is read changes.
+
+**Persistence.** Additive Flyway `V11__add_fx_cost_flow_account_config.sql` — a **new** table
+`fx_cost_flow_account_config` with composite PK `(tenant_id, ledger_account_code)`, `method
+VARCHAR(20) NOT NULL DEFAULT 'WEIGHTED_AVERAGE'` + the same `CHECK (method IN
+('WEIGHTED_AVERAGE','FIFO'))`, `updated_by` / `updated_at` audit columns. **No** change to the V9
+per-tenant table, **no** existing CHECK change, **no** backfill. There is **no FK** to
+`ledger_account` (an operator may pre-configure a code — parity with the per-tenant config). A
+domain aggregate `FxCostFlowAccountConfig` (JPA entity, composite id via `@IdClass`
+`FxCostFlowAccountConfigId`) reusing the `CostFlowMethod` enum + repository port
+`FxCostFlowAccountConfigRepository` (`findByTenantIdAndAccountCode`, `findByTenantId` (ordered),
+`save`, `deleteByTenantIdAndAccountCode` → `boolean` existed) + JPA adapter — mirror
+`FxCostFlowConfig`.
+
+**Application + REST.** `GetFxCostFlowAccountConfigsUseCase` (list the tenant's overrides ordered by
+`ledger_account_code`) + `SetFxCostFlowAccountConfigUseCase` (validate via
+`CostFlowMethod.fromString` **before** persist → `VALIDATION_ERROR` 400; upsert last-write-wins;
+audit `FX_COST_FLOW_ACCOUNT_METHOD_SET` in the **same `@Transactional`**, `aggregateType =
+"FxCostFlowAccountConfig"`, `aggregateId = tenantId + ":" + ledgerAccountCode`) +
+`DeleteFxCostFlowAccountConfigUseCase` (delete; audit `FX_COST_FLOW_ACCOUNT_METHOD_CLEARED` only
+when a row existed; idempotent — non-existent DELETE is a 200 no-op, `cleared=false`, no 404 / no
+audit row). `GET /cost-flow-config/accounts`, `PUT
+/cost-flow-config/accounts/{ledgerAccountCode}`, `DELETE
+/cost-flow-config/accounts/{ledgerAccountCode}` are tenant-scoped via `ActorContext` (same idiom as
+the per-tenant endpoints). Row-level isolated by `tenant_id` — tenant A's override is invisible to
+tenant B. **No new error code / status / event.**
+
 ### FX position lots (acquisition / backfill) (sixteenth increment — TASK-FIN-BE-024)
 
 ADR-001 D2 (lot model) + D5 (additive migration / backfill), § 3.1 step 2: materialize each

@@ -9,12 +9,14 @@ import com.example.finance.ledger.domain.error.LedgerErrors.JournalEntryNotFound
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementAmountInvalidException;
 import com.example.finance.ledger.domain.journal.CostFlowMethod;
+import com.example.finance.ledger.domain.journal.FxCostFlowAccountConfig;
 import com.example.finance.ledger.domain.journal.FxCostFlowConfig;
 import com.example.finance.ledger.domain.journal.FxPositionLot;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.SettlementResult;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.SourceRef;
+import com.example.finance.ledger.domain.journal.repository.FxCostFlowAccountConfigRepository;
 import com.example.finance.ledger.domain.journal.repository.FxCostFlowConfigRepository;
 import com.example.finance.ledger.domain.journal.repository.FxPositionLotRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
@@ -66,6 +68,7 @@ public class SettleForeignPositionUseCase {
     private final ProcessedEventStore processedEventStore;
     private final PostJournalEntryUseCase postJournalEntryUseCase;
     private final FxCostFlowConfigRepository fxCostFlowConfigRepository;
+    private final FxCostFlowAccountConfigRepository fxCostFlowAccountConfigRepository;
     private final FxPositionLotRepository fxPositionLotRepository;
     private final ClockPort clock;
 
@@ -162,9 +165,17 @@ public class SettleForeignPositionUseCase {
         //     F_settle == F → full settlement (residual exactly 0); F_settle < |F| →
         //     partial, residual (F − F_settle, C − C_settle) stays OPEN.
         //
-        //     The carrying basis C_settle is chosen by the tenant's cost-flow method
+        //     The carrying basis C_settle is chosen by the resolved cost-flow method
         //     (17th increment — TASK-FIN-BE-025, ADR-001 D3). Resolved AFTER all the
         //     guards above so FIFO and weighted-average share the identical guard surface.
+        //
+        //     Resolution precedence (21st increment — TASK-FIN-BE-029, ADR-001 D1 follow-up):
+        //       account override (tenant, ledgerAccountCode) > tenant default (tenant) >
+        //       WEIGHTED_AVERAGE.
+        //     A per-account override lets an operator pin one ledger account to FIFO (or
+        //     weighted-average) regardless of the tenant default — it can upgrade OR downgrade.
+        //     When no account override row exists the result is identical to FIN-BE-028 (the
+        //     tenant default, else WEIGHTED_AVERAGE) — net-zero.
         //       - WEIGHTED_AVERAGE / unset: the pre-existing weighted-average path —
         //         byte-identical, net-zero (FxSettlementPolicy.settle derives C_settle
         //         from the pool average).
@@ -173,8 +184,13 @@ public class SettleForeignPositionUseCase {
         //         FxSettlementPolicy.settleWithCarrying(C_settle_fifo). Lots absent/short
         //         (Σremaining < |F_settle|) → SAFE FALLBACK to weighted-average (no
         //         net-non-zero), with NO lot mutation persisted.
-        CostFlowMethod method = fxCostFlowConfigRepository.findByTenantId(cmd.tenantId())
-                .map(FxCostFlowConfig::method).orElse(CostFlowMethod.WEIGHTED_AVERAGE);
+        Optional<CostFlowMethod> accountOverride = fxCostFlowAccountConfigRepository
+                .findByTenantIdAndAccountCode(cmd.tenantId(), cmd.ledgerAccountCode())
+                .map(FxCostFlowAccountConfig::method);
+        Optional<CostFlowMethod> tenantDefault = fxCostFlowConfigRepository
+                .findByTenantId(cmd.tenantId())
+                .map(FxCostFlowConfig::method);
+        CostFlowMethod method = resolveCostFlowMethod(accountOverride, tenantDefault);
         Optional<SettlementResult> computed = (method == CostFlowMethod.FIFO)
                 ? computeFifo(cmd, foreignBalanceMinor, carryingBaseMinor, settleForeignMinor)
                 : FxSettlementPolicy.settle(
@@ -230,6 +246,24 @@ public class SettleForeignPositionUseCase {
                     "settleForeignAmount exceeds the position's foreign balance (over-settle)");
         }
         return fSettle;
+    }
+
+    /**
+     * Resolve the effective FX cost-flow method for a settlement (21st increment —
+     * TASK-FIN-BE-029, ADR-001 D1 follow-up). Pure (no I/O — unit-testable without
+     * Testcontainers): the per-account override wins when present, else the per-tenant default,
+     * else {@link CostFlowMethod#WEIGHTED_AVERAGE}. The override can both upgrade (WEIGHTED_AVERAGE
+     * tenant → FIFO account) and downgrade (FIFO tenant → WEIGHTED_AVERAGE account). When the
+     * account override is absent the result is identical to the prior tenant-only resolution
+     * (net-zero).
+     *
+     * @param accountOverride the per-account override method, if any (highest precedence)
+     * @param tenantDefault   the per-tenant default method, if any (middle precedence)
+     * @return the effective method (never {@code null})
+     */
+    static CostFlowMethod resolveCostFlowMethod(Optional<CostFlowMethod> accountOverride,
+                                                Optional<CostFlowMethod> tenantDefault) {
+        return accountOverride.or(() -> tenantDefault).orElse(CostFlowMethod.WEIGHTED_AVERAGE);
     }
 
     /**

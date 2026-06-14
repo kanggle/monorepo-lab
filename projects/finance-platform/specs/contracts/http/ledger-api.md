@@ -460,6 +460,67 @@ excluded — only open lots appear.
 
 ---
 
+## 13. Per-account FX cost-flow method override
+
+**(21st increment — TASK-FIN-BE-029)** Per-ledger-account override of the FX cost-flow method,
+layered on top of the per-tenant default (`fx_cost_flow_config`, 15th increment). A settlement
+resolves the effective method with the precedence:
+
+```
+account override (tenant, ledgerAccountCode)  >  tenant default (tenant)  >  WEIGHTED_AVERAGE
+```
+
+The override can upgrade (weighted-average tenant → `FIFO` account) **or** downgrade. All three
+routes are tenant-scoped (`ActorContext`), audited, and carry no `Idempotency-Key`. The literal
+`/cost-flow-config/accounts` prefix is matched ahead of the
+`/{ledgerAccountCode}/{currency}/lots` pattern (§12) — no route ambiguity.
+
+### 13.1 GET `/api/finance/ledger/settlements/cost-flow-config/accounts`
+
+List the tenant's account overrides, ordered by `ledgerAccountCode` ASC. Accounts with no override
+row do **not** appear (they inherit the per-tenant default). Empty → `200` with `data: []`.
+
+`200`:
+```json
+{ "data": [
+    { "ledgerAccountCode": "FX_USD_CLEARING", "method": "FIFO",
+      "updatedBy": "ops-7", "updatedAt": "2026-06-14T00:00:00Z" }
+  ], "meta": { "timestamp": "..." } }
+```
+
+### 13.2 PUT `/api/finance/ledger/settlements/cost-flow-config/accounts/{ledgerAccountCode}`
+
+Upsert an override (last-write-wins). Body `{ "method": "FIFO" }` (`"WEIGHTED_AVERAGE"` | `"FIFO"`,
+exact-match uppercase). The account is **not** validated to exist (an operator may pre-configure a
+code — parity with the per-tenant config). Audited (`FX_COST_FLOW_ACCOUNT_METHOD_SET`).
+
+`200`:
+```json
+{ "data": { "ledgerAccountCode": "FX_USD_CLEARING", "method": "FIFO",
+    "updatedBy": "ops-7", "updatedAt": "2026-06-14T00:00:00Z" },
+  "meta": { "timestamp": "..." } }
+```
+
+- `400 VALIDATION_ERROR` when `method` is null/blank or not `WEIGHTED_AVERAGE`/`FIFO` (e.g.
+  `"LIFO"`) — validated **before** any persist; nothing is written.
+- `403 TENANT_FORBIDDEN` when the dual-accept gate rejects.
+
+### 13.3 DELETE `/api/finance/ledger/settlements/cost-flow-config/accounts/{ledgerAccountCode}`
+
+Remove an override; the account falls back to the per-tenant default. **Idempotent** — deleting a
+non-existent override is a `200` no-op (`cleared: false`), **not** a 404. Audited
+(`FX_COST_FLOW_ACCOUNT_METHOD_CLEARED`, written only when a row actually existed).
+
+`200`:
+```json
+{ "data": { "ledgerAccountCode": "FX_USD_CLEARING", "cleared": true },
+  "meta": { "timestamp": "..." } }
+```
+
+- `403 TENANT_FORBIDDEN` when the dual-accept gate rejects.
+
+---
+
 ## Error codes (this contract → `platform/error-handling.md`)
 
 | Code | HTTP | Meaning |

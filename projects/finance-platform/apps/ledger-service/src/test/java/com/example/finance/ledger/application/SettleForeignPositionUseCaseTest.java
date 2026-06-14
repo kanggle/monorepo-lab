@@ -14,12 +14,14 @@ import com.example.finance.ledger.domain.error.LedgerErrors.SettlementAmountInva
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
 import com.example.finance.ledger.domain.journal.CostFlowMethod;
 import com.example.finance.ledger.domain.journal.EntryDirection;
+import com.example.finance.ledger.domain.journal.FxCostFlowAccountConfig;
 import com.example.finance.ledger.domain.journal.FxCostFlowConfig;
 import com.example.finance.ledger.domain.journal.FxPositionLot;
 import com.example.finance.ledger.domain.journal.FxSettlementPolicy.Outcome;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
 import com.example.finance.ledger.domain.journal.SourceRef;
+import com.example.finance.ledger.domain.journal.repository.FxCostFlowAccountConfigRepository;
 import com.example.finance.ledger.domain.journal.repository.FxCostFlowConfigRepository;
 import com.example.finance.ledger.domain.journal.repository.FxPositionLotRepository;
 import com.example.finance.ledger.domain.journal.repository.JournalRepository;
@@ -76,6 +78,7 @@ class SettleForeignPositionUseCaseTest {
     @Mock ProcessedEventStore processedEventStore;
     @Mock PostJournalEntryUseCase postJournalEntryUseCase;
     @Mock FxCostFlowConfigRepository fxCostFlowConfigRepository;
+    @Mock FxCostFlowAccountConfigRepository fxCostFlowAccountConfigRepository;
     @Mock FxPositionLotRepository fxPositionLotRepository;
     @Mock ClockPort clock;
 
@@ -85,11 +88,13 @@ class SettleForeignPositionUseCaseTest {
     void setUp() {
         useCase = new SettleForeignPositionUseCase(journalRepository, ledgerAccountRepository,
                 processedEventStore, postJournalEntryUseCase, fxCostFlowConfigRepository,
-                fxPositionLotRepository, clock);
+                fxCostFlowAccountConfigRepository, fxPositionLotRepository, clock);
         // The cost-flow config is resolved after the guards on every settle that reaches the
-        // policy call; absence → WEIGHTED_AVERAGE (the existing tests all assert the
-        // weighted-average path). Lenient so the early-reject tests (which never reach the
-        // branch) don't trip STRICT_STUBS.
+        // policy call; absence (account override + tenant default) → WEIGHTED_AVERAGE (the
+        // existing tests all assert the weighted-average path). Lenient so the early-reject tests
+        // (which never reach the branch) don't trip STRICT_STUBS.
+        lenient().when(fxCostFlowAccountConfigRepository.findByTenantIdAndAccountCode(TENANT, CASH))
+                .thenReturn(Optional.empty());
         lenient().when(fxCostFlowConfigRepository.findByTenantId(TENANT))
                 .thenReturn(Optional.empty());
     }
@@ -487,6 +492,73 @@ class SettleForeignPositionUseCaseTest {
         assertThat(result.realizedBaseMinor()).isEqualTo(7_000L);   // weighted-average outcome
         assertThat(result.proceedsBaseMinor()).isEqualTo(137_000L);
         verify(fxPositionLotRepository, never()).save(any());        // no lot mutation persisted
+    }
+
+    // ---- Per-account cost-flow override resolution (21st increment — TASK-FIN-BE-029) ----
+    // Pure static resolver, no Testcontainers (AC-2). Precedence:
+    //   account override > tenant default > WEIGHTED_AVERAGE.
+
+    @Test
+    @DisplayName("resolveCostFlowMethod: account override present → wins over the tenant default")
+    void resolveAccountOverrideWins() {
+        CostFlowMethod resolved = SettleForeignPositionUseCase.resolveCostFlowMethod(
+                Optional.of(CostFlowMethod.FIFO), Optional.of(CostFlowMethod.WEIGHTED_AVERAGE));
+        assertThat(resolved).isEqualTo(CostFlowMethod.FIFO);
+    }
+
+    @Test
+    @DisplayName("resolveCostFlowMethod: account empty + tenant present → the tenant default")
+    void resolveFallsBackToTenantDefault() {
+        CostFlowMethod resolved = SettleForeignPositionUseCase.resolveCostFlowMethod(
+                Optional.empty(), Optional.of(CostFlowMethod.FIFO));
+        assertThat(resolved).isEqualTo(CostFlowMethod.FIFO);
+    }
+
+    @Test
+    @DisplayName("resolveCostFlowMethod: both empty → WEIGHTED_AVERAGE")
+    void resolveDefaultsToWeightedAverage() {
+        CostFlowMethod resolved = SettleForeignPositionUseCase.resolveCostFlowMethod(
+                Optional.empty(), Optional.empty());
+        assertThat(resolved).isEqualTo(CostFlowMethod.WEIGHTED_AVERAGE);
+    }
+
+    @Test
+    @DisplayName("resolveCostFlowMethod: account WEIGHTED_AVERAGE + tenant FIFO → account downgrades to WEIGHTED_AVERAGE")
+    void resolveAccountCanDowngrade() {
+        CostFlowMethod resolved = SettleForeignPositionUseCase.resolveCostFlowMethod(
+                Optional.of(CostFlowMethod.WEIGHTED_AVERAGE), Optional.of(CostFlowMethod.FIFO));
+        assertThat(resolved).isEqualTo(CostFlowMethod.WEIGHTED_AVERAGE);
+    }
+
+    @Test
+    @DisplayName("an account override = FIFO (tenant unset) routes the settle through the FIFO walk")
+    void accountOverrideElevatesToFifo() {
+        when(processedEventStore.isProcessed(DEDUPE)).thenReturn(false);
+        when(ledgerAccountRepository.existsByCode(PROCEEDS, TENANT)).thenReturn(true);
+        when(journalRepository.accountTotalsForCurrency(CASH, Currency.USD, TENANT))
+                .thenReturn(Optional.of(usdPosition(2_000L, 2_700_000L)));
+        // Tenant default UNSET; the per-account override pins this account to FIFO.
+        when(fxCostFlowAccountConfigRepository.findByTenantIdAndAccountCode(TENANT, CASH))
+                .thenReturn(Optional.of(FxCostFlowAccountConfig.of(
+                        TENANT, CASH, CostFlowMethod.FIFO, "op", NOW)));
+        FxPositionLot lot1 = openLot(1L, 1_000L, 1_300_000L);
+        FxPositionLot lot2 = openLot(2L, 1_000L, 1_400_000L);
+        when(fxPositionLotRepository.findOpenLots(TENANT, CASH, Currency.USD))
+                .thenReturn(List.of(lot1, lot2));
+        when(clock.now()).thenReturn(NOW);
+        when(postJournalEntryUseCase.post(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Result result = useCase.settle(partialCmd("1500", 1_500L));
+
+        // FIFO C_settle = 2,000,000 → realized 250,000 (NOT the weighted-average 225,000): the
+        // override drove the FIFO branch even with the tenant default unset.
+        assertThat(result.realizedBaseMinor()).isEqualTo(250_000L);
+        assertThat(result.residualCarryingBaseMinor()).isEqualTo(700_000L);
+        verify(fxPositionLotRepository).save(lot1);
+        verify(fxPositionLotRepository).save(lot2);
+        // The tenant default is NOT consulted as the deciding factor here — the account override
+        // resolves first (it is still queried, but lenient stubbing covers the empty fallthrough).
     }
 
     /** A fully-open lot for FIFO-walk stubbing (acquired_at ordered by seq). */
