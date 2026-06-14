@@ -140,6 +140,28 @@ export {
 } from './api/types';
 
 // ---------------------------------------------------------------------------
+// Shippings facet (TASK-PC-FE-088 — ADR-031 Phase 4b — LIST + STATUS CHANGE + REFRESH)
+// ---------------------------------------------------------------------------
+export { ShippingsScreen } from './components/ShippingsScreen';
+export { ShipFormDialog } from './components/ShipFormDialog';
+
+export { getShippingsSectionState } from './api/shippings-state';
+export type { ShippingsSectionState } from './api/shippings-state';
+
+export type {
+  Shipping,
+  ShippingSummary,
+  ShippingList,
+  ShippingListParams,
+  ShippingStatus,
+  UpdateShippingStatusBody,
+} from './api/shipping-types';
+export {
+  SHIPPING_STATUS_VALUES,
+  allowedNextStatus,
+} from './api/shipping-types';
+
+// ---------------------------------------------------------------------------
 // Image facet (TASK-PC-FE-082 — ADR-MONO-031 Phase 1b CLOSING slice). The
 // product-image management surface is embedded in `ProductDetail` (no separate
 // route / sidebar leaf); `ImageManager` is exported for completeness/tests.

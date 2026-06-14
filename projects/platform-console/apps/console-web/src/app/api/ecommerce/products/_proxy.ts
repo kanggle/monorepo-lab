@@ -13,6 +13,7 @@ import {
   UpdatePromotionBodySchema,
   IssueCouponBodySchema,
 } from '@/features/ecommerce-ops/api/types';
+import { UpdateShippingStatusBodySchema } from '@/features/ecommerce-ops/api/shipping-types';
 import {
   PresignedUrlBodySchema,
   RegisterImageBodySchema,
@@ -68,6 +69,8 @@ export {
   CreatePromotionBodySchema,
   UpdatePromotionBodySchema,
   IssueCouponBodySchema,
+  // shippings facet (TASK-PC-FE-088 — ADR-031 Phase 4b)
+  UpdateShippingStatusBodySchema,
   newRequestId,
 };
 
