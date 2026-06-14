@@ -8,7 +8,7 @@ per-tenant **FX cost-flow method 설정**(`fx_cost_flow_config`) — ADR-001 D1 
 
 # Status
 
-ready
+done
 
 # Owner
 
