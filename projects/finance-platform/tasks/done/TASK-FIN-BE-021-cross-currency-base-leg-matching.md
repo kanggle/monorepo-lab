@@ -8,7 +8,7 @@ ledger-service — cross-currency base-leg matching (fourteenth increment): a ba
 
 # Status
 
-review
+done
 
 # Owner
 
