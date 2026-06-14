@@ -1,6 +1,6 @@
 # TASK-BE-375 — seller admin read surface (list + detail) — ADR-030 Step 4 facet f
 
-**Status:** review
+**Status:** done
 **Domain:** ecommerce · **Service:** product-service · **Type:** backend API gap-fill (operator read surface)
 **Parent:** ADR-MONO-030 Step 3 §3.1 (seller inner axis) / Step 4 facet f (seller operator surface). Unblocks the
 platform-console seller operator slice (separate console task, ADR-031 §2.4.10 absorption pattern — 7th operator area).
