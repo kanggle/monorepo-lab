@@ -8,7 +8,9 @@ TASK-BE-369
 
 # Status
 
-ready
+done
+
+> **완료 (2026-06-14)**: PR #1531 squash `fa864ba34` (CI 전건 green incl. iam Testcontainers IT 3m21s = wiring 권위검증, BE-329/BE-327 회귀 0; 3-dim verified). base 토큰[authorization_code/refresh]이 `roles` 실발급 시작 → dual-read role leg 활성(net-positive). 설계해소: aud≠플랫폼(SAS aud=client_id, gw는 tenant_id 검증) → 플랫폼=client tenant_id + account_type seed. `RoleSeedPolicy`(ecommerce C→CUSTOMER/O→ADMIN, wms→WMS_OPERATOR, fan→FAN, 미지→[]) + `populateRoles`(populateEntitledDomains 미러: fail-soft 절대throw 안함, recursion-safe cc 제외, stored-verbatim-else-seed). account_type·entitled_domains·assume-tenant 불변. close-chore=후속 TASK-BE-370 PR 동반. 구현=Opus 서브에이전트 + 오케스트레이터 diff 직접검증.
 
 # Owner
 

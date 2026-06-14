@@ -585,6 +585,14 @@ class TenantClaimTokenCustomizerTest {
                 tenantId, tenantType, operatorAccountType, orgScope);
     }
 
+    private AssumeTenantAuthenticationToken assumeGrant(
+            String tenantId, String tenantType, String operatorAccountType,
+            List<String> orgScope, List<String> operatorRoles) {
+        return new AssumeTenantAuthenticationToken(
+                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
+                tenantId, tenantType, operatorAccountType, orgScope, operatorRoles);
+    }
+
     @Test
     @DisplayName("assume-tenant: PRESERVES the operator's account_type=OPERATOR on the assumed token")
     void assumeTenant_preservesOperatorAccountType() {
@@ -917,6 +925,79 @@ class TenantClaimTokenCustomizerTest {
         verify(accountServicePort, never()).listAccountRoles(any(), any());
         JwtClaimsSet built = claimsBuilder.build();
         assertThat(built.getClaims()).doesNotContainKey("roles");
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-370 (ADR-MONO-033 S4 assume-tenant) — roles preserved verbatim
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-370 assume-tenant: operatorRoles carried on grant → roles claim injected verbatim")
+    void assumeTenant_operatorRoles_injectedVerbatim() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR",
+                        List.of("dept-sales"), List.of("WMS_OPERATOR", "OUTBOUND_MANAGER")));
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("wms"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        // roles preserved verbatim from the operator's subject token (no re-resolve / no seed / no union).
+        assertThat(built.<List<String>>getClaim("roles"))
+                .containsExactly("WMS_OPERATOR", "OUTBOUND_MANAGER");
+        // existing assume-tenant assertions still pass alongside (BE-329/BE-338 untouched).
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
+        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+        assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("dept-sales");
+    }
+
+    @Test
+    @DisplayName("BE-370 assume-tenant: null operatorRoles → no roles claim (net-zero, BE-329/BE-338 intact)")
+    void assumeTenant_nullOperatorRoles_omitsClaim() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        // 3-arg grant → operatorRoles is null (legacy subject token, pre-BE-369).
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR"));
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("finance"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.getClaims()).doesNotContainKey("roles");
+        // the existing assume-tenant injection is byte-unchanged.
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
+        assertThat((String) built.getClaim("account_type")).isEqualTo("OPERATOR");
+        assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("*");
+    }
+
+    @Test
+    @DisplayName("BE-370 assume-tenant: empty operatorRoles → no roles claim (net-zero)")
+    void assumeTenant_emptyOperatorRoles_omitsClaim() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE", "OPERATOR",
+                        List.of("dept-sales"), List.of()));
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("wms"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.getClaims()).doesNotContainKey("roles");
+        // org_scope still injected verbatim (the roles omission does not affect BE-338).
+        assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("dept-sales");
     }
 
     // -----------------------------------------------------------------------
