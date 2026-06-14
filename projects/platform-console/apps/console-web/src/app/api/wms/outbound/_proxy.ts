@@ -31,6 +31,18 @@ export const ActionBodySchema = z.object({
 });
 export type ActionBody = z.infer<typeof ActionBodySchema>;
 
+/** Cancel request body (TASK-PC-FE-085 — § 2.4.5.1 op 9): a **REQUIRED reason**
+ *  (3..500, producer § 1.4 validation) + the stable idempotency key. UNLIKE the
+ *  reason-free forward actions, cancel carries an operator reason — it rides in
+ *  the producer JSON body server-side (the wms surface still has no
+ *  `X-Operator-Reason` header). The proxy reads the order `version` server-side
+ *  (optimistic lock) — the client never supplies it. */
+export const CancelBodySchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+  idempotencyKey: z.string().min(1),
+});
+export type CancelBody = z.infer<typeof CancelBodySchema>;
+
 export const mapOutboundError = makeProxyErrorMapper(
   'wms-outbound',
   WmsOutboundUnavailableError,

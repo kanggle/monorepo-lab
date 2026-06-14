@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-085-console-wms-outbound-order-cancel-action.md` — promotes wms outbound **cancel** (§ 1.4) from "deferred" into the console § 2.4.5.1 binding (op 9). Adds a reason-required, role-escalating (WRITE pre-pick / ADMIN post-pick), async-saga-aware (`CANCELLATION_REQUESTED`) cancel action on the `/wms/outbound` drill-in. Producer unchanged; manual-create + TMS-retry stay deferred. (분석=Opus 4.8 / 구현 권장=Opus 4.8 — contract ext + mutation divergences.)
+(empty)
 
 ## in-progress
 
@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-085-console-wms-outbound-order-cancel-action.md` — wms outbound **cancel** operator action on `/wms/outbound` drill-in (§ 2.4.5.1 op 9, reason-required·role-escalating·async-saga). Impl complete: contract op9 + `cancelOrder` api/`cancel` proxy/`useCancelOrder`/`OutboundCancelDialog` + drill cancel button + error mapping. console-web tsc·lint·vitest **1683** GREEN (+14). Producer unchanged; manual-create + TMS-retry stay deferred.
 
 ## done
 

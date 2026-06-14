@@ -9,16 +9,20 @@ import {
   usePickAction,
   usePackAction,
   useShipAction,
+  useCancelOrder,
 } from '../hooks/use-outbound-ops';
 import {
   OUTBOUND_DEFAULT_PAGE_SIZE,
   canPick,
   canPack,
   canShip,
+  canCancel,
+  cancelNeedsAdmin,
   type OutboundOrderPage,
   type OutboundListParams,
 } from '../api/types';
 import { OutboundActionDialog } from './OutboundActionDialog';
+import { OutboundCancelDialog } from './OutboundCancelDialog';
 
 /**
  * wms outbound operations section (TASK-PC-FE-057 — ADR-MONO-022 § D7 operator
@@ -85,6 +89,20 @@ const ACTION_COPY: Record<
   },
 };
 
+/** Cancel-specific producer error → inline operator message (§ 1.4 errors). */
+function cancelErrorMessage(code: string): string {
+  switch (code) {
+    case 'ORDER_ALREADY_SHIPPED':
+      return '이미 출고된 주문은 취소할 수 없습니다.';
+    case 'STATE_TRANSITION_INVALID':
+      return '주문 상태가 변경되어 취소할 수 없습니다. 목록을 새로고침하세요.';
+    case 'FORBIDDEN':
+      return '취소 권한이 없습니다. 피킹 이후 취소는 관리자(OUTBOUND_ADMIN) 권한이 필요합니다.';
+    default:
+      return messageForCode(code, '주문을 취소하지 못했습니다.');
+  }
+}
+
 export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
   const statusFid = useId();
 
@@ -128,6 +146,17 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionConflict, setActionConflict] = useState(false);
+
+  // --- cancel dialog (reason-required, role-escalating, async-saga) --------
+  const cancel = useCancelOrder();
+  const [cancelTarget, setCancelTarget] = useState<{
+    orderId: string;
+    orderLabel: string;
+    needsAdmin: boolean;
+    idempotencyKey: string;
+  } | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelConflict, setCancelConflict] = useState(false);
 
   const activeMutation =
     action?.kind === 'pick' ? pick : action?.kind === 'pack' ? pack : ship;
@@ -173,6 +202,54 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
     );
   }
 
+  function openCancel(
+    orderId: string,
+    orderLabel: string,
+    status: string | undefined,
+  ) {
+    setCancelError(null);
+    setCancelConflict(false);
+    // A fresh confirmed attempt → a fresh Idempotency-Key.
+    setCancelTarget({
+      orderId,
+      orderLabel,
+      needsAdmin: cancelNeedsAdmin(status),
+      idempotencyKey: crypto.randomUUID(),
+    });
+  }
+
+  function confirmCancel(reason: string) {
+    if (!cancelTarget) return;
+    cancel.mutate(
+      {
+        orderId: cancelTarget.orderId,
+        reason,
+        idempotencyKey: cancelTarget.idempotencyKey,
+      },
+      {
+        onSuccess: () => {
+          setCancelTarget(null);
+          setCancelError(null);
+          setCancelConflict(false);
+        },
+        onError: (e) => {
+          const code = e instanceof ApiError ? e.code : 'SERVICE_UNAVAILABLE';
+          const status = e instanceof ApiError ? e.status : 0;
+          if (status === 409 && code === 'CONFLICT') {
+            // Optimistic-lock stale version → refetch + prompt retry (never a
+            // silent auto-retry).
+            drill.refetch();
+            setCancelConflict(true);
+            setCancelError(messageForCode('CONFLICT'));
+            return;
+          }
+          setCancelConflict(false);
+          setCancelError(cancelErrorMessage(code));
+        },
+      },
+    );
+  }
+
   function submitStatusFilter(e: React.FormEvent) {
     e.preventDefault();
     setQuery({
@@ -196,6 +273,14 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
   );
   const packEnabled = useMemo(() => canPack(drillStatus), [drillStatus]);
   const shipEnabled = useMemo(() => canShip(drillStatus), [drillStatus]);
+  const cancelVisible = useMemo(() => canCancel(drillStatus), [drillStatus]);
+  // Async-cancel hint: order CANCELLED but the saga still releasing inventory.
+  const cancelPending = useMemo(
+    () =>
+      drillStatus === 'CANCELLED' &&
+      drillSagaState === 'CANCELLATION_REQUESTED',
+    [drillStatus, drillSagaState],
+  );
 
   return (
     <section aria-labelledby="wms-outbound-heading">
@@ -489,6 +574,43 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
                   출고 확정
                 </Button>
               </div>
+
+              {/* Cancel — the one NON-forward action (reason-required,
+                  role-escalating). Visible for cancellable statuses only. */}
+              {cancelVisible && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      openCancel(
+                        drillDetail.orderId,
+                        drillDetail.orderNo ?? drillDetail.orderId,
+                        drillStatus,
+                      )
+                    }
+                    disabled={cancel.isPending}
+                    data-testid="outbound-action-cancel-order"
+                  >
+                    주문 취소
+                  </Button>
+                  {cancelNeedsAdmin(drillStatus) && (
+                    <span
+                      className="text-xs text-muted-foreground"
+                      data-testid="outbound-cancel-admin-note"
+                    >
+                      피킹 이후 취소는 관리자(OUTBOUND_ADMIN) 권한이 필요합니다.
+                    </span>
+                  )}
+                </div>
+              )}
+              {cancelPending && (
+                <p
+                  className="mt-2 text-xs text-muted-foreground"
+                  data-testid="outbound-cancel-pending-hint"
+                >
+                  {`취소 요청됨 · 예약 재고 해제 대기 (saga: ${drillSaga.state}).`}
+                </p>
+              )}
               {!pickEnabled && drillStatus === 'PICKING' && (
                 <p
                   className="mt-2 text-xs text-muted-foreground"
@@ -516,6 +638,21 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
           setAction(null);
           setActionError(null);
           setActionConflict(false);
+        }}
+      />
+
+      <OutboundCancelDialog
+        open={cancelTarget !== null}
+        orderLabel={cancelTarget?.orderLabel ?? ''}
+        needsAdmin={cancelTarget?.needsAdmin ?? false}
+        pending={cancel.isPending}
+        errorMessage={cancelError}
+        conflict={cancelConflict}
+        onConfirm={confirmCancel}
+        onCancel={() => {
+          setCancelTarget(null);
+          setCancelError(null);
+          setCancelConflict(false);
         }}
       />
     </section>

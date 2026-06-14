@@ -55,6 +55,7 @@ import { GET as drillGET } from '@/app/api/wms/outbound/[orderId]/route';
 import { POST as pickPOST } from '@/app/api/wms/outbound/[orderId]/pick/route';
 import { POST as packPOST } from '@/app/api/wms/outbound/[orderId]/pack/route';
 import { POST as shipPOST } from '@/app/api/wms/outbound/[orderId]/ship/route';
+import { POST as cancelPOST } from '@/app/api/wms/outbound/[orderId]/cancel/route';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -392,5 +393,119 @@ describe('POST /api/wms/outbound/{orderId}/ship', () => {
       params: Promise.resolve({ orderId: 'o-1' }),
     });
     expect(res.status).toBe(409);
+  });
+});
+
+describe('POST /api/wms/outbound/{orderId}:cancel (TASK-PC-FE-085)', () => {
+  function cancelReq(body: unknown) {
+    return new Request('http://console.local/api/wms/outbound/o-1/cancel', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  it('reads the order version then cancels with { reason, version } + Idempotency-Key (domain-facing token, no X-Operator-Reason)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).includes(':cancel') && init?.method === 'POST') {
+        return Promise.resolve(
+          jsonResponse({
+            orderId: 'o-1',
+            status: 'CANCELLED',
+            sagaState: 'CANCELLATION_REQUESTED',
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse(ORDER_DETAIL));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await cancelPOST(
+      cancelReq({ reason: '고객 주문 취소 요청', idempotencyKey: 'idem-cancel-1' }),
+      { params: Promise.resolve({ orderId: 'o-1' }) },
+    );
+    expect(res.status).toBe(200);
+
+    const cancelCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes(':cancel'),
+    )!;
+    const init = cancelCall[1] as RequestInit;
+    const h = init.headers as Record<string, string>;
+    expect(init.method).toBe('POST');
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['Idempotency-Key']).toBe('idem-cancel-1');
+    expect(h['X-Operator-Reason']).toBeUndefined();
+    const body = JSON.parse(init.body as string);
+    expect(body.reason).toBe('고객 주문 취소 요청');
+    expect(body.version).toBe(3); // from the order detail (optimistic lock)
+  });
+
+  it('a body without a reason → 422 (no upstream call)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await cancelPOST(cancelReq({ idempotencyKey: 'k' }), {
+      params: Promise.resolve({ orderId: 'o-1' }),
+    });
+    expect(res.status).toBe(422);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('a too-short reason (<3 chars) → 422 (no upstream call)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await cancelPOST(
+      cancelReq({ reason: 'ab', idempotencyKey: 'k' }),
+      { params: Promise.resolve({ orderId: 'o-1' }) },
+    );
+    expect(res.status).toBe(422);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('no IAM session → 401 (no upstream call)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await cancelPOST(
+      cancelReq({ reason: '취소 사유입니다', idempotencyKey: 'k' }),
+      { params: Promise.resolve({ orderId: 'o-1' }) },
+    );
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('422 ORDER_ALREADY_SHIPPED → 422 passthrough', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn((url: string, init?: RequestInit) =>
+      String(url).includes(':cancel') && init?.method === 'POST'
+        ? Promise.resolve(wmsError('ORDER_ALREADY_SHIPPED', 422))
+        : Promise.resolve(jsonResponse(ORDER_DETAIL)),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await cancelPOST(
+      cancelReq({ reason: '취소 사유', idempotencyKey: 'k' }),
+      { params: Promise.resolve({ orderId: 'o-1' }) },
+    );
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.code).toBe('ORDER_ALREADY_SHIPPED');
+  });
+
+  it('403 FORBIDDEN (post-pick needs OUTBOUND_ADMIN) → 403 passthrough', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn((url: string, init?: RequestInit) =>
+      String(url).includes(':cancel') && init?.method === 'POST'
+        ? Promise.resolve(wmsError('FORBIDDEN', 403))
+        : Promise.resolve(jsonResponse(ORDER_DETAIL)),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await cancelPOST(
+      cancelReq({ reason: '취소 사유', idempotencyKey: 'k' }),
+      { params: Promise.resolve({ orderId: 'o-1' }) },
+    );
+    expect(res.status).toBe(403);
   });
 });
