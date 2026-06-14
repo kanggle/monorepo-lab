@@ -25,7 +25,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | `id` | BIGINT | PK, AUTO_INCREMENT | internal | 내부 PK |
 | `operator_id` | VARCHAR(36) | UNIQUE, NOT NULL | internal | UUID v7. JWT `sub` 클레임에 실리는 외부 식별자 ([rbac.md](./rbac.md) JWT claim 절) |
 | `email` | VARCHAR(255) | UNIQUE, NOT NULL | **confidential** | 로그인 식별자. PII ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1). 응답에서 기본 마스킹 |
-| `password_hash` | VARCHAR(255) | NOT NULL | **restricted** | argon2id 해시. 평문 저장 금지 (R2) |
+| `password_hash` | VARCHAR(255) | NULL | **restricted** | argon2id 해시. 평문 저장 금지 (R2). **TASK-BE-377 / ADR-MONO-035 4c**: `NOT NULL` → **NULL** 로 강등(break-glass). 운영자 PRIMARY 로그인은 통합 IAM OIDC credential(`token-exchange` 경유, ADR-014)이며, 이 로컬 비밀번호는 IdP/OIDC 불가용 시의 **비상(break-glass)** 로그인으로만 잔존. `NULL` = OIDC-only 운영자(로컬 비밀번호 없음 — `AdminLoginService` 가 fail-closed: 비밀번호 로그인 거부, OIDC 로만 인증). 완전 제거는 OIDC-only 입증 후 후속(deferred) |
 | `display_name` | VARCHAR(120) | NOT NULL | **confidential** | 감사 UI에 표시되는 이름. 개인 식별 가능 (R1) |
 | `status` | VARCHAR(20) | NOT NULL, DEFAULT 'ACTIVE' | internal | `ACTIVE` / `DISABLED` / `LOCKED`. 소프트 비활성 플래그 |
 | `totp_secret_encrypted` | VARBINARY(255) | NULL | **restricted** | TOTP 시크릿 (envelope encryption). **TASK-BE-029 예약 컬럼** — 본 태스크에서는 NULL만 허용 |

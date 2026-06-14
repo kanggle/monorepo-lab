@@ -38,7 +38,14 @@ public class AdminOperatorJpaEntity {
     @Column(name = "email", length = 255, nullable = false)
     private String email;
 
-    @Column(name = "password_hash", length = 255, nullable = false)
+    // TASK-BE-377 / ADR-MONO-035 O2 (step 4c): NULLABLE break-glass credential.
+    // The operator's PRIMARY login is the unified IAM OIDC credential (exchanged into
+    // an operator token via the ADR-014 token-exchange). The local password login is
+    // RETAINED only as break-glass (emergency local login when the IdP/OIDC path is
+    // unavailable). NULL = OIDC-only operator (no local password) — AdminLoginService
+    // fail-closes such a row (INVALID_CREDENTIALS) so it must authenticate via OIDC.
+    // Demoted, not removed (full removal is a deferred follow-up).
+    @Column(name = "password_hash", length = 255)
     private String passwordHash;
 
     @Column(name = "display_name", length = 120, nullable = false)
@@ -137,8 +144,10 @@ public class AdminOperatorJpaEntity {
 
     /**
      * Factory for {@code POST /api/admin/operators} (TASK-BE-083 / TASK-BE-249).
-     * Callers must supply a pre-computed Argon2id hash; the entity never sees the
-     * plaintext password. {@code tenantId} is required (use
+     * When a password is supplied, callers pass a pre-computed Argon2id hash; the
+     * entity never sees the plaintext password. {@code passwordHash} may be
+     * {@code null} (TASK-BE-377 / ADR-MONO-035 4c) — an OIDC-only operator with no
+     * local break-glass password. {@code tenantId} is required (use
      * {@link com.example.admin.domain.rbac.AdminOperator#PLATFORM_TENANT_ID} for SUPER_ADMIN).
      */
     public static AdminOperatorJpaEntity create(String operatorId,

@@ -70,6 +70,17 @@ public class AdminLoginService {
     /**
      * Executes the login flow. Returns a {@link LoginResult} describing the
      * outcome; the controller converts this into HTTP + audit.
+     *
+     * <p>TASK-BE-377 / ADR-MONO-035 O2 (step 4c): this local password login is now
+     * <b>break-glass</b>. After step 4 the operator's PRIMARY login is the unified IAM
+     * OIDC credential, exchanged into an operator token via the ADR-014 token-exchange
+     * ({@link TokenExchangeService}); this password path is the emergency local login
+     * retained for when the IdP/OIDC path is unavailable. An OIDC-only operator has a
+     * NULL {@code password_hash} and therefore <b>cannot</b> local-login — the null-hash
+     * branch below fail-closes (after the timing-leveled dummy verify) exactly like an
+     * operator miss / wrong password. No behavior change from BE-377: the L80 guard
+     * already handled a null hash; 4c only makes the column nullable so such operators
+     * can exist.
      */
     @Transactional
     public LoginResult login(String operatorUuid, String password,
@@ -77,6 +88,9 @@ public class AdminLoginService {
         AdminOperatorPort.OperatorView operator = operatorPort.findByOperatorId(operatorUuid).orElse(null);
 
         // Password verification (timing-leveled between miss and wrong-password).
+        // A NULL password_hash (OIDC-only operator, no break-glass password) takes this
+        // same fail-closed branch — such an operator must authenticate via OIDC, never
+        // the local password login (BE-377 / ADR-035 4c break-glass semantics).
         if (operator == null || operator.passwordHash() == null) {
             // Consume comparable CPU time so the caller cannot distinguish miss from wrong password.
             passwordHasher.verify(DUMMY_PLAINTEXT, dummyHash());

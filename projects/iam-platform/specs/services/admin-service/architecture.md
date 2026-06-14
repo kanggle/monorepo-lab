@@ -205,9 +205,12 @@ admin-service 가 operator access token 을 민팅하는 경로는 다음 **둘*
 `iss=admin-service`)를 통과한다. self-issuing IdP 경계는 보존된다:
 
 1. **password (+ optional TOTP) login** — `POST /api/admin/auth/login`
-   (`AdminLoginService`, TASK-BE-029-3). canonical 발급 경로.
+   (`AdminLoginService`, TASK-BE-029-3). **TASK-BE-377 / ADR-MONO-035 4c 이후
+   break-glass 경로**(IdP/OIDC 불가용 시 비상 로컬 로그인). `admin_operators.password_hash`
+   가 NULL 인 OIDC-only 운영자는 이 경로로 로그인할 수 없다(`401 INVALID_CREDENTIALS`).
 2. **IAM OIDC token exchange** — `POST /api/admin/auth/token-exchange`
-   (TASK-BE-298, ADR-MONO-014 ACCEPTED § D2/D3). platform-console 이 보유한
+   (TASK-BE-298, ADR-MONO-014 ACCEPTED § D2/D3). **TASK-BE-377 / ADR-MONO-035 4c
+   이후 운영자 PRIMARY 로그인 경로**. platform-console 이 보유한
    IAM OIDC `platform-console-web` access token 을 검증(auth-service JWKS)하고
    OIDC subject 를 `admin_operators` row 로 **fail-closed** 해석한 뒤, 위
    1번과 **동일한 발급기**로 operator token 을 민팅한다. tenant 스코프는

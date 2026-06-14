@@ -97,6 +97,10 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
     private static final String SUPER_OP_UUID   = "00000000-0000-7000-8000-0000000be299";
     private static final String SUPER_OP_OIDC   = "oidc-sub-super-0001";
     private static final String UNMAPPED_OIDC   = "oidc-sub-not-provisioned";
+    // TASK-BE-377 / ADR-MONO-035 4c — an OIDC-only operator (NULL password_hash):
+    // no local break-glass password, authenticates purely via OIDC token-exchange.
+    private static final String OIDC_ONLY_OP_UUID = "00000000-0000-7000-8000-0000000be377";
+    private static final String OIDC_ONLY_OP_OIDC = "oidc-sub-oidc-only-0001";
 
     @BeforeAll
     static void setupShared() throws Exception {
@@ -175,6 +179,34 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
     void seed() {
         seedOperator(MAPPED_OP_UUID, "wms", MAPPED_OP_OIDC, "ACTIVE");
         seedOperator(SUPER_OP_UUID, "*", SUPER_OP_OIDC, "ACTIVE");
+        seedOidcOnlyOperator(OIDC_ONLY_OP_UUID, "wms", OIDC_ONLY_OP_OIDC, "ACTIVE");
+    }
+
+    /**
+     * TASK-BE-377 / ADR-MONO-035 4c — seed an OIDC-only operator with a NULL
+     * {@code password_hash} (no break-glass local password). Proves the V0037
+     * nullable demotion persists + the operator authenticates only via OIDC
+     * token-exchange (and cannot local-login).
+     */
+    private void seedOidcOnlyOperator(String operatorId, String tenantId, String oidcSubject, String status) {
+        Integer existing = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_operators WHERE operator_id = ?",
+                Integer.class, operatorId);
+        if (existing == null || existing == 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO admin_operators
+                      (operator_id, tenant_id, email, password_hash, display_name,
+                       status, oidc_subject, created_at, updated_at, version)
+                    VALUES (?, ?, ?, NULL, ?, ?, ?, NOW(6), NOW(6), 0)
+                    """, operatorId, tenantId, operatorId + "@example.com",
+                    "OidcOnly " + operatorId.substring(operatorId.length() - 4),
+                    status, oidcSubject);
+        } else {
+            jdbcTemplate.update(
+                    "UPDATE admin_operators SET status = ?, oidc_subject = ?, password_hash = NULL "
+                            + "WHERE operator_id = ?",
+                    status, oidcSubject, operatorId);
+        }
     }
 
     private void seedOperator(String operatorId, String tenantId, String oidcSubject, String status) {
@@ -248,6 +280,53 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + operatorToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.operatorId").value(MAPPED_OP_UUID));
+    }
+
+    @Test
+    @DisplayName("BE-377: OIDC-only operator (NULL password_hash) → token-exchange succeeds; minted token authenticates /api/admin/**")
+    void oidcOnlyOperator_nullPasswordHash_exchangesAndAuthenticates() throws Exception {
+        // ADR-MONO-035 4c: an operator with NO local break-glass password
+        // (password_hash NULL) is OIDC-PRIMARY — the unified IAM OIDC credential,
+        // exchanged into an operator token, is its only required login. Proves the
+        // V0037 nullable demotion persists AND the OIDC path works for such an operator.
+        String subject = sign(oidcToken(OIDC_ONLY_OP_OIDC));
+
+        MvcResult res = mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType("application/json")
+                        .content(exchangeBody(subject)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tokenType").value("admin"))
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andReturn();
+
+        String operatorToken = objectMapper.readTree(
+                res.getResponse().getContentAsString()).get("accessToken").asText();
+        mockMvc.perform(get("/api/admin/me")
+                        .header("Authorization", "Bearer " + operatorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorId").value(OIDC_ONLY_OP_UUID));
+
+        // Sanity: the row really has a NULL password_hash (break-glass absent).
+        String hash = jdbcTemplate.queryForObject(
+                "SELECT password_hash FROM admin_operators WHERE operator_id = ?",
+                String.class, OIDC_ONLY_OP_UUID);
+        assertThat(hash).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-377: OIDC-only operator (NULL password_hash) CANNOT local-login → 401 INVALID_CREDENTIALS (break-glass absent)")
+    void oidcOnlyOperator_localLogin_returns401() throws Exception {
+        // The break-glass password login fail-closes for a null-hash operator: it must
+        // authenticate via OIDC, never the local password (security.md §Operator
+        // Credential Convergence). Any password presented → 401 (after the timing dummy).
+        String loginBody = """
+                {"operatorId":"%s","password":"AnyPass1!"}
+                """.formatted(OIDC_ONLY_OP_UUID);
+        mockMvc.perform(post("/api/admin/auth/login")
+                        .contentType("application/json")
+                        .content(loginBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
 
     @Test

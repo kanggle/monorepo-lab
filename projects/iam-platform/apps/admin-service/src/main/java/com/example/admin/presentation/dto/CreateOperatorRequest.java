@@ -28,7 +28,15 @@ public record CreateOperatorRequest(
         @Size(min = 1, max = 64)
         String displayName,
 
-        @NotBlank
+        /**
+         * TASK-BE-377 (ADR-MONO-035 O2 / step 4c): OPTIONAL. When omitted/blank the
+         * operator is created OIDC-only (no local break-glass password — primary login
+         * is the unified IAM OIDC credential via the ADR-014 token-exchange). When
+         * supplied it is the break-glass local password and MUST satisfy the policy
+         * (≥10 chars, ≥1 letter + ≥1 digit + ≥1 special). {@code @Size}/{@code @Pattern}
+         * are skipped by Bean Validation on a null value, so an absent password is
+         * accepted and a supplied one is still policy-enforced.
+         */
         @Size(min = 10, max = 255)
         @Pattern(
                 regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$",

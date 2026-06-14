@@ -1,0 +1,21 @@
+-- TASK-BE-377 (ADR-MONO-035 O2 / O5 step 4c — operator credential convergence)
+-- admin-service: demote admin_operators.password_hash to a NULLABLE break-glass credential.
+--
+-- ADR-032 D5 step 4 converges operators onto the unified IAM OIDC credential as
+-- their PRIMARY login: the admin panel authenticates via the OIDC base login + the
+-- already-wired ADR-014 token-exchange (POST /api/admin/auth/token-exchange), not a
+-- second local password verify. The local password login (POST /api/admin/auth/login)
+-- is RETAINED as break-glass — an emergency local login for when the IdP/OIDC path is
+-- unavailable — so password_hash is DEMOTED to nullable, NOT removed (O2-A / O6;
+-- full removal is a deferred follow-up once OIDC-only admin login is proven).
+--
+-- After this migration an operator may exist WITHOUT a local password (password_hash
+-- NULL = OIDC-only): they authenticate purely through OIDC -> token-exchange. A null-
+-- hash operator cannot local-login (AdminLoginService already null-guards the hash and
+-- returns INVALID_CREDENTIALS after a timing-leveled dummy verify) — fail-closed, not a
+-- bypass. Existing rows keep their password_hash (no backfill = break-glass retained).
+--
+-- Plain MODIFY drops only the NOT NULL constraint (no COMMENT/AFTER ordering concern,
+-- diagnostic §22). CredentialJpaEntity / AdminOperatorJpaEntity map password_hash as
+-- nullable after this migration so Hibernate ddl-auto=validate passes.
+ALTER TABLE admin_operators MODIFY COLUMN password_hash VARCHAR(255) NULL;
