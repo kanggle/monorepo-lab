@@ -26,6 +26,7 @@ import {
   useWithdrawApproval,
 } from '../hooks/use-erp-ops';
 import { approvalErrorMessage } from './approval-error';
+import { fmtDateTime } from './format-datetime';
 
 /**
  * ERP "결재함" screen (TASK-PC-FE-051 — ADR-MONO-016 § D3.1 parity slice).
@@ -275,7 +276,7 @@ export function ApprovalScreen({
 // ===========================================================================
 
 function fmt(ts: string | undefined): string {
-  return ts ?? '—';
+  return fmtDateTime(ts);
 }
 
 export function ApprovalDetail({
