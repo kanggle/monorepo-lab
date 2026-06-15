@@ -267,24 +267,25 @@ Testcontainer wiring.
 
 ## Implementation Notes
 
-- Implementation lives in `application/` layer as a reusable component, invoked
-  from the controller (or from a filter if the service adopts a filter-based
-  approach later). The domain layer is unaware of idempotency.
-- The component should expose a small interface:
-  ```java
-  public interface IdempotencyStore {
-      Optional<StoredResponse> lookup(String key, String method, String path,
-                                       String requestHash);
-      void store(String key, String method, String path, String requestHash,
-                 int status, Object responseBody, String contentType);
-  }
-  ```
-- Provide an `InMemoryIdempotencyStore` for Spring profile `standalone` (per
+- **Realized via the shared `libs/java-web-servlet` abstraction (ADR-MONO-038,
+  TASK-MONO-275).** The generic store contract this section anticipated is now
+  the lib `com.example.web.idempotency.IdempotencyStore` (`lookup` / `put` /
+  `tryAcquireLock` / `releaseLock`, returning the lib `StoredResponse` record);
+  master keeps its own `IdempotencyFilter` (UUID validation, fail-closed store
+  posture, bounded lock-wait, 4xx caching — the Family-B control flow that
+  diverges from the Family-A `IdempotencyKeyFilter`) and its `RedisIdempotencyStore`
+  adapter, delegating body canonicalization to the lib `JsonTreeBodyCanonicalizer`
+  and request-body caching to the lib `CachedBodyHttpServletRequestWrapper`. The
+  domain layer is unaware of idempotency.
+- Provide an `InMemoryIdempotencyStore` (implementing the lib `IdempotencyStore`)
+  for Spring profile `standalone` (per
   `.claude/skills/backend/standalone-profile/SKILL.md`) so local development
   without Redis still works.
-- Generic — the interface is reusable across other wms services later
-  (`inventory`, `inbound`, `outbound`). If three or more services adopt an
-  identical implementation, promote it to `libs/java-web` per
+- The "promote to `libs/` once three or more services adopt an identical
+  implementation" prediction below was fulfilled: five wms services
+  (`inbound`, `outbound`, `master`, `admin`, `inventory`) shared the store +
+  `StoredResponse`, so ADR-MONO-038 lifted them (and the REST filter, for the
+  Family-A services) into `libs/java-web-servlet` per
   `platform/shared-library-policy.md`.
 
 ---

@@ -1,9 +1,9 @@
 package com.wms.inventory.config;
 
+import com.example.web.idempotency.IdempotencyStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inventory.adapter.out.idempotency.InMemoryIdempotencyStore;
 import com.wms.inventory.adapter.out.idempotency.RedisIdempotencyStore;
-import com.wms.inventory.application.port.out.IdempotencyStore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
