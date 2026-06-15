@@ -1,3 +1,5 @@
+> **DEPRECATED — 2026-05-04 (TASK-BE-132). Historical reference only; see [README.md](README.md).**
+
 # Service Overview
 
 ## Service

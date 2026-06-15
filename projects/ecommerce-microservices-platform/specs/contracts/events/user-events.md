@@ -15,7 +15,7 @@ multi-word event suffixes use hyphens (mirroring `shipping.shipping.status-chang
 | Event | Kafka topic | Status |
 |---|---|---|
 | `UserProfileUpdated` | `user.user.profile-updated` | live (no production consumer in v1; declared for platform-console / notification-service future use) |
-| `UserWithdrawn` | `user.user.withdrawn` | live (consumed by order-service + auth-service) |
+| `UserWithdrawn` | `user.user.withdrawn` | live (consumed by order-service; auth-service decommissioned TASK-BE-132 — credential lifecycle now IAM-internal) |
 
 > **Renaming history (TASK-BE-134, 2026-05-11)**: prior to this task the
 > publisher used `user.user-profile.updated` and `user.user-withdrawn`
@@ -73,7 +73,7 @@ Published when a user updates their profile information.
 
 Published when a user withdraws (deactivates) their account.
 
-**Consumers:** order-service, auth-service
+**Consumers:** order-service (auth-service decommissioned TASK-BE-132; credential lifecycle now IAM-internal)
 
 **Payload**
 ```json

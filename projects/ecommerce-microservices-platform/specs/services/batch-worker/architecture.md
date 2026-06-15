@@ -89,7 +89,7 @@ Package organization may follow package-by-layer or package-by-feature if the la
 For full dependency rules, see `dependencies.md`.
 
 ## Key Jobs (planned)
-- Expired session cleanup (auth-service sessions past inactivity timeout)
+- ~~Expired session cleanup (auth-service sessions past inactivity timeout)~~ **REMOVED — IAM owns auth sessions (TASK-BE-132).**
 - Stale order cancellation (orders stuck in PENDING beyond timeout)
 - Daily sales aggregation (order/payment summary)
 - Elasticsearch index consistency check (product data sync verification)
