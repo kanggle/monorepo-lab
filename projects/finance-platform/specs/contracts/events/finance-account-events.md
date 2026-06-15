@@ -54,8 +54,9 @@ Domain rules: [`rules/domains/fintech.md`](../../../../../rules/domains/fintech.
 | `EVENT_TRANSACTION_REVERSED` | `finance.transaction.reversed.v1` | transaction | reversal txn settled (original immutable) |
 | `EVENT_COMPLIANCE_SANCTION_HIT` | `finance.compliance.sanction.hit.v1` | account | sanction/watchlist match → operator queue (F4) |
 
-> `finance.reconciliation.*` and `finance.ledger.*` are **forward-declared in
-> fintech.md** but NOT emitted in v1 (no external settlement / no ledger-service).
+> `finance.reconciliation.*` and `finance.ledger.*` are emitted by **ledger-service**
+> (a separate service — see `finance-ledger-events.md`), **not** by account-service; this
+> contract covers only account-service's own events.
 
 ## Payload schemas (v1)
 
