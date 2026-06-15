@@ -5,7 +5,9 @@ Published HTTP API for settlement-service (ADR-MONO-030 Step 4 facet b — marke
 seller settlement / commission). All endpoints are accessible through
 gateway-service only. **Operator-plane only** (`/api/admin/**`) — there is no
 consumer-facing settlement surface. All endpoints require an authenticated
-operator (Bearer token, `account_type = OPERATOR`).
+operator (Bearer token, `roles ∋ ADMIN` — the platform-console operator's
+ADR-MONO-035 4a assume-tenant-derived domain role; the gateway gates
+`/api/admin/**` on `roles ∋ ADMIN`).
 
 > **No write path for accruals.** Commission is booked **only** from the
 > order/payment event streams (see `settlement-subscriptions.md`). The HTTP
