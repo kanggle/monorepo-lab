@@ -9,14 +9,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
-import java.net.http.HttpClient;
 import java.util.Map;
+
+import static com.example.auth.infrastructure.oauth.OAuthClientSupport.buildHttp11RestClient;
+import static com.example.auth.infrastructure.oauth.OAuthClientSupport.stringClaim;
 
 /**
  * Microsoft Identity Platform (Azure AD v2.0) OAuth 2.0 / OpenID Connect client.
@@ -53,15 +54,6 @@ public class MicrosoftOAuthClient implements OAuthClient {
         // Force HTTP/1.1 to avoid JDK HttpClient HTTP/2 RST_STREAM race against
         // WireMock stubs on Linux epoll event loops. (TASK-BE-273 Phase 2, ADR-004)
         this(oAuthProperties, objectMapper, buildHttp11RestClient());
-    }
-
-    private static RestClient buildHttp11RestClient() {
-        HttpClient jdkClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
-        return RestClient.builder()
-                .requestFactory(new JdkClientHttpRequestFactory(jdkClient))
-                .build();
     }
 
     MicrosoftOAuthClient(OAuthProperties oAuthProperties,
@@ -132,10 +124,5 @@ public class MicrosoftOAuthClient implements OAuthClient {
             log.error("Microsoft OAuth code exchange failed: {}", e.getMessage());
             throw new OAuthProviderException("Microsoft OAuth provider error", e);
         }
-    }
-
-    private static String stringClaim(Map<String, Object> claims, String key) {
-        Object v = claims.get(key);
-        return v == null ? null : v.toString();
     }
 }
