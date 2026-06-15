@@ -1,7 +1,8 @@
 # TASK-PC-FE-096 — convert the remaining inline page-size clamps to `clampPageSize`
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Duplication — 0 behavior change, 0 contract change)
+**Closure:** PR #1679 squash `5578b64f8`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass incl. Frontend unit tests/lint/E2E). 0 inline clamps remain; clampSize duplication now 0 across console-web. (Local full-suite showed load-induced flaky jsdom timeouts in unrelated files; CI isolated runner green.)
 **Parent:** completes TASK-PC-FE-095 (which extracted `shared/lib/pagination.ts#clampPageSize` and converted the `function clampSize` copies, but left the **inline** `Math.min(MAX, Math.max(1, size ?? DEFAULT))` expressions untouched).
 
 ## Goal
