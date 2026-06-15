@@ -1,6 +1,7 @@
 import { getServerEnv } from '@/shared/config/env';
 import { getOperatorToken, getActiveTenant } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
+import { clampPageSize } from '@/shared/lib/pagination';
 import { ApiError, OperatorsUnavailableError } from '@/shared/api/errors';
 import {
   OperatorPageSchema,
@@ -309,7 +310,7 @@ export async function listOperators(
   const tenant = await getActiveTenant();
   if (tenant) qs.set('tenantId', tenant);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
-  qs.set('size', String(Math.min(100, Math.max(1, params.size ?? 20))));
+  qs.set('size', String(clampPageSize(params.size, 20, 100)));
   return callGapOperators(
     { method: 'GET', path: `${OPERATORS_PREFIX}?${qs.toString()}` },
     (json) => OperatorPageSchema.parse(json),

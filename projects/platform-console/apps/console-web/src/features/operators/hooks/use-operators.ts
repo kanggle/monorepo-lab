@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   OperatorPageSchema,
   type OperatorPage,
@@ -84,7 +85,7 @@ async function queryList(
   const qs = new URLSearchParams();
   if (params.status) qs.set('status', params.status);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
-  qs.set('size', String(Math.min(100, Math.max(1, params.size ?? 20))));
+  qs.set('size', String(clampPageSize(params.size, 20, 100)));
   const raw = await apiClient.get<unknown>(
     `/api/operators?${qs.toString()}`,
   );

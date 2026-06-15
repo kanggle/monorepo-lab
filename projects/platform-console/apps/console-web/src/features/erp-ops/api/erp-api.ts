@@ -1,6 +1,7 @@
 import { getServerEnv } from '@/shared/config/env';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
+import { clampPageSize } from '@/shared/lib/pagination';
 import { ApiError, ErpUnavailableError } from '@/shared/api/errors';
 import {
   DepartmentListResponseSchema,
@@ -1002,7 +1003,7 @@ function orgViewListQs(params: OrgViewListQueryParams): string {
   qs.set('page', String(Math.max(0, params.page ?? 0)));
   qs.set(
     'size',
-    String(Math.min(ERP_MAX_PAGE_SIZE, Math.max(1, params.size ?? ERP_DEFAULT_PAGE_SIZE))),
+    String(clampPageSize(params.size, ERP_DEFAULT_PAGE_SIZE, ERP_MAX_PAGE_SIZE)),
   );
   if (params.departmentId) qs.set('departmentId', params.departmentId);
   if (params.status) qs.set('status', params.status);
@@ -1070,7 +1071,7 @@ function delegationListQs(params: DelegationFactListQueryParams): string {
   qs.set('page', String(Math.max(0, params.page ?? 0)));
   qs.set(
     'size',
-    String(Math.min(ERP_MAX_PAGE_SIZE, Math.max(1, params.size ?? ERP_DEFAULT_PAGE_SIZE))),
+    String(clampPageSize(params.size, ERP_DEFAULT_PAGE_SIZE, ERP_MAX_PAGE_SIZE)),
   );
   return qs.toString();
 }
