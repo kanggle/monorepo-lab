@@ -1,6 +1,6 @@
 ﻿# TASK-BE-385 — wms spec refactor pass (meaning-preserving consistency/naming/clarity + drift findings)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (3-agent discovery + careful meaning-preservation triage)
