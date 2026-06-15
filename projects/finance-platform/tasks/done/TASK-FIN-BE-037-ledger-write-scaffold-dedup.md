@@ -1,6 +1,6 @@
 # TASK-FIN-BE-037 — ledger-service write use-case scaffold dedup (refactor)
 
-- **Status:** review
+- **Status:** done
 - **Type:** refactor (behaviour-preserving — no contract / no API / no decision change)
 - **Service:** ledger-service (finance-platform)
 - **Increment:** N/A — pure internal refactor; does not advance the increment count
