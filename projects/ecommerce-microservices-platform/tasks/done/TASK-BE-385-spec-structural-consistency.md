@@ -1,6 +1,6 @@
 # TASK-BE-385 — Ecommerce spec structural consistency: missing per-service files + section gaps
 
-**Status:** review
+**Status:** done
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8
 **Recommended impl model:** Sonnet

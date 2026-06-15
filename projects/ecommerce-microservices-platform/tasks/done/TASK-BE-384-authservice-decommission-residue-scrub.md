@@ -1,6 +1,6 @@
 # TASK-BE-384 — Scrub decommissioned auth-service residue from ecommerce specs (post TASK-BE-132 / IAM delegation)
 
-**Status:** review
+**Status:** done
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (net-zero doc alignment — scrub stale references to a decommissioned service)
 

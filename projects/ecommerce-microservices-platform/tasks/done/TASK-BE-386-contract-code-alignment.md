@@ -1,6 +1,6 @@
 # TASK-BE-386 — Align ecommerce HTTP/event contracts to deployed code
 
-**Status:** review
+**Status:** done
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet
 

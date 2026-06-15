@@ -1,6 +1,6 @@
 # TASK-BE-383 — Reconcile ecommerce service specs with merged ADR-MONO-030 (multi-tenant + marketplace) and ADR-MONO-022 (ecommerce↔wms fulfillment) reality
 
-**Status:** review
+**Status:** done
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8
 **Recommended impl model:** Sonnet
