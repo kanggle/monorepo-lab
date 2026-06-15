@@ -21,6 +21,15 @@ dependencies {
     // Jackson for JSON serialization support of ErrorResponse.
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
+    // swagger-core OpenAPI models for BearerJwtOpenApi (shared JWT-bearer Swagger
+    // scheme builder). compileOnly: the OpenAPI model classes are pure POJOs (NOT
+    // spring-web / servlet — the MONO-044a framework-agnostic charter is preserved),
+    // and a compileOnly dep never reaches a consumer's runtime classpath, so the
+    // reactive gateway (which depends on libs:java-web) is unaffected. Servlet REST
+    // services that call the builder already supply swagger-core via springdoc.
+    compileOnly 'io.swagger.core.v3:swagger-models-jakarta:2.2.28'
+
+    testImplementation 'io.swagger.core.v3:swagger-models-jakarta:2.2.28'
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
     testImplementation 'org.assertj:assertj-core'
