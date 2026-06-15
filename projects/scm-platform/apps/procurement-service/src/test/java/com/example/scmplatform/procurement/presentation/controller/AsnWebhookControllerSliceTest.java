@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+import static org.hamcrest.Matchers.instanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -91,7 +92,11 @@ class AsnWebhookControllerSliceTest {
                         .content(validRequestJson()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value("asn-001"))
-                .andExpect(jsonPath("$.data.supplierAsnRef").value("ASN-REF-001"));
+                .andExpect(jsonPath("$.data.supplierAsnRef").value("ASN-REF-001"))
+                // procurement-api.md serialises line decimals as JSON strings
+                // (contract conformance — TASK-SCM-BE-031, mirrors BE-020 for PO).
+                .andExpect(jsonPath("$.data.lines[0].quantityShipped").value(instanceOf(String.class)))
+                .andExpect(jsonPath("$.data.lines[0].quantityShipped").value("5.00"));
     }
 
     @Test
