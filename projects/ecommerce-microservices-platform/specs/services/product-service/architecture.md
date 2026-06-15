@@ -74,6 +74,19 @@ Key domain concepts:
 - domain layer owns product and inventory rules and invariants
 - infrastructure layer handles persistence, event publishing, and external adapters
 
+## Outbox
+
+- Pattern: **Direct Kafka publish** (not `libs/java-messaging` transactional outbox — `java-messaging` is not a dependency of product-service).
+- Publisher: `KafkaProductEventPublisher` (`infrastructure/event`) — implements `ProductEventPublisher` domain port. Active on all profiles except `standalone`.
+- Topic 매핑 (`KafkaProductEventPublisher`):
+  - `ProductCreated` → `product.product.created`
+  - `ProductUpdated` → `product.product.updated`
+  - `ProductDeleted` → `product.product.deleted`
+  - `StockChanged` → `product.product.stock-changed`
+  - `ProductImagesUpdated` → `product.product.images-updated`
+- Publish failures are counted via `ProductMetrics.incrementEventPublishFailure(eventType)` and logged at ERROR level; no retry or dead-letter queue is wired in v1.
+- **Note**: the Identity table entry "Event publication | Kafka via outbox" reflects the intended target pattern; the v1 implementation is direct publish without a transactional outbox table. Adding the outbox is a forward-declared improvement.
+
 ## Integration Rules
 - HTTP behavior must follow published contracts
 - Product domain events must follow published event contracts

@@ -90,7 +90,7 @@ Required emphasis:
 - integration tests for provider interaction boundaries
 - failure and retry scenario tests
 
-## Event Publication
+## Outbox
 Domain events (`PaymentCompleted`, `PaymentRefunded`) are published via the
 **transactional outbox** pattern (`libs/java-messaging` —
 [ADR-006](../../../docs/adr/ADR-006-at-least-once-delivery-policy.md), Scenario
