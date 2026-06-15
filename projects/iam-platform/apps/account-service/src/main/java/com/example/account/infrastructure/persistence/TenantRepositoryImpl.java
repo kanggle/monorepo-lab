@@ -1,5 +1,6 @@
 package com.example.account.infrastructure.persistence;
 
+import com.example.account.domain.repository.PageResult;
 import com.example.account.domain.repository.TenantRepository;
 import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantId;
@@ -7,7 +8,7 @@ import com.example.account.domain.tenant.TenantStatus;
 import com.example.account.domain.tenant.TenantType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -41,8 +42,15 @@ public class TenantRepositoryImpl implements TenantRepository {
     }
 
     @Override
-    public Page<Tenant> findAll(TenantStatus statusFilter, TenantType tenantTypeFilter, Pageable pageable) {
-        return jpaRepository.findAllFiltered(statusFilter, tenantTypeFilter, pageable)
-                .map(TenantJpaEntity::toDomain);
+    public PageResult<Tenant> findAll(TenantStatus statusFilter, TenantType tenantTypeFilter, int page, int size) {
+        Page<TenantJpaEntity> jpaPage = jpaRepository.findAllFiltered(
+                statusFilter, tenantTypeFilter, PageRequest.of(page, size));
+        return new PageResult<>(
+                jpaPage.getContent().stream().map(TenantJpaEntity::toDomain).toList(),
+                jpaPage.getTotalElements(),
+                jpaPage.getNumber(),
+                jpaPage.getSize(),
+                jpaPage.getTotalPages()
+        );
     }
 }
