@@ -1,8 +1,6 @@
 package com.example.scmplatform.demandplanning.adapter.inbound.web.filter;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.example.scmplatform.demandplanning.adapter.inbound.web.HttpErrorResponseWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,7 +10,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -21,7 +18,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 
 /**
@@ -39,7 +35,6 @@ import java.util.List;
 @Order(Ordered.LOWEST_PRECEDENCE - 100)
 public class TenantClaimEnforcer extends OncePerRequestFilter {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
     private static final String WILDCARD_TENANT = "*";
     private static final String CLAIM_TENANT_ID = "tenant_id";
     private static final String CLAIM_ENTITLED_DOMAINS = "entitled_domains";
@@ -66,7 +61,7 @@ public class TenantClaimEnforcer extends OncePerRequestFilter {
             String tenantId = jwtAuth.getToken().getClaimAsString(CLAIM_TENANT_ID);
             boolean entitled = isEntitled(jwtAuth.getToken(), expectedTenantId);
             if ((tenantId == null || tenantId.isBlank()) && !entitled) {
-                writeError(response, HttpStatus.UNAUTHORIZED.value(),
+                HttpErrorResponseWriter.writeError(response, HttpStatus.UNAUTHORIZED.value(),
                         "UNAUTHORIZED", "tenant_id claim is required");
                 return;
             }
@@ -75,7 +70,7 @@ public class TenantClaimEnforcer extends OncePerRequestFilter {
             if (!legacyOk && !entitled) {
                 log.warn("TenantClaimEnforcer rejected cross-tenant request: tenant={} path={}",
                         tenantId, request.getRequestURI());
-                writeError(response, HttpStatus.FORBIDDEN.value(),
+                HttpErrorResponseWriter.writeError(response, HttpStatus.FORBIDDEN.value(),
                         "TENANT_FORBIDDEN",
                         "tenant_id '" + tenantId + "' is not allowed");
                 return;
@@ -97,20 +92,5 @@ public class TenantClaimEnforcer extends OncePerRequestFilter {
             if (element instanceof String s && s.equals(domain)) return true;
         }
         return false;
-    }
-
-    private static void writeError(HttpServletResponse response, int status,
-                                   String code, String message) throws IOException {
-        response.setStatus(status);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        ObjectNode node = JSON.createObjectNode();
-        node.put("code", code);
-        node.put("message", message);
-        node.put("timestamp", Instant.now().toString());
-        try {
-            response.getWriter().write(JSON.writeValueAsString(node));
-        } catch (JsonProcessingException ex) {
-            response.getWriter().write("{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}");
-        }
     }
 }
