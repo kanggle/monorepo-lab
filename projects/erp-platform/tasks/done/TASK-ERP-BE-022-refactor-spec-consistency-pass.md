@@ -1,6 +1,6 @@
 # TASK-ERP-BE-022 — refactor-spec consistency pass over erp-platform specs
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-ERP-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (doc-only, meaning-preserving)
