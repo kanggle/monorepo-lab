@@ -2037,19 +2037,25 @@ calls the existing GETs verbatim.
 > **header-trust** service, **not** a JWT resource server — it reads a trusted
 > `X-Tenant-Id` injected upstream and does not itself validate bearer tokens.
 > The gateway is therefore the authorization boundary: it validates the IAM
-> OIDC access token, enforces `account_type=OPERATOR` for `/api/admin/**`
+> OIDC access token, enforces `roles ∋ ADMIN` for `/api/admin/**`
 > (`AccountTypeEnforcementFilter`), requires a non-blank `tenant_id`
 > (`TenantClaimValidator`), injects the trusted `X-Tenant-Id`
 > (`JwtHeaderEnrichmentFilter`), and strips inbound client headers. Routing the
 > console leg direct-to-`product-service` would force console-bff to fabricate
-> `X-Tenant-Id` / `X-User-*` and bypass the gateway's `account_type` + JWT
+> `X-Tenant-Id` / `X-User-*` and bypass the gateway's `roles ∋ ADMIN` + JWT
 > validation — a security smell. The `product-service` `GET /api/admin/products`
-> read deliberately does **not** require an ecommerce-local `ADMIN` role (the
-> operator's IAM OIDC token carries no such claim); authorization is the
-> gateway entitlement-trust + OPERATOR `account_type`, and tenant isolation is
-> the repo `WHERE tenant_id` chokepoint (Step 2 / M6). This mirrors the
-> erp/finance overview legs, which are likewise gated by federation
-> entitlement-trust without a domain-local admin role.
+> read is gated at the gateway on `roles ∋ ADMIN`, **uniformly** with the
+> `/api/admin/products/**` write endpoints: the operator's IAM OIDC token carries
+> the `ADMIN` domain role **derived at assume-tenant** from the selected
+> (ecommerce-entitled) tenant (ADR-MONO-035 4a) — no ecommerce-local `ADMIN`
+> grant is provisioned, the role rides the token — and the header-trust
+> `product-service` applies no additional ecommerce-local RBAC (the gateway is
+> the single admission point; authoritative detail in ecommerce `product-api.md`
+> § `GET /api/admin/products`). Tenant isolation is the repo `WHERE tenant_id`
+> chokepoint (Step 2 / M6). This mirrors the erp/finance overview legs — the
+> console operator presents a single federation-issued token and the domain
+> service provisions no domain-local admin grant. (ADR-MONO-035 4b removed the
+> legacy `account_type=OPERATOR` gateway leg; admission is `roles`-only.)
 
 ##### Response schema (`200 OK`)
 
@@ -2753,7 +2759,9 @@ same-origin route handlers → ecommerce gateway direct, NO console-bff write le
   `ECOMMERCE_ADMIN_BASE_URL` = `http://ecommerce.local/api/admin`, same gateway
   + IAM-OIDC credential as § 2.4.10 products/orders/users — **NOT**
   `ECOMMERCE_PUBLIC_BASE_URL` which promotions/notifications/shippings use;
-  sellers live under the `/api/admin/**` subtree requiring `account_type=OPERATOR`):
+  sellers live under the `/api/admin/**` subtree gated on `roles ∋ ADMIN` — the
+  operator's ADR-MONO-035 4a assume-tenant-derived domain role; the legacy
+  `account_type=OPERATOR` gateway leg was removed at 4b):
 
 | # | Method | Path | Purpose |
 |---|--------|------|---------|
