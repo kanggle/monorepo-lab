@@ -1,6 +1,6 @@
 # TASK-MONO-267 — CLAUDE.md branch-hygiene: classifier "attempt-first" 정정
 
-- **Status**: ready
+- **Status**: done
 - **Level**: monorepo (shared — `CLAUDE.md`)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus (doc 1-line, 판단 동반)
 
