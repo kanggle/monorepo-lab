@@ -67,6 +67,20 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
     Page<AccountJpaEntity> findAllAccounts(Pageable pageable);
 
     /**
+     * TASK-BE-386 (ADR-MONO-036 P4, M4): cross-tenant read of the resolved
+     * {@code account_id → identity_id} bindings, used to drive the auth_db credential
+     * identity backfill. Platform-level (NOT tenant-scoped) — a bulk reconciliation
+     * legitimately spans all tenants, so it reads via this infrastructure repository
+     * (mirroring {@link #findActiveDormantCandidates}), never via the tenant-scoped
+     * {@code AccountRepository}. Native projection so {@code identity_id} stays UNMAPPED
+     * on {@link AccountJpaEntity}; only already-linked accounts (post-V0024) are returned.
+     */
+    @Query(value = "SELECT id AS accountId, identity_id AS identityId "
+            + "FROM accounts WHERE identity_id IS NOT NULL",
+            nativeQuery = true)
+    List<AccountIdentityBindingView> findAllIdentityBindings();
+
+    /**
      * TASK-BE-231: Tenant-scoped paginated account listing with optional status filter.
      * Used by the internal provisioning API to list accounts within a specific tenant.
      */

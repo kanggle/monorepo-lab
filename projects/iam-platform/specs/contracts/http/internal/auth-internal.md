@@ -74,6 +74,38 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
 
 ---
 
+## POST /internal/auth/credentials/identity-backfill
+
+**TASK-BE-386 (ADR-MONO-036 P4, M4)** — 프로덕션 데이터 reconciliation 의 auth_db 절반. account-service 가 account_db 에서 해석한 `account_id → identity_id` 매핑을 **일괄(batch)** 전달하면, auth-service 가 각 credential row 의 `identity_id` 를 채운다. M2 의 `assignIdentityId` writer 를 재사용한다 — native, `IS NULL` 가드, **멱등·무덮어쓰기**(ADR-MONO-034 § 1.3). cross-DB 라 마이그레이션으로 못 하는 절반을 이 푸시-기반 엔드포인트가 담당한다. **same-origin 전파이며 email 자동 병합이 아니다.**
+
+> AIP-136 콜론 verb 대신 하이픈 경로(`identity-backfill`)를 쓴다 — 클래스 레벨 `/internal/auth` prefix 와 결합 시 `:verb` 가 `PathPatternParser` 에서 오판되기 때문(account-service `BulkAccountController` 동일 이슈).
+
+**Request Body**:
+
+```json
+{
+  "items": [
+    { "accountId": "string (UUID v7, max 36)", "identityId": "string (UUID, max 36)" }
+  ]
+}
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `items` | array | Yes | 1개 이상의 `(accountId, identityId)` 쌍. 비어 있으면 400 |
+| `items[].accountId` | string | Yes | credential row 의 lookup key (`credentials.account_id`, UNIQUE) |
+| `items[].identityId` | string | Yes | 해당 account 가 이미 해석한 중앙 `identities.identity_id` (account_db) |
+
+**Response 200 OK** — 처리 결과 요약. 이미 연결된(또는 credential 없는) 쌍은 `updated` 에 집계되지 않는다(net-zero):
+
+```json
+{ "requested": 120, "updated": 37 }
+```
+
+**멱등성**: 동일 배치를 재전송하면 `IS NULL` 가드로 이미 채워진 row 는 0건 갱신 → `updated` 가 줄어들 뿐 부작용 없음. operator(admin_db) 절반은 이 엔드포인트가 건드리지 않는다 — opt-in 감사 link 표면이 담당(권한상승 가드). account_db 절반(orphan identity mint+link)은 account-service Flyway **V0024** 마이그레이션이 담당.
+
+---
+
 ## Caller Constraints (account-service 측)
 
 - 타임아웃: connect 3s, read 15s (TASK-BE-247: cold-start race 마스킹을 위해 5s → 15s 상향)
