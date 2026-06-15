@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   OperatorPageSchema,
@@ -105,8 +106,7 @@ export function useOperatorsList(
     // is a new queryKey → one fresh proxy call. NO auto-refetch interval.
     staleTime: initial ? 30_000 : 0,
     refetchOnMount: initial ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
   });
 }
 
@@ -295,8 +295,7 @@ export function useOperatorAssignments(operatorId: string | null) {
     enabled: Boolean(operatorId && operatorId.trim()),
     staleTime: 0,
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -330,8 +329,7 @@ export function useOrgScopeDepartments(enabled: boolean) {
     enabled,
     staleTime: 30_000,
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }

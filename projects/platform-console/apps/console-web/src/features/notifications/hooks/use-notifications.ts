@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   NotificationListResponseSchema,
@@ -71,8 +72,7 @@ export function useNotificationInbox(opts?: {
     queryKey: notificationInboxKey(unread, page, size),
     queryFn: () => fetchNotificationInbox({ unread, page, size }),
     enabled: opts?.enabled !== false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     // Cache-freshness TTL (NOT polling) — a passive on-mount fetch drives the
     // badge; SPA navigation within the window reuses the cache rather than
     // re-hitting erp on every page.

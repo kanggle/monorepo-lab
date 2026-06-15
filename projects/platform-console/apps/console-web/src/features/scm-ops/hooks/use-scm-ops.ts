@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   PoPageSchema,
@@ -83,8 +84,7 @@ export function useScmPoList(params: PoQueryParams, initial?: PoPage) {
     // / client retry — the gateway is rate-limited (§ 2.4.6).
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -109,8 +109,7 @@ export function useScmSkuBreakdown(sku: string | null) {
     queryFn: () => fetchSkuBreakdown(sku as string),
     enabled: Boolean(sku && sku.trim()),
     staleTime: 15_000,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }

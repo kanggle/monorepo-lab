@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   SuggestionPageSchema,
@@ -97,8 +98,7 @@ export function useSuggestions(
     // client retry — the gateway is rate-limited (§ 2.4.6.1).
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }

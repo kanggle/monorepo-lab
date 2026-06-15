@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   AccountSchema,
@@ -61,8 +62,7 @@ export function useFinanceAccount(accountId: string | null) {
     enabled: Boolean(accountId && accountId.trim()),
     staleTime: 15_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -91,8 +91,7 @@ export function useFinanceBalances(
     initialData: initial,
     staleTime: 15_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -150,8 +149,7 @@ export function useFinanceTransactions(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }

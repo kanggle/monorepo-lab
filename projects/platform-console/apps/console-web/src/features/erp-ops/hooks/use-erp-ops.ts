@@ -12,6 +12,7 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   DepartmentListResponseSchema,
@@ -250,8 +251,7 @@ export function useDepartments(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -274,8 +274,7 @@ export function useDepartment(id: string | null, asOfExplicit?: string | null) {
     enabled: Boolean(id && id.trim()),
     staleTime: 15_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -315,8 +314,7 @@ export function useEmployees(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -339,8 +337,7 @@ export function useEmployee(id: string | null, asOfExplicit?: string | null) {
     enabled: Boolean(id && id.trim()),
     staleTime: 15_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -375,8 +372,7 @@ export function useJobGrades(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -399,8 +395,7 @@ export function useJobGrade(id: string | null, asOfExplicit?: string | null) {
     enabled: Boolean(id && id.trim()),
     staleTime: 15_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -440,8 +435,7 @@ export function useCostCenters(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -464,8 +458,7 @@ export function useCostCenter(id: string | null, asOfExplicit?: string | null) {
     enabled: Boolean(id && id.trim()),
     staleTime: 15_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -506,8 +499,7 @@ export function useBusinessPartners(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -533,8 +525,7 @@ export function useBusinessPartner(
     enabled: Boolean(id && id.trim()),
     staleTime: 15_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -585,8 +576,7 @@ export function useEmployeeOrgViews(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -973,8 +963,7 @@ export function useApprovalRequests(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -1003,8 +992,7 @@ export function useApprovalInbox(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -1029,8 +1017,7 @@ export function useApprovalRequest(id: string | null) {
     enabled: Boolean(id && id.trim()),
     staleTime: 0,
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -1123,8 +1110,7 @@ export function useDelegations(role?: 'DELEGATOR' | 'DELEGATE') {
     queryKey: delegationListKey(role),
     queryFn: () => fetchDelegationList(role),
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -1222,8 +1208,7 @@ export function useDelegationFacts(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -1243,8 +1228,7 @@ export function useDelegationFact(grantId: string | null) {
     enabled: Boolean(grantId && grantId.trim()),
     staleTime: 0,
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }

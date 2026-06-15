@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   PromotionListSchema,
@@ -78,8 +79,7 @@ export function usePromotions(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
   });
 }
 
@@ -99,8 +99,7 @@ export function usePromotion(id: string | null, initial?: PromotionDetail) {
     enabled: id !== null,
     initialData: initial,
     staleTime: 0,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
   });
 }
 
