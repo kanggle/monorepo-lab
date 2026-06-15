@@ -49,7 +49,8 @@ public class InternalCredentialController {
                         request.accountId(),
                         request.email(),
                         request.password(),
-                        request.tenantId()    // TASK-BE-229: pass optional tenant context
+                        request.tenantId(),   // TASK-BE-229: pass optional tenant context
+                        request.identityId()  // TASK-BE-384 (ADR-036 M2): born-unified identity
                 )
         );
         HttpStatus status = result.wasIdempotent() ? HttpStatus.OK : HttpStatus.CREATED;

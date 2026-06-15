@@ -11,10 +11,12 @@ import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.ProfileRepository;
 import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SignupUseCase {
@@ -23,6 +25,7 @@ public class SignupUseCase {
     private final ProfileRepository profileRepository;
     private final AccountEventPublisher eventPublisher;
     private final AuthServicePort authServicePort;
+    private final AccountIdentityProvisioner accountIdentityProvisioner;
 
     @Transactional
     public SignupResult execute(SignupCommand command) {
@@ -39,6 +42,10 @@ public class SignupUseCase {
             // Create account (Email value object validates and normalizes)
             Account account = Account.create(tenantId, command.email());
             account = accountRepository.save(account);
+
+            // TASK-BE-381/382 (ADR-036 M1/M2): born-unified — mint+assign the central identity at
+            // creation; the resolved identityId is propagated to the credential row (M2).
+            String identityId = mintAndAssignIdentity(tenantId, account);
 
             // Create profile
             Profile profile = Profile.create(
@@ -60,7 +67,7 @@ public class SignupUseCase {
             try {
                 authServicePort.createCredential(
                         account.getId(), account.getEmail(), command.password(),
-                        account.getTenantId().value());
+                        account.getTenantId().value(), identityId);
             } catch (AuthServicePort.CredentialAlreadyExistsConflict e) {
                 throw new AccountAlreadyExistsException(command.email());
             }
@@ -74,5 +81,32 @@ public class SignupUseCase {
             // Race condition: concurrent signup with same email
             throw new AccountAlreadyExistsException(command.email());
         }
+    }
+
+    /**
+     * TASK-BE-381 (ADR-MONO-036 P1/P2, M1): mint the account's central identity at
+     * creation (born-unified), fail-soft. The mint runs in a REQUIRES_NEW transaction
+     * ({@link AccountIdentityProvisioner}) so a failure cannot poison this registration
+     * transaction; on any failure the account is born unlinked (identity_id stays NULL,
+     * reconciled later) — registration never blocks on the identity infrastructure
+     * (the ADR-034 availability stance). The {@code reuseExisting} mint converges the
+     * consumer and operator sides on the SAME identity (ADR-036 P1).
+     *
+     * @return the resolved central {@code identity_id}, or {@code null} when the mint
+     *         failed (fail-soft) — the caller propagates it to the credential row (M2).
+     */
+    private String mintAndAssignIdentity(TenantId tenantId, Account account) {
+        String identityId;
+        try {
+            identityId = accountIdentityProvisioner.mintIdentity(tenantId.value(), account.getEmail());
+        } catch (RuntimeException e) {
+            log.warn("born-unified identity mint failed (fail-soft, account {} born unlinked) tenant={}: {}",
+                    account.getId(), tenantId.value(), e.toString());
+            return null;
+        }
+        if (identityId != null) {
+            accountRepository.assignIdentityId(tenantId, account.getId(), identityId);
+        }
+        return identityId;
     }
 }

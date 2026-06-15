@@ -29,6 +29,14 @@ public record CreateCredentialRequest(
         /** Optional. Tenant slug. Defaults to "fan-platform" when null. */
         @Pattern(regexp = "^[a-z][a-z0-9-]{1,31}$",
                  message = "tenantId must be a valid tenant slug")
-        String tenantId
+        String tenantId,
+
+        /**
+         * TASK-BE-384 (ADR-036 M2/P3): optional central {@code identity_id} (born-unified
+         * provisioning). When present, the new credential row is born linked to this
+         * identity; when null/absent the credential is born unlinked (net-zero).
+         */
+        @Size(max = 36, message = "identityId must not exceed 36 characters")
+        String identityId
 ) {
 }

@@ -22,6 +22,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -38,6 +39,9 @@ class SocialSignupUseCaseTest {
 
     @Mock
     private AccountEventPublisher eventPublisher;
+
+    @Mock
+    private AccountIdentityProvisioner accountIdentityProvisioner;
 
     @InjectMocks
     private SocialSignupUseCase socialSignupUseCase;
@@ -56,6 +60,8 @@ class SocialSignupUseCaseTest {
                 "acc-new", TenantId.FAN_PLATFORM, "new@example.com", "hash-new", AccountStatus.ACTIVE,
                 Instant.now(), Instant.now(), null, null, null, 0);
         given(accountRepository.save(any(Account.class))).willReturn(savedAccount);
+        // TASK-BE-381 (ADR-036 M1): born-unified mint returns the central identity.
+        given(accountIdentityProvisioner.mintIdentity(any(), any())).willReturn("idy-new");
 
         // when
         SocialSignupResult result = socialSignupUseCase.execute(command);
@@ -69,6 +75,8 @@ class SocialSignupUseCaseTest {
         verify(accountRepository).save(any(Account.class));
         verify(profileRepository).save(any(Profile.class));
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
+        // TASK-BE-381: the minted identity is assigned to the new account (born-unified).
+        verify(accountRepository).assignIdentityId(any(), eq("acc-new"), eq("idy-new"));
     }
 
     @Test

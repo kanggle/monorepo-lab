@@ -27,10 +27,15 @@ public interface AuthServicePort {
      *                    credentials always to fall back to {@code "fan-platform"}
      *                    regardless of the account's actual tenant scope — which
      *                    broke multi-tenant login flows (TenantProvisioningE2ETest).
+     * @param identityId  TASK-BE-384 (ADR-036 M2/P3): the central {@code identity_id}
+     *                    minted at account creation (M1), propagated in-band so the new
+     *                    credential row is born linked to the same central identity.
+     *                    {@code null} when the mint failed (fail-soft) → credential born
+     *                    unlinked (reconciled later); auth-service writes it net-zero.
      * @throws CredentialAlreadyExistsConflict if auth-service reports 409 (concurrent signup)
      * @throws AuthServiceUnavailable          if auth-service is unreachable / 5xx / timeout
      */
-    void createCredential(String accountId, String email, String password, String tenantId);
+    void createCredential(String accountId, String email, String password, String tenantId, String identityId);
 
     /** Thrown when auth-service reports 409 — concurrent signup created the credential. */
     final class CredentialAlreadyExistsConflict extends RuntimeException {
