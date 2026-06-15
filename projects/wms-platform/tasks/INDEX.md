@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-385-wms-spec-refactor-pass.md` — **REVIEW**. Full `/refactor-spec` pass over all wms specs (7 services + contracts + integration) via 3 parallel discovery agents + per-finding re-verification. **Applied (meaning-preserving, verified)**: `WMS_SUPERVISOR`→`WMS_SUPERADMIN` (admin database-design seed-doc typo, confirmed vs the actual V99 seed) + `ShippingRecord`→`Shipment` ×3 (outbound overview term drift) + `## Public surface (routes)`→`## Public surface` (gateway, anchor-safe) + gateway external-integrations orphan cross-ref. **Headline**: wms specs structurally healthy (0 dead-refs / 521 links, consistent terms). **Findings (flagged, NOT auto-fixed — drift requiring a verified follow-up)**: Tier A service-doc↔canonical-contract value divergences (`inventory.adjusted`↔`inventory.reserve.failed` residue, notification wrong subscribed-topics/enum/`priorStatus`↔`previousStatus`), Tier B event/aggregate name drift in overviews, Tier C saga config/state semantics, Tier D identical-recap dedup, Tier E notification domain-model missing sections (authoring). Recommend follow-up TASK-BE-386 (verified drift-fix). No code / contract / Flyway change. 분석=Opus 4.8 / 구현=Opus. [[project_refactor_sweep_status]]
 
 ## done
 

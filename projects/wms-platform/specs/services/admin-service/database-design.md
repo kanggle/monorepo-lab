@@ -769,7 +769,7 @@ seed provides:
 
 | Seed type | Rows | Stable UUIDs |
 |---|---|---|
-| Built-in roles | 4 (`WMS_VIEWER` / `WMS_OPERATOR` / `WMS_SUPERVISOR` / `WMS_ADMIN`) | `11111111-...` / `22222222-...` / `33333333-...` / `44444444-...` |
+| Built-in roles | 4 (`WMS_VIEWER` / `WMS_OPERATOR` / `WMS_ADMIN` / `WMS_SUPERADMIN`) | `11111111-...` / `22222222-...` / `33333333-...` / `44444444-...` |
 | Bootstrap admin user | 1 (`admin@wms.local`, assigned WMS_ADMIN) | well-known dev id |
 | Seed settings | 7 (low-stock threshold + reservation TTL + saga retry budget + etc.) | scope=GLOBAL, sentinel warehouse_id |
 

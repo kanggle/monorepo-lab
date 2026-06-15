@@ -280,4 +280,5 @@ Per `platform/security-rules.md` and master-service's config:
 - `specs/services/admin-service/architecture.md` (downstream target — `/api/v1/admin/**`)
 - `specs/contracts/http/admin-service-api.md` (admin REST contract)
 - `specs/contracts/webhooks/erp-asn-webhook.md` (webhook wire-level contract)
+- [`external-integrations.md`](external-integrations.md) (OAuth2 AS / zero-direct-integration catalog for this service)
 - `rules/traits/integration-heavy.md` (circuit-breaker / retry patterns)
