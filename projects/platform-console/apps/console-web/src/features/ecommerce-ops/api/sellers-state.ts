@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation';
-import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
+import { mapSectionResilience, mapDetailResilience } from './section-state';
 import { listSellers, getSeller } from './sellers-api';
 import type { SellerList, SellerDetail, SellerListParams } from './seller-types';
 
@@ -54,7 +53,7 @@ export async function getSellersSectionState(
     const sellers = await listSellers({ page: 0, size: 20, ...params });
     return { ...EMPTY, sellers };
   } catch (err) {
-    return mapSectionError(err);
+    return { ...EMPTY, ...mapSectionResilience(err) };
   }
 }
 
@@ -87,30 +86,6 @@ export async function getSellerDetailSectionState(
     const detail = await getSeller(sellerId);
     return { ...DETAIL_EMPTY, detail };
   } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
-      return { ...DETAIL_EMPTY, notFound: true };
-    }
-    const mapped = mapSectionError(err);
-    return {
-      ...DETAIL_EMPTY,
-      forbidden: mapped.forbidden,
-      degraded: mapped.degraded,
-    };
+    return { ...DETAIL_EMPTY, ...mapDetailResilience(err) };
   }
-}
-
-/** Shared resilience mapping for the list/detail server reads. */
-function mapSectionError(err: unknown): SellersSectionState {
-  if (err instanceof ApiError && err.status === 401) {
-    // No partial authed state → clean WHOLE-SESSION re-login.
-    redirect('/login');
-  }
-  if (err instanceof ApiError && err.status === 403) {
-    return { ...EMPTY, forbidden: true };
-  }
-  if (err instanceof EcommerceUnavailableError) {
-    return { ...EMPTY, degraded: true };
-  }
-  // Any other producer error on a seeded read → degrade, not crash.
-  return { ...EMPTY, degraded: true };
 }

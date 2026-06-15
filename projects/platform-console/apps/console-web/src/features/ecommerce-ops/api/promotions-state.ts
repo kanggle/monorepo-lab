@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation';
-import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
+import { mapSectionResilience, mapDetailResilience } from './section-state';
 import { listPromotions, getPromotion } from './promotions-api';
 import type { PromotionList, PromotionDetail, PromotionListParams } from './types';
 
@@ -52,7 +51,7 @@ export async function getPromotionsSectionState(
     const promotions = await listPromotions({ page: 0, size: 20, ...params });
     return { ...EMPTY, promotions };
   } catch (err) {
-    return mapSectionError(err);
+    return { ...EMPTY, ...mapSectionResilience(err) };
   }
 }
 
@@ -85,28 +84,6 @@ export async function getPromotionDetailSectionState(
     const detail = await getPromotion(id);
     return { ...DETAIL_EMPTY, detail };
   } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
-      return { ...DETAIL_EMPTY, notFound: true };
-    }
-    const mapped = mapSectionError(err);
-    return {
-      ...DETAIL_EMPTY,
-      forbidden: mapped.forbidden,
-      degraded: mapped.degraded,
-    };
+    return { ...DETAIL_EMPTY, ...mapDetailResilience(err) };
   }
-}
-
-/** Shared resilience mapping for the list/detail server reads. */
-function mapSectionError(err: unknown): PromotionsSectionState {
-  if (err instanceof ApiError && err.status === 401) {
-    redirect('/login');
-  }
-  if (err instanceof ApiError && err.status === 403) {
-    return { ...EMPTY, forbidden: true };
-  }
-  if (err instanceof EcommerceUnavailableError) {
-    return { ...EMPTY, degraded: true };
-  }
-  return { ...EMPTY, degraded: true };
 }

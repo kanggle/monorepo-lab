@@ -1,7 +1,8 @@
 import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
-import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
+import {
+  callEcommerce,
+  type EcommerceCallLabel,
+} from './ecommerce-client';
 import {
   ImageListSchema,
   type ImageList,
@@ -76,179 +77,43 @@ import {
  * same convention the orders facet (`orders-api.ts`) followed.
  */
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
-
-interface CallOptions {
-  method: Method;
-  /** Path relative to `ECOMMERCE_ADMIN_BASE_URL`
-   *  (e.g. `/products/{id}/images`). */
-  path: string;
-  body?: unknown;
-}
+/**
+ * Per-slice observability + message label for the product-image surface. NOTE
+ * the message stems diverge from the plain product slice: `product-image
+ * service` / `product-image call` (preserved verbatim) and the `image` parser
+ * noun + `ecommerce_image_*` log events.
+ */
+const IMAGE_LABEL: EcommerceCallLabel = {
+  event: 'image',
+  errorNoun: 'image',
+  unavailableLabel: 'product-image service',
+  timedOutLabel: 'product-image',
+  failedLabel: 'product-image',
+};
 
 /**
- * Parses the ecommerce FLAT error envelope (`{ code, message, timestamp }`).
- * Defensive: a missing / non-JSON body degrades to a synthetic code rather
- * than throwing.
+ * Thin image-subtree wrapper over the shared {@link callEcommerce} core. The
+ * image endpoints are always under `ECOMMERCE_ADMIN_BASE_URL` (the
+ * `AdminProductImageController` operator-plane subtree), so this wrapper injects
+ * that base + the image label — keeping every image call site's `{ method, path }`
+ * shape unchanged. The presigned-byte S3 PUT (the browser-direct step) remains
+ * outside this module, exactly as before.
  */
-async function parseEcommerceError(
-  res: Response,
-): Promise<{ code: string; message: string; timestamp?: string }> {
-  let code = `HTTP_${res.status}`;
-  let message = `ecommerce image request failed (${res.status})`;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      code = body.code ?? code;
-      message = body.message ?? message;
-      timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, timestamp };
-}
-
-/**
- * Single hardened call site for the image admin subtree. Resolves the
- * domain-facing IAM OIDC token, applies the timeout, and maps the ecommerce
- * flat error envelope to the § 2.5 resilience taxonomy. `parse` is `undefined`
- * for a 204 (DELETE).
- */
-async function callEcommerceImage<T>(
-  opts: CallOptions,
+function callEcommerceImage<T>(
+  opts: { method: string; path: string; body?: unknown },
   parse?: (json: unknown) => T,
 ): Promise<T> {
   const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // Per-domain credential (§ 2.4.10): the DOMAIN-FACING IAM OIDC token, NEVER
-  // getOperatorToken() (that is the IAM-domain exchanged credential).
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('ecommerce_image_no_gap_session', {
-      requestId,
-      path: opts.path,
-    });
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-  };
-  // NO `X-Tenant-Id` (gateway resolves tenant from the JWT claim); NO
-  // `Idempotency-Key` (producer defines none) — § 2.4.10.
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.ECOMMERCE_TIMEOUT_MS);
-
-  try {
-    const res = await fetch(`${env.ECOMMERCE_ADMIN_BASE_URL}${opts.path}`, {
+  return callEcommerce(
+    {
       method: opts.method,
-      headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (res.status === 401) {
-      const e = await parseEcommerceError(res);
-      logger.warn('ecommerce_image_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseEcommerceError(res);
-      logger.warn('ecommerce_image_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(403, e.code || 'FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseEcommerceError(res);
-      logger.warn('ecommerce_image_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.path,
-      });
-      // 503 STORAGE_UNAVAILABLE / CIRCUIT_OPEN — ONLY the ecommerce section
-      // degrades; the console shell + other sections stay intact.
-      throw new EcommerceUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'ecommerce product-image service unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 404 IMAGE_NOT_FOUND / MEDIA_NOT_FOUND / PRODUCT_NOT_FOUND,
-      // 422 IMAGE_LIMIT_EXCEEDED, 400 MEDIA_VALIDATION_FAILED / VALIDATION_ERROR,
-      // 409 CONFLICT → inline actionable (no crash).
-      const e = await parseEcommerceError(res);
-      logger.warn('ecommerce_image_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    logger.info('ecommerce_image_ok', {
-      requestId,
-      status: res.status,
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
       path: opts.path,
-    });
-
-    // 204 No Content (DELETE) — nothing to parse.
-    if (res.status === 204 || parse === undefined) {
-      return undefined as T;
-    }
-    const json = await res.json();
-    return parse(json);
-  } catch (err) {
-    if (err instanceof ApiError || err instanceof EcommerceUnavailableError) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('ecommerce_image_timeout', {
-        requestId,
-        timeoutMs: env.ECOMMERCE_TIMEOUT_MS,
-        path: opts.path,
-      });
-      throw new EcommerceUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'ecommerce product-image call timed out',
-      );
-    }
-    logger.error('ecommerce_image_error', { requestId, path: opts.path });
-    throw new EcommerceUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'ecommerce product-image call failed',
-    );
-  } finally {
-    clearTimeout(timer);
-  }
+      body: opts.body,
+    },
+    parse,
+    IMAGE_LABEL,
+  );
 }
 
 function imagesBase(productId: string): string {

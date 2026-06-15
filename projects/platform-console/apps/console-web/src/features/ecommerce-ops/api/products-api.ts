@@ -1,7 +1,8 @@
 import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
-import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
+import {
+  callEcommerce,
+  type EcommerceCallLabel,
+} from './ecommerce-client';
 import {
   ProductListSchema,
   type ProductList,
@@ -79,185 +80,19 @@ import {
  * data are NEVER logged (redacted).
  */
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
-
-interface CallOptions {
-  method: Method;
-  /** Absolute base — admin (`ECOMMERCE_ADMIN_BASE_URL`) for the CRUD subtree,
-   *  public (`ECOMMERCE_PUBLIC_BASE_URL`) for the detail read (#2). */
-  base: string;
-  /** Path relative to `base` (e.g. `/products`, `/products/{id}/variants`). */
-  path: string;
-  /** Typed mutation body; `undefined` for reads + DELETE. */
-  body?: unknown;
-}
-
 /**
- * Parses the ecommerce FLAT error envelope (`{ code, message, timestamp }` —
- * the shared `ErrorResponse`). Defensive: a missing / non-JSON body degrades
- * to a synthetic code rather than throwing (the producer is the authority for
- * the real code; this never crashes the console on a malformed error body).
+ * Per-slice observability + message label for the product surface. The products
+ * slice uses the EMPTY log-event infix — the emitted events are the bare
+ * `ecommerce_ok` / `ecommerce_unauthorized` / … (no `_product_` infix),
+ * preserved verbatim from the original inline call site.
  */
-async function parseEcommerceError(
-  res: Response,
-): Promise<{ code: string; message: string; timestamp?: string }> {
-  let code = `HTTP_${res.status}`;
-  let message = `ecommerce product request failed (${res.status})`;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      code = body.code ?? code;
-      message = body.message ?? message;
-      timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, timestamp };
-}
-
-/**
- * Single hardened call site. Resolves the domain-facing IAM OIDC token,
- * applies the timeout, and maps the ecommerce flat error envelope to the
- * § 2.5 resilience taxonomy. `parse` is `undefined` for a 204 (DELETE).
- */
-async function callEcommerce<T>(
-  opts: CallOptions,
-  parse?: (json: unknown) => T,
-): Promise<T> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // ── Per-domain credential selection (§ 2.4.10, inherited from § 2.4.5):
-  //    the ecommerce gateway requires the IAM OIDC token (account_type=
-  //    OPERATOR). NEVER getOperatorToken() — that is the IAM-domain (§ 2.6
-  //    exchanged) credential; ecommerce would reject it. The credential is the
-  //    DOMAIN-FACING token (assumed-when-switched, else the base access
-  //    token — net-zero; ADR-MONO-020 D4).
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('ecommerce_no_gap_session', { requestId, path: opts.path });
-    // No IAM OIDC session ⇒ whole-session re-login (no partial authed state).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-  };
-  // NOTE: deliberately NO `X-Tenant-Id` — ecommerce resolves tenant from the
-  // JWT `tenant_id` claim (gateway-injected; § 2.4.10 tenant invariant).
-  // NOTE: NO `Idempotency-Key` — the producer defines none (§ 2.4.10).
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.ECOMMERCE_TIMEOUT_MS);
-
-  try {
-    const res = await fetch(`${opts.base}${opts.path}`, {
-      method: opts.method,
-      headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (res.status === 401) {
-      const e = await parseEcommerceError(res);
-      logger.warn('ecommerce_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseEcommerceError(res);
-      logger.warn('ecommerce_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(403, e.code || 'FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseEcommerceError(res);
-      logger.warn('ecommerce_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.path,
-      });
-      // ONLY the ecommerce section degrades — shell + other sections intact.
-      throw new EcommerceUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'ecommerce product-service unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400 VALIDATION_ERROR / INVALID_CATEGORY / INSUFFICIENT_STOCK,
-      // 404 PRODUCT_NOT_FOUND / VARIANT_NOT_FOUND, 422 VALIDATION_ERROR,
-      // 409 CONFLICT (optimistic lock) → inline actionable (no crash).
-      const e = await parseEcommerceError(res);
-      logger.warn('ecommerce_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    logger.info('ecommerce_ok', {
-      requestId,
-      status: res.status,
-      path: opts.path,
-    });
-
-    // 204 No Content (DELETE) — nothing to parse.
-    if (res.status === 204 || parse === undefined) {
-      return undefined as T;
-    }
-    const json = await res.json();
-    return parse(json);
-  } catch (err) {
-    if (err instanceof ApiError || err instanceof EcommerceUnavailableError) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('ecommerce_timeout', {
-        requestId,
-        timeoutMs: env.ECOMMERCE_TIMEOUT_MS,
-        path: opts.path,
-      });
-      throw new EcommerceUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'ecommerce product-service call timed out',
-      );
-    }
-    logger.error('ecommerce_error', { requestId, path: opts.path });
-    throw new EcommerceUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'ecommerce product-service call failed',
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-}
+const PRODUCT_LABEL: EcommerceCallLabel = {
+  event: '',
+  errorNoun: 'product',
+  unavailableLabel: 'product-service',
+  timedOutLabel: 'product-service',
+  failedLabel: 'product-service',
+};
 
 function clampSize(size?: number): number {
   return Math.min(
@@ -287,6 +122,7 @@ export function listProducts(
       path: `/products?${qs.toString()}`,
     },
     (j) => ProductListSchema.parse(j),
+    PRODUCT_LABEL,
   );
 }
 
@@ -301,6 +137,7 @@ export function getProduct(id: string): Promise<ProductDetail> {
       path: `/products/${encodeURIComponent(id)}`,
     },
     (j) => ProductDetailSchema.parse(j),
+    PRODUCT_LABEL,
   );
 }
 
@@ -317,6 +154,7 @@ export function registerProduct(
   return callEcommerce(
     { method: 'POST', base: env.ECOMMERCE_ADMIN_BASE_URL, path: '/products', body },
     (j) => RegisterProductResponseSchema.parse(j),
+    PRODUCT_LABEL,
   );
 }
 
@@ -334,17 +172,22 @@ export function updateProduct(
       body,
     },
     (j) => RegisterProductResponseSchema.parse(j),
+    PRODUCT_LABEL,
   );
 }
 
 /** 5 — DELETE /admin/products/{id} (204 No Content). */
 export function deleteProduct(id: string): Promise<void> {
   const env = getServerEnv();
-  return callEcommerce({
-    method: 'DELETE',
-    base: env.ECOMMERCE_ADMIN_BASE_URL,
-    path: `/products/${encodeURIComponent(id)}`,
-  });
+  return callEcommerce(
+    {
+      method: 'DELETE',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: `/products/${encodeURIComponent(id)}`,
+    },
+    undefined,
+    PRODUCT_LABEL,
+  );
 }
 
 /** 6 — POST /admin/products/{id}/variants (add variant → VariantDetail). */
@@ -361,6 +204,7 @@ export function addVariant(
       body,
     },
     (j) => VariantSchema.parse(j),
+    PRODUCT_LABEL,
   );
 }
 
@@ -379,6 +223,7 @@ export function updateVariant(
       body,
     },
     (j) => VariantSchema.parse(j),
+    PRODUCT_LABEL,
   );
 }
 
@@ -388,11 +233,15 @@ export function deleteVariant(
   variantId: string,
 ): Promise<void> {
   const env = getServerEnv();
-  return callEcommerce({
-    method: 'DELETE',
-    base: env.ECOMMERCE_ADMIN_BASE_URL,
-    path: `/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}`,
-  });
+  return callEcommerce(
+    {
+      method: 'DELETE',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: `/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}`,
+    },
+    undefined,
+    PRODUCT_LABEL,
+  );
 }
 
 /** 9 — PATCH /admin/products/{id}/stock (adjust stock; body carries the signed
@@ -410,5 +259,6 @@ export function adjustStock(
       body,
     },
     (j) => AdjustStockResponseSchema.parse(j),
+    PRODUCT_LABEL,
   );
 }
