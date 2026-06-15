@@ -38,8 +38,24 @@ public class PostStatusHistoryJpaEntity {
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 
+    /**
+     * Convenience factory that stamps the current instant as {@code occurredAt}.
+     * Used by persistence-layer tests that only exercise queries/ordering. The
+     * production mapping ({@code PostStatusHistoryRepositoryImpl}) uses the
+     * {@code occurredAt}-carrying overload so the domain event time is preserved.
+     */
     public static PostStatusHistoryJpaEntity record(String postId, String fromStatus, String toStatus,
                                                     String actorType, String actorId, String reason) {
+        return record(postId, fromStatus, toStatus, actorType, actorId, reason, Instant.now());
+    }
+
+    /**
+     * Factory that persists the supplied {@code occurredAt} (the domain event time)
+     * rather than re-stamping it at save time.
+     */
+    public static PostStatusHistoryJpaEntity record(String postId, String fromStatus, String toStatus,
+                                                    String actorType, String actorId, String reason,
+                                                    Instant occurredAt) {
         PostStatusHistoryJpaEntity h = new PostStatusHistoryJpaEntity();
         h.postId = postId;
         h.fromStatus = fromStatus;
@@ -47,7 +63,7 @@ public class PostStatusHistoryJpaEntity {
         h.actorType = actorType;
         h.actorId = actorId;
         h.reason = reason;
-        h.occurredAt = Instant.now();
+        h.occurredAt = occurredAt;
         return h;
     }
 }
