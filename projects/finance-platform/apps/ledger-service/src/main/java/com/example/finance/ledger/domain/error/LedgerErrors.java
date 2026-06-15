@@ -185,6 +185,23 @@ public final class LedgerErrors {
         }
     }
 
+    // ---- FX rate feed consumption (24th increment — TASK-FIN-BE-032, ADR-002 D3/D4) ----
+
+    /**
+     * An operator revaluation/settlement <b>omitted</b> the FX rate and no fresh cached quote
+     * could supply it — the feed is disabled, no quote has been cached for the pair, or the
+     * cached quote is stale ({@code now − asOf > maxAge}). 422; nothing persists, the
+     * idempotency key is not consumed (regulated fail-closed — a foreign position must never be
+     * valued at an estimated/stale rate; architecture.md § FX revaluation/settlement § rate
+     * omission; ledger-api.md § 10/11). Thrown by {@code ResolveEffectiveFxRate}. The operator
+     * recovers by supplying a manual rate or waiting for a fresh quote.
+     */
+    public static final class FxRateUnavailableException extends LedgerDomainException {
+        public FxRateUnavailableException(String message) {
+            super("FX_RATE_UNAVAILABLE", message);
+        }
+    }
+
     // ---- Partial / weighted-average FX settlement (12th increment — TASK-FIN-BE-018) ----
 
     /**

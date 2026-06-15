@@ -4,6 +4,7 @@ import com.example.finance.ledger.application.port.outbound.FxRateFeedSettings;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,6 +35,13 @@ public class FxRateFeedProperties implements FxRateFeedSettings {
 
     /** Foreign currency legs to poll (base is KRW). e.g. {@code [USD, EUR, JPY]}. */
     private List<String> pairs = new ArrayList<>();
+
+    /**
+     * Staleness horizon for a cached quote, in minutes (24th increment — TASK-FIN-BE-032,
+     * ADR-002 D4). A quote whose {@code asOf} is older than this relative to now is rejected as
+     * stale on the operator's omitted-rate fallback. Default 1440 (24h).
+     */
+    private long maxAgeMinutes = 1440;
 
     /** {@code stub}-mode fixed rates. */
     private Stub stub = new Stub();
@@ -77,6 +85,32 @@ public class FxRateFeedProperties implements FxRateFeedSettings {
 
     public void setPairs(List<String> pairs) {
         this.pairs = pairs;
+    }
+
+    public long getMaxAgeMinutes() {
+        return maxAgeMinutes;
+    }
+
+    public void setMaxAgeMinutes(long maxAgeMinutes) {
+        this.maxAgeMinutes = maxAgeMinutes;
+    }
+
+    /**
+     * {@link FxRateFeedSettings} — the master gate for the operator's omitted-rate cache fallback
+     * (24th increment — TASK-FIN-BE-032). Mirrors {@link #isEnabled()} (default OFF = net-zero).
+     */
+    @Override
+    public boolean feedEnabled() {
+        return enabled;
+    }
+
+    /**
+     * {@link FxRateFeedSettings} — the staleness horizon as a {@link Duration} (24th increment —
+     * TASK-FIN-BE-032), derived from {@link #maxAgeMinutes}.
+     */
+    @Override
+    public Duration staleAfter() {
+        return Duration.ofMinutes(maxAgeMinutes);
     }
 
     public Stub getStub() {

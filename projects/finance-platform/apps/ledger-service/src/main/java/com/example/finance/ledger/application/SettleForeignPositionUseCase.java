@@ -1,5 +1,6 @@
 package com.example.finance.ledger.application;
 
+import com.example.finance.ledger.application.ResolveEffectiveFxRate.ResolvedFxRate;
 import com.example.finance.ledger.application.port.outbound.ClockPort;
 import com.example.finance.ledger.application.port.outbound.ProcessedEventStore;
 import com.example.finance.ledger.domain.account.repository.LedgerAccountRepository;
@@ -70,6 +71,7 @@ public class SettleForeignPositionUseCase {
     private final FxCostFlowConfigRepository fxCostFlowConfigRepository;
     private final FxCostFlowAccountConfigRepository fxCostFlowAccountConfigRepository;
     private final FxPositionLotRepository fxPositionLotRepository;
+    private final ResolveEffectiveFxRate fxRateResolver;
     private final ClockPort clock;
 
     /** Why a settlement booked nothing ({@code settled=false}). */
@@ -160,6 +162,15 @@ public class SettleForeignPositionUseCase {
         //      SETTLEMENT_AMOUNT_INVALID; nothing persists, the key is not consumed.
         long settleForeignMinor = resolveSettleForeignMinor(cmd.settleForeignMinor(), foreignBalanceMinor);
 
+        // (4c) Resolve the effective settlement rate (24th increment — TASK-FIN-BE-032, ADR-002
+        //      D3/D4). Resolved AFTER the no-op returns + the settle-amount validation, BEFORE the
+        //      compute — so a no-op (no position) needs NO rate (AC-5; an omitted rate still 200s
+        //      a no-op above). A supplied rate is returned verbatim (fromFeed=false → net-zero,
+        //      byte-identical); an omitted rate falls back to the fresh cached quote, else 422
+        //      FX_RATE_UNAVAILABLE (nothing persists, the key is not consumed — AC-3).
+        ResolvedFxRate rate = fxRateResolver.resolve(
+                LedgerReportingCurrency.BASE, cmd.currency(), cmd.settlementRate());
+
         // (5) Compute. settlementRate ≤ 0 → SETTLEMENT_RATE_INVALID (422). A position
         //     always books an entry (even realized == 0 — a 2-line removal+proceeds).
         //     F_settle == F → full settlement (residual exactly 0); F_settle < |F| →
@@ -192,11 +203,12 @@ public class SettleForeignPositionUseCase {
                 .map(FxCostFlowConfig::method);
         CostFlowMethod method = resolveCostFlowMethod(accountOverride, tenantDefault);
         Optional<SettlementResult> computed = (method == CostFlowMethod.FIFO)
-                ? computeFifo(cmd, foreignBalanceMinor, carryingBaseMinor, settleForeignMinor)
+                ? computeFifo(cmd, foreignBalanceMinor, carryingBaseMinor, settleForeignMinor,
+                        rate.rate())
                 : FxSettlementPolicy.settle(
                         cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
                         foreignBalanceMinor, carryingBaseMinor, settleForeignMinor,
-                        cmd.settlementRate(), cmd.proceedsAccountCode());
+                        rate.rate(), cmd.proceedsAccountCode());
         if (computed.isEmpty()) {
             // F == 0 was already handled above; this is defensive.
             return Result.noOp(NoOpReason.NO_POSITION, null);
@@ -212,7 +224,12 @@ public class SettleForeignPositionUseCase {
                 SourceRef.ofSettlement(cmd.reference(), dedupeKey), result.lines());
         processedEventStore.markProcessed(dedupeKey, cmd.tenantId(), DEDUPE_TOPIC,
                 entry.source().getSourceTransactionId(), clock.now());
-        JournalEntry posted = postJournalEntryUseCase.post(entry, reason(cmd), cmd.operatorSubject());
+        // Audit reason: byte-identical to the manual path (fromFeed=false) — the feed source is
+        // appended ONLY when the rate came from the cache (AC-2 traceability; net-zero on manual).
+        String auditReason = rate.fromFeed()
+                ? reason(cmd) + " [fx-rate " + rate.sourceDescription() + "]"
+                : reason(cmd);
+        JournalEntry posted = postJournalEntryUseCase.post(entry, auditReason, cmd.operatorSubject());
 
         // The residual OPEN position left after a partial settle — (F − F_settle,
         // C − C_settle). Exactly (0, 0) on a full settle (F_settle == F, C_settle == C).
@@ -284,7 +301,8 @@ public class SettleForeignPositionUseCase {
      */
     private Optional<SettlementResult> computeFifo(SettleForeignPositionCommand cmd,
                                                    long foreignBalanceMinor, long carryingBaseMinor,
-                                                   long settleForeignMinor) {
+                                                   long settleForeignMinor,
+                                                   BigDecimal settlementRate) {
         List<FxPositionLot> openLots = fxPositionLotRepository.findOpenLots(
                 cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency());
         FifoWalk walk = walkFifo(openLots, Math.abs(settleForeignMinor));
@@ -298,7 +316,7 @@ public class SettleForeignPositionUseCase {
             return FxSettlementPolicy.settle(
                     cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
                     foreignBalanceMinor, carryingBaseMinor, settleForeignMinor,
-                    cmd.settlementRate(), cmd.proceedsAccountCode());
+                    settlementRate, cmd.proceedsAccountCode());
         }
 
         // C_settle carries the same sign as F (the policy expects a signed C_settle); the
@@ -314,7 +332,7 @@ public class SettleForeignPositionUseCase {
         return FxSettlementPolicy.settleWithCarrying(
                 cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
                 foreignBalanceMinor, settleForeignMinor, carryingSettledFifo,
-                cmd.settlementRate(), cmd.proceedsAccountCode());
+                settlementRate, cmd.proceedsAccountCode());
     }
 
     /** The result of a FIFO walk: the summed settled carrying (magnitude) + the mutated lots. */

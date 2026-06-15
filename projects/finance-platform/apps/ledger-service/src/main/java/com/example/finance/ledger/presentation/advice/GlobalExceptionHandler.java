@@ -46,6 +46,7 @@ public class GlobalExceptionHandler {
             Map.entry("REVALUATION_RATE_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("SETTLEMENT_RATE_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("SETTLEMENT_AMOUNT_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry("FX_RATE_UNAVAILABLE", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("VALIDATION_ERROR", HttpStatus.BAD_REQUEST),
             Map.entry("TENANT_FORBIDDEN", HttpStatus.FORBIDDEN));
 

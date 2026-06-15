@@ -1,5 +1,6 @@
 package com.example.finance.ledger.application;
 
+import com.example.finance.ledger.application.ResolveEffectiveFxRate.ResolvedFxRate;
 import com.example.finance.ledger.application.port.outbound.ClockPort;
 import com.example.finance.ledger.application.port.outbound.ProcessedEventStore;
 import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
@@ -56,6 +57,7 @@ public class RevalueForeignBalanceUseCase {
     private final ProcessedEventStore processedEventStore;
     private final PostJournalEntryUseCase postJournalEntryUseCase;
     private final FxPositionLotRepository fxPositionLotRepository;
+    private final ResolveEffectiveFxRate fxRateResolver;
     private final ClockPort clock;
 
     /** Why a revaluation booked nothing ({@code revalued=false}). */
@@ -126,11 +128,20 @@ public class RevalueForeignBalanceUseCase {
             return Result.noOp(NoOpReason.NO_POSITION, null);
         }
 
+        // (3b) Resolve the effective closing rate (24th increment — TASK-FIN-BE-032, ADR-002
+        //      D3/D4). Resolved AFTER the NO_POSITION no-op returns (an omitted rate still 200s a
+        //      no-op above — AC-5; the AT_SPOT no-op below DOES need the rate, so resolve precedes
+        //      it). A supplied rate is returned verbatim (fromFeed=false → net-zero); an omitted
+        //      rate falls back to the fresh cached quote, else 422 FX_RATE_UNAVAILABLE (nothing
+        //      persists, the key is not consumed — AC-3).
+        ResolvedFxRate rate = fxRateResolver.resolve(
+                LedgerReportingCurrency.BASE, cmd.currency(), cmd.closingRate());
+
         // (4) Compute. closingRate ≤ 0 → REVALUATION_RATE_INVALID (422). delta == 0
         //     (already at spot) → 200 revalued:false (key NOT marked).
         Optional<RevaluationResult> computed = FxRevaluationPolicy.revalue(
                 cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency(),
-                foreignBalanceMinor, carryingBaseMinor, cmd.closingRate());
+                foreignBalanceMinor, carryingBaseMinor, rate.rate());
         if (computed.isEmpty()) {
             return Result.noOp(NoOpReason.AT_SPOT, null);
         }
@@ -145,7 +156,12 @@ public class RevalueForeignBalanceUseCase {
                 SourceRef.ofRevaluation(cmd.reference(), dedupeKey), result.lines());
         processedEventStore.markProcessed(dedupeKey, cmd.tenantId(), DEDUPE_TOPIC,
                 entry.source().getSourceTransactionId(), clock.now());
-        JournalEntry posted = postJournalEntryUseCase.post(entry, reason(cmd), cmd.operatorSubject());
+        // Audit reason: byte-identical to the manual path (fromFeed=false) — the feed source is
+        // appended ONLY when the rate came from the cache (AC-2 traceability; net-zero on manual).
+        String auditReason = rate.fromFeed()
+                ? reason(cmd) + " [fx-rate " + rate.sourceDescription() + "]"
+                : reason(cmd);
+        JournalEntry posted = postJournalEntryUseCase.post(entry, auditReason, cmd.operatorSubject());
 
         // (6) Lot carrying distribution (18th increment — TASK-FIN-BE-026, ADR-001 D4-a).
         //     Revaluation has just trued the AGGREGATE position carrying to spot
@@ -160,7 +176,7 @@ public class RevalueForeignBalanceUseCase {
         //     aggregate carrying (NOT the lots), so re-marking lots leaves non-FIFO
         //     settlement results byte-unchanged.
         long revaluedBase = carryingBaseMinor + result.delta();
-        distributeRevaluationToLots(cmd, revaluedBase);
+        distributeRevaluationToLots(cmd, rate.rate(), revaluedBase);
 
         return Result.revalued(result, posted);
     }
@@ -177,13 +193,14 @@ public class RevalueForeignBalanceUseCase {
      * residual is clamped at 0 for an extreme shadow-desync (documented edge — a normal
      * position never hits it). Persists in the caller's {@code @Transactional}.
      */
-    private void distributeRevaluationToLots(RevalueForeignBalanceCommand cmd, long revaluedBase) {
+    private void distributeRevaluationToLots(RevalueForeignBalanceCommand cmd,
+                                             BigDecimal closingRate, long revaluedBase) {
         List<FxPositionLot> openLots = fxPositionLotRepository.findOpenLots(
                 cmd.tenantId(), cmd.ledgerAccountCode(), cmd.currency());
         if (openLots.isEmpty()) {
             return; // no lots → aggregate revaluation already posted; net-zero on settlement
         }
-        long[] marks = markToSpot(openLots, cmd.closingRate(), revaluedBase);
+        long[] marks = markToSpot(openLots, closingRate, revaluedBase);
         for (int i = 0; i < openLots.size(); i++) {
             FxPositionLot lot = openLots.get(i);
             lot.markCarrying(marks[i]);
