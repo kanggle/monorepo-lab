@@ -4,8 +4,6 @@ import com.example.finance.ledger.application.PostManualJournalEntryCommand.Manu
 import com.example.finance.ledger.application.port.outbound.ClockPort;
 import com.example.finance.ledger.application.port.outbound.ProcessedEventStore;
 import com.example.finance.ledger.domain.account.repository.LedgerAccountRepository;
-import com.example.finance.ledger.domain.error.LedgerErrors.IdempotencyKeyRequiredException;
-import com.example.finance.ledger.domain.error.LedgerErrors.JournalEntryNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoundException;
 import com.example.finance.ledger.domain.journal.JournalEntry;
 import com.example.finance.ledger.domain.journal.JournalLine;
@@ -19,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Manual journal posting (5th increment, TASK-FIN-BE-011 — architecture.md
@@ -45,8 +42,6 @@ public class PostManualJournalEntryUseCase {
 
     static final String DEDUPE_PREFIX = "manual:";
     static final String DEDUPE_TOPIC = "manual-posting";
-    /** Max client key length — {@code "manual:" + key} (57) must fit the 64-char column. */
-    static final int MAX_KEY_LENGTH = 50;
 
     private final JournalRepository journalRepository;
     private final LedgerAccountRepository ledgerAccountRepository;
@@ -64,23 +59,15 @@ public class PostManualJournalEntryUseCase {
     @Transactional
     public Result post(PostManualJournalEntryCommand cmd) {
         String key = cmd.idempotencyKey();
-        if (key == null || key.isBlank()) {
-            throw new IdempotencyKeyRequiredException("Idempotency-Key header is required");
-        }
-        if (key.length() > MAX_KEY_LENGTH) {
-            throw new IdempotencyKeyRequiredException(
-                    "Idempotency-Key must be at most " + MAX_KEY_LENGTH + " characters");
-        }
+        LedgerWriteSupport.validateIdempotencyKey(key);
         String dedupeKey = DEDUPE_PREFIX + key;
 
         // (1) Idempotent replay — the key was already processed; return the original
         //     entry (no re-post). The unique constraint on processed_events makes a
         //     concurrent double-submit race-safe (the loser lands here).
         if (processedEventStore.isProcessed(dedupeKey)) {
-            JournalEntry original = journalRepository
-                    .findBySourceEventId(dedupeKey, cmd.tenantId())
-                    .orElseThrow(() -> new JournalEntryNotFoundException(
-                            "manual entry for idempotency key not found (replay): " + dedupeKey));
+            JournalEntry original = LedgerWriteSupport.requireReplayEntry(
+                    journalRepository, dedupeKey, cmd.tenantId(), "manual");
             return new Result(original, true);
         }
 
@@ -107,7 +94,7 @@ public class PostManualJournalEntryUseCase {
                         line.direction(), line.money()));
             }
         }
-        JournalEntry entry = JournalEntry.post(newEntryId(), cmd.tenantId(), postedAt,
+        JournalEntry entry = JournalEntry.post(LedgerWriteSupport.newEntryId(), cmd.tenantId(), postedAt,
                 SourceRef.ofManual(cmd.reference(), dedupeKey), lines);
 
         // (4) Record the dedupe row in the SAME Tx, then funnel through the guarded
@@ -115,21 +102,8 @@ public class PostManualJournalEntryUseCase {
         //     operator subject; entry.posted outbox append).
         processedEventStore.markProcessed(dedupeKey, cmd.tenantId(), DEDUPE_TOPIC,
                 entry.source().getSourceTransactionId(), clock.now());
-        JournalEntry posted = postJournalEntryUseCase.post(entry, reason(cmd), cmd.operatorSubject());
+        String reason = LedgerWriteSupport.auditReason(cmd.memo(), cmd.reference(), "manual adjusting entry");
+        JournalEntry posted = postJournalEntryUseCase.post(entry, reason, cmd.operatorSubject());
         return new Result(posted, false);
-    }
-
-    private static String reason(PostManualJournalEntryCommand cmd) {
-        if (cmd.memo() != null && !cmd.memo().isBlank()) {
-            return cmd.memo();
-        }
-        if (cmd.reference() != null && !cmd.reference().isBlank()) {
-            return cmd.reference();
-        }
-        return "manual adjusting entry";
-    }
-
-    private static String newEntryId() {
-        return UUID.randomUUID().toString();
     }
 }
