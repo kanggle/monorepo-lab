@@ -1,7 +1,8 @@
 import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
-import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
+import {
+  callEcommerce,
+  type EcommerceCallLabel,
+} from './ecommerce-client';
 import {
   UserListSchema,
   type UserList,
@@ -51,171 +52,14 @@ import {
  *   - `503`/timeout/network → `EcommerceUnavailableError` (section degrades).
  */
 
-type Method = 'GET';
-
-interface CallOptions {
-  method: Method;
-  base: string;
-  path: string;
-}
-
-/**
- * Parses the ecommerce FLAT error envelope (`{ code, message, timestamp }`).
- * Defensive: a missing / non-JSON body degrades to a synthetic code rather
- * than throwing.
- */
-async function parseUserError(
-  res: Response,
-): Promise<{ code: string; message: string; timestamp?: string }> {
-  let code = `HTTP_${res.status}`;
-  let message = `ecommerce user request failed (${res.status})`;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      code = body.code ?? code;
-      message = body.message ?? message;
-      timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, timestamp };
-}
-
-/**
- * Single hardened call site for user-service. Resolves the domain-facing
- * IAM OIDC token, applies the timeout, and maps the ecommerce flat error
- * envelope to the § 2.5 resilience taxonomy.
- */
-async function callUser<T>(
-  opts: CallOptions,
-  parse?: (json: unknown) => T,
-): Promise<T> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // Per-domain credential selection (§ 2.4.10): NEVER getOperatorToken().
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('ecommerce_user_no_gap_session', {
-      requestId,
-      path: opts.path,
-    });
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-  };
-  // NOTE: deliberately NO `X-Tenant-Id` — ecommerce resolves tenant from the
-  // JWT `tenant_id` claim (gateway-injected; § 2.4.10 tenant invariant).
-  // NOTE: NO `Idempotency-Key` — read-only surface; no mutations defined.
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.ECOMMERCE_TIMEOUT_MS);
-
-  try {
-    const res = await fetch(`${opts.base}${opts.path}`, {
-      method: opts.method,
-      headers,
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (res.status === 401) {
-      const e = await parseUserError(res);
-      logger.warn('ecommerce_user_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseUserError(res);
-      logger.warn('ecommerce_user_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(403, e.code || 'FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseUserError(res);
-      logger.warn('ecommerce_user_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.path,
-      });
-      // ONLY the ecommerce section degrades — shell + other sections intact.
-      throw new EcommerceUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'ecommerce user-service unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 404 USER_PROFILE_NOT_FOUND — inline actionable (no crash).
-      const e = await parseUserError(res);
-      logger.warn('ecommerce_user_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    logger.info('ecommerce_user_ok', {
-      requestId,
-      status: res.status,
-      path: opts.path,
-    });
-
-    if (parse === undefined) {
-      return undefined as T;
-    }
-    const json = await res.json();
-    return parse(json);
-  } catch (err) {
-    if (err instanceof ApiError || err instanceof EcommerceUnavailableError) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('ecommerce_user_timeout', {
-        requestId,
-        timeoutMs: env.ECOMMERCE_TIMEOUT_MS,
-        path: opts.path,
-      });
-      throw new EcommerceUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'ecommerce user-service call timed out',
-      );
-    }
-    logger.error('ecommerce_user_error', { requestId, path: opts.path });
-    throw new EcommerceUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'ecommerce user-service call failed',
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-}
+/** Per-slice observability + message label for the (read-only) user surface. */
+const USER_LABEL: EcommerceCallLabel = {
+  event: 'user',
+  errorNoun: 'user',
+  unavailableLabel: 'user-service',
+  timedOutLabel: 'user-service',
+  failedLabel: 'user-service',
+};
 
 function clampSize(size?: number): number {
   return Math.min(
@@ -236,25 +80,27 @@ export function listUsers(params: UserListParams = {}): Promise<UserList> {
   if (params.email) qs.set('email', params.email);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
   qs.set('size', String(clampSize(params.size)));
-  return callUser(
+  return callEcommerce(
     {
       method: 'GET',
       base: env.ECOMMERCE_ADMIN_BASE_URL,
       path: `/users?${qs.toString()}`,
     },
     (j) => UserListSchema.parse(j),
+    USER_LABEL,
   );
 }
 
 /** GET /admin/users/{userId} (user detail). */
 export function getUser(userId: string): Promise<UserDetail> {
   const env = getServerEnv();
-  return callUser(
+  return callEcommerce(
     {
       method: 'GET',
       base: env.ECOMMERCE_ADMIN_BASE_URL,
       path: `/users/${encodeURIComponent(userId)}`,
     },
     (j) => UserDetailSchema.parse(j),
+    USER_LABEL,
   );
 }

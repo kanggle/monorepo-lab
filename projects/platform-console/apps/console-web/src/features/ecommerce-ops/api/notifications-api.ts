@@ -1,7 +1,8 @@
 import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
-import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
+import {
+  callEcommerce,
+  type EcommerceCallLabel,
+} from './ecommerce-client';
 import {
   NotificationTemplateListSchema,
   type NotificationTemplateList,
@@ -47,188 +48,14 @@ import {
  * ONLY `{ subject, body }` — never send type/channel on update.
  */
 
-type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
-
-interface CallOptions {
-  method: Method;
-  /** Absolute base. Notifications use ECOMMERCE_PUBLIC_BASE_URL (see above). */
-  base: string;
-  /** Path relative to `base` (e.g. `/notifications/templates`). */
-  path: string;
-  /** Typed mutation body; `undefined` for reads. */
-  body?: unknown;
-}
-
-/**
- * Parses the ecommerce FLAT error envelope (`{ code, message, timestamp }`).
- * Defensive: a missing / non-JSON body degrades to a synthetic code rather
- * than throwing.
- */
-async function parseNotificationError(
-  res: Response,
-): Promise<{ code: string; message: string; timestamp?: string }> {
-  let code = `HTTP_${res.status}`;
-  let message = `ecommerce notification request failed (${res.status})`;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      code = body.code ?? code;
-      message = body.message ?? message;
-      timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, timestamp };
-}
-
-/**
- * Single hardened call site. Resolves the domain-facing IAM OIDC token,
- * applies the timeout, and maps the ecommerce flat error envelope to the
- * § 2.5 resilience taxonomy.
- */
-async function callNotification<T>(
-  opts: CallOptions,
-  parse?: (json: unknown) => T,
-): Promise<T> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // Per-domain credential selection (§ 2.4.10): use getDomainFacingToken(),
-  // NEVER getOperatorToken() (the ecommerce gateway requires the IAM OIDC
-  // token; the #569 invariant is GAP-domain-scoped).
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('ecommerce_notification_no_gap_session', {
-      requestId,
-      path: opts.path,
-    });
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-  };
-  // NO `X-Tenant-Id` — ecommerce resolves tenant from the JWT `tenant_id`
-  // claim (gateway-injected; § 2.4.10 tenant invariant).
-  // NO `Idempotency-Key` — the producer defines none (§ 2.4.10).
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
-
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    env.ECOMMERCE_TIMEOUT_MS,
-  );
-
-  try {
-    const res = await fetch(`${opts.base}${opts.path}`, {
-      method: opts.method,
-      headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (res.status === 401) {
-      const e = await parseNotificationError(res);
-      logger.warn('ecommerce_notification_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseNotificationError(res);
-      logger.warn('ecommerce_notification_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(403, e.code || 'FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseNotificationError(res);
-      logger.warn('ecommerce_notification_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new EcommerceUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'ecommerce notification-service unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400 VALIDATION_ERROR, 404 TEMPLATE_NOT_FOUND, 409 TEMPLATE_ALREADY_EXISTS
-      // → inline actionable (no crash).
-      const e = await parseNotificationError(res);
-      logger.warn('ecommerce_notification_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    logger.info('ecommerce_notification_ok', {
-      requestId,
-      status: res.status,
-      path: opts.path,
-    });
-
-    if (parse === undefined) {
-      return undefined as T;
-    }
-    const json = await res.json();
-    return parse(json);
-  } catch (err) {
-    if (
-      err instanceof ApiError ||
-      err instanceof EcommerceUnavailableError
-    ) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('ecommerce_notification_timeout', {
-        requestId,
-        timeoutMs: env.ECOMMERCE_TIMEOUT_MS,
-        path: opts.path,
-      });
-      throw new EcommerceUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'ecommerce notification-service call timed out',
-      );
-    }
-    logger.error('ecommerce_notification_error', {
-      requestId,
-      path: opts.path,
-    });
-    throw new EcommerceUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'ecommerce notification-service call failed',
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-}
+/** Per-slice observability + message label for the notification surface. */
+const NOTIFICATION_LABEL: EcommerceCallLabel = {
+  event: 'notification',
+  errorNoun: 'notification',
+  unavailableLabel: 'notification-service',
+  timedOutLabel: 'notification-service',
+  failedLabel: 'notification-service',
+};
 
 function clampSize(size?: number): number {
   return Math.min(
@@ -249,13 +76,14 @@ export function listTemplates(
   const qs = new URLSearchParams();
   qs.set('page', String(Math.max(0, params.page ?? 0)));
   qs.set('size', String(clampSize(params.size)));
-  return callNotification(
+  return callEcommerce(
     {
       method: 'GET',
       base: env.ECOMMERCE_PUBLIC_BASE_URL,
       path: `/notifications/templates?${qs.toString()}`,
     },
     (j) => NotificationTemplateListSchema.parse(j),
+    NOTIFICATION_LABEL,
   );
 }
 
@@ -264,13 +92,14 @@ export function getTemplate(
   id: string,
 ): Promise<NotificationTemplateDetail> {
   const env = getServerEnv();
-  return callNotification(
+  return callEcommerce(
     {
       method: 'GET',
       base: env.ECOMMERCE_PUBLIC_BASE_URL,
       path: `/notifications/templates/${encodeURIComponent(id)}`,
     },
     (j) => NotificationTemplateDetailSchema.parse(j),
+    NOTIFICATION_LABEL,
   );
 }
 
@@ -283,7 +112,7 @@ export function createTemplate(
   body: CreateTemplateBody,
 ): Promise<NotificationMutationResponse> {
   const env = getServerEnv();
-  return callNotification(
+  return callEcommerce(
     {
       method: 'POST',
       base: env.ECOMMERCE_PUBLIC_BASE_URL,
@@ -291,6 +120,7 @@ export function createTemplate(
       body,
     },
     (j) => NotificationMutationResponseSchema.parse(j),
+    NOTIFICATION_LABEL,
   );
 }
 
@@ -301,7 +131,7 @@ export function updateTemplate(
   body: UpdateTemplateBody,
 ): Promise<NotificationMutationResponse> {
   const env = getServerEnv();
-  return callNotification(
+  return callEcommerce(
     {
       method: 'PUT',
       base: env.ECOMMERCE_PUBLIC_BASE_URL,
@@ -309,5 +139,6 @@ export function updateTemplate(
       body,
     },
     (j) => NotificationMutationResponseSchema.parse(j),
+    NOTIFICATION_LABEL,
   );
 }

@@ -1,7 +1,8 @@
 import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
-import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
+import {
+  callEcommerce,
+  type EcommerceCallLabel,
+} from './ecommerce-client';
 import {
   ShippingListSchema,
   type ShippingList,
@@ -58,185 +59,14 @@ import {
  *   - `503`/timeout/network → `EcommerceUnavailableError` (section degrades only).
  */
 
-type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
-
-interface CallOptions {
-  method: Method;
-  base: string;
-  path: string;
-  body?: unknown;
-}
-
-/**
- * Parses the ecommerce FLAT error envelope (`{ code, message, timestamp }`).
- * Defensive: a missing / non-JSON body degrades to a synthetic code rather
- * than throwing (the producer is the authority for the real code).
- */
-async function parseShippingError(
-  res: Response,
-): Promise<{ code: string; message: string; timestamp?: string }> {
-  let code = `HTTP_${res.status}`;
-  let message = `ecommerce shipping request failed (${res.status})`;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      code = body.code ?? code;
-      message = body.message ?? message;
-      timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, timestamp };
-}
-
-/**
- * Single hardened call site. Resolves the domain-facing IAM OIDC token,
- * applies the timeout, and maps the ecommerce flat error envelope to the
- * § 2.5 resilience taxonomy.
- */
-async function callShipping<T>(
-  opts: CallOptions,
-  parse?: (json: unknown) => T,
-): Promise<T> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // Per-domain credential selection (§ 2.4.10): use getDomainFacingToken(),
-  // NEVER getOperatorToken() (the ecommerce gateway requires the IAM OIDC
-  // token; the #569 invariant is GAP-domain-scoped).
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('ecommerce_shipping_no_gap_session', {
-      requestId,
-      path: opts.path,
-    });
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-  };
-  // NO `X-Tenant-Id` — ecommerce resolves tenant from the JWT `tenant_id`
-  // claim (gateway-injected; § 2.4.10 tenant invariant).
-  // NO `Idempotency-Key` — the producer defines none (§ 2.4.10).
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
-
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    env.ECOMMERCE_TIMEOUT_MS,
-  );
-
-  try {
-    const res = await fetch(`${opts.base}${opts.path}`, {
-      method: opts.method,
-      headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (res.status === 401) {
-      const e = await parseShippingError(res);
-      logger.warn('ecommerce_shipping_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseShippingError(res);
-      logger.warn('ecommerce_shipping_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(403, e.code || 'FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseShippingError(res);
-      logger.warn('ecommerce_shipping_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new EcommerceUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'ecommerce shipping-service unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400 InvalidShipping (SHIPPED without carrier/tracking),
-      // 400 INVALID_STATUS (illegal transition attempt),
-      // 404 SHIPPING_NOT_FOUND,
-      // 409/422 INVALID_TRANSITION
-      // → inline actionable (no crash).
-      const e = await parseShippingError(res);
-      logger.warn('ecommerce_shipping_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    logger.info('ecommerce_shipping_ok', {
-      requestId,
-      status: res.status,
-      path: opts.path,
-    });
-
-    if (parse === undefined) {
-      return undefined as T;
-    }
-    const json = await res.json();
-    return parse(json);
-  } catch (err) {
-    if (
-      err instanceof ApiError ||
-      err instanceof EcommerceUnavailableError
-    ) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('ecommerce_shipping_timeout', {
-        requestId,
-        timeoutMs: env.ECOMMERCE_TIMEOUT_MS,
-        path: opts.path,
-      });
-      throw new EcommerceUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'ecommerce shipping-service call timed out',
-      );
-    }
-    logger.error('ecommerce_shipping_error', { requestId, path: opts.path });
-    throw new EcommerceUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'ecommerce shipping-service call failed',
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-}
+/** Per-slice observability + message label for the shipping surface. */
+const SHIPPING_LABEL: EcommerceCallLabel = {
+  event: 'shipping',
+  errorNoun: 'shipping',
+  unavailableLabel: 'shipping-service',
+  timedOutLabel: 'shipping-service',
+  failedLabel: 'shipping-service',
+};
 
 function clampSize(size?: number): number {
   return Math.min(
@@ -261,13 +91,14 @@ export function listShippings(
   if (params.status) qs.set('status', params.status);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
   qs.set('size', String(clampSize(params.size)));
-  return callShipping(
+  return callEcommerce(
     {
       method: 'GET',
       base: env.ECOMMERCE_PUBLIC_BASE_URL,
       path: `/shippings?${qs.toString()}`,
     },
     (j) => ShippingListSchema.parse(j),
+    SHIPPING_LABEL,
   );
 }
 
@@ -287,7 +118,7 @@ export function updateShippingStatus(
   body: UpdateShippingStatusBody,
 ): Promise<Shipping> {
   const env = getServerEnv();
-  return callShipping(
+  return callEcommerce(
     {
       method: 'PUT',
       base: env.ECOMMERCE_PUBLIC_BASE_URL,
@@ -295,6 +126,7 @@ export function updateShippingStatus(
       body,
     },
     (j) => ShippingSchema.parse(j),
+    SHIPPING_LABEL,
   );
 }
 
@@ -306,7 +138,7 @@ export function updateShippingStatus(
  */
 export function refreshTracking(id: string): Promise<Shipping> {
   const env = getServerEnv();
-  return callShipping(
+  return callEcommerce(
     {
       method: 'POST',
       base: env.ECOMMERCE_PUBLIC_BASE_URL,
@@ -314,5 +146,6 @@ export function refreshTracking(id: string): Promise<Shipping> {
       body: {},
     },
     (j) => ShippingSchema.parse(j),
+    SHIPPING_LABEL,
   );
 }
