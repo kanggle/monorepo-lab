@@ -1,6 +1,6 @@
 # TASK-FIN-BE-036 — ledger architecture.md "Forbidden: outbox path" 드리프트 정정
 
-- **Status**: review
+- **Status**: done
 - **Project**: finance-platform
 - **Service**: ledger-service
 - **Domain / traits**: fintech / [transactional, regulated, audit-heavy]
