@@ -7,8 +7,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.web.idempotency.StoredResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.outbound.application.port.out.StoredResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;

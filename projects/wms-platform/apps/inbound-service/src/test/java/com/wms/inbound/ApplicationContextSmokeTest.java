@@ -2,13 +2,13 @@ package com.wms.inbound;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.web.idempotency.IdempotencyStore;
 import com.wms.inbound.adapter.in.messaging.masterref.MasterEventParser;
 import com.wms.inbound.adapter.in.webhook.erp.ErpAsnWebhookController;
 import com.wms.inbound.adapter.in.webhook.erp.HmacSignatureVerifier;
 import com.wms.inbound.adapter.in.webhook.erp.TimestampWindowVerifier;
 import com.wms.inbound.application.port.in.IngestWebhookEventUseCase;
 import com.wms.inbound.application.port.out.EventDedupePort;
-import com.wms.inbound.application.port.out.IdempotencyStorePort;
 import com.wms.inbound.application.port.out.MasterReadModelPort;
 import com.wms.inbound.application.port.out.MasterReadModelWriterPort;
 import com.wms.inbound.application.port.out.InboundEventPort;
@@ -51,7 +51,7 @@ class ApplicationContextSmokeTest {
         assertThat(context.getBean(EventDedupePort.class)).isNotNull();
         assertThat(context.getBean(MasterReadModelPort.class)).isNotNull();
         assertThat(context.getBean(MasterReadModelWriterPort.class)).isNotNull();
-        assertThat(context.getBean(IdempotencyStorePort.class)).isNotNull();
+        assertThat(context.getBean(IdempotencyStore.class)).isNotNull();
         assertThat(context.getBean(InboundEventPort.class)).isNotNull();
     }
 

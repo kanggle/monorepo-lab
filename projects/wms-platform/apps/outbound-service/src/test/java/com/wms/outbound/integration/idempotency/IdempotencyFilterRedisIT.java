@@ -5,11 +5,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.example.web.idempotency.IdempotencyFilterConfig;
+import com.example.web.idempotency.IdempotencyKeyFilter;
+import com.example.web.idempotency.IdempotencyStore;
+import com.example.web.idempotency.JsonValueBodyCanonicalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.outbound.adapter.in.web.filter.OutboundIdempotencyFilter;
+import com.wms.outbound.adapter.in.web.filter.OutboundIdempotencyErrorWriter;
 import com.wms.outbound.adapter.out.idempotency.RedisIdempotencyStore;
-import com.wms.outbound.application.port.out.IdempotencyStore;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
@@ -36,8 +38,9 @@ import org.testcontainers.utility.DockerImageName;
 import com.redis.testcontainers.RedisContainer;
 
 /**
- * Integration test for the {@link OutboundIdempotencyFilter} backed by a
- * real Redis instance via Testcontainers (TASK-BE-051).
+ * Integration test for the shared {@link IdempotencyKeyFilter} (ADR-MONO-038),
+ * wired with the outbound config, backed by a real Redis instance via
+ * Testcontainers (TASK-BE-051).
  *
  * <p>Boots only Redis — the filter is exercised via {@link MockHttpServletRequest}
  * with a real {@link RedisIdempotencyStore} adapter. This validates the
@@ -70,7 +73,7 @@ class IdempotencyFilterRedisIT {
 
     // Mirror Spring Boot's auto-configured ObjectMapper — registers
     // jackson-datatype-jsr310 so {@code Instant} fields on
-    // {@link com.wms.outbound.application.port.out.StoredResponse} round-trip.
+    // {@link com.example.web.idempotency.StoredResponse} round-trip.
     // Without {@code findAndRegisterModules()} the {@code put()} call inside
     // the filter throws and the IT silently observes "fail-open" misses.
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
@@ -80,7 +83,7 @@ class IdempotencyFilterRedisIT {
     private static StringRedisTemplate redisTemplate;
     private static LettuceConnectionFactory connectionFactory;
     private static IdempotencyStore store;
-    private OutboundIdempotencyFilter filter;
+    private IdempotencyKeyFilter filter;
 
     @BeforeAll
     static void startRedis() {
@@ -107,7 +110,18 @@ class IdempotencyFilterRedisIT {
         if (keys != null && !keys.isEmpty()) {
             redisTemplate.delete(keys);
         }
-        filter = new OutboundIdempotencyFilter(store, MAPPER, new SimpleMeterRegistry());
+        filter = new IdempotencyKeyFilter(
+                store,
+                new JsonValueBodyCanonicalizer(MAPPER),
+                new OutboundIdempotencyErrorWriter(MAPPER),
+                null,   // metrics not asserted here -> NO_OP
+                IdempotencyFilterConfig.builder()
+                        .methods("POST", "PATCH", "PUT", "DELETE")
+                        .applyToPrefixSkippingWebhook("/api/v1/outbound/", "/webhooks/")
+                        .maxKeyLength(255)
+                        .lockTtl(Duration.ofSeconds(30))
+                        .entryTtl(Duration.ofHours(24))
+                        .build());
     }
 
     @Test
@@ -229,8 +243,8 @@ class IdempotencyFilterRedisIT {
         // observe the state — the production filter uses 24h, but the IT
         // verifies the underlying Redis EXPIRE plumbing works.
         String storageKey = "POST:test-path-hash:idem-it-key-5";
-        com.wms.outbound.application.port.out.StoredResponse entry =
-                new com.wms.outbound.application.port.out.StoredResponse(
+        com.example.web.idempotency.StoredResponse entry =
+                new com.example.web.idempotency.StoredResponse(
                         "hash", 201, "{\"id\":\"x\"}", "application/json",
                         java.time.Instant.now());
 
