@@ -671,8 +671,12 @@ dedupe is event-id based via `processed_events`).
 
 ### Forbidden dependencies
 
-`float`/`double` in money; writing to `finance_db` (account-service's schema); an
-outbox/publish path (terminal consumer); external GL/ERP SDKs in `domain/`/`application/`.
+`float`/`double` in money; writing to `finance_db` (account-service's schema); the libs
+`OutboxAutoConfiguration` / `OutboxWriter` path (its `ProcessedEventJpaEntity` collides with the
+consumer-dedupe `processed_events` — the per-service `AbstractOutboxPublisher` /
+`LedgerOutboxJpaEntity` path is used instead, **3rd increment onward**; the service was a
+terminal consumer only through the 1st–2nd increments); external GL/ERP SDKs in
+`domain/`/`application/`.
 
 ### Boundary rules
 
