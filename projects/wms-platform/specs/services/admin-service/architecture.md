@@ -366,6 +366,16 @@ Full schema reflection lives in [`database-design.md`](database-design.md); doma
 - Other services receive role claims in JWT; they enforce their own
   finer-grained permissions (e.g., `INVENTORY_WRITE` mapped from
   `WMS_OPERATOR`).
+- **Operator domain-role source (roles-only model)** — a console operator's WMS
+  domain roles (`WMS_OPERATOR` etc.) are **derived by IAM at assume-tenant** from
+  the selected tenant's entitled domains (`wms → WMS_OPERATOR`, the operator-role
+  mirror of `RoleSeedPolicy`; ADR-MONO-035 O1 / step 4a), gated fail-closed by the
+  operator-assignment check. With ADR-MONO-032 (unified identity — `roles` is the
+  sole authorization axis) the `account_type` claim/column/gateway-leg was **fully
+  removed** (ADR-032 D5 step 4 + step 5, COMPLETE 2026-06-15), so operators no
+  longer ride the `account_type` leg — their domain authorization rides the JWT
+  `roles` claim only. IAM is authoritative on issuance; the gateway forwards the
+  claim as `X-User-Role` and admin-service's `@PreAuthorize` consumes it.
 - **Entitlement-trust READ dual-accept** (ADR-MONO-019 § D5, ADR-MONO-020 D4 —
   TASK-MONO-162): the `jwtAuthenticationConverter` (`config/SecurityConfig`)
   synthesises **only** `ROLE_WMS_VIEWER` when the RS256/JWKS-verified
@@ -378,6 +388,12 @@ Full schema reflection lives in [`database-design.md`](database-design.md); doma
   Net-zero for role/scope/SUPER_ADMIN tokens (the branch only ADDS the VIEWER
   authority; `entitled_domains` is read only from the verified token, so it is
   unforgeable, and an absent/malformed claim grants nothing — fail-closed).
+  Since ADR-MONO-035 step 4a a console operator's assume-tenant token for a
+  wms-entitled tenant **also** carries `roles ∋ WMS_OPERATOR` directly (see the
+  operator domain-role source above), so the VIEWER synthesis now primarily
+  serves **non-operator** wms-entitled token shapes (e.g. a cross-domain entitled
+  reader holding no WMS role); it is retained **net-zero** as defense-in-depth and
+  the live `jwtAuthenticationConverter` is unchanged.
 
 ### PII Handling
 

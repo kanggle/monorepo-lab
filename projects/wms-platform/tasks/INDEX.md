@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-383-wms-roles-only-operator-spec-alignment.md` — **REVIEW**. Doc-only, net-zero spec alignment: brings the wms service specs into conformance with the roles-only identity model (ADR-MONO-032 D5 step 4/5 `account_type` removal + ADR-MONO-035 O1/4a operator domain-role derivation at assume-tenant, `wms → WMS_OPERATOR`). Unlike erp (ERP-BE-021), wms specs **never carried** the literal `account_type=OPERATOR` framing and were already roles-based — the drift was a **documentation gap**: no wms spec recorded where an operator's `WMS_OPERATOR` role originates post-ADR-035. Edits: admin-service architecture § Security (add operator domain-role source bullet + relate the entitlement-trust `WMS_VIEWER` synthesis to the new operator-role path, net-zero) + iam-integration.md (record the assume-tenant derivation). No code / contract / Flyway / ADR-decision change. 분석=Opus 4.8 / 구현=Opus (doc-only). [[project_adr032_unified_identity_roles]]
 
 ## done
 
