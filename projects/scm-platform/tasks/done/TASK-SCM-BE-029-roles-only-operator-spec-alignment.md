@@ -1,6 +1,6 @@
 # TASK-SCM-BE-029 — Align scm service specs to the roles-only operator model (reframe the BUYER/OPERATOR actor as a `roles`-claim derivation)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-SCM-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (security/authorization-adjacent doc alignment — net-zero, but the operator-admission model must be stated exactly)
