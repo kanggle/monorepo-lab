@@ -72,8 +72,9 @@ public class ProvisionAccountUseCase {
             Account account = Account.create(tenantId, normalizedEmail);
             account = accountRepository.save(account);
 
-            // 3b. TASK-BE-381 (ADR-036 M1): born-unified — assign the central identity at creation.
-            assignBornUnifiedIdentity(tenantId, account);
+            // 3b. TASK-BE-381/382 (ADR-036 M1/M2): born-unified — mint+assign the central identity
+            // at creation; the resolved identityId is propagated to the credential row (M2).
+            String identityId = mintAndAssignIdentity(tenantId, account);
 
             // 4. Create Profile
             Profile profile = Profile.create(
@@ -105,7 +106,7 @@ public class ProvisionAccountUseCase {
             //    assume-tenant, BE-376).
             try {
                 authServicePort.createCredential(
-                        account.getId(), account.getEmail(), command.password(), command.tenantId());
+                        account.getId(), account.getEmail(), command.password(), command.tenantId(), identityId);
             } catch (AuthServicePort.CredentialAlreadyExistsConflict e) {
                 throw new AccountAlreadyExistsException(command.email());
             }
@@ -142,18 +143,22 @@ public class ProvisionAccountUseCase {
      * reconciled later) — provisioning never blocks on the identity infrastructure
      * (the ADR-034 availability stance). The {@code reuseExisting} mint converges the
      * consumer and operator sides on the SAME identity (ADR-036 P1).
+     *
+     * @return the resolved central {@code identity_id}, or {@code null} when the mint
+     *         failed (fail-soft) — the caller propagates it to the credential row (M2).
      */
-    private void assignBornUnifiedIdentity(TenantId tenantId, Account account) {
+    private String mintAndAssignIdentity(TenantId tenantId, Account account) {
         String identityId;
         try {
             identityId = accountIdentityProvisioner.mintIdentity(tenantId.value(), account.getEmail());
         } catch (RuntimeException e) {
             log.warn("born-unified identity mint failed (fail-soft, account {} born unlinked) tenant={}: {}",
                     account.getId(), tenantId.value(), e.toString());
-            return;
+            return null;
         }
         if (identityId != null) {
             accountRepository.assignIdentityId(tenantId, account.getId(), identityId);
         }
+        return identityId;
     }
 }

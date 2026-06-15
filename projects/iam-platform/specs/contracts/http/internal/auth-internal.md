@@ -19,7 +19,8 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
   "accountId": "string (UUID v7, max 36)",
   "email": "string (RFC 5322)",
   "password": "string (min 8)",
-  "tenantId": "string (tenant slug, optional)"
+  "tenantId": "string (tenant slug, optional)",
+  "identityId": "string (UUID, max 36, optional)"
 }
 ```
 
@@ -29,6 +30,9 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
 | `email` | string | Yes | 로그인 lookup key. lower-case 정규화 후 저장 |
 | `password` | string | Yes | 평문. auth-service 가 argon2id 해시 후 `credentials.credential_hash` 에 저장. **caller 는 반드시 HTTPS 내부망으로만 전송할 것** |
 | `tenantId` | string | No | 테넌트 slug. 생략 시 `"fan-platform"` 기본값 (TASK-BE-229/313) |
+| `identityId` | string | No | **TASK-BE-384 (ADR-MONO-036 M2/P3)** — 계정 생성 시점에 발급된 중앙 `identities.identity_id`. 전달되면 새 credential row 가 born-unified 로 동일 중앙 identity 에 연결된다(`credentials.identity_id`, idempotent·미덮어쓰기 native write). 생략/`null` 이면 born unlinked(account-side mint 실패 fail-soft) — net-zero, 추후 reconcile. |
+
+> **TASK-BE-384 (ADR-MONO-036 born-unified provisioning)** — `identityId` 는 same-origin issuance 의 in-band 전파(P3-A)다. account-service 가 계정 생성 시 `(tenant, email)` 로 mint/reuse 한 중앙 identity 를 이 필드로 넘기고, auth-service 는 `credentials.identity_id` 에 `IS NULL` 가드로 기록한다(덮어쓰기 없음, ADR-MONO-034 § 1.3). email 자동 병합이 아니다.
 
 > **TASK-MONO-263 (ADR-MONO-035 4b-2b / ADR-032 D5 step 4)** — `accountType` 필드(ADR-MONO-021 D2 / TASK-BE-330)는 **제거**되었다. `account_type` JWT 클레임은 더 이상 발급되지 않고 `auth_db.credentials.account_type` 컬럼은 drop 되었다(V0025). 권한 부여는 `roles` 클레임 단일 축으로 수렴한다 — consumer 는 플랫폼별 seed 역할(`CUSTOMER`/`FAN`, RoleSeedPolicy), operator 는 assume-tenant 시점 도메인 역할(OperatorRoleDerivation, BE-376). body 에 `accountType` 이 남아 있어도 무시된다(unknown property).
 

@@ -61,4 +61,9 @@ public class CredentialRepositoryImpl implements CredentialRepository {
     public boolean existsByAccountId(String accountId) {
         return credentialJpaRepository.findByAccountId(accountId).isPresent();
     }
+
+    @Override
+    public int assignIdentityId(String accountId, String identityId) {
+        return credentialJpaRepository.assignIdentityIdIfAbsent(accountId, identityId);
+    }
 }

@@ -47,4 +47,15 @@ public interface CredentialRepository {
      * attempting an insert (argon2id hashing is expensive, so we short-circuit).
      */
     boolean existsByAccountId(String accountId);
+
+    /**
+     * TASK-BE-384 (ADR-036 M2/P3): born-unified WRITER — set the credential's central
+     * {@code identity_id} when not already set (idempotent, net-zero; never overwrites —
+     * ADR-034 § 1.3). Native UPDATE under the hood ({@code identity_id} stays unmapped on
+     * the entity — mirror ADR-034 3a / ADR-035 O3, the merge-overwrite hazard). Keyed on
+     * the UNIQUE {@code account_id}.
+     *
+     * @return rows assigned (1 = set; 0 = already set, or no credential for the accountId)
+     */
+    int assignIdentityId(String accountId, String identityId);
 }

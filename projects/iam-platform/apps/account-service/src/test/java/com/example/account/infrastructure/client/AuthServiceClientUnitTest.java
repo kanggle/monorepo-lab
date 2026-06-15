@@ -45,7 +45,7 @@ class AuthServiceClientUnitTest {
                 .willReturn(aResponse().withStatus(200)));
 
         assertThatNoException().isThrownBy(() ->
-                client.createCredential("acc-1", "user@example.com", "pass123", "fan-platform"));
+                client.createCredential("acc-1", "user@example.com", "pass123", "fan-platform", null));
     }
 
     @Test
@@ -54,11 +54,13 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withStatus(201)));
 
-        client.createCredential("acc-op", "operator@example.com", "pass123", "acme-corp");
+        client.createCredential("acc-op", "operator@example.com", "pass123", "acme-corp", "idy-op");
 
         wireMockServer.verify(postRequestedFor(urlEqualTo(CREDENTIALS_PATH))
                 .withRequestBody(matchingJsonPath("$[?(@.tenantId == 'acme-corp')]"))
                 .withRequestBody(matchingJsonPath("$[?(@.accountId == 'acc-op')]"))
+                // TASK-BE-384 (ADR-036 M2): the born-unified identityId is propagated in the body.
+                .withRequestBody(matchingJsonPath("$[?(@.identityId == 'idy-op')]"))
                 // TASK-MONO-263: accountType is never sent.
                 .withRequestBody(matchingJsonPath("$[?(!@.accountType)]")));
     }
@@ -69,7 +71,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withStatus(409)));
 
-        assertThatThrownBy(() -> client.createCredential("acc-2", "dup@example.com", "pass123", "fan-platform"))
+        assertThatThrownBy(() -> client.createCredential("acc-2", "dup@example.com", "pass123", "fan-platform", null))
                 .isInstanceOf(AuthServicePort.CredentialAlreadyExistsConflict.class);
     }
 
@@ -79,7 +81,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withStatus(422)));
 
-        assertThatThrownBy(() -> client.createCredential("acc-3", "user@example.com", "pass123", "fan-platform"))
+        assertThatThrownBy(() -> client.createCredential("acc-3", "user@example.com", "pass123", "fan-platform", null))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
     }
 
@@ -89,7 +91,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
-        assertThatThrownBy(() -> client.createCredential("acc-err", "user@example.com", "pass123", "fan-platform"))
+        assertThatThrownBy(() -> client.createCredential("acc-err", "user@example.com", "pass123", "fan-platform", null))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
     }
 }

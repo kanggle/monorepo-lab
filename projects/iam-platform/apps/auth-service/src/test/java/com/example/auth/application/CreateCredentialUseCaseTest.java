@@ -167,4 +167,36 @@ class CreateCredentialUseCaseTest {
 
         assertThat(result.createdAt()).isBetween(before.minusSeconds(1), after.plusSeconds(1));
     }
+
+    @Test
+    @DisplayName("TASK-BE-384 (ADR-036 M2): identityId 가 전파되면 credential 에 born-unified 기록")
+    void createsCredential_withIdentityId_writesBornUnifiedLink() {
+        CreateCredentialCommand cmd = new CreateCredentialCommand(
+                "acc-bu", "bu@example.com", "password123", "fan-platform", "idy-bu");
+        given(credentialRepository.existsByAccountId("acc-bu")).willReturn(false);
+        given(passwordHasher.hash("password123")).willReturn("$argon2id$bu");
+        given(credentialRepository.save(org.mockito.ArgumentMatchers.any(Credential.class)))
+                .willAnswer(inv -> inv.getArgument(0));
+
+        useCase.execute(cmd);
+
+        // the propagated central identity is written to the new credential row (native, idempotent).
+        verify(credentialRepository).assignIdentityId("acc-bu", "idy-bu");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-384 (ADR-036 M2): identityId 없으면(born unlinked) writer 미호출 — net-zero")
+    void createsCredential_noIdentityId_skipsWriter() {
+        CreateCredentialCommand cmd = new CreateCredentialCommand(
+                "acc-no", "no@example.com", "password123"); // 3-arg → identityId null
+        given(credentialRepository.existsByAccountId("acc-no")).willReturn(false);
+        given(passwordHasher.hash("password123")).willReturn("$argon2id$no");
+        given(credentialRepository.save(org.mockito.ArgumentMatchers.any(Credential.class)))
+                .willAnswer(inv -> inv.getArgument(0));
+
+        useCase.execute(cmd);
+
+        verify(credentialRepository, never()).assignIdentityId(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+    }
 }

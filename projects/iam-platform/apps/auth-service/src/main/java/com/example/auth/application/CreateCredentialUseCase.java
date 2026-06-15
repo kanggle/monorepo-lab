@@ -58,6 +58,8 @@ public class CreateCredentialUseCase {
                         if (existing.getEmail().equals(email)) {
                             // Same (accountId, email) — this is a retry of the same signup attempt.
                             // Return success so account-service can complete the half-committed signup.
+                            // TASK-BE-384 (ADR-036 M2): backfill the born-unified identity on retry if absent.
+                            linkIdentityIfPresent(existing.getAccountId(), command.identityId());
                             log.info("Idempotent credential create for accountId={} tenantId={} — returning existing row",
                                     accountId, tenantId);
                             return new CreateCredentialResult(existing.getAccountId(), existing.getCreatedAt(), true);
@@ -80,6 +82,9 @@ public class CreateCredentialUseCase {
 
         try {
             Credential saved = credentialRepository.save(credential);
+            // TASK-BE-384 (ADR-036 M2/P3): born-unified — write the propagated central identity
+            // to the new credential row (native, idempotent, no overwrite; net-zero when null).
+            linkIdentityIfPresent(saved.getAccountId(), command.identityId());
             log.info("Credential created for accountId={} tenantId={}", saved.getAccountId(),
                     saved.getTenantId());
             return new CreateCredentialResult(saved.getAccountId(), saved.getCreatedAt());
@@ -88,8 +93,23 @@ public class CreateCredentialUseCase {
             // check and this save. Attempt idempotent resolution before failing.
             return credentialRepository.findByAccountId(accountId)
                     .filter(existing -> existing.getEmail().equals(email))
-                    .map(existing -> new CreateCredentialResult(existing.getAccountId(), existing.getCreatedAt(), true))
+                    .map(existing -> {
+                        linkIdentityIfPresent(existing.getAccountId(), command.identityId());
+                        return new CreateCredentialResult(existing.getAccountId(), existing.getCreatedAt(), true);
+                    })
                     .orElseThrow(() -> new CredentialAlreadyExistsException(accountId));
+        }
+    }
+
+    /**
+     * TASK-BE-384 (ADR-MONO-036 M2/P3): born-unified — write the propagated central
+     * {@code identity_id} to the credential row when present (idempotent, never overwrites;
+     * mirror the accounts.identity_id writer). Net-zero when the identity was not propagated
+     * (null/blank — the account-side mint failed → credential born unlinked, reconciled later).
+     */
+    private void linkIdentityIfPresent(String accountId, String identityId) {
+        if (identityId != null && !identityId.isBlank()) {
+            credentialRepository.assignIdentityId(accountId, identityId);
         }
     }
 }

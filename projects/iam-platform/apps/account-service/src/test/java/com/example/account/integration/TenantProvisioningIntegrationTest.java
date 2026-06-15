@@ -135,7 +135,8 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
                 org.mockito.ArgumentMatchers.eq(accountId),
                 org.mockito.ArgumentMatchers.eq(email),
                 org.mockito.ArgumentMatchers.eq("Password1!"),
-                org.mockito.ArgumentMatchers.eq(WMS_TENANT_ID));
+                org.mockito.ArgumentMatchers.eq(WMS_TENANT_ID),
+                org.mockito.ArgumentMatchers.any());  // TASK-BE-384: born-unified identityId propagated
     }
 
     @Test

@@ -27,7 +27,7 @@ backend
 
 - **child of**: ADR-MONO-036 (ACCEPTED 2026-06-15, TASK-MONO-266) — born-unified identity provisioning. This task is **M1** (P1/P2): the consumer-registration half of "born unified."
 - **generalizes**: ADR-MONO-034 U4 (`ResolveOrCreateIdentityUseCase` at operator creation) to the consumer account-creation paths.
-- **followed by**: M2 (TASK-BE-382, P3 — `credentials.identity_id` writer) + M3 (seed-rewrite, P4). Production cross-DB backfill = designed-deferred (ADR-036 P4).
+- **followed by**: M2 (TASK-BE-384, P3 — `credentials.identity_id` writer; renumbered from BE-382 to avoid collision with the merged ecommerce TASK-BE-382) + M3 (TASK-MONO-268, seed-rewrite, P4). Production cross-DB backfill = designed-deferred (ADR-036 P4).
 - **reaffirms**: ADR-034 § 1.3 no-silent-merge — convergence is same-origin issuance keyed on (tenant, email), `reuseExisting=true`, NOT email auto-merge.
 
 # Goal

@@ -112,8 +112,9 @@ class ProvisionAccountUseCaseTest {
         verify(historyRepository).save(any());
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(String.class), any(String.class));
         // TASK-MONO-263 (ADR-032 D5 step 4): createCredential no longer carries accountType.
+        // TASK-BE-384 (ADR-036 M2): the born-unified identity is propagated to the credential.
         verify(authServicePort).createCredential(any(), eq("user@example.com"), eq("Password1!"),
-                any());
+                any(), eq("idy-1"));
         // TASK-BE-381: the minted identity is assigned to the new account (born-unified).
         verify(accountRepository).assignIdentityId(any(TenantId.class), eq("acc-1"), eq("idy-1"));
     }

@@ -66,8 +66,8 @@ public class AuthServiceClient implements AuthServicePort {
     }
 
     @Override
-    public void createCredential(String accountId, String email, String password, String tenantId) {
-        Runnable op = () -> doCreateCredential(accountId, email, password, tenantId);
+    public void createCredential(String accountId, String email, String password, String tenantId, String identityId) {
+        Runnable op = () -> doCreateCredential(accountId, email, password, tenantId, identityId);
         Runnable retrying = Retry.decorateRunnable(retry, op);
         Runnable resilient = CircuitBreaker.decorateRunnable(circuitBreaker, retrying);
 
@@ -87,7 +87,8 @@ public class AuthServiceClient implements AuthServicePort {
         }
     }
 
-    private void doCreateCredential(String accountId, String email, String password, String tenantId) {
+    private void doCreateCredential(String accountId, String email, String password, String tenantId,
+                                    String identityId) {
         // TASK-BE-313: omit tenantId from body when null so auth-service applies its
         // own fallback ("fan-platform"); when non-null, include it so the credential
         // row matches the account row's tenant scope.
@@ -99,6 +100,11 @@ public class AuthServiceClient implements AuthServicePort {
         body.put("password", password);
         if (tenantId != null) {
             body.put("tenantId", tenantId);
+        }
+        // TASK-BE-384 (ADR-036 M2/P3): propagate the born-unified central identity so the
+        // credential row is born linked. Omitted when null (mint failed → born unlinked).
+        if (identityId != null) {
+            body.put("identityId", identityId);
         }
         restClient.post()
                 .uri(CREDENTIALS_PATH)

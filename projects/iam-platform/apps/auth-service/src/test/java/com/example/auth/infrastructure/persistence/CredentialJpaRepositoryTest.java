@@ -145,6 +145,35 @@ class CredentialJpaRepositoryTest {
         assertThat(readBack).isEqualTo(idy);
     }
 
+    // ── TASK-BE-384 (ADR-MONO-036 M2): born-unified identity_id native WRITER ─────
+
+    @Test
+    @DisplayName("BE-384: assignIdentityIdIfAbsent — NULL 이면 할당(1행), 이미 set 이면 no-op(0행, 덮어쓰기 없음)")
+    void assignIdentityIdIfAbsent_setsWhenNull_idempotentNoOverwrite() {
+        String accountId = uuid();
+        insertCredential(accountId, null); // identity_id NULL at birth
+
+        String idy1 = uuid();
+        String idy2 = uuid();
+        // first assign sets it (1 row affected)
+        assertThat(repo.assignIdentityIdIfAbsent(accountId, idy1)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT identity_id FROM credentials WHERE account_id = ?", String.class, accountId))
+                .isEqualTo(idy1);
+
+        // second assign with a DIFFERENT identity → no-op (0 rows), original preserved (no silent re-link)
+        assertThat(repo.assignIdentityIdIfAbsent(accountId, idy2)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT identity_id FROM credentials WHERE account_id = ?", String.class, accountId))
+                .isEqualTo(idy1);
+    }
+
+    @Test
+    @DisplayName("BE-384: assignIdentityIdIfAbsent — 없는 account 는 0행 (net-zero)")
+    void assignIdentityIdIfAbsent_missingAccount_zeroRows() {
+        assertThat(repo.assignIdentityIdIfAbsent("ghost-account", uuid())).isZero();
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private void insertCredential(String accountId, String email) {

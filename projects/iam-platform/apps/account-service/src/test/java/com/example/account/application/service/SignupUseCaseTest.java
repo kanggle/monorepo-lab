@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -70,7 +71,7 @@ class SignupUseCaseTest {
         assertThat(result.accountId()).isEqualTo("acc-1");
         // TASK-MONO-263 (ADR-032 D5 step 4): createCredential no longer carries accountType.
         verify(authServicePort).createCredential(eq("acc-1"), eq("new@example.com"), eq("password123!"),
-                any());
+                any(), eq("idy-1"));
         verify(profileRepository).save(any(Profile.class));
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
         // TASK-BE-381: the minted identity is assigned to the new account (born-unified).
@@ -90,7 +91,7 @@ class SignupUseCaseTest {
 
         // signup completes (born unlinked) — credential + event still happen, identity NOT assigned.
         assertThat(result.accountId()).isEqualTo("acc-1");
-        verify(authServicePort).createCredential(eq("acc-1"), eq("new@example.com"), eq("password123!"), any());
+        verify(authServicePort).createCredential(eq("acc-1"), eq("new@example.com"), eq("password123!"), any(), isNull());
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
         verify(accountRepository, never()).assignIdentityId(any(), any(), any());
     }
@@ -101,7 +102,7 @@ class SignupUseCaseTest {
         given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
         given(accountRepository.save(any(Account.class))).willReturn(sampleSavedAccount());
         willThrow(new AuthServicePort.CredentialAlreadyExistsConflict("acc-1"))
-                .given(authServicePort).createCredential(any(), any(), any(), any());
+                .given(authServicePort).createCredential(any(), any(), any(), any(), any());
 
         assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
                 .isInstanceOf(AccountAlreadyExistsException.class);
@@ -115,7 +116,7 @@ class SignupUseCaseTest {
         given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
         given(accountRepository.save(any(Account.class))).willReturn(sampleSavedAccount());
         willThrow(new AuthServicePort.AuthServiceUnavailable("down", new RuntimeException()))
-                .given(authServicePort).createCredential(any(), any(), any(), any());
+                .given(authServicePort).createCredential(any(), any(), any(), any(), any());
 
         assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
@@ -133,6 +134,6 @@ class SignupUseCaseTest {
         assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
                 .isInstanceOf(AccountAlreadyExistsException.class);
 
-        verify(authServicePort, never()).createCredential(any(), any(), any(), any());
+        verify(authServicePort, never()).createCredential(any(), any(), any(), any(), any());
     }
 }
