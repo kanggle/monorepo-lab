@@ -41,6 +41,8 @@ export { StatementDetail } from './components/StatementDetail';
 // TASK-PC-FE-091 — FX position open-lots drill read
 export { PositionLotsLookup } from './components/PositionLotsLookup';
 export { PositionLotsTable } from './components/PositionLotsTable';
+// TASK-PC-FE-092 — FX 환율 피드 대시보드
+export { FxRatesTable } from './components/FxRatesTable';
 export { getLedgerSectionState } from './api/ledger-state';
 export type { LedgerSectionState } from './api/ledger-state';
 export type {
@@ -70,6 +72,9 @@ export type {
   // TASK-PC-FE-091 — FX position open-lots drill read types
   PositionLot,
   PositionLotsResponse,
+  // TASK-PC-FE-092 — FX 환율 피드 대시보드 types
+  FxRate,
+  FxRatesResponse,
 } from './api/types';
 export {
   formatMoney,

@@ -696,3 +696,56 @@ export function positionLotMoney(lot: PositionLot): {
     carryingBase: { amount: lot.carryingBaseMinor, currency: 'KRW' },
   };
 }
+
+// ---------------------------------------------------------------------------
+// FX 환율 피드 대시보드 — TASK-PC-FE-092
+//   § GET /api/finance/ledger/fx-rates (FIN-BE-033)
+//   Producer envelope = { data: { feedEnabled, rates: [...] }, meta }.
+//   STRICTLY READ-ONLY — global list, no input parameters.
+//
+// F5 RATE INVARIANT — `rate` is a precision-exact **decimal string** from the
+// producer (e.g. "1300.12345678" for KRW/USD; "0.00076923" for USD/KRW).
+// It MUST be rendered verbatim (string as-is). NEVER apply `Number()`,
+// `parseFloat()`, or `parseInt()` to `rate` — the ledger-ops grep guard
+// covers `rate` as well as `amount`/`exchangeRate`. `ageSeconds` IS a number
+// (duration, not money — F5 invariant is amount/rate-only).
+// ---------------------------------------------------------------------------
+
+/**
+ * One FX rate entry from the feed cache (`ledger-api.md` FIN-BE-033
+ * `rates` array element).
+ *
+ * `rate` is a precision-exact **decimal string** (NEVER a number — F5).
+ * `ageSeconds` is a plain integer duration (NOT money — numbers allowed).
+ * `stale` indicates the rate is beyond the configured freshness window.
+ */
+export const FxRateSchema = z
+  .object({
+    baseCurrency: z.string().min(3).max(3),
+    foreignCurrency: z.string().min(3).max(3),
+    // F5 — exact decimal string; NEVER coerce to Number/parseFloat/parseInt.
+    rate: z.string(),
+    asOf: z.string(),
+    source: z.string(),
+    fetchedAt: z.string(),
+    // Duration in seconds — NOT money. F5 is amount/rate-only; `ageSeconds`
+    // is a count/duration, so `z.number()` is correct here.
+    ageSeconds: z.number().int(),
+    stale: z.boolean(),
+  })
+  .passthrough();
+export type FxRate = z.infer<typeof FxRateSchema>;
+
+/**
+ * FxRatesResponse — FIN-BE-033 `GET /api/finance/ledger/fx-rates` 200 body
+ * `data` sub-object: the top-level feed status (`feedEnabled`) + the list of
+ * cached rate entries. An empty cache → `rates: []`, `feedEnabled` may be
+ * true or false — this is a 200 empty-state, NOT a 404.
+ */
+export const FxRatesResponseSchema = z
+  .object({
+    feedEnabled: z.boolean(),
+    rates: z.array(FxRateSchema),
+  })
+  .passthrough();
+export type FxRatesResponse = z.infer<typeof FxRatesResponseSchema>;

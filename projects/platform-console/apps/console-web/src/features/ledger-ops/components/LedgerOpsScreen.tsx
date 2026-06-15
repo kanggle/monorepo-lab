@@ -23,12 +23,14 @@ import { StatementLookup } from './StatementLookup';
 import { StatementDetail } from './StatementDetail';
 import { PositionLotsLookup } from './PositionLotsLookup';
 import { PositionLotsTable } from './PositionLotsTable';
+import { FxRatesTable } from './FxRatesTable';
 import {
   useJournalEntry,
   useAccountBalance,
   useAccountEntries,
   useStatement,
   usePositionLots,
+  useFxRates,
 } from '../hooks/use-ledger-ops';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 
@@ -75,6 +77,7 @@ const TABS = [
   { key: 'reconciliation', label: '대사' },
   { key: 'account', label: '계정' },
   { key: 'lots', label: 'FX 포지션 로트' },
+  { key: 'fx-rates', label: 'FX 환율 피드' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -219,6 +222,13 @@ export function LedgerOpsScreen({
     setLotsAccountCode(code);
     setLotsCurrency(currency);
   }
+
+  // FX 환율 피드 — global read, no input (TASK-PC-FE-092). Gated on the active
+  // tab so a hidden panel never fetches on mount. `rate` stays a string (F5).
+  const fxRatesQ = useFxRates(active === 'fx-rates');
+  const fxRatesApiErr =
+    fxRatesQ.error instanceof ApiError ? fxRatesQ.error : null;
+  const fxRatesForbidden = fxRatesApiErr?.status === 403;
 
   /** Called when the operator clicks a trial-balance account code. */
   function handleSelectAccount(code: string) {
@@ -542,6 +552,38 @@ export function LedgerOpsScreen({
           <PositionLotsTable
             lots={lotsQ.data ?? null}
             onSelectEntry={handleSelectEntry}
+          />
+        )}
+      </div>
+
+      {/* FX 환율 피드 panel (TASK-PC-FE-092) */}
+      <div
+        role="tabpanel"
+        id="ledger-panel-fx-rates"
+        aria-labelledby="ledger-tab-fx-rates"
+        hidden={active !== 'fx-rates'}
+        data-testid="ledger-panel-fx-rates"
+      >
+        {fxRatesForbidden ? (
+          <div
+            role="status"
+            data-testid="ledger-fx-rates-forbidden"
+            className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          >
+            {messageForCode('TENANT_FORBIDDEN')}
+          </div>
+        ) : fxRatesApiErr ? (
+          <div
+            role="status"
+            data-testid="ledger-fx-rates-error"
+            className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          >
+            {messageForCode(fxRatesApiErr.code)}
+          </div>
+        ) : (
+          <FxRatesTable
+            data={fxRatesQ.data ?? null}
+            onRefresh={() => void fxRatesQ.refetch()}
           />
         )}
       </div>

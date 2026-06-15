@@ -215,12 +215,12 @@ describe('LedgerOpsScreen — FX 포지션 로트 tab (TASK-PC-FE-091)', () => {
     );
   }
 
-  it('the sixth tab "FX 포지션 로트" is present and labelled (6 tabs total)', () => {
+  it('the sixth tab "FX 포지션 로트" is present and labelled (7 tabs total with FX 환율 피드)', () => {
     renderScreen();
     const tab = screen.getByTestId('ledger-tab-lots');
     expect(tab).toBeInTheDocument();
     expect(tab.textContent).toContain('FX 포지션 로트');
-    expect(screen.getAllByRole('tab')).toHaveLength(6);
+    expect(screen.getAllByRole('tab')).toHaveLength(7);
   });
 
   it('clicking the tab reveals the lookup form; no (code,currency) yet → "none-input" placeholder, no fetch', () => {

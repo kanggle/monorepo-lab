@@ -353,7 +353,8 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
     // (`resolveDiscrepancy` — TASK-PC-FE-073) + two account-drill reads
     // (TASK-PC-FE-074: `getAccountBalance` + `getAccountEntries`) + one
     // statement-detail read (TASK-PC-FE-075: `getStatement`) + one FX
-    // position open-lots read (TASK-PC-FE-091: `getPositionLots`). No OTHER
+    // position open-lots read (TASK-PC-FE-091: `getPositionLots`) + one FX
+    // rates dashboard read (TASK-PC-FE-092: `getFxRates`). No OTHER
     // ledger write (manual posting / revaluation / settlement / statement
     // ingest), no entry list/search (id-driven).
     const mod = await import('@/features/ledger-ops/api/ledger-api');
@@ -373,6 +374,8 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
         'getStatement',
         // TASK-PC-FE-091 — FX position open-lots drill read (read-only, GET only)
         'getPositionLots',
+        // TASK-PC-FE-092 — FX 환율 피드 dashboard read (read-only, GET only)
+        'getFxRates',
       ].sort(),
     );
   });
