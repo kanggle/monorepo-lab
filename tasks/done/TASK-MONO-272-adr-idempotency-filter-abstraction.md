@@ -1,6 +1,6 @@
 # TASK-MONO-272 — ADR-MONO-038: a shared servlet Idempotency-Key filter abstraction in `libs/java-web-servlet`
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — authors a cross-service architecture decision record; doc-only)
 
