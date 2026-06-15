@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   SuggestionPageSchema,
   type SuggestionPage,
@@ -44,12 +45,8 @@ import {
 
 const REPL_KEY = 'scm-replenishment';
 
-function clampSize(size?: number): number {
-  return Math.min(
-    REPL_MAX_PAGE_SIZE,
-    Math.max(1, size ?? REPL_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, REPL_DEFAULT_PAGE_SIZE, REPL_MAX_PAGE_SIZE);
 
 // --- suggestions list read -----------------------------------------------
 

@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   InventoryPageSchema,
   type InventoryPage,
@@ -45,12 +46,8 @@ import {
 
 const WMS_KEY = 'wms-ops';
 
-function clampSize(size?: number): number {
-  return Math.min(
-    WMS_MAX_PAGE_SIZE,
-    Math.max(1, size ?? WMS_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, WMS_DEFAULT_PAGE_SIZE, WMS_MAX_PAGE_SIZE);
 
 // --- inventory snapshot read ---------------------------------------------
 

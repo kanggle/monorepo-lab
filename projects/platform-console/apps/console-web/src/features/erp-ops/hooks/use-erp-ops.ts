@@ -12,6 +12,7 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   DepartmentListResponseSchema,
   type DepartmentListResponse,
@@ -128,12 +129,8 @@ import {
  * means an erp failure surfaces immediately, no client retry).
  */
 
-function clampSize(size?: number): number {
-  return Math.min(
-    ERP_MAX_PAGE_SIZE,
-    Math.max(1, size ?? ERP_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, ERP_DEFAULT_PAGE_SIZE, ERP_MAX_PAGE_SIZE);
 
 // ---------------------------------------------------------------------------
 // useAsOf — URL-param-bound E3 first-class hook (the single source

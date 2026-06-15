@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   UserListSchema,
   type UserList,
@@ -28,12 +29,8 @@ import {
 
 const ECOMMERCE_USERS_KEY = 'ecommerce-users';
 
-function clampSize(size?: number): number {
-  return Math.min(
-    USER_MAX_PAGE_SIZE,
-    Math.max(1, size ?? USER_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, USER_DEFAULT_PAGE_SIZE, USER_MAX_PAGE_SIZE);
 
 // --- list ------------------------------------------------------------------
 

@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   AccountSchema,
   type Account,
@@ -36,13 +37,9 @@ import {
 
 const FINANCE_KEY = 'finance-ops';
 
-function clampSize(size?: number): number {
-  // Page size arithmetic — NOT money. F5 invariant is amount-only.
-  return Math.min(
-    FINANCE_MAX_PAGE_SIZE,
-    Math.max(1, size ?? FINANCE_DEFAULT_PAGE_SIZE),
-  );
-}
+// Page size arithmetic — NOT money. F5 invariant is amount-only.
+const clampSize = (size?: number): number =>
+  clampPageSize(size, FINANCE_DEFAULT_PAGE_SIZE, FINANCE_MAX_PAGE_SIZE);
 
 // --- account by id read --------------------------------------------------
 

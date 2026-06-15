@@ -1,4 +1,5 @@
 import { getServerEnv } from '@/shared/config/env';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   callEcommerce,
   type EcommerceCallLabel,
@@ -54,12 +55,8 @@ const SELLER_LABEL: EcommerceCallLabel = {
   failedLabel: 'seller-service',
 };
 
-function clampSize(size?: number): number {
-  return Math.min(
-    SELLER_MAX_PAGE_SIZE,
-    Math.max(1, size ?? SELLER_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, SELLER_DEFAULT_PAGE_SIZE, SELLER_MAX_PAGE_SIZE);
 
 // ===========================================================================
 // READS

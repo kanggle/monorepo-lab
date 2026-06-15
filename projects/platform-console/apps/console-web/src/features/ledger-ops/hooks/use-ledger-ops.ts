@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   TrialBalanceSchema,
   type TrialBalance,
@@ -63,13 +64,9 @@ import {
 
 const LEDGER_KEY = 'ledger-ops';
 
-function clampSize(size?: number): number {
-  // Page size arithmetic — NOT money. F5 invariant is amount-only.
-  return Math.min(
-    LEDGER_MAX_PAGE_SIZE,
-    Math.max(1, size ?? LEDGER_DEFAULT_PAGE_SIZE),
-  );
-}
+// Page size arithmetic — NOT money. F5 invariant is amount-only.
+const clampSize = (size?: number): number =>
+  clampPageSize(size, LEDGER_DEFAULT_PAGE_SIZE, LEDGER_MAX_PAGE_SIZE);
 
 // --- trial balance read --------------------------------------------------
 
