@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-030-demand-planning-refactor-tail.md` — **REVIEW (2026-06-15, `/refactor-code scm-platform` behavior-neutral tail)**. Discovery pass over the only post-May-sweep scm code (demand-planning-service BE-024/025/026 + procurement BE-025 surface) — found it already clean (textbook Hexagonal, no layer violations / dead code / anti-patterns). Applied the 3 high-confidence behavior-preserving wins: **(1)** extract the byte-identical duplicated `writeError` from `SecurityConfig` + `TenantClaimEnforcer` into one `adapter/inbound/web/HttpErrorResponseWriter` (reduce-duplication); **(2)** correct the stale "501 stub" javadoc in `SuggestionQueryUseCase` (approve shipped in BE-025); **(3)** fix the unresolved `{@link SweepReorderUseCase}` in `InventoryVisibilityRestAdapter`. Deliberately **skipped** marginal/behavior-risk candidates (`isEntitled` config↔filter dedup, the intentionally-distinct reorder fallback blocks, `shouldReorder` inline). No test/contract/Flyway/ADR change; `:test` green before+after with **zero test changes**; production `compileJava` 0 new warnings. PROJECT.md frontmatter byte-unchanged. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

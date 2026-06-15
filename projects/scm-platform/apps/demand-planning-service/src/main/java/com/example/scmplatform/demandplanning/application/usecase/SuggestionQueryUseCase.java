@@ -16,8 +16,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Query and mutation use cases for reorder suggestions exposed via the REST surface.
- * Approve (BE-025) is not implemented in this task — returns a 501 stub.
+ * Read/dismiss use cases for reorder suggestions exposed via the REST surface.
+ * Approve materialisation lives in {@link ApproveSuggestionUseCase} (BE-025).
  */
 @Slf4j
 @Service
