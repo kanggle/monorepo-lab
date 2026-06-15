@@ -1,7 +1,8 @@
 # TASK-PC-FE-095 — promote the duplicated `clampSize` to a shared pagination helper
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Duplication — 0 behavior change, 0 contract change)
+**Closure:** PR #1672 squash `8a473ff91`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass incl. Frontend lint/build + unit + E2E). Net −61 lines; full console-web vitest 1943 pass; tsc 0; lint clean; 0 `function clampSize` (23 delegates + 1 shared helper).
 **Parent:** follow-on to TASK-PC-FE-094 (ecommerce-ops dedup); same "mirror-built slices accumulated copy-paste" root cause, now across **all** domain features.
 
 ## Goal
