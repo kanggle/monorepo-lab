@@ -1,6 +1,6 @@
 # TASK-BE-380 — ecommerce gateway operator-surface routing + admission completeness
 
-**Status:** ready
+**Status:** done
 **Domain:** ecommerce · **Service:** gateway-service · **Type:** backend gateway routing/admission fix (live-surfaced integration gap)
 **Parent:** ADR-MONO-030 (marketplace) / ADR-MONO-031 (platform-console operator absorption) — closes the gateway side of the operator surfaces shipped by BE-375 + PC-FE-086/088/089/090.
 
