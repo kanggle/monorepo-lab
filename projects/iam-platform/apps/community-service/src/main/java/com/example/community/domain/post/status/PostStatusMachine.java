@@ -23,8 +23,9 @@ public final class PostStatusMachine {
                     PostStatus.DRAFT, Set.of(PostStatus.DELETED),
                     PostStatus.PUBLISHED, Set.of(PostStatus.HIDDEN, PostStatus.DELETED),
                     PostStatus.HIDDEN, Set.of(PostStatus.PUBLISHED, PostStatus.DELETED)
-            ),
-            ActorType.SYSTEM, Map.of()
+            )
+            // ActorType.SYSTEM has no transitions — omitted; getOrDefault(actor, Map.of())
+            // already yields an empty (deny-all) transition set for it.
     );
 
     private PostStatusMachine() {

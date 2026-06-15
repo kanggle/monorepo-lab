@@ -2,6 +2,7 @@ package com.example.community.integration;
 
 import org.junit.jupiter.api.Tag;
 import com.example.community.domain.feed.FeedSubscription;
+import com.example.community.domain.post.PageResult;
 import com.example.community.domain.post.Post;
 import com.example.community.domain.post.PostRepository;
 import com.example.community.domain.post.PostType;
@@ -13,8 +14,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
@@ -79,10 +78,10 @@ class PostRepositoryIntegrationTest extends CommunityIntegrationTestBase {
             postJpaRepository.save(createDraftPost(artistId, "Draft-1"));
         });
 
-        Page<Post> page = postRepository.findFeedForFan(fanId, PageRequest.of(0, 20));
+        PageResult<Post> page = postRepository.findFeedForFan(fanId, 0, 20);
 
-        assertThat(page.getContent()).hasSize(1);
-        assertThat(page.getContent().get(0).getTitle()).isEqualTo("Published-1");
+        assertThat(page.content()).hasSize(1);
+        assertThat(page.content().get(0).getTitle()).isEqualTo("Published-1");
     }
 
     @Test
@@ -99,11 +98,11 @@ class PostRepositoryIntegrationTest extends CommunityIntegrationTestBase {
             postJpaRepository.save(createPublishedPost(artistB, "ArtistB-Post"));
         });
 
-        Page<Post> page = postRepository.findFeedForFan(fanId, PageRequest.of(0, 20));
+        PageResult<Post> page = postRepository.findFeedForFan(fanId, 0, 20);
 
-        assertThat(page.getContent()).hasSize(1);
-        assertThat(page.getContent().get(0).getAuthorAccountId()).isEqualTo(artistA);
-        assertThat(page.getContent().get(0).getTitle()).isEqualTo("ArtistA-Post");
+        assertThat(page.content()).hasSize(1);
+        assertThat(page.content().get(0).getAuthorAccountId()).isEqualTo(artistA);
+        assertThat(page.content().get(0).getTitle()).isEqualTo("ArtistA-Post");
     }
 
     @Test
@@ -146,11 +145,11 @@ class PostRepositoryIntegrationTest extends CommunityIntegrationTestBase {
                     .ifPresent(p -> markDeletedAtNative(p.getId()));
         });
 
-        Page<Post> page = postRepository.findFeedForFan(fanId, PageRequest.of(0, 20));
+        PageResult<Post> page = postRepository.findFeedForFan(fanId, 0, 20);
 
         // The current JPQL does not filter `deleted_at`. If this test fails, the production
         // query needs an `AND p.deletedAt IS NULL` clause.
-        assertThat(page.getContent()).extracting(Post::getTitle).containsExactly("Live-Post");
+        assertThat(page.content()).extracting(Post::getTitle).containsExactly("Live-Post");
     }
 
     @Test
@@ -170,22 +169,22 @@ class PostRepositoryIntegrationTest extends CommunityIntegrationTestBase {
             }
         });
 
-        Page<Post> page0 = postRepository.findFeedForFan(fanId, PageRequest.of(0, 2));
-        Page<Post> page1 = postRepository.findFeedForFan(fanId, PageRequest.of(1, 2));
-        Page<Post> page2 = postRepository.findFeedForFan(fanId, PageRequest.of(2, 2));
+        PageResult<Post> page0 = postRepository.findFeedForFan(fanId, 0, 2);
+        PageResult<Post> page1 = postRepository.findFeedForFan(fanId, 1, 2);
+        PageResult<Post> page2 = postRepository.findFeedForFan(fanId, 2, 2);
 
-        assertThat(page0.getContent()).hasSize(2);
-        assertThat(page1.getContent()).hasSize(2);
-        assertThat(page2.getContent()).hasSize(1);
-        assertThat(page0.getTotalElements()).isEqualTo(5);
+        assertThat(page0.content()).hasSize(2);
+        assertThat(page1.content()).hasSize(2);
+        assertThat(page2.content()).hasSize(1);
+        assertThat(page0.totalElements()).isEqualTo(5);
 
         // Concatenated pages should not duplicate ids.
         List<String> ids = List.of(
-                page0.getContent().get(0).getId(),
-                page0.getContent().get(1).getId(),
-                page1.getContent().get(0).getId(),
-                page1.getContent().get(1).getId(),
-                page2.getContent().get(0).getId());
+                page0.content().get(0).getId(),
+                page0.content().get(1).getId(),
+                page1.content().get(0).getId(),
+                page1.content().get(1).getId(),
+                page2.content().get(0).getId());
         assertThat(ids).doesNotHaveDuplicates();
     }
 
