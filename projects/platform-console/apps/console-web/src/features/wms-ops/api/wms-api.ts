@@ -1,6 +1,7 @@
 import { getServerEnv } from '@/shared/config/env';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
+import { clampPageSize } from '@/shared/lib/pagination';
 import { ApiError, WmsUnavailableError } from '@/shared/api/errors';
 import {
   InventoryPageSchema,
@@ -319,7 +320,7 @@ function pageParams(qs: URLSearchParams, page?: number, size?: number): void {
   qs.set(
     'size',
     String(
-      Math.min(WMS_MAX_PAGE_SIZE, Math.max(1, size ?? WMS_DEFAULT_PAGE_SIZE)),
+      clampPageSize(size, WMS_DEFAULT_PAGE_SIZE, WMS_MAX_PAGE_SIZE),
     ),
   );
 }

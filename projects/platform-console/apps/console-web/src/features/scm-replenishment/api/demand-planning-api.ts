@@ -1,6 +1,7 @@
 import { getServerEnv } from '@/shared/config/env';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   ApiError,
   ScmReplenishmentUnavailableError,
@@ -318,7 +319,7 @@ function pageParams(qs: URLSearchParams, page?: number, size?: number): void {
   qs.set(
     'size',
     String(
-      Math.min(REPL_MAX_PAGE_SIZE, Math.max(1, size ?? REPL_DEFAULT_PAGE_SIZE)),
+      clampPageSize(size, REPL_DEFAULT_PAGE_SIZE, REPL_MAX_PAGE_SIZE),
     ),
   );
 }

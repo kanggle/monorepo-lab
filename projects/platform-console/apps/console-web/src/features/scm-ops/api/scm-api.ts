@@ -1,6 +1,7 @@
 import { getServerEnv } from '@/shared/config/env';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   ApiError,
   ScmUnavailableError,
@@ -333,7 +334,7 @@ function pageParams(qs: URLSearchParams, page?: number, size?: number): void {
   qs.set(
     'size',
     String(
-      Math.min(SCM_MAX_PAGE_SIZE, Math.max(1, size ?? SCM_DEFAULT_PAGE_SIZE)),
+      clampPageSize(size, SCM_DEFAULT_PAGE_SIZE, SCM_MAX_PAGE_SIZE),
     ),
   );
 }

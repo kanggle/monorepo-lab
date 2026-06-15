@@ -551,7 +551,7 @@ async function fetchEmployeeOrgViewsList(
   const qs = new URLSearchParams();
   if (params.asOf) qs.set('asOf', params.asOf);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
-  qs.set('size', String(Math.min(ERP_MAX_PAGE_SIZE, Math.max(1, params.size ?? ERP_DEFAULT_PAGE_SIZE))));
+  qs.set('size', String(clampPageSize(params.size, ERP_DEFAULT_PAGE_SIZE, ERP_MAX_PAGE_SIZE)));
   if (params.departmentId) qs.set('departmentId', params.departmentId);
   if (params.status) qs.set('status', params.status);
   const raw = await apiClient.get<unknown>(
@@ -1190,7 +1190,7 @@ async function fetchDelegationFactsList(
   if (params.status) qs.set('status', params.status);
   if (params.activeAt) qs.set('activeAt', params.activeAt);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
-  qs.set('size', String(Math.min(ERP_MAX_PAGE_SIZE, Math.max(1, params.size ?? ERP_DEFAULT_PAGE_SIZE))));
+  qs.set('size', String(clampPageSize(params.size, ERP_DEFAULT_PAGE_SIZE, ERP_MAX_PAGE_SIZE)));
   const raw = await apiClient.get<unknown>(
     `/api/erp/read-model/delegations?${qs.toString()}`,
   );
