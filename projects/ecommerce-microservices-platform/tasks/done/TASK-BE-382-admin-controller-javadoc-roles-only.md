@@ -1,6 +1,6 @@
 # TASK-BE-382 — Align ecommerce admin-controller javadoc to the roles-only operator model (drop `account_type=OPERATOR` framing)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (mechanical comment-only alignment — net-zero behavior, but the operator-admission rationale must be inverted correctly)
