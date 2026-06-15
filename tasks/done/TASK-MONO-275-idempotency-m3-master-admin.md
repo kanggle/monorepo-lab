@@ -1,6 +1,6 @@
 # TASK-MONO-275 — ADR-MONO-038 M3: migrate master + admin (Family B) onto the shared idempotency leaf abstractions
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — migrates two `projects/wms-platform/` services onto `libs/java-web-servlet`; one atomic PR; ADR-038 doc note)
 
