@@ -26,7 +26,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Slf4j
@@ -184,7 +186,7 @@ public class RefreshTokenUseCase {
         boolean alreadyRevoked = existingToken.isRevoked();
 
         List<DeviceSession> activeSessions = deviceSessionRepository.findActiveByAccountId(accountId);
-        java.util.Map<String, List<String>> jtisByDevice = new java.util.LinkedHashMap<>();
+        Map<String, List<String>> jtisByDevice = new LinkedHashMap<>();
         for (DeviceSession session : activeSessions) {
             jtisByDevice.put(session.getDeviceId(),
                     refreshTokenRepository.findActiveJtisByDeviceId(session.getDeviceId()));

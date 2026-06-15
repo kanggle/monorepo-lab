@@ -1,8 +1,6 @@
 package com.example.auth.presentation.exception;
 
 import com.example.auth.application.exception.*;
-import com.example.auth.application.exception.LoginTenantAmbiguousException;
-import com.example.auth.application.exception.TokenTenantMismatchException;
 import com.example.auth.domain.credentials.PasswordPolicyViolationException;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.CommonGlobalExceptionHandler;
@@ -119,38 +117,38 @@ public class AuthExceptionHandler extends CommonGlobalExceptionHandler {
                         "Refresh token reuse detected; all sessions have been revoked"));
     }
 
-    @ExceptionHandler(com.example.auth.application.exception.UnsupportedProviderException.class)
+    @ExceptionHandler(UnsupportedProviderException.class)
     public ResponseEntity<ErrorResponse> handleUnsupportedProvider(
-            com.example.auth.application.exception.UnsupportedProviderException e) {
+            UnsupportedProviderException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("UNSUPPORTED_PROVIDER", e.getMessage()));
     }
 
-    @ExceptionHandler(com.example.auth.application.exception.InvalidOAuthStateException.class)
+    @ExceptionHandler(InvalidOAuthStateException.class)
     public ResponseEntity<ErrorResponse> handleInvalidOAuthState(
-            com.example.auth.application.exception.InvalidOAuthStateException e) {
+            InvalidOAuthStateException e) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ErrorResponse.of("INVALID_STATE", "Invalid or expired OAuth state"));
     }
 
-    @ExceptionHandler(com.example.auth.application.exception.InvalidOAuthRedirectUriException.class)
+    @ExceptionHandler(InvalidOAuthRedirectUriException.class)
     public ResponseEntity<ErrorResponse> handleInvalidOAuthRedirectUri(
-            com.example.auth.application.exception.InvalidOAuthRedirectUriException e) {
+            InvalidOAuthRedirectUriException e) {
         log.warn("Rejected OAuth request with redirect_uri not in allowlist");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("INVALID_REDIRECT_URI", "Invalid redirect_uri"));
     }
 
-    @ExceptionHandler(com.example.auth.application.exception.OAuthEmailRequiredException.class)
+    @ExceptionHandler(OAuthEmailRequiredException.class)
     public ResponseEntity<ErrorResponse> handleOAuthEmailRequired(
-            com.example.auth.application.exception.OAuthEmailRequiredException e) {
+            OAuthEmailRequiredException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ErrorResponse.of("EMAIL_REQUIRED", "Email is required for social login"));
     }
 
-    @ExceptionHandler(com.example.auth.application.exception.OAuthProviderException.class)
+    @ExceptionHandler(OAuthProviderException.class)
     public ResponseEntity<ErrorResponse> handleOAuthProviderError(
-            com.example.auth.application.exception.OAuthProviderException e) {
+            OAuthProviderException e) {
         log.error("OAuth provider error: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ErrorResponse.of("PROVIDER_ERROR", "OAuth provider error"));
