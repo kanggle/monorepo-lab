@@ -1,6 +1,6 @@
 # TASK-MONO-270 — Promote the JWT-Bearer OpenAPI boilerplate to libs/java-web + document intentional per-service duplication
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — touches `libs/`)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (mechanical shared-lib extraction + 10-service adaptation; one new dependency, net-behavior-zero)
