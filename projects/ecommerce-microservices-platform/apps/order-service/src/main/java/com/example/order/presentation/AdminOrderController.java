@@ -23,15 +23,17 @@ import org.springframework.web.bind.annotation.*;
  * controller</b> (extension of the read-leg pattern established in
  * TASK-MONO-243 for {@code AdminProductController.list}, applied here to both
  * read and write endpoints):
- * {@code AccountTypeEnforcementFilter} requires {@code account_type=OPERATOR}
+ * {@code AccountTypeEnforcementFilter} requires {@code roles ∋ ADMIN}
  * for {@code /api/admin/**}, {@code TenantClaimValidator} requires a non-blank
  * {@code tenant_id}, and the repository {@code WHERE tenant_id} chokepoint
- * (Step 2 / M6) enforces tenant isolation. The platform-console OPERATOR
- * presents an IAM OIDC token with no ecommerce-local {@code ADMIN} role claim,
- * so ecommerce-local RBAC is intentionally not applied to any endpoint here
- * — reads ({@code getOrders}/{@code getOrder}) are open to the operator just
- * like the product list, and the write leg ({@code changeStatus}) follows the
- * same write-plane rationale.
+ * (Step 2 / M6) enforces tenant isolation. The platform-console operator
+ * carries the {@code ADMIN} domain role via the ADR-MONO-035 4a assume-tenant
+ * derivation (ecommerce-entitled tenant → {@code ADMIN}); the service applies
+ * no additional ecommerce-local RBAC — the gateway is the single admission
+ * point (header-trust service). Both the reads ({@code getOrders}/{@code getOrder})
+ * and the write leg ({@code changeStatus}) admit uniformly on
+ * {@code roles ∋ ADMIN}. (ADR-MONO-035 4b removed the legacy
+ * {@code account_type=OPERATOR} gateway leg.)
  */
 @RestController
 @RequiredArgsConstructor

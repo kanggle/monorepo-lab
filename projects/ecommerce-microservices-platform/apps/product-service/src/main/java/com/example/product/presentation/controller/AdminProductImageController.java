@@ -31,15 +31,17 @@ import java.util.UUID;
  * Operator-plane product-image administration (ADR-MONO-031 Phase 1a, TASK-BE-366).
  *
  * <p><b>Authorization is enforced at the ecommerce gateway, not in this
- * controller</b> (write-plane extension of the read-leg pattern established in
+ * controller</b> (extension of the read-leg pattern established in
  * TASK-MONO-243 for {@code AdminProductController.list}):
- * {@code AccountTypeEnforcementFilter} requires {@code account_type=OPERATOR}
+ * {@code AccountTypeEnforcementFilter} requires {@code roles ∋ ADMIN}
  * for {@code /api/admin/**}, {@code TenantClaimValidator} requires a non-blank
  * {@code tenant_id}, and the repository {@code WHERE tenant_id} chokepoint
- * (Step 2 / M6) enforces tenant isolation. The platform-console OPERATOR
- * presents an IAM OIDC token with no ecommerce-local {@code ADMIN} role claim,
- * so write-plane ecommerce-local RBAC is intentionally not applied to any
- * endpoint here.
+ * (Step 2 / M6) enforces tenant isolation. The platform-console operator
+ * carries the {@code ADMIN} domain role via the ADR-MONO-035 4a assume-tenant
+ * derivation (ecommerce-entitled tenant → {@code ADMIN}); the service applies
+ * no additional ecommerce-local RBAC — the gateway is the single admission
+ * point (header-trust service). (ADR-MONO-035 4b removed the legacy
+ * {@code account_type=OPERATOR} gateway leg.)
  */
 @RestController
 @RequestMapping("/api/admin/products/{productId}/images")
