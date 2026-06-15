@@ -200,31 +200,11 @@ No body.
 
 ---
 
-### POST /api/users/me/withdrawal
-Initiate account withdrawal. Transitions profile status to WITHDRAWN and publishes UserWithdrawn event.
+### Account withdrawal — owned by IAM (no ecommerce HTTP endpoint)
 
-> **NOT IMPLEMENTED (v1).** The `withdraw()` domain logic + `UserWithdrawn` event exist in user-service (`UserProfileService.withdraw()`), but no HTTP endpoint is wired to trigger it. `UserController` maps only `GET /api/users/me` and `PATCH /api/users/me`; no `@PostMapping("/me/withdrawal")` exists. Documented for intent; wiring the controller is a separate code task.
+There is **no consumer-facing ecommerce withdrawal endpoint.** Post-IAM (TASK-BE-132), account lifecycle — including withdrawal / deletion — is owned by the **IAM identity authority** (`iam-platform` account-service), which runs the withdrawal / GDPR-delete flow and emits the `account.deleted` domain event. A "delete my account" action belongs at IAM (reached via the gateway), not as a direct ecommerce profile-mutation endpoint that would bypass the identity authority.
 
-**Auth required:** Yes (Bearer JWT)
-
-**Request Body**
-```json
-{}
-```
-
-**Response 200**
-```json
-{
-  "userId": "string (UUID)",
-  "status": "WITHDRAWN"
-}
-```
-
-**Error responses**
-| Status | Code | Reason |
-|---|---|---|
-| 401 | UNAUTHORIZED | Missing or invalid access token |
-| 422 | USER_ALREADY_WITHDRAWN | User has already been withdrawn |
+**ecommerce reaction (forward-declared, not yet wired):** the profile-withdrawal machinery exists in user-service — `UserProfileService.withdrawProfile()` transitions the profile to `WITHDRAWN` and publishes the ecommerce `UserWithdrawn` event (consumed by order-service, etc.). The intended wiring is to **consume IAM's `account.deleted`** and invoke `withdrawProfile()`; that consumer is **not yet implemented** (the entry point is currently orphaned — no controller, no consumer triggers it). Building it is a separate cross-project integration task.
 
 ---
 
