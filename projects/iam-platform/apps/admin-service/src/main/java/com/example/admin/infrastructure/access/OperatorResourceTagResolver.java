@@ -6,7 +6,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -52,21 +51,6 @@ public class OperatorResourceTagResolver implements ResourceTagResolver {
         // Present (applicable). tags column may be NULL (untagged) or the row may be
         // absent — both project to an empty tag set (allowed at the gate).
         String raw = operatorRepository.findTagsByOperatorId(operatorId).orElse(null);
-        return Optional.of(splitTags(raw));
-    }
-
-    /** Split a comma-separated tags string into a set, dropping blanks. */
-    private static Set<String> splitTags(String raw) {
-        Set<String> tags = new HashSet<>();
-        if (raw == null) {
-            return tags;
-        }
-        for (String part : raw.split(",")) {
-            String t = part.trim();
-            if (!t.isEmpty()) {
-                tags.add(t);
-            }
-        }
-        return tags;
+        return Optional.of(ResourceTags.splitTags(raw));
     }
 }
