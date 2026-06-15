@@ -43,105 +43,49 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    @ExceptionHandler(WarehouseNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleNotFound(WarehouseNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(WarehouseCodeDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleCodeDuplicate(WarehouseCodeDuplicateException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(ZoneNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleZoneNotFound(ZoneNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(ZoneCodeDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleZoneCodeDuplicate(ZoneCodeDuplicateException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(LocationNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleLocationNotFound(LocationNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(LocationCodeDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleLocationCodeDuplicate(LocationCodeDuplicateException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(SkuNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleSkuNotFound(SkuNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(SkuCodeDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleSkuCodeDuplicate(SkuCodeDuplicateException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(BarcodeDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleBarcodeDuplicate(BarcodeDuplicateException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(PartnerNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handlePartnerNotFound(PartnerNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(PartnerCodeDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handlePartnerCodeDuplicate(PartnerCodeDuplicateException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(LotNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleLotNotFound(LotNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(LotNoDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleLotNoDuplicate(LotNoDuplicateException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(ConcurrencyConflictException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleConflict(ConcurrencyConflictException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(InvalidStateTransitionException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleInvalidTransition(InvalidStateTransitionException ex) {
-        // Per platform/error-handling.md, STATE_TRANSITION_INVALID is an
-        // unprocessable business rule violation → 422 Unprocessable Entity.
-        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex);
-    }
-
-    @ExceptionHandler(ReferenceIntegrityViolationException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleReferenceIntegrity(ReferenceIntegrityViolationException ex) {
-        // Per specs/contracts/http/master-service-api.md, REFERENCE_INTEGRITY_VIOLATION
-        // maps to 409 CONFLICT (distinct from STATE_TRANSITION_INVALID 422 — the latter
-        // covers single-aggregate invariants; this covers cross-aggregate orphan risk).
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(ImmutableFieldException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleImmutableField(ImmutableFieldException ex) {
-        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex);
-    }
-
-    @ExceptionHandler(ValidationException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleDomainValidation(ValidationException ex) {
-        return build(HttpStatus.BAD_REQUEST, ex);
-    }
+    /**
+     * Concrete domain exception → HTTP status. Replaces one-{@code @ExceptionHandler}-per-type
+     * boilerplate with a single explicit table (the only thing those handlers ever varied was
+     * the status; the body is always {@code ApiErrorEnvelope.of(code, message)} via {@link #build}).
+     * Keyed on the exact concrete class — every entry below is a direct {@link MasterDomainException}
+     * subclass. Unmapped domain exceptions fall through to 500 (see {@link #handleDomain}).
+     */
+    private static final Map<Class<? extends MasterDomainException>, HttpStatus> DOMAIN_STATUS = Map.ofEntries(
+            Map.entry(WarehouseNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(ZoneNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(LocationNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(SkuNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(PartnerNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(LotNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(WarehouseCodeDuplicateException.class, HttpStatus.CONFLICT),
+            Map.entry(ZoneCodeDuplicateException.class, HttpStatus.CONFLICT),
+            Map.entry(LocationCodeDuplicateException.class, HttpStatus.CONFLICT),
+            Map.entry(SkuCodeDuplicateException.class, HttpStatus.CONFLICT),
+            Map.entry(BarcodeDuplicateException.class, HttpStatus.CONFLICT),
+            Map.entry(PartnerCodeDuplicateException.class, HttpStatus.CONFLICT),
+            Map.entry(LotNoDuplicateException.class, HttpStatus.CONFLICT),
+            Map.entry(ConcurrencyConflictException.class, HttpStatus.CONFLICT),
+            // REFERENCE_INTEGRITY_VIOLATION → 409 (master-service-api.md): cross-aggregate orphan
+            // risk, distinct from STATE_TRANSITION_INVALID 422 (single-aggregate invariants).
+            Map.entry(ReferenceIntegrityViolationException.class, HttpStatus.CONFLICT),
+            // STATE_TRANSITION_INVALID → 422 (platform/error-handling.md): unprocessable business
+            // rule violation.
+            Map.entry(InvalidStateTransitionException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(ImmutableFieldException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(ValidationException.class, HttpStatus.BAD_REQUEST),
+            // TASK-MONO-215 (ADR-MONO-025 § 3.3 step 2): data-scoped operator targeted a warehouse
+            // outside its data_scope set → 403 DATA_SCOPE_FORBIDDEN (ABAC data visibility, distinct
+            // from RBAC FORBIDDEN and tenant TENANT_FORBIDDEN).
+            Map.entry(DataScopeForbiddenException.class, HttpStatus.FORBIDDEN));
 
     @ExceptionHandler(MasterDomainException.class)
     public ResponseEntity<ApiErrorEnvelope> handleDomain(MasterDomainException ex) {
-        log.warn("Unmapped domain exception: {} — {}", ex.getCode(), ex.getMessage());
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex);
+        HttpStatus status = DOMAIN_STATUS.get(ex.getClass());
+        if (status == null) {
+            log.warn("Unmapped domain exception: {} — {}", ex.getCode(), ex.getMessage());
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        return build(status, ex);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -192,17 +136,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorEnvelope.of("FORBIDDEN",
                         "Insufficient privileges for this operation"));
-    }
-
-    /**
-     * TASK-MONO-215 (ADR-MONO-025 § 3.3 step 2): a deliberately data-scoped
-     * operator targeted a warehouse outside its {@code data_scope} set → 403
-     * {@code DATA_SCOPE_FORBIDDEN} (distinct from the RBAC {@code FORBIDDEN} and
-     * the tenant {@code TENANT_FORBIDDEN}; ABAC data visibility, not privilege).
-     */
-    @ExceptionHandler(DataScopeForbiddenException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleDataScopeForbidden(DataScopeForbiddenException ex) {
-        return build(HttpStatus.FORBIDDEN, ex);
     }
 
     /**

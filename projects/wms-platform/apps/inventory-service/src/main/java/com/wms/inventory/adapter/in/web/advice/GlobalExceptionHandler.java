@@ -4,16 +4,12 @@ import com.wms.inventory.adapter.in.web.dto.response.ApiErrorEnvelope;
 import com.wms.inventory.domain.exception.AdjustmentNotFoundException;
 import com.wms.inventory.domain.exception.AdjustmentReasonRequiredException;
 import com.wms.inventory.domain.exception.DuplicateRequestException;
-import com.wms.inventory.domain.exception.InsufficientStockException;
 import com.wms.inventory.domain.exception.InventoryDomainException;
 import com.wms.inventory.domain.exception.InventoryNotFoundException;
 import com.wms.inventory.domain.exception.InventoryValidationException;
-import com.wms.inventory.domain.exception.MasterRefInactiveException;
 import com.wms.inventory.domain.exception.ReservationNotFoundException;
-import com.wms.inventory.domain.exception.ReservationQuantityMismatchException;
-import com.wms.inventory.domain.exception.StateTransitionInvalidException;
 import com.wms.inventory.domain.exception.TransferNotFoundException;
-import com.wms.inventory.domain.exception.TransferSameLocationException;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -31,63 +27,36 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * declared in {@code inventory-service-api.md} § Error Envelope.
  *
  * <p>Domain → HTTP status table is reproduced here as the controlling rules.
- * Unknown exceptions surface as {@code 500 INTERNAL_ERROR} with the cause
- * logged but not returned to the caller.
+ * Most {@link InventoryDomainException}s are business-rule violations → 422 (the
+ * default); only lookups (404), duplicates (409) and field-validation (400) map
+ * elsewhere. Unknown exceptions surface as {@code 500 INTERNAL_ERROR} with the
+ * cause logged but not returned to the caller.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    @ExceptionHandler({InventoryNotFoundException.class, ReservationNotFoundException.class,
-            AdjustmentNotFoundException.class, TransferNotFoundException.class})
-    public ResponseEntity<ApiErrorEnvelope> handleNotFound(InventoryDomainException e) {
-        return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(TransferSameLocationException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleTransferSameLocation(TransferSameLocationException e) {
-        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(AdjustmentReasonRequiredException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleReasonRequired(AdjustmentReasonRequiredException e) {
-        return body(HttpStatus.BAD_REQUEST, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(StateTransitionInvalidException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleStateTransition(StateTransitionInvalidException e) {
-        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(ReservationQuantityMismatchException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleQtyMismatch(ReservationQuantityMismatchException e) {
-        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(DuplicateRequestException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleDuplicateRequest(DuplicateRequestException e) {
-        return body(HttpStatus.CONFLICT, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(InsufficientStockException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleInsufficientStock(InsufficientStockException e) {
-        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(MasterRefInactiveException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleMasterRefInactive(MasterRefInactiveException e) {
-        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(InventoryValidationException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleValidation(InventoryValidationException e) {
-        return body(HttpStatus.BAD_REQUEST, e.errorCode(), e.getMessage());
-    }
+    /**
+     * Domain exception → HTTP status override. The default is 422 (business-rule violation —
+     * covers {@code TransferSameLocation}, {@code StateTransitionInvalid},
+     * {@code ReservationQuantityMismatch}, {@code InsufficientStock}, {@code MasterRefInactive},
+     * etc.); this table lists only the exceptions that map elsewhere. Keyed on the exact concrete
+     * class. Replaces the prior one-{@code @ExceptionHandler}-per-type boilerplate.
+     */
+    private static final Map<Class<? extends InventoryDomainException>, HttpStatus> DOMAIN_STATUS = Map.of(
+            InventoryNotFoundException.class, HttpStatus.NOT_FOUND,
+            ReservationNotFoundException.class, HttpStatus.NOT_FOUND,
+            AdjustmentNotFoundException.class, HttpStatus.NOT_FOUND,
+            TransferNotFoundException.class, HttpStatus.NOT_FOUND,
+            DuplicateRequestException.class, HttpStatus.CONFLICT,
+            AdjustmentReasonRequiredException.class, HttpStatus.BAD_REQUEST,
+            InventoryValidationException.class, HttpStatus.BAD_REQUEST);
 
     @ExceptionHandler(InventoryDomainException.class)
     public ResponseEntity<ApiErrorEnvelope> handleDomain(InventoryDomainException e) {
-        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
+        HttpStatus status = DOMAIN_STATUS.getOrDefault(e.getClass(), HttpStatus.UNPROCESSABLE_ENTITY);
+        return body(status, e.errorCode(), e.getMessage());
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
