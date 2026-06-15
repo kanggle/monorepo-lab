@@ -2,6 +2,7 @@ package com.example.account.infrastructure.persistence;
 
 import com.example.account.domain.account.Account;
 import com.example.account.domain.repository.AccountRepository;
+import com.example.account.domain.repository.PageResult;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
@@ -52,10 +53,10 @@ public class AccountRepositoryImpl implements AccountRepository {
     }
 
     @Override
-    public ProvisioningPage<Account> findAllByTenantId(TenantId tenantId, AccountStatus status, int page, int size) {
+    public PageResult<Account> findAllByTenantId(TenantId tenantId, AccountStatus status, int page, int size) {
         Page<AccountJpaEntity> jpaPage = jpaRepository.findByTenantIdWithStatusFilter(
                 tenantId.value(), status, PageRequest.of(page, size));
-        return new ProvisioningPage<>(
+        return new PageResult<>(
                 jpaPage.getContent().stream().map(AccountJpaEntity::toDomain).toList(),
                 jpaPage.getTotalElements(),
                 jpaPage.getNumber(),

@@ -8,6 +8,7 @@ import com.example.account.domain.account.Account;
 import com.example.account.domain.account.AccountRole;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.AccountRoleRepository;
+import com.example.account.domain.repository.PageResult;
 import com.example.account.domain.repository.ProfileRepository;
 import com.example.account.domain.repository.TenantRepository;
 import com.example.account.domain.status.AccountStatus;
@@ -44,7 +45,7 @@ public class TenantAccountQueryUseCase {
         tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException(tenantIdStr));
 
-        AccountRepository.ProvisioningPage<Account> accountPage =
+        PageResult<Account> accountPage =
                 accountRepository.findAllByTenantId(tenantId, statusFilter, page, size);
 
         List<ProvisionedAccountListResult.Item> items = accountPage.content().stream()

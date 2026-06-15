@@ -7,8 +7,9 @@ import java.util.List;
  *
  * <p>Keeps the {@code domain} layer independent of Spring Data's {@code Page} /
  * {@code Pageable} — infrastructure adapters convert between the JPA paging types
- * and this value object at the boundary, mirroring the existing
- * {@code AccountRepository.ProvisioningPage} pattern.
+ * and this value object at the boundary. It is the single page carrier used by the
+ * account-service domain repository ports ({@code TenantRepository},
+ * {@code AccountRepository}).
  *
  * @param content       the page's items
  * @param totalElements total number of matching items across all pages

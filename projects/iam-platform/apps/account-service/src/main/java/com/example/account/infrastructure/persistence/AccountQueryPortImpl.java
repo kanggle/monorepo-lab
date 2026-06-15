@@ -5,6 +5,7 @@ import com.example.account.application.result.AccountDetailResult;
 import com.example.account.application.result.AccountSearchResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
@@ -26,16 +27,17 @@ public class AccountQueryPortImpl implements AccountQueryPort {
     private final ProfileJpaRepository profileJpaRepository;
 
     @Override
-    public AccountSearchResult findAll(String tenantId, Pageable pageable) {
+    public AccountSearchResult findAll(String tenantId, int page, int size) {
         // TASK-BE-357: tenant-scoped (was an unscoped all-tenant scan → cross-tenant leak).
-        Page<AccountJpaEntity> page = PLATFORM_TENANT_ID.equals(tenantId)
+        Pageable pageable = PageRequest.of(page, size);
+        Page<AccountJpaEntity> jpaPage = PLATFORM_TENANT_ID.equals(tenantId)
                 ? accountJpaRepository.findAllAccounts(pageable)
                 : accountJpaRepository.findByTenantIdWithStatusFilter(tenantId, null, pageable);
-        List<AccountSearchResult.Item> items = page.getContent().stream()
+        List<AccountSearchResult.Item> items = jpaPage.getContent().stream()
                 .map(AccountQueryPortImpl::toItem)
                 .toList();
         return new AccountSearchResult(
-                items, page.getTotalElements(), page.getNumber(), page.getSize(), page.getTotalPages());
+                items, jpaPage.getTotalElements(), jpaPage.getNumber(), jpaPage.getSize(), jpaPage.getTotalPages());
     }
 
     @Override

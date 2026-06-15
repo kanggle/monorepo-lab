@@ -4,7 +4,6 @@ import com.example.account.domain.account.Account;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.tenant.TenantId;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -69,10 +68,5 @@ public interface AccountRepository {
      * @param size     page size
      * @return page slice of accounts
      */
-    ProvisioningPage<Account> findAllByTenantId(TenantId tenantId, AccountStatus status, int page, int size);
-
-    /**
-     * Minimal page result carrier used by provisioning list queries.
-     */
-    record ProvisioningPage<T>(List<T> content, long totalElements, int page, int size, int totalPages) {}
+    PageResult<Account> findAllByTenantId(TenantId tenantId, AccountStatus status, int page, int size);
 }

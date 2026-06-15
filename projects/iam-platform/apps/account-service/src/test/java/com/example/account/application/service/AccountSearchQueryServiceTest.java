@@ -9,7 +9,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageRequest;
 
 import java.time.Instant;
 import java.util.List;
@@ -54,19 +53,19 @@ class AccountSearchQueryServiceTest {
     @DisplayName("email blank — findAll(tenantId) 위임")
     void search_blankEmail_delegatesToFindAll() {
         AccountSearchResult expected = new AccountSearchResult(List.of(), 0, 0, 20, 0);
-        when(accountQueryPort.findAll("fan-platform", PageRequest.of(0, 20))).thenReturn(expected);
+        when(accountQueryPort.findAll("fan-platform", 0, 20)).thenReturn(expected);
 
         AccountSearchResult result = service.search("fan-platform", "  ", 0, 20);
 
         assertThat(result).isEqualTo(expected);
-        verify(accountQueryPort).findAll("fan-platform", PageRequest.of(0, 20));
+        verify(accountQueryPort).findAll("fan-platform", 0, 20);
     }
 
     @Test
     @DisplayName("email null — findAll(tenantId) 위임")
     void search_nullEmail_delegatesToFindAll() {
         AccountSearchResult expected = new AccountSearchResult(List.of(), 0, 0, 10, 0);
-        when(accountQueryPort.findAll("ecommerce", PageRequest.of(0, 10))).thenReturn(expected);
+        when(accountQueryPort.findAll("ecommerce", 0, 10)).thenReturn(expected);
 
         AccountSearchResult result = service.search("ecommerce", null, 0, 10);
 
