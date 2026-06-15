@@ -8,12 +8,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -21,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AuthServiceClientUnitTest {
 
     private static final String CREDENTIALS_PATH = "/internal/auth/credentials";
+    private static final String BACKFILL_PATH = "/internal/auth/credentials/identity-backfill";
 
     private WireMockServer wireMockServer;
     private AuthServiceClient client;
@@ -92,6 +96,45 @@ class AuthServiceClientUnitTest {
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
         assertThatThrownBy(() -> client.createCredential("acc-err", "user@example.com", "pass123", "fan-platform", null))
+                .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
+    }
+
+    // ── TASK-BE-386 (ADR-036 M4): credential identity backfill ───────────────────
+
+    @Test
+    @DisplayName("backfillCredentialIdentities — items 바디 전송 + 응답 updated 반환")
+    void backfill_sendsItemsBody_returnsUpdated() {
+        wireMockServer.stubFor(post(urlEqualTo(BACKFILL_PATH))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"requested\":2,\"updated\":1}")));
+
+        int updated = client.backfillCredentialIdentities(List.of(
+                new AuthServicePort.CredentialIdentityBinding("acc-1", "idy-1"),
+                new AuthServicePort.CredentialIdentityBinding("acc-2", "idy-2")));
+
+        assertThat(updated).isEqualTo(1);
+        wireMockServer.verify(postRequestedFor(urlEqualTo(BACKFILL_PATH))
+                .withRequestBody(matchingJsonPath("$.items[?(@.accountId == 'acc-1')]"))
+                .withRequestBody(matchingJsonPath("$.items[?(@.identityId == 'idy-1')]"))
+                .withRequestBody(matchingJsonPath("$.items[?(@.accountId == 'acc-2')]")));
+    }
+
+    @Test
+    @DisplayName("backfillCredentialIdentities — 빈 리스트 → HTTP 호출 없이 0 반환")
+    void backfill_emptyList_noHttpCall() {
+        assertThat(client.backfillCredentialIdentities(List.of())).isZero();
+        wireMockServer.verify(0, postRequestedFor(urlEqualTo(BACKFILL_PATH)));
+    }
+
+    @Test
+    @DisplayName("backfillCredentialIdentities — 4xx → AuthServiceUnavailable")
+    void backfill_clientError_throwsAuthServiceUnavailable() {
+        wireMockServer.stubFor(post(urlEqualTo(BACKFILL_PATH))
+                .willReturn(aResponse().withStatus(400)));
+
+        assertThatThrownBy(() -> client.backfillCredentialIdentities(
+                List.of(new AuthServicePort.CredentialIdentityBinding("acc-x", "idy-x"))))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
     }
 }

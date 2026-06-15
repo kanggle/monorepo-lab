@@ -16,6 +16,7 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,6 +40,7 @@ import java.util.Map;
 public class AuthServiceClient implements AuthServicePort {
 
     private static final String CREDENTIALS_PATH = "/internal/auth/credentials";
+    private static final String CREDENTIAL_IDENTITY_BACKFILL_PATH = "/internal/auth/credentials/identity-backfill";
 
     private final RestClient restClient;
     private final CircuitBreaker circuitBreaker;
@@ -85,6 +87,48 @@ public class AuthServiceClient implements AuthServicePort {
             log.error("auth-service credential write failed after retries: {}", e.getMessage());
             throw new AuthServiceUnavailable("auth-service is unavailable", e);
         }
+    }
+
+    @Override
+    public int backfillCredentialIdentities(List<AuthServicePort.CredentialIdentityBinding> bindings) {
+        if (bindings == null || bindings.isEmpty()) {
+            return 0;
+        }
+        List<Map<String, String>> items = bindings.stream()
+                .map(b -> {
+                    Map<String, String> item = new LinkedHashMap<>();
+                    item.put("accountId", b.accountId());
+                    item.put("identityId", b.identityId());
+                    return item;
+                })
+                .toList();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("items", items);
+        try {
+            BackfillResponse response = restClient.post()
+                    .uri(CREDENTIAL_IDENTITY_BACKFILL_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, (req, resp) -> {
+                        throw HttpClientErrorException.create(
+                                resp.getStatusCode(), "auth-service 4xx",
+                                resp.getHeaders(), new byte[0], null);
+                    })
+                    .body(BackfillResponse.class);
+            return response != null ? response.updated() : 0;
+        } catch (HttpClientErrorException e) {
+            log.error("auth-service credential identity backfill returned 4xx {}: {}",
+                    e.getStatusCode(), e.getMessage());
+            throw new AuthServiceUnavailable("auth-service rejected credential identity backfill", e);
+        } catch (Exception e) {
+            log.error("auth-service credential identity backfill failed: {}", e.getMessage());
+            throw new AuthServiceUnavailable("auth-service is unavailable", e);
+        }
+    }
+
+    /** Minimal view of auth-service's backfill response body. */
+    private record BackfillResponse(int requested, int updated) {
     }
 
     private void doCreateCredential(String accountId, String email, String password, String tenantId,

@@ -1,5 +1,6 @@
 package com.example.auth.presentation;
 
+import com.example.auth.application.BackfillCredentialIdentityUseCase;
 import com.example.auth.application.CreateCredentialUseCase;
 import com.example.auth.application.ForceLogoutUseCase;
 import com.example.auth.application.command.CreateCredentialCommand;
@@ -40,6 +41,42 @@ class InternalCredentialControllerTest {
 
     @MockitoBean
     private ForceLogoutUseCase forceLogoutUseCase;
+
+    @MockitoBean
+    private BackfillCredentialIdentityUseCase backfillCredentialIdentityUseCase;
+
+    @Test
+    @DisplayName("POST /internal/auth/credentials/identity-backfill — items → use case → {requested, updated} (TASK-BE-386)")
+    void backfillIdentity_returnsCounts() throws Exception {
+        given(backfillCredentialIdentityUseCase.execute(any()))
+                .willReturn(new BackfillCredentialIdentityUseCase.Result(2, 1));
+
+        mockMvc.perform(post("/internal/auth/credentials/identity-backfill")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "items": [
+                                    { "accountId": "acc-1", "identityId": "idy-1" },
+                                    { "accountId": "acc-2", "identityId": "idy-2" }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requested").value(2))
+                .andExpect(jsonPath("$.updated").value(1));
+
+        verify(backfillCredentialIdentityUseCase).execute(any());
+    }
+
+    @Test
+    @DisplayName("POST /internal/auth/credentials/identity-backfill — empty items → 400 VALIDATION_ERROR")
+    void backfillIdentity_emptyItems_returns400() throws Exception {
+        mockMvc.perform(post("/internal/auth/credentials/identity-backfill")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"items\": [] }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
     @Test
     @DisplayName("POST /internal/auth/credentials happy path returns 201")

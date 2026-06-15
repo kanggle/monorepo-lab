@@ -1,5 +1,7 @@
 package com.example.account.application.port;
 
+import java.util.List;
+
 /**
  * Port for account-service → auth-service internal calls.
  *
@@ -36,6 +38,24 @@ public interface AuthServicePort {
      * @throws AuthServiceUnavailable          if auth-service is unreachable / 5xx / timeout
      */
     void createCredential(String accountId, String email, String password, String tenantId, String identityId);
+
+    /**
+     * TASK-BE-386 (ADR-MONO-036 P4, M4): bulk-propagate the central {@code identity_id}
+     * to {@code auth_db.credentials} for the given {@code account_id → identity_id}
+     * bindings (the cross-DB half of the production reconciliation). auth-service writes
+     * each with the M2 writer — idempotent, {@code IS NULL}-guarded, no overwrite. Same-origin
+     * propagation, NOT an email merge.
+     *
+     * @param bindings the pairs to propagate (each account's already-resolved identity)
+     * @return number of credential rows that received an identity_id (already-linked /
+     *         missing credentials count 0)
+     * @throws AuthServiceUnavailable if auth-service is unreachable / 5xx / 4xx contract error
+     */
+    int backfillCredentialIdentities(List<CredentialIdentityBinding> bindings);
+
+    /** A single {@code account_id → identity_id} propagation pair (TASK-BE-386). */
+    record CredentialIdentityBinding(String accountId, String identityId) {
+    }
 
     /** Thrown when auth-service reports 409 — concurrent signup created the credential. */
     final class CredentialAlreadyExistsConflict extends RuntimeException {

@@ -106,7 +106,7 @@ Wire a **writer** for the ADR-035 O3 column. The credential is created by auth-s
 | **M1 — consumer registration born-unified (P1/P2)** | Consumer account-registration path calls `resolveOrCreate` (fail-soft) + ensures the `identities` row exists + writes `accounts.identity_id` at creation. | Additive: new consumer accounts born linked; infra-down → NULL (reconcilable). Net-zero for existing data. |
 | **M2 — `credentials.identity_id` writer (P3)** | Map `identity_id` on `CredentialJpaEntity`; registration orchestration propagates the minted value to credential creation (fail-soft). | Additive: new credentials born linked. No login-path synchronous dependency. Net-zero. |
 | **M3 — demo seed-rewrite (P4-A)** | Rewrite `seed.sql` + IAM dev seeds so all seeded principals are born unified (real `identities` rows + matching `identity_id` across all three stores). | Demo reaches fully-born-unified state. CI/e2e seeds updated atomically. |
-| **(designed, deferred)** | Production cross-DB reconciliation backfill (P4 design). | NOT built (demo is reseedable). Captured as design only. |
+| **M4 — production backfill (P4-B), BUILT** (TASK-BE-386 — see Amendment) | account_db Flyway **V0024** (mint+link orphan accounts) + account-service-driven auth_db reconciliation endpoint (`POST /internal/identity-backfill/credentials` → auth `…/credentials/identity-backfill`, reusing the M2 writer). | Implements the P4 design. Idempotent, additive, no-overwrite, no email-merge; operator half stays opt-in link. Net-zero safety net on fresh deploys. |
 | **(deferred follow-ups)** | `account_roles` re-key to `identity_id` (ADR-035 § 3.3); a dedicated identity-service; `IdentityAssigned` async writer (P3-C). | Out of scope. |
 
 ### P6 — safety invariants
@@ -146,6 +146,24 @@ Wire a **writer** for the ADR-035 O3 column. The credential is created by auth-s
 - **Optional follow-ups:** production cross-DB reconciliation backfill (P4 design → build, only if a real deployment target appears); `account_roles` re-key to `identity_id`; dedicated identity-service; async `IdentityAssigned` writer (P3-C); OIDC-side step-up (ADR-032 D4-B).
 
 > **UNPAUSED — ACCEPTED 2026-06-15 (TASK-MONO-266).** The § 3.3 roadmap proceeds dependency-correct from this ACCEPTED main. Task IDs are assigned at execution (root `TASK-MONO-*` for the seed/cross-cutting steps; `TASK-BE-*` in iam-platform for the service-internal registration/credential wiring), checked against the live `ready/` + `review/` queues and the concurrent worktrees (`be-380`, `pc-fe-092`) to avoid collision. Each remains a separate task; P1–P6 are finalised and not re-litigated at execution. Begin with **M1** (consumer registration born-unified, P1/P2 — the unblocker that makes new consumer accounts born-linked).
+
+---
+
+## 4. Amendment — P4-B promoted from *design-only* to **BUILT** (M4, TASK-BE-386, 2026-06-15)
+
+**Context.** The original P4 decision (rejected option B) deferred *building* the production cross-DB backfill because, for a reseedable demo, a resumable cross-DB job adds cost without demo value — "promotable later if a real deployment target appears." After M1–M3 landed (PR #1618), the production backfill **tooling** is now built proactively as the honest reconciliation mechanism, so the architecture is complete and runnable on demand rather than existing only as prose.
+
+**What changed.** This is **not** a re-decision of P1–P6 — it *implements* the P4 design at line 100 verbatim, preserving every safety invariant. The deferral condition in § 3.3 ("only if a real deployment target appears") is relaxed: the tooling ships now; on a fresh deploy it is a **net-zero safety net** (V0023 → M1 contiguous ⇒ no orphans), and it is the documented mechanism for any environment that ran in the V0023→M1 window.
+
+**Build (the three stores, per the P4-design split):**
+
+- **account_db (Flyway, in-DB):** `V0024__backfill_orphan_account_identities.sql` — mints one same-origin `(tenant, email)` identity per orphan account (`identity_id IS NULL`), reusing an existing identity where present (`NOT EXISTS`), then links it. Idempotent, additive, no-overwrite, no email-merge; `identity_id` stays unmapped (merge-overwrite hazard).
+- **auth_db (cross-DB, push-based):** auth_db cannot read account_db, so account-service drives it — a cross-tenant read of the resolved `account_id → identity_id` bindings (`AccountIdentityBindingReader`, the platform-level read kept OFF the tenant-scoped `AccountRepository`) is pushed to auth-service's batch endpoint `POST /internal/auth/credentials/identity-backfill`, which writes each via the **M2 writer** (`assignIdentityId`, `IS NULL`-guarded). Admin-triggered (`POST /internal/identity-backfill/credentials`), idempotent, re-runnable.
+- **admin_db (operators):** **intentionally NOT auto-backfilled** — operator↔consumer linking stays the ADR-034 U3 opt-in audited link surface (§ 1.3 privilege-escalation guard). The runbook documents the operator procedure.
+
+**Honest boundary retained.** The "why production differs from the demo" point still holds — the demo was reseeded (M3); production data is *reconciled additively*, never wiped. The backfill never deletes a user, never overwrites a non-NULL identity, and never email-merges two pre-existing records.
+
+분석=Opus 4.8 / 구현=Opus 4.8 (cross-DB reconciliation under the P4 design; reuses the M1/M2 writers; preserves all P6 invariants; user-directed promotion 2026-06-15).
 
 ---
 

@@ -408,4 +408,96 @@ class AccountJpaRepositoryTest {
 
         assertThat(candidates).extracting(AccountJpaEntity::getId).doesNotContain(id);
     }
+
+    // ── TASK-BE-386 (ADR-MONO-036 M4): production backfill ───────────────────────
+
+    private void insertIdentity(String identityId, String tenantId, String email) {
+        jdbc.update("INSERT INTO identities (identity_id, tenant_id, primary_email, status, created_at, updated_at, version) "
+                + "VALUES (?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)", identityId, tenantId, email);
+    }
+
+    private void insertLinkedAccount(String accountId, String identityId, String tenantId, String email) {
+        jdbc.update("INSERT INTO accounts (id, identity_id, tenant_id, email, status, created_at, updated_at, version) "
+                + "VALUES (?, ?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)", accountId, identityId, tenantId, email);
+    }
+
+    /** Replicates the V0024 backfill SQL (Flyway runs it once at startup with no orphans). */
+    private void runV0024Backfill() {
+        jdbc.update("INSERT INTO identities (identity_id, tenant_id, primary_email, status, created_at, updated_at, version) "
+                + "SELECT UUID(), a.tenant_id, a.email, 'ACTIVE', a.created_at, a.updated_at, 0 FROM accounts a "
+                + "WHERE a.identity_id IS NULL AND NOT EXISTS "
+                + "(SELECT 1 FROM identities i WHERE i.tenant_id = a.tenant_id AND i.primary_email = a.email)");
+        jdbc.update("UPDATE accounts a JOIN identities i ON i.tenant_id = a.tenant_id AND i.primary_email = a.email "
+                + "SET a.identity_id = i.identity_id WHERE a.identity_id IS NULL");
+    }
+
+    @Test
+    @DisplayName("BE-386: findAllIdentityBindings — linked 계정만 (account_id→identity_id), cross-tenant 포함, unlinked 제외")
+    void findAllIdentityBindings_returnsLinkedOnly() {
+        insertWmsTenant();
+        String idyFan = UUID.randomUUID().toString();
+        String accFan = UUID.randomUUID().toString();
+        insertIdentity(idyFan, TENANT_FAN, "lf@example.com");
+        insertLinkedAccount(accFan, idyFan, TENANT_FAN, "lf@example.com");
+
+        String idyWms = UUID.randomUUID().toString();
+        String accWms = UUID.randomUUID().toString();
+        insertIdentity(idyWms, TENANT_WMS, "lw@example.com");
+        insertLinkedAccount(accWms, idyWms, TENANT_WMS, "lw@example.com");
+
+        String accNull = UUID.randomUUID().toString();
+        insertAccount(TENANT_FAN, accNull, "nolink@example.com"); // identity_id NULL
+
+        List<AccountIdentityBindingView> bindings = accountRepo.findAllIdentityBindings();
+
+        assertThat(bindings).extracting(AccountIdentityBindingView::getAccountId)
+                .contains(accFan, accWms)        // cross-tenant, both linked accounts
+                .doesNotContain(accNull);        // unlinked excluded
+        assertThat(bindings)
+                .anyMatch(b -> accFan.equals(b.getAccountId()) && idyFan.equals(b.getIdentityId()))
+                .anyMatch(b -> accWms.equals(b.getAccountId()) && idyWms.equals(b.getIdentityId()));
+    }
+
+    @Test
+    @DisplayName("BE-386: V0024 backfill SQL — orphan 에 identity mint+link, 기존 재사용, 무덮어쓰기, 멱등")
+    void v0024Backfill_mintsLinksReusesIdempotent() {
+        // orphan A: no pre-existing identity for its (tenant, email) → fresh mint
+        String accA = UUID.randomUUID().toString();
+        insertAccount(TENANT_FAN, accA, "orphanA@example.com");
+        // orphan B: a same-origin identity already exists → must be REUSED, not duplicated
+        String existingIdyB = UUID.randomUUID().toString();
+        insertIdentity(existingIdyB, TENANT_FAN, "orphanB@example.com");
+        String accB = UUID.randomUUID().toString();
+        insertAccount(TENANT_FAN, accB, "orphanB@example.com");
+        // already-linked C: must NOT be overwritten
+        String idyC = UUID.randomUUID().toString();
+        String accC = UUID.randomUUID().toString();
+        insertIdentity(idyC, TENANT_FAN, "linkedC@example.com");
+        insertLinkedAccount(accC, idyC, TENANT_FAN, "linkedC@example.com");
+
+        runV0024Backfill();
+
+        // A minted + linked (non-null, not equal to any pre-existing one)
+        String aIdy = jdbc.queryForObject("SELECT identity_id FROM accounts WHERE id = ?", String.class, accA);
+        assertThat(aIdy).isNotNull();
+        // B reused the existing identity (no duplicate row)
+        assertThat(jdbc.queryForObject("SELECT identity_id FROM accounts WHERE id = ?", String.class, accB))
+                .isEqualTo(existingIdyB);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM identities WHERE tenant_id = ? AND primary_email = ?",
+                Integer.class, TENANT_FAN, "orphanB@example.com")).isEqualTo(1);
+        // C untouched (no overwrite)
+        assertThat(jdbc.queryForObject("SELECT identity_id FROM accounts WHERE id = ?", String.class, accC))
+                .isEqualTo(idyC);
+        // no orphan remains
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM accounts WHERE identity_id IS NULL", Integer.class))
+                .isZero();
+
+        // idempotent: a second run changes nothing (no new identities, no NULLs)
+        Integer identitiesBefore = jdbc.queryForObject("SELECT COUNT(*) FROM identities", Integer.class);
+        runV0024Backfill();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM identities", Integer.class)).isEqualTo(identitiesBefore);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM accounts WHERE identity_id IS NULL", Integer.class))
+                .isZero();
+    }
 }

@@ -1,9 +1,12 @@
 package com.example.auth.presentation;
 
+import com.example.auth.application.BackfillCredentialIdentityUseCase;
 import com.example.auth.application.CreateCredentialUseCase;
 import com.example.auth.application.ForceLogoutUseCase;
 import com.example.auth.application.command.CreateCredentialCommand;
 import com.example.auth.application.result.CreateCredentialResult;
+import com.example.auth.presentation.dto.BackfillCredentialIdentityRequest;
+import com.example.auth.presentation.dto.BackfillCredentialIdentityResponse;
 import com.example.auth.presentation.dto.CreateCredentialRequest;
 import com.example.auth.presentation.dto.CreateCredentialResponse;
 import com.example.auth.presentation.dto.ForceLogoutRequest;
@@ -17,6 +20,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * Internal endpoint for credential provisioning.
@@ -33,6 +38,7 @@ public class InternalCredentialController {
 
     private final CreateCredentialUseCase createCredentialUseCase;
     private final ForceLogoutUseCase forceLogoutUseCase;
+    private final BackfillCredentialIdentityUseCase backfillCredentialIdentityUseCase;
 
     /**
      * Creates a credential row or returns success for an idempotent retry.
@@ -63,5 +69,26 @@ public class InternalCredentialController {
             @RequestBody(required = false) ForceLogoutRequest body) {
         ForceLogoutUseCase.Result result = forceLogoutUseCase.execute(accountId);
         return ResponseEntity.ok(ForceLogoutResponse.from(result));
+    }
+
+    /**
+     * TASK-BE-386 (ADR-MONO-036 P4, M4): bulk credential identity backfill — the auth_db
+     * half of the production reconciliation. account-service posts the
+     * {@code account_id → identity_id} pairs it resolved from account_db; each is written
+     * onto {@code credentials.identity_id} via the M2 writer (idempotent, no overwrite).
+     *
+     * <p>A hyphen path (not an AIP-136 colon verb) is used deliberately: under the
+     * class-level {@code /internal/auth} prefix, a {@code :verb} suffix mis-parses in
+     * {@code PathPatternParser} (see {@code BulkAccountController}).</p>
+     */
+    @PostMapping("/credentials/identity-backfill")
+    public ResponseEntity<BackfillCredentialIdentityResponse> backfillIdentity(
+            @Valid @RequestBody BackfillCredentialIdentityRequest request) {
+        List<BackfillCredentialIdentityUseCase.Binding> bindings = request.items().stream()
+                .map(i -> new BackfillCredentialIdentityUseCase.Binding(i.accountId(), i.identityId()))
+                .toList();
+        BackfillCredentialIdentityUseCase.Result result = backfillCredentialIdentityUseCase.execute(bindings);
+        return ResponseEntity.ok(
+                new BackfillCredentialIdentityResponse(result.requested(), result.updated()));
     }
 }
