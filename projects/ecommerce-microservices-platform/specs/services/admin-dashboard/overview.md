@@ -2,6 +2,8 @@
 
 > **RETIRED (ADR-MONO-031 Phase 6, TASK-MONO-259).** Absorbed into platform-console. See projects/platform-console/specs/contracts/console-integration-contract.md § 2.4.10.
 
+> **Body is historical reference only.** All operator capability is now in platform-console. Do not implement new features against this spec.
+
 > 1-pager: responsibilities, public surface (pages), key invariants.
 
 ## Service identity
@@ -20,7 +22,7 @@
 
 ## Responsibilities
 
-- **Operator CRUD UI** — product catalog management (variants + inventory overview), order management (list / detail / status transitions / cancellation, requires admin order endpoints — planned in `order-api.md`), user management (list + detail).
+- **Operator CRUD UI** — product catalog management (variants + inventory overview), order management (list / detail / status transitions / cancellation, requires admin order endpoints — ~~planned in `order-api.md`~~ **[RETIRED — all operator capability is now in platform-console (TASK-MONO-259)]**), user management (list + detail).
 - **Dashboard summary** — KPIs, recent orders, alert surfaces (Grafana cross-links acceptable for deep dives).
 - **Admin authentication guard** — every page behind `ROLE_ADMIN`-required session; unauthenticated redirect to `/login`.
 - **CSR everywhere** — 모든 페이지 client-rendered behind auth (SEO 불필요). SSR/SSG 사용 안 함.

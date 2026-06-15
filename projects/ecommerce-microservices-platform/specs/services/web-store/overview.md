@@ -23,7 +23,7 @@
 - **Search + filters** — query `search-service` via gateway; results page with filter + sort UX.
 - **Cart state** — client-side (authenticated 사용자에게만 노출); server-side sync via `cart-service` (planned) or `order-service` cart endpoints.
 - **Checkout + payment** — order creation via `order-service`, payment via Toss Payments widget redirect → `payment-service` confirmation callback.
-- **Auth flows** — login / signup / refresh via `/api/auth/...` (currently `auth-service-deprecated`; IAM OIDC 전환 진행 중).
+- **Auth flows** — login / signup / refresh via `/api/auth/...` (IAM OIDC via NextAuth v5; auth-service decommissioned 2026-05-04 — TASK-BE-132 + TASK-FE-067 done).
 - **Profile + order history** — `user-service` 와 `order-service` read-only view.
 - **Error / loading boundaries** — Next.js Suspense + `app/error.tsx` 으로 graceful fallback.
 

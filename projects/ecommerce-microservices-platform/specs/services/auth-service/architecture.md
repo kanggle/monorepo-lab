@@ -1,3 +1,5 @@
+> **DEPRECATED — decommissioned 2026-05-04 (TASK-BE-132); app code excluded from the Gradle build. Replacement: IAM (iam-platform) — see [iam-integration.md](../../integration/iam-integration.md). Historical pre-IAM design for reference only.**
+
 # auth-service — Architecture
 
 This document declares the internal architecture of `auth-service`.
@@ -143,7 +145,7 @@ owns identity invariants, never JPA-mapped directly.
 ## Integration Rules
 
 - HTTP behavior must follow published contracts in
-  `specs/contracts/http/auth-service-api.md` (if published; otherwise the
+  `specs/contracts/http/auth-api.md` (retired with the service — see auth-service-deprecated/ for historical contract; otherwise the
   controllers + DTOs are authoritative until contracts are extracted)
 - Domain events must follow published event contracts in
   `specs/contracts/events/auth-events.md` (if published)

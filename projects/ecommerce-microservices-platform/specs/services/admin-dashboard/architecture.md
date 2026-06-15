@@ -2,6 +2,8 @@
 
 > **RETIRED (ADR-MONO-031 Phase 6, TASK-MONO-259).** Absorbed into platform-console. See projects/platform-console/specs/contracts/console-integration-contract.md § 2.4.10.
 
+> **Body is historical reference only.** All operator capability is now in platform-console. Do not implement new features against this spec.
+
 This document declares the internal architecture of `admin-dashboard`.
 All implementation tasks targeting this service must follow this declaration
 and `platform/architecture-decision-rule.md`.
@@ -124,6 +126,7 @@ Features compose these shared components with feature-specific configuration and
 - Client: `ecommerce-admin-dashboard-client` (registered in IAM V0012 seed). Confidential client + PKCE.
 - Scope: `openid profile email tenant.read ecommerce.operator`. Backend (gateway-service) asserts `tenant_id=ecommerce` via the JWT claim.
 - Account-type guard: only `account_type=OPERATOR` may sign in. A `CONSUMER` who completes the IAM flow is rejected by the `session()` callback and bounced to `/login?error=account_type_mismatch`.
+  > NOTE (historical): pre-ADR-MONO-032/035; account_type was removed, replaced by roles ∋ ADMIN.
 - Bearer token wiring: same pattern as web-store — `AuthProvider` (in `src/shared/hooks/auth-context.tsx`) pushes `session.accessToken` into `src/shared/auth/token-bridge.ts`, which the axios interceptor reads synchronously.
 - Server-side (RSC, route handlers): use `getAdminSession()` from `src/shared/auth/session.ts`.
 - 401 handling: same as web-store — re-run the IAM signin flow via `/api/auth/signin/gap`.
