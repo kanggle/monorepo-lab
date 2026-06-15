@@ -4,7 +4,7 @@
 Published HTTP API for product-service.
 All endpoints are accessible through gateway-service only.
 Public endpoints (`/api/products/**`) do not require authentication.
-Admin **write** endpoints (`/api/admin/products/**` POST/PATCH/DELETE) require an authenticated admin user (Bearer token, `X-User-Role: ADMIN`). The operator-plane **read** `GET /api/admin/products` (TASK-MONO-243) is the exception — it is gated by gateway entitlement-trust + `account_type=OPERATOR` only, with NO ecommerce-local ADMIN role (see that endpoint's Authorization note).
+All `/api/admin/products/**` endpoints — the operator-plane **read** `GET /api/admin/products` (TASK-MONO-243) and the **write** endpoints (POST/PATCH/DELETE) — are gated at the gateway by `roles ∋ ADMIN` + non-blank `tenant_id` (entitlement-trust). The platform-console operator obtains the `ADMIN` domain role via the ADR-MONO-035 4a assume-tenant derivation (ecommerce-entitled tenant → `ADMIN`); the service applies no additional ecommerce-local RBAC — the gateway is the single admission point. (ADR-MONO-035 4b removed the legacy `account_type=OPERATOR` gateway leg; `roles`-only admission is uniform across `/api/admin/**`.)
 
 ---
 
@@ -88,13 +88,15 @@ read behind the platform-console Operator Overview ecommerce snapshot leg
 }
 ```
 
-**Authorization**: gateway **entitlement-trust + `account_type=OPERATOR`** only
-(the gateway's `AccountTypeEnforcementFilter` requires `OPERATOR` for
+**Authorization**: gateway **entitlement-trust + `roles ∋ ADMIN`**
+(the gateway's `AccountTypeEnforcementFilter` requires `ADMIN` for
 `/api/admin/**`, and `TenantClaimValidator` requires a non-blank `tenant_id`).
-This GET deliberately does **NOT** require an ecommerce-local `ADMIN` role
-(`X-User-Role == ADMIN`) — unlike the write endpoints on `/api/admin/products/**`
-— because the caller is a platform-console operator presenting an IAM OIDC token
-with no ecommerce `ADMIN` role claim. **Read-only** (no mutation).
+The platform-console operator carries the `ADMIN` domain role via the
+ADR-MONO-035 4a assume-tenant derivation (ecommerce-entitled tenant → `ADMIN`);
+the service applies **no additional ecommerce-local RBAC** — the gateway is the
+single admission point for both this read and the write endpoints. (ADR-MONO-035 4b
+removed the legacy `account_type=OPERATOR` gateway leg; `roles`-only admission is
+uniform across `/api/admin/**`.) **Read-only** (no mutation).
 
 **Tenant scoping**: the gateway injects the trusted `X-Tenant-Id`; the read is
 scoped automatically by the repository `WHERE tenant_id` chokepoint (Step 2 /
