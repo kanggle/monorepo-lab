@@ -1,6 +1,6 @@
 ﻿# TASK-BE-383 — Align wms service specs to the roles-only operator model (document the `WMS_OPERATOR` domain-role source)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (security/authorization-adjacent doc alignment — net-zero, but the operator-admission model must be stated exactly)
