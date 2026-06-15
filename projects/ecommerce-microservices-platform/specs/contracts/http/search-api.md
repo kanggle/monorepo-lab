@@ -64,6 +64,32 @@ Search products by keyword and filters.
 
 ---
 
+### POST /api/search/admin/reindex (Admin — internal only)
+Full reindex of the Elasticsearch product index from product-service data. Intended for
+operational recovery when the index diverges from the DB (e.g. event loss, seed data).
+**Not exposed through the public gateway** — accessible only on the internal service port (8085).
+
+**Authorization**: `X-User-Role: ADMIN` header required (validated in-service).
+
+**Query Parameters**
+- `batchSize` (default: 50, must be > 0) — number of products fetched per batch
+
+**Response 200**
+```json
+{
+  "indexed": 123,
+  "batchSize": 50
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | VALIDATION_ERROR | `batchSize` is not a positive integer |
+| 403 | ACCESS_DENIED | Admin role required |
+
+---
+
 ## Error Response Format
 ```json
 {

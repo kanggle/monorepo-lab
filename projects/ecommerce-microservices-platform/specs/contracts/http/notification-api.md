@@ -156,6 +156,33 @@ List notification templates.
 
 ---
 
+### GET /api/notifications/templates/{templateId} (Admin)
+Get a single notification template by ID.
+
+**Authorization**: `X-User-Role: ADMIN` header required.
+
+**Response 200**
+```json
+{
+  "templateId": "string (UUID)",
+  "type": "ORDER_PLACED",
+  "channel": "EMAIL",
+  "subject": "string",
+  "body": "string",
+  "createdAt": "string (ISO 8601)",
+  "updatedAt": "string (ISO 8601)"
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 401 | UNAUTHORIZED | Missing or invalid access token |
+| 403 | ACCESS_DENIED | Not an admin user |
+| 404 | TEMPLATE_NOT_FOUND | Template does not exist |
+
+---
+
 ### POST /api/notifications/templates (Admin)
 Create a notification template.
 

@@ -203,6 +203,8 @@ No body.
 ### POST /api/users/me/withdrawal
 Initiate account withdrawal. Transitions profile status to WITHDRAWN and publishes UserWithdrawn event.
 
+> **NOT IMPLEMENTED (v1).** The `withdraw()` domain logic + `UserWithdrawn` event exist in user-service (`UserProfileService.withdraw()`), but no HTTP endpoint is wired to trigger it. `UserController` maps only `GET /api/users/me` and `PATCH /api/users/me`; no `@PostMapping("/me/withdrawal")` exists. Documented for intent; wiring the controller is a separate code task.
+
 **Auth required:** Yes (Bearer JWT)
 
 **Request Body**

@@ -23,7 +23,7 @@ Consumers must not depend on fields not defined in this contract.
 
 Published when a new review is created.
 
-**Consumers:** search-service, product-service
+**Consumers:** none in v1 (published for future search-index / product-aggregate use; no `@KafkaListener` for `review.review.created` exists in any service as of v1)
 
 **Topic:** `review.review.created`
 
@@ -44,7 +44,7 @@ Published when a new review is created.
 
 Published when a review is updated.
 
-**Consumers:** search-service, product-service
+**Consumers:** none in v1 (published for future search-index / product-aggregate use; no `@KafkaListener` for `review.review.updated` exists in any service as of v1)
 
 **Topic:** `review.review.updated`
 
@@ -65,7 +65,7 @@ Published when a review is updated.
 
 Published when a review is deleted.
 
-**Consumers:** search-service, product-service
+**Consumers:** none in v1 (published for future search-index / product-aggregate use; no `@KafkaListener` for `review.review.deleted` exists in any service as of v1)
 
 **Topic:** `review.review.deleted`
 
