@@ -11,56 +11,16 @@ All implementation tasks targeting this service must follow this declaration,
 > `ledger-service` is the **v2 double-entry ledger** deferred by
 > [ADR-MONO-008](../../../../../docs/adr/ADR-MONO-008-finance-platform-bootstrap.md)
 > § D3 (declared in `PROJECT.md` Service Map v2). The **first increment**
-> (TASK-FIN-BE-007 — event-driven auto-journal + read) is live; the **second
-> increment** (TASK-FIN-BE-008 — period close: `AccountingPeriod` lifecycle +
-> posting guard + close snapshot, emission deferred) is live; the **third increment**
-> (TASK-FIN-BE-009 — GL/AP feed: the transactional outbox + `finance.ledger.{entry.posted,
-> period.closed}.v1` emission, terminal→publishing consumer) is specified by
-> § Event publication + § Increment Scope; the **fourth increment** (TASK-FIN-BE-010
-> — reconciliation matching: external-statement matching + the F8 no-auto-close
-> discrepancy queue + emission) is specified by § Reconciliation + § Increment Scope;
-> the **fifth increment** (TASK-FIN-BE-011 — manual journal posting: an operator-
-> initiated adjusting-entry REST endpoint funnelling through the existing guarded
-> write path) is specified by § Manual Journal Posting + § Increment Scope; the
-> **sixth increment** (TASK-FIN-BE-012 — reconciliation period-lock: a discrepancy
-> whose statement date is in a CLOSED period is immutable, `resolve` rejected with
-> `RECONCILIATION_PERIOD_LOCKED`) and the **seventh increment** (TASK-FIN-BE-013 —
-> reconciliation *ingest-time* period-lock: ingesting a statement dated in a CLOSED
-> period is rejected with the same code, before any persist/match/emit) are specified
-> by § Reconciliation § Period lock + § Increment Scope. The **eighth increment**
-> (TASK-FIN-BE-014 — multi-currency journals: one entry may carry lines in different
-> currencies, balanced in a fixed base/reporting currency [KRW] via per-line
-> `exchangeRate` + `baseAmount`) is specified by § Multi-currency journals +
-> § Increment Scope. The **ninth increment** (TASK-FIN-BE-015 — FX gain/loss revaluation:
-> an operator revalues a foreign-currency position at a new closing rate, truing its base
-> carrying value to spot and booking the delta to `FX_GAIN` / `FX_LOSS` via a balanced
-> base-currency adjusting entry) is specified by § FX gain/loss revaluation +
-> § Increment Scope. The **tenth increment** (TASK-FIN-BE-016 — realized FX gain/loss on
-> settlement: an operator settles a foreign-currency position at a settlement rate, removing
-> the position at its carrying value and recognising the difference between the base proceeds
-> and the carrying as a *realized* `FX_GAIN` / `FX_LOSS`) is specified by § FX settlement +
-> § Increment Scope. The **eleventh increment** (TASK-FIN-BE-017 — multi-currency
-> reconciliation: a matched foreign statement line whose bank-reported base [KRW] value
-> differs from the internal carrying base records an `AMOUNT_MISMATCH` [FX-difference]
-> discrepancy for operator review) is specified by § Reconciliation § Multi-currency
-> reconciliation + § Increment Scope. The **twelfth increment** (TASK-FIN-BE-018 — partial /
-> weighted-average settlement: an operator settles a *portion* of a foreign position via an
-> optional `settleForeignAmount`, removing a proportional `round(C×|F_settle|/|F|)` share of the
-> carrying base and leaving a residual OPEN position) is specified by § FX settlement § Partial
-> settlement + § Increment Scope. The **thirteenth–twenty-fifth increments**
-> (TASK-FIN-BE-020 / 021 / 023–029 / 031–033) are likewise live and specified by their
-> § sections + § Increment Scope: configurable FX reconciliation tolerance + cross-currency
-> base-leg matching (**both** directions — foreign↔KRW); the **ADR-001** FX cost-flow saga
-> (per-tenant + per-account `WEIGHTED_AVERAGE`/`FIFO` config, `fx_position_lot` acquisition +
-> FIFO settlement consumption + revaluation lot-carrying distribution + lots read endpoint); and
-> the **ADR-002** live FX rate feed (config-gated outbound provider + `fx_rate_quote` cache +
-> scheduled poller + omitted-rate staleness fallback `FX_RATE_UNAVAILABLE` + fx-rates read
-> endpoint). A **bulk / period-close auto-hook** (revaluation/settlement act on one
-> `(account, currency)` per call), a **configurable base currency** (fixed KRW in v1), a
-> **proceeds-amount input** (proceeds derive from a rate), a **real public FX API provider schema**
-> (`mode=http` against an actual provider) + a `fx_rate_quote_history` audit trail, and
-> fuzzy / N:M / split matching + period reopen remain forward-declared (§ Increment Scope).
-> The account-service architecture
+> (TASK-FIN-BE-007 — event-driven auto-journal + read) is live; **increments 2–25**
+> (TASK-FIN-BE-008 … 033) are likewise delivered — period close, the GL/AP-feed
+> transactional outbox, reconciliation (matching + period-lock + multi-currency +
+> cross-currency both directions), manual posting, multi-currency journals + FX
+> revaluation / settlement, the **ADR-001** FX cost-flow / FIFO-lot saga, and the
+> **ADR-002** live FX rate feed. The full per-increment scope, decisions, and the
+> **forward-declared remainder** are catalogued in **§ Increment Scope** (the canonical
+> roadmap); each increment's mechanics live in its own `##` / `###` section
+> (e.g. § Reconciliation, § FX gain/loss revaluation, § FX settlement, § FX cost-flow
+> method config, § FX rate feed). The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
 > idempotency, audit) — this service mirrors it.
@@ -701,15 +661,18 @@ com.example.finance.ledger/
     └── security/PublicPaths.java
 ```
 
-### Allowed / Forbidden dependencies
+### Allowed dependencies
 
 Same allow-list as account-service (`spring-boot-starter-{web,data-jpa,data-redis?,security,oauth2-resource-server,validation,actuator}`,
 `spring-kafka`, `flyway-{core,mysql}`, `mysql-connector-j`, micrometer+otel, jackson,
 shared libs `java-common`/`java-web`/`java-messaging`/`java-observability`/`java-security`).
 Redis is **not** required in the first increment (no client idempotency-key surface;
-dedupe is event-id based via `processed_events`). **Forbidden**: `float`/`double` in
-money; writing to `finance_db` (account-service's schema); an outbox/publish path
-(terminal consumer); external GL/ERP SDKs in `domain/`/`application/`.
+dedupe is event-id based via `processed_events`).
+
+### Forbidden dependencies
+
+`float`/`double` in money; writing to `finance_db` (account-service's schema); an
+outbox/publish path (terminal consumer); external GL/ERP SDKs in `domain/`/`application/`.
 
 ### Boundary rules
 

@@ -535,7 +535,7 @@ non-existent override is a `200` no-op (`cleared: false`), **not** a 404. Audite
 
 ---
 
-## § FX rates (read) — 14. GET `/api/finance/ledger/fx-rates`
+## 14. FX rates (read) — GET `/api/finance/ledger/fx-rates`
 
 **(25th increment — TASK-FIN-BE-033)** Read-only surface over the `fx_rate_quote` cache
 (ADR-002 D2 — populated by the FX rate feed poller, FIN-BE-031). Exposes the current contents
