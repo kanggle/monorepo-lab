@@ -44,6 +44,10 @@ public class SecurityServiceClient {
             @Value("${admin.downstream.read-timeout-ms:10000}") int readTimeoutMs,
             IamClientCredentialsTokenProvider tokenProvider) {
         HttpClient httpClient = HttpClient.newBuilder()
+                // Pin HTTP/1.1 like the other admin downstream clients (Account/AccountTenant/Auth):
+                // internal IAM service-to-service calls are cleartext HTTP/1.1, and pinning avoids the
+                // JDK HttpClient's opportunistic h2c upgrade attempt against the (HTTP/1.1-only) target.
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                 .build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
