@@ -8,13 +8,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
-import java.net.http.HttpClient;
+import static com.example.auth.infrastructure.oauth.OAuthClientSupport.buildHttp11RestClient;
 
 /**
  * Kakao OAuth 2.0 client.
@@ -32,14 +31,7 @@ public class KakaoOAuthClient implements OAuthClient {
     public KakaoOAuthClient(OAuthProperties oAuthProperties, ObjectMapper objectMapper) {
         this.props = oAuthProperties.getKakao();
         this.objectMapper = objectMapper;
-        // Force HTTP/1.1 to avoid JDK HttpClient HTTP/2 RST_STREAM race against
-        // WireMock stubs on Linux epoll event loops. (TASK-BE-273 Phase 2, ADR-004)
-        HttpClient jdkClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
-        this.restClient = RestClient.builder()
-                .requestFactory(new JdkClientHttpRequestFactory(jdkClient))
-                .build();
+        this.restClient = buildHttp11RestClient();
     }
 
     @Override
