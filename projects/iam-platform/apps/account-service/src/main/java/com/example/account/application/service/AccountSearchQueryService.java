@@ -4,7 +4,6 @@ import com.example.account.application.port.AccountQueryPort;
 import com.example.account.application.result.AccountDetailResult;
 import com.example.account.application.result.AccountSearchResult;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +34,7 @@ public class AccountSearchQueryService {
         }
 
         if (email == null || email.isBlank()) {
-            return accountQueryPort.findAll(tenantId, PageRequest.of(page, size));
+            return accountQueryPort.findAll(tenantId, page, size);
         }
 
         List<AccountSearchResult.Item> items = accountQueryPort.findByEmail(tenantId, email.trim());
