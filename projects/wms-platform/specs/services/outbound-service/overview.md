@@ -14,7 +14,7 @@
 | Deployable unit | `apps/outbound-service/` |
 | Bounded Context | `Outbound` |
 | Persistent stores | PostgreSQL (Order / PickingRequest / PickingConfirmation / PackingUnit / Shipment / Saga state + master read-model cache) + Kafka outbox |
-| Event publication | `outbound.picking.requested.v1`, `outbound.picking.confirmed.v1`, `outbound.shipping.confirmed.v1` (per [`outbound-events.md`](../../contracts/events/outbound-events.md)) |
+| Event publication | `outbound.picking.requested.v1`, `outbound.picking.completed.v1`, `outbound.shipping.confirmed.v1` (per [`outbound-events.md`](../../contracts/events/outbound-events.md)) |
 
 ## Responsibilities
 
@@ -35,7 +35,7 @@
 | Webhook | `POST /webhooks/erp/order` | HMAC (gateway bypass) | ERP-driven order creation |
 | Kafka consume | `inventory.reserved.v1`, `inventory.confirmed.v1` | — | saga reply channel |
 | Kafka consume | `master.*` (6 aggregate types) | — | read-model cache refresh |
-| Kafka publish | `outbound.picking.requested.v1`, `outbound.picking.confirmed.v1`, `outbound.shipping.confirmed.v1` | — | inventory + notification consumers |
+| Kafka publish | `outbound.picking.requested.v1`, `outbound.picking.completed.v1`, `outbound.shipping.confirmed.v1` | — | inventory + notification consumers |
 | HTTP outbound | TMS adapter (R4j wrap) | — | shipment-ready notification |
 
 자세한 spec 은 [`../../contracts/http/outbound-service-api.md`](../../contracts/http/outbound-service-api.md) + [`../../contracts/events/outbound-events.md`](../../contracts/events/outbound-events.md) + [`../../contracts/webhooks/erp-order-webhook.md`](../../contracts/webhooks/erp-order-webhook.md) 참조. saga policy: [`../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md`](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md).

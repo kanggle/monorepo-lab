@@ -14,7 +14,7 @@
 | Deployable unit | `apps/inbound-service/` |
 | Bounded Context | `Inbound` |
 | Persistent stores | PostgreSQL (ASN / Inspection / PutawayInstruction + master read-model cache) + Kafka outbox |
-| Event publication | `inbound.asn.created.v1`, `inbound.inspection.completed.v1`, `inbound.putaway.completed.v1` (per [`inbound-events.md`](../../contracts/events/inbound-events.md)) |
+| Event publication | `inbound.asn.received.v1`, `inbound.inspection.completed.v1`, `inbound.putaway.completed.v1` (per [`inbound-events.md`](../../contracts/events/inbound-events.md)) |
 
 ## Responsibilities
 
@@ -33,7 +33,7 @@
 | REST | `POST /api/v1/inbound/putaway/**` | JWT + ROLE | putaway instruction + confirmation |
 | Webhook | `POST /webhooks/erp/asn` | HMAC (gateway bypass) | ERP-driven ASN creation |
 | Kafka consume | `master.{warehouse,zone,location,sku,partner,lot}.*` | — | read-model cache refresh |
-| Kafka publish | `inbound.asn.created.v1`, `inbound.inspection.completed.v1`, `inbound.putaway.completed.v1` | — | inventory + notification consumers |
+| Kafka publish | `inbound.asn.received.v1`, `inbound.inspection.completed.v1`, `inbound.putaway.completed.v1` | — | inventory + notification consumers |
 
 자세한 spec 은 [`../../contracts/http/inbound-service-api.md`](../../contracts/http/inbound-service-api.md) + [`../../contracts/events/inbound-events.md`](../../contracts/events/inbound-events.md) + [`../../contracts/webhooks/erp-asn-webhook.md`](../../contracts/webhooks/erp-asn-webhook.md) 참조.
 

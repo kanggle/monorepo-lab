@@ -470,7 +470,7 @@ Per `transactional` T3. Same single-table outbox pattern used by `master-service
 | `id` | UUID | no | PK |
 | `aggregate_type` | String (40) | no | `INVENTORY` / `RESERVATION` / `STOCK_ADJUSTMENT` / `STOCK_TRANSFER` |
 | `aggregate_id` | UUID | no | The aggregate root's id |
-| `event_type` | String (60) | no | e.g., `inventory.adjusted` / `inventory.transferred` / `inventory.reserved` / `inventory.released` / `inventory.confirmed` / `inventory.received` / `inventory.low-stock-detected` |
+| `event_type` | String (60) | no | e.g., `inventory.adjusted` / `inventory.transferred` / `inventory.reserved` / `inventory.released` / `inventory.confirmed` / `inventory.reserve.failed` / `inventory.received` / `inventory.low-stock-detected` |
 | `event_version` | String (10) | no | `v1` |
 | `payload` | JSONB | no | Event payload per `inventory-events.md` |
 | `partition_key` | String (60) | no | `location_id` (mutations) or `sku_id` (master refreshes) — picked at write-time |

@@ -93,7 +93,7 @@ proceeds, dropping the duplicate.
 **Failure — `INSUFFICIENT_STOCK`**: `Inventory.reserve(...)` throws when
 `available_qty < qty`. The transaction rolls back; **no `Reservation`
 row, no `Movement`, no outbox** are written. Instead, the consumer's
-catch block writes an `inventory.adjusted{reason=INSUFFICIENT_STOCK}`
+catch block writes an `inventory.reserve.failed{reason=INSUFFICIENT_STOCK}`
 outbox row in a *separate* `REQUIRES_NEW` transaction so outbound's saga
 can transition to `RESERVE_FAILED` (per `outbound-saga.md` § 3.2). No
 compensation event is needed — nothing was held.
@@ -101,7 +101,7 @@ compensation event is needed — nothing was held.
 **Other failures**:
 - Stale `MasterReadModel` (`LOCATION_INACTIVE` / `SKU_INACTIVE` /
   `LOT_INACTIVE` / `LOT_EXPIRED`) → same as `INSUFFICIENT_STOCK` —
-  rolls back + emits `inventory.adjusted{reason=<code>}`.
+  rolls back + emits `inventory.reserve.failed{reason=<code>}`.
 - Postgres outage / DB OL conflict → consumer retry (per Kafka consumer
   retry policy); after retry budget exhausted → DLT (T8 + I5).
 
@@ -242,8 +242,8 @@ coordination is **only** via Kafka events on owned topics.
 
 | Scenario | Behaviour | Recovery |
 |---|---|---|
-| `INSUFFICIENT_STOCK` on Reserve | Rolls back; emits `inventory.adjusted{reason=INSUFFICIENT_STOCK}` in `REQUIRES_NEW` TX | outbound saga → `RESERVE_FAILED` (terminal); no compensation needed |
-| Stale `MasterReadModel` (`LOCATION_INACTIVE` / `SKU_INACTIVE` / `LOT_INACTIVE` / `LOT_EXPIRED`) on Reserve | Same as `INSUFFICIENT_STOCK` — rolls back + emits `inventory.adjusted{reason=<code>}` | outbound saga → `RESERVE_FAILED` |
+| `INSUFFICIENT_STOCK` on Reserve | Rolls back; emits `inventory.reserve.failed{reason=INSUFFICIENT_STOCK}` in `REQUIRES_NEW` TX | outbound saga → `RESERVE_FAILED` (terminal); no compensation needed |
+| Stale `MasterReadModel` (`LOCATION_INACTIVE` / `SKU_INACTIVE` / `LOT_INACTIVE` / `LOT_EXPIRED`) on Reserve | Same as `INSUFFICIENT_STOCK` — rolls back + emits `inventory.reserve.failed{reason=<code>}` | outbound saga → `RESERVE_FAILED` |
 | Out-of-order: `picking.cancelled` arrives before `picking.requested` | `Reservation` lookup fails → DLT for the cancel; the requested event arrives later, succeeds → operator must manually release via `INVENTORY_ADMIN` REST OR wait for TTL | manual or TTL |
 | `RESERVATION_QUANTITY_MISMATCH` on Confirm | Throws → DLT | Operator inspects the divergence; v1 has no automated reconciliation — RMA inbound (v2) is the future path |
 | `RESERVATION_ALREADY_RELEASED` on Confirm | Throws → DLT | Operator investigates the race (likely a manual release fired during ship); v1 no automated path |
@@ -302,11 +302,11 @@ only; do not duplicate test cases here.
   one `inventory.confirmed` outbox row.
 - **Reserve rejected — `INSUFFICIENT_STOCK`**: `Inventory.reserve()` throws;
   TX rolls back; zero `Reservation` row, zero movement rows, zero outbox rows;
-  `inventory.adjusted{reason=INSUFFICIENT_STOCK}` emitted in separate
+  `inventory.reserve.failed{reason=INSUFFICIENT_STOCK}` emitted in separate
   `REQUIRES_NEW` TX.
 - **Reserve rejected — stale MasterReadModel** (`SKU_INACTIVE` / `LOT_INACTIVE`
   / `LOT_EXPIRED` / `LOCATION_INACTIVE`): same treatment as
-  `INSUFFICIENT_STOCK` — rolls back + `inventory.adjusted{reason=<code>}`.
+  `INSUFFICIENT_STOCK` — rolls back + `inventory.reserve.failed{reason=<code>}`.
 - **Confirm on RELEASED row**: `RESERVATION_ALREADY_RELEASED` → consumer
   throws → routed to DLT; no outbox row; `Reservation` row unchanged.
 - **Quantity mismatch on Confirm**: `RESERVATION_QUANTITY_MISMATCH` → DLT;
@@ -379,7 +379,7 @@ only; do not duplicate test cases here.
 - Same `event_id` delivered twice → single `Reservation`, single outbox row
   (event-dedupe table blocks replay).
 - `INSUFFICIENT_STOCK` → no `Reservation` row, no movement rows; outbound
-  saga receives `inventory.adjusted{reason=INSUFFICIENT_STOCK}` and moves to
+  saga receives `inventory.reserve.failed{reason=INSUFFICIENT_STOCK}` and moves to
   `RESERVE_FAILED`.
 - `RESERVATION_ALREADY_RELEASED` on confirm → DLT; no side-effect in
   inventory; outbound saga ops alert.
