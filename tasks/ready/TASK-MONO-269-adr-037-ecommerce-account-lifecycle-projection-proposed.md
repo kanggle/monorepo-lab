@@ -10,6 +10,8 @@ Author **ADR-MONO-037 PROPOSED** — Project the IAM account lifecycle into ecom
 
 ready
 
+> **PROPOSED → ACCEPTED in this PR (2026-06-15), user-explicit ACCEPT gate honored.** ADR-MONO-037 authored Status PROPOSED on `task/mono-269-account-lifecycle-projection-adr` (worktree-isolated, main parked); the P1-P6 decisions were **presented for review first** (the explicitly-required gate, self-ACCEPT prohibited); the user then gave explicit intent *"ACCEPT (같은 PR에서 flip)"* → ADR-MONO-037 flipped PROPOSED → ACCEPTED in the same PR (Status + History ACCEPTED clause + § 6 ACCEPTED row + § 3.3 UNPAUSED + TASK-BE-388 HARDSTOP-09 banner lift), ADR-003a audit rows #43 (PROPOSED) + #44 (ACCEPTED) appended (sibling ADR-036/MONO-266 same-PR pattern). Doc-only (no `apps/` code, no `platform/contracts/` change, no migrations, no seed). **Lifecycle close (ready → done) follows merge + 3-dim verification.** § 3.3 execution roadmap UNPAUSED — next = **TASK-BE-388 M1** (onboarding `account.created` re-point + minimal profile, P1), now implement-ready (banner lifted).
+
 # Owner
 
 architecture
