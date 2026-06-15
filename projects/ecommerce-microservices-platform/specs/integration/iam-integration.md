@@ -83,7 +83,8 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 3. **Issuer 검증** — `AllowedIssuersValidator` 로 SAS issuer + legacy `iam-platform` 양쪽 허용 (D2-b deprecate 호환).
 4. **Audience 검증** — `audiences: ecommerce` 로 `aud` 클레임 검증 (Spring Security 자동).
 5. **Tenant 검증** — `TenantClaimValidator` (entitlement-trust, ADR-MONO-030 §2.4) 로 **임의 well-formed `tenant_id`** 를 수용; **blank/missing 만** `tenant_mismatch` → 403 `TENANT_FORBIDDEN`. (레거시 고정슬러그 `ecommerce` = dual-accept 윈도우의 default-tenant. 도메인간 격리는 다운스트림 row 필터로 집행 — 게이트가 아님.)
-6. **Account-Type 강제** — `AccountTypeEnforcementFilter` (TASK-BE-131) 가 `/api/admin/**` 경로에 `account_type=OPERATOR` 강제, 그 외 인증 필요 경로에 `account_type=CONSUMER` 강제.
+6. **Role 강제** — `AccountTypeEnforcementFilter` (TASK-BE-131; ADR-MONO-035 4b-2a 로 roles-only 전환 — `account_type` OR-branch 제거) 가 `/api/admin/**` 경로에 `roles ∋ ADMIN` 강제, 그 외 인증 필요 경로에 `roles ∋ CUSTOMER` 강제.
+   - **operator-on-public 예외 (TASK-BE-380)** — promotion-api.md / shipping-api.md / notification-api.md 는 *운영자(Admin)* 엔드포인트를 **public 경로 트리**(`/api/promotions`, `/api/shippings`, `/api/notifications`)에 두고 서비스단에서 `X-User-Role == ADMIN` 으로 게이팅한다(`/api/admin/**` 아님). 따라서 게이트웨이는 이 세 read 트리에 한해 `CUSTOMER` 와 `ADMIN` 을 **둘 다** 수용한다(엔드포인트별 operator/consumer 구분은 서비스가 집행). prefix-only `non-/api/admin → CONSUMER` 규칙이면 운영자가 서비스 도달 전에 403 되는 라이브 갭(platform-console PC-FE-086/088/089 흡수)을 해소. 그 외 public 트리(`/api/products`, `/api/orders`, `/api/search`, `/api/users` 등)는 종전대로 `CUSTOMER` 전용.
 7. **Header Enrichment** — `JwtHeaderEnrichmentFilter` (TASK-BE-131) 가 downstream 으로 `X-User-Id`, `X-User-Email`, `X-User-Role`, `X-Account-Type`, `X-Tenant-Id` (멀티테넌트 컨텍스트 전파, ADR-MONO-030 §2.2 M2 layer 2) 헤더 주입. 클라이언트가 위조한 동일 헤더는 `IdentityHeaderStripFilter` 가 먼저 제거.
 
 ---
@@ -96,8 +97,8 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 | `iss` 가 allowed-issuers 미포함 | 401 | `UNAUTHORIZED` |
 | `aud` 가 `ecommerce` 아님 | 401 | `UNAUTHORIZED` |
 | `tenant_id` blank / missing | 403 | `TENANT_FORBIDDEN` (entitlement-trust: 임의 well-formed `tenant_id` 는 통과) |
-| `/api/admin/**` 인데 `account_type != OPERATOR` | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
-| 일반 경로인데 `account_type != CONSUMER` | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
+| `/api/admin/**` 인데 `roles ∌ ADMIN` | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
+| 일반 경로인데 `roles ∌ CUSTOMER` (operator-on-public 트리 `/api/{promotions,shippings,notifications}` 에서는 `ADMIN` 도 통과 — TASK-BE-380) | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
 | 유효 토큰이지만 도메인 권한 부족 | 403 | downstream 서비스가 결정 |
 
 `platform/error-handling.md` 의 envelope 형식 (`{ "code", "message", "timestamp" }`) 따름.
