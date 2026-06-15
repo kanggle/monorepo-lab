@@ -1,6 +1,6 @@
 # TASK-MONO-274 — ADR-MONO-038 M2: migrate inbound + outbound onto the shared Idempotency-Key filter
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — migrates two `projects/wms-platform/` services onto the `libs/java-web-servlet` shared filter; one atomic PR)
 
