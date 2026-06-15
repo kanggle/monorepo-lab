@@ -1,7 +1,7 @@
 package com.wms.inbound.adapter.out.idempotency;
 
-import com.wms.inbound.application.port.out.IdempotencyStorePort;
-import com.wms.inbound.application.port.out.StoredResponse;
+import com.example.web.idempotency.IdempotencyStore;
+import com.example.web.idempotency.StoredResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -10,10 +10,10 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Thread-safe in-memory {@link IdempotencyStorePort} for the {@code standalone}
+ * Thread-safe in-memory {@link IdempotencyStore} for the {@code standalone}
  * profile and tests. Entries expire lazily on access.
  */
-public class InMemoryIdempotencyStore implements IdempotencyStorePort {
+public class InMemoryIdempotencyStore implements IdempotencyStore {
 
     private final Map<String, Entry> entries = new ConcurrentHashMap<>();
     private final Map<String, Long> locks = new ConcurrentHashMap<>();

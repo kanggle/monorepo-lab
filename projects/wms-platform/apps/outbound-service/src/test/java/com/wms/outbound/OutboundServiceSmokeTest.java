@@ -2,6 +2,7 @@ package com.wms.outbound;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.web.idempotency.IdempotencyStore;
 import com.wms.outbound.adapter.in.messaging.consumer.EventEnvelopeParser;
 import com.wms.outbound.adapter.in.webhook.erp.ErpOrderWebhookController;
 import com.wms.outbound.adapter.in.webhook.erp.HmacVerifier;
@@ -10,7 +11,6 @@ import com.wms.outbound.application.port.in.IngestWebhookEventUseCase;
 import com.wms.outbound.application.port.in.ProcessWebhookInboxUseCase;
 import com.wms.outbound.application.port.out.WebhookInboxStorePort;
 import com.wms.outbound.application.port.out.EventDedupePort;
-import com.wms.outbound.application.port.out.IdempotencyStore;
 import com.wms.outbound.application.port.out.MasterReadModelPort;
 import com.wms.outbound.application.port.out.MasterReadModelWriterPort;
 import com.wms.outbound.application.port.out.OutboxWriterPort;
