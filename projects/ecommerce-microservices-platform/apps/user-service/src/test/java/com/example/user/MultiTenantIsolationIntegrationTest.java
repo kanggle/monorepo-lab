@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * resolves to the default tenant (net-zero, D8) which a real tenant still cannot
  * see.
  *
- * <p>Profiles are created by the {@code UserSignedUp} consumer (no HTTP POST seam),
+ * <p>Profiles are created by the {@code account.created} consumer (no HTTP POST seam),
  * so each tenant's row is seeded deterministically via {@link JdbcTemplate} with an
  * explicit {@code tenant_id} (no Kafka timing), then every assertion runs through
  * the admin HTTP surface so the tenant filter + persistence scoping are exercised
@@ -80,7 +80,7 @@ class MultiTenantIsolationIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    /** Seeds a user_profiles row with an explicit tenant_id (the consumer's create path). */
+    /** Seeds a user_profiles row with an explicit tenant_id (the account.created consumer's create path). */
     private UUID seedUser(String tenantId, String email) {
         UUID id = UUID.randomUUID();
         UUID userId = UUID.randomUUID();

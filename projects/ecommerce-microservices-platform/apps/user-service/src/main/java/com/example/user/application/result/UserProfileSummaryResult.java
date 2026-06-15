@@ -16,7 +16,7 @@ public record UserProfileSummaryResult(
     public static UserProfileSummaryResult from(UserProfile profile) {
         return new UserProfileSummaryResult(
                 profile.getUserId(),
-                profile.getEmail().value(),
+                profile.getEmail() == null ? null : profile.getEmail().value(),
                 profile.getName(),
                 profile.getNickname(),
                 profile.getStatus().name(),

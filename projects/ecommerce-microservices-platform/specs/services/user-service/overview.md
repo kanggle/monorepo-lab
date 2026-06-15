@@ -18,10 +18,10 @@
 
 ## Responsibilities
 
-- Create user profile on `UserSignedUp` event consumption (from `auth-service` — deprecated → IAM transition).
+- Create a **minimal** user profile on IAM `account.created` consumption (`email`/`name` sourced later from the OIDC token — the event is emailHash-only; [ADR-MONO-037](../../../../docs/adr/ADR-MONO-037-ecommerce-account-lifecycle-projection.md) P1).
 - Manage user profile query and update (`email`, `name`, `nickname`, `phone`, `profileImageUrl`).
 - Own shipping address CRUD — add / update / delete / list + default address designation.
-- Handle user withdrawal — status → `WITHDRAWN` + publish `UserWithdrawn` event.
+- React to IAM `account.deleted` (two-phase): grace entry (`anonymized=false`) → status `WITHDRAWN` + publish `UserWithdrawn`; post-grace (`anonymized=true`) → anonymize profile PII (the TASK-BE-258 obligation; ADR-MONO-037 P2/P3).
 - Admin user list + detail query (read-only v1).
 
 ## Public surface
@@ -34,9 +34,9 @@
 | REST | `POST /api/users/me/addresses` | JWT (self) | add address |
 | REST | `PUT /api/users/me/addresses/{id}` | JWT (self) | update address (+ default toggle) |
 | REST | `DELETE /api/users/me/addresses/{id}` | JWT (self) | delete address |
-| REST | `POST /api/users/me/withdraw` | JWT (self) | user withdrawal |
 | REST | `GET /api/admin/users` | JWT + ROLE_ADMIN | admin user list |
-| Kafka consume | `auth.user.signed-up` | — | profile bootstrap |
+| Kafka consume | `account.created` (IAM) | — | minimal profile bootstrap |
+| Kafka consume | `account.deleted` (IAM) | — | two-phase: withdraw (grace) / anonymize (post-grace) |
 | Kafka publish | `user.user.profile-updated`, `user.user.withdrawn` | — | downstream consumers (order / notification) |
 
 자세한 spec 은 [`../../contracts/http/user-api.md`](../../contracts/http/user-api.md) + [`../../contracts/events/user-events.md`](../../contracts/events/user-events.md) 참조.
@@ -63,7 +63,7 @@
 
 - PostgreSQL — user profile persistence
 - Kafka — event consumption + publication
-- ~~`auth-service`~~ (deprecated) → IAM (event source: `UserSignedUp`; IAM `AccountSignedUp` 위임)
+- ~~`auth-service`~~ (deprecated) → IAM (event source: `account.created` / `account.deleted`; ADR-MONO-037)
 
 ## Out of scope (v1)
 

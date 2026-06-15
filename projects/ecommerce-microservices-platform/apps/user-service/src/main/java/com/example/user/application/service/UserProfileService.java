@@ -107,10 +107,24 @@ public class UserProfileService {
         return new UserListPageResult(content, profiles.totalElements(), profiles.totalPages(), profiles.page(), profiles.size());
     }
 
+    /**
+     * Withdraw a profile in reaction to an IAM {@code account.deleted} grace-entry
+     * ({@code anonymized=false}, ADR-MONO-037 P2). Idempotent + fail-soft (P5): a
+     * missing profile or an already-WITHDRAWN profile is a no-op (no throw, no
+     * duplicate {@code UserWithdrawn}), so Kafka at-least-once re-delivery and the
+     * two-phase {@code account.deleted} emission are safe without a dedup store.
+     */
     @Transactional
     public void withdrawProfile(UUID userId) {
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-                .orElseThrow(() -> new UserProfileNotFoundException(userId));
+        UserProfile profile = userProfileRepository.findByUserId(userId).orElse(null);
+        if (profile == null) {
+            log.info("withdrawProfile: no profile for userId={}, no-op (idempotent/fail-soft, ADR-MONO-037 P5)", userId);
+            return;
+        }
+        if (profile.isWithdrawn()) {
+            log.info("withdrawProfile: profile userId={} already WITHDRAWN, no-op (idempotent re-delivery)", userId);
+            return;
+        }
 
         profile.withdraw();
         userProfileRepository.save(profile);
@@ -120,5 +134,29 @@ public class UserProfileService {
                 profile.getUpdatedAt(),
                 TenantContext.currentTenant()
         ));
+    }
+
+    /**
+     * Anonymize a profile's PII in reaction to an IAM {@code account.deleted} with
+     * {@code anonymized=true} (post-grace, ADR-MONO-037 P2/P3 — the standing
+     * TASK-BE-258 GDPR consumer obligation). Clears all identity-bearing fields while
+     * preserving {@code userId} for FK/audit integrity. Idempotent + fail-soft: a
+     * missing profile is a no-op; re-applying clears already-null fields.
+     *
+     * <p>Scope boundary (ADR-MONO-037 P3): user-service profile PII only.
+     * order-service-held PII (shipping addresses, recipient names) is a documented
+     * deferred follow-up, not cascaded here.
+     */
+    @Transactional
+    public void anonymizeProfile(UUID userId) {
+        UserProfile profile = userProfileRepository.findByUserId(userId).orElse(null);
+        if (profile == null) {
+            log.info("anonymizeProfile: no profile for userId={}, no-op (idempotent/fail-soft, ADR-MONO-037 P5)", userId);
+            return;
+        }
+
+        profile.anonymize();
+        userProfileRepository.save(profile);
+        log.info("Anonymized UserProfile PII for userId={} (account.deleted anonymized=true, TASK-BE-258 obligation)", userId);
     }
 }

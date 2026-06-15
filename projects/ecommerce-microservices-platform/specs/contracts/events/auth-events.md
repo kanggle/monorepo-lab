@@ -37,7 +37,9 @@ Consumers must not depend on fields not defined in this contract.
 
 Published when a new user account is successfully registered.
 
-**Consumers:** user-service, notification-service (future)
+> **RETIRED — no live producer or consumer.** The producer (ecommerce `auth-service`) was decommissioned (TASK-BE-132), and the former consumers (`user-service`, `notification-service`) re-pointed to IAM `account.created` per [ADR-MONO-037](../../../../docs/adr/ADR-MONO-037-ecommerce-account-lifecycle-projection.md) (subscription: [`account-lifecycle-subscriptions.md`](account-lifecycle-subscriptions.md)). Retained for historical reference only.
+
+**Consumers:** ~~user-service, notification-service~~ → migrated to IAM `account.created` (ADR-MONO-037)
 
 **Payload**
 ```json

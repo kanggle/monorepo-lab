@@ -2,6 +2,7 @@ package com.example.user.application.service;
 
 import com.example.user.application.command.UpdateProfileCommand;
 import com.example.user.application.event.UserProfileUpdatedSpringEvent;
+import com.example.user.application.event.UserWithdrawnSpringEvent;
 import com.example.user.application.result.UserListPageResult;
 import com.example.user.application.result.UserProfileResult;
 import com.example.user.application.result.UserProfileSummaryResult;
@@ -272,6 +273,92 @@ class UserProfileServiceTest {
 
             assertThatThrownBy(() -> userProfileService.getProfile(userId))
                     .isInstanceOf(UserProfileNotFoundException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("withdrawProfile (account.deleted grace-entry, ADR-MONO-037 P2)")
+    class WithdrawProfile {
+
+        @Test
+        @DisplayName("ACTIVE 프로필을 WITHDRAWN 으로 전이하고 UserWithdrawn 이벤트를 발행한다")
+        void withdrawProfile_activeProfile_withdrawsAndPublishes() {
+            UUID userId = UUID.randomUUID();
+            UserProfile profile = UserProfile.create(userId, "test@example.com", "홍길동");
+            given(userProfileRepository.findByUserId(userId)).willReturn(Optional.of(profile));
+            given(userProfileRepository.save(any(UserProfile.class))).willAnswer(inv -> inv.getArgument(0));
+
+            userProfileService.withdrawProfile(userId);
+
+            assertThat(profile.getStatus()).isEqualTo(ProfileStatus.WITHDRAWN);
+            ArgumentCaptor<UserWithdrawnSpringEvent> captor = ArgumentCaptor.forClass(UserWithdrawnSpringEvent.class);
+            then(applicationEventPublisher).should().publishEvent(captor.capture());
+            assertThat(captor.getValue().userId()).isEqualTo(userId);
+        }
+
+        @Test
+        @DisplayName("프로필 미존재 시 예외 없이 no-op (멱등/fail-soft) — 이벤트 미발행")
+        void withdrawProfile_missingProfile_noOp() {
+            UUID userId = UUID.randomUUID();
+            given(userProfileRepository.findByUserId(userId)).willReturn(Optional.empty());
+
+            userProfileService.withdrawProfile(userId);
+
+            then(userProfileRepository).should(never()).save(any());
+            then(applicationEventPublisher).should(never()).publishEvent(any(UserWithdrawnSpringEvent.class));
+        }
+
+        @Test
+        @DisplayName("이미 WITHDRAWN 인 프로필은 no-op — 재발행하지 않는다 (멱등 재전달)")
+        void withdrawProfile_alreadyWithdrawn_noOp() {
+            UUID userId = UUID.randomUUID();
+            UserProfile profile = UserProfile.create(userId, "test@example.com", "홍길동");
+            profile.withdraw();
+            given(userProfileRepository.findByUserId(userId)).willReturn(Optional.of(profile));
+
+            userProfileService.withdrawProfile(userId);
+
+            then(userProfileRepository).should(never()).save(any());
+            then(applicationEventPublisher).should(never()).publishEvent(any(UserWithdrawnSpringEvent.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("anonymizeProfile (account.deleted anonymized=true, ADR-MONO-037 P2/P3 — TASK-BE-258)")
+    class AnonymizeProfile {
+
+        @Test
+        @DisplayName("프로필 PII 를 모두 비우고 WITHDRAWN 으로 만든다 (userId 는 보존)")
+        void anonymizeProfile_clearsPiiPreservesUserId() {
+            UUID userId = UUID.randomUUID();
+            UserProfile profile = UserProfile.create(userId, "pii@example.com", "실명");
+            profile.updateNickname("닉네임");
+            profile.updatePhone("010-1234-5678");
+            profile.updateProfileImageUrl("https://img.example.com/p.jpg");
+            given(userProfileRepository.findByUserId(userId)).willReturn(Optional.of(profile));
+            given(userProfileRepository.save(any(UserProfile.class))).willAnswer(inv -> inv.getArgument(0));
+
+            userProfileService.anonymizeProfile(userId);
+
+            assertThat(profile.getUserId()).isEqualTo(userId);
+            assertThat(profile.getEmail()).isNull();
+            assertThat(profile.getName()).isNull();
+            assertThat(profile.getNickname()).isNull();
+            assertThat(profile.getPhone()).isNull();
+            assertThat(profile.getProfileImageUrl()).isNull();
+            assertThat(profile.getStatus()).isEqualTo(ProfileStatus.WITHDRAWN);
+            then(userProfileRepository).should().save(profile);
+        }
+
+        @Test
+        @DisplayName("프로필 미존재 시 예외 없이 no-op (멱등/fail-soft)")
+        void anonymizeProfile_missingProfile_noOp() {
+            UUID userId = UUID.randomUUID();
+            given(userProfileRepository.findByUserId(userId)).willReturn(Optional.empty());
+
+            userProfileService.anonymizeProfile(userId);
+
+            then(userProfileRepository).should(never()).save(any());
         }
     }
 }

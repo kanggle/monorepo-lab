@@ -20,15 +20,15 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/user-service/` |
 | Data store | PostgreSQL (owned) |
 | Event publication | Kafka via outbox (user.* lifecycle events) |
-| Event consumption | `UserSignedUp` from `auth.user.signed-up` (creates initial user profile on auth-service signup) |
+| Event consumption | IAM `account.created` (creates a minimal profile) + `account.deleted` (two-phase withdraw/anonymize) — ADR-MONO-037 |
 
 ### Service Type Composition
 
 `user-service` is a hybrid service per
 `platform/service-types/INDEX.md` § Hybrid Cases (REST service that also
 consumes events). Primary type is `rest-api`; the secondary `event-consumer`
-capability subscribes to `auth.user.signed-up` to bootstrap user profile
-records when auth-service issues a new user identity. The primary type
+capability subscribes to IAM `account.created` / `account.deleted` to bootstrap
+and project the lifecycle of an IAM-issued account. The primary type
 determines the spec read order — applied rules:
 [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
 The secondary capability is documented under "Events" below with topic /
@@ -95,10 +95,10 @@ Package organization may follow package-by-layer or package-by-feature if the la
 - events must follow published event contracts
 - persistence rules must follow service ownership boundaries
 - shared libraries may be used only under shared-library policy
-- IAM creates the user ID; user-service creates the profile record upon receiving a `UserSignedUp` event from `auth.user.signed-up` (emitted by IAM; auth-service decommissioned TASK-BE-132)
+- IAM creates the account ID; user-service creates a **minimal** profile record upon receiving IAM `account.created` (emailHash-only — `email`/`name` sourced later from the OIDC token; ADR-MONO-037 P1). auth-service decommissioned TASK-BE-132.
 
 ## Events
-- Consumes: `UserSignedUp` (from auth-service) — triggers initial profile creation
+- Consumes: IAM `account.created` (minimal profile create) + IAM `account.deleted` (two-phase: grace → withdraw, post-grace → anonymize PII). Subscription contract: [`account-lifecycle-subscriptions.md`](../../contracts/events/account-lifecycle-subscriptions.md) (ADR-MONO-037).
 - Publishes: `UserProfileUpdated`, `UserWithdrawn`
 
 ## Outbox
@@ -108,7 +108,7 @@ Package organization may follow package-by-layer or package-by-feature if the la
 - Topic 매핑 (`KafkaUserProfileEventPublisher`):
   - `UserProfileUpdated` → `user.user.profile-updated`
   - `UserWithdrawn` → `user.user.withdrawn`
-- Consumed topic: `auth.user.signed-up` (consumer group `user-service`) — handled by `UserSignedUpConsumer`.
+- Consumed topics (consumer group `user-service`): `account.created` — handled by `AccountCreatedConsumer`; `account.deleted` — handled by `AccountDeletedConsumer` (branches on `anonymized`).
 - **Note**: the Identity table entry "Event publication | Kafka via outbox" reflects the intended target pattern; the v1 implementation is a direct Spring-event → Kafka bridge without a transactional outbox table. Adding the outbox is a forward-declared improvement.
 
 ## Multi-Tenancy & Marketplace (ADR-MONO-030)
@@ -133,9 +133,9 @@ user-service owns consumer/profile data, not seller-attributed catalog data.
 - **M3 — 404-over-403**: a cross-tenant single-resource read (e.g. `GET /api/admin/users/{id}`
   for another tenant's user) resolves to empty → **404** (existence hidden), never 403.
 - **M5 — async propagation**: `UserProfileUpdated` / `UserWithdrawn` envelopes carry
-  `tenant_id` (see [user-events.md](../../contracts/events/user-events.md)). The consumed
-  `UserSignedUp` envelope's `tenant_id` (optional until auth-service migrates) is bound to
-  the context for profile creation; absent → default tenant.
+  `tenant_id` (see [user-events.md](../../contracts/events/user-events.md)). The consumed IAM
+  `account.created` / `account.deleted` carry `tenantId` in the **payload**; it is bound to
+  the context for the create/withdraw/anonymize reactions; absent → default tenant.
 - **M6 — cross-tenant-leak regression IT**: `MultiTenantIsolationIntegrationTest`
   (Testcontainers PostgreSQL) proves tenant A's users/profiles are invisible to a tenant B
   context (list exclusion + 404 single-read) and that a missing `X-Tenant-Id` resolves to

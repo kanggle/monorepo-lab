@@ -25,7 +25,7 @@
 
 | Source | Contract | Purpose |
 |---|---|---|
-| IAM (iam-platform) | topic `auth.user.signed-up` (auth-events.md DEPRECATED — see `specs/integration/iam-integration.md`) | Create a local user profile record when a new account is registered in IAM |
+| IAM (iam-platform) | topics `account.created` + `account.deleted` (IAM `account-events.md`; subscription `specs/contracts/events/account-lifecycle-subscriptions.md`, ADR-MONO-037) | Create a minimal local profile on account.created; project account.deleted (two-phase withdraw → anonymize) |
 | product-service | `specs/contracts/http/product-api.md` — `GET /api/products/{productId}` | Fetch product details (name, price, status) for wishlist item enrichment |
 
 ## Publishes To

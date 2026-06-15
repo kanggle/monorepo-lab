@@ -13,9 +13,9 @@ interface UserProfileJpaRepository extends JpaRepository<UserProfileJpaEntity, U
     Optional<UserProfileJpaEntity> findByUserIdAndTenantId(UUID userId, String tenantId);
 
     // Tenant-agnostic on purpose (ADR-MONO-030 Step 4, M1; TASK-BE-367): the
-    // UserSignedUp consumer/system dedup path keys off user_id, which is globally
-    // unique (uq_user_profiles_user_id) — an IAM user belongs to one tenant. Mirrors
-    // order-service findByIdAcrossTenants: identity dedup must not be tenant-scoped.
+    // account.created onboarding dedup path keys off user_id (= IAM accountId), which is
+    // globally unique (uq_user_profiles_user_id) — an IAM account belongs to one tenant.
+    // Mirrors order-service findByIdAcrossTenants: identity dedup must not be tenant-scoped.
     boolean existsByUserId(UUID userId);
 
     Page<UserProfileJpaEntity> findByTenantIdAndStatusAndEmailContaining(String tenantId, ProfileStatus status, String email, Pageable pageable);
