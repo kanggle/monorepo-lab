@@ -1,8 +1,9 @@
 # TASK-PC-FE-093 — reconcile `console-web` architecture spec with the shipped `features/ecommerce-ops` surface
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Spec-only** (docs reconciliation — 0 production code change)
 **Parent:** ADR-MONO-031 (ecommerce operator UI console consolidation) · ADR-MONO-030 Step 4 facet a/f.
+**Closure:** PR #1659 squash `903990e39`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge `changes`+`Frontend E2E smoke` pass, all code jobs skipped — docs-only).
 
 ## Goal
 
