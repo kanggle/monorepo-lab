@@ -23,6 +23,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.example.account.application.util.JsonArrayUtils.toJsonStringArray;
+
 /**
  * TASK-BE-231: Replaces all roles for an account within a tenant.
  *
@@ -106,14 +108,4 @@ public class AssignRolesUseCase {
         return new AssignRolesResult(command.accountId(), command.tenantId(), requestedRoles, now);
     }
 
-    private static String toJsonStringArray(List<String> items) {
-        if (items == null || items.isEmpty()) return "[]";
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < items.size(); i++) {
-            if (i > 0) sb.append(",");
-            sb.append("\"").append(items.get(i).replace("\"", "\\\"")).append("\"");
-        }
-        sb.append("]");
-        return sb.toString();
-    }
 }

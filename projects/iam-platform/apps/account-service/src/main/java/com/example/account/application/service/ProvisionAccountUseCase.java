@@ -86,15 +86,7 @@ public class ProvisionAccountUseCase {
             profileRepository.save(profile, tenantId);
 
             // 5. Persist role assignments
-            //    TASK-BE-255: AccountRole.create now requires a grantedBy attribution.
-            //    We use the provisioning operatorId (or, when null, fall back to the
-            //    tenantId itself so the row is never granted-by-NULL during creation).
-            List<String> roles = command.roles() != null ? command.roles() : List.of();
-            String grantedBy = command.operatorId() != null ? command.operatorId() : command.tenantId();
-            for (String roleName : roles) {
-                AccountRole role = AccountRole.create(tenantId, account.getId(), roleName, grantedBy);
-                accountRoleRepository.save(role);
-            }
+            List<String> roles = persistRoles(tenantId, account, command);
 
             // 6. Persist credential in auth-service
             //    TASK-BE-313: pass tenantId so the credential row in auth_db
@@ -112,18 +104,7 @@ public class ProvisionAccountUseCase {
             }
 
             // 7. Audit: record provisioning creation in account_status_history
-            String operatorId = command.operatorId() != null ? command.operatorId() : command.tenantId();
-            AccountStatusHistoryEntry auditEntry = AccountStatusHistoryEntry.create(
-                    command.tenantId(),
-                    account.getId(),
-                    AccountStatus.ACTIVE,   // from = ACTIVE (initial state)
-                    AccountStatus.ACTIVE,   // to   = ACTIVE (no transition, this is creation)
-                    StatusChangeReason.OPERATOR_PROVISIONING_STATUS_CHANGE,
-                    "provisioning_system",
-                    operatorId,
-                    "{\"action\":\"OPERATOR_PROVISIONING_CREATE\",\"tenantId\":\"" + command.tenantId() + "\"}"
-            );
-            historyRepository.save(auditEntry);
+            writeProvisioningAudit(command, account);
 
             // 8. Publish outbox account.created event (tenant_id included in payload)
             eventPublisher.publishAccountCreated(account, account.getTenantId().value(), profile.getLocale());
@@ -160,5 +141,46 @@ public class ProvisionAccountUseCase {
             accountRepository.assignIdentityId(tenantId, account.getId(), identityId);
         }
         return identityId;
+    }
+
+    /**
+     * Step 5: persist the requested role assignments.
+     *
+     * <p>TASK-BE-255: {@link AccountRole#create} requires a grantedBy attribution.
+     * We use the provisioning operatorId (or, when null, fall back to the tenantId
+     * itself so the row is never granted-by-NULL during creation). Runs within the
+     * caller's provisioning transaction.
+     *
+     * @return the requested role names (echoed into the provisioning result)
+     */
+    private List<String> persistRoles(TenantId tenantId, Account account, ProvisionAccountCommand command) {
+        List<String> roles = command.roles() != null ? command.roles() : List.of();
+        String grantedBy = command.operatorId() != null ? command.operatorId() : command.tenantId();
+        for (String roleName : roles) {
+            AccountRole role = AccountRole.create(tenantId, account.getId(), roleName, grantedBy);
+            accountRoleRepository.save(role);
+        }
+        return roles;
+    }
+
+    /**
+     * Step 7: record the provisioning creation in {@code account_status_history}
+     * (audit-heavy A1/A3). No status transition occurs — both from/to are ACTIVE
+     * (this is creation, not a state change). Runs within the caller's provisioning
+     * transaction so the audit row commits atomically with the account (A7).
+     */
+    private void writeProvisioningAudit(ProvisionAccountCommand command, Account account) {
+        String operatorId = command.operatorId() != null ? command.operatorId() : command.tenantId();
+        AccountStatusHistoryEntry auditEntry = AccountStatusHistoryEntry.create(
+                command.tenantId(),
+                account.getId(),
+                AccountStatus.ACTIVE,   // from = ACTIVE (initial state)
+                AccountStatus.ACTIVE,   // to   = ACTIVE (no transition, this is creation)
+                StatusChangeReason.OPERATOR_PROVISIONING_STATUS_CHANGE,
+                "provisioning_system",
+                operatorId,
+                "{\"action\":\"OPERATOR_PROVISIONING_CREATE\",\"tenantId\":\"" + command.tenantId() + "\"}"
+        );
+        historyRepository.save(auditEntry);
     }
 }
