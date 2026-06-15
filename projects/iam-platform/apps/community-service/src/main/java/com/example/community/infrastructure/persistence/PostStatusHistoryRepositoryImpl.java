@@ -19,7 +19,8 @@ public class PostStatusHistoryRepositoryImpl implements PostStatusHistoryReposit
                 entry.toStatus().name(),
                 entry.actorType().name(),
                 entry.actorId(),
-                entry.reason()
+                entry.reason(),
+                entry.occurredAt()   // preserve the domain event time (was re-stamped at save)
         ));
     }
 }
