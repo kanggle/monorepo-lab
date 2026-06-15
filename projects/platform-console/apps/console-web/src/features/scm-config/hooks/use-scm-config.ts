@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import {
   ReorderPolicySchema,
   type ReorderPolicy,
@@ -85,8 +86,7 @@ export function usePolicy(skuCode: string) {
     queryFn: () => fetchPolicy(sku),
     enabled: sku.length > 0,
     staleTime: 0,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -134,8 +134,7 @@ export function useSupplierMap(skuCode: string) {
     queryFn: () => fetchSupplierMap(sku),
     enabled: sku.length > 0,
     staleTime: 0,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }

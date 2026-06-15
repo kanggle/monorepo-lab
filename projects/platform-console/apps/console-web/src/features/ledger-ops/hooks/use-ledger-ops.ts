@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   TrialBalanceSchema,
@@ -86,8 +87,7 @@ export function useTrialBalance(initial?: TrialBalance) {
     initialData: initial,
     staleTime: 30_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -130,8 +130,7 @@ export function usePeriods(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -156,8 +155,7 @@ export function usePeriod(periodId: string | null) {
     enabled: Boolean(periodId && periodId.trim()),
     staleTime: 30_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -187,8 +185,7 @@ export function useJournalEntry(
     initialData: seeded ? initial : undefined,
     staleTime: 30_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -238,8 +235,7 @@ export function useDiscrepancies(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -264,8 +260,7 @@ export function useDiscrepancy(id: string | null) {
     enabled: Boolean(id && id.trim()),
     staleTime: 30_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -303,8 +298,7 @@ export function useAccountBalance(
     initialData: seeded ? initial : undefined,
     staleTime: 30_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -359,8 +353,7 @@ export function useAccountEntries(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -396,8 +389,7 @@ export function useStatement(id: string | null, initial?: Statement) {
     initialData: seeded ? initial : undefined,
     staleTime: 30_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -441,8 +433,7 @@ export function usePositionLots(
       enabled && Boolean(code && code.trim() && currency && currency.trim()),
     staleTime: 30_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }
@@ -480,8 +471,7 @@ export function useFxRates(enabled = true) {
     enabled,
     staleTime: 30_000,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
     retry: false,
   });
 }

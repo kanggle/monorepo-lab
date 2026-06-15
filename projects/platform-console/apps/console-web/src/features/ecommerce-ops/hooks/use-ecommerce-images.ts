@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import {
   ImageListSchema,
   type ImageList,
@@ -60,8 +61,7 @@ export function useImages(productId: string | null, initial?: ImageList) {
     enabled: productId !== null,
     initialData: initial,
     staleTime: 0,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
   });
 }
 

@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   OutboundOrderPageSchema,
@@ -92,8 +93,7 @@ export function useOutboundOrders(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
   });
 }
 
@@ -122,8 +122,7 @@ export function useOrderDrill(orderId: string | null) {
     queryFn: () => fetchOrderDrill(orderId as string),
     enabled: orderId !== null,
     staleTime: 0,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
   });
 }
 

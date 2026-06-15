@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import {
   AuditPageSchema,
   type AuditPage,
@@ -92,7 +93,6 @@ export function useAuditQuery(
     // refetchOnWindowFocus — the producer meta-audits every query.
     staleTime: initial ? 30_000 : 0,
     refetchOnMount: initial ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
   });
 }

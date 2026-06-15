@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { OperatorOverviewSchema, type OperatorOverview } from '../api/types';
 
 /**
@@ -55,7 +56,6 @@ export function useOperatorOverview(initial?: OperatorOverview) {
     // load = one bounded call set. A retry is an explicit user action.
     staleTime: initial ? 30_000 : 0,
     refetchOnMount: initial ? false : true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    ...READ_QUERY_REFETCH,
   });
 }
