@@ -11,10 +11,14 @@ dedupe), T2 (no distributed TX), T4 (no direct status update), T6
 (compensation), T7 (saga); trait `integration-heavy` I4 (idempotent
 side-effects), I6 (webhook reception pattern).
 
-> **Implementation status (TASK-BE-051, 2026-05-11)**: REST idempotency
-> (§1) is wired end-to-end via {@code OutboundIdempotencyFilter} +
-> {@code IdempotencyStore} port + {@code RedisIdempotencyStore} adapter
-> + {@code InMemoryIdempotencyStore} ({@code standalone} profile fallback).
+> **Implementation status (TASK-BE-051, 2026-05-11; shared-filter migration
+> TASK-MONO-274, 2026-06-16)**: REST idempotency (§1) is wired end-to-end via
+> the shared {@code com.example.web.idempotency.IdempotencyKeyFilter}
+> (ADR-MONO-038, `libs/java-web-servlet`) configured for outbound +
+> {@code RedisIdempotencyStore} adapter (implementing the lib
+> {@code IdempotencyStore}) + {@code InMemoryIdempotencyStore}
+> ({@code standalone} profile fallback), with an {@code OutboundIdempotencyErrorWriter}
+> (service {@code ApiErrorEnvelope}) and {@code OutboundIdempotencyMetrics}.
 > The filter runs at {@code HIGHEST_PRECEDENCE + 20}, after Spring Security
 > and before DispatcherServlet, applying to {@code POST/PATCH/PUT/DELETE
 > /api/v1/outbound/**} except {@code /webhooks/**}. The previous behaviour

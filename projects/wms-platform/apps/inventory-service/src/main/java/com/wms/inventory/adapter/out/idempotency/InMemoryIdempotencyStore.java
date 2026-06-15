@@ -1,7 +1,7 @@
 package com.wms.inventory.adapter.out.idempotency;
 
-import com.wms.inventory.application.port.out.IdempotencyStore;
-import com.wms.inventory.application.port.out.StoredResponse;
+import com.example.web.idempotency.IdempotencyStore;
+import com.example.web.idempotency.StoredResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

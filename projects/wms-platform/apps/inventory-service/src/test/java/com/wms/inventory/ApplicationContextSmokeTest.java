@@ -2,6 +2,7 @@ package com.wms.inventory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.web.idempotency.IdempotencyStore;
 import com.wms.inventory.adapter.in.messaging.masterref.MasterEventParser;
 import com.wms.inventory.adapter.in.web.controller.AdjustmentController;
 import com.wms.inventory.adapter.in.web.controller.InventoryQueryController;
@@ -20,7 +21,6 @@ import com.wms.inventory.application.port.in.ReleaseReservationUseCase;
 import com.wms.inventory.application.port.in.ReserveStockUseCase;
 import com.wms.inventory.application.port.in.TransferStockUseCase;
 import com.wms.inventory.application.port.out.EventDedupePort;
-import com.wms.inventory.application.port.out.IdempotencyStore;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
 import com.wms.inventory.application.port.out.InventoryRepository;
 import com.wms.inventory.application.port.out.LowStockAlertDebouncePort;
