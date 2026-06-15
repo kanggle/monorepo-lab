@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-BE-009-console-integration-contract-roles-only-admission-alignment.md` — **REVIEW**. Doc-only, net-zero, single-file spec alignment: brings `console-integration-contract.md`'s ecommerce overview leg (§ 2.4.9.1 card 6) + seller operator surface into conformance with the roles-only operator model (ADR-MONO-035 4a operator domain-role derivation `ecommerce → ADMIN` + 4b `account_type` gateway-leg removal). The console contract was the **last consumer-side doc** still framing the ecommerce gateway admission via `account_type=OPERATOR` ("operator token carries no ADMIN role") — **factually inverted** since TASK-BE-380 (#1596): the gateway's `AccountTypeEnforcementFilter` now enforces `roles ∋ ADMIN` uniformly on read+write, and the operator's assume-tenant token carries the IAM-derived `ADMIN` role. The authoritative producer (ecommerce `product-api.md`) was already aligned by #1603 — this converges the consumer to it. No code / contract semantics / Flyway / ADR-decision change. 분석=Opus 4.8 / 구현=Opus (doc-only). [[project_adr032_unified_identity_roles]]
 
 ## done
 
