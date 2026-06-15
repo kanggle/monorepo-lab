@@ -1,6 +1,6 @@
 # TASK-FIN-BE-034 — ledger-service 스펙 오버뷰 정합 (증분 13~25th)
 
-- **Status**: review
+- **Status**: done
 - **Project**: finance-platform
 - **Service**: ledger-service
 - **Domain / traits**: fintech / [transactional, regulated, audit-heavy]
