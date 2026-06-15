@@ -1,6 +1,9 @@
 # TASK-BE-391 — Collapse WMS per-entity exception handlers to a `Class → HttpStatus` map (behavior-preserving)
 
-**Status:** review
+**Status:** done
+
+> **DONE (2026-06-15, 3-dim verified — impl PR #1656 squash `be0a264b2`).** (a) MERGED + `be0a264b2`; (b) origin/main tip = `be0a264b2`; (c) pre-merge 20/20 required checks SUCCESS (Build & Test JDK21 Linux + Integration[master+outbound Testcontainers] + all E2E/Frontend/Package — 0 failing). Net −153 LOC across 5 handlers, behavior-preserving. worktree-isolated (main parked).
+
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (mechanical, contained refactor — but status-mapping exactness is load-bearing)
 
