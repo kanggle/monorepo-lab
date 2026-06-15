@@ -1,6 +1,6 @@
 # TASK-FIN-BE-032 — FX rate feed consumption: rate-omission cache fallback + staleness guard
 
-- **Status**: ready
+- **Status**: done
 - **Project**: finance-platform
 - **Service**: ledger-service
 - **Domain / traits**: fintech / [transactional, regulated, audit-heavy]
