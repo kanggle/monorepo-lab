@@ -47,6 +47,8 @@ public class QueryEmployeeOrgViewUseCase {
     private final CostCenterProjectionRepository costCenterRepository;
     private final JobGradeProjectionRepository jobGradeRepository;
     private final OrgViewMetricsPort metrics;
+    private final OrgScopeExpander orgScopeExpander;
+    private final DepartmentPathResolver departmentPathResolver;
 
     @Value("${erpplatform.readmodel.department-path-max-depth:32}")
     private int departmentPathMaxDepth;
@@ -105,7 +107,7 @@ public class QueryEmployeeOrgViewUseCase {
         if (departmentId != null && !departmentId.isBlank()) {
             explicitSubtree = departmentRepository.findSubtreeIds(departmentId, departmentPathMaxDepth);
         }
-        List<String> orgScopeSubtree = expandOrgScope(orgScopeRootIds);
+        List<String> orgScopeSubtree = orgScopeExpander.expand(orgScopeRootIds);
         List<String> subtreeIds = intersectFilters(explicitSubtree, orgScopeSubtree);
         List<EmployeeProjection> employees =
                 employeeRepository.findPage(effectiveStatus, subtreeIds, page, size);
@@ -205,56 +207,22 @@ public class QueryEmployeeOrgViewUseCase {
     }
 
     /**
-     * Resolves the root→leaf department ancestry path by walking {@code parentId}.
-     * Depth-bounded (the producer guarantees no parent-cycle; this terminates
-     * defensively at {@code departmentPathMaxDepth} and also guards a self/visited
-     * cycle). A parent whose projection is absent simply ends the walk (the path
-     * is best-effort; the leaf is always present because the leaf department
-     * resolved).
+     * Resolves the root→leaf department ancestry path (delegates to the shared
+     * {@link DepartmentPathResolver}; maps the neutral nodes to this view's
+     * {@link EmployeeOrgView.PathNode}). Net-zero — the walk semantics are
+     * preserved verbatim in the collaborator.
      */
     private List<EmployeeOrgView.PathNode> resolvePath(DepartmentProjection leaf) {
-        java.util.Deque<EmployeeOrgView.PathNode> reversed = new java.util.ArrayDeque<>();
-        Set<String> visited = new LinkedHashSet<>();
-        DepartmentProjection current = leaf;
-        int depth = 0;
-        while (current != null && depth < departmentPathMaxDepth && visited.add(current.id())) {
-            reversed.addFirst(new EmployeeOrgView.PathNode(
-                    current.id(), current.code(), current.name()));
-            String parentId = current.parentId();
-            if (parentId == null || parentId.isBlank()) {
-                break;
-            }
-            current = departmentRepository.findById(parentId).orElse(null);
-            depth++;
+        List<EmployeeOrgView.PathNode> path = new ArrayList<>();
+        for (DepartmentPathResolver.Node node : departmentPathResolver.resolvePath(leaf)) {
+            path.add(new EmployeeOrgView.PathNode(node.id(), node.code(), node.name()));
         }
-        return new ArrayList<>(reversed);
+        return path;
     }
 
     // ------------------------------------------------------------------------
     // org_scope read filter (TASK-ERP-BE-008)
     // ------------------------------------------------------------------------
-
-    /**
-     * Expands {@code org_scope} subtree-roots → the union of their descendant
-     * department ids over {@code department_proj.parent_id} (mirrors
-     * masterdata-service's write-side subtree containment, but using the
-     * read-model's own projection). {@code null} → {@code null} (no narrowing,
-     * net-zero); a bounded scope with no/empty roots → an empty list (matches
-     * nothing — zero-scope fail-closed). A root not (yet) projected contributes
-     * only itself (best-effort; never fabricates ids it cannot see).
-     */
-    private List<String> expandOrgScope(List<String> orgScopeRootIds) {
-        if (orgScopeRootIds == null) {
-            return null;
-        }
-        Set<String> union = new LinkedHashSet<>();
-        for (String root : orgScopeRootIds) {
-            if (root != null && !root.isBlank()) {
-                union.addAll(departmentRepository.findSubtreeIds(root, departmentPathMaxDepth));
-            }
-        }
-        return new ArrayList<>(union);
-    }
 
     /**
      * Intersects the explicit {@code ?departmentId=} subtree filter with the
@@ -284,7 +252,7 @@ public class QueryEmployeeOrgViewUseCase {
         if (departmentId == null) {
             return false;
         }
-        List<String> expanded = expandOrgScope(orgScopeRootIds);
+        List<String> expanded = orgScopeExpander.expand(orgScopeRootIds);
         return expanded != null && expanded.contains(departmentId);
     }
 }

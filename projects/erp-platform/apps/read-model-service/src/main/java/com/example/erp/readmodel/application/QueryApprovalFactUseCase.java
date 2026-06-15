@@ -14,14 +14,11 @@ import com.example.erp.readmodel.domain.projection.EmployeeProjection;
 import com.example.erp.readmodel.domain.projection.repository.DepartmentProjectionRepository;
 import com.example.erp.readmodel.domain.projection.repository.EmployeeProjectionRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Serves the read-only approval-fact API (E5 — latest fact only; the
@@ -48,9 +45,8 @@ public class QueryApprovalFactUseCase {
     private final DepartmentProjectionRepository departmentRepository;
     private final EmployeeProjectionRepository employeeRepository;
     private final OrgViewMetricsPort metrics;
-
-    @Value("${erpplatform.readmodel.department-path-max-depth:32}")
-    private int departmentPathMaxDepth;
+    private final OrgScopeExpander orgScopeExpander;
+    private final DepartmentPathResolver departmentPathResolver;
 
     // ------------------------------------------------------------------------
     // Detail
@@ -79,7 +75,7 @@ public class QueryApprovalFactUseCase {
         ApprovalFactProjection fact = approvalRepository.findById(approvalRequestId)
                 .orElseThrow(() -> new ReadModelNotFoundException(approvalRequestId));
         if (orgScopeRootIds != null
-                && !isWithinOrgScope(fact, expandOrgScope(orgScopeRootIds))) {
+                && !isWithinOrgScope(fact, orgScopeExpander.expand(orgScopeRootIds))) {
             throw new ReadModelNotFoundException(approvalRequestId);
         }
         return resolveSubject(fact, true);
@@ -100,7 +96,7 @@ public class QueryApprovalFactUseCase {
             filter = ApprovalFactFilter.unbounded(status, subjectType, subjectId,
                     approverId, submitterId);
         } else {
-            List<String> scopedDepartmentIds = expandOrgScope(orgScopeRootIds);
+            List<String> scopedDepartmentIds = orgScopeExpander.expand(orgScopeRootIds);
             // EMPLOYEE subjects in scope = employees whose department is in scope.
             List<String> scopedEmployeeSubjectIds =
                     employeeRepository.findIdsByDepartmentIdIn(scopedDepartmentIds);
@@ -150,49 +146,22 @@ public class QueryApprovalFactUseCase {
     }
 
     /**
-     * Resolves the root→leaf department ancestry path by walking {@code parentId}
-     * (depth-bounded, cycle-guarded — same walk as the employee org-view).
+     * Resolves the root→leaf department ancestry path (delegates to the shared
+     * {@link DepartmentPathResolver}; maps the neutral nodes to this view's
+     * {@link ApprovalFactView.PathNode}). Net-zero — the walk semantics are
+     * preserved verbatim in the collaborator.
      */
     private List<ApprovalFactView.PathNode> resolvePath(DepartmentProjection leaf) {
-        java.util.Deque<ApprovalFactView.PathNode> reversed = new java.util.ArrayDeque<>();
-        Set<String> visited = new LinkedHashSet<>();
-        DepartmentProjection current = leaf;
-        int depth = 0;
-        while (current != null && depth < departmentPathMaxDepth && visited.add(current.id())) {
-            reversed.addFirst(new ApprovalFactView.PathNode(
-                    current.id(), current.code(), current.name()));
-            String parentId = current.parentId();
-            if (parentId == null || parentId.isBlank()) {
-                break;
-            }
-            current = departmentRepository.findById(parentId).orElse(null);
-            depth++;
+        List<ApprovalFactView.PathNode> path = new ArrayList<>();
+        for (DepartmentPathResolver.Node node : departmentPathResolver.resolvePath(leaf)) {
+            path.add(new ApprovalFactView.PathNode(node.id(), node.code(), node.name()));
         }
-        return new ArrayList<>(reversed);
+        return path;
     }
 
     // ------------------------------------------------------------------------
     // org_scope helpers (subject department → subtree containment)
     // ------------------------------------------------------------------------
-
-    /**
-     * Expands {@code org_scope} subtree-roots → the union of their descendant
-     * department ids over {@code department_proj.parent_id}. {@code null} →
-     * {@code null} (no narrowing); a bounded scope with no roots → an empty list
-     * (zero-scope, matches nothing).
-     */
-    private List<String> expandOrgScope(List<String> orgScopeRootIds) {
-        if (orgScopeRootIds == null) {
-            return null;
-        }
-        Set<String> union = new LinkedHashSet<>();
-        for (String root : orgScopeRootIds) {
-            if (root != null && !root.isBlank()) {
-                union.addAll(departmentRepository.findSubtreeIds(root, departmentPathMaxDepth));
-            }
-        }
-        return new ArrayList<>(union);
-    }
 
     /**
      * {@code true} iff the fact's subject department is within the expanded

@@ -58,7 +58,16 @@ class QueryApprovalFactUseCaseTest {
 
     @BeforeEach
     void setDepthBound() {
-        ReflectionTestUtils.setField(useCase, "departmentPathMaxDepth", 32);
+        // The org_scope expansion + ancestry walk were extracted to real
+        // collaborators (net-zero); wire them with the same department mock + depth
+        // so the existing stubs/assertions are unchanged.
+        OrgScopeExpander orgScopeExpander = new OrgScopeExpander(departmentRepository);
+        ReflectionTestUtils.setField(orgScopeExpander, "departmentPathMaxDepth", 32);
+        DepartmentPathResolver departmentPathResolver =
+                new DepartmentPathResolver(departmentRepository);
+        ReflectionTestUtils.setField(departmentPathResolver, "departmentPathMaxDepth", 32);
+        ReflectionTestUtils.setField(useCase, "orgScopeExpander", orgScopeExpander);
+        ReflectionTestUtils.setField(useCase, "departmentPathResolver", departmentPathResolver);
     }
 
     private ApprovalFactProjection departmentFact(String subjectDeptId) {

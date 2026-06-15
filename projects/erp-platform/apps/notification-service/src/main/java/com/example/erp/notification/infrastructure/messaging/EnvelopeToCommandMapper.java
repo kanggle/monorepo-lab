@@ -35,7 +35,20 @@ public class EnvelopeToCommandMapper {
                 ? "erp" : requiredTenantId;
     }
 
-    public NotifyOnApprovalCommand map(String rawValue, String topic, NotificationType type) {
+    /**
+     * The shared mapper prologue result: the parsed + validity-checked envelope
+     * and its resolved (and tenant-invariant-checked) {@code tenantId}.
+     */
+    private record ValidatedEnvelope(ApprovalEventEnvelope envelope, String tenantId) {
+    }
+
+    /**
+     * Parses + validates the envelope and resolves/checks the tenant (extracted
+     * dedup — the byte-identical prologue of {@link #map} / {@link #mapDelegation}
+     * / {@link #mapDelegationRevoked}). The {@link InvalidEnvelopeException}
+     * messages are preserved verbatim.
+     */
+    private ValidatedEnvelope parseAndValidateTenant(String rawValue, String topic) {
         ApprovalEventEnvelope envelope;
         try {
             envelope = objectMapper.readValue(rawValue, ApprovalEventEnvelope.class);
@@ -55,6 +68,13 @@ public class EnvelopeToCommandMapper {
             throw new InvalidEnvelopeException("Out-of-contract tenantId '" + tenantId
                     + "' on topic " + topic + " (single-tenant invariant: " + requiredTenantId + ")");
         }
+        return new ValidatedEnvelope(envelope, tenantId);
+    }
+
+    public NotifyOnApprovalCommand map(String rawValue, String topic, NotificationType type) {
+        ValidatedEnvelope validated = parseAndValidateTenant(rawValue, topic);
+        ApprovalEventEnvelope envelope = validated.envelope();
+        String tenantId = validated.tenantId();
 
         String approvalRequestId = envelope.payloadString("approvalRequestId");
         if (approvalRequestId == null || approvalRequestId.isBlank()) {
@@ -109,25 +129,9 @@ public class EnvelopeToCommandMapper {
      * retry. {@code validTo} / {@code reason} are optional (NON_NULL absent).
      */
     public NotifyOnDelegationCommand mapDelegation(String rawValue, String topic) {
-        ApprovalEventEnvelope envelope;
-        try {
-            envelope = objectMapper.readValue(rawValue, ApprovalEventEnvelope.class);
-        } catch (Exception e) {
-            throw new InvalidEnvelopeException("Unparseable envelope on topic " + topic
-                    + ": " + e.getMessage());
-        }
-        if (envelope == null || !envelope.isValid()) {
-            throw new InvalidEnvelopeException("Invalid envelope (missing eventId/aggregateId/"
-                    + "payload) on topic " + topic);
-        }
-        String tenantId = envelope.payloadString("tenantId");
-        if (tenantId == null || tenantId.isBlank()) {
-            tenantId = envelope.tenantId();
-        }
-        if (tenantId == null || !requiredTenantId.equals(tenantId)) {
-            throw new InvalidEnvelopeException("Out-of-contract tenantId '" + tenantId
-                    + "' on topic " + topic + " (single-tenant invariant: " + requiredTenantId + ")");
-        }
+        ValidatedEnvelope validated = parseAndValidateTenant(rawValue, topic);
+        ApprovalEventEnvelope envelope = validated.envelope();
+        String tenantId = validated.tenantId();
 
         String grantId = envelope.payloadString("grantId");
         if (grantId == null || grantId.isBlank()) {
@@ -166,25 +170,9 @@ public class EnvelopeToCommandMapper {
      * (the recipient) → {@link InvalidEnvelopeException} → immediate DLT.
      */
     public NotifyOnDelegationRevokedCommand mapDelegationRevoked(String rawValue, String topic) {
-        ApprovalEventEnvelope envelope;
-        try {
-            envelope = objectMapper.readValue(rawValue, ApprovalEventEnvelope.class);
-        } catch (Exception e) {
-            throw new InvalidEnvelopeException("Unparseable envelope on topic " + topic
-                    + ": " + e.getMessage());
-        }
-        if (envelope == null || !envelope.isValid()) {
-            throw new InvalidEnvelopeException("Invalid envelope (missing eventId/aggregateId/"
-                    + "payload) on topic " + topic);
-        }
-        String tenantId = envelope.payloadString("tenantId");
-        if (tenantId == null || tenantId.isBlank()) {
-            tenantId = envelope.tenantId();
-        }
-        if (tenantId == null || !requiredTenantId.equals(tenantId)) {
-            throw new InvalidEnvelopeException("Out-of-contract tenantId '" + tenantId
-                    + "' on topic " + topic + " (single-tenant invariant: " + requiredTenantId + ")");
-        }
+        ValidatedEnvelope validated = parseAndValidateTenant(rawValue, topic);
+        ApprovalEventEnvelope envelope = validated.envelope();
+        String tenantId = validated.tenantId();
 
         String grantId = envelope.payloadString("grantId");
         if (grantId == null || grantId.isBlank()) {

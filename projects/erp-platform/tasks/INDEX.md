@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-023-net-zero-code-refactor.md` — **REVIEW**. `/refactor-code` service-scan over all 4 erp services — behavior-preserving (net-zero) dedup + import hygiene only. Discovery found the code mature/clean; domain invariants (fail-closed authz, idempotency, audit, state-machine, SoD, outbox, terminal-consumer, E5) explicitly NOT touched. 6 refactors: R1 `OrgScopeExpander` (read-model expandOrgScope 3-dup) · R2 `DepartmentPathResolver` (ancestry walk 2-dup) · R3 `ReadQueryWebSupport` (controller paging/org_scope 3-dup) · R4 `ActorContext.canWriteErp/canReadErp` (approval scope-tuple 3-dup, byte-equivalent, READ-only entitlement asymmetry preserved) · R5 `EnvelopeToCommandMapper.parseAndValidateTenant` (notification prologue 3-dup) · R6 import hygiene (masterdata ZoneOffset/ArrayList FQN). Verification: read-model + approval + notification + masterdata `:check` all BUILD SUCCESSFUL (read-model + approval independently re-run); test wiring updated for new collaborators, **no assertion changed**. No contract/schema/status/decision change. CI Testcontainers IT = authoritative behavioral gate. 분석=Opus 4.8 / 구현=refactoring-engineer(Opus dispatch) + dispatcher 독립 재검증(R4 authz byte-equivalence + 메인 체크아웃 오염 0 + read-model/approval `:check` 직접 재실행). 사용자 "ERP 측 코드 리팩토링" 선택. [[project_monorepo_template_strategy]] [[feedback_spring_boot_diagnostic_patterns]]
 
 ## done
 

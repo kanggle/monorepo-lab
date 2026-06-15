@@ -21,22 +21,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class JwtBackedAuthorizationAdapter implements AuthorizationPort {
 
-    private static final String ENTITLED_DOMAIN = "erp";
-
     @Override
     public AuthorizationDecision evaluate(ActorContext actor, RequiredScope required,
                                           String targetDepartmentId) {
         boolean roleOk = switch (required) {
-            case READ -> actor.isOperator()
-                    || actor.hasScope("erp.read")
-                    || actor.hasScope("erp.write")
-                    || actor.hasScope("erp.approval.create")
-                    || actor.hasScope("erp.approval.approve")
-                    || actor.isEntitledTo(ENTITLED_DOMAIN);
-            case WRITE -> actor.isOperator()
-                    || actor.hasScope("erp.write")
-                    || actor.hasScope("erp.approval.create")
-                    || actor.hasScope("erp.approval.approve");
+            case READ -> actor.canReadErp();
+            case WRITE -> actor.canWriteErp();
         };
         if (!roleOk) {
             return AuthorizationDecision.denyRole(

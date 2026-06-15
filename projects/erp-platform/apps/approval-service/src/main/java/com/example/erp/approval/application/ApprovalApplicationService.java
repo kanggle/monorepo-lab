@@ -66,8 +66,6 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class ApprovalApplicationService {
 
-    private static final String ENTITLED_DOMAIN = "erp";
-
     private final ApprovalRequestRepository requestRepository;
     private final ApprovalAuditLogRepository auditLogRepository;
     private final ApprovalEventPublisher eventPublisher;
@@ -259,10 +257,7 @@ public class ApprovalApplicationService {
         // WRITE/transition: scope or operator. Entitlement-trust NEVER widens a
         // transition (architecture.md § Approver authorization — entitlement
         // grants READ only).
-        if (actor.isOperator()
-                || actor.hasScope("erp.write")
-                || actor.hasScope("erp.approval.create")
-                || actor.hasScope("erp.approval.approve")) {
+        if (actor.canWriteErp()) {
             return;
         }
         AuthorizationDecision d = authorizationPort.evaluate(actor, RequiredScope.WRITE, null);
@@ -271,12 +266,7 @@ public class ApprovalApplicationService {
 
     private void authorizeRead(ActorContext actor) {
         // READ dual-accept: scope OR operator OR entitlement-trust (ADR-MONO-019).
-        if (actor.isOperator()
-                || actor.hasScope("erp.read")
-                || actor.hasScope("erp.write")
-                || actor.hasScope("erp.approval.create")
-                || actor.hasScope("erp.approval.approve")
-                || actor.isEntitledTo(ENTITLED_DOMAIN)) {
+        if (actor.canReadErp()) {
             return;
         }
         AuthorizationDecision d = authorizationPort.evaluate(actor, RequiredScope.READ, null);

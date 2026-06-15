@@ -132,10 +132,7 @@ public class DelegationApplicationService {
     private void authorizeWrite(ActorContext actor) {
         // WRITE: scope or operator (entitlement NEVER widens a write — mirrors
         // ApprovalApplicationService.authorizeWrite).
-        if (actor.isOperator()
-                || actor.hasScope("erp.write")
-                || actor.hasScope("erp.approval.create")
-                || actor.hasScope("erp.approval.approve")) {
+        if (actor.canWriteErp()) {
             return;
         }
         throw new PermissionDeniedException("erp.write scope required for delegation mutation");
@@ -143,12 +140,7 @@ public class DelegationApplicationService {
 
     private void authorizeRead(ActorContext actor) {
         // READ dual-accept: scope OR operator OR entitlement-trust (ADR-MONO-019).
-        if (actor.isOperator()
-                || actor.hasScope("erp.read")
-                || actor.hasScope("erp.write")
-                || actor.hasScope("erp.approval.create")
-                || actor.hasScope("erp.approval.approve")
-                || actor.isEntitledTo("erp")) {
+        if (actor.canReadErp()) {
             return;
         }
         throw new PermissionDeniedException("erp.read scope required for delegation list");

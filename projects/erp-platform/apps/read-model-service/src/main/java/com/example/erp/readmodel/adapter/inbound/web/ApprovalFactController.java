@@ -7,7 +7,6 @@ import com.example.erp.readmodel.application.query.ApprovalFactPage;
 import com.example.erp.readmodel.domain.approval.ApprovalFactView;
 import com.example.erp.readmodel.domain.approval.ApprovalStatus;
 import com.example.erp.readmodel.domain.approval.ApprovalSubjectType;
-import com.example.erp.readmodel.presentation.security.OrgScope;
 import com.example.erp.readmodel.presentation.security.ReadAuthorizationGate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -43,7 +42,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ApprovalFactController {
 
-    private static final int MAX_SIZE = 100;
+    private static final int MAX_SIZE = ReadQueryWebSupport.MAX_SIZE;
 
     private final QueryApprovalFactUseCase useCase;
     private final ReadAuthorizationGate readGate;
@@ -60,12 +59,12 @@ public class ApprovalFactController {
             @AuthenticationPrincipal Jwt jwt) {
 
         readGate.requireRead(jwt);
-        validatePaging(page, size);
+        ReadQueryWebSupport.validatePaging(page, size);
         ApprovalStatus statusFilter = parseStatus(status);
         ApprovalSubjectType subjectTypeFilter = parseSubjectType(subjectType);
 
         // org_scope read filter (TASK-ERP-BE-008): null = no narrowing (net-zero).
-        List<String> orgScopeRootIds = orgScopeRootIds(jwt);
+        List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);
 
         ApprovalFactPage result = useCase.list(statusFilter, subjectTypeFilter, subjectId,
                 approverId, submitterId, orgScopeRootIds, page, Math.min(size, MAX_SIZE));
@@ -84,25 +83,11 @@ public class ApprovalFactController {
         readGate.requireRead(jwt);
 
         // org_scope read filter: out-of-scope → 404 (no existence leak).
-        List<String> orgScopeRootIds = orgScopeRootIds(jwt);
+        List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);
 
         ApprovalFactView view = useCase.getOne(approvalRequestId, orgScopeRootIds);
         ApprovalFactResponse data = ApprovalFactResponse.from(view);
         return ResponseEntity.ok(ApiEnvelope.of(data, view.unresolved()));
-    }
-
-    private List<String> orgScopeRootIds(Jwt jwt) {
-        OrgScope orgScope = readGate.orgScope(jwt);
-        return orgScope.isPlatform() ? null : List.copyOf(orgScope.roots());
-    }
-
-    private void validatePaging(int page, int size) {
-        if (page < 0) {
-            throw new IllegalArgumentException("page must be >= 0");
-        }
-        if (size < 1 || size > MAX_SIZE) {
-            throw new IllegalArgumentException("size must be between 1 and " + MAX_SIZE);
-        }
     }
 
     private ApprovalStatus parseStatus(String status) {

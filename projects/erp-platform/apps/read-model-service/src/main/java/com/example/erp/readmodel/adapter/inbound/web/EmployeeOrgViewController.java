@@ -6,7 +6,6 @@ import com.example.erp.readmodel.application.QueryEmployeeOrgViewUseCase;
 import com.example.erp.readmodel.application.query.EmployeeOrgViewPage;
 import com.example.erp.readmodel.domain.common.MasterStatus;
 import com.example.erp.readmodel.domain.orgview.EmployeeOrgView;
-import com.example.erp.readmodel.presentation.security.OrgScope;
 import com.example.erp.readmodel.presentation.security.ReadAuthorizationGate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -42,7 +41,7 @@ import java.util.List;
 public class EmployeeOrgViewController {
 
     private static final int DEFAULT_SIZE = 20;
-    private static final int MAX_SIZE = 100;
+    private static final int MAX_SIZE = ReadQueryWebSupport.MAX_SIZE;
 
     private final QueryEmployeeOrgViewUseCase useCase;
     private final ReadAuthorizationGate readGate;
@@ -57,14 +56,12 @@ public class EmployeeOrgViewController {
             @AuthenticationPrincipal Jwt jwt) {
 
         readGate.requireRead(jwt);
-        validatePaging(page, size);
+        ReadQueryWebSupport.validatePaging(page, size);
         parseAsOf(asOf); // validates format (point-in-time parity, E2)
         MasterStatus statusFilter = parseStatus(status);
 
         // org_scope read filter (TASK-ERP-BE-008): null = no narrowing (net-zero).
-        OrgScope orgScope = readGate.orgScope(jwt);
-        List<String> orgScopeRootIds = orgScope.isPlatform()
-                ? null : List.copyOf(orgScope.roots());
+        List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);
 
         EmployeeOrgViewPage result = useCase.list(statusFilter, departmentId, orgScopeRootIds,
                 page, Math.min(size, MAX_SIZE));
@@ -85,22 +82,11 @@ public class EmployeeOrgViewController {
         parseAsOf(asOf);
 
         // org_scope read filter (TASK-ERP-BE-008): out-of-scope → 404 (no leak).
-        OrgScope orgScope = readGate.orgScope(jwt);
-        List<String> orgScopeRootIds = orgScope.isPlatform()
-                ? null : List.copyOf(orgScope.roots());
+        List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);
 
         EmployeeOrgView view = useCase.getOne(id, orgScopeRootIds);
         EmployeeOrgViewResponse data = EmployeeOrgViewResponse.from(view);
         return ResponseEntity.ok(ApiEnvelope.of(data, view.unresolved()));
-    }
-
-    private void validatePaging(int page, int size) {
-        if (page < 0) {
-            throw new IllegalArgumentException("page must be >= 0");
-        }
-        if (size < 1 || size > MAX_SIZE) {
-            throw new IllegalArgumentException("size must be between 1 and " + MAX_SIZE);
-        }
     }
 
     private MasterStatus parseStatus(String status) {

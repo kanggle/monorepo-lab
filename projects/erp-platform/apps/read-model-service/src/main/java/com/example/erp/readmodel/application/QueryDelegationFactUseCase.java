@@ -7,18 +7,13 @@ import com.example.erp.readmodel.domain.delegation.repository.DelegationFactFilt
 import com.example.erp.readmodel.domain.delegation.repository.DelegationFactProjectionRepository;
 import com.example.erp.readmodel.domain.error.ReadModelNotFoundException;
 import com.example.erp.readmodel.domain.projection.EmployeeProjection;
-import com.example.erp.readmodel.domain.projection.repository.DepartmentProjectionRepository;
 import com.example.erp.readmodel.domain.projection.repository.EmployeeProjectionRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Serves the read-only delegation-fact API (E5 — latest fact only; the
@@ -42,11 +37,8 @@ import java.util.Set;
 public class QueryDelegationFactUseCase {
 
     private final DelegationFactProjectionRepository delegationRepository;
-    private final DepartmentProjectionRepository departmentRepository;
     private final EmployeeProjectionRepository employeeRepository;
-
-    @Value("${erpplatform.readmodel.department-path-max-depth:32}")
-    private int departmentPathMaxDepth;
+    private final OrgScopeExpander orgScopeExpander;
 
     // ------------------------------------------------------------------------
     // Detail
@@ -71,7 +63,7 @@ public class QueryDelegationFactUseCase {
         DelegationFactProjection fact = delegationRepository.findById(grantId)
                 .orElseThrow(() -> new ReadModelNotFoundException(grantId));
         if (orgScopeRootIds != null
-                && !isWithinOrgScope(fact, expandOrgScope(orgScopeRootIds))) {
+                && !isWithinOrgScope(fact, orgScopeExpander.expand(orgScopeRootIds))) {
             throw new ReadModelNotFoundException(grantId);
         }
         return fact;
@@ -91,7 +83,7 @@ public class QueryDelegationFactUseCase {
             // Net-zero: no org_scope narrowing.
             filter = DelegationFactFilter.unbounded(delegatorId, delegateId, status, activeAt);
         } else {
-            List<String> scopedDepartmentIds = expandOrgScope(orgScopeRootIds);
+            List<String> scopedDepartmentIds = orgScopeExpander.expand(orgScopeRootIds);
             // Delegators in scope = employees whose department is in the subtree.
             List<String> scopedDelegatorIds =
                     employeeRepository.findIdsByDepartmentIdIn(scopedDepartmentIds);
@@ -107,25 +99,6 @@ public class QueryDelegationFactUseCase {
     // ------------------------------------------------------------------------
     // org_scope helpers (delegator department → subtree containment)
     // ------------------------------------------------------------------------
-
-    /**
-     * Expands {@code org_scope} subtree-roots → the union of their descendant
-     * department ids over {@code department_proj.parent_id}. {@code null} →
-     * {@code null} (no narrowing); a bounded scope with no roots → an empty list
-     * (zero-scope, matches nothing).
-     */
-    private List<String> expandOrgScope(List<String> orgScopeRootIds) {
-        if (orgScopeRootIds == null) {
-            return null;
-        }
-        Set<String> union = new LinkedHashSet<>();
-        for (String root : orgScopeRootIds) {
-            if (root != null && !root.isBlank()) {
-                union.addAll(departmentRepository.findSubtreeIds(root, departmentPathMaxDepth));
-            }
-        }
-        return new ArrayList<>(union);
-    }
 
     /**
      * {@code true} iff the fact's delegator's department is within the expanded

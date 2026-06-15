@@ -54,7 +54,12 @@ class QueryDelegationFactUseCaseTest {
 
     @BeforeEach
     void setDepthBound() {
-        ReflectionTestUtils.setField(useCase, "departmentPathMaxDepth", 32);
+        // The org_scope expansion was extracted to a real collaborator (net-zero);
+        // wire it with the same department mock + depth so the existing
+        // stubs/assertions are unchanged.
+        OrgScopeExpander orgScopeExpander = new OrgScopeExpander(departmentRepository);
+        ReflectionTestUtils.setField(orgScopeExpander, "departmentPathMaxDepth", 32);
+        ReflectionTestUtils.setField(useCase, "orgScopeExpander", orgScopeExpander);
     }
 
     private DelegationFactProjection grant(String delegatorId) {
