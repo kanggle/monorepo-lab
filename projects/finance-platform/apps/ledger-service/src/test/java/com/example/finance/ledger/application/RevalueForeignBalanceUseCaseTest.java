@@ -1,5 +1,6 @@
 package com.example.finance.ledger.application;
 
+import com.example.finance.ledger.application.ResolveEffectiveFxRate.ResolvedFxRate;
 import com.example.finance.ledger.application.RevalueForeignBalanceUseCase.NoOpReason;
 import com.example.finance.ledger.application.RevalueForeignBalanceUseCase.Result;
 import com.example.finance.ledger.application.port.outbound.ClockPort;
@@ -39,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,6 +68,7 @@ class RevalueForeignBalanceUseCaseTest {
     @Mock ProcessedEventStore processedEventStore;
     @Mock PostJournalEntryUseCase postJournalEntryUseCase;
     @Mock FxPositionLotRepository fxPositionLotRepository;
+    @Mock ResolveEffectiveFxRate fxRateResolver;
     @Mock ClockPort clock;
 
     RevalueForeignBalanceUseCase useCase;
@@ -74,7 +77,12 @@ class RevalueForeignBalanceUseCaseTest {
     void setUp() {
         useCase = new RevalueForeignBalanceUseCase(
                 journalRepository, processedEventStore, postJournalEntryUseCase,
-                fxPositionLotRepository, clock);
+                fxPositionLotRepository, fxRateResolver, clock);
+        // Existing tests all pass a MANUAL closingRate; mirror the production manual path — the
+        // resolver echoes the provided rate as a non-feed ResolvedFxRate (net-zero). Lenient so
+        // the early-reject / no-op tests (which never reach the resolve call) don't trip STRICT_STUBS.
+        lenient().when(fxRateResolver.resolve(any(), any(), any()))
+                .thenAnswer(inv -> new ResolvedFxRate(inv.getArgument(2), false, "manual"));
     }
 
     private static RevalueForeignBalanceCommand cmd(String rate) {

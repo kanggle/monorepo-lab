@@ -20,6 +20,12 @@ import java.time.Instant;
  * (net-zero). A non-integer value surfaces as a 422; the position-relative validation
  * (zero / opposite-sign / over-settle -&gt; {@code SETTLEMENT_AMOUNT_INVALID}) is in the
  * use case.
+ *
+ * <p><b>24th increment (TASK-FIN-BE-032, ADR-002 D3/D4) — {@code settlementRate} is now
+ * OPTIONAL.</b> Omitting it (null/blank) resolves the rate from the FX rate feed cache when
+ * the feed is enabled and a fresh quote exists; otherwise the use case fails closed with 422
+ * {@code FX_RATE_UNAVAILABLE}. A supplied rate is used verbatim (net-zero). A non-numeric
+ * supplied value still surfaces as a 422 (unchanged).
  */
 public record SettlementRequest(
         String ledgerAccountCode,
@@ -35,7 +41,8 @@ public record SettlementRequest(
      * Map the validated request + the request-scoped fields (tenant, actor, idempotency
      * key) to the application command. The currency resolve surfaces an unsupported
      * currency as a 422 via the handler; {@code settlementRate} is parsed as an exact
-     * {@link BigDecimal} (a non-numeric value surfaces as a 422).
+     * {@link BigDecimal} when present, or {@code null} when omitted (feed fallback in the
+     * use case — 24th increment). A non-numeric value surfaces as a 422.
      */
     public SettleForeignPositionCommand toCommand(String tenantId, String operatorSubject,
                                                   String idempotencyKey) {
@@ -49,7 +56,7 @@ public record SettlementRequest(
 
     private static BigDecimal parseRate(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("settlementRate is required");
+            return null; // omitted → feed fallback in the use case (24th increment — FIN-BE-032)
         }
         try {
             return new BigDecimal(value.trim());

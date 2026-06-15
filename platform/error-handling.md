@@ -709,7 +709,11 @@ the matcher records an `AMOUNT_MISMATCH` [FX-difference] discrepancy [the **firs
 the long-declared `DiscrepancyType`] for operator review, F8 never auto-adjusted. **No new error
 code / status / event** — `AMOUNT_MISMATCH` is an existing `DiscrepancyType` [a persisted record,
 not an HTTP error] emitted on the existing `discrepancy.detected.v1`; only an additive nullable
-`base_amount_minor`/`base_currency` column pair on `reconciliation_statement_line`).
+`base_amount_minor`/`base_currency` column pair on `reconciliation_statement_line`), **24th**
+(TASK-FIN-BE-032 — ADR-002 D3/D4 FX rate feed consumption: `closingRate` / `settlementRate` become
+optional; an omitted rate falls back to the FIN-BE-031 `fx_rate_quote` cache when the feed is
+enabled and the quote is fresh, else one new code `FX_RATE_UNAVAILABLE` (422) fails closed —
+regulated, no estimated-rate P&L; the supplied-rate path is byte-identical, net-zero).
 
 | Code | HTTP | Description |
 |---|---|---|
@@ -729,6 +733,7 @@ not an HTTP error] emitted on the existing `discrepancy.detected.v1`; only an ad
 | RECONCILIATION_PERIOD_LOCKED | 422 | Resolve (6th incr) OR ingest (7th incr) of a statement whose statement date is in a CLOSED accounting period (F8 — frozen with the books; correct via the next period) — `ledger-service` (`ReconciliationPeriodLockedException`; mirrors `LEDGER_PERIOD_CLOSED`; net-zero when no covering closed period; the ingest guard runs before any persist/match/emit) |
 | REVALUATION_RATE_INVALID | 422 | **(9th incr)** FX revaluation `closingRate` is not strictly positive — `ledger-service` (`RevaluationRateInvalidException`). The rate is the base-minor-per-foreign-minor spot factor (caller-supplied); a non-positive rate cannot value a position |
 | SETTLEMENT_RATE_INVALID | 422 | **(10th incr)** FX settlement `settlementRate` is not strictly positive — `ledger-service` (`SettlementRateInvalidException`). Same base-minor-per-foreign-minor spot factor; a non-positive rate cannot settle a position |
+| FX_RATE_UNAVAILABLE | 422 | **(24th incr)** No FX rate supplied and no fresh cached quote available (feed disabled / no quote / stale) on `POST /revaluations` / `/settlements` — `ledger-service` (`FxRateUnavailableException`, ADR-002 D3); regulated fail-closed (no estimated-rate P&L) — operator must supply a manual rate or wait for a fresh quote |
 
 ---
 

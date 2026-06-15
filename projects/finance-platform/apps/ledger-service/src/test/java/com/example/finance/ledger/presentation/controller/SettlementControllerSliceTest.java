@@ -19,6 +19,7 @@ import com.example.finance.ledger.application.view.FxPositionLotsView;
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.error.LedgerErrors.CostFlowMethodInvalidException;
 import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
+import com.example.finance.ledger.domain.error.LedgerErrors.FxRateUnavailableException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
 import com.example.finance.ledger.domain.error.LedgerErrors.SettlementRateInvalidException;
@@ -240,6 +241,31 @@ class SettlementControllerSliceTest {
                         .content(BODY))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("SETTLEMENT_RATE_INVALID"));
+    }
+
+    @Test
+    @DisplayName("POST /settlements omitted rate + no fresh quote → 422 FX_RATE_UNAVAILABLE")
+    void rateUnavailable() throws Exception {
+        when(settleForeignPosition.settle(any()))
+                .thenThrow(new FxRateUnavailableException(
+                        "no FX rate supplied and the FX rate feed is disabled — supply a manual rate"));
+
+        // The body omits settlementRate entirely → the use case resolves from the feed (here it
+        // fails closed). The DTO no longer rejects a blank/absent rate (24th increment).
+        String omittedRateBody = """
+                { "ledgerAccountCode": "CASH_CLEARING",
+                  "currency": "USD",
+                  "proceedsAccountCode": "SETTLEMENT_SUSPENSE",
+                  "reference": "FX-SETTLE-2026-06-USD",
+                  "memo": "liquidate USD holdings" }
+                """;
+
+        mockMvc.perform(post("/api/finance/ledger/settlements")
+                        .header("Idempotency-Key", "k-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(omittedRateBody))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("FX_RATE_UNAVAILABLE"));
     }
 
     @Test

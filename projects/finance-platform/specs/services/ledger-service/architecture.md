@@ -1177,6 +1177,19 @@ closingRate)` where `closingRate` is the **base-minor-per-foreign-minor** spot f
 - `delta == 0` → **no adjustment** (the position is already at spot — `Optional.empty()`).
 - `closingRate ≤ 0` → `RevaluationRateInvalidException` (422 `REVALUATION_RATE_INVALID`).
 
+**Rate omission → FX rate feed fallback (24th increment — TASK-FIN-BE-032, ADR-002 D3/D4).**
+`closingRate` is now **optional**. The use case resolves the effective rate via
+`ResolveEffectiveFxRate` **after** the `NO_POSITION` no-op (an omitted rate still 200s a no-op —
+a no-op never needs a rate) and **before** `FxRevaluationPolicy.revalue`: a **supplied** rate is
+used verbatim (`fromFeed=false` → byte-identical, **net-zero**); an **omitted** rate falls back to
+the `fx_rate_quote` cache (FIN-BE-031) when the feed is enabled and the latest quote for
+`KRW/{currency}` is **fresh** (`now − as_of ≤ max-age`, default 24h — the boundary is inclusive),
+recording the applied quote's `source`/`as_of` in the audit reason; otherwise (feed disabled /
+no quote / **stale**) it fails closed `422 FX_RATE_UNAVAILABLE` — nothing persists, the idempotency
+key is not consumed (regulated: an estimated/stale rate must never recognise P&L). The resolved
+rate flows into `revalue` **and** the lot mark-to-spot distribution. F8 unchanged — the feed
+supplies a rate, never a posting.
+
 **The adjusting entry** (balanced in the base currency). When `delta ≠ 0`, build a 2-line entry:
 
 | delta | foreign-account line (base-carrying adjustment) | contra line | meaning |
@@ -1282,6 +1295,18 @@ factor:
 - `F == 0` → **no position** to settle (`Optional.empty()` → the use case returns
   `200 {settled:false, reason:"NO_POSITION"}`);
 - `settlementRate ≤ 0` → `SettlementRateInvalidException` (422 `SETTLEMENT_RATE_INVALID`).
+
+**Rate omission → FX rate feed fallback (24th increment — TASK-FIN-BE-032, ADR-002 D3/D4).**
+`settlementRate` is now **optional**, resolved by `ResolveEffectiveFxRate` **after** the
+`NO_POSITION` no-op + the `settleForeignAmount` validation and **before** the cost-flow compute:
+a **supplied** rate is used verbatim (`fromFeed=false` → byte-identical, **net-zero** — both the
+weighted-average and FIFO branches receive the resolved rate, identical to the supplied value);
+an **omitted** rate falls back to the fresh `fx_rate_quote` cache (feed enabled + `now − as_of ≤
+max-age`, inclusive boundary), recording the quote's `source`/`as_of` in the audit reason;
+otherwise (feed disabled / no quote / **stale**) it fails closed `422 FX_RATE_UNAVAILABLE` —
+nothing persists, the idempotency key is not consumed (regulated fail-closed, no estimated-rate
+P&L). The cached rate is still subject to the policy's `rate > 0` guard
+(`SETTLEMENT_RATE_INVALID`). F8 unchanged — the feed only supplies a rate.
 
 **The settlement entry** (3 lines, balanced in base). The whole position is settled (first
 slice — partial is forward-declared):

@@ -12,6 +12,12 @@ import java.time.Instant;
  * position; {@code closingRate} is the base-minor-per-foreign-minor spot factor as a
  * string decimal (never a float — F5). {@code postedAt} / {@code reference} /
  * {@code memo} are optional operator narrative.
+ *
+ * <p><b>24th increment (TASK-FIN-BE-032, ADR-002 D3/D4) — {@code closingRate} is now
+ * OPTIONAL.</b> Omitting it (null/blank) resolves the rate from the FX rate feed cache when
+ * the feed is enabled and a fresh quote exists; otherwise the use case fails closed with 422
+ * {@code FX_RATE_UNAVAILABLE}. A supplied rate is used verbatim (net-zero). A non-numeric
+ * supplied value still surfaces as a 422 (unchanged).
  */
 public record RevaluationRequest(
         String ledgerAccountCode,
@@ -25,7 +31,8 @@ public record RevaluationRequest(
      * Map the validated request + the request-scoped fields (tenant, actor, idempotency
      * key) to the application command. The currency resolve surfaces an unsupported
      * currency as a 422 via the handler; {@code closingRate} is parsed as an exact
-     * {@link BigDecimal} (a non-numeric value surfaces as a 422).
+     * {@link BigDecimal} when present, or {@code null} when omitted (feed fallback in the
+     * use case — 24th increment). A non-numeric value surfaces as a 422.
      */
     public RevalueForeignBalanceCommand toCommand(String tenantId, String operatorSubject,
                                                   String idempotencyKey) {
@@ -38,7 +45,7 @@ public record RevaluationRequest(
 
     private static BigDecimal parseRate(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("closingRate is required");
+            return null; // omitted → feed fallback in the use case (24th increment — FIN-BE-032)
         }
         try {
             return new BigDecimal(value.trim());

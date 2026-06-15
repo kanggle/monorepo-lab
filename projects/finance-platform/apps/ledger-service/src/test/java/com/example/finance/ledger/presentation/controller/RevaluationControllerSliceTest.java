@@ -6,6 +6,7 @@ import com.example.finance.ledger.application.RevalueForeignBalanceUseCase.NoOpR
 import com.example.finance.ledger.application.RevalueForeignBalanceUseCase.Result;
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
+import com.example.finance.ledger.domain.error.LedgerErrors.FxRateUnavailableException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
 import com.example.finance.ledger.domain.error.LedgerErrors.RevaluationRateInvalidException;
 import com.example.finance.ledger.domain.journal.EntryDirection;
@@ -163,6 +164,30 @@ class RevaluationControllerSliceTest {
                         .content(BODY))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("REVALUATION_RATE_INVALID"));
+    }
+
+    @Test
+    @DisplayName("POST /revaluations omitted rate + no fresh quote → 422 FX_RATE_UNAVAILABLE")
+    void rateUnavailable() throws Exception {
+        when(revalueForeignBalance.revalue(any()))
+                .thenThrow(new FxRateUnavailableException(
+                        "no FX rate supplied and the FX rate feed is disabled — supply a manual rate"));
+
+        // The body omits closingRate entirely → the use case resolves from the feed (here it fails
+        // closed). The DTO no longer rejects a blank/absent rate (24th increment).
+        String omittedRateBody = """
+                { "ledgerAccountCode": "CASH_CLEARING",
+                  "currency": "USD",
+                  "reference": "FX-REVAL-2026-06-USD",
+                  "memo": "month-end USD revaluation" }
+                """;
+
+        mockMvc.perform(post("/api/finance/ledger/revaluations")
+                        .header("Idempotency-Key", "k-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(omittedRateBody))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("FX_RATE_UNAVAILABLE"));
     }
 
     @Test

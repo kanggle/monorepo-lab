@@ -293,7 +293,12 @@ Headers: `Idempotency-Key: <client-key>` (required, ≤ 50 chars). Request:
 - `closingRate` is the **base-currency minor units per one foreign-currency minor unit**
   (a string decimal — never a float, F5). For USD (minor scale 2) → KRW (minor scale 0) at
   a spot of ₩1,350 per $1: `$1 = 100 USD-minor = 1350 KRW-minor`, so `closingRate = "13.5"`.
-  MUST be strictly positive.
+  MUST be strictly positive. **(24th incr — TASK-FIN-BE-032, ADR-002 D3/D4) OPTIONAL**:
+  **omitting** `closingRate` resolves the rate from the FX rate feed cache — when the feed is
+  enabled and a **fresh** quote exists for `KRW/<currency>` it is used (the applied quote's
+  source/as-of is recorded in the audit reason); otherwise (feed disabled / no quote / stale)
+  the request is rejected `422 FX_RATE_UNAVAILABLE` (regulated fail-closed — no estimated-rate
+  P&L). A **supplied** rate is used verbatim (net-zero). A non-numeric supplied value still `422`s.
 - `postedAt` optional (defaults to the server clock; a month-end effective instant). The
   closed-period guard applies — a revaluation `postedAt` in a CLOSED period is rejected.
 - `reference` / `memo` optional operator narrative (audit reason + `source.sourceTransactionId`).
@@ -325,6 +330,8 @@ the original entry). Body: `{ "data": { "revalued": false, "reason": "AT_SPOT" |
 
 - `400 IDEMPOTENCY_KEY_REQUIRED` when the `Idempotency-Key` header is absent / blank / > 50 chars.
 - `422 REVALUATION_RATE_INVALID` when `closingRate` is not strictly positive.
+- `422 FX_RATE_UNAVAILABLE` **(24th incr)** when `closingRate` is **omitted** and no fresh cached
+  quote can supply it (feed disabled / no quote / stale); nothing persists, the key is not consumed.
 - `422 CURRENCY_MISMATCH` when `currency` is unsupported or is the base currency (KRW —
   the base currency cannot be revalued against itself).
 - `404 LEDGER_ACCOUNT_NOT_FOUND` when `ledgerAccountCode` does not exist.
@@ -363,7 +370,12 @@ Headers: `Idempotency-Key: <client-key>` (required, ≤ 50 chars). Request:
   lines in that currency). `currency` MUST NOT be the base currency (KRW).
 - `settlementRate` is the **base-currency minor units per one foreign-currency minor unit**
   (string decimal, never a float — F5); the base proceeds = `round(F_settle × settlementRate)`.
-  MUST be strictly positive.
+  MUST be strictly positive. **(24th incr — TASK-FIN-BE-032, ADR-002 D3/D4) OPTIONAL**: **omitting**
+  `settlementRate` resolves the rate from the FX rate feed cache — when the feed is enabled and a
+  **fresh** quote exists for `KRW/<currency>` it is used (the applied quote's source/as-of is
+  recorded in the audit reason); otherwise (feed disabled / no quote / stale) the request is
+  rejected `422 FX_RATE_UNAVAILABLE` (regulated fail-closed). A **supplied** rate is used verbatim
+  (net-zero); a non-numeric supplied value still `422`s.
 - `proceedsAccountCode` is the **base-currency account** that receives (asset) or pays
   (liability) the proceeds; it MUST already exist (no lazy mint).
 - `settleForeignAmount` **(12th incr — optional)** the foreign-minor portion `F_settle` to settle
@@ -411,6 +423,8 @@ C − C_settle)` and the position is still queryable.
 
 - `400 IDEMPOTENCY_KEY_REQUIRED` when the `Idempotency-Key` header is absent / blank / > 50 chars.
 - `422 SETTLEMENT_RATE_INVALID` when `settlementRate` is not strictly positive.
+- `422 FX_RATE_UNAVAILABLE` **(24th incr)** when `settlementRate` is **omitted** and no fresh cached
+  quote can supply it (feed disabled / no quote / stale); nothing persists, the key is not consumed.
 - `422 SETTLEMENT_AMOUNT_INVALID` **(12th incr)** when a supplied `settleForeignAmount` is zero,
   the opposite sign to the position's foreign balance, or exceeds it (over-settle); no entry, key
   not consumed.
@@ -538,6 +552,7 @@ non-existent override is a `200` no-op (`cleared: false`), **not** a 404. Audite
 | `ACCOUNTING_PERIOD_INVALID_WINDOW` | 422 | **(2nd incr)** `from ≥ to` |
 | `REVALUATION_RATE_INVALID` | 422 | **(9th incr)** FX revaluation `closingRate` not strictly positive on `POST /revaluations` (`RevaluationRateInvalidException`) |
 | `SETTLEMENT_RATE_INVALID` | 422 | **(10th incr)** FX settlement `settlementRate` not strictly positive on `POST /settlements` (`SettlementRateInvalidException`) |
+| `FX_RATE_UNAVAILABLE` | 422 | **(24th incr)** `closingRate` / `settlementRate` omitted on `POST /revaluations` / `/settlements` and no fresh cached quote can supply it — feed disabled, no quote, or stale (`FxRateUnavailableException`, ADR-002 D3); operator must supply a manual rate or wait for a fresh quote |
 | `SETTLEMENT_AMOUNT_INVALID` | 422 | **(12th incr)** partial FX settlement `settleForeignAmount` zero / opposite-sign / over-settle (`> \|F\|`) on `POST /settlements` (`SettlementAmountInvalidException`) |
 
 ## Out of scope (forward-declared — later increments)
