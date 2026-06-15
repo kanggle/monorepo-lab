@@ -1,6 +1,6 @@
 # TASK-FIN-BE-033 — FX rate quote read endpoint (operator feed visibility + staleness)
 
-- **Status**: ready
+- **Status**: done
 - **Project**: finance-platform
 - **Service**: ledger-service
 - **Domain / traits**: fintech / [transactional, regulated, audit-heavy]
