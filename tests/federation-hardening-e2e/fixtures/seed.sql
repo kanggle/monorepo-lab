@@ -570,3 +570,95 @@ SELECT o.id, r.id, 'ip-pilot-corp', NOW(6), NULL
   FROM admin_operators o
   JOIN admin_roles r ON r.name = 'SUPPORT_READONLY'
  WHERE o.operator_id IN ('rt-protected-target', 'rt-untagged-target');
+
+-- ===========================================================================
+-- TASK-MONO-268 — ADR-MONO-036 § P4 (M3): born-unified demo seed rewrite.
+--
+-- ADR-036 M1/M2 made every NEW consumer registration born-unified — the central
+-- `identities` row is minted at account creation (M1) and propagated to
+-- `accounts.identity_id` + `credentials.identity_id` at birth (M1/M2). This block
+-- makes the SEEDED demo principals look exactly as if they had been provisioned
+-- through that unified path: each customer-tenant operator-person gets a real
+-- `identities` registry row (account_db) and the SAME `identity_id` written onto
+-- every store it occupies (accounts where it is also a consumer, credentials,
+-- admin_operators). Before this block the demo was born-SPLIT — the live finding
+-- that motivated ADR-036: `identities` was EMPTY, `credentials.identity_id` was
+-- all NULL, and `accounts.identity_id` had no production/seed writer.
+--
+-- This is the SEED analog of the forward code; it is NOT the production backfill
+-- (ADR-036 P4 = DESIGN-not-built: real users cannot be wiped). The opt-in audited
+-- link surface (PATCH …/identity:link) stays the tool for reconciling pre-existing
+-- split data — here we simply seed clean (rewrite), which the demo CAN do.
+--
+-- WHY same-origin, not email auto-merge (ADR-034 § 1.3): every identity below is
+-- keyed by the operator's OWN (tenant_id, primary_email) — the exact key the M1
+-- mint resolves. No two distinct persons are merged; an operator and its own
+-- consumer account converge because they ARE the same (tenant, email) origin.
+--
+-- WHY `e2e-super-admin` is deliberately NOT born-unified (born unlinked, net-zero):
+-- it is tenant_id='*' — the platform-scope SENTINEL, which is NOT a row in the
+-- account_db `tenants` table, so an `identities` row (FK → tenants) cannot exist
+-- for it. A platform super-admin is not a customer-tenant person and has no
+-- central per-tenant identity. This mirrors the M1/M2 fail-soft "born unlinked"
+-- outcome (identity_id stays NULL) — a legitimate, documented net-zero state, not
+-- a gap. The same applies to any '*'-scoped operator.
+--
+-- Re-runnable: identities/accounts use INSERT IGNORE; the identity_id writers use
+-- `UPDATE … WHERE identity_id IS NULL` — idempotent and never overwriting, exactly
+-- mirroring the M1/M2 native `assignIdentityIdIfAbsent` writers (a second run with
+-- a different id is a 0-row no-op).
+-- ===========================================================================
+
+-- ── M3.1 account_db — central identities registry + the co-holder's consumer account.
+--    One identity per customer-tenant operator-person (fixed UUIDs in the 'd' band
+--    paired with each principal's existing 'c'-band account_id). FK
+--    fk_identities_tenant_id → tenants: acme-corp (V0020) and umbrella-corp (V9003)
+--    are present at seed time (GAP/account-service Flyway done before phase 1.5).
+USE `account_db`;
+
+INSERT IGNORE INTO identities
+    (identity_id, tenant_id, primary_email, status, created_at, updated_at, version)
+VALUES
+    ('01928c4a-7e9f-7c00-9a40-d2b1f5e8d200', 'acme-corp',     'acme-operator@example.com',                 'ACTIVE', NOW(6), NOW(6), 0),
+    ('01928c4a-7e9f-7c00-9a40-d2b1f5e8d300', 'acme-corp',     'multi-operator@example.com',                'ACTIVE', NOW(6), NOW(6), 0),
+    ('01928c4a-7e9f-7c00-9a40-d2b1f5e8d401', 'umbrella-corp', 'tenant-admin-umbrella@example.com',         'ACTIVE', NOW(6), NOW(6), 0),
+    ('01928c4a-7e9f-7c00-9a40-d2b1f5e8d402', 'umbrella-corp', 'tenant-billing-admin-umbrella@example.com', 'ACTIVE', NOW(6), NOW(6), 0);
+
+-- The headline co-holder: `multi-operator` is BOTH a consumer (account_db.accounts)
+-- AND an operator (admin_db.admin_operators) under the same central identity — the
+-- ADR-032 "one person, consumer + operator" scenario, born-unified across all THREE
+-- stores. The account id == the operator's credential account_id ('…c300'), so the
+-- credential below links to a real account. FK fk_accounts_identity_id → the '…d300'
+-- identity inserted above (order: identity first, then account).
+INSERT IGNORE INTO accounts
+    (id, tenant_id, identity_id, email, status, created_at, updated_at, version)
+VALUES
+    ('01928c4a-7e9f-7c00-9a40-d2b1f5e8c300', 'acme-corp',
+     '01928c4a-7e9f-7c00-9a40-d2b1f5e8d300', 'multi-operator@example.com',
+     'ACTIVE', NOW(6), NOW(6), 0);
+
+-- ── M3.2 auth_db — credentials.identity_id born-unified (the M2 writer's seed analog).
+--    `IS NULL` guard = idempotent, no overwrite (mirrors assignIdentityIdIfAbsent).
+USE `auth_db`;
+
+UPDATE credentials SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d200'
+ WHERE account_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8c200' AND identity_id IS NULL;
+UPDATE credentials SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d300'
+ WHERE account_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8c300' AND identity_id IS NULL;
+UPDATE credentials SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d401'
+ WHERE account_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8c401' AND identity_id IS NULL;
+UPDATE credentials SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d402'
+ WHERE account_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8c402' AND identity_id IS NULL;
+
+-- ── M3.3 admin_db — admin_operators.identity_id born-unified (the operator extension's
+--    link, the seed analog of the U3 audited link surface). `IS NULL` guard = idempotent.
+USE `admin_db`;
+
+UPDATE admin_operators SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d200'
+ WHERE operator_id = 'acme-corp-operator' AND identity_id IS NULL;
+UPDATE admin_operators SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d300'
+ WHERE operator_id = 'multi-operator' AND identity_id IS NULL;
+UPDATE admin_operators SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d401'
+ WHERE operator_id = 'tenant-admin-umbrella' AND identity_id IS NULL;
+UPDATE admin_operators SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d402'
+ WHERE operator_id = 'tenant-billing-admin-umbrella' AND identity_id IS NULL;
