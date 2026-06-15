@@ -1,12 +1,13 @@
 package com.wms.admin.config;
 
+import com.example.web.idempotency.BodyCanonicalizer;
+import com.example.web.idempotency.IdempotencyStore;
+import com.example.web.idempotency.JsonTreeBodyCanonicalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.admin.application.repository.AdminEventDedupeRepository;
-import com.wms.admin.application.repository.IdempotencyStore;
 import com.wms.admin.infra.idempotency.IdempotencyFilter;
 import com.wms.admin.infra.idempotency.InMemoryIdempotencyStore;
 import com.wms.admin.infra.idempotency.RedisIdempotencyStore;
-import com.wms.admin.infra.idempotency.RequestBodyCanonicalizer;
 import com.wms.admin.infra.observability.KafkaLagProbe;
 import com.wms.admin.infra.observability.ProjectionMetrics;
 import com.wms.admin.infra.observability.TopicEventTypeMap;
@@ -74,8 +75,8 @@ public class AdminServiceConfig {
     }
 
     @Bean
-    RequestBodyCanonicalizer requestBodyCanonicalizer(ObjectMapper objectMapper) {
-        return new RequestBodyCanonicalizer(objectMapper);
+    BodyCanonicalizer requestBodyCanonicalizer(ObjectMapper objectMapper) {
+        return new JsonTreeBodyCanonicalizer(objectMapper);
     }
 
     @Bean
@@ -101,7 +102,7 @@ public class AdminServiceConfig {
     @Bean
     FilterRegistrationBean<IdempotencyFilter> idempotencyFilterRegistration(
             IdempotencyStore store,
-            RequestBodyCanonicalizer canonicalizer,
+            BodyCanonicalizer canonicalizer,
             ObjectMapper objectMapper,
             @Value("${admin.idempotency.ttl-seconds:86400}") long ttlSeconds) {
         IdempotencyFilter filter = new IdempotencyFilter(

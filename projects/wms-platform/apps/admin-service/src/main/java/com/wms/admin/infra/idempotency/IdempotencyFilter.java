@@ -1,9 +1,11 @@
 package com.wms.admin.infra.idempotency;
 
+import com.example.web.idempotency.BodyCanonicalizer;
+import com.example.web.idempotency.CachedBodyHttpServletRequestWrapper;
+import com.example.web.idempotency.IdempotencyStore;
+import com.example.web.idempotency.StoredResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.admin.api.dto.ApiErrorEnvelope;
-import com.wms.admin.application.repository.IdempotencyStore;
-import com.wms.admin.application.repository.StoredResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,7 +41,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     private static final int MAX_KEY_LENGTH = 128;
 
     private final IdempotencyStore store;
-    private final RequestBodyCanonicalizer canonicalizer;
+    private final BodyCanonicalizer canonicalizer;
     private final ObjectMapper objectMapper;
     private final Duration ttl;
     private final Duration lockTtl;
@@ -47,7 +49,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     private final Duration lockPoll;
 
     public IdempotencyFilter(IdempotencyStore store,
-                             RequestBodyCanonicalizer canonicalizer,
+                             BodyCanonicalizer canonicalizer,
                              ObjectMapper objectMapper,
                              Duration ttl) {
         this(store, canonicalizer, objectMapper, ttl,
@@ -55,7 +57,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     }
 
     IdempotencyFilter(IdempotencyStore store,
-                      RequestBodyCanonicalizer canonicalizer,
+                      BodyCanonicalizer canonicalizer,
                       ObjectMapper objectMapper,
                       Duration ttl,
                       Duration lockTtl,
@@ -96,10 +98,10 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return;
         }
 
-        CachedBodyHttpServletRequest cachedRequest = new CachedBodyHttpServletRequest(request);
+        CachedBodyHttpServletRequestWrapper cachedRequest = new CachedBodyHttpServletRequestWrapper(request);
         String method = cachedRequest.getMethod();
         String path = cachedRequest.getRequestURI();
-        String requestHash = sha256Hex(canonicalizer.canonicalize(cachedRequest.getBody()));
+        String requestHash = canonicalizer.hash(cachedRequest.getCachedBody());
         String storageKey = sha256Hex(validatedKey.get() + ":" + method + ":" + path);
 
         Optional<StoredResponse> existing;
@@ -190,7 +192,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
      * idempotency store. Releases the lock unconditionally in the finally block.
      * Responses with status &ge; 500 or aborted by exception are not stored.
      */
-    private void executeAndStore(CachedBodyHttpServletRequest cachedRequest,
+    private void executeAndStore(CachedBodyHttpServletRequestWrapper cachedRequest,
                                  HttpServletResponse response,
                                  FilterChain chain,
                                  String storageKey,

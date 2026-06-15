@@ -1,9 +1,11 @@
 package com.wms.master.adapter.in.web.filter;
 
+import com.example.web.idempotency.BodyCanonicalizer;
+import com.example.web.idempotency.CachedBodyHttpServletRequestWrapper;
+import com.example.web.idempotency.IdempotencyStore;
+import com.example.web.idempotency.StoredResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.adapter.in.web.dto.response.ApiErrorEnvelope;
-import com.wms.master.application.port.out.IdempotencyStore;
-import com.wms.master.application.port.out.StoredResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,7 +41,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final IdempotencyStore store;
-    private final RequestBodyCanonicalizer canonicalizer;
+    private final BodyCanonicalizer canonicalizer;
     private final ObjectMapper objectMapper;
     private final Duration ttl;
     private final Duration lockTtl;
@@ -47,7 +49,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     private final Duration lockPoll;
 
     public IdempotencyFilter(IdempotencyStore store,
-                             RequestBodyCanonicalizer canonicalizer,
+                             BodyCanonicalizer canonicalizer,
                              ObjectMapper objectMapper,
                              Duration ttl) {
         this(store, canonicalizer, objectMapper, ttl,
@@ -55,7 +57,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     }
 
     IdempotencyFilter(IdempotencyStore store,
-                      RequestBodyCanonicalizer canonicalizer,
+                      BodyCanonicalizer canonicalizer,
                       ObjectMapper objectMapper,
                       Duration ttl,
                       Duration lockTtl,
@@ -86,8 +88,8 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return;
         }
 
-        CachedBodyHttpServletRequest cachedRequest = new CachedBodyHttpServletRequest(request);
-        String requestHash = sha256Hex(canonicalizer.canonicalize(cachedRequest.getBody()));
+        CachedBodyHttpServletRequestWrapper cachedRequest = new CachedBodyHttpServletRequestWrapper(request);
+        String requestHash = canonicalizer.hash(cachedRequest.getCachedBody());
         String storageKey = sha256Hex(key + ":" + cachedRequest.getMethod() + ":" + cachedRequest.getRequestURI());
 
         Optional<StoredResponse> existing = lookupSafe(storageKey, response);
@@ -157,7 +159,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
      */
     private boolean lockAndProceed(String storageKey,
                                    String requestHash,
-                                   CachedBodyHttpServletRequest cachedRequest,
+                                   CachedBodyHttpServletRequestWrapper cachedRequest,
                                    HttpServletResponse response,
                                    FilterChain chain) throws ServletException, IOException {
         boolean acquired;
@@ -232,7 +234,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
      */
     private void executeAndPersist(String storageKey,
                                    String requestHash,
-                                   CachedBodyHttpServletRequest cachedRequest,
+                                   CachedBodyHttpServletRequestWrapper cachedRequest,
                                    HttpServletResponse response,
                                    FilterChain chain) throws ServletException, IOException {
         ContentCachingResponseWrapper cachedResponse = new ContentCachingResponseWrapper(response);

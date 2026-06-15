@@ -1,11 +1,12 @@
 package com.wms.master.config;
 
+import com.example.web.idempotency.BodyCanonicalizer;
+import com.example.web.idempotency.IdempotencyStore;
+import com.example.web.idempotency.JsonTreeBodyCanonicalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.adapter.in.web.filter.IdempotencyFilter;
-import com.wms.master.adapter.in.web.filter.RequestBodyCanonicalizer;
 import com.wms.master.adapter.out.idempotency.InMemoryIdempotencyStore;
 import com.wms.master.adapter.out.idempotency.RedisIdempotencyStore;
-import com.wms.master.application.port.out.IdempotencyStore;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -35,14 +36,14 @@ public class IdempotencyConfig {
     }
 
     @Bean
-    RequestBodyCanonicalizer requestBodyCanonicalizer(ObjectMapper objectMapper) {
-        return new RequestBodyCanonicalizer(objectMapper);
+    BodyCanonicalizer requestBodyCanonicalizer(ObjectMapper objectMapper) {
+        return new JsonTreeBodyCanonicalizer(objectMapper);
     }
 
     @Bean
     FilterRegistrationBean<IdempotencyFilter> idempotencyFilterRegistration(
             IdempotencyStore store,
-            RequestBodyCanonicalizer canonicalizer,
+            BodyCanonicalizer canonicalizer,
             ObjectMapper objectMapper,
             @Value("${master.idempotency.ttl-seconds:86400}") long ttlSeconds) {
         IdempotencyFilter filter = new IdempotencyFilter(

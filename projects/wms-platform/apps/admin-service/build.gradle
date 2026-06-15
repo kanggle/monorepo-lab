@@ -39,6 +39,8 @@ dependencies {
     // incompatible with the spec's JSONB layout. Same decision pattern as
     // notification-service (TASK-BE-043).
     implementation project(':libs:java-common')
+    // Shared servlet Idempotency-Key filter abstraction (ADR-MONO-038).
+    implementation project(':libs:java-web-servlet')
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

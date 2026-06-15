@@ -2,7 +2,7 @@ package com.wms.master.adapter.out.idempotency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.wms.master.application.port.out.StoredResponse;
+import com.example.web.idempotency.StoredResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

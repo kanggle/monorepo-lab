@@ -2,11 +2,13 @@ package com.wms.master.adapter.in.web.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.web.idempotency.BodyCanonicalizer;
+import com.example.web.idempotency.IdempotencyStore;
+import com.example.web.idempotency.JsonTreeBodyCanonicalizer;
+import com.example.web.idempotency.StoredResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.wms.master.application.port.out.IdempotencyStore;
-import com.wms.master.application.port.out.StoredResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Duration;
@@ -32,7 +34,7 @@ class IdempotencyFilterTest {
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
-    private final RequestBodyCanonicalizer canonicalizer = new RequestBodyCanonicalizer(mapper);
+    private final BodyCanonicalizer canonicalizer = new JsonTreeBodyCanonicalizer(mapper);
 
     @Test
     void firstCall_executesChain_andStoresResponseOn2xx() throws Exception {
@@ -62,7 +64,7 @@ class IdempotencyFilterTest {
     void replay_returnsCachedResponse_doesNotExecuteChain() throws Exception {
         RecordingStore store = new RecordingStore();
         String body = "{\"warehouseCode\":\"WH01\"}";
-        String hash = store.hash(canonicalizer.canonicalize(body.getBytes()));
+        String hash = canonicalizer.hash(body.getBytes());
         store.seed(KEY, "POST", PATH, new StoredResponse(
                 hash, 201, "{\"id\":\"cached\"}", "application/json", Instant.now()));
 
