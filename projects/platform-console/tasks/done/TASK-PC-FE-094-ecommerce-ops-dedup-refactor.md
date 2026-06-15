@@ -1,7 +1,8 @@
 # TASK-PC-FE-094 — `features/ecommerce-ops` duplication refactor (api call-core + section-state)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Duplication — 0 behavior change, 0 contract change)
+**Closure:** PR #1664 squash `17357c60e`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass incl. Frontend lint/build + unit + E2E smoke). Net ≈ −1,040 lines; ecommerce 360 + full console-web 1943 tests green; log-event strings audited byte-identical.
 **Parent:** ADR-MONO-031 ecommerce-ops console consolidation (TASK-PC-FE-081…090 shipped the 8 slices by mirroring each other → accumulated near-identical boilerplate).
 
 ## Goal
