@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   PoPageSchema,
   type PoPage,
@@ -35,12 +36,8 @@ import {
 
 const SCM_KEY = 'scm-ops';
 
-function clampSize(size?: number): number {
-  return Math.min(
-    SCM_MAX_PAGE_SIZE,
-    Math.max(1, size ?? SCM_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, SCM_DEFAULT_PAGE_SIZE, SCM_MAX_PAGE_SIZE);
 
 // --- procurement PO list read --------------------------------------------
 

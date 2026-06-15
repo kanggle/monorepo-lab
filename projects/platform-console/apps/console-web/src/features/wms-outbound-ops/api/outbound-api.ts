@@ -2,6 +2,7 @@ import { getServerEnv } from '@/shared/config/env';
 import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { ApiError, WmsOutboundUnavailableError } from '@/shared/api/errors';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   OutboundOrderPageSchema,
   type OutboundOrderPage,
@@ -295,12 +296,8 @@ async function callOutbound<T>(
   }
 }
 
-function clampSize(size?: number): number {
-  return Math.min(
-    OUTBOUND_MAX_PAGE_SIZE,
-    Math.max(1, size ?? OUTBOUND_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, OUTBOUND_DEFAULT_PAGE_SIZE, OUTBOUND_MAX_PAGE_SIZE);
 
 // ===========================================================================
 // READS (OUTBOUND_READ — no mutation artifacts)

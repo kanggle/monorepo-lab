@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   PromotionListSchema,
   type PromotionList,
@@ -33,12 +34,8 @@ import {
 
 const PROMOTIONS_KEY = 'ecommerce-promotions';
 
-function clampSize(size?: number): number {
-  return Math.min(
-    PROMOTION_MAX_PAGE_SIZE,
-    Math.max(1, size ?? PROMOTION_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, PROMOTION_DEFAULT_PAGE_SIZE, PROMOTION_MAX_PAGE_SIZE);
 
 // --- list -----------------------------------------------------------------
 

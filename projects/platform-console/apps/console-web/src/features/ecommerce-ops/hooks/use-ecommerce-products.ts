@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   ProductListSchema,
   type ProductList,
@@ -41,12 +42,8 @@ import {
 
 const ECOMMERCE_KEY = 'ecommerce-products';
 
-function clampSize(size?: number): number {
-  return Math.min(
-    PRODUCT_MAX_PAGE_SIZE,
-    Math.max(1, size ?? PRODUCT_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, PRODUCT_DEFAULT_PAGE_SIZE, PRODUCT_MAX_PAGE_SIZE);
 
 // --- list -----------------------------------------------------------------
 

@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   OutboundOrderPageSchema,
   type OutboundOrderPage,
@@ -39,12 +40,8 @@ import {
 
 const OUTBOUND_KEY = 'wms-outbound-ops';
 
-function clampSize(size?: number): number {
-  return Math.min(
-    OUTBOUND_MAX_PAGE_SIZE,
-    Math.max(1, size ?? OUTBOUND_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, OUTBOUND_DEFAULT_PAGE_SIZE, OUTBOUND_MAX_PAGE_SIZE);
 
 // --- list orders ----------------------------------------------------------
 

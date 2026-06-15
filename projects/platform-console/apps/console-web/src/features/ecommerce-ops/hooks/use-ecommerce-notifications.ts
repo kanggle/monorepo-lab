@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { clampPageSize } from '@/shared/lib/pagination';
 import {
   NotificationTemplateListSchema,
   type NotificationTemplateList,
@@ -32,12 +33,8 @@ import {
 
 const NOTIFICATIONS_KEY = 'ecommerce-notifications';
 
-function clampSize(size?: number): number {
-  return Math.min(
-    NOTIFICATION_MAX_PAGE_SIZE,
-    Math.max(1, size ?? NOTIFICATION_DEFAULT_PAGE_SIZE),
-  );
-}
+const clampSize = (size?: number): number =>
+  clampPageSize(size, NOTIFICATION_DEFAULT_PAGE_SIZE, NOTIFICATION_MAX_PAGE_SIZE);
 
 // --- list -----------------------------------------------------------------
 
