@@ -1,6 +1,6 @@
 # TASK-FIN-BE-035 — finance 스펙 구조/가독성 refactor (meaning-preserving)
 
-- **Status**: review
+- **Status**: done
 - **Project**: finance-platform
 - **Service**: ledger-service (+ account-service / contracts)
 - **Domain / traits**: fintech / [transactional, regulated, audit-heavy]
