@@ -1,6 +1,6 @@
 # TASK-MONO-271 — Extract the idempotency body-hash utilities (Family A) into `libs/java-web-servlet`
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — shared `libs/` change rippling into two `projects/wms-platform/` services; one atomic PR)
 
