@@ -43,6 +43,7 @@ dependencies {
     // Shared libs
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')
+    implementation project(':libs:java-web-servlet')
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-observability')
     implementation project(':libs:java-security')

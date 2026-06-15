@@ -12,6 +12,8 @@ Boot's `WebApplicationType` deduction will fall back to `SERVLET`, breaking
 | Class | Purpose |
 | --- | --- |
 | `com.example.web.exception.CommonGlobalExceptionHandler` | Abstract `@ControllerAdvice` base providing default handlers for `MethodArgumentNotValidException`, `HttpMessageNotReadableException`, `MissingRequestHeaderException`, `MissingServletRequestParameterException`, `IllegalArgumentException`, `ObjectOptimisticLockingFailureException`, and a fallback `Exception` handler. Subclasses (per service) annotate themselves `@RestControllerAdvice` and add service-specific `@ExceptionHandler` methods. |
+| `com.example.web.idempotency.BodyHashUtil` | Canonical (sorted-keys) JSON → SHA-256 request-body hash + `sha256hex` helper, used by REST Idempotency-Key filters. Round-trips through a module-free `CANONICAL_MAPPER` so a transitive `jackson-module-scala` cannot make `readValue(Object.class)` content-independent (the TASK-BE-342 bug). Project-agnostic — pure Jackson + SHA-256. |
+| `com.example.web.idempotency.CachedBodyHttpServletRequestWrapper` | `HttpServletRequest` wrapper that caches the body at construction so both the idempotency filter and `DispatcherServlet` can read it (the servlet input stream is single-read). |
 
 ## Dependencies
 
@@ -40,3 +42,9 @@ Split out of `libs/java-web` by TASK-MONO-044a (2026-05-05) after a regression
 that leaked servlet API onto a reactive gateway classpath. See
 `tasks/done/TASK-MONO-044a-libs-java-web-servlet-leak-fix.md` and the
 incident report under `knowledge/incidents/` for details.
+
+TASK-MONO-271 (2026-06-15) added the `com.example.web.idempotency` utilities,
+extracting the byte-near-identical private copies that `inbound-service` and
+`outbound-service` each carried. The copies had silently diverged (only
+`outbound` received the TASK-BE-342 module-free-mapper fix), which is exactly
+the drift a single shared implementation prevents.

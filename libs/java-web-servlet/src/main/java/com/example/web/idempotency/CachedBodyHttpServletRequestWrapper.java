@@ -1,4 +1,4 @@
-package com.wms.inbound.adapter.in.web.filter;
+package com.example.web.idempotency;
 
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
@@ -12,23 +12,26 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * Caches the request body at construction time so that it can be read both
- * by the idempotency filter (for body-hash computation) and later by Spring's
+ * by an idempotency filter (for body-hash computation) and later by Spring's
  * DispatcherServlet (for deserialization).
  *
  * <p>The standard {@link jakarta.servlet.http.HttpServletRequest} InputStream
  * is single-read; wrapping it here stores the bytes in memory and replays them
  * on every subsequent call to {@link #getInputStream()} or {@link #getReader()}.
+ *
+ * <p>Project-agnostic servlet utility — shared by the WMS Idempotency-Key
+ * filters; contains no domain content.
  */
-class CachedBodyHttpServletRequestWrapper extends HttpServletRequestWrapper {
+public class CachedBodyHttpServletRequestWrapper extends HttpServletRequestWrapper {
 
     private final byte[] cachedBody;
 
-    CachedBodyHttpServletRequestWrapper(HttpServletRequest request) throws IOException {
+    public CachedBodyHttpServletRequestWrapper(HttpServletRequest request) throws IOException {
         super(request);
         this.cachedBody = request.getInputStream().readAllBytes();
     }
 
-    byte[] getCachedBody() {
+    public byte[] getCachedBody() {
         return cachedBody;
     }
 
