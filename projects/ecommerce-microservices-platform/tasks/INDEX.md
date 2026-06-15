@@ -85,6 +85,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-388 | **REVIEW**. Re-point the IAM→ecommerce account-lifecycle event bridge (ADR-MONO-037). M1 onboarding off the decommissioned `auth.user.signed-up` → IAM `account.created` (minimal profile, Flyway V5 nullable email/name; notification WELCOME de-PII'd); M2/M3 `account.deleted` two-phase (grace→withdraw idempotent, post-grace→profile PII anonymize, TASK-BE-258 obligation); M4 subscription contract + producer-retirement + spec re-point. order-PII cascade = documented-deferred boundary (P3). Docker-free `:test` GREEN; ITs CI-Linux. 분석=Opus 4.8 / 구현=Opus 4.8. | user-service, notification-service | code, test, migration, event-driven |
 
 ## done
 

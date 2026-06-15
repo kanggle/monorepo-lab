@@ -103,7 +103,7 @@ Key domain concepts:
   - `OrderPlaced` from `order.order.placed` (order-service)
   - `PaymentCompleted` from `payment.payment.completed` (payment-service)
   - `ShippingStatusChanged` from `shipping.shipping.status-changed` (shipping-service)
-  - `UserSignedUp` from `auth.user.signed-up` (IAM → ecommerce bridge; auth-service decommissioned TASK-BE-132)
+  - IAM `account.created` (onboarding WELCOME — sent without PII personalization since the event is emailHash-only; ADR-MONO-037 P1). Replaces the retired `auth.user.signed-up` (auth-service decommissioned TASK-BE-132). Handler: `AccountCreatedEventConsumer`.
 - Publishes: none
 - Consumer group: `notification-service`
 
@@ -127,9 +127,9 @@ data of its own.
   (3) any HTTP read surfaces filter `WHERE tenant_id = currentTenant()`.
 - **M3 — 404-over-403**: cross-tenant notification query resolves to empty → **404**,
   never 403.
-- **M5 — async propagation**: consumed event envelopes (`order.*`, `payment.*`,
-  `shipping.*`, `auth.user.signed-up`) carry `tenant_id`; the notification record is
-  stamped with the source event's `tenant_id`. Absent `tenant_id` → default tenant.
+- **M5 — async propagation**: consumed ecommerce event envelopes (`order.*`, `payment.*`,
+  `shipping.*`) carry `tenant_id`; IAM `account.created` carries `tenantId` in the
+  **payload**. The notification record is stamped with the source event's tenant. Absent → default tenant.
 - **net-zero / standalone (D8)**: V5 migration backfills all pre-existing rows to the
   default tenant `'ecommerce'`; an unset context resolves to that default — single-store
   behavior byte-identical. Multi-tenancy is additive; **fail-closed is prohibited**.

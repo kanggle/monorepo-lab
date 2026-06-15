@@ -2,14 +2,14 @@
 
 ## Purpose
 
-Manages user profile data and shipping addresses for authenticated users. Provides profile creation (triggered by signup event), profile query/update, address CRUD, and user withdrawal functionality.
+Manages user profile data and shipping addresses for authenticated users. Provides profile creation (triggered by the IAM `account.created` lifecycle event), profile query/update, address CRUD, and event-driven withdrawal/anonymization (reacting to IAM `account.deleted`) — [ADR-MONO-037](../../../../docs/adr/ADR-MONO-037-ecommerce-account-lifecycle-projection.md).
 
 ## Related Services
 
 | Service | Role |
 |---|---|
 | user-service | Primary owner — profile CRUD, address management, withdrawal, event publishing |
-| ~~auth-service~~ | ~~Publishes UserSignedUp event to trigger initial profile creation; consumes UserWithdrawn event to invalidate authentication credentials~~ **REMOVED by TASK-BE-132 — IAM (iam-platform) is now the identity source. Profile creation triggers from IAM `AccountSignedUp` events; credential invalidation is IAM-internal.** |
+| ~~auth-service~~ | ~~Publishes UserSignedUp event to trigger initial profile creation; consumes UserWithdrawn event to invalidate authentication credentials~~ **REMOVED by TASK-BE-132 — IAM (iam-platform) is now the identity source. Profile creation triggers from IAM `account.created` events (ADR-MONO-037); credential invalidation is IAM-internal.** |
 | order-service | Consumes UserWithdrawn event to cancel active orders |
 | web-store | Customer-facing profile view/edit, address management UI |
 | platform-console | Admin user list and detail view |
@@ -19,8 +19,8 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 
 ### Profile Creation (Event-Driven)
 
-1. IAM (iam-platform) publishes the account-signup event (IAM `AccountSignedUp`, consumed by ecommerce as `UserSignedUp`) upon successful registration in IAM
-2. user-service consumes the event and creates initial profile (userId, email, name)
+1. IAM (iam-platform) publishes `account.created` upon successful registration in IAM (ADR-MONO-037)
+2. user-service consumes it and creates a **minimal** profile (userId = `accountId`); `email`/`name` are NOT in the event (emailHash-only) — they are populated later from the OIDC token / profile-update
 3. Profile is created in ACTIVE status
 
 ### Profile Query
@@ -41,13 +41,17 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 3. PATCH /api/users/me/addresses/{addressId} — update existing address
 4. DELETE /api/users/me/addresses/{addressId} — delete address
 
-### User Withdrawal
+### User Withdrawal & Anonymization (Event-Driven, two-phase)
 
-1. User initiates account withdrawal
-2. user-service transitions profile status to WITHDRAWN
-3. user-service publishes UserWithdrawn event
-4. order-service consumes event and cancels all active orders
-5. Credential/session invalidation for the withdrawn user is handled IAM-internally (IAM consumes the withdrawal signal) — ecommerce no longer owns this step
+IAM owns the deletion lifecycle; ecommerce *reacts* to IAM `account.deleted` (the self-service HTTP withdrawal endpoint was removed by TASK-BE-387). The `user-service` consumer branches on the event's own `anonymized` flag — it does not self-schedule on `gracePeriodEndsAt` (ADR-MONO-037 P2/P3):
+
+1. **Phase 1 — grace entry (`anonymized=false`)**: user-service resolves the profile by `accountId` → transitions status to WITHDRAWN → publishes UserWithdrawn.
+2. order-service consumes UserWithdrawn and cancels all active orders.
+3. **Phase 2 — post-grace (`anonymized=true`)**: user-service anonymizes profile PII (`email`/`name`/`nickname`/`phone`/`profileImageUrl` cleared), preserving `userId` for FK/audit/order integrity — the TASK-BE-258 GDPR obligation.
+4. Both phases are idempotent + fail-soft over the monotonic ACTIVE → WITHDRAWN → anonymized transition.
+5. Credential/session invalidation for the withdrawn account is handled IAM-internally — ecommerce no longer owns this step.
+
+> **Scope boundary (ADR-MONO-037 P3):** v1 anonymizes user-service profile PII only. The order-service-held PII cascade (shipping addresses, recipient names on historical orders) is a documented, tracked deferred follow-up — not a silent omission.
 
 ### Admin User Management
 
@@ -63,7 +67,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 - Default address cannot be deleted while other addresses exist (DEFAULT_ADDRESS_CANNOT_BE_DELETED)
 - User ID is sourced from X-User-Id header injected by gateway
 - user-service must not expose or modify authentication credentials
-- Profile email and name are sourced from IAM (iam-platform) via the account-signup event and are not directly modifiable
+- Profile `email`/`name` are sourced from the IAM-issued OIDC id_token (`profile`/`email` scopes), not from the lifecycle event — `account.created` is emailHash-only (no raw PII); they are not directly modifiable via the profile-update API (ADR-MONO-037 P1)
 - Admin endpoints require admin role (enforced via gateway)
 - Concurrent address modifications are handled with proper synchronization
 
@@ -76,6 +80,7 @@ Manages user profile data and shipping addresses for authenticated users. Provid
 
 | Event | Publisher | Consumers |
 |---|---|---|
-| UserSignedUp | IAM (iam-platform) | user-service |
+| `account.created` | IAM (iam-platform) | user-service, notification-service |
+| `account.deleted` | IAM (iam-platform) | user-service (two-phase withdraw → anonymize) |
 | UserProfileUpdated | user-service | platform-console (future), notification-service (future) |
 | UserWithdrawn | user-service | order-service, IAM (credential/session invalidation, IAM-internal) |

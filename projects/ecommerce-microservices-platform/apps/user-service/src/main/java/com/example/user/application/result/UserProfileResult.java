@@ -19,7 +19,7 @@ public record UserProfileResult(
     public static UserProfileResult from(UserProfile profile) {
         return new UserProfileResult(
                 profile.getUserId(),
-                profile.getEmail().value(),
+                profile.getEmail() == null ? null : profile.getEmail().value(),
                 profile.getName(),
                 profile.getNickname(),
                 profile.getPhone(),

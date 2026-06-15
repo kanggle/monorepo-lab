@@ -38,13 +38,36 @@ public class UserProfile {
         return profile;
     }
 
+    /**
+     * Minimal profile born from an IAM {@code account.created} lifecycle event
+     * (ADR-MONO-037 P1). The event carries only {@code accountId} (+ a masked
+     * {@code emailHash}) — no raw email or name — so the profile is created with
+     * {@code email}/{@code name} unset. They are populated lazily from the OIDC
+     * id_token (profile/email scopes) at first login or via the profile-update
+     * flow; the system never depends on them being non-null (ADR-MONO-037 P5/P6).
+     */
+    public static UserProfile createMinimal(UUID userId) {
+        validateUserId(userId);
+
+        UserProfile profile = new UserProfile();
+        profile.id = UUID.randomUUID();
+        profile.userId = userId;
+        profile.email = null;
+        profile.name = null;
+        profile.status = ProfileStatus.ACTIVE;
+        Instant now = Instant.now();
+        profile.createdAt = now;
+        profile.updatedAt = now;
+        return profile;
+    }
+
     public static UserProfile reconstitute(UUID id, UUID userId, String email, String name,
                                             String nickname, String phone, String profileImageUrl,
                                             ProfileStatus status, Instant createdAt, Instant updatedAt) {
         UserProfile profile = new UserProfile();
         profile.id = id;
         profile.userId = userId;
-        profile.email = new Email(email);
+        profile.email = (email == null) ? null : new Email(email);
         profile.name = name;
         profile.nickname = nickname;
         profile.phone = phone;
@@ -78,6 +101,31 @@ public class UserProfile {
     }
 
     public void withdraw() {
+        this.status = ProfileStatus.WITHDRAWN;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isWithdrawn() {
+        return this.status == ProfileStatus.WITHDRAWN;
+    }
+
+    /**
+     * Anonymize the profile's PII in reaction to an IAM {@code account.deleted}
+     * with {@code anonymized=true} (post-grace, ADR-MONO-037 P2/P3, aligning to the
+     * IAM consumer obligation TASK-BE-258). All identity-bearing fields are cleared;
+     * {@code userId} is preserved as the FK for order/audit integrity. The terminal
+     * status is WITHDRAWN. Idempotent: re-applying clears already-null fields.
+     *
+     * <p>Scope boundary (ADR-MONO-037 P3): this anonymizes user-service-held profile
+     * PII only. Order-service-held PII (shipping addresses, recipient names) is a
+     * documented deferred follow-up, not cascaded here.
+     */
+    public void anonymize() {
+        this.email = null;
+        this.name = null;
+        this.nickname = null;
+        this.phone = null;
+        this.profileImageUrl = null;
         this.status = ProfileStatus.WITHDRAWN;
         this.updatedAt = Instant.now();
     }

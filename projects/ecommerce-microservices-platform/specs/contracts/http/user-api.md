@@ -285,7 +285,7 @@ Get a specific user's profile. Requires admin role.
 ```
 
 ## Notes
-- User ID and email are sourced from auth-service via the UserSignedUp event.
+- User ID is the IAM `accountId`, sourced via the IAM `account.created` event (ADR-MONO-037). **Email/name are NOT in that event** (it is emailHash-only) — the profile is created minimal and email/name are populated later from the OIDC token / profile-update; both may be null on a freshly-onboarded profile.
 - user-service must not expose or modify authentication credentials.
 - All profile endpoints use `X-User-Id` header injected by gateway for identity.
 - Maximum 10 addresses per user.

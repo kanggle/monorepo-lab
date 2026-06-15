@@ -1,6 +1,7 @@
 package com.example.user.infrastructure.config;
 
-import com.example.user.application.service.UserSignedUpHandler;
+import com.example.user.domain.model.UserProfile;
+import com.example.user.domain.repository.UserProfileRepository;
 import com.example.user.domain.service.ProductInfoProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -30,14 +31,23 @@ public class StandaloneConfig {
     }
 
     @Bean
-    CommandLineRunner standaloneDataInitializer(UserSignedUpHandler userSignedUpHandler) {
+    CommandLineRunner standaloneDataInitializer(UserProfileRepository userProfileRepository) {
         return args -> {
             UUID testUserId = UUID.fromString("56431938-da42-42e6-bb85-98bfaaebfb94");
             String testEmail = "test@example.com";
             String testName = "테스트유저";
 
+            if (userProfileRepository.existsByUserId(testUserId)) {
+                log.info("[standalone] Test user profile already exists: userId={}", testUserId);
+                return;
+            }
+
+            // Standalone seeds a full profile (with email/name) for local read/update
+            // testing. The live onboarding path creates a minimal profile from
+            // account.created (ADR-MONO-037 P1); this dev seed deliberately uses the
+            // full-profile factory so the standalone UI has data to render.
             log.info("[standalone] Creating test user profile: userId={}, email={}", testUserId, testEmail);
-            userSignedUpHandler.handle(testUserId, testEmail, testName);
+            userProfileRepository.save(UserProfile.create(testUserId, testEmail, testName));
             log.info("[standalone] Test user profile created successfully");
         };
     }

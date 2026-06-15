@@ -31,10 +31,16 @@ class UserProfileJpaEntity {
     @Column(nullable = false, unique = true, columnDefinition = "uuid")
     private UUID userId;
 
-    @Column(nullable = false, length = 255)
+    /**
+     * Nullable since ADR-MONO-037 (TASK-BE-388): a profile born from an IAM
+     * {@code account.created} lifecycle event carries no raw email/name (the event
+     * is emailHash-only), and {@code anonymize()} clears it on {@code account.deleted}
+     * (anonymized=true). Populated lazily from the OIDC token / profile-update.
+     */
+    @Column(length = 255)
     private String email;
 
-    @Column(nullable = false, length = 50)
+    @Column(length = 50)
     private String name;
 
     @Column(length = 50)
@@ -61,7 +67,7 @@ class UserProfileJpaEntity {
         entity.id = profile.getId();
         entity.tenantId = tenantId;
         entity.userId = profile.getUserId();
-        entity.email = profile.getEmail().value();
+        entity.email = profile.getEmail() == null ? null : profile.getEmail().value();
         entity.name = profile.getName();
         entity.nickname = profile.getNickname();
         entity.phone = profile.getPhone();

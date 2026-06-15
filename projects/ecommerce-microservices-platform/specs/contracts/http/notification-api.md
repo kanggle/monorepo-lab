@@ -264,7 +264,7 @@ Update a notification template.
 | `ORDER_PLACED` | OrderPlaced |
 | `PAYMENT_COMPLETED` | PaymentCompleted |
 | `SHIPPING_STATUS_CHANGED` | ShippingStatusChanged |
-| `WELCOME` | UserSignedUp |
+| `WELCOME` | IAM `account.created` (no PII personalization — emailHash-only; ADR-MONO-037) |
 
 ---
 

@@ -35,7 +35,7 @@
 | Kafka consume | `order.order.placed` | — | order placement notification |
 | Kafka consume | `payment.payment.completed`, `payment.payment.refunded` | — | payment notification |
 | Kafka consume | `shipping.shipping.status-changed` | — | shipping status notification |
-| Kafka consume | `auth.user.signed-up` | — | welcome notification |
+| Kafka consume | `account.created` (IAM) | — | welcome notification (no PII personalization — emailHash-only event; ADR-MONO-037) |
 
 자세한 spec 은 [`../../contracts/http/notification-api.md`](../../contracts/http/notification-api.md) 참조.
 
