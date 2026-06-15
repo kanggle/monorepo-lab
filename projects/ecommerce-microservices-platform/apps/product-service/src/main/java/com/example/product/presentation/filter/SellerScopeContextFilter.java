@@ -18,7 +18,7 @@ import java.io.IOException;
  * {@code X-Seller-Scope} header — the OPERATOR token's seller-scope claim — into
  * {@link SellerScopeContext} for the duration of the request, then clears it.
  *
- * <p>Runs at {@code HIGHEST_PRECEDENCE - 1}, i.e. immediately <em>after</em>
+ * <p>Runs at {@code HIGHEST_PRECEDENCE + 1}, i.e. immediately <em>after</em>
  * {@code TenantContextFilter}: the seller axis is always nested inside the tenant
  * axis (isolate-then-attribute, AC-6). The gateway only forwards this header on the
  * OPERATOR plane; CONSUMER requests carry no seller authority (F5), so the shared

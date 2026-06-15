@@ -32,7 +32,7 @@ function resolveCallbackUrl(raw: string | null): string {
 
 function describeError(code: string | null): string | null {
   if (!code) return null;
-  if (code === 'account_type_mismatch' || code === 'AccountTypeMismatch') {
+  if (code === 'account_type_mismatch') {
     return 'operator 계정으로는 web-store 에 접근할 수 없습니다. 운영자 콘솔을 이용해 주세요.';
   }
   if (code === 'Configuration') {
