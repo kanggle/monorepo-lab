@@ -1,6 +1,6 @@
 ﻿# TASK-PC-BE-009 — Align console-integration-contract.md ecommerce-leg admission to the roles-only operator model
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-PC-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (security/authorization-adjacent contract-doc alignment — net-zero, but the cross-project admission model must be stated exactly)
