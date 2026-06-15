@@ -1,6 +1,6 @@
 # TASK-SCM-BE-031 — ASN response decimal string contract conformance (+ IVS import cleanup)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-SCM-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (small fix; surfaced by the SCM-BE-030 refactor-code discovery)
