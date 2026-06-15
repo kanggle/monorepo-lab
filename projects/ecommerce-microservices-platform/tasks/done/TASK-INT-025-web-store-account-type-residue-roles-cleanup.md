@@ -1,6 +1,6 @@
 # TASK-INT-025 — Remove web-store `account_type` residue (vestigial session field + stale e2e) post ADR-035
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-INT
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (cross-cutting frontend/e2e cleanup with a retire-vs-re-point decision; net-zero but the consumer-role guard contract must be preserved exactly)
