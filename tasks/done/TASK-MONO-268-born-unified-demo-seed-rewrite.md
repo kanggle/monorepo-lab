@@ -8,7 +8,7 @@ ADR-MONO-036 **M3** — born-unified demo seed rewrite (§ P4). Rewrite the fede
 
 # Status
 
-review
+done
 
 # Owner
 
