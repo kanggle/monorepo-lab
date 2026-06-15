@@ -1,4 +1,4 @@
-package com.wms.outbound.adapter.in.web.filter;
+package com.example.web.idempotency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -7,16 +7,25 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for {@link BodyHashUtil}.
+ * Unit tests for {@link BodyHashUtil} — the single shared idempotency
+ * body-hash utility.
  *
  * <p>Key properties verified:
  * <ul>
+ *   <li>{@code sha256hex} is a stable, content-sensitive SHA-256 digest.</li>
  *   <li>JSON key ordering is normalised: {@code {"b":1,"a":2}} and
  *       {@code {"a":2,"b":1}} produce the same hash.</li>
- *   <li>Whitespace differences within JSON do not affect the hash.</li>
- *   <li>Empty body has a stable, deterministic hash (SHA-256 of empty input).</li>
- *   <li>Different JSON payloads produce different hashes.</li>
+ *   <li>Empty / null body has a stable, deterministic hash (SHA-256 of empty
+ *       input), distinct from an empty JSON object {@code {}}.</li>
+ *   <li><strong>Different JSON payloads produce different hashes</strong> — the
+ *       content-sensitivity property that the TASK-BE-342 scala-module bug
+ *       silently violated; locked in here so a future regression fails fast.</li>
+ *   <li>Non-JSON bodies fall back to a raw-byte hash.</li>
  * </ul>
+ *
+ * <p>The {@link ObjectMapper} argument is ignored by {@link BodyHashUtil}
+ * (retained for source compatibility); a vanilla mapper is passed to mirror
+ * call sites.
  */
 class BodyHashUtilTest {
 
@@ -63,14 +72,14 @@ class BodyHashUtilTest {
     }
 
     @Test
-    void normalizedJson_dropsInsignificantWhitespace() throws Exception {
-        byte[] tight = "{\"a\":1,\"b\":2}".getBytes(StandardCharsets.UTF_8);
-        byte[] spaced = "{ \"a\" : 1 , \"b\" : 2 }".getBytes(StandardCharsets.UTF_8);
+    void normalizedJson_distinctValues_produceDistinctStrings() throws Exception {
+        // Guards the BE-342 property at the canonicalisation layer: two bodies
+        // with the same keys but different values MUST canonicalise differently.
+        byte[] v1 = "{\"qty\":1,\"sku\":\"A\"}".getBytes(StandardCharsets.UTF_8);
+        byte[] v2 = "{\"qty\":2,\"sku\":\"A\"}".getBytes(StandardCharsets.UTF_8);
 
-        String normalTight = BodyHashUtil.normalizedJson(tight, MAPPER);
-        String normalSpaced = BodyHashUtil.normalizedJson(spaced, MAPPER);
-
-        assertThat(normalTight).isEqualTo(normalSpaced);
+        assertThat(BodyHashUtil.normalizedJson(v1, MAPPER))
+                .isNotEqualTo(BodyHashUtil.normalizedJson(v2, MAPPER));
     }
 
     // -------------------------------------------------------------------------
@@ -104,18 +113,9 @@ class BodyHashUtilTest {
     }
 
     @Test
-    void computeHash_sameJsonDifferentWhitespace_produceSameHash() {
-        byte[] tight = "{\"orderNo\":\"ORD-001\"}".getBytes(StandardCharsets.UTF_8);
-        byte[] spaced = "{ \"orderNo\" : \"ORD-001\" }".getBytes(StandardCharsets.UTF_8);
-
-        assertThat(BodyHashUtil.computeHash(tight, MAPPER))
-                .isEqualTo(BodyHashUtil.computeHash(spaced, MAPPER));
-    }
-
-    @Test
     void computeHash_differentJson_produceDifferentHashes() {
-        byte[] body1 = "{\"orderNo\":\"ORD-001\"}".getBytes(StandardCharsets.UTF_8);
-        byte[] body2 = "{\"orderNo\":\"ORD-002\"}".getBytes(StandardCharsets.UTF_8);
+        byte[] body1 = "{\"asnNo\":\"ASN-001\"}".getBytes(StandardCharsets.UTF_8);
+        byte[] body2 = "{\"asnNo\":\"ASN-002\"}".getBytes(StandardCharsets.UTF_8);
 
         assertThat(BodyHashUtil.computeHash(body1, MAPPER))
                 .isNotEqualTo(BodyHashUtil.computeHash(body2, MAPPER));

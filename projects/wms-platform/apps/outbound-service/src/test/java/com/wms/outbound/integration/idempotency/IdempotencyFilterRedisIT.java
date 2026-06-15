@@ -334,7 +334,9 @@ class IdempotencyFilterRedisIT {
 
     /**
      * Mirror of the production {@code BodyHashUtil#computeHash}: canonicalise
-     * the JSON body (sorted keys) then SHA-256. Replicated here because
-     * {@code BodyHashUtil} is package-private to the filter package.
+     * the JSON body (sorted keys) then SHA-256. Deliberately replicated here
+     * (rather than calling the shared {@code com.example.web.idempotency.BodyHashUtil})
+     * so the IT's expected hash is computed independently of the production
+     * code path it is asserting against.
      */
 }

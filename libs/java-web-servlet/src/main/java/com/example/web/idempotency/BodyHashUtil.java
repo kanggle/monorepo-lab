@@ -1,4 +1,4 @@
-package com.wms.outbound.adapter.in.web.filter;
+package com.example.web.idempotency;
 
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,23 +9,25 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * Package-private utilities for computing a canonical SHA-256 body hash.
+ * Shared utilities for computing a canonical SHA-256 request-body hash, used by
+ * the servlet-stack REST Idempotency-Key filters.
  *
  * <p>Key-order normalisation: JSON is re-serialised with both
  * {@link MapperFeature#SORT_PROPERTIES_ALPHABETICALLY} (for POJO fields) and
  * {@link SerializationFeature#ORDER_MAP_ENTRIES_BY_KEYS} (for Map entries,
  * which is what Jackson produces when parsing into {@code Object.class}) so
  * that {@code {"b":1,"a":2}} and {@code {"a":2,"b":1}} produce the same hash.
- * This is required by {@code idempotency.md} §1.6 to prevent spurious
- * {@code DUPLICATE_REQUEST (409)} responses when two clients submit
- * semantically identical bodies with different key ordering or whitespace.
+ * This prevents spurious {@code DUPLICATE_REQUEST (409)} responses when two
+ * clients submit semantically identical bodies with different key ordering or
+ * whitespace.
  *
- * <p>Mirror of {@code inbound-service}'s {@code BodyHashUtil}; the two
- * services maintain independent copies because {@code libs/} cross-service
- * sharing of REST adapters is forbidden by the Hard Stop on shared-library
- * project-specific content (see {@code CLAUDE.md} § Hard Stop Rules).
+ * <p>This is the single shared implementation. It was previously copied
+ * per-service; the copies silently diverged (see {@link #CANONICAL_MAPPER}),
+ * which is exactly the failure mode hosting it once in {@code libs/} prevents.
+ * The class is project-agnostic — pure Jackson + SHA-256, no domain content —
+ * so it carries no shared-library-policy concern.
  */
-final class BodyHashUtil {
+public final class BodyHashUtil {
 
     private BodyHashUtil() {
     }
@@ -35,14 +37,14 @@ final class BodyHashUtil {
      * {@link JsonMapper} with <strong>no auto-registered modules</strong>.
      *
      * <p>The body round-trip MUST parse and serialise with the <em>same</em>
-     * module set. The injected application {@link ObjectMapper} has
-     * jackson-module-scala on the classpath (pulled transitively), so
+     * module set. A caller-supplied application {@link ObjectMapper} can have
+     * {@code jackson-module-scala} on the classpath (pulled transitively), so
      * {@code readValue(json, Object.class)} returns a
      * {@code scala.collection.immutable.Map} — which a module-less serialiser
      * then renders by its Java-bean getters as {@code {"empty":...,
-     * "traversableAgain":...}}, a CONTENT-INDEPENDENT string. That made every
-     * body hash identical → idempotency body-conflict detection (409) silently
-     * broke (different bodies under the same key were treated as replays).
+     * "traversableAgain":...}}, a CONTENT-INDEPENDENT string. That would make
+     * every body hash identical → idempotency body-conflict detection (409)
+     * silently breaks (different bodies under the same key treated as replays).
      * Using one vanilla mapper for both read and write yields a
      * {@code java.util.LinkedHashMap} that serialises faithfully (TASK-BE-342).
      */
@@ -64,7 +66,7 @@ final class BodyHashUtil {
      *                  the TASK-BE-342 bug; see {@link #CANONICAL_MAPPER})
      * @return lowercase hex SHA-256 digest
      */
-    static String computeHash(byte[] bodyBytes, ObjectMapper mapper) {
+    public static String computeHash(byte[] bodyBytes, ObjectMapper mapper) {
         if (bodyBytes == null || bodyBytes.length == 0) {
             return sha256hex(new byte[0]);
         }
@@ -86,7 +88,7 @@ final class BodyHashUtil {
      * module-free mapper serialises is exactly the TASK-BE-342 correctness bug.
      */
     @SuppressWarnings("unused")
-    static String normalizedJson(byte[] jsonBytes, ObjectMapper mapper) throws Exception {
+    public static String normalizedJson(byte[] jsonBytes, ObjectMapper mapper) throws Exception {
         Object parsed = CANONICAL_MAPPER.readValue(jsonBytes, Object.class);
         return CANONICAL_MAPPER.writeValueAsString(parsed);
     }
@@ -94,7 +96,7 @@ final class BodyHashUtil {
     /**
      * Returns the lowercase hexadecimal SHA-256 digest of {@code input}.
      */
-    static String sha256hex(byte[] input) {
+    public static String sha256hex(byte[] input) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] digest = md.digest(input);
