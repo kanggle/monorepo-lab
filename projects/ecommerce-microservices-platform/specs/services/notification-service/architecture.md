@@ -19,7 +19,7 @@ and `platform/architecture-decision-rule.md`.
 | Bounded Context | Notification delivery (email / SMS / push 외부 채널 통합) |
 | Deployable unit | `apps/notification-service/` |
 | Data store | PostgreSQL (delivery state + dedupe) |
-| Event publication | Kafka (delivery outcome events) |
+| Event publication | none (terminal consumer — see § Events) |
 | Event consumption | Kafka (order/payment/shipping lifecycle source topics) |
 
 ### Service Type Composition
@@ -103,9 +103,38 @@ Key domain concepts:
   - `OrderPlaced` from `order.order.placed` (order-service)
   - `PaymentCompleted` from `payment.payment.completed` (payment-service)
   - `ShippingStatusChanged` from `shipping.shipping.status-changed` (shipping-service)
-  - `UserSignedUp` from `auth.user.signed-up` (auth-service)
+  - `UserSignedUp` from `auth.user.signed-up` (IAM → ecommerce bridge; auth-service decommissioned TASK-BE-132)
 - Publishes: none
 - Consumer group: `notification-service`
+
+## Multi-Tenancy (ADR-MONO-030 Step 4 / TASK-BE-370)
+
+notification-service adopts the platform's `multi-tenant` trait
+([`rules/traits/multi-tenant.md`](../../../../../rules/traits/multi-tenant.md) M1-M7),
+inheriting the outer-axis tenant-isolation pattern proven in product-service /
+order-service (TASK-BE-357), user-service (TASK-BE-367), promotion-service
+(TASK-BE-368), and shipping-service (TASK-BE-369). The `seller_id` inner axis does
+**not** apply — notification-service is a terminal consumer with no seller-attributed
+data of its own.
+
+- **M1 — row-level `tenant_id`**: `notifications` and `processed_events` records carry
+  `tenant_id VARCHAR(64) NOT NULL` where applicable, stamped from the consumed event
+  envelope's `tenant_id`. V5 migration backfills all pre-existing rows to the default
+  tenant `'ecommerce'`.
+- **M2 — 3-layer isolation**: (1) gateway entitlement-trust gate + `X-Tenant-Id` header
+  owned by **gateway-service** (TASK-BE-357), reused unchanged; (2) `TenantContextFilter`
+  (`HIGHEST_PRECEDENCE`) binds the header into a request-scoped `TenantContext` ThreadLocal;
+  (3) any HTTP read surfaces filter `WHERE tenant_id = currentTenant()`.
+- **M3 — 404-over-403**: cross-tenant notification query resolves to empty → **404**,
+  never 403.
+- **M5 — async propagation**: consumed event envelopes (`order.*`, `payment.*`,
+  `shipping.*`, `auth.user.signed-up`) carry `tenant_id`; the notification record is
+  stamped with the source event's `tenant_id`. Absent `tenant_id` → default tenant.
+- **net-zero / standalone (D8)**: V5 migration backfills all pre-existing rows to the
+  default tenant `'ecommerce'`; an unset context resolves to that default — single-store
+  behavior byte-identical. Multi-tenancy is additive; **fail-closed is prohibited**.
+
+> SoT = [specs/features/multi-tenancy-and-marketplace.md](../../features/multi-tenancy-and-marketplace.md) §2, ADR-MONO-030.
 
 ## Testing Expectations
 Required emphasis:

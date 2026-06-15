@@ -2,7 +2,24 @@
 
 > 본 문서는 ecommerce 를 **멀티벤더 마켓플레이스 SaaS** 로 승격하는 두 직교 축의 **스펙 기준(source of truth)** 이다 — [ADR-MONO-030](../../../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md) §3.4 **Step 1**.
 > **Step 1 = 스펙만** (Source-of-Truth-first). 컬럼/마이그레이션/게이트 코드/셀러 애그리거트 구현은 **Step 2(바깥 축)·Step 3(안쪽 축)** 의 별도 태스크가 본 문서를 기준으로 구현한다.
-> 슬라이스 범위 = **product-service + order-service** 2개. 나머지 11개 서비스·정산/수수료·콘솔 통합·[ADR-MONO-022](../../../../docs/adr/ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) 이행 이벤트 `tenant_id` 스레딩 = 보류(ADR §3.4 Step 4).
+> 슬라이스 범위 = **product-service + order-service** 2개. 나머지 서비스·정산/수수료·콘솔 통합·[ADR-MONO-022](../../../../docs/adr/ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) 이행 이벤트 `tenant_id` 스레딩 = 보류(ADR §3.4 Step 4).
+
+## 진행 현황 (as-of 2026-06-15)
+
+Step 2(product/order row-level `tenant_id` M1), Step 3(seller 축 TASK-BE-363), Step 4 facet b (settlement-service TASK-BE-365) 및 추가 tenant_id 증분이 완료됨:
+
+| 서비스 | tenant_id 마이그레이션 | 비고 |
+|---|---|---|
+| product-service | Step 2 (M1) | TASK-BE-357 |
+| order-service | Step 2 (M1) | TASK-BE-357 |
+| user-service | V4 | TASK-BE-367 |
+| promotion-service | V6 | TASK-BE-368 |
+| shipping-service | V7 | TASK-BE-369 |
+| notification-service | V5 | TASK-BE-370 |
+| settlement-service | 구현 완료 | TASK-BE-365 (신규 서비스) |
+| cart / payment / review / search / auth / web-store | **미완 (in-migration)** | 잔여 backlog |
+
+`admin-dashboard` (frontend-app): ADR-MONO-031 Phase 6 / TASK-MONO-259 로 **폐기 완료** — platform-console 일원화.
 
 ---
 
@@ -21,7 +38,7 @@
 
 ## 1. 현재 상태 (Step 1 이 닫는 갭)
 
-| 요소 | 현재 (single-tenant) | 목표 (슬라이스) |
+| 요소 | Before Step 2 (single-tenant, 역사적 기준) | 목표 (슬라이스) |
 |---|---|---|
 | gateway `TenantClaimValidator` | **고정 슬러그** `tenant_id == 'ecommerce'` 만 통과 (ADR-019 *"before"* 상태) — [iam-integration.md](../integration/iam-integration.md) §Token 검증 §5 | **entitlement-trust** — JWKS 검증된 GAP/IAM 토큰의 임의 `tenant_id` 수용, row 로 격리 (ADR-019 D5) |
 | product/order 데이터 | `tenant_id` **없음** (모든 row = 암묵적 단일 스토어) | 모든 영속 row 에 `tenant_id` (M1) + `seller_id`(소유/귀속) |

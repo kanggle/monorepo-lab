@@ -4,13 +4,12 @@ This document declares the internal architecture of `settlement-service`.
 All implementation tasks targeting this service must follow this declaration
 and `platform/architecture-decision-rule.md`.
 
-> **Status: forward-declared (ADR-MONO-030 Step 4 facet b).** This service does
-> not exist yet — this spec is the source-of-truth for the first settlement
-> increment (TASK-BE-365). It models **marketplace seller settlement /
-> commission**: the platform takes a commission per order-line by seller, and the
-> seller's net proceeds are accrued. Settlement-period close, payout/disbursement,
-> and seller banking are **forward-declared** to a later increment (see
-> § Forward-Declared below).
+> **Status: implemented — ADR-MONO-030 Step 4 facet b, TASK-BE-365.** This service
+> is fully implemented (66 Java source files). It models **marketplace seller
+> settlement / commission**: the platform takes a commission per order-line by
+> seller, and the seller's net proceeds are accrued. Settlement-period close,
+> payout/disbursement, and seller banking are **forward-declared** to a later
+> increment (see § Forward-Declared below).
 
 ---
 

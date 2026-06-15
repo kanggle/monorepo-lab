@@ -65,7 +65,10 @@
 | REST | `POST /api/shippings/{id}/refresh-tracking` | `X-User-Role: ADMIN` | carrier-driven status refresh (TASK-BE-293, best-effort) |
 | REST | `POST /api/shippings/carrier-webhook` | HMAC sig (`X-Carrier-Signature`) | inbound carrier tracking webhook (TASK-BE-294, idempotent, best-effort) |
 | Kafka consume | `order.order.confirmed` | — | shipping record creation |
+| Kafka consume | `wms.outbound.shipping.confirmed.v1` | — | advance Shipping `PREPARING → SHIPPED` (ADR-022 return leg, group `shipping-service-wms`) |
+| Kafka consume | `wms.outbound.order.cancelled.v1` | — | backorder/cancel ops alert (ADR-022 return leg, group `shipping-service-wms`) |
 | Kafka publish | `shipping.shipping.status-changed` | — | notification consumers |
+| Kafka publish | `ecommerce.fulfillment.requested.v1` | — | wms fulfillment trigger (ADR-022 forward leg, via outbox) |
 
 자세한 spec 은 [`../../contracts/http/shipping-api.md`](../../contracts/http/shipping-api.md) + [`../../contracts/events/shipping-events.md`](../../contracts/events/shipping-events.md) 참조.
 
