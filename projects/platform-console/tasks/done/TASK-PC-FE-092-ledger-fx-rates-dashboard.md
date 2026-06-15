@@ -1,6 +1,6 @@
 # TASK-PC-FE-092 — Ledger-ops FX 환율 피드 대시보드 탭 (FIN-BE-033 read EP 소비)
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js, ledger-ops 피처)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Sonnet 4.6 (read-only FE 슬라이스 — PC-FE-091 미러)
