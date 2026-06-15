@@ -44,6 +44,11 @@ and `platform/architecture-decision-rule.md`.
 
 ## Internal Structure Rule
 
+`domain/`·`application/`은 **package-by-feature** 구성(layered skill이 허용하는 대안 —
+계층 의존 규칙은 그대로 유지). 집계 엔터티는 `domain/<feature>/`에 JPA 매핑된 도메인
+엔터티로 두고(별도 `*JpaEntity` 없음 — 아래 *퍼시스턴스 매핑 규약* 참조), `infrastructure/persistence/`는
+Spring Data `*JpaRepository` + 도메인 포트 구현 `*RepositoryImpl` 어댑터만 보유.
+
 ```
 apps/community-service/src/main/java/com/example/community/
 ├── CommunityApplication.java
@@ -53,61 +58,77 @@ apps/community-service/src/main/java/com/example/community/
 │   ├── CommentController.java           ← 댓글 CRUD
 │   ├── ReactionController.java          ← 반응 upsert/delete
 │   ├── FeedSubscriptionController.java  ← 아티스트 팔로잉
-│   ├── dto/
+│   ├── dto/                             ← 요청·응답 DTO
 │   └── exception/
-├── application/
+│       └── GlobalExceptionHandler.java
+├── application/                         ← flat use-case 패키지 (package-by-feature)
 │   ├── PublishPostUseCase.java
 │   ├── UpdatePostUseCase.java
 │   ├── ChangePostStatusUseCase.java
 │   ├── GetFeedUseCase.java
+│   ├── GetPostUseCase.java
 │   ├── AddCommentUseCase.java
 │   ├── AddReactionUseCase.java
 │   ├── FollowArtistUseCase.java
-│   └── event/
-│       └── CommunityEventPublisher.java
-├── domain/
+│   ├── ActorContext.java / PostAccessGuard.java / PostMediaUrlsSerializer.java  ← use-case 지원
+│   ├── PublishPostCommand.java / PostView.java / FeedItemView.java / FeedPage.java / UpdatePostResponse.java  ← command·view 레코드
+│   ├── event/
+│   │   └── CommunityEventPublisher.java
+│   └── exception/                       ← 응용 예외(PostNotFound, MembershipRequired, Permission, Following 등)
+├── domain/                             ← 집계별 패키지 (package-by-feature)
 │   ├── post/
-│   │   ├── Post.java                    ← 엔터티 (aggregate root)
-│   │   ├── PostId.java
+│   │   ├── Post.java                    ← 집계 루트 (JPA 매핑 도메인 엔터티 — Layered 허용)
 │   │   ├── PostType.java                ← enum: ARTIST_POST / FAN_POST
 │   │   ├── PostVisibility.java          ← enum: PUBLIC / MEMBERS_ONLY
-│   │   ├── status/
-│   │   │   ├── PostStatus.java          ← enum: DRAFT / PUBLISHED / HIDDEN / DELETED
-│   │   │   └── PostStatusMachine.java   ← 전이 규칙
-│   │   └── repository/
-│   │       └── PostRepository.java
+│   │   ├── PostRepository.java          ← 리포지토리 포트(인터페이스)
+│   │   ├── PageResult.java              ← framework-free 페이지 VO (피드 페이지네이션)
+│   │   └── status/
+│   │       ├── PostStatus.java          ← enum: DRAFT / PUBLISHED / HIDDEN / DELETED
+│   │       ├── PostStatusMachine.java   ← 전이 규칙
+│   │       ├── ActorType.java           ← enum: ARTIST / OPERATOR
+│   │       ├── PostStatusHistoryEntry.java       ← append-only 감사 레코드 (POJO record)
+│   │       └── PostStatusHistoryRepository.java  ← 포트(인터페이스)
 │   ├── comment/
-│   │   ├── Comment.java
-│   │   └── repository/
-│   │       └── CommentRepository.java
+│   │   ├── Comment.java                 ← JPA 매핑 도메인 엔터티
+│   │   └── CommentRepository.java       ← 포트
 │   ├── reaction/
-│   │   ├── Reaction.java
-│   │   └── repository/
-│   │       └── ReactionRepository.java
+│   │   ├── Reaction.java                ← JPA 매핑 도메인 엔터티 (@IdClass 복합키)
+│   │   └── ReactionRepository.java      ← 포트
 │   ├── feed/
-│   │   ├── FeedSubscription.java
-│   │   └── repository/
-│   │       └── FeedSubscriptionRepository.java
+│   │   ├── FeedSubscription.java        ← JPA 매핑 도메인 엔터티 (@IdClass 복합키)
+│   │   └── FeedSubscriptionRepository.java ← 포트
 │   └── access/
 │       ├── ContentAccessChecker.java    ← membership-service 호출 포트(인터페이스)
 │       ├── ArtistAccountChecker.java    ← account-service artist 존재 확인 포트(인터페이스)
+│       ├── AccountProfileLookup.java    ← account-service 작성자 표시명 조회 포트(인터페이스)
 │       └── ArtistNotFoundException.java
 └── infrastructure/
     ├── persistence/
-    │   ├── PostJpaEntity.java
-    │   ├── PostStatusHistoryJpaEntity.java
-    │   ├── CommentJpaEntity.java
-    │   ├── ReactionJpaEntity.java
-    │   ├── FeedSubscriptionJpaEntity.java
-    │   └── *JpaRepository.java
-    ├── kafka/
-    │   └── CommunityKafkaProducer.java
+    │   ├── PostJpaRepository.java / PostRepositoryImpl.java
+    │   ├── CommentJpaRepository.java / CommentRepositoryImpl.java
+    │   ├── ReactionJpaRepository.java / ReactionRepositoryImpl.java
+    │   ├── FeedSubscriptionJpaRepository.java / FeedSubscriptionRepositoryImpl.java
+    │   └── PostStatusHistoryJpaEntity.java / PostStatusHistoryJpaRepository.java / PostStatusHistoryRepositoryImpl.java
+    ├── event/
+    │   └── CommunityOutboxPollingScheduler.java  ← outbox → Kafka 발행
     ├── client/
     │   ├── MembershipAccessClient.java  ← ContentAccessChecker 구현체
-    │   ├── AccountProfileClient.java    ← 작성자 표시명 조회
+    │   ├── AccountProfileClient.java    ← AccountProfileLookup 구현체 (작성자 표시명)
     │   └── AccountExistenceClient.java  ← ArtistAccountChecker 구현체
-    └── config/
+    ├── security/                        ← JWT actor-context 변환·issuer/tenant 클레임 검증
+    └── config/                          ← Clock, JPA, OAuth2 ResourceServer/WebClient, Security
 ```
+
+### 퍼시스턴스 매핑 규약
+
+- **집계(Post · Comment · Reaction · FeedSubscription)**: layered skill이 도메인 엔터티에
+  JPA 애너테이션을 명시적으로 허용하므로(*"JPA annotations are acceptable"*), 도메인 클래스가
+  곧 JPA 엔터티이다. 별도 `*JpaEntity` POJO 분리를 두지 않는다 — `infrastructure/persistence/`는
+  Spring Data `*JpaRepository`와 도메인 포트 구현 `*RepositoryImpl` 어댑터만 가진다.
+- **감사 로그(PostStatusHistory)**: 유일한 POJO/JpaEntity 분리. append-only 쓰기 전용 투영이므로
+  도메인은 불변 record `domain/post/status/PostStatusHistoryEntry`로 표현하고,
+  `infrastructure/persistence/PostStatusHistoryJpaEntity`가 영속 매핑을 담당하며
+  `PostStatusHistoryRepositoryImpl`이 경계에서 변환한다. (집계처럼 로드/수정되는 엔터티가 아님.)
 
 ## Allowed Dependencies
 
