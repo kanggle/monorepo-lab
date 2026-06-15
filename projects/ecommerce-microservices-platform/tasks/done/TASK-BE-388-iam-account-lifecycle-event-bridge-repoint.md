@@ -1,6 +1,9 @@
 # TASK-BE-388 — Re-point the IAM→ecommerce account-lifecycle event bridge (signup off the decommissioned `auth.user.signed-up`; add `account.deleted` reaction)
 
-**Status:** review
+**Status:** done
+
+> **DONE (2026-06-15, 3-dim verified — impl PR #1653 squash `5b31584fc`).** (a) MERGED + `5b31584fc`; (b) origin/main tip = `5b31584fc`; (c) pre-merge 20/20 required checks SUCCESS (Build & Test JDK21 Linux + all Integration/E2E/Frontend/Package — 0 failing). Realizes ADR-MONO-037 M1–M4. worktree-isolated (main parked).
+
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (event-driven cross-project integration + compliance-adjacent semantics)
 
