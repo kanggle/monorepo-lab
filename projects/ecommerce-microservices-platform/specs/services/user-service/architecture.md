@@ -85,9 +85,9 @@ Package organization may follow package-by-layer or package-by-feature if the la
 - Wishlist (user-product associations, product info fetched from product-service at query time)
 
 ## Domain Constraints
-- user-service must NOT own authentication credentials (owned by auth-service)
+- user-service must NOT own authentication credentials (owned by IAM; auth-service decommissioned TASK-BE-132)
 - user-service must NOT replicate or cache auth tokens
-- user ID is issued by auth-service; user-service receives it as an external identifier
+- user ID is issued by IAM; user-service receives it as an external identifier (formerly issued by auth-service; decommissioned TASK-BE-132)
 - profile data is exposed only through published contracts
 
 ## Integration Rules
@@ -95,13 +95,25 @@ Package organization may follow package-by-layer or package-by-feature if the la
 - events must follow published event contracts
 - persistence rules must follow service ownership boundaries
 - shared libraries may be used only under shared-library policy
-- auth-service creates the user ID; user-service creates the profile record upon receiving a UserSignedUp event
+- IAM creates the user ID; user-service creates the profile record upon receiving a `UserSignedUp` event from `auth.user.signed-up` (emitted by IAM; auth-service decommissioned TASK-BE-132)
 
 ## Events
 - Consumes: `UserSignedUp` (from auth-service) — triggers initial profile creation
 - Publishes: `UserProfileUpdated`, `UserWithdrawn`
 
-## Multi-Tenancy (ADR-MONO-030 Step 4 / TASK-BE-367)
+## Outbox
+
+- Pattern: **Direct Kafka publish via Spring event bridge** (not `libs/java-messaging` transactional outbox — `java-messaging` is not a dependency of user-service).
+- Flow: application layer publishes a Spring `ApplicationEvent` (`UserProfileUpdatedSpringEvent` / `UserWithdrawnSpringEvent`); `KafkaUserProfileEventPublisher` (`@EventListener`, `infrastructure/event`) converts and sends directly via `KafkaTemplate`.
+- Topic 매핑 (`KafkaUserProfileEventPublisher`):
+  - `UserProfileUpdated` → `user.user.profile-updated`
+  - `UserWithdrawn` → `user.user.withdrawn`
+- Consumed topic: `auth.user.signed-up` (consumer group `user-service`) — handled by `UserSignedUpConsumer`.
+- **Note**: the Identity table entry "Event publication | Kafka via outbox" reflects the intended target pattern; the v1 implementation is a direct Spring-event → Kafka bridge without a transactional outbox table. Adding the outbox is a forward-declared improvement.
+
+## Multi-Tenancy & Marketplace (ADR-MONO-030)
+
+> (Originally introduced in TASK-BE-367.) 모델 SoT = [specs/features/multi-tenancy-and-marketplace.md](../../features/multi-tenancy-and-marketplace.md)
 
 user-service adopts the platform's `multi-tenant` trait
 ([`rules/traits/multi-tenant.md`](../../../../../rules/traits/multi-tenant.md) M1-M7),

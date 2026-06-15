@@ -109,7 +109,9 @@ Key domain concepts:
 - Publishes: `CouponUsed`, `CouponExpired`
 - Consumes: `OrderCancelled` (from order-service, restores USED coupons to ISSUED)
 
-## Multi-Tenancy (ADR-MONO-030 Step 4 / TASK-BE-368)
+## Multi-Tenancy & Marketplace (ADR-MONO-030)
+
+> (Originally introduced in TASK-BE-368.) 모델 SoT = [specs/features/multi-tenancy-and-marketplace.md](../../features/multi-tenancy-and-marketplace.md)
 
 promotion-service adopts the platform's `multi-tenant` trait
 ([`rules/traits/multi-tenant.md`](../../../../../rules/traits/multi-tenant.md) M1-M7),

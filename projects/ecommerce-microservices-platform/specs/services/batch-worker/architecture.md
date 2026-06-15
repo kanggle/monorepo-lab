@@ -19,7 +19,7 @@ and `platform/architecture-decision-rule.md`.
 | Bounded Context | Scheduled / batch processing (periodic cleanup, aggregation, maintenance) |
 | Deployable unit | `apps/batch-worker/` |
 | Data store | PostgreSQL (shared with other ecommerce services for batch read/write) |
-| Event publication | Kafka (batch completion events) |
+| Event publication | none (forward-declared; contracts TBD) |
 | Event consumption | none (scheduled trigger) |
 
 ### Service Type Composition
@@ -73,7 +73,7 @@ Package organization may follow package-by-layer or package-by-feature if the la
 
 ## Published Interfaces
 - None (batch-worker does not expose HTTP APIs)
-- May publish domain events to notify other services of completed batch operations (contracts must be defined in `specs/contracts/events/` before implementation)
+- No Kafka event contracts exist in `specs/contracts/events/` for batch-worker as of v1. The Identity table reflects this: "none (forward-declared; contracts TBD)". Event publication may be introduced in a later increment; the contract must be defined in `specs/contracts/events/` before implementation.
 
 ## Consumed Interfaces
 - Consumes other services' published HTTP contracts (read-only) for data verification

@@ -82,6 +82,24 @@ Business logic must remain independent from Elasticsearch SDK details.
 - Elasticsearch dependency must be isolated behind outbound ports
 - Index schema changes must be managed through a versioned migration strategy
 
+## Events
+
+search-service is a **pure consumer** — it publishes no events.
+
+### Consumed Topics
+
+All consumers use consumer group `search-service` (verified from `@KafkaListener` annotations in `apps/search-service`):
+
+| Event | Topic | Consumer class | Purpose |
+|---|---|---|---|
+| `ProductCreated` | `product.product.created` | `ProductCreatedConsumer` | Index new product document in Elasticsearch |
+| `ProductUpdated` | `product.product.updated` | `ProductUpdatedConsumer` | Update existing product document |
+| `ProductDeleted` | `product.product.deleted` | `ProductDeletedConsumer` | Remove product document from index |
+| `StockChanged` | `product.product.stock-changed` | `StockChangedConsumer` | Update stock availability in index |
+| `ProductImagesUpdated` | `product.product.images-updated` | `ProductImagesUpdatedConsumer` | Update image URLs in indexed document |
+
+Contract: [`specs/contracts/events/product-events.md`](../../contracts/events/product-events.md).
+
 ## Testing Expectations
 Required emphasis:
 - application service tests (with mocked ports)
