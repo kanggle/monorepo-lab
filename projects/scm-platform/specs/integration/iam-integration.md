@@ -104,6 +104,20 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 v2 user-f
 4. **Tenant 검증** — `TenantClaimValidator` 로 `tenant_id` claim 이 `scm` 또는 `*` (SUPER_ADMIN platform-scope) 인 경우만 통과. 그 외 (`wms`, `ecommerce`, `fan-platform`, 향후 `erp`/`mes`) → `tenant_mismatch` → 403 `TENANT_FORBIDDEN`.
 5. **Scope 검증** — 다운스트림 service 의 `SecurityConfig` 가 `X-Scopes` 헤더 또는 SecurityContext 의 `Jwt.getClaimAsString("scope")` 로 enforce.
 
+> **Roles-only identity model (ADR-MONO-032 / ADR-MONO-035).** scm 의 **admission**
+> 은 `tenant_id`(+ entitlement, 위 4) 기반이며 `account_type` 을 보지 않는다 —
+> `account_type` claim 과 `X-Account-Type` 헤더는 unified identity 전환에서 완전히
+> 제거되었고(ADR-032 D5 step 4 / ADR-035 4b), scm 게이트웨이는 leg drop
+> ([TASK-MONO-262](../../../../tasks/done/TASK-MONO-262-gateway-roles-only-admission.md))
+> 이후 `X-Account-Type` 을 주입하지 않으며 애초에 `account_type` 으로 admit 한 적이 없다
+> (scm 코드 전체 `account_type` 참조 0). 다운스트림이 **운영자 vs 일반 caller** 를
+> 구분하는 곳(예: procurement `confirm`/`cancel` 의 `ActorType`)에서는 검증된 `roles`
+> claim 으로 도출한다 — `ActorContext.isOperator()` = `roles ∋ {OPERATOR, ADMIN,
+> SUPER_ADMIN}` → `OPERATOR`, 그 외 `BUYER`
+> ([`procurement-api.md`](../contracts/http/procurement-api.md) § Actor model).
+> demand-planning operator 표면은 role split 없이 `tenant_id` + DRAFT-PO 불변식으로
+> 게이트된다 ([`gateway-public-routes.md`](../contracts/http/gateway-public-routes.md)).
+
 ---
 
 ## Error Responses

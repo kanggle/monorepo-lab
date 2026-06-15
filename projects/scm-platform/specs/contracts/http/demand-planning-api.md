@@ -3,7 +3,16 @@
 ADR-MONO-027. Base path `/api/v1/demand-planning` (via gateway-service).
 All responses use the scm `{ data, meta }` envelope; errors `{ code, message, details? }`.
 Auth: OAuth2 RS (RS256, IAM JWKS), `tenant_id=scm` fail-closed + entitlement-trust
-dual-accept. Operator-authenticated.
+dual-accept. **Operator surface — tenant-gated, no role split.** These routes are
+consumed by the platform-console operator (IAM `platform-console-web` token); the
+gate is server-side `tenant_id=scm` (+ entitlement) plus the DRAFT-PO-only
+invariant, **not** a stronger credential — scm enforces no operator/admin `roles`
+check on demand-planning (the "operator/admin seed" label below names the
+*surface*, not a required role). This is consistent with the roles-only identity
+model (ADR-MONO-032/035; `account_type`/`X-Account-Type` removed) and is canonical
+in [`gateway-public-routes.md`](./gateway-public-routes.md) § platform-console
+operator-action / config consumer. (Contrast: procurement `confirm` *does* require
+`roles ∋ OPERATOR` — see [`procurement-api.md`](./procurement-api.md) § Actor model.)
 
 ## Route publicity
 

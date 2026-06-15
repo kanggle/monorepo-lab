@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-029-roles-only-operator-spec-alignment.md` — **REVIEW (2026-06-15, doc-only net-zero spec alignment)**. Align scm service specs to the roles-only identity model (ADR-MONO-032 D3 / D5 step 4 + ADR-MONO-035, executed at scm's gateway by TASK-MONO-262 — `account_type` admission leg + `X-Account-Type` injection dropped). scm app code was already roles-based (procurement `ActorContext.isOperator()` = `roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN}`; zero `account_type` refs; scm gateway admits on `tenant_id`, never `account_type`) — drift was purely in the specs. Edits (all under `projects/scm-platform/specs`): `procurement-api.md` (reframe "BUYER or OPERATOR **scope**" → roles-derived **actor** + new § Actor model), `procurement-service/architecture.md` (§ PO State Machine actor-derivation note), `scm-procurement-events.md` (`actorAccountId` roles-derivation note), `demand-planning-api.md` (operator surface = tenant-gated, no role split — canonical in gateway-public-routes.md), `iam-integration.md` (roles-only model note). No code / contract semantics / Flyway / ADR change; PROJECT.md frontmatter byte-unchanged; gateway-public-routes.md + gateway-service/architecture.md verified already roles-only-consistent (no change). erp TASK-ERP-BE-021 답습. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 
