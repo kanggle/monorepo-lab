@@ -39,7 +39,7 @@ service consumes are catalogued in
 Slack is the **sole real external channel** in v1. After a NotificationDelivery
 row reaches `PENDING`, the delivery dispatcher invokes the Slack adapter
 with the channel alias and a serialised `AlertEnvelope`. On 2xx the
-delivery transitions to `SENT`; on terminal failure (4xx / retry-exhaustion)
+delivery transitions to `SUCCEEDED`; on terminal failure (4xx / retry-exhaustion)
 it transitions to `FAILED`.
 
 ### 1.1 Endpoint
@@ -82,7 +82,7 @@ call is issued.
 
 | Scenario | Adapter outcome | Saga outcome | Observable |
 |---|---|---|---|
-| 2xx | `ChannelPort.send()` returns | `NotificationDelivery → SENT` | metric `notification.delivery.attempts{channel=SLACK,status=SUCCESS}` |
+| 2xx | `ChannelPort.send()` returns | `NotificationDelivery → SUCCEEDED` | metric `notification.delivery.attempts{channel=SLACK,status=SUCCESS}` |
 | 4xx (404 channel not found / 410 token revoked / others) | `ChannelPermanentFailureException` | `NotificationDelivery → FAILED` (no retry, ops fix) | metric `..{status=FAILED_PERMANENT}` + log WARN (no body) |
 | 5xx | `RuntimeException` (caught by `@Retry`) | retry per § 1.8; on exhaustion `→ FAILED` | metric `..{status=FAILED_TRANSIENT}` per attempt |
 | IO error / timeout | `RuntimeException` (caught by `@Retry`) | same as 5xx | same |
@@ -220,7 +220,7 @@ item.
 
 | HTTP status | Treatment | Delivery outcome |
 |---|---|---|
-| 200 / 204 | Success | `SENT` |
+| 200 / 204 | Success | `SUCCEEDED` |
 | 400 | Permanent. Body invalid — likely renderer bug. | `FAILED`, `failure_reason=CHANNEL_BAD_REQUEST` |
 | 403 | Permanent. Token scope insufficient. | `FAILED`, alert ops |
 | 404 | Permanent. Channel not found or webhook deleted. | `FAILED`, `failure_reason=CHANNEL_NOT_FOUND` |
@@ -318,7 +318,7 @@ spring.kafka.listener.ack-mode: record
 ```
 
 Per-listener:
-- Manual ACK after the delivery row reaches a terminal state (SENT /
+- Manual ACK after the delivery row reaches a terminal state (SUCCEEDED /
   FAILED_PERMANENT) or is scheduled for outer retry. Replay-safe because
   the dedupe table absorbs duplicates.
 - DLT routing inherits sibling pattern (`<topic>.DLT`) for any

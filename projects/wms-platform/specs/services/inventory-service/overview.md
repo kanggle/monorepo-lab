@@ -14,7 +14,7 @@
 | Deployable unit | `apps/inventory-service/` |
 | Bounded Context | `Inventory` |
 | Persistent stores | PostgreSQL (Inventory buckets + InventoryMovement history + StockAdjustment / StockTransfer + master read-model cache) + Kafka outbox |
-| Event publication | `inventory.adjusted.v1`, `inventory.transferred.v1`, `inventory.reserved.v1`, `inventory.confirmed.v1` (per [`inventory-events.md`](../../contracts/events/inventory-events.md)) |
+| Event publication | `inventory.adjusted.v1`, `inventory.transferred.v1`, `inventory.reserved.v1`, `inventory.confirmed.v1`, `inventory.reserve.failed.v1` (per [`inventory-events.md`](../../contracts/events/inventory-events.md)) |
 
 ## Responsibilities
 
@@ -35,7 +35,7 @@
 | REST | `GET /api/v1/inventory/**` | JWT + ROLE | query buckets / movements |
 | Kafka consume | `inbound.putaway.completed`, `outbound.picking.requested`, `outbound.shipping.confirmed` | — | saga reply + putaway credit |
 | Kafka consume | `master.location.*`, `master.sku.*` | — | read-model cache refresh |
-| Kafka publish | `inventory.{adjusted,transferred,reserved,confirmed}.v1` | — | saga + analytics consumers |
+| Kafka publish | `inventory.{adjusted,transferred,reserved,confirmed,reserve.failed}.v1` | — | saga + analytics consumers |
 
 자세한 spec 은 [`../../contracts/http/inventory-service-api.md`](../../contracts/http/inventory-service-api.md) + [`../../contracts/events/inventory-events.md`](../../contracts/events/inventory-events.md) 참조.
 
@@ -57,7 +57,7 @@
 ## Published Interfaces
 
 - [`../../contracts/http/inventory-service-api.md`](../../contracts/http/inventory-service-api.md) (HTTP)
-- [`../../contracts/events/inventory-events.md`](../../contracts/events/inventory-events.md) — 4 events
+- [`../../contracts/events/inventory-events.md`](../../contracts/events/inventory-events.md) — 5 events
 
 ## Dependent Systems
 

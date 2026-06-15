@@ -272,7 +272,7 @@ known IDs.
 | `…0002` | `inventory.adjusted` | `PAYLOAD_PREDICATE` `\|delta\| ≥ 100` | `wms-alerts` | INFO |
 | `…0003` | `inbound.inspection.completed` | `PAYLOAD_PREDICATE` `discrepancyCount > 0` | `wms-alerts` | WARNING |
 | `…0004` | `inbound.asn.cancelled` | `ALWAYS` | `wms-alerts` | INFO |
-| `…0005` | `outbound.order.cancelled` | `PAYLOAD_PREDICATE` `priorStatus IN ['PICKED','PACKED','SHIPPED']` | `wms-alerts` | WARNING |
+| `…0005` | `outbound.order.cancelled` | `PAYLOAD_PREDICATE` `previousStatus IN ['PICKED','PACKED','SHIPPED']` | `wms-alerts` | WARNING |
 | `…0006` | `outbound.shipping.confirmed` | `ALWAYS` | `wms-shipping` | INFO |
 
 Each rule's `templateKey` is `<event_slug>` (e.g., `low_stock`,

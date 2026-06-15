@@ -20,7 +20,7 @@
 
 - Single system of record for all WMS reference data — 6 aggregate types (W/Z/L/S/P/Lot).
 - Enforce **referential integrity** before delete — 활성 참조 존재 시 deletion 차단 (W6).
-- Enforce **location code uniqueness** within a warehouse at all times (W3).
+- Enforce **location code uniqueness** globally across the entire system at all times (W3).
 - Publish snapshot events on every mutation — consumed by sibling services as read-model cache source.
 - Single source for SKU tracking type, Partner classification, Lot identity (balance 는 `inventory-service` 가 소유).
 
@@ -40,7 +40,7 @@
 
 ## Key invariants
 
-1. **Location code unique within warehouse** — W3, 위반 시 `LocationCodeConflict` 예외.
+1. **Location code globally unique** — W3, 위반 시 `LocationCodeConflict` 예외.
 2. **Cannot delete entity with active references** — W6, sibling service 가 참조하는 경우 deletion 차단.
 3. **Only master-service may mutate these 6 entity types** — 다른 service 의 직접 mutation 금지; HTTP / event 만 통과.
 4. **Lot identity here, Lot balance in inventory-service** — `master-service` 는 lot 정체성만; 수량 변동은 `inventory-service` 가 소유.

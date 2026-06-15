@@ -41,8 +41,8 @@ notification_event_dedupe (
     event_id        VARCHAR(36) PRIMARY KEY,    -- source envelope's eventId (UUID)
     source_topic    VARCHAR(128) NOT NULL,      -- e.g. "wms.inventory.alert.v1"
     processed_at    TIMESTAMPTZ  NOT NULL,
-    outcome         VARCHAR(16)  NOT NULL,      -- QUEUED | FILTERED
-    constraint chk_outcome check (outcome in ('QUEUED','FILTERED'))
+    outcome         VARCHAR(16)  NOT NULL,      -- QUEUED | FILTERED | NO_RULE | ERROR
+    constraint chk_outcome check (outcome in ('QUEUED','FILTERED','NO_RULE','ERROR'))
 )
 ```
 
@@ -133,7 +133,7 @@ column (`VARCHAR(64) UNIQUE NOT NULL`).
 
 On `attempt_count >= max_attempts` AND last attempt fails:
 - `status` → `FAILED`
-- Outbox emits terminal audit event `wms.notification.delivery.failed.v1`
+- Outbox emits terminal audit event `wms.notification.delivered.v1`
   with `outcome = "FAILED_RETRY_EXHAUSTED"` and error code
   `DELIVERY_RETRY_EXHAUSTED` (per [`platform/error-handling.md`](../../../../../platform/error-handling.md)).
 - Operator surface: see [`runbooks/dlt-replay.md`](runbooks/dlt-replay.md)

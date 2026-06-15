@@ -218,7 +218,7 @@ edit until v2 admin UI ships.
 | `inventory.adjusted` | `PayloadPredicateMatch($.payload.delta abs >= 100)` | `wms-alerts` | INFO |
 | `inbound.inspection.completed` | `PayloadPredicateMatch($.payload.discrepancyCount > 0)` | `wms-alerts` | WARNING |
 | `inbound.asn.cancelled` | `AlwaysMatch` | `wms-alerts` | INFO |
-| `outbound.order.cancelled` | `PayloadPredicateMatch($.payload.priorStatus in ['PICKED','PACKED','SHIPPED'])` | `wms-alerts` | WARNING |
+| `outbound.order.cancelled` | `PayloadPredicateMatch($.payload.previousStatus in ['PICKED','PACKED','SHIPPED'])` | `wms-alerts` | WARNING |
 | `outbound.shipping.confirmed` | `AlwaysMatch` | `wms-shipping` | INFO |
 
 Rules not in this table = events not routed in v1. Adding a new event

@@ -115,8 +115,8 @@ implementation clarity.
 
 | Transition | Guard | Failure code |
 |---|---|---|
-| `(none) → RESERVED` | `available_qty >= qty` for every `ReservationLine` | `INSUFFICIENT_STOCK` (triggers `inventory.adjusted` outbox, not `inventory.reserved`) |
-| `(none) → RESERVED` | All `sku_id`s ACTIVE per MasterReadModel | `SKU_INACTIVE` (same treatment as `INSUFFICIENT_STOCK` — rolled back, emits `inventory.adjusted{reason=SKU_INACTIVE}`) |
+| `(none) → RESERVED` | `available_qty >= qty` for every `ReservationLine` | `INSUFFICIENT_STOCK` (triggers `inventory.reserve.failed` outbox, not `inventory.reserved`) |
+| `(none) → RESERVED` | All `sku_id`s ACTIVE per MasterReadModel | `SKU_INACTIVE` (same treatment as `INSUFFICIENT_STOCK` — rolled back, emits `inventory.reserve.failed{reason=SKU_INACTIVE}`) |
 | `(none) → RESERVED` | All `lot_id`s non-EXPIRED and ACTIVE per MasterReadModel (LOT-tracked SKUs) | `LOT_INACTIVE` / `LOT_EXPIRED` |
 | `(none) → RESERVED` | `location_id` for each line ACTIVE per MasterReadModel | `LOCATION_INACTIVE` |
 | `(none) → RESERVED` | At least one `ReservationLine` | `VALIDATION_ERROR` (422) — invariant from upstream picking plan |
@@ -195,7 +195,7 @@ Compensation for the full compensation decision table.
 | `ReservationQuantityMismatchException` | 422 | `RESERVATION_QUANTITY_MISMATCH` | `confirm()` with shipped-qty ≠ reserved-qty |
 | `OptimisticLockingFailureException` | 409 | `CONCURRENT_MODIFICATION` | Concurrent state transition on `Reservation.version` or `Inventory.version` |
 | `StateTransitionInvalidException` | 422 | `STATE_TRANSITION_INVALID` | Any domain method called with a source state not listed in the Transition Rules table |
-| `InsufficientStockException` | 422 | `INSUFFICIENT_STOCK` | `reserve()` when `available_qty < qty`; triggers `inventory.adjusted` outbox |
+| `InsufficientStockException` | 422 | `INSUFFICIENT_STOCK` | `reserve()` when `available_qty < qty`; triggers `inventory.reserve.failed` outbox |
 | `WarehouseMismatchException` | 422 | `WAREHOUSE_MISMATCH` | `reserve()` with mixed-warehouse lines |
 
 Full registry: `platform/error-handling.md` § Inventory `[domain: wms]`.
@@ -236,7 +236,7 @@ Matrix; this section covers the **state-machine unit and slice tests only**.
 - `release(CANCELLED)` success: 2N movement rows + one outbox row in same TX.
 - `confirm()` success: N movement rows + one outbox row in same TX.
 - `INSUFFICIENT_STOCK` failure: zero `Reservation` rows, zero movement rows,
-  zero outbox rows; `inventory.adjusted{reason=INSUFFICIENT_STOCK}` emitted in
+  zero outbox rows; `inventory.reserve.failed{reason=INSUFFICIENT_STOCK}` emitted in
   `REQUIRES_NEW` TX.
 - Optimistic-lock conflict on `Reservation.version` → TX rolls back, no
   outbox row written.

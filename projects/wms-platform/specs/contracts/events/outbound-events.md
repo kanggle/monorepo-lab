@@ -248,7 +248,9 @@ Partition key: `sagaId`
 > **⚠️ Authoritative cross-service contract.** This event is consumed by
 > `inventory-service` (`PickingRequestedConsumer`) to execute `ReserveStockUseCase`.
 > Inventory replies with `inventory.reserved` (success) or emits
-> `inventory.adjusted` with reason `INSUFFICIENT_STOCK` (failure). Topic name,
+> `inventory.reserve.failed` with reason `INSUFFICIENT_STOCK` (failure; the
+> dedicated event per TASK-MONO-196 — see § C1 + § 4a of `inventory-events.md`).
+> Topic name,
 > `sagaId`, `reservationId`, and `lines` shape are jointly owned with
 > `inventory-service`; any change requires a coordinated migration.
 >
@@ -260,7 +262,7 @@ Consumer expectations:
 - `inventory-service` (`PickingRequestedConsumer`): for each line, calls
   `ReserveStockUseCase` at `(locationId, skuId, lotId, qtyToReserve)`.
   On success publishes `inventory.reserved` with `reservationId` and `sagaId`.
-  On failure emits `inventory.adjusted` reason=`INSUFFICIENT_STOCK`.
+  On failure emits `inventory.reserve.failed` reason=`INSUFFICIENT_STOCK`.
 - `admin-service`: updates saga step view on operator dashboard
 
 ### 4. `outbound.picking.cancelled`  ⚠️ Cross-service contract

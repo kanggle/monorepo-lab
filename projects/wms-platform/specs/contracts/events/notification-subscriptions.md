@@ -18,7 +18,7 @@ services. Authoritative envelope shapes live in each producer's
 | `inventory-service` | `wms.inventory.adjusted.v1` | `inventory.adjusted` | `\|payload.delta\| ≥ 100` | `wms-alerts` (INFO) |
 | `inbound-service` | `wms.inbound.inspection.completed.v1` | `inbound.inspection.completed` | `payload.discrepancyCount > 0` | `wms-alerts` (WARNING) |
 | `inbound-service` | `wms.inbound.asn.cancelled.v1` | `inbound.asn.cancelled` | AlwaysMatch | `wms-alerts` (INFO) |
-| `outbound-service` | `wms.outbound.order.cancelled.v1` | `outbound.order.cancelled` | `payload.priorStatus IN [PICKED, PACKED, SHIPPED]` | `wms-alerts` (WARNING) |
+| `outbound-service` | `wms.outbound.order.cancelled.v1` | `outbound.order.cancelled` | `payload.previousStatus IN [PICKED, PACKED, SHIPPED]` | `wms-alerts` (WARNING) |
 | `outbound-service` | `wms.outbound.shipping.confirmed.v1` | `outbound.shipping.confirmed` | AlwaysMatch | `wms-shipping` (INFO) |
 
 Routing rules are seeded by `apps/notification-service/src/main/resources/db/migration/V2__seed_routing_rules.sql`. Operators may toggle `enabled` or adjust matchers via direct DB edit until the v2 admin UI ships.
@@ -51,7 +51,7 @@ Producers MUST emit the listed payload fields when the v1 routing rule depends o
 |---|---|---|
 | `inventory.adjusted` | `delta` (signed integer) | `\|delta\| ≥ 100` |
 | `inbound.inspection.completed` | `discrepancyCount` (non-negative integer) | `> 0` |
-| `outbound.order.cancelled` | `priorStatus` (string in {`RECEIVED`, `PICKED`, `PACKED`, `SHIPPED`, `CANCELLED`}) | `IN [PICKED, PACKED, SHIPPED]` |
+| `outbound.order.cancelled` | `previousStatus` (string in {`RECEIVED`, `PICKED`, `PACKED`, `SHIPPED`, `CANCELLED`}) | `IN [PICKED, PACKED, SHIPPED]` |
 
 `inventory.low-stock-detected`, `inbound.asn.cancelled`, `outbound.shipping.confirmed` use `AlwaysMatch` — payload shape is opaque to the matcher; templates may still read named fields when v2 introduces operator-editable templates.
 

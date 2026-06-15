@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-387-wms-spec-drift-fix.md` — **REVIEW**. Closes the **code-verified Tier A/B drift** flagged by TASK-BE-385 § Findings. Each fix direction confirmed against production code/migration/rule before edit (not agent claims): `inventory.adjusted`→`inventory.reserve.failed` reserve-failure reply (5 inventory/outbound-events files, per `InventoryReserveFailedEvent`+MONO-196) · `priorStatus`→`previousStatus` (3 notification files + notification-subscriptions contract, per `OrderCancelledEvent`) · notification overview 6 real subscribed topics (per `AlertConsumer`) · dedupe CHECK 2→4 values + `delivery.failed`→`delivered` topic (per `V1__init.sql`) · `SENT`→`SUCCEEDED` (per `DeliveryStatus`) · `inbound.asn.created`→`received` (per `AsnReceivedEvent`) · `outbound.picking.confirmed`→`completed` (per `PickingCompletedEvent`) · master location uniqueness within-warehouse→global (per W3 + `V4__init_location.sql`). 15 spec files, doc-only meaning-preserving (apps/ diff=0); canonical `inventory-events.md` unedited. Deferred: Tier C–E (config/dedup/authoring). 분석=Opus 4.8 / 구현=Opus. [[project_refactor_sweep_status]]
 
 ## done
 

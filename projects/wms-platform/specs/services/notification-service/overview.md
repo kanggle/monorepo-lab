@@ -30,10 +30,9 @@
 
 | Channel | Endpoint / Topic | Auth | Purpose |
 |---|---|---|---|
-| Kafka consume | `inbound.putaway.completed`, `inbound.inspection.completed` | — | inbound 알림 |
-| Kafka consume | `outbound.picking.requested`, `outbound.shipping.confirmed` | — | outbound 알림 |
-| Kafka consume | `inventory.adjusted` | — | 재고 조정 알림 |
-| Kafka consume | `master.sku.deactivated` | — | 마스터 변경 알림 |
+| Kafka consume | `inbound.inspection.completed`, `inbound.asn.cancelled` | — | inbound 알림 |
+| Kafka consume | `outbound.order.cancelled`, `outbound.shipping.confirmed` | — | outbound 알림 |
+| Kafka consume | `inventory.alert`, `inventory.adjusted` | — | 재고 알림 |
 | Kafka publish | `notification.delivered.v1` | — | audit trail (downstream analytics) |
 | HTTP outbound | Slack Webhook (R4j wrap) | webhook URL | actual delivery |
 

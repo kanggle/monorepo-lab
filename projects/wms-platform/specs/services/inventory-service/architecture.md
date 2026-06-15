@@ -223,6 +223,7 @@ All inventory state changes publish events via the **transactional outbox patter
 | `inventory.reserved` | `wms.inventory.reserved.v1` | Picking allocation created |
 | `inventory.released` | `wms.inventory.released.v1` | Reservation released (cancelled / expired) |
 | `inventory.confirmed` | `wms.inventory.confirmed.v1` | Reserved → consumed (shipped) |
+| `inventory.reserve.failed` | `wms.inventory.reserve.failed.v1` | Emitted on a reserve INSUFFICIENT_STOCK shortfall — saga failure reply, TASK-MONO-196 |
 | `inventory.low-stock-detected` | `wms.inventory.alert.v1` | Crossed below configured threshold |
 
 Full event schemas: `specs/contracts/events/inventory-events.md` (to be authored
