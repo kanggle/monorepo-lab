@@ -1,6 +1,6 @@
 # TASK-MONO-276 — ADR-MONO-038 M4: final idempotency duplication sweep + spec/README cross-references
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — completes the ADR-038 roadmap; migrates `inventory-service` store/DTO + spec/ADR doc sync; one atomic PR)
 
