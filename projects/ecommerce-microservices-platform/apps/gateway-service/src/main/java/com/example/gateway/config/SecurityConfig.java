@@ -30,7 +30,17 @@ public class SecurityConfig {
             "/actuator/info",
             "/api/auth/**",
             "/api/search/**",
-            "/oauth/**"
+            "/oauth/**",
+            // Aggregated Swagger UI (TASK-BE-379). Permit is always present but the
+            // content is gated by gateway.swagger-aggregation.enabled (default false):
+            // when OFF, springdoc is disabled and the /api-docs/<svc> proxy routes are
+            // not registered (SwaggerAggregationConfig is @ConditionalOnProperty), so
+            // these paths resolve to no handler / no route — nothing is exposed in prod.
+            "/swagger-ui.html",
+            "/swagger-ui/**",
+            "/v3/api-docs/**",
+            "/webjars/**",
+            "/api-docs/**"
     };
 
     /**
