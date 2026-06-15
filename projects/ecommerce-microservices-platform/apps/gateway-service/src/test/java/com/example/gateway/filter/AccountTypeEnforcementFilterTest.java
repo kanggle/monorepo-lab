@@ -178,6 +178,52 @@ class AccountTypeEnforcementFilterTest {
     }
 
     // -----------------------------------------------------------------------
+    // Operator-on-public admission (TASK-BE-380) — ADMIN admitted on the
+    // promotion/shipping/notification read trees whose producer contracts host
+    // Admin endpoints on the public path; the service self-gates via X-User-Role.
+    // -----------------------------------------------------------------------
+
+    @Test
+    void operatorPublicPath_adminRole_passesThrough() {
+        for (String path : new String[] {
+                "/api/promotions", "/api/promotions/p1",
+                "/api/shippings", "/api/shippings/s1/status",
+                "/api/notifications/templates", "/api/notifications/templates/t1"}) {
+            MockServerWebExchange exchange = exchangeFor(path);
+            CapturingChain chain = new CapturingChain();
+            run(exchange, chain, jwtWithRoles("ADMIN"));
+
+            assertThat(chain.called).as("ADMIN admitted on %s", path).isTrue();
+            assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    @Test
+    void operatorPublicPath_customerRole_stillPassesThrough() {
+        // Consumers keep reaching the consumer endpoints on these same trees.
+        MockServerWebExchange exchange = exchangeFor("/api/promotions");
+        CapturingChain chain = new CapturingChain();
+        run(exchange, chain, jwtWithRoles("CUSTOMER"));
+
+        assertThat(chain.called).isTrue();
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void nonOperatorPublicPath_adminRoleOnly_returns403() {
+        // Scope guard: the ADMIN exception is limited to the contracted operator
+        // read trees — other public trees stay CUSTOMER-only.
+        for (String path : new String[] {"/api/products/1", "/api/orders/1", "/api/search"}) {
+            MockServerWebExchange exchange = exchangeFor(path);
+            CapturingChain chain = new CapturingChain();
+            run(exchange, chain, jwtWithRoles("ADMIN"));
+
+            assertThat(chain.called).as("ADMIN blocked on non-operator public %s", path).isFalse();
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Public routes (no security context)
     // -----------------------------------------------------------------------
 

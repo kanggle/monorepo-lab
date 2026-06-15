@@ -48,7 +48,11 @@ spring:
         - id: product-service
           uri: ${PRODUCT_SERVICE_URL:http://localhost:8082}
           predicates:
-            - Path=/api/products/**,/api/admin/products/**
+            # /api/admin/sellers/** — the operator seller surface (AdminSellerController,
+            # TASK-BE-375). BE-375 assumed a generic /api/admin/** OPERATOR branch routed
+            # it, but routing is per-service: the predicate was missing, so the gateway
+            # 404'd before reaching product-service. Add it here (product-api.md § sellers).
+            - Path=/api/products/**,/api/admin/products/**,/api/admin/sellers/**
           filters:
             - name: RequestRateLimiter
               args:
