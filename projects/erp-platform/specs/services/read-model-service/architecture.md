@@ -1,5 +1,11 @@
 # read-model-service — Architecture
 
+This document declares the internal architecture of
+`erp-platform/apps/read-model-service`. All implementation tasks targeting this
+service must follow this declaration, `platform/architecture-decision-rule.md`,
+and the rule files indexed by `PROJECT.md`'s declared `domain` (`erp`) and
+`traits` (`internal-system`, `transactional`, `audit-heavy`).
+
 ## Identity
 
 | Field | Value |

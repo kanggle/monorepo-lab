@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-022-refactor-spec-consistency-pass.md` — **REVIEW**. `/refactor-spec` structure/consistency/clarity/dead-ref/naming audit over all 13 erp spec files (baseline = scm/finance siblings + `platform/` authorities). **Specs already clean** — dead-ref 0, consistency 0 (uniform `-` markers, consistent headings/tables), naming 0, duplication 0 (per-service repetition is intentional standalone-spec design, not SSOT violation). **1 meaning-preserving fix applied**: read-model-service/architecture.md was the lone service file missing the standard intro paragraph (the architecture-decision-rule.md + PROJECT.md-traits boilerplate all 3 siblings carry) → added. Provenance blockquote deliberately NOT synthesized (would author meaning-bearing facts). No requirement/contract/schema/decision change. Complements TASK-ERP-BE-021 (roles-only meaning alignment). 분석=Opus 4.8 / 구현=Opus (doc-only). [[project_adr032_unified_identity_roles]]
 
 ## done
 
