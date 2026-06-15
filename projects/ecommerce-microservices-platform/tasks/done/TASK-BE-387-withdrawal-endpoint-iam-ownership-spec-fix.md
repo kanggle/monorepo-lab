@@ -1,6 +1,6 @@
 # TASK-BE-387 — Remove stale ecommerce HTTP withdrawal endpoint from the contract (withdrawal is IAM-owned post-BE-132)
 
-**Status:** review
+**Status:** done
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (net-zero contract correction — supersedes the NOT-IMPLEMENTED placeholder left by TASK-BE-386)
 
