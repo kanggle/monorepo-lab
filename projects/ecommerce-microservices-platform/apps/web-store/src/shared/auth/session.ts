@@ -16,7 +16,6 @@ export interface WebStoreSession {
   accountId: string | null;
   tenantId: string | null;
   roles: string[];
-  accountType: string | null;
 }
 
 const EMPTY: WebStoreSession = {
@@ -24,7 +23,6 @@ const EMPTY: WebStoreSession = {
   accountId: null,
   tenantId: null,
   roles: [],
-  accountType: null,
 };
 
 export async function getWebStoreSession(): Promise<WebStoreSession> {
@@ -35,7 +33,6 @@ export async function getWebStoreSession(): Promise<WebStoreSession> {
     accountId: session.accountId ?? null,
     tenantId: session.tenantId ?? null,
     roles: session.roles ?? [],
-    accountType: session.accountType ?? null,
   };
 }
 

@@ -39,7 +39,6 @@ interface IamOidcProfile {
   preferred_username?: string;
   tenant_id?: string;
   account_id?: string;
-  account_type?: 'CONSUMER' | 'OPERATOR' | string;
   roles?: string[];
 }
 
@@ -89,7 +88,6 @@ export const authConfig: NextAuthConfig = {
           name: profile.name ?? profile.preferred_username ?? null,
           tenantId: profile.tenant_id ?? null,
           roles: profile.roles ?? [],
-          accountType: profile.account_type ?? null,
         };
       },
     },
@@ -125,24 +123,21 @@ export const authConfig: NextAuthConfig = {
         token.tenantId = p.tenant_id ?? token.tenantId;
         token.accountId = p.account_id ?? token.accountId;
         token.roles = p.roles ?? token.roles;
-        token.accountType = p.account_type ?? token.accountType;
       }
       if (user && 'accountId' in user) {
         const u = user as {
           accountId?: string;
           tenantId?: string | null;
           roles?: string[];
-          accountType?: string | null;
         };
         token.accountId = u.accountId ?? token.accountId;
         token.tenantId = u.tenantId ?? token.tenantId;
         token.roles = u.roles ?? token.roles;
-        token.accountType = u.accountType ?? token.accountType;
       }
       return token;
     },
     /**
-     * Expose tenant_id / account_id / roles / accountType to RSC pages and
+     * Expose tenant_id / account_id / roles to RSC pages and
      * server actions. `accessToken` deliberately stays only on the JWT —
      * server-only helpers (see `./session.ts`) read it via `auth()` so client
      * components never receive the bearer token.
@@ -165,14 +160,12 @@ export const authConfig: NextAuthConfig = {
           tenantId: null,
           roles: [],
           accessToken: undefined,
-          accountType: (token.accountType as string | null | undefined) ?? null,
         };
       }
       session.tenantId = (token.tenantId as string | null | undefined) ?? null;
       session.accountId = (token.accountId as string | null | undefined) ?? null;
       session.roles = (token.roles as string[] | undefined) ?? [];
       session.accessToken = (token.accessToken as string | undefined) ?? undefined;
-      session.accountType = (token.accountType as string | null | undefined) ?? null;
       return session;
     },
     authorized({ auth, request }) {

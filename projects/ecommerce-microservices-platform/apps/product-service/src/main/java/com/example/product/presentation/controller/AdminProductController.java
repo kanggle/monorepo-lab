@@ -64,29 +64,30 @@ public class AdminProductController {
      * is {@code ON_SALE|SOLD_OUT|HIDDEN}, with no boolean "active", so a status
      * count would be ambiguous during catalog setup).
      *
-     * <p><b>Authorization — deliberately does NOT apply any ecommerce-local RBAC.</b>
-     * This read MUST NOT require an ecommerce-local {@code ADMIN} role. Rationale
-     * (consistent with the erp/finance Operator Overview legs, which are gated
-     * purely by federation entitlement-trust):
+     * <p><b>Authorization — enforced at the ecommerce gateway; the service applies
+     * no additional ecommerce-local RBAC.</b> Rationale (consistent with the
+     * erp/finance Operator Overview legs, which are gated by federation
+     * entitlement-trust + the derived domain operator role):
      * <ol>
-     *   <li>The caller is a platform-console <b>OPERATOR</b> presenting an IAM
-     *       OIDC token (no ecommerce-local {@code ADMIN} role claim) — requiring
-     *       {@code ADMIN} here would make the overview card permanently
-     *       {@code forbidden}.</li>
+     *   <li>The caller is a platform-console operator presenting an IAM OIDC
+     *       token that carries the {@code ADMIN} domain role, derived at
+     *       assume-tenant from the selected (ecommerce-entitled) tenant
+     *       (ADR-MONO-035 4a). No ecommerce-local {@code ADMIN} grant is
+     *       provisioned or required — the role rides the token.</li>
      *   <li>Authorization is enforced at the ecommerce <b>gateway</b>:
-     *       {@code AccountTypeEnforcementFilter} requires
-     *       {@code account_type=OPERATOR} for {@code /api/admin/**}, and
-     *       {@code TenantClaimValidator} requires a non-blank {@code tenant_id};
-     *       the gateway injects the trusted {@code X-Tenant-Id} and strips client
-     *       headers (header-trust service — product-service is not a JWT resource
-     *       server).</li>
+     *       {@code AccountTypeEnforcementFilter} requires {@code roles ∋ ADMIN}
+     *       for {@code /api/admin/**}, and {@code TenantClaimValidator} requires
+     *       a non-blank {@code tenant_id}; the gateway injects the trusted
+     *       {@code X-Tenant-Id} and strips client headers (header-trust service
+     *       — product-service is not a JWT resource server). ADR-MONO-035 4b
+     *       removed the legacy {@code account_type=OPERATOR} gateway leg.</li>
      *   <li>Tenant isolation is the repository {@code WHERE tenant_id} chokepoint
      *       (Step 2 / M6) — this read is tenant-scoped automatically via the
      *       existing {@code TenantContext} / {@code TenantContextFilter}; no new
      *       scoping code is introduced.</li>
      * </ol>
-     * This is a read-only federated snapshot, so the write-plane ecommerce-local
-     * RBAC is a different concern and intentionally not applied.
+     * The gateway gates this read and the write endpoints uniformly on
+     * {@code roles ∋ ADMIN}; the service applies no additional RBAC.
      */
     @GetMapping
     public ProductListResponse list(
@@ -103,14 +104,14 @@ public class AdminProductController {
      * Operator-plane product registration (ADR-MONO-031 Phase 1a, TASK-BE-366).
      *
      * <p><b>Authorization is enforced at the ecommerce gateway, not here</b>
-     * (write-plane mirror of {@link #list}'s rationale, extended from the
-     * read leg established in TASK-MONO-243):
-     * {@code AccountTypeEnforcementFilter} requires {@code account_type=OPERATOR}
+     * (mirror of {@link #list}'s rationale, extended from the read leg
+     * established in TASK-MONO-243):
+     * {@code AccountTypeEnforcementFilter} requires {@code roles ∋ ADMIN}
      * for {@code /api/admin/**}, {@code TenantClaimValidator} requires a non-blank
      * {@code tenant_id}, and the repository {@code WHERE tenant_id} chokepoint
-     * (Step 2 / M6) enforces tenant isolation. The platform-console OPERATOR
-     * presents an IAM OIDC token with no ecommerce-local {@code ADMIN} role claim,
-     * so write-plane ecommerce-local RBAC is intentionally not applied.
+     * (Step 2 / M6) enforces tenant isolation. The platform-console operator
+     * carries the {@code ADMIN} domain role via the ADR-MONO-035 4a assume-tenant
+     * derivation; the service applies no additional ecommerce-local RBAC.
      */
     @PostMapping
     public ResponseEntity<RegisterProductResponse> register(
@@ -121,8 +122,8 @@ public class AdminProductController {
 
     /**
      * Operator-plane product update — authorization at the gateway
-     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
-     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     * ({@code roles ∋ ADMIN} + {@code tenant_id} + {@code WHERE tenant_id}); the
+     * service applies no additional ecommerce-local RBAC. See {@link #register}.
      */
     @PatchMapping("/{productId}")
     public ResponseEntity<RegisterProductResponse> update(
@@ -134,8 +135,8 @@ public class AdminProductController {
 
     /**
      * Operator-plane product deletion — authorization at the gateway
-     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
-     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     * ({@code roles ∋ ADMIN} + {@code tenant_id} + {@code WHERE tenant_id}); the
+     * service applies no additional ecommerce-local RBAC. See {@link #register}.
      */
     @DeleteMapping("/{productId}")
     public ResponseEntity<Void> delete(
@@ -146,8 +147,8 @@ public class AdminProductController {
 
     /**
      * Operator-plane variant addition — authorization at the gateway
-     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
-     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     * ({@code roles ∋ ADMIN} + {@code tenant_id} + {@code WHERE tenant_id}); the
+     * service applies no additional ecommerce-local RBAC. See {@link #register}.
      */
     @PostMapping("/{productId}/variants")
     public ResponseEntity<VariantDetail> addVariant(
@@ -160,8 +161,8 @@ public class AdminProductController {
 
     /**
      * Operator-plane variant update — authorization at the gateway
-     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
-     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     * ({@code roles ∋ ADMIN} + {@code tenant_id} + {@code WHERE tenant_id}); the
+     * service applies no additional ecommerce-local RBAC. See {@link #register}.
      */
     @PatchMapping("/{productId}/variants/{variantId}")
     public ResponseEntity<VariantDetail> updateVariant(
@@ -175,8 +176,8 @@ public class AdminProductController {
 
     /**
      * Operator-plane variant deletion — authorization at the gateway
-     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
-     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     * ({@code roles ∋ ADMIN} + {@code tenant_id} + {@code WHERE tenant_id}); the
+     * service applies no additional ecommerce-local RBAC. See {@link #register}.
      */
     @DeleteMapping("/{productId}/variants/{variantId}")
     public ResponseEntity<Void> deleteVariant(
@@ -188,8 +189,8 @@ public class AdminProductController {
 
     /**
      * Operator-plane stock adjustment — authorization at the gateway
-     * (OPERATOR + {@code tenant_id} + {@code WHERE tenant_id}); write-plane
-     * ecommerce-local RBAC intentionally not applied. See {@link #register}.
+     * ({@code roles ∋ ADMIN} + {@code tenant_id} + {@code WHERE tenant_id}); the
+     * service applies no additional ecommerce-local RBAC. See {@link #register}.
      */
     @PatchMapping("/{productId}/stock")
     public ResponseEntity<AdjustStockResponse> adjustStock(
