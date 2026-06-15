@@ -56,6 +56,7 @@ class ProvisionAccountUseCaseTest {
     @Mock private AccountStatusHistoryRepository historyRepository;
     @Mock private AccountEventPublisher eventPublisher;
     @Mock private AuthServicePort authServicePort;
+    @Mock private AccountIdentityProvisioner accountIdentityProvisioner;
 
     @InjectMocks private ProvisionAccountUseCase useCase;
 
@@ -95,6 +96,8 @@ class ProvisionAccountUseCaseTest {
         given(accountRoleRepository.save(any(AccountRole.class)))
                 .willReturn(AccountRole.create(new TenantId(TENANT_ID), "acc-1", "WAREHOUSE_ADMIN", "sys-test"));
         given(historyRepository.save(any())).willReturn(null);
+        // TASK-BE-381 (ADR-036 M1): born-unified mint returns the central identity.
+        given(accountIdentityProvisioner.mintIdentity(any(), eq("user@example.com"))).willReturn("idy-1");
 
         ProvisionAccountResult result = useCase.execute(command());
 
@@ -111,6 +114,8 @@ class ProvisionAccountUseCaseTest {
         // TASK-MONO-263 (ADR-032 D5 step 4): createCredential no longer carries accountType.
         verify(authServicePort).createCredential(any(), eq("user@example.com"), eq("Password1!"),
                 any());
+        // TASK-BE-381: the minted identity is assigned to the new account (born-unified).
+        verify(accountRepository).assignIdentityId(any(TenantId.class), eq("acc-1"), eq("idy-1"));
     }
 
     @Test

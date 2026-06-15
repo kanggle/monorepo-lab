@@ -50,6 +50,16 @@ public interface AccountRepository {
     Optional<String> findIdentityId(TenantId tenantId, String accountId);
 
     /**
+     * TASK-BE-381 (ADR-MONO-036 P1/P3, M1): born-unified WRITER — set the account's
+     * central {@code identity_id} when not already set (idempotent, net-zero; never
+     * overwrites an existing value — ADR-034 § 1.3). Native UPDATE under the hood
+     * ({@code identity_id} stays unmapped on the entity — the merge-overwrite hazard).
+     *
+     * @return rows assigned (1 = set; 0 = already set, or no such row in tenant)
+     */
+    int assignIdentityId(TenantId tenantId, String accountId, String identityId);
+
+    /**
      * TASK-BE-231: Tenant-scoped paginated account list with optional status filter.
      * Used by the internal provisioning API.
      *

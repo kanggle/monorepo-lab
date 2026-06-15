@@ -147,6 +147,47 @@ class AccountJpaRepositoryTest {
         assertThat(accountRepo.findIdentityIdByTenantIdAndId(TENANT_WMS, wmsAccountId)).isEmpty();
     }
 
+    // ── TASK-BE-381 (ADR-MONO-036 M1): born-unified identity_id native WRITER ─────
+
+    @Test
+    @DisplayName("assignIdentityIdIfAbsent — identity_id 가 NULL 인 계정에 할당(1행), 이미 set 이면 no-op(0행, 덮어쓰기 없음)")
+    void assignIdentityIdIfAbsent_setsWhenNull_idempotentNoOverwrite() {
+        // two identities exist (FK fk_accounts_identity_id, V0023)
+        String idy1 = UUID.randomUUID().toString();
+        String idy2 = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO identities (identity_id, tenant_id, primary_email, status, created_at, updated_at, version) " +
+                "VALUES (?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)", idy1, TENANT_FAN, "born@example.com");
+        jdbc.update("INSERT INTO identities (identity_id, tenant_id, primary_email, status, created_at, updated_at, version) " +
+                "VALUES (?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)", idy2, TENANT_FAN, "other@example.com");
+        String accountId = UUID.randomUUID().toString();
+        insertAccount(TENANT_FAN, accountId, "born@example.com"); // identity_id NULL at birth
+
+        // first assign sets it (1 row affected)
+        assertThat(accountRepo.assignIdentityIdIfAbsent(TENANT_FAN, accountId, idy1)).isEqualTo(1);
+        assertThat(accountRepo.findIdentityIdByTenantIdAndId(TENANT_FAN, accountId)).contains(idy1);
+
+        // second assign with a DIFFERENT identity → no-op (0 rows), original preserved (no silent re-link)
+        assertThat(accountRepo.assignIdentityIdIfAbsent(TENANT_FAN, accountId, idy2)).isZero();
+        assertThat(accountRepo.findIdentityIdByTenantIdAndId(TENANT_FAN, accountId)).contains(idy1);
+    }
+
+    @Test
+    @DisplayName("assignIdentityIdIfAbsent — cross-tenant / 없는 계정엔 0행 (tenant-scoped)")
+    void assignIdentityIdIfAbsent_crossTenantOrMissing_zeroRows() {
+        insertWmsTenant();
+        String idy = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO identities (identity_id, tenant_id, primary_email, status, created_at, updated_at, version) " +
+                "VALUES (?, ?, ?, 'ACTIVE', NOW(6), NOW(6), 0)", idy, TENANT_WMS, "wms-born@example.com");
+        String wmsAccountId = UUID.randomUUID().toString();
+        insertAccount(TENANT_WMS, wmsAccountId, "wms-born@example.com");
+
+        // wrong tenant → 0 rows (tenant-scoped WHERE), and missing account → 0 rows
+        assertThat(accountRepo.assignIdentityIdIfAbsent(TENANT_FAN, wmsAccountId, idy)).isZero();
+        assertThat(accountRepo.assignIdentityIdIfAbsent(TENANT_WMS, "ghost", idy)).isZero();
+        // the wms account remains unlinked (cross-tenant attempt did not touch it)
+        assertThat(accountRepo.findIdentityIdByTenantIdAndId(TENANT_WMS, wmsAccountId)).isEmpty();
+    }
+
     @Test
     @DisplayName("existsByTenantIdAndEmail — 존재하는 이메일 → true")
     void existsByTenantIdAndEmail_existingEmail_returnsTrue() {

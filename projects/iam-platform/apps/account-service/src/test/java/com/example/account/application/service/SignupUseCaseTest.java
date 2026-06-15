@@ -37,6 +37,7 @@ class SignupUseCaseTest {
     @Mock private ProfileRepository profileRepository;
     @Mock private AccountEventPublisher eventPublisher;
     @Mock private AuthServicePort authServicePort;
+    @Mock private AccountIdentityProvisioner accountIdentityProvisioner;
 
     @InjectMocks private SignupUseCase signupUseCase;
 
@@ -61,6 +62,8 @@ class SignupUseCaseTest {
     void execute_happyPath_invokesCreateCredentialAfterPersist() {
         given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
         given(accountRepository.save(any(Account.class))).willReturn(sampleSavedAccount());
+        // TASK-BE-381 (ADR-036 M1): born-unified mint returns the central identity.
+        given(accountIdentityProvisioner.mintIdentity(any(), eq("new@example.com"))).willReturn("idy-1");
 
         SignupResult result = signupUseCase.execute(sampleCommand());
 
@@ -70,6 +73,26 @@ class SignupUseCaseTest {
                 any());
         verify(profileRepository).save(any(Profile.class));
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
+        // TASK-BE-381: the minted identity is assigned to the new account (born-unified).
+        verify(accountRepository).assignIdentityId(any(TenantId.class), eq("acc-1"), eq("idy-1"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-381: born-unified mint 가 실패해도(REQUIRES_NEW 격리) 가입은 진행 — fail-soft, identity 미할당")
+    void execute_identityMintFails_signupStillSucceeds_failSoft() {
+        given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
+        given(accountRepository.save(any(Account.class))).willReturn(sampleSavedAccount());
+        // mint throws (identity infra unavailable / inner tx rollback-only) → must NOT abort signup.
+        willThrow(new RuntimeException("identity infra unavailable"))
+                .given(accountIdentityProvisioner).mintIdentity(any(), eq("new@example.com"));
+
+        SignupResult result = signupUseCase.execute(sampleCommand());
+
+        // signup completes (born unlinked) — credential + event still happen, identity NOT assigned.
+        assertThat(result.accountId()).isEqualTo("acc-1");
+        verify(authServicePort).createCredential(eq("acc-1"), eq("new@example.com"), eq("password123!"), any());
+        verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
+        verify(accountRepository, never()).assignIdentityId(any(), any(), any());
     }
 
     @Test

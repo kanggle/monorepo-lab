@@ -3,6 +3,7 @@ package com.example.account.infrastructure.persistence;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -38,6 +39,29 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
             nativeQuery = true)
     Optional<String> findIdentityIdByTenantIdAndId(@Param("tenantId") String tenantId,
                                                    @Param("accountId") String accountId);
+
+    /**
+     * TASK-BE-381 (ADR-MONO-036 P1/P3, M1): born-unified WRITER for the account's
+     * central {@code identity_id}. Native UPDATE (mirroring the native READ
+     * {@link #findIdentityIdByTenantIdAndId}) so {@code identity_id} stays UNMAPPED on
+     * {@link AccountJpaEntity} — Hibernate never touches the column on an account
+     * update (the merge-overwrite hazard documented above).
+     *
+     * <p>{@code AND identity_id IS NULL} makes it idempotent and net-zero: it only
+     * sets a previously-unset value, never overwrites an existing identity (no silent
+     * re-link — ADR-034 § 1.3). {@code flushAutomatically=true} flushes the pending
+     * account INSERT before the UPDATE so the just-created row is visible;
+     * {@code clearAutomatically=true} evicts now-stale managed entity state afterwards.
+     *
+     * @return rows affected (1 = assigned; 0 = already set, or no such row in tenant)
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "UPDATE accounts SET identity_id = :identityId "
+            + "WHERE tenant_id = :tenantId AND id = :accountId AND identity_id IS NULL",
+            nativeQuery = true)
+    int assignIdentityIdIfAbsent(@Param("tenantId") String tenantId,
+                                 @Param("accountId") String accountId,
+                                 @Param("identityId") String identityId);
 
     @Query("SELECT a FROM AccountJpaEntity a")
     Page<AccountJpaEntity> findAllAccounts(Pageable pageable);
