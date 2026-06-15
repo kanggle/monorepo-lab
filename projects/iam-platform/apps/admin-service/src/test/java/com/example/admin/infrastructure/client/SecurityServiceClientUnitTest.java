@@ -39,6 +39,7 @@ class SecurityServiceClientUnitTest {
         // TASK-BE-318b: token provider mocked — returns a fixed bearer for the header assertion.
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
+        // Constructor explicitly sets HTTP_1_1 — no h2c fix needed.
         client = new SecurityServiceClient(wireMock.baseUrl(), 3000, 5000, tokenProvider);
     }
 
