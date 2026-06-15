@@ -158,7 +158,7 @@ public class AuditQueryUseCase {
 
         // meta-audit: record the audit query itself
         final String effectiveTenantId = requestedTenantId;
-        String auditId = auditor.reserveAuditId();
+        String auditId = auditor.newAuditId();
         Instant now = Instant.now();
         auditor.record(new AdminActionAuditor.AuditRecord(
                 auditId,
