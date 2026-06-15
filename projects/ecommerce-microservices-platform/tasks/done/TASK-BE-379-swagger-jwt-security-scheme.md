@@ -1,6 +1,6 @@
 # TASK-BE-379 — Swagger JWT Bearer security scheme (10 live services) + gateway aggregated UI
 
-**Status:** ready
+**Status:** done
 **Domain:** ecommerce · **Service:** order / product / payment / user / settlement / shipping / search / review / promotion / notification-service (10) + gateway-service (aggregation) · **Type:** backend API documentation (OpenAPI config)
 
 > **auth-service 제외 (실측):** ecommerce `apps/auth-service` 는 `settings.gradle` 에서 빌드 제외됨
