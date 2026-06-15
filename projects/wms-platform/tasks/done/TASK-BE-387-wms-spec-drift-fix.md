@@ -1,6 +1,6 @@
 ﻿# TASK-BE-387 — wms spec drift-fix (code-verified Tier A/B corrections from TASK-BE-385 § Findings)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (each fix verified against production code before edit)
