@@ -1,6 +1,6 @@
 # TASK-ERP-BE-021 — Align erp service specs to the roles-only operator model (drop the `account_type=OPERATOR` framing)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-ERP-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (security/authorization-adjacent doc alignment — net-zero, but the operator-admission model must be stated exactly)
