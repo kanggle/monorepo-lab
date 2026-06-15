@@ -45,4 +45,30 @@ public record ActorContext(String actorId, String tenantId, Set<String> roles,
     public boolean isEntitledTo(String domain) {
         return domain != null && entitledDomains != null && entitledDomains.contains(domain);
     }
+
+    /** The erp domain the entitlement-trust READ grant applies to (ADR-MONO-019 § D5). */
+    private static final String ENTITLED_DOMAIN = "erp";
+
+    /**
+     * The erp WRITE/transition scope-tuple (extracted dedup — net-zero). WRITE is
+     * operator OR one of the write/approval scopes. Entitlement-trust NEVER widens
+     * a WRITE (architecture.md § Approver authorization).
+     */
+    public boolean canWriteErp() {
+        return isOperator()
+                || hasScope("erp.write")
+                || hasScope("erp.approval.create")
+                || hasScope("erp.approval.approve");
+    }
+
+    /**
+     * The erp READ scope-tuple (extracted dedup — net-zero). READ is the WRITE-set
+     * OR {@code erp.read} OR entitlement-trust to the erp domain (ADR-MONO-019 —
+     * entitlement grants READ only).
+     */
+    public boolean canReadErp() {
+        return canWriteErp()
+                || hasScope("erp.read")
+                || isEntitledTo(ENTITLED_DOMAIN);
+    }
 }

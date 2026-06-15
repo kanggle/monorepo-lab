@@ -5,6 +5,7 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -63,7 +64,7 @@ public class TenantClaimValidator implements OAuth2TokenValidator<Jwt> {
         }
         // getClaimAsStringList would throw on a non-string element; iterate
         // defensively so a malformed claim degrades to "not entitled".
-        java.util.ArrayList<String> result = new java.util.ArrayList<>(list.size());
+        ArrayList<String> result = new ArrayList<>(list.size());
         for (Object element : list) {
             if (element instanceof String s) {
                 result.add(s);

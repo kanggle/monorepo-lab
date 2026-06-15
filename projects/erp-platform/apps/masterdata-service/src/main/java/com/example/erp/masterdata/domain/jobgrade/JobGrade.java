@@ -18,6 +18,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Objects;
 
 @Entity
@@ -97,7 +98,7 @@ public class JobGrade {
     public void retire(Instant now) {
         MasterStatusMachine.ensureRetireAllowed(this.status, "JobGrade " + id);
         this.status = MasterStatus.RETIRED;
-        this.effectiveTo = now.atZone(java.time.ZoneOffset.UTC).toLocalDate();
+        this.effectiveTo = now.atZone(ZoneOffset.UTC).toLocalDate();
         this.updatedAt = now;
     }
 

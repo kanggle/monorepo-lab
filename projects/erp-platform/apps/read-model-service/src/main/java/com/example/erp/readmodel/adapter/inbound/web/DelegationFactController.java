@@ -6,7 +6,6 @@ import com.example.erp.readmodel.application.QueryDelegationFactUseCase;
 import com.example.erp.readmodel.application.query.DelegationFactPage;
 import com.example.erp.readmodel.domain.delegation.DelegationFactProjection;
 import com.example.erp.readmodel.domain.delegation.DelegationFactStatus;
-import com.example.erp.readmodel.presentation.security.OrgScope;
 import com.example.erp.readmodel.presentation.security.ReadAuthorizationGate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -43,7 +42,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DelegationFactController {
 
-    private static final int MAX_SIZE = 100;
+    private static final int MAX_SIZE = ReadQueryWebSupport.MAX_SIZE;
 
     private final QueryDelegationFactUseCase useCase;
     private final ReadAuthorizationGate readGate;
@@ -59,12 +58,12 @@ public class DelegationFactController {
             @AuthenticationPrincipal Jwt jwt) {
 
         readGate.requireRead(jwt);
-        validatePaging(page, size);
+        ReadQueryWebSupport.validatePaging(page, size);
         DelegationFactStatus statusFilter = parseStatus(status);
         Instant activeAtFilter = parseInstant(activeAt);
 
         // org_scope read filter (TASK-ERP-BE-008): null = no narrowing (net-zero).
-        List<String> orgScopeRootIds = orgScopeRootIds(jwt);
+        List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);
 
         DelegationFactPage result = useCase.list(delegatorId, delegateId, statusFilter,
                 activeAtFilter, orgScopeRootIds, page, Math.min(size, MAX_SIZE));
@@ -83,24 +82,10 @@ public class DelegationFactController {
         readGate.requireRead(jwt);
 
         // org_scope read filter: out-of-scope → 404 (no existence leak).
-        List<String> orgScopeRootIds = orgScopeRootIds(jwt);
+        List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);
 
         DelegationFactProjection fact = useCase.getOne(grantId, orgScopeRootIds);
         return ResponseEntity.ok(ApiEnvelope.of(DelegationFactResponse.from(fact), List.of()));
-    }
-
-    private List<String> orgScopeRootIds(Jwt jwt) {
-        OrgScope orgScope = readGate.orgScope(jwt);
-        return orgScope.isPlatform() ? null : List.copyOf(orgScope.roots());
-    }
-
-    private void validatePaging(int page, int size) {
-        if (page < 0) {
-            throw new IllegalArgumentException("page must be >= 0");
-        }
-        if (size < 1 || size > MAX_SIZE) {
-            throw new IllegalArgumentException("size must be between 1 and " + MAX_SIZE);
-        }
     }
 
     private DelegationFactStatus parseStatus(String status) {
