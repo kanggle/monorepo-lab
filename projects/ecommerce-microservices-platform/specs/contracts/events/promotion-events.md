@@ -34,7 +34,7 @@ Consumers must not depend on fields not defined in this contract.
 
 Published when a coupon is successfully applied to an order.
 
-**Consumers:** order-service, notification-service (future)
+**Consumers:** no consumer in v1 (no `@KafkaListener` for `promotion.coupon.used` exists in order-service or any other service; notification-service is a planned future consumer)
 
 **Topic:** `promotion.coupon.used`
 

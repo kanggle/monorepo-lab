@@ -116,6 +116,32 @@ List all shipping records.
 
 ---
 
+### POST /api/shippings/{shipmentId}/refresh-tracking (Admin)
+Admin-triggered carrier tracking refresh (TASK-BE-293). Fetches the shipment's carrier status
+via the logistics aggregator and advances the shipment status accordingly. Best-effort — a carrier
+outage or unknown status leaves the shipment unchanged (returns 200 with the current status).
+Default `shipping.carrier.mode=mock` is a no-op.
+
+**Authorization**: `X-User-Role: ADMIN` header required (forwarded by gateway).
+
+**Response 200**
+```json
+{
+  "shippingId": "string (UUID)",
+  "status": "string",
+  "updatedAt": "string (ISO 8601)"
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | INVALID_SHIPPING_REQUEST | Missing or blank `X-User-Role` header |
+| 403 | ACCESS_DENIED | Not an admin user |
+| 404 | SHIPPING_NOT_FOUND | Shipping record does not exist |
+
+---
+
 ### POST /api/shippings/carrier-webhook (Public — HMAC authenticated)
 Inbound carrier/aggregator delivery event webhook. **Gateway public-route** (TASK-BE-359).
 No bearer token is required at the gateway; the request is authenticated downstream via

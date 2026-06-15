@@ -19,11 +19,12 @@ All `/api/admin/products/**` endpoints — the operator-plane **read** `GET /api
 List products with filtering and pagination.
 
 **Query Parameters**
-- `name` (optional) — filter by product name (partial match)
 - `categoryId` (optional) — filter by category
 - `status` (optional) — filter by status: `ON_SALE`, `SOLD_OUT`, `HIDDEN`
 - `page` (default: 0) — page number
 - `size` (default: 20) — page size
+
+> **`name` filter — NOT IMPLEMENTED (v1).** `ProductController.list` accepts only `categoryId`, `status`, `page`, and `size`. A `name` partial-match filter is documented here for intent but the parameter is not wired in the controller — passing `name` has no effect. Wiring it is a separate code task.
 
 **Response 200**
 ```json
@@ -216,6 +217,190 @@ Onboarding flow / settlement are out of scope (Step 4).
 
 ---
 
+### DELETE /api/admin/products/{productId}
+Delete a product (soft-delete). Requires admin role.
+
+**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id` (entitlement-trust). Service applies no additional ecommerce-local RBAC.
+
+**Response 204** (no body)
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 403 | ACCESS_DENIED | Admin role required |
+| 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist |
+
+---
+
+### POST /api/admin/products/{productId}/variants
+Add a variant to an existing product. Requires admin role.
+
+**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
+
+**Request Body**
+```json
+{
+  "optionName": "string",
+  "stock": 0,
+  "additionalPrice": 0
+}
+```
+
+**Response 201**
+```json
+{
+  "id": "string (UUID)",
+  "optionName": "string",
+  "stock": 0,
+  "additionalPrice": 0
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | VALIDATION_ERROR | Missing or invalid field |
+| 403 | ACCESS_DENIED | Admin role required |
+| 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist |
+
+---
+
+### PATCH /api/admin/products/{productId}/variants/{variantId}
+Update a variant's option name and additional price. Requires admin role.
+
+**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
+
+**Request Body**
+```json
+{
+  "optionName": "string",
+  "additionalPrice": 0
+}
+```
+
+**Response 200**
+```json
+{
+  "id": "string (UUID)",
+  "optionName": "string",
+  "stock": 0,
+  "additionalPrice": 0
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | VALIDATION_ERROR | Missing or invalid field |
+| 403 | ACCESS_DENIED | Admin role required |
+| 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist |
+| 404 | VARIANT_NOT_FOUND | Variant with given ID does not exist |
+
+---
+
+### DELETE /api/admin/products/{productId}/variants/{variantId}
+Remove a variant from a product. Requires admin role.
+
+**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
+
+**Response 204** (no body)
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 403 | ACCESS_DENIED | Admin role required |
+| 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist |
+| 404 | VARIANT_NOT_FOUND | Variant with given ID does not exist |
+
+---
+
+### GET /api/admin/products/{productId}/images
+List all images for a product on the operator plane, sorted by `sortOrder` ascending. Requires admin role.
+
+**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
+
+**Response 200**
+```json
+{
+  "images": [
+    {
+      "imageId": "string (UUID)",
+      "url": "string (resolved CDN/storage URL)",
+      "objectKey": "string",
+      "sortOrder": 0,
+      "isPrimary": true,
+      "uploadedAt": "string (ISO 8601)"
+    }
+  ]
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 403 | ACCESS_DENIED | Admin role required |
+| 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist |
+
+---
+
+### GET /api/admin/sellers
+Tenant-scoped paged list of sellers (ADR-MONO-030 Step 4 facet f). Requires admin role.
+
+**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. The controller also validates `X-User-Role: ADMIN`. Service applies no additional ecommerce-local RBAC.
+
+**Query Parameters**
+- `page` (default: 0) — page number
+- `size` (default: 20, capped at 100) — page size
+
+**Response 200**
+```json
+{
+  "content": [
+    {
+      "sellerId": "string",
+      "displayName": "string",
+      "status": "ACTIVE",
+      "createdAt": "string (ISO 8601)",
+      "updatedAt": "string (ISO 8601)"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 5
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 403 | ACCESS_DENIED | Admin role required |
+
+---
+
+### GET /api/admin/sellers/{sellerId}
+Tenant-scoped seller detail (ADR-MONO-030 Step 4 facet f). Requires admin role.
+
+**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. The controller also validates `X-User-Role: ADMIN`. A cross-tenant or missing `sellerId` returns 404.
+
+**Response 200**
+```json
+{
+  "sellerId": "string",
+  "displayName": "string",
+  "status": "ACTIVE",
+  "createdAt": "string (ISO 8601)",
+  "updatedAt": "string (ISO 8601)"
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 403 | ACCESS_DENIED | Admin role required |
+| 404 | SELLER_NOT_FOUND | Seller with given ID does not exist for this tenant |
+
+---
+
 ### PATCH /api/admin/products/{productId}
 Update product information. Requires admin role.
 
@@ -231,7 +416,7 @@ Update product information. Requires admin role.
 
 **Response 200**
 ```json
-{ "productId": "string (UUID)" }
+{ "id": "string (UUID)" }
 ```
 
 **Error responses**
