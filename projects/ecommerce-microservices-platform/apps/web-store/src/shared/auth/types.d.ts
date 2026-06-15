@@ -1,7 +1,7 @@
 /**
  * Module augmentation for next-auth v5 — extends the default Session and JWT
- * to carry the GAP-specific claims (`tenant_id`, `account_id`, `roles`,
- * `account_type`) and the access/refresh tokens.
+ * to carry the GAP-specific claims (`tenant_id`, `account_id`, `roles`)
+ * and the access/refresh tokens.
  *
  * `accessToken` is exposed on the public session shape (read by AuthProvider
  * to push into the api-client token bridge). The HttpOnly JWT cookie remains
@@ -17,7 +17,6 @@ declare module 'next-auth' {
     accountId?: string | null;
     tenantId?: string | null;
     roles?: string[];
-    accountType?: string | null;
     accessToken?: string;
   }
 
@@ -25,7 +24,6 @@ declare module 'next-auth' {
     accountId?: string;
     tenantId?: string | null;
     roles?: string[];
-    accountType?: string | null;
   }
 }
 
@@ -37,7 +35,6 @@ declare module 'next-auth/jwt' {
     accountId?: string;
     tenantId?: string | null;
     roles?: string[];
-    accountType?: string | null;
     /**
      * GAP OIDC `id_token` — kept server-side on the JWT ONLY to serve as the
      * `id_token_hint` for RP-initiated logout (GAP `end_session`). Never copied

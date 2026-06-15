@@ -153,8 +153,12 @@ export async function signupAndLogin(page: Page, user: TestUser = uniqueUser()):
 }
 
 /**
- * Cross-app guard: an OPERATOR who completes GAP login should be rejected
- * by web-store and bounced back to `/login?error=account_type_mismatch`.
+ * Cross-app consumer-role guard (roles-based, ADR-MONO-035 4b-1): an operator
+ * whose web-store token lacks the `CUSTOMER` role (operators carry the
+ * assume-tenant-derived `ADMIN` domain role, not `CUSTOMER`) is rejected by
+ * web-store and bounced back to `/login?error=account_type_mismatch` (the
+ * error-code string is retained for UI compatibility; the legacy `account_type`
+ * claim was removed in ADR-MONO-032 D5 step 4).
  */
 export async function loginAsOperatorAndExpectMismatch(page: Page, user: TestUser): Promise<void> {
   const operator: TestUser = { ...user, accountType: 'OPERATOR' };

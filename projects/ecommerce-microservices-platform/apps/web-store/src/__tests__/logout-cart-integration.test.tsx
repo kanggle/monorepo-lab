@@ -24,7 +24,6 @@ function authenticatedSession() {
       tenantId: 'ecommerce',
       roles: ['CUSTOMER'],
       accessToken: 'fake.access.token',
-      accountType: 'CONSUMER',
       user: { email: 'test@example.com', name: '테스터' },
       expires: '2099-01-01T00:00:00Z',
     },

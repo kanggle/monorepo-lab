@@ -69,7 +69,6 @@ describe('AuthContext (NextAuth + GAP)', () => {
         tenantId: 'ecommerce',
         roles: ['CUSTOMER'],
         accessToken: 'gap-access-token',
-        accountType: 'CONSUMER',
         user: { email: 'consumer@test.com', name: '소비자' },
         expires: '2099-01-01T00:00:00Z',
       },
@@ -116,7 +115,6 @@ describe('AuthContext (NextAuth + GAP)', () => {
       data: {
         accountId: 'acc-1',
         accessToken: 'tok',
-        accountType: 'CONSUMER',
         user: { email: 'c@test.com', name: 'c' },
         expires: '2099-01-01T00:00:00Z',
       },
