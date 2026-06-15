@@ -1,7 +1,7 @@
 package com.example.account.application.result;
 
+import com.example.account.domain.repository.PageResult;
 import com.example.account.domain.tenant.Tenant;
-import org.springframework.data.domain.Page;
 
 import java.util.List;
 
@@ -15,16 +15,16 @@ public record TenantPageResult(
         long totalElements,
         int totalPages
 ) {
-    public static TenantPageResult from(Page<Tenant> page) {
-        List<TenantResult> items = page.getContent().stream()
+    public static TenantPageResult from(PageResult<Tenant> page) {
+        List<TenantResult> items = page.content().stream()
                 .map(TenantResult::from)
                 .toList();
         return new TenantPageResult(
                 items,
-                page.getNumber(),
-                page.getSize(),
-                page.getTotalElements(),
-                page.getTotalPages()
+                page.page(),
+                page.size(),
+                page.totalElements(),
+                page.totalPages()
         );
     }
 }

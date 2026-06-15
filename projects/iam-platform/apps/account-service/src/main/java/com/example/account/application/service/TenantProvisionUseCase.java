@@ -10,8 +10,6 @@ import com.example.account.domain.tenant.TenantId;
 import com.example.account.domain.tenant.TenantStatus;
 import com.example.account.domain.tenant.TenantType;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,7 +94,7 @@ public class TenantProvisionUseCase {
     public TenantPageResult list(String statusFilter, String tenantTypeFilter, int page, int size) {
         TenantStatus status = statusFilter != null ? TenantStatus.valueOf(statusFilter) : null;
         TenantType tenantType = tenantTypeFilter != null ? TenantType.valueOf(tenantTypeFilter) : null;
-        Page<Tenant> tenantPage = tenantRepository.findAll(status, tenantType, PageRequest.of(page, size));
+        var tenantPage = tenantRepository.findAll(status, tenantType, page, size);
         return TenantPageResult.from(tenantPage);
     }
 }

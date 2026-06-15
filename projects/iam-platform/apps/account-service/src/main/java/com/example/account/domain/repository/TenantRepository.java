@@ -4,8 +4,6 @@ import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantId;
 import com.example.account.domain.tenant.TenantStatus;
 import com.example.account.domain.tenant.TenantType;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 import java.util.Optional;
 
@@ -37,6 +35,9 @@ public interface TenantRepository {
     /**
      * Paginated listing with optional status and tenantType filters.
      * Null filter values are treated as "no filter" (all values accepted).
+     *
+     * @param page zero-based page number
+     * @param size page size
      */
-    Page<Tenant> findAll(TenantStatus statusFilter, TenantType tenantTypeFilter, Pageable pageable);
+    PageResult<Tenant> findAll(TenantStatus statusFilter, TenantType tenantTypeFilter, int page, int size);
 }
