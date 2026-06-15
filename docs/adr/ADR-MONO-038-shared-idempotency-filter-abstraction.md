@@ -104,8 +104,8 @@ Migrate per service behind the abstraction in stages, additive and net-zero per 
 
 - **M1** — lib: `IdempotencyStore` interface + `StoredResponse` record + `IdempotencyFilterConfig` + `IdempotencyKeyFilter` + `BodyCanonicalizer` strategy (Family-A `BodyHashUtil` adapter + lifted Family-B `readTree` canonicalizer on the lenient superset) + `IdempotencyErrorWriter` + optional `IdempotencyMetrics`. Unit-tested in the lib.
 - **M2** — migrate `inbound` + `outbound` (Family A, net-zero) onto the shared filter; per-service IT GREEN.
-- **M3** — migrate `master` + `admin` (Family B); reconcile the canonicalizer (I3); per-service IT GREEN; call out admin's fallback addition.
-- **M4** — remove the per-service filter/port/DTO duplicates; README + idempotency-spec cross-references updated (behavior-unchanged note).
+- **M3** — migrate `master` + `admin` (Family B); reconcile the canonicalizer (I3); per-service IT GREEN; call out admin's fallback addition. **Implementation finding (TASK-MONO-275):** the Family-B *filters* are **not** force-unified onto the Family-A `IdempotencyKeyFilter` — see § 5 "M3 implementation finding". master/admin keep their own `IdempotencyFilter`; only the **leaf** abstractions (`BodyCanonicalizer`/`JsonTreeBodyCanonicalizer`, `CachedBodyHttpServletRequestWrapper`, `IdempotencyStore`, `StoredResponse`) are shared. Net-zero, behavior-preserved.
+- **M4** — remove any residual per-service idempotency duplication + update READMEs/idempotency-spec cross-references (behavior-unchanged note). The Family-B `IdempotencyFilter` classes legitimately remain (per the M3 finding).
 - **Deferred follow-up** — single-algorithm canonicalizer unification across Family A + B (separate, IT-gated).
 
 ---
@@ -127,6 +127,26 @@ Migrate per service behind the abstraction in stages, additive and net-zero per 
 - **TASK-BE-342** — the canonical `BodyHashUtil` (Family A, in lib) carries this fix; I3 keeps it and lifts the Family-B canonicalizer alongside as a separate strategy.
 - **`shared-library-policy.md` / HARDSTOP-03** — the lifted abstraction (filter + generic store interface + DTO) is project-agnostic; service-specific concerns (error envelope, metrics, path/method policy) stay at the edges. ADR-038 does not relax HARDSTOP-03; it satisfies it by construction.
 - **WMS idempotency specs** (`idempotency.md` ×4) — unchanged; the implementation must preserve their behavior byte-for-byte.
+
+### M3 implementation finding (TASK-MONO-275) — Family-B filters stay service-specific
+
+During M3, the `master`/`admin` (Family B) filters were found to diverge from the Family-A `IdempotencyKeyFilter` on **five behavioral axes**, each spec'd in their `idempotency.md` and pinned by master's `IdempotencyFilterTest`:
+
+| Axis | Family A (`IdempotencyKeyFilter`) | Family B (`master`/`admin`) |
+|---|---|---|
+| Key validation | none (absent header → controller 400) | **UUID-required** → 400 `VALIDATION_ERROR` |
+| Store-error posture | **fail-open** (proceed) | **fail-closed** → 503 `SERVICE_UNAVAILABLE` |
+| Lock | single-try → 503 `PROCESSING` | **bounded wait-poll** → 409 `CONFLICT` on timeout |
+| Cache policy | 2xx only | **< 500** (4xx cached too) |
+| Storage key | `{METHOD}:sha256(uri):{key}` | `sha256({key}:{method}:{uri})` |
+
+Forcing Family B onto the Family-A filter would **break these documented, tested behaviors** — i.e. it is **not** behavior-preserving (it would be Alternative B "change master/admin to Family-A semantics", which this ADR did not choose). Generalizing the Family-A filter with config knobs for all five axes (Alternative-A-style) was judged to over-complicate the shared filter beyond the value of unifying two more services.
+
+**Decision (M3):** unify only the **leaf** abstractions for Family B — the `JsonTreeBodyCanonicalizer` (I3 lenient superset, resolving the master↔admin divergence), `CachedBodyHttpServletRequestWrapper`, `IdempotencyStore`, and `StoredResponse`. master/admin **retain their own `IdempotencyFilter`** (distinct control flow), now delegating to the shared leaf abstractions. This is net-zero and behavior-preserving, removes the real leaf duplication, and keeps the lib filter focused on the Family-A shape. The full Family-B filter unification (via filter generalization) is **declined** as not worth the config complexity; the canonical-algorithm unification across Family A+B remains the only deferred follow-up.
+
+This refines — does not contradict — I1/I6: I1's "one configurable filter" holds for Family A; Family B shares the leaf strategies the ADR introduced (I2/I3/I4) while keeping a service-specific filter, which I6's "behavior byte-identical per service" invariant requires.
+
+---
 
 This ADR does not re-decide any prior ADR; it is a self-contained infrastructure decision in the `libs/` governance lineage (sibling in *form* to the staged-child ADRs, unrelated in *topic* to the ADR-032 identity family).
 

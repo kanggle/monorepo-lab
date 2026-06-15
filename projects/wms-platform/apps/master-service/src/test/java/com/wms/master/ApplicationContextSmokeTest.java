@@ -2,6 +2,7 @@ package com.wms.master;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.web.idempotency.IdempotencyStore;
 import com.wms.master.adapter.in.web.controller.LocationController;
 import com.wms.master.adapter.in.web.controller.LocationCreateController;
 import com.wms.master.adapter.in.web.controller.SkuController;
@@ -17,7 +18,6 @@ import com.wms.master.application.port.in.WarehouseQueryUseCase;
 import com.wms.master.application.port.in.ZoneCrudUseCase;
 import com.wms.master.application.port.in.ZoneQueryUseCase;
 import com.wms.master.application.port.out.DomainEventPort;
-import com.wms.master.application.port.out.IdempotencyStore;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
