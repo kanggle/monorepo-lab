@@ -1,8 +1,8 @@
 # ADR-MONO-038 — Lift the REST Idempotency-Key filter skeleton, storage port, and stored-response DTO into `libs/java-web-servlet` as a configurable shared abstraction
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
-**History:** PROPOSED 2026-06-15 (TASK-MONO-272 — records the **shared servlet Idempotency-Key filter model**: how the four WMS services that implement the REST Idempotency-Key lifecycle [`inbound`, `outbound`, `master`, `admin`] collapse their ~80%-identical per-service filters onto one configurable abstraction in `libs/java-web-servlet`, after TASK-MONO-271 already lifted the two *pure-utility* primitives [`BodyHashUtil` + `CachedBodyHttpServletRequestWrapper`] for the `readValue` family. The remaining duplication — the filter control flow, the `IdempotencyStore(Port)`, and the `StoredResponse` record — cannot be lifted by a plain mechanical extraction: **moving an application-layer port abstraction into a shared library is a cross-service architecture decision** [hexagonal ownership, canonicalizer unification, error-contract stance], so a task that did it without a record would bake those postures in code → HARDSTOP-09. This ADR records the six decisions [I1–I6]. **Doc-only; ACCEPTED + implementation are separate user-explicit-intent-gated tasks [staged-child pattern, ADR-019/020/021/023/024/032/033/034/035/036/037]. Self-ACCEPT prohibited.**)
+**History:** PROPOSED 2026-06-15 (TASK-MONO-272 — records the **shared servlet Idempotency-Key filter model**: how the four WMS services that implement the REST Idempotency-Key lifecycle [`inbound`, `outbound`, `master`, `admin`] collapse their ~80%-identical per-service filters onto one configurable abstraction in `libs/java-web-servlet`, after TASK-MONO-271 already lifted the two *pure-utility* primitives [`BodyHashUtil` + `CachedBodyHttpServletRequestWrapper`] for the `readValue` family. The remaining duplication — the filter control flow, the `IdempotencyStore(Port)`, and the `StoredResponse` record — cannot be lifted by a plain mechanical extraction: **moving an application-layer port abstraction into a shared library is a cross-service architecture decision** [hexagonal ownership, canonicalizer unification, error-contract stance], so a task that did it without a record would bake those postures in code → HARDSTOP-09. This ADR records the six decisions [I1–I6]. **Doc-only; ACCEPTED + implementation are separate user-explicit-intent-gated tasks [staged-child pattern, ADR-019/020/021/023/024/032/033/034/035/036/037]. Self-ACCEPT prohibited.**) · ACCEPTED 2026-06-15 (TASK-MONO-272 — user-explicit *"accept 할게"* after the PROPOSED decisions [I1–I6] were presented for the explicitly-required ACCEPT gate; the gate was honored — the PROPOSED record was presented and review awaited before any flip, **NOT a self-ACCEPT**. I1–I6 CHOSEN-PROPOSED direction **finalised byte-unchanged** — ACCEPTED *finalises*, does not re-decide; § 1 Context + § 2 Decision + § 4 Alternatives + § 5 Relationship + § 7 Provenance byte-identical to the PROPOSED draft; flip = Status + this clause + § 6 ACCEPTED row + § 3.3 PAUSED→UNPAUSED. Delivered in the same PR as the PROPOSED record [the staged-child governance trail is preserved *within* the PR: both § 6 rows + ADR-003a audit rows #45 PROPOSED / #46 ACCEPTED, mirroring ADR-033/034/035/036/037]. TASK-MONO-271 deferral discharged into the M1–M4 roadmap.)
 
 **Builds on:** TASK-MONO-271 (2026-06-15, PR #1662) — extracted `com.example.web.idempotency.BodyHashUtil` + `CachedBodyHttpServletRequestWrapper` into `libs/java-web-servlet` (Family A: `inbound` + `outbound`). That task **explicitly deferred** the filter/store-port/DTO unification "as a larger contract change across each service's application layer" and the Family-B (`master`/`admin`) canonicalizer convergence "as a behavior change requiring per-service IT." ADR-038 is the design record for those deferrals.
 
@@ -98,9 +98,9 @@ Migrate per service behind the abstraction in stages, additive and net-zero per 
 - The I3 Family-B reconciliation is a (small) behavior change for `admin`; must be called out in the implementing PR, not shipped as silent net-zero.
 - One more lib abstraction to own; the config surface must stay small enough that it's genuinely simpler than four copies.
 
-### 3.3 Execution roadmap — **PAUSED until ACCEPTED**
+### 3.3 Execution roadmap — **UNPAUSED (ACCEPTED 2026-06-15)**
 
-> Implementation does not begin until this ADR is ACCEPTED (staged-child; self-ACCEPT prohibited). On ACCEPT, this section UNPAUSES and the steps below become implement-ready tasks.
+> ACCEPTED — implementation is now unblocked. The steps below are implement-ready tasks (separate user-gated tasks; each preserves the safety invariants in I6).
 
 - **M1** — lib: `IdempotencyStore` interface + `StoredResponse` record + `IdempotencyFilterConfig` + `IdempotencyKeyFilter` + `BodyCanonicalizer` strategy (Family-A `BodyHashUtil` adapter + lifted Family-B `readTree` canonicalizer on the lenient superset) + `IdempotencyErrorWriter` + optional `IdempotencyMetrics`. Unit-tested in the lib.
 - **M2** — migrate `inbound` + `outbound` (Family A, net-zero) onto the shared filter; per-service IT GREEN.
@@ -137,6 +137,7 @@ This ADR does not re-decide any prior ADR; it is a self-contained infrastructure
 | Date | Status | Task | Note |
 |---|---|---|---|
 | 2026-06-15 | PROPOSED | TASK-MONO-272 | I1–I6 CHOSEN-PROPOSED published for the explicitly-required ACCEPT gate. Doc-only. § 3.3 PAUSED. Self-ACCEPT prohibited. |
+| 2026-06-15 | ACCEPTED | TASK-MONO-272 | User-explicit *"accept 할게"* after the gate was presented (not self-ACCEPT). I1–I6 finalised byte-unchanged; flip = Status + History clause + this row + § 3.3 UNPAUSED. § 3.3 M1–M4 roadmap now implement-ready (separate user-gated tasks). |
 
 ---
 
