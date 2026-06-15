@@ -31,6 +31,8 @@ import {
   type Statement,
   PositionLotsResponseSchema,
   type PositionLotsResponse,
+  FxRatesResponseSchema,
+  type FxRatesResponse,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from '../api/types';
@@ -440,6 +442,45 @@ export function usePositionLots(
     queryFn: () => fetchPositionLots(code as string, currency as string),
     enabled:
       enabled && Boolean(code && code.trim() && currency && currency.trim()),
+    staleTime: 30_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+// --- FX 환율 피드 대시보드 (global read; TASK-PC-FE-092) --------------------
+//
+// GET /api/finance/ledger/fx-rates (FIN-BE-033). No input parameters —
+// global list; the query is always enabled (no `enabled` gate). `staleTime`
+// matches the lots read (30 s). No refetchInterval — the operator manually
+// refreshes via the UI button. `rate` is a decimal string (F5 — NEVER a
+// Number); `ageSeconds` is a plain integer duration (count, not money).
+
+export function fxRatesKey() {
+  return [LEDGER_KEY, 'fx-rates'] as const;
+}
+
+async function fetchFxRates(): Promise<FxRatesResponse> {
+  const raw = await apiClient.get<unknown>('/api/ledger/fx-rates');
+  return FxRatesResponseSchema.parse(raw);
+}
+
+/**
+ * `useFxRates` — reads the FX feed cache. READ-ONLY. No input form (global
+ * dashboard), but gated by `enabled` so the query only fires when its tab is
+ * active — a hidden panel must not fetch on mount (and must not pollute other
+ * tabs' request assertions). The same-origin proxy attaches the domain-facing
+ * IAM OIDC access token server-side. `retry: false` / no refetch-storm posture
+ * — same as the other ledger reads. An empty cache (`rates: []`) is a normal
+ * success, never an error.
+ */
+export function useFxRates(enabled = true) {
+  return useQuery({
+    queryKey: fxRatesKey(),
+    queryFn: fetchFxRates,
+    enabled,
     staleTime: 30_000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,

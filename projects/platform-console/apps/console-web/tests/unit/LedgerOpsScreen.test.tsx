@@ -1041,11 +1041,12 @@ describe('LedgerOpsScreen — 대사 tab statement (TASK-PC-FE-075)', () => {
     expect(screen.getByTestId('ledger-statement-input')).toBeInTheDocument();
     // The statement-detail read adds NO new tab — it is wired into the
     // existing 대사 tab. The tab count is whatever the screen declares
-    // (4 original + 계정 [FE-074] + FX 포지션 로트 [FE-091] = 6); the
-    // statement surface is NOT a tab of its own (the FE-075 invariant).
+    // (4 original + 계정 [FE-074] + FX 포지션 로트 [FE-091] +
+    // FX 환율 피드 [FE-092] = 7); the statement surface is NOT a tab of
+    // its own (the FE-075 invariant).
     expect(screen.queryByTestId('ledger-tab-statement')).toBeNull();
     const tabs = screen.getAllByRole('tab');
-    expect(tabs).toHaveLength(6);
+    expect(tabs).toHaveLength(7);
   });
 
   it('a seeded statementId opens on the 대사 tab with StatementDetail rendered (F5 header values)', () => {

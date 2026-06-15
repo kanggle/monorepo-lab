@@ -27,6 +27,8 @@ import {
   type Statement,
   PositionLotsResponseSchema,
   type PositionLotsResponse,
+  FxRatesResponseSchema,
+  type FxRatesResponse,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from './types';
@@ -693,6 +695,46 @@ export async function getPositionLots(
     (json) => {
       const env = (json ?? {}) as { data?: unknown };
       return PositionLotsResponseSchema.parse(env.data);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FX 환율 피드 대시보드 — TASK-PC-FE-092
+//   GET /api/finance/ledger/fx-rates (FIN-BE-033)
+//   Producer envelope = { data: { feedEnabled, rates: [...] }, meta }.
+//   STRICTLY READ-ONLY — global list, no path/query parameters.
+//
+//   Header matrix (honest, producer-faithful — § 2.4.7.1 REUSE):
+//     - the SAME domain-facing IAM OIDC token (NEVER getOperatorToken());
+//     - GET only — NO body, NO Idempotency-Key, NO X-Operator-Reason,
+//       NO X-Tenant-Id (handled by callLedger).
+//     - No 429 branch (the ledger has no documented 429).
+//
+//   `rate` is a decimal **string** (F5 — NEVER Number/parseFloat/parseInt).
+//   An empty cache → 200 with `rates: []` (NOT a 404 — empty-state).
+//   `logPath` is a fixed constant (no id/code/currency to sanitise).
+// ---------------------------------------------------------------------------
+
+/**
+ * `getFxRates()` — reads the FX feed cache from the ledger service.
+ * Returns `{ feedEnabled, rates }` where each rate carries a pair of
+ * currency codes, the exact decimal `rate` **string** (F5 — NOT a float),
+ * freshness timestamps, `ageSeconds` (duration, not money), and `stale`.
+ * READ-ONLY. The domain-facing IAM OIDC access token is attached by
+ * `callLedger`; NEVER `getOperatorToken()`. No path parameters — global
+ * list. An empty cache is a normal `200` (`rates: []`) — NOT a 404.
+ */
+export async function getFxRates(): Promise<FxRatesResponse> {
+  return callLedger(
+    {
+      path: '/api/finance/ledger/fx-rates',
+      // No id / code / currency to sanitise — the path is already generic.
+      logPath: '/api/finance/ledger/fx-rates',
+    },
+    (json) => {
+      const env = (json ?? {}) as { data?: unknown };
+      return FxRatesResponseSchema.parse(env.data);
     },
   );
 }
