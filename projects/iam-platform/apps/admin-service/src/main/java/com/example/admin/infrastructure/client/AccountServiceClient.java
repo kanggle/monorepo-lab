@@ -63,13 +63,13 @@ public class AccountServiceClient {
                             .build())
                     .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
-                    .onStatus(org.springframework.http.HttpStatusCode::isError, (req, resp) -> {
-                        throw org.springframework.web.client.HttpClientErrorException.create(
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
+                        throw HttpClientErrorException.create(
                                 resp.getStatusCode(), resp.getStatusText(),
                                 resp.getHeaders(), resp.getBody().readAllBytes(), null);
                     })
                     .body(AccountSearchResponse.class);
-        } catch (org.springframework.web.client.RestClientResponseException e) {
+        } catch (RestClientResponseException e) {
             log.warn("account-service returned {} on /internal/accounts: {}", e.getStatusCode(), e.getMessage());
             throw new DownstreamFailureException("account-service search error", e);
         } catch (Exception e) {
@@ -91,13 +91,13 @@ public class AccountServiceClient {
                             .build())
                     .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
-                    .onStatus(org.springframework.http.HttpStatusCode::isError, (req, resp) -> {
-                        throw org.springframework.web.client.HttpClientErrorException.create(
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
+                        throw HttpClientErrorException.create(
                                 resp.getStatusCode(), resp.getStatusText(),
                                 resp.getHeaders(), resp.getBody().readAllBytes(), null);
                     })
                     .body(AccountSearchResponse.class);
-        } catch (org.springframework.web.client.RestClientResponseException e) {
+        } catch (RestClientResponseException e) {
             log.warn("account-service returned {} on /internal/accounts (listAll): {}", e.getStatusCode(), e.getMessage());
             throw new DownstreamFailureException("account-service listAll error", e);
         } catch (Exception e) {

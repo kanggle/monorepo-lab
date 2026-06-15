@@ -4,7 +4,6 @@ import com.example.admin.infrastructure.persistence.access.AdminResourceTagJpaRe
 import com.example.admin.presentation.aspect.ResourceTagResolver;
 import jakarta.servlet.http.HttpServletRequest;
 
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -46,21 +45,6 @@ abstract class AbstractLocalResourceTagResolver implements ResourceTagResolver {
         }
         String resourceId = m.group(1);
         String raw = repository.findTags(resourceType, resourceId).orElse(null);
-        return Optional.of(splitTags(raw));
-    }
-
-    /** Split a comma-separated tags string into a set, dropping blanks. */
-    private static Set<String> splitTags(String raw) {
-        Set<String> tags = new HashSet<>();
-        if (raw == null) {
-            return tags;
-        }
-        for (String part : raw.split(",")) {
-            String t = part.trim();
-            if (!t.isEmpty()) {
-                tags.add(t);
-            }
-        }
-        return tags;
+        return Optional.of(ResourceTags.splitTags(raw));
     }
 }
