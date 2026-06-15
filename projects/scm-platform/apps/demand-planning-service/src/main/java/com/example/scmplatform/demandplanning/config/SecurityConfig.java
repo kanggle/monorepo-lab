@@ -1,14 +1,11 @@
 package com.example.scmplatform.demandplanning.config;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.example.scmplatform.demandplanning.adapter.inbound.web.HttpErrorResponseWriter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -19,7 +16,6 @@ import org.springframework.security.oauth2.server.resource.InvalidBearerTokenExc
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.io.IOException;
-import java.time.Instant;
 
 /**
  * demand-planning-service Spring Security configuration.
@@ -29,8 +25,6 @@ import java.time.Instant;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
-
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -67,14 +61,15 @@ public class SecurityConfig {
         } else if (oauthError != null && oauthError.getDescription() != null) {
             message = oauthError.getDescription();
         }
-        writeError(response, status, code, message);
+        HttpErrorResponseWriter.writeError(response, status, code, message);
     }
 
     static void onAccessDenied(HttpServletRequest request,
                                 HttpServletResponse response,
                                 org.springframework.security.access.AccessDeniedException e)
             throws IOException {
-        writeError(response, HttpStatus.FORBIDDEN.value(), "PERMISSION_DENIED", "Access denied");
+        HttpErrorResponseWriter.writeError(response, HttpStatus.FORBIDDEN.value(),
+                "PERMISSION_DENIED", "Access denied");
     }
 
     private static OAuth2Error extractOAuth2Error(Throwable t) {
@@ -93,20 +88,5 @@ public class SecurityConfig {
             cur = cur.getCause();
         }
         return fallback;
-    }
-
-    private static void writeError(HttpServletResponse response, int status,
-                                   String code, String message) throws IOException {
-        response.setStatus(status);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        ObjectNode node = JSON.createObjectNode();
-        node.put("code", code);
-        node.put("message", message);
-        node.put("timestamp", Instant.now().toString());
-        try {
-            response.getWriter().write(JSON.writeValueAsString(node));
-        } catch (JsonProcessingException ex) {
-            response.getWriter().write("{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}");
-        }
     }
 }

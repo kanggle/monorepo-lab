@@ -22,7 +22,8 @@ import java.util.UUID;
  * container network (scm-gateway routes only {@code /api/v1/**}). Mirrors the
  * {@code ProcurementDraftPoClient} RestClient construction (D5).
  *
- * <p>Returns every snapshot row across tenants; {@link SweepReorderUseCase}
+ * <p>Returns every snapshot row across tenants;
+ * {@link com.example.scmplatform.demandplanning.application.usecase.SweepReorderUseCase}
  * filters each against the reorder policy. On any transport / non-2xx / parse
  * failure this method throws, which the use case catches → it skips the run and
  * increments {@code reorder_sweep_ivs_unavailable_total} (S5 decoupling — the
