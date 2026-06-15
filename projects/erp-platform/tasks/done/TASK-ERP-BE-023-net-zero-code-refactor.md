@@ -1,6 +1,6 @@
 # TASK-ERP-BE-023 — net-zero code refactoring across erp-platform services
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-ERP-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (refactoring-engineer dispatch; security-adjacent authz predicate among the targets)
