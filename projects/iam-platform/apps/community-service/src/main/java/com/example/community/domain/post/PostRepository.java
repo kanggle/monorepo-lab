@@ -1,8 +1,5 @@
 package com.example.community.domain.post;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-
 import java.util.Optional;
 
 public interface PostRepository {
@@ -11,5 +8,5 @@ public interface PostRepository {
 
     Optional<Post> findById(String id);
 
-    Page<Post> findFeedForFan(String fanAccountId, Pageable pageable);
+    PageResult<Post> findFeedForFan(String fanAccountId, int page, int size);
 }

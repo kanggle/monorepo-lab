@@ -3,6 +3,7 @@ package com.example.community.application;
 import com.example.community.domain.access.AccountProfileLookup;
 import com.example.community.domain.access.ContentAccessChecker;
 import com.example.community.domain.comment.CommentRepository;
+import com.example.community.domain.post.PageResult;
 import com.example.community.domain.post.Post;
 import com.example.community.domain.post.PostRepository;
 import com.example.community.domain.post.PostType;
@@ -17,15 +18,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -54,8 +53,8 @@ class GetFeedUseCaseTest {
         ActorContext actor = new ActorContext("fan-1", Set.of("FAN"));
         List<String> postIds = List.of(post.getId());
 
-        when(postRepository.findFeedForFan(eq("fan-1"), any(PageRequest.class)))
-                .thenReturn(new PageImpl<>(List.of(post)));
+        when(postRepository.findFeedForFan(eq("fan-1"), anyInt(), anyInt()))
+                .thenReturn(new PageResult<>(List.of(post), 0, 20, 1, 1));
         when(commentRepository.countsByPostIds(postIds)).thenReturn(Map.of(post.getId(), 2L));
         when(reactionRepository.countsByPostIds(postIds)).thenReturn(Map.of(post.getId(), 5L));
         when(accountProfileLookup.displayNameOf("artist-1")).thenReturn("Artist Name");
@@ -76,8 +75,8 @@ class GetFeedUseCaseTest {
     void execute_emptyFeed_returnsEmptyPage() {
         ActorContext actor = new ActorContext("fan-1", Set.of("FAN"));
 
-        when(postRepository.findFeedForFan(eq("fan-1"), any(PageRequest.class)))
-                .thenReturn(new PageImpl<>(List.of()));
+        when(postRepository.findFeedForFan(eq("fan-1"), anyInt(), anyInt()))
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0, 0));
         when(commentRepository.countsByPostIds(List.of())).thenReturn(Map.of());
         when(reactionRepository.countsByPostIds(List.of())).thenReturn(Map.of());
 
@@ -95,8 +94,8 @@ class GetFeedUseCaseTest {
         ActorContext actor = new ActorContext("fan-1", Set.of("FAN"));
         List<String> postIds = List.of(post.getId());
 
-        when(postRepository.findFeedForFan(eq("fan-1"), any(PageRequest.class)))
-                .thenReturn(new PageImpl<>(List.of(post)));
+        when(postRepository.findFeedForFan(eq("fan-1"), anyInt(), anyInt()))
+                .thenReturn(new PageResult<>(List.of(post), 0, 20, 1, 1));
         when(commentRepository.countsByPostIds(postIds)).thenReturn(Map.of());
         when(reactionRepository.countsByPostIds(postIds)).thenReturn(Map.of());
         when(contentAccessChecker.check("fan-1", GetPostUseCase.REQUIRED_PLAN_LEVEL)).thenReturn(false);
@@ -118,8 +117,8 @@ class GetFeedUseCaseTest {
         ActorContext actor = new ActorContext("fan-1", Set.of("ARTIST"));
         List<String> postIds = List.of(post.getId());
 
-        when(postRepository.findFeedForFan(eq("fan-1"), any(PageRequest.class)))
-                .thenReturn(new PageImpl<>(List.of(post)));
+        when(postRepository.findFeedForFan(eq("fan-1"), anyInt(), anyInt()))
+                .thenReturn(new PageResult<>(List.of(post), 0, 20, 1, 1));
         when(commentRepository.countsByPostIds(postIds)).thenReturn(Map.of());
         when(reactionRepository.countsByPostIds(postIds)).thenReturn(Map.of());
         when(accountProfileLookup.displayNameOf("fan-1")).thenReturn("Self");
