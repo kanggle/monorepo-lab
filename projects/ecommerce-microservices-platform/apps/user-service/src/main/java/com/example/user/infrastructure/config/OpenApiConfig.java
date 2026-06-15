@@ -32,6 +32,6 @@ public class OpenApiConfig {
                     .type(SecurityScheme.Type.HTTP)
                     .scheme("bearer")
                     .bearerFormat("JWT")
-                    .description("auth-service 가 발급한 access token 을 입력하세요 (Bearer 접두어 제외, 토큰 값만).")));
+                    .description("IAM (GAP) OIDC 가 발급한 access token 을 입력하세요 (Bearer 접두어 제외, 토큰 값만).")));
     }
 }
