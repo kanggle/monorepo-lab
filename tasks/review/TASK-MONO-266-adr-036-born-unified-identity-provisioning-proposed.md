@@ -8,7 +8,7 @@ Author **ADR-MONO-036 PROPOSED** — Born-unified identity provisioning (ADR-MON
 
 # Status
 
-ready
+review
 
 > **PROPOSED → ACCEPTED in this PR (2026-06-15), user-explicit ACCEPT gate honored.** ADR-MONO-036 authored Status PROPOSED on `task/mono-266-born-unified-identity-adr` (worktree-isolated, main parked); the P1-P6 decisions were **presented for review first** (the explicitly-required gate, self-ACCEPT prohibited); the user then gave explicit intent *"진행"* → ADR-MONO-036 flipped PROPOSED → ACCEPTED in the same PR (Status + History ACCEPTED clause + § 6 ACCEPTED row + § 3.3 UNPAUSED), ADR-003a audit rows #41 (PROPOSED) + #42 (ACCEPTED) appended (sibling ADR-035/MONO-260 same-PR pattern). Doc-only (no `apps/` code, no `platform/contracts/` change, no migrations, no seed). **Lifecycle close (ready → done) follows merge + 3-dim verification.** § 3.3 execution roadmap UNPAUSED — next = **M1** (consumer registration born-unified, P1/P2), `TASK-BE-*` in iam-platform (avoid BE-380 held by the concurrent ecommerce session).
 
