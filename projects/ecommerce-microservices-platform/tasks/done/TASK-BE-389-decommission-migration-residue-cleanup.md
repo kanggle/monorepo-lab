@@ -1,6 +1,6 @@
 # TASK-BE-389 — Decommission/migration residue cleanup (stale auth-service Swagger refs, dead standalone route, doc/alias fixes)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (low-risk, net-behavior-zero code/doc cleanup — no domain logic, no contract/schema/ADR change)
