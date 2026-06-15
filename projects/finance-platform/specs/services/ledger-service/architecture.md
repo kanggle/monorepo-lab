@@ -47,9 +47,19 @@ All implementation tasks targeting this service must follow this declaration,
 > weighted-average settlement: an operator settles a *portion* of a foreign position via an
 > optional `settleForeignAmount`, removing a proportional `round(C×|F_settle|/|F|)` share of the
 > carrying base and leaving a residual OPEN position) is specified by § FX settlement § Partial
-> settlement + § Increment Scope. A FIFO / lot-level cost basis, a bulk/period-close revaluation
-> hook, a live FX rate feed, foreign-external → KRW-internal cross matching (the reverse of the
-> 14th increment), and fuzzy / N:M matching remain forward-declared (§ Increment Scope).
+> settlement + § Increment Scope. The **thirteenth–twenty-fifth increments**
+> (TASK-FIN-BE-020 / 021 / 023–029 / 031–033) are likewise live and specified by their
+> § sections + § Increment Scope: configurable FX reconciliation tolerance + cross-currency
+> base-leg matching (**both** directions — foreign↔KRW); the **ADR-001** FX cost-flow saga
+> (per-tenant + per-account `WEIGHTED_AVERAGE`/`FIFO` config, `fx_position_lot` acquisition +
+> FIFO settlement consumption + revaluation lot-carrying distribution + lots read endpoint); and
+> the **ADR-002** live FX rate feed (config-gated outbound provider + `fx_rate_quote` cache +
+> scheduled poller + omitted-rate staleness fallback `FX_RATE_UNAVAILABLE` + fx-rates read
+> endpoint). A **bulk / period-close auto-hook** (revaluation/settlement act on one
+> `(account, currency)` per call), a **configurable base currency** (fixed KRW in v1), a
+> **proceeds-amount input** (proceeds derive from a rate), a **real public FX API provider schema**
+> (`mode=http` against an actual provider) + a `fx_rate_quote_history` audit trail, and
+> fuzzy / N:M / split matching + period reopen remain forward-declared (§ Increment Scope).
 > The account-service architecture
 > (`../account-service/architecture.md`) is the canonical blueprint for the
 > shared infrastructure (Hexagonal, MySQL/Flyway, JWT/JWKS, tenant gate,
@@ -73,7 +83,7 @@ All implementation tasks targeting this service must follow this declaration,
 | Data store | MySQL `finance_ledger_db` (Flyway) — separate schema from account-service `finance_db` |
 | Event consumption | Kafka — `finance.transaction.completed.v1` / `finance.transaction.reversed.v1` (account-service outbox) |
 | Event publication | **(3rd increment, TASK-FIN-BE-009)** `finance.ledger.entry.posted.v1` + `finance.ledger.period.closed.v1`; **(4th increment, TASK-FIN-BE-010)** `finance.ledger.reconciliation.completed.v1` + `finance.ledger.reconciliation.discrepancy.detected.v1` — all via the per-service transactional outbox (`OutboxRow` path; the generic `TopicResolver` covers new `finance.ledger.*` types). A **publishing consumer** from the 3rd increment. |
-| Outbound integration | The GL/AP/ERP feed is the **emitted topics** above (the forward interface for an external accounting system); no synchronous outbound call (no in-repo consumer of the feed yet) |
+| Outbound integration | The GL/AP/ERP feed is the **emitted topics** above (the forward interface for an external accounting system). **(23rd increment, ADR-002)** a **config-gated outbound HTTP** FX-rate fetch (`HttpFxRateProviderAdapter` via `ResilienceClientFactory`, best-effort never-throw, default OFF / `mode=noop`) populates the `fx_rate_quote` cache; otherwise no synchronous outbound call. |
 
 ### Service Type Composition
 
@@ -389,28 +399,96 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   **Net-zero**: `settleForeignAmount` omitted → the 10th's full-settle path exactly. See § FX
   settlement § Partial settlement.
 
+**Thirteenth increment — IN (TASK-FIN-BE-020, configurable FX reconciliation tolerance):**
+- A **per-tenant FX-difference tolerance** generalising the 11th's exact base-leg comparison — a
+  sub-threshold base difference on a matched foreign line is absorbed (not flagged); only gaps
+  beyond the tolerance record an `AMOUNT_MISMATCH`. Per-currency-pair / per-account granularity
+  stays forward-declared (v1 is per-tenant). See § FX reconciliation tolerance.
+
+**Fourteenth increment — IN (TASK-FIN-BE-021, cross-currency base-leg matching):**
+- A **base-currency (KRW) external statement** matched against **foreign** internal lines by their
+  **carrying base** (the base comparison is the match key). See § Cross-currency base-leg matching.
+
+**Fifteenth increment — IN (TASK-FIN-BE-023, FX cost-flow method config):**
+- ADR-001 D1: a per-tenant FX **cost-flow method** (`WEIGHTED_AVERAGE` default / `FIFO`; `LIFO`
+  excluded by IFRS) in a new `fx_cost_flow_config` table (V9), `GET` / `PUT
+  /api/finance/ledger/settlements/cost-flow-config` (tenant-scoped, audited). **Net-zero** — absent
+  config ⇒ the existing weighted-average path. See § FX cost-flow method config.
+
+**Sixteenth increment — IN (TASK-FIN-BE-024, FX position lots — acquisition / backfill):**
+- ADR-001 D2/D5: materialise each foreign **acquisition** as an `fx_position_lot` row (V10 — new
+  table + one-synthetic-lot backfill of pre-existing positions) inside the posting `@Transactional`
+  — the **shadow** foundation for FIFO. Settlement still uses weighted-average here (a known shadow
+  desync on non-settlement reductions, reconciled by FIN-BE-025's safe fallback). **Net-zero**. See
+  § FX position lots.
+
+**Seventeenth increment — IN (TASK-FIN-BE-025, FIFO settlement consumption):**
+- ADR-001 D3: when the resolved cost-flow method is `FIFO`, a settlement derives `C_settle` by
+  **consuming open lots oldest-first** (lot-exact carrying). Computed before any persist with a
+  **safe fallback** to the weighted-average `C_settle` on lot shortfall (`FX_FIFO_LOT_SHORTFALL`
+  log — settlement always books). See § FIFO settlement consumption.
+
+**Eighteenth increment — IN (TASK-FIN-BE-026, revaluation lot-carrying distribution):**
+- ADR-001 D4: a revaluation **redistributes its carrying delta across the position's open lots**
+  (keeping the invariant `Σ open-lot carrying == position carrying C`), closing the
+  revalue-then-FIFO-settle divergence the 17th increment's IT deferred. See § Revaluation lot
+  carrying distribution.
+
+**Nineteenth increment — IN (TASK-FIN-BE-027, reverse cross-currency matching):**
+- The exact **mirror** of the 14th — a **foreign external** statement matched against a **KRW
+  internal** line by carrying base; cross-currency matching is now bidirectionally symmetric.
+  See § Reverse cross-currency matching.
+
+**Twentieth increment — IN (TASK-FIN-BE-028, FX position lots read endpoint):**
+- A read-only `GET /api/finance/ledger/settlements/{ledgerAccountCode}/{currency}/lots` exposing the
+  position's **open lots** + summary (FIFO order). Empty position ⇒ 200 empty (not 404). Pure read,
+  net-zero, no migration. See § FX position lots read endpoint + ledger-api.md § 12.
+
+**Twenty-first increment — IN (TASK-FIN-BE-029, per-account FX cost-flow override):**
+- A **per-ledger-account override** of the cost-flow method (V11 `fx_cost_flow_account_config`)
+  layered over the 15th's per-tenant default — precedence `account override > tenant default >
+  WEIGHTED_AVERAGE`. `GET` / `PUT` / `DELETE
+  /api/finance/ledger/settlements/cost-flow-config/accounts`. **Net-zero** (no override ⇒ unchanged).
+  See § FX cost-flow method config § Per-account override + ledger-api.md § 13.
+
+**Twenty-third increment — IN (TASK-FIN-BE-031, FX rate feed — shadow):**
+- ADR-002 D1/D2/D5/D6 — finance's **first external HTTP integration**: an outbound
+  `FxRateProviderPort` (noop / stub / http adapters, config-gated by
+  `financeplatform.ledger.fxrate.mode`, http via `ResilienceClientFactory` best-effort never-throw),
+  an `fx_rate_quote` cache table (V12, tenant-agnostic), `RefreshFxRateQuotesUseCase` + a
+  **default-OFF** `@Scheduled FxRateFeedPoller`. **Shadow** — the cache is loaded only; no operator
+  path reads it yet (net-zero, AC-1). See § FX rate feed.
+  *(Twenty-second increment = TASK-FIN-BE-030 = ADR-002 PROPOSED→ACCEPTED doc carrier — no code.)*
+
+**Twenty-fourth increment — IN (TASK-FIN-BE-032, FX rate feed consumption + staleness):**
+- ADR-002 D3/D4 — the **first operator-path change**: `closingRate` / `settlementRate` become
+  **optional**; an omitted rate is resolved by `ResolveEffectiveFxRate` from the **fresh**
+  `fx_rate_quote` cache (feed enabled + `now − asOf ≤ staleAfter`), else fails closed
+  `422 FX_RATE_UNAVAILABLE` (regulated — no estimated-rate P&L). A **supplied** rate is verbatim
+  (manual byte-identical). Resolved **after** the no-op checks, **before** compute. See § FX
+  gain/loss revaluation / § FX settlement (Rate omission → FX rate feed fallback).
+
+**Twenty-fifth increment — IN (TASK-FIN-BE-033, FX rates read endpoint):**
+- A read-only `GET /api/finance/ledger/fx-rates` over the `fx_rate_quote` cache (tenant-agnostic) —
+  each pair's `rate` (F5 string) + `source` + `asOf` / `fetchedAt` + `ageSeconds` + per-row `stale`
+  (same boundary as `ResolveEffectiveFxRate`) + a top-level `feedEnabled`. Empty cache ⇒ 200 empty.
+  Net-zero, no migration. See § FX rate feed (operator read surface) + ledger-api.md § 14.
+
 **Forward-declared — OUT (each a later task):**
-- Fuzzy / N:M / split matching; period **reopen**. *(A **configurable FX tolerance** — the 11th was
-  an exact base comparison — is now **done**: the 13th increment, TASK-FIN-BE-020, § FX reconciliation
-  tolerance. **Cross-currency base-leg matching** — a base-currency [KRW] external statement matched
-  against foreign internal lines by their carrying base — is now **done**: the 14th increment,
-  TASK-FIN-BE-021, § Cross-currency base-leg matching. The **foreign-external → KRW-internal** reverse
-  direction is now **done** too: the 19th increment, TASK-FIN-BE-027, § Reverse cross-currency matching
-  — cross-currency matching is bidirectionally symmetric.)* Per-currency-pair / per-account tolerance
-  granularity stays forward-declared (v1 is per-tenant).
-- **FIFO / lot-level settlement cost basis** — the 12th increment (TASK-FIN-BE-018) settles a
-  *portion* of a `(account, currency)` position under a **weighted-average** carrying basis (a
-  proportional share `round(C × |F_settle|/|F|)`, residual OPEN position); a **FIFO / lot-level**
-  cost basis (per-lot acquisition tracking) is forward-declared. A **bulk / all-positions** revaluation + a
-  **period-close auto-hook** (the 9th/10th increments act on one `(account, currency)` per
-  operator call). A **live FX rate feed** (rates are caller-supplied, not fetched), a
-  **proceeds-amount input** (the 10th derives proceeds from a rate; supplying the *actual*
-  base received is forward-declared), and a **configurable base currency** (fixed KRW in v1) are
-  also forward-declared. (Multi-currency **reconciliation** is the 11th increment — § above.)
-- **Manual-posting body-hash idempotency conflict** (`IDEMPOTENCY_KEY_CONFLICT` 409
-  on a same-key/different-body replay — the 5th increment is replay-safe on the key
-  alone; storing the request hash for conflict detection is forward-declared) +
-  a maker/checker approval workflow for manual entries.
+- **Matching**: fuzzy / N:M / split matching; period **reopen**; per-currency-pair / per-account
+  reconciliation-tolerance granularity (v1 is per-tenant). *(Configurable FX tolerance = 13th;
+  cross-currency base-leg matching, both directions = 14th + 19th — done.)*
+- **Settlement / revaluation**: a **bulk / all-positions** + **period-close auto-hook** (the
+  9th / 10th / 12th / 17th increments act on one `(account, currency)` per operator call); a
+  **proceeds-amount input** (proceeds derive from a rate; supplying the *actual* base received); a
+  **configurable base currency** (fixed KRW in v1). *(FIFO / lot-level cost basis = 16th–18th — done.)*
+- **FX rate feed (ADR-002 remainder)**: a **real public FX API provider schema** (`mode=http`
+  against an actual provider's response shape — the http adapter is wired, the provider contract is
+  a stub); a `fx_rate_quote_history` append-only audit trail; a **ShedLock single-leader guard** for
+  the poller (multi-instance). *(Feed infra + omitted-rate fallback + read surface = 23rd–25th — done.)*
+- **Manual posting**: body-hash idempotency conflict (`IDEMPOTENCY_KEY_CONFLICT` 409 on a
+  same-key / different-body replay — the 5th increment is replay-safe on the key alone) +
+  a maker / checker approval workflow for manual entries.
 
 ---
 
@@ -508,6 +586,10 @@ com.example.finance.ledger/
 │   │   ├── FxRevaluationPolicy.java        ← (9th incr) pure: (account, currency, foreignBalanceMinor, carryingBaseMinor, closingRate) → Optional<RevaluationResult> (delta + base-adjustment + FX_GAIN/FX_LOSS lines); empty when delta==0; non-positive rate → RevaluationRateInvalidException
 │   │   ├── FxSettlementPolicy.java         ← (10th incr) pure: (account, currency, F, C, settlementRate, proceedsAccount) → Optional<SettlementResult> (realized + 3 lines: position-removal[8th-incr of(money,baseAmount)] + base proceeds + FX_GAIN/FX_LOSS); empty when F==0; non-positive rate → SettlementRateInvalidException
 │   │   ├── SourceRef.java                 ← (sourceType, sourceTxnId, sourceEventId) provenance; (5th incr) ofManual → TYPE_MANUAL; (9th incr) ofRevaluation → TYPE_REVALUATION; (10th incr) ofSettlement → TYPE_SETTLEMENT
+│   │   ├── FxCostFlowConfig.java          ← (15th incr) per-tenant cost-flow method aggregate (JPA entity) + CostFlowMethod enum (WEIGHTED_AVERAGE default / FIFO; fromString exact-uppercase); repository FxCostFlowConfigRepository
+│   │   ├── FxCostFlowAccountConfig.java    ← (21st incr) per-(tenant, ledgerAccountCode) override (@IdClass FxCostFlowAccountConfigId), reuses CostFlowMethod; repository FxCostFlowAccountConfigRepository (findByTenantIdAndAccountCode / findByTenantId)
+│   │   ├── FxPositionLot.java              ← (16th incr) acquisition-lot aggregate (JPA entity); acquire(...) factory (remaining==original, carrying==original_base) + consume(consume, slice) (17th incr); repository FxPositionLotRepository (save + findOpenLots(tenant, code, currency) remaining>0 FIFO (acquired_at, seq))
+│   │   ├── FxRateQuote.java                ← (23rd incr) market-rate cache row (@IdClass FxRateQuoteId (base, foreign); tenant-agnostic); repository FxRateQuoteRepository (findLatest / save upsert / findAll)
 │   │   └── repository/JournalRepository.java   ← (5th incr) + findBySourceEventId (manual idempotent-replay return); (9th incr) + accountTotalsForCurrency(code, currency, tenant) (one FX position's foreign balance + base carrying)
 │   ├── period/                           ← (2nd increment) accounting period
 │   │   ├── AccountingPeriod.java          ← aggregate; OPEN→CLOSED state machine; [from,to) covers(); non-overlap
@@ -543,15 +625,22 @@ com.example.finance.ledger/
 │        (5th incr) IdempotencyKeyRequiredException [handler guard → 400] — manual posting reuses LedgerEntryUnbalanced/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed, no new domain code;
 │        (6th incr) ReconciliationPeriodLockedException [→ 422];
 │        (9th incr) RevaluationRateInvalidException [→ 422] — FX revaluation reuses IdempotencyKeyRequired/CurrencyMismatch/LedgerAccountNotFound/LedgerPeriodClosed otherwise;
-│        (10th incr) SettlementRateInvalidException [→ 422] — FX settlement reuses CurrencyMismatch/LedgerAccountNotFound/IdempotencyKeyRequired/LedgerPeriodClosed otherwise)
+│        (10th incr) SettlementRateInvalidException [→ 422] — FX settlement reuses CurrencyMismatch/LedgerAccountNotFound/IdempotencyKeyRequired/LedgerPeriodClosed otherwise;
+│        (24th incr) FxRateUnavailableException [→ 422] — omitted closingRate/settlementRate + no fresh cached quote (feed disabled / no quote / stale); FX cost-flow config + lots-read + fx-rates-read reuse VALIDATION_ERROR (400) — no new domain code)
 ├── application/                           ← use cases + outbound ports
 │   ├── PostJournalEntryUseCase.java       ← @Transactional: balance-validate → (2nd incr) closed-period guard → persist entry + lines + audit → (3rd incr) append entry.posted outbox row (one Tx); (5th incr) + post(entry, reason, actor) overload (operator audit actor; the no-actor overload delegates with the auto-journal default — net-zero)
 │   ├── PostFromTransactionUseCase.java    ← maps an account-service transaction envelope → PostJournalEntry (via PostingPolicy); idempotent on sourceEventId
 │   ├── PostManualJournalEntryUseCase.java ← (5th incr) @Transactional operator: require Idempotency-Key → replay-return via findBySourceEventId else markProcessed(manual:{key}) → validate each referenced account EXISTS (no lazy mint) → build JournalEntry.post(SourceRef.ofManual) → PostJournalEntryUseCase.post(entry, reason, actor)
-│   ├── RevalueForeignBalanceUseCase.java  ← (9th incr) @Transactional operator: require Idempotency-Key → replay-return (reval:{key}) → load (account,currency) position totals → FxRevaluationPolicy.revalue → delta==0/no-position → 200 revalued:false; else build base-adjustment + FX_GAIN/FX_LOSS lines, SourceRef.ofRevaluation, markProcessed → PostJournalEntryUseCase.post(entry, reason, actor)
+│   ├── RevalueForeignBalanceUseCase.java  ← (9th incr) @Transactional operator: require Idempotency-Key → replay-return (reval:{key}) → load (account,currency) position totals → FxRevaluationPolicy.revalue → delta==0/no-position → 200 revalued:false; else build base-adjustment + FX_GAIN/FX_LOSS lines, SourceRef.ofRevaluation, markProcessed → PostJournalEntryUseCase.post(entry, reason, actor); (18th incr) + redistribute carrying delta across open lots; (24th incr) + ResolveEffectiveFxRate when closingRate omitted
 │   ├── RevalueForeignBalanceCommand.java   ← (9th incr) (tenantId, operatorSubject, ledgerAccountCode, currency, closingRate, postedAt?, reference, memo, idempotencyKey)
-│   ├── SettleForeignPositionUseCase.java   ← (10th incr) @Transactional operator: require Idempotency-Key → replay-return (settle:{key}) → validate currency≠KRW + proceedsAccount EXISTS (no mint) → load position → F==0 → 200 settled:false; else FxSettlementPolicy.settle → build 3-line entry, SourceRef.ofSettlement, markProcessed → PostJournalEntryUseCase.post(entry, reason, actor)
+│   ├── SettleForeignPositionUseCase.java   ← (10th incr) @Transactional operator: require Idempotency-Key → replay-return (settle:{key}) → validate currency≠KRW + proceedsAccount EXISTS (no mint) → load position → F==0 → 200 settled:false; else FxSettlementPolicy.settle → build 3-line entry, SourceRef.ofSettlement, markProcessed → PostJournalEntryUseCase.post(entry, reason, actor); (12th incr) partial settleForeignAmount; (17th incr) FIFO branch — resolve method (account override > tenant default > WEIGHTED_AVERAGE) + walk FxPositionLotRepository.findOpenLots, safe fallback on shortfall; (24th incr) ResolveEffectiveFxRate when settlementRate omitted
 │   ├── SettleForeignPositionCommand.java   ← (10th incr) (tenantId, operatorSubject, ledgerAccountCode, currency, settlementRate, proceedsAccountCode, postedAt?, reference, memo, idempotencyKey)
+│   ├── GetFxCostFlowConfigUseCase.java / SetFxCostFlowConfigUseCase.java   ← (15th incr) per-tenant cost-flow method read / upsert (audit FX_COST_FLOW_METHOD_SET; absent ⇒ WEIGHTED_AVERAGE default view)
+│   ├── GetFxCostFlowAccountConfigsUseCase / SetFxCostFlowAccountConfigUseCase / DeleteFxCostFlowAccountConfigUseCase   ← (21st incr) per-account override list / upsert / delete (audit FX_COST_FLOW_ACCOUNT_METHOD_SET / _CLEARED; delete idempotent)
+│   ├── GetFxPositionLotsUseCase.java      ← (20th incr) @Transactional(readOnly): FxPositionLotRepository.findOpenLots → FxPositionLotsView (+ totals)
+│   ├── ResolveEffectiveFxRate.java        ← (24th incr) omitted-rate resolver: supplied ⇒ verbatim; omitted + feed enabled + fresh cache quote ⇒ cache rate; omitted + disabled/absent/stale ⇒ FxRateUnavailableException (422); staleness now−asOf>staleAfter
+│   ├── RefreshFxRateQuotesUseCase.java    ← (23rd incr) @Transactional: iterate configured pairs (base KRW) → FxRateProviderPort.latestQuote → upsert fx_rate_quote (per-pair try/catch; returns upserted count)
+│   ├── GetFxRatesUseCase.java             ← (25th incr) @Transactional(readOnly): fx_rate_quote cache → FxRatesView (top-level feedEnabled + per-row ageSeconds/stale)
 │   ├── QueryLedgerUseCase.java            ← read: entry detail / per-account entries + balance / trial balance
 │   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
 │   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit → (3rd incr) append period.closed outbox row
@@ -560,11 +649,13 @@ com.example.finance.ledger/
 │   ├── ResolveDiscrepancyUseCase.java     ← (4th incr) @Transactional operator: OPEN→RESOLVED + resolution + audit; (6th incr) + period-lock guard (statement's owning period CLOSED → RECONCILIATION_PERIOD_LOCKED; injects AccountingPeriodRepository + ReconciliationRepository.findStatementById)
 │   ├── QueryReconciliationUseCase.java    ← (4th incr) read: statement detail+summary / discrepancy queue / detail
 │   ├── ActorContext.java
-│   ├── view/ (JournalEntryView, JournalLineView, LedgerAccountBalanceView, TrialBalanceView)
+│   ├── view/ (JournalEntryView, JournalLineView, LedgerAccountBalanceView, TrialBalanceView; (15th incr) FxCostFlowConfigView; (20th incr) FxPositionLotsView + FxPositionLotView; (25th incr) FxRatesView + FxRateView)
 │   └── port/outbound/
 │       ├── ProcessedEventStore.java       ← dedupe port (processed_events, source event id)
 │       ├── LedgerEventPublisher.java      ← (3rd incr) append-side port: publishEntryPosted / publishPeriodClosed; (4th incr) + publishReconciliationCompleted / publishDiscrepancyDetected (all called in-Tx)
-│       └── ClockPort.java
+│       ├── ClockPort.java
+│       ├── FxRateProviderPort.java         ← (23rd incr) outbound: latestQuote(base, foreign) → Optional<RateQuote(rate, asOf, source)>; best-effort, never throws
+│       └── FxRateFeedSettings.java         ← (23rd/24th/25th incr) app-layer port over FxRateFeedProperties: feedEnabled() / staleAfter()
 ├── infrastructure/
 │   ├── persistence/jpa/                   ← Spring Data + adapters (toDomain/fromDomain)
 │   │   (LedgerAccountJpaEntity/Repository/Adapter, JournalEntryJpaEntity, JournalLineJpaEntity;
@@ -572,13 +663,21 @@ com.example.finance.ledger/
 │   │    (9th incr) accountTotalsForCurrency(code, currency, tenant) → one FX position's foreign balance + base carrying (filters the existing per-(account,currency) totals; no new column);
 │   │    AuditLogJpaEntity, processed_events;
 │   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity;
-│   │    (4th incr) ReconciliationStatement/Line/Match/DiscrepancyJpaEntity + Repository/Adapter)
-│   │   Flyway: V1 init, V2 period, V3 outbox, V4 reconciliation, (8th incr) V5__add_multi_currency (journal_line cols + backfill KRW rate=1), (11th incr) V6__add_reconciliation_fx (reconciliation_statement_line base_amount_minor/base_currency NULL — additive, no CHECK change)
+│   │    (4th incr) ReconciliationStatement/Line/Match/DiscrepancyJpaEntity + Repository/Adapter;
+│   │    (15th–23rd incr) FxCostFlowConfig / FxCostFlowAccountConfig / FxPositionLot / FxRateQuote JpaEntity + Spring Data repo + Adapter)
+│   │   Flyway: V1 init, V2 period, V3 outbox, V4 reconciliation, (8th incr) V5__add_multi_currency (journal_line cols + backfill KRW rate=1), (11th incr) V6__add_reconciliation_fx (reconciliation_statement_line base_amount_minor/base_currency NULL — additive, no CHECK change), (13th incr) V7__add_reconciliation_fx_tolerance, (14th incr) V8__add_reconciliation_match_cross_currency, (15th incr) V9__add_fx_cost_flow_config, (16th incr) V10__add_fx_position_lot (+ synthetic-lot backfill), (21st incr) V11__add_fx_cost_flow_account_config, (23rd incr) V12__add_fx_rate_quote (all additive — new tables / nullable cols, no CHECK change)
 │   ├── outbox/                            ← (3rd incr) per-service transactional outbox (OutboxRow path)
 │   │   ├── LedgerOutboxJpaEntity.java     ← implements OutboxRow (@Table ledger_outbox, MySQL payload TEXT)
 │   │   ├── LedgerOutboxJpaRepository.java ← findPending(Pageable) + countByPublishedAtIsNull
 │   │   ├── LedgerOutboxPublisher.java     ← extends AbstractOutboxPublisher; @Scheduled relay; TopicResolver finance.ledger.X→.v1
 │   │   └── OutboxLedgerEventPublisher.java ← LedgerEventPublisher impl: build canonical envelope → save ledger_outbox row
+│   ├── fxrate/                             ← (23rd incr, ADR-002) FX rate feed — config-gated outbound HTTP (financeplatform.ledger.fxrate.*)
+│   │   ├── NoopFxRateProviderAdapter.java   ← mode=noop (default, matchIfMissing) — always empty(); zero external calls (net-zero)
+│   │   ├── StubFxRateProviderAdapter.java   ← mode=stub — fixed rates from config; asOf=clock.now(); source="stub"
+│   │   ├── HttpFxRateProviderAdapter.java   ← mode=http — GET <baseUrl>/<base>/<foreign> via ResilienceClientFactory (libs/java-common); best-effort never-throw; source="http:<host>"
+│   │   ├── FxRateFeedPoller.java            ← @Scheduled relay (default OFF — @ConditionalOnProperty enabled=true, no matchIfMissing); wraps RefreshFxRateQuotesUseCase in catch-all (never throws)
+│   │   ├── FxRateFeedProperties.java        ← @ConfigurationProperties("financeplatform.ledger.fxrate"): enabled(false)/mode(noop)/pollIntervalMs/pairs/stub.rates/http.{baseUrl,timeouts}
+│   │   └── FxRateFeedConfig.java            ← @EnableConfigurationProperties + FxRateFeedSettings bean (app-port impl)
 │   ├── security/  (SecurityConfig, AllowedIssuersValidator, TenantClaimValidator,
 │   │               ActorContextJwtAuthenticationConverter, ServiceLevelOAuth2Config)
 │   └── config/ (ClockConfig, JpaConfig, KafkaConsumerConfig [also the outbox-relay KafkaTemplate],
@@ -592,9 +691,10 @@ com.example.finance.ledger/
     ├── controller/LedgerController.java    ← /api/finance/ledger/** (reads)
     ├── controller/JournalController.java    ← (5th incr) POST /api/finance/ledger/entries (manual posting; Idempotency-Key header; no @Transactional — funnels to PostManualJournalEntryUseCase)
     ├── controller/RevaluationController.java ← (9th incr) POST /api/finance/ledger/revaluations (FX revaluation; Idempotency-Key header; no @Transactional — funnels to RevalueForeignBalanceUseCase; 201 revalued / 200 revalued:false)
-    ├── controller/SettlementController.java ← (10th incr) POST /api/finance/ledger/settlements (FX settlement; Idempotency-Key header; no @Transactional — funnels to SettleForeignPositionUseCase; 201 settled / 200 settled:false)
+    ├── controller/SettlementController.java ← (10th incr) POST /api/finance/ledger/settlements (FX settlement; Idempotency-Key header; no @Transactional — funnels to SettleForeignPositionUseCase; 201 settled / 200 settled:false); (20th incr) GET /settlements/{code}/{currency}/lots (getPositionLots — open lots read); (15th/21st incr) GET/PUT /settlements/cost-flow-config + GET/PUT/DELETE /settlements/cost-flow-config/accounts
     ├── controller/PeriodController.java     ← (2nd incr) /api/finance/ledger/periods/** (open/close/list/detail)
     ├── controller/ReconciliationController.java ← (4th incr) /api/finance/ledger/reconciliation/** (ingest/resolve/read)
+    ├── controller/FxRateController.java     ← (25th incr) GET /api/finance/ledger/fx-rates (fx_rate_quote cache read; tenant-agnostic; no Idempotency-Key; .authenticated())
     ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes; (2nd incr) period codes; (5th incr) LEDGER_ENTRY_UNBALANCED/CURRENCY_MISMATCH/LEDGER_ACCOUNT_NOT_FOUND/LEDGER_PERIOD_CLOSED now surface synchronously + IDEMPOTENCY_KEY_REQUIRED handler guard)
     ├── dto/                                ← response DTOs (money as minor-units integer + currency)
     ├── filter/TenantClaimEnforcer.java
@@ -1149,10 +1249,11 @@ NULL DEFAULT 'KRW'` to `journal_line` and **backfills existing rows**
 all existing lines are KRW, so the backfill is exact and the base-balance check is
 unchanged for them).
 
-**Deferred** (forward-declared): a **live FX rate feed** (rates are caller-supplied);
-**multi-currency reconciliation** (cross-currency clearing-account matching); a
-**configurable base currency** (fixed KRW in v1). The **FX gain/loss revaluation** that
-the 8th increment deferred is delivered by the 9th increment (§ FX gain/loss revaluation).
+**Deferred** (forward-declared): a **configurable base currency** (fixed KRW in v1). *(A **live FX
+rate feed** [23rd–25th increments] and **multi-currency / cross-currency reconciliation**
+[11th / 14th / 19th increments] were deferred here and are now done.)* The **FX gain/loss
+revaluation** that the 8th increment deferred is delivered by the 9th increment (§ FX gain/loss
+revaluation).
 
 ## FX gain/loss revaluation (ninth increment — TASK-FIN-BE-015)
 
@@ -1264,12 +1365,14 @@ the unrealized FX adjustment tagged by provenance. No new topic.
 **Net-zero / immutability.** The auto-journal and manual paths are untouched (no revaluation
 unless the operator calls the endpoint). A revaluation entry is as **immutable** as any other
 (F3) — a correction is another revaluation (a later rate) or a reversal. `closingRate` is
-**caller-supplied** (a live FX rate feed is forward-declared).
+**caller-supplied or, when omitted, resolved from the FX rate feed** (24th increment — Rate
+omission → FX rate feed fallback, below).
 
 **Deferred** (forward-declared): a **bulk / all-positions** revaluation + a **period-close
-auto-hook** (one `(account, currency)` per call here); a **live FX rate feed**; a
-**configurable base currency**. The **realized** FX gain/loss on settlement that this
-increment deferred is delivered by the 10th increment (§ FX settlement).
+auto-hook** (one `(account, currency)` per call here); a **configurable base currency**. *(A **live
+FX rate feed** is now done — 23rd–25th increments; an omitted `closingRate` falls back to it.)* The
+**realized** FX gain/loss on settlement that this increment deferred is delivered by the 10th
+increment (§ FX settlement).
 
 ## FX settlement (tenth increment — TASK-FIN-BE-016)
 
@@ -1377,10 +1480,10 @@ tenant gate (parity with revaluation / manual posting).
 settlement unless the operator calls the endpoint). A settlement entry is **immutable** (F3) — a
 correction is a reversal or a re-establishing manual entry.
 
-**Deferred** (forward-declared): a **FIFO / lot-level** carrying basis (the 12th increment is
-weighted-average only); a **proceeds-amount input** (supply the *actual* base received instead of
-a rate); a **bulk / all-positions** settle; a **live FX rate feed**; a **configurable base
-currency**.
+**Deferred** (forward-declared): a **proceeds-amount input** (supply the *actual* base received
+instead of a rate); a **bulk / all-positions** settle; a **configurable base currency**. *(A **FIFO /
+lot-level** carrying basis [16th–18th increments] and a **live FX rate feed** [23rd–25th] were
+deferred here and are now done.)*
 
 ### Partial settlement (twelfth increment — TASK-FIN-BE-018)
 

@@ -612,16 +612,21 @@ and `stale=true` (operator sees both signals).
 ## Out of scope (forward-declared — later increments)
 
 - Manual-posting body-hash idempotency **conflict** (`IDEMPOTENCY_KEY_CONFLICT` 409 on
-  same-key/different-body — the 5th increment is replay-safe on the key alone); a
+  same-key/different-body — the manual-posting path is replay-safe on the key alone); a
   maker/checker **approval** workflow for manual entries; bulk multi-entry posting.
 - Period **reopen**; a "period must have ended (`to ≤ now`)" close policy.
-- GL/AP export endpoints (`finance.ledger.entry.posted.v1` — the increment that
-  introduces the outbox, and with it the deferred `finance.ledger.period.closed.v1`).
-- A **FIFO / lot-level** settlement carrying basis (the 12th increment settles a *portion* with a
-  **weighted-average** proportional carrying + a residual OPEN position; FIFO/lot cost basis is
-  forward-declared) + a **proceeds-amount input** (the 10th/12th derive proceeds from a
-  `settlementRate`; supplying the *actual* base received is forward-declared)
-  + a **bulk / all-positions** settlement/revaluation and a **period-close auto-hook** (the
-  9th/10th/12th increments act on one `(account, currency)` per call, operator-triggered) + a
-  **live FX rate feed** (rates are caller-supplied) + a **configurable base currency** (fixed KRW in v1)
-  + **multi-currency reconciliation** (cross-currency clearing-account matching).
+- A **proceeds-amount input** (the FX settlement derives proceeds from `settlementRate`; supplying
+  the *actual* base received is forward-declared) + a **bulk / all-positions** settlement/revaluation
+  + a **period-close auto-hook** (revaluation/settlement act on one `(account, currency)` per
+  operator call) + a **configurable base currency** (fixed KRW in v1).
+- **Reconciliation**: fuzzy / N:M / split matching; **per-currency-pair / per-account** FX-tolerance
+  granularity (a per-tenant tolerance is live — § 13th increment).
+- **FX rate feed (ADR-002 remainder)**: a **real public FX API provider schema** (`mode=http`
+  against an actual provider's response shape — the http adapter is wired, the provider contract is a
+  stub) + a `fx_rate_quote_history` append-only audit trail + a ShedLock single-leader poller guard.
+
+> **Now in scope (implemented — no longer forward-declared):** the GL/AP feed outbox
+> (`finance.ledger.{entry.posted,period.closed}.v1`) + reconciliation events; multi-currency +
+> cross-currency reconciliation (both directions); a **FIFO / lot-level** settlement carrying basis
+> (per-tenant + per-account cost-flow config §13, open-lots read §12) and the **live FX rate feed**
+> (omitted-rate fallback on `/revaluations` + `/settlements`, fx-rates read §14).

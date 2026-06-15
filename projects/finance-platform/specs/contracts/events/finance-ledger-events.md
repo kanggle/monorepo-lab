@@ -115,6 +115,12 @@ own consumer parses):
   (`sourceTransactionId` = the operator `reference`, `sourceEventId` =
   `settle:{Idempotency-Key}`) — the GL/AP feed sees the **realized** FX gain/loss + the base
   proceeds, the foreign position removed at its carrying value. No new topic.
+- **(ADR-002, 23rd–25th incr) FX rate feed = no event surface (net-zero on this contract).** The
+  live FX rate feed (`fx_rate_quote` cache + scheduled poller + omitted-rate settlement/revaluation
+  fallback + fx-rates read endpoint) is an **outbound HTTP** fetch plus a synchronous read — it
+  neither consumes nor publishes any Kafka event, so it adds **no** topic here by design. Operator
+  detail = `ledger-api.md § FX rates (read)`; provider / cache / poller detail = architecture.md
+  § FX rate feed.
 
 > **Outbox path (not the libs `OutboxWriter`).** ledger-service keeps the libs
 > `OutboxAutoConfiguration` excluded (its `ProcessedEventJpaEntity` would collide with
