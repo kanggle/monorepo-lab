@@ -181,6 +181,44 @@ management:
 server:
   port: 8080
 
+# TASK-BE-379: aggregated Swagger UI (single entry point for all downstream service docs).
+# OFF by default — prod-safe. The k8s/compose `prod` profile does not set the env, so a real
+# production gateway never exposes the service API specs. The local demo opts in with
+# GATEWAY_SWAGGER_AGGREGATION_ENABLED=true on the gateway container.
+gateway:
+  swagger-aggregation:
+    enabled: ${GATEWAY_SWAGGER_AGGREGATION_ENABLED:false}
+
+springdoc:
+  api-docs:
+    enabled: ${gateway.swagger-aggregation.enabled}
+  swagger-ui:
+    enabled: ${gateway.swagger-aggregation.enabled}
+    path: /swagger-ui.html
+    # Service dropdown — each url is proxied to the downstream /v3/api-docs by
+    # SwaggerAggregationConfig (registered only when aggregation is enabled).
+    urls:
+      - name: product-service
+        url: /api-docs/product-service
+      - name: user-service
+        url: /api-docs/user-service
+      - name: search-service
+        url: /api-docs/search-service
+      - name: order-service
+        url: /api-docs/order-service
+      - name: payment-service
+        url: /api-docs/payment-service
+      - name: shipping-service
+        url: /api-docs/shipping-service
+      - name: review-service
+        url: /api-docs/review-service
+      - name: promotion-service
+        url: /api-docs/promotion-service
+      - name: notification-service
+        url: /api-docs/notification-service
+      - name: settlement-service
+        url: /api-docs/settlement-service
+
 ecommerce:
   # TASK-MONO-027: OIDC Resource Server validators.
   # Consumed by OAuth2ResourceServerConfig + TenantClaimValidator +
