@@ -8,6 +8,7 @@ import com.wms.outbound.domain.exception.OutboundDomainException;
 import com.wms.outbound.domain.exception.PackingUnitNotFoundException;
 import com.wms.outbound.domain.exception.PickingRequestNotFoundException;
 import com.wms.outbound.domain.exception.ShipmentNotFoundException;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -36,33 +37,41 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    // ---- 404 -------------------------------------------------------------
+    /**
+     * Domain exception → HTTP status override. Most {@link OutboundDomainException}s are
+     * business-rule violations → 422 (the default in {@link #handleDomain}, covering e.g.
+     * {@code OrderAlreadyShippedException}); this table lists only the exceptions that map
+     * elsewhere (404 lookups, 409 duplicates). {@link ExternalServiceUnavailableException}
+     * is handled separately (503, with vendor logging). Keyed on the exact concrete class.
+     */
+    private static final Map<Class<? extends OutboundDomainException>, HttpStatus> DOMAIN_STATUS = Map.of(
+            OrderNotFoundException.class, HttpStatus.NOT_FOUND,
+            PickingRequestNotFoundException.class, HttpStatus.NOT_FOUND,
+            PackingUnitNotFoundException.class, HttpStatus.NOT_FOUND,
+            ShipmentNotFoundException.class, HttpStatus.NOT_FOUND,
+            OrderNoDuplicateException.class, HttpStatus.CONFLICT);
 
-    @ExceptionHandler(OrderNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleOrderNotFound(OrderNotFoundException e) {
-        return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
+    @ExceptionHandler(OutboundDomainException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleDomain(OutboundDomainException e) {
+        HttpStatus status = DOMAIN_STATUS.getOrDefault(e.getClass(), HttpStatus.UNPROCESSABLE_ENTITY);
+        return body(status, e.errorCode(), e.getMessage());
     }
 
-    @ExceptionHandler(PickingRequestNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handlePickingRequestNotFound(PickingRequestNotFoundException e) {
-        return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(PackingUnitNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handlePackingUnitNotFound(PackingUnitNotFoundException e) {
-        return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
-    }
-
-    @ExceptionHandler(ShipmentNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleShipmentNotFound(ShipmentNotFoundException e) {
-        return body(HttpStatus.NOT_FOUND, e.errorCode(), e.getMessage());
-    }
-
-    // ---- 409 -------------------------------------------------------------
-
-    @ExceptionHandler(OrderNoDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleOrderNoDuplicate(OrderNoDuplicateException e) {
-        return body(HttpStatus.CONFLICT, e.errorCode(), e.getMessage());
+    /**
+     * External vendor (TMS, ERP webhook out, etc.) unreachable / circuit-open
+     * / retry-exhausted. Mapped to 503 per {@code platform/error-handling.md}
+     * (registered globally for {@code integration-heavy} trait). Specific subtype
+     * handler — takes precedence over {@link #handleDomain} (which would default it to 422).
+     *
+     * <p>The {@code RetryTmsNotificationService} catches this internally for
+     * the manual-retry endpoint (returning 200 with the failed snapshot per
+     * {@code outbound-service-api.md} §4.3), so this handler is the
+     * defensive fallback for any other path that lets it escape.
+     */
+    @ExceptionHandler(ExternalServiceUnavailableException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleExternalUnavailable(ExternalServiceUnavailableException e) {
+        log.warn("external_service_unavailable vendor={} reason={}", e.getVendor(), e.getMessage());
+        return body(HttpStatus.SERVICE_UNAVAILABLE, e.errorCode(), e.getMessage());
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
@@ -78,39 +87,6 @@ public class GlobalExceptionHandler {
         return body(HttpStatus.CONFLICT, "CONFLICT",
                 "Resource already exists or violates a constraint");
     }
-
-    // ---- 503 — upstream/integration unavailable -------------------------
-
-    /**
-     * External vendor (TMS, ERP webhook out, etc.) unreachable / circuit-open
-     * / retry-exhausted. Mapped to 503 per {@code platform/error-handling.md}
-     * (registered globally for {@code integration-heavy} trait).
-     *
-     * <p>The {@code RetryTmsNotificationService} catches this internally for
-     * the manual-retry endpoint (returning 200 with the failed snapshot per
-     * {@code outbound-service-api.md} §4.3), so this handler is the
-     * defensive fallback for any other path that lets it escape.
-     */
-    @ExceptionHandler(ExternalServiceUnavailableException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleExternalUnavailable(ExternalServiceUnavailableException e) {
-        log.warn("external_service_unavailable vendor={} reason={}", e.getVendor(), e.getMessage());
-        return body(HttpStatus.SERVICE_UNAVAILABLE, e.errorCode(), e.getMessage());
-    }
-
-    // ---- 422 — domain rule violations -----------------------------------
-
-    /**
-     * Catch-all for all {@link OutboundDomainException} subclasses → 422 with the
-     * granular contract-defined error code.  Covers every concrete subtype including
-     * {@code OrderAlreadyShippedException} (identical response shape — no dedicated
-     * handler needed).
-     */
-    @ExceptionHandler(OutboundDomainException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleDomain(OutboundDomainException e) {
-        return body(HttpStatus.UNPROCESSABLE_ENTITY, e.errorCode(), e.getMessage());
-    }
-
-    // ---- 403 / 400 / 500 -------------------------------------------------
 
     @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
     public ResponseEntity<ApiErrorEnvelope> handleForbidden(RuntimeException e) {

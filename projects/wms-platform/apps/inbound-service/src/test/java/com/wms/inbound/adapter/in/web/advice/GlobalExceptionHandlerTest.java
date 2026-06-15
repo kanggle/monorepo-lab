@@ -57,7 +57,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void asnNotFound_returns404_withCode_ASN_NOT_FOUND() {
         ResponseEntity<ApiErrorEnvelope> resp =
-                handler.handleAsnNotFound(new AsnNotFoundException(ANY_UUID));
+                handler.handleDomainException(new AsnNotFoundException(ANY_UUID));
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(resp.getBody().code()).isEqualTo("ASN_NOT_FOUND");
     }
@@ -65,7 +65,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void inspectionNotFound_returns404_withCode_INSPECTION_NOT_FOUND() {
         ResponseEntity<ApiErrorEnvelope> resp =
-                handler.handleInspectionNotFound(new InspectionNotFoundException(ANY_UUID));
+                handler.handleDomainException(new InspectionNotFoundException(ANY_UUID));
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(resp.getBody().code()).isEqualTo("INSPECTION_NOT_FOUND");
     }
@@ -73,7 +73,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void putawayInstructionNotFound_returns404_withCode_PUTAWAY_INSTRUCTION_NOT_FOUND() {
         ResponseEntity<ApiErrorEnvelope> resp =
-                handler.handlePutawayInstructionNotFound(
+                handler.handleDomainException(
                         new PutawayInstructionNotFoundException(ANY_UUID));
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(resp.getBody().code()).isEqualTo("PUTAWAY_INSTRUCTION_NOT_FOUND");
@@ -82,7 +82,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void putawayLineNotFound_returns404_withCode_PUTAWAY_LINE_NOT_FOUND() {
         ResponseEntity<ApiErrorEnvelope> resp =
-                handler.handlePutawayLineNotFound(new PutawayLineNotFoundException(ANY_UUID));
+                handler.handleDomainException(new PutawayLineNotFoundException(ANY_UUID));
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(resp.getBody().code()).isEqualTo("PUTAWAY_LINE_NOT_FOUND");
     }
@@ -94,7 +94,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void asnNoDuplicate_returns409_withCode_ASN_NO_DUPLICATE() {
         ResponseEntity<ApiErrorEnvelope> resp =
-                handler.handleAsnDuplicate(new AsnNoDuplicateException("ASN-001"));
+                handler.handleDomainException(new AsnNoDuplicateException("ASN-001"));
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(resp.getBody().code()).isEqualTo("ASN_NO_DUPLICATE");
     }

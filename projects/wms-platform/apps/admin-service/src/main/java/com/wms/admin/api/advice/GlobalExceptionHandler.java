@@ -40,83 +40,36 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    // ----- 404 ----------------------------------------------------------------
-
-    @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleUserNotFound(UserNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(RoleNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleRoleNotFound(RoleNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(AssignmentNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleAssignmentNotFound(AssignmentNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(SettingNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleSettingNotFound(SettingNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    @ExceptionHandler(AlertNotFoundException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleAlertNotFound(AlertNotFoundException ex) {
-        return build(HttpStatus.NOT_FOUND, ex);
-    }
-
-    // ----- 409 ----------------------------------------------------------------
-
-    @ExceptionHandler(UserEmailDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleUserEmailDuplicate(UserEmailDuplicateException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    @ExceptionHandler(RoleCodeDuplicateException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleRoleCodeDuplicate(RoleCodeDuplicateException ex) {
-        return build(HttpStatus.CONFLICT, ex);
-    }
-
-    // ----- 422 ----------------------------------------------------------------
-
-    @ExceptionHandler(UserHasActiveAssignmentsException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleUserHasActive(UserHasActiveAssignmentsException ex) {
-        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex);
-    }
-
-    @ExceptionHandler(RoleInUseException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleRoleInUse(RoleInUseException ex) {
-        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex);
-    }
-
-    @ExceptionHandler(RoleBuiltinImmutableException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleRoleBuiltin(RoleBuiltinImmutableException ex) {
-        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex);
-    }
-
-    @ExceptionHandler(SettingImmutableFieldException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleSettingImmutable(SettingImmutableFieldException ex) {
-        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex);
-    }
-
-    @ExceptionHandler(StateTransitionInvalidException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleStateTransition(StateTransitionInvalidException ex) {
-        return build(HttpStatus.UNPROCESSABLE_ENTITY, ex);
-    }
-
-    // ----- 400 ----------------------------------------------------------------
-
-    @ExceptionHandler(SettingValidationErrorException.class)
-    public ResponseEntity<ApiErrorEnvelope> handleSettingValidation(SettingValidationErrorException ex) {
-        return build(HttpStatus.BAD_REQUEST, ex);
-    }
+    /**
+     * Concrete domain exception → HTTP status (per {@code platform/error-handling.md § Admin}).
+     * Replaces one-{@code @ExceptionHandler}-per-type boilerplate with a single explicit table;
+     * the body is always {@code ApiErrorEnvelope.of(code, message)} via {@link #build}. Keyed on
+     * the exact concrete class (each a direct {@link AdminDomainException} subclass). Unmapped
+     * domain exceptions fall through to 500 + a warn (see {@link #handleDomain}).
+     */
+    private static final Map<Class<? extends AdminDomainException>, HttpStatus> DOMAIN_STATUS = Map.ofEntries(
+            Map.entry(UserNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(RoleNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(AssignmentNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(SettingNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(AlertNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(UserEmailDuplicateException.class, HttpStatus.CONFLICT),
+            Map.entry(RoleCodeDuplicateException.class, HttpStatus.CONFLICT),
+            Map.entry(UserHasActiveAssignmentsException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(RoleInUseException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(RoleBuiltinImmutableException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(SettingImmutableFieldException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(StateTransitionInvalidException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(SettingValidationErrorException.class, HttpStatus.BAD_REQUEST));
 
     @ExceptionHandler(AdminDomainException.class)
     public ResponseEntity<ApiErrorEnvelope> handleDomain(AdminDomainException ex) {
-        log.warn("Unmapped admin domain exception: {} — {}", ex.getCode(), ex.getMessage());
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex);
+        HttpStatus status = DOMAIN_STATUS.get(ex.getClass());
+        if (status == null) {
+            log.warn("Unmapped admin domain exception: {} — {}", ex.getCode(), ex.getMessage());
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        return build(status, ex);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

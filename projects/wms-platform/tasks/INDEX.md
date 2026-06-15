@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-391-wms-exception-handler-status-map-collapse.md` — **REVIEW**. Collapse the per-entity `@ExceptionHandler` boilerplate in all 5 WMS `GlobalExceptionHandler`s (master/admin/inbound/outbound/inventory) into a single domain-exception dispatcher backed by a `Class→HttpStatus` map. Behavior-preserving (exact status + body kept; two default variants 500-warn vs 422 preserved; special framework handlers untouched; inventory redundant-422 handlers collapsed). **Net −153 LOC**, no domain/contract change. `:test` GREEN all 5 (Docker-free). F3 finding from the 2026-06-15 WMS refactor recon (F1/F4 deferred=shared-lib, F2 declined=HARDSTOP-03). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 ## done
 
