@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-031-asn-response-decimal-conformance.md` — **REVIEW (2026-06-15, fix surfaced by SCM-BE-030 refactor-code discovery)**. **(1) AsnResponse decimal conformance** — `AsnResponse.LineResponse.quantityShipped`/`quantityReceived` were plain `BigDecimal` (Jackson → JSON numbers) but `procurement-api.md` quotes ASN line qty as decimal **strings** (`"5.0000"`); same gap BE-020 fixed for `PurchaseOrderResponse`, missed for ASN. Added `@JsonFormat(shape=STRING)` to both line fields + `AsnWebhookControllerSliceTest` regression (`$.data.lines[0].quantityShipped` = `instanceOf(String.class)` + `"5.00"`). Code-to-contract conformance (no contract edit). **(2) cosmetic** — IVS `InventoryVisibilityController` `/nodes` inline FQN `NodeResponse` (3×) → normal import (identical bytecode). No Flyway/event/ADR change; both services' `:test` green; PROJECT.md frontmatter byte-unchanged. 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

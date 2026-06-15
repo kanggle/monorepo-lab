@@ -1,6 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.adapter.inbound.web;
 
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.ApiEnvelope;
+import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.NodeResponse;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.PageResponse;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.SkuBreakdownResponse;
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.SnapshotResponse;
@@ -140,12 +141,12 @@ public class InventoryVisibilityController {
      * GET /api/inventory-visibility/nodes — node list + status.
      */
     @GetMapping("/nodes")
-    public ResponseEntity<ApiEnvelope<List<com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.NodeResponse>>> getNodes(
+    public ResponseEntity<ApiEnvelope<List<NodeResponse>>> getNodes(
             @AuthenticationPrincipal Jwt jwt) {
         String tenantId = TenantClaimExtractor.extractTenantId(jwt);
-        List<com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.NodeResponse> nodes =
+        List<NodeResponse> nodes =
                 applicationService.getNodes(tenantId).stream()
-                        .map(com.example.scmplatform.inventoryvisibility.adapter.inbound.web.dto.NodeResponse::from)
+                        .map(NodeResponse::from)
                         .toList();
         return ResponseEntity.ok(ApiEnvelope.of(nodes));
     }
