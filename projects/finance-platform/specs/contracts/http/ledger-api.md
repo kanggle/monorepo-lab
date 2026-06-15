@@ -535,6 +535,60 @@ non-existent override is a `200` no-op (`cleared: false`), **not** a 404. Audite
 
 ---
 
+## § FX rates (read) — 14. GET `/api/finance/ledger/fx-rates`
+
+**(25th increment — TASK-FIN-BE-033)** Read-only surface over the `fx_rate_quote` cache
+(ADR-002 D2 — populated by the FX rate feed poller, FIN-BE-031). Exposes the current contents
+of the cache so an operator can verify what rate the settlement / revaluation feed fallback would
+apply and how fresh each pair's quote is. **No tenant filter** — market rates are tenant-agnostic
+(`fx_rate_quote` has no `tenant_id` column). No `Idempotency-Key`.
+
+`200` — top-level `feedEnabled` flag + ordered list of cached quotes:
+```json
+{ "data": {
+    "feedEnabled": true,
+    "rates": [
+      { "baseCurrency": "KRW", "foreignCurrency": "EUR",
+        "rate": "14.20000000",
+        "asOf": "2026-06-15T06:00:00Z",
+        "source": "stub",
+        "fetchedAt": "2026-06-15T06:00:05Z",
+        "ageSeconds": 21600,
+        "stale": false },
+      { "baseCurrency": "KRW", "foreignCurrency": "USD",
+        "rate": "13.50000000",
+        "asOf": "2026-06-13T06:00:00Z",
+        "source": "http:provider",
+        "fetchedAt": "2026-06-13T06:00:03Z",
+        "ageSeconds": 180000,
+        "stale": true }
+    ]
+  }, "meta": { "timestamp": "..." } }
+```
+
+Field semantics:
+- `feedEnabled` — mirrors `FxRateFeedSettings.feedEnabled()` (the master gate for the operator's
+  omitted-rate fallback, FIN-BE-032). An operator should read `feedEnabled=false` as "the cache
+  may contain stale rows but the settlement/revaluation fallback is OFF".
+- `rates` — sorted `(baseCurrency, foreignCurrency)` ASC; may be empty (feed never polled or
+  disabled — 200 with `rates: []`, not 404).
+- `rate` — exact decimal string (F5 — consistent with `settlementRate`/`closingRate`; NOT a float).
+- `asOf` — provider-stated rate instant; the staleness basis.
+- `fetchedAt` — when the quote was pulled from the provider.
+- `ageSeconds` — `now − asOf` in whole seconds. May be negative on clock skew (not clamped —
+  diagnostic transparency).
+- `stale` — `true` when `now − asOf > staleAfter` (same boundary as FIN-BE-032
+  `ResolveEffectiveFxRate`; `now − asOf == staleAfter` is **fresh**).
+
+Empty cache (feed never polled / disabled) → `200` with `rates: []` + `feedEnabled` from config
+(not 404 — AC-1). Feed disabled + stale rows present → quotes returned with `feedEnabled=false`
+and `stale=true` (operator sees both signals).
+
+- `401 / 403` when unauthenticated or the JWT is rejected (same `.authenticated()` chain as all
+  other ledger endpoints; the path falls under `/api/finance/**`).
+
+---
+
 ## Error codes (this contract → `platform/error-handling.md`)
 
 | Code | HTTP | Meaning |

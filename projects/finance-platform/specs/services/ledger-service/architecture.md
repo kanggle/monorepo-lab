@@ -1764,6 +1764,19 @@ ShedLock single-leader guard in this service (ADR-002 D4's "ShedLock" is a sketc
 change** — the external channel is outbound, recorded here in architecture only (ledger-api.md
 unchanged).
 
+**Operator read surface (twenty-fifth increment — TASK-FIN-BE-033).** `GET
+/api/finance/ledger/fx-rates` exposes the live `fx_rate_quote` cache contents to authenticated
+operators — no tenant filter (the table is tenant-agnostic). The response carries each pair's
+`rate` (exact decimal string, F5), `asOf` / `fetchedAt` (ISO-8601 instants), `ageSeconds`
+(`now − asOf`, may be negative on clock skew — not clamped), `stale` (same boundary as
+`ResolveEffectiveFxRate`: `now − asOf > staleAfter` → stale; `==` is **fresh**), and a
+top-level `feedEnabled` flag (mirrors `FxRateFeedSettings.feedEnabled()` — lets the operator
+distinguish "disabled feed" from "enabled but not yet polled"). Empty cache → 200 with
+`rates: []` (not 404). **Pure read / net-zero / no migration**: `GetFxRatesUseCase`
+(`@Transactional(readOnly=true)`) + `FxRateController` (`/api/finance/ledger/fx-rates`
+falls under the existing `/api/finance/**` `.authenticated()` rule — no new security config).
+Formal contract → `ledger-api.md § FX rates (read)`.
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):
