@@ -293,6 +293,21 @@ SETTLED
 | SYSTEM | RECEIVED | SETTLED |
 | SYSTEM | SETTLED | CLOSED |
 
+> **Actor derivation (roles-only).** The `BUYER` / `OPERATOR` `ActorType` of a
+> REST-driven transition is derived from the verified JWT `roles` claim, **not**
+> from an `account_type` claim or an OAuth scope. `ActorContextJwtAuthenticationConverter`
+> lifts `roles`/`role` (+ `sub` + `tenant_id`) into `ActorContext`, and
+> `ActorContext.isOperator()` returns true iff `roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN}`
+> → `ActorType.OPERATOR`, otherwise the caller maps to `ActorType.BUYER`
+> (`ActorContext.actorType()`). This is the roles-only identity model
+> (ADR-MONO-032 D3 / ADR-MONO-035; the `account_type` claim and `X-Account-Type`
+> header were removed and the gateways made role-based by TASK-MONO-262 — the scm
+> code carries **zero** `account_type` references and the scm gateway admits on
+> `tenant_id`, never `account_type`). `SUPPLIER` (webhook) and `SYSTEM`
+> (internal/settlement) actors are **not** token-derived. Tenant admission is the
+> separate entitlement-trust gate below (§ Multi-tenancy); the actor split only
+> decides which transitions a tenant-admitted token may drive.
+
 ### State transition history
 
 Every transition writes a `po_status_history` row inside the same transaction

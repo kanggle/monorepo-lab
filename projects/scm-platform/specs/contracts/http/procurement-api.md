@@ -11,6 +11,26 @@ All non-webhook endpoints:
 - Success envelope: `{ data, meta: { timestamp, ... } }`.
 - Error envelope: `{ code, message, details?, timestamp }`.
 
+### Actor model (roles-only)
+
+The PO **actor** (`BUYER` / `OPERATOR`) is derived from the verified JWT
+`roles` claim — **not** from an OAuth scope and **not** from a separate
+account-type claim. Per the roles-only identity model (ADR-MONO-032 D3 /
+ADR-MONO-035; the `account_type` claim/`X-Account-Type` header were removed and
+the gateways made role-based by TASK-MONO-262), `procurement-service` maps the
+token to an actor via `ActorContext.isOperator()`:
+
+- `roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN}` → **OPERATOR** actor.
+- any other authenticated caller → **BUYER** actor (the default mapping; BUYER
+  is not a registered scope or account type).
+
+scm's only OAuth **scopes** remain `scm.read` / `scm.write` (see
+[`iam-integration.md`](../../integration/iam-integration.md) § Scopes); they
+gate read-vs-write, orthogonal to the BUYER/OPERATOR actor split. Tenant
+admission (`tenant_id ∈ {scm, *}` ∪ signed `entitled_domains ∋ scm`, ADR-MONO-019)
+is a third, separate axis. `SUPPLIER` / `SYSTEM` actors are not token-derived
+(webhook callers / internal transitions).
+
 Webhook endpoints (`/api/procurement/webhooks/**`):
 - Public (no JWT) — supplier callers have no IAM identity.
 - Verified by `X-Supplier-Signature: <shared-secret>` header (v1 simple
@@ -147,7 +167,7 @@ Failure of the supplier call rolls back the transition (Failure Mode #5 /
 Edge Case #7 in architecture.md) — the PO stays `DRAFT` for retry.
 
 **Headers:**
-- `Authorization: Bearer <token>` (BUYER or OPERATOR scope)
+- `Authorization: Bearer <token>` (BUYER or OPERATOR actor — see § Actor model)
 - `Idempotency-Key: <string>` (required)
 
 **Request body:** none.
@@ -162,7 +182,9 @@ Edge Case #7 in architecture.md) — the PO stays `DRAFT` for retry.
 
 ## POST /api/procurement/po/{poId}/confirm
 
-Transition `ACKNOWLEDGED → CONFIRMED`. OPERATOR actor only.
+Transition `ACKNOWLEDGED → CONFIRMED`. OPERATOR actor only (i.e. the token's
+`roles` claim must contain `OPERATOR`/`ADMIN`/`SUPER_ADMIN` — `ActorContext.isOperator()`;
+see § Actor model).
 
 **Headers:** same as submit.
 
@@ -178,7 +200,8 @@ Transition `ACKNOWLEDGED → CONFIRMED`. OPERATOR actor only.
 ## POST /api/procurement/po/{poId}/cancel
 
 Transition any of `DRAFT / SUBMITTED / ACKNOWLEDGED → CANCELED`. BUYER or
-OPERATOR. CONFIRMED+ POs cannot be canceled in v1 (corrective tasks deferred).
+OPERATOR actor (see § Actor model). CONFIRMED+ POs cannot be canceled in v1
+(corrective tasks deferred).
 
 **Request body (optional):**
 ```json

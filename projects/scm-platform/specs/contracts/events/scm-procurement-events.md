@@ -168,6 +168,10 @@ Triggered when a supplier-ack webhook flips the PO `SUBMITTED → ACKNOWLEDGED`.
 ### scm.procurement.po.confirmed
 
 Triggered when an operator confirms an ACKNOWLEDGED PO (`ACKNOWLEDGED → CONFIRMED`).
+The OPERATOR/BUYER actor behind `actorAccountId` is the roles-derived `ActorType`
+(token `roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN}` → `ActorContext.isOperator()`,
+ADR-MONO-032/035 roles-only model) — no separate actor-type field is emitted; the
+value is the actor's `sub`.
 
 **Additional payload fields:**
 
