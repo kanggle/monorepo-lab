@@ -6,8 +6,8 @@ Two ecommerce services subscribe to **wms-platform** return-leg events to close 
 
 - `shipping-service` — advances the Shipping record (`PREPARING → SHIPPED`) on ship, and
   raises an ops alert on backorder (replacing today's manual-admin step).
-- `order-service` — **v2(a), TASK-MONO-197**: on the backorder/cancel signal, auto-cancels the
-  Order and triggers the existing refund saga (see § order-service consumer below).
+- `order-service` — on the backorder/cancel signal, auto-cancels the Order and triggers
+  the existing refund saga (see § order-service consumer below). **(implemented, TASK-MONO-197)**
 
 The authoritative envelope + payload schemas live in the **producing service** (wms):
 `projects/wms-platform/specs/contracts/events/outbound-events.md`.
@@ -18,7 +18,7 @@ The authoritative envelope + payload schemas live in the **producing service** (
 
 - `shipping-service-wms` — distinct from the `shipping-service` group used for ecommerce-internal
   topics, so wms-leg offsets/rebalancing are independent.
-- `order-service-wms` (v2(a), TASK-MONO-197) — distinct from the `order-service` group used for
+- `order-service-wms` (implemented, TASK-MONO-197) — distinct from the `order-service` group used for
   ecommerce-internal topics, so the wms backorder leg has independent offsets. Both groups receive
   `wms.outbound.order.cancelled.v1` (different groups ⇒ independent delivery).
 
@@ -28,7 +28,7 @@ The authoritative envelope + payload schemas live in the **producing service** (
 |---|---|---|---|
 | `wms.outbound.shipping.confirmed.v1` | `outbound.shipping.confirmed` | `WmsShippingConfirmedConsumer` (`shipping-service-wms`) | Shipping `PREPARING → SHIPPED` with `trackingNumber = shipmentNo`, `carrier = carrierCode`; existing `ShippingStatusChanged` then drives order-service `Order → SHIPPED`. |
 | `wms.outbound.order.cancelled.v1` | `outbound.order.cancelled` | `WmsOutboundCancelledConsumer` (`shipping-service-wms`) | Backorder/cancel path: ops alert; Shipping stays `PREPARING`-flagged (no Shipping row typically exists yet at backorder time). Unchanged from MONO-196. |
-| `wms.outbound.order.cancelled.v1` | `outbound.order.cancelled` | `WmsOutboundCancelledConsumer` (`order-service-wms`, **v2(a)**) | Locate Order by `orderId == orderNo`; if cancellable (PENDING/CONFIRMED) → `Order → CANCELLED` (system-initiated) → emit `order.cancelled` → existing `payment-service` refund + `promotion-service` coupon-restore fan-out. Status-safe + idempotent (see § order-service consumer). |
+| `wms.outbound.order.cancelled.v1` | `outbound.order.cancelled` | `WmsOutboundCancelledConsumer` (`order-service-wms`, implemented) | Locate Order by `orderId == orderNo`; if cancellable (PENDING/CONFIRMED) → `Order → CANCELLED` (system-initiated) → emit `order.cancelled` → existing `payment-service` refund + `promotion-service` coupon-restore fan-out. Status-safe + idempotent (see § order-service consumer). |
 
 ## Envelope — **wms convention (camelCase)**
 
@@ -69,7 +69,7 @@ the consumer logs + DLTs; it does not guess.)
 }
 ```
 
-## order-service consumer (v2(a), TASK-MONO-197)
+## order-service consumer (implemented, TASK-MONO-197)
 
 `order-service` consumes `wms.outbound.order.cancelled.v1` (group `order-service-wms`) and
 auto-cancels the Order, realizing ADR-022 §D4 v2(a). It builds **no new refund machinery** — it

@@ -20,7 +20,7 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/order-service/` |
 | Data store | PostgreSQL (owned) |
 | Event publication | Kafka via outbox (order.* lifecycle events, ADR-MONO-005 Category A) |
-| Event consumption | `UserWithdrawn` from `user.user.withdrawn`, `StockChanged` from `product.product.stock-changed`, `PaymentCompleted` / `PaymentRefunded` from `payment.payment.*` (saga participation, ADR-MONO-005 Category A) |
+| Event consumption | `UserWithdrawn` from `user.user.withdrawn`, `StockChanged` from `product.product.stock-changed`, `PaymentCompleted` / `PaymentRefunded` from `payment.payment.*` (saga participation, ADR-MONO-005 Category A); `wms.outbound.order.cancelled.v1` (WmsOutboundCancelledConsumer, consumer group `order-service-wms`, ADR-022 §D4) |
 
 ### Service Type Composition
 
