@@ -4,8 +4,6 @@ import com.example.finance.ledger.application.ResolveEffectiveFxRate.ResolvedFxR
 import com.example.finance.ledger.application.port.outbound.ClockPort;
 import com.example.finance.ledger.application.port.outbound.ProcessedEventStore;
 import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
-import com.example.finance.ledger.domain.error.LedgerErrors.IdempotencyKeyRequiredException;
-import com.example.finance.ledger.domain.error.LedgerErrors.JournalEntryNotFoundException;
 import com.example.finance.ledger.domain.journal.FxPositionLot;
 import com.example.finance.ledger.domain.journal.FxRevaluationPolicy;
 import com.example.finance.ledger.domain.journal.FxRevaluationPolicy.RevaluationResult;
@@ -25,7 +23,6 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * FX gain/loss revaluation use case (9th increment, TASK-FIN-BE-015 — architecture.md
@@ -50,8 +47,6 @@ public class RevalueForeignBalanceUseCase {
 
     static final String DEDUPE_PREFIX = "reval:";
     static final String DEDUPE_TOPIC = "fx-revaluation";
-    /** Max client key length — {@code "reval:" + key} (56) must fit the 64-char column. */
-    static final int MAX_KEY_LENGTH = 50;
 
     private final JournalRepository journalRepository;
     private final ProcessedEventStore processedEventStore;
@@ -87,23 +82,15 @@ public class RevalueForeignBalanceUseCase {
     @Transactional
     public Result revalue(RevalueForeignBalanceCommand cmd) {
         String key = cmd.idempotencyKey();
-        if (key == null || key.isBlank()) {
-            throw new IdempotencyKeyRequiredException("Idempotency-Key header is required");
-        }
-        if (key.length() > MAX_KEY_LENGTH) {
-            throw new IdempotencyKeyRequiredException(
-                    "Idempotency-Key must be at most " + MAX_KEY_LENGTH + " characters");
-        }
+        LedgerWriteSupport.validateIdempotencyKey(key);
         String dedupeKey = DEDUPE_PREFIX + key;
 
         // (1) Idempotent replay — the key was already processed; return the original
         //     entry (no re-post). The unique constraint on processed_events makes a
         //     concurrent double-submit race-safe (the loser lands here).
         if (processedEventStore.isProcessed(dedupeKey)) {
-            JournalEntry original = journalRepository
-                    .findBySourceEventId(dedupeKey, cmd.tenantId())
-                    .orElseThrow(() -> new JournalEntryNotFoundException(
-                            "revaluation entry for idempotency key not found (replay): " + dedupeKey));
+            JournalEntry original = LedgerWriteSupport.requireReplayEntry(
+                    journalRepository, dedupeKey, cmd.tenantId(), "revaluation");
             return Result.noOp(NoOpReason.REPLAY, original);
         }
 
@@ -152,15 +139,16 @@ public class RevalueForeignBalanceUseCase {
         //     here; audit actor = operator subject; entry.posted outbox append with
         //     sourceType = REVALUATION).
         Instant postedAt = cmd.postedAt() != null ? cmd.postedAt() : clock.now();
-        JournalEntry entry = JournalEntry.post(newEntryId(), cmd.tenantId(), postedAt,
+        JournalEntry entry = JournalEntry.post(LedgerWriteSupport.newEntryId(), cmd.tenantId(), postedAt,
                 SourceRef.ofRevaluation(cmd.reference(), dedupeKey), result.lines());
         processedEventStore.markProcessed(dedupeKey, cmd.tenantId(), DEDUPE_TOPIC,
                 entry.source().getSourceTransactionId(), clock.now());
         // Audit reason: byte-identical to the manual path (fromFeed=false) — the feed source is
         // appended ONLY when the rate came from the cache (AC-2 traceability; net-zero on manual).
+        String reason = LedgerWriteSupport.auditReason(cmd.memo(), cmd.reference(), "FX revaluation");
         String auditReason = rate.fromFeed()
-                ? reason(cmd) + " [fx-rate " + rate.sourceDescription() + "]"
-                : reason(cmd);
+                ? reason + " [fx-rate " + rate.sourceDescription() + "]"
+                : reason;
         JournalEntry posted = postJournalEntryUseCase.post(entry, auditReason, cmd.operatorSubject());
 
         // (6) Lot carrying distribution (18th increment — TASK-FIN-BE-026, ADR-001 D4-a).
@@ -237,19 +225,5 @@ public class RevalueForeignBalanceUseCase {
             }
         }
         return marks;
-    }
-
-    private static String reason(RevalueForeignBalanceCommand cmd) {
-        if (cmd.memo() != null && !cmd.memo().isBlank()) {
-            return cmd.memo();
-        }
-        if (cmd.reference() != null && !cmd.reference().isBlank()) {
-            return cmd.reference();
-        }
-        return "FX revaluation";
-    }
-
-    private static String newEntryId() {
-        return UUID.randomUUID().toString();
     }
 }
