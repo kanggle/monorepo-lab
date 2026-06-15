@@ -1,6 +1,6 @@
 # TASK-MONO-273 — ADR-MONO-038 M1: build the shared Idempotency-Key filter abstraction in `libs/java-web-servlet`
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — additive `libs/java-web-servlet` change; lib-only, no service migration)
 
