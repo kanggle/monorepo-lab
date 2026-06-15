@@ -97,6 +97,8 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
 5. **Scope 검증** — 다운스트림 service 의 `SecurityConfig` 가 `X-Scopes` 헤더 또는 SecurityContext 의 `Jwt.getClaimAsString("scope")` 로 enforce.
 6. **internal-only 경계** — 외부(비-내부망·비-SSO) 트래픽은 게이트웨이/네트워크 정책에서 거부 (도메인 룰 E7).
 
+> **운영자 도메인 role 의 출처 (roles-only 모델)**: ADR-MONO-032 (통합 identity — `roles` 가 유일한 인가 축) + ADR-MONO-035 (operator 인증 통합) 로 `account_type` claim/column/gateway-leg 는 전부 제거되었다 (ADR-032 D5 step 4 + step 5, COMPLETE 2026-06-15). 운영자의 erp 도메인 인가는 JWT `roles` claim 을 타며, 운영자의 도메인 role 은 **assume-tenant 교환 시 IAM 이 선택 tenant 의 entitled domains 에서 파생**한다 (`erp → ERP_OPERATOR`, `OperatorRoleDerivation`; ADR-MONO-035 O1 / step 4a) — 운영자의 assignment 를 fail-closed 로 검증한 뒤 가산된다. erp 서비스의 `isOperator()` 는 이 `roles ∋ ERP_OPERATOR`/`ERP_ADMIN`/`SUPER_ADMIN` 를 읽는다. (erp 코드는 이미 roles 기반 — `account_type` 참조 0; 본 모델은 IAM 발행 측이 권위, erp 는 소비만 한다.)
+
 ---
 
 ## platform-console Operator Read Consumer (ADR-MONO-013)

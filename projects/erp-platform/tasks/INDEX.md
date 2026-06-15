@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-021-roles-only-operator-spec-alignment.md` — **REVIEW**. Doc-only, net-zero spec alignment: brings the erp service specs into conformance with the roles-only identity model (ADR-MONO-032 D5 step 4/5 `account_type` removal + ADR-MONO-035 O1/4a operator domain-role derivation at assume-tenant, `erp → ERP_OPERATOR`). erp **code was already roles-based** (`isOperator()` = `ERP_OPERATOR`/`ERP_ADMIN`/`SUPER_ADMIN`; zero `account_type` in app code) — drift was purely in specs. Edits: masterdata architecture (drop literal `account_type=OPERATOR` v1-bridge framing + fix the entitlement-trust rationale ADR-035 inverted) + approval/notification/read-model Security sections (document the `ERP_OPERATOR` role source) + iam-integration.md (record operator domain-role derivation). No code / contract / Flyway / ADR-decision change. 분석=Opus 4.8 / 구현=Opus (doc-only). [[project_adr032_unified_identity_roles]]
 
 ## done
 

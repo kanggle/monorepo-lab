@@ -240,7 +240,11 @@ org-view returns the employee with the unresolved reference fields `null` +
   dual-accept gate; the decode validator and the filter are **independent gates
   and both dual-accept** (each carries its own local `isEntitled` helper).
 - READ authorization gate (`RoleScopeAuthorizationAdapter`-equivalent): READ =
-  `erp.read` scope ∨ `isOperator()` ∨ entitled. No mutating endpoints → no WRITE
+  `erp.read` scope ∨ `isOperator()` ∨ entitled (`isOperator()` = `roles ∋
+  ERP_OPERATOR`/`ERP_ADMIN`/`SUPER_ADMIN`; the operator's `ERP_OPERATOR` role is
+  derived by IAM at assume-tenant from the selected tenant's entitled domains,
+  ADR-MONO-035 O1 / step 4a — the `account_type=OPERATOR` claim of ADR-MONO-020 D4
+  was removed at ADR-MONO-032 D5 step 4). No mutating endpoints → no WRITE
   gate, no `org_scope` data-scope gate (E6 data-scope applies to write/targeted
   rows; the read-model list is tenant-scoped, not per-operator-subtree in this
   increment — see § Multi-tenancy).

@@ -470,7 +470,10 @@ Single un-bypassable application path:
    § "sub claim of client_credentials tokens"). For human operators
    (v2 user-flow), the claim is resolved from the user's organizational
    membership. **v1 bridge (TASK-BE-337)**: the console **assume-tenant
-   operator token** (`account_type=OPERATOR`, ADR-MONO-020 D4) is enriched
+   operator token** (whose domain authorization rides `roles ∋ ERP_OPERATOR`
+   — derived by IAM at assume-tenant from the selected tenant's entitled
+   domains, ADR-MONO-035 O1 / step 4a; the legacy `account_type=OPERATOR`
+   claim of ADR-MONO-020 D4 was removed at ADR-MONO-032 D5 step 4) is enriched
    by IAM (`TenantClaimTokenCustomizer.customizeForAssumeTenant`) with
    `org_scope=["*"]` — the same platform-wide default as
    `client_credentials`, scoped WITHIN the already-tenant-gated request
@@ -509,12 +512,19 @@ READ  authorized when:  erp.read ∨ erp.write ∨ isOperator() ∨ isEntitledTo
 WRITE authorized when:  erp.write ∨ isOperator()        ← entitlement NEVER widens WRITE
 ```
 
-Rationale: an operator viewing a customer they are *entitled* to (via the
-assume-tenant token — `tenant_id=<customer>` + `entitled_domains=[…,erp]`,
-ADR-MONO-020 D4) carries no `erp.read`/operator role, yet the tenant gate
-already admits them; without this the **separate** authz layer would still 403
-the entitled-but-no-role token (the gap MONO-161 closes — the tenant gate and
-the role/scope authz layer are independent gates, both must dual-accept).
+Rationale: when MONO-161 landed, an operator viewing a customer they are
+*entitled* to (via the assume-tenant token — `tenant_id=<customer>` +
+`entitled_domains=[…,erp]`) carried no `erp.read`/operator role, yet the tenant
+gate already admitted them; without the dual-accept the **separate** authz layer
+would still 403 the entitled-but-no-role token (the tenant gate and the
+role/scope authz layer are independent gates, both must dual-accept). Since
+ADR-MONO-035 step 4a that same assume-tenant token **also** carries
+`roles ∋ ERP_OPERATOR` (derived from the selected tenant's entitled domains —
+the `account_type=OPERATOR` claim of ADR-MONO-020 D4 having been removed at
+ADR-MONO-032 D5 step 4), so `isOperator()` now admits it directly and the
+`isEntitledTo("erp")` branch is retained **net-zero** as defense-in-depth (and
+for any entitled token shape lacking the derived operator role) — the live
+authorization code is unchanged.
 `entitledDomains` is lifted from the RS256/JWKS-verified JWT by
 `ActorContextJwtAuthenticationConverter` (fail-closed on shape anomaly:
 absent / non-list / non-string element → empty set, mirroring

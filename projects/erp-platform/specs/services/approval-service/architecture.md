@@ -782,7 +782,11 @@ cross-project data pollution — even though only `erp` is expected).
   `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`. IAM
   `erp-platform-internal-services-client` (client_credentials) + the console
   assume-tenant operator token are the v1.0 callers (E7 / I1 — SSO single auth, no
-  self-credential store).
+  self-credential store). The operator token's domain authorization rides
+  `roles ∋ ERP_OPERATOR` — derived by IAM at assume-tenant from the selected
+  tenant's entitled domains (ADR-MONO-035 O1 / step 4a), the role source
+  `ActorContext.isOperator()` keys on; the legacy `account_type=OPERATOR` claim
+  (ADR-MONO-020 D4) was removed at ADR-MONO-032 D5 step 4.
 - **External-traffic rejection (E7 / I2)** — `EXTERNAL_TRAFFIC_REJECTED` enforced at
   two layers:
   1. **Network** — Docker Compose `erp.local` Traefik label on an `internal: true`

@@ -657,9 +657,14 @@ The Kafka consumer trusts the producer's `tenantId = erp` envelope field
   `JwtTimestampValidator` + `AllowedIssuersValidator` + `TenantClaimValidator`
   (decode-time entitlement-trust dual-accept). The console assume-tenant operator
   token + the employee SSO token are the v1.0 inbox callers (E7 / I1 — SSO single
-  auth, no self-credential store).
+  auth, no self-credential store). The operator token's domain authorization rides
+  `roles ∋ ERP_OPERATOR` — derived by IAM at assume-tenant from the selected
+  tenant's entitled domains (ADR-MONO-035 O1 / step 4a); the legacy
+  `account_type=OPERATOR` claim (ADR-MONO-020 D4) was removed at ADR-MONO-032 D5
+  step 4.
 - **READ authorization gate** (`RoleScopeAuthorizationAdapter`-equivalent): READ =
-  `erp.read` scope ∨ `isOperator()` ∨ entitled. The mark-read set is a self-scoped
+  `erp.read` scope ∨ `isOperator()` ∨ entitled (`isOperator()` = `roles ∋
+  ERP_OPERATOR`/`ERP_ADMIN`/`SUPER_ADMIN`). The mark-read set is a self-scoped
   READ-adjacent write (the recipient clears their own receipt); it requires the
   same READ gate + recipient-ownership, not a separate WRITE scope (there is no
   org-wide notification mutation).
