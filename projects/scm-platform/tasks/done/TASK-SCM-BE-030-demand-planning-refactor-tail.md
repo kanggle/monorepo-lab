@@ -1,6 +1,6 @@
 # TASK-SCM-BE-030 — demand-planning-service refactor tail (behavior-neutral)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-SCM-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (small, but security-path adjacent — extraction must be byte-identical)
