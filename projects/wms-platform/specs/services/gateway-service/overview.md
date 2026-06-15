@@ -26,7 +26,7 @@
 - **Error envelope normalize** — all gateway-level errors (401 / 403 / 429 / 503) emit platform envelope.
 - **Trace propagation** — generate / echo `X-Request-Id` + OTel trace context.
 
-## Public surface (routes)
+## Public surface
 
 | External path | Auth | Downstream |
 |---|---|---|

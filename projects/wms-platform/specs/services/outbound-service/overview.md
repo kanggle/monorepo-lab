@@ -13,7 +13,7 @@
 | Stack | Java 21, Spring Boot 3.4, PostgreSQL, Kafka (consumer + outbox via `libs/java-messaging`), Spring Data JPA, Resilience4j, TMS adapter |
 | Deployable unit | `apps/outbound-service/` |
 | Bounded Context | `Outbound` |
-| Persistent stores | PostgreSQL (Order / PickingRequest / PickingConfirmation / PackingUnit / ShippingRecord / Saga state + master read-model cache) + Kafka outbox |
+| Persistent stores | PostgreSQL (Order / PickingRequest / PickingConfirmation / PackingUnit / Shipment / Saga state + master read-model cache) + Kafka outbox |
 | Event publication | `outbound.picking.requested.v1`, `outbound.picking.confirmed.v1`, `outbound.shipping.confirmed.v1` (per [`outbound-events.md`](../../contracts/events/outbound-events.md)) |
 
 ## Responsibilities
@@ -47,11 +47,11 @@
 3. **`outbound.shipping.confirmed` only after physical pack + operator confirmation** — auto-emit 금지.
 4. **eventId-based dedupe on all consumed events** (T8) — saga reply 중복 = no-op.
 5. **Saga + outbox atomic** — saga state mutation 과 outbox row 가 한 TX (T3).
-6. **TMS handover failure must not block shipping confirmation** — TMS 5xx → fallback + retry, ShippingRecord 자체는 commit (Category B fallback per ADR-MONO-005).
+6. **TMS handover failure must not block shipping confirmation** — TMS 5xx → fallback + retry, Shipment 자체는 commit (Category B fallback per ADR-MONO-005).
 
 ## Owned Data
 
-- Order, PickingRequest, PickingConfirmation, PackingUnit, ShippingRecord aggregate rows.
+- Order, PickingRequest, PickingConfirmation, PackingUnit, Shipment aggregate rows.
 - Saga aggregate rows (saga state machine).
 
 ## Published Interfaces
