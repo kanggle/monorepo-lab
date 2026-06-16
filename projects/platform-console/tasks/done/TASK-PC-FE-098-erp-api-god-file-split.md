@@ -1,7 +1,8 @@
 # TASK-PC-FE-098 — split the `erp-ops/api/erp-api.ts` god-file into cohesive modules
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
+**Closure:** PR #1691 squash `d4e99785175173765f9767d9ac53d6ba4556c40b`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass incl. Frontend lint/build + unit + E2E smoke + Build & Test). 1,113-line monolith → erp-client.ts (348) + erp-masters-api.ts (628) + erp-orgview-api.ts (77) + erp-delegation-facts-api.ts (73) + barrel (27); 30 exports import-stable; tsc 0 / lint 0 / vitest 162 files · 1943 tests green (baseline count; erp suite 96 incl. relocated 429-guard).
 **Parent:** the `features/erp-ops` surface accreted across TASK-PC-FE-010/046/048/049/055 by appending each new master / read-model binding to a single `erp-api.ts`, which grew to ~1,113 lines (the largest non-generated source in console-web).
 
 ## Goal
