@@ -1,6 +1,6 @@
 # TASK-MONO-282 — .claude/templates/ orphan sweep: delete completion-report + use-case templates, wire feature-spec into spec-change workflow
 
-Status: ready
+Status: review
 
 ## Goal
 

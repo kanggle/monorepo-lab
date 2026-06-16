@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-282-claude-templates-orphan-sweep-delete-2-wire-feature-spec.md` — **READY**. `.claude/templates/` orphan sweep (MONO-281 follow-up): 3 unreferenced files, differing dispositions — (1) **delete** `completion-report-template.md` (dead: 0 refs, 0 artifacts, no process); (2) **delete** `use-case-template.md` (stale: 12 real use-case specs diverged to a multi-UC Korean structure); (3) **keep + wire** `feature-spec-template.md` (canonical: 25 feature specs follow it exactly, just unlinked → reference from `.claude/workflows/spec-change.md`, mirroring service-bootstrap→service-architecture-template). Doc/template-only; `.claude/templates|workflows/` NOT hard-blocked. refactor-spec(command) secondary wire = optional user hand-off. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6. MONO-280 = concurrent session.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-282-claude-templates-orphan-sweep-delete-2-wire-feature-spec.md` — **REVIEW**. `.claude/templates/` orphan sweep: deleted `completion-report-template.md` (dead) + `use-case-template.md` (stale/divergent) — both 0 functional refs re-confirmed; wired `feature-spec-template.md` into `.claude/workflows/spec-change.md` Step 3 (canonical — 25 feature specs follow it). `.claude/templates/` now = 3 files (adr·service-architecture·feature-spec), all functionally referenced, no orphan. Doc/template-only, no real spec touched, HARDSTOP-03 clean. 분석=Opus 4.8 / 구현=Opus 직접.
 
 ## done
 
