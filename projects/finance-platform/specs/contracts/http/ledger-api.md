@@ -587,6 +587,50 @@ and `stale=true` (operator sees both signals).
 - `401 / 403` when unauthenticated or the JWT is rejected (same `.authenticated()` chain as all
   other ledger endpoints; the path falls under `/api/finance/**`).
 
+### 14.1 GET `/api/finance/ledger/fx-rates/{foreignCurrency}/history`
+
+**(27th increment — TASK-FIN-BE-040)** Read-only surface over the `fx_rate_quote_history`
+append-only audit trail (ADR-002 § 3.1 history-read drill, FIN-BE-039). Returns the time
+series of fetched quotes for one currency pair so an operator can audit how the auto-applied
+market rate moved. Base currency is the fixed reporting currency KRW; only the foreign leg
+is a path variable (mirrors the poller's pairs-are-foreign-legs model). No `Idempotency-Key`.
+
+Query parameters:
+- `limit` (optional integer): max rows to return. Default `50`; cap `500`; `≤ 0` is floored
+  to `1` (read-robustness). Example: `?limit=10`.
+
+`200` — `base`, `foreign`, `quotes` array ordered `fetched_at DESC` (newest first), ties
+broken by surrogate `id DESC` (deterministic):
+```json
+{ "data": {
+    "base": "KRW",
+    "foreign": "USD",
+    "quotes": [
+      { "rate": "13.60000000",
+        "asOf": "2026-06-15T07:00:00Z",
+        "fetchedAt": "2026-06-15T07:00:05Z",
+        "source": "stub" },
+      { "rate": "13.50000000",
+        "asOf": "2026-06-15T06:00:00Z",
+        "fetchedAt": "2026-06-15T06:00:05Z",
+        "source": "stub" }
+    ]
+  }, "meta": { "timestamp": "..." } }
+```
+
+Field semantics:
+- `rate` — exact decimal string (F5 — consistent with `settlementRate`/`closingRate`; NOT a float).
+- `asOf` — provider-stated rate instant (ISO-8601).
+- `fetchedAt` — when the quote was pulled from the provider (ISO-8601).
+- `source` — provider identifier (audit provenance).
+
+Unknown / never-polled foreign code → `200` with `quotes: []` (not 404 — mirrors the list
+EP's empty-200 stance from FIN-BE-033). This applies to both truly unsupported codes (e.g.
+`XXX`) and codes that exist but have no history rows yet.
+
+- `401 / 403` when unauthenticated or the JWT is rejected (same `.authenticated()` chain as
+  all other ledger endpoints; the path falls under `/api/finance/**`).
+
 ---
 
 ## Error codes (this contract → `platform/error-handling.md`)
@@ -627,9 +671,13 @@ and `stale=true` (operator sees both signals).
   trail is now implemented — TASK-FIN-BE-039; the **history read / per-pair drill endpoint** stays
   deferred.)*
 
+Also out of scope (still forward-declared): the console FX history drill tab (separate PC-FE
+task) + per-tenant rate override + ShedLock single-leader poller guard.
+
 > **Now in scope (implemented — no longer forward-declared):** the GL/AP feed outbox
 > (`finance.ledger.{entry.posted,period.closed}.v1`) + reconciliation events; multi-currency +
 > cross-currency reconciliation (both directions); a **FIFO / lot-level** settlement carrying basis
 > (per-tenant + per-account cost-flow config §13, open-lots read §12) and the **live FX rate feed**
 > (omitted-rate fallback on `/revaluations` + `/settlements`, fx-rates read §14) and the
-> **`fx_rate_quote_history` append-only audit trail** (V13 — TASK-FIN-BE-039; read endpoint deferred).
+> **`fx_rate_quote_history` append-only audit trail** (V13 — TASK-FIN-BE-039) and the
+> **per-pair FX rate history drill** (`/{foreignCurrency}/history` §14.1 — TASK-FIN-BE-040).
