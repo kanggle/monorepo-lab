@@ -1,6 +1,6 @@
 # TASK-PC-FE-104 — Ledger-ops FX 환율 history 드릴 (FIN-BE-040 read EP 소비)
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js, ledger-ops 피처)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (read-only FE 슬라이스 — PC-FE-092 미러 + per-pair 드릴)
