@@ -31,7 +31,7 @@ public interface FxRateQuoteHistoryRepository {
      *
      * <p>Ordering is {@code fetched_at DESC, id DESC} for deterministic tie-breaking
      * when two rows share the same {@code fetched_at} instant. Capped to {@code limit}
-     * rows; the JPA adapter translates {@code limit} to a {@link org.springframework.data.domain.PageRequest}
+     * rows; the JPA adapter translates {@code limit} to a top-N page request
      * (no {@code Page}/{@code Pageable} in this domain port — Spring-free boundary).
      * An unknown / never-polled pair returns an empty list (not an exception).
      *
