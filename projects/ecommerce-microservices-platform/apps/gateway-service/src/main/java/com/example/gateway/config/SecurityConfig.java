@@ -64,6 +64,14 @@ public class SecurityConfig {
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .logout(ServerHttpSecurity.LogoutSpec::disable)
                 .authorizeExchange(auth -> auth
+                        // CORS preflight (OPTIONS) is unauthenticated by spec — a browser
+                        // sends no Authorization header on the preflight. Permit it so it
+                        // reaches Spring Cloud Gateway's globalcors CorsWebFilter, which
+                        // answers with the Access-Control-Allow-* headers. Without this,
+                        // anyExchange().authenticated() 401s the preflight before CORS runs,
+                        // so every cross-origin authed write (e.g. POST /api/wishlists) fails
+                        // in the browser with "TypeError: Failed to fetch" (TASK-BE-394).
+                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Actuator / auth / search / oauth — fully public
                         .pathMatchers(PUBLIC_PATHS).permitAll()
                         // Product read (GET) is public; writes require auth
