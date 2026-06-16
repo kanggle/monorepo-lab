@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-278-claude-md-catalog-trim-extract-git-workflow-policy.md` — **READY**. Trim `CLAUDE.md` back to catalog: extract the Cross-Project Changes git/worktree/branch forensic prose (lines ~186–213) into a new on-demand `platform/git-workflow-policy.md`, leave terse catalog + pointer; also drop the Task-Rules line-107 incident parenthetical. Doc-only, behavior-preserving (zero normative-rule loss — per-rule old→new mapping required), project-agnostic (HARDSTOP-03 clean). Cuts per-session context (~249→~207 lines / ~21.9→~17 KB). `# Recommending Tasks and Dispatching Agents` placement = deferred. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (mechanical doc relocation, judgement = the no-loss mapping). Surfaced by 2026-06-16 rule-optimization audit.
 
 ## in-progress
 
