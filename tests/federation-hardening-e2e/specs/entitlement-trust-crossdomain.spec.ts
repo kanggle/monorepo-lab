@@ -1,5 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { loginAsAcmeOperator } from '../fixtures/login';
+import { gotoOverview } from '../fixtures/console-helpers';
 
 /**
  * TASK-MONO-154 — ADR-MONO-019 runtime activation capstone.
@@ -60,19 +61,6 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 const ENTITLED_DOMAINS = ['finance', 'wms'] as const;
 const NON_ENTITLED_DOMAINS = ['scm', 'erp'] as const;
-
-async function gotoOverview(page: Page): Promise<void> {
-  await page.goto('/dashboards/overview');
-  await page.waitForLoadState('networkidle');
-  // The composition route renders the 5-card grid on a 200. (A whole-fanout
-  // 401 redirects to /login; 400 NO_ACTIVE_TENANT / 502 render banner-only
-  // states — none of which is expected for a logged-in acme-corp operator
-  // with console_active_tenant='acme-corp'.)
-  await expect(page).toHaveURL(/\/dashboards\/overview(\?|$)/);
-  await expect(
-    page.getByTestId('operator-overview-cards'),
-  ).toBeVisible({ timeout: 20_000 });
-}
 
 test.describe('Entitlement-trust cross-domain (acme-corp: finance/wms entitled, scm/erp denied)', () => {
   test('non-entitled domains (scm, erp) are gate-rejected; entitled domains (finance, wms) are not', async ({

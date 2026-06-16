@@ -1,10 +1,11 @@
-import path from 'node:path';
 import {
   test,
   expect,
   type BrowserContext,
 } from '@playwright/test';
 import { loginAsMultiOperator } from '../fixtures/login';
+import { ADMIN_BASE, OPERATOR_COOKIE, STORAGE_STATE } from '../fixtures/admin-helpers';
+import { switchTenant } from '../fixtures/console-helpers';
 
 /**
  * TASK-MONO-207 — ADR-MONO-023 § 3.3 D2 cross-service plane-separation proof.
@@ -58,18 +59,7 @@ import { loginAsMultiOperator } from '../fixtures/login';
 // Override the suite-wide SUPER_ADMIN storageState — the operator logs in fresh.
 test.use({ storageState: { cookies: [], origins: [] } });
 
-/** admin-service host base URL (docker-compose maps 18085:8085); workflow exports
- *  E2E_ADMIN_BASE_URL. The admin RBAC surface is called directly with the
- *  exchanged operator token (no console-web subscription proxy route exists). */
-const ADMIN_BASE = process.env.E2E_ADMIN_BASE_URL ?? 'http://localhost:18085';
-
-/** The persisted global-setup SUPER_ADMIN session (playwright.config STORAGE_STATE):
- *  loaded by the admin context (no in-test login → no tracing.start collision);
- *  carries the exchanged operator token. */
-const STORAGE_STATE = path.join(__dirname, '../fixtures/.storage-state.json');
-
-/** session.ts cookie names (HttpOnly — readable via BrowserContext.cookies()). */
-const OPERATOR_COOKIE = 'console_operator_token'; // the /api/admin/** credential
+/** session.ts cookie name (HttpOnly — readable via BrowserContext.cookies()). */
 const ASSUMED_COOKIE = 'console_assumed_token'; // the re-scoped domain-facing token
 
 const TENANT = 'initech-corp';
@@ -121,17 +111,6 @@ async function entitledOf(
     TENANT,
   );
   return (claims.entitled_domains as string[] | undefined) ?? [];
-}
-
-/** Drive the real switcher → assume-tenant exchange. A 200 also asserts the
- *  IAM-plane assignment is intact (the D2 assignment gate would 403 otherwise). */
-async function switchTenant(ctx: BrowserContext, tenant: string): Promise<void> {
-  const res = await ctx.request.post('/api/tenant', { data: { tenant } });
-  expect(
-    res.status(),
-    `switch to ${tenant} must succeed (operator_tenant_assignment present → assume-tenant minted)`,
-  ).toBe(200);
-  expect((await res.json()).activeTenant).toBe(tenant);
 }
 
 /** Re-mint the initech assumed token via a genuinely fresh exchange: switch AWAY

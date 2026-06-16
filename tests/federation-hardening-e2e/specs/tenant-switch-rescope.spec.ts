@@ -1,5 +1,6 @@
-import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { loginAsMultiOperator } from '../fixtures/login';
+import { gotoOverview, switchTenant } from '../fixtures/console-helpers';
 
 /**
  * TASK-MONO-158 — ADR-MONO-020 § 3.3 step 3 (D4) capstone.
@@ -59,34 +60,6 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 const ACME = 'acme-corp';
 const GLOBEX = 'globex-corp';
-
-/** Drive the real switcher endpoint (production-identical: the server-side
- *  assume-tenant exchange runs inside this POST). Asserts a 200 — a denied
- *  switch (403) would mean the assignment seed / assume-tenant flow is broken,
- *  which the spec should surface loudly. */
-async function switchTenant(
-  context: BrowserContext,
-  tenant: string,
-): Promise<void> {
-  const res = await context.request.post('/api/tenant', {
-    data: { tenant },
-  });
-  expect(
-    res.status(),
-    `switch to ${tenant} should succeed (assume-tenant assigned + minted)`,
-  ).toBe(200);
-  const body = await res.json();
-  expect(body.activeTenant).toBe(tenant);
-}
-
-async function gotoOverview(page: Page): Promise<void> {
-  await page.goto('/dashboards/overview');
-  await page.waitForLoadState('networkidle');
-  await expect(page).toHaveURL(/\/dashboards\/overview(\?|$)/);
-  await expect(
-    page.getByTestId('operator-overview-cards'),
-  ).toBeVisible({ timeout: 20_000 });
-}
 
 /** Assert the entitled domains are NOT forbidden and the non-entitled ones ARE
  *  forbidden (the per-customer gate decision). */
