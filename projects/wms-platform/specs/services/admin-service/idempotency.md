@@ -411,6 +411,27 @@ Log events (structured JSON, INFO level unless noted):
 
 ---
 
+## 6. Testing Requirements
+
+Every change to REST idempotency or the event-dedupe + last-write-wins logic
+MUST cover (the two mechanisms in §1 / §2):
+
+1. **REST — key absent** on a mutating endpoint → 400 `VALIDATION_ERROR` (filter guard).
+2. **REST — first request** (new `Idempotency-Key`) → operation runs once, response cached.
+3. **REST — replay (same key, same body)** → cached response returned; the mutation is **not** re-executed.
+4. **REST — key reuse (same key, different body)** → 409 `DUPLICATE_REQUEST`.
+5. **Kafka — first event** → `APPLIED` dedupe row + the projection mutation, in one `@Transactional`.
+6. **Kafka — redelivery (same eventId)** → `IGNORED_DUPLICATE`; no second projection.
+7. **Kafka — out-of-order (fresh eventId, `occurredAt` older than the row's `last_event_at`)** → `IGNORED_DUPLICATE_LATE`: dedupe row written but the projection mutation is **skipped** (LWW guard); `event_stale_dropped` logged.
+8. **Concurrent same-eventId (two consumer instances)** → one wins; the other observes the PK constraint violation and exits cleanly.
+9. **Cross-context replay (full Spring restart)** → same eventId → dedupe hit → no duplicate projection.
+
+Reference: [`architecture.md`](architecture.md) § Testing Requirements + the
+sibling [`notification-service/idempotency.md`](../notification-service/idempotency.md)
+§ Testing Requirements (Testcontainers Postgres/Kafka patterns are reusable).
+
+---
+
 ## References
 
 - [`specs/services/admin-service/architecture.md`](architecture.md)

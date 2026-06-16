@@ -6,6 +6,36 @@ This document declares aggregates, value objects, and persistence layout for
 
 ---
 
+## Scope
+
+Three owned aggregates plus one infrastructure-supporting record type:
+
+**Aggregates (owned by this service)**
+
+1. **RoutingRule** — per-`eventType` decision of whether and where an inbound event becomes a notification (read-mostly in v1; Flyway-seeded, operator-toggled)
+2. **NotificationDelivery** — one logical delivery (one channel × one event); state-machined `PENDING → SUCCEEDED | FAILED`
+3. **NotificationEventDedupe** — consumer-side eventId dedupe across every subscribed topic (T8); insert-only
+
+**Infrastructure-supporting record (not a domain aggregate)**
+
+4. **NotificationOutbox** — transactional outbox row for the audit-only `notification.delivered.v1` publication (T3)
+
+`notification-service` is a **terminal consumer**: it subscribes to other services' domain events and fans them out to external channels, owning no business state that upstream services read back. Cross-aggregate consistency is event-driven only (trait `transactional` T2); v1 has **no** multi-aggregate write transaction — each inbound event is deduped, routed, and fanned out into independent delivery rows.
+
+---
+
+## Common Aggregate Shape
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | Internal surrogate key (PK) |
+| `createdAt` | Instant | UTC |
+| `updatedAt` | Instant | UTC |
+
+`NotificationDelivery` additionally carries `version` (JPA optimistic lock, trait T5; pessimistic `SELECT FOR UPDATE` is forbidden) — it is the only write-shaped aggregate. `NotificationEventDedupe` and `NotificationOutbox` are **append-only**: once written they are never modified, so they carry neither `version` nor `updatedAt`. `RoutingRule` is read-mostly in v1 (Flyway-seeded; operator toggles `enabled`).
+
+---
+
 ## Aggregates (v1)
 
 ### 1. `RoutingRule` (read-mostly aggregate)
@@ -91,7 +121,7 @@ service is fully replay-safe.
 | `eventId` | UUID | PK |
 | `sourceTopic` | string | for cross-topic ambiguity diagnostics |
 | `processedAt` | Instant | DB write time |
-| `outcome` | `DedupeOutcome` enum | `QUEUED \| FILTERED \| ERROR` |
+| `outcome` | `DedupeOutcome` enum | `QUEUED \| FILTERED \| NO_RULE \| ERROR` (canonical `CHECK` in `database-design.md` §3) |
 
 #### Invariants
 
@@ -207,6 +237,49 @@ CREATE INDEX idx_outbox_unpublished
 
 ---
 
+## Entity Relationship Diagram
+
+```
+   (source services, by event — no FK; correlated via Kafka topic + eventId)
+       inventory.*   inbound.*   outbound.*   admin alert.*
+                              │
+                              ▼  match RoutingRule.eventType (one enabled rule)
+                   ┌────────────────────┐
+                   │     RoutingRule    │
+                   └─────────┬──────────┘
+                             │ routing decision → 0..N deliveries
+                             ▼
+                   ┌────────────────────┐     ┌──────────────────────────┐
+                   │NotificationDelivery│     │ NotificationEventDedupe  │
+                   │ PENDING→SUCCEEDED/ │     │  (eventId PK, insert-only │
+                   │       FAILED       │     │   replay-safety gate)     │
+                   └─────────┬──────────┘     └──────────────────────────┘
+                             │ on delivered → audit row
+                             ▼
+                     NotificationOutbox  ──→ notification.delivered.v1
+```
+
+The four tables carry **no foreign keys** between them — `notification-service` is a
+projection / fan-out service whose records are correlated by `eventId`, not by
+referential integrity. `NotificationEventDedupe` and `NotificationOutbox` are
+infrastructure (not on the aggregate diagram of upstream owners).
+
+---
+
+## Aggregate Boundaries
+
+| Aggregate root | Owns | Cross-aggregate via |
+|---|---|---|
+| RoutingRule | the match predicate + channel targets + severity for one `eventType` | none — read at routing time; publishes no event |
+| NotificationDelivery | delivery status, attempt count, retry schedule, immutable payload snapshot | produces the audit `notification.delivered.v1` via outbox; owns no state read back by other services |
+| NotificationEventDedupe | a single immutable dedupe row | none — gates the consumer before routing |
+
+`notification-service` has **no W1-style multi-aggregate write transaction**: each
+inbound event is deduped (1 dedupe row), routed (read `RoutingRule`), and fanned
+out (N independent delivery rows). No use-case mutates two aggregates atomically.
+
+---
+
 ## Seeded Routing Rules (v1)
 
 Flyway `V1__init.sql` (or `V2__seed_routing_rules.sql`) seeds the following
@@ -244,6 +317,18 @@ markdown_template, version)` for operator-editable templates.
 
 ---
 
+## Forbidden Patterns (in code)
+
+- ❌ JPA entity used as the domain model — Hexagonal rule
+- ❌ Direct `UPDATE notification_delivery SET status = ?` outside the `send()` / retry domain-method path (T4; raises `DELIVERY_STATE_TRANSITION_INVALID`)
+- ❌ Transitioning a terminal (`SUCCEEDED` / `FAILED`) delivery
+- ❌ `UPDATE` / `DELETE` on `notification_event_dedupe` or `notification_outbox` — append-only ledgers (insert-only; dedupe is the replay-safety boundary)
+- ❌ Mutating `payloadSnapshot` after delivery creation (breaks retry reproducibility)
+- ❌ Persisting a vendor secret (Slack webhook URL) in `recipient` / `lastError` — only the resolved logical channel alias is stored
+- ❌ More than one `enabled` `RoutingRule` per `eventType` (storage partial-UNIQUE prevents it; surfaces as `ROUTING_AMBIGUOUS` only on a bad manual DB edit)
+
+---
+
 ## Domain Errors
 
 Error codes registered in `platform/error-handling.md`:
@@ -267,6 +352,26 @@ Error codes registered in `platform/error-handling.md`:
 - Tenant-scoped routing
 - Severity-driven delivery (e.g., `CRITICAL` → SMS escalation) — requires
   v2 channels
+
+---
+
+## Open Items (Retrospective Backfill Audit)
+
+> See [`architecture.md § Open Items`](architecture.md) for the full
+> retrospective framing and the deferred dedupe-cleanup job.
+
+- ✅ [`database-design.md`](database-design.md) — canonical physical schema
+  (tables, indexes, the 4-value dedupe `CHECK`). Future migrations update it in
+  the same commit.
+- ✅ [`idempotency.md`](idempotency.md) — event-dedupe + delivery-idempotency
+  strategy (this service exposes no mutating REST surface in v1).
+- ✅ The `NotificationDelivery` state machine is declared inline in §2 above;
+  v1 keeps it here (small, single-aggregate) rather than in a standalone
+  `state-machines/` file.
+- ✅ `platform/error-handling.md` — the domain codes listed in § Domain Errors
+  are registered there (see that section).
+- ⏳ Scheduled 30-day `notification_event_dedupe` cleanup job — deferred to v2
+  (see `architecture.md` Open Items); the table grows unbounded in v1.
 
 ---
 
