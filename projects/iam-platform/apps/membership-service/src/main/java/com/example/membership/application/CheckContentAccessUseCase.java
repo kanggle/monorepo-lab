@@ -21,7 +21,7 @@ public class CheckContentAccessUseCase {
         List<Subscription> actives = subscriptionRepository.findActiveByAccountId(accountId);
         PlanLevel highest = actives.stream()
                 .map(Subscription::getPlanLevel)
-                .max((a, b) -> Integer.compare(a.getRank(), b.getRank()))
+                .max(PlanLevel.BY_RANK)
                 .orElse(PlanLevel.FREE);
         boolean allowed = highest.meetsOrExceeds(requiredPlanLevel);
         return new AccessCheckResult(accountId, requiredPlanLevel, allowed, highest);

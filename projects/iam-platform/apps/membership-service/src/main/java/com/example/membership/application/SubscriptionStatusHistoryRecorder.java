@@ -34,8 +34,9 @@ class SubscriptionStatusHistoryRecorder {
      * @param subscription  subscription whose id and accountId identify the entry
      * @param from          previous status before the transition
      * @param to            new status after the transition
-     * @param operationCode reason/operation code (e.g. {@code USER_SUBSCRIBE},
-     *                      {@code USER_CANCEL}, {@code SCHEDULED_EXPIRE})
+     * @param reason        reason/operation code (e.g. {@code USER_SUBSCRIBE},
+     *                      {@code USER_CANCEL}, {@code SCHEDULED_EXPIRE}) — maps to
+     *                      {@link SubscriptionStatusHistoryEntry#reason()}
      * @param actorType     actor responsible for the transition
      *                      ({@code USER} or {@code SYSTEM})
      * @param occurredAt    transition timestamp
@@ -43,7 +44,7 @@ class SubscriptionStatusHistoryRecorder {
     void recordTransition(Subscription subscription,
                           SubscriptionStatus from,
                           SubscriptionStatus to,
-                          String operationCode,
+                          String reason,
                           String actorType,
                           LocalDateTime occurredAt) {
         historyRepository.append(new SubscriptionStatusHistoryEntry(
@@ -51,7 +52,7 @@ class SubscriptionStatusHistoryRecorder {
                 subscription.getAccountId(),
                 from,
                 to,
-                operationCode,
+                reason,
                 actorType,
                 occurredAt));
     }

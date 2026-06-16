@@ -27,7 +27,7 @@ public class GetMySubscriptionsUseCase {
         PlanLevel activeLevel = all.stream()
                 .filter(Subscription::isActive)
                 .map(Subscription::getPlanLevel)
-                .max((a, b) -> Integer.compare(a.getRank(), b.getRank()))
+                .max(PlanLevel.BY_RANK)
                 .orElse(PlanLevel.FREE);
 
         return new MySubscriptionsResult(accountId, subs, activeLevel);

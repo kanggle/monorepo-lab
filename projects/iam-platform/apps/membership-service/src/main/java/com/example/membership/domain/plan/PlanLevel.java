@@ -1,5 +1,7 @@
 package com.example.membership.domain.plan;
 
+import java.util.Comparator;
+
 /**
  * Membership plan level. Ordering: FREE < FAN_CLUB.
  * Use {@link #getRank()} for explicit numeric comparison.
@@ -7,6 +9,9 @@ package com.example.membership.domain.plan;
 public enum PlanLevel {
     FREE(0),
     FAN_CLUB(1);
+
+    /** Orders plan levels by ascending rank (FREE &lt; FAN_CLUB) — use with {@code max}/{@code sorted}. */
+    public static final Comparator<PlanLevel> BY_RANK = Comparator.comparingInt(PlanLevel::getRank);
 
     private final int rank;
 
