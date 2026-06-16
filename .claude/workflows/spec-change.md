@@ -26,6 +26,7 @@ Analyze downstream impact according to spec priority:
 ### 3. Modify Specs
 
 - Edit the relevant spec files
+- When creating a new feature spec (`specs/features/*.md`), follow `.claude/templates/feature-spec-template.md`
 - Record change history (date, reason)
 - Verify no conflicts with higher-priority specs
 
