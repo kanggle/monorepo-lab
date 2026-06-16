@@ -186,19 +186,11 @@ projection method internally.
 
 ### 2.2 EventDedupe Table
 
-Declared in `domain-model.md` § 15. Physical table: `admin_event_dedupe`.
-
-```sql
-CREATE TABLE admin_event_dedupe (
-  event_id     UUID         PRIMARY KEY,
-  event_type   VARCHAR(60)  NOT NULL,
-  processed_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
-  outcome      VARCHAR(30)  NOT NULL  -- 'APPLIED' | 'IGNORED_DUPLICATE' | 'IGNORED_DUPLICATE_LATE' | 'FAILED'
-);
-
-CREATE INDEX admin_event_dedupe_processed_at_idx
-  ON admin_event_dedupe (processed_at);
-```
+Physical table `admin_event_dedupe` — entity fields in
+[`domain-model.md`](domain-model.md) §15; the canonical physical schema (the
+4-outcome named `CHECK` constraint + the `idx_admin_event_dedupe_processed_at`
+index) is defined once in [`database-design.md`](database-design.md) §6. The
+behavioural semantics of each outcome:
 
 `IGNORED_DUPLICATE` covers redelivery of the same `eventId`.
 `IGNORED_DUPLICATE_LATE` covers a fresh `eventId` whose `occurredAt` is older

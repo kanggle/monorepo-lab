@@ -133,7 +133,8 @@ through to channel template for visual emphasis.
 ## Persistence Layout
 
 ```sql
--- Flyway V1__init.sql sketch (full SQL in BE-043 implementation PR)
+-- Flyway V1__init.sql sketch — canonical physical schema (constraints,
+-- indexes, full column set) in database-design.md
 
 CREATE TABLE notification_routing_rule (
     id              UUID            PRIMARY KEY,

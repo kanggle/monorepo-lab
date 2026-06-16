@@ -552,9 +552,9 @@ Per T8.
 | `event_id` | UUID | PK; from inbound event header |
 | `event_type` | String(60) | |
 | `processed_at` | Instant | |
-| `outcome` | enum `APPLIED` / `IGNORED_DUPLICATE` / `FAILED` | |
+| `outcome` | enum `APPLIED` / `IGNORED_DUPLICATE` / `IGNORED_DUPLICATE_LATE` / `FAILED` | `IGNORED_DUPLICATE_LATE` is admin's last-write-wins signal (a fresh event rejected by the `last_event_at` guard) — unique to admin |
 
-Retention: 30 days.
+Retention: 30 days. Canonical physical schema (named CHECK + index): [`database-design.md`](database-design.md) §6.
 
 ---
 
