@@ -46,7 +46,7 @@ class PostAccessGuard {
         if (post.getVisibility() == PostVisibility.MEMBERS_ONLY
                 && !post.getAuthorAccountId().equals(actor.accountId())) {
             boolean allowed = contentAccessChecker.check(
-                    actor.accountId(), GetPostUseCase.REQUIRED_PLAN_LEVEL);
+                    actor.accountId(), AccessPolicy.REQUIRED_PLAN_LEVEL);
             if (!allowed) {
                 throw new MembershipRequiredException();
             }

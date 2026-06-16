@@ -146,7 +146,7 @@ class GetPostUseCaseTest {
         ActorContext actor = new ActorContext("fan-1", Set.of("FAN"));
 
         when(postRepository.findById("post-1")).thenReturn(Optional.of(post));
-        when(contentAccessChecker.check("fan-1", GetPostUseCase.REQUIRED_PLAN_LEVEL)).thenReturn(false);
+        when(contentAccessChecker.check("fan-1", AccessPolicy.REQUIRED_PLAN_LEVEL)).thenReturn(false);
 
         assertThatThrownBy(() -> useCase.execute("post-1", actor))
                 .isInstanceOf(MembershipRequiredException.class);
