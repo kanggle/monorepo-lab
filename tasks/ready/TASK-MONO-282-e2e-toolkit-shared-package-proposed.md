@@ -1,4 +1,4 @@
-# TASK-MONO-281 — Decide + (if accepted) bootstrap a shared `e2e-toolkit` package for cross-suite Playwright helpers
+# TASK-MONO-282 — Decide + (if accepted) bootstrap a shared `e2e-toolkit` package for cross-suite Playwright helpers
 
 **Status:** proposed (needs an ADR — new shared package is an architecture decision; HARDSTOP-09)
 

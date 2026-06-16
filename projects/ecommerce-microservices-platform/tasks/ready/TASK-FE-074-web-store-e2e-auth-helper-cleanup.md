@@ -23,7 +23,7 @@ The cross-suite e2e diagnosis found that web-store's `e2e/helpers/auth.ts` carri
 
 **Folded sub-item (config, low priority — decide, do not blindly "align"):** the diagnosis flagged web-store using `PLAYWRIGHT_BASE_URL` while the console suites use `CONSOLE_BASE_URL`, plus `retries: 1` vs `2` and `trace: retain-on-failure` vs `on`. These are arguably **correct per-app choices** (web-store ≠ console; serial `workers:1` web-store wants fewer retries). Only change one if a concrete reason emerges — otherwise record "intentional divergence" in the config comment and close the item.
 
-**Out of scope:** the shared OIDC-PKCE login extraction across suites (TASK-MONO-281 gate); seed SQL credential de-duplication.
+**Out of scope:** the shared OIDC-PKCE login extraction across suites (TASK-MONO-282 gate); seed SQL credential de-duplication.
 
 ## Acceptance Criteria
 
