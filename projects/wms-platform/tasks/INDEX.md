@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-394-wms-tier-d-dedup-and-drift.md` — **REVIEW**. Closes the **Tier D** finding from TASK-BE-385 (identical-recap dedup, "verify identity per file first"). Per-file verification showed most flagged "duplication" is **legitimate** (architecture.md event/topic tables = summary + service-local trigger/effect + already cross-ref full schemas; admin error codes already cross-ref `rules/domains/wms.md`; notification DDL = self-disclaimed sketch) — left intact with recorded rationale. The one genuine verbatim duplication, `admin_event_dedupe`, was **triplicated with 2 drifts**: (D1a) admin domain-model §15 `outcome` enum listed **3** values, missing `IGNORED_DUPLICATE_LATE` (admin's LWW signal per the canonical) → added 4th + xref; (D1b) admin idempotency §2.2 inline DDL had a drifted index name (`admin_event_dedupe_processed_at_idx` vs canonical `idx_admin_event_dedupe_processed_at`) + comment-instead-of-CHECK → replaced the dup DDL block with a cross-ref to the canonical `database-design.md` §6, keeping the outcome-semantics prose; (D2) notification domain-model sketch's stale "BE-043 PR" pointer → retargeted to `database-design.md`. Canonical = admin `database-design.md` §6 (4-outcome named CHECK + `idx_*`). Doc-only — `git diff apps/**` empty; D1a adds a missing enum value to a stale doc copy to match the canonical (no schema change). 분석=Opus 4.8 / 구현=Opus.
 
 ## done
 
