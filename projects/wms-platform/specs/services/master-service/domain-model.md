@@ -298,7 +298,7 @@ picking downstream.
        [expire]                     [reactivate]
            |                              |
            v                              |
-       EXPIRED (terminal) <---[deactivate from EXPIRED]---
+       EXPIRED (terminal for reactivation) <---[deactivate from EXPIRED]---
 ```
 
 - `EXPIRED` is terminal for reactivation. Can still be deactivated to hide from listings.
