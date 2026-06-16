@@ -1,7 +1,8 @@
 # TASK-PC-FE-105 — split the `operators/components/OperatorsScreen.tsx` god-file (container/presentational)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
+**Closure:** PR #1727 squash `1bb8dd6cbb131ed80a3fb41da1cbb31a2c5e2803`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass/skip incl. Frontend lint/build + unit + E2E smoke + Build & Test). 634-line container → operators-confirm-copy.tsx (93) + OperatorsTable.tsx (256) + OperatorsScreen.tsx container (416); container/presentational, all state in container; public OperatorsScreen export import-stable; 0 test changes; tsc 0 / lint 0 / vitest 162 files · 1943 tests green (baseline count; operators suites 229).
 **Parent:** continuation of the console-web god-file split series (098 erp-api, 099 use-erp-ops, 100 ApprovalScreen, 101 OutboundOpsScreen, 102 ledger-api, 103 WmsOpsScreen). `OperatorsScreen.tsx` is the IAM operators-management surface (~634 lines, the most privilege-sensitive slice). Note: PC-FE-104 was taken by a concurrent session (`ledger-fx-history-tab`); this task is numbered 105.
 
 ## Goal
