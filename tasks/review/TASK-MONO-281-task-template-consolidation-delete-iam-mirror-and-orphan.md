@@ -1,6 +1,6 @@
 # TASK-MONO-281 — Task-template consolidation: delete iam-platform mirror + orphan .claude task-template + align root 3 templates
 
-Status: ready
+Status: review
 
 ## Goal
 
