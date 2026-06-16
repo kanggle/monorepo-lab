@@ -234,23 +234,26 @@ public class AccountServiceClient {
                 operatorId, DataExportResponse.class);
     }
 
-    private <T> T callGet(String path, String operatorId, Class<T> responseType) {
+    /**
+     * Shared {@code onStatus} handler: re-raises any error status from account-service
+     * as an {@link HttpClientErrorException} carrying the response body, which
+     * {@link #execute} then maps to the retryable/non-retryable downstream exceptions.
+     */
+    private static final RestClient.ResponseSpec.ErrorHandler ERROR_RAISER = (req, resp) -> {
+        throw HttpClientErrorException.create(
+                resp.getStatusCode(), resp.getStatusText(),
+                resp.getHeaders(), resp.getBody().readAllBytes(), null);
+    };
+
+    /**
+     * Runs a downstream account-service call and maps failures uniformly:
+     * 4xx → {@link NonRetryableDownstreamException} (with the parsed error code),
+     * any other failure → {@link DownstreamFailureException}. This try/catch was
+     * previously duplicated verbatim across every callGet/callPost helper.
+     */
+    private <T> T execute(String path, java.util.function.Supplier<T> call) {
         try {
-            return restClient.get()
-                    .uri(path)
-                    .headers(h -> {
-                        if (operatorId != null) h.add("X-Operator-ID", operatorId);
-                        // TASK-BE-318b: authenticate via GAP client_credentials Bearer JWT
-                        // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
-                        h.setBearerAuth(tokenProvider.currentBearer());
-                    })
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
-                        throw HttpClientErrorException.create(
-                                resp.getStatusCode(), resp.getStatusText(),
-                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
-                    })
-                    .body(responseType);
+            return call.get();
         } catch (RestClientResponseException e) {
             log.warn("account-service returned {} on {}: {}", e.getStatusCode(), path, e.getMessage());
             if (e.getStatusCode().is4xxClientError()) {
@@ -265,6 +268,20 @@ public class AccountServiceClient {
             log.error("account-service call failed on {}", path, e);
             throw new DownstreamFailureException("account-service unavailable", e);
         }
+    }
+
+    private <T> T callGet(String path, String operatorId, Class<T> responseType) {
+        return execute(path, () -> restClient.get()
+                .uri(path)
+                .headers(h -> {
+                    if (operatorId != null) h.add("X-Operator-ID", operatorId);
+                    // TASK-BE-318b: authenticate via GAP client_credentials Bearer JWT
+                    // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
+                    h.setBearerAuth(tokenProvider.currentBearer());
+                })
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, ERROR_RAISER)
+                .body(responseType));
     }
 
     /**
@@ -275,70 +292,32 @@ public class AccountServiceClient {
      * {@link DownstreamFailureException} (the fail-closed signal for the link use case).
      */
     private <T> T callGetWithTenant(String path, String tenantId, Class<T> responseType) {
-        try {
-            return restClient.get()
-                    .uri(path)
-                    .headers(h -> {
-                        if (tenantId != null) h.add("X-Tenant-Id", tenantId);
-                        h.setBearerAuth(tokenProvider.currentBearer());
-                    })
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
-                        throw HttpClientErrorException.create(
-                                resp.getStatusCode(), resp.getStatusText(),
-                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
-                    })
-                    .body(responseType);
-        } catch (RestClientResponseException e) {
-            log.warn("account-service returned {} on {}: {}", e.getStatusCode(), path, e.getMessage());
-            if (e.getStatusCode().is4xxClientError()) {
-                String code = extractErrorCode(e.getResponseBodyAsByteArray());
-                throw new NonRetryableDownstreamException(
-                        "account-service error " + e.getStatusCode().value(), e,
-                        e.getStatusCode().value(), code);
-            }
-            throw new DownstreamFailureException(
-                    "account-service error " + e.getStatusCode().value(), e);
-        } catch (Exception e) {
-            log.error("account-service call failed on {}", path, e);
-            throw new DownstreamFailureException("account-service unavailable", e);
-        }
+        return execute(path, () -> restClient.get()
+                .uri(path)
+                .headers(h -> {
+                    if (tenantId != null) h.add("X-Tenant-Id", tenantId);
+                    h.setBearerAuth(tokenProvider.currentBearer());
+                })
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, ERROR_RAISER)
+                .body(responseType));
     }
 
     private <T> T callPost(String path, Map<String, Object> body,
                            String operatorId, String idempotencyKey, Class<T> responseType) {
-        try {
-            return restClient.post()
-                    .uri(path)
-                    .headers(h -> {
-                        h.add("Idempotency-Key", idempotencyKey);
-                        if (operatorId != null) h.add("X-Operator-ID", operatorId);
-                        // TASK-BE-318b: GAP client_credentials Bearer JWT (replaces X-Internal-Token).
-                        h.setBearerAuth(tokenProvider.currentBearer());
-                        h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
-                    })
-                    .body(body)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
-                        throw HttpClientErrorException.create(
-                                resp.getStatusCode(), resp.getStatusText(),
-                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
-                    })
-                    .body(responseType);
-        } catch (RestClientResponseException e) {
-            log.warn("account-service returned {} on {}: {}", e.getStatusCode(), path, e.getMessage());
-            if (e.getStatusCode().is4xxClientError()) {
-                String code = extractErrorCode(e.getResponseBodyAsByteArray());
-                throw new NonRetryableDownstreamException(
-                        "account-service error " + e.getStatusCode().value(), e,
-                        e.getStatusCode().value(), code);
-            }
-            throw new DownstreamFailureException(
-                    "account-service error " + e.getStatusCode().value(), e);
-        } catch (Exception e) {
-            log.error("account-service call failed on {}", path, e);
-            throw new DownstreamFailureException("account-service unavailable", e);
-        }
+        return execute(path, () -> restClient.post()
+                .uri(path)
+                .headers(h -> {
+                    h.add("Idempotency-Key", idempotencyKey);
+                    if (operatorId != null) h.add("X-Operator-ID", operatorId);
+                    // TASK-BE-318b: GAP client_credentials Bearer JWT (replaces X-Internal-Token).
+                    h.setBearerAuth(tokenProvider.currentBearer());
+                    h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+                })
+                .body(body)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, ERROR_RAISER)
+                .body(responseType));
     }
 
     /**
@@ -353,36 +332,17 @@ public class AccountServiceClient {
      */
     private <T> T callPostWithTenant(String path, Map<String, Object> body,
                                      String tenantId, Class<T> responseType) {
-        try {
-            return restClient.post()
-                    .uri(path)
-                    .headers(h -> {
-                        if (tenantId != null) h.add("X-Tenant-Id", tenantId);
-                        h.setBearerAuth(tokenProvider.currentBearer());
-                        h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
-                    })
-                    .body(body)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
-                        throw HttpClientErrorException.create(
-                                resp.getStatusCode(), resp.getStatusText(),
-                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
-                    })
-                    .body(responseType);
-        } catch (RestClientResponseException e) {
-            log.warn("account-service returned {} on {}: {}", e.getStatusCode(), path, e.getMessage());
-            if (e.getStatusCode().is4xxClientError()) {
-                String code = extractErrorCode(e.getResponseBodyAsByteArray());
-                throw new NonRetryableDownstreamException(
-                        "account-service error " + e.getStatusCode().value(), e,
-                        e.getStatusCode().value(), code);
-            }
-            throw new DownstreamFailureException(
-                    "account-service error " + e.getStatusCode().value(), e);
-        } catch (Exception e) {
-            log.error("account-service call failed on {}", path, e);
-            throw new DownstreamFailureException("account-service unavailable", e);
-        }
+        return execute(path, () -> restClient.post()
+                .uri(path)
+                .headers(h -> {
+                    if (tenantId != null) h.add("X-Tenant-Id", tenantId);
+                    h.setBearerAuth(tokenProvider.currentBearer());
+                    h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+                })
+                .body(body)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, ERROR_RAISER)
+                .body(responseType));
     }
 
     /**
