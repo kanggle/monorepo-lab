@@ -376,6 +376,8 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
         'getPositionLots',
         // TASK-PC-FE-092 — FX 환율 피드 dashboard read (read-only, GET only)
         'getFxRates',
+        // TASK-PC-FE-104 — FX 환율 history 드릴 read (read-only, GET only)
+        'getFxRateHistory',
       ].sort(),
     );
   });

@@ -749,3 +749,66 @@ export const FxRatesResponseSchema = z
   })
   .passthrough();
 export type FxRatesResponse = z.infer<typeof FxRatesResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// FX 환율 history 드릴 — TASK-PC-FE-104
+//   § 14.1 GET /api/finance/ledger/fx-rates/{foreignCurrency}/history?limit=N
+//   (FIN-BE-040 — read over the `fx_rate_quote_history` append-only audit
+//   trail). Producer envelope = { data: { base, foreign, quotes: [...] }, meta }.
+//   STRICTLY READ-ONLY — per-pair time series, `fetched_at DESC` (newest first),
+//   ties broken by surrogate id DESC (deterministic, producer-ordered).
+//
+// F5 RATE INVARIANT — `rate` is a precision-exact **decimal string** from the
+// producer (e.g. "13.60000000"); rendered verbatim (string as-is). NEVER apply
+// `Number()` / `parseFloat()` / `parseInt()` to `rate`. History rows carry NO
+// staleness fields (history is raw provenance, not a live-cache freshness check).
+//
+// `limit` is a row count (NOT money — the F5 invariant is amount/rate-only):
+// default 50, cap 500, `≤ 0` floored to 1. The client hook clamps it; the
+// producer also floors/caps (double-defended). An unknown / never-polled
+// foreign code → 200 with `quotes: []` (NOT a 404 — mirrors the feed cache's
+// empty-200 stance).
+// ---------------------------------------------------------------------------
+
+/** Limit bounds for the FX history read (FIN-BE-040 — default 50, cap 500). */
+export const FX_HISTORY_DEFAULT_LIMIT = 50;
+export const FX_HISTORY_MAX_LIMIT = 500;
+
+/**
+ * One FX rate history row (`ledger-api.md` § 14.1 `quotes` array element).
+ *
+ * `rate` is a precision-exact **decimal string** (NEVER a number — F5).
+ * `asOf` is the provider-stated rate instant; `fetchedAt` is when the quote
+ * was pulled from the provider; `source` is the provider identifier (audit
+ * provenance). No staleness fields — history is raw provenance.
+ */
+export const FxRateHistoryQuoteSchema = z
+  .object({
+    // F5 — exact decimal string; NEVER coerce to Number/parseFloat/parseInt.
+    rate: z.string(),
+    asOf: z.string(),
+    fetchedAt: z.string(),
+    source: z.string(),
+  })
+  .passthrough();
+export type FxRateHistoryQuote = z.infer<typeof FxRateHistoryQuoteSchema>;
+
+/**
+ * FxRateHistoryResponse — FIN-BE-040 § 14.1 200 body `data` sub-object: the
+ * `(base, foreign)` pair + the ordered `quotes` time series (newest first).
+ * `base` is always `KRW` in v1 (the fixed reporting currency). An unknown /
+ * never-polled foreign code → `quotes: []` — a 200 empty-state, NOT a 404.
+ */
+export const FxRateHistoryResponseSchema = z
+  .object({
+    base: z.string().min(3).max(3),
+    foreign: z.string().min(3).max(3),
+    quotes: z.array(FxRateHistoryQuoteSchema),
+  })
+  .passthrough();
+export type FxRateHistoryResponse = z.infer<typeof FxRateHistoryResponseSchema>;
+
+/** FxRateHistoryQueryParams — the optional `limit` (row count, not money). */
+export interface FxRateHistoryQueryParams {
+  limit?: number;
+}

@@ -35,6 +35,10 @@ import {
   type PositionLotsResponse,
   FxRatesResponseSchema,
   type FxRatesResponse,
+  FxRateHistoryResponseSchema,
+  type FxRateHistoryResponse,
+  FX_HISTORY_DEFAULT_LIMIT,
+  FX_HISTORY_MAX_LIMIT,
   LEDGER_DEFAULT_PAGE_SIZE,
   LEDGER_MAX_PAGE_SIZE,
 } from '../api/types';
@@ -469,6 +473,69 @@ export function useFxRates(enabled = true) {
     queryKey: fxRatesKey(),
     queryFn: fetchFxRates,
     enabled,
+    staleTime: 30_000,
+    refetchOnMount: false,
+    ...READ_QUERY_REFETCH,
+    retry: false,
+  });
+}
+
+// --- FX 환율 history 드릴 (per-pair read; TASK-PC-FE-104) -------------------
+//
+// GET /api/ledger/fx-rates/{foreign}/history?limit=N (FIN-BE-040). Per-pair
+// (`KRW/{foreign}`) time series, newest first. `enabled`-gated: the query only
+// fires once a non-empty foreign code is supplied AND the tab is active. `limit`
+// is a row count (NOT money) — clamped client-side (≤0→1, cap 500, default 50),
+// mirroring the producer's own floor/cap (double-defended). `rate` is a decimal
+// string (F5). An unknown / never-polled foreign code → `quotes: []` (a normal
+// success, never an error).
+
+/** Clamps the FX history `limit` (a row count, not money — F5 is amount-only):
+ *  absent / non-finite → default 50; `≤ 0` → 1; `> 500` → 500. */
+const clampFxHistoryLimit = (limit?: number): number => {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return FX_HISTORY_DEFAULT_LIMIT;
+  }
+  const n = Math.floor(limit);
+  if (n <= 0) return 1;
+  return Math.min(FX_HISTORY_MAX_LIMIT, n);
+};
+
+export function fxRateHistoryKey(foreign: string | null, limit: number) {
+  return [LEDGER_KEY, 'fx-rate-history', foreign ?? '', limit] as const;
+}
+
+async function fetchFxRateHistory(
+  foreign: string,
+  limit: number,
+): Promise<FxRateHistoryResponse> {
+  const qs = new URLSearchParams();
+  qs.set('limit', String(limit));
+  const raw = await apiClient.get<unknown>(
+    `/api/ledger/fx-rates/${encodeURIComponent(foreign)}/history?${qs.toString()}`,
+  );
+  return FxRateHistoryResponseSchema.parse(raw);
+}
+
+/**
+ * `useFxRateHistory` — reads the per-pair FX rate history time series. READ-ONLY.
+ * `enabled`-gated: the query only fires once BOTH a non-empty foreign code is
+ * supplied AND `enabled` is true (the tab is active / a pair was selected). The
+ * same-origin proxy attaches the domain-facing IAM OIDC access token server-side
+ * — NEVER the operator token (§ 2.4.7.1 reuse). `limit` is clamped client-side.
+ * `retry: false` / no refetch-storm posture, same as the other ledger reads. An
+ * unknown / never-polled foreign code (`quotes: []`) is a normal success.
+ */
+export function useFxRateHistory(
+  foreign: string | null,
+  limit: number = FX_HISTORY_DEFAULT_LIMIT,
+  enabled = true,
+) {
+  const clamped = clampFxHistoryLimit(limit);
+  return useQuery({
+    queryKey: fxRateHistoryKey(foreign, clamped),
+    queryFn: () => fetchFxRateHistory(foreign as string, clamped),
+    enabled: enabled && Boolean(foreign && foreign.trim()),
     staleTime: 30_000,
     refetchOnMount: false,
     ...READ_QUERY_REFETCH,

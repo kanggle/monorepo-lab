@@ -28,6 +28,13 @@ import type { FxRatesResponse } from '../api/types';
 export interface FxRatesTableProps {
   data: FxRatesResponse | null;
   onRefresh?: () => void;
+  /**
+   * TASK-PC-FE-104 — when provided, each row's currency-pair cell becomes a
+   * button that drills into that pair's FX rate history (passing the foreign
+   * currency upward). Omitted → the pair renders as plain text (the FE-092
+   * feed-only behaviour; a test pins the no-regression).
+   */
+  onSelectPair?: (foreignCurrency: string) => void;
 }
 
 /**
@@ -45,7 +52,7 @@ function humanizeAge(ageSeconds: number): string {
   return `${Math.floor(ageSeconds / 86400)}일 전`;
 }
 
-export function FxRatesTable({ data, onRefresh }: FxRatesTableProps) {
+export function FxRatesTable({ data, onRefresh, onSelectPair }: FxRatesTableProps) {
   if (!data) {
     return null;
   }
@@ -144,7 +151,20 @@ export function FxRatesTable({ data, onRefresh }: FxRatesTableProps) {
                 }
               >
                 <td className="p-2 font-medium text-foreground">
-                  {rate.baseCurrency}/{rate.foreignCurrency}
+                  {onSelectPair ? (
+                    <button
+                      type="button"
+                      data-testid={`ledger-fx-rates-pair-${i}`}
+                      onClick={() => onSelectPair(rate.foreignCurrency)}
+                      className="text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      {rate.baseCurrency}/{rate.foreignCurrency}
+                    </button>
+                  ) : (
+                    <>
+                      {rate.baseCurrency}/{rate.foreignCurrency}
+                    </>
+                  )}
                 </td>
                 <td className="p-2 font-mono text-foreground">
                   {/* F5: rate is rendered as-is (string). NEVER Number()/parseFloat(). */}
