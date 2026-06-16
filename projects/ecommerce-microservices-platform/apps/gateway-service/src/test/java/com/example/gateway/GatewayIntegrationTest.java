@@ -384,4 +384,53 @@ class GatewayIntegrationTest {
                 .expectBody()
                 .jsonPath("$.code").isEqualTo("UNAUTHORIZED");
     }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-394 — CORS preflight (OPTIONS) must be permitted without auth.
+    //
+    // A browser sends an OPTIONS preflight (no Authorization header) before any
+    // non-simple cross-origin request (e.g. an authed POST /api/wishlists with
+    // Authorization + Content-Type: application/json). Before this fix the
+    // security chain's anyExchange().authenticated() 401'd the preflight before
+    // Spring Cloud Gateway's globalcors CorsWebFilter ran, so the browser
+    // reported "TypeError: Failed to fetch" and every cross-origin authed write
+    // was blocked. SecurityConfig now permits HttpMethod.OPTIONS so the
+    // preflight reaches the CorsWebFilter, which answers 200 + Access-Control-*.
+    //
+    // globalcors config (application.yml, NOT overridden by the integration
+    // profile): allowed-origins default http://localhost:3000, allow-credentials
+    // true, allowed-methods/headers '*'.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-1: CORS preflight(OPTIONS)는 인증 없이 200 + Access-Control-Allow-* 헤더를 반환한다 (보호 경로, TASK-BE-394)")
+    void corsPreflight_protectedRoute_noToken_permittedWithCorsHeaders() {
+        // OPTIONS preflight for a protected write path — no Authorization header.
+        // Must NOT 401; the CorsWebFilter answers it with the allow headers.
+        webTestClient.options()
+                .uri("/api/orders/123")
+                .header("Origin", "http://localhost:3000")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "authorization,content-type")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("Access-Control-Allow-Origin", "http://localhost:3000")
+                .expectHeader().valueEquals("Access-Control-Allow-Credentials", "true")
+                .expectHeader().exists("Access-Control-Allow-Methods");
+    }
+
+    @Test
+    @DisplayName("AC-1: 임의 /api/** 경로의 CORS preflight 도 인증 없이 200 을 반환한다 (preflight 전역 허용)")
+    void corsPreflight_anyApiRoute_noToken_isPermitted() {
+        // The user-service route owns /api/wishlists/** (application.yml) — the
+        // exact path whose preflight-401 surfaced this bug (FE-074 AC-2).
+        webTestClient.options()
+                .uri("/api/wishlists")
+                .header("Origin", "http://localhost:3000")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "authorization,content-type")
+                .exchange()
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
 }
