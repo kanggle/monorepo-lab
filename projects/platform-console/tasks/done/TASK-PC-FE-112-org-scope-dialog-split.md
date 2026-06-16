@@ -1,6 +1,6 @@
 # TASK-PC-FE-112 — operators `OrgScopeDialog.tsx` god-component 분할 (fat container → 커스텀훅)
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js, operators 피처)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (behavior-preserving — PC-FE-106 fat-container→custom-hook 패턴)
