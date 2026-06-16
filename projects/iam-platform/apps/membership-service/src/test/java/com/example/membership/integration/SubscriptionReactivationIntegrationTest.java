@@ -32,6 +32,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static com.example.membership.support.ReflectionTestSupport.setField;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -147,15 +148,5 @@ class SubscriptionReactivationIntegrationTest extends AbstractIntegrationTest {
                 "SELECT COUNT(*) FROM subscriptions WHERE account_id = ? AND status = 'EXPIRED'",
                 Integer.class, accountId);
         assertThat(expiredCount).isEqualTo(1);
-    }
-
-    private static void setField(Object target, String name, Object value) {
-        try {
-            var f = target.getClass().getDeclaredField(name);
-            f.setAccessible(true);
-            f.set(target, value);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(e);
-        }
     }
 }

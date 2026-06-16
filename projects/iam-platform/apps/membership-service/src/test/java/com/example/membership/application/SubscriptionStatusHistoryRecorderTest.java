@@ -15,9 +15,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 
+import static com.example.membership.support.ReflectionTestSupport.setField;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
@@ -124,11 +124,5 @@ class SubscriptionStatusHistoryRecorderTest {
         setField(s, "planLevel", PlanLevel.FAN_CLUB);
         setField(s, "status", SubscriptionStatus.ACTIVE);
         return s;
-    }
-
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Field f = target.getClass().getDeclaredField(name);
-        f.setAccessible(true);
-        f.set(target, value);
     }
 }
