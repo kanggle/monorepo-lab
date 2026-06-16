@@ -152,6 +152,6 @@ BigDecimal settlementRate,
 
 1. **`TASK-FIN-BE-031`** (D1/D2/D5/D6) — `FxRateProviderPort` + noop/stub 어댑터 + `ResilienceClientFactory` 배선 + V12 `fx_rate_quote` 캐시 + 스케줄드 폴러(ShedLock) **shadow**(캐시 적재만, 운영자 경로 미참조). MockWebServer IT. Model = **Opus**(외부의존·인프라).
 2. **`TASK-FIN-BE-032`** (D3/D4) — 재평가·결제 use-case 의 환율-생략 시 캐시 폴백 + staleness 가드 + `FX_RATE_UNAVAILABLE` + 적용 quote 출처 감사기록. net-zero(입력 제공 경로 byte-identical). Model = **Opus**(손익경로·regulated fail-closed).
-3. **(deferred)** 실제 공개 FX API 어댑터(`mode=<real>`) · append-only `fx_rate_quote_history` · 콘솔 "환율 대시보드 + 수동 refresh" 표면 · per-tenant override(특수 계약환율).
+3. **`TASK-FIN-BE-038`** (DONE) — 실제 공개 FX API 어댑터(`mode=real`, **Frankfurter** no-key/ECB). `RealFxRateProviderAdapter` + `FxRateFeedProperties.Real` 블록(`from=foreign&to=base` 방향 매핑) + MockWebServer IT. additive·net-zero(기본 `mode=noop` 불변). 잔여 deferred: append-only `fx_rate_quote_history` · 콘솔 "환율 대시보드 + 수동 refresh" 표면 · per-tenant override(특수 계약환율).
 
 > **FIN-BE-030 = 본 ADR 캐리어**(doc-only — ADR + README, 코드 0). 구현은 FIN-BE-031(shadow port+캐시+폴러)부터.

@@ -27,7 +27,10 @@ public class FxRateFeedProperties implements FxRateFeedSettings {
     /** Master gate for the scheduled poller. Default OFF (net-zero — no poller bean). */
     private boolean enabled = false;
 
-    /** Selects the active adapter bean: {@code noop} (default) / {@code stub} / {@code http}. */
+    /**
+     * Selects the active adapter bean: {@code noop} (default) / {@code stub} / {@code http} /
+     * {@code real} (Frankfurter public API — TASK-FIN-BE-038).
+     */
     private String mode = "noop";
 
     /** Poll cadence in ms (fixed-delay between {@code RefreshFxRateQuotesUseCase} runs). */
@@ -48,6 +51,9 @@ public class FxRateFeedProperties implements FxRateFeedSettings {
 
     /** {@code http}-mode endpoint config. */
     private Http http = new Http();
+
+    /** {@code real}-mode (Frankfurter public API) endpoint config. */
+    private Real real = new Real();
 
     public boolean isEnabled() {
         return enabled;
@@ -129,6 +135,14 @@ public class FxRateFeedProperties implements FxRateFeedSettings {
         this.http = http;
     }
 
+    public Real getReal() {
+        return real;
+    }
+
+    public void setReal(Real real) {
+        this.real = real;
+    }
+
     /** {@code stub}-mode fixed rates: foreign ISO code → base-minor-per-foreign-minor rate. */
     public static class Stub {
 
@@ -147,6 +161,41 @@ public class FxRateFeedProperties implements FxRateFeedSettings {
     public static class Http {
 
         private String baseUrl;
+        private int connectTimeoutMs = 2_000;
+        private int readTimeoutMs = 5_000;
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public int getConnectTimeoutMs() {
+            return connectTimeoutMs;
+        }
+
+        public void setConnectTimeoutMs(int connectTimeoutMs) {
+            this.connectTimeoutMs = connectTimeoutMs;
+        }
+
+        public int getReadTimeoutMs() {
+            return readTimeoutMs;
+        }
+
+        public void setReadTimeoutMs(int readTimeoutMs) {
+            this.readTimeoutMs = readTimeoutMs;
+        }
+    }
+
+    /**
+     * {@code real}-mode config (consumed only when {@code mode=real}) — Frankfurter public API
+     * (no-key, ECB daily). Default base URL {@code https://api.frankfurter.dev/v1}.
+     */
+    public static class Real {
+
+        private String baseUrl = "https://api.frankfurter.dev/v1";
         private int connectTimeoutMs = 2_000;
         private int readTimeoutMs = 5_000;
 
