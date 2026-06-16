@@ -1,6 +1,6 @@
 # TASK-MONO-277 — Clarify multi-secondary Service Type declarations in service-types/INDEX.md
 
-Status: ready
+Status: done
 
 ## Goal
 
