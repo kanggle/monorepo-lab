@@ -50,7 +50,7 @@ public class AccountLockedConsumer {
                     ? root.path("payload")
                     : root;
 
-            String eventId = firstNonBlank(root.path("eventId").asText(null),
+            String eventId = ConsumerUtils.firstNonBlank(root.path("eventId").asText(null),
                     payload.path("eventId").asText(null));
             if (eventId == null || eventId.isBlank()) {
                 // TASK-BE-041b-fix Critical 1: the account-events contract now mandates
@@ -63,7 +63,7 @@ public class AccountLockedConsumer {
             }
 
             String accountId = requireText(payload, "accountId", "account.locked payload missing accountId");
-            String reason = firstNonBlank(
+            String reason = ConsumerUtils.firstNonBlank(
                     payload.path("reason").asText(null),
                     payload.path("reasonCode").asText(null));
             if (reason == null || reason.isBlank()) {
@@ -80,7 +80,7 @@ public class AccountLockedConsumer {
             // The lenient fallback to DEFAULT_TENANT_ID is removed — upstream publishers
             // (account-service AccountEventPublisher) always include tenantId since Phase 2b.
             // Messages without tenant_id are routed to account.locked.dlq via MissingTenantIdException.
-            String tenantId = firstNonBlank(
+            String tenantId = ConsumerUtils.firstNonBlank(
                     root.path("tenantId").asText(null),
                     payload.path("tenantId").asText(null));
             if (tenantId == null || tenantId.isBlank()) {
@@ -110,7 +110,7 @@ public class AccountLockedConsumer {
     }
 
     private static String resolveLockedBy(JsonNode payload, String actorType) {
-        String lockedBy = firstNonBlank(
+        String lockedBy = ConsumerUtils.firstNonBlank(
                 payload.path("lockedBy").asText(null),
                 payload.path("actorId").asText(null));
         if (lockedBy == null || lockedBy.isBlank()) {
@@ -123,7 +123,7 @@ public class AccountLockedConsumer {
     }
 
     private static Instant resolveOccurredAt(JsonNode root, JsonNode payload) {
-        String ts = firstNonBlank(
+        String ts = ConsumerUtils.firstNonBlank(
                 payload.path("lockedAt").asText(null),
                 payload.path("occurredAt").asText(null),
                 root.path("occurredAt").asText(null));
@@ -144,13 +144,6 @@ public class AccountLockedConsumer {
             throw new IllegalArgumentException(msg);
         }
         return v;
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (String v : values) {
-            if (v != null && !v.isBlank() && !"null".equals(v)) return v;
-        }
-        return null;
     }
 
     private static String truncate(String s, int max) {
