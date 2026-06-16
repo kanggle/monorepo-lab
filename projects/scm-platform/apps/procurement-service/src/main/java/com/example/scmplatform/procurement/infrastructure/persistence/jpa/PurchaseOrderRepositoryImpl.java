@@ -1,12 +1,13 @@
 package com.example.scmplatform.procurement.infrastructure.persistence.jpa;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrderLine;
 import com.example.scmplatform.procurement.domain.po.repository.PurchaseOrderRepository;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -47,9 +48,14 @@ public class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
     }
 
     @Override
-    public Page<PurchaseOrder> search(String tenantId, PoStatus status, String supplierId, Pageable pageable) {
-        Page<PurchaseOrder> page = poJpa.search(tenantId, status, supplierId, pageable);
-        return page.map(this::hydrate);
+    public PageResult<PurchaseOrder> search(String tenantId, PoStatus status, String supplierId, PageQuery pageQuery) {
+        Page<PurchaseOrder> page = poJpa.search(tenantId, status, supplierId, PageRequests.toPageable(pageQuery));
+        return new PageResult<>(
+                page.getContent().stream().map(this::hydrate).toList(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages());
     }
 
     private PurchaseOrder hydrate(PurchaseOrder po) {

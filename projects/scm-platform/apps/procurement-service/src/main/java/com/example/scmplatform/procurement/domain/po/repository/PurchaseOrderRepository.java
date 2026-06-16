@@ -1,9 +1,9 @@
 package com.example.scmplatform.procurement.domain.po.repository;
 
+import com.example.common.page.PageQuery;
+import com.example.common.page.PageResult;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 import java.util.Optional;
 
@@ -31,7 +31,8 @@ public interface PurchaseOrderRepository {
 
     /**
      * Search with optional filters. {@code status} and {@code supplierId}
-     * may be null. Results are ordered by createdAt DESC.
+     * may be null. Paging + sort are carried by the framework-free {@link PageQuery};
+     * infrastructure adapters convert it to the JPA paging types at the boundary.
      */
-    Page<PurchaseOrder> search(String tenantId, PoStatus status, String supplierId, Pageable pageable);
+    PageResult<PurchaseOrder> search(String tenantId, PoStatus status, String supplierId, PageQuery pageQuery);
 }
