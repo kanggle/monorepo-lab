@@ -1,6 +1,6 @@
 # TASK-MONO-279 — Skill-library audit fixes: identity-platform-setup roles-only (ADR-032) + observability-query gap→iam rename residue
 
-Status: ready
+Status: review
 
 ## Goal
 
