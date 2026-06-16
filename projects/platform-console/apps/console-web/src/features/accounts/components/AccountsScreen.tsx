@@ -14,8 +14,17 @@ import {
 } from '../hooks/use-accounts';
 import type { AccountPage, AccountSummary, BulkLockItem } from '../api/types';
 import { classifyAccountsEmpty } from '../lib/classify-empty';
-import { AccountStatusBadge } from './AccountStatusBadge';
 import { ConfirmActionDialog } from './ConfirmActionDialog';
+import { AccountsTable } from './AccountsTable';
+import {
+  ACTION_META,
+  accountActionDescription,
+  isForbidden,
+  newIdemKey,
+  type ActionKind,
+  type AccountsQuery,
+  type PendingAction,
+} from './accounts-screen-helpers';
 
 /**
  * IAM accounts operator surface (TASK-PC-FE-002 — Phase 2 slice 1).
@@ -32,77 +41,19 @@ import { ConfirmActionDialog } from './ConfirmActionDialog';
  * (`crypto.randomUUID()` when the dialog confirms) and reused only if that
  * exact confirmed action is retried after a transient error — a brand-new
  * dialog open always yields a new key (no accidental dedupe / double-mutate).
+ *
+ * Container / presentational (TASK-PC-FE-111): this container owns ALL state +
+ * the 5 mutations + gating; the result table + pagination are the prop-driven
+ * {@link AccountsTable}; the pending-action model + confirm copy live in
+ * `accounts-screen-helpers`.
  */
-
-type ActionKind =
-  | 'lock'
-  | 'unlock'
-  | 'revoke-session'
-  | 'gdpr-delete'
-  | 'bulk-lock';
-
-interface PendingAction {
-  kind: ActionKind;
-  /** Single-target ops. */
-  account?: AccountSummary;
-  /** bulk-lock targets. */
-  accountIds?: string[];
-  /** Stable across retries of THIS confirmed action. */
-  idempotencyKey: string;
-}
-
-const ACTION_META: Record<
-  ActionKind,
-  { title: string; confirm: string; destructive: boolean }
-> = {
-  lock: { title: '계정 잠금', confirm: '잠금', destructive: true },
-  unlock: { title: '계정 잠금 해제', confirm: '잠금 해제', destructive: true },
-  'revoke-session': {
-    title: '모든 세션 강제 종료',
-    confirm: '세션 종료',
-    destructive: true,
-  },
-  'gdpr-delete': {
-    title: 'GDPR 삭제 (되돌릴 수 없음)',
-    confirm: '영구 삭제',
-    destructive: true,
-  },
-  'bulk-lock': {
-    title: '선택 계정 일괄 잠금',
-    confirm: '일괄 잠금',
-    destructive: true,
-  },
-};
-
-/**
- * A 403 PERMISSION_DENIED (account.read absent) is an AUTHORIZATION denial, not
- * a transient outage — suppress the degraded banner so the empty-state shows the
- * dedicated 권한 없음 message instead (TASK-MONO-202). Initial-load denials are
- * caught at the page level; this covers a mid-session permission revocation
- * surfaced on a client re-query.
- */
-function isForbidden(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    (error.status === 403 || error.code === 'PERMISSION_DENIED')
-  );
-}
-
-function newIdemKey(): string {
-  const g = globalThis as unknown as { crypto?: { randomUUID?: () => string } };
-  return (
-    g.crypto?.randomUUID?.() ??
-    `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  );
-}
 
 export function AccountsScreen({ initial }: { initial: AccountPage }) {
   const [emailInput, setEmailInput] = useState('');
-  const [query, setQuery] = useState<{
-    email?: string;
-    page: number;
-    size: number;
-  }>({ page: initial.page, size: initial.size });
+  const [query, setQuery] = useState<AccountsQuery>({
+    page: initial.page,
+    size: initial.size,
+  });
 
   const search = useAccountsSearch(query, query.page === initial.page && !query.email ? initial : undefined);
   const page = search.data;
@@ -339,164 +290,23 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
           );
         })()
       ) : (
-        <>
-          <table
-            className="data-table"
-            data-testid="accounts-table"
-          >
-            <caption className="sr-only">계정 목록</caption>
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th scope="col" className="p-2">
-                  <span className="sr-only">일괄 선택</span>
-                </th>
-                <th scope="col" className="p-2">
-                  이메일
-                </th>
-                <th scope="col" className="p-2">
-                  상태
-                </th>
-                <th scope="col" className="p-2">
-                  생성일
-                </th>
-                <th scope="col" className="p-2">
-                  작업
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((acc) => (
-                <tr
-                  key={acc.id}
-                  data-testid={`account-row-${acc.id}`}
-                  className="border-b border-border"
-                >
-                  <td className="p-2">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(acc.id)}
-                      onChange={() => toggleSelect(acc.id)}
-                      aria-label={`${acc.email} 일괄 작업 선택`}
-                      data-testid={`account-select-${acc.id}`}
-                    />
-                  </td>
-                  <td className="p-2">{acc.email}</td>
-                  <td className="p-2">
-                    <AccountStatusBadge status={acc.status} />
-                  </td>
-                  <td className="p-2 text-muted-foreground">
-                    {acc.createdAt}
-                  </td>
-                  <td className="p-2">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => openAction('lock', acc)}
-                        data-testid={`action-lock-${acc.id}`}
-                      >
-                        잠금
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => openAction('unlock', acc)}
-                        data-testid={`action-unlock-${acc.id}`}
-                      >
-                        잠금 해제
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => openAction('revoke-session', acc)}
-                        data-testid={`action-revoke-${acc.id}`}
-                      >
-                        세션 종료
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => exportAccount(acc)}
-                        data-testid={`action-export-${acc.id}`}
-                      >
-                        내보내기
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={() => openAction('gdpr-delete', acc)}
-                        data-testid={`action-gdpr-${acc.id}`}
-                      >
-                        GDPR 삭제
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <nav
-            className="mt-4 flex items-center justify-between"
-            aria-label="페이지 이동"
-          >
-            <Button
-              variant="secondary"
-              disabled={query.page <= 0 || !!query.email}
-              onClick={() =>
-                setQuery((q) => ({ ...q, page: Math.max(0, q.page - 1) }))
-              }
-              data-testid="accounts-prev"
-            >
-              이전
-            </Button>
-            <span
-              className="text-sm text-muted-foreground"
-              data-testid="accounts-pageinfo"
-            >
-              {query.email
-                ? '단건 검색'
-                : `${page.page + 1} / ${Math.max(1, page.totalPages)} 페이지 · 총 ${page.totalElements}건`}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={
-                !!query.email || page.page + 1 >= page.totalPages
-              }
-              onClick={() => setQuery((q) => ({ ...q, page: q.page + 1 }))}
-              data-testid="accounts-next"
-            >
-              다음
-            </Button>
-          </nav>
-        </>
+        <AccountsTable
+          rows={rows}
+          page={page}
+          query={query}
+          selected={selected}
+          onToggleSelect={toggleSelect}
+          onAction={openAction}
+          onExport={exportAccount}
+          onPageChange={setQuery}
+        />
       )}
 
       {pending && (
         <ConfirmActionDialog
           open
           title={ACTION_META[pending.kind].title}
-          description={
-            pending.kind === 'bulk-lock' ? (
-              <>
-                선택한 <strong>{pending.accountIds?.length ?? 0}</strong>개
-                계정을 일괄 잠금합니다. 계정별 결과가 표시되며 일부 실패해도
-                나머지는 처리됩니다.
-              </>
-            ) : pending.kind === 'gdpr-delete' ? (
-              <>
-                <strong>{pending.account?.email}</strong> 계정을 GDPR 삭제
-                합니다. 이 작업은 <strong>되돌릴 수 없으며</strong> 개인정보가
-                즉시 마스킹됩니다.
-              </>
-            ) : (
-              <>
-                <strong>{pending.account?.email}</strong> 계정에 대해 이
-                작업을 수행합니다.
-              </>
-            )
-          }
+          description={accountActionDescription(pending)}
           confirmLabel={ACTION_META[pending.kind].confirm}
           destructive={ACTION_META[pending.kind].destructive}
           requireTypedConfirmation={
