@@ -1,7 +1,8 @@
 # TASK-PC-FE-101 — split the `wms-outbound-ops/components/OutboundOpsScreen.tsx` god-file (container/presentational)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
+**Closure:** PR #1712 squash `b1ff6bd127a8a443b0d3dbe76ae2193083e08b35`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass incl. Frontend lint/build + unit + E2E smoke + Build & Test). 755-line single stateful component → outbound-ops-helpers.ts (75) + OutboundOrdersTable.tsx (192) + OutboundOrderDrill.tsx (269) + OutboundOpsScreen.tsx container (387); container/presentational, all state in container; public OutboundOpsScreen export import-stable; 0 test changes; tsc 0 / lint 0 / vitest 162 files · 1943 tests green (baseline count).
 **Parent:** fourth and final in the erp-ops/wms-outbound-ops god-file split series (after TASK-PC-FE-098 `erp-api.ts`, 099 `use-erp-ops.ts`, 100 `ApprovalScreen.tsx`). `OutboundOpsScreen.tsx` was a single ~755-line stateful component (TASK-PC-FE-057 + 085 + the TMS-retry follow-up).
 
 ## Goal
