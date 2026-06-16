@@ -442,11 +442,13 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   9th / 10th / 12th / 17th increments act on one `(account, currency)` per operator call); a
   **proceeds-amount input** (proceeds derive from a rate; supplying the *actual* base received); a
   **configurable base currency** (fixed KRW in v1). *(FIFO / lot-level cost basis = 16th–18th — done.)*
-- **FX rate feed (ADR-002 remainder)**: a `fx_rate_quote_history` append-only audit trail; a console
-  "FX rate dashboard + manual refresh" surface; per-tenant rate override (special contract rates); a
-  **ShedLock single-leader guard** for the poller (multi-instance). *(Feed infra + omitted-rate
-  fallback + read surface = 23rd–25th — done. **Real public FX API adapter** (`mode=real`,
-  Frankfurter no-key/ECB, `RealFxRateProviderAdapter`) = TASK-FIN-BE-038 — done.)*
+- **FX rate feed (ADR-002 remainder)**: a console "FX rate dashboard + manual refresh" surface;
+  per-tenant rate override (special contract rates); a **ShedLock single-leader guard** for the
+  poller (multi-instance). *(Feed infra + omitted-rate fallback + read surface = 23rd–25th — done.
+  **Real public FX API adapter** (`mode=real`, Frankfurter no-key/ECB, `RealFxRateProviderAdapter`)
+  = TASK-FIN-BE-038 — done. **Append-only `fx_rate_quote_history` audit trail** (V13,
+  `FxRateQuoteHistory` domain + `FxRateQuoteHistoryRepository` port + JPA adapter; poller appends
+  one row per pair per run inside the SAME `@Transactional`) = TASK-FIN-BE-039 — done.)*
 - **Manual posting**: body-hash idempotency conflict (`IDEMPOTENCY_KEY_CONFLICT` 409 on a
   same-key / different-body replay — the 5th increment is replay-safe on the key alone) +
   a maker / checker approval workflow for manual entries.
@@ -601,7 +603,7 @@ com.example.finance.ledger/
 │   ├── GetFxCostFlowAccountConfigsUseCase / SetFxCostFlowAccountConfigUseCase / DeleteFxCostFlowAccountConfigUseCase   ← (21st incr) per-account override list / upsert / delete (audit FX_COST_FLOW_ACCOUNT_METHOD_SET / _CLEARED; delete idempotent)
 │   ├── GetFxPositionLotsUseCase.java      ← (20th incr) @Transactional(readOnly): FxPositionLotRepository.findOpenLots → FxPositionLotsView (+ totals)
 │   ├── ResolveEffectiveFxRate.java        ← (24th incr) omitted-rate resolver: supplied ⇒ verbatim; omitted + feed enabled + fresh cache quote ⇒ cache rate; omitted + disabled/absent/stale ⇒ FxRateUnavailableException (422); staleness now−asOf>staleAfter
-│   ├── RefreshFxRateQuotesUseCase.java    ← (23rd incr) @Transactional: iterate configured pairs (base KRW) → FxRateProviderPort.latestQuote → upsert fx_rate_quote (per-pair try/catch; returns upserted count)
+│   ├── RefreshFxRateQuotesUseCase.java    ← (23rd incr) @Transactional: iterate configured pairs (base KRW) → FxRateProviderPort.latestQuote → upsert fx_rate_quote + append fx_rate_quote_history (per-pair try/catch; returns upserted count); (26th incr — TASK-FIN-BE-039) + FxRateQuoteHistoryRepository injected, append after each upsert
 │   ├── GetFxRatesUseCase.java             ← (25th incr) @Transactional(readOnly): fx_rate_quote cache → FxRatesView (top-level feedEnabled + per-row ageSeconds/stale)
 │   ├── QueryLedgerUseCase.java            ← read: entry detail / per-account entries + balance / trial balance
 │   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
@@ -626,8 +628,9 @@ com.example.finance.ledger/
 │   │    AuditLogJpaEntity, processed_events;
 │   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity;
 │   │    (4th incr) ReconciliationStatement/Line/Match/DiscrepancyJpaEntity + Repository/Adapter;
-│   │    (15th–23rd incr) FxCostFlowConfig / FxCostFlowAccountConfig / FxPositionLot / FxRateQuote JpaEntity + Spring Data repo + Adapter)
-│   │   Flyway: V1 init, V2 period, V3 outbox, V4 reconciliation, (8th incr) V5__add_multi_currency (journal_line cols + backfill KRW rate=1), (11th incr) V6__add_reconciliation_fx (reconciliation_statement_line base_amount_minor/base_currency NULL — additive, no CHECK change), (13th incr) V7__add_reconciliation_fx_tolerance, (14th incr) V8__add_reconciliation_match_cross_currency, (15th incr) V9__add_fx_cost_flow_config, (16th incr) V10__add_fx_position_lot (+ synthetic-lot backfill), (21st incr) V11__add_fx_cost_flow_account_config, (23rd incr) V12__add_fx_rate_quote (all additive — new tables / nullable cols, no CHECK change)
+│   │    (15th–23rd incr) FxCostFlowConfig / FxCostFlowAccountConfig / FxPositionLot / FxRateQuote JpaEntity + Spring Data repo + Adapter;
+│   │    (26th incr — TASK-FIN-BE-039) FxRateQuoteHistory (@Entity, surrogate IDENTITY id) + FxRateQuoteHistoryJpaRepository + FxRateQuoteHistoryRepositoryImpl)
+│   │   Flyway: V1 init, V2 period, V3 outbox, V4 reconciliation, (8th incr) V5__add_multi_currency (journal_line cols + backfill KRW rate=1), (11th incr) V6__add_reconciliation_fx (reconciliation_statement_line base_amount_minor/base_currency NULL — additive, no CHECK change), (13th incr) V7__add_reconciliation_fx_tolerance, (14th incr) V8__add_reconciliation_match_cross_currency, (15th incr) V9__add_fx_cost_flow_config, (16th incr) V10__add_fx_position_lot (+ synthetic-lot backfill), (21st incr) V11__add_fx_cost_flow_account_config, (23rd incr) V12__add_fx_rate_quote, (26th incr — TASK-FIN-BE-039) V13__add_fx_rate_quote_history (all additive — new tables / nullable cols, no CHECK change)
 │   ├── outbox/                            ← (3rd incr) per-service transactional outbox (OutboxRow path)
 │   │   ├── LedgerOutboxJpaEntity.java     ← implements OutboxRow (@Table ledger_outbox, MySQL payload TEXT)
 │   │   ├── LedgerOutboxJpaRepository.java ← findPending(Pageable) + countByPublishedAtIsNull

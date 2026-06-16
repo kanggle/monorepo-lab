@@ -4,6 +4,8 @@ import com.example.finance.ledger.application.port.outbound.ClockPort;
 import com.example.finance.ledger.application.port.outbound.FxRateFeedSettings;
 import com.example.finance.ledger.application.port.outbound.FxRateProviderPort;
 import com.example.finance.ledger.domain.journal.FxRateQuote;
+import com.example.finance.ledger.domain.journal.FxRateQuoteHistory;
+import com.example.finance.ledger.domain.journal.repository.FxRateQuoteHistoryRepository;
 import com.example.finance.ledger.domain.journal.repository.FxRateQuoteRepository;
 import com.example.finance.ledger.domain.money.Currency;
 import com.example.finance.ledger.domain.money.LedgerReportingCurrency;
@@ -29,6 +31,12 @@ import java.time.Instant;
  * ({@code SettleForeignPositionUseCase} / {@code RevalueForeignBalanceUseCase}) reads it in this
  * increment. With the default config ({@code mode=noop}, {@code enabled=false}) the poller bean is
  * not even created, so this use case is never invoked and the cache stays empty.
+ *
+ * <p><b>History trail</b> (26th increment — TASK-FIN-BE-039, ADR-002 § 3.1 item 3): after each
+ * latest-upsert into {@code fx_rate_quote}, the same quote is <em>also</em> appended to
+ * {@code fx_rate_quote_history} (append-only — many rows per pair over time) inside the SAME
+ * {@code @Transactional} and the SAME per-pair try/catch. The existing upsert call is
+ * byte-unchanged; history is purely additive.
  */
 @Service
 @RequiredArgsConstructor
@@ -38,6 +46,7 @@ public class RefreshFxRateQuotesUseCase {
 
     private final FxRateProviderPort fxRateProviderPort;
     private final FxRateQuoteRepository fxRateQuoteRepository;
+    private final FxRateQuoteHistoryRepository fxRateQuoteHistoryRepository;
     private final FxRateFeedSettings settings;
     private final ClockPort clock;
 
@@ -59,6 +68,12 @@ public class RefreshFxRateQuotesUseCase {
                 }
                 Instant now = clock.now();
                 fxRateQuoteRepository.save(FxRateQuote.of(
+                        base, foreign,
+                        quote.get().rate(),
+                        quote.get().asOf(),
+                        quote.get().source(),
+                        now));
+                fxRateQuoteHistoryRepository.append(FxRateQuoteHistory.of(
                         base, foreign,
                         quote.get().rate(),
                         quote.get().asOf(),
