@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-279-skills-audit-fix-identity-platform-roles-only-and-iam-rename.md` — **READY**. Fix 2 stale-content findings from the 2026-06-16 `.claude/skills/` audit: (1) `service-types/identity-platform-setup/SKILL.md` still teaches the ADR-MONO-032-removed `account_type (CONSUMER|OPERATOR)` partition → rewrite to roles-only (matching `platform/service-types/identity-platform.md` + `jwt-standard-claims.md`); (2) `cross-cutting/observability-query/SKILL.md` trace tree `gap producer span` → `iam producer span` (gap→iam rename residue). Doc-only, behavior-preserving (aligns to ACCEPTED ADR-032 + completed rename; no policy/ADR). ⚠️ `.claude/skills/` edit = per-action approvable; `.claude/` commit may be classifier-gated → patch handed to user if blocked. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (identity rewrite = the judgement; observability = 1-word). Library otherwise clean (74 skills/13 agents/11 commands INDEX+catalog drift-free).
 
 ## in-progress
 
