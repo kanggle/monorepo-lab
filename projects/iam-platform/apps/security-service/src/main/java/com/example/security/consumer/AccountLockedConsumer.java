@@ -1,32 +1,33 @@
 package com.example.security.consumer;
 
-import com.example.security.infrastructure.persistence.AccountLockHistoryJpaEntity;
-import com.example.security.infrastructure.persistence.AccountLockHistoryJpaRepository;
+import com.example.security.application.RecordAccountLockHistoryUseCase;
+import com.example.security.domain.history.AccountLockHistory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
 /**
- * Consumes the {@code account.locked} event published by account-service and
- * appends an immutable row to {@code account_lock_history} for downstream
- * security analysis (TASK-BE-041b).
+ * Consumes the {@code account.locked} event published by account-service and appends an
+ * immutable row to {@code account_lock_history} for downstream security analysis
+ * (TASK-BE-041b).
  *
- * <p>Idempotency: the {@code event_id} unique constraint naturally deduplicates
- * replays. A {@link DataIntegrityViolationException} from a duplicate eventId
- * is treated as success (already processed).
+ * <p>This consumer is a thin Kafka transport adapter: it deserializes the envelope,
+ * maps the payload to a domain {@link AccountLockHistory}, and delegates persistence +
+ * idempotency to {@link RecordAccountLockHistoryUseCase} (declared dependency rule
+ * {@code consumer → application → domain} — it does not touch
+ * {@code infrastructure/persistence} directly).
  *
- * <p>Envelope compatibility: accepts both the canonical envelope form
- * ({@code eventId}/{@code occurredAt}/{@code payload:{...}}) and the flat
- * payload form currently emitted by account-service. Deserialization failures
- * bubble up as {@link RuntimeException} so the shared
+ * <p>Idempotency: handled by the use case via the {@code event_id} unique constraint. A
+ * duplicate replay is swallowed there, so {@link #onMessage} only propagates genuine
+ * failures — deserialization errors and invalid payloads (missing eventId/accountId/
+ * reason/tenantId) bubble up as {@link RuntimeException} so the shared
  * {@code DefaultErrorHandler} routes them to {@code account.locked.dlq}
  * (platform/event-driven-policy.md).
  */
@@ -39,7 +40,7 @@ public class AccountLockedConsumer {
     private static final String SYSTEM_LOCKED_BY = "00000000-0000-0000-0000-000000000000";
 
     private final ObjectMapper objectMapper;
-    private final AccountLockHistoryJpaRepository repository;
+    private final RecordAccountLockHistoryUseCase recordAccountLockHistoryUseCase;
 
     @KafkaListener(topics = TOPIC)
     public void onMessage(ConsumerRecord<String, String> record) {
@@ -86,16 +87,10 @@ public class AccountLockedConsumer {
                 throw new MissingTenantIdException(eventId, "account.locked");
             }
 
-            AccountLockHistoryJpaEntity entity = AccountLockHistoryJpaEntity.create(
+            AccountLockHistory history = new AccountLockHistory(
                     tenantId, eventId, accountId, truncate(reason, 255), lockedBy, source, occurredAt);
 
-            try {
-                repository.save(entity);
-                log.info("account.locked recorded: eventId={}, accountId={}, source={}",
-                        eventId, accountId, source);
-            } catch (DataIntegrityViolationException dup) {
-                log.info("account.locked duplicate ignored (event_id unique): eventId={}", eventId);
-            }
+            recordAccountLockHistoryUseCase.execute(history);
         } catch (JsonProcessingException e) {
             log.error("Failed to deserialize account.locked event: topic={}, key={}",
                     record.topic(), record.key(), e);
