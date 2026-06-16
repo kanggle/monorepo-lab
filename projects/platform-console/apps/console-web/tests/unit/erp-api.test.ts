@@ -1197,8 +1197,14 @@ describe('erp-api — erp FLAT error envelope (NOT wms NESTED) + § 2.5 + no-429
   });
 
   it('the erp source carries NO 429/Retry-After handling code (grep-asserted)', () => {
+    // TASK-PC-FE-098 — the hardened `callErp` HTTP core (where any 429 /
+    // Retry-After / backoff branch would live) was extracted from the
+    // former monolithic `erp-api.ts` into `erp-client.ts`; the barrel
+    // `erp-api.ts` now only re-exports. This guard follows the code to
+    // keep pinning the actual client (a vacuous read of the barrel would
+    // silently pass while protecting nothing).
     const apiSrc = readFileSync(
-      path.resolve(__dirname, '../../src/features/erp-ops/api/erp-api.ts'),
+      path.resolve(__dirname, '../../src/features/erp-ops/api/erp-client.ts'),
       'utf8',
     );
     // Strip block-comment + line-comment content so we only look at
