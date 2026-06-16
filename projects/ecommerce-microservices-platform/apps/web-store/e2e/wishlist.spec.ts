@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { signupAndLogin, shouldSkipGap } from './helpers/auth';
+import { loginAsSeededConsumer, shouldSkipGap } from './helpers/auth';
 import { openFirstProductDetail } from './helpers/product';
 
-test.skip(shouldSkipGap, 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
+test.skip(shouldSkipGap(), 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
 
 /**
  * 위시리스트 추가/조회/제거 E2E.
@@ -13,9 +13,19 @@ test.skip(shouldSkipGap, 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
  */
 test.describe('위시리스트', () => {
   test('상품 상세에서 찜 추가 → 위시리스트 목록 노출 → 제거', async ({ page }) => {
-    await signupAndLogin(page);
+    await loginAsSeededConsumer(page);
 
     await openFirstProductDetail(page);
+
+    // 방어적 베이스라인: 단일 SEEDED_CONSUMER 의 위시리스트는 서버상태로 영속된다
+    // (cart 와 달리 localStorage 가 아님 — features/wishlist API). 이전 런이 중간
+    // 실패해 이 상품이 이미 찜된 채 남아있으면 아래 "추가" 단언이 깨지므로, 먼저
+    // 제거해 깨끗한 상태로 되돌린다(uniqueUser 폐기로 사라진 per-run 격리 대체).
+    const staleRemove = page.getByRole('button', { name: '위시리스트에서 제거' });
+    if (await staleRemove.isVisible().catch(() => false)) {
+      await staleRemove.click();
+      await expect(page.getByRole('button', { name: '위시리스트에 추가' })).toBeVisible();
+    }
 
     // 1) 찜 추가 — 상품 상세의 위시리스트 버튼(헤딩 옆에 1개만 존재)
     const addBtn = page.getByRole('button', { name: '위시리스트에 추가' });

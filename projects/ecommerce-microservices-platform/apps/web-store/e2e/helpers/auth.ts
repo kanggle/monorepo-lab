@@ -63,8 +63,9 @@ export const SEEDED_CONSUMER: TestUser = {
  * DEFAULT login page (no custom template): `<input id="username">` +
  * `<input id="password">` + a hidden `_csrf` + a submit button, posting to
  * `/login`. (The legacy `completeGapSignIn` below assumes a richer
- * signup-or-login page that the current GAP does NOT render — kept only for the
- * still-SKIP_GAP_E2E CRUD specs.)
+ * signup-or-login page that the current GAP does NOT render — after TASK-FE-074
+ * the consumer CRUD specs use `loginAsSeededConsumer` (this form filler); the
+ * legacy helper is retained only for the operator account-type-mismatch spec.)
  */
 export async function fillGapCredentialForm(page: Page, user: TestUser): Promise<void> {
   await page.waitForURL(
@@ -98,7 +99,18 @@ export async function loginAsSeededConsumer(
 }
 
 /**
- * Drive the GAP signup-or-login page. The exact selectors depend on GAP's
+ * Drive the GAP signup-or-login page.
+ *
+ * NOTE (TASK-FE-074): the current GAP renders the Spring-default
+ * `#username`/`#password` form (see `fillGapCredentialForm`), NOT this richer
+ * labeled signup-or-login page — so this helper is effectively dead. It is
+ * retained ONLY for `loginAsOperatorAndExpectMismatch` (account-type-guard),
+ * whose operator-mismatch flow has not yet been migrated onto a seeded operator
+ * + `fillGapCredentialForm` (an FE-074 follow-up that needs a seeded operator
+ * identity lacking the CUSTOMER role — stack-gated). The consumer CRUD specs no
+ * longer use it.
+ *
+ * The exact selectors depend on GAP's
  * own login UI (defined in `projects/iam-platform/`); when the
  * GAP UI changes, update this helper.
  *
@@ -132,24 +144,6 @@ export async function completeGapSignIn(page: Page, user: TestUser): Promise<voi
   const submit = page.getByRole('button', { name: /로그인|가입|continue|sign in/i }).first();
   await expect(submit).toBeEnabled({ timeout: 10_000 });
   await submit.click();
-}
-
-/**
- * Sign in via GAP — clicks the web-store `/login` GAP button, completes the
- * GAP authorize flow, and waits for redirect back into web-store.
- */
-export async function signupAndLogin(page: Page, user: TestUser = uniqueUser()): Promise<TestUser> {
-  await page.goto('/login');
-  const trigger = page.getByRole('button', { name: 'Global Account 로 로그인' });
-  await expect(trigger).toBeEnabled();
-  await trigger.click();
-
-  await completeGapSignIn(page, user);
-
-  // After successful GAP callback the user lands on `/` (or the original
-  // `from=` callbackUrl). Just confirm we're no longer on /login.
-  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 30_000 });
-  return user;
 }
 
 /**
