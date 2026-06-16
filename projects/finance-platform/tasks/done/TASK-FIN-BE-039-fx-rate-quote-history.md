@@ -1,6 +1,6 @@
 # TASK-FIN-BE-039 — fx_rate_quote_history append-only audit trail
 
-**Status:** ready
+**Status:** done
 **Domain:** finance · **Service:** ledger-service · **Type:** backend persistence (audit trail)
 **Parent:** ADR-002 (realtime FX rate feed, ACCEPTED 2026-06-15) — § 3.1 roadmap item 3 (deferred): *"append-only `fx_rate_quote_history`"*. Builds on FIN-BE-031 (cache + poller), FIN-BE-038 (real Frankfurter adapter). The ledger spec already forward-declares this table (see Related Specs) — this task closes the spec-ahead-of-code gap.
 
