@@ -1,6 +1,6 @@
 # TASK-PC-FE-109 — erp-ops `api/types.ts` god-file 분할 (area별 type 모듈) — masters 수직 완결
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js, erp-ops 피처)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (behavior-preserving 기계적 분할 — PC-FE-107/108 masters 수직의 마지막 1건)
