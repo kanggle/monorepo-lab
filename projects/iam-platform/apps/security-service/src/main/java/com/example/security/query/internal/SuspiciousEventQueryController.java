@@ -10,8 +10,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Read-only suspicious events query endpoint. admin-service only.
@@ -48,13 +46,6 @@ public class SuspiciousEventQueryController {
         Page<SuspiciousEventView> result = queryService.findSuspiciousEvents(
                 accountId, fromInstant, toInstant, ruleCode, pageable);
 
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("content", result.getContent());
-        response.put("page", result.getNumber());
-        response.put("size", result.getSize());
-        response.put("totalElements", result.getTotalElements());
-        response.put("totalPages", result.getTotalPages());
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(PageResponse.of(result));
     }
 }

@@ -51,7 +51,7 @@ public class AccountDeletedAnonymizedConsumer {
                     ? root.path("payload")
                     : root;
 
-            String eventId = firstNonBlank(
+            String eventId = ConsumerUtils.firstNonBlank(
                     root.path("eventId").asText(null),
                     payload.path("eventId").asText(null));
             if (eventId == null || eventId.isBlank()) {
@@ -65,14 +65,14 @@ public class AccountDeletedAnonymizedConsumer {
                 return;
             }
 
-            String tenantId = firstNonBlank(
+            String tenantId = ConsumerUtils.firstNonBlank(
                     root.path("tenantId").asText(null),
                     payload.path("tenantId").asText(null));
             if (tenantId == null || tenantId.isBlank()) {
                 throw new MissingTenantIdException(eventId, TOPIC);
             }
 
-            String accountId = firstNonBlank(
+            String accountId = ConsumerUtils.firstNonBlank(
                     payload.path("accountId").asText(null),
                     root.path("accountId").asText(null));
             if (accountId == null || accountId.isBlank()) {
@@ -97,12 +97,5 @@ public class AccountDeletedAnonymizedConsumer {
                     record.topic(), record.key(), e);
             throw new RuntimeException("Deserialization failed", e);
         }
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (String v : values) {
-            if (v != null && !v.isBlank() && !"null".equals(v)) return v;
-        }
-        return null;
     }
 }
