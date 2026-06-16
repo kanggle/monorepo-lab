@@ -434,6 +434,15 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   (same boundary as `ResolveEffectiveFxRate`) + a top-level `feedEnabled`. Empty cache ⇒ 200 empty.
   Net-zero, no migration. See § FX rate feed (operator read surface) + ledger-api.md § 14.
 
+**Twenty-seventh increment — IN (TASK-FIN-BE-040, FX rate history drill read endpoint):**
+- A read-only `GET /api/finance/ledger/fx-rates/{foreignCurrency}/history` over the
+  `fx_rate_quote_history` audit trail (ADR-002 § 3.1 history-read drill, FIN-BE-039). Returns the
+  per-pair time series newest-first (`fetched_at DESC, id DESC`), capped to `?limit=N` (default 50,
+  cap 500, floor 1). Unknown / never-polled pair ⇒ 200 `quotes: []` (not 404). Domain port
+  (`findHistory(Currency base, Currency foreign, int limit)`) stays Spring-free; the JPA adapter
+  translates `int limit` to `PageRequest.of(0, limit)`. Net-zero, no migration.
+  See § FX rate feed (operator read surface) + ledger-api.md § 14.1.
+
 **Forward-declared — OUT (each a later task):**
 - **Matching**: fuzzy / N:M / split matching; period **reopen**; per-currency-pair / per-account
   reconciliation-tolerance granularity (v1 is per-tenant). *(Configurable FX tolerance = 13th;
@@ -442,13 +451,15 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   9th / 10th / 12th / 17th increments act on one `(account, currency)` per operator call); a
   **proceeds-amount input** (proceeds derive from a rate; supplying the *actual* base received); a
   **configurable base currency** (fixed KRW in v1). *(FIFO / lot-level cost basis = 16th–18th — done.)*
-- **FX rate feed (ADR-002 remainder)**: a console "FX rate dashboard + manual refresh" surface;
-  per-tenant rate override (special contract rates); a **ShedLock single-leader guard** for the
-  poller (multi-instance). *(Feed infra + omitted-rate fallback + read surface = 23rd–25th — done.
-  **Real public FX API adapter** (`mode=real`, Frankfurter no-key/ECB, `RealFxRateProviderAdapter`)
-  = TASK-FIN-BE-038 — done. **Append-only `fx_rate_quote_history` audit trail** (V13,
-  `FxRateQuoteHistory` domain + `FxRateQuoteHistoryRepository` port + JPA adapter; poller appends
-  one row per pair per run inside the SAME `@Transactional`) = TASK-FIN-BE-039 — done.)*
+- **FX rate feed (ADR-002 remainder)**: a console "FX rate dashboard + manual refresh" surface
+  (separate PC-FE task); per-tenant rate override (special contract rates); a **ShedLock
+  single-leader guard** for the poller (multi-instance). *(Feed infra + omitted-rate fallback +
+  read surface = 23rd–25th — done. **Real public FX API adapter** (`mode=real`, Frankfurter
+  no-key/ECB, `RealFxRateProviderAdapter`) = TASK-FIN-BE-038 — done. **Append-only
+  `fx_rate_quote_history` audit trail** (V13, `FxRateQuoteHistory` domain +
+  `FxRateQuoteHistoryRepository` port + JPA adapter; poller appends one row per pair per run
+  inside the SAME `@Transactional`) = TASK-FIN-BE-039 — done. **Per-pair history drill read
+  EP** (`/{foreignCurrency}/history`) = TASK-FIN-BE-040 — done.)*
 - **Manual posting**: body-hash idempotency conflict (`IDEMPOTENCY_KEY_CONFLICT` 409 on a
   same-key / different-body replay — the 5th increment is replay-safe on the key alone) +
   a maker / checker approval workflow for manual entries.
@@ -605,6 +616,7 @@ com.example.finance.ledger/
 │   ├── ResolveEffectiveFxRate.java        ← (24th incr) omitted-rate resolver: supplied ⇒ verbatim; omitted + feed enabled + fresh cache quote ⇒ cache rate; omitted + disabled/absent/stale ⇒ FxRateUnavailableException (422); staleness now−asOf>staleAfter
 │   ├── RefreshFxRateQuotesUseCase.java    ← (23rd incr) @Transactional: iterate configured pairs (base KRW) → FxRateProviderPort.latestQuote → upsert fx_rate_quote + append fx_rate_quote_history (per-pair try/catch; returns upserted count); (26th incr — TASK-FIN-BE-039) + FxRateQuoteHistoryRepository injected, append after each upsert
 │   ├── GetFxRatesUseCase.java             ← (25th incr) @Transactional(readOnly): fx_rate_quote cache → FxRatesView (top-level feedEnabled + per-row ageSeconds/stale)
+│   ├── GetFxRateHistoryUseCase.java       ← (27th incr — TASK-FIN-BE-040) @Transactional(readOnly): fx_rate_quote_history → FxRateHistorySummaryView (limit-normalised, newest-first, empty-200 on unknown pair)
 │   ├── QueryLedgerUseCase.java            ← read: entry detail / per-account entries + balance / trial balance
 │   ├── OpenAccountingPeriodUseCase.java   ← (2nd incr) @Transactional: non-overlap check → persist OPEN period + audit
 │   ├── CloseAccountingPeriodUseCase.java  ← (2nd incr) @Transactional: require OPEN → compute snapshot (postedAt < to) → CLOSED + entryCount + snapshot + audit → (3rd incr) append period.closed outbox row
@@ -629,7 +641,8 @@ com.example.finance.ledger/
 │   │    (2nd incr) AccountingPeriodJpaEntity/Repository/Adapter, PeriodBalanceSnapshotJpaEntity;
 │   │    (4th incr) ReconciliationStatement/Line/Match/DiscrepancyJpaEntity + Repository/Adapter;
 │   │    (15th–23rd incr) FxCostFlowConfig / FxCostFlowAccountConfig / FxPositionLot / FxRateQuote JpaEntity + Spring Data repo + Adapter;
-│   │    (26th incr — TASK-FIN-BE-039) FxRateQuoteHistory (@Entity, surrogate IDENTITY id) + FxRateQuoteHistoryJpaRepository + FxRateQuoteHistoryRepositoryImpl)
+│   │    (26th incr — TASK-FIN-BE-039) FxRateQuoteHistory (@Entity, surrogate IDENTITY id) + FxRateQuoteHistoryJpaRepository + FxRateQuoteHistoryRepositoryImpl);
+│   │    (27th incr — TASK-FIN-BE-040) FxRateQuoteHistoryRepository.findHistory(Currency,Currency,int) domain port + JPA adapter (findByBaseCurrencyAndForeignCurrencyOrderByFetchedAtDescIdDesc + PageRequest.of(0,limit))
 │   │   Flyway: V1 init, V2 period, V3 outbox, V4 reconciliation, (8th incr) V5__add_multi_currency (journal_line cols + backfill KRW rate=1), (11th incr) V6__add_reconciliation_fx (reconciliation_statement_line base_amount_minor/base_currency NULL — additive, no CHECK change), (13th incr) V7__add_reconciliation_fx_tolerance, (14th incr) V8__add_reconciliation_match_cross_currency, (15th incr) V9__add_fx_cost_flow_config, (16th incr) V10__add_fx_position_lot (+ synthetic-lot backfill), (21st incr) V11__add_fx_cost_flow_account_config, (23rd incr) V12__add_fx_rate_quote, (26th incr — TASK-FIN-BE-039) V13__add_fx_rate_quote_history (all additive — new tables / nullable cols, no CHECK change)
 │   ├── outbox/                            ← (3rd incr) per-service transactional outbox (OutboxRow path)
 │   │   ├── LedgerOutboxJpaEntity.java     ← implements OutboxRow (@Table ledger_outbox, MySQL payload TEXT)
@@ -660,7 +673,7 @@ com.example.finance.ledger/
     ├── controller/SettlementController.java ← (10th incr) POST /api/finance/ledger/settlements (FX settlement; Idempotency-Key header; no @Transactional — funnels to SettleForeignPositionUseCase; 201 settled / 200 settled:false); (20th incr) GET /settlements/{code}/{currency}/lots (getPositionLots — open lots read); (15th/21st incr) GET/PUT /settlements/cost-flow-config + GET/PUT/DELETE /settlements/cost-flow-config/accounts
     ├── controller/PeriodController.java     ← (2nd incr) /api/finance/ledger/periods/** (open/close/list/detail)
     ├── controller/ReconciliationController.java ← (4th incr) /api/finance/ledger/reconciliation/** (ingest/resolve/read)
-    ├── controller/FxRateController.java     ← (25th incr) GET /api/finance/ledger/fx-rates (fx_rate_quote cache read; tenant-agnostic; no Idempotency-Key; .authenticated())
+    ├── controller/FxRateController.java     ← (25th incr) GET /api/finance/ledger/fx-rates (fx_rate_quote cache read; tenant-agnostic; no Idempotency-Key; .authenticated()); (27th incr — TASK-FIN-BE-040) + GET /{foreignCurrency}/history (history drill; limit-normalised; empty-200)
     ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes; (2nd incr) period codes; (5th incr) LEDGER_ENTRY_UNBALANCED/CURRENCY_MISMATCH/LEDGER_ACCOUNT_NOT_FOUND/LEDGER_PERIOD_CLOSED now surface synchronously + IDEMPOTENCY_KEY_REQUIRED handler guard)
     ├── dto/                                ← response DTOs (money as minor-units integer + currency)
     ├── filter/TenantClaimEnforcer.java
@@ -1854,6 +1867,18 @@ distinguish "disabled feed" from "enabled but not yet polled"). Empty cache → 
 (`@Transactional(readOnly=true)`) + `FxRateController` (`/api/finance/ledger/fx-rates`
 falls under the existing `/api/finance/**` `.authenticated()` rule — no new security config).
 Formal contract → `ledger-api.md § FX rates (read)`.
+
+**History drill read surface (twenty-seventh increment — TASK-FIN-BE-040).** `GET
+/api/finance/ledger/fx-rates/{foreignCurrency}/history` exposes the `fx_rate_quote_history`
+audit trail for one currency pair as a time series (ADR-002 § 3.1 history-read drill). Rows
+are returned newest first (`fetched_at DESC, id DESC` — deterministic tie-break). The `?limit`
+parameter (default 50, cap 500, floor 1) caps the result; the domain port (`findHistory(Currency
+base, Currency foreign, int limit)`) is Spring-free — the JPA adapter translates `int limit` to
+`PageRequest.of(0, limit)`. Unknown / never-polled pair → 200 `quotes: []` (not 404). Rate
+serialised as exact decimal string (F5). **Pure read / net-zero / no migration**:
+`GetFxRateHistoryUseCase` (`@Transactional(readOnly=true)`) added to `FxRateController`
+(`GET /{foreignCurrency}/history`) — no new security config, no new migration.
+Formal contract → `ledger-api.md § 14.1`.
 
 ## Idempotency / dedupe (F1)
 

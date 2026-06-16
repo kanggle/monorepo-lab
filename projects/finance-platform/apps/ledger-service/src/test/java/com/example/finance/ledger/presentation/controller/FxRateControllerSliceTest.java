@@ -1,6 +1,7 @@
 package com.example.finance.ledger.presentation.controller;
 
 import com.example.finance.ledger.application.ActorContext;
+import com.example.finance.ledger.application.GetFxRateHistoryUseCase;
 import com.example.finance.ledger.application.GetFxRatesUseCase;
 import com.example.finance.ledger.application.view.FxRateView;
 import com.example.finance.ledger.application.view.FxRatesView;
@@ -50,6 +51,9 @@ class FxRateControllerSliceTest {
 
     @MockitoBean
     GetFxRatesUseCase getFxRates;
+
+    @MockitoBean
+    GetFxRateHistoryUseCase getFxRateHistory;
 
     @BeforeEach
     void setUp() {
