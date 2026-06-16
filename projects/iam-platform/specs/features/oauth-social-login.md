@@ -13,7 +13,68 @@
 | gateway-service | `/api/auth/oauth/**` 라우팅 |
 | security-service | 로그인 이벤트 소비, 비정상 탐지 (기존과 동일) |
 
+## SAS Browser Session Flow (TASK-BE-396)
+
+> **이것이 consumer(web-store 등)가 실제 사용하는 표준 경로다.** ADR-006(옵션 B)에 따라
+> 외부 IdP(소셜) 로그인을 IAM Spring Authorization Server(SAS) 브라우저 플로우에
+> **upstream identity brokering**으로 통합한다. 소셜 인증은 **SAS 가 소비하는 인증된 HTTP
+> 세션**(JSESSIONID `SecurityContext`)으로 종결되고, 그 결과 **SAS 표준 토큰**(issuer
+> `http://iam.local`, JWKS 검증)이 발급된다. 커스텀 JWT 를 발급하지 않는다.
+
+### 엔드포인트
+
+| 경로 | 역할 |
+|---|---|
+| `GET /login` | 커스텀 Thymeleaf 로그인 페이지(`LoginPageController` + `templates/login.html`). email/password 폼 + 소셜 버튼(Google/Kakao/Microsoft). CSRF 토큰 포함. `DefaultLoginPageGeneratingFilter` 대체(`.loginPage("/login")`). |
+| `GET /login/oauth/{provider}` | 소셜 인증 개시. 요청 base 로부터 브라우저 콜백 URI(`scheme://host[:port]/login/oauth/{provider}/callback`)를 계산해 `OAuthLoginUseCase.authorize` 호출 → provider authorization URL 로 redirect. |
+| `GET /login/oauth/{provider}/callback` | provider 콜백. `OAuthLoginUseCase.resolveBrowserLogin` 으로 계정 해소 → SAS 세션 확립 → saved `/oauth2/authorize` 로 redirect. |
+
+### 플로우
+
+1. consumer 가 "Global Account 로 로그인" → IAM `GET /oauth2/authorize?client_id=ecommerce-web-store-client&...`
+2. 미인증 → SAS chain 의 `LoginUrlAuthenticationEntryPoint` 가 `/login` 으로 redirect (원래 요청은 `HttpSessionRequestCache` 에 saved)
+3. `/login` 렌더 → 사용자가 **Google 버튼** 클릭 → `GET /login/oauth/google`
+4. `OAuthLoginUseCase.authorize(GOOGLE, browserCallbackUri)` → state(Redis) 저장 → Google authorization URL 로 redirect
+5. Google 인증 → `GET /login/oauth/google/callback?code=...&state=...`
+6. `OAuthLoginUseCase.resolveBrowserLogin(command, tenantId)`:
+   a. state 검증 → token+userinfo 교환 → email 검증
+   b. `social_identities` 조회 / auto-link / auto-create(`/internal/accounts/social-signup`, ADR-036 born-unified mint)
+   c. **`SocialIdentityPersistStep`**(신규 transactional bean): `social_identity` upsert + 계정 상태 검사(LOCKED/DORMANT/DELETED 거부)만 수행. **JWT/디바이스 세션/refresh token/로그인 이벤트는 발급하지 않음.**
+7. **tenant 귀속** — saved `/oauth2/authorize` 의 `client_id` → `RegisteredClientRepository.findByClientId` → `ClientSettings` 의 `custom.tenant_id`/`custom.tenant_type` (`SavedRequestTenantResolver`). saved request 부재 시 `fan-platform` 기본값.
+8. **SAS 세션 확립** — `UsernamePasswordAuthenticationToken(email, null, [ROLE_USER])` + `details = HashMap{tenant_id, tenant_type, account_id}`(반드시 `HashMap` — `JdbcOAuth2AuthorizationService` 의 `SecurityJackson2Modules` allowlist), `HttpSessionSecurityContextRepository` 로 세션 영속.
+9. saved `/oauth2/authorize` 로 redirect → SAS `authorization_code` → **SAS 표준 토큰** 발급.
+10. **role 시딩(신규 코드 0)** — `TenantClaimTokenCustomizer` → `RoleSeedPolicy.seed(platform)`, `platform = 개시 client 의 tenant_id`. `ecommerce-web-store-client` → `roles:[CUSTOMER]`. operator 는 assume-tenant 단계에서 별도 파생.
+
+### 에러 → redirect 매핑
+
+| 예외 | redirect |
+|---|---|
+| `OAuthEmailRequiredException` | `/login?error=email_required` |
+| `AccountLockedException` / `AccountStatusException` | `/login?error=account_unavailable` |
+| `InvalidOAuthStateException` | `/login?error=invalid_state` |
+| `OAuthProviderException` | `/login?error=provider_error` |
+| `UnsupportedProviderException` | `/login?error=unsupported_provider` |
+
+### tenant 귀속 규칙 (ADR-006 옵션 1)
+
+소셜 principal 의 `tenant_id` = 로그인을 **개시한 consumer 의 tenant**. 메커니즘: 콜백 시점에
+세션의 `RequestCache`(saved `/oauth2/authorize?client_id=...`)에서 `client_id` 를 읽어
+client 의 `ClientSettings` tenant 설정을 추출(`SavedRequestTenantResolver`). state 스레딩
+불필요(saved request 에 이미 `client_id` 존재). saved request 부재(직접 `/login` 진입) →
+`TenantContext.DEFAULT_TENANT_ID`(`fan-platform`) fallback.
+
+---
+
 ## Design Decisions
+
+> ⚠️ **DEPRECATED (legacy / standalone)** — 아래 `### BFF 패턴` 이하가 기술하는
+> 커스텀-JWT JSON 종결 플로우(`POST /api/auth/oauth/callback` 가 `{ accessToken,
+> refreshToken, ... }` 반환)는 **레거시**다. SAS issuer 를 신뢰하는 표준 OIDC consumer
+> (ecommerce gateway 등, ADR-MONO-027)는 이 커스텀 JWT 를 거부한다. 신규 통합은 위
+> **SAS Browser Session Flow** 를 사용해야 한다. 레거시 경로는 standalone 소비자를 위해
+> deprecation window 동안 보존되며, `POST /api/auth/login`(`LoginController`)과 함께
+> **2026-08-01 일몰** 예정이다(ADR-006). `social_identities` upsert / auto-link /
+> auto-create / state CSRF / born-unified mint 등 계정해소 자산은 두 플로우가 공유한다.
 
 ### BFF 패턴 (Server-Side Token Exchange)
 

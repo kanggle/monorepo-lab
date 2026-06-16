@@ -87,37 +87,39 @@ public class WebLoginSecurityConfig {
                 .securityMatcher(new OrRequestMatcher(
                         new AntPathRequestMatcher("/login", "GET"),
                         new AntPathRequestMatcher("/login", "POST"),
+                        // TASK-BE-396 (ADR-006): the social-login browser bridge
+                        // (start + callback) lives on this chain so its session
+                        // (JSESSIONID SecurityContext) is established under the same
+                        // policy the SAS chain consumes. Both are GET endpoints.
+                        new AntPathRequestMatcher("/login/oauth/**", "GET"),
                         new AntPathRequestMatcher("/logout", "POST")))
                 .authenticationManager(authenticationManager)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
+                        // TASK-BE-396 (ADR-006): the social-login start + callback are
+                        // pre-authentication (the session is established BY the callback)
+                        // so they must be public, like /login itself.
+                        .requestMatchers(new AntPathRequestMatcher("/login/oauth/**", "GET")).permitAll()
                         // Form-login itself + the post-logout landing must be public;
                         // the post-login redirect target (typically /oauth2/authorize)
                         // is governed by the SAS chain on its own filter.
                         .anyRequest().permitAll())
                 .formLogin(form -> form
-                        // Use Spring Security's default-generated HTML form. Custom
-                        // Thymeleaf UI is a separate future task.
-                        //
-                        // TASK-BE-311 — do NOT call `.loginPage("/login")`. In Spring
-                        // Security 6, that setter flips `customLoginPage=true` on the
-                        // FormLoginConfigurer, which SUPPRESSES the registration of
-                        // `DefaultLoginPageGeneratingFilter` (Spring assumes the caller
-                        // provides a controller-mapped /login view). Both the default
-                        // form-login URL and the default login URL are `/login`
-                        // already, so omitting the setter loses nothing functionally
-                        // while keeping the auto-generated form active. The SAS
+                        // TASK-BE-396 (ADR-006) — situation REVERSED from BE-311. A
+                        // custom Thymeleaf /login view now EXISTS (LoginPageController +
+                        // templates/login.html, rendering the password form AND the
+                        // social-login buttons). We therefore CALL `.loginPage("/login")`
+                        // on purpose: in Spring Security 6 that setter flips
+                        // `customLoginPage=true`, which SUPPRESSES
+                        // `DefaultLoginPageGeneratingFilter` — exactly what we want now,
+                        // because the auto-generated form cannot render social buttons and
+                        // would otherwise shadow our controller-mapped view. (BE-311's
+                        // guidance to OMIT this setter applied only while we depended on
+                        // the default-generated form; that dependency is gone.) The SAS
                         // chain's `LoginUrlAuthenticationEntryPoint("/login")` in
                         // AuthorizationServerConfig is independent of this setter and
                         // continues to drive unauth `/oauth2/authorize` → `/login`.
-                        // BE-309's `FormLoginIntegrationTest` happened to pass without
-                        // catching this regression because it only exercises POST /login
-                        // (handled by UsernamePasswordAuthenticationFilter, present in
-                        // both configurations) and the unauth entry-point redirect (a
-                        // separate concern); it never asserted that GET /login renders
-                        // HTML. PC-FE-028 iter 7 trace evidence + BE-311 iter 1
-                        // diagnostic confirmed the missing
-                        // DefaultLoginPageGeneratingFilter in chain[0].
+                        .loginPage("/login")
                         .permitAll()
                         // No custom successHandler — the default
                         // SavedRequestAwareAuthenticationSuccessHandler reads
@@ -130,8 +132,11 @@ public class WebLoginSecurityConfig {
                         .invalidateHttpSession(true)
                         .clearAuthentication(true));
 
-        // CSRF is enabled by default for this chain. DefaultLoginPageGeneratingFilter
-        // injects the CSRF token automatically into the HTML form.
+        // CSRF is enabled by default for this chain. TASK-BE-396: with the
+        // default-generated form suppressed (.loginPage above), the custom
+        // templates/login.html injects the CSRF token explicitly via the
+        // ${_csrf} model attribute (Thymeleaf), and the social-login bridge
+        // endpoints are GET-only (CSRF-exempt by definition).
 
         return http.build();
     }

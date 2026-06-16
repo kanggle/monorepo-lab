@@ -61,7 +61,9 @@ oauth:
     client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET:test-google-client-secret}
     redirect-uri: ${OAUTH_GOOGLE_REDIRECT_URI:http://localhost:3000/oauth/callback}
     # Server-side allowlist of redirect URIs (exact-string match). Comma-separated env var.
-    allowed-redirect-uris: ${OAUTH_GOOGLE_ALLOWED_REDIRECT_URIS:http://localhost:3000/oauth/callback}
+    # TASK-BE-396 (ADR-006): the SAS browser flow's callback URIs are added so
+    # SocialLoginBrowserController's authorize() passes redirect-uri validation.
+    allowed-redirect-uris: ${OAUTH_GOOGLE_ALLOWED_REDIRECT_URIS:http://localhost:3000/oauth/callback,http://iam.local/login/oauth/google/callback,http://localhost:8081/login/oauth/google/callback}
     scopes: openid,email,profile
     token-uri: https://oauth2.googleapis.com/token
     auth-uri: https://accounts.google.com/o/oauth2/v2/auth
@@ -73,7 +75,7 @@ oauth:
     client-id: ${OAUTH_KAKAO_CLIENT_ID:test-kakao-client-id}
     client-secret: ${OAUTH_KAKAO_CLIENT_SECRET:test-kakao-client-secret}
     redirect-uri: ${OAUTH_KAKAO_REDIRECT_URI:http://localhost:3000/oauth/callback}
-    allowed-redirect-uris: ${OAUTH_KAKAO_ALLOWED_REDIRECT_URIS:http://localhost:3000/oauth/callback}
+    allowed-redirect-uris: ${OAUTH_KAKAO_ALLOWED_REDIRECT_URIS:http://localhost:3000/oauth/callback,http://iam.local/login/oauth/kakao/callback,http://localhost:8081/login/oauth/kakao/callback}
     scopes: account_email,profile_nickname
     token-uri: https://kauth.kakao.com/oauth/token
     auth-uri: https://kauth.kakao.com/oauth/authorize
@@ -83,7 +85,7 @@ oauth:
     client-id: ${OAUTH_MICROSOFT_CLIENT_ID:test-microsoft-client-id}
     client-secret: ${OAUTH_MICROSOFT_CLIENT_SECRET:test-microsoft-client-secret}
     redirect-uri: ${OAUTH_MICROSOFT_REDIRECT_URI:http://localhost:3000/oauth/callback}
-    allowed-redirect-uris: ${OAUTH_MICROSOFT_ALLOWED_REDIRECT_URIS:http://localhost:3000/oauth/callback}
+    allowed-redirect-uris: ${OAUTH_MICROSOFT_ALLOWED_REDIRECT_URIS:http://localhost:3000/oauth/callback,http://iam.local/login/oauth/microsoft/callback,http://localhost:8081/login/oauth/microsoft/callback}
     scopes: openid,email,profile
     token-uri: https://login.microsoftonline.com/${OAUTH_MICROSOFT_TENANT:common}/oauth2/v2.0/token
     auth-uri: https://login.microsoftonline.com/${OAUTH_MICROSOFT_TENANT:common}/oauth2/v2.0/authorize
