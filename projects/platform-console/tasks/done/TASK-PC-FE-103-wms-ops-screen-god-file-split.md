@@ -1,7 +1,8 @@
 # TASK-PC-FE-103 — split the `wms-ops/components/WmsOpsScreen.tsx` god-file (container/presentational)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
+**Closure:** PR #1723 squash `93786197294f6f8e855c0a7d49d6e4977354dd23`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass/skip incl. Frontend lint/build + unit + E2E smoke + Build & Test). 667-line single stateful component → wms-ops-helpers.ts (33) + WmsInventoryTable.tsx (239) + WmsShipmentsTable.tsx (208) + WmsAlertsTable.tsx (99) + WmsOpsScreen.tsx container (281); container/presentational, all state in container; public WmsOpsScreen export import-stable; 0 test changes; tsc 0 / lint 0 / vitest 162 files · 1943 tests green (baseline count).
 **Parent:** continuation of the console-web god-file split series (098 erp-api, 099 use-erp-ops, 100 ApprovalScreen, 101 OutboundOpsScreen, 102 ledger-api). `WmsOpsScreen.tsx` is the direct twin of `OutboundOpsScreen.tsx` (a single stateful wms screen) and was ~667 lines (TASK-PC-FE-007 + the shipments + alert-ack slices).
 
 ## Goal
