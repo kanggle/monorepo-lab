@@ -1,7 +1,8 @@
 # TASK-PC-FE-099 — split the `erp-ops/hooks/use-erp-ops.ts` god-file into cohesive modules
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
+**Closure:** PR #1701 squash `65170aa80849f56bc2b57782c8c5fb15634abacd`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass incl. Frontend lint/build + unit + E2E smoke + Build & Test). 1,250-line monolith → use-erp-shared.ts (108) + use-erp-masters.ts (755) + use-erp-approval.ts (197) + use-erp-delegation.ts (181) + barrel (52); public hook surface import-stable; 0 test changes; tsc 0 / lint 0 / vitest 162 files · 1943 tests green (baseline count).
 **Parent:** sibling of TASK-PC-FE-098 (the `erp-api.ts` split). The client-side `use-erp-ops.ts` accreted the same way across TASK-PC-FE-010/046/048/049/051/054/055 — one file grew to ~1,250 lines (the largest hooks module in console-web).
 
 ## Goal
