@@ -1,15 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import type {
-  TrialBalance,
-  PeriodsResponse,
-  DiscrepanciesResponse,
-  JournalEntry,
-  AccountBalance,
-  AccountEntriesResponse,
-  Statement,
-} from '../api/types';
+import { messageForCode } from '@/shared/api/errors';
 import { TrialBalanceTable } from './TrialBalanceTable';
 import { PeriodsTable } from './PeriodsTable';
 import { PeriodDetail } from './PeriodDetail';
@@ -26,17 +17,11 @@ import { PositionLotsTable } from './PositionLotsTable';
 import { FxRatesTable } from './FxRatesTable';
 import { FxRateHistoryLookup } from './FxRateHistoryLookup';
 import { FxRateHistoryTable } from './FxRateHistoryTable';
+import { LedgerOpsTabs } from './LedgerOpsTabs';
 import {
-  useJournalEntry,
-  useAccountBalance,
-  useAccountEntries,
-  useStatement,
-  usePositionLots,
-  useFxRates,
-  useFxRateHistory,
-} from '../hooks/use-ledger-ops';
-import { ApiError, messageForCode } from '@/shared/api/errors';
-import { FX_HISTORY_DEFAULT_LIMIT } from '../api/types';
+  useLedgerOpsState,
+  type LedgerOpsScreenProps,
+} from './use-ledger-ops-state';
 
 /**
  * finance ledger operations section (TASK-PC-FE-072 — § 2.4.7.1; the
@@ -72,208 +57,58 @@ import { FX_HISTORY_DEFAULT_LIMIT } from '../api/types';
  * WCAG AA: the tab strip is an ARIA `tablist` with roving keyboard
  * navigation (ArrowLeft / ArrowRight / Home / End); each panel is an
  * `aria-labelledby` `tabpanel`. Inputs + buttons are native + focusable.
+ *
+ * ── MODULE SPLIT (TASK-PC-FE-106) ── the per-tab state / queries / derived
+ * flags / drill handlers live in the `useLedgerOpsState` hook
+ * (`use-ledger-ops-state.ts`); the ARIA tab strip + roving keyboard nav live
+ * in `LedgerOpsTabs`. This component is the pure view: it calls the hook and
+ * renders the tab strip + the seven `tabpanel`s. (Each tab's content was
+ * already its own sub-component — TrialBalanceTable / PeriodsTable / … .)
  */
 
-const TABS = [
-  { key: 'trial-balance', label: '시산표' },
-  { key: 'periods', label: '회계 기간' },
-  { key: 'entry', label: '분개 조회' },
-  { key: 'reconciliation', label: '대사' },
-  { key: 'account', label: '계정' },
-  { key: 'lots', label: 'FX 포지션 로트' },
-  { key: 'fx-rates', label: 'FX 환율 피드' },
-] as const;
-type TabKey = (typeof TABS)[number]['key'];
+export type { LedgerOpsScreenProps };
 
-export interface LedgerOpsScreenProps {
-  initialEntryId: string | null;
-  trialBalance: TrialBalance | null;
-  periods: PeriodsResponse | null;
-  discrepancies: DiscrepanciesResponse | null;
-  initialEntry: JournalEntry | null;
-  /** True when the seeded entryId 404'd (JOURNAL_ENTRY_NOT_FOUND) —
-   *  rendered inline in the Journal Entry tab; the lookup stays mounted. */
-  initialNotFound?: boolean;
-  /** The server-seeded account code (TASK-PC-FE-074). */
-  initialAccountCode?: string | null;
-  /** The server-seeded account balance (TASK-PC-FE-074). */
-  initialAccountBalance?: AccountBalance | null;
-  /** The server-seeded account entries (TASK-PC-FE-074). */
-  initialAccountEntries?: AccountEntriesResponse | null;
-  /** True when the seeded accountCode 404'd (LEDGER_ACCOUNT_NOT_FOUND) —
-   *  rendered inline in the Account tab; the lookup stays mounted. */
-  initialAccountNotFound?: boolean;
-  /** The server-seeded statement id (TASK-PC-FE-075). */
-  initialStatementId?: string | null;
-  /** The server-seeded statement detail (TASK-PC-FE-075). */
-  initialStatement?: Statement | null;
-  /** True when the seeded statementId 404'd
-   *  (RECONCILIATION_STATEMENT_NOT_FOUND) — rendered inline in the 대사
-   *  tab; the lookup stays mounted (TASK-PC-FE-075). */
-  initialStatementNotFound?: boolean;
-}
-
-export function LedgerOpsScreen({
-  initialEntryId,
-  trialBalance,
-  periods,
-  discrepancies,
-  initialEntry,
-  initialNotFound = false,
-  initialAccountCode = null,
-  initialAccountBalance = null,
-  initialAccountEntries = null,
-  initialAccountNotFound = false,
-  initialStatementId = null,
-  initialStatement = null,
-  initialStatementNotFound = false,
-}: LedgerOpsScreenProps) {
-  const [active, setActive] = useState<TabKey>(
-    initialAccountCode
-      ? 'account'
-      : initialEntryId
-        ? 'entry'
-        : initialStatementId
-          ? 'reconciliation'
-          : 'trial-balance',
-  );
-  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-
-  // Periods + reconciliation row-selection (drives the detail reads).
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
-  const [selectedDiscrepancyId, setSelectedDiscrepancyId] = useState<
-    string | null
-  >(null);
-
-  // Journal entry — entry-id-driven. Seeded from the server when provided.
-  const [entryId, setEntryId] = useState<string | null>(initialEntryId);
-  const entryQ = useJournalEntry(
+export function LedgerOpsScreen(props: LedgerOpsScreenProps) {
+  const { trialBalance, periods, discrepancies } = props;
+  const {
+    active,
+    setActive,
+    selectedPeriodId,
+    setSelectedPeriodId,
+    selectedDiscrepancyId,
+    setSelectedDiscrepancyId,
     entryId,
-    entryId && entryId === initialEntryId ? initialEntry ?? undefined : undefined,
-  );
-  const entry: JournalEntry | null =
-    entryQ.data ?? (entryId === initialEntryId ? initialEntry : null);
-  const entryApiErr = entryQ.error instanceof ApiError ? entryQ.error : null;
-  // notFound: either the server-seeded 404, or a client lookup 404 — but a
-  // freshly-typed id that differs from the seed clears the seeded flag.
-  const entryNotFound =
-    entryApiErr?.status === 404 ||
-    (initialNotFound && entryId === initialEntryId);
-  const entryForbidden = entryApiErr?.status === 403;
-
-  // Account — account-code-driven (TASK-PC-FE-074). Seeded from the server
-  // when an `?accountCode=` query param is supplied.
-  const [selectedAccountCode, setSelectedAccountCode] = useState<string | null>(
-    initialAccountCode,
-  );
-  const accountBalanceQ = useAccountBalance(
+    setEntryId,
+    entry,
+    entryNotFound,
+    entryForbidden,
     selectedAccountCode,
-    selectedAccountCode === initialAccountCode
-      ? (initialAccountBalance ?? undefined)
-      : undefined,
-  );
-  const accountEntriesQ = useAccountEntries(
-    selectedAccountCode,
-    { page: 0, size: 20 },
-    selectedAccountCode === initialAccountCode
-      ? (initialAccountEntries ?? undefined)
-      : undefined,
-  );
-  const accountBalance: AccountBalance | null =
-    accountBalanceQ.data ??
-    (selectedAccountCode === initialAccountCode ? initialAccountBalance : null);
-  const accountEntries: AccountEntriesResponse | null =
-    accountEntriesQ.data ??
-    (selectedAccountCode === initialAccountCode ? initialAccountEntries : null);
-  const accountApiErr =
-    accountBalanceQ.error instanceof ApiError ? accountBalanceQ.error : null;
-  const accountNotFound =
-    accountApiErr?.status === 404 ||
-    (initialAccountNotFound && selectedAccountCode === initialAccountCode);
-
-  // Statement — reconciliation statement id-driven (TASK-PC-FE-075).
-  // Seeded from the server when a ?statementId= query param is supplied.
-  const [selectedStatementId, setSelectedStatementId] = useState<string | null>(
-    initialStatementId,
-  );
-  const statementQ = useStatement(
+    setSelectedAccountCode,
+    accountBalance,
+    accountEntries,
+    accountNotFound,
     selectedStatementId,
-    selectedStatementId === initialStatementId
-      ? (initialStatement ?? undefined)
-      : undefined,
-  );
-  const statement: Statement | null =
-    statementQ.data ??
-    (selectedStatementId === initialStatementId ? initialStatement : null);
-  const statementApiErr =
-    statementQ.error instanceof ApiError ? statementQ.error : null;
-  const statementNotFound =
-    statementApiErr?.status === 404 ||
-    (initialStatementNotFound && selectedStatementId === initialStatementId);
-
-  // FX position lots — (account, currency)-driven (TASK-PC-FE-091). Purely
-  // client-driven: the lookup form submit gates the query (no server seed).
-  const [lotsAccountCode, setLotsAccountCode] = useState<string | null>(null);
-  const [lotsCurrency, setLotsCurrency] = useState<string | null>(null);
-  const lotsQ = usePositionLots(lotsAccountCode, lotsCurrency, true);
-  const lotsApiErr = lotsQ.error instanceof ApiError ? lotsQ.error : null;
-  const lotsForbidden = lotsApiErr?.status === 403;
-  // A 400 (unsupported currency) is the only producer 4xx for this read; an
-  // empty position is a 200 (lots: []), NOT a 404. Surface 400 inline.
-  const lotsBadRequest = lotsApiErr?.status === 400;
-
-  function handleSubmitLots(code: string, currency: string) {
-    setLotsAccountCode(code);
-    setLotsCurrency(currency);
-  }
-
-  // FX 환율 피드 — global read, no input (TASK-PC-FE-092). Gated on the active
-  // tab so a hidden panel never fetches on mount. `rate` stays a string (F5).
-  const fxRatesQ = useFxRates(active === 'fx-rates');
-  const fxRatesApiErr =
-    fxRatesQ.error instanceof ApiError ? fxRatesQ.error : null;
-  const fxRatesForbidden = fxRatesApiErr?.status === 403;
-
-  // FX 환율 history 드릴 — per-pair read (TASK-PC-FE-104). Foreign-currency-
-  // driven: set either by clicking a feed-table pair OR by the manual lookup
-  // form. Gated on the active tab + a non-empty foreign code so a hidden panel
-  // (or an unselected pair) never fetches. `rate` stays a string (F5).
-  const [fxHistoryForeign, setFxHistoryForeign] = useState<string | null>(null);
-  const fxHistoryQ = useFxRateHistory(
+    setSelectedStatementId,
+    statement,
+    statementNotFound,
+    lotsAccountCode,
+    lotsCurrency,
+    lotsQ,
+    lotsForbidden,
+    lotsBadRequest,
+    lotsApiErr,
+    handleSubmitLots,
+    fxRatesQ,
+    fxRatesForbidden,
+    fxRatesApiErr,
     fxHistoryForeign,
-    FX_HISTORY_DEFAULT_LIMIT,
-    active === 'fx-rates',
-  );
-  const fxHistoryApiErr =
-    fxHistoryQ.error instanceof ApiError ? fxHistoryQ.error : null;
-  const fxHistoryForbidden = fxHistoryApiErr?.status === 403;
-
-  /** Called when the operator clicks a trial-balance account code. */
-  function handleSelectAccount(code: string) {
-    setSelectedAccountCode(code);
-    setActive('account');
-  }
-
-  /** Called when the operator clicks an entry's entryId in the account
-   *  entries table OR a statement match-row journalEntryId — drills into
-   *  the Journal Entry tab. */
-  function handleSelectEntry(eid: string) {
-    setEntryId(eid);
-    setActive('entry');
-  }
-
-  function onTabKeyDown(e: React.KeyboardEvent, idx: number) {
-    let next = idx;
-    if (e.key === 'ArrowRight') next = (idx + 1) % TABS.length;
-    else if (e.key === 'ArrowLeft') next = (idx - 1 + TABS.length) % TABS.length;
-    else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = TABS.length - 1;
-    else return;
-    e.preventDefault();
-    const nextKey = TABS[next].key;
-    setActive(nextKey);
-    tabRefs.current[nextKey]?.focus();
-  }
+    setFxHistoryForeign,
+    fxHistoryQ,
+    fxHistoryForbidden,
+    fxHistoryApiErr,
+    handleSelectAccount,
+    handleSelectEntry,
+  } = useLedgerOpsState(props);
 
   return (
     <section aria-labelledby="ledger-heading">
@@ -287,38 +122,7 @@ export function LedgerOpsScreen({
         범위가 아닙니다.
       </p>
 
-      <div
-        role="tablist"
-        aria-label="ledger 운영 보기"
-        className="mb-6 flex gap-1 border-b border-border"
-      >
-        {TABS.map((tab, idx) => {
-          const selected = active === tab.key;
-          return (
-            <button
-              key={tab.key}
-              ref={(el) => {
-                tabRefs.current[tab.key] = el;
-              }}
-              role="tab"
-              id={`ledger-tab-${tab.key}`}
-              aria-selected={selected}
-              aria-controls={`ledger-panel-${tab.key}`}
-              tabIndex={selected ? 0 : -1}
-              data-testid={`ledger-tab-${tab.key}`}
-              onClick={() => setActive(tab.key)}
-              onKeyDown={(e) => onTabKeyDown(e, idx)}
-              className={
-                selected
-                  ? 'rounded-t-md border-b-2 border-primary px-3 py-2 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
-                  : 'rounded-t-md border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
-              }
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <LedgerOpsTabs active={active} onSelect={setActive} />
 
       {/* Trial Balance panel */}
       <div
