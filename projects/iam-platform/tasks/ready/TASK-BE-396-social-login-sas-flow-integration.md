@@ -109,9 +109,18 @@ Follow:
 # Implementation Notes
 
 - **불변식**: 소셜 인증 성공은 SAS chain 이 소비하는 인증된 HTTP 세션(JSESSIONID SecurityContext)으로 끝나야 한다. SPA 로 커스텀 JWT 를 반환하면 안 된다.
-- `WebLoginSecurityConfig` 주석(TASK-BE-311)대로 `.loginPage("/login")` 호출이 `DefaultLoginPageGeneratingFilter` 등록을 억제하는 함정 주의 — 커스텀 컨트롤러-매핑 `/login` 뷰를 제공하면서 그 상호작용을 정확히 처리할 것.
-- 계정해소 로직은 `OAuthLoginUseCase` 에서 추출/재사용. JWT 발급 꼬리(스펙 step g~i)만 세션 확립으로 대체.
-- role 시딩은 ADR-032 의 기존 RoleSeedPolicy 경로 재사용(신규 정책 발명 금지).
+- 계정해소 로직은 `OAuthLoginUseCase.callback()` 에서 추출/재사용. JWT 발급 꼬리(스펙 step g~i, `oAuthLoginTransactionalStep.persistLogin`)만 세션 확립으로 대체.
+
+## 코드 정찰 + 확정 설계 (2026-06-17, 구현 착수 전)
+
+- **role 시딩 = 신규 코드 0** — `TenantClaimTokenCustomizer.customizeForAuthorizationCode` → `populateRoles` → `RoleSeedPolicy.seed(platform)` 가 이미 처리. `platform = registered client 의 tenant_id`(ClientSettings) 로 키잉되므로, `ecommerce-web-store-client` 로 시작된 authorization_code 는 **principal.details 만 올바르면 `roles:[CUSTOMER]` 자동 주입**. seed 는 principal tenant 가 아니라 client platform 으로 키잉됨.
+- **principal 템플릿** — `CredentialAuthenticationProvider` 가 정답: `UsernamePasswordAuthenticationToken(email, null, [ROLE_USER])` + `details = HashMap{tenant_id, tenant_type, account_id}`. details 맵은 **반드시 `HashMap`**(Map.of 는 SAS `JdbcOAuth2AuthorizationService` 의 SecurityJackson2Modules allowlist 밖 → /oauth2/token 라운드트립 깨짐). 소셜 콜백도 이 토큰을 세워 `SecurityContextRepository` 로 세션 영속 → saved `/oauth2/authorize` 복귀.
+- **`.loginPage("/login")`** — 커스텀 페이지 제공 시 호출하는 게 맞음(default 폼 억제가 의도). BE-311 함정은 default 폼 의존 시 호출 금지였음(상황 반전).
+- **Thymeleaf 추가** — `auth-service` 는 `spring-boot-starter-web` 만 → `spring-boot-starter-thymeleaf` 추가 + `templates/login.html`.
+
+### tenant 귀속 — 개시 OIDC client 파생 (사용자 확정 2026-06-17, ADR-006 옵션 1)
+
+소셜 principal 의 `tenant_id` = **로그인을 개시한 consumer 의 tenant**. 메커니즘: 콜백 시점에 세션의 `RequestCache`(saved authorization request `/oauth2/authorize?client_id=...`)에서 `client_id` 를 읽어 `RegisteredClientRepository.findByClientId` → `ClientSettings` 의 `OAuthClientMapper.SETTING_TENANT_ID`/`SETTING_TENANT_TYPE` 추출 → principal.details 에 주입. state 스레딩 불필요(saved-request 에 이미 client_id 존재). saved request 부재(직접 `/login` 진입) → `TenantContext.DEFAULT_TENANT_ID` fallback.
 
 ---
 
