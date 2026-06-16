@@ -1,7 +1,6 @@
 'use client';
 
 import { useId, useMemo, useState } from 'react';
-import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useWmsInventory,
@@ -19,6 +18,16 @@ import {
   type ShipmentQueryParams,
 } from '../api/types';
 import { AcknowledgeAlertDialog } from './AcknowledgeAlertDialog';
+import { WmsInventoryTable } from './WmsInventoryTable';
+import { WmsShipmentsTable } from './WmsShipmentsTable';
+import { WmsAlertsTable } from './WmsAlertsTable';
+import {
+  type InvFilterState,
+  EMPTY_INV_FILTERS,
+  type ShipFilterState,
+  EMPTY_SHIP_FILTERS,
+  alertLabel,
+} from './wms-ops-helpers';
 
 /**
  * wms operations section (TASK-PC-FE-007 — ADR-MONO-013 Phase 4 slice 1).
@@ -40,6 +49,12 @@ import { AcknowledgeAlertDialog } from './AcknowledgeAlertDialog';
  * re-login — not surfaced here as a per-section state); 403/404/422/409 →
  * inline actionable; 503/timeout → this section degrades only (the console
  * shell + IAM sections stay intact).
+ *
+ * ── MODULE SPLIT (TASK-PC-FE-103) ── this container owns ALL state, the
+ * mutation, and the lag banner; the three read regions (inventory snapshot,
+ * shipments, alerts) are rendered by the prop-driven `WmsInventoryTable` /
+ * `WmsShipmentsTable` / `WmsAlertsTable` presentational children, and the
+ * filter shapes + alert label formatter live in `wms-ops-helpers.ts`.
  */
 
 export interface WmsOpsScreenProps {
@@ -48,32 +63,6 @@ export interface WmsOpsScreenProps {
   shipments: ShipmentPage;
   /** NON-blocking eventual-consistency hint (seconds), or null. */
   lagSeconds: number | null;
-}
-
-interface InvFilterState {
-  warehouseId: string;
-  skuId: string;
-  lowStockOnly: boolean;
-}
-
-const EMPTY_INV_FILTERS: InvFilterState = {
-  warehouseId: '',
-  skuId: '',
-  lowStockOnly: false,
-};
-
-interface ShipFilterState {
-  warehouseId: string;
-  carrierCode: string;
-}
-
-const EMPTY_SHIP_FILTERS: ShipFilterState = {
-  warehouseId: '',
-  carrierCode: '',
-};
-
-function alertLabel(a: AlertRow): string {
-  return a.alertType ? `${a.alertType} (${a.alertId})` : a.alertId;
 }
 
 export function WmsOpsScreen({
@@ -147,9 +136,6 @@ export function WmsOpsScreen({
     });
   }
 
-  const shipRows = shipData.content;
-  const shipTotalPages = Math.max(1, shipData.page.totalPages);
-
   // The alerts list is not paginated in this slice's UI (only inventory
   // is). It is seeded page-0; the only re-fetch is the post-ack
   // invalidation (the acknowledged row then reflects state).
@@ -215,10 +201,6 @@ export function WmsOpsScreen({
     });
   }
 
-  const invRows = invData.content;
-  const invTotalPages = Math.max(1, invData.page.totalPages);
-  const alertRows = alertsData.content;
-
   const lagBanner = useMemo(() => {
     if (lagSeconds === null || lagSeconds <= 0) return null;
     return `데이터가 약 ${Math.round(lagSeconds)}초 지연될 수 있습니다 (읽기 모델은 최종 일관성 — 표시값이 잠시 과거일 수 있습니다).`;
@@ -244,446 +226,44 @@ export function WmsOpsScreen({
         </div>
       )}
 
-      {/* ── Inventory snapshot ─────────────────────────────────────────── */}
-      <h2 className="mb-3 text-lg font-medium text-foreground">
-        재고 스냅샷
-      </h2>
-      <form
+      <WmsInventoryTable
+        whFid={whFid}
+        skuFid={skuFid}
+        lowFid={lowFid}
+        filters={invFilters}
+        onFiltersChange={setInvFilters}
         onSubmit={submitInvFilters}
-        className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-        role="search"
-        aria-label="재고 스냅샷 필터"
-      >
-        <div>
-          <label
-            htmlFor={whFid}
-            className="block text-sm font-medium text-foreground"
-          >
-            창고 ID
-          </label>
-          <input
-            id={whFid}
-            type="text"
-            value={invFilters.warehouseId}
-            onChange={(e) =>
-              setInvFilters((f) => ({ ...f, warehouseId: e.target.value }))
-            }
-            data-testid="wms-inv-filter-warehouse"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          />
-        </div>
-        <div>
-          <label
-            htmlFor={skuFid}
-            className="block text-sm font-medium text-foreground"
-          >
-            SKU ID
-          </label>
-          <input
-            id={skuFid}
-            type="text"
-            value={invFilters.skuId}
-            onChange={(e) =>
-              setInvFilters((f) => ({ ...f, skuId: e.target.value }))
-            }
-            data-testid="wms-inv-filter-sku"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          />
-        </div>
-        <div className="flex items-end">
-          <label
-            htmlFor={lowFid}
-            className="flex items-center gap-2 text-sm font-medium text-foreground"
-          >
-            <input
-              id={lowFid}
-              type="checkbox"
-              checked={invFilters.lowStockOnly}
-              onChange={(e) =>
-                setInvFilters((f) => ({
-                  ...f,
-                  lowStockOnly: e.target.checked,
-                }))
-              }
-              data-testid="wms-inv-filter-lowstock"
-              className="h-4 w-4 rounded border-border"
-            />
-            저재고만
-          </label>
-        </div>
-        <div className="flex items-end">
-          <Button type="submit" data-testid="wms-inv-filter-submit">
-            조회
-          </Button>
-        </div>
-      </form>
+        forbidden={invForbidden}
+        degraded={invDegraded}
+        data={invData}
+        query={invQuery}
+        onPrevPage={() =>
+          setInvQuery((q) => ({ ...q, page: Math.max(0, (q.page ?? 0) - 1) }))
+        }
+        onNextPage={() =>
+          setInvQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
+        }
+      />
 
-      {invForbidden ? (
-        <div
-          role="status"
-          data-testid="wms-inv-forbidden"
-          className="mb-8 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
-        >
-          {messageForCode('FORBIDDEN')}
-        </div>
-      ) : invDegraded ? (
-        <div
-          role="status"
-          data-testid="wms-inv-degraded"
-          className="mb-8 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
-        >
-          wms 재고 정보를 일시적으로 불러올 수 없습니다. 콘솔의 다른 기능은
-          계속 사용할 수 있습니다.
-        </div>
-      ) : invRows.length === 0 ? (
-        <p
-          className="mb-8 text-sm text-muted-foreground"
-          data-testid="wms-inv-empty"
-        >
-          표시할 재고 스냅샷이 없습니다.
-        </p>
-      ) : (
-        <>
-          <table
-            className="mb-3 data-table"
-            data-testid="wms-inv-table"
-          >
-            <caption className="sr-only">재고 스냅샷</caption>
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th scope="col" className="p-2">
-                  위치
-                </th>
-                <th scope="col" className="p-2">
-                  SKU
-                </th>
-                <th scope="col" className="p-2">
-                  로트
-                </th>
-                <th scope="col" className="p-2">
-                  가용
-                </th>
-                <th scope="col" className="p-2">
-                  예약
-                </th>
-                <th scope="col" className="p-2">
-                  보유
-                </th>
-                <th scope="col" className="p-2">
-                  저재고
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {invRows.map((r, i) => (
-                <tr
-                  key={`${r.locationId}-${r.skuId}-${r.lotId ?? 'nolot'}`}
-                  data-testid={`wms-inv-row-${i}`}
-                  className="border-b border-border"
-                >
-                  <td className="p-2">{r.locationCode ?? r.locationId}</td>
-                  <td className="p-2">{r.skuCode ?? r.skuId}</td>
-                  <td className="p-2">{r.lotNo ?? r.lotId ?? '—'}</td>
-                  <td className="p-2">{r.availableQty ?? '—'}</td>
-                  <td className="p-2">{r.reservedQty ?? '—'}</td>
-                  <td className="p-2">{r.onHandQty ?? '—'}</td>
-                  <td className="p-2">
-                    {r.lowStockFlag ? (
-                      <span
-                        className="rounded bg-destructive/15 px-1.5 py-0.5 text-xs text-destructive"
-                        data-testid={`wms-inv-low-${i}`}
-                      >
-                        저재고
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <nav
-            className="mb-8 flex items-center justify-between"
-            aria-label="재고 페이지 이동"
-          >
-            <Button
-              variant="secondary"
-              disabled={(invQuery.page ?? 0) <= 0}
-              onClick={() =>
-                setInvQuery((q) => ({
-                  ...q,
-                  page: Math.max(0, (q.page ?? 0) - 1),
-                }))
-              }
-              data-testid="wms-inv-prev"
-            >
-              이전
-            </Button>
-            <span
-              className="text-sm text-muted-foreground"
-              data-testid="wms-inv-pageinfo"
-            >
-              {`${invData.page.number + 1} / ${invTotalPages} 페이지 · 총 ${invData.page.totalElements}건`}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={invData.page.number + 1 >= invData.page.totalPages}
-              onClick={() =>
-                setInvQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-              }
-              data-testid="wms-inv-next"
-            >
-              다음
-            </Button>
-          </nav>
-        </>
-      )}
-
-      {/* ── Shipments (택배/출고 read — carrier code / tracking no) ─────── */}
-      <h2 className="mb-3 text-lg font-medium text-foreground">택배 / 출고</h2>
-      <p className="mb-4 text-sm text-muted-foreground">
-        출고 확정된 화물의 택배사 · 운송장번호 · 출고시각 (읽기 전용 — 출고
-        확정은 출고 운영 화면에서 수행합니다).
-      </p>
-      <form
+      <WmsShipmentsTable
+        shipWhFid={shipWhFid}
+        shipCarrierFid={shipCarrierFid}
+        filters={shipFilters}
+        onFiltersChange={setShipFilters}
         onSubmit={submitShipFilters}
-        className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-        role="search"
-        aria-label="택배/출고 필터"
-      >
-        <div>
-          <label
-            htmlFor={shipWhFid}
-            className="block text-sm font-medium text-foreground"
-          >
-            창고 ID
-          </label>
-          <input
-            id={shipWhFid}
-            type="text"
-            value={shipFilters.warehouseId}
-            onChange={(e) =>
-              setShipFilters((f) => ({ ...f, warehouseId: e.target.value }))
-            }
-            data-testid="wms-ship-filter-warehouse"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          />
-        </div>
-        <div>
-          <label
-            htmlFor={shipCarrierFid}
-            className="block text-sm font-medium text-foreground"
-          >
-            택배사 코드
-          </label>
-          <input
-            id={shipCarrierFid}
-            type="text"
-            value={shipFilters.carrierCode}
-            onChange={(e) =>
-              setShipFilters((f) => ({ ...f, carrierCode: e.target.value }))
-            }
-            data-testid="wms-ship-filter-carrier"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          />
-        </div>
-        <div className="flex items-end">
-          <Button type="submit" data-testid="wms-ship-filter-submit">
-            조회
-          </Button>
-        </div>
-      </form>
+        forbidden={shipForbidden}
+        degraded={shipDegraded}
+        data={shipData}
+        query={shipQuery}
+        onPrevPage={() =>
+          setShipQuery((q) => ({ ...q, page: Math.max(0, (q.page ?? 0) - 1) }))
+        }
+        onNextPage={() =>
+          setShipQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
+        }
+      />
 
-      {shipForbidden ? (
-        <div
-          role="status"
-          data-testid="wms-ship-forbidden"
-          className="mb-8 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
-        >
-          {messageForCode('FORBIDDEN')}
-        </div>
-      ) : shipDegraded ? (
-        <div
-          role="status"
-          data-testid="wms-ship-degraded"
-          className="mb-8 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
-        >
-          wms 출고/택배 정보를 일시적으로 불러올 수 없습니다. 콘솔의 다른
-          기능은 계속 사용할 수 있습니다.
-        </div>
-      ) : shipRows.length === 0 ? (
-        <p
-          className="mb-8 text-sm text-muted-foreground"
-          data-testid="wms-ship-empty"
-        >
-          표시할 출고/택배 내역이 없습니다.
-        </p>
-      ) : (
-        <>
-          <table className="mb-3 data-table" data-testid="wms-ship-table">
-            <caption className="sr-only">출고/택배 내역</caption>
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th scope="col" className="p-2">
-                  출고번호
-                </th>
-                <th scope="col" className="p-2">
-                  주문번호
-                </th>
-                <th scope="col" className="p-2">
-                  택배사
-                </th>
-                <th scope="col" className="p-2">
-                  운송장번호
-                </th>
-                <th scope="col" className="p-2">
-                  출고시각 (UTC)
-                </th>
-                <th scope="col" className="p-2">
-                  수량
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {shipRows.map((s, i) => (
-                <tr
-                  key={s.shipmentId}
-                  data-testid={`wms-ship-row-${i}`}
-                  className="border-b border-border"
-                >
-                  <td className="p-2">{s.shipmentNo ?? '—'}</td>
-                  <td className="p-2">{s.orderNo ?? '—'}</td>
-                  <td className="p-2">
-                    {s.carrierCode ? (
-                      <span data-testid={`wms-ship-carrier-${i}`}>
-                        {s.carrierCode}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="p-2">{s.trackingNo ?? '—'}</td>
-                  <td className="p-2">{s.shippedAt ?? '—'}</td>
-                  <td className="p-2">{s.totalQty ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <nav
-            className="mb-8 flex items-center justify-between"
-            aria-label="출고/택배 페이지 이동"
-          >
-            <Button
-              variant="secondary"
-              disabled={(shipQuery.page ?? 0) <= 0}
-              onClick={() =>
-                setShipQuery((q) => ({
-                  ...q,
-                  page: Math.max(0, (q.page ?? 0) - 1),
-                }))
-              }
-              data-testid="wms-ship-prev"
-            >
-              이전
-            </Button>
-            <span
-              className="text-sm text-muted-foreground"
-              data-testid="wms-ship-pageinfo"
-            >
-              {`${shipData.page.number + 1} / ${shipTotalPages} 페이지 · 총 ${shipData.page.totalElements}건`}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={shipData.page.number + 1 >= shipData.page.totalPages}
-              onClick={() =>
-                setShipQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-              }
-              data-testid="wms-ship-next"
-            >
-              다음
-            </Button>
-          </nav>
-        </>
-      )}
-
-      {/* ── Alerts (confirm-gated acknowledge — the only mutation) ─────── */}
-      <h2 className="mb-3 text-lg font-medium text-foreground">알림</h2>
-      {alertRows.length === 0 ? (
-        <p
-          className="text-sm text-muted-foreground"
-          data-testid="wms-alerts-empty"
-        >
-          표시할 알림이 없습니다.
-        </p>
-      ) : (
-        <table
-          className="data-table"
-          data-testid="wms-alerts-table"
-        >
-          <caption className="sr-only">알림 목록</caption>
-          <thead>
-            <tr className="border-b border-border text-left">
-              <th scope="col" className="p-2">
-                유형
-              </th>
-              <th scope="col" className="p-2">
-                메시지
-              </th>
-              <th scope="col" className="p-2">
-                감지 시각 (UTC)
-              </th>
-              <th scope="col" className="p-2">
-                상태
-              </th>
-              <th scope="col" className="p-2">
-                작업
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {alertRows.map((a, i) => (
-              <tr
-                key={a.alertId}
-                data-testid={`wms-alert-row-${i}`}
-                className="border-b border-border"
-              >
-                <td className="p-2">{a.alertType ?? '—'}</td>
-                <td className="p-2">{a.message ?? '—'}</td>
-                <td className="p-2">{a.detectedAt ?? '—'}</td>
-                <td className="p-2">
-                  {a.acknowledged ? (
-                    <span
-                      className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-                      data-testid={`wms-alert-acked-${i}`}
-                    >
-                      확인됨
-                    </span>
-                  ) : (
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
-                      미확인
-                    </span>
-                  )}
-                </td>
-                <td className="p-2">
-                  {a.acknowledged ? (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => openAck(a)}
-                      data-testid={`wms-alert-ack-${i}`}
-                    >
-                      확인 처리
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <WmsAlertsTable rows={alertsData.content} onAck={openAck} />
 
       <AcknowledgeAlertDialog
         open={ackTarget !== null}
