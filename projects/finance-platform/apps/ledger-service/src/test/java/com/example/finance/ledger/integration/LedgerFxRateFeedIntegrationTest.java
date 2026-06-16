@@ -21,7 +21,8 @@ import static org.awaitility.Awaitility.await;
 /**
  * FX rate feed end-to-end integration (23rd increment, TASK-FIN-BE-031, ADR-002 — the authoritative
  * wiring gate; Docker-free {@code :check} would not catch the persisted-cache / poller-bean wiring).
- * Testcontainers MySQL (V12 runs) + real Kafka + MockWebServer JWKS.
+ * Extended by TASK-FIN-BE-039 to assert the append-only {@code fx_rate_quote_history} trail.
+ * Testcontainers MySQL (V12 + V13 run) + real Kafka + MockWebServer JWKS.
  *
  * <p>The feed gate is enabled with {@code mode=stub} via {@link DynamicPropertySource}
  * (financeplatform.ledger.fxrate.enabled=true, mode=stub, pairs=USD,EUR, stub.rates.USD=1300,
@@ -33,6 +34,8 @@ import static org.awaitility.Awaitility.await;
  *       rate / source="stub" / as_of / fetched_at populated;</li>
  *   <li><b>Upsert (AC-5)</b>: a second refresh keeps the row count stable (last-write-wins,
  *       fetched_at advances);</li>
+ *   <li><b>History trail (TASK-FIN-BE-039)</b>: two refreshes → {@code fx_rate_quote} count = 2
+ *       (one per pair), {@code fx_rate_quote_history} count = 4 (two per pair);</li>
  *   <li><b>Operator path untouched (AC-1)</b>: a manual-rate settlement on the seeded
  *       CASH_CLEARING USD position still removes the position + realizes the gain byte-identically
  *       — the loaded cache does not influence the operator path (shadow).</li>
@@ -97,7 +100,22 @@ class LedgerFxRateFeedIntegrationTest extends AbstractLedgerIntegrationTest {
                 "SELECT COUNT(*) FROM fx_rate_quote", Long.class);
         assertThat(count).isEqualTo(2L);   // upsert, not insert — still exactly the two pairs
 
-        // (3) Operator path is byte-identical (AC-1). A manual-rate settlement still removes the
+        // (3) History trail (TASK-FIN-BE-039): two refresh() runs × two pairs = four history rows.
+        // fx_rate_quote count stays at 2 (latest-only); fx_rate_quote_history grows to 4.
+        Long historyCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fx_rate_quote_history", Long.class);
+        assertThat(historyCount).isEqualTo(4L);  // 2 runs × 2 pairs = 4 append-only rows
+
+        // USD pair specifically: fx_rate_quote = 1, fx_rate_quote_history = 2 (append-only).
+        Long latestUsdCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fx_rate_quote WHERE foreign_currency = 'USD'", Long.class);
+        assertThat(latestUsdCount).isEqualTo(1L);  // latest-only: still exactly one USD row
+        Long historyUsdCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fx_rate_quote_history WHERE foreign_currency = 'USD'",
+                Long.class);
+        assertThat(historyUsdCount).isEqualTo(2L); // two runs → two history rows for USD
+
+        // (4) Operator path is byte-identical (AC-1). A manual-rate settlement still removes the
         //     position + realizes the gain — the loaded cache does NOT influence it (shadow).
         String token = financeReadToken();
         String wallet = ensureWallet(token);

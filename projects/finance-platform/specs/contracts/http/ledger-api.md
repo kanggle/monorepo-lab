@@ -623,10 +623,13 @@ and `stale=true` (operator sees both signals).
   granularity (a per-tenant tolerance is live — § 13th increment).
 - **FX rate feed (ADR-002 remainder)**: a **real public FX API provider schema** (`mode=http`
   against an actual provider's response shape — the http adapter is wired, the provider contract is a
-  stub) + a `fx_rate_quote_history` append-only audit trail + a ShedLock single-leader poller guard.
+  stub) + a ShedLock single-leader poller guard. *(The `fx_rate_quote_history` append-only audit
+  trail is now implemented — TASK-FIN-BE-039; the **history read / per-pair drill endpoint** stays
+  deferred.)*
 
 > **Now in scope (implemented — no longer forward-declared):** the GL/AP feed outbox
 > (`finance.ledger.{entry.posted,period.closed}.v1`) + reconciliation events; multi-currency +
 > cross-currency reconciliation (both directions); a **FIFO / lot-level** settlement carrying basis
 > (per-tenant + per-account cost-flow config §13, open-lots read §12) and the **live FX rate feed**
-> (omitted-rate fallback on `/revaluations` + `/settlements`, fx-rates read §14).
+> (omitted-rate fallback on `/revaluations` + `/settlements`, fx-rates read §14) and the
+> **`fx_rate_quote_history` append-only audit trail** (V13 — TASK-FIN-BE-039; read endpoint deferred).

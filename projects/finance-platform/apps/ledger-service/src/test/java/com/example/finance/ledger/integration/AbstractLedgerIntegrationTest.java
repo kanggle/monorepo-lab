@@ -244,6 +244,9 @@ public abstract class AbstractLedgerIntegrationTest {
         // poller; a leftover quote would change the row-count the feed IT asserts (no operator path
         // reads it, so other classes are unaffected — cleaned for the feed IT's determinism).
         jdbcTemplate.execute("DELETE FROM fx_rate_quote");
+        // (26th incr — TASK-FIN-BE-039) the FX rate quote history audit trail. Append-only rows;
+        // a leftover row would change the row-count the history IT asserts.
+        jdbcTemplate.execute("DELETE FROM fx_rate_quote_history");
     }
 
     // ------------------------------------------------------------------------
