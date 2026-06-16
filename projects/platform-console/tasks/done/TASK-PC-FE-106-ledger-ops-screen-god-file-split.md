@@ -1,7 +1,8 @@
 # TASK-PC-FE-106 — split the `ledger-ops/components/LedgerOpsScreen.tsx` god-file (state-hook + tab-strip extraction)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
+**Closure:** PR #1731 squash `6a6498af75aad9ca4b4e7e9f507fc58bf107a255`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass/skip incl. Frontend lint/build + unit + E2E smoke + Build & Test). 622-line tabbed shell → use-ledger-ops-state.ts (249) + LedgerOpsTabs.tsx (80) + LedgerOpsScreen.tsx view (453); state-hook + tab-strip extraction, 7 tabpanels stay in view; public LedgerOpsScreen export import-stable; F5 dir-walk guards auto-cover new files; 0 test changes; tsc 0 / lint 0 / vitest 165 files · 1980 tests green (baseline count).
 **Parent:** continuation of the console-web god-file split series (098 erp-api, 099 use-erp-ops, 100 ApprovalScreen, 101 OutboundOpsScreen, 102 ledger-api, 103 WmsOpsScreen, 105 OperatorsScreen). `LedgerOpsScreen.tsx` is the finance-ledger tabbed shell (~622 lines after PC-FE-104 added the FX-rate-history drill).
 
 ## Goal
