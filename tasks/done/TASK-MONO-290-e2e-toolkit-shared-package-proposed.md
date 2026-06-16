@@ -1,6 +1,6 @@
 # TASK-MONO-290 — Decide + (if accepted) bootstrap a shared `e2e-toolkit` package for cross-suite Playwright helpers
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — architecture decision; ADR authoring)
 
