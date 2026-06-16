@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useOperatorsList,
@@ -11,18 +10,23 @@ import {
   useSetOperatorProfile,
 } from '../hooks/use-operators';
 import {
-  OPERATOR_STATUSES,
-  ELEVATED_ROLE,
   type OperatorPage,
   type OperatorSummary,
   type OperatorStatus,
   type CreateOperatorInput,
 } from '../api/types';
-import { OperatorRoleChips, OperatorStatusBadge } from './OperatorBadges';
 import { CreateOperatorForm } from './CreateOperatorForm';
 import { OperatorConfirmDialog } from './OperatorConfirmDialog';
 import { OperatorProfileEditDialog } from './OperatorProfileEditDialog';
 import { OrgScopeDialog } from './OrgScopeDialog';
+import { OperatorsTable } from './OperatorsTable';
+import {
+  type PendingAction,
+  newIdemKey,
+  operatorConfirmTitle,
+  operatorConfirmDescription,
+  operatorConfirmLabel,
+} from './operators-confirm-copy';
 
 /**
  * IAM operators-management surface (TASK-PC-FE-004 — Phase 2 slice 3, the
@@ -43,32 +47,14 @@ import { OrgScopeDialog } from './OrgScopeDialog';
  * (`crypto.randomUUID()`), reused only if that exact confirmed create is
  * retried. edit-roles / change-status carry NO key (per the producer
  * header matrix — § 2.4.3).
+ *
+ * ── MODULE SPLIT (TASK-PC-FE-105) ── this container owns ALL state, the
+ * mutations, and the gating; the list region (filter + table + pagination)
+ * is the prop-driven `OperatorsTable` presentational child, and the
+ * pending-action model + the `OperatorConfirmDialog` copy builders live in
+ * `operators-confirm-copy.tsx`. The badges / create form / confirm / profile /
+ * org-scope dialogs were already separate components.
  */
-
-type PendingKind = 'create' | 'edit-roles' | 'change-status';
-
-interface PendingAction {
-  kind: PendingKind;
-  operator?: OperatorSummary;
-  /** create draft. */
-  draft?: CreateOperatorInput;
-  /** change-status target value. */
-  nextStatus?: OperatorStatus;
-  /** create only — stable across retries of THIS confirmed create. */
-  idempotencyKey?: string;
-  /** Privilege-high → elevated confirm copy. */
-  elevated: boolean;
-}
-
-function newIdemKey(): string {
-  const g = globalThis as unknown as {
-    crypto?: { randomUUID?: () => string };
-  };
-  return (
-    g.crypto?.randomUUID?.() ??
-    `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  );
-}
 
 export interface OperatorsScreenProps {
   initial: OperatorPage;
@@ -241,6 +227,11 @@ export function OperatorsScreen({
     });
   }
 
+  function openProfileEdit(operator: OperatorSummary) {
+    setProfile.reset();
+    setProfileEditOperatorId(operator.operatorId);
+  }
+
   function closeDialog() {
     setPending(null);
   }
@@ -339,274 +330,33 @@ export function OperatorsScreen({
             pending={create.isPending}
           />
 
-          <form
-            onSubmit={submitFilter}
-            className="mb-6 flex flex-wrap items-end gap-3"
-            role="search"
-            aria-label="운영자 목록 필터"
-          >
-            <div>
-              <label
-                htmlFor="operators-status-filter"
-                className="block text-sm font-medium text-foreground"
-              >
-                상태 필터
-              </label>
-              <select
-                id="operators-status-filter"
-                value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(
-                    e.target.value as '' | OperatorStatus,
-                  )
-                }
-                data-testid="operators-status-filter"
-                className="mt-1 w-48 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <option value="">전체</option>
-                {OPERATOR_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button type="submit" data-testid="operators-filter-submit">
-              조회
-            </Button>
-          </form>
-
-          {list.isError && (
-            <div
-              role="status"
-              data-testid="operators-degraded"
-              className="mb-6 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
-            >
-              운영자 목록을 일시적으로 불러올 수 없습니다. 잠시 후 다시
-              시도하세요.
-            </div>
-          )}
-
-          {rows.length === 0 ? (
-            <p
-              className="text-sm text-muted-foreground"
-              data-testid="operators-empty"
-            >
-              표시할 운영자가 없습니다.
-            </p>
-          ) : (
-            <>
-              <table
-                className="data-table"
-                data-testid="operators-table"
-              >
-                <caption className="sr-only">운영자 목록</caption>
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <th scope="col" className="p-2">
-                      이메일
-                    </th>
-                    <th scope="col" className="p-2">
-                      표시 이름
-                    </th>
-                    <th scope="col" className="p-2">
-                      상태
-                    </th>
-                    <th scope="col" className="p-2">
-                      역할
-                    </th>
-                    <th scope="col" className="p-2">
-                      생성일
-                    </th>
-                    <th scope="col" className="p-2">
-                      작업
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((op) => (
-                    <tr
-                      key={op.operatorId}
-                      data-testid={`operator-row-${op.operatorId}`}
-                      className="border-b border-border"
-                    >
-                      <td className="p-2">{op.email}</td>
-                      <td className="p-2">{op.displayName}</td>
-                      <td className="p-2">
-                        <OperatorStatusBadge status={op.status} />
-                      </td>
-                      <td className="p-2">
-                        <OperatorRoleChips roles={op.roles} />
-                      </td>
-                      <td className="p-2 text-muted-foreground">
-                        {op.createdAt}
-                      </td>
-                      <td className="p-2">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => openEditRoles(op)}
-                            data-testid={`action-edit-roles-${op.operatorId}`}
-                          >
-                            역할 변경
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className={
-                              op.status === 'SUSPENDED'
-                                ? undefined
-                                : 'text-destructive'
-                            }
-                            onClick={() => openChangeStatus(op)}
-                            data-testid={`action-status-${op.operatorId}`}
-                          >
-                            {op.status === 'SUSPENDED'
-                              ? '활성화'
-                              : '정지'}
-                          </Button>
-                          {/* TASK-PC-FE-017 — admin-on-behalf-of profile edit.
-                              Disabled on self row (producer-side rejection
-                              `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH`
-                              is the fail-safe; UX layer hides the always-400). */}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={
-                              selfOperatorId !== null &&
-                              selfOperatorId === op.operatorId
-                            }
-                            title={
-                              selfOperatorId !== null &&
-                              selfOperatorId === op.operatorId
-                                ? '자기 자신은 /operators 의 "내 프로파일" 영역에서 변경하세요.'
-                                : undefined
-                            }
-                            onClick={() => {
-                              setProfile.reset();
-                              setProfileEditOperatorId(op.operatorId);
-                            }}
-                            data-testid={`action-edit-profile-${op.operatorId}`}
-                          >
-                            프로파일 편집
-                          </Button>
-                          {/* TASK-PC-FE-050 — org_scope (데이터-스코프) per the
-                              active tenant's assignment row. */}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setOrgScopeOperatorId(op.operatorId)}
-                            data-testid={`action-org-scope-${op.operatorId}`}
-                          >
-                            조직 스코프
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <nav
-                className="mt-4 flex items-center justify-between"
-                aria-label="페이지 이동"
-              >
-                <Button
-                  variant="secondary"
-                  disabled={query.page <= 0}
-                  onClick={() =>
-                    setQuery((q) => ({
-                      ...q,
-                      page: Math.max(0, q.page - 1),
-                    }))
-                  }
-                  data-testid="operators-prev"
-                >
-                  이전
-                </Button>
-                <span
-                  className="text-sm text-muted-foreground"
-                  data-testid="operators-pageinfo"
-                >
-                  {page
-                    ? `${page.page + 1} / ${Math.max(1, page.totalPages)} 페이지 · 총 ${page.totalElements}명`
-                    : '—'}
-                </span>
-                <Button
-                  variant="secondary"
-                  disabled={
-                    !page || page.page + 1 >= page.totalPages
-                  }
-                  onClick={() =>
-                    setQuery((q) => ({ ...q, page: q.page + 1 }))
-                  }
-                  data-testid="operators-next"
-                >
-                  다음
-                </Button>
-              </nav>
-            </>
-          )}
+          <OperatorsTable
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            onSubmitFilter={submitFilter}
+            isListError={list.isError}
+            rows={rows}
+            page={page}
+            currentPage={query.page}
+            onPrevPage={() =>
+              setQuery((q) => ({ ...q, page: Math.max(0, q.page - 1) }))
+            }
+            onNextPage={() => setQuery((q) => ({ ...q, page: q.page + 1 }))}
+            selfOperatorId={selfOperatorId}
+            onEditRoles={openEditRoles}
+            onChangeStatus={openChangeStatus}
+            onEditProfile={openProfileEdit}
+            onOrgScope={(op) => setOrgScopeOperatorId(op.operatorId)}
+          />
         </>
       )}
 
       {pending && (
         <OperatorConfirmDialog
           open
-          title={
-            pending.kind === 'create'
-              ? '운영자 생성 (특권 작업)'
-              : pending.kind === 'edit-roles'
-                ? '운영자 역할 변경 (특권 작업)'
-                : pending.nextStatus === 'SUSPENDED'
-                  ? '운영자 정지 (특권 작업)'
-                  : '운영자 활성화'
-          }
-          description={
-            pending.kind === 'create' ? (
-              <>
-                <strong>{pending.draft?.email}</strong> 운영자를{' '}
-                <strong>{pending.draft?.tenantId}</strong> 테넌트에
-                생성합니다.
-                {pending.draft?.roles.includes(ELEVATED_ROLE) && (
-                  <>
-                    {' '}
-                    이 운영자는 <strong>SUPER_ADMIN</strong> 특권을
-                    가집니다.
-                  </>
-                )}{' '}
-                이 작업은 운영자 권한 부여에 해당하므로 사유가 요구됩니다.
-              </>
-            ) : pending.kind === 'edit-roles' ? (
-              <>
-                <strong>{pending.operator?.email}</strong> 운영자의 역할을
-                전체 교체합니다. 역할을 모두 비우면 이 운영자는 어떤 운영
-                권한도 갖지 않으며, <strong>SUPER_ADMIN</strong> 부여는
-                특권 상승입니다. 사유가 요구됩니다.
-              </>
-            ) : pending.nextStatus === 'SUSPENDED' ? (
-              <>
-                <strong>{pending.operator?.email}</strong> 운영자를{' '}
-                <strong>정지(SUSPENDED)</strong> 합니다. 정지 시 해당
-                운영자의 모든 세션이 즉시 종료됩니다. 사유가 요구됩니다.
-              </>
-            ) : (
-              <>
-                <strong>{pending.operator?.email}</strong> 운영자를
-                활성화(ACTIVE)합니다. 사유가 요구됩니다.
-              </>
-            )
-          }
-          confirmLabel={
-            pending.kind === 'create'
-              ? '운영자 생성'
-              : pending.kind === 'edit-roles'
-                ? '역할 변경'
-                : pending.nextStatus === 'SUSPENDED'
-                  ? '정지'
-                  : '활성화'
-          }
+          title={operatorConfirmTitle(pending)}
+          description={operatorConfirmDescription(pending)}
+          confirmLabel={operatorConfirmLabel(pending)}
           elevated={pending.elevated}
           roleEditor={
             pending.kind === 'edit-roles'
