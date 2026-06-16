@@ -2,6 +2,7 @@ package com.example.gateway.security;
 
 import com.example.security.jwt.JwtVerificationException;
 import com.example.security.jwt.Rs256JwtVerifier;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
@@ -24,11 +25,14 @@ public class TokenValidator {
 
     private final JwksCache jwksCache;
     private final String expectedIssuer;
+    private final ObjectMapper objectMapper;
 
     public TokenValidator(JwksCache jwksCache,
-                          @org.springframework.beans.factory.annotation.Value("${gateway.jwt.expected-issuer}") String expectedIssuer) {
+                          @org.springframework.beans.factory.annotation.Value("${gateway.jwt.expected-issuer}") String expectedIssuer,
+                          ObjectMapper objectMapper) {
         this.jwksCache = jwksCache;
         this.expectedIssuer = expectedIssuer;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -66,8 +70,7 @@ public class TokenValidator {
         try {
             String headerJson = new String(java.util.Base64.getUrlDecoder().decode(parts[0]));
             @SuppressWarnings("unchecked")
-            Map<String, Object> header = new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readValue(headerJson, Map.class);
+            Map<String, Object> header = objectMapper.readValue(headerJson, Map.class);
             String kid = (String) header.get("kid");
             if (kid == null || kid.isBlank()) {
                 throw new JwtVerificationException("JWT missing kid header");
