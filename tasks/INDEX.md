@@ -119,9 +119,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-282-claude-templates-orphan-sweep-delete-2-wire-feature-spec.md` — **REVIEW**. `.claude/templates/` orphan sweep: deleted `completion-report-template.md` (dead) + `use-case-template.md` (stale/divergent) — both 0 functional refs re-confirmed; wired `feature-spec-template.md` into `.claude/workflows/spec-change.md` Step 3 (canonical — 25 feature specs follow it). `.claude/templates/` now = 3 files (adr·service-architecture·feature-spec), all functionally referenced, no orphan. Doc/template-only, no real spec touched, HARDSTOP-03 clean. 분석=Opus 4.8 / 구현=Opus 직접.
+(empty)
 
 ## done
+
+- `TASK-MONO-282-claude-templates-orphan-sweep-delete-2-wire-feature-spec.md` — **DONE (impl PR #1761 머지, `6513f4d66`; spec PR #1760 `4927688149`; 3-dim verified)**. `.claude/templates/` orphan sweep (MONO-281 follow-up): deleted `completion-report-template.md` (dead: 0 refs/artifacts/process) + `use-case-template.md` (stale: 12 real use-case specs diverged to multi-UC Korean structure) — both 0 functional refs re-confirmed; wired `feature-spec-template.md` into `.claude/workflows/spec-change.md` Step 3 (canonical — 25 feature specs follow it exactly, mirrors service-bootstrap→service-architecture). `.claude/templates/` now = 3 files (adr·service-architecture·feature-spec), all functionally referenced, **no orphan remains**. Doc/template-only, no real spec touched, HARDSTOP-03 clean. 분석=Opus 4.8 / 구현=Opus 직접.
 
 - `TASK-MONO-281-task-template-consolidation-delete-iam-mirror-and-orphan.md` — **DONE (impl PR #1758 머지, `8d93708b2`; spec PR #1756 `e87c5a28b`; 3-dim verified)**. Consolidated task templates to the single shared `tasks/templates/` home: (1) deleted `projects/iam-platform/tasks/templates/` (3 files; exact mirror — `TEMPLATE.md:374` directive satisfied; sync-portfolio SHARED_PATHS carries root so standalone publish unaffected); (2) deleted orphan `.claude/templates/task-template.md` (0 refs confirmed; `.claude/templates/` commit NOT classifier-blocked); (3) aligned `frontend`+`integration` root templates to `backend` (Required-Sections block + `---` separators added, `apps/admin`→`apps/<app>`). All 3 keep 7/7 required sections; structure-only, −509/+77 lines. Doc/template-only, HARDSTOP-03 clean. 분석=Opus 4.8 / 구현=Opus 직접.
 
