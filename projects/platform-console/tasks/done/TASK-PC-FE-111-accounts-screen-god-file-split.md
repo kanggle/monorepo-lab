@@ -1,7 +1,8 @@
 # TASK-PC-FE-111 — split the `accounts/components/AccountsScreen.tsx` god-file (container/presentational)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
+**Closure:** PR #1743 squash `9ceeef74e41d5095395c2c481d17ef5b25a37802`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge 20 checks pass / 1 skip / 0 fail incl. Frontend lint/build + unit + E2E smoke + Build & Test). 513-line container → accounts-screen-helpers.tsx (97) + AccountsTable.tsx (168) + AccountsScreen.tsx container (323, −37%); container/presentational, all state in container; public AccountsScreen export import-stable; 0 test changes; tsc 0 / lint 0 / vitest 165 files · 1980 tests green (baseline count).
 **Parent:** continuation of the console-web god-file split series (098 erp-api, 099 use-erp-ops, 100 ApprovalScreen, 101 OutboundOpsScreen, 102 ledger-api, 103 WmsOpsScreen, 105 OperatorsScreen, 106 LedgerOpsScreen, 107/108/109 erp-masters hook/api/types). `AccountsScreen.tsx` is the IAM accounts operator surface (~513 lines, the destructive-op privilege slice: lock/unlock/revoke-session/gdpr-delete/bulk-lock). Note: PC-FE-110 (operators-api split) is owned by a concurrent session; this task is numbered 111 and touches a disjoint feature (`accounts/`).
 
 ## Goal
