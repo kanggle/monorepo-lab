@@ -31,9 +31,6 @@ import com.example.scmplatform.procurement.domain.supplier.repository.SupplierRe
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -366,15 +363,8 @@ public class PurchaseOrderApplicationService {
                                                 PoStatus status,
                                                 String supplierId,
                                                 PageQuery pageQuery) {
-        PageRequest pageable = toPageable(pageQuery);
-        Page<PurchaseOrder> page = poRepository.search(actor.tenantId(), status, supplierId, pageable);
-        return new PageResult<>(
-                page.getContent().stream().map(PurchaseOrderView::from).toList(),
-                page.getNumber(),
-                page.getSize(),
-                page.getTotalElements(),
-                page.getTotalPages()
-        );
+        return poRepository.search(actor.tenantId(), status, supplierId, pageQuery)
+                .map(PurchaseOrderView::from);
     }
 
     // ---------------- helpers ----------------
@@ -395,21 +385,5 @@ public class PurchaseOrderApplicationService {
                 po.getId(), po.getTenantId(),
                 previous, next,
                 actorType, actorAccountId, note));
-    }
-
-    /**
-     * Converts a {@link PageQuery} to a Spring Data {@link PageRequest} preserving
-     * sort/direction information. Without this, the sort fields were silently
-     * discarded (bug fix — TASK-SCM-BE-016 L5).
-     */
-    private static PageRequest toPageable(PageQuery pageQuery) {
-        if (pageQuery.sortBy() == null || pageQuery.sortBy().isBlank()) {
-            return PageRequest.of(pageQuery.page(), pageQuery.size());
-        }
-        Sort.Direction direction = "desc".equalsIgnoreCase(pageQuery.sortDirection())
-                ? Sort.Direction.DESC
-                : Sort.Direction.ASC;
-        return PageRequest.of(pageQuery.page(), pageQuery.size(),
-                Sort.by(direction, pageQuery.sortBy()));
     }
 }

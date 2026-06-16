@@ -33,8 +33,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -51,8 +49,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import org.mockito.ArgumentCaptor;
-import org.springframework.data.domain.Sort;
 
 /**
  * Application unit tests for {@link PurchaseOrderApplicationService}. Covers
@@ -342,40 +338,25 @@ class PurchaseOrderApplicationServiceTest {
         assertThat(view.status()).isEqualTo(PoStatus.DRAFT);
     }
 
-    // ---------------- SEARCH sort fix (TASK-SCM-BE-016 L5 bug fix) ----------------
+    // ---------------- SEARCH (sort building relocated to PageRequests — see PageRequestsTest) ----------------
 
     @Test
-    @DisplayName("search() propagates sortBy=createdAt asc — Pageable carries Sort.Direction.ASC")
-    void searchSortAscIsReflectedInPageable() {
-        PageQuery pageQuery = PageQuery.of(0, 10, "createdAt", "asc");
-        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        when(poRepository.search(eq(TENANT), any(), any(), pageableCaptor.capture()))
-                .thenReturn(new PageImpl<>(List.of()));
-
-        service.search(BUYER, null, null, pageQuery);
-
-        Pageable captured = pageableCaptor.getValue();
-        assertThat(captured.getSort().isSorted()).isTrue();
-        assertThat(captured.getSort().getOrderFor("createdAt"))
-                .isNotNull()
-                .satisfies(order -> assertThat(order.getDirection()).isEqualTo(Sort.Direction.ASC));
-    }
-
-    @Test
-    @DisplayName("search() propagates sortBy=createdAt desc — Pageable carries Sort.Direction.DESC")
-    void searchSortDescIsReflectedInPageable() {
+    @DisplayName("search() forwards the PageQuery (incl. sort) to the port and maps the result")
+    void searchForwardsPageQueryAndMapsResult() {
         PageQuery pageQuery = PageQuery.of(0, 10, "createdAt", "desc");
-        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        when(poRepository.search(eq(TENANT), any(), any(), pageableCaptor.capture()))
-                .thenReturn(new PageImpl<>(List.of()));
+        ArgumentCaptor<PageQuery> captor = ArgumentCaptor.forClass(PageQuery.class);
+        when(poRepository.search(eq(TENANT), any(), any(), captor.capture()))
+                .thenReturn(new PageResult<>(List.of(), 0, 10, 0, 0));
 
-        service.search(BUYER, null, null, pageQuery);
+        PageResult<PurchaseOrderView> result = service.search(BUYER, null, null, pageQuery);
 
-        Pageable captured = pageableCaptor.getValue();
-        assertThat(captured.getSort().isSorted()).isTrue();
-        assertThat(captured.getSort().getOrderFor("createdAt"))
-                .isNotNull()
-                .satisfies(order -> assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC));
+        // The service forwards sort as data on the PageQuery; the PageQuery -> Spring Sort
+        // mapping is covered Docker-free by PageRequestsTest.
+        assertThat(captor.getValue().sortBy()).isEqualTo("createdAt");
+        assertThat(captor.getValue().sortDirection()).isEqualTo("desc");
+        assertThat(result.content()).isEmpty();
+        assertThat(result.page()).isEqualTo(0);
+        assertThat(result.size()).isEqualTo(10);
     }
 
     // ---------------- helpers ----------------
