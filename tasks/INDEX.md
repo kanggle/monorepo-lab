@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-281-task-template-consolidation-delete-iam-mirror-and-orphan.md` — **READY**. Task-template consolidation from the 2026-06-16 audit: (1) delete `projects/iam-platform/tasks/templates/` (exact mirror of root; `TEMPLATE.md:374` already says "Delete — root is shared"; only iam has it = gap→iam extraction residue); (2) delete orphan `.claude/templates/task-template.md` (unreferenced ~90% dup of backend template); (3) align `frontend`/`integration` root templates to `backend` (add Required-Sections block + `---` separators, generalize `apps/admin`→`apps/<app>`). Doc/template-only, structure-only, no lifecycle change. Verify sync-portfolio SHARED_PATHS carries root templates (standalone unaffected). 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (mechanical delete + structural align). MONO-280 = concurrent session, so this took 281.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-281-task-template-consolidation-delete-iam-mirror-and-orphan.md` — **REVIEW**. Consolidated task templates: (1) deleted `projects/iam-platform/tasks/templates/` (3 files; exact mirror, `TEMPLATE.md:374` directive satisfied; sync-portfolio SHARED_PATHS carries root so standalone unaffected); (2) deleted orphan `.claude/templates/task-template.md` (0 refs confirmed); (3) aligned `frontend`+`integration` root templates to `backend` (Required-Sections block + `---` separators added, `apps/admin`→`apps/<app>`). All 3 keep 7/7 required sections; structure-only, no content change. Doc/template-only, HARDSTOP-03 clean. 분석=Opus 4.8 / 구현=Opus 직접.
 
 ## done
 

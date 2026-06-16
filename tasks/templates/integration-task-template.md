@@ -22,9 +22,27 @@ integration
 - api
 - event
 
+---
+
+# Required Sections (must exist)
+
+- Goal
+- Scope (in/out)
+- Acceptance Criteria
+- Related Specs
+- Related Contracts
+- Edge Cases
+- Failure Scenarios
+
+If any section is missing or incomplete, this task must not be implemented.
+
+---
+
 # Goal
 
 Describe the cross-service or cross-component flow that must be implemented or changed.
+
+---
 
 # Scope
 
@@ -40,12 +58,16 @@ Describe the cross-service or cross-component flow that must be implemented or c
 - item 2
 - item 3
 
+---
+
 # Acceptance Criteria
 
 - [ ] Flow is testable end-to-end
 - [ ] Contract usage is consistent
 - [ ] Failure handling is defined
 - [ ] Retry or recovery behavior is defined where needed
+
+---
 
 # Related Specs
 
@@ -61,10 +83,14 @@ Describe the cross-service or cross-component flow that must be implemented or c
 <!-- Reference .claude/skills/INDEX.md to find relevant skills. List only what this task needs. -->
 - `.claude/skills/messaging/...`
 
+---
+
 # Related Contracts
 
 - `specs/contracts/http/...`
 - `specs/contracts/events/...`
+
+---
 
 # Participating Components
 
@@ -72,9 +98,13 @@ Describe the cross-service or cross-component flow that must be implemented or c
 - component/service 2
 - component/service 3
 
+---
+
 # Trigger
 
 Describe what starts the flow.
+
+---
 
 # Expected Flow
 
@@ -82,12 +112,16 @@ Describe what starts the flow.
 2. step 2
 3. step 3
 
+---
+
 # Edge Cases
 
 - duplicate event/request
 - partial failure
 - delayed response
 - missing dependent data
+
+---
 
 # Failure Scenarios
 
@@ -97,11 +131,15 @@ Describe what starts the flow.
 - timeout
 - retry exhaustion
 
+---
+
 # Test Requirements
 
 - integration test
 - contract test
 - end-to-end verification if needed
+
+---
 
 # Definition of Done
 

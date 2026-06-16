@@ -22,9 +22,27 @@ frontend
 - code
 - api
 
+---
+
+# Required Sections (must exist)
+
+- Goal
+- Scope (in/out)
+- Acceptance Criteria
+- Related Specs
+- Related Contracts
+- Edge Cases
+- Failure Scenarios
+
+If any section is missing or incomplete, this task must not be implemented.
+
+---
+
 # Goal
 
 Describe the user-visible result that must be achieved.
+
+---
 
 # Scope
 
@@ -40,11 +58,15 @@ Describe the user-visible result that must be achieved.
 - item 2
 - item 3
 
+---
+
 # Acceptance Criteria
 
 - [ ] Screen behavior is testable
 - [ ] Error handling is testable
 - [ ] Loading/empty state is testable
+
+---
 
 # Related Specs
 
@@ -60,17 +82,25 @@ Describe the user-visible result that must be achieved.
 <!-- Reference .claude/skills/INDEX.md to find relevant skills. List only what this task needs. -->
 - `.claude/skills/frontend/...`
 
+---
+
 # Related Contracts
 
 - `specs/contracts/http/...`
 
+---
+
 # Target App
 
-- `apps/web` or `apps/admin`
+- `apps/<app>`
+
+---
 
 # Implementation Notes
 
 Describe UI/UX constraints, routing constraints, permission assumptions, or data dependencies.
+
+---
 
 # Edge Cases
 
@@ -80,6 +110,8 @@ Describe UI/UX constraints, routing constraints, permission assumptions, or data
 - invalid input
 - unauthorized access
 
+---
+
 # Failure Scenarios
 
 - API error
@@ -88,11 +120,15 @@ Describe UI/UX constraints, routing constraints, permission assumptions, or data
 - stale data
 - permission denied
 
+---
+
 # Test Requirements
 
 - component test
 - page/flow test
 - e2e if task scope requires it
+
+---
 
 # Definition of Done
 
