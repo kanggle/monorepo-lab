@@ -129,8 +129,8 @@ Three entry points, one domain operation. The `released_reason` enum on
 4. For each line: `Inventory.release(qty, reservationId, reason)` — bumps
    `version`, writes **two** `Movement` rows (`RESERVED delta=-N` +
    `AVAILABLE delta=+N`, both with `reservation_id`, `reason_code` =
-   `PICKING_CANCELLED` / `PICKING_EXPIRED` / `ADJUSTMENT_RECLASSIFY`
-   depending on reason).
+   `PICKING_CANCELLED` (reason `CANCELLED` or `MANUAL`) / `PICKING_EXPIRED`
+   (reason `EXPIRED`) depending on reason).
 5. Insert outbox row: `inventory.released` (payload carries
    `reason=CANCELLED|EXPIRED|MANUAL`).
 

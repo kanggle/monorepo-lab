@@ -689,8 +689,9 @@ specs:
 
 1. **Force-fail admin endpoint** — `POST /sagas/{id}:force-fail` for
    ops to terminate STUCK sagas. v1: direct DB; v2: REST endpoint.
-2. **Sweeper attempt cap value** — starts at 10, may be tuned based on
-   prod observation.
+2. **Sweeper attempt cap value** — resolved: shipped at `5`
+   (`outbound.saga.sweeper.max-attempts`, see §4.2 / §4.5); may be tuned
+   based on prod observation.
 3. **Wave / batch saga model** — multi-order sagas (Wave aggregate) are
    v2; this saga document is per-order only.
 4. **Returns / RMA inbound saga** — distinct from Outbound Saga;

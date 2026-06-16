@@ -383,9 +383,13 @@ inbound Kafka events.
                  COMPLETED (terminal)
 
          CANCELLATION_REQUESTED ──[inventory.released consumed]──> CANCELLED (terminal)
+
+         {REQUESTED, CANCELLATION_REQUESTED, SHIPPED}
+              ──[saga sweeper re-emitted max-attempts (default 5) without advancing]──>
+         STUCK_RECOVERY_FAILED (terminal)
 ```
 
-- `RESERVE_FAILED`, `CANCELLED`, `COMPLETED` are terminal.
+- `RESERVE_FAILED`, `CANCELLED`, `COMPLETED`, `STUCK_RECOVERY_FAILED` are terminal.
 - `SHIPPED_NOT_NOTIFIED` is a **non-terminal alert state** — saga stays here until
   manual TMS retry succeeds, at which point it advances to `COMPLETED`.
 - Direct `UPDATE outbound_saga SET state = ?` is forbidden (T4). Only
@@ -585,6 +589,11 @@ Flyway `V99__seed_dev_data.sql`, profile `dev` or `standalone`.
 ---
 
 ## Open Items
+
+> **Status**: all artifacts and error-code registrations listed below are now
+> authored / registered. See [`architecture.md`](architecture.md) § Open Items
+> (Retrospective Backfill Audit) for the per-item ✅ audit. Retained here as the
+> domain-model's related-artifact index.
 
 - `specs/services/outbound-service/state-machines/order-status.md` — Order state
   machine standalone diagram

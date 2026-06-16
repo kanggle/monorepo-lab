@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-392-wms-tier-c-saga-semantics-drift.md` — **REVIEW**. Code-verified **Tier C** drift-fix (config / state-machine semantics) from TASK-BE-385 § Findings, the tier TASK-BE-387 deferred. Five fixes, each anchored to production code/config: (1) outbound-saga.md §9 sweeper-cap "starts at 10"→resolved `5` (per `application.yml` `max-attempts: 5` + the doc's own §4.2); (2) added terminal `STUCK_RECOVERY_FAILED` to the saga-status.md ASCII+Mermaid and outbound domain-model.md §6 ASCII+terminal-list (present in `SagaStatus` enum + States table but absent from diagrams) + marked the stale domain-model "Open Items" list resolved (architecture.md backfill audit = all ✅); (3) removed the phantom "operator force-completes" from saga-status.md (no v1 force-complete; transition table lists only `inventory.confirmed`/`:retry-tms-notify`); (4) MANUAL reservation release reason_code `ADJUSTMENT_RECLASSIFY`→`PICKING_CANCELLED` in reservation-saga.md + reservation-status.md (per `ReleaseReservationService.reasonCodeFor`: `MANUAL→PICKING_CANCELLED` unconditional); (5) master domain-model.md lot ASCII label `EXPIRED (terminal)`→`(terminal for reactivation)` (matches the already-correct prose + `Lot`/`LotStatus` code: `EXPIRED→INACTIVE` permitted). Doc-only — `git diff apps/**` empty; no enum value / topic / Flyway / contract change. Deferred: Tier D (recap dedup) / Tier E (notification authoring). 분석=Opus 4.8 / 구현=Opus.
 
 ## done
 
