@@ -1,51 +1,42 @@
 package com.example.security.consumer;
 
-import com.example.security.consumer.MissingTenantIdException;
-import com.example.security.infrastructure.persistence.AccountLockHistoryJpaEntity;
-import com.example.security.infrastructure.persistence.AccountLockHistoryJpaRepository;
+import com.example.security.application.RecordAccountLockHistoryUseCase;
+import com.example.security.domain.history.AccountLockHistory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class AccountLockedConsumerUnitTest {
 
     @Mock
-    private AccountLockHistoryJpaRepository repository;
+    private RecordAccountLockHistoryUseCase useCase;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @InjectMocks
-    private AccountLockedConsumer consumer;
-
-    AccountLockedConsumerUnitTest() {
-        // Manual wiring because @InjectMocks cannot inject the concrete ObjectMapper bean.
-    }
 
     private ConsumerRecord<String, String> record(String value) {
         return new ConsumerRecord<>("account.locked", 0, 0L, "key", value);
     }
 
     private AccountLockedConsumer newConsumer() {
-        return new AccountLockedConsumer(objectMapper, repository);
+        // Manual wiring because the concrete ObjectMapper bean is not a mock.
+        return new AccountLockedConsumer(objectMapper, useCase);
     }
 
     @Test
-    @DisplayName("Envelope-wrapped payload is parsed and saved with reasonCode/actorType mapping")
+    @DisplayName("Envelope-wrapped payload is parsed and delegated with reasonCode/actorType mapping")
     void envelopeWrappedPayloadPersisted() {
         String json = """
             {
@@ -68,11 +59,11 @@ class AccountLockedConsumerUnitTest {
 
         newConsumer().onMessage(record(json));
 
-        ArgumentCaptor<AccountLockHistoryJpaEntity> captor =
-                ArgumentCaptor.forClass(AccountLockHistoryJpaEntity.class);
-        verify(repository).save(captor.capture());
-        AccountLockHistoryJpaEntity saved = captor.getValue();
+        ArgumentCaptor<AccountLockHistory> captor = ArgumentCaptor.forClass(AccountLockHistory.class);
+        verify(useCase).execute(captor.capture());
+        AccountLockHistory saved = captor.getValue();
         assertThat(saved.getEventId()).isEqualTo("11111111-1111-1111-1111-111111111111");
+        assertThat(saved.getTenantId()).isEqualTo("fan-platform");
         assertThat(saved.getAccountId()).isEqualTo("acc-1");
         assertThat(saved.getReason()).isEqualTo("ADMIN_LOCK");
         assertThat(saved.getLockedBy()).isEqualTo("op-42");
@@ -96,10 +87,9 @@ class AccountLockedConsumerUnitTest {
 
         newConsumer().onMessage(record(json));
 
-        ArgumentCaptor<AccountLockHistoryJpaEntity> captor =
-                ArgumentCaptor.forClass(AccountLockHistoryJpaEntity.class);
-        verify(repository).save(captor.capture());
-        AccountLockHistoryJpaEntity saved = captor.getValue();
+        ArgumentCaptor<AccountLockHistory> captor = ArgumentCaptor.forClass(AccountLockHistory.class);
+        verify(useCase).execute(captor.capture());
+        AccountLockHistory saved = captor.getValue();
         assertThat(saved.getEventId()).isEqualTo("55555555-5555-5555-5555-555555555555");
         assertThat(saved.getAccountId()).isEqualTo("acc-2");
         assertThat(saved.getSource()).isEqualTo("system");
@@ -123,24 +113,7 @@ class AccountLockedConsumerUnitTest {
         assertThatThrownBy(() -> newConsumer().onMessage(record(json)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("eventId");
-        verifyNoInteractions(repository);
-    }
-
-    @Test
-    @DisplayName("Duplicate event_id triggers DataIntegrityViolation which is swallowed (idempotent)")
-    void duplicateEventIdSwallowed() {
-        doThrow(new DataIntegrityViolationException("uk_account_lock_history_event_id"))
-                .when(repository).save(any());
-
-        String json = """
-            {"eventId":"22222222-2222-2222-2222-222222222222",
-             "payload":{"accountId":"acc-3","tenantId":"fan-platform","reasonCode":"ADMIN_LOCK",
-                        "actorType":"operator","actorId":"op-1","lockedAt":"2026-04-14T12:00:00Z"}}
-            """;
-
-        // Must not throw — DLQ routing should only happen for genuine failures.
-        newConsumer().onMessage(record(json));
-        verify(repository).save(any());
+        verifyNoInteractions(useCase);
     }
 
     @Test
@@ -148,7 +121,7 @@ class AccountLockedConsumerUnitTest {
     void malformedJsonThrows() {
         assertThatThrownBy(() -> newConsumer().onMessage(record("not json {{{")))
                 .isInstanceOf(RuntimeException.class);
-        verifyNoInteractions(repository);
+        verifyNoInteractions(useCase);
     }
 
     @Test
@@ -160,7 +133,7 @@ class AccountLockedConsumerUnitTest {
             """;
         assertThatThrownBy(() -> newConsumer().onMessage(record(json)))
                 .isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(repository);
+        verifyNoInteractions(useCase);
     }
 
     @Test
@@ -174,9 +147,8 @@ class AccountLockedConsumerUnitTest {
 
         newConsumer().onMessage(record(json));
 
-        ArgumentCaptor<AccountLockHistoryJpaEntity> captor =
-                ArgumentCaptor.forClass(AccountLockHistoryJpaEntity.class);
-        verify(repository).save(captor.capture());
+        ArgumentCaptor<AccountLockHistory> captor = ArgumentCaptor.forClass(AccountLockHistory.class);
+        verify(useCase).execute(captor.capture());
         assertThat(captor.getValue().getSource()).isEqualTo("admin");
         assertThat(captor.getValue().getLockedBy()).isEqualTo("op-9");
     }
@@ -191,6 +163,6 @@ class AccountLockedConsumerUnitTest {
             """;
         assertThatThrownBy(() -> newConsumer().onMessage(record(json)))
                 .isInstanceOf(MissingTenantIdException.class);
-        verifyNoInteractions(repository);
+        verifyNoInteractions(useCase);
     }
 }
