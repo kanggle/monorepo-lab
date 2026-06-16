@@ -24,7 +24,7 @@ Four **uncommitted** ad-hoc browser scripts sit in `apps/console-web/tests/e2e/`
 4. Add the operator-persona seed (the `ecommerce-operator@example.com` / `omni-operator@example.com` rows the demo scripts assume) to the suite's committed seed path so the new specs are reproducible in CI, not just on a hand-seeded local stack.
 5. Delete the `.mjs` scripts + their `*.png` screenshots from the working tree once their coverage is committed (they are untracked demo artifacts).
 
-**Out of scope:** the shared cross-suite OIDC-PKCE login extraction (TASK-MONO-282 gate); committing the demo seed SQL / compose variants that live under `tests/federation-hardening-e2e/` (separate, root-scoped, and currently intentionally uncommitted).
+**Out of scope:** the shared cross-suite OIDC-PKCE login extraction (TASK-MONO-290 gate); committing the demo seed SQL / compose variants that live under `tests/federation-hardening-e2e/` (separate, root-scoped, and currently intentionally uncommitted).
 
 ## Acceptance Criteria
 

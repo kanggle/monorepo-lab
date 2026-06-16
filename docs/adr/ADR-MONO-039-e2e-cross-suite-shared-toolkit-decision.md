@@ -2,7 +2,7 @@
 
 **Status:** PROPOSED
 
-**History:** PROPOSED 2026-06-16 (TASK-MONO-282 — records the **cross-suite e2e tooling-ownership decision**: whether the OIDC-PKCE login flow + dev credential + Playwright config presets duplicated across the three sibling suites [`tests/federation-hardening-e2e`, `console-web`, `web-store`] should be lifted into a shared package. The duplication is small but spans three **separate pnpm packages** across the root↔`projects/**` boundary, so unifying it is a structural decision — a package that did it without a record would silently bake a workspace-topology + boundary-crossing posture → HARDSTOP-09. This ADR records the four decisions [C1–C4]. **Doc-only; ACCEPTED is a separate user-explicit-intent gate [staged-child pattern, ADR-019/020/021/023/024/032/033/034/035/036/037/038]. Self-ACCEPT prohibited.** Direction CHOSEN-PROPOSED = **Option C** [no package; document the convention], selected by the user via the TASK-MONO-282 direction question.)
+**History:** PROPOSED 2026-06-16 (TASK-MONO-290 — records the **cross-suite e2e tooling-ownership decision**: whether the OIDC-PKCE login flow + dev credential + Playwright config presets duplicated across the three sibling suites [`tests/federation-hardening-e2e`, `console-web`, `web-store`] should be lifted into a shared package. The duplication is small but spans three **separate pnpm packages** across the root↔`projects/**` boundary, so unifying it is a structural decision — a package that did it without a record would silently bake a workspace-topology + boundary-crossing posture → HARDSTOP-09. This ADR records the four decisions [C1–C4]. **Doc-only; ACCEPTED is a separate user-explicit-intent gate [staged-child pattern, ADR-019/020/021/023/024/032/033/034/035/036/037/038]. Self-ACCEPT prohibited.** Direction CHOSEN-PROPOSED = **Option C** [no package; document the convention], selected by the user via the TASK-MONO-290 direction question.)
 
 **Builds on:** TASK-MONO-280 (2026-06-16, PR #1755) — extracted the byte-identical **intra-suite** helpers in `tests/federation-hardening-e2e/` (`operatorToken`/`headers`/`codeOf`/`send`/`warmUpAdminOutbox`/`gotoOverview`/`switchTenant`) into two in-package fixtures. That work was confined to one package; the **inter-suite** layer it surfaced is what this ADR decides.
 
@@ -45,7 +45,7 @@ This is a portfolio monorepo; a clean shared `e2e-toolkit` would have demonstrat
 
 ## 2. Decision
 
-> Direction is **CHOSEN-PROPOSED = Option C**, selected by the user (TASK-MONO-282 direction question, 2026-06-16); to be finalised (byte-unchanged) at ACCEPTED per the staged-child pattern. **No package / workspace / import change in this ADR.**
+> Direction is **CHOSEN-PROPOSED = Option C**, selected by the user (TASK-MONO-290 direction question, 2026-06-16); to be finalised (byte-unchanged) at ACCEPTED per the staged-child pattern. **No package / workspace / import change in this ADR.**
 
 ### C1 — No shared `e2e-toolkit` package; the three suites stay independent
 
@@ -89,7 +89,7 @@ Mirrors the **staged-child governance** of ADR-019/020/021/023/024/032/033/034/0
 
 | Date | Status | Task | Note |
 |---|---|---|---|
-| 2026-06-16 | PROPOSED | TASK-MONO-282 | C1–C4 recorded; direction CHOSEN-PROPOSED = Option C (user direction-question). Awaiting explicit ACCEPT gate (self-ACCEPT prohibited). |
+| 2026-06-16 | PROPOSED | TASK-MONO-290 | C1–C4 recorded; direction CHOSEN-PROPOSED = Option C (user direction-question). Awaiting explicit ACCEPT gate (self-ACCEPT prohibited). |
 
 ## 7. Provenance
 
