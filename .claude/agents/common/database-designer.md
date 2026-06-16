@@ -54,7 +54,7 @@ Design database schemas, plan migrations, and optimize index strategies.
 ## Ownership Boundary
 
 - Owns: table schemas, indexes, migrations, constraints, data types
-- Does NOT own: event payload schemas (→ `event-architect`), application-level transaction orchestration (→ `backend-engineer`)
+- Does NOT own: event payload schemas (→ `event-architect`), application-level transaction orchestration (→ `backend-engineer`), frontend-app data stores (Next.js apps own no SQL schema — they consume backend APIs/BFF; hence `frontend-app` is intentionally absent from `service_types`)
 - Shared concern: if an event is stored in a database table (e.g., outbox table), `database-designer` owns the table schema, `event-architect` owns the event payload structure
 
 ## Does NOT

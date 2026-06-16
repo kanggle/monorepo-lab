@@ -56,7 +56,7 @@ Follow the full `/implement-task` batch mode procedure:
 8. Present execution plan
 9. If `--dry-run`, show plan and continue to Phase 2 dry-run (do not execute)
 10. Execute via worktree-isolated subagents following `/implement-task` batch mode Phase 5 rules:
-    - Parallel rounds for independent tasks, `subagent_type` per task type (`"backend-engineer"` / `"frontend-engineer"`)
+    - Parallel rounds for independent tasks, `subagent_type` per task category per `/implement-task` Phase 5 (`"backend-engineer"` / `"frontend-engineer"`; `"refactoring-engineer"` for simple-refactor; `"api-designer"` + `"event-architect"` for contract-change)
     - Sequential rounds for dependent tasks
     - Merge worktree branches between rounds
     - Mark dependents of failed tasks as blocked

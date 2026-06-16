@@ -3,6 +3,7 @@ name: code-reviewer
 description: Code review specialist. Verifies quality, security, performance, and convention compliance of implemented code.
 model: sonnet
 tools: Read, Glob, Grep, Bash
+skills: review-checklist
 capabilities: [code-quality-review, security-review, performance-review, convention-check, spec-compliance-check]
 languages: [java, kotlin, typescript, sql]
 domains: [all]

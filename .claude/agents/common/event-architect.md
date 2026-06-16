@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Glob, Grep
 capabilities: [event-contract-design, payload-schema, idempotency-design, retry-dlq-design, schema-versioning]
 languages: [yaml, markdown]
 domains: [all]
-service_types: [event-consumer, rest-api]
+service_types: [event-consumer, rest-api, batch-job]
 ---
 
 You are the project event architect.

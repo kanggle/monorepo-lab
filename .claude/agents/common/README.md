@@ -38,6 +38,8 @@ name: <agent-name>            # matches filename without .md
 description: <one-line role>  # used by dispatcher scoring
 model: opus | sonnet | haiku  # default model when invoked without override
 tools: <comma-separated>      # tool allowlist (Read, Write, Edit, Glob, Grep, Bash, Agent, ...)
+capabilities: [...]           # what the agent can do — used by dispatcher scoring
+languages: [...]              # languages worked in (java, kotlin, typescript, sql, yaml, ...)
 domains: [all]                # carries no project leak — matches every domain
 service_types: [...]          # optional, used by dispatcher when service_type matches
 triggers: [...]               # optional keyword triggers
