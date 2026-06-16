@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   type ErpListQueryParams,
@@ -9,7 +10,7 @@ import {
   ERP_DEFAULT_PAGE_SIZE,
   ERP_MAX_PAGE_SIZE,
 } from '../api/types';
-import { normaliseAsOf } from '../api/erp-keys';
+import { ERP_KEY, normaliseAsOf } from '../api/erp-keys';
 
 /**
  * Shared erp-ops hook infrastructure (TASK-PC-FE-099 split). Holds the
@@ -19,10 +20,28 @@ import { normaliseAsOf } from '../api/erp-keys';
  * `UseAsOfResult` are the only public symbols re-exported from the
  * `use-erp-ops` barrel; the rest are feature-internal (imported by the
  * sibling hook modules, never widened to the public surface).
+ *
+ * TASK-PC-FE-107 split: also holds `invalidateMaster`, the shared
+ * prefix-invalidation helper used by the per-entity masters mutation hooks
+ * (employees / job-grades / cost-centers / business-partners). It lives here
+ * — alongside the masters list/detail query-string builders — rather than
+ * being duplicated across the per-entity modules. Feature-internal.
  */
 
 export const clampSize = (size?: number): number =>
   clampPageSize(size, ERP_DEFAULT_PAGE_SIZE, ERP_MAX_PAGE_SIZE);
+
+/**
+ * Invalidates every list/detail query for one master (by `[ERP_KEY, master]`
+ * prefix — any asOf / page). Shared by the per-entity masters mutation hooks
+ * (TASK-PC-FE-107 split). Feature-internal.
+ */
+export function invalidateMaster(
+  qc: ReturnType<typeof useQueryClient>,
+  master: string,
+) {
+  qc.invalidateQueries({ queryKey: [ERP_KEY, master] });
+}
 
 // ---------------------------------------------------------------------------
 // useAsOf — URL-param-bound E3 first-class hook (the single source
