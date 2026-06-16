@@ -442,10 +442,11 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   9th / 10th / 12th / 17th increments act on one `(account, currency)` per operator call); a
   **proceeds-amount input** (proceeds derive from a rate; supplying the *actual* base received); a
   **configurable base currency** (fixed KRW in v1). *(FIFO / lot-level cost basis = 16th–18th — done.)*
-- **FX rate feed (ADR-002 remainder)**: a **real public FX API provider schema** (`mode=http`
-  against an actual provider's response shape — the http adapter is wired, the provider contract is
-  a stub); a `fx_rate_quote_history` append-only audit trail; a **ShedLock single-leader guard** for
-  the poller (multi-instance). *(Feed infra + omitted-rate fallback + read surface = 23rd–25th — done.)*
+- **FX rate feed (ADR-002 remainder)**: a `fx_rate_quote_history` append-only audit trail; a console
+  "FX rate dashboard + manual refresh" surface; per-tenant rate override (special contract rates); a
+  **ShedLock single-leader guard** for the poller (multi-instance). *(Feed infra + omitted-rate
+  fallback + read surface = 23rd–25th — done. **Real public FX API adapter** (`mode=real`,
+  Frankfurter no-key/ECB, `RealFxRateProviderAdapter`) = TASK-FIN-BE-038 — done.)*
 - **Manual posting**: body-hash idempotency conflict (`IDEMPOTENCY_KEY_CONFLICT` 409 on a
   same-key / different-body replay — the 5th increment is replay-safe on the key alone) +
   a maker / checker approval workflow for manual entries.
@@ -636,8 +637,9 @@ com.example.finance.ledger/
 │   │   ├── NoopFxRateProviderAdapter.java   ← mode=noop (default, matchIfMissing) — always empty(); zero external calls (net-zero)
 │   │   ├── StubFxRateProviderAdapter.java   ← mode=stub — fixed rates from config; asOf=clock.now(); source="stub"
 │   │   ├── HttpFxRateProviderAdapter.java   ← mode=http — GET <baseUrl>/<base>/<foreign> via ResilienceClientFactory (libs/java-common); best-effort never-throw; source="http:<host>"
+│   │   ├── RealFxRateProviderAdapter.java   ← mode=real — Frankfurter GET <baseUrl>/latest?from=<foreign>&to=<base> via ResilienceClientFactory; best-effort never-throw; source="real:<host>" (TASK-FIN-BE-038)
 │   │   ├── FxRateFeedPoller.java            ← @Scheduled relay (default OFF — @ConditionalOnProperty enabled=true, no matchIfMissing); wraps RefreshFxRateQuotesUseCase in catch-all (never throws)
-│   │   ├── FxRateFeedProperties.java        ← @ConfigurationProperties("financeplatform.ledger.fxrate"): enabled(false)/mode(noop)/pollIntervalMs/pairs/stub.rates/http.{baseUrl,timeouts}
+│   │   ├── FxRateFeedProperties.java        ← @ConfigurationProperties("financeplatform.ledger.fxrate"): enabled(false)/mode(noop)/pollIntervalMs/pairs/stub.rates/http.{baseUrl,timeouts}/real.{baseUrl,timeouts}
 │   │   └── FxRateFeedConfig.java            ← @EnableConfigurationProperties + FxRateFeedSettings bean (app-port impl)
 │   ├── security/  (SecurityConfig, AllowedIssuersValidator, TenantClaimValidator,
 │   │               ActorContextJwtAuthenticationConverter, ServiceLevelOAuth2Config)
@@ -1808,6 +1810,7 @@ carries `matchIfMissing`):
 | `noop` (default, `matchIfMissing=true`) | `NoopFxRateProviderAdapter` | always `empty()` — zero external calls (net-zero) |
 | `stub` | `StubFxRateProviderAdapter` | fixed rate from `…fxrate.stub.rates` keyed by foreign code; `asOf=clock.now()`, `source="stub"`; absent pair → empty |
 | `http` | `HttpFxRateProviderAdapter` | `GET <baseUrl>/<base>/<foreign>` (JSON `{"rate":"…","asOf":"<ISO>"}`) via `ResilienceClientFactory.buildRestClient` (libs/java-common — never `new RestTemplate()`); **best-effort never-throw**: non-2xx / connection-refused / timeout / parse-failure / blank baseUrl → `empty()`; `source="http:<host>"` |
+| `real` (ADR-002 § 3.1 item 3, TASK-FIN-BE-038) | `RealFxRateProviderAdapter` | **Frankfurter** public API (no-key, ECB daily) `GET <baseUrl>/latest?from=<foreign>&to=<base>` (JSON `{"base","date","rates":{"<base>":<num>}}`) via `ResilienceClientFactory.buildRestClient`; **direction**: `from=foreign,to=base,rate=rates[base.code()]` = base-minor-per-foreign-minor; `asOf`=`date`@00:00:00Z (malformed/absent → `clock.now()`); **best-effort never-throw** → `empty()`; `source="real:<host>"`; default `baseUrl=https://api.frankfurter.dev/v1` |
 
 **Cache table + domain.** `V12__add_fx_rate_quote.sql` creates the **new** `fx_rate_quote` table
 only (composite PK `(base_currency, foreign_currency)`; `rate DECIMAL(20,8)` exact, `as_of` /
@@ -1831,6 +1834,7 @@ ShedLock single-leader guard in this service (ADR-002 D4's "ShedLock" is a sketc
 "financeplatform.ledger.fxrate")`, registered via `@EnableConfigurationProperties` on
 `FxRateFeedConfig`): `enabled` (default `false`), `mode` (default `noop`), `pollIntervalMs`,
 `pairs` (foreign legs, base KRW), `stub.rates` (code→rate map), `http` (`baseUrl`,
+`connectTimeoutMs=2000`, `readTimeoutMs=5000`), `real` (`baseUrl=https://api.frankfurter.dev/v1`,
 `connectTimeoutMs=2000`, `readTimeoutMs=5000`). **No REST endpoint / no event / no contract
 change** — the external channel is outbound, recorded here in architecture only (ledger-api.md
 unchanged).
