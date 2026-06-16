@@ -1,6 +1,6 @@
 # TASK-BE-394 — ecommerce-gateway returns 401 on CORS preflight (`OPTIONS`), blocking all browser-origin authed writes
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE (project-internal — `projects/ecommerce-microservices-platform/` gateway service)
 
