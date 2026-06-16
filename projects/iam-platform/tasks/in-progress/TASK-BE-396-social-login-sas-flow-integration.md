@@ -8,7 +8,7 @@ TASK-BE-396
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
