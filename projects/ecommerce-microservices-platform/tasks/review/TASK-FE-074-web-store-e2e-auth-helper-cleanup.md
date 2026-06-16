@@ -1,6 +1,6 @@
 # TASK-FE-074 — Retire the dead GAP signup auth-path in web-store e2e; converge on the seeded-consumer login
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-FE (project-internal — `projects/ecommerce-microservices-platform/apps/web-store/e2e/` only)
 

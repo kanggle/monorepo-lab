@@ -28,8 +28,13 @@ test.describe('RP-initiated OIDC logout (GAP end_session)', () => {
 
     // 3. Logout via the profile dropdown. The client logout() fetches the GAP
     //    end_session URL, clears the NextAuth session, then hard-navigates the
-    //    browser to GAP /connect/logout — catch that outbound navigation to the
-    //    GAP host so we know the IdP round-trip actually happened.
+    //    browser to GAP /connect/logout. We race a BEST-EFFORT observation of
+    //    that outbound nav to the GAP host, but deliberately tolerate a miss
+    //    (`.catch`) rather than assert on it: the hard-navigation can be too
+    //    brief for waitForURL to latch reliably, and the AUTHORITATIVE proof that
+    //    the IdP session was terminated is step 6 (re-login re-presents the GAP
+    //    #username form). So this tolerance is documented, not a silent swallow —
+    //    a surviving IdP session is still caught loudly by the step-6 assertion.
     await profileMenu.click();
     await Promise.all([
       page

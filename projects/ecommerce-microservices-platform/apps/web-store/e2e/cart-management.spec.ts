@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { signupAndLogin, shouldSkipGap } from './helpers/auth';
+import { loginAsSeededConsumer, shouldSkipGap } from './helpers/auth';
 import { openFirstProductDetail, selectFirstVariant, addToCart } from './helpers/product';
 
-test.skip(shouldSkipGap, 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
+test.skip(shouldSkipGap(), 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
 
 /**
  * 장바구니 조작 E2E: 수량 증가/감소, 전체선택 → 선택 삭제.
@@ -13,7 +13,7 @@ test.skip(shouldSkipGap, 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
  */
 test.describe('장바구니 조작', () => {
   test('수량 증가/감소 + 선택 삭제 후 장바구니가 비워진다', async ({ page }) => {
-    await signupAndLogin(page);
+    await loginAsSeededConsumer(page);
 
     // 한 상품을 장바구니에 담는다
     await openFirstProductDetail(page);

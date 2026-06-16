@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { signupAndLogin, shouldSkipGap } from './helpers/auth';
+import { loginAsSeededConsumer, shouldSkipGap } from './helpers/auth';
 import { openFirstProductDetail, selectFirstVariant, addToCart } from './helpers/product';
 
 /**
@@ -13,10 +13,10 @@ import { openFirstProductDetail, selectFirstVariant, addToCart } from './helpers
  * 자동 활성화된다.
  */
 test.describe('웹스토어 주문 골든 플로우 (GAP)', () => {
-  test.skip(shouldSkipGap, 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
+  test.skip(shouldSkipGap(), 'SKIP_GAP_E2E=1 — GAP 컨테이너 미가용');
 
   test('GAP 로그인 → 상품 선택 → 장바구니 담기 → 결제 페이지 진입', async ({ page }) => {
-    await signupAndLogin(page);
+    await loginAsSeededConsumer(page);
 
     await openFirstProductDetail(page);
     await selectFirstVariant(page);
