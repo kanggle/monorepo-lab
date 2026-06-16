@@ -1,6 +1,7 @@
 package com.example.gateway.security;
 
 import com.example.security.jwt.JwtVerificationException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +39,7 @@ class TokenValidatorUnitTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        tokenValidator = new TokenValidator(jwksCache, EXPECTED_ISSUER);
+        tokenValidator = new TokenValidator(jwksCache, EXPECTED_ISSUER, new ObjectMapper());
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
         keyGen.initialize(2048);
         keyPair = keyGen.generateKeyPair();
