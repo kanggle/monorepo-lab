@@ -2,6 +2,7 @@ package com.example.fanplatform.community.application;
 
 import com.example.fanplatform.community.domain.comment.CommentRepository;
 import com.example.fanplatform.community.domain.membership.MembershipChecker;
+import com.example.fanplatform.community.domain.post.PageResult;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostRepository;
 import com.example.fanplatform.community.domain.post.PostVisibility;
@@ -9,8 +10,6 @@ import com.example.fanplatform.community.application.port.out.FeedCache;
 import com.example.fanplatform.community.domain.reaction.ReactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,16 +73,15 @@ public class GetFeedUseCase {
     }
 
     private FeedPage queryAndBuild(ActorContext actor, int safePage, int safeSize) {
-        Page<Post> posts = postRepository.findFeedForFan(
-                actor.accountId(), actor.tenantId(),
-                PageRequest.of(safePage, safeSize));
+        PageResult<Post> posts = postRepository.findFeedForFan(
+                actor.accountId(), actor.tenantId(), safePage, safeSize);
 
-        List<String> postIds = posts.getContent().stream().map(Post::getId).toList();
+        List<String> postIds = posts.content().stream().map(Post::getId).toList();
         Map<String, Long> commentCounts = commentRepository.countsByPostIds(postIds, actor.tenantId());
         Map<String, Long> reactionCounts = reactionRepository.countsByPostIds(postIds, actor.tenantId());
 
-        List<FeedItemView> items = new ArrayList<>(posts.getNumberOfElements());
-        for (Post post : posts.getContent()) {
+        List<FeedItemView> items = new ArrayList<>(posts.numberOfElements());
+        for (Post post : posts.content()) {
             boolean locked = isLocked(post, actor);
             String title = locked ? null : post.getTitle();
             String preview = locked ? null : preview(post.getBody());
@@ -102,10 +100,10 @@ public class GetFeedUseCase {
         }
         return new FeedPage(
                 items,
-                posts.getNumber(),
-                posts.getSize(),
-                posts.getTotalElements(),
-                posts.getTotalPages(),
+                posts.page(),
+                posts.size(),
+                posts.totalElements(),
+                posts.totalPages(),
                 posts.hasNext()
         );
     }

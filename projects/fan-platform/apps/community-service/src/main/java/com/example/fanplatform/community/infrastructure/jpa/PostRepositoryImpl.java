@@ -1,10 +1,11 @@
 package com.example.fanplatform.community.infrastructure.jpa;
 
+import com.example.fanplatform.community.domain.post.PageResult;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -26,7 +27,13 @@ public class PostRepositoryImpl implements PostRepository {
     }
 
     @Override
-    public Page<Post> findFeedForFan(String fanAccountId, String tenantId, Pageable pageable) {
-        return jpa.findFeedForFan(fanAccountId, tenantId, pageable);
+    public PageResult<Post> findFeedForFan(String fanAccountId, String tenantId, int page, int size) {
+        Page<Post> jpaPage = jpa.findFeedForFan(fanAccountId, tenantId, PageRequest.of(page, size));
+        return new PageResult<>(
+                jpaPage.getContent(),
+                jpaPage.getNumber(),
+                jpaPage.getSize(),
+                jpaPage.getTotalElements(),
+                jpaPage.getTotalPages());
     }
 }
