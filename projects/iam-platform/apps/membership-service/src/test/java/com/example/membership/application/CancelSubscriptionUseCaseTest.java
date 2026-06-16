@@ -17,10 +17,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+import static com.example.membership.support.ReflectionTestSupport.setField;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -112,11 +112,5 @@ class CancelSubscriptionUseCaseTest {
         setField(s, "startedAt", LocalDateTime.of(2026, 4, 1, 0, 0, 0));
         setField(s, "createdAt", LocalDateTime.of(2026, 4, 1, 0, 0, 0));
         return s;
-    }
-
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Field f = target.getClass().getDeclaredField(name);
-        f.setAccessible(true);
-        f.set(target, value);
     }
 }

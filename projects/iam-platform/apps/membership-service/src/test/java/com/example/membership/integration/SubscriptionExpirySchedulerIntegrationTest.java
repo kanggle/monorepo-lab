@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.example.membership.support.ReflectionTestSupport.setField;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -127,15 +128,5 @@ class SubscriptionExpirySchedulerIntegrationTest extends AbstractIntegrationTest
                 "SELECT COUNT(*) FROM outbox WHERE event_type = 'membership.subscription.expired'",
                 Integer.class);
         assertThat(expiredEvents).isEqualTo(0);
-    }
-
-    private static void setField(Object target, String name, Object value) {
-        try {
-            var f = target.getClass().getDeclaredField(name);
-            f.setAccessible(true);
-            f.set(target, value);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(e);
-        }
     }
 }

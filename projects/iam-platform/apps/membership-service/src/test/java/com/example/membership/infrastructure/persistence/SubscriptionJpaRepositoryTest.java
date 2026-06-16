@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static com.example.membership.support.ReflectionTestSupport.setField;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -137,15 +138,5 @@ class SubscriptionJpaRepositoryTest {
 
         assertThat(rows).extracting(SubscriptionJpaEntity::getAccountId)
                 .containsExactly("acc-active");
-    }
-
-    private static void setField(Object target, String name, Object value) {
-        try {
-            var f = target.getClass().getDeclaredField(name);
-            f.setAccessible(true);
-            f.set(target, value);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(e);
-        }
     }
 }
