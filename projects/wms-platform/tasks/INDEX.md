@@ -75,7 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-395-wms-tier-e-notification-spec-normalize.md` — **REVIEW**. Closes the final **Tier E** item from TASK-BE-385 (notification spec-completion + idempotency heading normalization). **E-A**: brought `notification-service/domain-model.md` into the sibling-standard shape — added the 6 missing standard sections (`## Scope`, `## Common Aggregate Shape`, `## Entity Relationship Diagram`, `## Aggregate Boundaries`, `## Forbidden Patterns (in code)`, `## Open Items`), each sourced from existing notification content (no invented requirements), + folded in a value-drift fix (dedupe `outcome` enum listed 3 values, missing `NO_RULE` — present in the canonical `database-design.md` §3 CHECK + the doc's own Domain Errors row). **E-C**: added the missing `## 6. Testing Requirements` to admin + inventory idempotency.md (sourced from each doc's §1/§2 mechanisms + sibling shape; admin includes the LWW `IGNORED_DUPLICATE_LATE` late-arrival case). **E-B declined** (recorded): numbering notification/master idempotency H2s would break **4 cross-service anchor links** to master's `Cross-Service Idempotency Key Conventions` heading for zero functional gain, and their section structures legitimately differ from the REST/Kafka-dual numbered template. Doc-only — `git diff apps/**` empty. With this the BE-385 ledger (A/B→387, C→392, D→394, E→here) is fully closed. 분석=Opus 4.8 / 구현=Opus.
 
 ## done
 

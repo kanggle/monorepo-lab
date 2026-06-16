@@ -299,6 +299,26 @@ Log events (structured JSON, INFO level):
 
 ---
 
+## 6. Testing Requirements
+
+Every change to REST idempotency or event-dedupe logic MUST cover (the two
+mechanisms in §1 / §2):
+
+1. **REST — key absent** on a mutating endpoint → 400 `VALIDATION_ERROR` (filter guard).
+2. **REST — first request** (new `Idempotency-Key`) → operation runs once, response cached in Redis.
+3. **REST — replay (same key, same body)** → cached response returned; the domain mutation (and its `InventoryMovement` row) is **not** re-executed.
+4. **REST — key reuse (same key, different body)** → 409 `DUPLICATE_REQUEST`; `inventory.idempotency.mismatch.count` increments.
+5. **Kafka — first event** → fresh `inventory_event_dedupe` row + the domain mutation, in one `@Transactional`.
+6. **Kafka — redelivery (same eventId)** → dedupe PK conflict → skip; no second mutation; offset still committed.
+7. **Concurrent same-eventId (two consumer instances)** → one wins; the other observes the PK constraint violation and exits cleanly.
+8. **Postgres outage during dedupe** (Testcontainers pause) → consumer throws → offset uncommitted → resumes on poll after release.
+
+Reference: [`architecture.md`](architecture.md) § Testing Requirements + the
+sibling [`notification-service/idempotency.md`](../notification-service/idempotency.md)
+§ Testing Requirements (Testcontainers Postgres/Kafka patterns are reusable).
+
+---
+
 ## References
 
 - `specs/services/inventory-service/architecture.md` § Idempotency
