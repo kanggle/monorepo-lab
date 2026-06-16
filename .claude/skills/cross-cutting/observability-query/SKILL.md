@@ -130,7 +130,7 @@ The headline use case is **cross-product fan-out tracing**: a console dashboard 
 ```
 console-web SSR span                    (root — Next.js instrumentation.ts, ADR-MONO-007a D3)
 └─ console-bff aggregation span         (RestClient ObservationRegistry adopts the inbound traceparent)
-   ├─ gap producer span
+   ├─ iam producer span
    ├─ wms producer span
    ├─ scm producer span
    ├─ finance producer span
