@@ -28,6 +28,7 @@
 | [shared-library-policy.md](shared-library-policy.md) | `libs/` 사용 정책 — 기술 재사용만 허용 |
 | [ownership-rule.md](ownership-rule.md) | 서비스·계약·스펙 소유권 |
 | [repository-structure.md](repository-structure.md) | 모노레포 디렉터리 레이아웃 |
+| [git-workflow-policy.md](git-workflow-policy.md) | git/branch/worktree 규율 — 브랜치 네이밍·동시세션 worktree 격리·머지후 ref 위생·`.claude/` classifier 차단·CI path-filter (CLAUDE.md 카탈로그의 on-demand 상세) |
 | [versioning-policy.md](versioning-policy.md) | API/Event/Library 버전 관리 |
 | [event-driven-policy.md](event-driven-policy.md) | 이벤트 발행·소비 패턴, DLQ·재시도 정책 |
 | [api-gateway-policy.md](api-gateway-policy.md) | 퍼블릭 API 노출·라우팅 규칙 |

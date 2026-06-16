@@ -1,6 +1,6 @@
 # TASK-MONO-278 — Trim CLAUDE.md back to catalog: extract Cross-Project git/worktree/branch forensics to platform/git-workflow-policy.md
 
-Status: ready
+Status: review
 
 ## Goal
 
