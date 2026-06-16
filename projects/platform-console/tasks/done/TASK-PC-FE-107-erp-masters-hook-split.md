@@ -1,6 +1,6 @@
 # TASK-PC-FE-107 — erp-ops `use-erp-masters.ts` god-file 분할 (엔티티별 hook 모듈)
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js, erp-ops 피처)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (behavior-preserving 기계적 분할 — PC-FE-098~102 god-file split 시리즈 연속)
