@@ -1,18 +1,8 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { Button } from '@/shared/ui/Button';
-import { ApiError, messageForCode } from '@/shared/api/errors';
-// Pure (zod-only, client-safe) erp department type + retired predicate —
-// imported from the erp-ops types module directly (NOT the barrel, which is
-// server-coupled; same client-safety reason as the hooks' ERP_KEY import).
-import { isRetired, type Department } from '@/features/erp-ops/api/types';
-import {
-  useOperatorAssignments,
-  useOrgScopeDepartments,
-  useSetOperatorOrgScope,
-} from '../hooks/use-operators';
-import type { OperatorAssignment } from '../api/types';
+import { useOrgScopeForm } from '../hooks/use-org-scope-form';
 
 /**
  * Per-operator org_scope (데이터-스코프) dialog (TASK-PC-FE-050 — sibling of
@@ -22,6 +12,12 @@ import type { OperatorAssignment } from '../api/types';
  * (`PUT .../assignments/{tenantId}/org-scope`) — the source half of the
  * org_scope end-to-end loop (설정 → IAM 저장(BE-339) → assume-tenant 전파 →
  * erp 소비(ERP-BE-008) → read 카드(PC-FE-049)).
+ *
+ * TASK-PC-FE-112 split: this component is now a presentational shell — the
+ * tri-state form logic (seed / degrade-aware id derivation / submit mutation)
+ * lives in `useOrgScopeForm` (the PC-FE-106 fat-container → custom-hook
+ * pattern). The dialog owns only the view concerns (ids, focus container,
+ * Escape-to-close) + the JSX. 0 behavior change.
  *
  * TRI-STATE (null ≠ [] is unambiguous in BOTH the UI and the wire):
  *   - 전체 (net-zero)        → `orgScope: null`  (clear; default for a
@@ -48,8 +44,6 @@ import type { OperatorAssignment } from '../api/types';
  * `400 REASON_REQUIRED`).
  */
 
-type ScopeMode = 'all' | 'subset' | 'block';
-
 export interface OrgScopeDialogProps {
   open: boolean;
   /** Target operator id (path var for both GET + PUT). */
@@ -57,21 +51,6 @@ export interface OrgScopeDialogProps {
   /** Human-friendly label (email or operatorId) for the heading. */
   operatorLabel: string;
   onClose: () => void;
-}
-
-/** Parses the manual-entry textarea (degrade fallback) into a clean id list:
- *  split on newline / comma, trim, drop blanks, dedupe (order-preserving). */
-function parseManualIds(raw: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const tok of raw.split(/[\n,]/)) {
-    const t = tok.trim();
-    if (t && !seen.has(t)) {
-      seen.add(t);
-      out.push(t);
-    }
-  }
-  return out;
 }
 
 export function OrgScopeDialog({
@@ -86,63 +65,7 @@ export function OrgScopeDialog({
   const manualId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  const assignments = useOperatorAssignments(open ? operatorId : null);
-  const setOrgScope = useSetOperatorOrgScope();
-
-  // erp departments for the picker (active-tenant scoped erp read; reuses the
-  // existing `/api/erp/masterdata/departments` proxy). Only fetched while the
-  // dialog is open. A fetch failure (503 / not erp-entitled) is surfaced via
-  // `deptsFailed` → the manual id-entry fallback (degrade; the dialog never
-  // fails wholesale).
-  const deptsQuery = useOrgScopeDepartments(open);
-  const departments: Department[] = useMemo(
-    () => deptsQuery.data?.data ?? [],
-    [deptsQuery.data],
-  );
-  const deptsLoading = deptsQuery.isLoading;
-  const deptsFailed = deptsQuery.isError;
-
-  // Active (non-retired) departments only as picker options; a retired
-  // dept-id already in org_scope is still rendered as a chip (preserved).
-  const activeDepartments = useMemo(
-    () => departments.filter((d) => !isRetired(d.effectivePeriod)),
-    [departments],
-  );
-
-  // Resolve the single active-tenant assignment row (0 or 1).
-  const assignment: OperatorAssignment | null = useMemo(() => {
-    const rows = assignments.data?.assignments ?? [];
-    return rows[0] ?? null;
-  }, [assignments.data]);
-  const hasAssignment = assignment !== null;
-  const currentScope = assignment?.orgScope ?? null; // null=전체, []=차단, [ids]
-
-  const [mode, setMode] = useState<ScopeMode>('all');
-  const [selected, setSelected] = useState<string[]>([]);
-  const [manual, setManual] = useState('');
-  const [reason, setReason] = useState('');
-  const [blockConfirmed, setBlockConfirmed] = useState(false);
-
-  // Initialise the tri-state from the current assignment whenever the dialog
-  // opens OR the assignment data settles (reactive — a late GET fills it in).
-  useEffect(() => {
-    if (!open) return;
-    if (currentScope === null) {
-      setMode('all');
-      setSelected([]);
-      setManual('');
-    } else if (currentScope.length === 0) {
-      setMode('block');
-      setSelected([]);
-      setManual('');
-    } else {
-      setMode('subset');
-      setSelected(currentScope);
-      setManual(currentScope.join('\n'));
-    }
-    setReason('');
-    setBlockConfirmed(false);
-  }, [open, currentScope]);
+  const f = useOrgScopeForm({ open, operatorId, onClose });
 
   useEffect(() => {
     if (!open) return;
@@ -156,72 +79,7 @@ export function OrgScopeDialog({
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  const trimmedReason = reason.trim();
-  const reasonOk = trimmedReason.length > 0;
-
-  // The effective subtree ids: the manual textarea when departments
-  // degraded, else the multi-select.
-  const subsetIds = useMemo(
-    () => (deptsFailed ? parseManualIds(manual) : selected),
-    [deptsFailed, manual, selected],
-  );
-
-  // Compute the payload for the chosen mode (null / [] / [ids]).
-  const payload: string[] | null = useMemo(() => {
-    if (mode === 'all') return null;
-    if (mode === 'block') return [];
-    return subsetIds;
-  }, [mode, subsetIds]);
-
-  const subsetEmpty = mode === 'subset' && subsetIds.length === 0;
-  const blockNotConfirmed = mode === 'block' && !blockConfirmed;
-
-  const canSubmit =
-    open &&
-    hasAssignment &&
-    reasonOk &&
-    !subsetEmpty &&
-    !blockNotConfirmed &&
-    !setOrgScope.isPending;
-
-  const submitError =
-    setOrgScope.error instanceof ApiError
-      ? messageForCode(
-          (setOrgScope.error as ApiError).code,
-          setOrgScope.error.message,
-        )
-      : setOrgScope.error
-        ? '조직 스코프를 저장하지 못했습니다. 잠시 후 다시 시도하세요.'
-        : null;
-
-  function toggleDept(id: string) {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  }
-
-  function submit() {
-    if (!canSubmit || !assignment) return;
-    setOrgScope.mutate(
-      {
-        operatorId,
-        tenantId: assignment.tenantId,
-        orgScope: payload,
-        reason: trimmedReason,
-      },
-      { onSuccess: () => onClose() },
-    );
-  }
-
   if (!open) return null;
-
-  // Render current-scope summary chips.
-  const currentSummary =
-    currentScope === null
-      ? '전체 (net-zero — 데이터-스코프 미적용)'
-      : currentScope.length === 0
-        ? '차단 (zero-scope — 어떤 부서도 아님)'
-        : null;
 
   return (
     <div
@@ -250,14 +108,14 @@ export function OrgScopeDialog({
         </p>
 
         {/* Loading / no-assignment / current-scope summary */}
-        {assignments.isLoading ? (
+        {f.assignmentsLoading ? (
           <p
             className="mt-4 text-sm text-muted-foreground"
             data-testid="org-scope-loading"
           >
             배정 정보를 불러오는 중…
           </p>
-        ) : !hasAssignment ? (
+        ) : !f.hasAssignment ? (
           <div
             role="status"
             data-testid="org-scope-no-assignment"
@@ -270,20 +128,20 @@ export function OrgScopeDialog({
           <>
             <div className="mt-4 rounded-md border border-border bg-muted px-3 py-2 text-sm">
               <span className="font-medium text-foreground">현재 스코프: </span>
-              {currentSummary ? (
+              {f.currentSummary ? (
                 <span
                   className="text-foreground"
                   data-testid="org-scope-current"
                 >
-                  {currentSummary}
+                  {f.currentSummary}
                 </span>
               ) : (
                 <span
                   className="flex flex-wrap gap-1"
                   data-testid="org-scope-current"
                 >
-                  {(currentScope ?? []).map((id) => {
-                    const dept = departments.find((d) => d.id === id);
+                  {(f.currentScope ?? []).map((id) => {
+                    const dept = f.departments.find((d) => d.id === id);
                     return (
                       <span
                         key={id}
@@ -308,8 +166,8 @@ export function OrgScopeDialog({
                   <input
                     type="radio"
                     name="org-scope-mode"
-                    checked={mode === 'all'}
-                    onChange={() => setMode('all')}
+                    checked={f.mode === 'all'}
+                    onChange={() => f.setMode('all')}
                     data-testid="org-scope-mode-all"
                     className="mt-1"
                   />
@@ -322,8 +180,8 @@ export function OrgScopeDialog({
                   <input
                     type="radio"
                     name="org-scope-mode"
-                    checked={mode === 'subset'}
-                    onChange={() => setMode('subset')}
+                    checked={f.mode === 'subset'}
+                    onChange={() => f.setMode('subset')}
                     data-testid="org-scope-mode-subset"
                     className="mt-1"
                   />
@@ -336,8 +194,8 @@ export function OrgScopeDialog({
                   <input
                     type="radio"
                     name="org-scope-mode"
-                    checked={mode === 'block'}
-                    onChange={() => setMode('block')}
+                    checked={f.mode === 'block'}
+                    onChange={() => f.setMode('block')}
                     data-testid="org-scope-mode-block"
                     className="mt-1"
                   />
@@ -352,9 +210,9 @@ export function OrgScopeDialog({
             </fieldset>
 
             {/* Subset picker */}
-            {mode === 'subset' && (
+            {f.mode === 'subset' && (
               <div className="mt-3" data-testid="org-scope-subset-panel">
-                {deptsFailed ? (
+                {f.deptsFailed ? (
                   <div>
                     <div
                       role="status"
@@ -374,18 +232,18 @@ export function OrgScopeDialog({
                     </label>
                     <textarea
                       id={manualId}
-                      value={manual}
-                      onChange={(e) => setManual(e.target.value)}
+                      value={f.manual}
+                      onChange={(e) => f.setManual(e.target.value)}
                       rows={3}
                       data-testid="org-scope-manual-input"
                       placeholder={'dept-sales\ndept-eng'}
                       className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      입력된 ID: {subsetIds.length}개
+                      입력된 ID: {f.subsetIds.length}개
                     </p>
                   </div>
-                ) : deptsLoading ? (
+                ) : f.deptsLoading ? (
                   <p
                     className="text-sm text-muted-foreground"
                     data-testid="org-scope-depts-loading"
@@ -397,20 +255,20 @@ export function OrgScopeDialog({
                     className="max-h-48 overflow-y-auto rounded-md border border-border p-2"
                     data-testid="org-scope-dept-list"
                   >
-                    {activeDepartments.length === 0 ? (
+                    {f.activeDepartments.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         선택할 수 있는 활성 부서가 없습니다.
                       </p>
                     ) : (
-                      activeDepartments.map((d) => (
+                      f.activeDepartments.map((d) => (
                         <label
                           key={d.id}
                           className="flex items-center gap-2 py-1 text-sm text-foreground"
                         >
                           <input
                             type="checkbox"
-                            checked={selected.includes(d.id)}
-                            onChange={() => toggleDept(d.id)}
+                            checked={f.selected.includes(d.id)}
+                            onChange={() => f.toggleDept(d.id)}
                             data-testid={`org-scope-dept-${d.id}`}
                           />
                           <span>
@@ -421,7 +279,7 @@ export function OrgScopeDialog({
                     )}
                   </div>
                 )}
-                {subsetEmpty && (
+                {f.subsetEmpty && (
                   <p
                     className="mt-1 text-xs text-muted-foreground"
                     data-testid="org-scope-subset-empty"
@@ -434,7 +292,7 @@ export function OrgScopeDialog({
             )}
 
             {/* Block confirm */}
-            {mode === 'block' && (
+            {f.mode === 'block' && (
               <div
                 className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2"
                 data-testid="org-scope-block-warning"
@@ -447,8 +305,8 @@ export function OrgScopeDialog({
                 <label className="mt-2 flex items-center gap-2 text-sm text-foreground">
                   <input
                     type="checkbox"
-                    checked={blockConfirmed}
-                    onChange={(e) => setBlockConfirmed(e.target.checked)}
+                    checked={f.blockConfirmed}
+                    onChange={(e) => f.setBlockConfirmed(e.target.checked)}
                     data-testid="org-scope-block-confirm"
                   />
                   위 내용을 이해했으며 차단을 적용합니다.
@@ -467,8 +325,8 @@ export function OrgScopeDialog({
               </label>
               <textarea
                 id={reasonId}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
+                value={f.reason}
+                onChange={(e) => f.setReason(e.target.value)}
                 required
                 aria-required="true"
                 rows={2}
@@ -476,7 +334,7 @@ export function OrgScopeDialog({
                 className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 placeholder="이 변경의 사유를 입력하세요 (감사 기록에 남습니다)"
               />
-              {!reasonOk && (
+              {!f.reasonOk && (
                 <p
                   className="mt-1 text-xs text-muted-foreground"
                   data-testid="org-scope-reason-required"
@@ -488,13 +346,13 @@ export function OrgScopeDialog({
           </>
         )}
 
-        {submitError && (
+        {f.submitError && (
           <p
             role="alert"
             data-testid="org-scope-error"
             className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
           >
-            {submitError}
+            {f.submitError}
           </p>
         )}
 
@@ -502,18 +360,18 @@ export function OrgScopeDialog({
           <Button
             variant="secondary"
             onClick={onClose}
-            disabled={setOrgScope.isPending}
+            disabled={f.isPending}
             data-testid="org-scope-cancel"
           >
             취소
           </Button>
           <Button
             variant="primary"
-            onClick={submit}
-            disabled={!canSubmit}
+            onClick={f.submit}
+            disabled={!f.canSubmit}
             data-testid="org-scope-save"
           >
-            {setOrgScope.isPending ? '처리 중…' : '저장'}
+            {f.isPending ? '처리 중…' : '저장'}
           </Button>
         </div>
       </div>
