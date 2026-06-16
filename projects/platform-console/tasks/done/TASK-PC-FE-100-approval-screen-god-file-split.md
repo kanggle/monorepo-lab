@@ -1,7 +1,8 @@
 # TASK-PC-FE-100 — split the `erp-ops/components/ApprovalScreen.tsx` god-file into cohesive components
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
+**Closure:** PR #1707 squash `99abbe97436906db72dc43e8e156ba07c0d69a95`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass incl. Frontend lint/build + unit + E2E smoke + Build & Test). 944-line monolith → approval-common.tsx (52) + ApprovalDetail.tsx (451) + ApprovalCreateDialog.tsx (251) + ApprovalScreen.tsx (230); public component surface import-stable (dialogs re-exported); 0 test changes; tsc 0 / lint 0 / vitest 162 files · 1943 tests green (baseline count).
 **Parent:** third in the erp-ops god-file split series (sibling of TASK-PC-FE-098 `erp-api.ts` + TASK-PC-FE-099 `use-erp-ops.ts`). `ApprovalScreen.tsx` accreted three full components in one file (TASK-PC-FE-051 + 053) — ~944 lines.
 
 ## Goal
