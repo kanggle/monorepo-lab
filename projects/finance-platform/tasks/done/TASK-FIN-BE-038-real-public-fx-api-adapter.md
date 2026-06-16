@@ -1,6 +1,6 @@
 # TASK-FIN-BE-038 — real public FX API adapter (mode=real, Frankfurter)
 
-**Status:** ready
+**Status:** done
 **Domain:** finance · **Service:** ledger-service · **Type:** backend infrastructure adapter (external HTTP integration)
 **Parent:** ADR-002 (realtime FX rate feed, ACCEPTED 2026-06-15) — § 3.1 roadmap item 3 (deferred): *"실제 공개 FX API 어댑터(`mode=<real>`)"*. Builds on FIN-BE-031 (port + noop/stub/http adapters + cache + shadow poller) and FIN-BE-032 (consume + staleness + audit).
 
