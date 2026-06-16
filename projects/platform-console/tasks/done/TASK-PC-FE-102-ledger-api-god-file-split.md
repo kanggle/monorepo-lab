@@ -1,7 +1,8 @@
 # TASK-PC-FE-102 — split the `ledger-ops/api/ledger-api.ts` god-file into cohesive modules
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
+**Closure:** PR #1717 squash `8766dccce8cd87ceda4ea12e95481b051f65bb9f`, 3-dim verified (state=MERGED · origin/main tip match · pre-merge all checks pass/skip incl. Frontend lint/build + unit + E2E smoke + Build & Test). 740-line monolith → ledger-client.ts (350) + ledger-reads-api.ts (306) + ledger-reconciliation-api.ts (94) + barrel (26); 12 exports import-stable; F5 dir-walk guards auto-cover new files; 0 test changes; tsc 0 / lint 0 / vitest 162 files · 1943 tests green (baseline count).
 **Parent:** continuation of the console-web god-file split series (after TASK-PC-FE-098 `erp-api.ts`, 099 `use-erp-ops.ts`, 100 `ApprovalScreen.tsx`, 101 `OutboundOpsScreen.tsx`). `ledger-api.ts` is the direct twin of `erp-api.ts` (a server-side per-domain read client) and accreted across TASK-PC-FE-072/073/074/075/091/092 — ~740 lines.
 
 ## Goal
