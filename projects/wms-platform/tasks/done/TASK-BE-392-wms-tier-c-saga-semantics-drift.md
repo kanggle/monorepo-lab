@@ -1,6 +1,6 @@
 # TASK-BE-392 — wms spec Tier C drift-fix (code-verified saga / state-machine semantics from TASK-BE-385 § Findings)
 
-Status: review
+Status: done
 
 ## Goal
 
