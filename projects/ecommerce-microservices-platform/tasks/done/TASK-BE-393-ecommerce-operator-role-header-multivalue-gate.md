@@ -1,6 +1,6 @@
 # TASK-BE-393 — ecommerce operator role-gate: accept multi-value X-User-Role (multi-domain operator)
 
-**Status:** ready
+**Status:** done
 **Domain:** ecommerce · **Services:** product-service, promotion-service, shipping-service, user-service, search-service, settlement-service · **Type:** backend authorization fix (live-surfaced correctness bug)
 **Parent / sibling:** TASK-BE-380 (gateway operator-surface routing/admission). BE-380 fixed the **gateway** so operator tokens reach these endpoints; this fixes the **service-side** `X-User-Role == ADMIN` self-gate, which BE-380 explicitly left to the producers.
 
