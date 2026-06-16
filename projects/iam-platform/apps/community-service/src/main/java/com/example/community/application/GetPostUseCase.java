@@ -19,8 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class GetPostUseCase {
 
-    static final String REQUIRED_PLAN_LEVEL = "FAN_CLUB";
-
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
     private final ReactionRepository reactionRepository;
@@ -40,7 +38,7 @@ public class GetPostUseCase {
         }
 
         if (post.getVisibility() == PostVisibility.MEMBERS_ONLY && !isAuthor) {
-            boolean allowed = contentAccessChecker.check(actor.accountId(), REQUIRED_PLAN_LEVEL);
+            boolean allowed = contentAccessChecker.check(actor.accountId(), AccessPolicy.REQUIRED_PLAN_LEVEL);
             if (!allowed) {
                 throw new MembershipRequiredException();
             }

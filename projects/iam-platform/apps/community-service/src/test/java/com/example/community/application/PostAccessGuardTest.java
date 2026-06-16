@@ -75,7 +75,7 @@ class PostAccessGuardTest {
         guard = new PostAccessGuard(postRepository, contentAccessChecker);
         Post post = publishedPost(PostVisibility.MEMBERS_ONLY);
         when(postRepository.findById("post-1")).thenReturn(Optional.of(post));
-        when(contentAccessChecker.check(OTHER_ID, GetPostUseCase.REQUIRED_PLAN_LEVEL))
+        when(contentAccessChecker.check(OTHER_ID, AccessPolicy.REQUIRED_PLAN_LEVEL))
                 .thenReturn(false);
 
         assertThatThrownBy(() -> guard.requirePublishedAccess("post-1", actor(OTHER_ID)))
@@ -100,7 +100,7 @@ class PostAccessGuardTest {
         guard = new PostAccessGuard(postRepository, contentAccessChecker);
         Post post = publishedPost(PostVisibility.MEMBERS_ONLY);
         when(postRepository.findById("post-1")).thenReturn(Optional.of(post));
-        when(contentAccessChecker.check(OTHER_ID, GetPostUseCase.REQUIRED_PLAN_LEVEL))
+        when(contentAccessChecker.check(OTHER_ID, AccessPolicy.REQUIRED_PLAN_LEVEL))
                 .thenReturn(true);
 
         Post returned = guard.requirePublishedAccess("post-1", actor(OTHER_ID));

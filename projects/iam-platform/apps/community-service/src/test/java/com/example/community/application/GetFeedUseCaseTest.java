@@ -98,7 +98,7 @@ class GetFeedUseCaseTest {
                 .thenReturn(new PageResult<>(List.of(post), 0, 20, 1, 1));
         when(commentRepository.countsByPostIds(postIds)).thenReturn(Map.of());
         when(reactionRepository.countsByPostIds(postIds)).thenReturn(Map.of());
-        when(contentAccessChecker.check("fan-1", GetPostUseCase.REQUIRED_PLAN_LEVEL)).thenReturn(false);
+        when(contentAccessChecker.check("fan-1", AccessPolicy.REQUIRED_PLAN_LEVEL)).thenReturn(false);
         when(accountProfileLookup.displayNameOf("artist-1")).thenReturn("Artist");
 
         FeedPage result = useCase.execute(actor, 0, 20);
