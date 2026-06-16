@@ -1,7 +1,6 @@
 package com.example.erp.approval.domain.delegation;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 
@@ -22,8 +21,12 @@ import java.time.Instant;
  * decides "is this principal allowed to act for the stage approver"; the
  * Separation-of-Duties check (delegate ≠ submitter) is applied by the use case
  * (it needs the request's submitter, which is not a delegation concern).
+ *
+ * <p>Framework-free domain collaborator (architecture.md § "domain/ ← pure Java,
+ * no framework"): it is wired as a Spring bean by {@code infrastructure.config.DomainConfig}
+ * rather than carrying a {@code @Component} stereotype, keeping the domain layer
+ * free of framework coupling.
  */
-@Component
 @RequiredArgsConstructor
 public class DelegationResolver {
 
