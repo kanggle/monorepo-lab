@@ -1,5 +1,13 @@
-import path from 'node:path';
 import { test, expect, type BrowserContext, type APIResponse } from '@playwright/test';
+import {
+  ADMIN_BASE,
+  STORAGE_STATE,
+  codeOf,
+  headers,
+  operatorToken,
+  send,
+  warmUpAdminOutbox,
+} from '../fixtures/admin-helpers';
 
 /**
  * TASK-MONO-221 — ADR-MONO-026 § D7 step 3 iam admin SOURCE_IP access-condition
@@ -53,18 +61,6 @@ import { test, expect, type BrowserContext, type APIResponse } from '@playwright
 // This spec uses ONLY the persisted SUPER_ADMIN storageState (no fresh login) —
 // keep the suite-wide storageState (do NOT override it like the per-operator specs).
 
-/** admin-service host base URL (docker-compose maps 18085:8085); workflow exports
- *  E2E_ADMIN_BASE_URL. The admin RBAC surface is called directly with the
- *  exchanged operator token (mirror of the MONO-207/210 specs). */
-const ADMIN_BASE = process.env.E2E_ADMIN_BASE_URL ?? 'http://localhost:18085';
-
-/** The persisted global-setup SUPER_ADMIN session: its `console_operator_token`
- *  is the platform credential the proof drives the admin surface with. */
-const STORAGE_STATE = path.join(__dirname, '../fixtures/.storage-state.json');
-
-/** session.ts cookie name (HttpOnly — readable via BrowserContext.cookies()). */
-const OPERATOR_COOKIE = 'console_operator_token'; // the /api/admin/** credential
-
 const TARGET = 'ip-pilot-target'; // the dedicated throwaway operator (object, never actor)
 const TENANT = 'ip-pilot-corp'; // the dedicated tenant the target is assigned to
 
@@ -73,52 +69,6 @@ const TENANT = 'ip-pilot-corp'; // the dedicated tenant the target is assigned t
 const IP_OUT_OF_RANGE = '203.0.113.7';
 /** X-Forwarded-For first hop INSIDE the allowlist (∈ 10.0.0.0/8). */
 const IP_IN_RANGE = '10.20.30.40';
-
-async function operatorToken(ctx: BrowserContext, label: string): Promise<string> {
-  const all = await ctx.cookies();
-  const tok = all.find((c) => c.name === OPERATOR_COOKIE)?.value;
-  expect(tok, `${label}: console_operator_token cookie must be present after login`).toBeTruthy();
-  return tok!;
-}
-
-/** Base admin-surface headers. `sourceIp` (when set) is injected as the
- *  X-Forwarded-For first hop, which the aspect resolves as the request source IP. */
-function headers(token: string, reason: string, sourceIp?: string): Record<string, string> {
-  const h: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-    'X-Operator-Reason': encodeURIComponent(reason),
-    'Content-Type': 'application/json',
-  };
-  if (sourceIp) {
-    h['X-Forwarded-For'] = sourceIp;
-  }
-  return h;
-}
-
-async function codeOf(res: APIResponse): Promise<string | undefined> {
-  try {
-    return ((await res.json()) as { code?: string }).code;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Re-issue a request while it returns a transient infra 500/503 (the MONO-207/210
- * lesson: the admin_db `outbox` poller's range PESSIMISTIC_WRITE lock — no SKIP
- * LOCKED — can make the audit→outbox INSERT time out while Kafka warms up). The
- * admin mutations are transactional + idempotent, so re-issuing is safe. A 403 is
- * NOT retried (the gate denial is deterministic, not transient). The `beforeAll`
- * gate below also front-loads the warm-up so this is a no-op under warm conditions.
- */
-async function send(fn: () => Promise<APIResponse>): Promise<APIResponse> {
-  let res = await fn();
-  for (let i = 0; i < 5 && (res.status() === 500 || res.status() === 503); i++) {
-    await new Promise((r) => setTimeout(r, 3000));
-    res = await fn();
-  }
-  return res;
-}
 
 function assign(ctx: BrowserContext, token: string, sourceIp?: string): Promise<APIResponse> {
   return send(() => ctx.request.post(`${ADMIN_BASE}/api/admin/operators/${TARGET}/assignments/${TENANT}`, {
@@ -167,26 +117,14 @@ test.describe('ADR-MONO-026 step 3 — iam admin SOURCE_IP access condition (fed
   // until an admin write succeeds — so the real assertions run against a warm stack.
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(240_000);
-    const ctx = await browser.newContext({ storageState: STORAGE_STATE });
-    try {
-      const tok = await operatorToken(ctx, 'warm-up SUPER_ADMIN');
-      let warm = false;
-      for (let i = 0; i < 12 && !warm; i++) {
-        // in-range assign (writes audit→outbox); 201/409 ⇒ writable.
-        const res = await assign(ctx, tok, IP_IN_RANGE);
-        if (res.status() === 201 || res.status() === 409) {
-          warm = true;
-        } else {
-          // eslint-disable-next-line no-console
-          console.log(`[MONO-221] outbox warm-up attempt ${i + 1}: assign http=${res.status()}`);
-          await new Promise((r) => setTimeout(r, 4000));
-        }
-      }
-      await quietUnassign(ctx, tok);
-      expect(warm, 'admin outbox must become writable (Kafka/poller warm) before the proof').toBe(true);
-    } finally {
-      await ctx.close();
-    }
+    // in-range assign (writes audit→outbox); 201/409 ⇒ writable. In-range so the
+    // gate itself never denies the warm-up; the throwaway row is unassigned after.
+    await warmUpAdminOutbox(browser, {
+      logPrefix: 'MONO-221',
+      accept: [201, 409],
+      probe: (ctx, tok) => assign(ctx, tok, IP_IN_RANGE),
+      cleanup: (ctx, tok) => quietUnassign(ctx, tok),
+    });
   });
 
   test('gated: an RBAC-granted mutation from an out-of-range source IP → 403 ACCESS_CONDITION_UNMET, not executed', async ({ browser }) => {

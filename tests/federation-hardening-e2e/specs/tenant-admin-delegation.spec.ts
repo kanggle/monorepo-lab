@@ -1,9 +1,17 @@
-import path from 'node:path';
 import { test, expect, type BrowserContext, type APIResponse } from '@playwright/test';
 import {
   loginAsTenantAdmin,
   loginAsTenantBillingAdmin,
 } from '../fixtures/login';
+import {
+  ADMIN_BASE,
+  STORAGE_STATE,
+  codeOf,
+  headers,
+  operatorToken,
+  send,
+  warmUpAdminOutbox,
+} from '../fixtures/admin-helpers';
 
 /**
  * TASK-MONO-210 — ADR-MONO-024 § 3.3 step 3 tenant-admin delegation runtime proof.
@@ -53,68 +61,12 @@ import {
 // Override the suite-wide SUPER_ADMIN storageState — each delegated admin logs in fresh.
 test.use({ storageState: { cookies: [], origins: [] } });
 
-/** admin-service host base URL (docker-compose maps 18085:8085); workflow exports
- *  E2E_ADMIN_BASE_URL. The admin RBAC surface is called directly with the
- *  exchanged operator token (mirror of the MONO-207 plane-separation spec). */
-const ADMIN_BASE = process.env.E2E_ADMIN_BASE_URL ?? 'http://localhost:18085';
-
-/** The persisted global-setup SUPER_ADMIN session: its `console_operator_token`
- *  is the platform credential used for baseline/teardown + the net-zero proof. */
-const STORAGE_STATE = path.join(__dirname, '../fixtures/.storage-state.json');
-
-/** session.ts cookie name (HttpOnly — readable via BrowserContext.cookies()). */
-const OPERATOR_COOKIE = 'console_operator_token'; // the /api/admin/** credential
-
 const HOME = 'umbrella-corp'; // the delegated admins' own tenant
 const FOREIGN = 'globex-corp'; // an out-of-scope tenant (exists; never mutated here)
 const TARGET = 'deleg-target-umbrella'; // the operator the TENANT_ADMIN manages
 const BILL_DOMAIN = 'finance'; // umbrella-corp's seeded subscription (V9003)
 
-async function operatorToken(ctx: BrowserContext, label: string): Promise<string> {
-  const all = await ctx.cookies();
-  const tok = all.find((c) => c.name === OPERATOR_COOKIE)?.value;
-  expect(tok, `${label}: console_operator_token cookie must be present after login`).toBeTruthy();
-  return tok!;
-}
-
-function headers(token: string, reason: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${token}`,
-    'X-Operator-Reason': encodeURIComponent(reason),
-    'Content-Type': 'application/json',
-  };
-}
-
-async function codeOf(res: APIResponse): Promise<string | undefined> {
-  try {
-    return ((await res.json()) as { code?: string }).code;
-  } catch {
-    return undefined;
-  }
-}
-
 // ── admin-surface request helpers (absolute ADMIN_BASE URLs) ──────────────────
-
-/**
- * Re-issue a request while it returns a transient infra 500/503. The admin
- * audit write emits a row into the admin_db `outbox` table in the SAME (or a
- * REQUIRES_NEW) transaction; the outbox poller takes a range `PESSIMISTIC_WRITE`
- * lock on `status='PENDING'` (no SKIP LOCKED) and, while Kafka is still warming
- * up on a cold federation stack, can hold it long enough to make the audit
- * INSERT time out (1205 → PessimisticLockingFailureException → 500). The admin
- * mutations are transactional (a failed write rolls back) + idempotent, so
- * re-issuing once the poller releases the lock is safe and deterministic. The
- * `beforeAll` gate below also blocks until the outbox is writable, so under
- * normal warm conditions this retry is a no-op.
- */
-async function send(fn: () => Promise<APIResponse>): Promise<APIResponse> {
-  let res = await fn();
-  for (let i = 0; i < 5 && (res.status() === 500 || res.status() === 503); i++) {
-    await new Promise((r) => setTimeout(r, 3000));
-    res = await fn();
-  }
-  return res;
-}
 
 function assign(ctx: BrowserContext, token: string, operatorId: string, tenant: string): Promise<APIResponse> {
   return send(() => ctx.request.post(`${ADMIN_BASE}/api/admin/operators/${operatorId}/assignments/${tenant}`, {
@@ -174,26 +126,13 @@ test.describe('ADR-MONO-024 step 3 — tenant-admin delegation (federation runti
   // worker instead of inside every test.
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(240_000);
-    const ctx = await browser.newContext({ storageState: STORAGE_STATE });
-    try {
-      const tok = await operatorToken(ctx, 'warm-up SUPER_ADMIN');
-      let warm = false;
-      for (let i = 0; i < 12 && !warm; i++) {
-        // assign→unassign a throwaway (writes two audit→outbox rows); 2xx ⇒ writable.
-        const res = await assign(ctx, tok, TARGET, FOREIGN);
-        if (res.status() === 201 || res.status() === 409) {
-          warm = true;
-        } else {
-          // eslint-disable-next-line no-console
-          console.log(`[MONO-210] outbox warm-up attempt ${i + 1}: assign http=${res.status()}`);
-          await new Promise((r) => setTimeout(r, 4000));
-        }
-      }
-      await quietUnassign(ctx, tok, FOREIGN);
-      expect(warm, 'admin outbox must become writable (Kafka/poller warm) before the proof').toBe(true);
-    } finally {
-      await ctx.close();
-    }
+    // assign→unassign a throwaway (writes audit→outbox rows); 201/409 ⇒ writable.
+    await warmUpAdminOutbox(browser, {
+      logPrefix: 'MONO-210',
+      accept: [201, 409],
+      probe: (ctx, tok) => assign(ctx, tok, TARGET, FOREIGN),
+      cleanup: (ctx, tok) => quietUnassign(ctx, tok, FOREIGN),
+    });
   });
 
   test('TENANT_ADMIN administers its own tenant (assign/scope/grant) and is denied cross-tenant + escalating grants', async ({ browser }) => {
