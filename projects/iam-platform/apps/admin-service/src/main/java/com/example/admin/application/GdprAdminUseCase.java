@@ -1,7 +1,6 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.DownstreamFailureException;
-import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.infrastructure.client.AccountServiceClient;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +23,7 @@ public class GdprAdminUseCase {
     private final AdminActionAuditor auditor;
 
     public GdprDeleteResult gdprDelete(GdprDeleteCommand cmd) {
-        requireReason(cmd.reason());
+        AuditReasons.require(cmd.reason());
 
         String auditId = auditor.newAuditId();
         Instant startedAt = Instant.now();
@@ -68,7 +67,7 @@ public class GdprAdminUseCase {
     }
 
     public DataExportResult dataExport(String accountId, OperatorContext operator, String reason) {
-        requireReason(reason);
+        AuditReasons.require(reason);
 
         String auditId = auditor.newAuditId();
         Instant startedAt = Instant.now();
@@ -112,12 +111,6 @@ public class GdprAdminUseCase {
                 downstream.createdAt(),
                 profileData,
                 downstream.exportedAt() != null ? downstream.exportedAt() : completedAt);
-    }
-
-    private static void requireReason(String reason) {
-        if (reason == null || reason.isBlank()) {
-            throw new ReasonRequiredException();
-        }
     }
 
     private void recordAuditFailure(String auditId, ActionCode actionCode,

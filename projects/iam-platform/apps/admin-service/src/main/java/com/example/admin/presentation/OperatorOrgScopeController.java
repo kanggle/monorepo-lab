@@ -2,7 +2,6 @@ package com.example.admin.presentation;
 
 import com.example.admin.application.ManageOperatorAssignmentUseCase;
 import com.example.admin.application.ManageOperatorOrgScopeUseCase;
-import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
@@ -81,7 +80,7 @@ public class OperatorOrgScopeController {
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @RequestBody(required = false) SetOrgScopeRequest body) {
 
-        String reason = requireReason(headerReason);
+        String reason = ControllerReasonSupport.requireReason(headerReason);
         List<String> orgScope = body == null ? null : body.orgScope();
 
         OperatorTenantAssignmentPort.AssignmentView updated = manageOrgScopeUseCase.setOrgScope(
@@ -108,7 +107,7 @@ public class OperatorOrgScopeController {
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason) {
 
         OperatorTenantAssignmentPort.AssignmentView created = manageAssignmentUseCase.assignOperator(
-                operatorId, tenantId, OperatorContextHolder.require(), requireReason(headerReason));
+                operatorId, tenantId, OperatorContextHolder.require(), ControllerReasonSupport.requireReason(headerReason));
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(created));
     }
 
@@ -124,18 +123,11 @@ public class OperatorOrgScopeController {
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason) {
 
         manageAssignmentUseCase.unassignOperator(
-                operatorId, tenantId, OperatorContextHolder.require(), requireReason(headerReason));
+                operatorId, tenantId, OperatorContextHolder.require(), ControllerReasonSupport.requireReason(headerReason));
         return ResponseEntity.noContent().build();
     }
 
     private static OperatorAssignmentResponse toResponse(OperatorTenantAssignmentPort.AssignmentView a) {
         return new OperatorAssignmentResponse(a.tenantId(), a.orgScope(), a.permissionSetId());
-    }
-
-    private static String requireReason(String headerReason) {
-        if (headerReason == null || headerReason.isBlank()) {
-            throw new ReasonRequiredException();
-        }
-        return headerReason;
     }
 }

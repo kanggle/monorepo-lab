@@ -1,7 +1,6 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.DownstreamFailureException;
-import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.infrastructure.client.AuthServiceClient;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.RequiredArgsConstructor;
@@ -17,9 +16,7 @@ public class SessionAdminUseCase {
     private final AdminActionAuditor auditor;
 
     public RevokeSessionResult revoke(RevokeSessionCommand cmd) {
-        if (cmd.reason() == null || cmd.reason().isBlank()) {
-            throw new ReasonRequiredException();
-        }
+        AuditReasons.require(cmd.reason());
 
         String auditId = auditor.newAuditId();
         Instant startedAt = Instant.now();

@@ -1,5 +1,7 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.ReasonRequiredException;
+
 /**
  * Small utility for normalising the free-form {@code X-Operator-Reason} value
  * stamped on every {@code admin_actions} row. Centralised here (TASK-BE-288)
@@ -20,5 +22,17 @@ public final class AuditReasons {
 
     public static String normalize(String reason) {
         return (reason == null || reason.isBlank()) ? NOT_PROVIDED : reason;
+    }
+
+    /**
+     * Validates that a mandatory operator reason is present, throwing
+     * {@link ReasonRequiredException} when null or blank. Shared by the lock/unlock,
+     * GDPR, and session command use cases (which previously each declared a private
+     * {@code requireReason} copy).
+     */
+    public static void require(String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new ReasonRequiredException();
+        }
     }
 }

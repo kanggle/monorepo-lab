@@ -1,7 +1,6 @@
 package com.example.admin.presentation;
 
 import com.example.admin.application.ManageSubscriptionUseCase;
-import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.application.tenant.SubscriptionMutationSummary;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
@@ -44,7 +43,7 @@ public class SubscriptionAdminController {
     public ResponseEntity<SubscriptionResponse> subscribe(
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @Valid @RequestBody SubscribeRequest body) {
-        String reason = requireReason(headerReason);
+        String reason = ControllerReasonSupport.requireReason(headerReason);
         SubscriptionMutationSummary result = manageSubscriptionUseCase.subscribe(
                 body.tenantId(), body.domainKey(), OperatorContextHolder.require(), reason);
         return ResponseEntity.status(HttpStatus.CREATED).body(SubscriptionResponse.from(result));
@@ -62,17 +61,10 @@ public class SubscriptionAdminController {
             @PathVariable String domainKey,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @Valid @RequestBody ChangeStatusRequest body) {
-        String reason = requireReason(headerReason);
+        String reason = ControllerReasonSupport.requireReason(headerReason);
         SubscriptionMutationSummary result = manageSubscriptionUseCase.changeStatus(
                 tenantId, domainKey, body.status(), OperatorContextHolder.require(), reason);
         return ResponseEntity.ok(SubscriptionResponse.from(result));
-    }
-
-    private static String requireReason(String reason) {
-        if (reason == null || reason.isBlank()) {
-            throw new ReasonRequiredException();
-        }
-        return reason;
     }
 
     // ---- DTOs ----------------------------------------------------------------

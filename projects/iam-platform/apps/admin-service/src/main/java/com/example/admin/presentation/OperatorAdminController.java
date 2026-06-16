@@ -17,7 +17,6 @@ import com.example.admin.application.UnlinkOperatorIdentityUseCase.UnlinkResult;
 import com.example.admin.application.UpdateOperatorProfileUseCase;
 import com.example.admin.application.UpdateOwnOperatorProfileUseCase;
 import com.example.admin.application.exception.InvalidRequestException;
-import com.example.admin.application.exception.ReasonRequiredException;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
 import com.example.admin.presentation.aspect.RequiresPermission;
@@ -114,7 +113,7 @@ public class OperatorAdminController {
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateOperatorRequest body) {
 
-        String reason = requireReason(headerReason);
+        String reason = ControllerReasonSupport.requireReason(headerReason);
 
         CreateOperatorResult result = createOperatorUseCase.createOperator(
                 body.email(),
@@ -146,7 +145,7 @@ public class OperatorAdminController {
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @Valid @RequestBody PatchOperatorRolesRequest body) {
 
-        String reason = requireReason(headerReason);
+        String reason = ControllerReasonSupport.requireReason(headerReason);
 
         PatchRolesResult result = patchOperatorRoleUseCase.patchRoles(
                 operatorId,
@@ -165,7 +164,7 @@ public class OperatorAdminController {
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @Valid @RequestBody PatchOperatorStatusRequest body) {
 
-        String reason = requireReason(headerReason);
+        String reason = ControllerReasonSupport.requireReason(headerReason);
 
         PatchStatusResult result = patchOperatorStatusUseCase.patchStatus(
                 operatorId,
@@ -209,7 +208,7 @@ public class OperatorAdminController {
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @RequestBody(required = false) UpdateOperatorProfileRequest body) {
 
-        String reason = requireReason(headerReason);
+        String reason = ControllerReasonSupport.requireReason(headerReason);
         String normalizedValue = parseAndValidateBody(body);
 
         updateOperatorProfileUseCase.update(
@@ -242,7 +241,7 @@ public class OperatorAdminController {
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @Valid @RequestBody LinkOperatorIdentityRequest body) {
 
-        String reason = requireReason(headerReason);
+        String reason = ControllerReasonSupport.requireReason(headerReason);
 
         LinkResult result = linkOperatorIdentityUseCase.link(
                 operatorId,
@@ -267,7 +266,7 @@ public class OperatorAdminController {
             @PathVariable String operatorId,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason) {
 
-        String reason = requireReason(headerReason);
+        String reason = ControllerReasonSupport.requireReason(headerReason);
 
         UnlinkResult result = unlinkOperatorIdentityUseCase.unlink(
                 operatorId,
@@ -416,10 +415,4 @@ public class OperatorAdminController {
         return new OperatorSummaryResponse.OperatorContextResponse(financeDefaultAccountId);
     }
 
-    private static String requireReason(String headerReason) {
-        if (headerReason == null || headerReason.isBlank()) {
-            throw new ReasonRequiredException();
-        }
-        return headerReason;
-    }
 }
