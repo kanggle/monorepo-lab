@@ -73,19 +73,10 @@ public class ProvisionStatusChangeUseCase {
         Instant now = Instant.now();
 
         // Publish outbox events
-        eventPublisher.publishStatusChanged(account, account.getTenantId().value(), previousStatus.name(),
+        AccountStatusEvents.publishStatusChangeEvents(
+                eventPublisher, account, previousStatus, targetStatus,
                 StatusChangeReason.OPERATOR_PROVISIONING_STATUS_CHANGE.name(),
                 "provisioning_system", actor, now);
-
-        if (targetStatus == AccountStatus.LOCKED) {
-            eventPublisher.publishAccountLocked(account, account.getTenantId().value(),
-                    StatusChangeReason.OPERATOR_PROVISIONING_STATUS_CHANGE.name(),
-                    "provisioning_system", actor, now);
-        } else if (targetStatus == AccountStatus.ACTIVE && previousStatus == AccountStatus.LOCKED) {
-            eventPublisher.publishAccountUnlocked(account, account.getTenantId().value(),
-                    StatusChangeReason.OPERATOR_PROVISIONING_STATUS_CHANGE.name(),
-                    "provisioning_system", actor, now);
-        }
 
         return new ProvisionedStatusChangeResult(
                 accountId,

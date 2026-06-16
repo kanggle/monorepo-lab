@@ -101,20 +101,9 @@ public class AccountStatusUseCase {
             return;
         }
 
-        eventPublisher.publishStatusChanged(
-                account, account.getTenantId().value(), previousStatus.name(), command.reason().name(),
-                command.actorType(), command.actorId(), now);
-
-        if (command.targetStatus() == AccountStatus.LOCKED) {
-            eventPublisher.publishAccountLocked(
-                    account, account.getTenantId().value(), command.reason().name(),
-                    command.actorType(), command.actorId(), now);
-        } else if (command.targetStatus() == AccountStatus.ACTIVE
-                && previousStatus == AccountStatus.LOCKED) {
-            eventPublisher.publishAccountUnlocked(
-                    account, account.getTenantId().value(), command.reason().name(),
-                    command.actorType(), command.actorId(), now);
-        }
+        AccountStatusEvents.publishStatusChangeEvents(
+                eventPublisher, account, previousStatus, command.targetStatus(),
+                command.reason().name(), command.actorType(), command.actorId(), now);
     }
 
     @Transactional
