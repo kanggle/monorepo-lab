@@ -1,6 +1,6 @@
 # TASK-MONO-280 — Extract the duplicated federation-hardening-e2e spec helpers into shared fixtures
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — shared root `tests/federation-hardening-e2e/` harness; no project paths touched)
 
