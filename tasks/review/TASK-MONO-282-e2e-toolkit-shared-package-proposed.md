@@ -1,10 +1,16 @@
 # TASK-MONO-282 — Decide + (if accepted) bootstrap a shared `e2e-toolkit` package for cross-suite Playwright helpers
 
-**Status:** proposed (needs an ADR — new shared package is an architecture decision; HARDSTOP-09)
+**Status:** review
 
-**Type:** TASK-MONO (monorepo-level — new root/`libs`-level package + adoption rippling into ≥3 e2e suites across 2 projects)
+**Type:** TASK-MONO (monorepo-level — architecture decision; ADR authoring)
 
-**Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (package-boundary + cross-project atomic adoption; ADR authoring)
+**Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (package-boundary + cross-project posture; ADR authoring)
+
+---
+
+## Decision (2026-06-16)
+
+Authored as **[ADR-MONO-039](../../docs/adr/ADR-MONO-039-e2e-cross-suite-shared-toolkit-decision.md)** (PROPOSED). Direction **CHOSEN-PROPOSED = Option C** (user direction-question): **do NOT build a shared `e2e-toolkit` package** — keep the three suites independent and govern the small overlap by a documented login convention (C1–C4). The ADR awaits the explicit ACCEPT gate (self-ACCEPT prohibited). On ACCEPT there is **no bootstrap** (Option A/B not taken); the deliverable is the decision record + the documented convention. The Goal/Scope below is retained for provenance — the chosen outcome is "no package."
 
 ---
 
