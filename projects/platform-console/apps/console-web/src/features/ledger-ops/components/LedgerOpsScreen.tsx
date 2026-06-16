@@ -24,6 +24,8 @@ import { StatementDetail } from './StatementDetail';
 import { PositionLotsLookup } from './PositionLotsLookup';
 import { PositionLotsTable } from './PositionLotsTable';
 import { FxRatesTable } from './FxRatesTable';
+import { FxRateHistoryLookup } from './FxRateHistoryLookup';
+import { FxRateHistoryTable } from './FxRateHistoryTable';
 import {
   useJournalEntry,
   useAccountBalance,
@@ -31,8 +33,10 @@ import {
   useStatement,
   usePositionLots,
   useFxRates,
+  useFxRateHistory,
 } from '../hooks/use-ledger-ops';
 import { ApiError, messageForCode } from '@/shared/api/errors';
+import { FX_HISTORY_DEFAULT_LIMIT } from '../api/types';
 
 /**
  * finance ledger operations section (TASK-PC-FE-072 — § 2.4.7.1; the
@@ -229,6 +233,20 @@ export function LedgerOpsScreen({
   const fxRatesApiErr =
     fxRatesQ.error instanceof ApiError ? fxRatesQ.error : null;
   const fxRatesForbidden = fxRatesApiErr?.status === 403;
+
+  // FX 환율 history 드릴 — per-pair read (TASK-PC-FE-104). Foreign-currency-
+  // driven: set either by clicking a feed-table pair OR by the manual lookup
+  // form. Gated on the active tab + a non-empty foreign code so a hidden panel
+  // (or an unselected pair) never fetches. `rate` stays a string (F5).
+  const [fxHistoryForeign, setFxHistoryForeign] = useState<string | null>(null);
+  const fxHistoryQ = useFxRateHistory(
+    fxHistoryForeign,
+    FX_HISTORY_DEFAULT_LIMIT,
+    active === 'fx-rates',
+  );
+  const fxHistoryApiErr =
+    fxHistoryQ.error instanceof ApiError ? fxHistoryQ.error : null;
+  const fxHistoryForbidden = fxHistoryApiErr?.status === 403;
 
   /** Called when the operator clicks a trial-balance account code. */
   function handleSelectAccount(code: string) {
@@ -584,6 +602,45 @@ export function LedgerOpsScreen({
           <FxRatesTable
             data={fxRatesQ.data ?? null}
             onRefresh={() => void fxRatesQ.refetch()}
+            onSelectPair={setFxHistoryForeign}
+          />
+        )}
+
+        {/* FX 환율 history 드릴 (TASK-PC-FE-104) — per-pair time series, wired
+            BELOW the feed table within the SAME tab (NO new tab; same pattern
+            as the FE-075 statement drill in the 대사 tab). Set by clicking a
+            feed pair above OR the manual lookup below. */}
+        <FxRateHistoryLookup
+          initialCurrency={fxHistoryForeign ?? undefined}
+          onSubmit={setFxHistoryForeign}
+        />
+        {!fxHistoryForeign ? (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="ledger-fx-history-none"
+          >
+            이력을 볼 외화 통화를 입력하거나 위 피드 표의 통화쌍을 클릭하세요.
+          </p>
+        ) : fxHistoryForbidden ? (
+          <div
+            role="status"
+            data-testid="ledger-fx-history-forbidden"
+            className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          >
+            {messageForCode('TENANT_FORBIDDEN')}
+          </div>
+        ) : fxHistoryApiErr ? (
+          <div
+            role="status"
+            data-testid="ledger-fx-history-error"
+            className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+          >
+            {messageForCode(fxHistoryApiErr.code)}
+          </div>
+        ) : (
+          <FxRateHistoryTable
+            data={fxHistoryQ.data ?? null}
+            onRefresh={() => void fxHistoryQ.refetch()}
           />
         )}
       </div>

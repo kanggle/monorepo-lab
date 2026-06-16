@@ -43,6 +43,9 @@ export { PositionLotsLookup } from './components/PositionLotsLookup';
 export { PositionLotsTable } from './components/PositionLotsTable';
 // TASK-PC-FE-092 — FX 환율 피드 대시보드
 export { FxRatesTable } from './components/FxRatesTable';
+// TASK-PC-FE-104 — FX 환율 history 드릴
+export { FxRateHistoryTable } from './components/FxRateHistoryTable';
+export { FxRateHistoryLookup } from './components/FxRateHistoryLookup';
 export { getLedgerSectionState } from './api/ledger-state';
 export type { LedgerSectionState } from './api/ledger-state';
 export type {
@@ -75,6 +78,10 @@ export type {
   // TASK-PC-FE-092 — FX 환율 피드 대시보드 types
   FxRate,
   FxRatesResponse,
+  // TASK-PC-FE-104 — FX 환율 history 드릴 types
+  FxRateHistoryQuote,
+  FxRateHistoryResponse,
+  FxRateHistoryQueryParams,
 } from './api/types';
 export {
   formatMoney,
@@ -87,4 +94,7 @@ export {
   KNOWN_DISCREPANCY_STATUSES,
   RESOLUTION_TYPES,
   DEFAULT_CURRENCY_SCALES,
+  // TASK-PC-FE-104 — FX 환율 history limit bounds
+  FX_HISTORY_DEFAULT_LIMIT,
+  FX_HISTORY_MAX_LIMIT,
 } from './api/types';

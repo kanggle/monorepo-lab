@@ -19,6 +19,8 @@ import {
   type PositionLotsResponse,
   FxRatesResponseSchema,
   type FxRatesResponse,
+  FxRateHistoryResponseSchema,
+  type FxRateHistoryResponse,
 } from './types';
 import { callLedger, pageParams } from './ledger-client';
 
@@ -301,6 +303,56 @@ export async function getFxRates(): Promise<FxRatesResponse> {
     (json) => {
       const env = (json ?? {}) as { data?: unknown };
       return FxRatesResponseSchema.parse(env.data);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FX 환율 history 드릴 — TASK-PC-FE-104
+//   § 14.1 GET /api/finance/ledger/fx-rates/{foreignCurrency}/history?limit=N
+//   (FIN-BE-040). Producer envelope = { data: { base, foreign, quotes }, meta }.
+//   STRICTLY READ-ONLY — per-pair time series, newest first.
+//
+//   Header matrix (honest, producer-faithful — § 2.4.7.1 REUSE):
+//     - the SAME domain-facing IAM OIDC token (NEVER getOperatorToken());
+//     - GET only — NO body, NO Idempotency-Key, NO X-Operator-Reason,
+//       NO X-Tenant-Id (handled by `callLedger`).
+//     - No 429 branch (the ledger has no documented 429).
+//
+//   `rate` is a decimal **string** (F5 — NEVER Number/parseFloat/parseInt).
+//   An unknown / never-polled foreign code → 200 with `quotes: []` (NOT a 404).
+//   `limit` is a row count (NOT money): forwarded only when provided; the
+//   producer applies default 50 / floor ≤0→1 / cap 500. The foreign currency
+//   is `encodeURIComponent`-encoded on the path; the sanitised `logPath`
+//   carries only the `{currency}` placeholder (F7-consistent with the lots read).
+// ---------------------------------------------------------------------------
+
+/**
+ * `getFxRateHistory(foreignCurrency, limit?)` — reads the per-pair FX rate
+ * history time series (`KRW/{foreignCurrency}`) from the ledger's append-only
+ * audit trail. Returns `{ base, foreign, quotes }` where each quote carries
+ * the exact decimal `rate` **string** (F5 — NOT a float), `asOf`, `fetchedAt`,
+ * and `source`. READ-ONLY. The domain-facing IAM OIDC access token is attached
+ * by `callLedger`; NEVER `getOperatorToken()`. `limit` (when provided) is
+ * appended as a query param — a row count, not money. An unknown /
+ * never-polled foreign code is a normal `200` (`quotes: []`) — NOT a 404.
+ */
+export async function getFxRateHistory(
+  foreignCurrency: string,
+  limit?: number,
+): Promise<FxRateHistoryResponse> {
+  const qs = new URLSearchParams();
+  if (limit !== undefined) qs.set('limit', String(limit));
+  const query = qs.toString();
+  return callLedger(
+    {
+      path: `/api/finance/ledger/fx-rates/${encodeURIComponent(foreignCurrency)}/history${query ? `?${query}` : ''}`,
+      // confidential / F7-consistent — the log path carries NO foreign currency.
+      logPath: '/api/finance/ledger/fx-rates/{currency}/history',
+    },
+    (json) => {
+      const env = (json ?? {}) as { data?: unknown };
+      return FxRateHistoryResponseSchema.parse(env.data);
     },
   );
 }
