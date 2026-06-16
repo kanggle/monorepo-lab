@@ -1,6 +1,6 @@
 # TASK-BE-395 — wms notification-service spec-completion + idempotency heading normalization (Tier E from TASK-BE-385 § Findings)
 
-Status: review
+Status: done
 
 ## Goal
 
