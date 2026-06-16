@@ -88,9 +88,21 @@ public class CouponCommandService {
     }
 
     private void validateAdminRole(String userRole) {
-        if (!"ADMIN".equalsIgnoreCase(userRole)) {
+        if (!hasAdminRole(userRole)) {
             throw new AccessDeniedException();
         }
+    }
+
+    private static boolean hasAdminRole(String userRole) {
+        if (userRole == null || userRole.isBlank()) {
+            return false;
+        }
+        for (String role : userRole.split(",")) {
+            if ("ADMIN".equalsIgnoreCase(role.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Transactional

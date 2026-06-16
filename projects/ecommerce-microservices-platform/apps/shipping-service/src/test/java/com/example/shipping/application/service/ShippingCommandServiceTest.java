@@ -157,4 +157,60 @@ class ShippingCommandServiceTest {
         assertThatThrownBy(() -> shippingCommandService.markShippedByOrderId("nope", "SHP", "CJ"))
                 .isInstanceOf(ShippingNotFoundException.class);
     }
+
+    // ─── Multi-value X-User-Role (BE-393) ─────────────────────────────────
+
+    @Test
+    @DisplayName("멀티롤 헤더에 ADMIN 포함 시 상태 업데이트 허용 (multi-domain operator)")
+    void updateStatus_multiRoleContainingAdmin_admitted() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
+        given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운",
+                "ADMIN,ERP_OPERATOR,SCM_OPERATOR");
+
+        assertThatCode(() -> shippingCommandService.updateStatus(command))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("단일 ADMIN 롤 헤더는 계속 허용 (회귀 방지)")
+    void updateStatus_singleAdminRole_admitted() {
+        Shipping shipping = Shipping.create("tenant-a", "order-2", "user-1", fixedClock);
+        given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-002", "CJ대한통운", "ADMIN");
+
+        assertThatCode(() -> shippingCommandService.updateStatus(command))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("ADMIN 없는 멀티롤은 거부")
+    void updateStatus_multiRoleWithoutAdmin_throwsAccessDeniedException() {
+        assertThatThrownBy(() -> shippingCommandService.updateStatus(
+                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ",
+                        "SCM_OPERATOR,ERP_OPERATOR")))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("null 헤더는 거부")
+    void updateStatus_nullRole_throwsAccessDeniedException() {
+        assertThatThrownBy(() -> shippingCommandService.updateStatus(
+                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", null)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("SUPERADMIN 서브스트링만 있는 헤더는 거부 (부분일치 방지)")
+    void updateStatus_superadminSubstringOnly_throwsAccessDeniedException() {
+        assertThatThrownBy(() -> shippingCommandService.updateStatus(
+                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", "SUPERADMIN")))
+                .isInstanceOf(AccessDeniedException.class);
+    }
 }

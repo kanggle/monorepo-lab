@@ -42,8 +42,20 @@ public class AdminUserController {
     }
 
     private void validateAdminRole(String userRole) {
-        if (!ROLE_ADMIN.equalsIgnoreCase(userRole)) {
+        if (!hasAdminRole(userRole)) {
             throw new AccessDeniedException();
         }
+    }
+
+    private static boolean hasAdminRole(String userRole) {
+        if (userRole == null || userRole.isBlank()) {
+            return false;
+        }
+        for (String role : userRole.split(",")) {
+            if (ROLE_ADMIN.equalsIgnoreCase(role.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

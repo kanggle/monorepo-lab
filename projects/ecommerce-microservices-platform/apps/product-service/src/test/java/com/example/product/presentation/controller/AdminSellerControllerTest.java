@@ -140,4 +140,55 @@ class AdminSellerControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
+
+    // ─── Multi-value X-User-Role (BE-393) ─────────────────────────────────
+
+    @Test
+    @DisplayName("GET /api/admin/sellers - 멀티롤 헤더에 ADMIN 포함 시 200 (multi-domain operator)")
+    void list_multiRoleHeaderContainingAdmin_returns200() throws Exception {
+        SellerListResult result = new SellerListResult(List.of(), 0, 20, 0L);
+        given(sellerQueryService.listSellers(anyInt(), anyInt())).willReturn(result);
+
+        mockMvc.perform(get("/api/admin/sellers")
+                        .header(ROLE_HEADER, "ADMIN,ERP_OPERATOR,SCM_OPERATOR"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("GET /api/admin/sellers - ADMIN만 있는 단일 롤 헤더 200 (회귀 방지)")
+    void list_singleAdminRole_returns200_regressionGuard() throws Exception {
+        SellerListResult result = new SellerListResult(List.of(), 0, 20, 0L);
+        given(sellerQueryService.listSellers(anyInt(), anyInt())).willReturn(result);
+
+        mockMvc.perform(get("/api/admin/sellers")
+                        .header(ROLE_HEADER, "ADMIN"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("GET /api/admin/sellers - ADMIN 없는 멀티롤은 403")
+    void list_multiRoleWithoutAdmin_returns403() throws Exception {
+        mockMvc.perform(get("/api/admin/sellers")
+                        .header(ROLE_HEADER, "SCM_OPERATOR,ERP_OPERATOR"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("GET /api/admin/sellers - 빈 헤더는 403")
+    void list_emptyRoleHeader_returns403() throws Exception {
+        mockMvc.perform(get("/api/admin/sellers")
+                        .header(ROLE_HEADER, ""))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("GET /api/admin/sellers - SUPERADMIN(서브스트링)만 있는 헤더는 403")
+    void list_superadminSubstringOnly_returns403() throws Exception {
+        mockMvc.perform(get("/api/admin/sellers")
+                        .header(ROLE_HEADER, "SUPERADMIN"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
 }

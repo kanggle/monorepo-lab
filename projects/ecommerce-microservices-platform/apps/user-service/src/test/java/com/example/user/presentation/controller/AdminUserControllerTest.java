@@ -167,4 +167,60 @@ class AdminUserControllerTest {
                     .andExpect(jsonPath("$.code").value("USER_PROFILE_NOT_FOUND"));
         }
     }
+
+    // ─── Multi-value X-User-Role (BE-393) ─────────────────────────────────
+
+    @Nested
+    @DisplayName("X-User-Role 멀티값 게이팅 (BE-393)")
+    class MultiValueRoleGating {
+
+        @Test
+        @DisplayName("멀티롤 헤더에 ADMIN 포함 시 200 (multi-domain operator)")
+        void listUsers_multiRoleContainingAdmin_returns200() throws Exception {
+            var page = new UserListPageResult(List.of(), 0L, 0, 0, 20);
+            given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
+
+            mockMvc.perform(get("/api/admin/users")
+                            .header("X-User-Role", "ADMIN,ERP_OPERATOR,SCM_OPERATOR"))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("단일 ADMIN 롤 헤더는 계속 200 (회귀 방지)")
+        void listUsers_singleAdminRole_returns200_regressionGuard() throws Exception {
+            var page = new UserListPageResult(List.of(), 0L, 0, 0, 20);
+            given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
+
+            mockMvc.perform(get("/api/admin/users")
+                            .header("X-User-Role", "ADMIN"))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("ADMIN 없는 멀티롤은 403")
+        void listUsers_multiRoleWithoutAdmin_returns403() throws Exception {
+            mockMvc.perform(get("/api/admin/users")
+                            .header("X-User-Role", "SCM_OPERATOR,ERP_OPERATOR"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+
+        @Test
+        @DisplayName("빈 헤더는 403")
+        void listUsers_emptyRoleHeader_returns403() throws Exception {
+            mockMvc.perform(get("/api/admin/users")
+                            .header("X-User-Role", ""))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+
+        @Test
+        @DisplayName("SUPERADMIN 서브스트링만 있는 헤더는 403 (부분일치 방지)")
+        void listUsers_superadminSubstringOnly_returns403() throws Exception {
+            mockMvc.perform(get("/api/admin/users")
+                            .header("X-User-Role", "SUPERADMIN"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+    }
 }

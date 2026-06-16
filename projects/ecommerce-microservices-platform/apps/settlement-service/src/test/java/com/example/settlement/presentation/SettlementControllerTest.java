@@ -171,4 +171,50 @@ class SettlementControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
+
+    // ─── Multi-value X-User-Role (BE-393) ─────────────────────────────────
+
+    @Test
+    void listAccruals_multiRoleContainingAdmin_returns200() throws Exception {
+        given(queryService.listAccruals(any(), any(), any()))
+                .willReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
+
+        mockMvc.perform(get("/api/admin/settlements/accruals")
+                        .header("X-User-Role", "ADMIN,ERP_OPERATOR,SCM_OPERATOR"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void listAccruals_singleAdminRole_returns200_regressionGuard() throws Exception {
+        given(queryService.listAccruals(any(), any(), any()))
+                .willReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
+
+        mockMvc.perform(get("/api/admin/settlements/accruals")
+                        .header("X-User-Role", "ADMIN"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void listAccruals_multiRoleWithoutAdmin_returns403() throws Exception {
+        mockMvc.perform(get("/api/admin/settlements/accruals")
+                        .header("X-User-Role", "SCM_OPERATOR,ERP_OPERATOR"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void listAccruals_emptyRoleHeader_returns403() throws Exception {
+        mockMvc.perform(get("/api/admin/settlements/accruals")
+                        .header("X-User-Role", ""))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void listAccruals_superadminSubstringOnly_returns403() throws Exception {
+        mockMvc.perform(get("/api/admin/settlements/accruals")
+                        .header("X-User-Role", "SUPERADMIN"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
 }

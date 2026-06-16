@@ -42,7 +42,7 @@ public class RefreshTrackingService {
 
     @Transactional
     public UpdateShippingStatusResult refreshFromCarrier(String shippingId, String userRole) {
-        if (!"ADMIN".equalsIgnoreCase(userRole)) {
+        if (!hasAdminRole(userRole)) {
             throw new AccessDeniedException("Admin role required");
         }
         // Tenant-scoped lookup (admin mutation): a cross-tenant shippingId → 404 (M3).
@@ -64,5 +64,17 @@ public class RefreshTrackingService {
     private static UpdateShippingStatusResult result(Shipping shipping) {
         return new UpdateShippingStatusResult(
                 shipping.getShippingId(), shipping.getStatus(), shipping.getUpdatedAt());
+    }
+
+    private static boolean hasAdminRole(String userRole) {
+        if (userRole == null || userRole.isBlank()) {
+            return false;
+        }
+        for (String role : userRole.split(",")) {
+            if ("ADMIN".equalsIgnoreCase(role.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
