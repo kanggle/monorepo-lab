@@ -64,4 +64,54 @@ class SearchAdminControllerTest {
                         .param("batchSize", "0"))
                 .andExpect(status().isBadRequest());
     }
+
+    // ─── Multi-value X-User-Role (BE-393) ─────────────────────────────────
+
+    @Test
+    @DisplayName("reindex - 멀티롤 헤더에 ADMIN 포함 시 200 (multi-domain operator)")
+    void reindex_multiRoleHeaderContainingAdmin_returns200() throws Exception {
+        given(reindexAllUseCase.reindexAll(anyInt())).willReturn(10);
+
+        mockMvc.perform(post("/api/search/admin/reindex")
+                        .header("X-User-Role", "ADMIN,ERP_OPERATOR,SCM_OPERATOR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.indexed").value(10));
+    }
+
+    @Test
+    @DisplayName("reindex - ADMIN만 있는 단일 롤 헤더 200 (회귀 방지)")
+    void reindex_singleAdminRole_returns200_regressionGuard() throws Exception {
+        given(reindexAllUseCase.reindexAll(anyInt())).willReturn(5);
+
+        mockMvc.perform(post("/api/search/admin/reindex")
+                        .header("X-User-Role", "ADMIN"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("reindex - ADMIN 없는 멀티롤은 403")
+    void reindex_multiRoleWithoutAdmin_returns403() throws Exception {
+        mockMvc.perform(post("/api/search/admin/reindex")
+                        .header("X-User-Role", "SCM_OPERATOR,ERP_OPERATOR"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("reindex - 빈 헤더는 403")
+    void reindex_emptyRoleHeader_returns403() throws Exception {
+        mockMvc.perform(post("/api/search/admin/reindex")
+                        .header("X-User-Role", ""))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("reindex - SUPERADMIN(서브스트링)만 있는 헤더는 403")
+    void reindex_superadminSubstringOnly_returns403() throws Exception {
+        mockMvc.perform(post("/api/search/admin/reindex")
+                        .header("X-User-Role", "SUPERADMIN"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
 }

@@ -209,4 +209,93 @@ class CouponCommandServiceTest {
 
         verify(couponRepository, never()).save(any(Coupon.class));
     }
+
+    // ─── Multi-value X-User-Role (BE-393) ─────────────────────────────────
+
+    @Test
+    @DisplayName("멀티롤 헤더에 ADMIN 포함 시 쿠폰 발급 허용 (multi-domain operator)")
+    void issueCoupons_multiRoleHeaderContainingAdmin_admitted() {
+        CouponCommandService service = createService();
+
+        Promotion promotion = Promotion.create(
+                "프로모션", "설명", DiscountType.FIXED, 1000, 0, 100,
+                Instant.parse("2026-03-01T00:00:00Z"),
+                Instant.parse("2026-04-01T00:00:00Z"), clock
+        );
+
+        given(promotionRepository.findByIdForUpdate(promotion.getPromotionId()))
+                .willReturn(Optional.of(promotion));
+        given(couponRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
+        given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                promotion.getPromotionId(), List.of("user-1"), "ADMIN,ERP_OPERATOR,SCM_OPERATOR"
+        );
+
+        assertThatCode(() -> service.issueCoupons(command))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("단일 ADMIN 롤 헤더는 계속 허용 (회귀 방지)")
+    void issueCoupons_singleAdminRole_admitted() {
+        CouponCommandService service = createService();
+
+        Promotion promotion = Promotion.create(
+                "프로모션", "설명", DiscountType.FIXED, 1000, 0, 100,
+                Instant.parse("2026-03-01T00:00:00Z"),
+                Instant.parse("2026-04-01T00:00:00Z"), clock
+        );
+
+        given(promotionRepository.findByIdForUpdate(promotion.getPromotionId()))
+                .willReturn(Optional.of(promotion));
+        given(couponRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
+        given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                promotion.getPromotionId(), List.of("user-1"), "ADMIN"
+        );
+
+        assertThatCode(() -> service.issueCoupons(command))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("ADMIN 없는 멀티롤 헤더는 거부")
+    void issueCoupons_multiRoleWithoutAdmin_throwsAccessDeniedException() {
+        CouponCommandService service = createService();
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                "promo-1", List.of("user-1"), "SCM_OPERATOR,ERP_OPERATOR"
+        );
+
+        assertThatThrownBy(() -> service.issueCoupons(command))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("null 헤더는 거부")
+    void issueCoupons_nullRole_throwsAccessDeniedException() {
+        CouponCommandService service = createService();
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                "promo-1", List.of("user-1"), null
+        );
+
+        assertThatThrownBy(() -> service.issueCoupons(command))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("SUPERADMIN 서브스트링만 있는 헤더는 거부 (부분일치 방지)")
+    void issueCoupons_superadminSubstringOnly_throwsAccessDeniedException() {
+        CouponCommandService service = createService();
+
+        IssueCouponsCommand command = new IssueCouponsCommand(
+                "promo-1", List.of("user-1"), "SUPERADMIN"
+        );
+
+        assertThatThrownBy(() -> service.issueCoupons(command))
+                .isInstanceOf(AccessDeniedException.class);
+    }
 }
