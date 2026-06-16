@@ -193,7 +193,7 @@ When `--dry-run` surfaces findings, classify each into one of three tiers before
 
 | Tier | Definition | Closure pattern |
 |---|---|---|
-| **Tier 1** | Mechanical, in-cycle author artifact (newly-authored specs from the same author/session — depth miscount, basename typo, hedge phrasing). Risk: low. | Single PR mechanical batch — `sed` per pattern + per-file `Edit` for outliers. Verify via dead-ref checker. |
+| **Tier 1** | Mechanical, in-cycle author artifact (newly-authored specs from the same author/session — depth miscount, basename typo, hedge phrasing). Risk: low. | Single PR mechanical batch — per-file `Edit` (`replace_all: true` for a repeated literal). Verify via dead-ref checker. |
 | **Tier 2** | Judgment-required (stale references where production code was renamed; sample link semantics; "참조 구현" mismatch). Risk: low–medium. | Author task with 3-option weighing (rename / drop link / drop sentence) in Goal. Single PR closure after judgment. |
 | **Tier 3** | Pre-existing artifact from a different author origin or era (pre-import depth bug, prior-author miscount, cross-project sync gap). Risk: low (mechanical) but blast radius wider. | Separate task per origin (don't bundle with current cycle's Tier 1). Sibling mechanical batch precedent. |
 
@@ -204,7 +204,7 @@ If `--dry-run` produces a mix, **report each tier separately** in Phase 3 plan a
 For Tier 1 + Tier 3 mechanical fixes:
 
 1. **Author task** in `tasks/ready/` describing total fix count + pattern catalog + Tier 2 skips with explicit `## Out of Scope` rationale.
-2. **Apply fixes** preferring `sed -i 's|](OLD)|](NEW)|g'` for repeated patterns (markdown link syntax `](...)` narrows over-match risk); `Edit` for one-off cases.
+2. **Apply fixes** with the `Edit` tool (`replace_all: true` for a repeated literal within a file; the markdown link form `](...)` makes a precise search string). Do NOT use Bash `sed`/`sed -i` — global CLAUDE.md § Windows Shell Environment forbids it (msys2 sed crashes traversing large trees, leaving `.stackdump`).
 3. **Verify** with a dead-ref checker script (markdown link extractor + `[ -e ... ]` per target). Expected remaining count = Tier 2 skips (documented in task body).
 4. **Move lifecycle** `ready/` → `review/`. Don't modify task body after move except the Status field (CLAUDE.md HARDSTOP-05 — review/ frozen).
 5. **Commit + push** per `feedback_pr_on_request.md` policy (PR open is user-explicit). Separate impl PR from close-chore PR per `tasks/INDEX.md § PR Separation Rule`.

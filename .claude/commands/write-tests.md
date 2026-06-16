@@ -23,13 +23,14 @@ Examples:
 
 ## Procedure
 
-1. Read `platform/testing-strategy.md`
-2. Read `.claude/skills/backend/testing-backend/SKILL.md`
-3. Read `specs/services/<service>/architecture.md` for the target service
-4. Check whether test files already exist for the target code
-5. Determine required test levels based on the architecture style
-6. Write tests
-7. Run tests and verify all pass
+1. Read `CLAUDE.md` and complete project classification (load `PROJECT.md` + the applicable `rules/common.md` / `rules/domains/<domain>.md` / `rules/traits/<trait>.md` per `platform/entrypoint.md` Step 0) — active traits (e.g. `transactional`) impose test mandates.
+2. Read `platform/testing-strategy.md`
+3. Read `.claude/skills/backend/testing-backend/SKILL.md`
+4. Read `specs/services/<service>/architecture.md` for the target service
+5. Check whether test files already exist for the target code
+6. Determine required test levels based on the architecture style
+7. Write tests
+8. Run tests and verify all pass
 
 ## Test Levels (per testing-strategy.md)
 

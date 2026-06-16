@@ -104,7 +104,7 @@ No single spec — this file is the skill catalog itself. Each row points at the
 | Add gateway route/filter | `gateway-security` |
 | Add observability/metrics | `observability-metrics` |
 | Add standalone support | `standalone-profile` |
-| Integration task | backend skills + `e2e-test` + specs as needed |
+| Integration task | backend skills + `testing/e2e-test` + specs as needed |
 | Infrastructure task | `docker-build`, `kubernetes-deploy`, `ci-cd` as needed |
 | Code review | `review-checklist` + related architecture skill + `testing-backend` or `testing-frontend` |
 | Set up new service | matching `service-types/<type>-setup` + `cross-cutting/observability-setup` + `cross-cutting/security-hardening` |

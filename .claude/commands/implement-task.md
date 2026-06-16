@@ -179,7 +179,7 @@ You are implementing a task in this project. Follow these steps exactly:
 8. Read existing code in the target service
 9. Implement the task following specs and architecture rules
 10. Write tests as specified in Test Requirements
-11. Run tests: ./gradlew :apps:{service}:test
+11. Run tests for the target service's stack — backend (Gradle): `./gradlew :apps:{service}:test`; frontend (Node): `pnpm --filter {service} test` (per the service's build.gradle.kts / package.json).
 12. Verify all Acceptance Criteria are met
 13. Move task from `tasks/in-progress/` to `tasks/review/`
 
