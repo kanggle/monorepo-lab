@@ -1,6 +1,6 @@
 # TASK-BE-394 — wms spec Tier D dedup + the duplication-induced drift it surfaced (code-verified, from TASK-BE-385 § Findings)
 
-Status: review
+Status: done
 
 ## Goal
 
