@@ -133,17 +133,36 @@ public class AccountServiceClient implements AccountServicePort {
         }
     }
 
+    /**
+     * Maps a 4xx response from account-service to an {@link HttpClientErrorException}
+     * (404 → {@code NotFound}, other 4xx → generic client error). Shared by the
+     * status and profile lookups, whose downstream handlers were byte-identical.
+     */
+    private static final RestClient.ResponseSpec.ErrorHandler MAP_4XX = (request, response) -> {
+        if (response.getStatusCode().value() == 404) {
+            throw HttpClientErrorException.create(
+                    response.getStatusCode(), "Not Found",
+                    response.getHeaders(), new byte[0], null);
+        }
+        throw HttpClientErrorException.create(
+                response.getStatusCode(), "Client Error",
+                response.getHeaders(), new byte[0], null);
+    };
+
+    /**
+     * Wraps a downstream call in the shared resilience pipeline (retry, then circuit
+     * breaker) and invokes it. Centralises the decorate-retry-then-circuit-breaker
+     * boilerplate that every port method repeated verbatim.
+     */
+    private <T> T callResilient(Supplier<T> call) {
+        return CircuitBreaker.decorateSupplier(circuitBreaker,
+                Retry.decorateSupplier(retry, call)).get();
+    }
+
     @Override
     public Optional<AccountStatusLookupResult> getAccountStatus(String accountId) {
-        Supplier<Optional<AccountStatusLookupResult>> supplier = () -> doGetStatus(accountId);
-
-        Supplier<Optional<AccountStatusLookupResult>> retryingSupplier =
-                Retry.decorateSupplier(retry, supplier);
-        Supplier<Optional<AccountStatusLookupResult>> resilientSupplier =
-                CircuitBreaker.decorateSupplier(circuitBreaker, retryingSupplier);
-
         try {
-            return resilientSupplier.get();
+            return callResilient(() -> doGetStatus(accountId));
         } catch (HttpClientErrorException.NotFound e) {
             return Optional.empty();
         } catch (HttpClientErrorException e) {
@@ -174,16 +193,7 @@ public class AccountServiceClient implements AccountServicePort {
                     // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
                     .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
-                    .onStatus(HttpStatusCode::is4xxClientError, (request, response) -> {
-                        if (response.getStatusCode().value() == 404) {
-                            throw HttpClientErrorException.create(
-                                    response.getStatusCode(), "Not Found",
-                                    response.getHeaders(), new byte[0], null);
-                        }
-                        throw HttpClientErrorException.create(
-                                response.getStatusCode(), "Client Error",
-                                response.getHeaders(), new byte[0], null);
-                    })
+                    .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
                     .body(Map.class);
 
             if (body == null) {
@@ -207,15 +217,8 @@ public class AccountServiceClient implements AccountServicePort {
     @Override
     public SocialSignupResult socialSignup(String email, String provider,
                                             String providerUserId, String displayName) {
-        Supplier<SocialSignupResult> supplier = () -> doSocialSignup(email, provider, providerUserId, displayName);
-
-        Supplier<SocialSignupResult> retryingSupplier =
-                Retry.decorateSupplier(retry, supplier);
-        Supplier<SocialSignupResult> resilientSupplier =
-                CircuitBreaker.decorateSupplier(circuitBreaker, retryingSupplier);
-
         try {
-            return resilientSupplier.get();
+            return callResilient(() -> doSocialSignup(email, provider, providerUserId, displayName));
         } catch (HttpClientErrorException e) {
             log.warn("Account service social-signup returned client error {}: {}",
                     e.getStatusCode(), e.getMessage());
@@ -261,15 +264,8 @@ public class AccountServiceClient implements AccountServicePort {
 
     @Override
     public Optional<AccountProfileResult> getAccountProfile(String accountId) {
-        Supplier<Optional<AccountProfileResult>> supplier = () -> doGetProfile(accountId);
-
-        Supplier<Optional<AccountProfileResult>> retryingSupplier =
-                Retry.decorateSupplier(retry, supplier);
-        Supplier<Optional<AccountProfileResult>> resilientSupplier =
-                CircuitBreaker.decorateSupplier(circuitBreaker, retryingSupplier);
-
         try {
-            return resilientSupplier.get();
+            return callResilient(() -> doGetProfile(accountId));
         } catch (HttpClientErrorException.NotFound e) {
             return Optional.empty();
         } catch (HttpClientErrorException e) {
@@ -297,16 +293,7 @@ public class AccountServiceClient implements AccountServicePort {
                     // TASK-BE-318c: GAP client_credentials Bearer JWT.
                     .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
-                    .onStatus(HttpStatusCode::is4xxClientError, (request, response) -> {
-                        if (response.getStatusCode().value() == 404) {
-                            throw HttpClientErrorException.create(
-                                    response.getStatusCode(), "Not Found",
-                                    response.getHeaders(), new byte[0], null);
-                        }
-                        throw HttpClientErrorException.create(
-                                response.getStatusCode(), "Client Error",
-                                response.getHeaders(), new byte[0], null);
-                    })
+                    .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
                     .body(Map.class);
 
             if (body == null) {
@@ -335,15 +322,8 @@ public class AccountServiceClient implements AccountServicePort {
 
     @Override
     public List<String> listEntitledDomains(String tenantId) {
-        Supplier<List<String>> supplier = () -> doListEntitledDomains(tenantId);
-
-        Supplier<List<String>> retryingSupplier =
-                Retry.decorateSupplier(retry, supplier);
-        Supplier<List<String>> resilientSupplier =
-                CircuitBreaker.decorateSupplier(circuitBreaker, retryingSupplier);
-
         try {
-            return resilientSupplier.get();
+            return callResilient(() -> doListEntitledDomains(tenantId));
         } catch (HttpClientErrorException e) {
             // TASK-BE-324: any 4xx (incl. unstubbed-WireMock 404) is treated as an
             // account-service failure here; the caller (TenantClaimTokenCustomizer)
@@ -397,15 +377,8 @@ public class AccountServiceClient implements AccountServicePort {
 
     @Override
     public List<String> listAccountRoles(String tenantId, String accountId) {
-        Supplier<List<String>> supplier = () -> doListAccountRoles(tenantId, accountId);
-
-        Supplier<List<String>> retryingSupplier =
-                Retry.decorateSupplier(retry, supplier);
-        Supplier<List<String>> resilientSupplier =
-                CircuitBreaker.decorateSupplier(circuitBreaker, retryingSupplier);
-
         try {
-            return resilientSupplier.get();
+            return callResilient(() -> doListAccountRoles(tenantId, accountId));
         } catch (HttpClientErrorException e) {
             // ADR-MONO-033 S2: any 4xx is treated as an account-service failure;
             // the caller (future TenantClaimTokenCustomizer roles leg) fail-softs
