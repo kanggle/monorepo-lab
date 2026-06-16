@@ -1,6 +1,6 @@
 # TASK-FIN-BE-040 — FX rate quote history read endpoint (per-pair drill)
 
-**Status:** ready
+**Status:** done
 **Domain:** finance · **Service:** ledger-service · **Type:** backend read endpoint (read-only)
 **Parent:** ADR-002 (realtime FX rate feed) — § 3.1 deferred "history read / per-pair drill" (explicitly deferred in FIN-BE-033). Builds on FIN-BE-039 (`fx_rate_quote_history` append-only table) + FIN-BE-033 (the latest-only `fx-rates` read EP). Enables the deferred console FX history drill (a separate PC-FE task will consume this).
 
