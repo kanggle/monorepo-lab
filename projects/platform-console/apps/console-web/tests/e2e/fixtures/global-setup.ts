@@ -1,4 +1,5 @@
 import { chromium, type FullConfig } from '@playwright/test';
+import { shouldSkipFederation } from './federation';
 import { loginAsSuperAdmin } from './login';
 
 /**
@@ -25,6 +26,19 @@ export default async function globalSetup(config: FullConfig) {
 
   const browser = await chromium.launch();
   const context = await browser.newContext();
+
+  // TASK-PC-FE-113 — in federation mode (PC_FEDERATION_E2E=1) the SUPER_ADMIN
+  // (e2e-super-admin) is not provisioned on the federation demo stack and its
+  // callback would fail with `operator_exchange_unavailable`. The
+  // federation-gated specs log in fresh per-spec (overriding storageState), so
+  // skip the SUPER_ADMIN mint and persist an empty state so the config's
+  // storageState path still exists. Normal runs (flag unset) are unchanged.
+  if (!shouldSkipFederation()) {
+    await context.storageState({ path: storageStatePath });
+    await browser.close();
+    return;
+  }
+
   await loginAsSuperAdmin(context);
   await context.storageState({ path: storageStatePath });
   await browser.close();
