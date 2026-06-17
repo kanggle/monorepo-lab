@@ -28,6 +28,7 @@ public class OAuthPropertiesConfigAdapter implements OAuthProviderConfigPort {
             case GOOGLE -> oAuthProperties.getGoogle();
             case KAKAO -> oAuthProperties.getKakao();
             case MICROSOFT -> oAuthProperties.getMicrosoft();
+            case NAVER -> oAuthProperties.getNaver();
         };
         return new OAuthProviderConfig(
                 props.getClientId(),

@@ -14,6 +14,7 @@ class OAuthClientFactoryTest {
     private GoogleOAuthClient googleClient;
     private KakaoOAuthClient kakaoClient;
     private MicrosoftOAuthClient microsoftClient;
+    private NaverOAuthClient naverClient;
     private OAuthClientFactory factory;
 
     @BeforeEach
@@ -31,7 +32,8 @@ class OAuthClientFactoryTest {
         googleClient = new GoogleOAuthClient(props, mapper);
         kakaoClient = new KakaoOAuthClient(props, mapper);
         microsoftClient = new MicrosoftOAuthClient(props, mapper);
-        factory = new OAuthClientFactory(googleClient, kakaoClient, microsoftClient);
+        naverClient = new NaverOAuthClient(props, mapper);
+        factory = new OAuthClientFactory(googleClient, kakaoClient, microsoftClient, naverClient);
     }
 
     @Test
@@ -53,11 +55,18 @@ class OAuthClientFactoryTest {
     }
 
     @Test
+    @DisplayName("getClient returns NaverOAuthClient for NAVER")
+    void getClientNaver() {
+        assertThat(factory.getClient(OAuthProvider.NAVER)).isSameAs(naverClient);
+    }
+
+    @Test
     @DisplayName("factory implements the OAuthClientProvider port — same returned clients via the port type")
     void factoryImplementsOAuthClientProviderPort() {
         OAuthClientProvider provider = factory;
         assertThat(provider.getClient(OAuthProvider.GOOGLE)).isSameAs(googleClient);
         assertThat(provider.getClient(OAuthProvider.KAKAO)).isSameAs(kakaoClient);
         assertThat(provider.getClient(OAuthProvider.MICROSOFT)).isSameAs(microsoftClient);
+        assertThat(provider.getClient(OAuthProvider.NAVER)).isSameAs(naverClient);
     }
 }
