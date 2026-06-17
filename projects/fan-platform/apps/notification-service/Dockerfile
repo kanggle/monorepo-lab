@@ -6,6 +6,13 @@
 # so a local redeploy MUST run `./gradlew bootJar` before `docker compose build`,
 # else the image re-copies a stale jar (see project memory
 # env_gap_docker_host_prebuilt_jar_redeploy_trap).
+# ADR-MONO-041 D1: Spring Boot layered-jar — a code-only change rebuilds only the
+# small `application` layer; the dependencies layer stays cached.
+
+FROM eclipse-temurin:21-jre-alpine AS build
+WORKDIR /workspace
+COPY build/libs/notification-service.jar /workspace/app.jar
+RUN java -Djarmode=layertools -jar app.jar extract && rm -f app.jar
 
 FROM eclipse-temurin:21-jre-alpine
 
@@ -15,7 +22,11 @@ RUN apk add --no-cache curl tini \
 
 WORKDIR /app
 
-COPY --chown=app:app build/libs/notification-service.jar /app/app.jar
+# ADR-MONO-041 D1: copy layers low->high change frequency (deps first, app last).
+COPY --from=build --chown=app:app /workspace/dependencies/ ./
+COPY --from=build --chown=app:app /workspace/spring-boot-loader/ ./
+COPY --from=build --chown=app:app /workspace/snapshot-dependencies/ ./
+COPY --from=build --chown=app:app /workspace/application/ ./
 
 USER app
 
@@ -27,4 +38,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -fsS http://localhost:8080/actuator/health || exit 1
 
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+# ADR-MONO-041 D1: launch via JarLauncher (layered-equivalent of -jar app.jar).
+CMD ["sh", "-c", "java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]
