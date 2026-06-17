@@ -58,11 +58,6 @@ async function loadApiClientWithEnv(
     }),
   }));
 
-  vi.doMock('@/shared/auth/token-bridge', () => ({
-    getAccessToken: vi.fn(() => null),
-    clearAccessToken: vi.fn(),
-  }));
-
   await import('../api');
 
   globalThis.window = originalWindow;
@@ -104,7 +99,11 @@ describe('web-store apiClient baseURL', () => {
     expect(baseURL).toBe('http://localhost:8080');
   });
 
-  it('client (window defined) → uses NEXT_PUBLIC_API_URL, ignores API_URL_INTERNAL', async () => {
+  it('client (window defined) → uses same-origin BFF proxy, ignores both backend URLs (F2)', async () => {
+    // Phase 4.5 F2: the client never talks to the backend gateway directly; it
+    // goes through the same-origin `/api/bff` proxy which attaches the bearer
+    // server-side. So the client baseURL is always `/api/bff`, regardless of
+    // API_URL_INTERNAL / NEXT_PUBLIC_API_URL.
     const baseURL = await loadApiClientWithEnv(
       {
         API_URL_INTERNAL: 'http://gateway-service:8080',
@@ -112,6 +111,6 @@ describe('web-store apiClient baseURL', () => {
       },
       true,
     );
-    expect(baseURL).toBe('http://ecommerce.local');
+    expect(baseURL).toBe('/api/bff');
   });
 });

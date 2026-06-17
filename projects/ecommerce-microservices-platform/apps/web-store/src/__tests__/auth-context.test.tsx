@@ -3,7 +3,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { AuthProvider, useAuth } from '@/features/auth/model/auth-context';
-import { getAccessToken } from '@/shared/auth/token-bridge';
 
 const mockUseSession = vi.mocked(useSession);
 const mockSignIn = vi.mocked(signIn);
@@ -62,16 +61,19 @@ describe('AuthContext (NextAuth + GAP)', () => {
     expect(screen.getByTestId('user').textContent).toBe('null');
   });
 
-  it('authenticated CONSUMER: user/accountId/accessToken 가 노출된다', async () => {
+  it('authenticated CONSUMER: 비민감 식별 claim 만 노출 (accessToken 없음, F2)', async () => {
+    // Phase 4.5 F2: the public session must carry NO access token. The session
+    // object here intentionally omits `accessToken` (the auth.ts session
+    // callback no longer copies it).
+    const session = {
+      accountId: 'acc-1',
+      tenantId: 'ecommerce',
+      roles: ['CUSTOMER'],
+      user: { email: 'consumer@test.com', name: '소비자' },
+      expires: '2099-01-01T00:00:00Z',
+    };
     mockUseSession.mockReturnValue({
-      data: {
-        accountId: 'acc-1',
-        tenantId: 'ecommerce',
-        roles: ['CUSTOMER'],
-        accessToken: 'gap-access-token',
-        user: { email: 'consumer@test.com', name: '소비자' },
-        expires: '2099-01-01T00:00:00Z',
-      },
+      data: session,
       status: 'authenticated',
       update: vi.fn(),
     } as ReturnType<typeof useSession>);
@@ -88,8 +90,9 @@ describe('AuthContext (NextAuth + GAP)', () => {
 
     expect(screen.getByTestId('user').textContent).toContain('acc-1');
     expect(screen.getByTestId('user').textContent).toContain('consumer@test.com');
-    // 토큰 브리지에 access token 이 푸시됨
-    expect(getAccessToken()).toBe('gap-access-token');
+    // F2: no bearer token is ever present on the client session object.
+    expect(session).not.toHaveProperty('accessToken');
+    expect(screen.getByTestId('user').textContent).not.toContain('access');
   });
 
   it('login() 호출 시 signIn("iam", {callbackUrl:"/"}) 가 호출된다', async () => {

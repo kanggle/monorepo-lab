@@ -112,7 +112,8 @@ describe('로그아웃 카트 통합 (NextAuth)', () => {
     });
     expect(storage['cart']).toBeDefined();
 
-    // logout()은 signOut() 을 호출하기 전에 즉시 token-bridge + cart 를 정리한다.
+    // logout()은 signOut() 을 호출하기 전에 즉시 cart 를 정리한다. (F2: 토큰은
+    // server-only 이므로 클라이언트 token-bridge 정리 단계는 더 이상 없다.)
     await act(async () => {
       await user.click(screen.getByText('logout'));
     });

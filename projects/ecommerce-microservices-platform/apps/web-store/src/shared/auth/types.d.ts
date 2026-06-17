@@ -1,13 +1,13 @@
 /**
- * Module augmentation for next-auth v5 — extends the default Session and JWT
- * to carry the GAP-specific claims (`tenant_id`, `account_id`, `roles`)
- * and the access/refresh tokens.
+ * Module augmentation for next-auth v5 — extends the default Session and JWT.
  *
- * `accessToken` is exposed on the public session shape (read by AuthProvider
- * to push into the api-client token bridge). The HttpOnly JWT cookie remains
- * the source of truth — `useSession()` decodes it via the `/api/auth/session`
- * route handler so the bearer is never serialized into a Server Component
- * client-bundle leak.
+ * Phase 4.5 F2 (token confidentiality): the public `Session` carries ONLY
+ * non-sensitive identity claims (`account_id` / `tenant_id` / `roles` + the
+ * default display `email`·`name`). The access / refresh / id tokens live ONLY
+ * on the server-side `JWT` (encrypted HttpOnly cookie) and are NEVER added to
+ * `Session` — that object is serialized to client JS via `/api/auth/session`.
+ * Server code reads the bearer through the server-only `getWebStoreSession()`
+ * helper; client code reaches the backend only via the same-origin BFF proxy.
  */
 import 'next-auth';
 import 'next-auth/jwt';
@@ -17,7 +17,7 @@ declare module 'next-auth' {
     accountId?: string | null;
     tenantId?: string | null;
     roles?: string[];
-    accessToken?: string;
+    // NOTE: no `accessToken` here — tokens are server-only (F2).
   }
 
   interface User {
@@ -41,5 +41,12 @@ declare module 'next-auth/jwt' {
      * onto the public Session (would leak via /api/auth/session).
      */
     idToken?: string;
+    /**
+     * Set to `'RefreshAccessTokenError'` by the `jwt` callback when a silent
+     * refresh (Phase 4.5 F3) fails. The `session` callback then degrades the
+     * session to anonymous so the next protected request forces a full re-auth
+     * (F1). Cleared on a fresh sign-in.
+     */
+    error?: 'RefreshAccessTokenError';
   }
 }
