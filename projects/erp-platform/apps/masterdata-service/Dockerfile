@@ -9,13 +9,9 @@ WORKDIR /workspace
 COPY build/libs/masterdata-service.jar /workspace/app.jar
 RUN java -Djarmode=layertools -jar app.jar extract && rm -f app.jar
 
-FROM eclipse-temurin:21-jre-alpine
-
-RUN apk add --no-cache curl tini \
-    && addgroup -S app \
-    && adduser -S -G app app
-
-WORKDIR /app
+# ADR-MONO-041 D2: runtime FROM the shared monorepo/java-service-base:v1 image
+# (alpine jre + curl + tini + non-root app user + WORKDIR /app).
+FROM monorepo/java-service-base:v1
 
 # ADR-MONO-041 D1: copy layers low->high change frequency (deps first, app last).
 COPY --from=build --chown=app:app /workspace/dependencies/ ./
