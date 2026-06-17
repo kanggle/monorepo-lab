@@ -8,7 +8,7 @@ fan-platform-web OIDC 프런트 동작 파리티 정렬 — F3 silent refresh (c
 
 # Status
 
-ready
+done
 
 # Owner
 
