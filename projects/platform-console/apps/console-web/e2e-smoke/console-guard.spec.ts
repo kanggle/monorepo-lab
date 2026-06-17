@@ -10,20 +10,23 @@ import { test, expect } from '@playwright/test';
  * cookie 두개를 둘 다 요구 — 미인증 BrowserContext 는 즉시 false. backend
  * 호출 0.
  *
- * NOTE — 현재 layout 의 `redirect('/login')` 는 query 보존 (NextAuth-style
- * `from=<original>`) 안 함. 향후 UX 개선 시 query 보존 추가되면 본 spec 도
- * `from` 검증 추가.
+ * NOTE — layout 가드는 이제 의도한 목적지를 보존한다 (TASK-PC-FE-115,
+ * consumer-integration-guide § Phase 4.5 F6): `/login?redirect=<원래경로>`.
+ * `redirect` 파라미터는 `/api/auth/login` 이 OAuth state 쿠키로 왕복시켜
+ * 로그인 후 원래 경로로 복귀시킨다.
  */
 test.describe('(console) guard (backend 미기동)', () => {
-  test('미인증 /operators → /login', async ({ page }) => {
+  test('미인증 /operators → /login (목적지 보존)', async ({ page }) => {
     await page.goto('/operators');
-    await page.waitForURL('**/login', { timeout: 10_000 });
+    await page.waitForURL(/\/login\?redirect=/, { timeout: 10_000 });
+    expect(page.url()).toContain('redirect=%2Foperators');
     await expect(page.getByRole('heading', { name: 'Platform Console' })).toBeVisible();
   });
 
-  test('미인증 /dashboards/overview → /login', async ({ page }) => {
+  test('미인증 /dashboards/overview → /login (목적지 보존)', async ({ page }) => {
     await page.goto('/dashboards/overview');
-    await page.waitForURL('**/login', { timeout: 10_000 });
+    await page.waitForURL(/\/login\?redirect=/, { timeout: 10_000 });
+    expect(page.url()).toContain('redirect=%2Fdashboards%2Foverview');
     await expect(page.getByRole('heading', { name: 'Platform Console' })).toBeVisible();
   });
 });
