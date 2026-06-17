@@ -6,7 +6,7 @@
 
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 for the mechanical per-service D1/D3 sweep (template application, behavior-preserving); **Opus 4.8** for the D2 base-image design (the gated architecture decision)
 
-> Implements **ADR-MONO-041**. D1 (layered-jar) + D3 (context narrowing) are behavior-preserving and may land per-project. **D2 (shared base image) is gated on a separate user-explicit ACCEPT of ADR-MONO-041** before implementation — self-ACCEPT prohibited. Pilot (account-service) already validated and measured (818→638 MB; application layer 1.68 MB vs dependencies 94.9 MB).
+> Implements **ADR-MONO-041 (ACCEPTED 2026-06-17, full ADR incl. D2)**. D1 (layered-jar) + D3 (context narrowing) are behavior-preserving and land per-project first. **D2 (shared base image)** lands last per the rollout (after D1 is repo-wide); its ACCEPT gate was discharged by the ADR ACCEPT — not separately re-gated. Pilot (account-service) already validated and measured (818→638 MB; application layer 1.68 MB vs dependencies 94.9 MB).
 
 ---
 

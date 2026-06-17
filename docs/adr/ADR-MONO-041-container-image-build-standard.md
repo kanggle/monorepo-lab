@@ -1,8 +1,10 @@
 # ADR-MONO-041 — Container image build standard: layered-jar extraction, a shared Java-service base image, and per-service build-context narrowing
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
 **Date:** 2026-06-17
+
+**Accepted:** 2026-06-17 — user-explicit *"ACCEPT"* of the full ADR (including D2) after the PROPOSED D1–D4 + rollout were presented for the ACCEPT gate; the gate was honored (PROPOSED record presented, review awaited, **NOT a self-ACCEPT**). D1/D2/D3 **finalised byte-unchanged** — ACCEPTED *finalises*, does not re-decide. The ACCEPT covers D2's *direction*; per the §2.D4 rollout, D2 (shared base image) still **lands last** (after D1 is repo-wide), but is **not separately re-gated** — this ACCEPT discharged that gate. Implementation = TASK-MONO-294 (D1+D3 swept per-project first, iam-platform leading).
 
 **Decision driver:** The monorepo's 41 Java-service Dockerfiles each rebuild the **entire** application image layer on every code change (single fat-jar `COPY`), repeat the same runtime preparation (JRE + `curl` + non-root user) as a per-service layer, and — for the iam-family `.dockerignore` (`**/build` + `!apps/*/build/libs`) — drag **all** sibling services' jars into every build context (~220 MB). The result is slow incremental rebuilds and oversized images, which compounds on this Windows host where the Rancher/WSL2 vhdx never shrinks (project memory `env_rancher_desktop_vhdx_no_shrink`). A pilot on `iam-platform/account-service` (2026-06-17) proved the fix: Spring Boot layered-jar extraction drops the rebuilt-on-code-change bytes from the full image to a **1.68 MB** application layer (vs a cached **94.9 MB** dependencies layer — a ~50× reduction in volatile bytes) and shrinks the image **818 MB → 638 MB (−22%)**, behavior-preserving.
 
@@ -54,7 +56,7 @@ This divergence means a security-relevant change (JRE CVE bump, non-root hardeni
 
 ## 2. Decision
 
-> **PROPOSED record only.** D2 (shared base image) is a genuine architecture decision (HARDSTOP-09 class) and is **gated on a separate user-explicit ACCEPT** before any implementation; self-ACCEPT prohibited (staged-child pattern — ADR-019/020/021/023/024/032/034/035/036/037/038/039/040). D1 + D3 are behavior-preserving and may land per-project ahead of D2.
+> **ACCEPTED 2026-06-17** (user-explicit, full ADR incl. D2). D2 (shared base image) is a genuine architecture decision (HARDSTOP-09 class); its ACCEPT gate was honored and **discharged by this ACCEPT** (self-ACCEPT prohibited; staged-child pattern — ADR-019/020/021/023/024/032/034/035/036/037/038/039/040). D1 + D3 are behavior-preserving and land per-project first; D2 lands last per the §D4 rollout (staged, not separately re-gated).
 
 - **D1 — Layered-jar extraction is the standard for every Spring Boot service image (behavior-preserving).**
   Each Java-service Dockerfile replaces the single fat-jar `COPY` with: in the build stage, `java -Djarmode=layertools -jar app.jar extract`; in the runtime stage, four ordered `COPY --from=build` of `dependencies/` → `spring-boot-loader/` → `snapshot-dependencies/` → `application/` (low→high change frequency); and an entrypoint that launches `org.springframework.boot.loader.launch.JarLauncher` instead of `-jar app.jar`. All other lines (DNS-wait `getent` gate, `HEALTHCHECK`, `USER app`, `EXPOSE`, `JAVA_OPTS`) are preserved verbatim. This is a pure build-layout optimization — no runtime behavior changes.
@@ -101,6 +103,7 @@ This divergence means a security-relevant change (JRE CVE bump, non-root hardeni
 | Date | Status | Note |
 |---|---|---|
 | 2026-06-17 | PROPOSED | D1/D3 behavior-preserving; D2 (shared base image) awaits user-explicit ACCEPT before implementation. Pilot (account-service) measured and validated; pilot artifacts removed (running stack untouched). |
+| 2026-06-17 | ACCEPTED | User-explicit ACCEPT of the full ADR (incl. D2 direction). D1/D2/D3 byte-unchanged. Implementation = TASK-MONO-294; D1+D3 swept per-project (iam-platform first), D2 base image lands last per the §D4 rollout. |
 
 ## 7. Provenance
 
