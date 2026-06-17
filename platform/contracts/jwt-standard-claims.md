@@ -51,7 +51,8 @@ All access tokens issued by the identity-platform service MUST include the follo
 
 | Claim | Type | Required | Description | Example |
 |---|---|---|---|---|
-| `sub` | UUID string | Yes | Account ID (globally unique, immutable across all platforms) | `550e8400-e29b-41d4-a716-446655440000` |
+| `sub` | UUID string | Yes | Account ID (globally unique, immutable across all platforms). **Known deviation (ADR-MONO-040):** the live SAS OIDC path currently emits the login **email** here, not the UUID; Phase 2 restores `sub` = account UUID. Until then, consumer-facing services read the account UUID from `account_id` (below). | `550e8400-e29b-41d4-a716-446655440000` |
+| `account_id` | UUID string | Conditional | **ADR-MONO-040 Phase 1** transitional claim: the account UUID, emitted additively on SAS access tokens while `sub` carries the email. Consumer-facing services derive `X-User-Id` from this claim (fallback `sub`). Retired in Phase 2 when `sub` itself is the account UUID. | `550e8400-e29b-41d4-a716-446655440000` |
 | `aud` | string | Yes | Target platform audience — must match gateway's own platform | `ecommerce`, `fan`, `wms`, `erp`, `mes`, `scm` |
 | `roles` | string[] | Yes | Platform-scoped roles for the `aud` platform — **the sole authorization axis** (may span consumer-facing and operator-facing roles; may be empty, minimum `[]`) | `["CUSTOMER"]`, `["CUSTOMER","ADMIN"]`, `["WMS_OPERATOR","OUTBOUND_MANAGER"]` |
 | `email` | string | Yes | Account email address | `user@example.com` |
@@ -132,7 +133,7 @@ Every platform gateway MUST implement the following validation and injection log
 ## Post-Validation Injection
 
 7. **Inject standard headers** into the request context for downstream services:
-   - `X-User-Id` ← `sub`
+   - `X-User-Id` ← `account_id` claim when present, else `sub` (**ADR-MONO-040 Phase 1**: the SAS `sub` is currently the login email, so the account UUID is sourced from `account_id`; Phase 2 makes `sub` the UUID and restores `X-User-Id` ← `sub`)
    - `X-User-Role` ← comma-separated `roles` array (e.g., `WMS_OPERATOR,OUTBOUND_MANAGER`)
    - `X-User-Email` ← `email`
    - `X-Account-Type` is **no longer injected** (the claim is deprecated). Downstream services that need a consumer-vs-operator distinction derive it from `X-User-Role` (the presence of a consumer-facing vs operator-facing role).

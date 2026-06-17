@@ -226,6 +226,15 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         Authentication principal = context.getPrincipal();
         String clientId = context.getRegisteredClient().getClientId();
 
+        // ADR-MONO-040 D2 (Phase 1): emit the account UUID as an additive
+        // `account_id` claim. The SAS access-token `sub` is the login principal
+        // (email) — it does NOT satisfy jwt-standard-claims.md (`sub` = account
+        // UUID), so consumer-facing services derive their user key (X-User-Id)
+        // from this claim instead of `sub`. Additive + `sub`-untouched, so
+        // operator assume-tenant (which keys on `sub`=email) is unaffected.
+        // Phase 2 will make `sub` itself the account UUID and retire this claim.
+        emitAccountIdClaim(context, principal);
+
         String tenantId = extractTenantAttribute(principal, "tenant_id");
         String tenantType = extractTenantAttribute(principal, "tenant_type");
 
@@ -272,6 +281,21 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                                 "neither principal attributes nor client metadata contain tenant context. " +
                                 "clientId=" + clientId);
             }
+        }
+    }
+
+    /**
+     * ADR-MONO-040 D2 (Phase 1): emit the principal's {@code account_id} (the
+     * account UUID) as an additive access/id-token claim, when present. The value
+     * already rides on the principal {@code details} map (set by
+     * CredentialAuthenticationProvider / carried through refresh + assume-tenant).
+     * Additive and {@code sub}-untouched — no existing consumer breaks, and the
+     * operator assume-tenant {@code sub}=email dependency is unaffected.
+     */
+    private void emitAccountIdClaim(JwtEncodingContext context, Authentication principal) {
+        String accountId = extractTenantAttribute(principal, "account_id");
+        if (accountId != null && !accountId.isBlank()) {
+            context.getClaims().claim("account_id", accountId);
         }
     }
 
