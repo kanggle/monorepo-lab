@@ -1,8 +1,10 @@
 # ADR-MONO-040 — Align the SAS OIDC access-token `sub` to the platform `jwt-standard-claims` contract (`sub` = account UUID), and unblock ecommerce consumer authed writes
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
 **Date:** 2026-06-17
+
+**Accepted:** 2026-06-17 (TASK-MONO-291 — user-explicit *"accept"* after the PROPOSED D1–D4 were presented for the required ACCEPT gate; the gate was honored — the PROPOSED record was presented and review awaited before any flip, **NOT a self-ACCEPT**. D1–D4 **finalised byte-unchanged** — ACCEPTED *finalises*, does not re-decide; § 1 Context + § 2 Decision + § 3 Consequences + § 4 Alternatives + § 5 Verification + § 7 Provenance byte-identical to the PROPOSED draft; flip = Status + this clause + § 6 ACCEPTED row. Implementation is the gated child Phase 1 task — Phase 2 stays separately gated.)
 
 **Decision driver:** `platform/contracts/jwt-standard-claims.md` mandates `sub` = **Account ID (UUID), immutable** and `X-User-Id ← sub`. But the live SAS OIDC path (`CredentialAuthenticationProvider`) emits `sub` = the **login email** (the Spring Security principal), and `TenantClaimTokenCustomizer` never overrides it. So every email/password-authenticated token **violates the contract**, and since ecommerce consumer auth IS the SAS/GAP OIDC path (ecommerce `auth-service` decommissioned, TASK-MONO-027 / TASK-BE-132), **every ecommerce consumer browser-origin authed write 400s** at the user-service's contract-compliant `@RequestHeader("X-User-Id") UUID userId` binding (`{"code":"VALIDATION_ERROR","message":"Invalid value for parameter: X-User-Id"}`). This is a **latent production defect**, not a demo-stack fixture issue — it was masked until the consumer authed-write path was first exercised E2E (TASK-FE-074 real-GAP login → TASK-BE-394 CORS-preflight unblock → TASK-MONO-291 AC-0).
 
@@ -77,6 +79,7 @@ The SAS migration (ADR-032 / MONO-027) made SAS the live path but left its `sub`
 | Date | Status | Task | Note |
 |---|---|---|---|
 | 2026-06-17 | PROPOSED | TASK-MONO-291 | D1–D4 recorded; CHOSEN-PROPOSED = contract-compliant fix at the producer, phased (P1 additive `account_id` claim + gateway derive; P2 `sub`=account_id + operator migration). Awaiting explicit ACCEPT gate (self-ACCEPT prohibited). |
+| 2026-06-17 | ACCEPTED | TASK-MONO-291 | User-explicit *"accept"*. D1–D4 finalised byte-unchanged (no re-decide); flip = Status + Accepted clause + this row. Phase 1 implementation child gated-open; Phase 2 stays separately gated. |
 
 ## 7. Provenance
 
