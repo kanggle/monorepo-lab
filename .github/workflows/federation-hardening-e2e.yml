@@ -220,6 +220,13 @@ jobs:
         working-directory: projects/platform-console/apps/console-web
         run: pnpm build
 
+      # ADR-MONO-041 D2: the iam service images now `FROM
+      # monorepo/java-service-base:v1`. There is no image registry, so the
+      # shared base must be built locally before any `docker compose ... --build`
+      # that builds an iam image, else the compose build fails to resolve it.
+      - name: Build shared java-service-base image (ADR-MONO-041 D2)
+        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
+
       # --- Phase 1: Start IAM core stack ---
       - name: Start docker compose Phase 1 (mysql + redis + kafka + victoriatraces + IAM services)
         working-directory: tests/federation-hardening-e2e/docker
