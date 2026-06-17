@@ -214,7 +214,12 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
                 .encodeToString(sha256.digest(verifier.getBytes(StandardCharsets.US_ASCII)));
 
         // 1. Unauthenticated /oauth2/authorize → 302 to /login (request saved in session).
+        // Accept: text/html mimics a browser — the SAS LoginUrlAuthenticationEntryPoint
+        // redirect is scoped to text/html requests (AuthorizationServerConfig
+        // buildHtmlOnlyRequestMatcher, TASK-MONO-046-1); without it the unauth
+        // /oauth2/authorize returns 401 (API-client semantics) instead of redirecting.
         MvcResult authorizeRedirect = mockMvc.perform(get("/oauth2/authorize")
+                        .accept(MediaType.TEXT_HTML)
                         .queryParam("response_type", "code")
                         .queryParam("client_id", CLIENT_ID)
                         .queryParam("redirect_uri", REDIRECT_URI)
