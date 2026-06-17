@@ -809,6 +809,12 @@ jobs:
         working-directory: projects/platform-console/apps/console-web
         run: pnpm build
 
+      # ADR-MONO-041 D2: iam (auth/account/admin), finance-account, and console-bff
+      # images `FROM monorepo/java-service-base:v1`. No image registry → build the
+      # shared base before `compose up --build` (both phases) tries to resolve it.
+      - name: Build shared java-service-base image (ADR-MONO-041 D2)
+        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
+
       - name: Start docker compose stack (5 services + MySQL + Redis)
         working-directory: projects/platform-console
         run: |
