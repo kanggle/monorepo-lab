@@ -10,7 +10,17 @@ const ERROR_MESSAGES: Record<string, string> = {
   state_mismatch: '보안 검증에 실패했습니다. 다시 로그인해주세요.',
   token_exchange_failed:
     '인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.',
+  // Gap C (F5): operator-provisioning and transient server-side error codes
+  // emitted by callback/route.ts — previously unmapped → silent failure.
+  not_provisioned:
+    '운영자 권한이 없는 계정입니다. 관리자에게 권한 부여를 요청하세요.',
+  operator_exchange_unavailable:
+    '인증 서버 일시 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
 };
+
+/** Generic fallback message shown for any unrecognised error code. */
+const GENERIC_ERROR =
+  '로그인 중 오류가 발생했습니다. 다시 시도해주세요.';
 
 /**
  * Login entry (IAM OIDC Auth Code + PKCE). Server component — no client JS,
@@ -28,7 +38,10 @@ export default async function LoginPage({
   if (await isAuthenticated()) redirect('/console');
 
   const sp = await searchParams;
-  const error = sp.error ? ERROR_MESSAGES[sp.error] : null;
+  // Gap C (F5): unknown codes must never render silent (null → visible fallback).
+  const error = sp.error
+    ? (ERROR_MESSAGES[sp.error] ?? GENERIC_ERROR)
+    : null;
   const next = sp.redirect && sp.redirect.startsWith('/') ? sp.redirect : '/';
   const loginHref = `/api/auth/login?redirect=${encodeURIComponent(next)}`;
 
