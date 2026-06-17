@@ -1,5 +1,6 @@
 import NextAuth, { type NextAuthConfig } from 'next-auth';
 import { env } from '@/shared/config/env';
+import { jwtCallback, sessionCallback } from '@/shared/auth/auth-callbacks';
 
 /**
  * next-auth v5 (auth.js) configuration — GAP OIDC + PKCE.
@@ -15,6 +16,9 @@ import { env } from '@/shared/config/env';
  *   API calls (community-api / artist-api will assert `tenant_id=fan-platform`
  *   server-side regardless).
  * - `authorization_code` + PKCE is forced (`checks: ['pkce', 'state']`).
+ * - Phase 4.5 F3: the `jwt` callback performs proactive silent refresh via
+ *   `auth-callbacks.ts`; on failure the session degrades to anonymous and
+ *   middleware bounces the user to `/login?from=…` (F6 preserved).
  *
  * See:
  *   - projects/iam-platform/specs/features/consumer-integration-guide.md
@@ -76,43 +80,20 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     /**
      * Persist access_token + refresh_token + tenant_id onto the JWT session
-     * cookie. The JWT itself is HttpOnly so client JS never sees the tokens.
+     * cookie and perform proactive silent refresh (Phase 4.5 F3).
+     * The JWT itself is HttpOnly so client JS never sees the tokens.
+     * Logic is extracted to `auth-callbacks.ts` for unit-testability.
      */
-    async jwt({ token, account, profile, user }) {
-      if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at;
-        // Keep the id_token server-side as the RP-initiated-logout id_token_hint
-        // (GAP end_session). Never surfaced to the public session.
-        token.idToken = account.id_token;
-      }
-      if (profile) {
-        const p = profile as IamOidcProfile;
-        token.tenantId = p.tenant_id ?? token.tenantId;
-        token.accountId = p.account_id ?? token.accountId;
-        token.roles = p.roles ?? token.roles;
-      }
-      if (user && 'accountId' in user) {
-        const u = user as { accountId?: string; tenantId?: string | null; roles?: string[] };
-        token.accountId = u.accountId ?? token.accountId;
-        token.tenantId = u.tenantId ?? token.tenantId;
-        token.roles = u.roles ?? token.roles;
-      }
-      return token;
-    },
+    jwt: jwtCallback,
     /**
      * Expose tenant_id / account_id / roles to RSC pages and server actions.
      * `accessToken` deliberately stays only on the JWT (server-side) — a
      * dedicated `getAccessToken()` helper reads it via `auth()` so that no
-     * client component ever receives the bearer token.
+     * client component ever receives the bearer token (F2).
+     * Degrades to anonymous when a silent refresh has failed (F3 fallback).
      */
-    async session({ session, token }) {
-      session.tenantId = (token.tenantId as string | null | undefined) ?? null;
-      session.accountId = (token.accountId as string | null | undefined) ?? null;
-      session.roles = (token.roles as string[] | undefined) ?? [];
-      return session;
-    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    session: sessionCallback as any,
     authorized({ auth, request }) {
       const { pathname } = request.nextUrl;
       const isProtected =
