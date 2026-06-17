@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import {
   isAuthenticated,
   getActiveTenant,
@@ -33,6 +34,29 @@ function accountDisplayLabel(idToken: string | null, accessToken: string | null)
 export const dynamic = 'force-dynamic';
 
 /**
+ * Builds the login redirect URL, preserving the intended destination via
+ * `?redirect=<path>` (Gap D / F6 — TASK-PC-FE-115).
+ *
+ * Reads the current path from the `x-pathname` header injected by
+ * middleware.ts. Sanitises to a same-site relative path before encoding:
+ *   - Must start with a single `/` (rejects absolute URLs and `//…`)
+ *   - Must not be `/login` (avoid a meaningless self-redirect param)
+ *   - Must not be an `/api/…` non-page path (not a valid return destination)
+ */
+async function buildLoginRedirect(): Promise<string> {
+  const hdrs = await headers();
+  const raw = hdrs.get('x-pathname');
+  const isSameSite =
+    raw !== null &&
+    raw.startsWith('/') &&
+    !raw.startsWith('//') &&
+    !raw.startsWith('/login') &&
+    !raw.startsWith('/api/');
+  if (!isSameSite) return '/login';
+  return `/login?redirect=${encodeURIComponent(raw)}`;
+}
+
+/**
  * Authenticated console shell layout (Vercel-style — TASK-PC-FE-039).
  *
  * Layout: a full-width sticky top bar holds only the brand + the **tenant
@@ -57,7 +81,7 @@ export default async function ConsoleLayout({
 }: {
   children: ReactNode;
 }) {
-  if (!(await isAuthenticated())) redirect('/login');
+  if (!(await isAuthenticated())) redirect(await buildLoginRedirect());
 
   const activeTenant = await getActiveTenant();
   const accountLabel = accountDisplayLabel(
@@ -69,7 +93,8 @@ export default async function ConsoleLayout({
     const catalog = await getCatalog();
     tenants = selectableTenants(catalog.products);
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) redirect('/login');
+    if (err instanceof ApiError && err.status === 401)
+      redirect(await buildLoginRedirect());
     tenants = []; // degraded — switcher hidden, shell still usable
   }
 
