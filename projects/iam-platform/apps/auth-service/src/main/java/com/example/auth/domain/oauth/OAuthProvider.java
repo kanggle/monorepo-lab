@@ -6,7 +6,8 @@ package com.example.auth.domain.oauth;
 public enum OAuthProvider {
     GOOGLE,
     KAKAO,
-    MICROSOFT;
+    MICROSOFT,
+    NAVER;
 
     /**
      * Parses a provider string (case-insensitive) into an OAuthProvider.

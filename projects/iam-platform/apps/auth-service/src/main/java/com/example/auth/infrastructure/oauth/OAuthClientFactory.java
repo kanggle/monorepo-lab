@@ -16,6 +16,7 @@ public class OAuthClientFactory implements OAuthClientProvider {
     private final GoogleOAuthClient googleOAuthClient;
     private final KakaoOAuthClient kakaoOAuthClient;
     private final MicrosoftOAuthClient microsoftOAuthClient;
+    private final NaverOAuthClient naverOAuthClient;
 
     @Override
     public OAuthClient getClient(OAuthProvider provider) {
@@ -23,6 +24,7 @@ public class OAuthClientFactory implements OAuthClientProvider {
             case GOOGLE -> googleOAuthClient;
             case KAKAO -> kakaoOAuthClient;
             case MICROSOFT -> microsoftOAuthClient;
+            case NAVER -> naverOAuthClient;
         };
     }
 }
