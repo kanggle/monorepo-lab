@@ -1,45 +1,60 @@
 import { ApiClient } from '@repo/api-client';
-import { getAccessToken, clearAccessToken } from '@/shared/auth/token-bridge';
 
 /**
- * web-store axios client. Token injection is wired through the NextAuth
- * session bridge (`shared/auth/token-bridge.ts`) which is updated by
- * `AuthProvider` whenever `useSession()` resolves.
+ * web-store axios client.
  *
- * Refresh path:
- *   - GAP issues short-lived access tokens with refresh tokens. NextAuth's
- *     JWT cookie holds the refresh token but does NOT auto-refresh — when
- *     the access token expires, the next API call returns 401, the
- *     interceptor calls `onAuthError`, and we redirect to `/login` so
- *     NextAuth re-runs the OIDC flow (which re-issues both tokens).
- *   - We deliberately do NOT call the legacy `/api/auth/refresh` endpoint;
- *     `getRefreshToken: () => null` short-circuits the interceptor's refresh
- *     attempt, so 401 → onAuthError → /login.
+ * Phase 4.5 F2 (token confidentiality) — the client NEVER holds the OIDC
+ * access token:
+ *
+ *   - Client context (`window` defined): `baseURL` is the SAME-ORIGIN BFF proxy
+ *     (`/api/bff`). The proxy route handler reads the access token from the
+ *     encrypted server-side NextAuth JWT and attaches `Authorization: Bearer`
+ *     SERVER-SIDE before forwarding to the backend gateway. `getAccessToken`
+ *     returns null on the client — no token ever reaches browser JS.
+ *
+ *   - Server context (RSC / Server Actions): `baseURL` is the backend gateway
+ *     (internal URL). Those callers attach the bearer via the server-only
+ *     `getWebStoreSession()` helper for direct fetches; the shared axios client
+ *     carries no token on the server either (the bridge is gone).
+ *
+ * Phase 4.5 F3 (silent refresh) — refresh is performed in the NextAuth `jwt`
+ * callback (server-side, rotation-aware). The BFF proxy reads the freshest
+ * token per request, so a still-valid refresh transparently re-issues. When the
+ * backend returns 401 (token rejected / refresh already failed), the BFF
+ * responds `401 X-Reauth: 1`; the interceptor below has no client refresh token
+ * (`getRefreshToken: () => null`) so it short-circuits to `onAuthError`, which
+ * redirects to a full re-auth (F1) preserving the return-to.
  */
 
 const isServer = typeof window === 'undefined';
+
+const SAME_ORIGIN_BFF = '/api/bff';
+
 const baseURL = isServer
   ? process.env.API_URL_INTERNAL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
-  : process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+  : SAME_ORIGIN_BFF;
 
 export const apiClient = new ApiClient({
   baseURL,
-  // Read the GAP-issued access token from the NextAuth session bridge.
-  // Returns null on the server (the bridge is client-only), which is correct:
-  // server-side fetches should use `getWebStoreSession()` directly.
-  getAccessToken: () => getAccessToken(),
-  // No legacy refresh path with GAP — see file header.
+  // Client: tokens are server-only (F2) — the BFF proxy attaches the bearer.
+  // Server: direct fetches use `getWebStoreSession()`; the shared client adds
+  // no token here.
+  getAccessToken: () => null,
+  // No client-side refresh token (F2/F3): refresh happens server-side in the
+  // NextAuth jwt callback. A 401 short-circuits straight to onAuthError.
   getRefreshToken: () => null,
   onAuthError: () => {
     if (typeof window === 'undefined') return;
-    clearAccessToken();
     try {
       localStorage.removeItem('cart');
     } catch {
       // localStorage 접근 실패(프라이빗 모드 등) 시 무시
     }
-    // Trigger NextAuth re-auth via the GAP provider. We don't await — this
-    // is fire-and-forget; the page will navigate.
-    window.location.href = '/api/auth/signin/gap';
+    // Full re-auth via the IAM provider (F1), preserving the intended
+    // destination as `?from=` so login bounces back (F6).
+    const from = encodeURIComponent(
+      window.location.pathname + window.location.search,
+    );
+    window.location.href = `/login?from=${from}`;
   },
 });

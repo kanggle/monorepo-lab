@@ -1,9 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { SessionProvider, useSession, signIn, signOut } from 'next-auth/react';
 import { AuthContext, type AuthUser } from '@/shared/lib/auth-context';
-import { setAccessToken, clearAccessToken } from '@/shared/auth/token-bridge';
 
 export { useAuth } from '@/shared/lib/auth-context';
 
@@ -12,11 +11,12 @@ export { useAuth } from '@/shared/lib/auth-context';
  * legacy `useAuth()` interface used across web-store (Header, CartProvider,
  * WishlistButton, etc.).
  *
- * Two responsibilities:
- *   1. Map `useSession()` onto `{ user, isAuthenticated, isLoading }`
- *   2. Push the GAP-issued access token into the synchronous token bridge
- *      so the existing axios client can attach `Authorization: Bearer ...`
- *      without becoming async-aware.
+ * Responsibility: map `useSession()` onto `{ user, isAuthenticated, isLoading }`.
+ *
+ * Phase 4.5 F2 (token confidentiality): the client-side access-token bridge has
+ * been REMOVED. The session object no longer carries `accessToken`, and the
+ * axios client attaches no bearer on the client — protected calls go through
+ * the same-origin `/api/bff` proxy which attaches the bearer server-side.
  */
 function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -33,21 +33,11 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated, session]);
 
-  // Sync access token into the api-client bridge whenever the session changes.
-  useEffect(() => {
-    if (isAuthenticated && session?.accessToken) {
-      setAccessToken(session.accessToken);
-    } else if (status === 'unauthenticated') {
-      clearAccessToken();
-    }
-  }, [isAuthenticated, session, status]);
-
   const login = useCallback((callbackUrl?: string) => {
     return signIn('iam', { callbackUrl: callbackUrl ?? '/' });
   }, []);
 
   const logout = useCallback(async () => {
-    clearAccessToken();
     try {
       localStorage.removeItem('cart');
     } catch {

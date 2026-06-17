@@ -1,4 +1,16 @@
 import NextAuth, { type NextAuthConfig } from 'next-auth';
+import {
+  type IamOidcProfile,
+  OIDC_ISSUER_URL,
+  WEB_STORE_CLIENT_ID,
+  WEB_STORE_CLIENT_SECRET,
+  jwtCallback,
+  sessionCallback,
+  signInCallback,
+} from '@/shared/auth/auth-callbacks';
+
+// Re-export the silent-refresh helper so existing import sites keep working.
+export { refreshAccessToken } from '@/shared/auth/auth-callbacks';
 
 /**
  * NextAuth v5 (auth.js) configuration — GAP OIDC + PKCE for web-store (consumer).
@@ -18,42 +30,36 @@ import NextAuth, { type NextAuthConfig } from 'next-auth';
  * ADR-MONO-032 D5 step 4, so consumer-vs-operator is decided by role presence
  * (`CUSTOMER`), not the deprecated `account_type` partition.
  *
- * Token storage: HttpOnly JWT cookie. The bearer token is exposed only via the
- * server-side `getSession()` helper in `./session.ts`. Client components
- * receive `tenantId` / `accountId` / `roles` only.
+ * Token storage: HttpOnly JWT cookie. The access / refresh / id tokens live
+ * ONLY on the encrypted server-side NextAuth JWT and are NEVER serialized onto
+ * the public session (read by the client via `/api/auth/session`). The bearer
+ * is attached to downstream calls only through the server-only
+ * `getWebStoreSession()` helper (`./session.ts`, RSC / server actions) and the
+ * same-origin BFF proxy (`/api/bff/[...path]`, client components). Client
+ * components receive `tenantId` / `accountId` / `roles` / display `email`·`name`
+ * only — consumer-integration-guide § Phase 4.5 F2 (token confidentiality).
+ *
+ * Silent refresh (Phase 4.5 F3): the OIDC access token is short-lived (30m).
+ * When it is at/near expiry the `jwt` callback exchanges the stored
+ * `refresh_token` at `${OIDC_ISSUER_URL}/oauth2/token`
+ * (grant_type=refresh_token, client_secret_basic) and stores the rotated pair
+ * (IAM `reuse-refresh-tokens=false`). On refresh failure the JWT is flagged
+ * `error: 'RefreshAccessTokenError'` so the next protected request forces a
+ * full re-auth redirect (F1).
+ *
+ * The pure callback logic + the refresh helper live in `./auth-callbacks.ts`
+ * (no `next-auth` import) so they are unit-testable without the `NextAuth()`
+ * factory (which transitively imports `next/server`).
  *
  * Lazy provider config (NextAuth v5 default): the OIDC discovery doc is fetched
  * on first sign-in attempt, so dev boot / lint / unit-test do not require GAP
  * to be running.
  *
  * See:
- *   - projects/iam-platform/specs/features/consumer-integration-guide.md § Phase 4 (PKCE)
+ *   - projects/iam-platform/specs/features/consumer-integration-guide.md § Phase 4.5 (F2/F3/F5)
  *   - projects/ecommerce-microservices-platform/specs/integration/iam-integration.md (TASK-MONO-027)
  *   - projects/fan-platform/web/fan-platform-web/src/shared/auth/auth.ts (reference pattern)
  */
-
-interface IamOidcProfile {
-  sub: string;
-  email?: string;
-  name?: string;
-  preferred_username?: string;
-  tenant_id?: string;
-  account_id?: string;
-  roles?: string[];
-}
-
-/**
- * ADR-MONO-035 (4b-1): the storefront requires the `CUSTOMER` role. Consumers
- * carry it (RoleSeedPolicy `ecommerce → CUSTOMER`, or a stored `account_roles`
- * grant); operators carry `ADMIN` / no `CUSTOMER`. Role-based replaces the
- * legacy `account_type === 'CONSUMER'` check (ADR-MONO-032 D5 step 4 removes
- * `account_type`).
- */
-const REQUIRED_CONSUMER_ROLE = 'CUSTOMER';
-
-function hasConsumerRole(roles: string[] | undefined | null): boolean {
-  return Array.isArray(roles) && roles.includes(REQUIRED_CONSUMER_ROLE);
-}
 
 export const authConfig: NextAuthConfig = {
   // Self-hosted (no Vercel) — honor `AUTH_TRUST_HOST=true` for non-Vercel
@@ -70,9 +76,9 @@ export const authConfig: NextAuthConfig = {
       id: 'iam',
       name: 'IAM',
       type: 'oidc',
-      issuer: process.env.OIDC_ISSUER_URL ?? 'http://iam.local',
-      clientId: process.env.ECOMMERCE_WEB_STORE_CLIENT_ID ?? 'ecommerce-web-store-client',
-      clientSecret: process.env.ECOMMERCE_WEB_STORE_CLIENT_SECRET ?? '',
+      issuer: OIDC_ISSUER_URL,
+      clientId: WEB_STORE_CLIENT_ID,
+      clientSecret: WEB_STORE_CLIENT_SECRET,
       authorization: {
         params: {
           scope: 'openid profile email tenant.read ecommerce.consumer',
@@ -96,77 +102,20 @@ export const authConfig: NextAuthConfig = {
     /**
      * Cross-app role guard (ADR-MONO-035 4b-1). Reject the sign-in *before* a
      * valid JWT is issued (so NextAuth redirects through the configured
-     * `pages.error` URL) unless the GAP token carries the `CUSTOMER` role. An
-     * operator's ecommerce token carries `ADMIN` / no `CUSTOMER` → rejected.
-     * session() also keeps a defense-in-depth degraded-session branch for stale
-     * cookies. (Role-based: the `account_type` claim is removed in ADR-032 D5
-     * step 4 — gating on its absence would no-op and admit operators.)
+     * `pages.error` URL) unless the GAP token carries the `CUSTOMER` role.
      */
     async signIn({ profile }) {
-      const p = profile as IamOidcProfile | undefined;
-      if (!hasConsumerRole(p?.roles)) {
-        return '/login?error=account_type_mismatch';
-      }
-      return true;
+      return signInCallback(profile as IamOidcProfile | undefined);
     },
     async jwt({ token, account, profile, user }) {
-      if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at;
-        // Keep the id_token server-side as the RP-initiated-logout id_token_hint
-        // (GAP end_session). Never surfaced to the public session.
-        token.idToken = account.id_token;
-      }
-      if (profile) {
-        const p = profile as IamOidcProfile;
-        token.tenantId = p.tenant_id ?? token.tenantId;
-        token.accountId = p.account_id ?? token.accountId;
-        token.roles = p.roles ?? token.roles;
-      }
-      if (user && 'accountId' in user) {
-        const u = user as {
-          accountId?: string;
-          tenantId?: string | null;
-          roles?: string[];
-        };
-        token.accountId = u.accountId ?? token.accountId;
-        token.tenantId = u.tenantId ?? token.tenantId;
-        token.roles = u.roles ?? token.roles;
-      }
-      return token;
+      return jwtCallback({ token, account, profile, user });
     },
     /**
-     * Expose tenant_id / account_id / roles to RSC pages and
-     * server actions. `accessToken` deliberately stays only on the JWT —
-     * server-only helpers (see `./session.ts`) read it via `auth()` so client
-     * components never receive the bearer token.
-     *
-     * If the token's `roles` do not include `CUSTOMER`, return a degraded
-     * (anonymous) session so NextAuth treats it as unauthenticated. Combined
-     * with the `/login` error page, the user sees the mismatch banner.
-     * (ADR-MONO-035 4b-1: role-based — replaces the `account_type !== CONSUMER`
-     * check, which would no-op once `account_type` is dropped.)
+     * Expose ONLY non-sensitive identity claims (Phase 4.5 F2). Degrades to
+     * anonymous on role-mismatch or refresh failure. See `sessionCallback`.
      */
     async session({ session, token }) {
-      if (!hasConsumerRole(token.roles as string[] | undefined)) {
-        // Surface as anonymous — middleware will redirect to /login.
-        // (Returning the augmented session anyway would let an operator
-        // browse the storefront with the backend rejecting every API call.)
-        return {
-          ...session,
-          user: undefined as unknown as typeof session.user,
-          accountId: null,
-          tenantId: null,
-          roles: [],
-          accessToken: undefined,
-        };
-      }
-      session.tenantId = (token.tenantId as string | null | undefined) ?? null;
-      session.accountId = (token.accountId as string | null | undefined) ?? null;
-      session.roles = (token.roles as string[] | undefined) ?? [];
-      session.accessToken = (token.accessToken as string | undefined) ?? undefined;
-      return session;
+      return sessionCallback({ session, token }) as unknown as typeof session;
     },
     authorized({ auth, request }) {
       const { pathname } = request.nextUrl;
@@ -176,11 +125,15 @@ export const authConfig: NextAuthConfig = {
         pathname.startsWith('/signup') ||
         pathname.startsWith('/products') ||
         pathname.startsWith('/api/auth') ||
+        // The same-origin BFF proxy enforces auth via the server-side session
+        // token and returns 401 (→ client re-auth, F1) when absent; it must not
+        // be middleware-bounced to /login (that would break XHR re-auth).
+        pathname.startsWith('/api/bff') ||
         pathname.startsWith('/_next') ||
         pathname.startsWith('/favicon');
       if (isPublic) return true;
-      // Block access if not authenticated OR account_type mismatch
-      // (session callback returns null user for non-CONSUMER).
+      // Block access if not authenticated OR role mismatch
+      // (session callback returns null accountId for non-CONSUMER).
       return Boolean(auth && auth.accountId);
     },
   },
