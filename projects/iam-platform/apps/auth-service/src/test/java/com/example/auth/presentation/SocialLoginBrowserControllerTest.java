@@ -49,7 +49,9 @@ class SocialLoginBrowserControllerTest {
     private SavedRequestTenantResolver savedRequestTenantResolver;
 
     private SocialLoginBrowserController controller() {
-        return new SocialLoginBrowserController(oAuthLoginUseCase, savedRequestTenantResolver);
+        // Issuer base URL → the browser callback is built from this (not the request host).
+        return new SocialLoginBrowserController(
+                oAuthLoginUseCase, savedRequestTenantResolver, "http://iam.local");
     }
 
     @AfterEach
@@ -72,15 +74,10 @@ class SocialLoginBrowserControllerTest {
         when(oAuthLoginUseCase.authorize(eq("google"), anyString()))
                 .thenReturn(new OAuthAuthorizeResult("https://accounts.google.com/auth?x=1", "st"));
 
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/login/oauth/google");
-        request.setScheme("http");
-        request.setServerName("iam.local");
-        request.setServerPort(80);
-
-        String view = controller().startSocialLogin("google", request);
+        String view = controller().startSocialLogin("google");
 
         assertThat(view).isEqualTo("redirect:https://accounts.google.com/auth?x=1");
-        // callback URI computed from the request base (default port omitted)
+        // callback URI built from the configured issuer base URL (http://iam.local)
         ArgumentCaptor<String> uri = ArgumentCaptor.forClass(String.class);
         verify(oAuthLoginUseCase).authorize(eq("google"), uri.capture());
         assertThat(uri.getValue()).isEqualTo("http://iam.local/login/oauth/google/callback");
@@ -92,12 +89,7 @@ class SocialLoginBrowserControllerTest {
         when(oAuthLoginUseCase.authorize(eq("naver"), anyString()))
                 .thenThrow(new UnsupportedProviderException("naver"));
 
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/login/oauth/naver");
-        request.setScheme("http");
-        request.setServerName("iam.local");
-        request.setServerPort(80);
-
-        String view = controller().startSocialLogin("naver", request);
+        String view = controller().startSocialLogin("naver");
 
         assertThat(view).isEqualTo("redirect:/login?error=unsupported_provider");
     }

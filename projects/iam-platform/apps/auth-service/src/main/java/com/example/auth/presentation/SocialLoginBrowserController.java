@@ -4,6 +4,7 @@ import com.example.auth.application.OAuthLoginUseCase;
 import com.example.auth.application.command.OAuthCallbackCommand;
 import com.example.auth.application.exception.AccountLockedException;
 import com.example.auth.application.exception.AccountStatusException;
+import com.example.auth.application.exception.InvalidOAuthRedirectUriException;
 import com.example.auth.application.exception.InvalidOAuthStateException;
 import com.example.auth.application.exception.OAuthEmailRequiredException;
 import com.example.auth.application.exception.OAuthProviderException;
@@ -14,8 +15,8 @@ import com.example.auth.domain.session.SessionContext;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
@@ -43,7 +44,7 @@ import java.util.Map;
  * <ul>
  *   <li>{@code GET /login/oauth/{provider}} — starts the upstream authorization
  *       (reuses {@link OAuthLoginUseCase#authorize}) with a browser callback URI
- *       computed from the request base, then redirects to the provider.</li>
+ *       built from the configured issuer base URL, then redirects to the provider.</li>
  *   <li>{@code GET /login/oauth/{provider}/callback} — resolves the account
  *       (reuses {@link OAuthLoginUseCase#resolveBrowserLogin}), establishes the
  *       SAS session, and resumes the saved {@code /oauth2/authorize}.</li>
@@ -51,11 +52,18 @@ import java.util.Map;
  */
 @Slf4j
 @Controller
-@RequiredArgsConstructor
 public class SocialLoginBrowserController {
 
     private final OAuthLoginUseCase oAuthLoginUseCase;
     private final SavedRequestTenantResolver savedRequestTenantResolver;
+
+    /**
+     * The public base URL the browser uses for this auth-service (the OIDC issuer).
+     * The social callback URI is built from this — NOT from the request {@code Host}
+     * header — so it is deterministic, registered in each provider's
+     * allowed-redirect-uris, and not subject to Host-header injection.
+     */
+    private final String browserCallbackBaseUrl;
 
     /**
      * The SecurityContextRepository the SAS chain reads via the shared JSESSIONID.
@@ -66,15 +74,33 @@ public class SocialLoginBrowserController {
     private final SecurityContextRepository securityContextRepository =
             new HttpSessionSecurityContextRepository();
 
+    public SocialLoginBrowserController(
+            OAuthLoginUseCase oAuthLoginUseCase,
+            SavedRequestTenantResolver savedRequestTenantResolver,
+            @Value("${oidc.issuer-url:http://localhost:8081}") String issuerUrl) {
+        this.oAuthLoginUseCase = oAuthLoginUseCase;
+        this.savedRequestTenantResolver = savedRequestTenantResolver;
+        this.browserCallbackBaseUrl = issuerUrl.endsWith("/")
+                ? issuerUrl.substring(0, issuerUrl.length() - 1)
+                : issuerUrl;
+    }
+
     @GetMapping("/login/oauth/{provider}")
-    public String startSocialLogin(@PathVariable String provider, HttpServletRequest request) {
-        String callbackUri = browserCallbackUri(request, provider);
+    public String startSocialLogin(@PathVariable String provider) {
+        String callbackUri = browserCallbackUri(provider);
         try {
             OAuthAuthorizeResult result = oAuthLoginUseCase.authorize(provider, callbackUri);
             return "redirect:" + result.authorizationUrl();
         } catch (UnsupportedProviderException e) {
             log.warn("social login start rejected — unsupported provider '{}'", provider);
             return "redirect:/login?error=unsupported_provider";
+        } catch (InvalidOAuthRedirectUriException e) {
+            // The issuer-derived callback URI is not in the provider's
+            // allowed-redirect-uris — a server misconfiguration, not user error.
+            log.error("social login start failed — browser callback URI '{}' not in '{}' "
+                    + "allowed-redirect-uris (check oidc.issuer-url + OAUTH_<P>_ALLOWED_REDIRECT_URIS)",
+                    callbackUri, provider);
+            return "redirect:/login?error=provider_error";
         }
     }
 
@@ -86,7 +112,7 @@ public class SocialLoginBrowserController {
             HttpServletRequest request,
             HttpServletResponse response) {
 
-        String callbackUri = browserCallbackUri(request, provider);
+        String callbackUri = browserCallbackUri(provider);
 
         SessionContext sessionContext = new SessionContext(
                 request.getRemoteAddr(),
@@ -112,7 +138,7 @@ public class SocialLoginBrowserController {
             return "redirect:/login?error=account_unavailable";
         } catch (InvalidOAuthStateException e) {
             return "redirect:/login?error=invalid_state";
-        } catch (OAuthProviderException e) {
+        } catch (InvalidOAuthRedirectUriException | OAuthProviderException e) {
             return "redirect:/login?error=provider_error";
         } catch (UnsupportedProviderException e) {
             return "redirect:/login?error=unsupported_provider";
@@ -163,22 +189,13 @@ public class SocialLoginBrowserController {
     }
 
     /**
-     * Computes the browser callback URI from the request base:
-     * {@code scheme://host[:port]/login/oauth/{provider}/callback}. This MUST be in
-     * the provider's allowed-redirect-uris (validated by {@code authorize()}); the
-     * application.yml allowlist adds the {@code iam.local} + {@code localhost:8081}
-     * variants.
+     * Builds the browser callback URI from the configured issuer base URL:
+     * {@code <issuer>/login/oauth/{provider}/callback}. This MUST be in the
+     * provider's allowed-redirect-uris (validated by {@code authorize()}); the
+     * application.yml allowlist registers the {@code iam.local} (prod) +
+     * {@code localhost:8081} (dev) variants matching {@code oidc.issuer-url}.
      */
-    private String browserCallbackUri(HttpServletRequest request, String provider) {
-        StringBuilder base = new StringBuilder();
-        base.append(request.getScheme()).append("://").append(request.getServerName());
-        int port = request.getServerPort();
-        boolean defaultPort = ("http".equals(request.getScheme()) && port == 80)
-                || ("https".equals(request.getScheme()) && port == 443);
-        if (!defaultPort && port > 0) {
-            base.append(':').append(port);
-        }
-        base.append("/login/oauth/").append(provider).append("/callback");
-        return base.toString();
+    private String browserCallbackUri(String provider) {
+        return browserCallbackBaseUrl + "/login/oauth/" + provider + "/callback";
     }
 }

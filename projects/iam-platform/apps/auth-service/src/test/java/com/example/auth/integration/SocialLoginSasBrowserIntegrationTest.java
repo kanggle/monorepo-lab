@@ -93,6 +93,13 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
 
+        // The test SAS issuer is http://localhost (application-test.yml), so the
+        // issuer-derived browser callback is http://localhost/login/oauth/google/callback.
+        // Register it as google's allowed redirect (the only provider this IT drives) —
+        // the production allowlist carries the iam.local + localhost:8081 variants.
+        registry.add("oauth.google.allowed-redirect-uris",
+                () -> "http://localhost/login/oauth/google/callback");
+
         wireMock = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
         wireMock.start();
         registry.add("auth.account-service.base-url", wireMock::baseUrl);
@@ -240,15 +247,22 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
         assertThat(loginPage.getResponse().getContentAsString())
                 .contains("/login/oauth/google");
 
-        // 3. /login/oauth/google → 302 to Google (state stored in Redis).
-        mockMvc.perform(get("/login/oauth/google").session(toMockSession(session)))
-                .andExpect(status().is3xxRedirection());
+        // 3. /login/oauth/google → 302 to Google (real state stored in Redis).
+        // Capture the generated state from the Google authorization URL — the callback
+        // must echo it back (the state round-trip through Redis is real, not mocked;
+        // only the provider token/userinfo exchange is mocked).
+        MvcResult startResult = mockMvc.perform(get("/login/oauth/google").session(toMockSession(session)))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        String googleAuthUrl = startResult.getResponse().getHeader("Location");
+        String realState = extractParam(googleAuthUrl, "state");
+        assertThat(realState).as("state generated + stored by authorize()").isNotBlank();
 
         // 4. Google callback → session established → 302 back to saved /oauth2/authorize.
         MvcResult callback = mockMvc.perform(get("/login/oauth/google/callback")
                         .session(toMockSession(session))
                         .queryParam("code", "google-auth-code")
-                        .queryParam("state", "ignored-by-mock"))
+                        .queryParam("state", realState))
                 .andExpect(status().is3xxRedirection())
                 .andReturn();
         String resumed = callback.getResponse().getHeader("Location");
