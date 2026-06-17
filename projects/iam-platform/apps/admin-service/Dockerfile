@@ -6,14 +6,18 @@
 # Strategy: Gradle bootJar is produced on the HOST by
 #   ./gradlew :apps:admin-service:bootJar
 # (documented in docs/guides/docker-build.md). The "build" stage below then
-# selects the freshly produced jar using a shell glob and copies it into the
-# minimal JRE runtime stage. Building outside the container keeps layer
-# cache-friendly, avoids Gradle network dependencies inside BuildKit, and
-# still preserves a multi-stage graph so the final image only ships JRE + jar.
+# selects the freshly produced jar using a shell glob, extracts its Spring Boot
+# layers, and copies them into the minimal JRE runtime stage. Building outside
+# the container keeps layer cache-friendly, avoids Gradle network dependencies
+# inside BuildKit, and still preserves a multi-stage graph so the final image
+# only ships JRE + the exploded layers.
+#
+# ADR-MONO-041 D1: Spring Boot layered-jar — a code-only change rebuilds only
+# the small `application` layer; the ~95 MB `dependencies` layer stays cached.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build — pick the bootJar produced on the host
+# Stage 1: Build — pick the bootJar produced on the host, extract layers
 # -----------------------------------------------------------------------------
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
@@ -22,7 +26,10 @@ RUN set -eux; \
     cd libs; \
     jar="$(ls -1 *.jar | grep -v -E 'plain|sources|javadoc' | head -n1)"; \
     test -n "$jar" || (echo "bootJar not found. Run: ./gradlew :apps:admin-service:bootJar" >&2; exit 1); \
-    cp "$jar" /workspace/app.jar
+    cp "$jar" /workspace/app.jar; \
+    cd /workspace; \
+    java -Djarmode=layertools -jar app.jar extract; \
+    rm -f app.jar
 
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime — JRE only, non-root user, healthcheck
@@ -36,8 +43,11 @@ RUN apt-get update \
  && groupadd -g 1000 app \
  && useradd -u 1000 -g 1000 -s /usr/sbin/nologin -M app
 
-COPY --from=build /workspace/app.jar /app/app.jar
-RUN chown -R app:app /app
+# ADR-MONO-041 D1: copy layers low->high change frequency (deps first, app last).
+COPY --from=build --chown=app:app /workspace/dependencies/ ./
+COPY --from=build --chown=app:app /workspace/spring-boot-loader/ ./
+COPY --from=build --chown=app:app /workspace/snapshot-dependencies/ ./
+COPY --from=build --chown=app:app /workspace/application/ ./
 
 USER app
 EXPOSE 8085
@@ -54,4 +64,5 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=6 \
 # `java.net.UnknownHostException: mysql` during Hikari/Flyway startup. Doing
 # the resolution check in the shell (getent) before `exec java` guarantees
 # the JVM never sees a negative lookup in the first place.
-ENTRYPOINT ["sh","-c","until getent hosts mysql >/dev/null && getent hosts kafka >/dev/null && getent hosts redis >/dev/null; do echo 'waiting for DNS: mysql/kafka/redis'; sleep 1; done; exec java $JAVA_OPTS -jar /app/app.jar"]
+# ADR-MONO-041 D1: launch via JarLauncher (layered-equivalent of -jar app.jar).
+ENTRYPOINT ["sh","-c","until getent hosts mysql >/dev/null && getent hosts kafka >/dev/null && getent hosts redis >/dev/null; do echo 'waiting for DNS: mysql/kafka/redis'; sleep 1; done; exec java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]
