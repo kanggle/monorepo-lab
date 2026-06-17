@@ -9,6 +9,7 @@ import com.example.auth.application.port.OAuthClientProvider;
 import com.example.auth.application.port.OAuthProviderConfig;
 import com.example.auth.application.port.OAuthProviderConfigPort;
 import com.example.auth.application.result.AccountStatusLookupResult;
+import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.OAuthAuthorizeResult;
 import com.example.auth.application.result.OAuthLoginResult;
 import com.example.auth.application.result.SocialSignupResult;
@@ -38,6 +39,9 @@ public class OAuthLoginUseCase {
     private final OAuthLoginTransactionalStep oAuthLoginTransactionalStep;
     private final AccountServicePort accountServicePort;
     private final SocialIdentityRepository socialIdentityRepository;
+    // TASK-BE-396 (ADR-006 option B): the session-establishing transactional tail
+    // for the SAS browser flow (social_identity upsert + status check only — no JWT).
+    private final SocialIdentityPersistStep socialIdentityPersistStep;
 
     /**
      * Generates an authorization URL for the given OAuth provider.
@@ -91,8 +95,61 @@ public class OAuthLoginUseCase {
      * {@code (provider, provider_user_id)} is enforced at the DB).
      */
     public OAuthLoginResult callback(OAuthCallbackCommand command) {
-        OAuthProvider provider = parseProvider(command.provider());
+        ResolvedSocialLogin resolved = resolveSocialLogin(command);
         SessionContext ctx = command.sessionContext();
+
+        // Hand off to the transactional bean — DB writes happen atomically here.
+        // Behavior is byte-identical to the pre-TASK-BE-396 inline body: the shared
+        // pre-resolution (state consume → validate → provider HTTP → email check →
+        // identity lookup → socialSignup-or-existing → getAccountStatus) was hoisted
+        // verbatim into resolveSocialLogin(); the JWT-issuing tail is unchanged.
+        return oAuthLoginTransactionalStep.persistLogin(new OAuthCallbackTxnCommand(
+                resolved.provider(), resolved.userInfo(), ctx,
+                resolved.accountId(), resolved.isNewAccount(), resolved.accountStatus()));
+    }
+
+    /**
+     * SAS browser-flow account resolution (TASK-BE-396, ADR-006 option B).
+     *
+     * <p>Reuses the EXACT same pre-resolution orchestration as {@link #callback}
+     * (state {@code consumeAtomic} → {@code exchangeCodeForUserInfo} → email
+     * validate → identity lookup → socialSignup-or-existing → {@code getAccountStatus}),
+     * then runs ONLY the social-identity upsert + account-status check via
+     * {@link SocialIdentityPersistStep} — it does NOT issue a custom JWT, register a
+     * device session, persist a refresh token, or publish login events.
+     *
+     * <p>The caller (presentation layer) takes the returned {@code accountId}/{@code email}
+     * and establishes a SAS-consumed authenticated HTTP session, then resumes the saved
+     * {@code /oauth2/authorize} request → standard SAS tokens.
+     *
+     * @param command the browser callback command (carries provider, code, state,
+     *                browser callback URI, and request session context)
+     * @param tenantId the tenant the new social-identity row is attributed to,
+     *                derived from the initiating OIDC client by the caller
+     * @return the resolved account id, email, and new-account flag (no tokens)
+     */
+    public BrowserLoginResolution resolveBrowserLogin(OAuthCallbackCommand command, String tenantId) {
+        ResolvedSocialLogin resolved = resolveSocialLogin(command);
+
+        // Session-establishing transactional tail — social_identity upsert + status
+        // check ONLY. No JWT / device session / refresh token / login events.
+        socialIdentityPersistStep.persistIdentityAndCheckStatus(
+                resolved.provider(), resolved.userInfo(),
+                resolved.accountId(), tenantId, resolved.accountStatus());
+
+        return new BrowserLoginResolution(
+                resolved.accountId(), resolved.userInfo().email(), resolved.isNewAccount());
+    }
+
+    /**
+     * Shared pre-resolution extracted from {@link #callback} so both the legacy
+     * custom-JWT flow and the SAS browser flow run the IDENTICAL account-resolution
+     * sequence. This body is hoisted verbatim — see {@link #callback} for the
+     * TASK-BE-069 / TASK-BE-072 / TASK-BE-063 design rationale on the
+     * outside-transaction HTTP ordering and the empty-status semantics.
+     */
+    private ResolvedSocialLogin resolveSocialLogin(OAuthCallbackCommand command) {
+        OAuthProvider provider = parseProvider(command.provider());
 
         // Verify state via the domain port (GETDEL for atomic check-and-delete).
         // Done outside txn — state check is an auth prerequisite, not a DB write.
@@ -149,9 +206,17 @@ public class OAuthLoginUseCase {
         Optional<String> accountStatus = accountServicePort.getAccountStatus(accountId)
                 .map(AccountStatusLookupResult::accountStatus);
 
-        // Hand off to the transactional bean — DB writes happen atomically here.
-        return oAuthLoginTransactionalStep.persistLogin(
-                new OAuthCallbackTxnCommand(provider, userInfo, ctx, accountId, isNewAccount, accountStatus));
+        return new ResolvedSocialLogin(provider, userInfo, accountId, isNewAccount, accountStatus);
+    }
+
+    /** Internal holder for the shared pre-resolution result. */
+    private record ResolvedSocialLogin(
+            OAuthProvider provider,
+            OAuthUserInfo userInfo,
+            String accountId,
+            boolean isNewAccount,
+            Optional<String> accountStatus
+    ) {
     }
 
     private OAuthProvider parseProvider(String providerStr) {

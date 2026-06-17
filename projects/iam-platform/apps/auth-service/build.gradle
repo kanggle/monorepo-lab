@@ -19,6 +19,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    // TASK-BE-396 (ADR-006): custom /login page renders the social-login buttons +
+    // password form via Thymeleaf, replacing the default-generated form.
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 
     // Spring Authorization Server (OIDC / OAuth2 AS) — TASK-BE-251
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-authorization-server'
