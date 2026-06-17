@@ -580,6 +580,12 @@ jobs:
       - name: Verify Docker (ComposeFixture prerequisite)
         run: docker info
 
+      # ADR-MONO-041 D2: iam service images `FROM monorepo/java-service-base:v1`.
+      # No image registry → build the shared base locally before the
+      # ComposeFixture's `docker compose up -d --build` resolves it.
+      - name: Build shared java-service-base image (ADR-MONO-041 D2)
+        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
+
       - name: Run iam docker-compose e2e full suite
         run: >-
           ./gradlew

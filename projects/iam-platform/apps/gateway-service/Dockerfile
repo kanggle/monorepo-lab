@@ -2,10 +2,11 @@
 # =============================================================================
 # gateway-service — multi-stage Docker build (context: monorepo root)
 # HOST pre-build required:  ./gradlew :apps:gateway-service:bootJar
-# ADR-MONO-041 D1: Spring Boot layered-jar — a code-only change rebuilds only
-# the small `application` layer; the ~95 MB `dependencies` layer stays cached.
+# ADR-MONO-041 D1: Spring Boot layered-jar (code change rebuilds only the small
+# `application` layer). D2: runtime FROM the shared monorepo/java-service-base
+# image (alpine jre + curl + tini + non-root `app` user + WORKDIR /app).
 # =============================================================================
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:21-jre-alpine AS build
 WORKDIR /workspace
 COPY apps/gateway-service/build/libs/ ./libs/
 RUN set -eux; cd libs; \
@@ -16,14 +17,8 @@ RUN set -eux; cd libs; \
     java -Djarmode=layertools -jar app.jar extract; \
     rm -f app.jar
 
-FROM eclipse-temurin:21-jre
-WORKDIR /app
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/* \
- && (userdel -r ubuntu 2>/dev/null || true) \
- && groupadd -g 1000 app \
- && useradd -u 1000 -g 1000 -s /usr/sbin/nologin -M app
+# Runtime: shared base provides jre-alpine + curl + tini + `app` user + WORKDIR.
+FROM monorepo/java-service-base:v1
 # ADR-MONO-041 D1: copy layers low->high change frequency (deps first, app last).
 COPY --from=build --chown=app:app /workspace/dependencies/ ./
 COPY --from=build --chown=app:app /workspace/spring-boot-loader/ ./
