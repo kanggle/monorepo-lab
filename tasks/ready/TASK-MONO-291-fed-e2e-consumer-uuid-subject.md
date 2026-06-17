@@ -4,11 +4,32 @@
 
 **Type:** TASK-MONO (root — `tests/federation-hardening-e2e/` fixtures; cross-cutting IAM identity ↔ ecommerce user-service)
 
-**Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (fixture/seed provisioning once AC-0 confirms the sub-derivation)
+**Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (architecture decision — see AC-0 finding; likely an ADR)
 
-> **Priority: LOW / fixture-only.** Production is unaffected — real born-unified (ADR-MONO-036) consumers get a UUID `identity_id` `sub`. This only unblocks the web-store wishlist e2e (the FE-074/BE-394 spec's 3rd test) against the **federation demo stack**. File-and-defer is acceptable; pick up when the federation demo is being exercised.
+> **⚠️ PRIORITY RAISED (2026-06-17, AC-0 done): likely a LATENT PRODUCTION BUG, not fixture-only.** The original "seed the consumer's `identity_id`" premise is **INVALID** — the `sub` is the SAS login principal (email), not `identity_id`-derived. Ecommerce consumer auth IS the SAS/GAP OIDC path (auth-service decommissioned, MONO-027), so *every* email/password ecommerce consumer gets `sub=email` and **all browser-origin authed writes (wishlist add/remove, profile mutations, …) 400** at the user-service `UUID userId` binding — in production too, not just the demo stack. It was latent because the consumer authed-write path was never exercised E2E until FE-074 → BE-394 → here. **This needs an architecture decision (below), not a seed change.**
 
 ---
+
+## AC-0 FINDING + RE-SCOPE (2026-06-17)
+
+AC-0 (investigate the auth-service `sub` derivation **before** any seed change) is complete and **fired the STOP/re-scope branch**. Evidence:
+
+- **SAS OIDC path (what web-store + console consumers/operators actually use):** `CredentialAuthenticationProvider` builds `new UsernamePasswordAuthenticationToken(credential.getEmail(), …)` — the OAuth2 principal name is the **email**, so the SAS access-token `sub` = **email**. `account_id` is carried only in the `details` map (for tenant claims). `TenantClaimTokenCustomizer` injects `tenant_id`/`tenant_type`/`roles`/`entitled_domains`/`org_scope` but **never overrides `sub`**. → consumer `sub` = email, regardless of `identity_id`.
+- **Conflicting UUID-`sub` convention elsewhere in the same service:** the legacy `JwtTokenGenerator` (`TokenGeneratorPort`, BE-229) sets `accessClaims.put("sub", accountId)` and `OidcUserInfoMapper` sets `sub=accountId`. So the service has **two contradictory `sub` conventions** (legacy custom-JWT = account_id UUID; current SAS = email). The SAS migration silently changed the live consumer `sub` from UUID → email.
+- **Cross-cutting constraint — can't just flip SAS `sub` to account_id:** `AssumeTenantAuthenticationProvider` extracts `oidcSubject = subjectJwt.getSubject()` and calls `resolveAssignment(oidcSubject, tenant)`, matched against `admin_operators.oidc_subject = email`. Operators **depend on `sub=email`** for assume-tenant. A global `sub=account_id` would break every operator's tenant switch.
+- **Consumer side wants UUID:** the ecommerce `WishlistController` (and `/me/check`, `/me`) bind `@RequestHeader("X-User-Id") UUID userId`; the gateway forwards `X-User-Id = sub` verbatim (`JwtHeaderEnrichmentFilter`). email `sub` → `400 VALIDATION_ERROR "Invalid value for parameter: X-User-Id"`.
+
+**So the real problem is a `sub`-claim contract mismatch between IAM (email principal) and the ecommerce user-service (UUID expectation), with operators pinned to email.** Resolution requires a decision (candidate options, an ADR is warranted):
+
+- **Option A (ecommerce-side, lowest blast radius):** the ecommerce user-service stops binding `X-User-Id` as `UUID` — accept the IAM `sub` (email or string) as the user key, OR resolve `email → account_id` via the `details`/account claim. Scope contained to ecommerce; no IAM/operator risk. **Likely recommended.**
+- **Option B (auth-service, conditional `sub`):** the SAS token customizer sets `sub = account_id` ONLY for consumer (CUSTOMER) tokens, keeping `sub = email` for operators. Restores the UUID convention for consumers but adds a role-conditional `sub` (subtle; risks assume-tenant edge cases; needs careful operator-vs-consumer discrimination).
+- **Option C (gateway map):** the ecommerce gateway maps the email `sub` → the account_id UUID (from a claim) before setting `X-User-Id`. Contained to the ecommerce gateway; needs account_id to be a reliable claim on the token (it is not today — `account_id` is in `details`, not emitted as a claim on the SAS access token; would need the customizer to emit it).
+
+**Recommendation:** treat this as a real ecommerce-consumer-writes defect; spin an ADR (or a scoped TASK-BE in ecommerce) for **Option A** (relax/resolve the user-service `X-User-Id` binding), with the federation demo-stack wishlist e2e (original AC-2) as the live acceptance proof once chosen. The original seed-based scope below is **superseded** and retained only for history.
+
+---
+
+### (SUPERSEDED — original seed-based framing, kept for history)
 
 ## Goal
 
