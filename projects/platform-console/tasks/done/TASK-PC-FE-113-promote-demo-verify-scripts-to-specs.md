@@ -1,6 +1,6 @@
 # TASK-PC-FE-113 — Promote the throwaway `verify-*.mjs` console demo scripts to committed Playwright specs
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-PC-FE (project-internal — `projects/platform-console/apps/console-web/tests/e2e/` only)
 
