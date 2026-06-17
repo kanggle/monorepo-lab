@@ -1,6 +1,6 @@
 # TASK-MONO-292 — ADR-MONO-040 Phase 1: emit `account_id` claim + derive ecommerce `X-User-Id` from it
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (root — cross-project atomic: iam-platform `auth-service` + ecommerce `gateway-service` + `platform/contracts/`)
 
