@@ -1,6 +1,6 @@
 # TASK-MONO-291 — fed-e2e consumer token `sub` is not a UUID, blocking web-store wishlist (browser-origin authed writes) e2e
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-MONO (root — `tests/federation-hardening-e2e/` fixtures; cross-cutting IAM identity ↔ ecommerce user-service)
 
