@@ -35,7 +35,7 @@ host port is load-bearing, not arbitrary.
 | `15433` | `5432` | `scm-postgres` (`scm_procurement`) | base |
 | `15434` | `5432` | `wms-admin-postgres` (`admin_db`) | base |
 | `15435` | `5432` | `scm-inv-postgres` (`scm_inventory_visibility`) | base |
-| `15436` | `5432` | `scm-replenishment-postgres` | `…replenishment.yml` |
+| `15436` | `5432` | `scm-dp-postgres` (demand-planning) | `…replenishment.yml` |
 | `19092` | `19092` | `redpanda` (replenishment Kafka) | `…replenishment.yml` |
 
 Next free datastore port: **`15437`** (then `15438`, …).
@@ -53,15 +53,19 @@ Next free datastore port: **`15437`** (then `15438`, …).
 | `18093` | `8080` | `erp-masterdata-service` | erp | base |
 | `18094` | `8086` | `wms-admin-service` | wms | base |
 | `18095` | `8080` | `scm-inventory-visibility-service` | scm | base |
-| `18096` | `8080` | `ecommerce-gateway` | ecommerce | `…demo.yml` |
+| `18096` | `8080` | `scm-gateway` | scm | `…demo.yml` |
 | `18097` | `8080` | `ledger-service` | finance | `…ledger.yml` |
 | `18098` | `8080` | `erp-approval-service` | erp | `…erp-fullstack.yml` |
 | `18099` | `80` | `erp-gateway` (nginx fan-out) | erp | `…erp-fullstack.yml` |
-| `18100` | `8080` | `scm-replenishment-service` | scm | `…replenishment.yml` |
+| `18100` | `8080` | `scm-demand-planning-service` | scm | `…replenishment.yml` |
 | `18197` | `8080` | `erp-read-model-service` | erp | `…erp-fullstack.yml` (moved off `18097` — see incident) |
 
-> `ecommerce.yml` / `ecommerce-extra.yml` (product/order/user/promotion/shipping/notification +
-> payment/review) publish **no** host ports — all reached internally via `ecommerce-gateway`.
+> **ecommerce publishes NO host ports — not even `ecommerce-gateway`.** Every ecommerce service
+> (gateway + product/order/user/promotion/shipping/notification + payment/review) **and its own
+> infra** (`ecommerce-kafka`, `ecommerce-minio`, `ecommerce-redis`, 8× postgres) is internal-only
+> on the `fed-e2e` bridge, reached container-to-container (console → `ecommerce-gateway:8080`). The
+> only host-facing path is the standalone web-store `socat` proxy on `8080` — an ad-hoc container,
+> not a compose binding. Verified via `docker compose config` merge (TASK-MONO-293).
 
 Allocated app block: `18082`–`18100` (dense) + `18197`. **Next free app port: `18101`** (continue
 `18101`–`18196`; `18197`–`18199` is the tail band, `18197` already used).
@@ -70,7 +74,9 @@ Allocated app block: `18082`–`18100` (dense) + `18197`. **Next free app port: 
 
 As of TASK-MONO-293, the full overlay set
 (`base` + `.demo` + `.ledger` + `.erp-fullstack` + `.replenishment` + `.ecommerce` + `.ecommerce-extra`)
-publishes the union of the host ports above with **no duplicates**.
+publishes **26 host ports with no duplicates** — confirmed by rendering the merged config with
+`docker compose … config` (~48 containers, single `fed-e2e` bridge network). None of the ~21
+ecommerce containers publishes a host port.
 
 ## Allocation rule (for the next overlay)
 
