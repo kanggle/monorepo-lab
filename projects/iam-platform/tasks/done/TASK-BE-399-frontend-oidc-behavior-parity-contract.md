@@ -8,7 +8,7 @@ TASK-BE-399
 
 # Status
 
-ready
+done
 
 # Owner
 

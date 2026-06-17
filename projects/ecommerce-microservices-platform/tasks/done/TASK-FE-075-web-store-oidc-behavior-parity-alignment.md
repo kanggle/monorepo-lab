@@ -8,7 +8,7 @@ web-store OIDC 프런트 동작 파리티 정렬 (consumer-integration-guide § 
 
 # Status
 
-ready
+done
 
 # Owner
 
