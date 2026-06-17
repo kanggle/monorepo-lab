@@ -47,9 +47,19 @@ public class JwtHeaderEnrichmentFilter implements GlobalFilter, Ordered {
         String email = jwt.getClaimAsString("email");
         String role = resolveRole(jwt);
 
+        // ADR-MONO-040 D2 (Phase 1): X-User-Id is the account UUID. The SAS
+        // access-token `sub` is the login email (it does NOT satisfy
+        // jwt-standard-claims.md `sub` = account UUID), so downstream services
+        // binding X-User-Id as a UUID (e.g. user-service WishlistController)
+        // 400 on it. Prefer the additive `account_id` claim the auth-service now
+        // emits; fall back to `sub` for legacy/non-SAS tokens without it. Phase 2
+        // makes `sub` itself the account UUID and retires this fallback.
+        String accountId = jwt.getClaimAsString("account_id");
+        String userId = (accountId != null && !accountId.isBlank()) ? accountId : subject;
+
         ServerHttpRequest.Builder builder = exchange.getRequest().mutate();
-        if (subject != null) {
-            builder.header("X-User-Id", subject);
+        if (userId != null) {
+            builder.header("X-User-Id", userId);
         }
         if (email != null) {
             builder.header("X-User-Email", email);

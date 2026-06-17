@@ -46,6 +46,35 @@ class JwtHeaderEnrichmentFilterTest {
         assertThat(headers.getFirst("X-Account-Type")).isNull();
     }
 
+    // -----------------------------------------------------------------------
+    // ADR-MONO-040 D2 — X-User-Id = account_id claim (UUID), fallback to sub
+    // -----------------------------------------------------------------------
+
+    @Test
+    void xUserIdUsesAccountIdClaimWhenPresent() {
+        // SAS access token: sub = login email, account_id = the account UUID.
+        // X-User-Id must be the UUID (jwt-standard-claims contract value), not sub.
+        Jwt jwt = jwtBuilder()
+                .subject("user@example.com")
+                .claim("account_id", "550e8400-e29b-41d4-a716-446655440000")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-User-Id"))
+                .isEqualTo("550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    @Test
+    void xUserIdFallsBackToSubWhenAccountIdBlankOrAbsent() {
+        // Legacy/non-SAS token without account_id → fall back to sub.
+        Jwt blank = jwtBuilder().subject("legacy-uuid").claim("account_id", "   ").build();
+        assertThat(runAndCaptureHeaders(blank).getFirst("X-User-Id")).isEqualTo("legacy-uuid");
+
+        Jwt absent = jwtBuilder().subject("legacy-uuid-2").build();
+        assertThat(runAndCaptureHeaders(absent).getFirst("X-User-Id")).isEqualTo("legacy-uuid-2");
+    }
+
     @Test
     void doesNotInjectAccountTypeEvenWhenClaimPresent() {
         // Explicit assertion that the injection leg is gone.

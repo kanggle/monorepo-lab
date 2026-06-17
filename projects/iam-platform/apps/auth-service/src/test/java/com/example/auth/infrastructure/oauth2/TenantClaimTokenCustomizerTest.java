@@ -236,6 +236,56 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
+    @DisplayName("ADR-MONO-040 authorization_code: account_id from principal details → emitted as account_id claim")
+    void authorizationCode_accountIdFromPrincipalDetails_emittedAsClaim() {
+        RegisteredClient client = buildClientWithGrantType(
+                "ecommerce|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        // The account UUID rides on the principal details (set by
+        // CredentialAuthenticationProvider). ADR-040 D2: the customizer emits it
+        // as an additive account_id claim (the SAS sub stays the email).
+        Map<String, Object> details = Map.of(
+                "tenant_id", "ecommerce",
+                "tenant_type", "B2C",
+                "account_id", "550e8400-e29b-41d4-a716-446655440000"
+        );
+        when(principal.getDetails()).thenReturn(details);
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat((String) built.getClaim("account_id"))
+                .isEqualTo("550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    @Test
+    @DisplayName("ADR-MONO-040 authorization_code: no account_id in details → no account_id claim (additive, never blank)")
+    void authorizationCode_noAccountId_noClaim() {
+        RegisteredClient client = buildClientWithGrantType(
+                "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        when(principal.getDetails()).thenReturn(Map.of("tenant_id", "fan-platform", "tenant_type", "B2C"));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        assertThat((Object) claimsBuilder.build().getClaim("account_id")).isNull();
+    }
+
+    @Test
     @DisplayName("authorization_code: no principal details → fallback to client metadata")
     void authorizationCode_noPrincipalDetails_fallbackToClientMetadata() {
         RegisteredClient client = buildClientWithGrantType(
