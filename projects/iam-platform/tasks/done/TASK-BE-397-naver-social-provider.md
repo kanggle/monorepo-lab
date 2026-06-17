@@ -8,7 +8,7 @@ Naver 소셜 로그인 제공자 추가 (SAS 브라우저 플로우)
 
 # Status
 
-review
+done
 
 # Owner
 
