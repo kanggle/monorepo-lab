@@ -421,6 +421,84 @@ async function fetchInventory(sku) {
 
 ---
 
+## Phase 4.5 — 프런트엔드 OIDC 소비자 동작 계약 (Frontend Behavior Parity)
+
+> **적용 대상**: IAM SAS 를 IdP 로 쓰는 **브라우저/SPA/BFF 프런트엔드** (예: ecommerce `web-store`, `platform-console` console-web, `fan-platform` web). Phase 3(resource server)·Phase 4(S2S)가 **백엔드** 토큰 검증을 다룬 데 반해, 본 절은 **사용자가 보는 로그인·세션·로그아웃 동작**을 표준화한다.
+>
+> **왜 필요한가**: 동일 IdP 를 쓰는 프런트엔드들이 redirect·refresh·logout·에러 처리를 **제각각** 구현하면(라이브러리 선택은 자유여도) 사용자 체감과 보안 자세가 갈린다. 본 절은 **구현 메커니즘(NextAuth vs 자작 핸들러, 쿠키 네이밍 등)은 자유**로 두되, 아래 **관찰 가능한 동작(observable behavior)** 을 **MUST/SHOULD** 수준으로 못박아 일관성을 강제한다.
+
+### 적용 범위 밖 (구현 자유 — 동작만 맞으면 됨)
+
+- 인증 라이브러리 선택 (NextAuth/auth.js vs 자작 route handler vs 기타).
+- 세션 쿠키 구조 (단일 암호화 JWT 쿠키 vs 다중 `*_token` 쿠키) 및 쿠키 이름.
+- 라우트 보호 메커니즘 (Next.js `middleware.ts` vs server-component layout guard).
+- operator token 교환(RFC 8693)·assumed-tenant token 등 **도메인 특화 토큰** — 운영자 콘솔처럼 멀티도메인/테넌트 어슘이 필요한 소비자만 추가로 가지며, 본 계약의 파리티 대상이 아니다.
+
+### F1 — 로그인 개시 (MUST)
+
+- 소비자는 자체 credential 폼을 호스팅하지 **않는다**. 로그인은 **전체-페이지 리다이렉트**로 IdP `/oauth2/authorize` 에 위임한다 (`response_type=code` + **PKCE `S256`** + `state`). ROPC/embedded credential POST 금지.
+- 로그인 진입 화면에 **이미 유효 세션이면** 보호 영역으로 즉시 우회한다.
+
+### F2 — 토큰 기밀성 (MUST) — *gap B*
+
+- `access_token` / `refresh_token` / `id_token` 은 **서버 측 HttpOnly 쿠키에만** 보관한다. **클라이언트 JS 가 읽을 수 있는 표면(예: 공개 세션 객체, `localStorage`, 비-HttpOnly 쿠키)에 토큰을 노출 금지.**
+- 클라이언트에 노출 허용되는 것: 비민감 식별 claim 만 (`accountId`/`tenantId`/`roles`/표시용 `email`·`name`). bearer token 자체는 **서버 전용 헬퍼** 또는 **same-origin 프록시**를 통해서만 다운스트림에 첨부한다.
+- 세션 조회 엔드포인트(있다면)는 `{ authenticated, ... }` 같은 **비토큰 요약**만 반환한다.
+
+### F3 — 토큰 갱신 (MUST) — *gap A*
+
+- 소비자는 access token 만료 시 사용자를 곧바로 로그인으로 내쫓지 **않는다**. 최소 **반응형 silent refresh**(보호 API 가 401 → `refresh_token` 으로 `/oauth2/token` 재발급 → 원요청 1회 재시도)를 구현한다.
+- refresh 는 **rotation 전제**(IAM `reuse-refresh-tokens=false`) — 회전된 refresh token 을 다시 보관한다. 동시 401 은 **단일 in-flight refresh 로 dedupe** 한다(SHOULD).
+- refresh **실패** 시에만 세션 쿠키를 정리하고 **전체 재인증 리다이렉트**(F1)로 폴백한다. proactive(만료 전) refresh 는 선택(SHOULD).
+
+### F4 — 로그아웃 (MUST) — *gap E*
+
+- `id_token` 이 있으면 **RP-initiated logout** 을 수행한다: 로컬 세션 쿠키 정리 **전에** IdP `end_session`(`{issuer}/connect/logout?id_token_hint=<id_token>&post_logout_redirect_uri=<등록된 URI>&client_id=<client_id>`)으로 브라우저를 보내 **IdP 세션까지 종료**한다. 이를 빠뜨리면 다음 로그인이 무자각 재인증된다.
+- `id_token` 부재(레거시 세션) 시 **local-only 폴백**: 쿠키만 정리하고 앱 내 경로로 이동.
+- 로그아웃 시 **모든** 세션 쿠키를 정리한다. 토큰 **revoke(RFC 7009)** 는 best-effort 로 수행(SHOULD) 하되 실패해도 로그아웃은 진행한다.
+- `post_logout_redirect_uri` 는 **사전 등록된 절대 URI** 여야 한다(정확 일치).
+
+### F5 — 역할 가드 + 에러 UX (MUST) — *gaps C*
+
+- 소비자는 자기 표면에 필요한 **역할 claim 을 게이트**한다(예: storefront=`CUSTOMER`, operator console=운영자 provisioning). 미충족 시 표준 에러로 거부하고 degraded(=미인증) 세션으로 처리한다.
+- 로그인 화면은 `?error=<code>` 를 사용자 메시지로 렌더하며, **인식 못 한 코드에는 반드시 generic fallback 메시지**를 보여준다(무음 실패 금지).
+- **표준 에러 코드 어휘** — 모든 프런트 소비자는 아래 코드를 동일 의미로 사용한다(앱별 메시지 문구는 자유, 단 의미·키는 공유):
+
+  | code | 의미 | 트리거 위치 |
+  |---|---|---|
+  | `provider_error` | IdP 가 authorize/callback 에서 error 반환 | callback |
+  | `invalid_state` | transient state/verifier 누락·만료 | callback |
+  | `state_mismatch` | CSRF state 불일치 | callback |
+  | `token_exchange_failed` | token endpoint 비정상 응답/형식 | callback |
+  | `role_denied` | 인증됐으나 필요한 역할 미보유 (storefront 의 operator, console 의 미provisioning 운영자) | signIn/callback |
+  | `config_error` | client/discovery 설정 오류 | 라이브러리/디스커버리 |
+  | `access_denied` | IdP 가 사용자 동의 거부 | callback |
+  | (그 외 임의 코드) | — | → **generic fallback 메시지 필수** |
+
+  > 마이그레이션 매핑: web-store 의 레거시 `account_type_mismatch`·`Configuration`·`AccessDenied` → 각각 `role_denied`·`config_error`·`access_denied`. console 의 `not_provisioned`·`operator_exchange_unavailable` → `role_denied`(+ 세부는 운영자 토큰 교환 결과로 구분) 및 `token_exchange_failed` 계열로 정렬하되, **둘 다 반드시 사용자 메시지를 가진다**(현재 무음 → 위반).
+
+### F6 — 로그인 후 복귀 (MUST) — *gap D*
+
+- 보호 경로 접근으로 미인증 바운스가 발생하면, **의도한 목적지를 보존**해 로그인 후 그 위치로 돌려보낸다. 보존 파라미터 이름은 소비자별로 통일하되(예: `?from=` 또는 `?redirect=`), **목적지 유실(맨 `/login` 으로만 보냄) 은 위반**이다.
+- 복귀 경로는 **same-site 상대 경로**로 정규화한다(open-redirect 방어: `//` 및 절대 URL 거부).
+
+### F7 — SSO 동작 (SHOULD)
+
+- 소비자는 `prompt` 를 강제하지 않음으로써 **IdP 세션 재사용(SSO)** 을 허용한다 — 이미 IAM 세션이 있으면 `/oauth2/authorize` 가 화면 없이 code 를 발급한다(소비자 간 SSO).
+- 첫 진입 깜빡임을 줄이려면 **`prompt=none` 사일런트 인증**(세션 있으면 무화면 통과, 없으면 `login_required` 에러 → 정식 로그인으로 폴백)을 선택 적용할 수 있다(MAY).
+
+### 파리티 체크리스트 (프런트 소비자 배포 전)
+
+- [ ] F1 전체-페이지 리다이렉트 + PKCE S256 + state (embedded/ROPC 없음).
+- [ ] F2 토큰이 클라이언트 JS 표면에 노출되지 않음 (access/refresh/id 전부 HttpOnly server-only).
+- [ ] F3 반응형 silent refresh + rotation 보관, 실패 시에만 재인증 폴백.
+- [ ] F4 RP-initiated logout(+id_token_hint) + local-only 폴백 + 전체 쿠키 정리.
+- [ ] F5 역할 가드 + 표준 에러 코드 + **unknown-code generic fallback**.
+- [ ] F6 로그인 후 의도 목적지 복귀(목적지 유실 없음, same-site 정규화).
+- [ ] F7 SSO 허용(불필요한 `prompt` 강제 없음).
+
+---
+
 ## Phase 5 — 이벤트 구독 (사용자 라이프사이클)
 
 ### 구독해야 할 4개 이벤트
