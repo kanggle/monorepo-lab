@@ -41,7 +41,10 @@ Every service must have coverage at all four levels unless the level is explicit
 
 - Test real interactions with DB and cache using Testcontainers.
 - Start full Spring context.
-- Must not use H2 or in-memory substitutes for persistence layers.
+- Must not use H2 or in-memory substitutes for persistence layers. The
+  integration-test layer is Testcontainers-only — this prohibition is **not**
+  relaxed by the H2 auxiliary-slice exception (see § Testcontainers Conventions),
+  which applies only to non-authoritative `@DataJpaTest` slices.
 
 **Naming:** `*IntegrationTest.java`
 
@@ -123,8 +126,37 @@ For implementation details (annotations, imports, container images, setup code),
 
 # Testcontainers Conventions
 
-- Use real containers via Testcontainers. Do not use H2 or in-memory substitutes.
+- Use real containers via Testcontainers. Do not use H2 or in-memory substitutes — except for the narrowly-scoped auxiliary-slice case below.
 - Container image versions are specified in `.claude/skills/backend/testing-backend/SKILL.md`.
+
+## H2 auxiliary-slice exception
+
+The "no H2" rule above and under § Integration Tests is **absolute for the
+integration-test layer** (`*IntegrationTest` / `@SpringBootTest` full-context
+persistence tests stay Testcontainers-only, always). It is relaxed in exactly
+one place: a **supplementary `@DataJpaTest` ORM-mapping slice** may run on an H2
+`MODE=PostgreSQL` in-memory database **iff ALL** of the following hold.
+
+- **A1 — slice, not IT.** The test is a `@DataJpaTest` slice that does NOT boot
+  the full Spring context. An `*IntegrationTest` may never substitute H2.
+- **A2 — authoritative IT exists.** A Testcontainers integration test covering
+  the **same** persistence adapter exists and remains the source of truth for
+  Flyway-migrated real-Postgres behavior. The H2 slice is additive coverage,
+  never a replacement.
+- **A3 — non-authoritative naming.** The slice is named so its non-authoritative
+  status is obvious at a glance (convention: an `H2` marker in the class name,
+  e.g. a `*H2Test` suffix paralleling the authoritative `*Test`).
+- **A4 — portable assertions only.** The slice asserts only ORM/JPA-mapping
+  behavior portable across the H2-`MODE=PostgreSQL` dialect and real Postgres.
+  Postgres-specific SQL, native upserts, JSONB operators, and Flyway-migration
+  assertions belong to the Testcontainers test, not the H2 slice.
+
+**Rationale.** On dev hosts where Testcontainers is unavailable, a
+`disabledWithoutDocker` IT clean-skips — leaving the ORM path unexercised on
+every Docker-free CI run. An H2 slice keeps the JPA mapping under test there
+while the Testcontainers IT remains authoritative on Docker-capable runners.
+The exception **permits, it does not mandate** — do not retrofit H2 slices onto
+services that do not need them (on-demand policy).
 
 ## Integration-test bootstrap pitfalls (full-context-only failures)
 
