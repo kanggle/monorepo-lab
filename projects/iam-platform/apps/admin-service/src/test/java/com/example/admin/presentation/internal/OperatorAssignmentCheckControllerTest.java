@@ -76,6 +76,20 @@ class OperatorAssignmentCheckControllerTest {
     }
 
     @Test
+    @DisplayName("TASK-MONO-295: X-Subject-Email 헤더 → use case 의 subjectEmail 인자로 전달 (dual-key)")
+    void subjectEmailHeader_threadedToUseCase() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("acme-operator@example.com"), eq("acme-corp")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, null));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "acme-corp")
+                        .header("X-Subject-Email", "acme-operator@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true));
+    }
+
+    @Test
     @DisplayName("assigned=false (미할당/unknown/non-ACTIVE 모두) → 200 {assigned:false, orgScope:null}")
     void assignedFalse() throws Exception {
         given(checkUseCase.check(eq(SUB), any(), eq("globex")))

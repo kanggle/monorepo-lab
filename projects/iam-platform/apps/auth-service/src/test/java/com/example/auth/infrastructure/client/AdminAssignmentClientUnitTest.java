@@ -147,26 +147,29 @@ class AdminAssignmentClientUnitTest {
     }
 
     @Test
-    @DisplayName("TASK-MONO-295: subjectEmail 제공 시 dual-key query 파라미터로 전달")
+    @DisplayName("TASK-MONO-295: subjectEmail 제공 시 dual-key X-Subject-Email HEADER 로 전달 (PII off the URL)")
     void forwardsSubjectEmail_whenProvided() {
         stubAssigned(true);
         String email = "acme-operator@example.com";
         client.resolveAssignment(SUBJECT, email, TENANT);
+        // PII rides the header, never the query string (which lands in access logs).
         wireMockServer.verify(getRequestedFor(urlPathEqualTo(CHECK_PATH))
                 .withQueryParam("oidcSubject", equalTo(SUBJECT))
-                .withQueryParam("subjectEmail", equalTo(email))
-                .withQueryParam("tenantId", equalTo(TENANT)));
+                .withQueryParam("tenantId", equalTo(TENANT))
+                .withoutQueryParam("subjectEmail")
+                .withHeader("X-Subject-Email", equalTo(email)));
     }
 
     @Test
-    @DisplayName("TASK-MONO-295: subjectEmail null 이면 query 에서 생략(byte-identical 요청)")
+    @DisplayName("TASK-MONO-295: subjectEmail null 이면 header 생략(byte-identical 요청)")
     void omitsSubjectEmail_whenNull() {
         stubAssigned(true);
         client.resolveAssignment(SUBJECT, null, TENANT);
         wireMockServer.verify(getRequestedFor(urlPathEqualTo(CHECK_PATH))
                 .withQueryParam("oidcSubject", equalTo(SUBJECT))
                 .withQueryParam("tenantId", equalTo(TENANT))
-                .withoutQueryParam("subjectEmail"));
+                .withoutQueryParam("subjectEmail")
+                .withoutHeader("X-Subject-Email"));
     }
 
     @Test

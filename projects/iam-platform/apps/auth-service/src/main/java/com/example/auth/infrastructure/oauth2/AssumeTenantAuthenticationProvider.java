@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.exception.AssumeTenantDeniedException;
 import com.example.auth.application.port.OperatorAssignmentPort;
+import com.example.auth.domain.repository.CredentialRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
@@ -61,6 +62,20 @@ import java.util.Set;
  * tenants are enterprise tenants). The provider carries that on the context so
  * the customizer never blanks {@code tenant_type} (auth-service fails closed on a
  * missing tenant_type).
+ *
+ * <p><b>TASK-MONO-295 (ADR-MONO-040 Phase 2) — server-side operator email
+ * resolution.</b> Phase 2 flips the SAS access-token {@code sub} to the account
+ * UUID, but {@code admin_operators.oidc_subject} is still seeded with the
+ * operator's login <b>email</b>, so the assignment gate needs a DUAL-KEY fallback
+ * (account_id first, legacy email second). The SAS access token used as the
+ * assume-tenant {@code subject_token} carries <b>NO {@code email} claim</b> —
+ * email is emitted only into userinfo / id-token via {@link OidcUserInfoMapper},
+ * never the access token. So the email fallback key MUST be resolved
+ * <b>server-side</b> from the validated {@code sub} (= account_id): the
+ * {@link CredentialRepository} (the local {@code auth_db.credentials} store this
+ * service already authenticates against — no cross-service hop, no PII on any
+ * token) maps {@code account_id → email}. The resolved email is passed to
+ * admin-service as the legacy fallback key but is NEVER logged (PII).
  */
 @Slf4j
 public class AssumeTenantAuthenticationProvider implements AuthenticationProvider {
@@ -70,14 +85,17 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
 
     private final JwtDecoder subjectTokenDecoder;
     private final OperatorAssignmentPort operatorAssignmentPort;
+    private final CredentialRepository credentialRepository;
     private final OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator;
 
     public AssumeTenantAuthenticationProvider(
             JwtDecoder subjectTokenDecoder,
             OperatorAssignmentPort operatorAssignmentPort,
+            CredentialRepository credentialRepository,
             OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator) {
         this.subjectTokenDecoder = subjectTokenDecoder;
         this.operatorAssignmentPort = operatorAssignmentPort;
+        this.credentialRepository = credentialRepository;
         this.tokenGenerator = tokenGenerator;
     }
 
@@ -94,19 +112,9 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
 
         // --- 1. Validate the subject token (auth-service's own JWKS) — fail-closed. ---
         String oidcSubject;
-        String subjectEmail;
         try {
             Jwt subjectJwt = subjectTokenDecoder.decode(exchange.getSubjectToken());
             oidcSubject = subjectJwt.getSubject();
-            // TASK-MONO-295 (ADR-MONO-040 Phase 2): the SAS access-token `sub` is now
-            // the account UUID (Phase 2 flipped it off the login email). But
-            // admin_operators.oidc_subject is seeded with the operator's EMAIL, and
-            // the account_id<->email mapping is cross-DB (auth_db vs admin_db) so it
-            // cannot be backfilled in one Flyway step. Carry the subject token's
-            // `email` claim as the DUAL-KEY legacy fallback: the assignment gate
-            // resolves on account_id (`sub`) first, then on this email — keeping every
-            // existing operator's tenant switch working through the migration.
-            subjectEmail = subjectJwt.getClaimAsString("email");
             // TASK-BE-376 (ADR-MONO-035 O1 / step 4a): the operator's domain roles are
             // no longer preserved from the subject token (TASK-BE-370) — the base
             // operator token has no domain-role set to preserve. The customizer's
@@ -121,6 +129,22 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         if (oidcSubject == null || oidcSubject.isBlank()) {
             throw invalidGrant("subject_token has no subject");
         }
+
+        // TASK-MONO-295 (ADR-MONO-040 Phase 2): resolve the DUAL-KEY legacy email
+        // fallback SERVER-SIDE from the validated `sub` (= account_id). The SAS
+        // access token used as the subject_token carries NO `email` claim (email is
+        // emitted only into userinfo/id-token by OidcUserInfoMapper, never the
+        // access token), so reading it off the token would always be null — the
+        // fallback would be dead and every legacy email-seeded operator would fail
+        // closed. Instead, the local auth_db.credentials store (the same store
+        // CredentialAuthenticationProvider authenticates against) maps
+        // account_id → email with no cross-service hop and no PII on any token.
+        // A missing credential row (non-SAS / legacy / break-glass subject) yields a
+        // null fallback → resolution proceeds on account_id alone (graceful F4).
+        // The resolved email is NEVER logged (PII).
+        String subjectEmail = credentialRepository.findByAccountId(oidcSubject)
+                .map(com.example.auth.domain.credentials.Credential::getEmail)
+                .orElse(null);
 
         String selectedTenantId = exchange.getSelectedTenantId();
 
