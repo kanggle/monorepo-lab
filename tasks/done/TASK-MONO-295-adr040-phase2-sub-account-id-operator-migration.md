@@ -1,6 +1,6 @@
 # TASK-MONO-295 — ADR-MONO-040 Phase 2: SAS `sub` = account_id + operator assume-tenant resolution migration
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-MONO (root — cross-project atomic: iam-platform `auth-service` + `admin-service` + ecommerce `gateway-service` + `platform/contracts/`)
 

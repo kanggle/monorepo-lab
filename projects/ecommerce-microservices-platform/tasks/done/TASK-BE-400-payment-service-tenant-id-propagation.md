@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-400
 title: "payment-service tenant_id propagation (ADR-MONO-030 Step 4, facet c)"
-status: ready
+status: done
 service: payment-service
 tags: [code, test, migration, multi-tenant, event-driven]
 analysis_model: "Opus 4.8"
