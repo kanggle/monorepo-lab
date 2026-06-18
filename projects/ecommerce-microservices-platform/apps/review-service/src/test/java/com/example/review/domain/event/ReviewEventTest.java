@@ -28,13 +28,14 @@ class ReviewEventTest {
                 FIXED_TIME.toString()
         );
 
-        ReviewEvent event = ReviewEvent.created(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.created(payload, "ecommerce", fixedClock);
 
         assertThat(event.occurredAt()).isEqualTo(FIXED_TIME);
         assertThat(event.eventType()).isEqualTo("ReviewCreated");
         assertThat(event.source()).isEqualTo("review-service");
         assertThat(event.eventId()).isNotNull();
         assertThat(event.payload()).isEqualTo(payload);
+        assertThat(event.tenantId()).isEqualTo("ecommerce");
     }
 
     @Test
@@ -48,7 +49,7 @@ class ReviewEventTest {
                 FIXED_TIME.toString()
         );
 
-        ReviewEvent event = ReviewEvent.updated(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.updated(payload, "ecommerce", fixedClock);
 
         assertThat(event.occurredAt()).isEqualTo(FIXED_TIME);
         assertThat(event.eventType()).isEqualTo("ReviewUpdated");
@@ -65,7 +66,7 @@ class ReviewEventTest {
                 FIXED_TIME.toString()
         );
 
-        ReviewEvent event = ReviewEvent.deleted(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.deleted(payload, "ecommerce", fixedClock);
 
         assertThat(event.occurredAt()).isEqualTo(FIXED_TIME);
         assertThat(event.eventType()).isEqualTo("ReviewDeleted");
@@ -83,7 +84,7 @@ class ReviewEventTest {
                 FIXED_TIME.toString()
         );
 
-        assertThatThrownBy(() -> ReviewEvent.created(payload, null))
+        assertThatThrownBy(() -> ReviewEvent.created(payload, "ecommerce", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("clock must not be null");
     }
@@ -99,8 +100,8 @@ class ReviewEventTest {
                 FIXED_TIME.toString()
         );
 
-        ReviewEvent event1 = ReviewEvent.created(payload, fixedClock);
-        ReviewEvent event2 = ReviewEvent.created(payload, fixedClock);
+        ReviewEvent event1 = ReviewEvent.created(payload, "ecommerce", fixedClock);
+        ReviewEvent event2 = ReviewEvent.created(payload, "ecommerce", fixedClock);
 
         assertThat(event1.eventId()).isNotEqualTo(event2.eventId());
     }

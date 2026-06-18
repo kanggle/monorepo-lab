@@ -1,5 +1,7 @@
 package com.example.review.domain.model;
 
+import com.example.review.domain.tenant.TenantContext;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -10,6 +12,8 @@ public class Review {
     private UUID userId;
     private UUID productId;
     private String productName;
+    /** Outer-axis tenant (ADR-MONO-030 Step 4 facet c — TASK-BE-403, M1). */
+    private String tenantId;
     private Rating rating;
     private String title;
     private String content;
@@ -30,6 +34,7 @@ public class Review {
         review.userId = userId;
         review.productId = productId;
         review.productName = productName;
+        review.tenantId = TenantContext.currentTenant();
         review.rating = new Rating(rating);
         review.title = title.trim();
         review.content = content.trim();
@@ -41,6 +46,7 @@ public class Review {
     }
 
     public static Review reconstitute(UUID id, UUID userId, UUID productId, String productName,
+                                       String tenantId,
                                        int rating, String title, String content, ReviewStatus status,
                                        Instant createdAt, Instant updatedAt) {
         if (id == null) throw new IllegalArgumentException("id must not be null");
@@ -55,6 +61,7 @@ public class Review {
         review.userId = userId;
         review.productId = productId;
         review.productName = productName;
+        review.tenantId = (tenantId != null && !tenantId.isBlank()) ? tenantId : TenantContext.DEFAULT_TENANT_ID;
         review.rating = new Rating(rating);
         review.title = title;
         review.content = content;
@@ -94,6 +101,7 @@ public class Review {
     public UUID getUserId() { return userId; }
     public UUID getProductId() { return productId; }
     public String getProductName() { return productName; }
+    public String getTenantId() { return tenantId; }
     public Rating getRating() { return rating; }
     public int getRatingValue() { return rating.value(); }
     public String getTitle() { return title; }

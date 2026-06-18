@@ -48,7 +48,7 @@ class OutboxReviewEventPublisherTest {
     void publish_reviewCreatedEvent_savesToOutbox() {
         ReviewCreatedPayload payload = new ReviewCreatedPayload(
                 "review-id-123", "product-id-456", "user-id-789", 5, "2024-01-01T00:00:00Z");
-        ReviewEvent event = ReviewEvent.created(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.created(payload, "ecommerce", fixedClock);
 
         publisher.publish(event);
 
@@ -76,7 +76,7 @@ class OutboxReviewEventPublisherTest {
     void publish_reviewUpdatedEvent_savesToOutbox() {
         ReviewUpdatedPayload payload = new ReviewUpdatedPayload(
                 "review-id-123", "product-id-456", "user-id-789", 4, "2024-01-02T00:00:00Z");
-        ReviewEvent event = ReviewEvent.updated(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.updated(payload, "ecommerce", fixedClock);
 
         publisher.publish(event);
 
@@ -98,7 +98,7 @@ class OutboxReviewEventPublisherTest {
     void publish_reviewDeletedEvent_savesToOutbox() {
         ReviewDeletedPayload payload = new ReviewDeletedPayload(
                 "review-id-123", "product-id-456", "user-id-789", "2024-01-03T00:00:00Z");
-        ReviewEvent event = ReviewEvent.deleted(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.deleted(payload, "ecommerce", fixedClock);
 
         publisher.publish(event);
 
@@ -118,7 +118,7 @@ class OutboxReviewEventPublisherTest {
     void publish_serializedPayload_containsEnvelopeFields() {
         ReviewCreatedPayload payload = new ReviewCreatedPayload(
                 "review-id-123", "product-id-456", "user-id-789", 5, "2024-01-01T00:00:00Z");
-        ReviewEvent event = ReviewEvent.created(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.created(payload, "ecommerce", fixedClock);
 
         publisher.publish(event);
 
@@ -136,5 +136,7 @@ class OutboxReviewEventPublisherTest {
         assertThat(serializedPayload).contains("occurred_at");
         assertThat(serializedPayload).contains("source");
         assertThat(serializedPayload).contains("review-service");
+        assertThat(serializedPayload).contains("tenant_id");
+        assertThat(serializedPayload).contains("ecommerce");
     }
 }

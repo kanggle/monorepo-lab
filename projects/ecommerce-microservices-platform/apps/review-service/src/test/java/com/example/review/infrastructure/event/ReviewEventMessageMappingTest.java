@@ -41,7 +41,7 @@ class ReviewEventMessageMappingTest {
     void toMessage_reviewCreatedEvent_mapsAllFields() {
         ReviewCreatedPayload payload = new ReviewCreatedPayload(
                 "review-id-123", "product-id-456", "user-id-789", 5, "2024-01-01T00:00:00Z");
-        ReviewEvent event = ReviewEvent.created(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.created(payload, "ecommerce", fixedClock);
 
         ReviewEventMessage message = publisher.toMessage(event);
 
@@ -49,6 +49,7 @@ class ReviewEventMessageMappingTest {
         assertThat(message.eventType()).isEqualTo("ReviewCreated");
         assertThat(message.occurredAt()).isEqualTo(event.occurredAt());
         assertThat(message.source()).isEqualTo("review-service");
+        assertThat(message.tenantId()).isEqualTo("ecommerce");
         assertThat(message.payload()).isSameAs(payload);
     }
 
@@ -57,7 +58,7 @@ class ReviewEventMessageMappingTest {
     void toMessage_reviewUpdatedEvent_mapsAllFields() {
         ReviewUpdatedPayload payload = new ReviewUpdatedPayload(
                 "review-id-123", "product-id-456", "user-id-789", 4, "2024-01-02T00:00:00Z");
-        ReviewEvent event = ReviewEvent.updated(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.updated(payload, "ecommerce", fixedClock);
 
         ReviewEventMessage message = publisher.toMessage(event);
 
@@ -70,7 +71,7 @@ class ReviewEventMessageMappingTest {
     void toMessage_reviewDeletedEvent_mapsAllFields() {
         ReviewDeletedPayload payload = new ReviewDeletedPayload(
                 "review-id-123", "product-id-456", "user-id-789", "2024-01-03T00:00:00Z");
-        ReviewEvent event = ReviewEvent.deleted(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.deleted(payload, "ecommerce", fixedClock);
 
         ReviewEventMessage message = publisher.toMessage(event);
 
@@ -83,7 +84,7 @@ class ReviewEventMessageMappingTest {
     void toMessage_serialized_containsSnakeCaseEnvelopeFields() throws Exception {
         ReviewCreatedPayload payload = new ReviewCreatedPayload(
                 "review-id-123", "product-id-456", "user-id-789", 5, "2024-01-01T00:00:00Z");
-        ReviewEvent event = ReviewEvent.created(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.created(payload, "ecommerce", fixedClock);
 
         ReviewEventMessage message = publisher.toMessage(event);
         String json = objectMapper.writeValueAsString(message);
@@ -92,8 +93,10 @@ class ReviewEventMessageMappingTest {
         assertThat(node.has("event_id")).isTrue();
         assertThat(node.has("event_type")).isTrue();
         assertThat(node.has("occurred_at")).isTrue();
+        assertThat(node.has("tenant_id")).isTrue();
         assertThat(node.get("event_type").asText()).isEqualTo("ReviewCreated");
         assertThat(node.get("source").asText()).isEqualTo("review-service");
+        assertThat(node.get("tenant_id").asText()).isEqualTo("ecommerce");
     }
 
     @Test
@@ -101,7 +104,7 @@ class ReviewEventMessageMappingTest {
     void toMessage_serialized_doesNotContainCamelCaseEnvelopeFields() throws Exception {
         ReviewCreatedPayload payload = new ReviewCreatedPayload(
                 "review-id-123", "product-id-456", "user-id-789", 5, "2024-01-01T00:00:00Z");
-        ReviewEvent event = ReviewEvent.created(payload, fixedClock);
+        ReviewEvent event = ReviewEvent.created(payload, "ecommerce", fixedClock);
 
         ReviewEventMessage message = publisher.toMessage(event);
         String json = objectMapper.writeValueAsString(message);
