@@ -1,8 +1,10 @@
 package com.example.payment.adapter.in.event;
 
 import com.example.payment.application.service.PaymentRefundService;
+import com.example.payment.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -30,9 +33,23 @@ class OrderCancelledEventConsumerTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @AfterEach
+    void clearTenantContext() {
+        TenantContext.clear();
+    }
+
     private OrderCancelledEvent event(String orderId) {
         return new OrderCancelledEvent(
                 UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",
+                "ecommerce",
+                new OrderCancelledEvent.OrderCancelledPayload(orderId, "user-1", "2026-03-23T00:00:00")
+        );
+    }
+
+    private OrderCancelledEvent eventWithTenant(String orderId, String tenantId) {
+        return new OrderCancelledEvent(
+                UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",
+                tenantId,
                 new OrderCancelledEvent.OrderCancelledPayload(orderId, "user-1", "2026-03-23T00:00:00")
         );
     }
@@ -43,6 +60,17 @@ class OrderCancelledEventConsumerTest {
         consumer.handle(event("order-1"));
 
         verify(paymentRefundService).refundPayment("order-1");
+    }
+
+    @Test
+    @DisplayName("이벤트의 tenant_id 가 TenantContext 에 설정된 후 refundPayment 가 호출된다 (M5)")
+    void handle_eventWithTenantId_setsContextBeforeProcessing() {
+        // tenant context cleared after handle() completes (finally block)
+        consumer.handle(eventWithTenant("order-1", "tenant-a"));
+
+        verify(paymentRefundService).refundPayment("order-1");
+        // After the call the context should be cleared (finally fired)
+        assertThat(TenantContext.currentTenant()).isEqualTo("ecommerce"); // default (not tenant-a)
     }
 
     @Test
@@ -61,6 +89,7 @@ class OrderCancelledEventConsumerTest {
     void handle_nullPayload_skips() {
         OrderCancelledEvent nullPayloadEvent = new OrderCancelledEvent(
                 UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",
+                "ecommerce",
                 null
         );
 

@@ -1,6 +1,7 @@
 package com.example.payment.adapter.in.event;
 
 import com.example.payment.application.service.PaymentRefundService;
+import com.example.payment.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,14 @@ public class OrderCancelledEventConsumer {
             return;
         }
 
-        paymentRefundService.refundPayment(orderId);
+        // TASK-BE-400 (ADR-MONO-030 Step 4 facet c, M5): thread the event's tenant_id
+        // into TenantContext so the findByOrderId lookup in refundPayment is tenant-scoped.
+        // Falls back to default tenant if the field is absent (net-zero D8).
+        TenantContext.set(event.tenantId());
+        try {
+            paymentRefundService.refundPayment(orderId);
+        } finally {
+            TenantContext.clear();
+        }
     }
 }

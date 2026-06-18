@@ -24,6 +24,14 @@ class PaymentJpaEntity {
     @Column(name = "user_id", nullable = false)
     private String userId;
 
+    /**
+     * Outer-axis tenant owning this payment (ADR-MONO-030 Step 4 facet c — TASK-BE-400, M1).
+     * Stamped once at insert from the request/event tenant context; immutable afterward.
+     * Not part of the clean {@code Payment} domain model — persistence/event layers only.
+     */
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "amount", nullable = false)
     private long amount;
 
@@ -54,6 +62,7 @@ class PaymentJpaEntity {
         entity.paymentId = payment.getPaymentId();
         entity.orderId = payment.getOrderId();
         entity.userId = payment.getUserId();
+        entity.tenantId = payment.getTenantId();
         entity.amount = payment.getAmount();
         entity.status = payment.getStatus();
         entity.createdAt = payment.getCreatedAt();

@@ -1,6 +1,8 @@
 package com.example.payment.domain.model;
 
 import com.example.payment.domain.exception.InvalidPaymentException;
+import com.example.payment.domain.tenant.TenantContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +12,11 @@ import static org.assertj.core.api.Assertions.*;
 
 @DisplayName("Payment 애그리거트 단위 테스트")
 class PaymentTest {
+
+    @AfterEach
+    void clearTenantContext() {
+        TenantContext.clear();
+    }
 
     @Test
     @DisplayName("create 호출 시 PENDING 상태로 생성된다")
@@ -26,6 +33,24 @@ class PaymentTest {
         assertThat(payment.getPaymentKey()).isNull();
         assertThat(payment.getPaymentMethod()).isNull();
         assertThat(payment.getReceiptUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("create 시 TenantContext 미설정이면 기본 테넌트 'ecommerce'가 할당된다 (D8 net-zero)")
+    void create_noTenantContext_usesDefaultTenant() {
+        TenantContext.clear();
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+
+        assertThat(payment.getTenantId()).isEqualTo("ecommerce");
+    }
+
+    @Test
+    @DisplayName("create 시 TenantContext 가 설정되면 해당 tenantId 가 할당된다")
+    void create_withTenantContext_usesContextTenant() {
+        TenantContext.set("tenant-a");
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+
+        assertThat(payment.getTenantId()).isEqualTo("tenant-a");
     }
 
     @Test
@@ -150,11 +175,11 @@ class PaymentTest {
     }
 
     @Test
-    @DisplayName("reconstitute로 복원된 Payment는 모든 필드를 유지한다")
+    @DisplayName("reconstitute로 복원된 Payment는 모든 필드를 유지한다 (tenantId 포함)")
     void reconstitute_restoresAllFields() {
         LocalDateTime now = LocalDateTime.now();
         Payment payment = Payment.reconstitute(
-                "pay-1", "order-1", "user-1", 50000L,
+                "pay-1", "order-1", "user-1", "tenant-a", 50000L,
                 PaymentStatus.COMPLETED, now, now.plusMinutes(1), null,
                 "pk_test_123", "CARD", "https://receipt.url"
         );
@@ -162,6 +187,7 @@ class PaymentTest {
         assertThat(payment.getPaymentId()).isEqualTo("pay-1");
         assertThat(payment.getOrderId()).isEqualTo("order-1");
         assertThat(payment.getUserId()).isEqualTo("user-1");
+        assertThat(payment.getTenantId()).isEqualTo("tenant-a");
         assertThat(payment.getAmount()).isEqualTo(50000L);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(payment.getCreatedAt()).isEqualTo(now);

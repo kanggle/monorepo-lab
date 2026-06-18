@@ -8,12 +8,20 @@ import java.util.List;
 /**
  * Inbound event record mirroring order-service OrderPlaced contract.
  * See specs/contracts/events/order-events.md
+ *
+ * <p>TASK-BE-400: {@code tenant_id} added to the envelope mirror. Order events have
+ * carried this field since TASK-BE-357 (ADR-MONO-030 Step 2 M5). The consumer now
+ * threads it into {@link com.example.payment.domain.tenant.TenantContext} before
+ * delegating to the application service, so the created Payment row inherits the
+ * correct tenant (multi-tenant-ready). A missing/null field falls back to the
+ * default tenant via TenantContext.
  */
 public record OrderPlacedEvent(
         @JsonProperty("event_id") @JsonAlias("eventId") String eventId,
         @JsonProperty("event_type") @JsonAlias("eventType") String eventType,
         @JsonProperty("occurred_at") @JsonAlias("occurredAt") String occurredAt,
         String source,
+        @JsonProperty("tenant_id") @JsonAlias("tenantId") String tenantId,
         OrderPlacedPayload payload
 ) {
     public record OrderPlacedPayload(

@@ -1,6 +1,7 @@
 package com.example.payment.domain.model;
 
 import com.example.payment.domain.exception.InvalidPaymentException;
+import com.example.payment.domain.tenant.TenantContext;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -10,6 +11,8 @@ public class Payment {
     private String paymentId;
     private String orderId;
     private String userId;
+    /** Outer-axis tenant (ADR-MONO-030 Step 4 facet c — TASK-BE-400, M1). */
+    private String tenantId;
     private long amount;
     private PaymentStatus status;
     private LocalDateTime createdAt;
@@ -27,6 +30,7 @@ public class Payment {
         payment.paymentId = UUID.randomUUID().toString();
         payment.orderId = orderId;
         payment.userId = userId;
+        payment.tenantId = TenantContext.currentTenant();
         payment.amount = amount;
         payment.status = PaymentStatus.PENDING;
         payment.createdAt = LocalDateTime.now();
@@ -34,6 +38,7 @@ public class Payment {
     }
 
     public static Payment reconstitute(String paymentId, String orderId, String userId,
+                                        String tenantId,
                                         long amount, PaymentStatus status,
                                         LocalDateTime createdAt, LocalDateTime paidAt,
                                         LocalDateTime refundedAt,
@@ -43,6 +48,7 @@ public class Payment {
         payment.paymentId = paymentId;
         payment.orderId = orderId;
         payment.userId = userId;
+        payment.tenantId = tenantId;
         payment.amount = amount;
         payment.status = status;
         payment.createdAt = createdAt;
@@ -97,6 +103,10 @@ public class Payment {
 
     public String getUserId() {
         return userId;
+    }
+
+    public String getTenantId() {
+        return tenantId;
     }
 
     public long getAmount() {

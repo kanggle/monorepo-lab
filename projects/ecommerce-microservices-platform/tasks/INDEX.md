@@ -74,6 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-400 | **READY**. payment-service `tenant_id` propagation (ADR-MONO-030 Step 4 facet c). Flyway V5 + TenantContext + TenantContextFilter + domain/persistence/event threading. 분석=Opus 4.8 / 구현=Sonnet 4.6. | payment-service | code, multi-tenant, migration |
 | TASK-BE-357 | **READY**. ecommerce **outer-axis tenant isolation** (ADR-MONO-030 **Step 2**, code). Gateway `TenantClaimValidator` 고정슬러그 → **entitlement-trust + dual-accept**(wms/scm 미러) + `X-Tenant-Id` 전파; product(V10)/order(V8) **row-level `tenant_id` NOT NULL** + 백필 `'ecommerce'`(default-tenant) + read 필터 + 404(M3) + 이벤트 봉투 `tenant_id`(M5); **M6 cross-tenant-leak Testcontainers IT**; **`PROJECT.md` `multi-tenant` trait** 추가(ADR §D7 타이밍). net-zero(default-tenant 백필+dual-accept). `seller_id` 미포함(Step3/BE-358), 11서비스·ADR-022 스레딩 미포함(Step4). SoT=`specs/features/multi-tenancy-and-marketplace.md` §2. 분할 가능 A(게이트)→B(product)→C(order). 분석=Opus 4.8 / 구현 권장=Opus. ⚠️큰 세션 JDT.LS OOM→새 세션 구현 권장. | gateway-service, product-service, order-service | code, multi-tenant, migration |
 | TASK-BE-143 | product-service `ProductImageService` 의 `infrastructure.storage.StorageProperties` 직접 import 제거 — `domain/port/ProductImageBucketResolver` 추출 + `ProductImageRepository.saveAll` dead code 제거 (trivial bundling). 2026-05-15 dry-run finding A1 single-PR closure (B/C/D polish 는 DEFER). 분석=Opus 4.7 / 구현 권장=Sonnet 4.6 — small refactor. | product-service | code, test, refactor |
 

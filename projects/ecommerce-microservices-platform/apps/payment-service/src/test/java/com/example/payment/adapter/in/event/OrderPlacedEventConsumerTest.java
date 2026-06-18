@@ -1,8 +1,10 @@
 package com.example.payment.adapter.in.event;
 
 import com.example.payment.application.service.PaymentProcessingService;
+import com.example.payment.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -32,9 +35,23 @@ class OrderPlacedEventConsumerTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @AfterEach
+    void clearTenantContext() {
+        TenantContext.clear();
+    }
+
     private OrderPlacedEvent event(String orderId, String userId, long totalPrice) {
         return new OrderPlacedEvent(
                 UUID.randomUUID().toString(), "OrderPlaced", "2026-03-23T00:00:00", "order-service",
+                "ecommerce",
+                new OrderPlacedEvent.OrderPlacedPayload(orderId, userId, totalPrice, List.of(), null)
+        );
+    }
+
+    private OrderPlacedEvent eventWithTenant(String orderId, String userId, long totalPrice, String tenantId) {
+        return new OrderPlacedEvent(
+                UUID.randomUUID().toString(), "OrderPlaced", "2026-03-23T00:00:00", "order-service",
+                tenantId,
                 new OrderPlacedEvent.OrderPlacedPayload(orderId, userId, totalPrice, List.of(), null)
         );
     }
@@ -45,6 +62,17 @@ class OrderPlacedEventConsumerTest {
         consumer.handle(event("order-1", "user-1", 30000L));
 
         verify(paymentProcessingService).processPayment("order-1", "user-1", 30000L);
+    }
+
+    @Test
+    @DisplayName("이벤트의 tenant_id 가 TenantContext 에 설정된 후 processPayment 가 호출된다 (M5)")
+    void handle_eventWithTenantId_setsContextBeforeProcessing() {
+        // tenant context cleared after handle() completes (finally block)
+        consumer.handle(eventWithTenant("order-1", "user-1", 30000L, "tenant-a"));
+
+        verify(paymentProcessingService).processPayment("order-1", "user-1", 30000L);
+        // After the call the context should be cleared
+        assertThat(TenantContext.currentTenant()).isEqualTo("ecommerce"); // default (not tenant-a)
     }
 
     @Test
@@ -79,6 +107,7 @@ class OrderPlacedEventConsumerTest {
     void handle_nullPayload_skips() {
         OrderPlacedEvent nullPayloadEvent = new OrderPlacedEvent(
                 UUID.randomUUID().toString(), "OrderPlaced", "2026-03-23T00:00:00", "order-service",
+                "ecommerce",
                 null
         );
 

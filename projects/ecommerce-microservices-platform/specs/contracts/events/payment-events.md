@@ -7,12 +7,19 @@ Consumers must not depend on fields not defined in this contract.
 ---
 
 ## Event Envelope (common to all events)
+
+> `tenant_id` was added to the envelope in TASK-BE-400 (ADR-MONO-030 Step 4 facet c).
+> Consumers that do not yet read `tenant_id` are unaffected — it is an additive field.
+> Pre-existing outbox rows serialized before this change may lack the field; consumers
+> must treat a missing `tenant_id` as the default tenant (`'ecommerce'`).
+
 ```json
 {
   "event_id": "string (UUID)",
   "event_type": "string",
   "occurred_at": "string (ISO 8601)",
   "source": "payment-service",
+  "tenant_id": "string (tenant slug, e.g. 'ecommerce')",
   "payload": {}
 }
 ```

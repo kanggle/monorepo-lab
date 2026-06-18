@@ -15,10 +15,10 @@ class PaymentPersistenceMapperTest {
     private final PaymentPersistenceMapper mapper = new PaymentPersistenceMapper();
 
     @Test
-    @DisplayName("도메인 -> JpaEntity 변환 시 모든 필드가 매핑된다")
+    @DisplayName("도메인 -> JpaEntity 변환 시 모든 필드가 매핑된다 (tenantId 포함)")
     void toEntity_mapsAllFields() {
         Payment payment = Payment.reconstitute(
-                "pay-1", "order-1", "user-1", 50000L,
+                "pay-1", "order-1", "user-1", "ecommerce", 50000L,
                 PaymentStatus.COMPLETED,
                 LocalDateTime.of(2025, 1, 1, 10, 0),
                 LocalDateTime.of(2025, 1, 1, 10, 5),
@@ -31,6 +31,7 @@ class PaymentPersistenceMapperTest {
         assertThat(entity.getPaymentId()).isEqualTo("pay-1");
         assertThat(entity.getOrderId()).isEqualTo("order-1");
         assertThat(entity.getUserId()).isEqualTo("user-1");
+        assertThat(entity.getTenantId()).isEqualTo("ecommerce");
         assertThat(entity.getAmount()).isEqualTo(50000L);
         assertThat(entity.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(entity.getCreatedAt()).isEqualTo(LocalDateTime.of(2025, 1, 1, 10, 0));
@@ -42,10 +43,10 @@ class PaymentPersistenceMapperTest {
     }
 
     @Test
-    @DisplayName("JpaEntity -> 도메인 변환 시 모든 필드가 매핑된다")
+    @DisplayName("JpaEntity -> 도메인 변환 시 모든 필드가 매핑된다 (tenantId 포함)")
     void toDomain_mapsAllFields() {
         Payment original = Payment.reconstitute(
-                "pay-1", "order-1", "user-1", 30000L,
+                "pay-1", "order-1", "user-1", "tenant-a", 30000L,
                 PaymentStatus.REFUNDED,
                 LocalDateTime.of(2025, 1, 1, 10, 0),
                 LocalDateTime.of(2025, 1, 1, 10, 5),
@@ -59,6 +60,7 @@ class PaymentPersistenceMapperTest {
         assertThat(restored.getPaymentId()).isEqualTo("pay-1");
         assertThat(restored.getOrderId()).isEqualTo("order-1");
         assertThat(restored.getUserId()).isEqualTo("user-1");
+        assertThat(restored.getTenantId()).isEqualTo("tenant-a");
         assertThat(restored.getAmount()).isEqualTo(30000L);
         assertThat(restored.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
         assertThat(restored.getCreatedAt()).isEqualTo(LocalDateTime.of(2025, 1, 1, 10, 0));
@@ -70,7 +72,7 @@ class PaymentPersistenceMapperTest {
     }
 
     @Test
-    @DisplayName("도메인 -> JpaEntity -> 도메인 왕복 변환 시 데이터 손실이 없다")
+    @DisplayName("도메인 -> JpaEntity -> 도메인 왕복 변환 시 데이터 손실이 없다 (tenantId 포함)")
     void roundTrip_noDataLoss() {
         Payment original = Payment.create("order-1", "user-1", 40000L);
         original.confirm("pk_test_789", "CARD", "https://receipt.url");
@@ -81,6 +83,7 @@ class PaymentPersistenceMapperTest {
         assertThat(restored.getPaymentId()).isEqualTo(original.getPaymentId());
         assertThat(restored.getOrderId()).isEqualTo(original.getOrderId());
         assertThat(restored.getUserId()).isEqualTo(original.getUserId());
+        assertThat(restored.getTenantId()).isEqualTo(original.getTenantId());
         assertThat(restored.getAmount()).isEqualTo(original.getAmount());
         assertThat(restored.getStatus()).isEqualTo(original.getStatus());
         assertThat(restored.getCreatedAt()).isEqualTo(original.getCreatedAt());
