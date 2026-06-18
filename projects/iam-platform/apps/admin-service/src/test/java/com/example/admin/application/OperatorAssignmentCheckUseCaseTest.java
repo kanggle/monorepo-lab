@@ -184,68 +184,34 @@ class OperatorAssignmentCheckUseCaseTest {
         verify(assignmentPort, never()).findOrgScope(anyLong(), anyString());
     }
 
-    // ── TASK-MONO-295 (ADR-MONO-040 Phase 2): DUAL-KEY operator resolution ───────
-
-    private static final String OPERATOR_EMAIL = "acme-operator@example.com";
+    // ── TASK-MONO-299 (ADR-MONO-040 Phase 3 part B): account_id-only resolution ──
 
     @Test
-    @DisplayName("AC-0: account_id 키 hit → 기존 동작 그대로 (email fallback 미조회)")
-    void dualKey_accountIdHit_emailFallbackNotConsulted() {
-        // The target end-state: oidc_subject already backfilled to account_id.
+    @DisplayName("account_id-only: account_id 키 hit → assigned (oidc_subject 가 account_id 로 backfill 됨)")
+    void accountIdOnly_hit_assigned() {
+        // The Phase-3 end-state: oidc_subject backfilled to account_id (part A).
         when(operatorPort.findByOidcSubject(OIDC_SUBJECT))
                 .thenReturn(Optional.of(operator("acme-corp", "ACTIVE", 7L)));
         when(tenantScopeResolver.resolveEffectiveTenantScope(7L, "acme-corp"))
                 .thenReturn(Set.of("acme-corp"));
 
         OperatorAssignmentCheckUseCase.Result result =
-                useCase.check(OIDC_SUBJECT, OPERATOR_EMAIL, "acme-corp");
+                useCase.check(OIDC_SUBJECT, "acme-corp");
 
         assertThat(result.assigned()).isTrue();
-        // account_id hit → the email fallback lookup is never performed.
-        verify(operatorPort, never()).findByOidcSubject(OPERATOR_EMAIL);
     }
 
     @Test
-    @DisplayName("AC-0: account_id 키 miss → 레거시 email fallback 으로 resolve (기존 operator 무회귀)")
-    void dualKey_accountIdMiss_resolvesViaEmailFallback() {
-        // The live transition state: sub is now the account UUID, but
-        // admin_operators.oidc_subject still holds the seed EMAIL.
+    @DisplayName("account_id-only: account_id 키 miss → fail-closed false (email fallback 없음)")
+    void accountIdOnly_miss_failClosed() {
         when(operatorPort.findByOidcSubject(OIDC_SUBJECT)).thenReturn(Optional.empty());
-        when(operatorPort.findByOidcSubject(OPERATOR_EMAIL))
-                .thenReturn(Optional.of(operator("acme-corp", "ACTIVE", 7L)));
-        when(tenantScopeResolver.resolveEffectiveTenantScope(7L, "acme-corp"))
-                .thenReturn(Set.of("acme-corp"));
 
         OperatorAssignmentCheckUseCase.Result result =
-                useCase.check(OIDC_SUBJECT, OPERATOR_EMAIL, "acme-corp");
-
-        // The operator still resolves — AC-0 no-regression proven.
-        assertThat(result.assigned()).isTrue();
-    }
-
-    @Test
-    @DisplayName("AC-0: 두 키 모두 miss → fail-closed false (fallback 이 게이트를 완화하지 않음)")
-    void dualKey_bothKeysMiss_failClosed() {
-        when(operatorPort.findByOidcSubject(OIDC_SUBJECT)).thenReturn(Optional.empty());
-        when(operatorPort.findByOidcSubject(OPERATOR_EMAIL)).thenReturn(Optional.empty());
-
-        OperatorAssignmentCheckUseCase.Result result =
-                useCase.check(OIDC_SUBJECT, OPERATOR_EMAIL, "acme-corp");
+                useCase.check(OIDC_SUBJECT, "acme-corp");
 
         assertThat(result.assigned()).isFalse();
-        verify(tenantScopeResolver, never()).resolveEffectiveTenantScope(anyLong(), anyString());
-    }
-
-    @Test
-    @DisplayName("dual-key: subjectEmail null + account_id miss → fallback 시도 없이 fail-closed")
-    void dualKey_nullEmail_noFallbackAttempt() {
-        when(operatorPort.findByOidcSubject(OIDC_SUBJECT)).thenReturn(Optional.empty());
-
-        OperatorAssignmentCheckUseCase.Result result =
-                useCase.check(OIDC_SUBJECT, null, "acme-corp");
-
-        assertThat(result.assigned()).isFalse();
-        // Only the account_id lookup was attempted (null email is skipped).
+        // Only the account_id lookup is attempted; no email fallback lookup remains.
         verify(operatorPort).findByOidcSubject(OIDC_SUBJECT);
+        verify(tenantScopeResolver, never()).resolveEffectiveTenantScope(anyLong(), anyString());
     }
 }

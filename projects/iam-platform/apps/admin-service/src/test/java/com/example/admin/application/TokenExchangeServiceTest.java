@@ -3,7 +3,6 @@ package com.example.admin.application;
 import com.example.admin.application.exception.SubjectTokenInvalidException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.IamOidcSubjectTokenValidator;
-import com.example.admin.infrastructure.client.AuthServiceClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,7 +18,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,13 +28,11 @@ import static org.mockito.Mockito.when;
  * (mapped / unmapped-fail-closed / deactivated) + the fail-closed propagation
  * of a subject-token validation failure.
  *
- * <p>TASK-MONO-295 (ADR-MONO-040 Phase 2): exercises the REAL shared
- * {@link OperatorOidcSubjectResolver} (wrapping the mock {@code operatorPort}) and a
- * mock {@link AuthServiceClient}, proving the login-time exchange resolves an
- * <b>email-seeded</b> operator when the subject token's {@code sub}=account_id and the
- * SAS access token carries no email claim (the email fallback is resolved
- * server-side from the account_id) — the federation-e2e {@code not_provisioned}
- * regression fix.
+ * <p>TASK-MONO-299 (ADR-MONO-040 Phase 3 part B): exercises the REAL shared
+ * account_id-only {@link OperatorOidcSubjectResolver} (wrapping the mock
+ * {@code operatorPort}). The subject-token {@code sub} is the account UUID and
+ * {@code admin_operators.oidc_subject} is backfilled to account_id, so the operator
+ * resolves by it directly (the Phase-2 email fallback is removed).
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -46,26 +42,22 @@ class TokenExchangeServiceTest {
     @Mock IamOidcSubjectTokenValidator subjectTokenValidator;
     @Mock AdminOperatorPort operatorPort;
     @Mock OperatorAccessTokenIssuer accessTokenIssuer;
-    @Mock AuthServiceClient authServiceClient;
 
     TokenExchangeService service;
 
     private static final String SUBJECT_TOKEN = "header.payload.sig";
-    // Phase 2: the subject-token `sub` is now the account UUID.
+    // The subject-token `sub` is the account UUID (jwt-standard-claims.md).
     private static final String OIDC_SUB = "acc-uuid-0001";
     private static final String OPERATOR_EMAIL = "op@example.com";
     private static final String OPERATOR_UUID = "00000000-0000-7000-8000-000000000010";
 
     @BeforeEach
     void setUp() {
-        // Use the REAL shared dual-key resolver (the SAME one the assume-tenant gate
-        // uses) so resolution is tested through the production component, not stubbed.
+        // Use the REAL shared account_id-only resolver (the SAME one the assume-tenant
+        // gate uses) so resolution is tested through the production component.
         OperatorOidcSubjectResolver resolver = new OperatorOidcSubjectResolver(operatorPort);
         service = new TokenExchangeService(
-                subjectTokenValidator, operatorPort, accessTokenIssuer, resolver, authServiceClient);
-        // Default: no email resolved (account_id-keyed rows / fail-soft) unless a
-        // test overrides it. lenient — not every test reaches the email lookup.
-        lenient().when(authServiceClient.resolveOperatorEmail(anyString())).thenReturn(Optional.empty());
+                subjectTokenValidator, operatorPort, accessTokenIssuer, resolver);
     }
 
     private AdminOperatorPort.OperatorView operatorView(String status, String tenantId) {
@@ -162,64 +154,36 @@ class TokenExchangeServiceTest {
         verify(accessTokenIssuer, never()).mint(anyString());
     }
 
-    // ── TASK-MONO-295 (ADR-MONO-040 Phase 2): DUAL-KEY login-time resolution ─────
+    // ── TASK-MONO-299 (ADR-MONO-040 Phase 3 part B): account_id-only resolution ──
 
     @Test
-    @DisplayName("AC-0 (regression fix): sub=account_id misses oidc_subject=email, but server-side email fallback resolves the email-seeded operator → mints (login no longer breaks)")
-    void dualKey_accountIdMiss_resolvesViaServerSideEmailFallback() {
-        // The exact federation-e2e regression: the subject token's `sub` is the
-        // account UUID (Phase 2) and carries NO email claim, while
-        // admin_operators.oidc_subject still holds the seed EMAIL. Without the
-        // server-side email resolution + dual-key, findByOidcSubject(account_id)
-        // misses → 401 → console-web not_provisioned → every operator login breaks.
-        when(subjectTokenValidator.validateAndExtractSubject(SUBJECT_TOKEN)).thenReturn(OIDC_SUB);
-        // account_id key misses (oidc_subject not yet backfilled).
-        when(operatorPort.findByOidcSubject(OIDC_SUB)).thenReturn(Optional.empty());
-        // The email is resolved SERVER-SIDE from the account_id (auth_db.credentials).
-        when(authServiceClient.resolveOperatorEmail(OIDC_SUB)).thenReturn(Optional.of(OPERATOR_EMAIL));
-        // Legacy email key hits — oidc_subject == the seed email.
-        when(operatorPort.findByOidcSubject(OPERATOR_EMAIL))
-                .thenReturn(Optional.of(operatorView("ACTIVE", "wms")));
-        when(accessTokenIssuer.mint(OPERATOR_UUID)).thenReturn("minted.via.email.fallback");
-        when(accessTokenIssuer.accessTokenTtlSeconds()).thenReturn(3600L);
-
-        TokenExchangeService.ExchangeResult result = service.exchange(SUBJECT_TOKEN);
-
-        // The email-seeded operator resolves under sub=account_id with no email claim.
-        assertThat(result.accessToken()).isEqualTo("minted.via.email.fallback");
-        verify(accessTokenIssuer).mint(OPERATOR_UUID);
-    }
-
-    @Test
-    @DisplayName("AC-0: account_id key hits → email fallback never consulted (Phase-3 backfill end-state)")
-    void dualKey_accountIdHit_emailFallbackNotConsulted() {
+    @DisplayName("account_id-only: sub=account_id resolves the backfilled operator → mints")
+    void accountIdOnly_resolvesBackfilledOperator() {
+        // Phase 3: admin_operators.oidc_subject is backfilled to account_id (part A),
+        // so findByOidcSubject(account_id) hits directly — no email fallback needed.
         when(subjectTokenValidator.validateAndExtractSubject(SUBJECT_TOKEN)).thenReturn(OIDC_SUB);
         when(operatorPort.findByOidcSubject(OIDC_SUB))
                 .thenReturn(Optional.of(operatorView("ACTIVE", "wms")));
         when(accessTokenIssuer.mint(OPERATOR_UUID)).thenReturn("minted.via.account.id");
         when(accessTokenIssuer.accessTokenTtlSeconds()).thenReturn(3600L);
 
-        service.exchange(SUBJECT_TOKEN);
+        TokenExchangeService.ExchangeResult result = service.exchange(SUBJECT_TOKEN);
 
-        // account_id hit → the legacy email key is never looked up, AND the
-        // server-side email resolution (auth-service round-trip) is never invoked
-        // (lazy fallback — the happy path pays no extra cost).
-        verify(operatorPort, never()).findByOidcSubject(OPERATOR_EMAIL);
-        verify(authServiceClient, never()).resolveOperatorEmail(anyString());
+        assertThat(result.accessToken()).isEqualTo("minted.via.account.id");
+        verify(accessTokenIssuer).mint(OPERATOR_UUID);
     }
 
     @Test
-    @DisplayName("fail-soft email resolve (auth-service down → empty) + account_id miss → 401 fail-closed (invariant unchanged)")
-    void emailResolveFailSoft_andAccountIdMiss_failClosed() {
+    @DisplayName("account_id-only: account_id miss → 401 fail-closed (no email fallback exists)")
+    void accountIdOnly_miss_failClosed() {
         when(subjectTokenValidator.validateAndExtractSubject(SUBJECT_TOKEN)).thenReturn(OIDC_SUB);
         when(operatorPort.findByOidcSubject(OIDC_SUB)).thenReturn(Optional.empty());
-        // auth-service unavailable → fail-soft empty (the client swallows the error).
-        when(authServiceClient.resolveOperatorEmail(OIDC_SUB)).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(SubjectTokenInvalidException.class)
                 .isThrownBy(() -> service.exchange(SUBJECT_TOKEN));
 
-        // No email key looked up (it was empty); no token minted (fail-closed kept).
+        // Only the account_id lookup is attempted; the legacy email key is never
+        // looked up (the dual-key fallback is removed); no token minted.
         verify(operatorPort, never()).findByOidcSubject(OPERATOR_EMAIL);
         verify(accessTokenIssuer, never()).mint(anyString());
     }

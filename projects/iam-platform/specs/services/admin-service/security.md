@@ -172,28 +172,19 @@ token 검증 정책을 규정한다. operator token **발급**은 기존 login-s
   `admin_operators` row 를 해석한다. 링크 키 선택(provisioned
   `admin_operators.oidc_subject` 컬럼)과 근거는 [data-model.md §OIDC Subject
   ↔ Operator Link Key](./data-model.md) 가 canonical.
-- **TASK-MONO-295 (ADR-MONO-040 Phase 2) — DUAL-KEY 해석**: Phase 2 가 SAS
-  access-token `sub` 를 account UUID 로 뒤집었으나 `admin_operators.oidc_subject`
-  는 여전히 운영자의 로그인 **email** 로 시드되어 있고, account_id↔email 매핑은
-  `auth_db`(admin_db 와 물리적으로 분리된 DB)에 있어 단일 Flyway backfill 이
-  불가능하다. 그래서 `TokenExchangeService` 는 운영자를 **account_id(`sub`) 먼저,
-  레거시 email 다음** 의 dual-key 로 해석한다(공유 `OperatorOidcSubjectResolver` —
-  assume-tenant 게이트 `OperatorAssignmentCheckUseCase` 와 **동일** 컴포넌트, 두
-  sub-keyed 경로가 갈라지지 않도록 중앙화). email fallback 키는 **서버사이드** 로
-  검증된 `sub` 에서 해석한다: login-time exchange 는 console-web 이 admin-service 를
-  직접 호출하므로(assume-tenant 처럼 auth-service 내부 `CredentialRepository` 를
-  못 읽음) 내부 엔드포인트 `GET /internal/auth/credentials/{accountId}/email`(동일
-  `findByAccountId` 소스, [admin-to-auth.md](../../contracts/http/internal/admin-to-auth.md))
-  로 해석한다 — SAS access token 은 `email` claim 을 싣지 않아 토큰에서 못 읽는다.
-  이 lookup 은 **fail-soft**(auth-service 장애 → email 없음 → account_id 단독 해석).
-  email 은 어떤 토큰에도 싣지 않고 로그하지 않는다(`confidential` PII).
-  account_id-first 라 향후 cross-DB backfill 로 `oidc_subject`=account_id 가
-  채워지면(Phase-3) 1차 lookup 이 hit 하고 email fallback 은 더 이상 조회되지 않는다.
+- **TASK-MONO-299 (ADR-MONO-040 Phase 3 part B) — account_id 단독 해석**: Phase 2 가
+  SAS access-token `sub` 를 account UUID 로 뒤집었고, part A(TASK-MONO-298)가
+  `admin_operators.oidc_subject` 를 email → account_id 로 backfill 했다. 따라서
+  `TokenExchangeService` 는 운영자를 검증된 `sub`(= account_id)로 **직접** 해석한다
+  (공유 `OperatorOidcSubjectResolver` — assume-tenant 게이트
+  `OperatorAssignmentCheckUseCase` 와 **동일** 컴포넌트, 두 sub-keyed 경로가
+  갈라지지 않도록 중앙화). Phase-2 의 임시 DUAL-KEY email fallback 과 서버사이드
+  `GET /internal/auth/credentials/{accountId}/email` 조회는 **제거**되었다.
+  (실배포 전제: part-A backfill 이 선행돼야 한다 — 미migrate 운영자는 fallback
+  제거 후 fail-closed 된다. demo/e2e 시드는 account_id 이므로 stranded 없음.)
 - 다음 중 하나라도 해당하면 **fail-closed `401 TOKEN_INVALID`**(기존
-  `OperatorUnauthorizedException`) — operator token **미발급** (dual-key 해석 후에도
-  불변 — email fallback 은 게이트를 완화하지 않는다):
-  - **두 키(account_id `sub` AND 레거시 email)** 모두 어떤 `admin_operators` row 와도
-    매칭되지 않음 (미매핑).
+  `OperatorUnauthorizedException`) — operator token **미발급**:
+  - account_id `sub` 가 어떤 `admin_operators` row 와도 매칭되지 않음 (미매핑).
   - 매칭된 operator 의 `status != ACTIVE` (DISABLED/LOCKED — 비활성/잠금).
 - operator 해석 성공 시 **tenant 스코프는 `admin_operators.tenant_id` 에서만**
   결정된다 (ADR-002 `'*'` SUPER_ADMIN platform sentinel 포함). subject token

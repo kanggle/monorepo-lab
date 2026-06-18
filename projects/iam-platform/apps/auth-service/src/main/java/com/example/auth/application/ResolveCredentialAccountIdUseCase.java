@@ -11,11 +11,10 @@ import java.util.Optional;
 
 /**
  * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — resolves an operator's
- * {@code account_id} from its login <b>email</b>, scoped by tenant. This is the
- * <b>reverse</b> direction of {@link ResolveCredentialEmailUseCase} (account_id →
- * email, Phase 2) and exists for the <b>one-time backfill</b> that migrates
- * {@code admin_operators.oidc_subject} from email to account_id (the Phase-3
- * end-state key), driven by the admin-service maintenance endpoint.
+ * {@code account_id} from its login <b>email</b>, scoped by tenant. Exists for the
+ * <b>one-time backfill</b> that migrates {@code admin_operators.oidc_subject} from
+ * email to account_id (the Phase-3 end-state key), driven by the admin-service
+ * maintenance endpoint.
  *
  * <h2>Tenant scoping is MANDATORY (not advisory)</h2>
  *
