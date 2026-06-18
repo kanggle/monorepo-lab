@@ -114,14 +114,26 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          # TASK-BE-406: 1G → 2G. With a 512m heap, ES needs roughly equal off-heap
+          # (Lucene mmap, the nori plugin, JVM overhead); a 1G cgroup limit left no
+          # headroom and ES could be OOM-pressured into an unhealthy state at startup
+          # on a loaded CI runner (recurring `ecommerce-elasticsearch is unhealthy`
+          # nightly flake, 2026-06-18).
+          memory: 2G
           cpus: '1.0'
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qv '\"status\":\"red\"'"]
       interval: 10s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      # TASK-BE-406: retries 10 → 15, start_period 30s → 120s. The nori-plugin image's
+      # cold start (JVM + plugin load + single-node bootstrap) regularly exceeds the
+      # old 30s start_period on a loaded CI runner, so the first real health probes
+      # began burning the retry budget before ES was ready → intermittent
+      # `dependency failed to start: container ecommerce-elasticsearch is unhealthy`
+      # aborting the whole web-store full-stack e2e bring-up. Wider cold-start window
+      # + more retries absorb the variance without masking a genuinely-down ES.
+      retries: 15
+      start_period: 120s
     networks:
       - ecommerce-net
 
