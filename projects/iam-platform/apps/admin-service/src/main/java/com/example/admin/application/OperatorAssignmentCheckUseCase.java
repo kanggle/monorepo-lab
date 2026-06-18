@@ -31,6 +31,21 @@ import java.util.Set;
  * <p>Otherwise the decision is delegated to {@link TenantScopeResolver} (BE-326
  * dual-read: assignment rows ∪ {legacy home tenant}).
  *
+ * <p><b>TASK-MONO-295 (ADR-MONO-040 Phase 2) — DUAL-KEY operator resolution.</b>
+ * The auth-service now flips the SAS access-token {@code sub} to the account UUID
+ * (Phase 2). But {@code admin_operators.oidc_subject} is seeded with the operator's
+ * login <b>email</b> (federation {@code seed.sql}), and the account_id↔email mapping
+ * lives in {@code auth_db} (a physically separate database from {@code admin_db}),
+ * so a single-Flyway backfill is impossible (mirrors the V0036 "no cross-DB read at
+ * migrate time" precedent). To keep <b>every existing operator working</b> while the
+ * {@code sub} migration lands, {@link #check(String, String, String)} resolves the
+ * operator by the account_id {@code oidcSubject} FIRST (the target end-state key),
+ * and on a miss falls back to the legacy {@code subjectEmail} (the seed value).
+ * Account_id is the preferred key: once the eventual cross-DB backfill sets
+ * {@code oidc_subject}=account_id (Phase-3 follow-up), the primary lookup hits and
+ * the email fallback silently stops being consulted. The fallback never relaxes the
+ * fail-closed gate — a row that matches NEITHER key is {@code assigned=false}.
+ *
  * <p><b>No {@code admin_actions} row</b> — read-only (ADR-014 token-exchange
  * "not audited" rule; the subsequent domain commands each audit). No
  * {@code @Transactional}: a fail-closed read only.
@@ -40,9 +55,12 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class OperatorAssignmentCheckUseCase {
 
-    private final AdminOperatorPort operatorPort;
     private final TenantScopeResolver tenantScopeResolver;
     private final OperatorTenantAssignmentPort assignmentPort;
+    // TASK-MONO-295 (ADR-MONO-040 Phase 2): the shared DUAL-KEY resolver — the SAME
+    // account_id-first/email-fallback resolution the login-time exchange
+    // (TokenExchangeService) uses, so the two sub-keyed paths cannot diverge.
+    private final OperatorOidcSubjectResolver operatorResolver;
 
     /**
      * Boolean convenience kept for callers that need only the assignment verdict.
@@ -53,7 +71,20 @@ public class OperatorAssignmentCheckUseCase {
      *         {@code tenantId}; {@code false} fail-closed otherwise
      */
     public boolean isAssigned(String oidcSubject, String tenantId) {
-        return check(oidcSubject, tenantId).assigned();
+        return check(oidcSubject, null, tenantId).assigned();
+    }
+
+    /**
+     * TASK-MONO-292 (ADR-MONO-040 Phase 1) back-compat overload — single-key
+     * resolution (no legacy email fallback). Retained so any caller holding only
+     * the {@code oidcSubject} continues to compile; the dual-key
+     * {@link #check(String, String, String)} is the Phase-2 entry point.
+     *
+     * @param oidcSubject the operator's GAP OIDC {@code sub} (account_id)
+     * @param tenantId    the selected (assume-target) customer tenant id
+     */
+    public Result check(String oidcSubject, String tenantId) {
+        return check(oidcSubject, null, tenantId);
     }
 
     /**
@@ -67,21 +98,35 @@ public class OperatorAssignmentCheckUseCase {
      * assignment row, platform-scope, and every {@code assigned=false} case). The
      * auth-service customizer maps {@code null}/empty/absent → {@code ["*"]}.
      *
-     * @param oidcSubject the operator's GAP OIDC {@code sub} (account_id)
-     * @param tenantId    the selected (assume-target) customer tenant id
+     * <p>TASK-MONO-295 (ADR-MONO-040 Phase 2): DUAL-KEY operator resolution — the
+     * operator row is resolved by the account_id {@code oidcSubject} first, then
+     * (on a miss) by the legacy {@code subjectEmail}. See the class javadoc.
+     *
+     * @param oidcSubject  the operator's GAP OIDC {@code sub} (account_id — the
+     *                     preferred/end-state key)
+     * @param subjectEmail the operator's login email from the subject token's
+     *                     {@code email} claim (the legacy fallback key; may be
+     *                     {@code null} for a token lacking the claim)
+     * @param tenantId     the selected (assume-target) customer tenant id
      * @return the assignment verdict + the selected assignment's {@code org_scope}
      *         ({@code null} when unset / not assigned)
      */
-    public Result check(String oidcSubject, String tenantId) {
+    public Result check(String oidcSubject, String subjectEmail, String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {
             // Blank/malformed selected tenant never resolves to an assignment.
             return Result.notAssigned();
         }
 
-        // 1. Resolve oidc_subject → admin_operators row, FAIL-CLOSED.
-        AdminOperatorPort.OperatorView operator = operatorPort.findByOidcSubject(oidcSubject).orElse(null);
+        // 1. Resolve admin_operators row, FAIL-CLOSED. DUAL-KEY (ADR-040 Phase 2):
+        // account_id (oidcSubject) first — the target end-state key; legacy email
+        // (subjectEmail) second — the value oidc_subject is currently seeded with.
+        // Delegated to the SHARED OperatorOidcSubjectResolver so this path and the
+        // login-time exchange (TokenExchangeService) cannot diverge.
+        AdminOperatorPort.OperatorView operator =
+                operatorResolver.resolve(oidcSubject, subjectEmail).orElse(null);
         if (operator == null) {
-            log.debug("assignment-check fail-closed: no admin_operators row for the OIDC subject");
+            log.debug("assignment-check fail-closed: no admin_operators row for the OIDC subject "
+                    + "(account_id key NOR legacy email fallback matched)");
             return Result.notAssigned();
         }
         if (!"ACTIVE".equals(operator.status())) {

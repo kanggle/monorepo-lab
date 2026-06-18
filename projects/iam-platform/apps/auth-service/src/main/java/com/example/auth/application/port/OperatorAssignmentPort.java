@@ -24,6 +24,12 @@ public interface OperatorAssignmentPort {
      * resolves the selected assignment's per-assignment data-scope
      * ({@code org_scope}).
      *
+     * <p>TASK-MONO-292 (ADR-MONO-040 Phase 1) back-compat overload — single-key
+     * (no legacy email fallback). Delegates to the dual-key
+     * {@link #resolveAssignment(String, String, String)} with a {@code null}
+     * email. Retained so any caller holding only the {@code oidcSubject}
+     * continues to compile.
+     *
      * @param oidcSubject the operator's GAP OIDC {@code sub} (account_id) from the
      *                    validated subject token
      * @param tenantId    the selected (assume-target) customer tenant id
@@ -32,7 +38,29 @@ public interface OperatorAssignmentPort {
      * @throws com.example.auth.application.exception.AssumeTenantDeniedException
      *         on a negative answer OR any admin-service failure (fail-closed)
      */
-    AssignmentResult resolveAssignment(String oidcSubject, String tenantId);
+    default AssignmentResult resolveAssignment(String oidcSubject, String tenantId) {
+        return resolveAssignment(oidcSubject, null, tenantId);
+    }
+
+    /**
+     * TASK-MONO-295 (ADR-MONO-040 Phase 2) — DUAL-KEY assignment resolution.
+     * Confirms the assignment AND resolves {@code org_scope}, keying the
+     * admin-service lookup on the account_id {@code oidcSubject} first and the
+     * legacy {@code subjectEmail} second. See
+     * {@code com.example.admin.application.OperatorAssignmentCheckUseCase} for the
+     * fallback rationale (cross-DB seed value).
+     *
+     * @param oidcSubject  the operator's GAP OIDC {@code sub} (account_id — the
+     *                     preferred/end-state key) from the validated subject token
+     * @param subjectEmail the operator's login email from the subject token's
+     *                     {@code email} claim (the legacy fallback key; may be
+     *                     {@code null})
+     * @param tenantId     the selected (assume-target) customer tenant id
+     * @return the confirmed assignment + its {@code org_scope}
+     * @throws com.example.auth.application.exception.AssumeTenantDeniedException
+     *         on a negative answer OR any admin-service failure (fail-closed)
+     */
+    AssignmentResult resolveAssignment(String oidcSubject, String subjectEmail, String tenantId);
 
     /**
      * Boolean convenience kept for callers that need only the verdict (the
@@ -43,7 +71,7 @@ public interface OperatorAssignmentPort {
      *         on a negative answer OR any admin-service failure (fail-closed)
      */
     default boolean isAssigned(String oidcSubject, String tenantId) {
-        return resolveAssignment(oidcSubject, tenantId).assigned();
+        return resolveAssignment(oidcSubject, null, tenantId).assigned();
     }
 
     /**

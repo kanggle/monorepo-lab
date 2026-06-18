@@ -64,6 +64,39 @@ admin-service가 운영자 명령으로 auth-service에 강제 로그아웃 / re
 
 ---
 
+## GET /internal/auth/credentials/{accountId}/email
+
+**TASK-MONO-295 (ADR-MONO-040 Phase 2)** — 검증된 `account_id`(= SAS access token 의 `sub`)로부터 운영자의 로그인 **email** 을 해석한다. login-time operator-token exchange (`POST /api/admin/auth/token-exchange`, admin-service `TokenExchangeService`) 의 DUAL-KEY 운영자 해석을 위한 **레거시 email fallback 키** 제공이 목적이다.
+
+> **왜 이 엔드포인트인가** — Phase 2 가 SAS access-token `sub` 를 account UUID 로 뒤집었으나 `admin_operators.oidc_subject` 는 여전히 운영자의 로그인 **email** 로 시드되어 있다(federation `seed.sql`). assume-tenant exchange 는 auth-service 내부(`AssumeTenantAuthenticationProvider`)에서 `CredentialRepository.findByAccountId` 로 email 을 **서버사이드** 해석하지만, login-time exchange 는 console-web 이 admin-service 를 **직접** 호출하므로 auth-service 를 거치지 않는다 — admin-service 는 `auth_db.credentials` 를 로컬로 읽을 수 없다. 그래서 동일한 `findByAccountId` 소스(account_id → email 의 단일 진실 소스)를 이 내부 엔드포인트로 해석한다. SAS access token 은 `email` claim 을 싣지 않으므로 토큰에서 읽을 수 없다.
+
+**Path Parameters**:
+
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `accountId` | string (UUID) | 검증된 subject-token `sub`. `auth_db.credentials.account_id` 로 단건 조회 |
+
+**Response 200** (항상 200 — fail-soft 경계):
+```json
+{
+  "accountId": "string",
+  "email": "operator@example.com"
+}
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `accountId` | string | 요청한 account_id (echo) |
+| `email` | string \| null | `credentials.email`(정규화된 lower-case). credential row 부재 시 `null` — caller 는 account_id 단독 해석으로 진행(graceful) |
+
+**Side Effect**: 없음 (read-only).
+
+> **PII 경계** — `email` 은 `confidential` (data-model.md `admin_operators.email`). caller(admin-service)는 이를 즉시 dual-key 해석에만 소비하고 query param·로그에 남기지 않는다. 이 엔드포인트 자체는 `account_id`(불투명 UUID, `internal`)만 URL 에 노출한다.
+
+> **Caller fail-soft** (admin-service 측, **assume-tenant fail-CLOSED 와 정반대**) — email 은 *레거시 fallback 키* 일 뿐이다. 호출 실패(타임아웃·5xx·circuit-open·IO 모두)는 `email=null` 과 동일하게 처리되어 operator 해석이 account_id 단독으로 진행된다(그것마저 miss 면 401 — fail-closed 불변식 유지). `AuthServiceClient.resolveOperatorEmail` 이 예외를 삼키고 `Optional.empty()` 를 반환한다.
+
+---
+
 ## POST /internal/auth/sessions/{jti}/revoke
 
 특정 세션(refresh token) 하나만 revoke.

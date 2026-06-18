@@ -9,7 +9,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -82,5 +85,55 @@ class AuthServiceClientUnitTest {
 
         assertThatThrownBy(() -> client.forceLogout("acc-1", "op-1", "reason", "idemp-1"))
                 .isInstanceOf(DownstreamFailureException.class);
+    }
+
+    // ── TASK-MONO-295 (ADR-MONO-040 Phase 2): resolveOperatorEmail (FAIL-SOFT) ───
+
+    @Test
+    @DisplayName("resolveOperatorEmail — 200 + email → Optional.of(email)")
+    void resolveOperatorEmail_200WithEmail_returnsEmail() {
+        wireMockServer.stubFor(get(urlPathMatching("/internal/auth/credentials/.*/email"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"email\":\"op@example.com\"}")));
+
+        Optional<String> email = client.resolveOperatorEmail("acc-1");
+
+        assertThat(email).contains("op@example.com");
+    }
+
+    @Test
+    @DisplayName("resolveOperatorEmail — 200 + null email (no credential row) → Optional.empty (account_id-only)")
+    void resolveOperatorEmail_200NullEmail_returnsEmpty() {
+        wireMockServer.stubFor(get(urlPathMatching("/internal/auth/credentials/.*/email"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"email\":null}")));
+
+        assertThat(client.resolveOperatorEmail("acc-1")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("resolveOperatorEmail — FAIL-SOFT: 5xx → Optional.empty (never throws; account_id-only resolution)")
+    void resolveOperatorEmail_5xx_failSoftEmpty() {
+        wireMockServer.stubFor(get(urlPathMatching("/internal/auth/credentials/.*/email"))
+                .willReturn(aResponse().withStatus(500)));
+
+        assertThat(client.resolveOperatorEmail("acc-1")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("resolveOperatorEmail — FAIL-SOFT: 네트워크 오류 → Optional.empty (never throws)")
+    void resolveOperatorEmail_networkFault_failSoftEmpty() {
+        wireMockServer.stubFor(get(urlPathMatching("/internal/auth/credentials/.*/email"))
+                .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+        assertThat(client.resolveOperatorEmail("acc-1")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("resolveOperatorEmail — blank accountId → Optional.empty, no HTTP call")
+    void resolveOperatorEmail_blankAccountId_returnsEmptyWithoutCall() {
+        assertThat(client.resolveOperatorEmail("  ")).isEmpty();
     }
 }

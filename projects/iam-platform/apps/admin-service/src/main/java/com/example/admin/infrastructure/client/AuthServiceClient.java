@@ -18,9 +18,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
- * Calls auth-service internal endpoints to force-logout (revoke all sessions).
+ * Calls auth-service internal endpoints to force-logout (revoke all sessions)
+ * and — TASK-MONO-295 (ADR-MONO-040 Phase 2) — to resolve a credential's login
+ * email from its {@code account_id}.
  * Contract: specs/contracts/http/internal/admin-to-auth.md
  */
 @Slf4j
@@ -89,9 +92,73 @@ public class AuthServiceClient {
         }
     }
 
+    /**
+     * TASK-MONO-295 (ADR-MONO-040 Phase 2) — resolve the operator's login email
+     * from its {@code account_id} (= the validated SAS subject-token {@code sub}),
+     * for the login-time operator-token exchange's DUAL-KEY operator resolution.
+     *
+     * <p><b>FAIL-SOFT</b> (deliberately the opposite of {@link #forceLogout}, which
+     * fail-closes a mutation): this is only the <em>legacy email FALLBACK</em> key.
+     * Any failure (auth-service down / circuit-open / timeout / non-2xx / IO) →
+     * {@link Optional#empty()} so the exchange proceeds on the account_id
+     * {@code oidcSubject} alone (which already resolves once the Phase-3 cross-DB
+     * {@code oidc_subject} backfill lands, and works today for any account_id-keyed
+     * row). The fail-closed operator-resolution INVARIANT is unchanged: if neither
+     * key matches a row, the exchange still 401s — this method never relaxes that;
+     * it only supplies (or fails to supply) the optional second key.
+     *
+     * <p>The email is {@code confidential} PII — never logged (only its presence).
+     *
+     * @param accountId the validated subject-token {@code sub}
+     * @return the login email, or empty (no row / lookup failed → account_id-only)
+     */
+    @Retry(name = "authService")
+    @CircuitBreaker(name = "authService")
+    public Optional<String> resolveOperatorEmail(String accountId) {
+        if (accountId == null || accountId.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            ResolveEmailResponse resp = restClient.get()
+                    .uri("/internal/auth/credentials/{accountId}/email", accountId)
+                    .headers(h -> {
+                        if (internalToken != null && !internalToken.isBlank()) {
+                            h.add("X-Internal-Token", internalToken);
+                        }
+                    })
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, r) -> {
+                        throw HttpClientErrorException.create(
+                                r.getStatusCode(), r.getStatusText(),
+                                r.getHeaders(), r.getBody().readAllBytes(), null);
+                    })
+                    .body(ResolveEmailResponse.class);
+            if (resp == null || resp.email() == null || resp.email().isBlank()) {
+                return Optional.empty();
+            }
+            return Optional.of(resp.email());
+        } catch (RuntimeException e) {
+            // FAIL-SOFT: the email is only the legacy fallback key. Do NOT propagate —
+            // resolution proceeds on account_id alone (fail-closed if THAT also misses).
+            // Never log the email (PII); the account_id is an opaque UUID (internal).
+            log.warn("auth-service operator-email resolve failed (fail-soft → account_id-only "
+                    + "resolution): {}", e.toString());
+            return Optional.empty();
+        }
+    }
+
     public record ForceLogoutResponse(
             String accountId,
             Integer revokedTokenCount,
             Instant revokedAt
+    ) {}
+
+    /**
+     * TASK-MONO-295 — response of {@code GET /internal/auth/credentials/{accountId}/email}.
+     * {@code email} is {@code null} when no credential row exists for the accountId.
+     */
+    public record ResolveEmailResponse(
+            String accountId,
+            String email
     ) {}
 }

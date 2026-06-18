@@ -47,13 +47,33 @@ class JwtHeaderEnrichmentFilterTest {
     }
 
     // -----------------------------------------------------------------------
-    // ADR-MONO-040 D2 — X-User-Id = account_id claim (UUID), fallback to sub
+    // ADR-MONO-040 Phase 2 (TASK-MONO-295) — X-User-Id ← sub (sub is now the
+    // account UUID); transitional account_id fallback ONLY for in-flight legacy
+    // email-sub tokens during redeploy.
     // -----------------------------------------------------------------------
 
     @Test
-    void xUserIdUsesAccountIdClaimWhenPresent() {
-        // SAS access token: sub = login email, account_id = the account UUID.
-        // X-User-Id must be the UUID (jwt-standard-claims contract value), not sub.
+    void xUserIdUsesSubWhenSubIsAccountUuid() {
+        // ADR-040 Phase 2: the SAS access-token sub is NOW the account UUID.
+        // X-User-Id ← sub (contract value restored). The account_id claim is still
+        // present transitionally but must NOT override a UUID sub.
+        Jwt jwt = jwtBuilder()
+                .subject("550e8400-e29b-41d4-a716-446655440000")
+                .claim("account_id", "550e8400-e29b-41d4-a716-446655440000")
+                .build();
+
+        HttpHeaders headers = runAndCaptureHeaders(jwt);
+
+        assertThat(headers.getFirst("X-User-Id"))
+                .isEqualTo("550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    @Test
+    void xUserIdFallsBackToAccountIdForInFlightLegacyEmailSub() {
+        // F3: a token minted BEFORE the auth-service redeploy still has sub = the
+        // login email (contains '@'); the additive account_id claim carries the
+        // UUID. The transitional fallback keeps X-User-Id = the UUID so there is no
+        // 400 window during rollout.
         Jwt jwt = jwtBuilder()
                 .subject("user@example.com")
                 .claim("account_id", "550e8400-e29b-41d4-a716-446655440000")
@@ -66,13 +86,17 @@ class JwtHeaderEnrichmentFilterTest {
     }
 
     @Test
-    void xUserIdFallsBackToSubWhenAccountIdBlankOrAbsent() {
-        // Legacy/non-SAS token without account_id → fall back to sub.
-        Jwt blank = jwtBuilder().subject("legacy-uuid").claim("account_id", "   ").build();
-        assertThat(runAndCaptureHeaders(blank).getFirst("X-User-Id")).isEqualTo("legacy-uuid");
+    void xUserIdUsesSubWhenNoAccountIdClaim() {
+        // Post-Phase-2 / non-SAS token without account_id → X-User-Id ← sub.
+        Jwt absent = jwtBuilder().subject("550e8400-e29b-41d4-a716-446655440001").build();
+        assertThat(runAndCaptureHeaders(absent).getFirst("X-User-Id"))
+                .isEqualTo("550e8400-e29b-41d4-a716-446655440001");
 
-        Jwt absent = jwtBuilder().subject("legacy-uuid-2").build();
-        assertThat(runAndCaptureHeaders(absent).getFirst("X-User-Id")).isEqualTo("legacy-uuid-2");
+        // A UUID sub with a blank account_id → still sub (blank never substitutes).
+        Jwt blank = jwtBuilder().subject("550e8400-e29b-41d4-a716-446655440002")
+                .claim("account_id", "   ").build();
+        assertThat(runAndCaptureHeaders(blank).getFirst("X-User-Id"))
+                .isEqualTo("550e8400-e29b-41d4-a716-446655440002");
     }
 
     @Test

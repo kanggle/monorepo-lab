@@ -41,6 +41,12 @@ import java.util.function.Function;
  * directly after token validation.</p>
  *
  * <p>TASK-BE-251 Phase 2a — authorization_code + PKCE + /oauth2/userinfo.</p>
+ *
+ * <p>TASK-MONO-295 (ADR-MONO-040 Phase 2) — ALIGNED by construction. The userinfo
+ * {@code sub} is sourced from the access token's {@code sub} ({@code principal.getName()}),
+ * which Phase 2 makes the account UUID (the {@code TenantClaimTokenCustomizer}
+ * override). So the userinfo {@code sub} is now the account UUID too, matching the
+ * {@code account_id} the profile is keyed on — no mapper change needed.</p>
  */
 @Slf4j
 @Component

@@ -198,9 +198,14 @@ class FormLoginIntegrationTest extends AbstractIntegrationTest {
                 tokenResult.getResponse().getContentAsString());
         JsonNode accessPayload = decodeJwtPayload(tokenResponse.get("access_token").asText());
 
-        // The form-login principal name is the credential's stored email
-        // (CredentialAuthenticationProvider returns credential.getEmail()).
-        assertThat(accessPayload.get("sub").asText()).isEqualTo(TEST_EMAIL);
+        // ADR-MONO-040 Phase 2 (TASK-MONO-295): the SAS `sub` is now the account
+        // UUID, per jwt-standard-claims.md (`sub` = account ID, immutable). The
+        // form-login principal name is the credential's stored email, but
+        // CredentialAuthenticationProvider publishes `account_id` in the principal
+        // details and TenantClaimTokenCustomizer overrides `sub` to that account_id
+        // (= the seeded TEST_ACCOUNT_ID). The login email surfaces via the `email`
+        // claim, not `sub`.
+        assertThat(accessPayload.get("sub").asText()).isEqualTo(TEST_ACCOUNT_ID);
         assertThat(accessPayload.get("tenant_id").asText()).isEqualTo(TEST_TENANT_ID);
         assertThat(accessPayload.has("tenant_type"))
                 .as("tenant_type claim must be present (set by CredentialAuthenticationProvider)")

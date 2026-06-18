@@ -236,15 +236,16 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
-    @DisplayName("ADR-MONO-040 authorization_code: account_id from principal details → emitted as account_id claim")
-    void authorizationCode_accountIdFromPrincipalDetails_emittedAsClaim() {
+    @DisplayName("ADR-MONO-040 Phase 2 authorization_code: account_id from principal details → sub OVERRIDDEN to account UUID + account_id claim emitted")
+    void authorizationCode_accountIdFromPrincipalDetails_overridesSubAndEmitsClaim() {
         RegisteredClient client = buildClientWithGrantType(
                 "ecommerce|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
         // The account UUID rides on the principal details (set by
-        // CredentialAuthenticationProvider). ADR-040 D2: the customizer emits it
-        // as an additive account_id claim (the SAS sub stays the email).
+        // CredentialAuthenticationProvider). ADR-040 Phase 2 (MONO-295): the
+        // customizer OVERRIDES `sub` to the account UUID (full jwt-standard-claims
+        // compliance) AND still emits the transitional `account_id` claim.
         Map<String, Object> details = Map.of(
                 "tenant_id", "ecommerce",
                 "tenant_type", "B2C",
@@ -261,13 +262,16 @@ class TenantClaimTokenCustomizerTest {
         customizer.customize(context);
 
         JwtClaimsSet built = claimsBuilder.build();
+        // AC-1: sub is now the account UUID (was the framework default "test-client").
+        assertThat(built.getSubject()).isEqualTo("550e8400-e29b-41d4-a716-446655440000");
+        // Transitional account_id claim still present (retired in Phase 3).
         assertThat((String) built.getClaim("account_id"))
                 .isEqualTo("550e8400-e29b-41d4-a716-446655440000");
     }
 
     @Test
-    @DisplayName("ADR-MONO-040 authorization_code: no account_id in details → no account_id claim (additive, never blank)")
-    void authorizationCode_noAccountId_noClaim() {
+    @DisplayName("ADR-MONO-040 Phase 2 authorization_code: no account_id in details → sub NOT overridden, no account_id claim (graceful net-zero)")
+    void authorizationCode_noAccountId_subUnchanged_noClaim() {
         RegisteredClient client = buildClientWithGrantType(
                 "fan-platform|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
@@ -282,7 +286,10 @@ class TenantClaimTokenCustomizerTest {
 
         customizer.customize(context);
 
-        assertThat((Object) claimsBuilder.build().getClaim("account_id")).isNull();
+        JwtClaimsSet built = claimsBuilder.build();
+        // No account_id to substitute → sub keeps the framework default.
+        assertThat(built.getSubject()).isEqualTo("test-client");
+        assertThat((Object) built.getClaim("account_id")).isNull();
     }
 
     @Test

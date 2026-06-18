@@ -111,8 +111,8 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
     }
 
     @Override
-    public AssignmentResult resolveAssignment(String oidcSubject, String tenantId) {
-        Supplier<AssignmentResult> supplier = () -> doCheck(oidcSubject, tenantId);
+    public AssignmentResult resolveAssignment(String oidcSubject, String subjectEmail, String tenantId) {
+        Supplier<AssignmentResult> supplier = () -> doCheck(oidcSubject, subjectEmail, tenantId);
         Supplier<AssignmentResult> retrying = Retry.decorateSupplier(retry, supplier);
         Supplier<AssignmentResult> resilient = CircuitBreaker.decorateSupplier(circuitBreaker, retrying);
 
@@ -139,16 +139,32 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
         return result;
     }
 
+    /** TASK-MONO-295 — header carrying the DUAL-KEY legacy email off the logged URL. */
+    static final String SUBJECT_EMAIL_HEADER = "X-Subject-Email";
+
     @SuppressWarnings("unchecked")
-    private AssignmentResult doCheck(String oidcSubject, String tenantId) {
+    private AssignmentResult doCheck(String oidcSubject, String subjectEmail, String tenantId) {
         // admin-service returns { "assigned": true|false, "orgScope": [...]|null }.
+        // TASK-MONO-295 (ADR-MONO-040 Phase 2): pass subjectEmail as the DUAL-KEY
+        // legacy fallback. The email is PII, so it rides in the X-Subject-Email
+        // HEADER — NOT a query param — to keep it off the request URL (and thus out
+        // of gateway / access-log lines, which capture query strings but not header
+        // values). A null/blank email is OMITTED entirely, so the request shape is
+        // byte-identical to the Phase-1 call when the subject account has no
+        // resolvable email (admin-service then resolves on oidcSubject alone). The
+        // email value is never logged here.
         Map<String, Object> body = restClient().get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/internal/operator-assignments/check")
                         .queryParam("oidcSubject", oidcSubject)
                         .queryParam("tenantId", tenantId)
                         .build())
-                .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                .headers(h -> {
+                    h.setBearerAuth(tokenProvider.currentBearer());
+                    if (subjectEmail != null && !subjectEmail.isBlank()) {
+                        h.set(SUBJECT_EMAIL_HEADER, subjectEmail);
+                    }
+                })
                 .retrieve()
                 .body(Map.class);
         if (body == null) {
