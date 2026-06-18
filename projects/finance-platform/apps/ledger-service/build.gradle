@@ -49,6 +49,12 @@ dependencies {
     // Structured logging (prod profile)
     implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
 
+    // ShedLock — distributed scheduler lock for the FX-rate poller (TASK-FIN-BE-041);
+    // single-instance execution across replicas. Version pinned to match shipping-service
+    // (6.2.0) for monorepo consistency.
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.2.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.2.0'
+
     // Shared libs
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')

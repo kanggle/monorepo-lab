@@ -1846,8 +1846,7 @@ present quote (`fetched_at=clock.now()`); per-pair try/catch so one failure does
 `@Scheduled(fixedDelayString="${…poll-interval-ms:60000}", initialDelayString="${…initial-delay-ms:5000}")`
 gated by `@ConditionalOnProperty(name="financeplatform.ledger.fxrate.enabled", havingValue="true")`
 with **no `matchIfMissing`** → the poller bean exists only when explicitly enabled (default OFF =
-net-zero). The tick wraps the use-case in a catch-all (never throws; the scheduler survives). No
-ShedLock single-leader guard in this service (ADR-002 D4's "ShedLock" is a sketch; deferred).
+net-zero). The tick wraps the use-case in a catch-all (never throws; the scheduler survives). **ShedLock single-leader guard active (TASK-FIN-BE-041)**: `@SchedulerLock(name="ledger-fx-rate-poll", lockAtMostFor="PT10M", lockAtLeastFor="PT5S")` on `poll()` — only one replica acquires the lock per tick; others skip (DB CAS via the `shedlock` table, V14 migration). Single-instance deploy is a no-contention pass-through.
 
 **Config** (`infrastructure/fxrate/FxRateFeedProperties`, `@ConfigurationProperties(
 "financeplatform.ledger.fxrate")`, registered via `@EnableConfigurationProperties` on
