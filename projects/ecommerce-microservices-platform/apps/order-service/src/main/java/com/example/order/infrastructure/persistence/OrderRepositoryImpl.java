@@ -137,6 +137,17 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    public List<Order> findAllByUserIdAcrossTenants(String userId) {
+        // GDPR PII-anonymization cascade (ADR-MONO-037 P3-B): every order for the
+        // subject, any status, any tenant. Keyed by the globally-unique user_id, so
+        // it can never reach another subject and never leaks across tenants — it only
+        // ever returns the subject's own rows, and tenant_id is preserved on save.
+        return jpaRepository.findByUserId(userId).stream()
+                .map(mapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public PageResult<Order> findAll(PageQuery pageQuery) {
         PageRequest pageable = toPageRequest(pageQuery);
         Page<OrderJpaEntity> page = jpaRepository.findByTenantId(TenantContext.currentTenant(), pageable);

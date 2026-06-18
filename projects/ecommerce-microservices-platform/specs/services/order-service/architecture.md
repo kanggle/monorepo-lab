@@ -20,7 +20,7 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/order-service/` |
 | Data store | PostgreSQL (owned) |
 | Event publication | Kafka via outbox (order.* lifecycle events, ADR-MONO-005 Category A) |
-| Event consumption | `UserWithdrawn` from `user.user.withdrawn`, `StockChanged` from `product.product.stock-changed`, `PaymentCompleted` / `PaymentRefunded` from `payment.payment.*` (saga participation, ADR-MONO-005 Category A); `wms.outbound.order.cancelled.v1` (WmsOutboundCancelledConsumer, consumer group `order-service-wms`, ADR-022 §D4) |
+| Event consumption | `UserWithdrawn` from `user.user.withdrawn`, `StockChanged` from `product.product.stock-changed`, `PaymentCompleted` / `PaymentRefunded` from `payment.payment.*` (saga participation, ADR-MONO-005 Category A); `wms.outbound.order.cancelled.v1` (WmsOutboundCancelledConsumer, consumer group `order-service-wms`, ADR-022 §D4); **IAM `account.deleted` (AccountDeletedConsumer, consumer group `order-service-account-sync`, ADR-MONO-037 P3-B / TASK-BE-401)** — `anonymized=true` → order-held PII (shipping-address snapshot) anonymization cascade across all of the subject's orders; the GDPR TASK-BE-258 obligation for the order store |
 
 ### Service Type Composition
 

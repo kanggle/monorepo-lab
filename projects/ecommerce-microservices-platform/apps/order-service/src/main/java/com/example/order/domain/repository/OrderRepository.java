@@ -47,6 +47,17 @@ public interface OrderRepository {
 
     List<Order> findByUserIdAndStatusIn(String userId, Collection<OrderStatus> statuses);
 
+    /**
+     * Tenant-agnostic, status-agnostic lookup of EVERY order belonging to a subject,
+     * for the GDPR PII-anonymization cascade (ADR-MONO-037 P3-B). Masking is
+     * retention-wide — it must reach historical orders in any status (DELIVERED,
+     * CANCELLED, …) and across every tenant the subject ordered under. Addressing by
+     * the globally-unique {@code user_id} (= OIDC {@code sub} = IAM {@code accountId})
+     * cannot leak: it only ever returns that subject's own rows, and each order's
+     * immutable {@code tenant_id} is preserved across the subsequent save.
+     */
+    List<Order> findAllByUserIdAcrossTenants(String userId);
+
     boolean existsByUserIdAndProductIdAndStatus(String userId, String productId, OrderStatus status);
 
     PageResult<Order> findAll(PageQuery pageQuery);
