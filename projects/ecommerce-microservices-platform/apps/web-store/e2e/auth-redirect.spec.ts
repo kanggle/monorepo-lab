@@ -47,6 +47,9 @@ test.describe('인증 필요 라우트 보호 (NextAuth + GAP)', () => {
     // resolution to 2 elements. Scope explicitly to the LoginForm error
     // banner — which carries `class="alert-error"` — to keep the assertion
     // deterministic regardless of Next.js's announcer presence.
-    await expect(page.locator('[role="alert"].alert-error')).toContainText('admin');
+    // The account_type_mismatch → role_denied copy (LoginForm.tsx) reads
+    // "operator 계정으로는 web-store 에 접근할 수 없습니다. 운영자 콘솔을 이용해 주세요." —
+    // assert the stable "운영자 콘솔" substring (TASK-FE-076; was the obsolete 'admin').
+    await expect(page.locator('[role="alert"].alert-error')).toContainText('운영자 콘솔');
   });
 });
