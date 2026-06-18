@@ -1529,6 +1529,11 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
+      # ADR-MONO-041 D2: fan service images `FROM monorepo/java-service-base:v1`.
+      # No image registry → build the shared base locally before the docker builds.
+      - name: Build shared java-service-base image (ADR-MONO-041 D2)
+        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
+
       - name: Build fan-platform service images for e2e
         # Docker CLI build (BuildKit) — see wms `e2e-tests` job for the
         # rationale (Docker 28 + Testcontainers ImageFromDockerfile hang).
