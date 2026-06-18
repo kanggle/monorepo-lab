@@ -42,8 +42,30 @@ import java.util.UUID;
 @Component
 public class AccountServiceSellerProvisioner implements SellerAccountProvisioner {
 
-    /** account-service DEACTIVATED status literal (AccountStatus) for the close path (D4). */
-    private static final String STATUS_DEACTIVATED = "DEACTIVATED";
+    /**
+     * account-service status literal (AccountStatus) for the seller-CLOSE deactivation path
+     * (D4). MUST be a valid {@code AccountStatus} enum constant or {@code AccountStatus.valueOf}
+     * throws server-side (400) and the fail-soft swallow silently makes CLOSE a cosmetic no-op
+     * — the exact D4-B alternative the ADR REJECTED.
+     *
+     * <p><b>Why {@code LOCKED}</b> (and not {@code DEACTIVATED}/{@code DORMANT}/{@code DELETED}):
+     * <ul>
+     *   <li>{@code DEACTIVATED} is NOT a member of account-service {@code AccountStatus}
+     *       ({@code ACTIVE, LOCKED, DORMANT, DELETED}) — the original literal was invalid.</li>
+     *   <li>The {@code /status} EP hardcodes reason {@code OPERATOR_PROVISIONING_STATUS_CHANGE};
+     *       {@code AccountStatusMachine} permits that reason for {@code ACTIVE→LOCKED} (and the
+     *       idempotent {@code LOCKED→LOCKED}) but NOT for {@code →DORMANT} (only {@code DORMANT_365D}
+     *       reaches DORMANT), so DORMANT is unreachable here.</li>
+     *   <li>{@code LOCKED} revokes the seller-operator's ability to authenticate (D4 intent:
+     *       "deactivation is real, not just a label"), sets NO {@code deletedAt}, and emits only
+     *       {@code account.status.changed}/{@code account.locked} — it does NOT fire
+     *       {@code account.deleted}, so a seller CLOSE never triggers the ADR-037 PII-anonymization
+     *       deletion cascade. (Only the separate {@code deleteAccount}/GDPR path emits that.)</li>
+     *   <li>{@code DELETED} is rejected: it sets {@code deletedAt} and is the GDPR/deletion
+     *       lifecycle state — semantically wrong + destructive for an operator seller CLOSE.</li>
+     * </ul>
+     */
+    private static final String STATUS_DEACTIVATED = "LOCKED";
 
     private final RestClient restClient;
     private final IamClientCredentialsTokenProvider tokenProvider;
@@ -160,7 +182,7 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("email", email);
         body.put("password", generatePassword());
-        body.put("displayName", displayName);
+        body.put("displayName", truncateDisplayName(displayName));
         body.put("roles", List.of(sellerRole));
         body.put("operatorId", "product-service");
         return restClient.post()
@@ -209,6 +231,22 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
                     tenantId, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Truncate the seller display name to the account-service {@code ProvisionAccountRequest}
+     * {@code @Size(max=100)} bound (m4). product-service {@code sellers.display_name} is
+     * VARCHAR(255); a 101–255-char name would 400 the mint and strand the seller in
+     * {@code PENDING_PROVISIONING}. Truncating client-side keeps the mint succeeding (the
+     * seller-operator display name is cosmetic — it never authenticates by name).
+     */
+    private static final int MAX_ACCOUNT_DISPLAY_NAME = 100;
+
+    private static String truncateDisplayName(String displayName) {
+        if (displayName == null || displayName.length() <= MAX_ACCOUNT_DISPLAY_NAME) {
+            return displayName;
+        }
+        return displayName.substring(0, MAX_ACCOUNT_DISPLAY_NAME);
     }
 
     /**

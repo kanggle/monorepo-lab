@@ -105,28 +105,53 @@ public class Seller {
      * {@code accountId}/{@code identityId} and transitions PENDING_PROVISIONING → ACTIVE.
      * Idempotent + no-overwrite (AC-4 / F2): if already ACTIVE this is a no-op and a
      * stored non-null account/identity is never replaced. A {@code null} minted id does
-     * not overwrite an existing non-null one (re-provision only fills nulls).
+     * not overwrite an existing non-null one (re-provision only fills nulls). An ACTIVE
+     * seller with a null {@code identity_id} is topped up on re-provision (m2 reconciliation).
+     *
+     * @return {@code true} iff this call changed any field (so the caller persists only on a
+     *     real change — an already-fully-provisioned no-op returns {@code false}).
      */
-    public void markProvisioned(String accountId, String identityId) {
+    public boolean markProvisioned(String accountId, String identityId) {
         if (status == SellerStatus.CLOSED) {
             throw new IllegalStateException("Cannot provision a CLOSED seller: " + sellerId);
         }
+        boolean changed = false;
         if (this.accountId == null && accountId != null) {
             this.accountId = accountId;
+            changed = true;
         }
         if (this.identityId == null && identityId != null) {
             this.identityId = identityId;
+            changed = true;
         }
         // Become ACTIVE only once the account is backed (identity is born-unified best-effort).
         if (this.accountId != null && status == SellerStatus.PENDING_PROVISIONING) {
             this.status = SellerStatus.ACTIVE;
+            changed = true;
         }
-        this.updatedAt = Instant.now();
+        if (changed) {
+            this.updatedAt = Instant.now();
+        }
+        return changed;
     }
 
     /**
-     * Operator suspension (ADR-042 D4): ACTIVE → SUSPENDED. Idempotent (re-suspending a
-     * SUSPENDED seller is a no-op returning {@code false} = no account-lock call needed).
+     * Whether this seller is ACTIVE but still missing the born-unified {@code identity_id}
+     * (m2): the account was minted (operable) but the best-effort identity resolve failed at
+     * onboarding. The onboarding re-provision tops it up, matching the contract's
+     * "filled on re-provision". A PENDING seller is handled by the normal
+     * provisioning retry, not this predicate.
+     */
+    public boolean needsIdentityReconciliation() {
+        return status == SellerStatus.ACTIVE && identityId == null;
+    }
+
+    /**
+     * Operator suspension (ADR-042 D4): ACTIVE/PENDING_PROVISIONING → SUSPENDED. Suspending a
+     * {@code PENDING_PROVISIONING} seller is intentionally allowed (m1): an operator may halt a
+     * seller that never finished provisioning — its backing account is null so the lock is
+     * net-zero (no IAM call). Idempotent (re-suspending a SUSPENDED seller is a no-op returning
+     * {@code false} = no account-lock call needed); a CLOSED seller cannot be suspended.
      *
      * @return {@code true} if a transition occurred (caller should lock the backing account).
      */

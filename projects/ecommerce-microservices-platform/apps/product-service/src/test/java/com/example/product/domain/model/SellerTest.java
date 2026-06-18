@@ -78,6 +78,60 @@ class SellerTest {
     }
 
     @Test
+    @DisplayName("markProvisioned 는 변경이 있을 때만 true; 완전 provisioned 재호출은 false (no redundant update)")
+    void markProvisioned_returnsChangedFlag() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1");
+
+        assertThat(seller.markProvisioned("acct-1", "id-1")).isTrue();   // PENDING→ACTIVE + ids
+        assertThat(seller.markProvisioned("acct-1", "id-1")).isFalse();  // no-op (already set)
+    }
+
+    @Test
+    @DisplayName("needsIdentityReconciliation - ACTIVE + identity null 이면 true, markProvisioned 가 top-up (m2)")
+    void needsIdentityReconciliation_topUp() {
+        Instant now = Instant.now();
+        Seller seller = Seller.reconstitute("seller-a1", "셀러", SellerStatus.ACTIVE,
+                "acct-1", null, now, now);
+
+        assertThat(seller.needsIdentityReconciliation()).isTrue();
+        assertThat(seller.markProvisioned("acct-1", "id-late")).isTrue(); // fills identity only
+        assertThat(seller.getIdentityId()).isEqualTo("id-late");
+        assertThat(seller.needsIdentityReconciliation()).isFalse();
+    }
+
+    @Test
+    @DisplayName("needsIdentityReconciliation - identity 가 이미 있으면 false; PENDING 도 false")
+    void needsIdentityReconciliation_falseCases() {
+        Instant now = Instant.now();
+        Seller activeWithId = Seller.reconstitute("s-1", "셀러", SellerStatus.ACTIVE,
+                "acct-1", "id-1", now, now);
+        assertThat(activeWithId.needsIdentityReconciliation()).isFalse();
+
+        Seller pending = Seller.register("s-2", "셀러");
+        assertThat(pending.needsIdentityReconciliation()).isFalse();
+    }
+
+    @Test
+    @DisplayName("suspend - PENDING_PROVISIONING 셀러도 SUSPENDED 로 전이 가능 (m1 intentional)")
+    void suspend_fromPending_allowed() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1"); // PENDING
+
+        boolean transitioned = seller.suspend();
+
+        assertThat(transitioned).isTrue();
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.SUSPENDED);
+    }
+
+    @Test
+    @DisplayName("close - PENDING_PROVISIONING 셀러도 CLOSED 로 전이 가능 (m1 intentional)")
+    void close_fromPending_allowed() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1"); // PENDING
+
+        assertThat(seller.close()).isTrue();
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.CLOSED);
+    }
+
+    @Test
     @DisplayName("suspend 시 ACTIVE → SUSPENDED 전이하고 true 반환 (계정 lock 필요)")
     void suspend_transitionsAndSignalsLock() {
         Seller seller = Seller.register("seller-a1", "셀러 A1");

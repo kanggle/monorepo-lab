@@ -8,6 +8,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
+import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.patch;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
@@ -137,14 +141,50 @@ class AccountServiceSellerProvisionerTest {
     }
 
     @Test
-    @DisplayName("deactivateAccount - non-null → PATCH /internal/tenants/{t}/accounts/{id}/status 1회")
+    @DisplayName("deactivateAccount - non-null → PATCH .../status 1회, body status='LOCKED' (valid AccountStatus, B1 contract pin)")
     void deactivateAccount_callsStatus() {
+        // The /status EP returns 200 ONLY for the VALID AccountStatus body (LOCKED), and a
+        // lower-priority catch-all returns 400 for any other body (e.g. the old never-valid
+        // "DEACTIVATED" literal). This removes the blanket-200 stub that masked B1: if the
+        // provisioner regressed to an invalid status, it would hit the 400 catch-all and the
+        // LOCKED body-assert below would fail.
         wireMock.stubFor(patch(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
+                .atPriority(10)
+                .willReturn(aResponse().withStatus(400))); // catch-all: any non-LOCKED body
+        wireMock.stubFor(patch(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
+                .atPriority(1)
+                .withRequestBody(equalToJson(
+                        "{\"status\":\"LOCKED\",\"operatorId\":\"product-service\"}"))
                 .willReturn(aResponse().withStatus(200)));
 
         provisioner.deactivateAccount("tenant-a", "acct-1");
 
-        wireMock.verify(patchRequestedFor(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status")));
+        // Pin the contract: the request BODY carried the VALID status literal "LOCKED".
+        wireMock.verify(patchRequestedFor(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
+                .withRequestBody(matchingJsonPath("$.status", containing("LOCKED"))));
+    }
+
+    @Test
+    @DisplayName("deactivateAccount - 비-enum status(예: DEACTIVATED) 면 EP 가 400 → fail-soft 회귀 가드 (B1)")
+    void deactivateAccount_nonEnumStatus_wouldBe400() {
+        // Regression guard: account-service AccountStatus has NO "DEACTIVATED" — valueOf 400s.
+        // If the provisioner ever sent a non-enum status, the EP would 400 here. The call must
+        // still not throw (fail-soft), but the LOCKED body-assert in the sibling test is the
+        // mechanism that actually catches a regressed literal.
+        wireMock.stubFor(patch(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
+                .withRequestBody(matchingJsonPath("$.status", containing("DEACTIVATED")))
+                .willReturn(aResponse().withStatus(400)));
+        wireMock.stubFor(patch(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
+                .withRequestBody(matchingJsonPath("$.status", containing("LOCKED")))
+                .willReturn(aResponse().withStatus(200)));
+
+        // Must not throw whatever the EP returns (fail-soft, D3).
+        provisioner.deactivateAccount("tenant-a", "acct-1");
+
+        // The provisioner sent LOCKED (the valid status), so the request did NOT hit the
+        // 400-on-DEACTIVATED stub.
+        wireMock.verify(0, patchRequestedFor(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
+                .withRequestBody(matchingJsonPath("$.status", containing("DEACTIVATED"))));
     }
 
     @Test
@@ -153,5 +193,28 @@ class AccountServiceSellerProvisionerTest {
         provisioner.deactivateAccount("tenant-a", null);
 
         assertThat(wireMock.getAllServeEvents()).isEmpty();
+    }
+
+    // ─── m4: displayName truncation to account-service @Size(max=100) ──────
+
+    @Test
+    @DisplayName("provision - 100자 초과 displayName 은 100자로 truncate 후 mint (m4)")
+    void provision_longDisplayName_truncatedTo100() {
+        String longName = "N".repeat(150);
+        wireMock.stubFor(post(urlPathEqualTo("/internal/tenants/tenant-a/accounts"))
+                .willReturn(aResponse().withStatus(201)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acct-1\",\"status\":\"ACTIVE\"}")));
+        wireMock.stubFor(post(urlPathEqualTo("/internal/tenants/tenant-a/identities:resolveOrCreate"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"identityId\":\"id-1\",\"outcome\":\"CREATED\"}")));
+
+        provisioner.provision("tenant-a", "seller-1", longName);
+
+        // the minted account carried a displayName truncated to EXACTLY 100 chars (<= @Size(max=100)):
+        // the regex pins exactly 100 'N' anchored end-to-end, so 101+ would NOT match.
+        wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/tenants/tenant-a/accounts"))
+                .withRequestBody(matchingJsonPath("$.displayName", matching("N{100}"))));
     }
 }

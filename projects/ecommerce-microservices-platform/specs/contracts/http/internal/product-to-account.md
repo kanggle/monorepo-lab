@@ -76,8 +76,27 @@ Idempotent (re-locking an already-locked account is a no-op at the EP).
 
 `PATCH /internal/tenants/{tenantId}/accounts/{accountId}/status` —
 `TenantProvisioningController#changeStatus`.
-Request: `{ "status": "DEACTIVATED", "operatorId": "product-service" }`.
+Request: `{ "status": "LOCKED", "operatorId": "product-service" }`.
 Called only when the seller has a stored `accountId`. Idempotent + fail-soft.
+
+- `status` **MUST** be a valid account-service `AccountStatus` enum constant
+  (`ACTIVE`, `LOCKED`, `DORMANT`, `DELETED`). The EP does `AccountStatus.valueOf(status)`, so a
+  non-enum value (e.g. the never-valid `DEACTIVATED`) 400s server-side and the fail-soft swallow
+  would make CLOSE a cosmetic no-op — the D4-B alternative the ADR REJECTED.
+- **`LOCKED`** is the chosen deactivation status: the EP hardcodes reason
+  `OPERATOR_PROVISIONING_STATUS_CHANGE`, which `AccountStatusMachine` permits for `ACTIVE→LOCKED`
+  (and the idempotent `LOCKED→LOCKED`) but NOT for `→DORMANT` (only `DORMANT_365D` reaches
+  DORMANT). `LOCKED` revokes the seller-operator's ability to authenticate (D4: "deactivation is
+  real, not just a label"), sets no `deleted_at`, and emits only `account.status.changed` /
+  `account.locked` — it does **NOT** fire `account.deleted`, so a seller CLOSE never triggers the
+  ADR-037 PII-anonymization deletion cascade (only the separate GDPR delete path emits that).
+  `DELETED` is deliberately avoided: it sets `deleted_at` and is the GDPR/deletion lifecycle state
+  — destructive and semantically wrong for an operator seller CLOSE.
+
+The minted-account `displayName` (§1) is truncated to **100 chars** caller-side before the mint:
+account-service `ProvisionAccountRequest.displayName` is `@Size(max=100)` but product-service
+`sellers.display_name` is `VARCHAR(255)`, so a 101–255-char name would 400 the mint and strand the
+seller in `PENDING_PROVISIONING`.
 
 ## Net-zero / idempotency invariants
 
