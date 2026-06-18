@@ -1,6 +1,8 @@
 # TASK-MONO-294 — Container image build standard: layered-jar + shared base image + context narrowing (ADR-MONO-041 sweep)
 
-**Status:** ready
+**Status:** done
+
+> **Closed 2026-06-18.** D1 (layered-jar) + D2 (shared base image) COMPLETE across all 41 service images, merged + 3-dim verified (PRs #1784–1793, #1796, #1800–1804, #1806). **D3 (context narrowing, AC-4) descoped by decision** — low reward (only local context-transfer savings; CI negligible) vs non-zero regression risk (build-input change touching Dockerfile COPY + every compose `build.context` + CI + uncommitted demo overlays in lockstep) + only partially applicable to ecommerce (web-store genuinely needs the project-root pnpm-workspace context). The standardization win (layered-jar churn + 41-way runtime-prep drift) is fully captured by D1+D2. Re-open with a fresh task if local build context-transfer ever becomes a real bottleneck (iam-only narrowing would be the clean subset).
 
 **Type:** TASK-MONO (root — cross-project: 41 `projects/*/apps/*/Dockerfile` + a shared base-image artifact + per-project `.dockerignore`/compose `context`)
 
