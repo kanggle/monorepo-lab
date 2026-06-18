@@ -83,6 +83,12 @@ Otherwise the test is `full`. Any of the following pulls a test into `full`:
 - `e2eFullTest` — runs `@Tag("full")` only. Nightly + push-to-main invocation.
 - `e2eTest` — runs `@Tag("e2e")` umbrella (smoke + full). Back-compat for local dev.
 
+## Frontend E2E Smoke (Playwright URL assertions)
+
+A frontend with a Playwright `e2e-smoke/` suite gates every PR on **URL assertions** (`page.waitForURL(...)`, `page.url()`) — often glob patterns such as `**/login`. This is a CI gate **distinct from** `tsc` / `vitest` / `lint`: unit tests do not exercise navigation, so all three can be GREEN while the Playwright smoke is RED.
+
+**Rule** — when changing any redirect / guard / navigation behavior (an unauthenticated bounce destination, a `?redirect=<dest>` query param, a BFF base-URL switch, etc.), update the corresponding `e2e-smoke` URL assertions **in the same change**. Prefer a regex that tolerates a query string (`/\/login(\?|$)/`) over a bare glob (`**/login`) so a destination-preserving parameter does not silently break the match. Local `tsc` + `vitest` + `lint` GREEN is **necessary but not sufficient** for a navigation/URL change — confirm it against the Playwright smoke before merge.
+
 ## Event Consumer / Producer Tests
 
 - Test event publishing and consuming with Testcontainers Kafka.
