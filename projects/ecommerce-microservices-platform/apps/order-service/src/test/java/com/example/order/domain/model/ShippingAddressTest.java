@@ -117,7 +117,7 @@ class ShippingAddressTest {
     // ---- PII anonymization (ADR-MONO-037 P3-B) ---------------------------------
 
     @Test
-    @DisplayName("anonymized()는 식별 필드를 tombstone으로 덮고 구조 필드는 비운다")
+    @DisplayName("anonymized()는 식별 필드와 NOT-NULL zipCode를 tombstone으로 덮고 nullable address2만 비운다")
     void anonymized_replacesIdentifyingFieldsWithTombstone() {
         ShippingAddress address = new ShippingAddress(
                 "홍길동", "010-1234-5678", "12345", "서울시 강남구 테헤란로 1", "101호"
@@ -128,7 +128,8 @@ class ShippingAddressTest {
         assertThat(masked.getRecipient()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
         assertThat(masked.getPhone()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
         assertThat(masked.getAddress1()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
-        assertThat(masked.getZipCode()).isNull();
+        // zip_code is NOT-NULL (orders.zip_code VARCHAR(20) NOT NULL) — tombstoned, not nulled
+        assertThat(masked.getZipCode()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
         assertThat(masked.getAddress2()).isNull();
         // 원본은 불변 (anonymized()는 새 인스턴스를 반환)
         assertThat(address.getRecipient()).isEqualTo("홍길동");
@@ -156,6 +157,7 @@ class ShippingAddressTest {
         assertThat(twice.isAnonymized()).isTrue();
         assertThat(twice.getRecipient()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
         assertThat(twice.getPhone()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+        assertThat(twice.getZipCode()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
         assertThat(twice.getAddress1()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
     }
 

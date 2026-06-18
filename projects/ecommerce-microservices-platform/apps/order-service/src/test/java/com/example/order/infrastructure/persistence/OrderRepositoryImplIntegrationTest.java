@@ -392,7 +392,9 @@ class OrderRepositoryImplIntegrationTest {
                 orderRepository.findAllByUserIdAcrossTenants(userId).get(0));
         assertThat(fromDb.getShippingAddress().isAnonymized()).isTrue();
         assertThat(fromDb.getShippingAddress().getRecipient()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
-        assertThat(fromDb.getShippingAddress().getZipCode()).isNull();
+        // zip_code is NOT-NULL (orders.zip_code VARCHAR(20) NOT NULL) — tombstoned so the
+        // saveAll flush satisfies the constraint instead of throwing a NOT-NULL violation
+        assertThat(fromDb.getShippingAddress().getZipCode()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
         // 비즈니스 데이터 보존
         assertThat(fromDb.getUserId()).isEqualTo(userId);
         assertThat(fromDb.getTotalPrice()).isEqualTo(totalBefore);

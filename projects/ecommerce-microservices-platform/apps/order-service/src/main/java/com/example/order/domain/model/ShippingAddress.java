@@ -9,10 +9,12 @@ public class ShippingAddress {
      * Tombstone value written into the identifying PII fields when an order's
      * shipping-address snapshot is anonymized in reaction to an IAM
      * {@code account.deleted(anonymized=true)} (ADR-MONO-037 P3-B, the standing
-     * TASK-BE-258 GDPR consumer obligation for the order store). Identifying fields
-     * are overwritten (not nulled) so any NOT-NULL column stays satisfied while
-     * carrying no personal information; non-identifying structural fields
-     * ({@code zipCode}, {@code address2}) are cleared.
+     * TASK-BE-258 GDPR consumer obligation for the order store). The identifying
+     * PII fields ({@code recipient}, {@code phone}, {@code address1}) AND the
+     * NOT-NULL {@code zipCode} ({@code orders.zip_code VARCHAR(20) NOT NULL}) are
+     * overwritten with this tombstone (not nulled) so every NOT-NULL column stays
+     * satisfied on flush while carrying no personal information. The only field
+     * cleared to {@code null} is the nullable {@code address2}.
      */
     public static final String ANONYMIZED_TOMBSTONE = "[deleted]";
 
@@ -57,21 +59,24 @@ public class ShippingAddress {
 
     /**
      * A PII-anonymized copy of this address (ADR-MONO-037 P3-B). The identifying
-     * fields ({@code recipient}, {@code phone}, {@code address1}) are replaced with
-     * {@link #ANONYMIZED_TOMBSTONE} (preserving any NOT-NULL constraint without
-     * personal data); the non-identifying structural fields ({@code zipCode},
-     * {@code address2}) are cleared. Idempotent: anonymizing an already-anonymized
-     * address yields an equivalent tombstoned address.
+     * fields ({@code recipient}, {@code phone}, {@code address1}) and the NOT-NULL
+     * {@code zipCode} are replaced with {@link #ANONYMIZED_TOMBSTONE} (preserving
+     * the {@code orders.zip_code VARCHAR(20) NOT NULL} constraint on flush without
+     * personal data); the nullable {@code address2} is cleared to {@code null}.
+     * Idempotent: anonymizing an already-anonymized address yields an equivalent
+     * tombstoned address.
      */
     public ShippingAddress anonymized() {
         return ShippingAddress.reconstitute(
-                ANONYMIZED_TOMBSTONE, ANONYMIZED_TOMBSTONE, null, ANONYMIZED_TOMBSTONE, null);
+                ANONYMIZED_TOMBSTONE, ANONYMIZED_TOMBSTONE, ANONYMIZED_TOMBSTONE,
+                ANONYMIZED_TOMBSTONE, null);
     }
 
-    /** Whether every identifying PII field already holds the anonymization tombstone. */
+    /** Whether every identifying PII field and the {@code zipCode} already hold the anonymization tombstone. */
     public boolean isAnonymized() {
         return ANONYMIZED_TOMBSTONE.equals(recipient)
                 && ANONYMIZED_TOMBSTONE.equals(phone)
+                && ANONYMIZED_TOMBSTONE.equals(zipCode)
                 && ANONYMIZED_TOMBSTONE.equals(address1);
     }
 }
