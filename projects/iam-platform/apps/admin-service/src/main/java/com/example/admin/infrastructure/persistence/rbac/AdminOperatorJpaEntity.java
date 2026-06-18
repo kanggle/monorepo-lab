@@ -175,6 +175,18 @@ public class AdminOperatorJpaEntity {
         this.updatedAt = at;
     }
 
+    /**
+     * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — rewrite {@code oidc_subject}
+     * (the email→account_id backfill). Invoked only by the internal maintenance
+     * backfill endpoint after the new value (account_id) is resolved from
+     * auth-service. Bumps {@code updated_at}; {@code @Version} drives the
+     * optimistic-lock surface on a stale row.
+     */
+    public void setOidcSubject(String newOidcSubject, Instant at) {
+        this.oidcSubject = newOidcSubject;
+        this.updatedAt = at;
+    }
+
     /** Password change invoked by {@code PATCH /operators/me/password}. */
     public void changePasswordHash(String newPasswordHash, Instant at) {
         this.passwordHash = newPasswordHash;

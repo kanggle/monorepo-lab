@@ -29,9 +29,9 @@
 --        (a) `e2e-super-admin`  — SUPER_ADMIN, tenant_id='*', no
 --            finance_default_account_id (so the PC-FE-016 self-set spec can
 --            assert the post-Save flip from MISSING_PREREQUISITE → ok).
---            `oidc_subject='e2e-super-admin@example.com'` so the admin
---            token-exchange resolves the user-based authorization_code JWT
---            (sub=email) to THIS row.
+--            `oidc_subject` = the seeded credentials.account_id (TASK-MONO-298,
+--            ADR-040 Phase 3 part A) so the dual-key token-exchange resolves the
+--            SAS JWT (Phase-2 `sub`=account_id) to THIS row account_id-first.
 --        (b) `e2e-target-operator` — vanilla operator, tenant_id='fan-platform',
 --            no finance_default_account_id (so the PC-FE-017 + PC-FE-018
 --            admin-on-behalf-of spec can set + later verify the value).
@@ -129,10 +129,10 @@ UPDATE admin_roles
 -- 3. Operator (a) — SUPER_ADMIN caller. tenant_id='*' (ADR-002 platform-scope
 --    sentinel). password_hash is a fixed Argon2id hash of 'devpassword123!'
 --    (same value V0014 dev seed uses) so any password-based path still works
---    if a test ever needs it. oidc_subject='e2e-super-admin@example.com'
---    matches the JWT `sub` claim issued by the authorization_code grant
---    (CredentialAuthenticationProvider sets principal=email) — so
---    TokenExchangeService.findByOidcSubject resolves THIS row.
+--    if a test ever needs it. oidc_subject = the seeded credentials.account_id
+--    (TASK-MONO-298): Phase 2 (ADR-040) made the SAS access-token `sub` =
+--    account_id, so TokenExchangeService's dual-key resolver hits THIS row on the
+--    account_id-first lookup (the retained email fallback is no longer exercised).
 INSERT INTO admin_operators (
     operator_id,
     tenant_id,
@@ -152,7 +152,12 @@ INSERT INTO admin_operators (
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
     'E2E Super Admin',
     'ACTIVE',
-    'e2e-super-admin@example.com',
+    -- TASK-MONO-298 (ADR-MONO-040 Phase 3 part A): oidc_subject = the matching
+    -- seeded credentials.account_id (§ 2 above), NOT the login email. Phase 2 made
+    -- the SAS access-token `sub` = account_id; this seeds the end-state key so the
+    -- dual-key resolver's account_id-first lookup hits directly (the retained email
+    -- fallback is no longer exercised). Login still uses the unchanged email.
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8c100',
     NULL,
     NOW(6),
     NOW(6),

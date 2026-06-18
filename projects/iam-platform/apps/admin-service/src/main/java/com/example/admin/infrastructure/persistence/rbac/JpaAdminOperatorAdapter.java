@@ -100,6 +100,26 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
     }
 
     @Override
+    public List<OperatorOidcSubjectView> findOperatorsWithOidcSubject() {
+        List<AdminOperatorJpaEntity> rows = operatorRepository.findByOidcSubjectIsNotNull();
+        List<OperatorOidcSubjectView> out = new ArrayList<>(rows.size());
+        for (AdminOperatorJpaEntity e : rows) {
+            out.add(new OperatorOidcSubjectView(
+                    e.getId(), e.getOperatorId(), e.getTenantId(), e.getOidcSubject()));
+        }
+        return out;
+    }
+
+    @Override
+    public void updateOidcSubject(long operatorInternalId, String newOidcSubject, Instant at) {
+        AdminOperatorJpaEntity entity = operatorRepository.findById(operatorInternalId)
+                .orElseThrow(() -> new OperatorNotFoundException(
+                        "admin_operators row not found for internalId=" + operatorInternalId));
+        entity.setOidcSubject(newOidcSubject, at);
+        operatorRepository.saveAndFlush(entity); // TASK-BE-335: explicit flush (see changeStatus)
+    }
+
+    @Override
     public void changeStatus(long operatorInternalId, String newStatus, Instant at) {
         AdminOperatorJpaEntity entity = operatorRepository.findById(operatorInternalId)
                 .orElseThrow(() -> new OperatorNotFoundException(

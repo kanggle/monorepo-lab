@@ -147,10 +147,80 @@ public class AuthServiceClient {
         }
     }
 
+    /**
+     * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — resolve an operator's
+     * {@code account_id} from its login email (the REVERSE of
+     * {@link #resolveOperatorEmail}), scoped by the operator's {@code tenantId}.
+     * Backs the one-time {@code oidc_subject} email→account_id backfill.
+     *
+     * <p><b>POST + body</b>: the email is {@code confidential} PII and must not land
+     * in a request URL / access log. {@code tenantId} scopes the lookup because
+     * {@code credentials.email} is unique only per tenant.
+     *
+     * <p><b>FAIL-SOFT</b> (like {@link #resolveOperatorEmail}, the opposite of
+     * {@link #forceLogout}): any failure (auth-service down / circuit-open / timeout
+     * / non-2xx / IO) → {@link Optional#empty()}. The backfill then leaves that
+     * operator's {@code oidc_subject} unchanged (it stays resolvable via the RETAINED
+     * email fallback) and retries on a later run. The email is never logged (PII);
+     * the account_id is an opaque UUID (internal).
+     *
+     * @param email    the operator's login email
+     * @param tenantId the operator's tenant scope (admin_operators.tenant_id)
+     * @return the resolved account_id, or empty (no match / ambiguous / lookup failed)
+     */
+    @Retry(name = "authService")
+    @CircuitBreaker(name = "authService")
+    public Optional<String> resolveOperatorAccountId(String email, String tenantId) {
+        if (email == null || email.isBlank()) {
+            return Optional.empty();
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("email", email);
+        body.put("tenantId", tenantId);
+        try {
+            ResolveAccountIdResponse resp = restClient.post()
+                    .uri("/internal/auth/credentials/account-id-by-email")
+                    .headers(h -> {
+                        if (internalToken != null && !internalToken.isBlank()) {
+                            h.add("X-Internal-Token", internalToken);
+                        }
+                        h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+                    })
+                    .body(body)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, r) -> {
+                        throw HttpClientErrorException.create(
+                                r.getStatusCode(), r.getStatusText(),
+                                r.getHeaders(), r.getBody().readAllBytes(), null);
+                    })
+                    .body(ResolveAccountIdResponse.class);
+            if (resp == null || resp.accountId() == null || resp.accountId().isBlank()) {
+                return Optional.empty();
+            }
+            return Optional.of(resp.accountId());
+        } catch (RuntimeException e) {
+            // FAIL-SOFT: never propagate. The unresolved operator is left unchanged
+            // and retried on a later run. Never log the email (PII).
+            log.warn("auth-service operator-account-id resolve failed (fail-soft → operator left "
+                    + "unchanged for retry): {}", e.toString());
+            return Optional.empty();
+        }
+    }
+
     public record ForceLogoutResponse(
             String accountId,
             Integer revokedTokenCount,
             Instant revokedAt
+    ) {}
+
+    /**
+     * TASK-MONO-298 — response of
+     * {@code POST /internal/auth/credentials/account-id-by-email}.
+     * {@code accountId} is {@code null} when no credential matches the
+     * {@code (tenantId, email)} scope (fail-soft).
+     */
+    public record ResolveAccountIdResponse(
+            String accountId
     ) {}
 
     /**
