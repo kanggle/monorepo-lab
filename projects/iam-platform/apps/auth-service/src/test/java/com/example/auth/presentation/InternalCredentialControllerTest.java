@@ -4,7 +4,6 @@ import com.example.auth.application.BackfillCredentialIdentityUseCase;
 import com.example.auth.application.CreateCredentialUseCase;
 import com.example.auth.application.ForceLogoutUseCase;
 import com.example.auth.application.ResolveCredentialAccountIdUseCase;
-import com.example.auth.application.ResolveCredentialEmailUseCase;
 import com.example.auth.application.command.CreateCredentialCommand;
 import com.example.auth.application.exception.CredentialAlreadyExistsException;
 import com.example.auth.application.result.CreateCredentialResult;
@@ -28,7 +27,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -49,9 +47,6 @@ class InternalCredentialControllerTest {
 
     @MockitoBean
     private BackfillCredentialIdentityUseCase backfillCredentialIdentityUseCase;
-
-    @MockitoBean
-    private ResolveCredentialEmailUseCase resolveCredentialEmailUseCase;
 
     @MockitoBean
     private ResolveCredentialAccountIdUseCase resolveCredentialAccountIdUseCase;
@@ -98,34 +93,6 @@ class InternalCredentialControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    }
-
-    // ── TASK-MONO-295 (ADR-MONO-040 Phase 2): account_id → email resolution ──────
-
-    @Test
-    @DisplayName("GET /internal/auth/credentials/{accountId}/email — row 존재 → 200 {accountId, email}")
-    void resolveEmail_existing_returns200WithEmail() throws Exception {
-        given(resolveCredentialEmailUseCase.resolveEmail("acc-1"))
-                .willReturn(Optional.of("operator@example.com"));
-
-        mockMvc.perform(get("/internal/auth/credentials/{accountId}/email", "acc-1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accountId").value("acc-1"))
-                .andExpect(jsonPath("$.email").value("operator@example.com"));
-    }
-
-    @Test
-    @DisplayName("GET /internal/auth/credentials/{accountId}/email — row 부재 → 200 {accountId, email:null}")
-    void resolveEmail_missing_returns200WithNullEmail() throws Exception {
-        given(resolveCredentialEmailUseCase.resolveEmail("acc-x"))
-                .willReturn(Optional.empty());
-
-        mockMvc.perform(get("/internal/auth/credentials/{accountId}/email", "acc-x"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accountId").value("acc-x"))
-                // null email serialized as JSON null (the admin client maps null/absent
-                // identically → account_id-only resolution).
-                .andExpect(jsonPath("$.email").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test

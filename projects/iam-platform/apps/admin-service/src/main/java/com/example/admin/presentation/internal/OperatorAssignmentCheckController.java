@@ -4,7 +4,6 @@ import com.example.admin.application.OperatorAssignmentCheckUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,12 +33,8 @@ public class OperatorAssignmentCheckController {
 
     private final OperatorAssignmentCheckUseCase checkUseCase;
 
-    /** TASK-MONO-295 — header carrying the DUAL-KEY legacy email off the logged URL. */
-    static final String SUBJECT_EMAIL_HEADER = "X-Subject-Email";
-
     /**
      * GET /internal/operator-assignments/check?oidcSubject=&tenantId=
-     * (legacy email fallback rides the {@code X-Subject-Email} HEADER, not a query param)
      *
      * <p>Returns {@code {assigned: true|false, orgScope: [...]|null}} per the
      * operator's effective tenant scope (legacy home ∪ assignments; {@code '*'}
@@ -60,29 +55,18 @@ public class OperatorAssignmentCheckController {
      * orgScope to {@code null} → {@code TenantClaimTokenCustomizer} injects
      * {@code ["*"]} (graceful net-zero).
      *
-     * <p>TASK-MONO-295 (ADR-MONO-040 Phase 2): the DUAL-KEY legacy email fallback
-     * arrives in the ADDITIVE, OPTIONAL {@code X-Subject-Email} HEADER — the
-     * operator's login email, resolved <b>server-side</b> by auth-service from the
-     * subject token's {@code sub} (= account_id) against its local
-     * {@code auth_db.credentials} store (the SAS access token used as the
-     * assume-tenant {@code subject_token} carries no {@code email} claim). It rides
-     * in a header, not a query param, because it is PII ({@code confidential}) and
-     * a query param would land it in gateway / access-log URL lines
-     * ([data-model.md] {@code admin_operators.email} = confidential). The use case
-     * resolves the operator by the account_id {@code oidcSubject} first, then by
-     * this email (the value {@code admin_operators.oidc_subject} is currently
-     * seeded with). The header is OPTIONAL: an older auth-service that omits it
-     * still resolves on {@code oidcSubject} alone (account_id-keyed rows), and the
-     * verdict + status codes are byte-unchanged for callers that supply it. The
-     * email value is never logged.
+     * <p>TASK-MONO-299 (ADR-MONO-040 Phase 3 part B): the operator is resolved
+     * account_id-only — the {@code oidcSubject} IS the account UUID (jwt-standard-claims.md
+     * {@code sub}) and {@code admin_operators.oidc_subject} is backfilled to account_id
+     * (part A). The Phase-2 transitional {@code X-Subject-Email} legacy email-fallback
+     * header is removed.
      */
     @GetMapping("/check")
     public ResponseEntity<AssignmentCheckResponse> check(
             @RequestParam String oidcSubject,
-            @RequestHeader(name = SUBJECT_EMAIL_HEADER, required = false) String subjectEmail,
             @RequestParam String tenantId) {
         OperatorAssignmentCheckUseCase.Result result =
-                checkUseCase.check(oidcSubject, subjectEmail, tenantId);
+                checkUseCase.check(oidcSubject, tenantId);
         return ResponseEntity.ok(new AssignmentCheckResponse(result.assigned(), result.orgScope()));
     }
 

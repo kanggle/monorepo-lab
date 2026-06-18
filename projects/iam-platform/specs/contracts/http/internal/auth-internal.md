@@ -106,11 +106,9 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
 
 ---
 
-## GET /internal/auth/credentials/{accountId}/email
+## ~~GET /internal/auth/credentials/{accountId}/email~~ — REMOVED (TASK-MONO-299)
 
-> **별도 caller** — 이 read-only 엔드포인트는 본 문서의 account-service 가 아니라 **admin-service** 가 호출한다(login-time operator-token exchange 의 DUAL-KEY email fallback, ADR-MONO-040 Phase 2 / TASK-MONO-295). 동일한 `/internal/auth/**` prefix·`InternalCredentialController` 에 공존하므로 producer 표면 일관성을 위해 여기 cross-reference 한다. 요청/응답·fail-soft caller 규약의 canonical 정의는 [admin-to-auth.md](./admin-to-auth.md) §`GET /internal/auth/credentials/{accountId}/email` 가 담당한다.
-
-`auth_db.credentials.account_id` 단건 조회로 로그인 email(`credentials.email`)을 해석해 `{accountId, email|null}` 로 반환한다. row 부재 시 `email=null`(graceful). 서버사이드 read-only — `password`/`credential_hash` 미노출, email 은 로그 금지(`confidential`).
+> **제거됨 (ADR-MONO-040 Phase 3 part B / TASK-MONO-299)** — Phase-2 의 account_id → email read-only 엔드포인트(login-time operator-token exchange 의 DUAL-KEY email fallback 용)는 운영자 해석이 account_id 단독으로 전환되면서 제거되었다(`admin_operators.oidc_subject` 가 part A 로 account_id backfill 됨). 유일한 consumer 였던 admin-service `AuthServiceClient.resolveOperatorEmail` 도 함께 제거되었다. **역방향** `POST /internal/auth/credentials/account-id-by-email`(email → account_id, part A backfill 도구; admin-service 가 호출)은 **유지**된다 — canonical 정의는 [admin-to-auth.md](./admin-to-auth.md) §`POST /internal/auth/credentials/account-id-by-email`.
 
 ---
 

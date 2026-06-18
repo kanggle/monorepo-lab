@@ -3,7 +3,6 @@ package com.example.auth.infrastructure.oauth2;
 import com.example.auth.application.event.AuthEventPublisher;
 import com.example.auth.application.port.OperatorAssignmentPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
-import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.token.TokenReuseDetector;
@@ -105,15 +104,6 @@ public class AuthorizationServerConfig {
     // assignment gate (admin-service) — injected into the lazily-built provider.
     @Autowired
     private OperatorAssignmentPort operatorAssignmentPort;
-    // TASK-MONO-295 (ADR-MONO-040 Phase 2): the assume-tenant provider resolves the
-    // DUAL-KEY legacy operator email SERVER-SIDE from the validated `sub`
-    // (= account_id) via the local auth_db.credentials store — the SAS access token
-    // used as subject_token carries no `email` claim, so the email fallback key can
-    // only come from this account_id → email lookup (no PII on any token, no
-    // cross-service hop).
-    @Autowired
-    private CredentialRepository credentialRepository;
-
     /**
      * SAS security filter chain — Order(1).
      * Covers: /oauth2/**, /.well-known/openid-configuration
@@ -163,8 +153,7 @@ public class AuthorizationServerConfig {
                 new AssumeTenantAuthenticationConverter();
         AssumeTenantAuthenticationProvider assumeTenantProvider =
                 new AssumeTenantAuthenticationProvider(
-                        jwtDecoder, operatorAssignmentPort, credentialRepository,
-                        oAuth2TokenGenerator);
+                        jwtDecoder, operatorAssignmentPort, oAuth2TokenGenerator);
 
         // TASK-BE-272 / ADR-003 option A: public-client converters for
         // refresh_token grant + revoke endpoint. Stock SAS converters do not

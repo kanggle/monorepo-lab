@@ -2,8 +2,6 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.exception.AssumeTenantDeniedException;
 import com.example.auth.application.port.OperatorAssignmentPort;
-import com.example.auth.domain.credentials.Credential;
-import com.example.auth.domain.repository.CredentialRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,7 +28,6 @@ import org.springframework.security.oauth2.server.authorization.settings.Authori
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,14 +59,10 @@ class AssumeTenantAuthenticationProviderTest {
     private static final String OIDC_SUBJECT = "00000000-0000-7000-8000-0000000000a1";
     private static final String SELECTED_TENANT = "acme-corp";
 
-    private static final String OPERATOR_EMAIL = "acme-operator@example.com";
-
     @Mock
     private JwtDecoder subjectTokenDecoder;
     @Mock
     private OperatorAssignmentPort operatorAssignmentPort;
-    @Mock
-    private CredentialRepository credentialRepository;
     @Mock
     private OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator;
 
@@ -78,7 +71,7 @@ class AssumeTenantAuthenticationProviderTest {
     @BeforeEach
     void setUp() {
         provider = new AssumeTenantAuthenticationProvider(
-                subjectTokenDecoder, operatorAssignmentPort, credentialRepository, tokenGenerator);
+                subjectTokenDecoder, operatorAssignmentPort, tokenGenerator);
 
         AuthorizationServerContext ctx = new AuthorizationServerContext() {
             @Override
@@ -120,26 +113,11 @@ class AssumeTenantAuthenticationProviderTest {
                 .build();
     }
 
-    /**
-     * TASK-MONO-295 — a credential row keyed by the account_id (= the subject
-     * token's {@code sub}) carrying the operator's login email. This is the REAL
-     * server-side source the provider resolves the dual-key email fallback from
-     * ({@code auth_db.credentials}), NOT a hand-built token {@code email} claim that
-     * the SAS access token never mints.
-     */
-    private Credential credentialFor(String accountId, String email) {
-        Instant now = Instant.now();
-        return new Credential(1L, accountId, "iam", email,
-                "argon2id$hash", "argon2id", now, now, 0);
-    }
-
     @Test
     @DisplayName("assigned → mint short-lived access token, NO refresh token")
     void assigned_mintsAccessTokenNoRefresh() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        // No credential row for the sub → email fallback is null (account_id-only).
-        when(credentialRepository.findByAccountId(OIDC_SUBJECT)).thenReturn(Optional.empty());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         Jwt minted = Jwt.withTokenValue("assumed-token")
                 .header("alg", "RS256")
@@ -163,25 +141,16 @@ class AssumeTenantAuthenticationProviderTest {
     // preservesOperatorAccountType_onResolvedGrant test (TASK-BE-329) is deleted.
 
     @Test
-    @DisplayName("TASK-MONO-295 AC-0 (the BLOCKER regression): NO email claim on the subject token — "
-            + "email fallback resolved SERVER-SIDE from account_id, dual-key threaded to the port")
-    void resolvesEmailServerSide_fromAccountId_whenTokenHasNoEmailClaim() {
-        // ADR-MONO-040 Phase 2: the SAS access token used as the subject_token carries
-        // NO `email` claim (OidcUserInfoMapper emits email only into userinfo/id-token,
-        // never the access token). The provider MUST therefore resolve the operator's
-        // email SERVER-SIDE from the validated `sub` (= account_id) against the local
-        // auth_db.credentials store, then thread it as the dual-key legacy fallback so
-        // admin-service can resolve an EMAIL-seeded admin_operators.oidc_subject row.
-        // This test exercises the REAL account_id → email path (the credential source
-        // is NOT stubbed away) — the prior false-green test hand-built an `email` claim
-        // the producer never mints, so it never proved the fallback was reachable.
+    @DisplayName("TASK-MONO-299: account_id-only — the validated sub (= account UUID) is "
+            + "threaded to the port directly (no email resolution)")
+    void resolvesByAccountIdOnly() {
+        // ADR-MONO-040 Phase 3 part B: admin_operators.oidc_subject is backfilled to
+        // account_id (part A), so the provider resolves on the validated sub directly —
+        // no server-side email lookup, no email param to the port.
         Jwt subjectNoEmailClaim = validSubjectJwt();
         assertThat(subjectNoEmailClaim.getClaimAsString("email")).isNull(); // the real producer shape
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(subjectNoEmailClaim);
-        // The server-side source: account_id-keyed credential row carrying the email.
-        when(credentialRepository.findByAccountId(OIDC_SUBJECT))
-                .thenReturn(Optional.of(credentialFor(OIDC_SUBJECT, OPERATOR_EMAIL)));
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, OPERATOR_EMAIL, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         Jwt minted = Jwt.withTokenValue("assumed-token")
                 .header("alg", "RS256").subject(OIDC_SUBJECT)
@@ -191,37 +160,15 @@ class AssumeTenantAuthenticationProviderTest {
         Authentication result = provider.authenticate(exchange());
 
         assertThat(result).isInstanceOf(OAuth2AccessTokenAuthenticationToken.class);
-        // The port was called with BOTH the account_id sub AND the SERVER-RESOLVED email —
-        // the email came from credentials, NOT from a token claim.
-        verify(operatorAssignmentPort).resolveAssignment(OIDC_SUBJECT, OPERATOR_EMAIL, SELECTED_TENANT);
-    }
-
-    @Test
-    @DisplayName("TASK-MONO-295 F4: no credential row for the sub → email fallback null, "
-            + "resolution proceeds on account_id alone (graceful)")
-    void noCredentialRow_emailFallbackNull_accountIdOnly() {
-        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(credentialRepository.findByAccountId(OIDC_SUBJECT)).thenReturn(Optional.empty());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
-                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
-        Jwt minted = Jwt.withTokenValue("assumed-token")
-                .header("alg", "RS256").subject(OIDC_SUBJECT)
-                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
-        doReturn(minted).when(tokenGenerator).generate(any());
-
-        provider.authenticate(exchange());
-
-        // account_id alone (null email fallback) — an account_id-keyed operator still
-        // resolves; an email-only-keyed operator would 403 (correct fail-closed).
-        verify(operatorAssignmentPort).resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT);
+        // The port was called with the account_id sub only — no email argument.
+        verify(operatorAssignmentPort).resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT);
     }
 
     @Test
     @DisplayName("TASK-BE-338: resolved org_scope carried onto the resolved grant")
     void carriesResolvedOrgScope_onResolvedGrant() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(credentialRepository.findByAccountId(OIDC_SUBJECT)).thenReturn(Optional.empty());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(
                         true, java.util.List.of("dept-sales")));
         Jwt minted = Jwt.withTokenValue("assumed-token")
@@ -245,8 +192,7 @@ class AssumeTenantAuthenticationProviderTest {
     @DisplayName("TASK-BE-338 net-zero: null org_scope carried as null (customizer → [*])")
     void carriesNullOrgScope_netZero() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(credentialRepository.findByAccountId(OIDC_SUBJECT)).thenReturn(Optional.empty());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         Jwt minted = Jwt.withTokenValue("assumed-token")
                 .header("alg", "RS256").subject(OIDC_SUBJECT)
@@ -281,8 +227,7 @@ class AssumeTenantAuthenticationProviderTest {
                 .expiresAt(Instant.now().plusSeconds(300))
                 .build();
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(operatorSubject);
-        when(credentialRepository.findByAccountId(OIDC_SUBJECT)).thenReturn(Optional.empty());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(
                         true, java.util.List.of("dept-sales")));
         Jwt minted = Jwt.withTokenValue("assumed-token")
@@ -314,7 +259,7 @@ class AssumeTenantAuthenticationProviderTest {
                 .satisfies(e -> assertThat(((OAuth2AuthenticationException) e).getError().getErrorCode())
                         .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT));
 
-        verify(operatorAssignmentPort, never()).resolveAssignment(any(), any(), any());
+        verify(operatorAssignmentPort, never()).resolveAssignment(any(), any());
         verify(tokenGenerator, never()).generate(any());
     }
 
@@ -322,8 +267,7 @@ class AssumeTenantAuthenticationProviderTest {
     @DisplayName("assignment-denied (not assigned) → no token, invalid_grant")
     void assignmentDenied_noToken() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(credentialRepository.findByAccountId(OIDC_SUBJECT)).thenReturn(Optional.empty());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
                 .thenThrow(new AssumeTenantDeniedException("operator is not assigned to the selected tenant"));
 
         assertThatThrownBy(() -> provider.authenticate(exchange()))
@@ -338,9 +282,8 @@ class AssumeTenantAuthenticationProviderTest {
     @DisplayName("admin-unavailable → fail-closed deny, invalid_grant (NOT fail-soft)")
     void adminUnavailable_failClosedDeny() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(credentialRepository.findByAccountId(OIDC_SUBJECT)).thenReturn(Optional.empty());
         // The port wraps admin-down / timeout / circuit-open into AssumeTenantDeniedException.
-        when(operatorAssignmentPort.resolveAssignment(eq(OIDC_SUBJECT), eq(null), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(eq(OIDC_SUBJECT), eq(SELECTED_TENANT)))
                 .thenThrow(new AssumeTenantDeniedException(
                         "assignment check failed — admin-service unavailable (fail-closed)",
                         new RuntimeException("connection refused")));

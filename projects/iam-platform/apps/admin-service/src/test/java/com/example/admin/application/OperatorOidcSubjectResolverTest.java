@@ -19,70 +19,54 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * TASK-MONO-295 (ADR-MONO-040 Phase 2) — unit tests for the shared DUAL-KEY
- * {@link OperatorOidcSubjectResolver} that BOTH operator-token exchanges
- * (assume-tenant gate + login-time exchange) delegate to.
+ * TASK-MONO-299 (ADR-MONO-040 Phase 3 part B) — unit tests for the shared
+ * account_id-only {@link OperatorOidcSubjectResolver} that BOTH operator-token
+ * exchanges (assume-tenant gate + login-time exchange) delegate to. The Phase-2
+ * legacy email fallback is removed.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-@DisplayName("OperatorOidcSubjectResolver (dual-key) 단위 테스트")
+@DisplayName("OperatorOidcSubjectResolver (account_id-only) 단위 테스트")
 class OperatorOidcSubjectResolverTest {
 
     private static final String ACCOUNT_ID = "00000000-0000-7000-8000-0000000000a1";
-    private static final String EMAIL = "operator@example.com";
 
     @Mock AdminOperatorPort operatorPort;
     @InjectMocks OperatorOidcSubjectResolver resolver;
 
     private AdminOperatorPort.OperatorView op() {
         return new AdminOperatorPort.OperatorView(
-                7L, "op-uuid", "acme-corp", EMAIL, "hash", "Op",
+                7L, "op-uuid", "acme-corp", "operator@example.com", "hash", "Op",
                 "ACTIVE", null, null, Instant.now(), Instant.now(), null, null);
     }
 
     @Test
-    @DisplayName("account_id 키 hit → 그 row 반환, email fallback 미조회")
-    void accountIdHit_returnsRow_emailNotConsulted() {
+    @DisplayName("account_id 키 hit → 그 row 반환")
+    void accountIdHit_returnsRow() {
         when(operatorPort.findByOidcSubject(ACCOUNT_ID)).thenReturn(Optional.of(op()));
 
-        assertThat(resolver.resolve(ACCOUNT_ID, EMAIL)).isPresent();
-        verify(operatorPort, never()).findByOidcSubject(EMAIL);
+        assertThat(resolver.resolve(ACCOUNT_ID)).isPresent();
     }
 
     @Test
-    @DisplayName("account_id miss + email hit → 레거시 email fallback 으로 resolve")
-    void accountIdMiss_emailHit_resolvesViaFallback() {
-        when(operatorPort.findByOidcSubject(ACCOUNT_ID)).thenReturn(Optional.empty());
-        when(operatorPort.findByOidcSubject(EMAIL)).thenReturn(Optional.of(op()));
-
-        assertThat(resolver.resolve(ACCOUNT_ID, EMAIL)).isPresent();
-    }
-
-    @Test
-    @DisplayName("두 키 모두 miss → empty (fail-closed; fallback 이 게이트를 완화하지 않음)")
-    void bothKeysMiss_empty() {
-        when(operatorPort.findByOidcSubject(ACCOUNT_ID)).thenReturn(Optional.empty());
-        when(operatorPort.findByOidcSubject(EMAIL)).thenReturn(Optional.empty());
-
-        assertThat(resolver.resolve(ACCOUNT_ID, EMAIL)).isEmpty();
-    }
-
-    @Test
-    @DisplayName("email null + account_id miss → fallback 시도 없이 empty")
-    void nullEmail_accountIdMiss_noFallbackAttempt() {
+    @DisplayName("account_id miss → empty (fail-closed; no row matched)")
+    void accountIdMiss_empty() {
         when(operatorPort.findByOidcSubject(ACCOUNT_ID)).thenReturn(Optional.empty());
 
-        assertThat(resolver.resolve(ACCOUNT_ID, (String) null)).isEmpty();
-        verify(operatorPort).findByOidcSubject(ACCOUNT_ID);
+        assertThat(resolver.resolve(ACCOUNT_ID)).isEmpty();
     }
 
     @Test
-    @DisplayName("blank account_id + email hit → email fallback 단독으로 resolve")
-    void blankAccountId_emailHit_resolvesViaEmail() {
-        when(operatorPort.findByOidcSubject(EMAIL)).thenReturn(Optional.of(op()));
-
-        assertThat(resolver.resolve("  ", EMAIL)).isPresent();
-        // blank account_id key is skipped — only the email lookup runs.
+    @DisplayName("blank oidcSubject → empty, repository 미조회")
+    void blankSubject_emptyWithoutLookup() {
+        assertThat(resolver.resolve("  ")).isEmpty();
         verify(operatorPort, never()).findByOidcSubject("  ");
+    }
+
+    @Test
+    @DisplayName("null oidcSubject → empty, repository 미조회")
+    void nullSubject_emptyWithoutLookup() {
+        assertThat(resolver.resolve(null)).isEmpty();
+        verify(operatorPort, never()).findByOidcSubject(null);
     }
 }

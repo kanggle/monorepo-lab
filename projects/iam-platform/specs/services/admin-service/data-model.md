@@ -77,24 +77,17 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > 도입한다. dev/test seed 는 Flyway dev migration 또는 IT seed 에서 직접
 > 설정한다.
 >
-> **TASK-MONO-295 (ADR-MONO-040 Phase 2) — DUAL-KEY 전환**: 위 근거는 `oidc_subject`
-> 가 account_id UUID 라고 규정하나, **현행 시드/프로비저닝은 운영자 email 을
-> 채워 왔다**(federation `seed.sql`, dev V0028 일부). ADR-040 Phase 2 가 SAS `sub`
-> 를 account_id 로 전환하면서, `assignment-check` 의 운영자 조회를 **account_id
-> 우선 → 레거시 email fallback** 의 DUAL-KEY 로 전환했다(`OperatorAssignmentCheckUseCase`).
-> account_id↔email 매핑이 cross-DB (auth_db ⟂ admin_db)라 단일 Flyway backfill 이
-> 불가하기 때문이며(V0036 의 "no cross-DB read at migrate time" 선례), `oidc_subject`
-> 를 account_id 로 채우는 backfill + email fallback 제거는 deferred **Phase-3**
-> 후속이다. 그때까지 두 키 모두 동작해 기존 운영자 무회귀(AC-0).
->
-> **email 출처 + 전송 채널 (PII 비-토큰·비-쿼리)**: fallback email 은 **토큰이
-> 아니라 서버사이드**로 구해진다 — assume-tenant `subject_token`(SAS access token)
-> 은 `email` claim 을 싣지 않으므로(email 은 userinfo/id-token 전용), auth-service 가
-> 검증된 `sub`(=account_id)로 로컬 `auth_db.credentials` 에서 `account_id → email`
-> 을 resolve 한다(`CredentialAuthenticationProvider` 가 인증에 쓰는 동일 스토어;
-> cross-service hop 없음). admin-service 로는 **`X-Subject-Email` 헤더**(쿼리 파라미터
-> 아님)로 전달된다 — `email` 은 본 표의 `confidential` PII 라 쿼리스트링(로그 URL 잔류)
-> 대신 헤더를 쓰고, 값은 auth·admin 양측 모두 미로깅한다. **어떤 access token 에도
+> **TASK-MONO-299 (ADR-MONO-040 Phase 3 part B) — account_id 단독으로 정착**: 위
+> 근거대로 `oidc_subject` 는 account_id UUID 이다. 과거 시드/프로비저닝은 운영자
+> email 을 채웠으나(federation `seed.sql`, dev V0028 일부), part A(TASK-MONO-298)가
+> email → account_id backfill 메커니즘 + 시드 마이그레이션을 제공했고, part B
+> (TASK-MONO-299)가 Phase-2 의 임시 **DUAL-KEY** email fallback 을 제거했다 —
+> `assignment-check`(`OperatorAssignmentCheckUseCase`)·login-time exchange
+> (`TokenExchangeService`) 모두 운영자를 account_id(`sub`) **단독**으로 조회한다.
+> 서버사이드 `account_id → email` 해석(`X-Subject-Email` 헤더 /
+> `GET /internal/auth/credentials/{accountId}/email`)은 함께 제거되었다.
+> (실배포 전제: part-A backfill 선행 필수 — 미migrate 운영자는 fail-closed 된다.
+> demo/e2e 시드는 account_id 이므로 stranded 없음.) **어떤 access token 에도
 > email 은 탑재되지 않는다.**
 
 ### `admin_roles`

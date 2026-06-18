@@ -226,19 +226,13 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         Authentication principal = context.getPrincipal();
         String clientId = context.getRegisteredClient().getClientId();
 
-        // ADR-MONO-040 (Phase 1 → Phase 2): align `sub` + emit `account_id`.
-        //   Phase 1 (TASK-MONO-292): emit the account UUID as an additive
-        //     `account_id` claim while `sub` stayed the login email.
-        //   Phase 2 (TASK-MONO-295): OVERRIDE `sub` to the account UUID — fully
-        //     satisfying jwt-standard-claims.md (`sub` = account UUID, immutable)
-        //     so X-User-Id ← sub is restored downstream. The `account_id` claim is
-        //     STILL emitted as a transitional belt-and-suspenders so a gateway not
-        //     yet redeployed (still on the Phase-1 derive) keeps working during the
-        //     rollout window; it is retired in the Phase-3 cleanup follow-up.
-        // The operator assume-tenant `sub`=email dependency is migrated separately
-        // (DUAL-KEY resolution, AssumeTenantAuthenticationProvider +
-        // OperatorAssignmentCheckUseCase) so flipping `sub` here does not break it.
-        emitAccountIdClaimAndAlignSub(context, principal);
+        // ADR-MONO-040 Phase 2 (TASK-MONO-295) → Phase 3 part B (TASK-MONO-299):
+        // OVERRIDE `sub` to the account UUID — fully satisfying jwt-standard-claims.md
+        // (`sub` = account UUID, immutable) so X-User-Id ← sub is restored downstream.
+        // Phase 3 part B removes the transitional additive `account_id` claim: every
+        // gateway now reads `sub` directly (it has been the account UUID since Phase 2),
+        // so the belt-and-suspenders claim is redundant.
+        alignSubToAccountId(context, principal);
 
         String tenantId = extractTenantAttribute(principal, "tenant_id");
         String tenantType = extractTenantAttribute(principal, "tenant_type");
@@ -290,42 +284,34 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
     }
 
     /**
-     * ADR-MONO-040 Phase 2 (TASK-MONO-295): align the access/id-token {@code sub}
-     * to the account UUID AND emit the transitional {@code account_id} claim.
+     * ADR-MONO-040 Phase 2 (TASK-MONO-295) → Phase 3 part B (TASK-MONO-299): align
+     * the access/id-token {@code sub} to the account UUID.
      *
      * <p>The account UUID already rides on the principal {@code details} map (set
      * by {@code CredentialAuthenticationProvider}, carried through refresh). When
-     * present:
-     * <ul>
-     *   <li><b>Override {@code sub} = account UUID</b> — the SAS framework default
-     *       set {@code sub} = the login principal (email), violating
-     *       {@code jwt-standard-claims.md} ({@code sub} = account UUID, immutable).
-     *       Overriding it here is the Phase-2 fix: downstream services restore
-     *       {@code X-User-Id ← sub}.</li>
-     *   <li><b>Still emit {@code account_id}</b> — transitional, so a gateway not
-     *       yet redeployed (still deriving {@code X-User-Id} from {@code account_id},
-     *       Phase 1) keeps working during the rollout window. Retired in the Phase-3
-     *       cleanup follow-up.</li>
-     * </ul>
+     * present, <b>override {@code sub} = account UUID</b> — the SAS framework default
+     * set {@code sub} = the login principal (email), violating
+     * {@code jwt-standard-claims.md} ({@code sub} = account UUID, immutable). Overriding
+     * it here restores {@code X-User-Id ← sub} downstream (the contract letter).
+     *
+     * <p>Phase 3 part B removes the transitional additive {@code account_id} claim
+     * that Phase 1 introduced and Phase 2 retained for the redeploy window: every
+     * gateway now reads {@code sub} directly, so the claim is redundant.
      *
      * <p>When the principal carries no {@code account_id} (e.g. the client-metadata
-     * fallback path, or a non-credential principal), neither the override nor the
-     * claim is applied — {@code sub} keeps the framework default. This is the
-     * graceful net-zero branch (no UUID to substitute).
+     * fallback path, or a non-credential principal), the override is not applied —
+     * {@code sub} keeps the framework default. This is the graceful net-zero branch
+     * (no UUID to substitute).
      *
-     * <p>Operator safety: flipping {@code sub} here would break the operator
-     * assume-tenant resolution that keyed on {@code sub}=email — that path is
-     * migrated to DUAL-KEY resolution (account_id first, legacy email fallback) in
-     * {@code AssumeTenantAuthenticationProvider} +
-     * {@code OperatorAssignmentCheckUseCase}, so no operator regresses.
+     * <p>Operator safety: operator resolution is account_id-only (TASK-MONO-299) and
+     * {@code admin_operators.oidc_subject} is backfilled to account_id (part A), so the
+     * {@code sub}=account_id token resolves every operator directly.
      */
-    private void emitAccountIdClaimAndAlignSub(JwtEncodingContext context, Authentication principal) {
+    private void alignSubToAccountId(JwtEncodingContext context, Authentication principal) {
         String accountId = extractTenantAttribute(principal, "account_id");
         if (accountId != null && !accountId.isBlank()) {
-            // Phase 2: sub = account UUID (full jwt-standard-claims.md compliance).
+            // sub = account UUID (full jwt-standard-claims.md compliance).
             context.getClaims().subject(accountId);
-            // Phase 1 transitional claim (retained for the rollout window).
-            context.getClaims().claim("account_id", accountId);
         }
     }
 

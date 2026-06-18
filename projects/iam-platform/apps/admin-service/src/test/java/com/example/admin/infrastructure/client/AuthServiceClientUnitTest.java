@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Optional;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -87,53 +86,53 @@ class AuthServiceClientUnitTest {
                 .isInstanceOf(DownstreamFailureException.class);
     }
 
-    // ── TASK-MONO-295 (ADR-MONO-040 Phase 2): resolveOperatorEmail (FAIL-SOFT) ───
+    // ── TASK-MONO-298 (ADR-MONO-040 Phase 3 part A): resolveOperatorAccountId (FAIL-SOFT) ──
 
     @Test
-    @DisplayName("resolveOperatorEmail — 200 + email → Optional.of(email)")
-    void resolveOperatorEmail_200WithEmail_returnsEmail() {
-        wireMockServer.stubFor(get(urlPathMatching("/internal/auth/credentials/.*/email"))
+    @DisplayName("resolveOperatorAccountId — 200 + accountId → Optional.of(accountId)")
+    void resolveOperatorAccountId_200WithAccountId_returnsAccountId() {
+        wireMockServer.stubFor(post(urlPathMatching("/internal/auth/credentials/account-id-by-email"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("{\"accountId\":\"acc-1\",\"email\":\"op@example.com\"}")));
+                        .withBody("{\"accountId\":\"acc-1\"}")));
 
-        Optional<String> email = client.resolveOperatorEmail("acc-1");
+        Optional<String> accountId = client.resolveOperatorAccountId("op@example.com", "acme-corp");
 
-        assertThat(email).contains("op@example.com");
+        assertThat(accountId).contains("acc-1");
     }
 
     @Test
-    @DisplayName("resolveOperatorEmail — 200 + null email (no credential row) → Optional.empty (account_id-only)")
-    void resolveOperatorEmail_200NullEmail_returnsEmpty() {
-        wireMockServer.stubFor(get(urlPathMatching("/internal/auth/credentials/.*/email"))
+    @DisplayName("resolveOperatorAccountId — 200 + null accountId (no match) → Optional.empty (fail-soft)")
+    void resolveOperatorAccountId_200NullAccountId_returnsEmpty() {
+        wireMockServer.stubFor(post(urlPathMatching("/internal/auth/credentials/account-id-by-email"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("{\"accountId\":\"acc-1\",\"email\":null}")));
+                        .withBody("{\"accountId\":null}")));
 
-        assertThat(client.resolveOperatorEmail("acc-1")).isEmpty();
+        assertThat(client.resolveOperatorAccountId("op@example.com", "acme-corp")).isEmpty();
     }
 
     @Test
-    @DisplayName("resolveOperatorEmail — FAIL-SOFT: 5xx → Optional.empty (never throws; account_id-only resolution)")
-    void resolveOperatorEmail_5xx_failSoftEmpty() {
-        wireMockServer.stubFor(get(urlPathMatching("/internal/auth/credentials/.*/email"))
+    @DisplayName("resolveOperatorAccountId — FAIL-SOFT: 5xx → Optional.empty (never throws)")
+    void resolveOperatorAccountId_5xx_failSoftEmpty() {
+        wireMockServer.stubFor(post(urlPathMatching("/internal/auth/credentials/account-id-by-email"))
                 .willReturn(aResponse().withStatus(500)));
 
-        assertThat(client.resolveOperatorEmail("acc-1")).isEmpty();
+        assertThat(client.resolveOperatorAccountId("op@example.com", "acme-corp")).isEmpty();
     }
 
     @Test
-    @DisplayName("resolveOperatorEmail — FAIL-SOFT: 네트워크 오류 → Optional.empty (never throws)")
-    void resolveOperatorEmail_networkFault_failSoftEmpty() {
-        wireMockServer.stubFor(get(urlPathMatching("/internal/auth/credentials/.*/email"))
+    @DisplayName("resolveOperatorAccountId — FAIL-SOFT: 네트워크 오류 → Optional.empty (never throws)")
+    void resolveOperatorAccountId_networkFault_failSoftEmpty() {
+        wireMockServer.stubFor(post(urlPathMatching("/internal/auth/credentials/account-id-by-email"))
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
-        assertThat(client.resolveOperatorEmail("acc-1")).isEmpty();
+        assertThat(client.resolveOperatorAccountId("op@example.com", "acme-corp")).isEmpty();
     }
 
     @Test
-    @DisplayName("resolveOperatorEmail — blank accountId → Optional.empty, no HTTP call")
-    void resolveOperatorEmail_blankAccountId_returnsEmptyWithoutCall() {
-        assertThat(client.resolveOperatorEmail("  ")).isEmpty();
+    @DisplayName("resolveOperatorAccountId — blank email → Optional.empty, no HTTP call")
+    void resolveOperatorAccountId_blankEmail_returnsEmptyWithoutCall() {
+        assertThat(client.resolveOperatorAccountId("  ", "acme-corp")).isEmpty();
     }
 }

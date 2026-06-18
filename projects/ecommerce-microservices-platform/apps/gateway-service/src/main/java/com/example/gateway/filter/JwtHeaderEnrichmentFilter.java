@@ -15,9 +15,10 @@ import reactor.core.publisher.Mono;
 
 /**
  * Adds verified identity headers derived from the authenticated JWT (ADR-MONO-035 4b-2a):
- * {@code X-User-Id} ← {@code sub} (ADR-MONO-040 Phase 2 — the SAS {@code sub} is now the
- * account UUID; a transitional {@code account_id}-claim fallback covers in-flight legacy
- * email-{@code sub} tokens during redeploy), {@code X-User-Email} ← {@code email},
+ * {@code X-User-Id} ← {@code sub} (ADR-MONO-040 Phase 3 — the SAS {@code sub} is the
+ * account UUID, so the {@code jwt-standard-claims.md} {@code X-User-Id ← sub} letter is
+ * restored directly; the Phase-1/2 transitional {@code account_id}-claim fallback is
+ * removed), {@code X-User-Email} ← {@code email},
  * {@code X-User-Role} ← {@code roles} array (comma-joined) or {@code role} string,
  * {@code X-Tenant-Id} ← {@code tenant_id} (multi-tenant context propagation,
  * ADR-MONO-030 § 2.2 M2 layer 2).
@@ -49,25 +50,14 @@ public class JwtHeaderEnrichmentFilter implements GlobalFilter, Ordered {
         String email = jwt.getClaimAsString("email");
         String role = resolveRole(jwt);
 
-        // ADR-MONO-040 Phase 2 (TASK-MONO-295): X-User-Id ← sub. The SAS
-        // access-token `sub` is NOW the account UUID (Phase 2 flipped the
-        // auth-service customizer to override `sub` off the login email), so the
-        // contract's `X-User-Id ← sub` (jwt-standard-claims.md § Post-Validation
-        // Injection) is restored. The Phase-1 `account_id`-claim-first derivation
-        // is retired: `sub` is the authoritative account UUID.
-        //
-        // Transitional fallback (retired in the Phase-3 cleanup): if a token issued
-        // BEFORE the auth-service redeploy is still in flight, its `sub` is the
-        // legacy email and the additive `account_id` claim carries the UUID — so a
-        // non-UUID `sub` (contains '@', i.e. an email) falls back to `account_id`.
-        // This closes the redeploy-ordering 400 window without keeping account_id
-        // as the primary key. A post-Phase-2 token has a UUID `sub` and never hits
-        // the fallback.
-        String accountId = jwt.getClaimAsString("account_id");
-        boolean subjectIsLegacyEmail = subject != null && subject.contains("@");
-        String userId = (subjectIsLegacyEmail && accountId != null && !accountId.isBlank())
-                ? accountId
-                : subject;
+        // ADR-MONO-040 Phase 3 part B (TASK-MONO-299): X-User-Id ← sub, directly. The
+        // SAS access-token `sub` is the account UUID (Phase 2 flipped the auth-service
+        // customizer to override `sub` off the login email), so the contract's
+        // `X-User-Id ← sub` (jwt-standard-claims.md § Post-Validation Injection) is
+        // honored verbatim. The Phase-1/2 transitional `account_id`-claim email-shape
+        // fallback is removed — the auth-service no longer emits the `account_id` claim,
+        // and there are no longer any in-flight legacy email-`sub` tokens to cover.
+        String userId = subject;
 
         ServerHttpRequest.Builder builder = exchange.getRequest().mutate();
         if (userId != null) {

@@ -236,16 +236,17 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
-    @DisplayName("ADR-MONO-040 Phase 2 authorization_code: account_id from principal details → sub OVERRIDDEN to account UUID + account_id claim emitted")
-    void authorizationCode_accountIdFromPrincipalDetails_overridesSubAndEmitsClaim() {
+    @DisplayName("ADR-MONO-040 Phase 3 part B authorization_code: account_id from principal details → sub OVERRIDDEN to account UUID, transitional account_id claim NO LONGER emitted")
+    void authorizationCode_accountIdFromPrincipalDetails_overridesSubNoClaim() {
         RegisteredClient client = buildClientWithGrantType(
                 "ecommerce|B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
         // The account UUID rides on the principal details (set by
-        // CredentialAuthenticationProvider). ADR-040 Phase 2 (MONO-295): the
+        // CredentialAuthenticationProvider). ADR-040 Phase 3 part B (MONO-299): the
         // customizer OVERRIDES `sub` to the account UUID (full jwt-standard-claims
-        // compliance) AND still emits the transitional `account_id` claim.
+        // compliance, X-User-Id ← sub) and NO LONGER emits the transitional
+        // `account_id` claim (every gateway reads `sub` directly).
         Map<String, Object> details = Map.of(
                 "tenant_id", "ecommerce",
                 "tenant_type", "B2C",
@@ -262,11 +263,10 @@ class TenantClaimTokenCustomizerTest {
         customizer.customize(context);
 
         JwtClaimsSet built = claimsBuilder.build();
-        // AC-1: sub is now the account UUID (was the framework default "test-client").
+        // AC-2: sub is the account UUID (was the framework default "test-client").
         assertThat(built.getSubject()).isEqualTo("550e8400-e29b-41d4-a716-446655440000");
-        // Transitional account_id claim still present (retired in Phase 3).
-        assertThat((String) built.getClaim("account_id"))
-                .isEqualTo("550e8400-e29b-41d4-a716-446655440000");
+        // The transitional account_id claim is removed (Phase 3 part B).
+        assertThat((Object) built.getClaim("account_id")).isNull();
     }
 
     @Test
