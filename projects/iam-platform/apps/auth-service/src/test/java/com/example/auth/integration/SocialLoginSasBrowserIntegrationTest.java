@@ -307,7 +307,12 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
         JsonNode tokenBody = objectMapper.readTree(token.getResponse().getContentAsString());
         JsonNode accessPayload = decodeJwtPayload(tokenBody.get("access_token").asText());
 
-        assertThat(accessPayload.get("sub").asText()).isEqualTo("social.customer@example.com");
+        // ADR-MONO-040 Phase 2 (TASK-MONO-295): `sub` is now the account UUID
+        // (jwt-standard-claims.md), not the login email. The resolved social
+        // identity's account_id is `social-acc-1` (the social-signup / profile
+        // stubs above) — TenantClaimTokenCustomizer overrides `sub` to it. The
+        // social email surfaces via the `email` claim, not `sub`.
+        assertThat(accessPayload.get("sub").asText()).isEqualTo("social-acc-1");
         assertThat(accessPayload.get("tenant_id").asText()).isEqualTo("ecommerce");
         assertThat(accessPayload.has("roles")).as("roles claim present").isTrue();
         assertThat(accessPayload.get("roles").isArray()).isTrue();
