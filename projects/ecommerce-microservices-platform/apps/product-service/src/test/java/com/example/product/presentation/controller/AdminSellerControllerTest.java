@@ -23,7 +23,10 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -42,7 +45,6 @@ class AdminSellerControllerTest {
     private SellerQueryService sellerQueryService;
 
     @MockitoBean
-    @SuppressWarnings("unused")
     private RegisterSellerService registerSellerService;
 
     private static SellerSummary summary(String sellerId, String name) {
@@ -190,5 +192,55 @@ class AdminSellerControllerTest {
                         .header(ROLE_HEADER, "SUPERADMIN"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    // ─── lifecycle endpoints (ADR-MONO-042) ────────────────────────────
+
+    @Test
+    @DisplayName("POST /api/admin/sellers/{id}/provision - ADMIN → 204 + provisionPending 위임")
+    void provision_admin_returns204() throws Exception {
+        mockMvc.perform(post("/api/admin/sellers/{id}/provision", "seller-a1")
+                        .header(ROLE_HEADER, "ADMIN"))
+                .andExpect(status().isNoContent());
+        verify(registerSellerService).provisionPending("seller-a1");
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/sellers/{id}/suspend - ADMIN → 204 + suspend 위임")
+    void suspend_admin_returns204() throws Exception {
+        mockMvc.perform(post("/api/admin/sellers/{id}/suspend", "seller-a1")
+                        .header(ROLE_HEADER, "ADMIN"))
+                .andExpect(status().isNoContent());
+        verify(registerSellerService).suspend("seller-a1");
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/sellers/{id}/close - ADMIN → 204 + close 위임")
+    void close_admin_returns204() throws Exception {
+        mockMvc.perform(post("/api/admin/sellers/{id}/close", "seller-a1")
+                        .header(ROLE_HEADER, "ADMIN"))
+                .andExpect(status().isNoContent());
+        verify(registerSellerService).close("seller-a1");
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/sellers/{id}/suspend - 비-ADMIN 은 403")
+    void suspend_nonAdmin_returns403() throws Exception {
+        mockMvc.perform(post("/api/admin/sellers/{id}/suspend", "seller-a1")
+                        .header(ROLE_HEADER, "USER"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/sellers/{id}/provision - 부재 셀러는 404")
+    void provision_missing_returns404() throws Exception {
+        willThrow(new SellerNotFoundException("ghost"))
+                .given(registerSellerService).provisionPending("ghost");
+
+        mockMvc.perform(post("/api/admin/sellers/{id}/provision", "ghost")
+                        .header(ROLE_HEADER, "ADMIN"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SELLER_NOT_FOUND"));
     }
 }

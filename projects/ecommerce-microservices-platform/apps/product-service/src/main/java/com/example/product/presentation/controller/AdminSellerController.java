@@ -23,11 +23,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * OPERATOR-plane seller registration + read surface (ADR-MONO-030 Step 3 §3.1 /
- * Step 4 facet f). Minimal v1 lifecycle: register a seller (ACTIVE) and read the
- * tenant's sellers (list + detail). Seller is the inner marketplace axis nested
- * under {@code tenant_id} — onboarding flow, settlement, commission, and any
- * deactivate/suspend/status-transition are out of scope (Step 4).
+ * OPERATOR-plane seller onboarding + lifecycle + read surface (ADR-MONO-030 Step 3
+ * §3.1 / Step 4 facet f, ADR-MONO-042). Onboarding mints a real IAM seller-operator
+ * account fail-soft (the seller is born {@code PENDING_PROVISIONING} → {@code ACTIVE}
+ * on provision); operators can re-provision a PENDING seller, and suspend/close a
+ * seller (which locks/deactivates the backing account). Seller is the inner
+ * marketplace axis nested under {@code tenant_id}; settlement/commission remain Step 4.
  *
  * <p>Authorization is promotions-exact: every endpoint calls
  * {@link #validateAdminRole(String)} ({@code X-User-Role == ADMIN}); the routes sit
@@ -83,6 +84,46 @@ public class AdminSellerController {
         validateAdminRole(userRole);
         String sellerId = registerSellerService.register(request.toCommand());
         return ResponseEntity.status(HttpStatus.CREATED).body(RegisterSellerResponse.from(sellerId));
+    }
+
+    /**
+     * Re-provision a seller stuck in {@code PENDING_PROVISIONING} (ADR-042 D3 retry —
+     * e.g. IAM was unavailable at onboarding). Idempotent: an already-ACTIVE seller is a
+     * no-op. 204 on success/no-op; 404 if the seller does not exist in the tenant.
+     */
+    @PostMapping("/{sellerId}/provision")
+    public ResponseEntity<Void> provision(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @PathVariable String sellerId) {
+        validateAdminRole(userRole);
+        registerSellerService.provisionPending(sellerId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Operator SUSPEND (ADR-042 D4): seller ACTIVE → SUSPENDED + lock the backing
+     * account. Idempotent + null-safe. 204 on success/no-op; 404 if missing.
+     */
+    @PostMapping("/{sellerId}/suspend")
+    public ResponseEntity<Void> suspend(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @PathVariable String sellerId) {
+        validateAdminRole(userRole);
+        registerSellerService.suspend(sellerId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Operator CLOSE (ADR-042 D4): seller → CLOSED (terminal) + deactivate the backing
+     * account. Idempotent + null-safe. 204 on success/no-op; 404 if missing.
+     */
+    @PostMapping("/{sellerId}/close")
+    public ResponseEntity<Void> close(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @PathVariable String sellerId) {
+        validateAdminRole(userRole);
+        registerSellerService.close(sellerId);
+        return ResponseEntity.noContent().build();
     }
 
     private void validateAdminRole(String userRole) {
