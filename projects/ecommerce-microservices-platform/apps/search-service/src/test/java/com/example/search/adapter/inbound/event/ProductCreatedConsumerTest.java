@@ -37,7 +37,7 @@ class ProductCreatedConsumerTest {
 
     private ProductCreatedEvent event(String productId, String name, List<ProductCreatedEvent.VariantPayload> variants) {
         return new ProductCreatedEvent(
-                "event-id", "ProductCreated", "2026-03-23T00:00:00Z", "product-service",
+                "event-id", "ProductCreated", "2026-03-23T00:00:00Z", "product-service", "tenant-a",
                 new ProductCreatedEvent.ProductCreatedPayload(productId, name, "설명", 1000000L, "ON_SALE", "cat1", null, variants)
         );
     }

@@ -16,6 +16,7 @@ import com.example.search.domain.model.SearchDocument;
 import com.example.search.domain.model.SearchSort;
 import com.example.search.application.port.out.SearchQueryPort;
 import com.example.search.application.exception.SearchException;
+import com.example.search.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -80,11 +81,16 @@ public class ElasticsearchQueryAdapter implements SearchQueryPort {
 
     private Query buildQuery(SearchProductQuery query) {
         var filter = query.filter();
+        // tenant isolation (TASK-BE-404, ADR-MONO-030 Step 4 facet c):
+        // mandatory term filter on tenantId — a document in tenant A must not appear in a tenant B search.
+        String tenantId = TenantContext.currentTenant();
         return Query.of(q -> q.bool(builder -> {
             builder.must(m -> m.multiMatch(mm -> mm
                     .query(filter.keyword())
                     .fields("name", "description")
             ));
+            // mandatory tenant scoping filter — always applied, never bypassed
+            builder.filter(f -> f.term(t -> t.field("tenantId").value(tenantId)));
             builder.filter(f -> f.term(t -> t.field("status").value(filter.status())));
             if (filter.categoryId() != null) {
                 builder.filter(f -> f.term(t -> t.field("categoryId").value(filter.categoryId())));

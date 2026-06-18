@@ -66,18 +66,19 @@ class IndexInitializerUnitTest {
         given(indicesClient.exists(any(ExistsRequest.class))).willReturn(new BooleanResponse(true));
 
         // hasCurrentSpec(indexName) 의 deep call chain 을 'name=text/nori_korean' + 'thumbnailUrl 존재'
-        // 매핑으로 stub — production code 의 두 분기(name analyzer, thumbnailUrl key)를 모두 통과시켜야 한다.
+        // + 'tenantId 존재' 매핑으로 stub — production code 의 세 분기를 모두 통과시켜야 한다 (TASK-BE-404).
         GetMappingResponse mappingResp = mock(GetMappingResponse.class);
         IndexMappingRecord mappingRecord = mock(IndexMappingRecord.class);
         TypeMapping typeMapping = mock(TypeMapping.class);
         Property nameProp = mock(Property.class);
         Property thumbnailProp = mock(Property.class);
+        Property tenantIdProp = mock(Property.class);
         TextProperty nameText = mock(TextProperty.class);
 
         given(indicesClient.getMapping(any(Function.class))).willReturn(mappingResp);
         given(mappingResp.result()).willReturn(Map.of("products", mappingRecord));
         given(mappingRecord.mappings()).willReturn(typeMapping);
-        given(typeMapping.properties()).willReturn(Map.of("name", nameProp, "thumbnailUrl", thumbnailProp));
+        given(typeMapping.properties()).willReturn(Map.of("name", nameProp, "thumbnailUrl", thumbnailProp, "tenantId", tenantIdProp));
         given(nameProp.isText()).willReturn(true);
         given(nameProp.text()).willReturn(nameText);
         given(nameText.analyzer()).willReturn("nori_korean");

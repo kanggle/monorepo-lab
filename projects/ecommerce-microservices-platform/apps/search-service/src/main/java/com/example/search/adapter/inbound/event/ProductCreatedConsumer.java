@@ -33,6 +33,9 @@ public class ProductCreatedConsumer {
         int totalStock = p.variants() == null ? 0
                 : p.variants().stream().mapToInt(ProductCreatedEvent.VariantPayload::stock).sum();
 
+        // M5 propagation: extract tenant_id from event envelope; default 'ecommerce' when absent
+        String tenantId = (event.tenantId() == null || event.tenantId().isBlank()) ? "ecommerce" : event.tenantId();
+
         SearchDocument document = SearchDocument.of(
                 p.productId(),
                 p.name(),
@@ -41,7 +44,8 @@ public class ProductCreatedConsumer {
                 p.status(),
                 p.categoryId(),
                 totalStock,
-                p.thumbnailUrl()
+                p.thumbnailUrl(),
+                tenantId
         );
         indexSyncService.upsert(document);
     }

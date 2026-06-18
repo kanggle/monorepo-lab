@@ -71,7 +71,7 @@ class IndexSyncIntegrationTest {
 
     private ProductCreatedEvent createdEvent(String productId, String name, List<ProductCreatedEvent.VariantPayload> variants) {
         return new ProductCreatedEvent(
-                "evt-id", "ProductCreated", "2026-03-23T00:00:00Z", "product-service",
+                "evt-id", "ProductCreated", "2026-03-23T00:00:00Z", "product-service", "ecommerce",
                 new ProductCreatedEvent.ProductCreatedPayload(productId, name, "설명", 1500000L, "ON_SALE", "electronics", null, variants)
         );
     }
@@ -103,7 +103,7 @@ class IndexSyncIntegrationTest {
         elasticsearchClient.indices().refresh(r -> r.index(indexProperties.name()));
 
         productUpdatedConsumer.handle(new ProductUpdatedEvent(
-                "evt-id", "ProductUpdated", "2026-03-23T00:00:00Z", "product-service",
+                "evt-id", "ProductUpdated", "2026-03-23T00:00:00Z", "product-service", "ecommerce",
                 new ProductUpdatedEvent.ProductUpdatedPayload(productId, "수정된상품", "새설명", 2000L, "ON_SALE", "cat2", null)
         ));
         elasticsearchClient.indices().refresh(r -> r.index(indexProperties.name()));
@@ -125,7 +125,7 @@ class IndexSyncIntegrationTest {
         elasticsearchClient.indices().refresh(r -> r.index(indexProperties.name()));
 
         productDeletedConsumer.handle(new ProductDeletedEvent(
-                "evt-id", "ProductDeleted", "2026-03-23T00:00:00Z", "product-service",
+                "evt-id", "ProductDeleted", "2026-03-23T00:00:00Z", "product-service", "ecommerce",
                 new ProductDeletedEvent.ProductDeletedPayload(productId)
         ));
         elasticsearchClient.indices().refresh(r -> r.index(indexProperties.name()));
@@ -147,7 +147,7 @@ class IndexSyncIntegrationTest {
         elasticsearchClient.indices().refresh(r -> r.index(indexProperties.name()));
 
         stockChangedConsumer.handle(new StockChangedEvent(
-                "evt-id", "StockChanged", "2026-03-23T00:00:00Z", "product-service",
+                "evt-id", "StockChanged", "2026-03-23T00:00:00Z", "product-service", "ecommerce",
                 new StockChangedEvent.StockChangedPayload(productId, "v1", 10, 0, -10, "ORDER_RESERVED", null)
         ));
         elasticsearchClient.indices().refresh(r -> r.index(indexProperties.name()));

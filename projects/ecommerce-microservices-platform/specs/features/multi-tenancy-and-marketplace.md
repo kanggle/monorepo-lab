@@ -18,7 +18,8 @@ Step 2(product/order row-level `tenant_id` M1), Step 3(seller 축 TASK-BE-363), 
 | notification-service | V5 | TASK-BE-370 |
 | settlement-service | 구현 완료 | TASK-BE-365 (신규 서비스) |
 | payment-service | V5 | TASK-BE-400 |
-| cart / review / search / auth / web-store | **미완 (in-migration)** | 잔여 backlog |
+| search-service | ES index-filter (TASK-BE-404) | tenantId 필드 + mandatory query filter; Flyway/SQL 없음 |
+| cart / review / auth / web-store | **미완 (in-migration)** | 잔여 backlog |
 
 `admin-dashboard` (frontend-app): ADR-MONO-031 Phase 6 / TASK-MONO-259 로 **폐기 완료** — platform-console 일원화.
 
