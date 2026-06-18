@@ -45,6 +45,11 @@ dependencies {
 test {
     environment 'DOCKER_HOST', 'npipe:////./pipe/docker_engine_linux'
     jvmArgs '-Dapi.version=1.44'
+    // Integration tests require Testcontainers (PostgreSQL + Kafka) and are CI-only.
+    // Exclude them from the standard unit-test target on this host (TASK-BE-403).
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
 }
 
 dependencyManagement {

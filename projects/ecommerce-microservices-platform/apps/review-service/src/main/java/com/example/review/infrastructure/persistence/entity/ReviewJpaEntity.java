@@ -30,6 +30,13 @@ public class ReviewJpaEntity implements Persistable<UUID> {
     @Column(name = "product_name")
     private String productName;
 
+    /**
+     * Outer-axis tenant owning this review (ADR-MONO-030 Step 4 facet c — TASK-BE-403, M1).
+     * Stamped once at insert from the request tenant context; immutable afterward.
+     */
+    @Column(name = "tenant_id", nullable = false, updatable = false, length = 64)
+    private String tenantId;
+
     @Column(nullable = false)
     private int rating;
 
@@ -70,6 +77,7 @@ public class ReviewJpaEntity implements Persistable<UUID> {
         entity.userId = review.getUserId();
         entity.productId = review.getProductId();
         entity.productName = review.getProductName();
+        entity.tenantId = review.getTenantId();
         entity.rating = review.getRatingValue();
         entity.title = review.getTitle();
         entity.content = review.getContent();
@@ -82,8 +90,8 @@ public class ReviewJpaEntity implements Persistable<UUID> {
 
     public Review toDomain() {
         return Review.reconstitute(
-                id, userId, productId, productName, rating,
-                title, content, status, createdAt, updatedAt
+                id, userId, productId, productName, tenantId,
+                rating, title, content, status, createdAt, updatedAt
         );
     }
 

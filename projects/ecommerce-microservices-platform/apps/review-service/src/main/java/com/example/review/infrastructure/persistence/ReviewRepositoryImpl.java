@@ -7,6 +7,7 @@ import com.example.review.application.result.ReviewSummaryResult;
 import com.example.review.domain.model.Review;
 import com.example.review.domain.model.ReviewStatus;
 import com.example.review.domain.repository.ReviewRepository;
+import com.example.review.domain.tenant.TenantContext;
 import com.example.review.infrastructure.persistence.entity.ReviewJpaEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -36,25 +37,34 @@ class ReviewRepositoryImpl implements ReviewRepository, ReviewQueryPort {
         return review;
     }
 
+    /**
+     * Tenant-scoped lookup: a review in another tenant resolves to empty → 404
+     * (M2 layer 3, M3 404-over-403; TASK-BE-403).
+     */
     @Override
     public Optional<Review> findActiveById(UUID id) {
-        return jpaRepository.findByIdAndStatus(id, ReviewStatus.ACTIVE)
+        return jpaRepository.findByIdAndStatusAndTenantId(id, ReviewStatus.ACTIVE, TenantContext.currentTenant())
                 .map(ReviewJpaEntity::toDomain);
     }
 
+    /**
+     * Tenant-scoped existence check (M2 layer 3; TASK-BE-403).
+     */
     @Override
     public boolean existsByUserIdAndProductId(UUID userId, UUID productId) {
-        return jpaRepository.existsByUserIdAndProductIdAndStatus(userId, productId, ReviewStatus.ACTIVE);
+        return jpaRepository.existsByUserIdAndProductIdAndStatusAndTenantId(
+                userId, productId, ReviewStatus.ACTIVE, TenantContext.currentTenant());
     }
 
     @Override
     public ReviewListResult findByProductId(UUID productId, int page, int size, String sort) {
+        String tenantId = TenantContext.currentTenant();
         Sort jpaSort = parseSort(sort);
-        Page<ReviewJpaEntity> result = jpaRepository.findByProductIdAndStatus(
-                productId, ReviewStatus.ACTIVE, PageRequest.of(page, size, jpaSort));
+        Page<ReviewJpaEntity> result = jpaRepository.findByProductIdAndStatusAndTenantId(
+                productId, ReviewStatus.ACTIVE, tenantId, PageRequest.of(page, size, jpaSort));
 
-        double averageRating = fetchAverageRating(productId);
-        long totalReviews = fetchTotalReviews(productId);
+        double averageRating = fetchAverageRating(productId, tenantId);
+        long totalReviews = fetchTotalReviews(productId, tenantId);
 
         List<ReviewListResult.ReviewItem> items = result.getContent().stream()
                 .map(entity -> new ReviewListResult.ReviewItem(
@@ -80,11 +90,12 @@ class ReviewRepositoryImpl implements ReviewRepository, ReviewQueryPort {
 
     @Override
     public ReviewSummaryResult getSummaryByProductId(UUID productId) {
-        double averageRating = fetchAverageRating(productId);
-        long totalReviews = fetchTotalReviews(productId);
+        String tenantId = TenantContext.currentTenant();
+        double averageRating = fetchAverageRating(productId, tenantId);
+        long totalReviews = fetchTotalReviews(productId, tenantId);
 
-        List<Object[]> distribution = jpaRepository.ratingDistributionByProductIdAndStatus(
-                productId, ReviewStatus.ACTIVE);
+        List<Object[]> distribution = jpaRepository.ratingDistributionByProductIdAndStatusAndTenantId(
+                productId, ReviewStatus.ACTIVE, tenantId);
 
         Map<Integer, Long> ratingDistribution = new LinkedHashMap<>();
         for (int i = 1; i <= 5; i++) {
@@ -106,8 +117,9 @@ class ReviewRepositoryImpl implements ReviewRepository, ReviewQueryPort {
 
     @Override
     public MyReviewListResult findByUserId(UUID userId, int page, int size) {
-        Page<ReviewJpaEntity> result = jpaRepository.findByUserIdAndStatus(
-                userId, ReviewStatus.ACTIVE, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
+        Page<ReviewJpaEntity> result = jpaRepository.findByUserIdAndStatusAndTenantId(
+                userId, ReviewStatus.ACTIVE, TenantContext.currentTenant(),
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
 
         List<MyReviewListResult.MyReviewItem> items = result.getContent().stream()
                 .map(entity -> new MyReviewListResult.MyReviewItem(
@@ -129,12 +141,12 @@ class ReviewRepositoryImpl implements ReviewRepository, ReviewQueryPort {
         );
     }
 
-    private double fetchAverageRating(UUID productId) {
-        return jpaRepository.averageRatingByProductIdAndStatus(productId, ReviewStatus.ACTIVE);
+    private double fetchAverageRating(UUID productId, String tenantId) {
+        return jpaRepository.averageRatingByProductIdAndStatusAndTenantId(productId, ReviewStatus.ACTIVE, tenantId);
     }
 
-    private long fetchTotalReviews(UUID productId) {
-        return jpaRepository.countByProductIdAndStatus(productId, ReviewStatus.ACTIVE);
+    private long fetchTotalReviews(UUID productId, String tenantId) {
+        return jpaRepository.countByProductIdAndStatusAndTenantId(productId, ReviewStatus.ACTIVE, tenantId);
     }
 
     private double roundToOneDecimal(double value) {

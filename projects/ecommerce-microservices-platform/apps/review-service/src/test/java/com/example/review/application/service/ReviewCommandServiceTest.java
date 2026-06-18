@@ -117,7 +117,7 @@ class ReviewCommandServiceTest {
     void updateReview_ownReview_success() {
         UUID reviewId = UUID.randomUUID();
         Review review = Review.reconstitute(
-                reviewId, USER_ID, PRODUCT_ID, "테스트상품", 5, "좋은 상품", "매우 만족합니다",
+                reviewId, USER_ID, PRODUCT_ID, "테스트상품", "ecommerce", 5, "좋은 상품", "매우 만족합니다",
                 ReviewStatus.ACTIVE, FIXED_TIME, FIXED_TIME);
 
         UpdateReviewCommand command = new UpdateReviewCommand(USER_ID, reviewId, 3, "수정된 제목", "수정된 내용");
@@ -138,7 +138,7 @@ class ReviewCommandServiceTest {
         UUID reviewId = UUID.randomUUID();
         UUID otherUserId = UUID.randomUUID();
         Review review = Review.reconstitute(
-                reviewId, USER_ID, PRODUCT_ID, "테스트상품", 5, "좋은 상품", "매우 만족합니다",
+                reviewId, USER_ID, PRODUCT_ID, "테스트상품", "ecommerce", 5, "좋은 상품", "매우 만족합니다",
                 ReviewStatus.ACTIVE, FIXED_TIME, FIXED_TIME);
 
         UpdateReviewCommand command = new UpdateReviewCommand(otherUserId, reviewId, 3, "수정", "수정 내용");
@@ -166,7 +166,7 @@ class ReviewCommandServiceTest {
     void deleteReview_ownReview_success() {
         UUID reviewId = UUID.randomUUID();
         Review review = Review.reconstitute(
-                reviewId, USER_ID, PRODUCT_ID, "테스트상품", 5, "좋은 상품", "매우 만족합니다",
+                reviewId, USER_ID, PRODUCT_ID, "테스트상품", "ecommerce", 5, "좋은 상품", "매우 만족합니다",
                 ReviewStatus.ACTIVE, FIXED_TIME, FIXED_TIME);
 
         given(reviewRepository.findActiveById(reviewId)).willReturn(Optional.of(review));
@@ -202,7 +202,7 @@ class ReviewCommandServiceTest {
         UUID reviewId = UUID.randomUUID();
         UUID otherUserId = UUID.randomUUID();
         Review review = Review.reconstitute(
-                reviewId, USER_ID, PRODUCT_ID, "테스트상품", 5, "좋은 상품", "매우 만족합니다",
+                reviewId, USER_ID, PRODUCT_ID, "테스트상품", "ecommerce", 5, "좋은 상품", "매우 만족합니다",
                 ReviewStatus.ACTIVE, FIXED_TIME, FIXED_TIME);
 
         given(reviewRepository.findActiveById(reviewId)).willReturn(Optional.of(review));
