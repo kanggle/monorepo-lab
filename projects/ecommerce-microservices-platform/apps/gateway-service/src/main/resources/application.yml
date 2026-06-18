@@ -58,7 +58,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
         - id: user-service
           uri: ${USER_SERVICE_URL:http://localhost:8084}
@@ -69,7 +69,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
         - id: search-service
           uri: ${SEARCH_SERVICE_URL:http://localhost:8085}
@@ -80,7 +80,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
         - id: order-service
           uri: ${ORDER_SERVICE_URL:http://localhost:8086}
@@ -91,7 +91,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
         - id: payment-service
           uri: ${PAYMENT_SERVICE_URL:http://localhost:8087}
@@ -102,7 +102,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
         - id: shipping-service
           uri: ${SHIPPING_SERVICE_URL:http://localhost:8090}
@@ -113,7 +113,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
         - id: review-service
           uri: ${REVIEW_SERVICE_URL:http://localhost:8091}
@@ -124,7 +124,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
         - id: promotion-service
           uri: ${PROMOTION_SERVICE_URL:http://localhost:8092}
@@ -135,7 +135,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
         - id: notification-service
           uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8093}
@@ -146,7 +146,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
         # TASK-BE-365 (ADR-MONO-030 Step 4 facet b): settlement-service —
         # operator-plane marketplace settlement read + commission-rate admin.
@@ -159,7 +159,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
-                key-resolver: "#{@ipKeyResolver}"
+                key-resolver: "#{@tenantRouteKeyResolver}"
 
 management:
   endpoints:

@@ -111,6 +111,7 @@ Required emphasis:
 - **이벤트**: `ProductCreated`/`StockChanged` 등 봉투에 `tenant_id` 전파(M5), 페이로드에 `seller_id`. (계약 편집 = Step 2/3.)
 - **degradation (D8)**: default-tenant + default-seller 시드 → 단일 스토어 단일 셀러 동작 byte-identical; default seller 는 ACTIVE 로 태어나 IAM provisioning 하지 않음(standalone 단일 스토어 anchor). legacy 셀러(ADR-042 이전)는 ACTIVE + null account/identity 로 backfill — 동작 불변. `tenant_id` claim 부재(standalone) → default tenant.
 - **회귀 (M6)**: cross-tenant leak IT 필수 — 테넌트 A 상품이 B 토큰으로 안 보임.
+- **M7 unbounded-query cap (TASK-BE-405)**: 모든 list endpoint(`GET /api/products`, `GET /api/admin/products`, `GET /api/admin/sellers`)는 **max page size = 100**(`MAX_PAGE_SIZE`) — `size` 가 100 을 초과하면 100 으로 clamp(`Math.min`); 정상 size 는 그대로 전달(backward-compatible). `LIMIT`-less / 과도 list 를 통한 단일 테넌트의 cross-tenant DBMS 자원 고갈 차단(M7 line 86). per-tenant API rate limit 은 gateway-edge(M2 layer-1, gateway-service/architecture.md § Per-tenant Rate Limit).
 - **PROJECT.md `multi-tenant` trait**: Step 2(코드)와 함께 추가 (ADR-030 §D7 타이밍 — 슬라이스 전 추가 시 미마이그 서비스 M1 미스분류).
 
 ## Change Rule

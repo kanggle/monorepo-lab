@@ -88,6 +88,33 @@ class ProductControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/products?size=500 - 과도한 page size 는 100 으로 clamp 된다 (M7, TASK-BE-405)")
+    void getProducts_oversizedSize_clampedToMax() throws Exception {
+        ProductListResult result = new ProductListResult(List.of(), 0, 100, 0L);
+        org.mockito.ArgumentCaptor<Integer> sizeCaptor = org.mockito.ArgumentCaptor.forClass(Integer.class);
+        given(queryProductService.findAll(any(), any(), anyInt(), sizeCaptor.capture())).willReturn(result);
+
+        mockMvc.perform(get("/api/products").param("size", "500"))
+                .andExpect(status().isOk());
+
+        // M7: no LIMIT-less / oversized list reachable by a tenant — clamped to 100.
+        org.assertj.core.api.Assertions.assertThat(sizeCaptor.getValue()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("GET /api/products?size=50 - 정상 page size 는 그대로 전달된다 (backward-compatible)")
+    void getProducts_normalSize_passedThrough() throws Exception {
+        ProductListResult result = new ProductListResult(List.of(), 0, 50, 0L);
+        org.mockito.ArgumentCaptor<Integer> sizeCaptor = org.mockito.ArgumentCaptor.forClass(Integer.class);
+        given(queryProductService.findAll(any(), any(), anyInt(), sizeCaptor.capture())).willReturn(result);
+
+        mockMvc.perform(get("/api/products").param("size", "50"))
+                .andExpect(status().isOk());
+
+        org.assertj.core.api.Assertions.assertThat(sizeCaptor.getValue()).isEqualTo(50);
+    }
+
+    @Test
     @DisplayName("GET /api/products/{productId} - 상세 조회 성공")
     void getProduct_success_returns200WithVariants() throws Exception {
         UUID id = UUID.randomUUID();
