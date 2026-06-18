@@ -249,4 +249,22 @@ public final class LedgerErrors {
             super("VALIDATION_ERROR", message);
         }
     }
+
+    // ---- Per-tenant FX contract-rate override (28th increment — TASK-FIN-BE-042) ----
+
+    /**
+     * A {@code PUT /settlements/fx-rate-override/{foreignCurrency}} body with a {@code rate}
+     * that is null / not a valid decimal / not strictly positive, or an unknown currency — a
+     * tenant contract rate must be a strictly-positive exact decimal for a supported foreign
+     * currency (architecture.md § FX rate feed § Per-tenant contract-rate override; ADR-002
+     * § 3.1). 400; nothing persists. The DB CHECK ({@code ck_fx_rate_override_rate_positive})
+     * is the structural backstop. No new error code — reuses the platform-standard
+     * {@code VALIDATION_ERROR} exactly like {@link FxToleranceInvalidException} /
+     * {@link CostFlowMethodInvalidException}.
+     */
+    public static final class FxRateOverrideInvalidException extends LedgerDomainException {
+        public FxRateOverrideInvalidException(String message) {
+            super("VALIDATION_ERROR", message);
+        }
+    }
 }

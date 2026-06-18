@@ -5,10 +5,13 @@ import com.example.finance.ledger.application.DeleteFxCostFlowAccountConfigUseCa
 import com.example.finance.ledger.application.GetFxCostFlowAccountConfigsUseCase;
 import com.example.finance.ledger.application.GetFxCostFlowConfigUseCase;
 import com.example.finance.ledger.application.GetFxPositionLotsUseCase;
+import com.example.finance.ledger.application.GetFxRateOverrideUseCase;
 import com.example.finance.ledger.application.SetFxCostFlowAccountConfigCommand;
 import com.example.finance.ledger.application.SetFxCostFlowAccountConfigUseCase;
 import com.example.finance.ledger.application.SetFxCostFlowConfigCommand;
 import com.example.finance.ledger.application.SetFxCostFlowConfigUseCase;
+import com.example.finance.ledger.application.SetFxRateOverrideCommand;
+import com.example.finance.ledger.application.SetFxRateOverrideUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.NoOpReason;
 import com.example.finance.ledger.application.SettleForeignPositionUseCase.Result;
@@ -16,9 +19,11 @@ import com.example.finance.ledger.application.view.FxCostFlowAccountConfigView;
 import com.example.finance.ledger.application.view.FxCostFlowConfigView;
 import com.example.finance.ledger.application.view.FxPositionLotView;
 import com.example.finance.ledger.application.view.FxPositionLotsView;
+import com.example.finance.ledger.application.view.FxRateOverrideView;
 import com.example.finance.ledger.domain.account.LedgerAccountCodes;
 import com.example.finance.ledger.domain.error.LedgerErrors.CostFlowMethodInvalidException;
 import com.example.finance.ledger.domain.error.LedgerErrors.CurrencyMismatchException;
+import com.example.finance.ledger.domain.error.LedgerErrors.FxRateOverrideInvalidException;
 import com.example.finance.ledger.domain.error.LedgerErrors.FxRateUnavailableException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerAccountNotFoundException;
 import com.example.finance.ledger.domain.error.LedgerErrors.LedgerPeriodClosedException;
@@ -96,6 +101,8 @@ class SettlementControllerSliceTest {
     @MockitoBean GetFxCostFlowAccountConfigsUseCase getFxCostFlowAccountConfigs;
     @MockitoBean SetFxCostFlowAccountConfigUseCase setFxCostFlowAccountConfig;
     @MockitoBean DeleteFxCostFlowAccountConfigUseCase deleteFxCostFlowAccountConfig;
+    @MockitoBean GetFxRateOverrideUseCase getFxRateOverride;
+    @MockitoBean SetFxRateOverrideUseCase setFxRateOverride;
 
     @BeforeEach
     void setUp() {
@@ -507,5 +514,77 @@ class SettlementControllerSliceTest {
         mockMvc.perform(delete("/api/finance/ledger/settlements/cost-flow-config/accounts/FX_UNKNOWN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.cleared").value(false));
+    }
+
+    // ---- 28th increment: per-tenant FX contract-rate override (TASK-FIN-BE-042) ----
+
+    @Test
+    @DisplayName("GET /fx-rate-override/USD set → 200 present:true with rate (F5 string) + audit")
+    void getRateOverridePresent() throws Exception {
+        when(getFxRateOverride.get("finance", "USD")).thenReturn(new FxRateOverrideView(
+                "KRW", "USD", true, new java.math.BigDecimal("1325.50000000"),
+                "operator-7", Instant.parse("2026-02-01T10:00:00Z")));
+
+        mockMvc.perform(get("/api/finance/ledger/settlements/fx-rate-override/USD"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.present").value(true))
+                .andExpect(jsonPath("$.data.baseCurrency").value("KRW"))
+                .andExpect(jsonPath("$.data.foreignCurrency").value("USD"))
+                .andExpect(jsonPath("$.data.rate").value("1325.50000000"))
+                .andExpect(jsonPath("$.data.updatedBy").value("operator-7"));
+    }
+
+    @Test
+    @DisplayName("GET /fx-rate-override/USD unset → 200 present:false, no rate (feed fallthrough)")
+    void getRateOverrideAbsent() throws Exception {
+        when(getFxRateOverride.get("finance", "USD"))
+                .thenReturn(FxRateOverrideView.none("KRW", "USD"));
+
+        mockMvc.perform(get("/api/finance/ledger/settlements/fx-rate-override/USD"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.present").value(false))
+                .andExpect(jsonPath("$.data.rate").doesNotExist())
+                .andExpect(jsonPath("$.data.updatedBy").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("PUT /fx-rate-override/USD → 200 persisted contract rate, audited (updatedBy = actor)")
+    void putRateOverrideOk() throws Exception {
+        when(setFxRateOverride.set(any(SetFxRateOverrideCommand.class))).thenReturn(new FxRateOverrideView(
+                "KRW", "USD", true, new java.math.BigDecimal("1325.5"),
+                "operator-7", Instant.parse("2026-02-01T10:00:00Z")));
+
+        mockMvc.perform(put("/api/finance/ledger/settlements/fx-rate-override/USD")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rate\":\"1325.5\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.present").value(true))
+                .andExpect(jsonPath("$.data.foreignCurrency").value("USD"))
+                .andExpect(jsonPath("$.data.rate").value("1325.5"))
+                .andExpect(jsonPath("$.data.updatedBy").value("operator-7"));
+    }
+
+    @Test
+    @DisplayName("PUT /fx-rate-override/USD blank rate → 400 VALIDATION_ERROR (parsed in controller)")
+    void putRateOverrideBlankRate() throws Exception {
+        mockMvc.perform(put("/api/finance/ledger/settlements/fx-rate-override/USD")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rate\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("PUT /fx-rate-override/USD non-positive rate → 400 VALIDATION_ERROR")
+    void putRateOverrideNonPositive() throws Exception {
+        when(setFxRateOverride.set(any(SetFxRateOverrideCommand.class)))
+                .thenThrow(new FxRateOverrideInvalidException(
+                        "contract rate must be a strictly-positive decimal — got: 0"));
+
+        mockMvc.perform(put("/api/finance/ledger/settlements/fx-rate-override/USD")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rate\":\"0\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 }

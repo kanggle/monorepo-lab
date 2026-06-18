@@ -81,8 +81,8 @@ class RevalueForeignBalanceUseCaseTest {
         // Existing tests all pass a MANUAL closingRate; mirror the production manual path — the
         // resolver echoes the provided rate as a non-feed ResolvedFxRate (net-zero). Lenient so
         // the early-reject / no-op tests (which never reach the resolve call) don't trip STRICT_STUBS.
-        lenient().when(fxRateResolver.resolve(any(), any(), any()))
-                .thenAnswer(inv -> new ResolvedFxRate(inv.getArgument(2), false, "manual"));
+        lenient().when(fxRateResolver.resolve(any(), any(), any(), any()))
+                .thenAnswer(inv -> new ResolvedFxRate(inv.getArgument(3), false, "manual"));
     }
 
     private static RevalueForeignBalanceCommand cmd(String rate) {
