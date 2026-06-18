@@ -191,10 +191,16 @@ plane has no seller authority — it cannot register products.
 ---
 
 ### POST /api/admin/sellers
-Register a marketplace seller within the current tenant (ADR-MONO-030 Step 3 §3.1).
-Requires admin role. Minimal v1 lifecycle (register + ACTIVE); the owning
-`tenant_id` is derived from the token (gateway `X-Tenant-Id`), not the body.
-Onboarding flow / settlement are out of scope (Step 4).
+Onboard a marketplace seller within the current tenant (ADR-MONO-030 Step 3 §3.1 +
+Step 4 facet f / ADR-MONO-042). Requires admin role. The owning `tenant_id` is derived
+from the token (gateway `X-Tenant-Id`), not the body.
+
+**Onboarding now mints a real IAM seller-operator account (ADR-042, fail-soft).** The
+seller is created `PENDING_PROVISIONING`; product-service then calls account-service
+(see [internal/product-to-account.md](internal/product-to-account.md)) to mint the
+seller-operator account + born-unified identity → the seller transitions to `ACTIVE`. If
+IAM is unavailable the seller STAYS `PENDING_PROVISIONING` and onboarding still returns
+`201` (D3 fail-soft) — re-provision via `POST /api/admin/sellers/{sellerId}/provision`.
 
 **Request Body**
 ```json
@@ -204,7 +210,7 @@ Onboarding flow / settlement are out of scope (Step 4).
 }
 ```
 
-**Response 201**
+**Response 201** (returned regardless of provisioning outcome — onboarding never blocks)
 ```json
 { "sellerId": "string" }
 ```
@@ -214,6 +220,22 @@ Onboarding flow / settlement are out of scope (Step 4).
 |---|---|---|
 | 400 | VALIDATION_ERROR | Missing or invalid field |
 | 403 | ACCESS_DENIED | Admin role required |
+
+### POST /api/admin/sellers/{sellerId}/provision
+Re-provision a seller stuck in `PENDING_PROVISIONING` (ADR-042 D3 retry — e.g. IAM was
+unavailable at onboarding). Requires admin role. Idempotent: an already-`ACTIVE` seller
+is a no-op. **Response 204** (no body). `404 SELLER_NOT_FOUND` if the seller does not
+exist in the tenant.
+
+### POST /api/admin/sellers/{sellerId}/suspend
+Operator SUSPEND (ADR-042 D4): seller `ACTIVE → SUSPENDED` and the backing IAM account
+is locked. Requires admin role. Idempotent + null-safe (a seller with no backing account
+transitions without an IAM call). **Response 204**. `404 SELLER_NOT_FOUND` if missing.
+
+### POST /api/admin/sellers/{sellerId}/close
+Operator CLOSE (ADR-042 D4): seller → `CLOSED` (terminal) and the backing IAM account is
+deactivated. Requires admin role. Idempotent + null-safe. **Response 204**.
+`404 SELLER_NOT_FOUND` if missing.
 
 ---
 

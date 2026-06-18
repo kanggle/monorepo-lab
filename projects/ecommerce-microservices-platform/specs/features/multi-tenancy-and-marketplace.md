@@ -81,7 +81,7 @@ ecommerce 는 [`rules/traits/multi-tenant.md`](../../../../rules/traits/multi-te
 
 ### 3.1 seller 애그리거트
 - ecommerce-local `seller` 엔티티, 키 `(tenant_id, seller_id)` — 셀러는 **한 테넌트 내부의 참여자**(격리 경계 아님; ADR-030 D3-B 기각).
-- v1 라이프사이클 최소(등록/활성). 온보딩 흐름·정산/수수료 = **보류**(Step 4).
+- **라이프사이클 + 실 IAM provisioning (ADR-MONO-042, Step 4 facet f — 실현됨)**: 셀러는 실 운영자 principal. 온보딩이 account-service 내부 EP 를 호출해 **실 IAM seller-operator 계정 + born-unified identity**(ADR-036 `resolveOrCreate` 재사용)를 발급한다. 상태기계 `PENDING_PROVISIONING → ACTIVE`(provisioning 성공) / `ACTIVE → SUSPENDED·CLOSED`(운영자 비활성화 시 백킹 계정 lock/deactivate). **fail-soft(D3)**: IAM 미가용 시 셀러는 PENDING_PROVISIONING 유지, 온보딩은 막히지 않음(재-provision 가능). **authz net-zero(D6)**: 런타임 seller-scope 경로 불변(신뢰 claim 이 실 계정으로 backing 될 뿐). 정산/수수료 = 여전히 **보류**(Step 4 facet b 는 별도 settlement-service). 계약 = [contracts/http/internal/product-to-account.md](../contracts/http/internal/product-to-account.md).
 
 ### 3.2 소유/귀속
 - **product**: 소유권 = `(tenant_id, seller_id)`. 셀러가 등록한 상품.
@@ -131,7 +131,9 @@ ecommerce 는 [`rules/traits/multi-tenant.md`](../../../../rules/traits/multi-te
 
 ## 7. 보류 (ADR §3.4 Step 4)
 
-셀러 정산/수수료 · 콘솔 통합(원래 "웹스토어 어드민을 콘솔에서" 질문 — `domain_key='ecommerce'` 시드 + 카탈로그 렌더) · 나머지 11개 서비스(cart/payment/promotion/shipping/review/search/notification/…) `tenant_id` 전파 · ADR-022 이행 이벤트 `tenant_id` 스레딩 · M7 per-tenant quota · 셀러 온보딩 흐름.
+셀러 정산/수수료 · 콘솔 통합(원래 "웹스토어 어드민을 콘솔에서" 질문 — `domain_key='ecommerce'` 시드 + 카탈로그 렌더) · 나머지 11개 서비스(cart/payment/promotion/shipping/review/search/notification/…) `tenant_id` 전파 · ADR-022 이행 이벤트 `tenant_id` 스레딩 · M7 per-tenant quota.
+
+> **셀러 온보딩 흐름 + 실 IAM provisioning (facet f) = 실현됨** ([ADR-MONO-042](../../../../docs/adr/ADR-MONO-042-ecommerce-seller-onboarding-iam-provisioning.md) / TASK-BE-402) — §3.1 참조. 잔여 facet f 후속(연기): IAM→셀러 역방향 `account.status.changed` 투영, 셀러 self-service 온보딩 표면.
 
 ---
 

@@ -107,8 +107,9 @@ Required emphasis:
 
 - **바깥 축 (tenant, M1-M7)**: `Product` / `ProductVariant` / `Inventory` 등 **모든 영속 aggregate/entity 에 `tenant_id` (NOT NULL)**. 모든 read 는 `WHERE tenant_id = <요청 컨텍스트>` (gateway `X-Tenant-Id`), write 는 컨텍스트 `tenant_id` 주입. cross-tenant 조회 = 404 (M3). 참조 = scm/erp `tenant_id` 컬럼.
 - **안쪽 축 (seller)**: 상품 **소유권 = `(tenant_id, seller_id)`**. `seller_id` 는 product 등록(OPERATOR 표면)에서 토큰/스코프로 주입; 소비자 조회 표면엔 읽기 전용 표시. 셀러-스코프 read = ADR-025 `org_scope` 형태(net-zero: claim 부재/`'*'`=무필터).
+- **셀러 라이프사이클 + 실 IAM provisioning (ADR-MONO-042, Step 4 facet f)**: `Seller` 애그리거트가 실제 운영자 principal 을 갖는다. 온보딩 시 product-service 가 account-service 내부 EP(`POST /internal/tenants/{t}/accounts` 역할 `SELLER` + `identities:resolveOrCreate`)를 client_credentials JWT 로 호출해 **실 IAM seller-operator 계정 + born-unified identity**(ADR-036 재사용)를 발급한다. 상태기계: `register → PENDING_PROVISIONING`; provisioning 성공 → `ACTIVE`(account_id/identity_id 저장); 운영자 `suspend → SUSPENDED`(계정 lock)/`close → CLOSED`(계정 deactivate). **fail-soft(D3)**: IAM 미가용 시 셀러는 PENDING_PROVISIONING 으로 남고 온보딩은 절대 막히지 않음(재-provision 가능). **authz net-zero(D6)**: 런타임 seller-scope 경로(`SellerScopeContextFilter` → ADR-025 axis-2)는 불변 — 신뢰 claim 이 실 계정으로 backing 될 뿐. 계약 = [specs/contracts/http/internal/product-to-account.md](../../contracts/http/internal/product-to-account.md).
 - **이벤트**: `ProductCreated`/`StockChanged` 등 봉투에 `tenant_id` 전파(M5), 페이로드에 `seller_id`. (계약 편집 = Step 2/3.)
-- **degradation (D8)**: default-tenant + default-seller 시드 → 단일 스토어 단일 셀러 동작 byte-identical; `tenant_id` claim 부재(standalone) → default tenant.
+- **degradation (D8)**: default-tenant + default-seller 시드 → 단일 스토어 단일 셀러 동작 byte-identical; default seller 는 ACTIVE 로 태어나 IAM provisioning 하지 않음(standalone 단일 스토어 anchor). legacy 셀러(ADR-042 이전)는 ACTIVE + null account/identity 로 backfill — 동작 불변. `tenant_id` claim 부재(standalone) → default tenant.
 - **회귀 (M6)**: cross-tenant leak IT 필수 — 테넌트 A 상품이 B 토큰으로 안 보임.
 - **PROJECT.md `multi-tenant` trait**: Step 2(코드)와 함께 추가 (ADR-030 §D7 타이밍 — 슬라이스 전 추가 시 미마이그 서비스 M1 미스분류).
 
