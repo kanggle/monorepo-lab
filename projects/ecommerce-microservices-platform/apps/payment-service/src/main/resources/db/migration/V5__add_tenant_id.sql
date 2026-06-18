@@ -14,3 +14,6 @@ UPDATE payments SET tenant_id = 'ecommerce' WHERE tenant_id IS NULL;
 ALTER TABLE payments ALTER COLUMN tenant_id SET NOT NULL;
 -- tenant_id is the primary read-scoping axis; lead with it on the supporting index.
 CREATE INDEX idx_payments_tenant_id ON payments (tenant_id);
+-- Composite index covers the hot path: tenant-scoped order lookup (findByOrderIdAndTenantId).
+-- Leading with tenant_id matches the repository scoping; order_id narrows within the tenant.
+CREATE INDEX idx_payments_tenant_order ON payments (tenant_id, order_id);

@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -45,12 +46,31 @@ class OrderCancelledEventConsumerTest {
         );
     }
 
+    private OrderCancelledEvent eventWithTenant(String orderId, String tenantId) {
+        return new OrderCancelledEvent(
+                UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",
+                tenantId,
+                new OrderCancelledEvent.OrderCancelledPayload(orderId, "user-1", "2026-03-23T00:00:00")
+        );
+    }
+
     @Test
     @DisplayName("정상 이벤트 수신 시 refundPayment를 호출한다")
     void handle_validEvent_callsRefundPayment() {
         consumer.handle(event("order-1"));
 
         verify(paymentRefundService).refundPayment("order-1");
+    }
+
+    @Test
+    @DisplayName("이벤트의 tenant_id 가 TenantContext 에 설정된 후 refundPayment 가 호출된다 (M5)")
+    void handle_eventWithTenantId_setsContextBeforeProcessing() {
+        // tenant context cleared after handle() completes (finally block)
+        consumer.handle(eventWithTenant("order-1", "tenant-a"));
+
+        verify(paymentRefundService).refundPayment("order-1");
+        // After the call the context should be cleared (finally fired)
+        assertThat(TenantContext.currentTenant()).isEqualTo("ecommerce"); // default (not tenant-a)
     }
 
     @Test

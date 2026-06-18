@@ -20,7 +20,7 @@ public record PaymentCompletedEvent(
         @JsonProperty("event_id") String eventId,
         @JsonProperty("event_type") String eventType,
         @JsonProperty("occurred_at") String occurredAt,
-        String source,
+        @JsonProperty("source") String source,
         @JsonProperty("tenant_id") String tenantId,
         Payload payload
 ) {

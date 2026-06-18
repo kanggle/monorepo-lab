@@ -142,7 +142,7 @@ shipping-service V7).
 | **M3 404-over-403** | **Applied** | `findByOrderId` / `findById` scoped to tenant; cross-tenant row → 404 via `PaymentNotFoundException` |
 | **M4 enumeration prevention** | **Applied** | Listings are tenant-scoped; id traversal cannot reveal other-tenant data |
 | **M5 async event propagation** | **Applied** | `PaymentCompletedEvent` / `PaymentRefundedEvent` envelopes include `tenant_id` top-level field |
-| **M6 cross-tenant leak regression IT** | **Deferred** | Testcontainers ITs blocked on this host; CI coverage via `@Tag("integration")` when unblocked |
+| **M6 cross-tenant leak regression IT** | **Applied** | `MultiTenantIsolationIntegrationTest` — `@Tag("integration")` `@SpringBootTest` (Testcontainers): (a) tenant-A context querying tenant-B's payment by orderId → 404/empty; (b) cross-tenant payment confirmation attempt → 404 (`PaymentNotFoundException`). Host-blocked locally; authoritative proof runs in CI. |
 | **M7 per-tenant quota** | **Not applicable** | Out of scope for payment-service v1 |
 
 ### Context propagation
@@ -151,10 +151,12 @@ shipping-service V7).
   `X-Tenant-Id` from the gateway-injected header into `TenantContext` (ThreadLocal).
   Cleared in `finally` to prevent thread-pool leakage.
 - **Event consumer threads** (`OrderPlacedEventConsumer`, `OrderCancelledEventConsumer`):
-  no HTTP context — `TenantContext` defaults to `'ecommerce'`. Multi-tenant-ready:
-  order events will carry `tenant_id` in their envelope once order-service supports it
-  (a separate future task; payment consumer can then call `TenantContext.set(event.tenantId())`
-  before delegating to the application service).
+  no HTTP context. Both consumers read `tenant_id` directly from the inbound event
+  envelope (`OrderPlacedEvent.tenantId()` / `OrderCancelledEvent.tenantId()`), call
+  `TenantContext.set(event.tenantId())` before delegating to the application service,
+  and unconditionally clear it in a `finally` block to prevent thread-pool leakage.
+  A null/blank `tenant_id` in the event resolves to the default tenant (`'ecommerce'`)
+  via `TenantContext.set(null)` semantics (net-zero, D8).
 - **Standalone / no-IAM (D8)**: absent header → default tenant `'ecommerce'` → net-zero.
 
 ### Event envelope
