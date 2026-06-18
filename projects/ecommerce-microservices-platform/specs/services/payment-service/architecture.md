@@ -129,5 +129,39 @@ Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-
 
 Source: `TossPaymentsAdapter` (`@CircuitBreaker(name="toss-payments", fallbackMethod="confirmFallback"/"cancelFallback")`). Fallback translates `CallNotPermittedException` / `BulkheadFullException` / retry-exhausted `HttpServerErrorException` / `ResourceAccessException` (timeout) uniformly to `PgGatewayUnavailableException`. `PaymentConfirmService` / `PaymentRefundService` distinguish the two exception kinds — only `PgConfirmFailedException` transitions the row state. Caller error codes: 502 `PG_CONFIRM_FAILED` vs 503 `PG_GATEWAY_UNAVAILABLE`.
 
+## Multi-Tenancy (ADR-MONO-030 Step 4 facet c — TASK-BE-400)
+
+payment-service adopts the `multi-tenant` trait M1-M7 pattern matching the sibling
+services (user-service V4, notification-service V5, promotion-service V6,
+shipping-service V7).
+
+| Mechanism | Applicability | Notes |
+|---|---|---|
+| **M1 row-level `tenant_id`** | **Applied** — Flyway V5 | `payments` table gains `tenant_id VARCHAR(64) NOT NULL`; backfilled to `'ecommerce'` |
+| **M2 3-layer isolation** | **Applied** | (a) Gateway `TenantClaimValidator` (TASK-BE-357); (b) `TenantContextFilter` reads `X-Tenant-Id` header; (c) repository reads scoped by `TenantContext.currentTenant()` |
+| **M3 404-over-403** | **Applied** | `findByOrderId` / `findById` scoped to tenant; cross-tenant row → 404 via `PaymentNotFoundException` |
+| **M4 enumeration prevention** | **Applied** | Listings are tenant-scoped; id traversal cannot reveal other-tenant data |
+| **M5 async event propagation** | **Applied** | `PaymentCompletedEvent` / `PaymentRefundedEvent` envelopes include `tenant_id` top-level field |
+| **M6 cross-tenant leak regression IT** | **Deferred** | Testcontainers ITs blocked on this host; CI coverage via `@Tag("integration")` when unblocked |
+| **M7 per-tenant quota** | **Not applicable** | Out of scope for payment-service v1 |
+
+### Context propagation
+
+- **HTTP requests**: `TenantContextFilter` (highest-precedence `OncePerRequestFilter`) reads
+  `X-Tenant-Id` from the gateway-injected header into `TenantContext` (ThreadLocal).
+  Cleared in `finally` to prevent thread-pool leakage.
+- **Event consumer threads** (`OrderPlacedEventConsumer`, `OrderCancelledEventConsumer`):
+  no HTTP context — `TenantContext` defaults to `'ecommerce'`. Multi-tenant-ready:
+  order events will carry `tenant_id` in their envelope once order-service supports it
+  (a separate future task; payment consumer can then call `TenantContext.set(event.tenantId())`
+  before delegating to the application service).
+- **Standalone / no-IAM (D8)**: absent header → default tenant `'ecommerce'` → net-zero.
+
+### Event envelope
+
+`tenant_id` is a top-level field alongside `event_id` / `event_type` / `occurred_at` /
+`source`. Consumers that do not yet read `tenant_id` are unaffected (additive). Pre-TASK-BE-400
+outbox rows may lack the field; consumers should treat missing `tenant_id` as `'ecommerce'`.
+
 ## Change Rule
 Any architectural change to this service must be documented here first before implementation.
