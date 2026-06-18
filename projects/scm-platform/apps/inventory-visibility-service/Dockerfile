@@ -4,8 +4,8 @@ WORKDIR /workspace
 COPY build/libs/inventory-visibility-service.jar app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
-FROM eclipse-temurin:21-jre-alpine
-WORKDIR /app
+# ADR-MONO-041 D2: runtime FROM the shared monorepo/java-service-base:v1 image.
+FROM monorepo/java-service-base:v1
 COPY --from=builder /workspace/dependencies/ ./
 COPY --from=builder /workspace/spring-boot-loader/ ./
 COPY --from=builder /workspace/snapshot-dependencies/ ./
