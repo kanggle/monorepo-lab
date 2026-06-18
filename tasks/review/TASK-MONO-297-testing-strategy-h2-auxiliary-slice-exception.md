@@ -8,7 +8,7 @@ Testing-strategy H2 auxiliary-slice exception — reconcile the absolute "no H2"
 
 # Status
 
-ready
+review
 
 # Task Tags
 

@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-297-testing-strategy-h2-auxiliary-slice-exception.md` — Reconcile `platform/testing-strategy.md`'s absolute "no H2" rule with the wms master-service `@DataJpaTest` ORM-path H2 slice pattern (authoritative Testcontainers IT retained). Doc-only, monorepo-level (shared `platform/`); narrow exception scoped to the slice tier — IT layer stays Testcontainers-only. Motivated by the 2026-06-18 testing-strategy conformance check (codebase otherwise fully compliant). 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (단순 doc 정합).
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-297-testing-strategy-h2-auxiliary-slice-exception.md` — Reconcile `platform/testing-strategy.md`'s absolute "no H2" rule with the wms master-service `@DataJpaTest` ORM-path H2 slice pattern (authoritative Testcontainers IT retained). Doc-only, monorepo-level (shared `platform/`); narrow exception scoped to the slice tier — IT layer stays Testcontainers-only. Motivated by the 2026-06-18 testing-strategy conformance check (codebase otherwise fully compliant). 분석=Opus 4.8 / 구현=Opus 직접 (단순 doc 정합).
 
 ## done
 
