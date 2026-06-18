@@ -12,6 +12,13 @@ final class ElasticsearchFieldMapper {
     }
 
     static SearchDocument toSearchDocument(Map<String, Object> source, Double score) {
+        // tenantId: pre-existing documents (indexed before TASK-BE-404) may lack the field;
+        // coalesce to the default tenant so they remain visible under the default context
+        // without requiring a destructive reindex.
+        String tenantId = getString(source, "tenantId");
+        if (tenantId == null || tenantId.isBlank()) {
+            tenantId = "ecommerce";
+        }
         return new SearchDocument(
                 getString(source, "productId"),
                 getString(source, "name"),
@@ -21,7 +28,8 @@ final class ElasticsearchFieldMapper {
                 getString(source, "categoryId"),
                 toInt(source.get("totalStock")),
                 getString(source, "thumbnailUrl"),
-                score
+                score,
+                tenantId
         );
     }
 

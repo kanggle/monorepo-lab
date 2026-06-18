@@ -38,6 +38,8 @@ public class ElasticsearchIndexAdapter implements SearchIndexPort {
             if (document.thumbnailUrl() != null) {
                 doc.put("thumbnailUrl", document.thumbnailUrl());
             }
+            // tenant isolation (TASK-BE-404, ADR-MONO-030 Step 4 facet c)
+            doc.put("tenantId", document.tenantId() != null ? document.tenantId() : "ecommerce");
             elasticsearchClient.index(IndexRequest.of(i -> i
                     .index(indexProperties.name())
                     .id(document.productId())

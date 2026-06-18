@@ -33,7 +33,7 @@ class StockChangedConsumerTest {
 
     private StockChangedEvent event(String productId, int currentStock) {
         return new StockChangedEvent(
-                "event-id", "StockChanged", "2026-03-23T00:00:00Z", "product-service",
+                "event-id", "StockChanged", "2026-03-23T00:00:00Z", "product-service", "tenant-a",
                 new StockChangedEvent.StockChangedPayload(
                         productId, "v1", 100, currentStock, currentStock - 100, "RESTOCK", null)
         );
@@ -73,7 +73,7 @@ class StockChangedConsumerTest {
     @DisplayName("payload가 null인 이벤트는 무시된다")
     void handle_nullPayload_skips() {
         StockChangedEvent e = new StockChangedEvent(
-                "event-id", "StockChanged", "2026-03-23T00:00:00Z", "product-service", null);
+                "event-id", "StockChanged", "2026-03-23T00:00:00Z", "product-service", null, null);
 
         consumer.handle(e);
 

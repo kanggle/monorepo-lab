@@ -30,6 +30,9 @@ public class ProductUpdatedConsumer {
         }
 
         var p = event.payload();
+        // M5 propagation: extract tenant_id from event envelope; default 'ecommerce' when absent
+        String tenantId = (event.tenantId() == null || event.tenantId().isBlank()) ? "ecommerce" : event.tenantId();
+
         SearchDocument document = SearchDocument.of(
                 p.productId(),
                 p.name(),
@@ -38,7 +41,8 @@ public class ProductUpdatedConsumer {
                 p.status(),
                 p.categoryId(),
                 0,
-                p.thumbnailUrl()
+                p.thumbnailUrl(),
+                tenantId
         );
         indexSyncService.upsertPreservingStock(document);
     }

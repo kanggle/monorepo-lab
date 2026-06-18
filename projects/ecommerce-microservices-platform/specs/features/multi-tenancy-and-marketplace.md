@@ -19,7 +19,7 @@ Step 2(product/order row-level `tenant_id` M1), Step 3(seller 축 TASK-BE-363), 
 | settlement-service | 구현 완료 | TASK-BE-365 (신규 서비스) |
 | payment-service | V5 | TASK-BE-400 |
 | review-service | V5 | TASK-BE-403 |
-| search-service | **미완 (in-migration)** | ES index-filter shape, TASK-BE-404 |
+| search-service | ES index-filter (TASK-BE-404) | tenantId 필드 + mandatory query filter; Flyway/SQL 없음 |
 | cart | **N/A — 서비스 미존재** | 클라이언트/order-service 미분리; 추후 cart-service 추출 시 |
 | auth-service | **N/A — 폐기됨** | TASK-BE-132, 빌드 제외; iam-platform 대체 |
 | web-store | **N/A — 프런트(Next.js)** | relational 영속 없음; `X-Tenant-Id` 헤더 전파만 (gateway→BFF, 이미 라이브) — 마이그레이션 대상 아님 |

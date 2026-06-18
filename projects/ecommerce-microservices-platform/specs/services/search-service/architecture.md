@@ -100,6 +100,36 @@ All consumers use consumer group `search-service` (verified from `@KafkaListener
 
 Contract: [`specs/contracts/events/product-events.md`](../../contracts/events/product-events.md).
 
+## Multi-Tenancy
+
+**Isolation shape**: ES index-field + mandatory query filter (TASK-BE-404, ADR-MONO-030 Step 4 facet c).
+
+This differs from the relational `tenant_id`-column services (product/order/payment/etc.) in
+that there is **no Flyway migration and no SQL column**. Isolation is achieved entirely at the
+Elasticsearch document and query layer:
+
+| Layer | Implementation |
+|---|---|
+| Document field | `tenantId` keyword field on every `SearchDocument`; populated from the inbound product event's `tenant_id` envelope field (M5 propagation — product-service stamps it since TASK-BE-357). |
+| Query filter | Every read path in `ElasticsearchQueryAdapter.buildQuery()` adds a mandatory `term { tenantId: TenantContext.currentTenant() }` filter clause inside `bool.filter`. A document in tenant A is never returned under a tenant B context. |
+| Context injection | `TenantContextFilter` (servlet filter, `Ordered.HIGHEST_PRECEDENCE`) reads the gateway-injected `X-Tenant-Id` header into `TenantContext` (ThreadLocal) for the duration of each request, then clears it in `finally`. |
+| Default / D8 net-zero | `X-Tenant-Id` absent → `TenantContext.currentTenant()` returns `"ecommerce"` → query is scoped to the default tenant → single-store behaviour preserved. |
+
+### Index mapping
+
+`tenantId` is a `keyword` field declared in `IndexInitializer.INDEX_SPEC_JSON`. Adding it is
+**additive** (no mapping conflict). The `IndexInitializer.hasCurrentSpec()` check includes a
+`tenantId` key presence gate: if an existing index lacks the field the initializer will
+delete-and-recreate it (non-destructive from a code standpoint; data is repopulated via
+`POST /api/search/admin/reindex`).
+
+### Pre-existing documents (demo / migration)
+
+Documents indexed before TASK-BE-404 lack `tenantId`. These are coalesced to the default
+tenant `"ecommerce"` at read time in `ElasticsearchFieldMapper.toSearchDocument()`. They
+will be restamped on the next product event re-sync. No destructive bulk reindex is required
+for demo / development purposes.
+
 ## Testing Expectations
 Required emphasis:
 - application service tests (with mocked ports)
@@ -107,6 +137,9 @@ Required emphasis:
 - event consumer integration tests
 - search query accuracy tests
 - index sync failure and retry scenario tests
+- `TenantContext` + `TenantContextFilter` unit tests
+- consumer tenant_id propagation unit tests (no live ES)
+- `ElasticsearchQueryAdapter` query-construction unit tests asserting mandatory `tenant_id` filter
 
 ## Change Rule
 Any architectural change to this service must be documented here first before implementation.

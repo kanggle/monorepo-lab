@@ -26,7 +26,7 @@ class SearchDocumentTest {
     @Test
     @DisplayName("score 포함 생성 - score 필드가 설정된다")
     void constructor_withScore_setsScore() {
-        SearchDocument doc = new SearchDocument("p1", "상품명", "설명", 10000L, "ON_SALE", "cat1", 100, null, 1.5);
+        SearchDocument doc = new SearchDocument("p1", "상품명", "설명", 10000L, "ON_SALE", "cat1", 100, null, 1.5, "ecommerce");
 
         assertThat(doc.score()).isEqualTo(1.5);
     }

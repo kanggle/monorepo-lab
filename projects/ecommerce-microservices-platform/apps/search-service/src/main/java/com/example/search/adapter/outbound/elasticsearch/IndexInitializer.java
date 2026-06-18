@@ -75,7 +75,8 @@ public class IndexInitializer implements ApplicationRunner {
                   "status":       { "type": "keyword" },
                   "categoryId":   { "type": "keyword" },
                   "totalStock":   { "type": "integer" },
-                  "thumbnailUrl": { "type": "keyword", "index": false }
+                  "thumbnailUrl": { "type": "keyword", "index": false },
+                  "tenantId":     { "type": "keyword" }
                 }
               }
             }
@@ -126,7 +127,16 @@ public class IndexInitializer implements ApplicationRunner {
         }
 
         // 2. thumbnailUrl 필드가 존재하는지
-        return properties.containsKey("thumbnailUrl");
+        if (!properties.containsKey("thumbnailUrl")) {
+            return false;
+        }
+
+        // 3. tenantId keyword 필드가 존재하는지 (TASK-BE-404)
+        // tenantId is an additive keyword field — its absence means the index predates
+        // multi-tenancy. The IndexInitializer will delete-and-recreate so fresh indices
+        // always carry the field. Pre-existing documents without the field are coalesced
+        // to the default tenant at query time (ElasticsearchFieldMapper).
+        return properties.containsKey("tenantId");
     }
 
     private void createIndex(String indexName) throws Exception {

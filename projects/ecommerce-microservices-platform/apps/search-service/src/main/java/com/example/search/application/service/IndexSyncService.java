@@ -48,7 +48,8 @@ public class IndexSyncService implements IndexSyncUseCase {
                     document.status(),
                     document.categoryId(),
                     existingStock,
-                    document.thumbnailUrl()
+                    document.thumbnailUrl(),
+                    document.tenantId()
             );
             searchIndexPort.upsert(withStock);
         });

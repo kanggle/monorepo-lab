@@ -40,7 +40,7 @@ class ProductImagesUpdatedConsumerTest {
                 )
         );
         return new ProductImagesUpdatedEvent(
-                "event-id", "ProductImagesUpdated", "2026-04-16T00:00:00Z", "product-service",
+                "event-id", "ProductImagesUpdated", "2026-04-16T00:00:00Z", "product-service", "tenant-a",
                 new ProductImagesUpdatedEvent.ProductImagesUpdatedPayload(productId, thumbnailUrl, images)
         );
     }
@@ -69,7 +69,7 @@ class ProductImagesUpdatedConsumerTest {
     @DisplayName("productId가 null인 이벤트는 무시된다")
     void handle_nullProductId_skips() {
         ProductImagesUpdatedEvent e = new ProductImagesUpdatedEvent(
-                "event-id", "ProductImagesUpdated", "2026-04-16T00:00:00Z", "product-service",
+                "event-id", "ProductImagesUpdated", "2026-04-16T00:00:00Z", "product-service", "tenant-a",
                 new ProductImagesUpdatedEvent.ProductImagesUpdatedPayload(null, "http://cdn.example.com/img.jpg", List.of())
         );
 
@@ -82,7 +82,7 @@ class ProductImagesUpdatedConsumerTest {
     @DisplayName("payload가 null인 이벤트는 무시된다")
     void handle_nullPayload_skips() {
         ProductImagesUpdatedEvent e = new ProductImagesUpdatedEvent(
-                "event-id", "ProductImagesUpdated", "2026-04-16T00:00:00Z", "product-service", null);
+                "event-id", "ProductImagesUpdated", "2026-04-16T00:00:00Z", "product-service", null, null);
 
         consumer.handle(e);
 

@@ -35,7 +35,7 @@ class ProductUpdatedConsumerTest {
 
     private ProductUpdatedEvent event(String productId, String name) {
         return new ProductUpdatedEvent(
-                "event-id", "ProductUpdated", "2026-03-23T00:00:00Z", "product-service",
+                "event-id", "ProductUpdated", "2026-03-23T00:00:00Z", "product-service", "tenant-a",
                 new ProductUpdatedEvent.ProductUpdatedPayload(productId, name, "설명", 1000000L, "ON_SALE", "cat1", null)
         );
     }
@@ -83,7 +83,7 @@ class ProductUpdatedConsumerTest {
     @DisplayName("payload가 null인 이벤트는 무시된다")
     void handle_nullPayload_skips() {
         ProductUpdatedEvent e = new ProductUpdatedEvent(
-                "event-id", "ProductUpdated", "2026-03-23T00:00:00Z", "product-service", null);
+                "event-id", "ProductUpdated", "2026-03-23T00:00:00Z", "product-service", null, null);
 
         consumer.handle(e);
 
