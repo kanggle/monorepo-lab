@@ -9,16 +9,17 @@ WORKDIR /app
 COPY apps/search-service/build/libs/*.jar app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
-FROM eclipse-temurin:21-jre-alpine
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-WORKDIR /app
+# ADR-MONO-041 D2: runtime FROM the shared monorepo/java-service-base:v1 image
+# (alpine jre + curl + tini + non-root app user + WORKDIR /app); the base provides
+# the `app` user, so per-service appgroup/appuser creation is dropped.
+FROM monorepo/java-service-base:v1
 COPY --from=otel /otel/opentelemetry-javaagent.jar /app/opentelemetry-javaagent.jar
 COPY --from=layers /app/dependencies ./
 COPY --from=layers /app/spring-boot-loader ./
 COPY --from=layers /app/snapshot-dependencies ./
 COPY --from=layers /app/application ./
-RUN chown -R appuser:appgroup /app
-USER appuser
+RUN chown -R app:app /app
+USER app
 EXPOSE 8085
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD wget -qO- http://localhost:8085/actuator/health || exit 1
