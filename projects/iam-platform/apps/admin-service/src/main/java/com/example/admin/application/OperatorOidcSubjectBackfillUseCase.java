@@ -3,6 +3,7 @@ package com.example.admin.application;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.infrastructure.client.AuthServiceClient;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -68,7 +69,14 @@ public class OperatorOidcSubjectBackfillUseCase {
      */
     private final Clock clock;
 
-    /** Production constructor — system UTC clock (no required {@code Clock} bean). */
+    /**
+     * Production constructor — system UTC clock (no required {@code Clock} bean).
+     * {@code @Autowired} marks this as the injection constructor: the class has a
+     * second (package-private, fixed-clock) constructor for tests, so Spring would
+     * otherwise fall back to a non-existent no-arg constructor (the IT context-load
+     * failure this annotation fixes).
+     */
+    @Autowired
     public OperatorOidcSubjectBackfillUseCase(AdminOperatorPort operatorPort,
                                               AuthServiceClient authServiceClient) {
         this(operatorPort, authServiceClient, Clock.systemUTC());
