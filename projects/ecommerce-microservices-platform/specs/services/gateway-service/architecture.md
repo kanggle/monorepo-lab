@@ -68,6 +68,17 @@ Package organization follows package-by-layer.
 - Security handles JWT token parsing and validation only
 - All downstream service calls are handled by Spring Cloud Gateway routing, not application code
 
+## Per-tenant Rate Limit (M7, TASK-BE-405 / ADR-MONO-030 Step 4 facet e)
+
+Realizes `rules/traits/multi-tenant.md` M7 at the gateway edge (M2 layer-1 home).
+
+- **Key shape = `(tenant_id, route_id)` tuple** — `tenantRouteKeyResolver` (`config/TenantRouteRateLimitConfig`) produces `rate:ecommerce-gw:<routeId>:t:<tenantId>`. Each route's `RequestRateLimiter` filter (application.yml) references it via `key-resolver: "#{@tenantRouteKeyResolver}"` (replaced the legacy IP-only `ipKeyResolver`). One tenant's burst cannot consume another tenant's bucket.
+- **Tenant source** — the JWT `tenant_id` claim, read from the **reactive security context** (`ReactiveSecurityContextHolder`), not the `X-Tenant-Id` header (whose injection order relative to the rate-limit filter is unspecified) and not a ThreadLocal (the resolver runs reactively / non-blocking).
+- **Pre-auth vs post-auth keying** — authenticated requests key on `<tenant>:<route>`. Anonymous / pre-auth requests (public `GET /api/products/**`, `/api/search/**`, the carrier webhook) have no security context, so they fall back to the **default tenant `'ecommerce'` qualified by client IP** (`...:t:ecommerce:ip:<ip>`). This preserves the IP-based DoS/brute-force bounding the legacy `ipKeyResolver` provided — without it every anonymous caller on a public route would share one default-tenant bucket. The key is **never null** (default-tenant guard).
+- **Limit source** — per-route default `replenishRate`/`burstCapacity` in the route filter args; an optional per-tenant override map is a future additive increment (no coupling to `tenant_domain_subscription` — entitlement plane stays decoupled). Breach → **429 `TOO_MANY_REQUESTS`**.
+- **Degrade** — `tenant_id` absent (standalone / no IAM) → default-tenant single bucket (D8 net-zero). **Redis unavailable → fail-open** via `FailOpenRateLimiter` (`ratelimit/FailOpenRateLimiter`, the scm/wms/fan precedent): only Redis-class errors are allowed through with sentinel `X-RateLimit-Remaining: -1` + `gateway_ratelimit_redis_unavailable_total`; non-Redis errors propagate (5xx) + `gateway_ratelimit_unexpected_error_total`. Rate limiting is additive, never a hard dependency.
+- **No contract change** — 429 is a standard HTTP status; no external API/event contract is altered.
+
 ## Integration Rules
 - Routing targets must match published service URLs
 - JWT validation must follow the IAM OIDC token contract (RS256 via JWKS, `aud=ecommerce`, `tenant_id=ecommerce`); see [`../../integration/iam-integration.md`](../../integration/iam-integration.md)

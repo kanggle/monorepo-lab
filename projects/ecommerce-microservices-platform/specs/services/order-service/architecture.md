@@ -123,6 +123,7 @@ Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-
 - **degradation (D8)**: default-tenant + default-seller 시드 → 단일 스토어 동작 byte-identical; standalone `tenant_id` 부재 → default tenant.
 - **회귀 (M6)**: cross-tenant leak IT 필수 — 테넌트 A 주문이 B 토큰으로 안 보임.
 - **saga 상호작용**: §"Saga / Long-running Flow" 의 stuck-detector sweep(`OrderStuckDetector`)은 **테넌트 무관 전역 sweep 유지 가능**(시스템 운영성); 단 복구가 주문을 변이할 때 그 주문의 `tenant_id` 컨텍스트를 보존. (상세 = Step 2 구현.)
+- **M7 unbounded-query cap (TASK-BE-405)**: list endpoint(`GET /api/orders`, `GET /api/admin/orders`)는 **max page size = 100**(`OrderControllerUtils.MAX_PAGE_SIZE` → 공유 `PageQuery`(MAX_SIZE=100)) — `size` 가 100 초과 시 100 으로 clamp, `size < 1` 은 기본 20; 정상 size 는 그대로(backward-compatible). 단일 테넌트의 `LIMIT`-less / 과도 list 차단(M7 line 86). per-tenant API rate limit 은 gateway-edge(M2 layer-1, gateway-service/architecture.md § Per-tenant Rate Limit).
 - **PROJECT.md `multi-tenant` trait**: Step 2(코드)와 함께 추가 (ADR-030 §D7 타이밍).
 
 ## Change Rule

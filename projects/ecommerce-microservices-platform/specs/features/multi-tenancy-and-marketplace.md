@@ -70,7 +70,7 @@ ecommerce 는 [`rules/traits/multi-tenant.md`](../../../../rules/traits/multi-te
 3. **row 필터**: 모든 read 가 `WHERE tenant_id = <context>`; write 는 컨텍스트의 `tenant_id` 주입.
 
 ### 2.3 M3-M7
-- **M3 (404-over-403)**: cross-tenant 리소스 조회 = 404 (존재 누설 방지). **M4 (enumeration 방지)**: id 순회로 타 테넌트 존재 추론 불가. **M5 (async 전파)**: order saga 이벤트(`order.*`)·consumer(`product.product.stock-changed` 등) 봉투에 `tenant_id` 전파 (ADR-022 이행 이벤트 스레딩은 Step 4). **M6 (cross-tenant leak 회귀 IT)**: 슬라이스 필수 — 테넌트 A 데이터가 B 토큰으로 안 보임 증명. **M7 (per-tenant quota)**: 슬라이스 범위 밖(보류).
+- **M3 (404-over-403)**: cross-tenant 리소스 조회 = 404 (존재 누설 방지). **M4 (enumeration 방지)**: id 순회로 타 테넌트 존재 추론 불가. **M5 (async 전파)**: order saga 이벤트(`order.*`)·consumer(`product.product.stock-changed` 등) 봉투에 `tenant_id` 전파 (ADR-022 이행 이벤트 스레딩은 Step 4). **M6 (cross-tenant leak 회귀 IT)**: 슬라이스 필수 — 테넌트 A 데이터가 B 토큰으로 안 보임 증명. **M7 (per-tenant rate limit / unbounded-query cap)**: **realized (TASK-BE-405, ADR-MONO-030 Step 4 facet e)** — §2.6 참조.
 
 ### 2.4 entitlement-trust 게이트 진화 (ADR-019 D5)
 - gateway `TenantClaimValidator`: `tenant_id == 'ecommerce'` (고정) → **JWKS 검증된 GAP/IAM 토큰의 임의 `tenant_id` 수용**. entitlement 결정은 **IAM 발급 시점**(구독 + operator 배정이 있을 때만 ecommerce-스코프 토큰 발급) — ecommerce 는 row 격리만 집행 (두 권위, 무중첩).
@@ -79,6 +79,17 @@ ecommerce 는 [`rules/traits/multi-tenant.md`](../../../../rules/traits/multi-te
 ### 2.5 default-tenant + standalone degradation (D8)
 - **default-tenant 시드**: 기존 단일 스토어 데이터 = 단일 default tenant(예: `tenant_id='ecommerce'`)로 매핑 → 오늘 동작 byte-identical.
 - **standalone**(플랫폼 IAM 부재): `tenant_id` claim 부재 → default tenant 로 resolve → 단일 스토어로 degrade. 멀티테넌트 = **additive**, 하드 의존성 아님.
+
+### 2.6 M7 — per-tenant rate limit + unbounded-query cap (realized, TASK-BE-405 / ADR-MONO-030 Step 4 facet e)
+
+M7 의 두 facet 을 **gateway-edge** (M2 layer-1) 에서 실현:
+
+- **per-tenant rate limit** (`gateway-service`): route 의 `RequestRateLimiter` 필터가 **`(tenant_id, route_id)` 튜플 키**로 동작 (`tenantRouteKeyResolver`, 키 = `rate:ecommerce-gw:<routeId>:t:<tenantId>`). 한 테넌트의 burst 가 다른 테넌트의 버킷을 소모하지 않음 (M7 line 84). tenant 는 JWKS-검증된 JWT 의 `tenant_id` claim 에서 **reactive security context** 로 추출 (ThreadLocal 아님, non-blocking).
+  - **pre-auth vs post-auth 키잉**: 인증 요청 = `<tenant>:<route>`; **익명/pre-auth 요청**(`/api/search/**`, 공개 `GET /api/products/**`, carrier-webhook) = security context 부재 → **default tenant `'ecommerce'` + client IP** 로 키잉(`...:t:ecommerce:ip:<ip>`) → 레거시 IP-바운딩(brute-force/DoS) 보존. 키는 **절대 null 아님**(default-tenant 가드).
+  - **limit source**: route 당 config 기본값(`replenishRate`/`burstCapacity`, application.yml) + 향후 옵션 per-tenant override(entitlement 평면과 decouple — `tenant_domain_subscription` 무결합). 위반 → **429 `TOO_MANY_REQUESTS`**.
+  - **degrade (D8 net-zero)**: `tenant_id` 부재(standalone) → default tenant 단일 버킷(오늘 동작 동치). Redis 미가용 → **fail-open**(`FailOpenRateLimiter` — Redis-class 에러만 통과 허용, sentinel `X-RateLimit-Remaining: -1` + 메트릭; 비-Redis 에러는 전파). rate-limit 은 additive, 하드 의존성 아님.
+- **unbounded-query cap** (모든 tenant-scoped list endpoint): max page size = **100**(`LIMIT`-less / 과도 list 도달 불가, M7 line 86). 정상 page size 는 backward-compatible(clamp only). **audit 결과 (2026-06-18)**: ecommerce 전 list endpoint 가 이미 100 으로 clamp — `product-service`(`ProductController`/`AdminProductController`/`AdminSellerController` `MAX_PAGE_SIZE=100`), `order-service`(`OrderControllerUtils.MAX_PAGE_SIZE=100`), 공유 `PageQuery.of`(MAX_SIZE=100, settlement/promotion/review 사용), `user-service`(WishlistService/UserProfileService 서비스-레이어 `Math.min(size,100)`). TASK-BE-405 는 product/order 에 회귀 테스트를 추가해 캡을 고정.
+- **cross-tenant isolation IT** (AC-7): `CrossTenantRateLimitIsolationIntegrationTest` — tenant A 의 burst(429)가 동일 route·동일 client 의 tenant B 버킷을 소모하지 않음 증명(`@Tag("integration")`, CI 가 실 Redis 로 실행).
 
 ---
 
@@ -136,7 +147,7 @@ ecommerce 는 [`rules/traits/multi-tenant.md`](../../../../rules/traits/multi-te
 
 ## 7. 보류 (ADR §3.4 Step 4)
 
-셀러 정산/수수료 · 콘솔 통합(원래 "웹스토어 어드민을 콘솔에서" 질문 — `domain_key='ecommerce'` 시드 + 카탈로그 렌더) · 나머지 11개 서비스(cart/payment/promotion/shipping/review/search/notification/…) `tenant_id` 전파 · M7 per-tenant quota.
+셀러 정산/수수료 · 콘솔 통합(원래 "웹스토어 어드민을 콘솔에서" 질문 — `domain_key='ecommerce'` 시드 + 카탈로그 렌더) · 나머지 11개 서비스(cart/payment/promotion/shipping/review/search/notification/…) `tenant_id` 전파. (M7 per-tenant rate limit / unbounded-query cap 은 **realized** — §2.6 / TASK-BE-405. 향후 보류 facet = resource-count quotas(max products/sellers per tenant) · subscription-tier-derived limits — 마켓플레이스 경제 기능, M7 아님.)
 
 > **ADR-022 이행 이벤트 `tenant_id` 스레딩 (facet d) = 실현됨** ([ADR-MONO-022](../../../../docs/adr/ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) §6 facet-d row / TASK-MONO-296) — M5 비동기 전파 불변식이 ecommerce↔wms 이행 루프까지 도달. 정방향(`OrderConfirmed.tenant_id` → `FulfillmentRequestedMessage.tenantId`)에 이어 **귀환 레그**도 스레딩: wms 가 인바운드 봉투의 `tenantId` 를 **불투명 correlation** 으로 캡처(아웃바운드 order 의 nullable 컬럼 — 격리 키 아님; wms 단일 테넌트 유지, NOT NULL/row 필터/게이트 변경 없음)하고 `wms.outbound.shipping.confirmed.v1`·`wms.outbound.order.cancelled.v1` 봉투에 echo. ecommerce 귀환 컨슈머(shipping `WmsShippingConfirmedConsumer`/`WmsOutboundCancelledConsumer`, order `WmsOutboundCancelledConsumer`)가 `TenantContext` 바인딩(봉투 부재 시 `orderNo` 로 로컬 행 폴백, D8) + `finally` clear. D5 correlation-round-trip 패턴의 *실현*(신규 결정 아님).
 
