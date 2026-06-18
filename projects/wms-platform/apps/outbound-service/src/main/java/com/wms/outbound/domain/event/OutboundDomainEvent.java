@@ -38,4 +38,16 @@ public sealed interface OutboundDomainEvent
     Instant occurredAt();
 
     String actorId();
+
+    /**
+     * Opaque ecommerce-tenant correlation echoed onto the outer envelope
+     * (ADR-MONO-022 facet d, TASK-MONO-296). Only the cross-project return-leg
+     * events ({@link ShippingConfirmedEvent}, {@link OrderCancelledEvent}) carry
+     * one for {@code FULFILLMENT_ECOMMERCE}-origin orders; every other event and
+     * all B2B / standalone orders return {@code null}, in which case the
+     * serializer omits the field (additive). wms never interprets it.
+     */
+    default String tenantId() {
+        return null;
+    }
 }

@@ -152,6 +152,49 @@ class ConfirmShippingServiceTest {
         assertThat(outboxWriter.published).isEmpty();
     }
 
+    @Test
+    void fulfillmentOrder_echoesTenantIdOntoShippingConfirmed() {
+        // ADR-MONO-022 facet d: a FULFILLMENT_ECOMMERCE order carrying an opaque
+        // tenant correlation echoes it on the return-leg event so the ecommerce
+        // consumer re-binds the originating tenant.
+        seedFulfillmentOrder(OrderStatus.PACKED, "store-acme");
+        seedPickingArtifacts();
+        seedPackedUnit();
+        seedSaga(SagaStatus.PACKING_CONFIRMED);
+
+        ConfirmShippingCommand cmd = new ConfirmShippingCommand(
+                orderId, 0L, "CJ", "user-1", Set.of("ROLE_OUTBOUND_WRITE"));
+
+        service.confirm(cmd);
+
+        com.wms.outbound.domain.event.ShippingConfirmedEvent confirmed =
+                (com.wms.outbound.domain.event.ShippingConfirmedEvent) outboxWriter.published.stream()
+                        .filter(e -> e.eventType().equals("outbound.shipping.confirmed"))
+                        .findFirst().orElseThrow();
+        assertThat(confirmed.tenantId()).isEqualTo("store-acme");
+    }
+
+    @Test
+    void b2bOrder_emitsNullTenantIdOnShippingConfirmed() {
+        // B2B (MANUAL/WEBHOOK_ERP) order: no tenant correlation → echoed null
+        // (serializer omits the envelope field — additive).
+        seedOrder(OrderStatus.PACKED);
+        seedPickingArtifacts();
+        seedPackedUnit();
+        seedSaga(SagaStatus.PACKING_CONFIRMED);
+
+        ConfirmShippingCommand cmd = new ConfirmShippingCommand(
+                orderId, 0L, "CJ", "user-1", Set.of("ROLE_OUTBOUND_WRITE"));
+
+        service.confirm(cmd);
+
+        com.wms.outbound.domain.event.ShippingConfirmedEvent confirmed =
+                (com.wms.outbound.domain.event.ShippingConfirmedEvent) outboxWriter.published.stream()
+                        .filter(e -> e.eventType().equals("outbound.shipping.confirmed"))
+                        .findFirst().orElseThrow();
+        assertThat(confirmed.tenantId()).isNull();
+    }
+
     // ------------------------------------------------------------------
     //  helpers
     // ------------------------------------------------------------------
@@ -160,6 +203,14 @@ class ConfirmShippingServiceTest {
         OrderLine line = new OrderLine(orderLineId, orderId, 1, skuId, null, 50);
         Order order = new Order(orderId, "ORD-1", OrderSource.MANUAL,
                 partnerId, warehouseId, null, null, status,
+                0L, T0, "creator", T0, "creator", List.of(line));
+        orderPersistence.save(order);
+    }
+
+    private void seedFulfillmentOrder(OrderStatus status, String tenantId) {
+        OrderLine line = new OrderLine(orderLineId, orderId, 1, skuId, null, 50);
+        Order order = new Order(orderId, "ORD-1", OrderSource.FULFILLMENT_ECOMMERCE,
+                partnerId, warehouseId, null, null, null /* shipTo */, tenantId, status,
                 0L, T0, "creator", T0, "creator", List.of(line));
         orderPersistence.save(order);
     }

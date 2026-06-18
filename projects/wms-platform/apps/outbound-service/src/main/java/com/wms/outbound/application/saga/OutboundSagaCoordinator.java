@@ -210,7 +210,9 @@ public class OutboundSagaCoordinator {
             // learns of the backorder (it cannot poll wms saga state). Emitted in
             // this same TX as the saga + order mutation (outbox = atomic).
             outboxWriter.publish(new OrderCancelledEvent(
-                    order.getId(), order.getOrderNo(), previousStatus, reason, now, now,
+                    order.getId(), order.getOrderNo(), previousStatus, reason,
+                    order.getTenantId() /* opaque correlation echo, ADR-MONO-022 facet d */,
+                    now, now,
                     "system:saga-coordinator"));
         }
         log.info("saga_reserve_failed sagaId={} reason={}", sagaId, reason);

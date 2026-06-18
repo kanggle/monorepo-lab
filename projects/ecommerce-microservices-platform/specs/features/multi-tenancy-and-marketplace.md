@@ -2,7 +2,7 @@
 
 > 본 문서는 ecommerce 를 **멀티벤더 마켓플레이스 SaaS** 로 승격하는 두 직교 축의 **스펙 기준(source of truth)** 이다 — [ADR-MONO-030](../../../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md) §3.4 **Step 1**.
 > **Step 1 = 스펙만** (Source-of-Truth-first). 컬럼/마이그레이션/게이트 코드/셀러 애그리거트 구현은 **Step 2(바깥 축)·Step 3(안쪽 축)** 의 별도 태스크가 본 문서를 기준으로 구현한다.
-> 슬라이스 범위 = **product-service + order-service** 2개. 나머지 서비스·정산/수수료·콘솔 통합·[ADR-MONO-022](../../../../docs/adr/ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) 이행 이벤트 `tenant_id` 스레딩 = 보류(ADR §3.4 Step 4).
+> 슬라이스 범위 = **product-service + order-service** 2개. 나머지 서비스·정산/수수료·콘솔 통합 = 보류(ADR §3.4 Step 4). [ADR-MONO-022](../../../../docs/adr/ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) 이행 이벤트 `tenant_id` 스레딩(facet d) = 실현됨(TASK-MONO-296 — §7).
 
 ## 진행 현황 (as-of 2026-06-15)
 
@@ -115,7 +115,7 @@ ecommerce 는 [`rules/traits/multi-tenant.md`](../../../../rules/traits/multi-te
 > Step 1 은 **모델**을 확정한다. 아래는 Step 2/3 이 갱신할 계약의 **영향 범위** — 필드 단위 계약 편집은 해당 구현 태스크가 본 문서를 기준으로 수행.
 
 - **HTTP 계약**: `tenant_id` 는 **요청 본문 필드가 아니라 토큰 claim 파생**(헤더 `X-Tenant-Id`) — API 표면에 노출 안 함. `seller_id` 는 product 등록/조회·order 항목 응답에 노출(OPERATOR 표면). 소비자 표면은 `seller_id` 를 읽기 전용 표시로만.
-- **이벤트 계약**: `order.*`·product 소비 이벤트 봉투에 `tenant_id` 추가(M5). `seller_id` 는 product/order 항목 페이로드에. **ADR-022 이행 이벤트(`ecommerce.fulfillment.requested.v1` 등) `tenant_id` 스레딩 = Step 4 보류**(슬라이스 범위 밖).
+- **이벤트 계약**: `order.*`·product 소비 이벤트 봉투에 `tenant_id` 추가(M5). `seller_id` 는 product/order 항목 페이로드에. **ADR-022 이행 이벤트(`ecommerce.fulfillment.requested.v1` 정방향 + `wms.outbound.shipping.confirmed.v1`/`wms.outbound.order.cancelled.v1` 귀환) `tenant_id` 스레딩 = 실현됨** (facet d / TASK-MONO-296 — §7 참조; wms 는 불투명 correlation 으로만 carry, 단일 테넌트 유지).
 - **`tenant_domain_subscription` `domain_key='ecommerce'`**: 플랫폼 IAM(account-service) 소유 — ecommerce 가 구독 가능 도메인이 되는 entitlement 행. ecommerce 는 이를 **의존성**으로 참조(읽지 않음; 게이트는 토큰 claim 만 신뢰). 실제 시드/콘솔 렌더 = Step 4.
 
 ---
@@ -132,7 +132,9 @@ ecommerce 는 [`rules/traits/multi-tenant.md`](../../../../rules/traits/multi-te
 
 ## 7. 보류 (ADR §3.4 Step 4)
 
-셀러 정산/수수료 · 콘솔 통합(원래 "웹스토어 어드민을 콘솔에서" 질문 — `domain_key='ecommerce'` 시드 + 카탈로그 렌더) · 나머지 11개 서비스(cart/payment/promotion/shipping/review/search/notification/…) `tenant_id` 전파 · ADR-022 이행 이벤트 `tenant_id` 스레딩 · M7 per-tenant quota.
+셀러 정산/수수료 · 콘솔 통합(원래 "웹스토어 어드민을 콘솔에서" 질문 — `domain_key='ecommerce'` 시드 + 카탈로그 렌더) · 나머지 11개 서비스(cart/payment/promotion/shipping/review/search/notification/…) `tenant_id` 전파 · M7 per-tenant quota.
+
+> **ADR-022 이행 이벤트 `tenant_id` 스레딩 (facet d) = 실현됨** ([ADR-MONO-022](../../../../docs/adr/ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) §6 facet-d row / TASK-MONO-296) — M5 비동기 전파 불변식이 ecommerce↔wms 이행 루프까지 도달. 정방향(`OrderConfirmed.tenant_id` → `FulfillmentRequestedMessage.tenantId`)에 이어 **귀환 레그**도 스레딩: wms 가 인바운드 봉투의 `tenantId` 를 **불투명 correlation** 으로 캡처(아웃바운드 order 의 nullable 컬럼 — 격리 키 아님; wms 단일 테넌트 유지, NOT NULL/row 필터/게이트 변경 없음)하고 `wms.outbound.shipping.confirmed.v1`·`wms.outbound.order.cancelled.v1` 봉투에 echo. ecommerce 귀환 컨슈머(shipping `WmsShippingConfirmedConsumer`/`WmsOutboundCancelledConsumer`, order `WmsOutboundCancelledConsumer`)가 `TenantContext` 바인딩(봉투 부재 시 `orderNo` 로 로컬 행 폴백, D8) + `finally` clear. D5 correlation-round-trip 패턴의 *실현*(신규 결정 아님).
 
 > **셀러 온보딩 흐름 + 실 IAM provisioning (facet f) = 실현됨** ([ADR-MONO-042](../../../../docs/adr/ADR-MONO-042-ecommerce-seller-onboarding-iam-provisioning.md) / TASK-BE-402) — §3.1 참조. 잔여 facet f 후속(연기): IAM→셀러 역방향 `account.status.changed` 투영, 셀러 self-service 온보딩 표면.
 

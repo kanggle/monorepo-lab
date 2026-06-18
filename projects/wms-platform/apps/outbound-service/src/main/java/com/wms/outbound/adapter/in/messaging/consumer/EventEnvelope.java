@@ -15,6 +15,14 @@ import java.util.UUID;
  *
  * <p>{@code payload} stays as a {@link JsonNode} so each consumer pulls the
  * fields it needs.
+ *
+ * <p>{@code tenantId} is an <strong>additive, optional</strong> envelope-level
+ * field (ADR-MONO-022 facet d, TASK-MONO-296): the cross-project
+ * {@code ecommerce.fulfillment.requested.v1} event carries the originating
+ * ecommerce tenant on the envelope. wms captures it as an <em>opaque
+ * correlation</em> value (never interpreted/filtered — wms stays single-tenant)
+ * and echoes it back on the return-leg events. {@code null} for wms-internal
+ * events and for standalone/pre-M5 producers.
  */
 public record EventEnvelope(
         UUID eventId,
@@ -22,6 +30,7 @@ public record EventEnvelope(
         Instant occurredAt,
         UUID aggregateId,
         String aggregateType,
+        String tenantId,
         JsonNode payload
 ) {
 }

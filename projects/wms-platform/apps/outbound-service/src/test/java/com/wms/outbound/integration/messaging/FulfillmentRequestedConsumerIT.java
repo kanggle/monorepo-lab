@@ -142,6 +142,9 @@ class FulfillmentRequestedConsumerIT extends OutboundServiceIntegrationBase {
             assertThat(row.get("ship_to_name")).isEqualTo("홍길동");
             assertThat(row.get("ship_to_address")).isEqualTo("서울시 강남구 1");
             assertThat(row.get("ship_to_phone")).isEqualTo("010-1234-5678");
+            // ADR-MONO-022 facet d: the envelope tenantId is captured as an opaque
+            // correlation column on the order (nullable; never gated/filtered).
+            assertThat(row.get("tenant_id")).isEqualTo("store-acme");
         });
 
         UUID orderId = orderIdHolder[0];
@@ -257,6 +260,7 @@ class FulfillmentRequestedConsumerIT extends OutboundServiceIntegrationBase {
                   "aggregateId": "%s",
                   "traceId": null,
                   "actorId": "system:ecommerce",
+                  "tenantId": "store-acme",
                   "payload": {
                     "orderNo": "%s",
                     "customerPartnerCode": "ECOMMERCE-STORE",

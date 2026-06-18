@@ -51,6 +51,13 @@ public class EventEnvelopeSerializer {
         envelope.put("aggregateId", event.aggregateId().toString());
         envelope.put("traceId", currentTraceId());
         envelope.put("actorId", event.actorId());
+        // Additive envelope-level tenant correlation (ADR-MONO-022 facet d). Only
+        // the return-leg events for FULFILLMENT_ECOMMERCE orders carry one; omitted
+        // entirely otherwise so the envelope stays byte-identical for B2B /
+        // wms-internal events (additive — existing consumers unaffected).
+        if (event.tenantId() != null) {
+            envelope.put("tenantId", event.tenantId());
+        }
         envelope.put("payload", buildPayload(event));
         try {
             return new Serialised(eventId, EVENT_VERSION, objectMapper.writeValueAsString(envelope));

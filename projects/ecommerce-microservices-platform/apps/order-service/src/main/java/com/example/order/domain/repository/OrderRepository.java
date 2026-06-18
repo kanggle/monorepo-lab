@@ -41,6 +41,17 @@ public interface OrderRepository {
      */
     Optional<Order> findByIdAcrossTenants(String orderId);
 
+    /**
+     * Tenant-agnostic resolution of the {@code tenant_id} stored on a globally-unique
+     * order, for the cross-project wms return-leg fallback (ADR-MONO-022 facet d,
+     * TASK-MONO-296): when the wms {@code outbound.order.cancelled} envelope carries
+     * no {@code tenantId} (older wms / standalone), the consumer resolves the
+     * originating tenant from the local Order row by {@code orderId == orderNo} before
+     * binding {@code TenantContext}. Addressing by the unique id cannot leak across
+     * tenants. Empty when no such order exists (then the default tenant applies, D8).
+     */
+    Optional<String> findTenantIdByOrderId(String orderId);
+
     PageResult<Order> findByUserId(String userId, PageQuery pageQuery);
 
     PageResult<Order> findByUserIdAndStatus(String userId, OrderStatus status, PageQuery pageQuery);

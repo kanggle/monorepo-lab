@@ -110,7 +110,7 @@ public class FulfillmentRequestedConsumer {
     }
 
     private void applyEvent(EventEnvelope envelope) {
-        ReceiveOrderCommand command = toCommand(envelope.payload());
+        ReceiveOrderCommand command = toCommand(envelope.payload(), envelope.tenantId());
         try {
             receiveOrderUseCase.receive(command);
             log.info("fulfillment_order_received orderNo={} eventId={}",
@@ -128,10 +128,13 @@ public class FulfillmentRequestedConsumer {
      * {@link MasterReadModelPort} (exactly as the ERP webhook does) and builds
      * the {@link ReceiveOrderCommand}.
      *
+     * @param tenantId the originating ecommerce tenant captured from the inbound
+     *        envelope (ADR-MONO-022 facet d) — carried as opaque correlation onto
+     *        the order; {@code null} for standalone/pre-M5 producers.
      * @throws IllegalArgumentException if a required field is missing or any
      *         master code is unresolved / inactive (→ non-retryable → DLT)
      */
-    private ReceiveOrderCommand toCommand(JsonNode payload) {
+    private ReceiveOrderCommand toCommand(JsonNode payload, String tenantId) {
         String orderNo = requireText(payload, "orderNo");
         String customerPartnerCode = requireText(payload, "customerPartnerCode");
         String warehouseCode = requireText(payload, "warehouseCode");
@@ -164,6 +167,7 @@ public class FulfillmentRequestedConsumer {
                 requiredShipDate,
                 null /* notes */,
                 shipTo,
+                tenantId /* opaque correlation, ADR-MONO-022 facet d */,
                 lines,
                 SYSTEM_ACTOR,
                 Set.of());

@@ -78,6 +78,18 @@ class FulfillmentRequestedConsumerTest {
 
     private static String event(UUID eventId, String orderNo,
                                 String partnerCode, String warehouseCode, String skuCode) {
+        return event(eventId, orderNo, partnerCode, warehouseCode, skuCode, "store-acme");
+    }
+
+    /**
+     * Builds the fulfillment envelope. {@code tenantId} is the envelope-level
+     * opaque correlation (ADR-MONO-022 facet d); pass {@code null} to omit it
+     * (standalone / pre-M5 producer).
+     */
+    private static String event(UUID eventId, String orderNo,
+                                String partnerCode, String warehouseCode, String skuCode,
+                                String tenantId) {
+        String tenantLine = tenantId == null ? "" : "\"tenantId\": \"" + tenantId + "\",";
         return """
                 {
                   "eventId": "%s",
@@ -85,6 +97,7 @@ class FulfillmentRequestedConsumerTest {
                   "occurredAt": "2026-04-29T10:00:00.000Z",
                   "aggregateId": "%s",
                   "aggregateType": "fulfillment",
+                  %s
                   "payload": {
                     "orderNo": "%s",
                     "customerPartnerCode": "%s",
@@ -100,7 +113,7 @@ class FulfillmentRequestedConsumerTest {
                     ]
                   }
                 }
-                """.formatted(eventId, UUID.randomUUID(), orderNo,
+                """.formatted(eventId, UUID.randomUUID(), tenantLine, orderNo,
                         partnerCode, warehouseCode, skuCode);
     }
 
@@ -124,6 +137,9 @@ class FulfillmentRequestedConsumerTest {
         assertThat(order.getShipTo().recipientName()).isEqualTo("홍길동");
         assertThat(order.getShipTo().address()).isEqualTo("서울시 강남구 1");
         assertThat(order.getShipTo().phone()).isEqualTo("010-1234-5678");
+        // The envelope-level tenantId is captured as an opaque correlation on the
+        // order (ADR-MONO-022 facet d) so the return-leg events can echo it.
+        assertThat(order.getTenantId()).isEqualTo("store-acme");
 
         // order.received carries the additive shipTo; picking.requested also fired.
         assertThat(outboxWriter.countByType("outbound.order.received")).isEqualTo(1);
@@ -134,6 +150,23 @@ class FulfillmentRequestedConsumerTest {
         assertThat(received.source()).isEqualTo("FULFILLMENT_ECOMMERCE");
         assertThat(received.shipTo()).isNotNull();
         assertThat(received.shipTo().recipientName()).isEqualTo("홍길동");
+    }
+
+    @Test
+    void absentTenantIdYieldsNullCorrelation() {
+        // Standalone ecommerce / pre-M5 producer: no envelope tenantId. wms must
+        // accept the order with a null correlation (D8 net-zero), NOT reject it.
+        String json = event(UUID.randomUUID(), "ECO-1002",
+                "ECOMMERCE-STORE", "WH-MAIN", "SKU-APPLE-001", null);
+
+        consumer.onMessage(json, null);
+
+        assertThat(orderPersistence.orderCount()).isEqualTo(1);
+        Order order = orderPersistence.findSummaries(null).stream()
+                .findFirst()
+                .flatMap(s -> orderPersistence.findById(s.orderId()))
+                .orElseThrow();
+        assertThat(order.getTenantId()).isNull();
     }
 
     @Test

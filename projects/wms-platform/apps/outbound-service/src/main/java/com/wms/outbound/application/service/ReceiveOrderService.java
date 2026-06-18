@@ -178,6 +178,7 @@ public class ReceiveOrderService implements ReceiveOrderUseCase {
                 command.requiredShipDate(),
                 command.notes(),
                 command.shipTo(),
+                command.tenantId(),
                 OrderStatus.RECEIVED,
                 0L,
                 now, command.actorId(),
