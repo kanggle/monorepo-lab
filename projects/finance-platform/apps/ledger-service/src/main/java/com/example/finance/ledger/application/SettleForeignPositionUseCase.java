@@ -156,7 +156,7 @@ public class SettleForeignPositionUseCase {
         //      byte-identical); an omitted rate falls back to the fresh cached quote, else 422
         //      FX_RATE_UNAVAILABLE (nothing persists, the key is not consumed — AC-3).
         ResolvedFxRate rate = fxRateResolver.resolve(
-                LedgerReportingCurrency.BASE, cmd.currency(), cmd.settlementRate());
+                cmd.tenantId(), LedgerReportingCurrency.BASE, cmd.currency(), cmd.settlementRate());
 
         // (5) Compute. settlementRate ≤ 0 → SETTLEMENT_RATE_INVALID (422). A position
         //     always books an entry (even realized == 0 — a 2-line removal+proceeds).
@@ -211,12 +211,14 @@ public class SettleForeignPositionUseCase {
                 SourceRef.ofSettlement(cmd.reference(), dedupeKey), result.lines());
         processedEventStore.markProcessed(dedupeKey, cmd.tenantId(), DEDUPE_TOPIC,
                 entry.source().getSourceTransactionId(), clock.now());
-        // Audit reason: byte-identical to the manual path (fromFeed=false) — the feed source is
-        // appended ONLY when the rate came from the cache (AC-2 traceability; net-zero on manual).
+        // Audit reason: byte-identical to the manual path — the rate source is appended whenever
+        // the rate was NOT operator-supplied, i.e. it came from the market feed OR a per-tenant
+        // contract override (28th increment — TASK-FIN-BE-042; AC-2 traceability: an operator can
+        // see WHY a contract rate was used). Net-zero on the manual path ("manual" → no suffix).
         String reason = LedgerWriteSupport.auditReason(cmd.memo(), cmd.reference(), "FX settlement");
-        String auditReason = rate.fromFeed()
-                ? reason + " [fx-rate " + rate.sourceDescription() + "]"
-                : reason;
+        String auditReason = "manual".equals(rate.sourceDescription())
+                ? reason
+                : reason + " [fx-rate " + rate.sourceDescription() + "]";
         JournalEntry posted = postJournalEntryUseCase.post(entry, auditReason, cmd.operatorSubject());
 
         // The residual OPEN position left after a partial settle — (F − F_settle,

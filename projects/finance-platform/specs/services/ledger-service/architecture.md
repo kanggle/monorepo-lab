@@ -452,8 +452,9 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   **proceeds-amount input** (proceeds derive from a rate; supplying the *actual* base received); a
   **configurable base currency** (fixed KRW in v1). *(FIFO / lot-level cost basis = 16th–18th — done.)*
 - **FX rate feed (ADR-002 remainder)**: a console "FX rate dashboard + manual refresh" surface
-  (separate PC-FE task); per-tenant rate override (special contract rates); a **ShedLock
-  single-leader guard** for the poller (multi-instance). *(Feed infra + omitted-rate fallback +
+  (separate PC-FE task); a **ShedLock single-leader guard** for the poller (multi-instance).
+  *(Per-tenant rate override (special contract rates) = 28th increment, TASK-FIN-BE-042 — done;
+  see § FX rate feed § Per-tenant contract-rate override.)* *(Feed infra + omitted-rate fallback +
   read surface = 23rd–25th — done. **Real public FX API adapter** (`mode=real`, Frankfurter
   no-key/ECB, `RealFxRateProviderAdapter`) = TASK-FIN-BE-038 — done. **Append-only
   `fx_rate_quote_history` audit trail** (V13, `FxRateQuoteHistory` domain +
@@ -564,6 +565,7 @@ com.example.finance.ledger/
 │   │   ├── FxCostFlowAccountConfig.java    ← (21st incr) per-(tenant, ledgerAccountCode) override (@IdClass FxCostFlowAccountConfigId), reuses CostFlowMethod; repository FxCostFlowAccountConfigRepository (findByTenantIdAndAccountCode / findByTenantId)
 │   │   ├── FxPositionLot.java              ← (16th incr) acquisition-lot aggregate (JPA entity); acquire(...) factory (remaining==original, carrying==original_base) + consume(consume, slice) (17th incr); repository FxPositionLotRepository (save + findOpenLots(tenant, code, currency) remaining>0 FIFO (acquired_at, seq))
 │   │   ├── FxRateQuote.java                ← (23rd incr) market-rate cache row (@IdClass FxRateQuoteId (base, foreign); tenant-agnostic); repository FxRateQuoteRepository (findLatest / save upsert / findAll)
+│   │   ├── FxRateOverride.java              ← (28th incr) per-tenant contract-rate override (@IdClass FxRateOverrideId (tenant, base, foreign); rate DECIMAL(20,8) > 0); repository FxRateOverrideRepository (findOverride(tenant, base, foreign) / save upsert); absence ⇒ feed fallthrough (net-zero)
 │   │   └── repository/JournalRepository.java   ← (5th incr) + findBySourceEventId (manual idempotent-replay return); (9th incr) + accountTotalsForCurrency(code, currency, tenant) (one FX position's foreign balance + base carrying)
 │   ├── period/                           ← (2nd increment) accounting period
 │   │   ├── AccountingPeriod.java          ← aggregate; OPEN→CLOSED state machine; [from,to) covers(); non-overlap
@@ -613,7 +615,8 @@ com.example.finance.ledger/
 │   ├── GetFxCostFlowConfigUseCase.java / SetFxCostFlowConfigUseCase.java   ← (15th incr) per-tenant cost-flow method read / upsert (audit FX_COST_FLOW_METHOD_SET; absent ⇒ WEIGHTED_AVERAGE default view)
 │   ├── GetFxCostFlowAccountConfigsUseCase / SetFxCostFlowAccountConfigUseCase / DeleteFxCostFlowAccountConfigUseCase   ← (21st incr) per-account override list / upsert / delete (audit FX_COST_FLOW_ACCOUNT_METHOD_SET / _CLEARED; delete idempotent)
 │   ├── GetFxPositionLotsUseCase.java      ← (20th incr) @Transactional(readOnly): FxPositionLotRepository.findOpenLots → FxPositionLotsView (+ totals)
-│   ├── ResolveEffectiveFxRate.java        ← (24th incr) omitted-rate resolver: supplied ⇒ verbatim; omitted + feed enabled + fresh cache quote ⇒ cache rate; omitted + disabled/absent/stale ⇒ FxRateUnavailableException (422); staleness now−asOf>staleAfter
+│   ├── ResolveEffectiveFxRate.java        ← (24th incr) omitted-rate resolver: supplied ⇒ verbatim; omitted + feed enabled + fresh cache quote ⇒ cache rate; omitted + disabled/absent/stale ⇒ FxRateUnavailableException (422); staleness now−asOf>staleAfter; (28th incr) tenant-scoped per-tenant override layer: precedence manual > override:contract > feed > FX_RATE_UNAVAILABLE (absence ⇒ feed unchanged, net-zero)
+│   ├── GetFxRateOverrideUseCase.java / SetFxRateOverrideUseCase.java   ← (28th incr) per-tenant contract-rate override read / upsert (audit FX_RATE_OVERRIDE_SET; non-positive/invalid rate or unknown currency ⇒ VALIDATION_ERROR 400; absent ⇒ present:false view)
 │   ├── RefreshFxRateQuotesUseCase.java    ← (23rd incr) @Transactional: iterate configured pairs (base KRW) → FxRateProviderPort.latestQuote → upsert fx_rate_quote + append fx_rate_quote_history (per-pair try/catch; returns upserted count); (26th incr — TASK-FIN-BE-039) + FxRateQuoteHistoryRepository injected, append after each upsert
 │   ├── GetFxRatesUseCase.java             ← (25th incr) @Transactional(readOnly): fx_rate_quote cache → FxRatesView (top-level feedEnabled + per-row ageSeconds/stale)
 │   ├── GetFxRateHistoryUseCase.java       ← (27th incr — TASK-FIN-BE-040) @Transactional(readOnly): fx_rate_quote_history → FxRateHistorySummaryView (limit-normalised, newest-first, empty-200 on unknown pair)
@@ -1878,6 +1881,48 @@ serialised as exact decimal string (F5). **Pure read / net-zero / no migration**
 `GetFxRateHistoryUseCase` (`@Transactional(readOnly=true)`) added to `FxRateController`
 (`GET /{foreignCurrency}/history`) — no new security config, no new migration.
 Formal contract → `ledger-api.md § 14.1`.
+
+**Per-tenant contract-rate override (twenty-eighth increment — TASK-FIN-BE-042, ADR-002 § 3.1
+"per-tenant override / 특수 계약환율").** A tenant may configure a **contract FX rate** for a
+currency pair that overrides the tenant-agnostic market rate from the `fx_rate_quote` feed during
+FX resolution. The market `fx_rate_quote` (V12) stays **global**; the override is a **tenant-scoped
+layer on top**, resolved at read time. `V15__add_fx_rate_override.sql` creates the **new**
+`fx_rate_override` table only (composite PK `(tenant_id, base_currency, foreign_currency)`;
+`rate DECIMAL(20,8)` exact — same unit as `fx_rate_quote.rate`, base-minor-per-foreign-minor; audit
+`updated_by`/`updated_at DATETIME(6)`; CHECK `rate > 0`), additive, **no backfill** — absence of a
+row = no override = the existing feed path runs **byte-identical** (net-zero, today's behaviour).
+Entity `domain/journal/FxRateOverride` (`@IdClass FxRateOverrideId`), port
+`FxRateOverrideRepository` (`findOverride(tenantId, base, foreign)` / `save` upsert), JPA adapter +
+Spring Data repo. **(V14 is TASK-FIN-BE-041's ShedLock table — this increment owns V15.)**
+
+`ResolveEffectiveFxRate` now resolves under the caller's **tenant** with the precedence:
+```
+manual providedRate  >  per-tenant override (contract)  >  feed market rate  >  FX_RATE_UNAVAILABLE
+```
+- a **supplied** manual rate is used verbatim (`fromFeed=false`, `source="manual"`) — neither the
+  override nor the cache is consulted (**net-zero**, byte-identical — the most specific intent wins);
+- an **omitted** rate with a **per-tenant override** present for the `(tenant, base, foreign)` pair →
+  the contract `rate` (`fromFeed=false`, `source="override:contract"` — recorded in the audit reason
+  so an operator can see WHY a contract rate was applied). The override **shadows the market feed**
+  (the cache is never read);
+- an **omitted** rate with **no** override row → the existing feed fallback runs **unchanged** (feed
+  enabled + fresh quote ⇒ cache rate; disabled/absent/stale ⇒ `422 FX_RATE_UNAVAILABLE`) — net-zero.
+
+**Tenant-scoped (AC-3).** The lookup is keyed by the caller's `tenant_id` (part of the PK), so
+tenant A's override **never** applies to tenant B — B falls through to the global feed. The override
+`rate > 0` validation lives in `SetFxRateOverrideUseCase` (→ `VALIDATION_ERROR` 400; the DB CHECK is
+the structural backstop); `rate` stays an exact `BigDecimal` end-to-end (no `float`/`double`,
+regulated F5) and is wired as a plain-decimal **string** in the response DTO (match
+`FxRateHistoryResponse`).
+
+**Operator REST + audit.** `SettlementController` adds `GET` / `PUT
+/api/finance/ledger/settlements/fx-rate-override/{foreignCurrency}` (base fixed to KRW;
+tenant-scoped via `ActorContext`, parity with the cost-flow-config endpoints). The literal
+`/fx-rate-override` prefix is matched ahead of the `/{ledgerAccountCode}/{currency}/lots` pattern —
+no route ambiguity. `GetFxRateOverrideUseCase` (read; absent → `present:false` view) +
+`SetFxRateOverrideUseCase` (upsert last-write-wins, audit `FX_RATE_OVERRIDE_SET`,
+`updated_by` = the actor identity, in the SAME `@Transactional`). A non-positive / invalid rate or
+an unknown currency → `400 VALIDATION_ERROR`, nothing persisted.
 
 ## Idempotency / dedupe (F1)
 

@@ -94,8 +94,8 @@ class SettleForeignPositionUseCaseTest {
         // Existing tests all pass a MANUAL settlementRate; mirror the production manual path —
         // the resolver echoes the provided rate as a non-feed ResolvedFxRate (net-zero). Lenient
         // so the early-reject tests (which never reach the resolve call) don't trip STRICT_STUBS.
-        lenient().when(fxRateResolver.resolve(any(), any(), any()))
-                .thenAnswer(inv -> new ResolvedFxRate(inv.getArgument(2), false, "manual"));
+        lenient().when(fxRateResolver.resolve(any(), any(), any(), any()))
+                .thenAnswer(inv -> new ResolvedFxRate(inv.getArgument(3), false, "manual"));
         // The cost-flow config is resolved after the guards on every settle that reaches the
         // policy call; absence (account override + tenant default) → WEIGHTED_AVERAGE (the
         // existing tests all assert the weighted-average path). Lenient so the early-reject tests
