@@ -56,10 +56,15 @@ public class OverrideAwareRateLimiter implements RateLimiter<RedisRateLimiter.Co
 
     private static final Logger log = LoggerFactory.getLogger(OverrideAwareRateLimiter.class);
 
-    /** Key segment that precedes the tenant id in the resolved rate-limit key. */
-    static final String TENANT_SEGMENT = ":t:";
+    /**
+     * Key segment that precedes the tenant id in the resolved rate-limit key.
+     * <b>Single source of truth for the key format</b>: {@code TenantRouteRateLimitConfig}
+     * builds the key from these constants and this class parses the tenant back out of them,
+     * so the builder and parser cannot drift (the prior duplicated string literals could).
+     */
+    public static final String TENANT_SEGMENT = ":t:";
     /** Key segment that follows the tenant id (anonymous/pre-auth IP qualifier), if present. */
-    static final String IP_SEGMENT = ":ip:";
+    public static final String IP_SEGMENT = ":ip:";
 
     private final RedisRateLimiter defaultDelegate;
     private final RateLimitOverrideProperties overrideProperties;

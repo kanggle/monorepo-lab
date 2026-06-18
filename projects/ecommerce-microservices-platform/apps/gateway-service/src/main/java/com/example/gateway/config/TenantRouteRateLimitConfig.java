@@ -108,16 +108,20 @@ public class TenantRouteRateLimitConfig {
     /** {@code rate:ecommerce-gw:<routeId>:t:<tenantId>} — never a null tenant. */
     private static String authenticatedKey(ServerWebExchange exchange, Jwt jwt) {
         String tenantId = resolveTenant(jwt);
-        return KEY_PREFIX + ":" + resolveRouteId(exchange) + ":t:" + tenantId;
+        return KEY_PREFIX + ":" + resolveRouteId(exchange)
+                + OverrideAwareRateLimiter.TENANT_SEGMENT + tenantId;
     }
 
     /**
      * {@code rate:ecommerce-gw:<routeId>:t:ecommerce:ip:<ip>} — default tenant + client IP
      * so anonymous traffic on a public route stays IP-bounded (no single shared bucket).
+     * Uses {@link OverrideAwareRateLimiter#TENANT_SEGMENT}/{@link OverrideAwareRateLimiter#IP_SEGMENT}
+     * (the single source of truth) so the builder and the override parser cannot drift.
      */
     private static String anonymousKey(ServerWebExchange exchange) {
         return KEY_PREFIX + ":" + resolveRouteId(exchange)
-                + ":t:" + DEFAULT_TENANT + ":ip:" + resolveClientIp(exchange);
+                + OverrideAwareRateLimiter.TENANT_SEGMENT + DEFAULT_TENANT
+                + OverrideAwareRateLimiter.IP_SEGMENT + resolveClientIp(exchange);
     }
 
     /** Never returns null/blank — a blank claim resolves to the default tenant (D8). */
