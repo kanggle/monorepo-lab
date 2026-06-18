@@ -370,6 +370,11 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
+      # ADR-MONO-041 D2: wms service images `FROM monorepo/java-service-base:v1`.
+      # No image registry → build the shared base locally before the docker builds.
+      - name: Build shared java-service-base image (ADR-MONO-041 D2)
+        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
+
       - name: Build wms service images for full e2e
         # Docker CLI build (BuildKit) — Docker 28 + Testcontainers
         # ImageFromDockerfile hang workaround (incident
