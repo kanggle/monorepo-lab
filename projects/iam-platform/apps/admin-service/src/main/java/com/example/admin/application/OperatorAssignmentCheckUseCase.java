@@ -55,9 +55,12 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class OperatorAssignmentCheckUseCase {
 
-    private final AdminOperatorPort operatorPort;
     private final TenantScopeResolver tenantScopeResolver;
     private final OperatorTenantAssignmentPort assignmentPort;
+    // TASK-MONO-295 (ADR-MONO-040 Phase 2): the shared DUAL-KEY resolver — the SAME
+    // account_id-first/email-fallback resolution the login-time exchange
+    // (TokenExchangeService) uses, so the two sub-keyed paths cannot diverge.
+    private final OperatorOidcSubjectResolver operatorResolver;
 
     /**
      * Boolean convenience kept for callers that need only the assignment verdict.
@@ -117,7 +120,10 @@ public class OperatorAssignmentCheckUseCase {
         // 1. Resolve admin_operators row, FAIL-CLOSED. DUAL-KEY (ADR-040 Phase 2):
         // account_id (oidcSubject) first — the target end-state key; legacy email
         // (subjectEmail) second — the value oidc_subject is currently seeded with.
-        AdminOperatorPort.OperatorView operator = resolveOperator(oidcSubject, subjectEmail);
+        // Delegated to the SHARED OperatorOidcSubjectResolver so this path and the
+        // login-time exchange (TokenExchangeService) cannot diverge.
+        AdminOperatorPort.OperatorView operator =
+                operatorResolver.resolve(oidcSubject, subjectEmail).orElse(null);
         if (operator == null) {
             log.debug("assignment-check fail-closed: no admin_operators row for the OIDC subject "
                     + "(account_id key NOR legacy email fallback matched)");
@@ -145,40 +151,6 @@ public class OperatorAssignmentCheckUseCase {
         // (unset column OR legacy-home/platform with no explicit row).
         List<String> orgScope = assignmentPort.findOrgScope(operator.internalId(), tenantId);
         return new Result(true, orgScope);
-    }
-
-    /**
-     * TASK-MONO-295 (ADR-MONO-040 Phase 2) — DUAL-KEY operator resolution. Tries
-     * the account_id {@code oidcSubject} first (the preferred end-state key the
-     * Phase-2 {@code sub} migration emits), then the legacy {@code subjectEmail}
-     * (the value {@code admin_operators.oidc_subject} is currently seeded with).
-     * Order matters: account_id-first means that once the eventual cross-DB
-     * backfill sets {@code oidc_subject}=account_id (Phase-3), the primary lookup
-     * hits and the email fallback is never consulted — behavior is already correct.
-     *
-     * <p>The two keys are looked up against the SAME platform-global UNIQUE
-     * {@code oidc_subject} column (V0027), so at most one row matches either key.
-     * A blank/null key is skipped (the adapter already null-guards). Returns
-     * {@code null} when neither key matches — the caller treats that as
-     * {@code assigned=false} (fail-closed, never leaks existence).
-     */
-    private AdminOperatorPort.OperatorView resolveOperator(String oidcSubject, String subjectEmail) {
-        AdminOperatorPort.OperatorView byAccountId =
-                operatorPort.findByOidcSubject(oidcSubject).orElse(null);
-        if (byAccountId != null) {
-            return byAccountId;
-        }
-        // Phase-2 transition fallback: oidc_subject still holds the login email.
-        if (subjectEmail != null && !subjectEmail.isBlank()) {
-            AdminOperatorPort.OperatorView byEmail =
-                    operatorPort.findByOidcSubject(subjectEmail).orElse(null);
-            if (byEmail != null) {
-                log.debug("assignment-check: resolved operator via the legacy email "
-                        + "fallback (oidc_subject not yet backfilled to account_id)");
-                return byEmail;
-            }
-        }
-        return null;
     }
 
     /**

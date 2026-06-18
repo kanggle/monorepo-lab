@@ -106,6 +106,14 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
 
 ---
 
+## GET /internal/auth/credentials/{accountId}/email
+
+> **별도 caller** — 이 read-only 엔드포인트는 본 문서의 account-service 가 아니라 **admin-service** 가 호출한다(login-time operator-token exchange 의 DUAL-KEY email fallback, ADR-MONO-040 Phase 2 / TASK-MONO-295). 동일한 `/internal/auth/**` prefix·`InternalCredentialController` 에 공존하므로 producer 표면 일관성을 위해 여기 cross-reference 한다. 요청/응답·fail-soft caller 규약의 canonical 정의는 [admin-to-auth.md](./admin-to-auth.md) §`GET /internal/auth/credentials/{accountId}/email` 가 담당한다.
+
+`auth_db.credentials.account_id` 단건 조회로 로그인 email(`credentials.email`)을 해석해 `{accountId, email|null}` 로 반환한다. row 부재 시 `email=null`(graceful). 서버사이드 read-only — `password`/`credential_hash` 미노출, email 은 로그 금지(`confidential`).
+
+---
+
 ## Caller Constraints (account-service 측)
 
 - 타임아웃: connect 3s, read 15s (TASK-BE-247: cold-start race 마스킹을 위해 5s → 15s 상향)

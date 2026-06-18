@@ -2,10 +2,10 @@ package com.example.admin.application;
 
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -49,8 +49,16 @@ class OperatorAssignmentCheckUseCaseTest {
     @Mock
     private OperatorTenantAssignmentPort assignmentPort;
 
-    @InjectMocks
     private OperatorAssignmentCheckUseCase useCase;
+
+    @BeforeEach
+    void setUp() {
+        // TASK-MONO-295: exercise the REAL shared dual-key resolver (wrapping the
+        // mock operatorPort) so the dual-key fallback is tested end-to-end through
+        // the SAME component the login-time exchange uses — not a stubbed-away mock.
+        OperatorOidcSubjectResolver resolver = new OperatorOidcSubjectResolver(operatorPort);
+        useCase = new OperatorAssignmentCheckUseCase(tenantScopeResolver, assignmentPort, resolver);
+    }
 
     private AdminOperatorPort.OperatorView operator(String tenantId, String status, long internalId) {
         return new AdminOperatorPort.OperatorView(
