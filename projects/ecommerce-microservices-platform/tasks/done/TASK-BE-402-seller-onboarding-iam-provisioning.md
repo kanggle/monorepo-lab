@@ -1,6 +1,6 @@
 # TASK-BE-402 — Seller onboarding mints a real IAM seller-operator account (ADR-MONO-042): extend the `Seller` aggregate lifecycle + IAM provisioning (born-unified) + fail-soft + deactivation
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (cross-service IAM provisioning + lifecycle state machine + fail-soft availability)

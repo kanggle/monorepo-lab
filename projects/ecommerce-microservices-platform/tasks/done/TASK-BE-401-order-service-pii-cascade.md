@@ -1,6 +1,6 @@
 # TASK-BE-401 — order-service PII cascade on account deletion (ADR-MONO-037 P3-B)
 
-- **Status:** ready
+- **Status:** done
 - **Service:** order-service (`projects/ecommerce-microservices-platform/apps/order-service/`)
 - **ADR:** [ADR-MONO-037](../../../../docs/adr/ADR-MONO-037-ecommerce-account-lifecycle-projection.md) P3-B (the documented deferred follow-up)
 - **Sibling implemented:** TASK-BE-388 M3 (user-service `AccountDeletedConsumer` → `anonymizeProfile`) — this task MIRRORS that pattern for the order store.
