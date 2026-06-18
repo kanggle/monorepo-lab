@@ -1,6 +1,6 @@
 # TASK-PC-FE-114 — Add a root `global-error.tsx` so cold-deploy client exceptions don't blank the shell
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-PC-FE (project-internal — `projects/platform-console/apps/console-web/src/app/` only)
 
