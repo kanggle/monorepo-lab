@@ -1,6 +1,6 @@
 # TASK-FE-076 — Fix stale `account_type_mismatch` e2e assertion (`'admin'`) breaking nightly web-store full-stack
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-FE (project-internal — `projects/ecommerce-microservices-platform/apps/web-store/e2e/` only)
 
