@@ -1,19 +1,26 @@
 package com.example.gateway.config;
 
 import com.example.gateway.ratelimit.FailOpenRateLimiter;
+import com.example.gateway.ratelimit.OverrideAwareRateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.InetSocketAddress;
+import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RateLimiter;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.cloud.gateway.route.Route;
+import org.springframework.cloud.gateway.support.ConfigurationService;
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -55,11 +62,18 @@ import reactor.core.publisher.Mono;
  * Per-route default {@code replenishRate}/{@code burstCapacity} live in the route's
  * {@code RequestRateLimiter} filter args (application.yml). Spring Cloud Gateway resolves
  * the limiter config per route id, so the bucket size is a route default; the
- * {@code (tenant, route)} key gives each tenant its own bucket of that size. Per-tenant
- * overrides are an additive future increment (the entitlement plane stays decoupled —
- * no coupling to {@code tenant_domain_subscription}).
+ * {@code (tenant, route)} key gives each tenant its own bucket of that size.
+ *
+ * <p>An <b>optional per-tenant override</b> (TASK-BE-405 AC-2) is layered on top via
+ * {@link OverrideAwareRateLimiter} + {@link RateLimitOverrideProperties}
+ * ({@code ecommerce.ratelimit.overrides.<tenantId>.<routeId>.{replenish-rate,burst-capacity}}):
+ * a tenant configured with an override gets a different bucket size on that route, while
+ * every other {@code (tenant, route)} falls back to the route default. With no overrides
+ * configured the behaviour is net-zero identical to the config-default-only limiter. The
+ * entitlement plane stays decoupled — no coupling to {@code tenant_domain_subscription}.
  */
 @Configuration
+@EnableConfigurationProperties(RateLimitOverrideProperties.class)
 public class TenantRouteRateLimitConfig {
 
     private static final Logger log = LoggerFactory.getLogger(TenantRouteRateLimitConfig.class);
@@ -134,15 +148,35 @@ public class TenantRouteRateLimitConfig {
     }
 
     /**
-     * Primary {@link RateLimiter} exposed to Spring Cloud Gateway. Wraps the autoconfigured
-     * {@link RedisRateLimiter} with fail-open semantics (TASK-BE-405 § Degrade). On Redis
-     * connectivity errors requests are allowed through with a WARN log + metric, rather than
-     * 5xx-ing the edge.
+     * Primary {@link RateLimiter} exposed to Spring Cloud Gateway. The chain is
+     * {@code FailOpenRateLimiter → OverrideAwareRateLimiter → RedisRateLimiter}:
+     *
+     * <ul>
+     *   <li>{@link OverrideAwareRateLimiter} (innermost decision) — for each request key it
+     *       resolves the optional per-tenant override (TASK-BE-405 AC-2), applying the
+     *       override bucket size when configured and otherwise the route/config default
+     *       (the autoconfigured {@code delegate}). Override limiters share the delegate's
+     *       Redis template + Lua script via {@code overrideLimiterFactory}, so the
+     *       {@code (tenant, route)} bucket is the same — only its size differs.</li>
+     *   <li>{@link FailOpenRateLimiter} (outermost) — on Redis connectivity errors requests
+     *       are allowed through with a WARN log + metric rather than 5xx-ing the edge
+     *       (TASK-BE-405 § Degrade). Wrapping the override-aware limiter means both the
+     *       override and default paths inherit identical fail-open behaviour.</li>
+     * </ul>
      */
     @Bean
     @Primary
-    public RateLimiter<RedisRateLimiter.Config> failOpenRateLimiter(RedisRateLimiter delegate,
-                                                                    MeterRegistry meterRegistry) {
-        return new FailOpenRateLimiter(delegate, meterRegistry);
+    public RateLimiter<RedisRateLimiter.Config> failOpenRateLimiter(
+            RedisRateLimiter delegate,
+            RateLimitOverrideProperties overrideProperties,
+            ReactiveStringRedisTemplate redisTemplate,
+            @Qualifier(RedisRateLimiter.REDIS_SCRIPT_NAME) RedisScript<List<Long>> redisScript,
+            ConfigurationService configurationService,
+            MeterRegistry meterRegistry) {
+        OverrideAwareRateLimiter overrideAware = new OverrideAwareRateLimiter(
+                delegate,
+                overrideProperties,
+                config -> new RedisRateLimiter(redisTemplate, redisScript, configurationService));
+        return new FailOpenRateLimiter(overrideAware, meterRegistry);
     }
 }

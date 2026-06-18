@@ -36,8 +36,13 @@ import reactor.core.publisher.Mono;
  *
  * <p>Configuration binding (the
  * {@code spring.cloud.gateway.filter.request-rate-limiter} FilterArgsEvent machinery) is
- * delegated to the wrapped {@link RedisRateLimiter}, which remains the bean that listens
- * for the event. This decorator only wraps {@code isAllowed}.
+ * delegated through the wrapped {@link RateLimiter} down to the autoconfigured
+ * {@link RedisRateLimiter}, which remains the bean that listens for the event. This
+ * decorator only wraps {@code isAllowed}.
+ *
+ * <p>The wrapped delegate is the {@link OverrideAwareRateLimiter} (TASK-BE-405 AC-2), so
+ * both the per-tenant-override path and the route-default path inherit identical fail-open
+ * semantics — fail-open composes <em>around</em> override resolution.
  */
 public class FailOpenRateLimiter implements RateLimiter<RedisRateLimiter.Config> {
 
@@ -45,11 +50,11 @@ public class FailOpenRateLimiter implements RateLimiter<RedisRateLimiter.Config>
     public static final String METRIC_REDIS_UNAVAILABLE = "gateway_ratelimit_redis_unavailable_total";
     public static final String METRIC_UNEXPECTED_ERROR = "gateway_ratelimit_unexpected_error_total";
 
-    private final RedisRateLimiter delegate;
+    private final RateLimiter<RedisRateLimiter.Config> delegate;
     private final Counter redisUnavailableCounter;
     private final Counter unexpectedErrorCounter;
 
-    public FailOpenRateLimiter(RedisRateLimiter delegate, MeterRegistry meterRegistry) {
+    public FailOpenRateLimiter(RateLimiter<RedisRateLimiter.Config> delegate, MeterRegistry meterRegistry) {
         this.delegate = delegate;
         this.redisUnavailableCounter = Counter.builder(METRIC_REDIS_UNAVAILABLE)
                 .description("Gateway rate-limit Redis backend unavailable; failed open.")
