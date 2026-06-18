@@ -247,6 +247,13 @@ jobs:
         # See knowledge/incidents/2026-05-05-ci-regression.md § Root Cause #2.
         run: docker network create traefik-net || true
 
+      # ADR-MONO-041 D2: ecommerce service images `FROM monorepo/java-service-base:v1`.
+      # No image registry → build the shared base before `compose up --build`.
+      # Override the job's ecommerce working-directory to reach docker/ at repo root.
+      - name: Build shared java-service-base image (ADR-MONO-041 D2)
+        working-directory: ${{ github.workspace }}
+        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
+
       - name: Start docker compose stack (backends + infra, no observability)
         # Apply the CI overlay so gateway-service is published on host
         # port 18080 (the shared Traefik stack is not started in CI).
