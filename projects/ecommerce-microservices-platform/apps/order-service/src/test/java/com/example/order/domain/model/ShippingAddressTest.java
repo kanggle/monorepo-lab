@@ -113,4 +113,59 @@ class ShippingAddressTest {
         ).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("address1");
     }
+
+    // ---- PII anonymization (ADR-MONO-037 P3-B) ---------------------------------
+
+    @Test
+    @DisplayName("anonymized()는 식별 필드를 tombstone으로 덮고 구조 필드는 비운다")
+    void anonymized_replacesIdentifyingFieldsWithTombstone() {
+        ShippingAddress address = new ShippingAddress(
+                "홍길동", "010-1234-5678", "12345", "서울시 강남구 테헤란로 1", "101호"
+        );
+
+        ShippingAddress masked = address.anonymized();
+
+        assertThat(masked.getRecipient()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+        assertThat(masked.getPhone()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+        assertThat(masked.getAddress1()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+        assertThat(masked.getZipCode()).isNull();
+        assertThat(masked.getAddress2()).isNull();
+        // 원본은 불변 (anonymized()는 새 인스턴스를 반환)
+        assertThat(address.getRecipient()).isEqualTo("홍길동");
+    }
+
+    @Test
+    @DisplayName("anonymized() 결과는 isAnonymized()가 true다")
+    void anonymized_resultIsAnonymized() {
+        ShippingAddress masked = new ShippingAddress(
+                "홍길동", "010-1234-5678", "12345", "서울시 강남구 테헤란로 1", "101호"
+        ).anonymized();
+
+        assertThat(masked.isAnonymized()).isTrue();
+    }
+
+    @Test
+    @DisplayName("anonymized()는 멱등적이다 — 이미 익명화된 주소를 다시 익명화해도 동일하다")
+    void anonymized_isIdempotent() {
+        ShippingAddress once = new ShippingAddress(
+                "홍길동", "010-1234-5678", "12345", "서울시 강남구 테헤란로 1", "101호"
+        ).anonymized();
+
+        ShippingAddress twice = once.anonymized();
+
+        assertThat(twice.isAnonymized()).isTrue();
+        assertThat(twice.getRecipient()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+        assertThat(twice.getPhone()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+        assertThat(twice.getAddress1()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+    }
+
+    @Test
+    @DisplayName("일반 주소는 isAnonymized()가 false다")
+    void isAnonymized_normalAddress_returnsFalse() {
+        ShippingAddress address = new ShippingAddress(
+                "홍길동", "010-1234-5678", "12345", "서울시 강남구 테헤란로 1", "101호"
+        );
+
+        assertThat(address.isAnonymized()).isFalse();
+    }
 }

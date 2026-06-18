@@ -193,6 +193,30 @@ public class Order {
         this.updatedAt = now;
     }
 
+    /**
+     * Anonymize the order-held PII (the shipping-address snapshot) in reaction to an
+     * IAM {@code account.deleted(anonymized=true)} (ADR-MONO-037 P3-B — the standing
+     * TASK-BE-258 GDPR consumer obligation for the order store). Only the address
+     * snapshot is tombstoned; {@code orderId} / {@code userId} (FK), amounts, line
+     * items, status, and payment/refund timestamps are all preserved for audit /
+     * finance / settlement integrity.
+     *
+     * <p>Idempotent: returns {@code false} (no mutation, no version bump) when the
+     * address is absent or already anonymized, so Kafka at-least-once re-delivery and
+     * the two-phase {@code account.deleted} emission are safe without extra guards.
+     *
+     * @param clock domain clock for the {@code updatedAt} stamp
+     * @return {@code true} if PII was actually masked; {@code false} on a no-op
+     */
+    public boolean anonymizePii(Clock clock) {
+        if (this.shippingAddress == null || this.shippingAddress.isAnonymized()) {
+            return false;
+        }
+        this.shippingAddress = this.shippingAddress.anonymized();
+        this.updatedAt = Instant.now(clock);
+        return true;
+    }
+
     public List<OrderItem> getItems() {
         return Collections.unmodifiableList(items);
     }

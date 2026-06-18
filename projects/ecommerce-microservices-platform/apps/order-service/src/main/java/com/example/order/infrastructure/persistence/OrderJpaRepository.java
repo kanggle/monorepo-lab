@@ -88,6 +88,12 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
 
     List<OrderJpaEntity> findByUserIdAndStatusIn(String userId, Collection<OrderStatus> statuses);
 
+    // GDPR PII-anonymization cascade (ADR-037 P3-B): every order for the subject,
+    // any status, any tenant. Keyed by the globally-unique user_id (= OIDC sub =
+    // IAM accountId) → cannot reach another subject's rows, cannot leak across
+    // tenants (only mutates the subject's own orders; tenant_id stays immutable).
+    List<OrderJpaEntity> findByUserId(String userId);
+
     @Query("SELECT o FROM OrderJpaEntity o " +
            "WHERE o.status = :status AND o.paymentId IS NULL AND o.createdAt < :placedBefore " +
            "ORDER BY o.createdAt ASC")

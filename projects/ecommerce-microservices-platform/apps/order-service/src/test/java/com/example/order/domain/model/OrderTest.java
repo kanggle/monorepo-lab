@@ -370,4 +370,72 @@ class OrderTest {
         assertThat(order.getUpdatedAt()).isEqualTo(refundTime);
         assertThat(order.getRefundedAt()).isEqualTo(refundedAt);
     }
+
+    // ---- PII anonymization cascade (ADR-MONO-037 P3-B) -------------------------
+
+    @Test
+    @DisplayName("anonymizePii()는 배송지 PII를 마스킹하고 true를 반환한다")
+    void anonymizePii_unmaskedOrder_masksAddressAndReturnsTrue() {
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 2, 1000L)),
+                ADDRESS, FIXED_CLOCK);
+
+        boolean masked = order.anonymizePii(FIXED_CLOCK);
+
+        assertThat(masked).isTrue();
+        assertThat(order.getShippingAddress().isAnonymized()).isTrue();
+        assertThat(order.getShippingAddress().getRecipient()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+        assertThat(order.getShippingAddress().getPhone()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+    }
+
+    @Test
+    @DisplayName("anonymizePii()는 주문 비즈니스 데이터(금액/항목/상태/userId)를 보존한다")
+    void anonymizePii_preservesBusinessData() {
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", "블랙", 2, 1000L)),
+                ADDRESS, FIXED_CLOCK);
+        order.confirm(FIXED_CLOCK);
+        String orderIdBefore = order.getOrderId();
+        long totalBefore = order.getTotalPrice();
+
+        order.anonymizePii(FIXED_CLOCK);
+
+        assertThat(order.getOrderId()).isEqualTo(orderIdBefore);
+        assertThat(order.getUserId()).isEqualTo("user1");
+        assertThat(order.getTotalPrice()).isEqualTo(totalBefore);
+        assertThat(order.getItems()).hasSize(1);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    @DisplayName("anonymizePii()는 멱등적이다 — 이미 익명화된 주문은 false를 반환하고 변이하지 않는다")
+    void anonymizePii_alreadyAnonymized_returnsFalseAndNoMutation() {
+        Instant createTime = Instant.parse("2026-03-25T09:00:00Z");
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
+                ADDRESS, Clock.fixed(createTime, ZoneOffset.UTC));
+
+        Instant firstMaskTime = Instant.parse("2026-03-25T10:00:00Z");
+        order.anonymizePii(Clock.fixed(firstMaskTime, ZoneOffset.UTC));
+
+        boolean secondResult = order.anonymizePii(
+                Clock.fixed(Instant.parse("2026-03-26T10:00:00Z"), ZoneOffset.UTC));
+
+        assertThat(secondResult).isFalse();
+        // updatedAt 이 두 번째 호출로 바뀌지 않음 (no-op)
+        assertThat(order.getUpdatedAt()).isEqualTo(firstMaskTime);
+    }
+
+    @Test
+    @DisplayName("anonymizePii() 호출 시 Clock.fixed()로 주입한 시간이 updatedAt에 설정된다")
+    void anonymizePii_withFixedClock_updatesTimestamp() {
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
+                ADDRESS, Clock.fixed(Instant.parse("2026-03-25T09:00:00Z"), ZoneOffset.UTC));
+
+        Instant maskTime = Instant.parse("2026-03-25T15:00:00Z");
+        order.anonymizePii(Clock.fixed(maskTime, ZoneOffset.UTC));
+
+        assertThat(order.getUpdatedAt()).isEqualTo(maskTime);
+    }
 }

@@ -347,6 +347,68 @@ class OrderRepositoryImplIntegrationTest {
                 .hasMessageContaining("Order not found for update");
     }
 
+    @Test
+    @DisplayName("findAllByUserIdAcrossTenants — 한 사용자의 모든 상태/테넌트 주문을 조회한다 (PII cascade, ADR-037 P3-B)")
+    void findAllByUserIdAcrossTenants_returnsAllOrdersForSubject() {
+        // given: 동일 사용자의 주문을 여러 상태로 저장 (DELIVERED 포함 — 비활성 주문도 마스킹 대상)
+        String userId = "pii-cascade-user-" + UUID.randomUUID();
+        transactionTemplate.executeWithoutResult(status -> {
+            Order pending = orderRepository.save(createNewOrderForUser(userId));
+            Order delivered = reconstituteFrom(pending);
+            delivered.confirm(Clock.systemUTC());
+            orderRepository.save(delivered);
+            // 다른 사용자의 주문 (cascade 대상 아님)
+            orderRepository.save(createNewOrderForUser("other-" + UUID.randomUUID()));
+        });
+
+        // when
+        List<Order> orders = transactionTemplate.execute(status ->
+                orderRepository.findAllByUserIdAcrossTenants(userId));
+
+        // then: 해당 사용자 주문만 반환 (다른 사용자 제외)
+        assertThat(orders).isNotEmpty();
+        assertThat(orders).allMatch(o -> o.getUserId().equals(userId));
+    }
+
+    @Test
+    @DisplayName("PII cascade — anonymizePii 후 saveAll 하면 배송지 PII가 영속화되고 비즈니스 데이터는 보존된다 (ADR-037 P3-B)")
+    void piiCascade_anonymizeThenSave_persistsMaskedAddressPreservingBusinessData() {
+        // given
+        String userId = "pii-persist-user-" + UUID.randomUUID();
+        Order saved = transactionTemplate.execute(status ->
+                orderRepository.save(createNewOrderForUser(userId)));
+        assertThat(saved).isNotNull();
+        long totalBefore = saved.getTotalPrice();
+
+        // when: 도메인 익명화 후 saveAll
+        transactionTemplate.executeWithoutResult(status -> {
+            List<Order> all = orderRepository.findAllByUserIdAcrossTenants(userId);
+            List<Order> masked = all.stream().filter(o -> o.anonymizePii(Clock.systemUTC())).toList();
+            orderRepository.saveAll(masked);
+        });
+
+        // then: DB 재조회 시 배송지 PII는 tombstone, 비즈니스 데이터는 보존
+        Order fromDb = transactionTemplate.execute(status ->
+                orderRepository.findAllByUserIdAcrossTenants(userId).get(0));
+        assertThat(fromDb.getShippingAddress().isAnonymized()).isTrue();
+        assertThat(fromDb.getShippingAddress().getRecipient()).isEqualTo(ShippingAddress.ANONYMIZED_TOMBSTONE);
+        assertThat(fromDb.getShippingAddress().getZipCode()).isNull();
+        // 비즈니스 데이터 보존
+        assertThat(fromDb.getUserId()).isEqualTo(userId);
+        assertThat(fromDb.getTotalPrice()).isEqualTo(totalBefore);
+        assertThat(fromDb.getItems()).isNotEmpty();
+    }
+
+    private Order reconstituteFrom(Order saved) {
+        return Order.reconstitute(
+                saved.getOrderId(), saved.getUserId(), saved.getItems(),
+                saved.getStatus(), saved.getTotalPrice(), saved.getShippingAddress(),
+                saved.getCreatedAt(), saved.getUpdatedAt(),
+                saved.getPaymentId(), saved.getPaidAt(), saved.getRefundedAt(),
+                saved.getStuckRecoveryAttemptCount(), saved.getStuckRecoveryAt(),
+                saved.getVersion());
+    }
+
     /**
      * 테스트용 신규 주문 생성 헬퍼.
      * 매 호출마다 고유한 userId와 orderId를 사용하여 테스트 격리를 보장한다.

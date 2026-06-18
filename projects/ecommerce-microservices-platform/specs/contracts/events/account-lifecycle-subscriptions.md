@@ -14,6 +14,7 @@ Authoritative producer schemas: **IAM** [`account-events.md`](../../../iam-platf
 |---|---|---|
 | `user-service` | `user-service` | `account.created`, `account.deleted` |
 | `notification-service` | `notification-service` | `account.created` |
+| `order-service` | `order-service-account-sync` | `account.deleted` (`anonymized=true` only — order-PII cascade, ADR-MONO-037 P3-B / TASK-BE-401) |
 
 ## Subscribed Topics
 
@@ -23,12 +24,20 @@ Authoritative producer schemas: **IAM** [`account-events.md`](../../../iam-platf
 | `account.created` | (same) | `notification-service` `AccountCreatedEventConsumer` | **Onboarding WELCOME.** Sends the `WELCOME` notification keyed on `accountId`, **with no PII personalization** (the event carries no name/email). Dedup on the event id. |
 | `account.deleted` (`anonymized=false`, grace entry) | IAM `account.deleted` (payload incl. `reasonCode`, `gracePeriodEndsAt`, `anonymized`) | `user-service` `AccountDeletedConsumer` → `UserProfileService.withdrawProfile` | **Phase 1 — logical/status delete.** Resolve profile by `accountId` → `status=WITHDRAWN` → publish ecommerce `UserWithdrawn` (`user.user.withdrawn`, consumed by order-service). Idempotent + fail-soft. |
 | `account.deleted` (`anonymized=true`, post-grace) | (same) | `user-service` `AccountDeletedConsumer` → `UserProfileService.anonymizeProfile` | **Phase 2 — PII anonymization** (the TASK-BE-258 obligation). Clear `email`/`name`/`nickname`/`phone`/`profile_image_url`; preserve `user_id` (FK/audit/order integrity). Idempotent + fail-soft. |
+| `account.deleted` (`anonymized=true`, post-grace) | (same) | `order-service` `AccountDeletedConsumer` → `OrderPiiAnonymizationService.anonymizeOrdersForAccount` | **Order-PII cascade (ADR-037 P3-B / TASK-BE-401).** Tombstone the shipping-address snapshot (`recipient`/`phone`/`address1` → `[deleted]`, `zip_code`/`address2` → NULL) on **every** order for the subject (all statuses, all tenants — `findAllByUserIdAcrossTenants`); preserve `order_id`/`user_id` FK + amounts/items/status/timestamps. `anonymized=false` (grace) → **no order-PII action** (cancellation is the `UserWithdrawn` reaction's job). `eventId` dedup via `EventDeduplicationChecker`; idempotent + fail-soft. |
 
 > **Two-phase, flag-driven.** The consumer branches on the event's own `anonymized` flag — it does **not** self-schedule on `gracePeriodEndsAt` (the IAM producer re-emits at grace end). This mirrors the IAM `consumer-integration-guide` § GDPR downstream reference consumer exactly.
 
-## Scope boundary — order-PII cascade (DEFERRED, documented per ADR-MONO-037 P3)
+## Scope boundary — order-PII cascade (IMPLEMENTED, ADR-MONO-037 P3-B / TASK-BE-401)
 
-v1 anonymizes **user-service profile PII only** (the primary identity-bearing store). **order-service-held PII** (shipping addresses, recipient names on historical orders) is **NOT** anonymized by this subscription — it is a **documented, tracked deferred follow-up** (a future order-service consumer of `account.deleted(anonymized=true)`, or a reaction to `UserWithdrawn`). This boundary is recorded explicitly so GDPR deletion handling is not misrepresented (ADR-MONO-037 P3 / F2): the profile store is covered now; the order-PII cascade is a named follow-up, not a silent omission.
+**Status: CLOSED** (was DEFERRED in M4). The order-PII cascade ADR-037 P3 documented as a tracked follow-up is now **implemented** by `order-service`'s own `account.deleted(anonymized=true)` consumer (group `order-service-account-sync`):
+
+- **order-service-held PII** — the shipping-address snapshot (recipient name, phone, street address) denormalized onto every order — is anonymized when the subject's account reaches the terminal `anonymized=true` phase. Identifying fields are overwritten with the `[deleted]` tombstone (so any NOT-NULL column stays satisfied without personal data); the non-identifying structural fields (`zip_code`, `address2`) are cleared.
+- **FK + business data preserved** — `order_id` and `user_id` survive (masking is field-level on the embedded address, not row deletion), so audit / finance / settlement FKs are intact; amounts, line items, status, and payment/refund timestamps are untouched.
+- **Retention-wide** — masking reaches **all historical orders** in any status, across every tenant the subject ordered under (the existing `UserWithdrawn` reaction only cancels *active* orders, which is correct for cancellation but insufficient for GDPR PII masking — hence a separate status-agnostic, tenant-agnostic cascade).
+- **Grace-entry (`anonymized=false`) is a no-op for order PII** — active-order cancellation is already driven by the user-service `UserWithdrawn` event (`UserWithdrawnEventConsumer`); the order PII consumer does not duplicate it.
+
+Both ecommerce PII stores (user-service profile + order-service order) now meet the TASK-BE-258 `anonymized=true` masking obligation. The GDPR deletion-handling boundary ADR-037 P3 flagged as documented-but-open is closed.
 
 ## id mapping (ADR-MONO-037 P4)
 
