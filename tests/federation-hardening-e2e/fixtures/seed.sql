@@ -118,7 +118,11 @@ INSERT INTO admin_operators (
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
     'E2E Super Admin',
     'ACTIVE',
-    'e2e-super-admin@example.com',
+    -- TASK-MONO-298 (ADR-MONO-040 Phase 3 part A): oidc_subject = the matching
+    -- seeded credentials.account_id (§ 2 above), NOT the login email. The dual-key
+    -- resolver now hits account_id-first directly; the retained email fallback is
+    -- no longer exercised for this operator. (login still uses the unchanged email.)
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8c100',
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a000',
     NOW(6),
     NOW(6),
@@ -212,7 +216,9 @@ INSERT INTO admin_operators (
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
     'Acme Operator',
     'ACTIVE',
-    'acme-operator@example.com',
+    -- TASK-MONO-298 (ADR-MONO-040 Phase 3 part A): oidc_subject = matching seeded
+    -- credentials.account_id (§ 6 above: acme-operator@example.com @ acme-corp).
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8c200',
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a200',
     NOW(6),
     NOW(6),
@@ -313,7 +319,11 @@ INSERT INTO admin_operators (
     '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
     'Multi Operator',
     'ACTIVE',
-    'multi-operator@example.com',
+    -- TASK-MONO-298 (ADR-MONO-040 Phase 3 part A): oidc_subject = matching seeded
+    -- credentials.account_id (§ 10 above: multi-operator@example.com @ acme-corp,
+    -- the home/login tenant that owns the credential — one account regardless of
+    -- the globex-corp/initech-corp ASSIGNMENTS).
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8c300',
     '01928c4a-7e9f-7c00-9a40-d2b1f5e8a200',
     NOW(6),
     NOW(6),
@@ -431,13 +441,18 @@ INSERT INTO admin_operators (
     operator_id, tenant_id, email, password_hash, display_name, status,
     oidc_subject, finance_default_account_id, created_at, updated_at, version
 ) VALUES
+    -- TASK-MONO-298 (ADR-MONO-040 Phase 3 part A): the two operators that LOG IN
+    -- (have an auth_db credential, § 15a) get oidc_subject = their seeded
+    -- credentials.account_id. `deleg-target-umbrella` has NO credential (object
+    -- only — never logs in), so its oidc_subject stays email-shaped: the backfill
+    -- endpoint leaves it unchanged (fail-soft) and it never resolves a token anyway.
     ('tenant-admin-umbrella', 'umbrella-corp', 'tenant-admin-umbrella@example.com',
      '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
-     'Umbrella Tenant Admin', 'ACTIVE', 'tenant-admin-umbrella@example.com',
+     'Umbrella Tenant Admin', 'ACTIVE', '01928c4a-7e9f-7c00-9a40-d2b1f5e8c401',
      '01928c4a-7e9f-7c00-9a40-d2b1f5e8a401', NOW(6), NOW(6), 0),
     ('tenant-billing-admin-umbrella', 'umbrella-corp', 'tenant-billing-admin-umbrella@example.com',
      '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
-     'Umbrella Billing Admin', 'ACTIVE', 'tenant-billing-admin-umbrella@example.com',
+     'Umbrella Billing Admin', 'ACTIVE', '01928c4a-7e9f-7c00-9a40-d2b1f5e8c402',
      '01928c4a-7e9f-7c00-9a40-d2b1f5e8a402', NOW(6), NOW(6), 0),
     ('deleg-target-umbrella', 'umbrella-corp', 'deleg-target-umbrella@example.com',
      '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',

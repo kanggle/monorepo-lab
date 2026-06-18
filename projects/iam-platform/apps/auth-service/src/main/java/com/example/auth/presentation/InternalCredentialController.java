@@ -3,6 +3,7 @@ package com.example.auth.presentation;
 import com.example.auth.application.BackfillCredentialIdentityUseCase;
 import com.example.auth.application.CreateCredentialUseCase;
 import com.example.auth.application.ForceLogoutUseCase;
+import com.example.auth.application.ResolveCredentialAccountIdUseCase;
 import com.example.auth.application.ResolveCredentialEmailUseCase;
 import com.example.auth.application.command.CreateCredentialCommand;
 import com.example.auth.application.result.CreateCredentialResult;
@@ -12,6 +13,8 @@ import com.example.auth.presentation.dto.CreateCredentialRequest;
 import com.example.auth.presentation.dto.CreateCredentialResponse;
 import com.example.auth.presentation.dto.ForceLogoutRequest;
 import com.example.auth.presentation.dto.ForceLogoutResponse;
+import com.example.auth.presentation.dto.ResolveCredentialAccountIdRequest;
+import com.example.auth.presentation.dto.ResolveCredentialAccountIdResponse;
 import com.example.auth.presentation.dto.ResolveCredentialEmailResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +46,7 @@ public class InternalCredentialController {
     private final ForceLogoutUseCase forceLogoutUseCase;
     private final BackfillCredentialIdentityUseCase backfillCredentialIdentityUseCase;
     private final ResolveCredentialEmailUseCase resolveCredentialEmailUseCase;
+    private final ResolveCredentialAccountIdUseCase resolveCredentialAccountIdUseCase;
 
     /**
      * Creates a credential row or returns success for an idempotent retry.
@@ -121,5 +125,37 @@ public class InternalCredentialController {
             @PathVariable String accountId) {
         String email = resolveCredentialEmailUseCase.resolveEmail(accountId).orElse(null);
         return ResponseEntity.ok(new ResolveCredentialEmailResponse(accountId, email));
+    }
+
+    /**
+     * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — resolve a credential's
+     * {@code account_id} from its login <b>email</b> (the REVERSE of
+     * {@link #resolveEmail}). Backs the admin-service one-time backfill that
+     * migrates {@code admin_operators.oidc_subject} from email to account_id (the
+     * Phase-3 end-state key).
+     *
+     * <p><b>POST + body (NOT a path/query param)</b>: {@code email} is
+     * {@code confidential} PII and must not land in the request URL / access logs
+     * (the Phase-2 "no PII in query logs" discipline). The body also carries the
+     * operator's {@code tenantId} because {@code credentials.email} is unique only
+     * <b>per tenant</b> ({@code uk_credentials_tenant_email}, V0007) — a global
+     * email lookup could mis-resolve to another tenant's account and mis-authorize
+     * the operator.
+     *
+     * <p>Always HTTP 200 (fail-soft): a missing / ambiguous credential returns
+     * {@code accountId=null} — the caller leaves that operator's {@code oidc_subject}
+     * unchanged (it stays resolvable via the RETAINED email fallback). Under the
+     * {@code /internal/**} chain (never exposed through the public gateway, S2).
+     * Hyphen path (not an AIP-136 colon verb) — the {@code :verb} suffix mis-parses
+     * under the class-level prefix in {@code PathPatternParser} (see
+     * {@link #backfillIdentity}).
+     */
+    @PostMapping("/credentials/account-id-by-email")
+    public ResponseEntity<ResolveCredentialAccountIdResponse> resolveAccountIdByEmail(
+            @Valid @RequestBody ResolveCredentialAccountIdRequest request) {
+        String accountId = resolveCredentialAccountIdUseCase
+                .resolveAccountId(request.email(), request.tenantId())
+                .orElse(null);
+        return ResponseEntity.ok(new ResolveCredentialAccountIdResponse(accountId));
     }
 }

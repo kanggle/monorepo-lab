@@ -3,6 +3,7 @@ package com.example.auth.presentation;
 import com.example.auth.application.BackfillCredentialIdentityUseCase;
 import com.example.auth.application.CreateCredentialUseCase;
 import com.example.auth.application.ForceLogoutUseCase;
+import com.example.auth.application.ResolveCredentialAccountIdUseCase;
 import com.example.auth.application.ResolveCredentialEmailUseCase;
 import com.example.auth.application.command.CreateCredentialCommand;
 import com.example.auth.application.exception.CredentialAlreadyExistsException;
@@ -51,6 +52,53 @@ class InternalCredentialControllerTest {
 
     @MockitoBean
     private ResolveCredentialEmailUseCase resolveCredentialEmailUseCase;
+
+    @MockitoBean
+    private ResolveCredentialAccountIdUseCase resolveCredentialAccountIdUseCase;
+
+    // ── TASK-MONO-298 (ADR-MONO-040 Phase 3 part A): email → account_id resolution ──
+
+    @Test
+    @DisplayName("POST /internal/auth/credentials/account-id-by-email — 매칭 → 200 {accountId}")
+    void resolveAccountIdByEmail_match_returns200() throws Exception {
+        given(resolveCredentialAccountIdUseCase.resolveAccountId("operator@example.com", "acme-corp"))
+                .willReturn(Optional.of("01928c4a-7e9f-7c00-9a40-d2b1f5e8c200"));
+
+        mockMvc.perform(post("/internal/auth/credentials/account-id-by-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "operator@example.com", "tenantId": "acme-corp" }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value("01928c4a-7e9f-7c00-9a40-d2b1f5e8c200"));
+    }
+
+    @Test
+    @DisplayName("POST /internal/auth/credentials/account-id-by-email — 미매칭 → 200 {accountId:null} (fail-soft)")
+    void resolveAccountIdByEmail_noMatch_returns200WithNull() throws Exception {
+        given(resolveCredentialAccountIdUseCase.resolveAccountId("ghost@example.com", "ghost-corp"))
+                .willReturn(Optional.empty());
+
+        mockMvc.perform(post("/internal/auth/credentials/account-id-by-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "ghost@example.com", "tenantId": "ghost-corp" }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    @DisplayName("POST /internal/auth/credentials/account-id-by-email — blank email → 400 VALIDATION_ERROR (no PII in URL)")
+    void resolveAccountIdByEmail_blankEmail_returns400() throws Exception {
+        mockMvc.perform(post("/internal/auth/credentials/account-id-by-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "email": "", "tenantId": "acme-corp" }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
 
     // ── TASK-MONO-295 (ADR-MONO-040 Phase 2): account_id → email resolution ──────
 

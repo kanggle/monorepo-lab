@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJpaEntity, Long> {
@@ -38,6 +39,16 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
      * row; a missing row is the fail-closed branch (no token minted).
      */
     Optional<AdminOperatorJpaEntity> findByOidcSubject(String oidcSubject);
+
+    /**
+     * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — all provisioned operators
+     * (non-null {@code oidc_subject}) for the email→account_id backfill. The
+     * email-shape filter (contains {@code @}, not UUID-parseable) is applied in the
+     * application layer, not here, so the email-shape rule is not duplicated into
+     * persistence. {@code oidc_subject IS NULL} rows are excluded — they are
+     * unprovisioned (nothing to backfill).
+     */
+    List<AdminOperatorJpaEntity> findByOidcSubjectIsNotNull();
 
     /**
      * Per-tenant email uniqueness check. Replaces the legacy single-column

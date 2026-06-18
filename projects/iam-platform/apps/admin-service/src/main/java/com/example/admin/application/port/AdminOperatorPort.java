@@ -83,6 +83,27 @@ public interface AdminOperatorPort {
      */
     OperatorView createOperator(NewOperator row);
 
+    /**
+     * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — every operator whose
+     * {@code oidc_subject} is non-null (provisioned), as a lightweight
+     * {@link OperatorOidcSubjectView} projection (the only fields the backfill
+     * needs). The backfill use case filters the email-shaped subset in the
+     * application layer (the email-shape rule — contains {@code @}, not
+     * UUID-parseable — is a domain decision kept out of the persistence layer).
+     * Read-only; ordering is implementation-defined. {@code oidc_subject IS NULL}
+     * rows are excluded (unprovisioned — nothing to backfill).
+     */
+    List<OperatorOidcSubjectView> findOperatorsWithOidcSubject();
+
+    /**
+     * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — set
+     * {@code admin_operators.oidc_subject = newOidcSubject} on the row identified by
+     * {@code operatorInternalId} (the email→account_id backfill write). Bumps
+     * {@code updated_at}. Same load-modify-{@code saveAndFlush} pattern as
+     * {@link #changeStatus} so the UPDATE flushes WITHIN the request transaction.
+     */
+    void updateOidcSubject(long operatorInternalId, String newOidcSubject, Instant at);
+
     /** Status transition (PATCH /operators/{id}/status). Bumps {@code updated_at}. */
     void changeStatus(long operatorInternalId, String newStatus, Instant at);
 
@@ -208,6 +229,20 @@ public interface AdminOperatorPort {
              * already-linked-to-different checks.
              */
             String identityId
+    ) {}
+
+    /**
+     * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — lightweight projection for the
+     * {@code oidc_subject} email→account_id backfill: only the row's internal id
+     * (for the targeted UPDATE), external operator id + tenant (for the PII-safe
+     * audit log + tenant-scoped account_id resolution), and the current
+     * {@code oidc_subject} (the email-shape filter input).
+     */
+    record OperatorOidcSubjectView(
+            long internalId,
+            String operatorId,
+            String tenantId,
+            String oidcSubject
     ) {}
 
     /** Value used to INSERT a new operator row. */
