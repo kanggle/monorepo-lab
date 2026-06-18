@@ -25,6 +25,15 @@ import java.util.UUID;
  * {@code tenant_type} claims per specs/features/multi-tenancy.md §JWT Changes.
  * Issuing a token with null/blank tenant values is a fail-closed guard —
  * {@link IllegalStateException} is thrown before any signing attempt.
+ *
+ * <p>TASK-MONO-295 (ADR-MONO-040 Phase 2) — RECONCILED. This legacy
+ * {@code TokenGeneratorPort} path already sets {@code sub = accountId} (the
+ * account UUID), so it was ALWAYS {@code jwt-standard-claims.md}-compliant; the
+ * "contradictory convention" ADR-040 § 1.1 noted was only that the LIVE SAS path
+ * diverged ({@code sub} = email). Phase 2 aligns the SAS customizer
+ * ({@code TenantClaimTokenCustomizer}) to this same {@code sub} = account UUID
+ * convention, so both paths now agree. No behavior change here — documented as the
+ * reference for the contract-compliant {@code sub}.
  */
 @Slf4j
 @Component

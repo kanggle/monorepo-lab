@@ -117,7 +117,7 @@ class AssumeTenantAuthenticationProviderTest {
     @DisplayName("assigned → mint short-lived access token, NO refresh token")
     void assigned_mintsAccessTokenNoRefresh() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         Jwt minted = Jwt.withTokenValue("assumed-token")
                 .header("alg", "RS256")
@@ -141,10 +141,41 @@ class AssumeTenantAuthenticationProviderTest {
     // preservesOperatorAccountType_onResolvedGrant test (TASK-BE-329) is deleted.
 
     @Test
+    @DisplayName("TASK-MONO-295 AC-0: subject token email threaded to the port as the dual-key legacy fallback")
+    void threadsSubjectEmail_asDualKeyFallback() {
+        // ADR-MONO-040 Phase 2: the subject token `sub` is the account UUID, but the
+        // operator's admin_operators.oidc_subject is still the email — so the provider
+        // MUST thread the subject token's `email` claim to the port so admin-service
+        // can resolve via the legacy email fallback. Proves AC-0 plumbing.
+        String operatorEmail = "acme-operator@example.com";
+        Jwt subjectWithEmail = Jwt.withTokenValue(SUBJECT_TOKEN)
+                .header("alg", "RS256")
+                .subject(OIDC_SUBJECT) // account UUID (Phase 2 sub)
+                .claim("email", operatorEmail)
+                .claim("tenant_id", "iam")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(subjectWithEmail);
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, operatorEmail, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
+        Jwt minted = Jwt.withTokenValue("assumed-token")
+                .header("alg", "RS256").subject(OIDC_SUBJECT)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
+        doReturn(minted).when(tokenGenerator).generate(any());
+
+        Authentication result = provider.authenticate(exchange());
+
+        assertThat(result).isInstanceOf(OAuth2AccessTokenAuthenticationToken.class);
+        // The port was called with BOTH the account_id sub AND the legacy email.
+        verify(operatorAssignmentPort).resolveAssignment(OIDC_SUBJECT, operatorEmail, SELECTED_TENANT);
+    }
+
+    @Test
     @DisplayName("TASK-BE-338: resolved org_scope carried onto the resolved grant")
     void carriesResolvedOrgScope_onResolvedGrant() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(
                         true, java.util.List.of("dept-sales")));
         Jwt minted = Jwt.withTokenValue("assumed-token")
@@ -168,7 +199,7 @@ class AssumeTenantAuthenticationProviderTest {
     @DisplayName("TASK-BE-338 net-zero: null org_scope carried as null (customizer → [*])")
     void carriesNullOrgScope_netZero() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         Jwt minted = Jwt.withTokenValue("assumed-token")
                 .header("alg", "RS256").subject(OIDC_SUBJECT)
@@ -203,7 +234,7 @@ class AssumeTenantAuthenticationProviderTest {
                 .expiresAt(Instant.now().plusSeconds(300))
                 .build();
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(operatorSubject);
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(
                         true, java.util.List.of("dept-sales")));
         Jwt minted = Jwt.withTokenValue("assumed-token")
@@ -235,7 +266,7 @@ class AssumeTenantAuthenticationProviderTest {
                 .satisfies(e -> assertThat(((OAuth2AuthenticationException) e).getError().getErrorCode())
                         .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT));
 
-        verify(operatorAssignmentPort, never()).resolveAssignment(any(), any());
+        verify(operatorAssignmentPort, never()).resolveAssignment(any(), any(), any());
         verify(tokenGenerator, never()).generate(any());
     }
 
@@ -243,7 +274,7 @@ class AssumeTenantAuthenticationProviderTest {
     @DisplayName("assignment-denied (not assigned) → no token, invalid_grant")
     void assignmentDenied_noToken() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
-        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, null, SELECTED_TENANT))
                 .thenThrow(new AssumeTenantDeniedException("operator is not assigned to the selected tenant"));
 
         assertThatThrownBy(() -> provider.authenticate(exchange()))
@@ -259,7 +290,7 @@ class AssumeTenantAuthenticationProviderTest {
     void adminUnavailable_failClosedDeny() {
         when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
         // The port wraps admin-down / timeout / circuit-open into AssumeTenantDeniedException.
-        when(operatorAssignmentPort.resolveAssignment(eq(OIDC_SUBJECT), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(eq(OIDC_SUBJECT), eq(null), eq(SELECTED_TENANT)))
                 .thenThrow(new AssumeTenantDeniedException(
                         "assignment check failed — admin-service unavailable (fail-closed)",
                         new RuntimeException("connection refused")));

@@ -34,6 +34,7 @@ import java.util.Base64;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -183,7 +184,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("happy: assigned + subscription → tenant_id=selected + entitled_domains, NO refresh_token, same iss")
     void happyPath() throws Exception {
-        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(anyString(), any(), eq(SELECTED_TENANT)))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         stubEntitledDomains("finance", "wms");
 
@@ -225,7 +226,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("BE-338: assigned + 설정된 org_scope → assumed token org_scope=그 값 (AC-5)")
     void populatedOrgScope_carriedAsClaim() throws Exception {
-        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(anyString(), any(), eq(SELECTED_TENANT)))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(
                         true, java.util.List.of("dept-sales")));
         stubEntitledDomains("erp");
@@ -245,7 +246,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("denied: assignment-denied → no token, invalid_grant (AC-2)")
     void deniedPath() throws Exception {
-        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(anyString(), any(), eq(SELECTED_TENANT)))
                 .thenThrow(new AssumeTenantDeniedException("operator is not assigned to the selected tenant"));
 
         String base = mintBaseToken("assume-op-002");
@@ -258,7 +259,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("admin-unavailable → fail-CLOSED deny, invalid_grant (AC-2)")
     void adminUnavailable_failClosed() throws Exception {
-        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(anyString(), any(), eq(SELECTED_TENANT)))
                 .thenThrow(new AssumeTenantDeniedException("admin-service unavailable (fail-closed)",
                         new RuntimeException("connection refused")));
 
@@ -272,7 +273,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("account-unavailable → fail-SOFT: token issued WITHOUT entitled_domains (AC-3)")
     void accountUnavailable_failSoft() throws Exception {
-        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(anyString(), any(), eq(SELECTED_TENANT)))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         // account /internal/tenant-domain-subscriptions returns 503 → fail-soft.
         wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenant-domain-subscriptions"))
@@ -346,7 +347,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("STEP 5 (ADR-032 D5): one account → consumer login token + operator domain token in one session; roles-only, NO account_type on either")
     void step5_unifiedIdentity_oneAccount_consumerAndOperatorTokens_rolesOnly() throws Exception {
-        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+        when(operatorAssignmentPort.resolveAssignment(anyString(), any(), eq(SELECTED_TENANT)))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         // The selected tenant is entitled to wms + ecommerce → the operator's derived
         // domain roles are WMS_OPERATOR + ADMIN (OperatorRoleDerivation, BE-376 / 4a).

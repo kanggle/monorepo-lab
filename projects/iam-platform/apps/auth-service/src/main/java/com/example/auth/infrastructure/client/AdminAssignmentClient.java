@@ -111,8 +111,8 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
     }
 
     @Override
-    public AssignmentResult resolveAssignment(String oidcSubject, String tenantId) {
-        Supplier<AssignmentResult> supplier = () -> doCheck(oidcSubject, tenantId);
+    public AssignmentResult resolveAssignment(String oidcSubject, String subjectEmail, String tenantId) {
+        Supplier<AssignmentResult> supplier = () -> doCheck(oidcSubject, subjectEmail, tenantId);
         Supplier<AssignmentResult> retrying = Retry.decorateSupplier(retry, supplier);
         Supplier<AssignmentResult> resilient = CircuitBreaker.decorateSupplier(circuitBreaker, retrying);
 
@@ -140,14 +140,24 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
     }
 
     @SuppressWarnings("unchecked")
-    private AssignmentResult doCheck(String oidcSubject, String tenantId) {
+    private AssignmentResult doCheck(String oidcSubject, String subjectEmail, String tenantId) {
         // admin-service returns { "assigned": true|false, "orgScope": [...]|null }.
+        // TASK-MONO-295 (ADR-MONO-040 Phase 2): pass subjectEmail as the DUAL-KEY
+        // legacy fallback. A null/blank email is OMITTED from the query so the
+        // request shape is byte-identical to the Phase-1 call when the subject
+        // token lacks an email claim (admin-service then resolves on oidcSubject
+        // alone). UriBuilder.queryParam(name, (Object) null) drops the param.
         Map<String, Object> body = restClient().get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/internal/operator-assignments/check")
-                        .queryParam("oidcSubject", oidcSubject)
-                        .queryParam("tenantId", tenantId)
-                        .build())
+                .uri(uriBuilder -> {
+                    uriBuilder
+                            .path("/internal/operator-assignments/check")
+                            .queryParam("oidcSubject", oidcSubject)
+                            .queryParam("tenantId", tenantId);
+                    if (subjectEmail != null && !subjectEmail.isBlank()) {
+                        uriBuilder.queryParam("subjectEmail", subjectEmail);
+                    }
+                    return uriBuilder.build();
+                })
                 .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                 .retrieve()
                 .body(Map.class);

@@ -34,7 +34,7 @@ public class OperatorAssignmentCheckController {
     private final OperatorAssignmentCheckUseCase checkUseCase;
 
     /**
-     * GET /internal/operator-assignments/check?oidcSubject=&tenantId=
+     * GET /internal/operator-assignments/check?oidcSubject=&subjectEmail=&tenantId=
      *
      * <p>Returns {@code {assigned: true|false, orgScope: [...]|null}} per the
      * operator's effective tenant scope (legacy home ∪ assignments; {@code '*'}
@@ -54,12 +54,24 @@ public class OperatorAssignmentCheckController {
      * the auth-service {@code AdminAssignmentClient} parses an absent/null/non-list
      * orgScope to {@code null} → {@code TenantClaimTokenCustomizer} injects
      * {@code ["*"]} (graceful net-zero).
+     *
+     * <p>TASK-MONO-295 (ADR-MONO-040 Phase 2): {@code subjectEmail} is an ADDITIVE,
+     * OPTIONAL query param — the operator's login email from the subject token's
+     * {@code email} claim, used as the DUAL-KEY legacy fallback. The use case
+     * resolves the operator by the account_id {@code oidcSubject} first, then by
+     * {@code subjectEmail} (the value {@code admin_operators.oidc_subject} is
+     * currently seeded with). {@code required = false} keeps the contract
+     * backward-compatible: an older auth-service that omits the param still
+     * resolves on {@code oidcSubject} alone (account_id-keyed rows), and the
+     * verdict + status codes are byte-unchanged for callers that supply it.
      */
     @GetMapping("/check")
     public ResponseEntity<AssignmentCheckResponse> check(
             @RequestParam String oidcSubject,
+            @RequestParam(required = false) String subjectEmail,
             @RequestParam String tenantId) {
-        OperatorAssignmentCheckUseCase.Result result = checkUseCase.check(oidcSubject, tenantId);
+        OperatorAssignmentCheckUseCase.Result result =
+                checkUseCase.check(oidcSubject, subjectEmail, tenantId);
         return ResponseEntity.ok(new AssignmentCheckResponse(result.assigned(), result.orgScope()));
     }
 

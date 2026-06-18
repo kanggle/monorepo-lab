@@ -94,9 +94,19 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
 
         // --- 1. Validate the subject token (auth-service's own JWKS) — fail-closed. ---
         String oidcSubject;
+        String subjectEmail;
         try {
             Jwt subjectJwt = subjectTokenDecoder.decode(exchange.getSubjectToken());
             oidcSubject = subjectJwt.getSubject();
+            // TASK-MONO-295 (ADR-MONO-040 Phase 2): the SAS access-token `sub` is now
+            // the account UUID (Phase 2 flipped it off the login email). But
+            // admin_operators.oidc_subject is seeded with the operator's EMAIL, and
+            // the account_id<->email mapping is cross-DB (auth_db vs admin_db) so it
+            // cannot be backfilled in one Flyway step. Carry the subject token's
+            // `email` claim as the DUAL-KEY legacy fallback: the assignment gate
+            // resolves on account_id (`sub`) first, then on this email — keeping every
+            // existing operator's tenant switch working through the migration.
+            subjectEmail = subjectJwt.getClaimAsString("email");
             // TASK-BE-376 (ADR-MONO-035 O1 / step 4a): the operator's domain roles are
             // no longer preserved from the subject token (TASK-BE-370) — the base
             // operator token has no domain-role set to preserve. The customizer's
@@ -122,8 +132,11 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // grant for the customizer to inject.
         java.util.List<String> orgScope;
         try {
+            // TASK-MONO-295 (ADR-MONO-040 Phase 2): DUAL-KEY — pass both the account_id
+            // (`sub`) and the legacy email so admin-service resolves the operator on
+            // account_id first, email second (the seed value).
             OperatorAssignmentPort.AssignmentResult assignment =
-                    operatorAssignmentPort.resolveAssignment(oidcSubject, selectedTenantId);
+                    operatorAssignmentPort.resolveAssignment(oidcSubject, subjectEmail, selectedTenantId);
             orgScope = assignment.orgScope();
         } catch (AssumeTenantDeniedException e) {
             log.debug("assume-tenant: assignment gate denied (fail-closed): {}", e.getMessage());

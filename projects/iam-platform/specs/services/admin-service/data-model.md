@@ -76,6 +76,17 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > provisioning / 향후 admin API)의 책임 — 본 태스크는 컬럼+제약+링크 해석만
 > 도입한다. dev/test seed 는 Flyway dev migration 또는 IT seed 에서 직접
 > 설정한다.
+>
+> **TASK-MONO-295 (ADR-MONO-040 Phase 2) — DUAL-KEY 전환**: 위 근거는 `oidc_subject`
+> 가 account_id UUID 라고 규정하나, **현행 시드/프로비저닝은 운영자 email 을
+> 채워 왔다**(federation `seed.sql`, dev V0028 일부). ADR-040 Phase 2 가 SAS `sub`
+> 를 account_id 로 전환하면서, `assignment-check` 의 운영자 조회를 **account_id
+> 우선 → 레거시 email fallback** 의 DUAL-KEY 로 전환했다(`OperatorAssignmentCheckUseCase`,
+> auth→admin `subjectEmail` additive 파라미터). account_id↔email 매핑이 cross-DB
+> (auth_db ⟂ admin_db)라 단일 Flyway backfill 이 불가하기 때문이며(V0036 의
+> "no cross-DB read at migrate time" 선례), `oidc_subject` 를 account_id 로
+> 채우는 backfill + email fallback 제거는 deferred **Phase-3** 후속이다. 그때까지
+> 두 키 모두 동작해 기존 운영자 무회귀(AC-0).
 
 ### `admin_roles`
 

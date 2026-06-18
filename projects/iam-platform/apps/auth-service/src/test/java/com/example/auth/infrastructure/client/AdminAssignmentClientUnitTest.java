@@ -147,6 +147,29 @@ class AdminAssignmentClientUnitTest {
     }
 
     @Test
+    @DisplayName("TASK-MONO-295: subjectEmail 제공 시 dual-key query 파라미터로 전달")
+    void forwardsSubjectEmail_whenProvided() {
+        stubAssigned(true);
+        String email = "acme-operator@example.com";
+        client.resolveAssignment(SUBJECT, email, TENANT);
+        wireMockServer.verify(getRequestedFor(urlPathEqualTo(CHECK_PATH))
+                .withQueryParam("oidcSubject", equalTo(SUBJECT))
+                .withQueryParam("subjectEmail", equalTo(email))
+                .withQueryParam("tenantId", equalTo(TENANT)));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-295: subjectEmail null 이면 query 에서 생략(byte-identical 요청)")
+    void omitsSubjectEmail_whenNull() {
+        stubAssigned(true);
+        client.resolveAssignment(SUBJECT, null, TENANT);
+        wireMockServer.verify(getRequestedFor(urlPathEqualTo(CHECK_PATH))
+                .withQueryParam("oidcSubject", equalTo(SUBJECT))
+                .withQueryParam("tenantId", equalTo(TENANT))
+                .withoutQueryParam("subjectEmail"));
+    }
+
+    @Test
     @DisplayName("assigned=false → AssumeTenantDeniedException (미할당 deny)")
     void assignedFalse_denies() {
         stubAssigned(false);

@@ -73,7 +73,7 @@ class OperatorAssignmentInternalChainSliceTest {
     @Test
     @DisplayName("유효 GAP JWT(Bearer) → 200 {assigned:true}")
     void validBearerJwt_returns200() throws Exception {
-        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+        given(checkUseCase.check(eq(SUB), org.mockito.ArgumentMatchers.any(), eq("acme-corp")))
                 .willReturn(new com.example.admin.application.OperatorAssignmentCheckUseCase.Result(true, null));
         Jwt jwt = Jwt.withTokenValue("good-jwt")
                 .header("alg", "RS256")
