@@ -36,8 +36,16 @@ public class SellerJpaEntity implements Persistable<SellerJpaEntity.SellerId> {
     private String displayName;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 24)
     private SellerStatus status;
+
+    /** Backing IAM seller-operator account id (ADR-MONO-042 D2). Nullable until provisioned. */
+    @Column(name = "account_id", length = 64)
+    private String accountId;
+
+    /** Born-unified central identity id (ADR-MONO-042 D5). Nullable until provisioned. */
+    @Column(name = "identity_id", length = 64)
+    private String identityId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -71,14 +79,30 @@ public class SellerJpaEntity implements Persistable<SellerJpaEntity.SellerId> {
         entity.sellerId = seller.getSellerId();
         entity.displayName = seller.getDisplayName();
         entity.status = seller.getStatus();
+        entity.accountId = seller.getAccountId();
+        entity.identityId = seller.getIdentityId();
         entity.createdAt = seller.getCreatedAt();
         entity.updatedAt = seller.getUpdatedAt();
         entity.isNew = true;
         return entity;
     }
 
+    /**
+     * Applies a mutated {@link Seller} aggregate's lifecycle fields onto a loaded entity
+     * (ADR-MONO-042 — provisioning / suspend / close update an existing managed row).
+     * The composite key + creation timestamp are immutable.
+     */
+    public void applyLifecycle(Seller seller) {
+        this.status = seller.getStatus();
+        this.accountId = seller.getAccountId();
+        this.identityId = seller.getIdentityId();
+        this.displayName = seller.getDisplayName();
+        this.updatedAt = seller.getUpdatedAt();
+    }
+
     public Seller toDomain() {
-        return Seller.reconstitute(sellerId, displayName, status, createdAt, updatedAt);
+        return Seller.reconstitute(sellerId, displayName, status, accountId, identityId,
+                createdAt, updatedAt);
     }
 
     @Override

@@ -16,6 +16,14 @@ public interface SellerRepository {
     /** Persists a new seller under the current tenant. */
     Seller save(Seller seller);
 
+    /**
+     * Applies a mutated seller's lifecycle fields (status / account_id / identity_id /
+     * display_name) onto the existing row within the current tenant (ADR-MONO-042 —
+     * provisioning success + suspend/close transitions update an existing seller).
+     * Returns the persisted aggregate.
+     */
+    Seller update(Seller seller);
+
     /** Looks up a seller by id within the current tenant. */
     Optional<Seller> findById(String sellerId);
 

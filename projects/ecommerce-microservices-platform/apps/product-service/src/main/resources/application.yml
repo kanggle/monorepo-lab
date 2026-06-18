@@ -64,6 +64,25 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
+# ADR-MONO-042 (TASK-BE-402) — seller-operator account provisioning via account-service
+# internal EPs, authenticated with a GAP client_credentials Bearer JWT (mirrors
+# admin-service IamClientCredentialsTokenProvider, ADR-005 단계 3b). All seller
+# provisioning is FAIL-SOFT (D3): account-service unavailability never blocks onboarding.
+iam:
+  internal-client:
+    token-uri: ${IAM_TOKEN_URI:http://localhost:8081/oauth2/token}
+    client-id: ${IAM_CLIENT_ID:product-service-client}
+    client-secret: ${IAM_CLIENT_SECRET:secret}
+  account-service:
+    base-url: ${ACCOUNT_SERVICE_BASE_URL:http://localhost:8081}
+  downstream:
+    connect-timeout-ms: ${IAM_DOWNSTREAM_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${IAM_DOWNSTREAM_READ_TIMEOUT_MS:10000}
+  seller:
+    # The seller-scoped operator role minted on the seller-operator account (D2/D6).
+    # Yields the existing ADR-025 axis-2 X-Seller-Scope claim — authz net-zero.
+    role: ${IAM_SELLER_ROLE:SELLER}
+
 storage:
   s3:
     endpoint: ${S3_ENDPOINT:http://localhost:9000}

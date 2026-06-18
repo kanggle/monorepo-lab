@@ -73,6 +73,15 @@ class SellerAdminReadCrossTenantIsolationIntegrationTest {
     @SuppressWarnings("unused")
     private KafkaTemplate<String, Object> kafkaTemplate;
 
+    /**
+     * The outbound IAM provisioner is mocked (no real account-service in the IT). This
+     * read-surface test only cares that sellers are persisted + tenant-scoped; the
+     * onboarding provisioning attempt (ADR-042) is irrelevant here and fail-soft anyway.
+     */
+    @MockitoBean
+    @SuppressWarnings("unused")
+    private com.example.product.application.port.SellerAccountProvisioner sellerAccountProvisioner;
+
     @Autowired
     private MockMvc mockMvc;
 
