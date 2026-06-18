@@ -1,6 +1,6 @@
 # TASK-MONO-293 — federation-hardening-e2e host port registry
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — root-scoped shared test infra, ADR-MONO-018 D1)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (doc-only registry, no behavior change)

@@ -1,6 +1,6 @@
 # TASK-BE-395 — Label ecommerce k8s manifests as reference-only
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE (infra/docs — no production code)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (single doc, no behaviour change)
