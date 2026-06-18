@@ -3,32 +3,124 @@ package com.example.product.domain.model;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@DisplayName("Seller 애그리거트 단위 테스트 (ADR-MONO-030 §3.1)")
+@DisplayName("Seller 애그리거트 단위 테스트 (ADR-MONO-030 §3.1 + ADR-MONO-042 lifecycle)")
 class SellerTest {
 
     @Test
-    @DisplayName("register 시 ACTIVE 상태로 생성된다")
-    void register_createsActiveSeller() {
+    @DisplayName("register 시 PENDING_PROVISIONING 상태로 온보딩된다 (ADR-042 D3)")
+    void register_createsPendingSeller() {
         Seller seller = Seller.register("seller-a1", "셀러 A1");
 
         assertThat(seller.getSellerId()).isEqualTo("seller-a1");
         assertThat(seller.getDisplayName()).isEqualTo("셀러 A1");
-        assertThat(seller.getStatus()).isEqualTo(SellerStatus.ACTIVE);
-        assertThat(seller.isActive()).isTrue();
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.PENDING_PROVISIONING);
+        assertThat(seller.isPendingProvisioning()).isTrue();
+        assertThat(seller.isActive()).isFalse();
+        assertThat(seller.getAccountId()).isNull();
+        assertThat(seller.getIdentityId()).isNull();
         assertThat(seller.getCreatedAt()).isNotNull();
     }
 
     @Test
-    @DisplayName("defaultSeller 는 seller_id='default' 의 ACTIVE 셀러 (D8 anchor)")
-    void defaultSeller_isDefaultId() {
+    @DisplayName("defaultSeller 는 seller_id='default' 의 ACTIVE 셀러 (D8 anchor, never provisioned)")
+    void defaultSeller_isActiveDefaultId() {
         Seller seller = Seller.defaultSeller();
 
         assertThat(seller.getSellerId()).isEqualTo(Seller.DEFAULT_SELLER_ID);
         assertThat(seller.getSellerId()).isEqualTo("default");
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.ACTIVE);
         assertThat(seller.isActive()).isTrue();
+        assertThat(seller.getAccountId()).isNull();
+    }
+
+    @Test
+    @DisplayName("markProvisioned 시 account/identity 저장 + PENDING → ACTIVE 전이 (ADR-042 D3 success)")
+    void markProvisioned_transitionsToActive() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1");
+
+        seller.markProvisioned("acct-1", "id-1");
+
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.ACTIVE);
+        assertThat(seller.getAccountId()).isEqualTo("acct-1");
+        assertThat(seller.getIdentityId()).isEqualTo("id-1");
+        assertThat(seller.hasBackingAccount()).isTrue();
+    }
+
+    @Test
+    @DisplayName("markProvisioned 는 멱등 + no-overwrite — 저장된 account 는 덮어쓰지 않는다 (AC-4 / F2)")
+    void markProvisioned_isIdempotentAndNoOverwrite() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1");
+        seller.markProvisioned("acct-1", "id-1");
+
+        // re-provision with different ids must NOT overwrite the stored non-null values
+        seller.markProvisioned("acct-2", "id-2");
+
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.ACTIVE);
+        assertThat(seller.getAccountId()).isEqualTo("acct-1");
+        assertThat(seller.getIdentityId()).isEqualTo("id-1");
+    }
+
+    @Test
+    @DisplayName("markProvisioned 가 null account 면 PENDING 유지 (identity-만-성공 fail-soft)")
+    void markProvisioned_nullAccount_staysPending() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1");
+
+        seller.markProvisioned(null, "id-1");
+
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.PENDING_PROVISIONING);
+        assertThat(seller.getIdentityId()).isEqualTo("id-1");
+        assertThat(seller.getAccountId()).isNull();
+    }
+
+    @Test
+    @DisplayName("suspend 시 ACTIVE → SUSPENDED 전이하고 true 반환 (계정 lock 필요)")
+    void suspend_transitionsAndSignalsLock() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1");
+        seller.markProvisioned("acct-1", "id-1");
+
+        boolean transitioned = seller.suspend();
+
+        assertThat(transitioned).isTrue();
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.SUSPENDED);
+    }
+
+    @Test
+    @DisplayName("suspend 는 멱등 — 이미 SUSPENDED 면 false 반환 (재-lock 호출 불필요)")
+    void suspend_isIdempotent() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1");
+        seller.markProvisioned("acct-1", "id-1");
+        seller.suspend();
+
+        boolean again = seller.suspend();
+
+        assertThat(again).isFalse();
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.SUSPENDED);
+    }
+
+    @Test
+    @DisplayName("close 시 → CLOSED(terminal) 전이하고 true 반환; 재-close 는 false (멱등)")
+    void close_transitionsThenIdempotent() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1");
+        seller.markProvisioned("acct-1", "id-1");
+
+        assertThat(seller.close()).isTrue();
+        assertThat(seller.getStatus()).isEqualTo(SellerStatus.CLOSED);
+        assertThat(seller.close()).isFalse();
+    }
+
+    @Test
+    @DisplayName("CLOSED 셀러는 다시 provision 할 수 없다")
+    void markProvisioned_onClosed_throws() {
+        Seller seller = Seller.register("seller-a1", "셀러 A1");
+        seller.close();
+
+        assertThatThrownBy(() -> seller.markProvisioned("acct-1", "id-1"))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -46,12 +138,26 @@ class SellerTest {
     }
 
     @Test
-    @DisplayName("reconstitute 로 영속 상태에서 복원된다")
+    @DisplayName("reconstitute 로 영속 상태(account/identity 포함)에서 복원된다")
     void reconstitute_restoresState() {
-        java.time.Instant now = java.time.Instant.now();
-        Seller seller = Seller.reconstitute("s-1", "셀러", SellerStatus.ACTIVE, now, now);
+        Instant now = Instant.now();
+        Seller seller = Seller.reconstitute("s-1", "셀러", SellerStatus.ACTIVE,
+                "acct-1", "id-1", now, now);
 
         assertThat(seller.getSellerId()).isEqualTo("s-1");
         assertThat(seller.getStatus()).isEqualTo(SellerStatus.ACTIVE);
+        assertThat(seller.getAccountId()).isEqualTo("acct-1");
+        assertThat(seller.getIdentityId()).isEqualTo("id-1");
+    }
+
+    @Test
+    @DisplayName("reconstitute 는 legacy 셀러(null account/identity)도 복원한다 (net-zero backfill)")
+    void reconstitute_legacyNullLinkage() {
+        Instant now = Instant.now();
+        Seller seller = Seller.reconstitute("legacy-1", "Legacy", SellerStatus.ACTIVE,
+                null, null, now, now);
+
+        assertThat(seller.isActive()).isTrue();
+        assertThat(seller.hasBackingAccount()).isFalse();
     }
 }

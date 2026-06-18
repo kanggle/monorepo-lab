@@ -34,6 +34,17 @@ class SellerRepositoryImpl implements SellerRepository, SellerQueryPort {
     }
 
     @Override
+    @Transactional
+    public Seller update(Seller seller) {
+        String tenantId = TenantContext.currentTenant();
+        SellerJpaEntity entity = jpaRepository.findByTenantIdAndSellerId(tenantId, seller.getSellerId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Cannot update a non-existent seller: " + seller.getSellerId()));
+        entity.applyLifecycle(seller);
+        return jpaRepository.save(entity).toDomain();
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<Seller> findById(String sellerId) {
         return jpaRepository.findByTenantIdAndSellerId(TenantContext.currentTenant(), sellerId)
