@@ -34,6 +34,13 @@ Cross-product Playwright suite that exercises all 5 backend domains (GAP + wms +
 
 `.github/workflows/federation-hardening-e2e.yml` — nightly cron `0 19 * * *` UTC (KST 04:00, 1h offset from nightly-e2e.yml) + `workflow_dispatch`. NO push trigger (ADR-018 D1 explicit: nightly + on-demand sufficient).
 
+## Host port registry
+
+Host-published ports across the base stack + all demo overlays are catalogued in
+[`docker/HOST-PORTS.md`](docker/HOST-PORTS.md). **Consult and update it before assigning a host
+port in any overlay** — it is the single allocation table that prevents the silent collisions
+overlays have hit before (`ledger` ↔ `erp-read-model` on `18097`).
+
 ## Local dev loop
 
 ### Prerequisites
