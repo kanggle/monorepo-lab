@@ -1,8 +1,10 @@
 package com.example.payment.adapter.in.event;
 
 import com.example.payment.application.service.PaymentRefundService;
+import com.example.payment.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,9 +32,15 @@ class OrderCancelledEventConsumerTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @AfterEach
+    void clearTenantContext() {
+        TenantContext.clear();
+    }
+
     private OrderCancelledEvent event(String orderId) {
         return new OrderCancelledEvent(
                 UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",
+                "ecommerce",
                 new OrderCancelledEvent.OrderCancelledPayload(orderId, "user-1", "2026-03-23T00:00:00")
         );
     }
@@ -61,6 +69,7 @@ class OrderCancelledEventConsumerTest {
     void handle_nullPayload_skips() {
         OrderCancelledEvent nullPayloadEvent = new OrderCancelledEvent(
                 UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",
+                "ecommerce",
                 null
         );
 

@@ -43,6 +43,7 @@ class PaymentEventOutboxWriterTest {
                 "PaymentCompleted",
                 Instant.parse("2026-03-25T00:00:00Z").toString(),
                 "payment-service",
+                "ecommerce",
                 new PaymentCompletedEvent.Payload("pay-1", "order-1", "user-1", 30000L,
                         Instant.parse("2026-03-25T00:00:00Z").toString())
         );
@@ -61,6 +62,7 @@ class PaymentEventOutboxWriterTest {
                 "PaymentRefunded",
                 Instant.parse("2026-03-25T01:00:00Z").toString(),
                 "payment-service",
+                "ecommerce",
                 new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 30000L,
                         Instant.parse("2026-03-25T01:00:00Z").toString())
         );
@@ -72,12 +74,13 @@ class PaymentEventOutboxWriterTest {
     }
 
     @Test
-    @DisplayName("저장된 envelope 은 event_id / event_type / occurred_at / source / payload 필드를 유지한다 (계약 변경 없음)")
+    @DisplayName("저장된 envelope 은 event_id / event_type / occurred_at / source / tenant_id / payload 필드를 유지한다")
     void serializedEnvelope_preservesContractFields() throws Exception {
         PaymentCompletedEvent event = new PaymentCompletedEvent(
                 "evt-1", "PaymentCompleted",
                 Instant.parse("2026-03-25T00:00:00Z").toString(),
                 "payment-service",
+                "ecommerce",
                 new PaymentCompletedEvent.Payload("pay-1", "order-1", "user-1", 30000L,
                         Instant.parse("2026-03-25T00:00:00Z").toString())
         );
@@ -91,6 +94,7 @@ class PaymentEventOutboxWriterTest {
         assertThat(envelope).contains("\"event_id\":\"evt-1\"");
         assertThat(envelope).contains("\"event_type\":\"PaymentCompleted\"");
         assertThat(envelope).contains("\"source\":\"payment-service\"");
+        assertThat(envelope).contains("\"tenant_id\":\"ecommerce\"");
         assertThat(envelope).contains("\"payload\":");
     }
 }

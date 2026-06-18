@@ -1,6 +1,7 @@
 package com.example.payment.adapter.in.event;
 
 import com.example.payment.application.service.PaymentProcessingService;
+import com.example.payment.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,15 @@ public class OrderPlacedEventConsumer {
             return;
         }
 
-        paymentProcessingService.processPayment(orderId, userId, amount);
+        // TASK-BE-400 (ADR-MONO-030 Step 4 facet c, M5): thread the event's tenant_id
+        // into TenantContext so the Payment row created by processPayment inherits the
+        // correct tenant. Falls back to default tenant if the field is absent (net-zero D8,
+        // or if the event pre-dates TASK-BE-357).
+        TenantContext.set(event.tenantId());
+        try {
+            paymentProcessingService.processPayment(orderId, userId, amount);
+        } finally {
+            TenantContext.clear();
+        }
     }
 }

@@ -51,7 +51,7 @@ class PaymentRefundServiceTest {
 
     private Payment completedPaymentWithPgKey() {
         return Payment.reconstitute(
-                "pay-1", "order-1", "user-1", 30000L,
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L,
                 PaymentStatus.COMPLETED,
                 LocalDateTime.now(), LocalDateTime.now(), null,
                 "pk_test_123", "CARD", null
@@ -60,7 +60,7 @@ class PaymentRefundServiceTest {
 
     private Payment completedPaymentWithoutPgKey() {
         return Payment.reconstitute(
-                "pay-1", "order-1", "user-1", 30000L,
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L,
                 PaymentStatus.COMPLETED,
                 LocalDateTime.now(), LocalDateTime.now(), null,
                 null, null, null
