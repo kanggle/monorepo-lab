@@ -121,7 +121,8 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
         List<PackingUnit> packingUnits = packingPersistence.findByOrderId(savedOrder.getId());
         List<ShippingConfirmedEvent.Line> eventLines =
                 buildShippingEventLines(savedOrder, packingUnits, agg.pickingConfirmation());
-        emitShippingOutbox(savedShipment, savedOrder.getOrderNo(), agg.saga(), agg.pickingRequest(),
+        emitShippingOutbox(savedShipment, savedOrder.getOrderNo(), savedOrder.getTenantId(),
+                agg.saga(), agg.pickingRequest(),
                 savedOrder.getWarehouseId(), eventLines, now, command.actorId());
 
         log.info("shipping_confirmed orderId={} shipmentId={} sagaId={}",
@@ -249,6 +250,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
      */
     private void emitShippingOutbox(Shipment savedShipment,
                                     String orderNo,
+                                    String tenantId,
                                     OutboundSaga saga,
                                     PickingRequest pickingRequest,
                                     UUID warehouseId,
@@ -265,6 +267,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                 warehouseId,
                 savedShipment.getShippedAt(),
                 savedShipment.getCarrierCode(),
+                tenantId /* opaque correlation echo, ADR-MONO-022 facet d */,
                 eventLines,
                 now,
                 actorId));

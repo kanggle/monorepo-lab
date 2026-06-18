@@ -34,6 +34,7 @@ final class OrderMapper {
                 e.getRequestedShipDate(),
                 e.getNotes(),
                 toShipTo(e),
+                e.getTenantId(),
                 OrderStatus.valueOf(e.getStatus()),
                 e.getVersion(),
                 e.getCreatedAt(),

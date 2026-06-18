@@ -114,6 +114,14 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    public Optional<String> findTenantIdByOrderId(String orderId) {
+        // wms return-leg fallback (ADR-MONO-022 facet d): tenant-agnostic — addressing
+        // by the unique order id cannot leak across tenants; returns the row's stored
+        // tenant so the consumer can bind it before mutating + emitting order.cancelled.
+        return jpaRepository.findById(orderId).map(OrderJpaEntity::getTenantId);
+    }
+
+    @Override
     public PageResult<Order> findByUserId(String userId, PageQuery pageQuery) {
         PageRequest pageable = toPageRequest(pageQuery);
         Page<OrderJpaEntity> page = jpaRepository.findByTenantIdAndUserId(

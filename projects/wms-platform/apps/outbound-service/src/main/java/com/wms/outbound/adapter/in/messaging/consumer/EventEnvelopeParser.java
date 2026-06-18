@@ -34,12 +34,16 @@ public class EventEnvelopeParser {
             Instant occurredAt = Instant.parse(requireText(root, "occurredAt"));
             UUID aggregateId = UUID.fromString(requireText(root, "aggregateId"));
             String aggregateType = requireText(root, "aggregateType");
+            // Additive, optional envelope-level tenant correlation (ADR-MONO-022
+            // facet d). Absent on wms-internal events and on standalone/pre-M5
+            // producers → null. wms treats it as opaque (never gates on it).
+            String tenantId = optionalText(root, "tenantId");
             JsonNode payload = root.get("payload");
             if (payload == null || payload.isNull()) {
                 throw new IllegalArgumentException("event missing payload: " + eventType);
             }
             return new EventEnvelope(
-                    eventId, eventType, occurredAt, aggregateId, aggregateType, payload);
+                    eventId, eventType, occurredAt, aggregateId, aggregateType, tenantId, payload);
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("malformed event JSON", e);
         }
@@ -49,6 +53,14 @@ public class EventEnvelopeParser {
         JsonNode node = root.get(field);
         if (node == null || node.isNull() || !node.isTextual()) {
             throw new IllegalArgumentException("event missing required field: " + field);
+        }
+        return node.asText();
+    }
+
+    private static String optionalText(JsonNode root, String field) {
+        JsonNode node = root.get(field);
+        if (node == null || node.isNull() || !node.isTextual() || node.asText().isBlank()) {
+            return null;
         }
         return node.asText();
     }

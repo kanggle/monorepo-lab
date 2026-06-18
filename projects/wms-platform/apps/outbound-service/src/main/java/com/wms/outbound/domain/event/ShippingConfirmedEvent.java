@@ -17,6 +17,12 @@ import java.util.UUID;
  * for {@code FULFILLMENT_ECOMMERCE} orders this equals the ecommerce order id,
  * the correlation key the ecommerce return-leg consumer matches on. Additive ⇒
  * existing consumers (inventory-service, admin-service) ignore it.
+ *
+ * <p>{@code tenantId} is additive (ADR-MONO-022 facet d, TASK-MONO-296): the
+ * opaque ecommerce-tenant correlation captured at intake and echoed back on the
+ * outer envelope so the ecommerce return consumer re-binds the originating
+ * tenant. {@code null} for B2B / standalone orders (then omitted from the
+ * envelope). wms never interprets it.
  */
 public record ShippingConfirmedEvent(
         UUID sagaId,
@@ -28,6 +34,7 @@ public record ShippingConfirmedEvent(
         UUID warehouseId,
         Instant shippedAt,
         String carrierCode,
+        String tenantId,
         List<Line> lines,
         Instant occurredAt,
         String actorId

@@ -44,28 +44,53 @@ order id this consumer sent on the forward leg). The consumer locates the local 
 `orderId == orderNo`. No wms↔ecommerce id map is stored. (If `orderNo` is absent — a pre-D5 wms —
 the consumer logs + DLTs; it does not guess.)
 
+## Tenant binding (ADR-022 facet d, TASK-MONO-296)
+
+Both return-leg events now carry an **additive envelope-level `tenantId`** (camelCase, wms
+convention) — the originating ecommerce tenant that wms captured on the forward leg and echoed
+back unchanged (wms treats it as opaque correlation; see the wms `ecommerce-fulfillment-subscriptions.md`).
+Each ecommerce return consumer:
+
+1. binds `TenantContext` from the envelope `tenantId` for the duration of its tenant-scoped work;
+2. when the envelope `tenantId` is **absent** (older wms / standalone / B2B), falls back to the
+   tenant stored on the **local row** resolved by `orderNo` (shipping-service: the `Shipping`
+   row's `tenantId`; order-service: the `Order` row's `tenant_id`) — net-zero (D8);
+3. **clears `TenantContext` in a `finally`** (Kafka listener threads are pooled — an un-cleared
+   binding would leak into the next message, AC-4 failure scenario).
+
+This makes the system-initiated `markShipped` (emitting `ShippingStatusChanged`) and the
+auto-cancel (emitting `order.cancelled`) resolve the **correct** tenant rather than the default.
+
 ## Fields read
 
-**`outbound.shipping.confirmed` payload** (subset shipping-service reads):
+Envelope `tenantId` (top-level, additive — facet d) is read off the envelope, not the payload.
+
+**`outbound.shipping.confirmed` envelope+payload** (subset shipping-service reads):
 
 ```json
 {
-  "orderId": "<wms internal id, ignored>",
-  "orderNo": "<= ecommerce orderId — the correlation key>",
-  "shipmentNo": "SHP-20260608-0001",
-  "carrierCode": "CJ-LOGISTICS",
-  "shippedAt": "2026-06-08T15:00:00Z"
+  "tenantId": "<= ecommerce tenant — bound into TenantContext; null → local-row fallback>",
+  "payload": {
+    "orderId": "<wms internal id, ignored>",
+    "orderNo": "<= ecommerce orderId — the correlation key>",
+    "shipmentNo": "SHP-20260608-0001",
+    "carrierCode": "CJ-LOGISTICS",
+    "shippedAt": "2026-06-08T15:00:00Z"
+  }
 }
 ```
 
-**`outbound.order.cancelled` payload** (subset):
+**`outbound.order.cancelled` envelope+payload** (subset):
 
 ```json
 {
-  "orderNo": "<= ecommerce orderId>",
-  "previousStatus": "PICKING",
-  "reason": "INSUFFICIENT_STOCK | ...",
-  "cancelledAt": "2026-06-08T11:30:00Z"
+  "tenantId": "<= ecommerce tenant — bound into TenantContext; null → local-row fallback>",
+  "payload": {
+    "orderNo": "<= ecommerce orderId>",
+    "previousStatus": "PICKING",
+    "reason": "INSUFFICIENT_STOCK | ...",
+    "cancelledAt": "2026-06-08T11:30:00Z"
+  }
 }
 ```
 

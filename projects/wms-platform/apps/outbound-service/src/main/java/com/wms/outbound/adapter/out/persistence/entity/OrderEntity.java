@@ -63,6 +63,14 @@ public class OrderEntity {
     @Column(name = "ship_to_phone", length = 20)
     private String shipToPhone;
 
+    /**
+     * Opaque ecommerce-tenant correlation (ADR-MONO-022 facet d, TASK-MONO-296).
+     * Nullable — NOT an isolation key, never filtered/gated on. NULL for B2B and
+     * standalone/pre-M5 orders. Echoed onto the return-leg events.
+     */
+    @Column(name = "tenant_id", length = 64)
+    private String tenantId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -100,7 +108,10 @@ public class OrderEntity {
                 createdAt, createdBy, updatedAt, updatedBy);
     }
 
-    /** Full constructor with additive drop-ship recipient columns (ADR-MONO-022). */
+    /**
+     * Constructor with additive drop-ship recipient columns (ADR-MONO-022 D2-a)
+     * but no tenant correlation. Delegates with {@code tenantId == null}.
+     */
     public OrderEntity(UUID id,
                        String orderNo,
                        String source,
@@ -112,6 +123,32 @@ public class OrderEntity {
                        String shipToName,
                        String shipToAddress,
                        String shipToPhone,
+                       Instant createdAt,
+                       String createdBy,
+                       Instant updatedAt,
+                       String updatedBy) {
+        this(id, orderNo, source, customerPartnerId, warehouseId, status,
+                requestedShipDate, notes, shipToName, shipToAddress, shipToPhone,
+                null, createdAt, createdBy, updatedAt, updatedBy);
+    }
+
+    /**
+     * Fullest constructor with the additive drop-ship recipient columns
+     * (ADR-MONO-022 D2-a) and the additive {@code tenantId} opaque correlation
+     * column (ADR-MONO-022 facet d, TASK-MONO-296). Both may be {@code null}.
+     */
+    public OrderEntity(UUID id,
+                       String orderNo,
+                       String source,
+                       UUID customerPartnerId,
+                       UUID warehouseId,
+                       String status,
+                       LocalDate requestedShipDate,
+                       String notes,
+                       String shipToName,
+                       String shipToAddress,
+                       String shipToPhone,
+                       String tenantId,
                        Instant createdAt,
                        String createdBy,
                        Instant updatedAt,
@@ -129,6 +166,7 @@ public class OrderEntity {
         this.shipToName = shipToName;
         this.shipToAddress = shipToAddress;
         this.shipToPhone = shipToPhone;
+        this.tenantId = tenantId;
         this.createdAt = createdAt;
         this.createdBy = createdBy;
         this.updatedAt = updatedAt;
@@ -146,6 +184,7 @@ public class OrderEntity {
     public String getShipToName() { return shipToName; }
     public String getShipToAddress() { return shipToAddress; }
     public String getShipToPhone() { return shipToPhone; }
+    public String getTenantId() { return tenantId; }
     public Instant getCreatedAt() { return createdAt; }
     public String getCreatedBy() { return createdBy; }
     public Instant getUpdatedAt() { return updatedAt; }

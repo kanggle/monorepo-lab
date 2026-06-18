@@ -1,6 +1,9 @@
 package com.example.shipping.infrastructure.event;
 
+import com.example.shipping.domain.repository.ShippingRepository;
+import com.example.shipping.domain.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -8,6 +11,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -28,15 +32,23 @@ class WmsOutboundCancelledConsumerTest {
     private WmsOutboundCancelledConsumer consumer;
 
     @Mock
+    private ShippingRepository shippingRepository;
+
+    @Mock
     private EventDeduplicationChecker eventDeduplicationChecker;
 
     @Mock
     private ObjectMapper objectMapper;
 
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
+
     private WmsOutboundCancelledEvent event(String eventId, String reason) {
         return new WmsOutboundCancelledEvent(
                 eventId, "outbound.order.cancelled", "2026-06-08T11:30:00Z",
-                "order", "wms-internal-1",
+                "order", "wms-internal-1", "store-acme",
                 new WmsOutboundCancelledEvent.Payload("order-1", "PICKING", reason, "2026-06-08T11:30:00Z"));
     }
 
@@ -65,11 +77,22 @@ class WmsOutboundCancelledConsumerTest {
     void handle_nullPayload_gracefulSkip() {
         WmsOutboundCancelledEvent event = new WmsOutboundCancelledEvent(
                 "evt-2", "outbound.order.cancelled", "2026-06-08T11:30:00Z",
-                "order", "wms-internal-1", null);
+                "order", "wms-internal-1", "store-acme", null);
         given(eventDeduplicationChecker.isDuplicate("evt-2", "WmsOutboundCancelled")).willReturn(false);
 
         assertThatCode(() -> consumer.handle(event)).doesNotThrowAnyException();
 
         verify(eventDeduplicationChecker, never()).isDuplicate("other", "x");
+    }
+
+    @Test
+    @DisplayName("alert 후 TenantContext 는 finally 에서 clear 된다 (스레드 누수 방지)")
+    void handle_clearsTenantAfterAlert() {
+        WmsOutboundCancelledEvent event = event("evt-3", "INSUFFICIENT_STOCK");
+        given(eventDeduplicationChecker.isDuplicate("evt-3", "WmsOutboundCancelled")).willReturn(false);
+
+        consumer.handle(event);
+
+        assertThat(TenantContext.currentTenant()).isEqualTo(TenantContext.DEFAULT_TENANT_ID);
     }
 }

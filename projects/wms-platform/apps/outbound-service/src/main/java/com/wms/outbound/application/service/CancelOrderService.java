@@ -121,6 +121,7 @@ public class CancelOrderService implements CancelOrderUseCase {
                 saved.getOrderNo(),
                 previousStatus.name(),
                 command.reason(),
+                saved.getTenantId() /* opaque correlation echo, ADR-MONO-022 facet d */,
                 now,
                 now,
                 command.actorId()));
