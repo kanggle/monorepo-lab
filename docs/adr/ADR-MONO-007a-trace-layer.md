@@ -169,7 +169,7 @@ No verification by this ADR's own merge — the policy lives or dies on whether 
 ## 6. Outstanding follow-ups
 
 1. **TASK-MONO-143 — ADR-MONO-018 D4 observability federation impl.** Filed in `tasks/ready/` after this ADR merges. Scope: VictoriaTraces + Vector OTLP source/sink + console-web `@opentelemetry` + federation e2e trace-tree assertion + footprint re-measure + `/observe trace` full impl. Owner: monorepo. Model: Sonnet 4.6 (routine compose / SDK wiring / TS assertion per ADR-018 § D6 row 8) with Opus dispatcher verify.
-2. **ADR-MONO-018 D5 (multi-tenant isolation regression IT cohort)** — independent of this ADR (no trace backend dependency); remains the other open Phase 8 execution axis (Opus per ADR-013 § D6 row 8).
+2. **ADR-MONO-018 D5 (multi-tenant isolation regression IT cohort)** — ✅ **CLOSED** (2026-06-18 audit). Satisfied end-to-end by the producer-side per-domain cross-tenant-deny ITs (wms `OidcAuthIntegrationTest`, scm `MultiTenantIsolationIntegrationTest`, finance `CrossTenantHttpIntegrationTest`, GAP/iam `AdminAuditTenantScopeIntegrationTest`, erp `CrossTenantHttpIntegrationTest` via TASK-ERP-BE-004) + the console-bff D6 pass-through deny IT (`CrossTenantDenyIntegrationTest`, TASK-PC-BE-006). A fresh cohort task (MONO-296) was opened then **dropped** as duplicate — every D5 slice already has a green `@Tag("integration")` IT on `main`. (Was previously listed here as "the other open Phase 8 execution axis"; that wording was stale.)
 3. **VictoriaTraces production-maturity revisit** — if a project reaches Operations maturity and needs a persistent (non-ephemeral) trace store, a follow-up ADR addresses persistence + retention (out of scope here; ephemeral-only per D4).
 
 ---
