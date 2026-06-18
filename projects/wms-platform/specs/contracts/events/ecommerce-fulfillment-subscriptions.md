@@ -45,6 +45,24 @@ this consumer reuses the existing `EventEnvelopeParser` + `outbound_event_dedupe
 }
 ```
 
+## Tenant correlation passthrough (ADR-022 facet d, TASK-MONO-296)
+
+The inbound `ecommerce.fulfillment.requested.v1` envelope carries an
+**envelope-level `tenantId`** (the ecommerce tenant, M5). `FulfillmentRequestedConsumer`
+**captures** it from the envelope and threads it through `ReceiveOrderCommand` →
+the wms outbound `Order`, where it is persisted as an **additive, nullable
+correlation column** (`outbound_order.tenant_id`) — exactly like `orderNo` (D5)
+and `shipTo` (D2-a): wms stores it without interpreting it. On the return leg the
+stored `tenantId` is **echoed** onto the `wms.outbound.shipping.confirmed.v1` and
+`wms.outbound.order.cancelled.v1` envelopes so the ecommerce consumers re-bind the
+originating tenant.
+
+> **wms stays single-tenant (ADR-MONO-030 §1.1, AC-6).** `tenant_id` is an opaque
+> correlation field, NOT an isolation key: **no** `NOT NULL` constraint, **no** row
+> filtering by tenant, **no** tenant-gate change. `TenantClaimValidator` and the
+> repositories are untouched in their isolation behavior. `null` when the inbound
+> event omits a tenant (standalone ecommerce / pre-M5 producer — D8).
+
 ## Code → uuid resolution (mirrors the ERP webhook)
 
 | Incoming code | Resolver (`MasterReadModelPort`) | Failure |
@@ -74,10 +92,12 @@ echoed into `outbound.order.received` (ADR-022 D2-a). ERP-webhook / manual order
 ## Return leg (this service → ecommerce)
 
 On ship, `outbound-service` emits `wms.outbound.shipping.confirmed.v1` (existing) with the
-**additive `orderNo`** (D5) so ecommerce correlates. On reserve-failure — inventory-service emits
+**additive `orderNo`** (D5) and the **additive envelope `tenantId`** (facet d, echoed from the
+stored correlation column) so ecommerce correlates and re-binds the originating tenant. On reserve-failure — inventory-service emits
 `inventory.reserve.failed` (TASK-MONO-196), `InventoryReserveFailedConsumer` advances the saga to
 `RESERVE_FAILED`, the order goes `BACKORDERED`, and the coordinator emits
-`wms.outbound.order.cancelled.v1` carrying `orderNo` + `reason=INSUFFICIENT_STOCK`. Both are
+`wms.outbound.order.cancelled.v1` carrying `orderNo` + `reason=INSUFFICIENT_STOCK`
++ the echoed envelope `tenantId` (facet d). Both are
 authoritative in `outbound-events.md`; consumed by ecommerce per `wms-shipment-subscriptions.md`.
 On the ecommerce side the cancel signal now (ADR-022 §D4 v2(a), TASK-MONO-197) **auto-cancels the
 ecommerce order + refunds** (order-service consumer), in addition to the ops alert (shipping-service)

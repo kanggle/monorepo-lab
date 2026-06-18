@@ -67,6 +67,7 @@ public class OrderRepositoryImpl implements OrderPersistencePort {
                     order.getShipTo() != null ? order.getShipTo().recipientName() : null,
                     order.getShipTo() != null ? order.getShipTo().address() : null,
                     order.getShipTo() != null ? order.getShipTo().phone() : null,
+                    order.getTenantId(),
                     order.getCreatedAt(),
                     order.getCreatedBy(),
                     order.getUpdatedAt(),

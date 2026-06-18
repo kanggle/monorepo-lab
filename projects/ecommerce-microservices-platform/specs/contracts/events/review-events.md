@@ -13,9 +13,14 @@ Consumers must not depend on fields not defined in this contract.
   "event_type": "string",
   "occurred_at": "string (ISO 8601)",
   "source": "review-service",
+  "tenant_id": "string (additive — TASK-BE-403, ADR-MONO-030 Step 4 facet c; defaults to 'ecommerce' for pre-migration rows)",
   "payload": {}
 }
 ```
+
+> **Additive change (TASK-BE-403):** `tenant_id` was added to the envelope in TASK-BE-403.
+> Existing consumers that do not read `tenant_id` are unaffected. Consumers must tolerate
+> a missing/`null` `tenant_id` in any outbox rows written before this migration.
 
 ---
 

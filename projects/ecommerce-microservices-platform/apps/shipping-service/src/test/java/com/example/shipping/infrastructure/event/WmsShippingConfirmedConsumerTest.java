@@ -2,7 +2,10 @@ package com.example.shipping.infrastructure.event;
 
 import com.example.shipping.application.service.ShippingCommandService;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
+import com.example.shipping.domain.repository.ShippingRepository;
+import com.example.shipping.domain.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -30,15 +34,27 @@ class WmsShippingConfirmedConsumerTest {
     private ShippingCommandService shippingCommandService;
 
     @Mock
+    private ShippingRepository shippingRepository;
+
+    @Mock
     private EventDeduplicationChecker eventDeduplicationChecker;
 
     @Mock
     private ObjectMapper objectMapper;
 
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
+
     private WmsShippingConfirmedEvent event(String eventId, String orderNo) {
+        return event(eventId, orderNo, "store-acme");
+    }
+
+    private WmsShippingConfirmedEvent event(String eventId, String orderNo, String tenantId) {
         return new WmsShippingConfirmedEvent(
                 eventId, "outbound.shipping.confirmed", "2026-06-08T15:00:00Z",
-                "outbound", "wms-internal-1",
+                "outbound", "wms-internal-1", tenantId,
                 new WmsShippingConfirmedEvent.Payload(
                         "wms-internal-1", orderNo, "SHP-20260608-0001", "CJ-LOGISTICS",
                         "2026-06-08T15:00:00Z"));
@@ -83,11 +99,53 @@ class WmsShippingConfirmedConsumerTest {
     void handle_nullPayload_throwsIllegalArgument() {
         WmsShippingConfirmedEvent event = new WmsShippingConfirmedEvent(
                 "evt-3", "outbound.shipping.confirmed", "2026-06-08T15:00:00Z",
-                "outbound", "wms-internal-1", null);
+                "outbound", "wms-internal-1", "store-acme", null);
         given(eventDeduplicationChecker.isDuplicate("evt-3", "WmsShippingConfirmed")).willReturn(false);
 
         assertThatThrownBy(() -> consumer.handle(event))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("봉투 tenantId 를 TenantContext 에 바인딩한 채 markShipped 실행, 이후 finally 로 clear")
+    void handle_bindsTenantFromEnvelope_andClearsAfter() {
+        WmsShippingConfirmedEvent event = event("evt-tenant", "order-1", "store-acme");
+        given(eventDeduplicationChecker.isDuplicate("evt-tenant", "WmsShippingConfirmed")).willReturn(false);
+        // Capture the tenant bound at the moment markShipped runs.
+        String[] boundDuringCall = new String[1];
+        org.mockito.BDDMockito.willAnswer(inv -> {
+            boundDuringCall[0] = TenantContext.currentTenant();
+            return null;
+        }).given(shippingCommandService).markShippedByOrderId(anyString(), anyString(), anyString());
+
+        consumer.handle(event);
+
+        assertThat(boundDuringCall[0]).isEqualTo("store-acme");
+        // Cleared in finally → reverts to the default tenant (no leak).
+        assertThat(TenantContext.currentTenant()).isEqualTo(TenantContext.DEFAULT_TENANT_ID);
+    }
+
+    @Test
+    @DisplayName("봉투 tenantId 부재 시 로컬 Shipping 행의 tenant 로 폴백 (D8)")
+    void handle_absentEnvelopeTenant_fallsBackToLocalRow() {
+        WmsShippingConfirmedEvent event = event("evt-fb", "order-9", null);
+        given(eventDeduplicationChecker.isDuplicate("evt-fb", "WmsShippingConfirmed")).willReturn(false);
+        com.example.shipping.domain.model.Shipping local = com.example.shipping.domain.model.Shipping.reconstitute(
+                "ship-9", "store-zeta", "order-9", "user-9",
+                com.example.shipping.domain.model.ShippingStatus.PREPARING,
+                null, null, java.util.List.of(),
+                java.time.Instant.now(), java.time.Instant.now());
+        given(shippingRepository.findByOrderId("order-9")).willReturn(java.util.Optional.of(local));
+        String[] boundDuringCall = new String[1];
+        org.mockito.BDDMockito.willAnswer(inv -> {
+            boundDuringCall[0] = TenantContext.currentTenant();
+            return null;
+        }).given(shippingCommandService).markShippedByOrderId(anyString(), anyString(), anyString());
+
+        consumer.handle(event);
+
+        assertThat(boundDuringCall[0]).isEqualTo("store-zeta");
+        assertThat(TenantContext.currentTenant()).isEqualTo(TenantContext.DEFAULT_TENANT_ID);
     }
 
     @Test

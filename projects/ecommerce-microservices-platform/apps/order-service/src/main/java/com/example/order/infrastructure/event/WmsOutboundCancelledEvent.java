@@ -8,6 +8,11 @@ package com.example.order.infrastructure.event;
  * <p>order-service consumes this (group {@code order-service-wms}, distinct from the
  * shipping-service consumer) to auto-cancel + refund the order; {@code payload.orderNo}
  * is the ecommerce orderId (ADR-022 §D5 correlation).
+ *
+ * <p>{@code tenantId} is the additive envelope-level tenant correlation
+ * (ADR-MONO-022 facet d, TASK-MONO-296) echoed by wms; the consumer binds it into
+ * {@code TenantContext} (local-Order-row fallback when {@code null}) so the
+ * auto-cancel + emitted {@code order.cancelled} resolve the originating tenant.
  */
 public record WmsOutboundCancelledEvent(
         String eventId,
@@ -15,6 +20,7 @@ public record WmsOutboundCancelledEvent(
         String occurredAt,
         String aggregateType,
         String aggregateId,
+        String tenantId,
         Payload payload
 ) {
     public record Payload(

@@ -113,5 +113,25 @@ Required emphasis:
 - event publishing tests
 - purchase verification integration tests
 
+## Multi-Tenancy
+
+Adopted as of TASK-BE-403 (ADR-MONO-030 Step 4 facet c). All M1-M7 rules from
+`rules/traits/multi-tenant.md` apply; see the table below for applicability:
+
+| Rule | Description | Status |
+|---|---|---|
+| M1 | Row-level `tenant_id VARCHAR NOT NULL` on `reviews` table | Applied — V5 migration |
+| M2 | 3-layer isolation: gateway entitlement-trust → `X-Tenant-Id` context → `WHERE tenant_id` | Applied — `TenantContextFilter` + tenant-scoped JPA queries |
+| M3 | 404-over-403 on cross-tenant access | Applied — `findActiveById` / `existsByUserIdAndProductId` scope by `TenantContext.currentTenant()` |
+| M4 | Enumeration prevention | Applied — all list/summary queries scoped by `tenant_id` |
+| M5 | Async event envelope carries `tenant_id` | Applied — `ReviewEvent` record + `ReviewEventMessage` DTO include `tenant_id` |
+| M6 | Cross-tenant leak regression IT | Covered by `ReviewIntegrationTest` (Testcontainers, CI-only) |
+| M7 | Per-tenant quota | N/A — out of scope (ADR-MONO-030 §3.4 Step 4 backlog) |
+
+**Default tenant (D8 net-zero):** `TenantContext.currentTenant()` returns `'ecommerce'` when no
+`X-Tenant-Id` header is present (standalone deployment without platform IAM). All pre-existing rows
+were backfilled to `tenant_id = 'ecommerce'` via V5 migration. The service behaves
+byte-identically to its pre-multi-tenant state in single-store mode.
+
 ## Change Rule
 Any architectural change to this service must be documented here first before implementation.

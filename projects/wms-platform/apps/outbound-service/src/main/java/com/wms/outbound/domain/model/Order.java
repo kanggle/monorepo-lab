@@ -51,6 +51,7 @@ public final class Order {
     private final LocalDate requiredShipDate;
     private final String notes;
     private final ShipToAddress shipTo;
+    private final String tenantId;
     private OrderStatus status;
     private long version;
     private final Instant createdAt;
@@ -82,8 +83,9 @@ public final class Order {
     }
 
     /**
-     * Full constructor with an additive {@link ShipToAddress shipTo}
-     * (ADR-MONO-022 D2-a). {@code shipTo} may be {@code null} for B2B orders.
+     * Constructor with an additive {@link ShipToAddress shipTo} (ADR-MONO-022
+     * D2-a) but no tenant correlation. Delegates with {@code tenantId == null}.
+     * {@code shipTo} may be {@code null} for B2B orders.
      */
     public Order(UUID id,
                  String orderNo,
@@ -100,6 +102,35 @@ public final class Order {
                  Instant updatedAt,
                  String updatedBy,
                  List<OrderLine> lines) {
+        this(id, orderNo, source, customerPartnerId, warehouseId, requiredShipDate,
+                notes, shipTo, null, status, version, createdAt, createdBy,
+                updatedAt, updatedBy, lines);
+    }
+
+    /**
+     * Fullest constructor with both the additive {@link ShipToAddress shipTo}
+     * (ADR-MONO-022 D2-a) and the additive {@code tenantId} opaque correlation
+     * (ADR-MONO-022 facet d, TASK-MONO-296). Both may be {@code null}. The
+     * {@code tenantId} is an echoed ecommerce-tenant correlation value — it is
+     * NOT an isolation key and is never used to filter or gate wms data
+     * (wms stays single-tenant).
+     */
+    public Order(UUID id,
+                 String orderNo,
+                 OrderSource source,
+                 UUID customerPartnerId,
+                 UUID warehouseId,
+                 LocalDate requiredShipDate,
+                 String notes,
+                 ShipToAddress shipTo,
+                 String tenantId,
+                 OrderStatus status,
+                 long version,
+                 Instant createdAt,
+                 String createdBy,
+                 Instant updatedAt,
+                 String updatedBy,
+                 List<OrderLine> lines) {
         this.id = Objects.requireNonNull(id, "id");
         this.orderNo = Objects.requireNonNull(orderNo, "orderNo");
         this.source = Objects.requireNonNull(source, "source");
@@ -108,6 +139,7 @@ public final class Order {
         this.requiredShipDate = requiredShipDate;
         this.notes = notes;
         this.shipTo = shipTo;
+        this.tenantId = tenantId;
         this.status = Objects.requireNonNull(status, "status");
         this.version = version;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
@@ -245,6 +277,16 @@ public final class Order {
      */
     public ShipToAddress getShipTo() {
         return shipTo;
+    }
+
+    /**
+     * Opaque ecommerce-tenant correlation echoed on the return-leg events
+     * (ADR-MONO-022 facet d). {@code null} for B2B ({@code MANUAL} /
+     * {@code WEBHOOK_ERP}) orders and standalone/pre-M5 fulfillment. NOT an
+     * isolation key — wms never filters or gates on it (wms stays single-tenant).
+     */
+    public String getTenantId() {
+        return tenantId;
     }
 
     public OrderStatus getStatus() {

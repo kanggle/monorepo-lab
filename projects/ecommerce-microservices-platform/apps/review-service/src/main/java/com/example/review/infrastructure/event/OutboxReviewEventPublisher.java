@@ -33,6 +33,7 @@ public class OutboxReviewEventPublisher implements ReviewEventPublisher {
                 event.eventType(),
                 event.occurredAt(),
                 event.source(),
+                event.tenantId(),
                 event.payload()
         );
     }
