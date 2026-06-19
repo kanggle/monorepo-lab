@@ -20,6 +20,7 @@ import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
+import com.example.auth.infrastructure.tenant.TenantTypeResolver;
 import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,7 @@ public class LoginUseCase {
     private final LoginAttemptCounter loginAttemptCounter;
     private final AuthEventPublisher authEventPublisher;
     private final RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
+    private final TenantTypeResolver tenantTypeResolver;
 
     @Value("${auth.login.max-failure-count:5}")
     private int maxFailureCount;
@@ -141,9 +143,9 @@ public class LoginUseCase {
      */
     private TokenPair issueTokensAndPublishSuccess(String accountId, String resolvedTenantId,
                                                     String emailHash, SessionContext ctx) {
-        // tenantType currently derives from the default mapping — when account-service
-        // exposes tenantType in credential lookup, use that value instead.
-        String tenantType = TenantContext.resolveTenantType(resolvedTenantId);
+        // TASK-BE-407: authoritative tenant_type from account-service (cached),
+        // replacing the previous hardcoded fallback that misclassified B2C tenants.
+        String tenantType = tenantTypeResolver.resolve(resolvedTenantId);
         TenantContext tenantContext = new TenantContext(resolvedTenantId, tenantType);
 
         RegisterDeviceSessionResult sessionResult =

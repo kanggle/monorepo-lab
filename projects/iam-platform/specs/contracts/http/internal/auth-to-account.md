@@ -10,6 +10,8 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 
 > **TASK-BE-229 (tenant-aware login)** — `GET /internal/accounts/tenant-info` 엔드포인트를 추가한다. auth-service 가 로그인 시 이메일·`tenant_id`(선택)로 계정의 `tenant_id`·`tenant_type`·`accountId`를 조회한다. 다중 매칭 가능 응답 형태: 0건 → credential 없음, 1건 → 정상, 2건 이상 → `LOGIN_TENANT_AMBIGUOUS` (presentation layer에서 변환).
 
+> **TASK-BE-407 (authoritative tenant_type)** — auth-service 가 JWT `tenant_type` 클레임을 정확히 채우기 위해 account-service `GET /internal/tenants/{tenantId}` 를 호출해 권위 `tenant_type` 을 조회한다(과거의 `"fan-platform"→B2C_CONSUMER`, 그 외→`B2B_ENTERPRISE` 하드코딩 폴백 제거). hot-path(로그인/refresh) 성능을 위해 auth-service 는 결과를 캐시하며 `fan-platform` 은 프리시드된 기본값으로 네트워크 호출 0이다. 미존재 테넌트(404)는 `Optional.empty()`, 5xx/네트워크 장애는 `AccountServiceUnavailableException` 으로 매핑된다. 호출 대상 엔드포인트는 이미 존재하며(`TenantLifecycleController`), 본 task 는 auth-service 측 소비만 추가한다.
+
 ---
 
 ## GET /internal/accounts/tenant-info
@@ -39,6 +41,39 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 - 배열 길이 2 이상 → 다중 테넌트 매칭 → auth-service presentation에서 `LOGIN_TENANT_AMBIGUOUS` 400으로 변환
 
 **Response 404**: 요청 형식 오류 (email 누락 등) — `VALIDATION_ERROR`
+
+---
+
+## GET /internal/tenants/{tenantId}
+
+테넌트의 권위 `tenant_type` 조회. auth-service 가 토큰 발급 경로(로그인/refresh/social-callback)에서 JWT `tenant_type` 클레임을 정확히 채우기 위해 호출한다 (TASK-BE-407). 서버 측 엔드포인트는 account-service `TenantLifecycleController` 에 이미 존재한다.
+
+**Path Parameters**:
+
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `tenantId` | string (slug) | 대상 테넌트 |
+
+**Response 200**:
+```json
+{
+  "tenantId": "ecommerce",
+  "displayName": "E-commerce",
+  "tenantType": "B2C_CONSUMER | B2B_ENTERPRISE",
+  "status": "ACTIVE | SUSPENDED | ...",
+  "createdAt": "2026-06-20T10:00:00Z",
+  "updatedAt": "2026-06-20T10:00:00Z"
+}
+```
+
+- auth-service 는 `tenantType` 필드만 소비한다. 나머지 필드는 무시한다.
+
+**Response 404**: 해당 `tenantId` 의 테넌트 미존재 → auth-service 는 `Optional.empty()` 로 매핑.
+
+**auth-service 매핑 규약**:
+- 200 → `tenantType` 문자열을 `Optional` 로 반환.
+- 404 → `Optional.empty()`.
+- 5xx / 네트워크 장애 / circuit-open → `AccountServiceUnavailableException` (다른 internal 호출과 동일).
 
 ---
 

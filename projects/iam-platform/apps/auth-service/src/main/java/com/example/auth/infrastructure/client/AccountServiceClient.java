@@ -397,6 +397,59 @@ public class AccountServiceClient implements AccountServicePort {
         }
     }
 
+    @Override
+    public Optional<String> getTenantType(String tenantId) {
+        try {
+            return callResilient(() -> doGetTenantType(tenantId));
+        } catch (HttpClientErrorException.NotFound e) {
+            // Unknown tenant — surface as empty so the resolver can apply its policy
+            // without treating a 404 as an infrastructure outage.
+            return Optional.empty();
+        } catch (HttpClientErrorException e) {
+            log.warn("Account service tenant-type lookup returned client error {}: {}",
+                    e.getStatusCode(), e.getMessage());
+            return Optional.empty();
+        } catch (RuntimeException e) {
+            log.error("Account service tenant-type lookup failed after retries: "
+                            + "msg={} type={} cause={} causeType={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getMessage(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
+            throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<String> doGetTenantType(String tenantId) {
+        try {
+            // account-service returns
+            //   { tenantId, displayName, tenantType, status, createdAt, updatedAt }
+            // — we consume only the tenantType field (TASK-BE-407).
+            Map<String, Object> body = restClient().get()
+                    .uri("/internal/tenants/{tid}", tenantId)
+                    // TASK-BE-318c: GAP client_credentials Bearer JWT.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
+                    .body(Map.class);
+
+            if (body == null) {
+                return Optional.empty();
+            }
+            Object tenantType = body.get("tenantType");
+            if (tenantType instanceof String tt && !tt.isBlank()) {
+                return Optional.of(tt);
+            }
+            return Optional.empty();
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (HttpClientErrorException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Account service communication error", e);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private List<String> doListAccountRoles(String tenantId, String accountId) {
         try {

@@ -20,6 +20,7 @@ import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
 import com.example.auth.domain.token.TokenReuseDetector;
+import com.example.auth.infrastructure.tenant.TenantTypeResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ public class RefreshTokenUseCase {
     private final BulkInvalidationStore bulkInvalidationStore;
     private final AuthEventPublisher authEventPublisher;
     private final DeviceSessionRepository deviceSessionRepository;
+    private final TenantTypeResolver tenantTypeResolver;
 
     @Transactional
     public RefreshTokenResult execute(RefreshTokenCommand command) {
@@ -133,8 +135,9 @@ public class RefreshTokenUseCase {
             });
         }
 
-        // Build tenant context from the DB row (authoritative)
-        String tenantType = TenantContext.resolveTenantType(dbTenantId);
+        // Build tenant context from the DB row (authoritative tenant_id).
+        // TASK-BE-407: tenant_type resolved from account-service (cached).
+        String tenantType = tenantTypeResolver.resolve(dbTenantId);
         TenantContext tenantContext = new TenantContext(dbTenantId, tenantType);
 
         TokenPair newTokenPair = tokenGeneratorPort.generateTokenPair(accountId, "user", deviceId,

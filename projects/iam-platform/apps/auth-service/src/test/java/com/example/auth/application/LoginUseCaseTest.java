@@ -20,6 +20,7 @@ import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
+import com.example.auth.infrastructure.tenant.TenantTypeResolver;
 import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,6 +60,8 @@ class LoginUseCaseTest {
     private AuthEventPublisher authEventPublisher;
     @Mock
     private RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
+    @Mock
+    private TenantTypeResolver tenantTypeResolver;
 
     @InjectMocks
     private LoginUseCase loginUseCase;
@@ -89,6 +92,7 @@ class LoginUseCaseTest {
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountStatusLookupResult(ACCOUNT_ID, "ACTIVE")));
         when(passwordHasher.verify(PASSWORD, HASH)).thenReturn(true);
+        when(tenantTypeResolver.resolve(TENANT_ID)).thenReturn("B2C_CONSUMER");
         when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
         when(tokenGeneratorPort.generateTokenPair(eq(ACCOUNT_ID), eq("user"), eq("dev-1"),
@@ -111,6 +115,41 @@ class LoginUseCaseTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-407 regression: non-fan B2C tenant (ecommerce) → tenant_type=B2C_CONSUMER reaches TenantContext")
+    void login_nonFanB2cTenant_resolvesB2cConsumerIntoTenantContext() {
+        // given: an "ecommerce" tenant that the OLD hardcoded fallback misclassified
+        // as B2B_ENTERPRISE. The resolver returns the authoritative B2C_CONSUMER.
+        String ecommerceTenant = "ecommerce";
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
+        Credential cred = credential(ACCOUNT_ID, ecommerceTenant, EMAIL, HASH);
+        when(credentialRepository.findByTenantIdAndEmail(ecommerceTenant, EMAIL))
+                .thenReturn(Optional.of(cred));
+        when(accountServicePort.getAccountStatus(ACCOUNT_ID))
+                .thenReturn(Optional.of(new AccountStatusLookupResult(ACCOUNT_ID, "ACTIVE")));
+        when(passwordHasher.verify(PASSWORD, HASH)).thenReturn(true);
+        when(tenantTypeResolver.resolve(ecommerceTenant)).thenReturn("B2C_CONSUMER");
+        when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), anyString(), any(SessionContext.class)))
+                .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
+
+        ArgumentCaptor<TenantContext> tenantCtxCaptor = ArgumentCaptor.forClass(TenantContext.class);
+        when(tokenGeneratorPort.generateTokenPair(eq(ACCOUNT_ID), eq("user"), eq("dev-1"),
+                tenantCtxCaptor.capture()))
+                .thenReturn(new TokenPair("access-jwt", "refresh-jwt", 1800));
+        when(tokenGeneratorPort.extractJti("refresh-jwt")).thenReturn("jti-123");
+        when(tokenGeneratorPort.refreshTokenTtlSeconds()).thenReturn(604800L);
+        when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(i -> i.getArgument(0));
+
+        // when
+        loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, ecommerceTenant, CTX));
+
+        // then: the TenantContext flowing into token generation carries the correct
+        // tenant_id AND the authoritative B2C_CONSUMER type (was wrongly B2B_ENTERPRISE).
+        TenantContext captured = tenantCtxCaptor.getValue();
+        assertThat(captured.tenantId()).isEqualTo(ecommerceTenant);
+        assertThat(captured.tenantType()).isEqualTo("B2C_CONSUMER");
+    }
+
+    @Test
     @DisplayName("Login succeeds when tenantId is explicitly specified")
     void loginSuccessWithExplicitTenant() {
         // given
@@ -121,6 +160,7 @@ class LoginUseCaseTest {
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountStatusLookupResult(ACCOUNT_ID, "ACTIVE")));
         when(passwordHasher.verify(PASSWORD, HASH)).thenReturn(true);
+        when(tenantTypeResolver.resolve(TENANT_ID)).thenReturn("B2C_CONSUMER");
         when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
         when(tokenGeneratorPort.generateTokenPair(eq(ACCOUNT_ID), eq("user"), eq("dev-1"),

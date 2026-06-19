@@ -277,4 +277,56 @@ class AccountServiceClientUnitTest {
         assertThatThrownBy(() -> client.listAccountRoles("wms", "acc-fault"))
                 .isInstanceOf(AccountServiceUnavailableException.class);
     }
+
+    // ── getTenantType (TASK-BE-407) ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("getTenantType — 200 응답 → tenantType 문자열 반환")
+    void getTenantType_200_returnsTenantType() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/ecommerce"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "tenantId": "ecommerce",
+                                  "displayName": "E-commerce",
+                                  "tenantType": "B2C_CONSUMER",
+                                  "status": "ACTIVE"
+                                }
+                                """)));
+
+        Optional<String> result = client.getTenantType("ecommerce");
+
+        assertThat(result).contains("B2C_CONSUMER");
+    }
+
+    @Test
+    @DisplayName("getTenantType — 404 응답 → Optional.empty()")
+    void getTenantType_404_returnsEmpty() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/unknown"))
+                .willReturn(aResponse().withStatus(404)));
+
+        assertThat(client.getTenantType("unknown")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getTenantType — 503 응답 → AccountServiceUnavailableException")
+    void getTenantType_503_throwsAccountServiceUnavailable() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/svc-down"))
+                .willReturn(aResponse().withStatus(503)));
+
+        assertThatThrownBy(() -> client.getTenantType("svc-down"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("getTenantType — 연결 오류 → AccountServiceUnavailableException (retry 후)")
+    void getTenantType_connectionFault_throwsAccountServiceUnavailable() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/fault"))
+                .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+        assertThatThrownBy(() -> client.getTenantType("fault"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
 }
