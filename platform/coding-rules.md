@@ -46,6 +46,7 @@ Platform-wide coding standards for all services and libraries.
 - Use Flyway for all schema migrations.
 - Do not modify existing migration files after deployment.
 - Migration file naming follows `naming-conventions.md`.
+- MySQL `ALTER TABLE … ADD COLUMN`: place the `COMMENT '…'` clause **before** the positional `AFTER <col>` clause (`ADD COLUMN x INT NOT NULL COMMENT '…' AFTER y`). The reverse order (`… AFTER y COMMENT '…'`) is a syntax error that surfaces only when Flyway applies the migration against a real MySQL (a Testcontainers integration test or a live DB), not in Docker-free unit/slice tests.
 
 ## API
 

@@ -90,6 +90,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # ⚠️ ADDING AN ECOMMERCE SERVICE? Update ALL of the following in lockstep,
+      # or the nightly goes RED (ci.yml passing is NOT sufficient — these are
+      # nightly-only and fail sequentially):
+      #   (1) this `Build ecommerce boot jars` gradle bootJar list
+      #   (2) the `Upload ecommerce boot jars` artifact `path:` list (below)
+      #   (3) the jar-restore step in the `frontend-e2e-fullstack` job
+      #   (4) the new service's DB password / env in the docker-compose `.env`
+      # (Drift history: settlement-service, TASK-MONO-250/251.)
       - name: Build ecommerce boot jars
         # auth-service excluded by TASK-BE-132 — decommissioned, not in settings.gradle.
         run: >-
