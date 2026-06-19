@@ -1,5 +1,7 @@
 package com.example.auth.infrastructure.security;
 
+import com.example.auth.application.exception.AccountServiceUnavailableException;
+import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.tenant.TenantContext;
@@ -7,6 +9,7 @@ import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -53,6 +56,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
 
     private final CredentialRepository credentialRepository;
     private final PasswordHasher passwordHasher;
+    private final TenantTypePort tenantTypePort;
 
     @Override
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
@@ -88,7 +92,19 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         String tenantId = Optional.ofNullable(credential.getTenantId())
                 .filter(s -> !s.isBlank())
                 .orElse(TenantContext.DEFAULT_TENANT_ID);
-        String tenantType = TenantContext.resolveTenantType(tenantId);
+        // TASK-BE-407: authoritative tenant_type from account-service (cached).
+        // AC-5: an account-service outage must surface as an AuthenticationException
+        // (AuthenticationServiceException) rather than leaking a raw RuntimeException
+        // out of the AuthenticationProvider, which the ProviderManager would otherwise
+        // propagate to the filter chain as a 500. Wrapping maps the infra failure to a
+        // clean authentication-boundary error.
+        String tenantType;
+        try {
+            tenantType = tenantTypePort.resolve(tenantId);
+        } catch (AccountServiceUnavailableException e) {
+            throw new AuthenticationServiceException(
+                    "Tenant metadata service is unavailable", e);
+        }
 
         // The principal is the email (Spring Security default for username/password
         // flows). Tenant context is published via `details` so that

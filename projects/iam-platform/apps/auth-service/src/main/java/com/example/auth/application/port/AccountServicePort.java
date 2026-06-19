@@ -89,4 +89,23 @@ public interface AccountServicePort {
      * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
      */
     List<String> listAccountRoles(String tenantId, String accountId);
+
+    /**
+     * Resolves the authoritative {@code tenant_type} for a tenant from
+     * account-service (TASK-BE-407). Calls {@code GET /internal/tenants/{tenantId}}
+     * and extracts the {@code tenantType} field ("B2C_CONSUMER" | "B2B_ENTERPRISE").
+     *
+     * <p>Replaces the previous hardcoded 2-value fallback in
+     * {@link com.example.auth.domain.tenant.TenantContext} that misclassified new
+     * B2C tenants (e.g. {@code ecommerce}) as {@code B2B_ENTERPRISE}. The login /
+     * refresh / social-callback paths consume this (via
+     * {@link com.example.auth.infrastructure.tenant.TenantTypeResolver}) to populate
+     * the signed {@code tenant_type} claim accurately.</p>
+     *
+     * @param tenantId the tenant whose type to resolve
+     * @return the tenant_type string, or empty if the tenant does not exist (404)
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException
+     *         if account-service is down (5xx / circuit-open / timeout / IO)
+     */
+    Optional<String> getTenantType(String tenantId);
 }

@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.security;
 
+import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,7 +32,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>Fallback (no saved request / no {@code client_id} / no matching client /
  * blank tenant settings) → {@link TenantContext#DEFAULT_TENANT_ID} +
- * {@link TenantContext#resolveTenantType(String)}.
+ * {@link TenantTypePort#resolve(String)} (TASK-BE-407).
  *
  * <p>The resolved tenant feeds BOTH the social-identity row attribution (via
  * {@code SocialIdentityPersistStep}) and the SAS principal's {@code details}
@@ -49,6 +50,7 @@ public class SavedRequestTenantResolver {
     private static final String AUTHORIZE_PATH = "/oauth2/authorize";
 
     private final RegisteredClientRepository registeredClientRepository;
+    private final TenantTypePort tenantTypePort;
     private final RequestCache requestCache = new HttpSessionRequestCache();
 
     /**
@@ -105,8 +107,10 @@ public class SavedRequestTenantResolver {
             }
         }
 
+        // TASK-BE-407: tenant_type via the resolver. For DEFAULT_TENANT_ID this is the
+        // pre-seeded cache value (no network call), preserving prior hot-path behavior.
         String fallbackTenant = TenantContext.DEFAULT_TENANT_ID;
-        String fallbackType = TenantContext.resolveTenantType(fallbackTenant);
+        String fallbackType = tenantTypePort.resolve(fallbackTenant);
         log.debug("SavedRequestTenantResolver: no initiating client tenant (client_id={}), "
                 + "falling back to tenant_id={} tenant_type={}", clientId, fallbackTenant, fallbackType);
         return new TenantInfo(fallbackTenant, fallbackType);

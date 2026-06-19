@@ -7,6 +7,7 @@ import com.example.auth.application.exception.TokenExpiredException;
 import com.example.auth.application.exception.TokenParseException;
 import com.example.auth.application.exception.TokenReuseDetectedException;
 import com.example.auth.application.exception.TokenTenantMismatchException;
+import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.application.result.RefreshTokenResult;
 import com.example.auth.domain.repository.BulkInvalidationStore;
@@ -45,6 +46,7 @@ public class RefreshTokenUseCase {
     private final BulkInvalidationStore bulkInvalidationStore;
     private final AuthEventPublisher authEventPublisher;
     private final DeviceSessionRepository deviceSessionRepository;
+    private final TenantTypePort tenantTypePort;
 
     @Transactional
     public RefreshTokenResult execute(RefreshTokenCommand command) {
@@ -133,8 +135,9 @@ public class RefreshTokenUseCase {
             });
         }
 
-        // Build tenant context from the DB row (authoritative)
-        String tenantType = TenantContext.resolveTenantType(dbTenantId);
+        // Build tenant context from the DB row (authoritative tenant_id).
+        // TASK-BE-407: tenant_type resolved from account-service (cached).
+        String tenantType = tenantTypePort.resolve(dbTenantId);
         TenantContext tenantContext = new TenantContext(dbTenantId, tenantType);
 
         TokenPair newTokenPair = tokenGeneratorPort.generateTokenPair(accountId, "user", deviceId,

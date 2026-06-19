@@ -8,6 +8,7 @@ import com.example.auth.application.exception.CredentialsInvalidException;
 import com.example.auth.application.exception.LoginRateLimitedException;
 import com.example.auth.application.exception.LoginTenantAmbiguousException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.LoginResult;
@@ -48,6 +49,7 @@ public class LoginUseCase {
     private final LoginAttemptCounter loginAttemptCounter;
     private final AuthEventPublisher authEventPublisher;
     private final RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
+    private final TenantTypePort tenantTypePort;
 
     @Value("${auth.login.max-failure-count:5}")
     private int maxFailureCount;
@@ -141,9 +143,9 @@ public class LoginUseCase {
      */
     private TokenPair issueTokensAndPublishSuccess(String accountId, String resolvedTenantId,
                                                     String emailHash, SessionContext ctx) {
-        // tenantType currently derives from the default mapping — when account-service
-        // exposes tenantType in credential lookup, use that value instead.
-        String tenantType = TenantContext.resolveTenantType(resolvedTenantId);
+        // TASK-BE-407: authoritative tenant_type from account-service (cached),
+        // replacing the previous hardcoded fallback that misclassified B2C tenants.
+        String tenantType = tenantTypePort.resolve(resolvedTenantId);
         TenantContext tenantContext = new TenantContext(resolvedTenantId, tenantType);
 
         RegisterDeviceSessionResult sessionResult =
