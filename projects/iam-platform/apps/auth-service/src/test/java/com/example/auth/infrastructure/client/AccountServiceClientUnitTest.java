@@ -321,6 +321,29 @@ class AccountServiceClientUnitTest {
     }
 
     @Test
+    @DisplayName("getTenantType — 401 응답(비-404 4xx) → AccountServiceUnavailableException (empty 로 삼키지 않음)")
+    void getTenantType_401_throwsAccountServiceUnavailable() {
+        // Regression: a non-404 4xx must NOT be swallowed as Optional.empty(), which
+        // would let the resolver fall back to the B2C default and misclassify the
+        // tenant_type claim — the exact bug class TASK-BE-407 fixes.
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/unauthorized"))
+                .willReturn(aResponse().withStatus(401)));
+
+        assertThatThrownBy(() -> client.getTenantType("unauthorized"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("getTenantType — 403 응답(비-404 4xx) → AccountServiceUnavailableException (empty 로 삼키지 않음)")
+    void getTenantType_403_throwsAccountServiceUnavailable() {
+        wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/forbidden"))
+                .willReturn(aResponse().withStatus(403)));
+
+        assertThatThrownBy(() -> client.getTenantType("forbidden"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
     @DisplayName("getTenantType — 연결 오류 → AccountServiceUnavailableException (retry 후)")
     void getTenantType_connectionFault_throwsAccountServiceUnavailable() {
         wireMockServer.stubFor(get(urlEqualTo("/internal/tenants/fault"))

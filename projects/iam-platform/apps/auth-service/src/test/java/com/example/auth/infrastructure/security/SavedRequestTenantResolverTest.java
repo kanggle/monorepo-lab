@@ -1,8 +1,8 @@
 package com.example.auth.infrastructure.security;
 
+import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
-import com.example.auth.infrastructure.tenant.TenantTypeResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +38,7 @@ class SavedRequestTenantResolverTest {
     private RegisteredClientRepository registeredClientRepository;
 
     @Mock
-    private TenantTypeResolver tenantTypeResolver;
+    private TenantTypePort tenantTypePort;
 
     private RegisteredClient ecommerceClient() {
         return RegisteredClient.withId("id-1")
@@ -89,7 +89,7 @@ class SavedRequestTenantResolverTest {
         // Resolved tenant comes from the client settings on this path — the
         // TenantTypeResolver fallback is NOT consulted, so it is left unstubbed.
         SavedRequestTenantResolver resolver =
-                new SavedRequestTenantResolver(registeredClientRepository, tenantTypeResolver);
+                new SavedRequestTenantResolver(registeredClientRepository, tenantTypePort);
 
         HttpServletRequest callback = savedAuthorizeRequest("ecommerce-web-store-client");
         HttpServletResponse response = new MockHttpServletResponse();
@@ -107,10 +107,10 @@ class SavedRequestTenantResolverTest {
     void noSavedRequest_fallsBackToDefaultTenant() {
         // TASK-BE-407: the fallback now derives tenant_type via the resolver, which for
         // DEFAULT_TENANT_ID returns the pre-seeded DEFAULT_TENANT_TYPE (no network).
-        when(tenantTypeResolver.resolve(TenantContext.DEFAULT_TENANT_ID))
+        when(tenantTypePort.resolve(TenantContext.DEFAULT_TENANT_ID))
                 .thenReturn(TenantContext.DEFAULT_TENANT_TYPE);
         SavedRequestTenantResolver resolver =
-                new SavedRequestTenantResolver(registeredClientRepository, tenantTypeResolver);
+                new SavedRequestTenantResolver(registeredClientRepository, tenantTypePort);
 
         MockHttpServletRequest callback = new MockHttpServletRequest("GET",
                 "/login/oauth/google/callback");
@@ -127,10 +127,10 @@ class SavedRequestTenantResolverTest {
     @DisplayName("saved request but client not found → default tenant fallback (redirect URL still present)")
     void clientNotFound_fallsBackToDefaultTenant() {
         when(registeredClientRepository.findByClientId("unknown-client")).thenReturn(null);
-        when(tenantTypeResolver.resolve(TenantContext.DEFAULT_TENANT_ID))
+        when(tenantTypePort.resolve(TenantContext.DEFAULT_TENANT_ID))
                 .thenReturn(TenantContext.DEFAULT_TENANT_TYPE);
         SavedRequestTenantResolver resolver =
-                new SavedRequestTenantResolver(registeredClientRepository, tenantTypeResolver);
+                new SavedRequestTenantResolver(registeredClientRepository, tenantTypePort);
 
         HttpServletRequest callback = savedAuthorizeRequest("unknown-client");
         HttpServletResponse response = new MockHttpServletResponse();

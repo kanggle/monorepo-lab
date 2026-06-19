@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.tenant;
 
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.domain.tenant.TenantContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -44,7 +45,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @Component
-public class TenantTypeResolver {
+public class TenantTypeResolver implements TenantTypePort {
 
     private final AccountServicePort accountServicePort;
     private final Map<String, String> cache = new ConcurrentHashMap<>();
@@ -64,6 +65,7 @@ public class TenantTypeResolver {
      *         when the tenant is unknown (404)
      * @throws AccountServiceUnavailableException if account-service is unavailable
      */
+    @Override
     public String resolve(String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {
             return TenantContext.DEFAULT_TENANT_TYPE;

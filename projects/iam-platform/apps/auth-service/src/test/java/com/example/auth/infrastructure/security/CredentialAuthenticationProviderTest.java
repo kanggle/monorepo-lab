@@ -2,8 +2,8 @@ package com.example.auth.infrastructure.security;
 
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.domain.credentials.Credential;
+import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.domain.repository.CredentialRepository;
-import com.example.auth.infrastructure.tenant.TenantTypeResolver;
 import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
  * carries {@code account_type} — the claim is removed entirely.
  *
  * <p>TASK-BE-407: {@code tenant_type} is now resolved from account-service via
- * {@link TenantTypeResolver} (no longer the hardcoded fallback). An account-service
+ * {@link TenantTypePort} (no longer the hardcoded fallback). An account-service
  * outage must surface as {@link AuthenticationServiceException} (AC-5).
  */
 @ExtendWith(MockitoExtension.class)
@@ -47,7 +47,7 @@ class CredentialAuthenticationProviderTest {
     private PasswordHasher passwordHasher;
 
     @Mock
-    private TenantTypeResolver tenantTypeResolver;
+    private TenantTypePort tenantTypePort;
 
     @InjectMocks
     private CredentialAuthenticationProvider provider;
@@ -79,7 +79,7 @@ class CredentialAuthenticationProviderTest {
     @DisplayName("details map carries tenant + account_id, but NOT account_type (MONO-263)")
     void detailsMap_noAccountType() {
         stubHappyCredentialLookup();
-        when(tenantTypeResolver.resolve("acme-corp")).thenReturn("B2B_ENTERPRISE");
+        when(tenantTypePort.resolve("acme-corp")).thenReturn("B2B_ENTERPRISE");
 
         Map<String, Object> details = authenticateAndGetDetails();
 
@@ -95,7 +95,7 @@ class CredentialAuthenticationProviderTest {
         stubHappyCredentialLookup();
         // A B2C tenant value that the OLD hardcoded fallback would have wrongly
         // produced as B2B_ENTERPRISE for a non-fan-platform tenant.
-        when(tenantTypeResolver.resolve("acme-corp")).thenReturn("B2C_CONSUMER");
+        when(tenantTypePort.resolve("acme-corp")).thenReturn("B2C_CONSUMER");
 
         Map<String, Object> details = authenticateAndGetDetails();
 
@@ -106,7 +106,7 @@ class CredentialAuthenticationProviderTest {
     @DisplayName("AC-5: account-service outage → AuthenticationServiceException (not a raw RuntimeException)")
     void resolverUnavailable_throwsAuthenticationServiceException() {
         stubHappyCredentialLookup();
-        when(tenantTypeResolver.resolve("acme-corp"))
+        when(tenantTypePort.resolve("acme-corp"))
                 .thenThrow(new AccountServiceUnavailableException("down"));
 
         assertThatThrownBy(() -> provider.authenticate(

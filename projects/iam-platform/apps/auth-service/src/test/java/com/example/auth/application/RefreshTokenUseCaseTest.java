@@ -20,7 +20,7 @@ import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
 import com.example.auth.domain.token.TokenReuseDetector;
-import com.example.auth.infrastructure.tenant.TenantTypeResolver;
+import com.example.auth.application.port.TenantTypePort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,7 +57,7 @@ class RefreshTokenUseCaseTest {
     @Mock
     private DeviceSessionRepository deviceSessionRepository;
     @Mock
-    private TenantTypeResolver tenantTypeResolver;
+    private TenantTypePort tenantTypePort;
 
     @InjectMocks
     private RefreshTokenUseCase refreshTokenUseCase;
@@ -88,7 +88,7 @@ class RefreshTokenUseCaseTest {
         RefreshToken existingToken = activeToken(OLD_JTI, TENANT_ID);
         when(refreshTokenRepository.findByJti(OLD_JTI)).thenReturn(Optional.of(existingToken));
         when(tokenReuseDetector.isReuse(existingToken)).thenReturn(false);
-        when(tenantTypeResolver.resolve(TENANT_ID)).thenReturn("B2C_CONSUMER");
+        when(tenantTypePort.resolve(TENANT_ID)).thenReturn("B2C_CONSUMER");
         when(tokenGeneratorPort.generateTokenPair(eq(ACCOUNT_ID), eq("user"),
                 nullable(String.class), any(TenantContext.class)))
                 .thenReturn(new TokenPair("new-access", "new-refresh", 1800));

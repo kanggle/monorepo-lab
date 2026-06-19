@@ -1,10 +1,10 @@
 package com.example.auth.infrastructure.security;
 
 import com.example.auth.application.exception.AccountServiceUnavailableException;
+import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.tenant.TenantContext;
-import com.example.auth.infrastructure.tenant.TenantTypeResolver;
 import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,7 +56,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
 
     private final CredentialRepository credentialRepository;
     private final PasswordHasher passwordHasher;
-    private final TenantTypeResolver tenantTypeResolver;
+    private final TenantTypePort tenantTypePort;
 
     @Override
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
@@ -100,7 +100,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         // clean authentication-boundary error.
         String tenantType;
         try {
-            tenantType = tenantTypeResolver.resolve(tenantId);
+            tenantType = tenantTypePort.resolve(tenantId);
         } catch (AccountServiceUnavailableException e) {
             throw new AuthenticationServiceException(
                     "Tenant metadata service is unavailable", e);

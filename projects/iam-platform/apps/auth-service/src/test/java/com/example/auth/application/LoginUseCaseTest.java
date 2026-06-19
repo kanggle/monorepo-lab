@@ -20,7 +20,7 @@ import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
-import com.example.auth.infrastructure.tenant.TenantTypeResolver;
+import com.example.auth.application.port.TenantTypePort;
 import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -61,7 +61,7 @@ class LoginUseCaseTest {
     @Mock
     private RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
     @Mock
-    private TenantTypeResolver tenantTypeResolver;
+    private TenantTypePort tenantTypePort;
 
     @InjectMocks
     private LoginUseCase loginUseCase;
@@ -92,7 +92,7 @@ class LoginUseCaseTest {
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountStatusLookupResult(ACCOUNT_ID, "ACTIVE")));
         when(passwordHasher.verify(PASSWORD, HASH)).thenReturn(true);
-        when(tenantTypeResolver.resolve(TENANT_ID)).thenReturn("B2C_CONSUMER");
+        when(tenantTypePort.resolve(TENANT_ID)).thenReturn("B2C_CONSUMER");
         when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
         when(tokenGeneratorPort.generateTokenPair(eq(ACCOUNT_ID), eq("user"), eq("dev-1"),
@@ -127,7 +127,7 @@ class LoginUseCaseTest {
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountStatusLookupResult(ACCOUNT_ID, "ACTIVE")));
         when(passwordHasher.verify(PASSWORD, HASH)).thenReturn(true);
-        when(tenantTypeResolver.resolve(ecommerceTenant)).thenReturn("B2C_CONSUMER");
+        when(tenantTypePort.resolve(ecommerceTenant)).thenReturn("B2C_CONSUMER");
         when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
 
@@ -160,7 +160,7 @@ class LoginUseCaseTest {
         when(accountServicePort.getAccountStatus(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountStatusLookupResult(ACCOUNT_ID, "ACTIVE")));
         when(passwordHasher.verify(PASSWORD, HASH)).thenReturn(true);
-        when(tenantTypeResolver.resolve(TENANT_ID)).thenReturn("B2C_CONSUMER");
+        when(tenantTypePort.resolve(TENANT_ID)).thenReturn("B2C_CONSUMER");
         when(registerOrUpdateDeviceSessionUseCase.execute(eq(ACCOUNT_ID), anyString(), any(SessionContext.class)))
                 .thenReturn(new RegisterDeviceSessionResult("dev-1", true, List.of()));
         when(tokenGeneratorPort.generateTokenPair(eq(ACCOUNT_ID), eq("user"), eq("dev-1"),

@@ -406,9 +406,16 @@ public class AccountServiceClient implements AccountServicePort {
             // without treating a 404 as an infrastructure outage.
             return Optional.empty();
         } catch (HttpClientErrorException e) {
+            // Any NON-404 4xx (401 / 403 / 429 / 422 …) is an account-service failure,
+            // NOT "unknown tenant". Treating it as empty would let the resolver fall
+            // back to the B2C default and silently misclassify the tenant_type claim —
+            // the exact bug class TASK-BE-407 fixes. Mirror listAccountRoles /
+            // getAccountStatus's non-404 handling: surface as an outage so the caller
+            // (TenantTypeResolver) fails closed.
             log.warn("Account service tenant-type lookup returned client error {}: {}",
                     e.getStatusCode(), e.getMessage());
-            return Optional.empty();
+            throw new AccountServiceUnavailableException(
+                    "Account service tenant-type lookup failed", e);
         } catch (RuntimeException e) {
             log.error("Account service tenant-type lookup failed after retries: "
                             + "msg={} type={} cause={} causeType={}",
