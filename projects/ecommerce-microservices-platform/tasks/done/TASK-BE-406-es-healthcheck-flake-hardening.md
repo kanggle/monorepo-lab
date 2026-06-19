@@ -1,6 +1,6 @@
 # TASK-BE-406 — Harden ecommerce-elasticsearch healthcheck/resources against recurring web-store full-stack e2e flake
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE (project-internal — `projects/ecommerce-microservices-platform/docker-compose.yml` only)
 
