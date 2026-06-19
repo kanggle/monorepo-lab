@@ -37,6 +37,8 @@ import {
   type FxRatesResponse,
   FxRateHistoryResponseSchema,
   type FxRateHistoryResponse,
+  FxRatesRefreshResponseSchema,
+  type FxRatesRefreshResponse,
   FX_HISTORY_DEFAULT_LIMIT,
   FX_HISTORY_MAX_LIMIT,
   LEDGER_DEFAULT_PAGE_SIZE,
@@ -540,6 +542,41 @@ export function useFxRateHistory(
     refetchOnMount: false,
     ...READ_QUERY_REFETCH,
     retry: false,
+  });
+}
+
+// --- FX 환율 수동 refresh (operator mutation; TASK-MONO-300) ----------------
+//
+// POST /api/ledger/fx-rates/refresh → the same-origin proxy. No request body
+// (the refresh is unconditional). `retry: false` — a failure surfaces
+// immediately (no client retry storm; same posture as useResolveDiscrepancy).
+// `onSuccess` invalidates the fx-rates query so the table re-fetches and
+// reflects the newly-upserted rates.
+//
+// Feed-disabled: the proxy returns 200 `{feedEnabled:false, refreshed:0}` —
+// the mutation succeeds; `onSuccess` still re-fetches the list (which will
+// again show `rates:[]`, consistent). The button disable-while-in-flight
+// prevents double-POSTs (idempotent upserts make concurrent calls safe, but
+// disabling is courteous to the external FX provider).
+
+/**
+ * `useRefreshFxRates` — triggers the FX feed on-demand refresh mutation.
+ * `onSuccess` invalidates the `fxRatesKey()` query so the table re-fetches.
+ * The `FxRatesRefreshResponse` result (`{feedEnabled, refreshed}`) is returned
+ * to the caller so the UI can surface it (e.g. a toast or status message).
+ */
+export function useRefreshFxRates() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<FxRatesRefreshResponse> => {
+      const raw = await apiClient.post<unknown>('/api/ledger/fx-rates/refresh');
+      return FxRatesRefreshResponseSchema.parse(raw);
+    },
+    retry: false,
+    onSuccess: () => {
+      // Re-fetch the feed cache so the table + staleness indicators update.
+      qc.invalidateQueries({ queryKey: fxRatesKey() });
+    },
   });
 }
 

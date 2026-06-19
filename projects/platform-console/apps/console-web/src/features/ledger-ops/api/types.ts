@@ -812,3 +812,31 @@ export type FxRateHistoryResponse = z.infer<typeof FxRateHistoryResponseSchema>;
 export interface FxRateHistoryQueryParams {
   limit?: number;
 }
+
+// ---------------------------------------------------------------------------
+// FX 환율 수동 refresh — TASK-MONO-300 (Scope B)
+//   POST /api/finance/ledger/fx-rates/refresh (FIN-BE-???; finance side Scope A)
+//   Producer envelope = { data: { feedEnabled, refreshed }, meta }.
+//
+// F5 INVARIANT: `refreshed` is a plain integer COUNT (not money — the F5
+// invariant is amount/rate-only); `feedEnabled` is a boolean. No `rate`
+// string on this path. Feed-disabled → 200 no-op (`feedEnabled:false,
+// refreshed:0`). Provider failure → 200 with the count that succeeded
+// (best-effort). The console presents the result via toast / status message.
+// ---------------------------------------------------------------------------
+
+/**
+ * FxRatesRefreshResponse — `POST /api/finance/ledger/fx-rates/refresh` 200
+ * body `data` sub-object: the feed-enabled flag + the count of pairs that
+ * were upserted. `refreshed` is a non-negative integer count (NOT money —
+ * F5 is amount/rate-only). Feed-disabled → `{feedEnabled:false, refreshed:0}`
+ * (a 200 no-op, consistent with GET `feedEnabled:false, rates:[]`).
+ */
+export const FxRatesRefreshResponseSchema = z
+  .object({
+    feedEnabled: z.boolean(),
+    // Count of pairs upserted — NOT money; z.number() is correct here.
+    refreshed: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type FxRatesRefreshResponse = z.infer<typeof FxRatesRefreshResponseSchema>;

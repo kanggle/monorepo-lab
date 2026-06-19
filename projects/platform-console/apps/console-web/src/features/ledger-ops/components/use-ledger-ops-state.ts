@@ -19,6 +19,7 @@ import {
   usePositionLots,
   useFxRates,
   useFxRateHistory,
+  useRefreshFxRates,
 } from '../hooks/use-ledger-ops';
 import { ApiError } from '@/shared/api/errors';
 import type { TabKey } from './LedgerOpsTabs';
@@ -179,6 +180,16 @@ export function useLedgerOpsState({
     fxRatesQ.error instanceof ApiError ? fxRatesQ.error : null;
   const fxRatesForbidden = fxRatesApiErr?.status === 403;
 
+  // FX 환율 수동 refresh mutation (TASK-MONO-300). `onSuccess` invalidates the
+  // fxRatesKey() query so the table re-fetches. `isPending` drives the
+  // button's loading/disabled state (no double-POST while in-flight).
+  const refreshFxRatesMutation = useRefreshFxRates();
+  const fxRatesRefreshing = refreshFxRatesMutation.isPending;
+  const fxRatesRefreshError =
+    refreshFxRatesMutation.error instanceof ApiError
+      ? refreshFxRatesMutation.error
+      : null;
+
   // FX 환율 history 드릴 — per-pair read (TASK-PC-FE-104). Foreign-currency-
   // driven: set either by clicking a feed-table pair OR by the manual lookup
   // form. Gated on the active tab + a non-empty foreign code so a hidden panel
@@ -238,6 +249,9 @@ export function useLedgerOpsState({
     fxRatesQ,
     fxRatesForbidden,
     fxRatesApiErr,
+    refreshFxRatesMutation,
+    fxRatesRefreshing,
+    fxRatesRefreshError,
     fxHistoryForeign,
     setFxHistoryForeign,
     fxHistoryQ,

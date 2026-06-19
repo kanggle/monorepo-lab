@@ -101,6 +101,9 @@ export function LedgerOpsScreen(props: LedgerOpsScreenProps) {
     fxRatesQ,
     fxRatesForbidden,
     fxRatesApiErr,
+    refreshFxRatesMutation,
+    fxRatesRefreshing,
+    fxRatesRefreshError,
     fxHistoryForeign,
     setFxHistoryForeign,
     fxHistoryQ,
@@ -403,11 +406,23 @@ export function LedgerOpsScreen(props: LedgerOpsScreenProps) {
             {messageForCode(fxRatesApiErr.code)}
           </div>
         ) : (
-          <FxRatesTable
-            data={fxRatesQ.data ?? null}
-            onRefresh={() => void fxRatesQ.refetch()}
-            onSelectPair={setFxHistoryForeign}
-          />
+          <>
+            {fxRatesRefreshError ? (
+              <div
+                role="status"
+                data-testid="ledger-fx-rates-refresh-error"
+                className="mb-3 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+              >
+                {messageForCode(fxRatesRefreshError.code)}
+              </div>
+            ) : null}
+            <FxRatesTable
+              data={fxRatesQ.data ?? null}
+              onRefresh={() => void refreshFxRatesMutation.mutate()}
+              refreshing={fxRatesRefreshing}
+              onSelectPair={setFxHistoryForeign}
+            />
+          </>
         )}
 
         {/* FX 환율 history 드릴 (TASK-PC-FE-104) — per-pair time series, wired

@@ -24,3 +24,4 @@
 
 export * from './ledger-reads-api';
 export * from './ledger-reconciliation-api';
+export * from './ledger-fx-rates-api';

@@ -1,7 +1,7 @@
 ---
 id: TASK-MONO-300
 title: "FX rate manual refresh — finance POST endpoint + console-web refresh action (ADR-002 deferred)"
-status: ready
+status: done
 scope: cross-project
 projects: [finance-platform, platform-console]
 tags: [code, test, fx, console, cross-project]
