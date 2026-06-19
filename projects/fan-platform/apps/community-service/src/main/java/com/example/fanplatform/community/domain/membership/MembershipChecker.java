@@ -5,10 +5,13 @@ package com.example.fanplatform.community.domain.membership;
  * grants access to a {@code MEMBERS_ONLY} or {@code PREMIUM} post.
  *
  * <p>Implementations MUST be fail-closed: on any infrastructure error, return
- * {@code false} (deny access). For the v1 PREMIUM tier the
- * {@code AlwaysAllowMembershipChecker} default returns {@code true} +
- * WARN-level log; a real membership-service consumer is a v2 concern (see
- * TASK-FAN-BE-002 § Edge Cases — PREMIUM v1).
+ * {@code false} (deny access). The production implementation is
+ * {@code HttpMembershipChecker} (wired by {@code MembershipCheckerAutoConfig}),
+ * which enforces both {@code MEMBERS_ONLY} and {@code PREMIUM} tiers against
+ * membership-service (TASK-FAN-BE-010 hard fail-close; feed path completed in
+ * TASK-FAN-BE-019). {@code AlwaysAllowMembershipChecker} is a
+ * {@code @ConditionalOnMissingBean} escape-hatch fallback only (e.g. tests that
+ * opt out), never selected when the HTTP checker is present.
  */
 public interface MembershipChecker {
 
