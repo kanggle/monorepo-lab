@@ -9,7 +9,6 @@ import com.example.fanplatform.community.domain.post.PostVisibility;
 import com.example.fanplatform.community.application.port.out.FeedCache;
 import com.example.fanplatform.community.domain.reaction.ReactionRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,7 +36,6 @@ import java.util.Optional;
  * {@code community.follow.changed} topic if sub-minute freshness becomes a
  * requirement.
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class GetFeedUseCase {
@@ -116,11 +114,12 @@ public class GetFeedUseCase {
             return false;
         }
         if (post.getVisibility() == PostVisibility.PREMIUM) {
-            // v1 PREMIUM = always allow (fail-open with WARN). Locked=false.
-            // TODO(TASK-FAN-BE-MEMBERSHIP): hard-gate once membership-service exists.
-            log.warn("PREMIUM gate bypassed in feed for post {} actor {} tenant {}",
-                    post.getId(), actor.accountId(), actor.tenantId());
-            return false;
+            // membership-service enforces the gate (mirrors PostAccessGuard FAN-BE-010).
+            // The checker is fail-closed: any downstream/auth error returns false (locked).
+            // Required tier is PREMIUM; tier hierarchy (PREMIUM ⊇ MEMBERS_ONLY) is
+            // resolved server-side in membership-service — the client passes the required tier only.
+            return !membershipChecker.hasAccess(actor.accountId(),
+                    PostVisibility.PREMIUM.name(), actor.tenantId());
         }
         // MEMBERS_ONLY
         return !membershipChecker.hasAccess(actor.accountId(),
