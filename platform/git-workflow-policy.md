@@ -51,6 +51,12 @@ The repo squash-merges PRs; feature/chore refs are not auto-pruned and accumulat
 
 ---
 
+## `gh pr create` / `gh pr merge` Body Hook False-Match
+
+The `protect-main-branch` hook inspects the command string for direct-to-`main` pushes. A `gh pr create` / `gh pr merge` whose **inline body text** (`--body "…"`) contains literal tokens such as `push origin --delete`, `push --delete`, or `reset … to main` can trip a false-match and be **blocked** even though the command only opens/merges a PR. Workaround: pass the body via a file — `gh pr create --body-file <path>` (the hook matches the inline command string, not file contents) — or reword the body to avoid those literal tokens. (Agent personal-memory detail, this host: `project_branch_hygiene_policy`.)
+
+---
+
 ## `.claude/` Self-Modification Is Classifier-Blocked
 
 The auto-mode classifier hard-blocks editing or committing files under `.claude/hooks/`, `.claude/agents/`, `.claude/commands/` even with explicit user approval (the same higher-safety layer as mass `push --delete`). Hand the exact patch to the user to apply + commit; do not attempt a shell-write bypass. `platform/` is **not** subject to this — only `.claude/`. (Agent personal-memory detail, this host: `env_classifier_claude_self_mod_block`.)
