@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-407
 title: resolveTenantType 하드코딩 폴백 제거 — account-service tenant_type 조회로 대체
-status: ready
+status: done
 project: iam-platform
 service: auth-service
 type: bugfix
