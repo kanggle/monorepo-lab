@@ -349,14 +349,14 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
       expect(h['X-Operator-Reason']).toBeUndefined();
       expect(h['Content-Type']).toBeUndefined();
     }
-    // The api module exports the six read functions + EXACTLY ONE mutation
-    // (`resolveDiscrepancy` — TASK-PC-FE-073) + two account-drill reads
-    // (TASK-PC-FE-074: `getAccountBalance` + `getAccountEntries`) + one
-    // statement-detail read (TASK-PC-FE-075: `getStatement`) + one FX
-    // position open-lots read (TASK-PC-FE-091: `getPositionLots`) + one FX
-    // rates dashboard read (TASK-PC-FE-092: `getFxRates`). No OTHER
-    // ledger write (manual posting / revaluation / settlement / statement
-    // ingest), no entry list/search (id-driven).
+    // The api module exports the six read functions + TWO mutations
+    // (`resolveDiscrepancy` — TASK-PC-FE-073; `refreshFxRates` — TASK-MONO-300)
+    // + two account-drill reads (TASK-PC-FE-074: `getAccountBalance` +
+    // `getAccountEntries`) + one statement-detail read (TASK-PC-FE-075:
+    // `getStatement`) + one FX position open-lots read (TASK-PC-FE-091:
+    // `getPositionLots`) + one FX rates dashboard read (TASK-PC-FE-092:
+    // `getFxRates`). No OTHER ledger write (manual posting / revaluation /
+    // settlement / statement ingest), no entry list/search (id-driven).
     const mod = await import('@/features/ledger-ops/api/ledger-api');
     expect(Object.keys(mod).sort()).toEqual(
       [
@@ -378,11 +378,13 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
         'getFxRates',
         // TASK-PC-FE-104 — FX 환율 history 드릴 read (read-only, GET only)
         'getFxRateHistory',
+        // TASK-MONO-300 — FX 환율 수동 refresh mutation (POST, no request body)
+        'refreshFxRates',
       ].sort(),
     );
   });
 
-  it('the proxy directory exposes ONLY GET reads + EXACTLY ONE POST (the resolve mutation; no PUT/PATCH/DELETE)', async () => {
+  it('the proxy directory exposes ONLY GET reads + EXACTLY TWO POSTs (resolve + fx-refresh; no PUT/PATCH/DELETE)', async () => {
     const proxyRoot = path.resolve(__dirname, '../../src/app/api/ledger');
     function walk(p: string): string[] {
       const out: string[] = [];
@@ -400,11 +402,16 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
     for (const f of tsFiles) {
       const src = readFileSync(f, 'utf8');
       if (path.basename(f) === '_proxy.ts') continue;
-      const isResolve = f.replace(/\\/g, '/').endsWith(
+      const normalised = f.replace(/\\/g, '/');
+      const isResolve = normalised.endsWith(
         'reconciliation/discrepancies/[id]/resolve/route.ts',
       );
-      if (isResolve) {
-        // The ONLY mutation route — POST only (no GET/PUT/PATCH/DELETE).
+      // TASK-MONO-300 — the FX 환율 수동 refresh POST route (Scope B).
+      const isFxRefresh = normalised.endsWith(
+        'api/ledger/fx-rates/refresh/route.ts',
+      );
+      if (isResolve || isFxRefresh) {
+        // Mutation routes — POST only (no GET/PUT/PATCH/DELETE).
         expect(src).toMatch(/export\s+async\s+function\s+POST\b/);
         expect(src).not.toMatch(/export\s+async\s+function\s+GET\b/);
         postRoutes += 1;
@@ -417,8 +424,9 @@ describe('ledger-api — STRICTLY read-only (no mutation artifacts anywhere; § 
       expect(src).not.toMatch(/export\s+async\s+function\s+PATCH\b/);
       expect(src).not.toMatch(/export\s+async\s+function\s+DELETE\b/);
     }
-    // EXACTLY ONE mutation route in the whole ledger proxy tree.
-    expect(postRoutes).toBe(1);
+    // EXACTLY TWO mutation routes: resolve discrepancy (PC-FE-073) +
+    // FX rates manual refresh (TASK-MONO-300).
+    expect(postRoutes).toBe(2);
   });
 });
 

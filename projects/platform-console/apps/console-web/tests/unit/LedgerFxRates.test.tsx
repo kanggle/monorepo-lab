@@ -7,14 +7,15 @@ import type { FxRatesResponse } from '@/features/ledger-ops';
 
 /**
  * `features/ledger-ops` FX 환율 피드 대시보드 surface (TASK-PC-FE-092 —
- * STRICTLY READ-ONLY):
+ * READ-ONLY display; TASK-MONO-300 — manual refresh action):
  *   - FxRatesTable renders the feedEnabled badge (both states);
  *   - stale rows get the warning highlight style + a "STALE" badge;
  *   - fresh rows get the "최신" badge;
  *   - empty rates array → empty-state message (NOT a 404 / error);
  *   - `rate` is rendered verbatim as the exact string (F5 — proves no
  *     Number()/parseFloat() coercion — the precision string appears verbatim);
- *   - the refresh button calls onRefresh when clicked.
+ *   - the refresh button calls onRefresh when clicked;
+ *   - `refreshing=true` disables the button + shows "새로고침 중…" (TASK-MONO-300).
  */
 
 function wrapper() {
@@ -221,5 +222,48 @@ describe('FxRatesTable — refresh button calls onRefresh', () => {
     expect(screen.getByTestId('ledger-fx-rates-refresh')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('ledger-fx-rates-refresh'));
     expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FxRatesTable — refreshing prop (TASK-MONO-300 loading/disabled state)
+// ---------------------------------------------------------------------------
+
+describe('FxRatesTable — refreshing prop (TASK-MONO-300 in-flight guard)', () => {
+  it('refreshing=true disables the button and shows "새로고침 중…"', () => {
+    const onRefresh = vi.fn();
+    render(
+      <FxRatesTable data={FX_RATES_ENABLED} onRefresh={onRefresh} refreshing />,
+      { wrapper: wrapper() },
+    );
+    const btn = screen.getByTestId('ledger-fx-rates-refresh');
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute('aria-busy', 'true');
+    expect(btn.textContent).toContain('새로고침 중…');
+    // Click should not fire onRefresh when disabled.
+    fireEvent.click(btn);
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('refreshing=false (default) shows "새로고침" + is enabled', () => {
+    const onRefresh = vi.fn();
+    render(
+      <FxRatesTable data={FX_RATES_ENABLED} onRefresh={onRefresh} refreshing={false} />,
+      { wrapper: wrapper() },
+    );
+    const btn = screen.getByTestId('ledger-fx-rates-refresh');
+    expect(btn).not.toBeDisabled();
+    expect(btn.textContent).toContain('새로고침');
+    expect(btn.textContent).not.toContain('중…');
+  });
+
+  it('refreshing=true also disables with empty rates', () => {
+    render(
+      <FxRatesTable data={FX_RATES_EMPTY} refreshing />,
+      { wrapper: wrapper() },
+    );
+    const btn = screen.getByTestId('ledger-fx-rates-refresh');
+    expect(btn).toBeDisabled();
+    expect(btn.textContent).toContain('새로고침 중…');
   });
 });

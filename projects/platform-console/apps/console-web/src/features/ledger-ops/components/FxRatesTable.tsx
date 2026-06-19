@@ -29,6 +29,13 @@ export interface FxRatesTableProps {
   data: FxRatesResponse | null;
   onRefresh?: () => void;
   /**
+   * TASK-MONO-300 — when true, the Refresh button is disabled and shows a
+   * loading indicator while the POST mutation is in-flight. Prevents
+   * double-submit and avoids spamming the external FX provider. Defaults to
+   * false (the read-only FE-092 baseline behaviour; tests pin no-regression).
+   */
+  refreshing?: boolean;
+  /**
    * TASK-PC-FE-104 — when provided, each row's currency-pair cell becomes a
    * button that drills into that pair's FX rate history (passing the foreign
    * currency upward). Omitted → the pair renders as plain text (the FE-092
@@ -52,7 +59,7 @@ function humanizeAge(ageSeconds: number): string {
   return `${Math.floor(ageSeconds / 86400)}일 전`;
 }
 
-export function FxRatesTable({ data, onRefresh, onSelectPair }: FxRatesTableProps) {
+export function FxRatesTable({ data, onRefresh, refreshing = false, onSelectPair }: FxRatesTableProps) {
   if (!data) {
     return null;
   }
@@ -93,9 +100,11 @@ export function FxRatesTable({ data, onRefresh, onSelectPair }: FxRatesTableProp
           type="button"
           data-testid="ledger-fx-rates-refresh"
           onClick={onRefresh}
-          className="rounded-md border border-border px-3 py-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          disabled={refreshing}
+          aria-busy={refreshing}
+          className="rounded-md border border-border px-3 py-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
-          새로고침
+          {refreshing ? '새로고침 중…' : '새로고침'}
         </button>
       </div>
 
