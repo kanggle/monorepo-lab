@@ -443,6 +443,23 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   translates `int limit` to `PageRequest.of(0, limit)`. Net-zero, no migration.
   See § FX rate feed (operator read surface) + ledger-api.md § 14.1.
 
+**Twenty-eighth increment — IN (TASK-MONO-300, FX rate manual refresh endpoint):**
+- ADR-002 "수동 refresh" deferred item realized: `POST /api/finance/ledger/fx-rates/refresh`
+  — an operator-triggered on-demand cache reload that invokes `RefreshFxRateQuotesUseCase.refresh()`
+  (the same use case the `FxRateFeedPoller` calls) and returns `FxRatesRefreshResponse{feedEnabled,
+  refreshed}`. **Graceful when feed disabled**: if `financeplatform.ledger.fxrate.enabled=false` the
+  noop provider returns empty for all pairs; the use case returns 0 and the endpoint returns 200
+  `{feedEnabled:false, refreshed:0}` (consistent with `GET` returning `feedEnabled:false, rates:[]`),
+  NOT an error. **Best-effort / never-throw**: the use case's per-pair try/catch means a provider
+  failure per pair is logged and skipped — the endpoint returns the partial count, not a 500.
+  **No ShedLock** on the manual path — a deliberate on-demand action; concurrent refreshes are safe
+  (the upsert is last-write-wins idempotent). Net-zero: no new migration, no new event, no new
+  domain type. `FxRateFeedSettings.feedEnabled()` (already an application-layer port, 24th increment)
+  is read directly in the controller to determine the `feedEnabled` field in the response. The
+  `refreshed` count comes from the use case return value. New DTO `FxRatesRefreshResponse{feedEnabled:
+  boolean, refreshed: int}` (presentation layer). See § FX rate feed § Manual refresh endpoint
+  + ledger-api.md § 14.2.
+
 **Forward-declared — OUT (each a later task):**
 - **Matching**: fuzzy / N:M / split matching; period **reopen**; per-currency-pair / per-account
   reconciliation-tolerance granularity (v1 is per-tenant). *(Configurable FX tolerance = 13th;
@@ -451,8 +468,8 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   9th / 10th / 12th / 17th increments act on one `(account, currency)` per operator call); a
   **proceeds-amount input** (proceeds derive from a rate; supplying the *actual* base received); a
   **configurable base currency** (fixed KRW in v1). *(FIFO / lot-level cost basis = 16th–18th — done.)*
-- **FX rate feed (ADR-002 remainder)**: a console "FX rate dashboard + manual refresh" surface
-  (separate PC-FE task); a **ShedLock single-leader guard** for the poller (multi-instance).
+- **FX rate feed (ADR-002 remainder)**: a **ShedLock single-leader guard** for the poller
+  (multi-instance).
   *(Per-tenant rate override (special contract rates) = 28th increment, TASK-FIN-BE-042 — done;
   see § FX rate feed § Per-tenant contract-rate override.)* *(Feed infra + omitted-rate fallback +
   read surface = 23rd–25th — done. **Real public FX API adapter** (`mode=real`, Frankfurter
@@ -460,7 +477,10 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   `fx_rate_quote_history` audit trail** (V13, `FxRateQuoteHistory` domain +
   `FxRateQuoteHistoryRepository` port + JPA adapter; poller appends one row per pair per run
   inside the SAME `@Transactional`) = TASK-FIN-BE-039 — done. **Per-pair history drill read
-  EP** (`/{foreignCurrency}/history`) = TASK-FIN-BE-040 — done.)*
+  EP** (`/{foreignCurrency}/history`) = TASK-FIN-BE-040 — done. **Console FX rate dashboard +
+  manual refresh** (`POST /api/finance/ledger/fx-rates/refresh` + console-web `FxRatesTable`
+  refresh action) = TASK-MONO-300 — done; the ADR-002 "환율 대시보드 + 수동 refresh" deferred
+  item is **realized**. See § FX rate feed § Manual refresh endpoint.)*
 - **Manual posting**: body-hash idempotency conflict (`IDEMPOTENCY_KEY_CONFLICT` 409 on a
   same-key / different-body replay — the 5th increment is replay-safe on the key alone) +
   a maker / checker approval workflow for manual entries.
@@ -676,7 +696,7 @@ com.example.finance.ledger/
     ├── controller/SettlementController.java ← (10th incr) POST /api/finance/ledger/settlements (FX settlement; Idempotency-Key header; no @Transactional — funnels to SettleForeignPositionUseCase; 201 settled / 200 settled:false); (20th incr) GET /settlements/{code}/{currency}/lots (getPositionLots — open lots read); (15th/21st incr) GET/PUT /settlements/cost-flow-config + GET/PUT/DELETE /settlements/cost-flow-config/accounts
     ├── controller/PeriodController.java     ← (2nd incr) /api/finance/ledger/periods/** (open/close/list/detail)
     ├── controller/ReconciliationController.java ← (4th incr) /api/finance/ledger/reconciliation/** (ingest/resolve/read)
-    ├── controller/FxRateController.java     ← (25th incr) GET /api/finance/ledger/fx-rates (fx_rate_quote cache read; tenant-agnostic; no Idempotency-Key; .authenticated()); (27th incr — TASK-FIN-BE-040) + GET /{foreignCurrency}/history (history drill; limit-normalised; empty-200)
+    ├── controller/FxRateController.java     ← (25th incr) GET /api/finance/ledger/fx-rates (fx_rate_quote cache read; tenant-agnostic; no Idempotency-Key; .authenticated()); (27th incr — TASK-FIN-BE-040) + GET /{foreignCurrency}/history (history drill; limit-normalised; empty-200); (TASK-MONO-300) + POST /refresh → RefreshFxRateQuotesUseCase.refresh() → FxRatesRefreshResponse{feedEnabled, refreshed}; feed-disabled → 200 {feedEnabled:false, refreshed:0}; best-effort (partial count on provider failure, no 500); no ShedLock (deliberate on-demand); now also injects FxRateFeedSettings
     ├── advice/GlobalExceptionHandler.java  ← domain → HTTP envelope (fintech codes; (2nd incr) period codes; (5th incr) LEDGER_ENTRY_UNBALANCED/CURRENCY_MISMATCH/LEDGER_ACCOUNT_NOT_FOUND/LEDGER_PERIOD_CLOSED now surface synchronously + IDEMPOTENCY_KEY_REQUIRED handler guard)
     ├── dto/                                ← response DTOs (money as minor-units integer + currency)
     ├── filter/TenantClaimEnforcer.java
@@ -1924,6 +1944,34 @@ no route ambiguity. `GetFxRateOverrideUseCase` (read; absent → `present:false`
 `updated_by` = the actor identity, in the SAME `@Transactional`). A non-positive / invalid rate or
 an unknown currency → `400 VALIDATION_ERROR`, nothing persisted.
 
+**Manual refresh endpoint (TASK-MONO-300 — ADR-002 "수동 refresh" realized).** `POST
+/api/finance/ledger/fx-rates/refresh` in `FxRateController` — operator-triggered on-demand cache
+reload. The endpoint:
+
+1. Calls `ActorContextResolver.currentOrThrow()` (auth enforcement — same pattern as every other
+   ledger endpoint; the `/api/finance/**` `.authenticated()` rule in `SecurityConfig` enforces the
+   real 401/403 at the filter chain layer).
+2. Reads `FxRateFeedSettings.feedEnabled()` (the existing application-layer port, 24th increment) to
+   determine the `feedEnabled` response field — mirrors the GET list endpoint's `feedEnabled` field.
+3. Calls `RefreshFxRateQuotesUseCase.refresh()` — the same use case the `FxRateFeedPoller` calls
+   (the upsert is last-write-wins idempotent; concurrent calls are safe without a ShedLock). Returns
+   the count of pairs upserted (`refreshed`).
+4. Returns 200 `ApiEnvelope<FxRatesRefreshResponse>` with `{feedEnabled, refreshed}`.
+
+**Graceful when feed disabled**: `financeplatform.ledger.fxrate.enabled=false` (the default /
+standalone mode) → the noop adapter returns `empty()` for every pair → use case returns 0 → endpoint
+returns 200 `{feedEnabled:false, refreshed:0}`. This is a safe no-op, NOT an error (consistent with
+the GET returning `feedEnabled:false, rates:[]`).
+
+**Best-effort / never-throw**: the use case's per-pair try/catch (AC-6, 23rd increment) means any
+provider failure is logged and skipped — the endpoint returns the partial count, not a 500.
+
+**No ShedLock** on the manual path — a deliberate on-demand action. The idempotent upsert makes
+concurrent manual refreshes + concurrent poller tick safe.
+
+**No new migration, no new domain type, no new event.** New DTO `FxRatesRefreshResponse{feedEnabled:
+boolean, refreshed: int}` (presentation layer only). Formal contract → `ledger-api.md § 14.2`.
+
 ## Idempotency / dedupe (F1)
 
 The consumer dedupes on the **signed source event id** (the envelope's `eventId`):
@@ -1974,6 +2022,7 @@ All under `/api/finance/ledger/**`. Formal shapes → [`ledger-api.md`](../../co
 | `GET` | `/api/finance/ledger/reconciliation/statements/{id}` | JWT | **(4th increment)** statement detail + match/discrepancy summary |
 | `GET` | `/api/finance/ledger/reconciliation/discrepancies` | JWT | **(4th increment)** discrepancy review queue (`?status=OPEN`) |
 | `GET` | `/api/finance/ledger/reconciliation/discrepancies/{id}` | JWT | **(4th increment)** discrepancy detail |
+| `POST` | `/api/finance/ledger/fx-rates/refresh` | JWT (authenticated) | **(TASK-MONO-300)** on-demand FX rate cache refresh → `{feedEnabled, refreshed}`; feed-disabled → 200 no-op; best-effort (partial count on provider failure) |
 | `GET` | `/actuator/{health,info}` | none | probes |
 | `GET` | `/actuator/prometheus` | network-isolated | metrics |
 

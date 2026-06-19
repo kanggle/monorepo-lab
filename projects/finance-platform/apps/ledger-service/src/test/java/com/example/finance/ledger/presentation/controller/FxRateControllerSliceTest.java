@@ -3,6 +3,8 @@ package com.example.finance.ledger.presentation.controller;
 import com.example.finance.ledger.application.ActorContext;
 import com.example.finance.ledger.application.GetFxRateHistoryUseCase;
 import com.example.finance.ledger.application.GetFxRatesUseCase;
+import com.example.finance.ledger.application.RefreshFxRateQuotesUseCase;
+import com.example.finance.ledger.application.port.outbound.FxRateFeedSettings;
 import com.example.finance.ledger.application.view.FxRateView;
 import com.example.finance.ledger.application.view.FxRatesView;
 import com.example.finance.ledger.presentation.advice.GlobalExceptionHandler;
@@ -54,6 +56,12 @@ class FxRateControllerSliceTest {
 
     @MockitoBean
     GetFxRateHistoryUseCase getFxRateHistory;
+
+    @MockitoBean
+    RefreshFxRateQuotesUseCase refreshFxRateQuotes;
+
+    @MockitoBean
+    FxRateFeedSettings fxRateFeedSettings;
 
     @BeforeEach
     void setUp() {
