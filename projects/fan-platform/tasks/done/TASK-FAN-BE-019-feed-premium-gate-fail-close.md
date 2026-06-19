@@ -1,7 +1,7 @@
 ---
 id: TASK-FAN-BE-019
 title: Feed PREMIUM 게이트 fail-close (GetFeedUseCase.isLocked 정합)
-status: ready
+status: done
 project: fan-platform
 service: community-service
 type: bugfix
