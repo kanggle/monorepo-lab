@@ -204,7 +204,7 @@ No body.
 
 There is **no consumer-facing ecommerce withdrawal endpoint.** Post-IAM (TASK-BE-132), account lifecycle — including withdrawal / deletion — is owned by the **IAM identity authority** (`iam-platform` account-service), which runs the withdrawal / GDPR-delete flow and emits the `account.deleted` domain event. A "delete my account" action belongs at IAM (reached via the gateway), not as a direct ecommerce profile-mutation endpoint that would bypass the identity authority.
 
-**ecommerce reaction (forward-declared, not yet wired):** the profile-withdrawal machinery exists in user-service — `UserProfileService.withdrawProfile()` transitions the profile to `WITHDRAWN` and publishes the ecommerce `UserWithdrawn` event (consumed by order-service, etc.). The intended wiring is to **consume IAM's `account.deleted`** and invoke `withdrawProfile()`; that consumer is **not yet implemented** (the entry point is currently orphaned — no controller, no consumer triggers it). Building it is a separate cross-project integration task.
+**ecommerce reaction (wired — TASK-BE-388):** the profile-withdrawal machinery in user-service — `UserProfileService.withdrawProfile()` transitions the profile to `WITHDRAWN` and publishes the ecommerce `UserWithdrawn` event (consumed by order-service, etc.). IAM's `account.deleted` is consumed by `AccountDeletedConsumer` (`@KafkaListener(topics = "account.deleted", groupId = "user-service")`, `@Profile("!standalone")`), which invokes `withdrawProfile()` / `anonymizeProfile()`. The cross-project deletion wiring is live (see [`account-lifecycle-subscriptions.md`](account-lifecycle-subscriptions.md)).
 
 ---
 

@@ -487,7 +487,7 @@ Blocked if current state is `EXPIRED`. Returns `STATE_TRANSITION_INVALID`.
 
 Note: **Lot expiration is not exposed as a public endpoint.** A scheduled domain
 job transitions `ACTIVE → EXPIRED` when `expiry_date < today`. Job design:
-`specs/services/master-service/scheduled-jobs.md` (to be authored in a later task).
+[`specs/services/master-service/scheduled-jobs.md`](../../services/master-service/scheduled-jobs.md).
 
 ---
 
