@@ -75,9 +75,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
 
-    // TASK-BE-273 Phase 1 diagnostic: dedicated logger so WireMock request-listener
-    // emissions land at INFO and are visible in CI Surefire output without depending
-    // on the production AccountServiceClient logger configuration.
+    // Diagnostic logger (kept from TASK-BE-273): WireMock request-listener emissions
+    // land at INFO and are visible in CI Surefire output without depending on the
+    // production AccountServiceClient logger configuration. Retained as a permanent
+    // aid should the resolved HTTP/2-vs-WireMock race (ADR-004) ever recur.
     private static final Logger DIAG_LOG = LoggerFactory.getLogger(OAuthLoginIntegrationTest.class);
 
     // MySQL + Kafka containers inherited from AbstractIntegrationTest (TASK-BE-076).
@@ -174,14 +175,11 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     void resetStubs() {
         wireMock.resetAll();
 
-        // TASK-BE-273 Phase 1 diagnostic: track every request that reaches the
-        // WireMock server (account-service stubs + provider stubs). If the IT 503
-        // is a network-level reach failure (ConnectException / UnknownHostException)
-        // this listener will emit zero WIREMOCK_REQUEST lines for the failing
-        // method. If reach is fine but stub matching is missing the listener will
-        // log incoming URL + status returned (404 = stub miss, 200 = stub matched).
-        // The listener is re-registered on every @BeforeEach because resetAll()
-        // clears the listener registry as well as the stub registry.
+        // Diagnostic request-listener (kept from TASK-BE-273): logs every request
+        // that reaches the WireMock server (account-service + provider stubs) with
+        // URL + returned status (404 = stub miss, 200 = stub matched). Useful if the
+        // resolved HTTP-client/WireMock race (ADR-004) ever recurs. Re-registered on
+        // every @BeforeEach because resetAll() clears the listener registry too.
         wireMock.addMockServiceRequestListener((request, response) ->
                 DIAG_LOG.info("WIREMOCK_REQUEST method={} url={} status={} bodyLen={}",
                         request.getMethod(), request.getUrl(), response.getStatus(),
@@ -242,29 +240,17 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // Happy-path tests per provider
     // ----------------------------------------------------------------------
 
-    // TASK-MONO-046-7a Cluster C — re-disabled after PR #289 cycle 1 + 2 burned.
-    // Cycle 1 hypothesis (CB pollution via reflection reset in @BeforeEach) was
-    // sufficient locally (Rancher dockerd, single-class run PASSED 7/7 in 15.3s)
-    // but FAILED 5/5 on CI Linux (full-suite run, identical {@code Account
-    // service social-signup failed after retries: Account service communication
-    // error}). Cycle 2 hypothesis (JVM-shared static state via {@code forkEvery
-    // 1}) was also FAILED 5/5 on CI with the same error pattern, falsifying
-    // suite-isolation as a sufficient fix. Two cycles confirm PR #264's
-    // "auth-service infrastructure isn't fully isolated test-to-test" but the
-    // actual mechanism (Linux-specific HTTP client behaviour / WireMock binding
-    // / Spring DynamicPropertySource ordering / unidentified other) was not
-    // localised within the 6-cycle budget. Per spec § Failure Scenarios option
-    // (a), the IT remains @Disabled with coverage preserved at the unit level
-    // by OAuthLoginUseCaseTest + OAuthLoginTransactionalStepTest. Re-enabling
-    // requires a separate ADR / task that designs deeper isolation (e.g. CI
-    // matrix with -Dauth.account-service.base-url override pointing at a
-    // standalone WireMock container, or splitting the OAuth callback IT into
-    // its own Gradle module with a controlled classpath).
-    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily so the 5
-    // happy-path methods run on CI and surface the underlying 503 root cause
-    // through the AccountServiceClient cause-chain logging + the WireMock
-    // request-listener. Phase 2 will either restore @Disabled (option D) or
-    // apply a targeted fix (option B/C) per ADR-004 § Phase 1 Findings.
+    // OAuth happy-path IT methods — ENABLED and green on CI Linux (resolved).
+    // History: these 5 methods failed 5/5 only on CI Linux with a 503
+    // ("Account service communication error" after retries → Resilience4j CB
+    // open). TASK-BE-273 / ADR-004 (Phase 2, ACCEPTED) diagnosed the cause as a
+    // JDK HttpClient HTTP/2 RST_STREAM "Stream cancelled" race against WireMock
+    // on Linux epoll event loops (WireMock logged status=200, the client saw a
+    // timeout). Fix: pin all outbound HTTP clients to HTTP/1.1 — see
+    // ResilienceClientFactory (AccountServiceClient path) and
+    // OAuthClientSupport.buildHttp11RestClient() (Google/Kakao/Microsoft). The
+    // methods have run green on the iam Testcontainers CI job ever since; the
+    // WireMock request-listener below is kept as a permanent diagnostic aid.
     @Test
     @DisplayName("Google: authorize + callback → tokens, social_identities row, outbox OAUTH_GOOGLE")
     void googleHappyPath() throws Exception {
@@ -284,7 +270,6 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-google-001", "OAUTH_GOOGLE");
     }
 
-    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily.
     @Test
     @DisplayName("Kakao: authorize + callback (access_token + userinfo) → outbox OAUTH_KAKAO")
     void kakaoHappyPath() throws Exception {
@@ -321,7 +306,6 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-kakao-002", "OAUTH_KAKAO");
     }
 
-    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily.
     @Test
     @DisplayName("Microsoft: authorize + callback (id_token sub/email) → outbox OAUTH_MICROSOFT")
     void microsoftHappyPath() throws Exception {
@@ -339,7 +323,6 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
         assertOutboxLoginMethod("acc-ms-003", "OAUTH_MICROSOFT");
     }
 
-    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily.
     @Test
     @DisplayName("Microsoft: email absent → preferred_username fallback is used as email")
     void microsoftPreferredUsernameFallback() throws Exception {
@@ -362,7 +345,6 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // Existing-email auto-link scenario
     // ----------------------------------------------------------------------
 
-    // TASK-BE-273 Phase 1 diagnostic: @Disabled removed temporarily.
     @Test
     @DisplayName("Microsoft: existing email → isNewAccount false, social_identities created on existing account")
     void microsoftExistingEmailAutoLink() throws Exception {
