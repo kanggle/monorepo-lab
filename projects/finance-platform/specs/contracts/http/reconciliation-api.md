@@ -182,10 +182,15 @@ response.
 ## Out of scope (forward-declared — later increments)
 
 - Fuzzy / N:M / split matching; period **reopen**.
-- **Foreign-external → KRW-internal** cross matching (the reverse direction) — the 14th increment
-  (TASK-FIN-BE-021) ships **base-external → foreign-internal** only; the reverse is a separate
-  forward-declarable increment.
-- FIFO / lot-level cost basis — a separate, larger increment.
 - Per-currency-pair / per-account FX tolerance granularity — v1 is **per-tenant**.
 - An in-repo consumer of the reconciliation feed (this increment ships the producer
   + topics only).
+
+> **Now in scope (implemented — no longer forward-declared):** **Foreign-external →
+> KRW-internal** reverse cross-currency matching (the 19th increment, TASK-FIN-BE-027 —
+> `ReconciliationMatcher#findReverseCrossCurrencyCandidate`, the strict mirror of the
+> 14th-increment base-external → foreign-internal pass, TASK-FIN-BE-021) and **FIFO /
+> lot-level** cost basis (TASK-FIN-BE-022–029 — per-tenant + per-account FX cost-flow
+> config, FX position-lot acquisition, FIFO settlement consumption, open-lots read). See
+> `ledger-api.md` § "Now in scope" for the consolidated ledger-side statement (both
+> reconciliation directions + FIFO).

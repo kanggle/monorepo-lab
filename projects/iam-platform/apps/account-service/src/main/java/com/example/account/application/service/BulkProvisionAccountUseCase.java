@@ -41,13 +41,14 @@ import java.util.List;
  * {@code account_status_history} recording the bulk call as a whole
  * ({@code action=ACCOUNT_BULK_CREATE,targetCount=N}).
  *
- * <p><b>Audit obligation (admin-service):</b> The {@code admin_actions} table in
- * admin-service is not written by account-service directly. An
- * {@code ACCOUNT_BULK_CREATE} action code should be emitted via admin-service's
- * audit emission pattern once that pattern is established for provisioning flows.
- * Until then, the audit is captured in {@code account_status_history} only.
- * TODO(TASK-BE-257): wire admin-service audit event when provisioning audit
- * emission pattern is defined.
+ * <p><b>Audit (TASK-BE-257 finalised design):</b> bulk provisioning does NOT emit an
+ * {@code ACCOUNT_BULK_CREATE} envelope on {@code admin.action.performed}; account-service
+ * instead publishes one {@code account.created} event per row (downstream consumers process
+ * each individually), and the bulk-call audit is the {@code account_status_history} row
+ * above. The {@code ACCOUNT_BULK_CREATE} actionCode stays reserved in the
+ * {@code admin.action.performed} enum (forward-compatible) but has no admin-service emitter
+ * by deliberate design — see {@code admin-events.md} (reality-aligned by TASK-BE-316).
+ * Re-introducing admin-side emission would be a separate task.
  */
 @Slf4j
 @Service

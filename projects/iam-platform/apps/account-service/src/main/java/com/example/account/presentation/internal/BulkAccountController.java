@@ -33,14 +33,12 @@ import java.util.List;
  * not mis-parse the AIP-136 colon verb suffix ({@code accounts:bulk}) when it is appended
  * to a class-level prefix.
  *
- * <p><b>Audit emission (admin-service)</b>: The {@code admin_actions} table in admin-service
- * is owned by admin-service and is NOT written by account-service directly. An
- * {@code ACCOUNT_BULK_CREATE} action code is documented in
- * {@code specs/contracts/events/admin-events.md} for future emission once admin-service's
- * provisioning audit emission pattern is established. Until then, the audit is recorded
- * in {@code account_status_history} by {@link BulkProvisionAccountUseCase}.
- * TODO(TASK-BE-257): wire admin-service audit event when provisioning audit
- * emission pattern is defined in admin-service.
+ * <p><b>Audit (TASK-BE-257 finalised design)</b>: account-service does NOT write the
+ * admin-service {@code admin_actions} table for bulk provisioning. The bulk-call audit is
+ * recorded in {@code account_status_history} by {@link BulkProvisionAccountUseCase}, and each
+ * created account emits its own {@code account.created} event. The {@code ACCOUNT_BULK_CREATE}
+ * actionCode stays reserved (forward-compatible) in {@code admin.action.performed} with no
+ * emitter by deliberate design — see {@code admin-events.md} (reality-aligned by TASK-BE-316).
  */
 @RestController
 @RequiredArgsConstructor
