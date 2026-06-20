@@ -1,6 +1,6 @@
 # TASK-BE-421 — Reverse `account.status.changed → LOCKED` → seller-SUSPENDED projection (ADR-MONO-042 D4-C)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (cross-service event projection + idempotent/race-tolerant lifecycle reaction)
