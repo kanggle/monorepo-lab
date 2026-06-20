@@ -33,7 +33,7 @@ batch-worker 는 **HTTP API 0**. 다음 채널만 보유:
 | Spring Scheduler | `expiredSessionCleanupJob` (`@Scheduled(cron = "0 0 * * * *")`) | — | hourly session GC |
 | Spring Scheduler | `staleOrderCancellationJob` (`@Scheduled(cron = "0 */10 * * * *")`) | — | every 10 min PENDING sweep |
 | Spring Scheduler | `dailySalesAggregationJob` (`@Scheduled(cron = "0 0 1 * * *")`) | — | daily 01:00 summary |
-| Spring Scheduler | `searchIndexConsistencyCheckJob` (`@Scheduled(cron = "0 0 3 * * *")`) | — | daily 03:00 index drift check |
+| Spring Scheduler | `searchIndexConsistencyCheckJob` (`@Scheduled(cron = "0 0 3 * * *")`) | — | daily 03:00 index drift check — **heuristic spot-check only**: search-api has no full-enumeration endpoint, so the check paginates the product-service authority catalog and queries search by name; results represent suspected drift, not confirmed inconsistency (see `SearchIndexConsistencyJob` javadoc + AC-6, TASK-BE-409). |
 | Kafka publish | TBD (per future contracts) | — | batch 완료 통지 |
 | HTTP outbound | `product-service`, `search-service` (published contracts read-only) | — | index consistency check |
 
