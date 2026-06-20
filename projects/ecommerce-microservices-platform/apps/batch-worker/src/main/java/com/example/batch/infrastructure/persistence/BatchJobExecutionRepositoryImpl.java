@@ -5,6 +5,7 @@ import com.example.batch.domain.repository.BatchJobExecutionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -22,5 +23,12 @@ class BatchJobExecutionRepositoryImpl implements BatchJobExecutionRepository {
     @Override
     public Optional<BatchJobExecution> findById(Long id) {
         return jpaRepository.findById(id).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<BatchJobExecution> findAll() {
+        return jpaRepository.findAll().stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 }

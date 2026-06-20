@@ -1,6 +1,7 @@
 package com.example.batch.application;
 
 import com.example.batch.AbstractIntegrationTest;
+import com.example.batch.domain.model.BatchJobExecution;
 import com.example.batch.domain.model.BatchJobStatus;
 import com.example.batch.domain.repository.BatchJobExecutionRepository;
 import io.micrometer.core.instrument.Counter;
@@ -8,7 +9,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -80,11 +82,18 @@ class StalePaidOrderConfirmationIntegrationTest extends AbstractIntegrationTest 
     @Autowired
     private MeterRegistry meterRegistry;
 
-    @AfterEach
-    void drainQueues() {
-        // Drain any unconsumed MockWebServer responses between tests to keep server state clean
-        drainServer(orderServer);
-        drainServer(iamServer);
+    @AfterAll
+    static void stopServers() throws IOException {
+        // Shut down servers after all tests; no per-test drain needed —
+        // each test enqueues exactly the responses it consumes.
+        // getRequestCount() is cumulative and never decreases, so a
+        // drain-while-loop on it would hang forever after the first request.
+        if (orderServer != null) {
+            orderServer.shutdown();
+        }
+        if (iamServer != null) {
+            iamServer.shutdown();
+        }
     }
 
     // ─── token stub helper ────────────────────────────────────────────────────
@@ -174,6 +183,12 @@ class StalePaidOrderConfirmationIntegrationTest extends AbstractIntegrationTest 
 
         // Assert: at least one request was made to order-service
         assertThat(orderServer.getRequestCount()).isGreaterThanOrEqualTo(1);
+
+        // Assert: a FAILED history row was persisted in the database (B-1)
+        List<BatchJobExecution> history = executionRepository.findAll();
+        assertThat(history).anyMatch(e ->
+                e.getStatus() == BatchJobStatus.FAILED
+                        && e.getJobName().equals(StalePaidOrderConfirmationJob.JOB_NAME));
     }
 
     // ─── helpers ──────────────────────────────────────────────────────────────
@@ -192,10 +207,4 @@ class StalePaidOrderConfirmationIntegrationTest extends AbstractIntegrationTest 
         return counter != null ? counter.count() : 0.0;
     }
 
-    private void drainServer(MockWebServer server) {
-        while (server.getRequestCount() > 0) {
-            try { server.takeRequest(1, TimeUnit.MILLISECONDS); }
-            catch (Exception ignored) { break; }
-        }
-    }
 }
