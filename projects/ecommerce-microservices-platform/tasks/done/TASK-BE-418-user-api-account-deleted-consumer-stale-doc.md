@@ -1,6 +1,6 @@
 # TASK-BE-418 — Correct stale "not yet implemented" account.deleted consumer note in user-api.md
 
-**Status:** ready
+**Status:** done
 **Type:** docs (spec accuracy)
 
 ## Goal

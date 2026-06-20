@@ -1,6 +1,6 @@
 # TASK-BE-417 — Remove stale UUID-v7 TODO in AuthEventPublisher
 
-**Status:** ready
+**Status:** done
 **Type:** code cleanup (stale marker)
 
 ## Goal
