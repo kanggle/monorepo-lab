@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface ProductQueryPort {
 
-    ProductListResult findSummaries(UUID categoryId, ProductStatus status, int page, int size);
+    ProductListResult findSummaries(UUID categoryId, ProductStatus status, String name, int page, int size);
 }

@@ -67,10 +67,11 @@ class ProductRepositoryImpl implements ProductRepository, ProductQueryPort {
     }
 
     @Override
-    public ProductListResult findSummaries(UUID categoryId, ProductStatus status, int page, int size) {
-        // Tenant filter + (when bound) net-zero seller-scope filter (AC-6, F1).
+    public ProductListResult findSummaries(UUID categoryId, ProductStatus status, String name, int page, int size) {
+        // Tenant filter + optional case-insensitive name match + (when bound)
+        // net-zero seller-scope filter (AC-6, F1).
         Page<ProductSummary> result = jpaRepository
-                .findByFilters(TenantContext.currentTenant(), categoryId, status,
+                .findByFilters(TenantContext.currentTenant(), categoryId, status, name,
                         SellerScopeContext.isRestricted(), SellerScopeContext.currentSellerScope(),
                         PageRequest.of(page, size))
                 .map(entity -> new ProductSummary(

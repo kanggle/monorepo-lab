@@ -32,15 +32,24 @@ interface ProductJpaRepository extends JpaRepository<ProductJpaEntity, UUID> {
                                                     @Param("sellerRestricted") boolean sellerRestricted,
                                                     @Param("sellerScope") String sellerScope);
 
+    // The :name predicate is case-insensitive partial match (LOWER + LIKE, JPQL has
+    // no ILIKE) and null/blank-guarded like categoryId/status — absent OR blank name
+    // returns the full (tenant- and seller-scoped) view (a cleared search box sends
+    // ?name= which binds to "" — treat it as no filter, not LIKE '' = match-nothing).
+    // LOWER(...) LIKE LOWER(CONCAT('%',?,'%')) is portable across Postgres (prod) and
+    // H2 PostgreSQL-mode (tests). A leading wildcard cannot use a B-tree index; a
+    // pg_trgm GIN index on name is a future follow-up if catalog scan cost matters.
     @Query("SELECT p FROM ProductJpaEntity p WHERE p.tenantId = :tenantId "
             + "AND (:categoryId IS NULL OR p.categoryId = :categoryId) "
             + "AND (:status IS NULL OR p.status = :status) "
+            + "AND (:name IS NULL OR :name = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%'))) "
             + "AND (:sellerRestricted = false OR p.sellerId = :sellerScope) "
             + "AND p.deletedAt IS NULL")
     Page<ProductJpaEntity> findByFilters(
             @Param("tenantId") String tenantId,
             @Param("categoryId") UUID categoryId,
             @Param("status") ProductStatus status,
+            @Param("name") String name,
             @Param("sellerRestricted") boolean sellerRestricted,
             @Param("sellerScope") String sellerScope,
             Pageable pageable);

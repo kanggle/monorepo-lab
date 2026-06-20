@@ -172,7 +172,7 @@ class ProductUpdateDeleteIntegrationTest {
 
         deleteProductService.delete(productId);
 
-        var result = queryProductService.findAll(null, null, 0, 20);
+        var result = queryProductService.findAll(null, null, null, 0, 20);
         assertThat(result.content().stream().noneMatch(p -> p.id().equals(productId))).isTrue();
     }
 

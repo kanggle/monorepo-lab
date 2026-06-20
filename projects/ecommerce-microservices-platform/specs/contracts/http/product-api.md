@@ -21,10 +21,9 @@ List products with filtering and pagination.
 **Query Parameters**
 - `categoryId` (optional) — filter by category
 - `status` (optional) — filter by status: `ON_SALE`, `SOLD_OUT`, `HIDDEN`
+- `name` (optional) — case-insensitive partial match on product name (`LOWER(name) LIKE LOWER('%name%')`); absent = no name filter (TASK-BE-420)
 - `page` (default: 0) — page number
 - `size` (default: 20) — page size
-
-> **`name` filter — NOT IMPLEMENTED (v1).** `ProductController.list` accepts only `categoryId`, `status`, `page`, and `size`. A `name` partial-match filter is documented here for intent but the parameter is not wired in the controller — passing `name` has no effect. Wiring it is a separate code task.
 
 **Response 200**
 ```json
@@ -66,6 +65,7 @@ read behind the platform-console Operator Overview ecommerce snapshot leg
 **Query Parameters** (all optional — mirror `GET /api/products`)
 - `categoryId` (optional) — filter by category (UUID)
 - `status` (optional) — filter by status: `ON_SALE`, `SOLD_OUT`, `HIDDEN`
+- `name` (optional) — case-insensitive partial match on product name (mirrors public endpoint — TASK-BE-420)
 - `page` (default: 0) — page number
 - `size` (default: 20, capped at 100) — page size
 

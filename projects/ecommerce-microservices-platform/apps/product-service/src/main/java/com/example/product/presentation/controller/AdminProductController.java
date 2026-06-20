@@ -56,7 +56,7 @@ public class AdminProductController {
      *
      * <p>Query path is byte-identical to the public {@link ProductController#list}
      * — same {@link QueryProductService#findAll} read, same {@code categoryId} /
-     * {@code status} filters, same {@link #MAX_PAGE_SIZE} page-size cap, same
+     * {@code status} / {@code name} filters, same {@link #MAX_PAGE_SIZE} page-size cap, same
      * {@link ProductListResponse} envelope ({@code content[]}, {@code page},
      * {@code size}, {@code totalElements}). The Operator Overview leg calls it
      * with {@code ?page=0&size=1} (no status filter), so {@code totalElements}
@@ -93,10 +93,11 @@ public class AdminProductController {
     public ProductListResponse list(
             @RequestParam(required = false) UUID categoryId,
             @RequestParam(required = false) ProductStatus status,
+            @RequestParam(required = false) String name,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         int cappedSize = Math.min(size, MAX_PAGE_SIZE);
-        ProductListResult result = queryProductService.findAll(categoryId, status, page, cappedSize);
+        ProductListResult result = queryProductService.findAll(categoryId, status, name, page, cappedSize);
         return ProductListResponse.from(result);
     }
 

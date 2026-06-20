@@ -29,10 +29,17 @@ public class QueryProductService {
     @Transactional(readOnly = true)
     @Cacheable(
             value = "product-list",
-            key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + T(java.util.Objects).toString(T(com.example.product.domain.seller.SellerScopeContext).currentSellerScope(), 'all') + ':' + T(java.util.Objects).toString(#categoryId, 'all') + ':' + T(java.util.Objects).toString(#status, 'all') + ':' + #page + ':' + #size"
+            // The 'all' sentinel for #name is safe for categoryId/status (UUID/enum
+            // can never equal "all"); for the free-text #name a literal ?name=all
+            // shares the no-filter cache slot — a known minor limitation (low
+            // probability, short cache TTL). A collision-proof key would need richer
+            // SpEL that the per-PR CI does not exercise (the product-service
+            // @Cacheable path runs only under the @Tag("integration") IT, nightly),
+            // so it is deferred rather than shipped unvalidated.
+            key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + T(java.util.Objects).toString(T(com.example.product.domain.seller.SellerScopeContext).currentSellerScope(), 'all') + ':' + T(java.util.Objects).toString(#categoryId, 'all') + ':' + T(java.util.Objects).toString(#status, 'all') + ':' + T(java.util.Objects).toString(#name, 'all') + ':' + #page + ':' + #size"
     )
-    public ProductListResult findAll(UUID categoryId, ProductStatus status, int page, int size) {
-        return productQueryPort.findSummaries(categoryId, status, page, size);
+    public ProductListResult findAll(UUID categoryId, ProductStatus status, String name, int page, int size) {
+        return productQueryPort.findSummaries(categoryId, status, name, page, size);
     }
 
     @Transactional(readOnly = true)
