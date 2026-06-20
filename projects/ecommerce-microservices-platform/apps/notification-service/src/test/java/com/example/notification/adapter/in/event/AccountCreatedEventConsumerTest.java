@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.then;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("AccountCreatedEventConsumer 단위 테스트 (ADR-MONO-037 P1 welcome)")
+@DisplayName("AccountCreatedEventConsumer 단위 테스트 (ADR-MONO-037 P1 welcome, flat wire TASK-BE-422)")
 class AccountCreatedEventConsumerTest {
 
     @Mock
@@ -37,23 +37,21 @@ class AccountCreatedEventConsumerTest {
     class OnMessage {
 
         @Test
-        @DisplayName("account.created 수신 시 WELCOME 알림을 PII 개인화 없이 발송한다")
-        void onMessage_sendsWelcomeWithoutPii() throws Exception {
+        @DisplayName("FLAT account.created 수신 시 WELCOME 알림을 PII 개인화 없이 발송한다")
+        void onMessage_flatWire_sendsWelcomeWithoutPii() throws Exception {
             String accountId = "550e8400-e29b-41d4-a716-446655440001";
-            String eventId = "550e8400-e29b-41d4-a716-446655440000";
+            // EXACT flat shape from iam-platform account-events.md § account.created
+            // (top-level fields, NO nested payload, NO eventId).
             String json = """
                     {
-                      "eventId": "%s",
-                      "eventType": "account.created",
-                      "occurredAt": "2026-06-15T10:00:00Z",
-                      "source": "account-service",
-                      "payload": {
-                        "accountId": "%s",
-                        "tenantId": "ecommerce",
-                        "emailHash": "a1b2c3d4e5"
-                      }
+                      "accountId": "%s",
+                      "tenantId": "ecommerce",
+                      "emailHash": "a1b2c3d4e5",
+                      "status": "ACTIVE",
+                      "locale": "ko-KR",
+                      "createdAt": "2026-06-15T10:00:00Z"
                     }
-                    """.formatted(eventId, accountId);
+                    """.formatted(accountId);
 
             consumer.onMessage(json);
 
@@ -61,12 +59,37 @@ class AccountCreatedEventConsumerTest {
             then(notificationSendService).should().sendNotification(captor.capture());
             SendNotificationCommand command = captor.getValue();
             assertThat(command.userId()).isEqualTo(accountId);
-            assertThat(command.eventId()).isEqualTo(eventId);
+            // No eventId on the flat wire → stable accountId-derived dedup key.
+            assertThat(command.eventId()).isEqualTo("account.created:" + accountId);
             assertThat(command.tenantId()).isEqualTo("ecommerce");
             assertThat(command.templateType()).isEqualTo(TemplateType.WELCOME);
             // No PII personalization — account.created is emailHash-only.
             assertThat(command.variables().get("name")).isEmpty();
             assertThat(command.variables().get("email")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("snake_case alias 도 수신하면 WELCOME 을 발송한다 (forward-compat)")
+        void onMessage_snakeCase_sendsWelcome() throws Exception {
+            String accountId = "550e8400-e29b-41d4-a716-446655440001";
+            String json = """
+                    {
+                      "account_id": "%s",
+                      "tenant_id": "ecommerce",
+                      "email_hash": "a1b2c3d4e5",
+                      "status": "ACTIVE",
+                      "locale": "ko-KR",
+                      "created_at": "2026-06-15T10:00:00Z"
+                    }
+                    """.formatted(accountId);
+
+            consumer.onMessage(json);
+
+            ArgumentCaptor<SendNotificationCommand> captor = ArgumentCaptor.forClass(SendNotificationCommand.class);
+            then(notificationSendService).should().sendNotification(captor.capture());
+            SendNotificationCommand command = captor.getValue();
+            assertThat(command.userId()).isEqualTo(accountId);
+            assertThat(command.tenantId()).isEqualTo("ecommerce");
         }
     }
 
@@ -75,22 +98,10 @@ class AccountCreatedEventConsumerTest {
     class Handle {
 
         @Test
-        @DisplayName("payload가 null이면 알림을 발송하지 않는다")
-        void handle_nullPayload_skips() {
-            AccountCreatedEvent event = new AccountCreatedEvent(
-                    "evt", "account.created", "2026-06-15T10:00:00Z", "account-service", "ecommerce", null);
-
-            consumer.handle(event);
-
-            then(notificationSendService).shouldHaveNoInteractions();
-        }
-
-        @Test
         @DisplayName("accountId가 null이면 알림을 발송하지 않는다")
         void handle_nullAccountId_skips() {
             AccountCreatedEvent event = new AccountCreatedEvent(
-                    "evt", "account.created", "2026-06-15T10:00:00Z", "account-service", "ecommerce",
-                    new AccountCreatedEvent.Payload(null, "ecommerce", "hash", "ACTIVE", "ko-KR"));
+                    null, "ecommerce", "hash", "ACTIVE", "ko-KR", "2026-06-15T10:00:00Z");
 
             consumer.handle(event);
 

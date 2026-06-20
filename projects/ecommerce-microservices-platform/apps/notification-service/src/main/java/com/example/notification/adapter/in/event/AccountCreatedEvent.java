@@ -9,25 +9,25 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * consumes it to send the onboarding WELCOME, replacing the dead-topic
  * {@code auth.user.signed-up} (TASK-BE-132).
  *
+ * <p><b>The wire shape is FLAT</b> — the fields are top-level, NOT nested under a
+ * {@code payload} object (TASK-BE-422). The IAM producer serializes the payload map
+ * directly with NO envelope wrapper, matching the authoritative
+ * {@code iam-platform/specs/contracts/events/account-events.md} § account.created payload.
+ * Note there is NO {@code eventId} in the flat account.created payload; the consumer derives
+ * a stable dedup key from {@code accountId}. A nested DTO would silently deserialize to a
+ * {@code null} payload and no-op every event — the defect this task fixes.
+ *
  * <p>The payload is PII-masked ({@code emailHash} only, no raw email/name), so the
- * WELCOME is sent without personalization vars (ADR-MONO-037 P1). Tolerant
- * deserialization (camelCase primary + snake_case alias + ignore-unknown).
+ * WELCOME is sent without personalization vars (ADR-MONO-037 P1). {@code accountId} is a
+ * {@code String} (= recipient userId). Tolerant deserialization (camelCase primary +
+ * snake_case alias + ignore-unknown).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record AccountCreatedEvent(
-        @JsonProperty("eventId") @JsonAlias("event_id") String eventId,
-        @JsonProperty("eventType") @JsonAlias("event_type") String eventType,
-        @JsonProperty("occurredAt") @JsonAlias("occurred_at") String occurredAt,
-        String source,
+        @JsonProperty("accountId") @JsonAlias("account_id") String accountId,
         @JsonProperty("tenantId") @JsonAlias("tenant_id") String tenantId,
-        Payload payload
-) {
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Payload(
-            @JsonProperty("accountId") @JsonAlias("account_id") String accountId,
-            @JsonProperty("tenantId") @JsonAlias("tenant_id") String tenantId,
-            String emailHash,
-            String status,
-            String locale
-    ) {}
-}
+        @JsonProperty("emailHash") @JsonAlias("email_hash") String emailHash,
+        @JsonProperty("status") String status,
+        @JsonProperty("locale") String locale,
+        @JsonProperty("createdAt") @JsonAlias("created_at") String createdAt
+) {}

@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.then;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("AccountDeletedConsumer 단위 테스트 (ADR-MONO-037 P2 two-phase)")
+@DisplayName("AccountDeletedConsumer 단위 테스트 (ADR-MONO-037 P2 two-phase, flat wire TASK-BE-422)")
 class AccountDeletedConsumerTest {
 
     @Mock
@@ -38,26 +38,23 @@ class AccountDeletedConsumerTest {
     class PhaseRouting {
 
         @Test
-        @DisplayName("anonymized=false (유예 진입) → withdrawProfile 만 호출한다")
+        @DisplayName("FLAT anonymized=false (유예 진입) → withdrawProfile 만 호출한다")
         void onMessage_graceEntry_callsWithdraw() {
             UUID accountId = UUID.randomUUID();
+            // EXACT flat shape from iam-platform account-events.md § account.deleted
+            // (top-level fields, NO nested payload, NO eventId).
             String json = """
                     {
-                      "eventId": "%s",
-                      "eventType": "account.deleted",
-                      "occurredAt": "2026-06-15T10:00:00Z",
-                      "source": "account-service",
-                      "payload": {
-                        "accountId": "%s",
-                        "tenantId": "ecommerce",
-                        "reasonCode": "USER_REQUEST",
-                        "actorType": "user",
-                        "deletedAt": "2026-06-15T10:00:00Z",
-                        "gracePeriodEndsAt": "2026-07-15T10:00:00Z",
-                        "anonymized": false
-                      }
+                      "accountId": "%s",
+                      "tenantId": "ecommerce",
+                      "reasonCode": "USER_REQUEST",
+                      "actorType": "user",
+                      "actorId": null,
+                      "deletedAt": "2026-06-15T10:00:00Z",
+                      "gracePeriodEndsAt": "2026-07-15T10:00:00Z",
+                      "anonymized": false
                     }
-                    """.formatted(UUID.randomUUID(), accountId);
+                    """.formatted(accountId);
 
             consumer.onMessage(json);
 
@@ -66,26 +63,21 @@ class AccountDeletedConsumerTest {
         }
 
         @Test
-        @DisplayName("anonymized=true (유예 종료) → anonymizeProfile 만 호출한다")
+        @DisplayName("FLAT anonymized=true (유예 종료) → anonymizeProfile 만 호출한다")
         void onMessage_postGrace_callsAnonymize() {
             UUID accountId = UUID.randomUUID();
             String json = """
                     {
-                      "eventId": "%s",
-                      "eventType": "account.deleted",
-                      "occurredAt": "2026-07-15T10:00:00Z",
-                      "source": "account-service",
-                      "payload": {
-                        "accountId": "%s",
-                        "tenantId": "ecommerce",
-                        "reasonCode": "USER_REQUEST",
-                        "actorType": "user",
-                        "deletedAt": "2026-06-15T10:00:00Z",
-                        "gracePeriodEndsAt": "2026-07-15T10:00:00Z",
-                        "anonymized": true
-                      }
+                      "accountId": "%s",
+                      "tenantId": "ecommerce",
+                      "reasonCode": "USER_REQUEST",
+                      "actorType": "user",
+                      "actorId": null,
+                      "deletedAt": "2026-06-15T10:00:00Z",
+                      "gracePeriodEndsAt": "2026-07-15T10:00:00Z",
+                      "anonymized": true
                     }
-                    """.formatted(UUID.randomUUID(), accountId);
+                    """.formatted(accountId);
 
             consumer.onMessage(json);
 
@@ -107,10 +99,11 @@ class AccountDeletedConsumerTest {
     class Handle {
 
         @Test
-        @DisplayName("payload가 null이면 아무 반응도 하지 않는다")
-        void handle_nullPayload_skips() {
+        @DisplayName("accountId가 null이면 아무 반응도 하지 않는다")
+        void handle_nullAccountId_skips() {
             AccountDeletedEvent event = new AccountDeletedEvent(
-                    UUID.randomUUID(), "account.deleted", Instant.now(), "account-service", "ecommerce", null);
+                    null, "ecommerce", "USER_REQUEST", "user", null,
+                    Instant.now(), Instant.now(), false);
 
             consumer.handle(event);
 
@@ -122,9 +115,8 @@ class AccountDeletedConsumerTest {
         void handle_nullAnonymized_treatedAsGraceEntry() {
             UUID accountId = UUID.randomUUID();
             AccountDeletedEvent event = new AccountDeletedEvent(
-                    UUID.randomUUID(), "account.deleted", Instant.now(), "account-service", "ecommerce",
-                    new AccountDeletedEvent.Payload(accountId, "ecommerce", "USER_REQUEST", "user", null,
-                            Instant.now(), Instant.now(), null));
+                    accountId, "ecommerce", "USER_REQUEST", "user", null,
+                    Instant.now(), Instant.now(), null);
 
             consumer.handle(event);
 
