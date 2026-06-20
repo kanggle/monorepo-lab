@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-411
 title: dailySalesAggregationJob — 차단 해소(출력스키마·데이터소스·소비자·중복) spec-clarification 선행
-status: ready
+status: done
 project: ecommerce-microservices-platform
 service: batch-worker
 type: spec
@@ -11,6 +11,17 @@ created: 2026-06-20
 # TASK-BE-411 — dailySalesAggregationJob spec-clarification (구현 차단 해소)
 
 > ⛔ **구현 차단 task** — 3개 batch 잡 중 가장 심하게 under-specified. 아래 AC 전부 해소 전 구현 금지. 본 task 는 결정/문서화만. (2026-06-20 BE-409 스코핑에서 HARDSTOP-06/08/09 로 식별.)
+
+## ✅ RESOLVED (2026-06-20) — Option B: spec-only closure, 구현하지 않음
+
+결정 세션(Opus architect 조사 + 승인) 결과 **구현하지 않고 batch-worker spec 에서 잡을 제거**. 근거:
+- **소비자 없음**: `daily_sales_summary`/sales-dashboard 가 repo 전체에서 batch-worker 자기 spec + 본 task 에만 등장. 읽는 쪽 부재.
+- **유일 매출 대시보드(TASK-FE-063)가 백엔드 집계를 거부**: admin 홈 7일 매출 추이를 `GET /api/orders` 기반 **FE-side 집계**로 구현, "백엔드 집계 전용 API 신규 개발"을 명시적 out-of-scope 선언.
+- **settlement-service 중복**: 내용 중복 아님(commission/seller grain) 이나, 미래 일일 money 롤업의 자연 home 은 settlement(이미 `occurred_at` 인덱스 money 행 + forward-declared period-close) 이지 batch-worker 가 아님.
+
+AC 해소: **AC-1** 출력 테이블 없음(Owned Data=`batch_job_execution_history`만) · **AC-2** 데이터소스 N/A(미구현) · **AC-3** 소비자 부재 → defer · **AC-4** settlement 이 미래 home · **AC-5** spec-only closure, impl task 없음.
+
+spec 편집: `batch-worker/{overview,architecture,observability}.md` 에서 dailySalesAggregationJob/책임/메트릭 제거(silent 재도입 방지 위해 `~~strike~~ + DEFERRED 사유` 기록). batch-worker 는 근거 있는 2 잡(stale-paid forward-confirm BE-413 + search-index consistency BE-409)으로 정리됨.
 
 ## Goal
 

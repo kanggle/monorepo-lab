@@ -16,7 +16,6 @@ Platform-wide observability rules are defined in `platform/observability.md`.
 | `batch_expired_sessions_cleaned_total` | Counter | Total expired sessions cleaned per execution |
 | `batch_paid_orders_confirmed_total` | Counter | Total stale paid-but-unconfirmed orders forward-confirmed (`PENDING → CONFIRMED`) per execution (TASK-BE-410 reframe — was `batch_stale_orders_cancelled_total`; the job confirms, it does not cancel) |
 | `batch_paid_orders_confirm_skipped_total` | Counter | Stale paid-order confirm attempts no-op'd (already CONFIRMED / raced out of PENDING) per execution |
-| `batch_sales_aggregation_total` | Counter | Total daily sales aggregation executions |
 | `batch_index_inconsistencies_detected_total` | Counter | Total Elasticsearch index inconsistencies detected per execution |
 
 ---
