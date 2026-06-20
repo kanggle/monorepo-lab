@@ -2,6 +2,9 @@ package com.example.settlement.presentation;
 
 import com.example.settlement.application.exception.SellerScopeForbiddenException;
 import com.example.settlement.domain.model.InvalidCommissionRateException;
+import com.example.settlement.domain.period.PeriodAlreadyClosedException;
+import com.example.settlement.domain.period.PeriodNotFoundException;
+import com.example.settlement.domain.period.PeriodWindowInvalidException;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.ConstraintViolationException;
@@ -32,6 +35,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(SellerScopeForbiddenException.class)
     public ResponseEntity<ErrorResponse> handleSellerScope(SellerScopeForbiddenException e) {
         // 404-over-403 — no cross-tenant / cross-seller existence disclosure (M3).
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("SETTLEMENT_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(PeriodWindowInvalidException.class)
+    public ResponseEntity<ErrorResponse> handlePeriodWindow(PeriodWindowInvalidException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("PERIOD_WINDOW_INVALID", e.getMessage()));
+    }
+
+    @ExceptionHandler(PeriodAlreadyClosedException.class)
+    public ResponseEntity<ErrorResponse> handlePeriodAlreadyClosed(PeriodAlreadyClosedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("PERIOD_ALREADY_CLOSED", e.getMessage()));
+    }
+
+    @ExceptionHandler(PeriodNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePeriodNotFound(PeriodNotFoundException e) {
+        // 404-over-403 — cross-tenant / absent period (M3).
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("SETTLEMENT_NOT_FOUND", e.getMessage()));
     }

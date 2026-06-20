@@ -5,6 +5,7 @@ import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.settlement.domain.model.SellerBalance;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -43,4 +44,15 @@ public interface CommissionAccrualRepository {
 
     /** Aggregated balance for one seller in the current tenant + seller scope. */
     SellerBalance sellerBalance(String sellerId);
+
+    /**
+     * Period-close aggregation (architecture.md § Close-time aggregation): folds the
+     * EXISTING accrual rows whose {@code occurred_at ∈ [from, to)} (half-open,
+     * tenant-scoped) per seller into a {@link SellerAccrualFold}. <b>Read-only</b> —
+     * the accrual ledger is never mutated (F3). Net-zero skip (decision 7) is applied
+     * by the close use-case, not here (this returns every seller's raw fold, including
+     * {@code payableNetMinor ≤ 0}). Tenant is passed explicitly (close runs in the
+     * operator's tenant context).
+     */
+    List<SellerAccrualFold> foldByPeriod(String tenantId, Instant from, Instant to);
 }

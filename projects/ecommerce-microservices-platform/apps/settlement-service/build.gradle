@@ -10,6 +10,12 @@ dependencies {
     // Common (PageQuery / PageResult)
     implementation project(':libs:java-common')
 
+    // Messaging (transactional Outbox pattern) — introduced this increment
+    // (TASK-BE-415): settlement-service becomes a producer for its first event,
+    // settlement.period.closed.v1. OutboxAutoConfiguration / OutboxMetricsAutoConfiguration
+    // auto-enable via the lib's AutoConfiguration.imports once the dependency is present.
+    implementation project(':libs:java-messaging')
+
     // Observability
     implementation project(':libs:java-observability')
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -44,11 +50,6 @@ dependencies {
 
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka'
-
-    // NOTE: terminal consumer — libs:java-messaging (OutboxAutoConfiguration /
-    // OutboxMetricsAutoConfiguration) is intentionally NOT imported. settlement-service
-    // publishes no events in v1; the processed_event dedupe table is owned locally
-    // (mirrors finance ledger-service / erp read-model terminal-consumer precedent).
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

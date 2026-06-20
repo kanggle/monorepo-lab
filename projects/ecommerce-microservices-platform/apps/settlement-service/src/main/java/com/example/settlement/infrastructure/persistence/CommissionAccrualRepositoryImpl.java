@@ -6,6 +6,7 @@ import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.settlement.domain.model.SellerBalance;
 import com.example.settlement.domain.repository.CommissionAccrualRepository;
+import com.example.settlement.domain.repository.SellerAccrualFold;
 import com.example.settlement.domain.seller.SellerScopeContext;
 import com.example.settlement.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -82,6 +84,16 @@ public class CommissionAccrualRepositoryImpl implements CommissionAccrualReposit
         }
         return new SellerBalance(sellerId, p.accruedNetMinor(), p.platformCommissionMinor(),
                 p.grossMinor(), p.accrualCount());
+    }
+
+    @Override
+    public List<SellerAccrualFold> foldByPeriod(String tenantId, Instant from, Instant to) {
+        // Read-only fold over the immutable accrual ledger (F3) — half-open [from, to).
+        return jpaRepository.foldByPeriod(tenantId, from, to).stream()
+                .map(p -> new SellerAccrualFold(
+                        p.sellerId(), p.payableNetMinor(), p.commissionMinor(),
+                        Math.toIntExact(p.accrualCount())))
+                .toList();
     }
 
     private static CommissionAccrualJpaEntity toEntity(CommissionAccrual a) {
