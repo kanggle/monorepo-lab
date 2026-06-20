@@ -27,6 +27,13 @@ public interface SellerRepository {
     /** Looks up a seller by id within the current tenant. */
     Optional<Seller> findById(String sellerId);
 
+    /**
+     * Looks up a seller by its backing IAM {@code account_id} within the current tenant
+     * (ADR-MONO-042 D4-C, TASK-BE-421 — reverse {@code account.status.changed} projection).
+     * Scoped to the current tenant: the same account never backs sellers across tenants.
+     */
+    Optional<Seller> findByAccountId(String accountId);
+
     /** Whether a seller with this id exists within the current tenant. */
     boolean existsById(String sellerId);
 

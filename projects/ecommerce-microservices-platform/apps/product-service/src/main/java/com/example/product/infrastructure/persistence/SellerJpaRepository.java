@@ -15,6 +15,14 @@ interface SellerJpaRepository extends JpaRepository<SellerJpaEntity, SellerJpaEn
     Optional<SellerJpaEntity> findByTenantIdAndSellerId(@Param("tenantId") String tenantId,
                                                         @Param("sellerId") String sellerId);
 
+    /**
+     * Looks up a seller by its backing IAM {@code account_id} within one tenant
+     * (ADR-MONO-042 D4-C, TASK-BE-421 — reverse {@code account.status.changed} projection).
+     */
+    @Query("SELECT s FROM SellerJpaEntity s WHERE s.tenantId = :tenantId AND s.accountId = :accountId")
+    Optional<SellerJpaEntity> findByTenantIdAndAccountId(@Param("tenantId") String tenantId,
+                                                        @Param("accountId") String accountId);
+
     /** Paged sellers within one tenant — the operator list read (M6-scoped). */
     @Query("SELECT s FROM SellerJpaEntity s WHERE s.tenantId = :tenantId")
     Page<SellerJpaEntity> findByTenantId(@Param("tenantId") String tenantId, Pageable pageable);

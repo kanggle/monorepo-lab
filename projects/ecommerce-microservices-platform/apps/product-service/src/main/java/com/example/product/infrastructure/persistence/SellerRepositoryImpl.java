@@ -53,6 +53,13 @@ class SellerRepositoryImpl implements SellerRepository, SellerQueryPort {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Seller> findByAccountId(String accountId) {
+        return jpaRepository.findByTenantIdAndAccountId(TenantContext.currentTenant(), accountId)
+                .map(SellerJpaEntity::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean existsById(String sellerId) {
         return jpaRepository.existsByTenantIdAndSellerId(TenantContext.currentTenant(), sellerId);
     }

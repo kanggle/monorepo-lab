@@ -49,6 +49,16 @@ class SellerLifecyclePersistence {
         return sellerRepository.findById(sellerId);
     }
 
+    /**
+     * Look up a seller by its backing IAM {@code account_id} within the current tenant
+     * (read tx, ADR-MONO-042 D4-C / TASK-BE-421 — reverse {@code account.status.changed}
+     * projection).
+     */
+    @Transactional(readOnly = true)
+    Optional<Seller> findByAccountId(String accountId) {
+        return sellerRepository.findByAccountId(accountId);
+    }
+
     /** Look up a seller by id or throw {@link SellerNotFoundException} (read tx). */
     @Transactional(readOnly = true)
     Seller getOrThrow(String sellerId) {

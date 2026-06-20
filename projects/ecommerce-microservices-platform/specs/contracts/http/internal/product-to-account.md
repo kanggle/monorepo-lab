@@ -108,7 +108,15 @@ seller in `PENDING_PROVISIONING`.
 - **authz net-zero (D6)** — these calls only make the existing seller-scope claim *backed*
   by a real account; the runtime seller-scope enforcement path is unchanged.
 
+## Reverse projection (IMPLEMENTED — separate event contract)
+
+- Reverse `account.status.changed → LOCKED` → seller-SUSPENDED projection (ADR-042 D4-C) is
+  **IMPLEMENTED** by TASK-BE-421. It is an inbound Kafka subscription, not an HTTP call, so it
+  lives in the event contract: [`events/account-lifecycle-subscriptions.md` § Reverse
+  seller-suspend projection](../../events/account-lifecycle-subscriptions.md). The consumer
+  resolves the seller by backing `account_id` and suspends it; it does **NOT** call any endpoint
+  in this HTTP contract back (the account is already locked — no loop).
+
 ## Deferred follow-ups (not in this contract)
 
-- Reverse `account.status.changed` → seller-SUSPENDED projection (ADR-042 D4-C).
 - Async `seller.onboarded` provisioning event (ADR-042 D2-B).
