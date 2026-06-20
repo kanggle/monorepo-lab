@@ -78,10 +78,23 @@ product-service:
 search-service:
   base-url: ${SEARCH_SERVICE_BASE_URL:http://search-service:8085}
 
+order-service:
+  base-url: ${ORDER_SERVICE_BASE_URL:http://order-service:8082}
+
+iam:
+  internal-client:
+    token-uri: ${IAM_TOKEN_URI:http://iam-service:8081/oauth2/token}
+    client-id: ${IAM_CLIENT_ID:ecommerce-internal-services-client}
+    client-secret: ${IAM_CLIENT_SECRET:secret}
+
 batch:
   jobs:
     search-consistency:
       enabled: ${BATCH_SEARCH_CONSISTENCY_ENABLED:true}
+    stale-paid-order-confirmation:
+      enabled: ${BATCH_STALE_PAID_ORDER_CONFIRMATION_ENABLED:true}
+      older-than-minutes: ${BATCH_STALE_PAID_ORDER_CONFIRMATION_OLDER_THAN_MINUTES:30}
+      limit: ${BATCH_STALE_PAID_ORDER_CONFIRMATION_LIMIT:200}
 
 logging:
   level:
