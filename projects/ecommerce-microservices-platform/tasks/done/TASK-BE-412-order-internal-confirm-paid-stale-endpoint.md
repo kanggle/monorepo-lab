@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-412
 title: order-service internal endpoint — POST /api/internal/orders/confirm-paid-stale (stale paid-order forward-confirm)
-status: ready
+status: done
 project: ecommerce-microservices-platform
 service: order-service
 type: feature
