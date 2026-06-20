@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 
 public interface CommissionAccrualJpaRepository extends JpaRepository<CommissionAccrualJpaEntity, String> {
@@ -53,4 +54,27 @@ public interface CommissionAccrualJpaRepository extends JpaRepository<Commission
                                                    @Param("sellerId") String sellerId,
                                                    @Param("sellerRestricted") boolean sellerRestricted,
                                                    @Param("sellerScope") String sellerScope);
+
+    /**
+     * Period-close fold (read-only — F3): groups the tenant's accrual rows whose
+     * {@code occurred_at ∈ [from, to)} (half-open) by {@code seller_id} into
+     * {@code Σ seller_net_minor} (payable net, ACCRUAL − REVERSAL), {@code Σ
+     * commission_minor}, and the row count. No seller-scope filter (close runs over
+     * the whole tenant). Net-zero skip is applied by the caller (use-case).
+     */
+    @Query("""
+            SELECT new com.example.settlement.infrastructure.persistence.SellerAccrualFoldProjection(
+                a.sellerId,
+                COALESCE(SUM(a.sellerNetMinor), 0L),
+                COALESCE(SUM(a.commissionMinor), 0L),
+                COUNT(a))
+            FROM CommissionAccrualJpaEntity a
+            WHERE a.tenantId = :tenantId
+              AND a.occurredAt >= :from
+              AND a.occurredAt < :to
+            GROUP BY a.sellerId
+            """)
+    List<SellerAccrualFoldProjection> foldByPeriod(@Param("tenantId") String tenantId,
+                                                   @Param("from") Instant from,
+                                                   @Param("to") Instant to);
 }
