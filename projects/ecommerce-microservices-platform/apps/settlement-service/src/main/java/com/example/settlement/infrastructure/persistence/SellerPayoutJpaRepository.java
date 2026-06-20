@@ -9,4 +9,7 @@ import java.util.List;
 public interface SellerPayoutJpaRepository extends JpaRepository<SellerPayout, String> {
 
     List<SellerPayout> findByPeriodId(String periodId);
+
+    /** Tenant-scoped payout rows for a period (used by execute use-case + read API). */
+    List<SellerPayout> findByPeriodIdAndTenantId(String periodId, String tenantId);
 }
