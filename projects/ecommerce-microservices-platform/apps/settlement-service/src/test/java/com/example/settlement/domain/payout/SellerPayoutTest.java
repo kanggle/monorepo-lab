@@ -59,4 +59,54 @@ class SellerPayoutTest {
         p.markFailed();
         assertThat(p.status()).isEqualTo(PayoutStatus.FAILED);
     }
+
+    // ── PENDING-only guard (AC-4) ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("markPaid on already-PAID throws IllegalStateException — no re-transition")
+    void markPaid_alreadyPaid_throws() {
+        SellerPayout p = pending();
+        p.markPaid("ref-1", Instant.parse("2026-07-01T10:00:00Z"));
+
+        assertThatThrownBy(() -> p.markPaid("ref-2", Instant.now()))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("markPaid on FAILED throws IllegalStateException — no reverse transition")
+    void markPaid_onFailed_throws() {
+        SellerPayout p = pending();
+        p.markFailed();
+
+        assertThatThrownBy(() -> p.markPaid("ref-1", Instant.now()))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("markFailed on already-PAID throws IllegalStateException — no reverse transition")
+    void markFailed_onPaid_throws() {
+        SellerPayout p = pending();
+        p.markPaid("ref-1", Instant.parse("2026-07-01T10:00:00Z"));
+
+        assertThatThrownBy(() -> p.markFailed())
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("markFailed on already-FAILED throws IllegalStateException — no double-fail")
+    void markFailed_alreadyFailed_throws() {
+        SellerPayout p = pending();
+        p.markFailed();
+
+        assertThatThrownBy(() -> p.markFailed())
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("markPaid with null reference throws NullPointerException")
+    void markPaid_nullReference_throws() {
+        SellerPayout p = pending();
+        assertThatThrownBy(() -> p.markPaid(null, Instant.now()))
+                .isInstanceOf(NullPointerException.class);
+    }
 }

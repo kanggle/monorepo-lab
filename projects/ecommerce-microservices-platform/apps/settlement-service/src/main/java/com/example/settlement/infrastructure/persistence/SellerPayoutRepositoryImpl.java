@@ -21,4 +21,14 @@ public class SellerPayoutRepositoryImpl implements SellerPayoutRepository {
     public List<SellerPayout> saveAll(List<SellerPayout> payouts) {
         return jpaRepository.saveAll(payouts);
     }
+
+    @Override
+    public SellerPayout save(SellerPayout payout) {
+        return jpaRepository.save(payout);
+    }
+
+    @Override
+    public List<SellerPayout> findByPeriodAndTenant(String periodId, String tenantId) {
+        return jpaRepository.findByPeriodIdAndTenantId(periodId, tenantId);
+    }
 }

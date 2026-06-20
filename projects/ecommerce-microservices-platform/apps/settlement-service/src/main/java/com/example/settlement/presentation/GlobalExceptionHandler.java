@@ -3,6 +3,7 @@ package com.example.settlement.presentation;
 import com.example.settlement.application.exception.SellerScopeForbiddenException;
 import com.example.settlement.domain.model.InvalidCommissionRateException;
 import com.example.settlement.domain.period.PeriodAlreadyClosedException;
+import com.example.settlement.domain.period.PeriodNotClosedException;
 import com.example.settlement.domain.period.PeriodNotFoundException;
 import com.example.settlement.domain.period.PeriodWindowInvalidException;
 import com.example.web.dto.ErrorResponse;
@@ -49,6 +50,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handlePeriodAlreadyClosed(PeriodAlreadyClosedException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("PERIOD_ALREADY_CLOSED", e.getMessage()));
+    }
+
+    @ExceptionHandler(PeriodNotClosedException.class)
+    public ResponseEntity<ErrorResponse> handlePeriodNotClosed(PeriodNotClosedException e) {
+        // 409 PERIOD_NOT_CLOSED — execute on an OPEN period (settlement-api.md error codes).
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("PERIOD_NOT_CLOSED", e.getMessage()));
     }
 
     @ExceptionHandler(PeriodNotFoundException.class)
