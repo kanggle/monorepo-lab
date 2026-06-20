@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-408
 title: admin RBAC — tenant.manage rbac.md 정합 + GET tenant 권한 강제 + 매트릭스 IT
-status: ready
+status: done
 project: iam-platform
 service: admin-service
 type: bugfix
