@@ -1,6 +1,6 @@
 # TASK-FIN-BE-043 — Correct stale "Out of scope" deferrals in ledger-api.md
 
-**Status:** ready
+**Status:** done
 **Type:** docs (spec accuracy — contract documentation)
 **Parent:** ADR-002 (realtime FX rate feed) roadmap completion
 
