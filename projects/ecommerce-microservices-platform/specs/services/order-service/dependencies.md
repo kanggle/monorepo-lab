@@ -20,7 +20,8 @@
 
 ## Allowed Service Interactions
 - exposes its own HTTP API for order placement, cancellation, and purchase verification (consumed by review-service via `GET /api/orders/verify-purchase`)
-- all inbound interactions arrive through gateway-service; no direct service-to-service HTTP calls initiated
+- all inbound interactions arrive through gateway-service — **with one exception**: the internal system-command endpoint `POST /api/internal/orders/confirm-paid-stale` (`/api/internal/orders/**`) is gateway-excluded (no external route) and called directly on the internal network by batch-worker (`client_credentials` Bearer, fail-closed). order-service evaluates the predicate + performs the `PENDING → CONFIRMED` transition server-side and emits the standard `OrderConfirmed`. Contract: `specs/contracts/http/internal/order-confirm-paid-stale.md` (TASK-BE-410 decision; impl TASK-BE-412).
+- no outbound service-to-service HTTP calls initiated
 
 ## Consumes From
 
