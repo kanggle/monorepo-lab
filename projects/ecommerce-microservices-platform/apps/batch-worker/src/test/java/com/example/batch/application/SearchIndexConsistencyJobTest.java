@@ -27,7 +27,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -100,7 +99,13 @@ class SearchIndexConsistencyJobTest {
         assertThat(count).isEqualTo(0.0);
 
         // Assert: execution saved twice (start RUNNING + complete COMPLETED)
-        verify(executionRepository, org.mockito.Mockito.times(2)).save(any(BatchJobExecution.class));
+        // WARNING fix: capture the second save and assert COMPLETED status — guards against a
+        // regression that records FAILED on the happy path.
+        org.mockito.ArgumentCaptor<BatchJobExecution> captor =
+                org.mockito.ArgumentCaptor.forClass(BatchJobExecution.class);
+        verify(executionRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        List<BatchJobExecution> saved = captor.getAllValues();
+        assertThat(saved.get(1).getStatus()).isEqualTo(BatchJobStatus.COMPLETED);
     }
 
     @Test
@@ -142,8 +147,14 @@ class SearchIndexConsistencyJobTest {
         assertThat(counter).isNotNull();
         assertThat(counter.count()).isEqualTo(1.0);
 
-        // Assert: execution saved twice (start + complete)
-        verify(executionRepository, org.mockito.Mockito.times(2)).save(any(BatchJobExecution.class));
+        // Assert: execution saved twice (start + complete) and SECOND save has COMPLETED status.
+        // WARNING fix: explicit COMPLETED assertion catches a regression that saves FAILED on
+        // the happy path while save() count alone would still pass.
+        org.mockito.ArgumentCaptor<BatchJobExecution> captor =
+                org.mockito.ArgumentCaptor.forClass(BatchJobExecution.class);
+        verify(executionRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        List<BatchJobExecution> saved = captor.getAllValues();
+        assertThat(saved.get(1).getStatus()).isEqualTo(BatchJobStatus.COMPLETED);
     }
 
     @Test

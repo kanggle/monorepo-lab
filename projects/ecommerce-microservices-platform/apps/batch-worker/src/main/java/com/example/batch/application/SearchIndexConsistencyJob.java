@@ -57,6 +57,13 @@ public class SearchIndexConsistencyJob {
 
     private static final int PAGE_SIZE = 50;
 
+    /**
+     * Absolute page-count backstop: if the loop somehow exceeds this many pages (e.g. due to an
+     * unexpected API contract change), break and emit a WARN rather than spin forever.
+     * 100_000 pages × PAGE_SIZE=50 = 5 million products — well above any realistic catalog size.
+     */
+    private static final int MAX_PAGES_BACKSTOP = 100_000;
+
     private final ProductServiceClient productServiceClient;
     private final SearchServiceClient searchServiceClient;
     private final BatchJobExecutionRepository executionRepository;
@@ -99,26 +106,57 @@ public class SearchIndexConsistencyJob {
             log.info("SearchIndexConsistencyJob completed (executionId={} suspectedDrift={})",
                     execution.getId(), totalDrift);
         } catch (Exception e) {
-            execution.fail(e.getMessage() != null ? e.getMessage() : e.getClass().getName());
+            // B-4 fix: guard for blank message — e.getMessage() may be non-null but "" (blank),
+            // which would cause BatchJobExecution.fail() to throw IllegalArgumentException,
+            // escaping this catch block and breaking exception isolation (overview.md invariant 2).
+            String errorMsg = (e.getMessage() != null && !e.getMessage().isBlank())
+                    ? e.getMessage()
+                    : e.getClass().getName();
+            execution.fail(errorMsg);
             executionRepository.save(execution);
             log.error("SearchIndexConsistencyJob FAILED (executionId={}): {}",
-                    execution.getId(), e.getMessage(), e);
+                    execution.getId(), errorMsg, e);
             // Do NOT re-throw — failed jobs must not block the scheduler thread (overview.md invariant 2).
         }
     }
 
     /**
      * Core pagination + spot-check loop. Returns the total suspected inconsistency count.
+     *
+     * <p><b>Termination logic (B-2 fix):</b>
+     * <ol>
+     *   <li>{@code totalPages} is snapshotted from the first page response before the loop starts.
+     *       This prevents the "catalog grows mid-run" infinite-loop risk where
+     *       {@code consumedSoFar >= totalElements} might never fire if every page returns exactly
+     *       PAGE_SIZE items and totalElements keeps growing.</li>
+     *   <li>{@code products.isEmpty()} remains as a hard secondary terminator (defensive guard
+     *       against a server that returns empty content before page >= totalPages).</li>
+     *   <li>An absolute backstop ({@link #MAX_PAGES_BACKSTOP}) breaks the loop and emits WARN
+     *       if page count exceeds a sane upper bound, ensuring no input can spin forever.</li>
+     * </ol>
      */
     private long runCheck() {
+        // Fetch the first page to snapshot totalPages before the loop.
+        ProductPageResponse firstResponse = productServiceClient.listOnSale(0, PAGE_SIZE);
+        List<ProductSummary> firstProducts = firstResponse.content();
+
+        if (firstProducts.isEmpty()) {
+            log.info("SearchIndexConsistencyJob check complete: totalProducts=0 suspectedDrift=0");
+            return 0L;
+        }
+
+        // Snapshot totalPages once — prevents mid-run catalog growth from blocking termination.
+        int totalPages = (int) Math.ceil((double) firstResponse.totalElements() / PAGE_SIZE);
+        log.debug("SearchIndexConsistencyJob: totalElements={} totalPages={}",
+                firstResponse.totalElements(), totalPages);
+
         int page = 0;
         long totalProducts = 0;
         long totalDrift = 0;
+        List<ProductSummary> products = firstProducts;
 
         while (true) {
-            ProductPageResponse pageResponse = productServiceClient.listOnSale(page, PAGE_SIZE);
-            List<ProductSummary> products = pageResponse.content();
-
+            // Hard secondary terminator: empty page means no more data regardless of page count.
             if (products.isEmpty()) {
                 break;
             }
@@ -137,14 +175,23 @@ public class SearchIndexConsistencyJob {
                 }
             }
 
-            // Check if we've consumed all pages
-            long totalElements = pageResponse.totalElements();
-            long consumedSoFar = (long) (page + 1) * PAGE_SIZE;
-            if (consumedSoFar >= totalElements || products.size() < PAGE_SIZE) {
+            page++;
+
+            // Primary terminator: all pages from the snapshotted total consumed.
+            if (page >= totalPages) {
                 break;
             }
 
-            page++;
+            // Absolute backstop: no input can cause an infinite loop regardless of API behavior.
+            if (page >= MAX_PAGES_BACKSTOP) {
+                log.warn("SearchIndexConsistencyJob: page count exceeded backstop limit " +
+                        "(page={} MAX_PAGES_BACKSTOP={}). Terminating early to prevent runaway loop. " +
+                        "This should not happen under normal conditions — investigate API contract.",
+                        page, MAX_PAGES_BACKSTOP);
+                break;
+            }
+
+            products = productServiceClient.listOnSale(page, PAGE_SIZE).content();
         }
 
         log.info("SearchIndexConsistencyJob check complete: totalProducts={} suspectedDrift={}",

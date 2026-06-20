@@ -1,10 +1,13 @@
 package com.example.batch.infrastructure.client;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,8 +30,15 @@ public class SearchServiceClient {
     private final RestClient restClient;
 
     public SearchServiceClient(@Value("${search-service.base-url}") String baseUrl) {
+        // WARNING fix: explicit timeouts prevent a hung search-service from blocking the
+        // scheduler thread for the entire ShedLock window. 5s connect / 10s read mirrors
+        // the values used in ProductServiceClient for consistency.
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(5));
+        factory.setReadTimeout(Duration.ofSeconds(10));
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
+                .requestFactory(factory)
                 .build();
     }
 
@@ -50,12 +60,17 @@ public class SearchServiceClient {
     /**
      * Response shape for {@code GET /api/search/products} (search-api.md).
      *
+     * <p>B-3 fix: {@code @JsonIgnoreProperties(ignoreUnknown = true)} ensures that extra fields
+     * present in the actual search-api response (e.g. {@code facets}) do not cause deserialization
+     * failures under a strict Jackson config ({@code FAIL_ON_UNKNOWN_PROPERTIES=true}).
+     *
      * @param query         the echoed search query
      * @param content       list of matching product hits
      * @param page          current page
      * @param size          page size
      * @param totalElements total hits in the index
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record SearchResponse(
             String query,
             List<SearchHit> content,
@@ -67,9 +82,14 @@ public class SearchServiceClient {
     /**
      * A single product hit returned by the search service.
      *
+     * <p>B-3 fix: {@code @JsonIgnoreProperties(ignoreUnknown = true)} for symmetry with
+     * {@link SearchResponse} — guards against future search-api additions to individual hit
+     * objects (e.g. highlight fragments, sort values).
+     *
      * @param productId UUID of the product
      * @param name      product name
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record SearchHit(
             UUID productId,
             String name,

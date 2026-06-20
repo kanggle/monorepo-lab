@@ -1,11 +1,13 @@
 package com.example.batch.infrastructure.client;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,8 +30,14 @@ public class ProductServiceClient {
     private final RestClient restClient;
 
     public ProductServiceClient(@Value("${product-service.base-url}") String baseUrl) {
+        // WARNING fix: explicit timeouts prevent a hung product-service from blocking the
+        // scheduler thread for the entire ShedLock window. 5s connect / 10s read.
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(5));
+        factory.setReadTimeout(Duration.ofSeconds(10));
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
+                .requestFactory(factory)
                 .build();
     }
 
@@ -52,11 +60,16 @@ public class ProductServiceClient {
     /**
      * Response shape for {@code GET /api/products} (product-api.md).
      *
+     * <p>B-3 fix: {@code @JsonIgnoreProperties(ignoreUnknown = true)} for symmetry with
+     * {@link SearchServiceClient}'s records — guards against extra fields in the product-service
+     * page response (e.g. {@code sort}, {@code pageable}) under a strict Jackson config.
+     *
      * @param content list of product summaries
      * @param page    current page
      * @param size    page size
      * @param totalElements total products matching the filter
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record ProductPageResponse(
             List<ProductSummary> content,
             int page,
@@ -67,10 +80,14 @@ public class ProductServiceClient {
     /**
      * A single product entry in the paginated catalog list.
      *
+     * <p>B-3 fix: {@code @JsonIgnoreProperties(ignoreUnknown = true)} for symmetry — guards
+     * against future product-api additions to individual product objects.
+     *
      * @param id   product UUID
      * @param name product name (used as search query term in the spot-check)
      * @param status product status (always ON_SALE for this client's use case)
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record ProductSummary(
             UUID id,
             String name,
