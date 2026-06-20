@@ -1,6 +1,6 @@
 # TASK-BE-420 — Wire the product `name` partial-match filter
 
-**Status:** ready
+**Status:** done
 **Type:** backend feature (product-service query)
 
 ## Goal
