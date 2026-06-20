@@ -80,8 +80,25 @@ class RbacTenantEndpointMatrixIntegrationTest extends AbstractIntegrationTest {
     static String signingKeyPem;
 
     // Distinct UUID prefixes to avoid collision with other IT classes.
-    static final String SUPER_ADMIN_UUID = "00000000-0000-7000-8000-000000000081";
-    static final String SUPPORT_OP_UUID  = "00000000-0000-7000-8000-000000000082";
+    //
+    // CRITICAL: AbstractIntegrationTest shares ONE MySQL container across every
+    // integration test class in the JVM and NEVER truncates between classes
+    // (see its class javadoc). admin_operators.operator_id rows therefore persist
+    // across classes, and each class's seedOperator only INSERTs the operator row
+    // when absent (idempotent guard) — but always re-runs the role binding.
+    //
+    // The original ...081/...082 prefixes COLLIDED with
+    // OperatorAdminScopeConfinementIntegrationTest, which seeds
+    //   ...081 → SUPER_ADMIN  and  ...082 → SUPER_ADMIN (tenant-x).
+    // That class runs first (alphabetical), so by the time this class ran, ...082
+    // already carried a SUPER_ADMIN binding (which holds tenant.manage via V0024).
+    // This class then ADDED a SUPPORT_LOCK binding on top; loadPermissions unions
+    // BOTH roles → tenant.manage present → the RBAC aspect ALLOWED the supposed
+    // SUPPORT_LOCK deny actor, the controller body ran, and the deny tests saw
+    // TENANT_SCOPE_DENIED instead of PERMISSION_DENIED. Use a prefix no other IT
+    // class touches so SUPPORT_OP carries ONLY SUPPORT_LOCK.
+    static final String SUPER_ADMIN_UUID = "00000000-0000-7000-8000-0000000000E1";
+    static final String SUPPORT_OP_UUID  = "00000000-0000-7000-8000-0000000000E2";
 
     @BeforeAll
     static void setupShared() throws IOException {
@@ -303,8 +320,12 @@ class RbacTenantEndpointMatrixIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
-     * Idempotent seed: inserts the operator + binds the given role (which carries
-     * the role's seeded permission set per V0022/V0024).
+     * Deterministic seed: inserts the operator (idempotent) then binds EXACTLY the
+     * given role. The role set is reset first so the operator carries ONLY
+     * {@code roleName} — defense-in-depth against the cross-class operator-row
+     * persistence described on {@link #SUPPORT_OP_UUID} (the shared, un-truncated
+     * MySQL means a UUID reused by another class could otherwise leave a stray
+     * binding that contaminates this class's permission union).
      */
     private void seedOperator(String uuid, String tenantId, String email, String roleName) {
         Integer existing = jdbcTemplate.queryForObject(
@@ -319,6 +340,14 @@ class RbacTenantEndpointMatrixIntegrationTest extends AbstractIntegrationTest {
                     """,
                     uuid, tenantId, email, "Matrix Op");
         }
+        // Reset role bindings for this operator so the actor carries EXACTLY one
+        // role — guarantees the SUPPORT_LOCK deny actor never accidentally unions a
+        // tenant.manage-bearing role left over from a prior class on the same UUID.
+        jdbcTemplate.update("""
+                DELETE ar FROM admin_operator_roles ar
+                  JOIN admin_operators o ON o.id = ar.operator_id
+                 WHERE o.operator_id = ?
+                """, uuid);
         jdbcTemplate.update("""
                 INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
                 SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
