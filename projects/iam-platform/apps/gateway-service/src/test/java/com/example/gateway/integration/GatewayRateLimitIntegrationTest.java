@@ -22,9 +22,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.io.IOException;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -52,14 +50,15 @@ class GatewayRateLimitIntegrationTest {
     static KeyPair keyPair;
 
     /**
-     * Deterministic connection-reset downstream (replaces the flaky WireMock
+     * Deterministic unreachable downstream (replaces the flaky WireMock
      * {@code Fault.CONNECTION_RESET_BY_PEER} stub — TASK-MONO-044 § AC #8 option a).
-     * Accepts every TCP connection and immediately closes it with
-     * {@code SO_LINGER=0}, forcing an RST so the gateway always sees a downstream
-     * connection failure. The gateway route {@code /api/connreset/**} points here.
+     * A free ephemeral port is reserved then closed in {@code @BeforeAll}, so nothing
+     * listens on it: every connection from the gateway is REFUSED (a clean
+     * {@code ConnectException}), which the gateway maps to 5xx every time — unlike a
+     * mid-request RST, which Reactor Netty can surface as an empty 200. The gateway
+     * route {@code /api/connreset/**} points at this dead port.
      */
-    static ServerSocket resetServer;
-    static volatile boolean resetServerRunning;
+    static int deadDownstreamPort;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -106,30 +105,17 @@ class GatewayRateLimitIntegrationTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"id\":\"account-123\"}")));
 
-        // Deterministic connection-reset downstream: accept then RST every connection.
-        resetServer = new ServerSocket(0);
-        resetServerRunning = true;
-        Thread t = new Thread(() -> {
-            while (resetServerRunning) {
-                try (Socket s = resetServer.accept()) {
-                    s.setSoLinger(true, 0); // close() sends RST instead of FIN
-                } catch (IOException ignored) {
-                    // server closed (afterAll) or transient accept error → loop check exits
-                }
-            }
-        }, "reset-downstream-accept");
-        t.setDaemon(true);
-        t.start();
+        // Deterministic unreachable downstream: reserve a free ephemeral port, then
+        // close it so nothing listens → every connection is refused (ConnectException).
+        try (ServerSocket probe = new ServerSocket(0)) {
+            deadDownstreamPort = probe.getLocalPort();
+        }
     }
 
     @AfterAll
     static void afterAll() {
         if (authServiceMock != null) authServiceMock.stop();
         if (accountServiceMock != null) accountServiceMock.stop();
-        resetServerRunning = false;
-        if (resetServer != null) {
-            try { resetServer.close(); } catch (IOException ignored) { /* best-effort */ }
-        }
     }
 
     @DynamicPropertySource
@@ -144,9 +130,9 @@ class GatewayRateLimitIntegrationTest {
         registry.add("spring.cloud.gateway.routes[1].uri", accountServiceMock::baseUrl);
         registry.add("spring.cloud.gateway.routes[1].id", () -> "account-service");
         registry.add("spring.cloud.gateway.routes[1].predicates[0]", () -> "Path=/api/accounts/**");
-        // Deterministic connection-reset downstream (TASK-MONO-044 § AC #8 option a).
+        // Deterministic unreachable downstream → connection refused (TASK-MONO-044 § AC #8 option a).
         registry.add("spring.cloud.gateway.routes[2].uri",
-                () -> "http://127.0.0.1:" + resetServer.getLocalPort());
+                () -> "http://127.0.0.1:" + deadDownstreamPort);
         registry.add("spring.cloud.gateway.routes[2].id", () -> "connreset-downstream");
         registry.add("spring.cloud.gateway.routes[2].predicates[0]", () -> "Path=/api/connreset/**");
         // login scope max=2 for fast rate-limit testing
@@ -270,11 +256,10 @@ class GatewayRateLimitIntegrationTest {
      * version used WireMock's {@code Fault.CONNECTION_RESET_BY_PEER} stub, which
      * raced with the Reactor Netty client (~5-10% of CI runs returned 200 because
      * the gateway forwarded before WireMock applied the fault). Per TASK-MONO-044
-     * § AC #8 option (a), the flaky stub is replaced by a real downstream
-     * ({@code resetServer}) that accepts every connection and RSTs it
-     * ({@code SO_LINGER=0}), via the dedicated {@code /api/connreset/**} route.
-     * The connection failure is now deterministic, so the test is reliable in the
-     * main suite (no nightly-only carve-out needed).
+     * § AC #8 option (a), the flaky stub is replaced by routing {@code /api/connreset/**}
+     * at a dead port (reserved-then-closed in {@code @BeforeAll}) so every connection
+     * is refused — a clean {@code ConnectException} the gateway maps to 5xx every time.
+     * Deterministic, so the test is reliable in the main suite (no nightly-only carve-out).
      */
     @Test
     @DisplayName("다운스트림 연결 리셋(Fault) → 게이트웨이가 5xx 반환")
