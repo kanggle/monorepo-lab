@@ -19,26 +19,25 @@ import java.util.UUID;
  * The consumer branches on {@code anonymized}; it does NOT self-schedule on
  * {@code gracePeriodEndsAt} (the producer re-emits at grace end).
  *
- * <p>Tolerant deserialization (camelCase primary + snake_case alias + ignore-unknown).
+ * <p><b>The wire shape is FLAT</b> — the fields are top-level, NOT nested under a
+ * {@code payload} object (TASK-BE-422). The IAM producer serializes the payload map
+ * directly with NO envelope wrapper, matching the authoritative
+ * {@code iam-platform/specs/contracts/events/account-events.md} § account.deleted payload.
+ * Note there is NO {@code eventId} in the flat account.deleted payload (only
+ * {@code account.locked} carries one). A nested DTO would silently deserialize to a
+ * {@code null} payload and no-op every event — the defect this task fixes.
+ *
+ * <p>{@code accountId} is a {@code UUID} to feed {@code UserProfileService} directly.
+ * Tolerant deserialization (camelCase primary + snake_case alias + ignore-unknown).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record AccountDeletedEvent(
-        @JsonProperty("eventId") @JsonAlias("event_id") UUID eventId,
-        @JsonProperty("eventType") @JsonAlias("event_type") String eventType,
-        @JsonProperty("occurredAt") @JsonAlias("occurred_at") Instant occurredAt,
-        String source,
+        @JsonProperty("accountId") @JsonAlias("account_id") UUID accountId,
         @JsonProperty("tenantId") @JsonAlias("tenant_id") String tenantId,
-        Payload payload
-) {
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Payload(
-            UUID accountId,
-            @JsonProperty("tenantId") @JsonAlias("tenant_id") String tenantId,
-            @JsonProperty("reasonCode") @JsonAlias("reason_code") String reasonCode,
-            @JsonProperty("actorType") @JsonAlias("actor_type") String actorType,
-            @JsonProperty("actorId") @JsonAlias("actor_id") String actorId,
-            @JsonProperty("deletedAt") @JsonAlias("deleted_at") Instant deletedAt,
-            @JsonProperty("gracePeriodEndsAt") @JsonAlias("grace_period_ends_at") Instant gracePeriodEndsAt,
-            Boolean anonymized
-    ) {}
-}
+        @JsonProperty("reasonCode") @JsonAlias("reason_code") String reasonCode,
+        @JsonProperty("actorType") @JsonAlias("actor_type") String actorType,
+        @JsonProperty("actorId") @JsonAlias("actor_id") String actorId,
+        @JsonProperty("deletedAt") @JsonAlias("deleted_at") Instant deletedAt,
+        @JsonProperty("gracePeriodEndsAt") @JsonAlias("grace_period_ends_at") Instant gracePeriodEndsAt,
+        @JsonProperty("anonymized") Boolean anonymized
+) {}

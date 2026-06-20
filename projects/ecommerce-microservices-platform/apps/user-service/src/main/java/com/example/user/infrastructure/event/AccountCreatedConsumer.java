@@ -17,8 +17,9 @@ import org.springframework.stereotype.Component;
  * ({@code auth.user.signed-up}, retired with the decommissioned ecommerce
  * auth-service, TASK-BE-132).
  *
- * <p>Fail-soft (ADR-MONO-037 P5): a null payload / missing accountId is logged and
- * skipped rather than blocking the partition. Idempotency is handled downstream by
+ * <p>The wire is FLAT (TASK-BE-422): fields are read from the JSON root, not a nested
+ * {@code payload}. Fail-soft (ADR-MONO-037 P5): a missing {@code accountId} is logged
+ * and skipped rather than blocking the partition. Idempotency is handled downstream by
  * {@link AccountCreatedHandler} (existsByUserId).
  */
 @Slf4j
@@ -45,17 +46,17 @@ public class AccountCreatedConsumer {
     }
 
     void handle(AccountCreatedEvent event) {
-        if (event.payload() == null || event.payload().accountId() == null) {
-            log.warn("account.created event missing payload/accountId, skipping. eventId={}", event.eventId());
+        if (event.accountId() == null) {
+            log.warn("account.created event missing accountId, skipping.");
             return;
         }
 
-        // IAM carries the tenant in the payload (account-events.md); fall back to the
-        // envelope, then to null → TenantContext resolves the default tenant (M5/D8 net-zero).
-        String tenantId = event.payload().tenantId() != null ? event.payload().tenantId() : event.tenantId();
+        // IAM carries the tenant at the top level (account-events.md, flat wire);
+        // a null tenant → TenantContext resolves the default tenant (M5/D8 net-zero).
+        String tenantId = event.tenantId();
         try {
             TenantContext.set(tenantId);
-            accountCreatedHandler.handle(event.payload().accountId());
+            accountCreatedHandler.handle(event.accountId());
         } finally {
             TenantContext.clear();
         }

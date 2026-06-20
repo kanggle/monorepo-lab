@@ -24,8 +24,9 @@ import org.springframework.stereotype.Component;
  *       (profile PII cleared).</li>
  * </ul>
  * It does NOT self-schedule on {@code gracePeriodEndsAt} — the producer re-emits at
- * grace end. Fail-soft (P5): a null payload / missing accountId is logged and skipped;
- * the downstream reactions are idempotent.
+ * grace end. The wire is FLAT (TASK-BE-422): fields are read from the JSON root, not a
+ * nested {@code payload}. Fail-soft (P5): a missing {@code accountId} is logged and
+ * skipped; the downstream reactions are idempotent.
  */
 @Slf4j
 @Component
@@ -51,20 +52,19 @@ public class AccountDeletedConsumer {
     }
 
     void handle(AccountDeletedEvent event) {
-        if (event.payload() == null || event.payload().accountId() == null) {
-            log.warn("account.deleted event missing payload/accountId, skipping. eventId={}", event.eventId());
+        if (event.accountId() == null) {
+            log.warn("account.deleted event missing accountId, skipping.");
             return;
         }
 
-        var payload = event.payload();
-        String tenantId = payload.tenantId() != null ? payload.tenantId() : event.tenantId();
-        boolean anonymized = Boolean.TRUE.equals(payload.anonymized());
+        String tenantId = event.tenantId();
+        boolean anonymized = Boolean.TRUE.equals(event.anonymized());
         try {
             TenantContext.set(tenantId);
             if (anonymized) {
-                userProfileService.anonymizeProfile(payload.accountId());
+                userProfileService.anonymizeProfile(event.accountId());
             } else {
-                userProfileService.withdrawProfile(payload.accountId());
+                userProfileService.withdrawProfile(event.accountId());
             }
         } finally {
             TenantContext.clear();

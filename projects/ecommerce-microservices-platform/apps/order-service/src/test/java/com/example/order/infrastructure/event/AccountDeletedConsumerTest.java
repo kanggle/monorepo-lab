@@ -20,7 +20,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("AccountDeletedConsumer 단위 테스트 (order-service, ADR-MONO-037 P3-B)")
+@DisplayName("AccountDeletedConsumer 단위 테스트 (order-service, ADR-MONO-037 P3-B, flat wire TASK-BE-422)")
 class AccountDeletedConsumerTest {
 
     @Mock
@@ -42,24 +42,21 @@ class AccountDeletedConsumerTest {
                 org.mockito.ArgumentMatchers.eq("AccountDeleted"))).thenReturn(false);
     }
 
+    // EXACT flat shape from iam-platform account-events.md § account.deleted
+    // (top-level fields, NO nested payload, NO eventId).
     private String json(UUID accountId, Boolean anonymized) {
         return """
                 {
-                  "eventId": "%s",
-                  "eventType": "account.deleted",
-                  "occurredAt": "2026-06-15T10:00:00Z",
-                  "source": "account-service",
-                  "payload": {
-                    "accountId": "%s",
-                    "tenantId": "ecommerce",
-                    "reasonCode": "USER_REQUEST",
-                    "actorType": "user",
-                    "deletedAt": "2026-06-15T10:00:00Z",
-                    "gracePeriodEndsAt": "2026-07-15T10:00:00Z",
-                    "anonymized": %s
-                  }
+                  "accountId": "%s",
+                  "tenantId": "ecommerce",
+                  "reasonCode": "USER_REQUEST",
+                  "actorType": "user",
+                  "actorId": null,
+                  "deletedAt": "2026-06-15T10:00:00Z",
+                  "gracePeriodEndsAt": "2026-07-15T10:00:00Z",
+                  "anonymized": %s
                 }
-                """.formatted(UUID.randomUUID(), accountId, anonymized);
+                """.formatted(accountId, anonymized);
     }
 
     @Nested
@@ -67,7 +64,7 @@ class AccountDeletedConsumerTest {
     class PhaseRouting {
 
         @Test
-        @DisplayName("anonymized=true (유예 종료) → 주문 PII 익명화를 호출한다")
+        @DisplayName("FLAT anonymized=true (유예 종료) → 주문 PII 익명화를 호출한다")
         void onMessage_postGrace_callsAnonymize() {
             UUID accountId = UUID.randomUUID();
 
@@ -75,14 +72,20 @@ class AccountDeletedConsumerTest {
 
             then(orderPiiAnonymizationService).should().anonymizeOrdersForAccount(accountId.toString());
             then(orderPiiAnonymizationService).shouldHaveNoMoreInteractions();
+            // dedup keyed off the accountId+phase composite (no eventId on the flat wire).
+            then(eventDeduplicationChecker).should().isDuplicate(accountId + ":anon", "AccountDeleted");
         }
 
         @Test
-        @DisplayName("anonymized=false (유예 진입) → 주문 PII 동작 없음 (UserWithdrawn 반응이 취소 담당)")
+        @DisplayName("FLAT anonymized=false (유예 진입) → 주문 PII 동작 없음 (UserWithdrawn 반응이 취소 담당)")
         void onMessage_graceEntry_noOrderPiiAction() {
-            consumer.onMessage(json(UUID.randomUUID(), false));
+            UUID accountId = UUID.randomUUID();
+
+            consumer.onMessage(json(accountId, false));
 
             then(orderPiiAnonymizationService).shouldHaveNoInteractions();
+            // grace phase dedups under its own composite key.
+            then(eventDeduplicationChecker).should().isDuplicate(accountId + ":grace", "AccountDeleted");
         }
 
         @Test
@@ -99,15 +102,13 @@ class AccountDeletedConsumerTest {
     class Handle {
 
         @Test
-        @DisplayName("중복 이벤트면 아무 동작도 하지 않는다")
+        @DisplayName("중복 이벤트(accountId+phase 복합키)면 아무 동작도 하지 않는다")
         void handle_duplicate_skips() {
             UUID accountId = UUID.randomUUID();
-            UUID eventId = UUID.randomUUID();
-            given(eventDeduplicationChecker.isDuplicate(eventId.toString(), "AccountDeleted")).willReturn(true);
+            given(eventDeduplicationChecker.isDuplicate(accountId + ":anon", "AccountDeleted")).willReturn(true);
             AccountDeletedEvent event = new AccountDeletedEvent(
-                    eventId, "account.deleted", Instant.now(), "account-service", "ecommerce",
-                    new AccountDeletedEvent.Payload(accountId, "ecommerce", "USER_REQUEST", "user", null,
-                            Instant.now(), Instant.now(), true));
+                    accountId, "ecommerce", "USER_REQUEST", "user", null,
+                    Instant.now(), Instant.now(), true);
 
             consumer.handle(event);
 
@@ -115,13 +116,20 @@ class AccountDeletedConsumerTest {
         }
 
         @Test
-        @DisplayName("payload가 null이면 익명화를 호출하지 않는다 (fail-soft)")
-        void handle_nullPayload_skips() {
-            AccountDeletedEvent event = new AccountDeletedEvent(
-                    UUID.randomUUID(), "account.deleted", Instant.now(), "account-service", "ecommerce", null);
+        @DisplayName("anon 단계 중복이어도 grace 단계는 독립적으로 처리된다 (복합키 분리)")
+        void handle_anonDuplicate_graceStillIndependent() {
+            UUID accountId = UUID.randomUUID();
+            // anon already processed, grace not yet.
+            lenient().when(eventDeduplicationChecker.isDuplicate(accountId + ":anon", "AccountDeleted")).thenReturn(true);
+            given(eventDeduplicationChecker.isDuplicate(accountId + ":grace", "AccountDeleted")).willReturn(false);
+            AccountDeletedEvent graceEvent = new AccountDeletedEvent(
+                    accountId, "ecommerce", "USER_REQUEST", "user", null,
+                    Instant.now(), Instant.now(), false);
 
-            consumer.handle(event);
+            consumer.handle(graceEvent);
 
+            // grace branch is a no-op for order-PII but must NOT be treated as a duplicate of anon.
+            then(eventDeduplicationChecker).should().isDuplicate(accountId + ":grace", "AccountDeleted");
             then(orderPiiAnonymizationService).shouldHaveNoInteractions();
         }
 
@@ -129,13 +137,13 @@ class AccountDeletedConsumerTest {
         @DisplayName("accountId가 null이면 익명화를 호출하지 않는다 (fail-soft)")
         void handle_nullAccountId_skips() {
             AccountDeletedEvent event = new AccountDeletedEvent(
-                    UUID.randomUUID(), "account.deleted", Instant.now(), "account-service", "ecommerce",
-                    new AccountDeletedEvent.Payload(null, "ecommerce", "USER_REQUEST", "user", null,
-                            Instant.now(), Instant.now(), true));
+                    null, "ecommerce", "USER_REQUEST", "user", null,
+                    Instant.now(), Instant.now(), true);
 
             consumer.handle(event);
 
             then(orderPiiAnonymizationService).shouldHaveNoInteractions();
+            then(eventDeduplicationChecker).shouldHaveNoInteractions();
         }
 
         @Test
@@ -143,13 +151,13 @@ class AccountDeletedConsumerTest {
         void handle_nullAnonymized_treatedAsGraceEntry() {
             UUID accountId = UUID.randomUUID();
             AccountDeletedEvent event = new AccountDeletedEvent(
-                    UUID.randomUUID(), "account.deleted", Instant.now(), "account-service", "ecommerce",
-                    new AccountDeletedEvent.Payload(accountId, "ecommerce", "USER_REQUEST", "user", null,
-                            Instant.now(), Instant.now(), null));
+                    accountId, "ecommerce", "USER_REQUEST", "user", null,
+                    Instant.now(), Instant.now(), null);
 
             consumer.handle(event);
 
             then(orderPiiAnonymizationService).shouldHaveNoInteractions();
+            then(eventDeduplicationChecker).should().isDuplicate(accountId + ":grace", "AccountDeleted");
         }
     }
 }
