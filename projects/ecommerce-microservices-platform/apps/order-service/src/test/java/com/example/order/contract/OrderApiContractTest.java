@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -50,6 +51,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * fails with "Found multiple @SpringBootConfiguration annotated classes".
  */
 @WebMvcTest(OrderController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @ContextConfiguration(classes = TestOrderServiceApplication.class)
 @Import(GlobalExceptionHandler.class)
 @DisplayName("Order API 컨트랙트 테스트 — specs/contracts/http/order-api.md")

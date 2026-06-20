@@ -86,4 +86,17 @@ public interface OrderRepository {
      * never received a {@code PaymentCompleted} event.
      */
     List<Order> findStuckPaymentPending(Instant placedBefore, int batchSize);
+
+    /**
+     * Returns orders that paid ({@code payment_id IS NOT NULL}) but never received
+     * their confirmation event — still {@code PENDING} with {@code created_at} predating
+     * {@code cutoff}, oldest first, capped at {@code limit}. Used by the internal
+     * stale-paid forward-confirm sweep (TASK-BE-412).
+     *
+     * <p>Disjoint from {@link #findStuckPaymentPending(Instant, int)} on {@code payment_id}:
+     * that bucket is {@code payment_id IS NULL} (payment never completed, BE-138); this
+     * bucket is {@code payment_id IS NOT NULL} (paid, confirmation event lost). No order is
+     * ever a candidate for both.
+     */
+    List<Order> findStalePaidUnconfirmed(Instant cutoff, int limit);
 }
