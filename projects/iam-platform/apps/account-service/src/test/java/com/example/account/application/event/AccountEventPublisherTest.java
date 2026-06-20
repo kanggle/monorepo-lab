@@ -103,6 +103,72 @@ class AccountEventPublisherTest {
         assertThat(e1).isNotEqualTo(e2);
     }
 
+    // ── TASK-BE-423: producer-side FLAT-wire guard for the BE-422 events ───────────
+    // The exact JSON captured here is what `saveEvent` writes to the outbox and what
+    // `OutboxPublisher` relays to Kafka verbatim — i.e. the real on-wire message. These
+    // lock the flat shape (top-level fields, NO `payload` envelope wrapper) so the
+    // producer can never silently regress to a nested envelope and re-break the ecommerce
+    // account.* consumers fixed in TASK-BE-422 (see account-lifecycle-subscriptions.md
+    // § Envelope). The consumer-side flat deserialization tests meet this exact shape.
+
+    private Account lockedAccount(String id) {
+        return Account.reconstitute(id, TenantId.FAN_PLATFORM, "user@example.com", null,
+                AccountStatus.LOCKED, Instant.now(), Instant.now(), null, null, null, 0);
+    }
+
+    @Test
+    @DisplayName("publishStatusChanged — outbox JSON is FLAT (top-level fields, no payload wrapper)")
+    void publishStatusChanged_flatWireShape() throws Exception {
+        publisher.publishStatusChanged(
+                lockedAccount("acc-1"), TenantId.FAN_PLATFORM.value(), "ACTIVE",
+                "ADMIN_LOCK", "operator", "op-7", Instant.parse("2026-04-14T10:00:00Z"));
+
+        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+        verify(outboxWriter).save(eq("Account"), eq("acc-1"), eq("account.status.changed"),
+                payloadCaptor.capture());
+
+        JsonNode wire = objectMapper.readTree(payloadCaptor.getValue());
+        // FLAT: the consumer-relevant fields are at the JSON root.
+        assertThat(wire.get("accountId").asText()).isEqualTo("acc-1");
+        assertThat(wire.get("tenantId").asText()).isEqualTo(TenantId.FAN_PLATFORM.value());
+        assertThat(wire.get("previousStatus").asText()).isEqualTo("ACTIVE");
+        assertThat(wire.get("currentStatus").asText()).isEqualTo("LOCKED");
+        assertThat(wire.get("reasonCode").asText()).isEqualTo("ADMIN_LOCK");
+        assertThat(wire.get("actorType").asText()).isEqualTo("operator");
+        assertThat(wire.get("actorId").asText()).isEqualTo("op-7");
+        assertThat(wire.get("occurredAt").asText()).isEqualTo("2026-04-14T10:00:00Z");
+        // NOT a nested envelope — these would break the flat consumer DTO.
+        assertThat(wire.has("payload")).as("no nested payload wrapper").isFalse();
+        assertThat(wire.has("eventType")).as("no eventType envelope field").isFalse();
+        assertThat(wire.has("source")).as("no source envelope field").isFalse();
+    }
+
+    @Test
+    @DisplayName("publishAccountDeleted — outbox JSON is FLAT (top-level fields, no payload wrapper)")
+    void publishAccountDeleted_flatWireShape() throws Exception {
+        publisher.publishAccountDeleted(
+                account("acc-2"), TenantId.FAN_PLATFORM.value(), "USER_REQUEST", "user", "u-9",
+                Instant.parse("2026-04-14T10:00:00Z"), Instant.parse("2026-05-14T10:00:00Z"));
+
+        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+        verify(outboxWriter).save(eq("Account"), eq("acc-2"), eq("account.deleted"),
+                payloadCaptor.capture());
+
+        JsonNode wire = objectMapper.readTree(payloadCaptor.getValue());
+        assertThat(wire.get("accountId").asText()).isEqualTo("acc-2");
+        assertThat(wire.get("tenantId").asText()).isEqualTo(TenantId.FAN_PLATFORM.value());
+        assertThat(wire.get("reasonCode").asText()).isEqualTo("USER_REQUEST");
+        assertThat(wire.get("actorType").asText()).isEqualTo("user");
+        assertThat(wire.get("actorId").asText()).isEqualTo("u-9");
+        assertThat(wire.get("deletedAt").asText()).isEqualTo("2026-04-14T10:00:00Z");
+        assertThat(wire.get("gracePeriodEndsAt").asText()).isEqualTo("2026-05-14T10:00:00Z");
+        assertThat(wire.get("anonymized").asBoolean()).isFalse();
+        // account.deleted carries NO eventId on the flat wire (only account.locked does) —
+        // this is why TASK-BE-422 re-keyed the order-service dedup off accountId+phase.
+        assertThat(wire.has("eventId")).as("account.deleted has no eventId field").isFalse();
+        assertThat(wire.has("payload")).as("no nested payload wrapper").isFalse();
+    }
+
     // ── TASK-BE-248: tenantId null/blank guard ────────────────────────────────
 
     @Test
