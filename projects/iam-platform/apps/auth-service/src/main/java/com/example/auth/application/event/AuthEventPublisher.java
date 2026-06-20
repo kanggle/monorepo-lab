@@ -305,7 +305,6 @@ public class AuthEventPublisher extends BaseEventPublisher {
     }
 
     private void write(String eventType, String aggregateId, Map<String, Object> payload) {
-        // TODO: TASK-BE-015 switch to UUID v7 when Java 21+ UUID v7 support is added
         writeEvent(AGGREGATE_TYPE, aggregateId, eventType, SOURCE, payload);
     }
 }

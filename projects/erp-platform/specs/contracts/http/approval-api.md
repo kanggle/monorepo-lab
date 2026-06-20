@@ -507,10 +507,11 @@ deferred to v2 (ADR-MONO-016 § D3 v2 Service Map; `rules/domains/erp.md` E3 UL)
 - **Inbox filtering** — due-date, priority, processed (기결) history, and
   delegated-to-me views are v2. The first increment's `/inbox` returns only
   the caller's own `SUBMITTED` pending items.
-- **Notification fan-out** — `erp.approval.*` events are published in this
-  increment (forward interface), but `notification-service` consumes them in
-  v2 (see [`erp-approval-events.md`](../events/erp-approval-events.md)).
-
 When any of the above lands, this contract is amended additively (new states /
 fields / endpoints), and breaking shape changes follow the platform versioning
 policy (`.v2` topic + dual-publish window for events; `/api/v2/...` for HTTP).
+
+> **Now in scope (no longer v2-deferred):** notification fan-out — `erp.approval.*`
+> events are consumed by `notification-service` (`ApprovalApprovedConsumer`,
+> `ApprovalRejectedConsumer`, `ApprovalSubmittedConsumer`, `ApprovalWithdrawnConsumer`
+> — TASK-ERP-BE-011; see [`erp-approval-events.md`](../events/erp-approval-events.md)).
