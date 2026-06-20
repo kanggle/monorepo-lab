@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-413
 title: batch-worker stalePaidOrderConfirmationJob — forward-confirm paid-but-unconfirmed PENDING orders
-status: ready
+status: done
 project: ecommerce-microservices-platform
 service: batch-worker
 type: feature
