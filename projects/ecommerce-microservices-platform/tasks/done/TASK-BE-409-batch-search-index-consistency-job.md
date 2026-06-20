@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-409
 title: batch-worker — searchIndexConsistencyCheckJob 구현 + 스케줄링 스캐폴딩(ShedLock)
-status: ready
+status: done
 project: ecommerce-microservices-platform
 service: batch-worker
 type: feature
