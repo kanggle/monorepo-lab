@@ -114,8 +114,11 @@ public class TenantAdminController {
     /**
      * GET /api/admin/tenants
      * SUPER_ADMIN only. Paginated tenant list.
+     * {@code @RequiresPermission} is the primary RBAC gate (TASK-BE-408); the
+     * inline {@code requirePlatformScope} check remains as defense-in-depth.
      */
     @GetMapping
+    @RequiresPermission(Permission.TENANT_MANAGE)
     public ResponseEntity<TenantPageResponse> listTenants(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String tenantType,
@@ -132,8 +135,11 @@ public class TenantAdminController {
     /**
      * GET /api/admin/tenants/{tenantId}
      * SUPER_ADMIN OR scoped operator whose tenantId matches the path.
+     * {@code @RequiresPermission} is the primary RBAC gate (TASK-BE-408); the
+     * inline {@code isTenantAllowed} scope check remains as defense-in-depth.
      */
     @GetMapping("/{tenantId}")
+    @RequiresPermission(Permission.TENANT_MANAGE)
     public ResponseEntity<TenantResponse> getTenant(@PathVariable String tenantId) {
         OperatorContext operator = OperatorContextHolder.require();
         var entity = operatorRepository.findByOperatorId(operator.operatorId())

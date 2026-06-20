@@ -345,25 +345,24 @@ class TenantAdminControllerTest {
     }
 
     @Test
-    void get_tenant_scoped_operator_own_tenant_returns_200() throws Exception {
-        when(operatorRepository.findByOperatorId(REGULAR_OP_ID))
-                .thenReturn(Optional.of(regularOpMock));
-        when(getTenantUseCase.execute("tenant-a")).thenReturn(stubTenant("tenant-a"));
-
+    void get_tenant_scoped_operator_own_tenant_returns_403_permission_denied() throws Exception {
+        // TASK-BE-408: GET /api/admin/tenants/{id} now requires tenant.manage.
+        // The regular operator lacks it, so the RequiresPermissionAspect denies
+        // (PERMISSION_DENIED) before the inline isTenantAllowed scope check runs —
+        // even for the operator's own tenant.
         mockMvc.perform(get("/api/admin/tenants/tenant-a")
                         .header("Authorization", regularOpToken()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tenantId").value("tenant-a"));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     @Test
-    void get_tenant_scoped_operator_other_tenant_returns_403() throws Exception {
-        when(operatorRepository.findByOperatorId(REGULAR_OP_ID))
-                .thenReturn(Optional.of(regularOpMock));
-
+    void get_tenant_scoped_operator_other_tenant_returns_403_permission_denied() throws Exception {
+        // TASK-BE-408: previously TENANT_SCOPE_DENIED (reached the inline scope
+        // gate). Now the tenant.manage aspect denies first → PERMISSION_DENIED.
         mockMvc.perform(get("/api/admin/tenants/tenant-b")
                         .header("Authorization", regularOpToken()))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 }
