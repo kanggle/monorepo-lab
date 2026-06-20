@@ -45,7 +45,7 @@ import java.util.UUID;
  *   <li>POST   /api/admin/tenants           — SUPER_ADMIN only (platform scope) → 201</li>
  *   <li>PATCH  /api/admin/tenants/{id}      — SUPER_ADMIN only → 200</li>
  *   <li>GET    /api/admin/tenants           — SUPER_ADMIN only → 200 paginated</li>
- *   <li>GET    /api/admin/tenants/{id}      — SUPER_ADMIN OR own-tenant scoped operator → 200</li>
+ *   <li>GET    /api/admin/tenants/{id}      — SUPER_ADMIN only ({@code tenant.manage}) → 200</li>
  * </ul>
  *
  * <p>auth: {@code OperatorAuthenticationFilter} validates the operator JWT before this
@@ -114,8 +114,11 @@ public class TenantAdminController {
     /**
      * GET /api/admin/tenants
      * SUPER_ADMIN only. Paginated tenant list.
+     * {@code @RequiresPermission} is the primary RBAC gate (TASK-BE-408); the
+     * inline {@code requirePlatformScope} check remains as defense-in-depth.
      */
     @GetMapping
+    @RequiresPermission(Permission.TENANT_MANAGE)
     public ResponseEntity<TenantPageResponse> listTenants(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String tenantType,
@@ -131,9 +134,14 @@ public class TenantAdminController {
 
     /**
      * GET /api/admin/tenants/{tenantId}
-     * SUPER_ADMIN OR scoped operator whose tenantId matches the path.
+     * SUPER_ADMIN only — {@code tenant.manage} (seeded to SUPER_ADMIN only) is the
+     * primary RBAC gate (TASK-BE-408), so no non-SUPER_ADMIN operator reaches the
+     * body. The inline {@code isTenantAllowed} scope check remains as defense-in-depth
+     * (reachable only after the RBAC aspect passes); it does NOT widen access to
+     * non-{@code tenant.manage} holders.
      */
     @GetMapping("/{tenantId}")
+    @RequiresPermission(Permission.TENANT_MANAGE)
     public ResponseEntity<TenantResponse> getTenant(@PathVariable String tenantId) {
         OperatorContext operator = OperatorContextHolder.require();
         var entity = operatorRepository.findByOperatorId(operator.operatorId())

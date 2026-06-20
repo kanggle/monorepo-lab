@@ -65,8 +65,16 @@ class AspectCoverageTest {
                 }
                 if (!isMutation) continue;
 
-                assertThat(m.isAnnotationPresent(RequiresPermission.class))
-                        .as("Controller mutation method %s.%s must declare @RequiresPermission",
+                // TASK-BE-408: a mutation method is covered if it declares
+                // @RequiresPermission OR @SelfServiceEndpoint (JWT-only self-service
+                // surface, e.g. me/password, me/profile). The aspect's
+                // deny-by-default guardrail exempts @SelfServiceEndpoint identically,
+                // so the build-time guardrail must accept either annotation.
+                boolean covered = m.isAnnotationPresent(RequiresPermission.class)
+                        || m.isAnnotationPresent(SelfServiceEndpoint.class);
+                assertThat(covered)
+                        .as("Controller mutation method %s.%s must declare "
+                                + "@RequiresPermission or @SelfServiceEndpoint",
                                 c.getSimpleName(), m.getName())
                         .isTrue();
             }

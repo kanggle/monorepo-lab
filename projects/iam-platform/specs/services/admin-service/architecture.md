@@ -89,7 +89,7 @@ apps/admin-service/src/main/java/com/example/admin/
     │   └── SecurityServiceClient.java   ← 감사 조회 호출
     ├── security/
     │   ├── OperatorAuthenticationFilter.java   ← 별도 인증 경계
-    │   └── OperatorEndpointAccessResolver.java ← (planned, 미구현) role 기반 엔드포인트 접근 제어.
+    │   └── (RBAC 강제는 presentation/aspect/RequiresPermissionAspect.java 가 담당 — 구현됨, TASK-BE-028/408)
     ├── persistence/                     ← 최소한의 로컬 상태만
     │   ├── AdminActionJpaEntity.java    ← 감사 원장 (append-only)
     │   ├── AdminActionJpaRepository.java
@@ -145,7 +145,7 @@ presentation → application → infrastructure/client
 
 ### infrastructure/security/
 - `OperatorAuthenticationFilter`: admin-scope JWT 검증 + 2FA 확인 (선택)
-- `OperatorEndpointAccessResolver` (planned, 미구현): role 기반 권한 (SUPER_ADMIN / ACCOUNT_ADMIN / AUDITOR 등) → 엔드포인트 접근 제어. 구현 시 RBAC 의도가 드러나는 이름으로 명명한다. (참고: TASK-BE-121 의 use-case role 헬퍼는 TASK-BE-288 에서 `application/port/AdminOperatorPort`(role-name·actor-id 해석) + `application/AuditReasons`(reason 정규화)로 흡수·삭제되어 더 이상 이름 충돌 대상이 아니다.)
+- RBAC 강제(role 기반 권한 → 엔드포인트 접근 제어)는 `presentation/aspect/RequiresPermissionAspect.java` 가 담당한다 (구현됨, TASK-BE-028/408). `@RequiresPermission` 어노테이션 + deny-by-default 가드 + `AspectCoverageTest` 빌드타임 커버리지로 전 mutation 엔드포인트를 보호하며, 권한 union·tenant-scope confinement·ADR-026/028/029 access-condition 게이트가 이 단일 결정 지점에서 합성된다. (참고: TASK-BE-121 의 use-case role 헬퍼는 TASK-BE-288 에서 `application/port/AdminOperatorPort`(role-name·actor-id 해석) + `application/AuditReasons`(reason 정규화)로 흡수·삭제되었다.)
 
 ### infrastructure/persistence/
 - `admin_actions` 테이블은 **append-only** (DB 트리거 또는 권한 제한으로 UPDATE/DELETE 차단)

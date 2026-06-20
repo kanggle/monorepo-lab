@@ -453,30 +453,26 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Regular operator GET own tenant → 200")
-    void regularOperator_get_own_tenant_returns_200() throws Exception {
-        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/tenants/tenant-a"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("""
-                                {"tenantId":"tenant-a","displayName":"Tenant A",
-                                 "tenantType":"B2C_CONSUMER","status":"ACTIVE",
-                                 "createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z"}
-                                """)));
-
+    @DisplayName("Regular operator GET own tenant → 403 PERMISSION_DENIED (TASK-BE-408: GET tenant now requires tenant.manage; aspect rejects before tenant-scope gate)")
+    void regularOperator_get_own_tenant_returns_403() throws Exception {
+        // TASK-BE-408: GET /api/admin/tenants/{id} now carries
+        // @RequiresPermission(tenant.manage). A regular operator without that
+        // permission is denied by the RBAC aspect even for its own tenant —
+        // PERMISSION_DENIED precedes the inline isTenantAllowed scope check.
         mockMvc.perform(get("/api/admin/tenants/tenant-a")
                         .header("Authorization", regularOpToken()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tenantId").value("tenant-a"));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     @Test
-    @DisplayName("Regular operator GET other tenant → 403 TENANT_SCOPE_DENIED")
+    @DisplayName("Regular operator GET other tenant → 403 PERMISSION_DENIED (TASK-BE-408: aspect rejects before tenant-scope gate)")
     void regularOperator_get_other_tenant_returns_403() throws Exception {
+        // TASK-BE-408: previously TENANT_SCOPE_DENIED (reached the inline scope
+        // gate). Now the tenant.manage RBAC aspect denies first → PERMISSION_DENIED.
         mockMvc.perform(get("/api/admin/tenants/tenant-b")
                         .header("Authorization", regularOpToken()))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 }
