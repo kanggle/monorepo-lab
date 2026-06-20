@@ -20,6 +20,13 @@ dependencies {
     // Web
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
+    // Security — resource server for the internal /api/internal/** route only
+    // (TASK-BE-412): validates the inbound client_credentials Bearer JWT. The
+    // gateway-fronted user routes (/api/orders/**, /api/admin/orders/**) keep the
+    // X-User-* header-trust model via a permissive second filter chain.
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
     // JPA
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
@@ -53,6 +60,10 @@ dependencies {
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
+    // MockWebServer serves a local JWKS so the resource-server IT can mint a valid
+    // client_credentials JWT signed by a per-run RSA key (TASK-BE-412). nimbus-jose-jwt
+    // arrives transitively via spring-boot-starter-oauth2-resource-server.
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 }
 
 test {

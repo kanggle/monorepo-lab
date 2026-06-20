@@ -1,6 +1,7 @@
 package com.example.order.presentation;
 
 import com.example.order.application.exception.UnauthorizedOrderAccessException;
+import com.example.order.presentation.exception.InvalidRequestException;
 import com.example.web.exception.AccessDeniedException;
 import com.example.order.domain.exception.InvalidOrderException;
 import com.example.order.domain.exception.OrderCannotBeCancelledException;
@@ -81,6 +82,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleOrderNotFound(OrderNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("ORDER_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("INVALID_REQUEST", e.getMessage()));
     }
 
     @ExceptionHandler(InvalidOrderException.class)

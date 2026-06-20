@@ -206,6 +206,15 @@ public class OrderRepositoryImpl implements OrderRepository {
                 .toList();
     }
 
+    @Override
+    public List<Order> findStalePaidUnconfirmed(Instant cutoff, int limit) {
+        return jpaRepository.findStalePaidUnconfirmed(
+                        OrderStatus.PENDING, cutoff, PageRequest.of(0, limit))
+                .stream()
+                .map(mapper::toDomain)
+                .toList();
+    }
+
     private PageRequest toPageRequest(PageQuery pageQuery) {
         Sort.Direction direction = "ASC".equalsIgnoreCase(pageQuery.sortDirection())
                 ? Sort.Direction.ASC

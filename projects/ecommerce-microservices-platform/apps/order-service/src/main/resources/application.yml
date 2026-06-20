@@ -61,6 +61,14 @@ outbox:
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
 
 order:
+  internal:
+    # Resource-server validation for the gateway-excluded /api/internal/** route
+    # (TASK-BE-412): validates the inbound client_credentials Bearer JWT. JWKS / issuer /
+    # audience are env-overridable; audience is unset by default (pin per environment).
+    oauth2:
+      jwk-set-uri: ${ORDER_INTERNAL_OAUTH2_JWK_SET_URI:http://auth-service:8081/oauth2/jwks}
+      issuer: ${ORDER_INTERNAL_OAUTH2_ISSUER:http://auth-service:8081}
+      audience: ${ORDER_INTERNAL_OAUTH2_AUDIENCE:}
   saga:
     stuck-detector:
       enabled: ${ORDER_STUCK_DETECTOR_ENABLED:true}

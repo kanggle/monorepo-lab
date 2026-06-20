@@ -101,4 +101,17 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
             @Param("status") OrderStatus status,
             @Param("placedBefore") Instant placedBefore,
             Pageable pageable);
+
+    // Paid-but-unconfirmed bucket (TASK-BE-412): the order paid (payment_id IS NOT NULL)
+    // but its confirmation event was lost, so it sits in PENDING past the cutoff. Disjoint
+    // from findStuckPaymentPending (payment_id IS NULL) — mutually exclusive on payment_id.
+    // Tenant-agnostic operational sweep keyed by globally-unique ids; the per-order TX
+    // re-loads + re-checks before any mutation, preserving each row's immutable tenant_id.
+    @Query("SELECT o FROM OrderJpaEntity o " +
+           "WHERE o.status = :status AND o.paymentId IS NOT NULL AND o.createdAt < :cutoff " +
+           "ORDER BY o.createdAt ASC")
+    List<OrderJpaEntity> findStalePaidUnconfirmed(
+            @Param("status") OrderStatus status,
+            @Param("cutoff") Instant cutoff,
+            Pageable pageable);
 }
