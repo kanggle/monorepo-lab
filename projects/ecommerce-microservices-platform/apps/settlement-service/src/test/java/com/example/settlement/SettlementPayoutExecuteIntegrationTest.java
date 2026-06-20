@@ -135,6 +135,9 @@ class SettlementPayoutExecuteIntegrationTest {
     void execute_twice_is_idempotent_reference_stable() {
         String periodId = openAndClose("tenantA", "seller-1", "acc-2");
 
+        // C-2: snapshot the metric before the first execute so we can assert an exact delta.
+        double counterBefore = getPayoutCounter("PAID");
+
         List<PayoutView> first = executePayouts.execute(periodId, "tenantA");
         List<PayoutView> second = executePayouts.execute(periodId, "tenantA");
 
@@ -151,6 +154,11 @@ class SettlementPayoutExecuteIntegrationTest {
         Long count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM seller_payout WHERE period_id = ?", Long.class, periodId);
         assertThat(count).isEqualTo(1L);
+
+        // C-2: metric must be incremented exactly ONCE (by the first execute only).
+        // The second execute skips the already-PAID row — no additional counter increment.
+        double counterAfter = getPayoutCounter("PAID");
+        assertThat(counterAfter - counterBefore).isEqualTo(1.0);
     }
 
     // ── AC-4: OPEN period execute → 409 PERIOD_NOT_CLOSED ────────────────────

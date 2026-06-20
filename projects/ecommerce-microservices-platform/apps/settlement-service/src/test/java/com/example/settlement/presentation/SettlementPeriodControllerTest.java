@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -119,7 +120,8 @@ class SettlementPeriodControllerTest {
                 .andExpect(jsonPath("$.payouts[0].payoutId").value("po-1"))
                 .andExpect(jsonPath("$.payouts[0].status").value("PENDING"))
                 .andExpect(jsonPath("$.payouts[0].payableNetMinor").value(27000))
-                .andExpect(jsonPath("$.payouts[0].payoutReference").doesNotExist());
+                // W-4: payoutReference is PRESENT with value null while PENDING (contract).
+                .andExpect(jsonPath("$.payouts[0].payoutReference").value(nullValue()));
     }
 
     @Test
@@ -192,7 +194,8 @@ class SettlementPeriodControllerTest {
                 .andExpect(jsonPath("$.items[0].status").value("PAID"))
                 .andExpect(jsonPath("$.items[0].payoutReference").value("SIM-p-1-seller-1-uuid1"))
                 .andExpect(jsonPath("$.items[1].status").value("PENDING"))
-                .andExpect(jsonPath("$.items[1].payoutReference").doesNotExist())
+                // W-4: payoutReference is PRESENT with value null while PENDING (contract).
+                .andExpect(jsonPath("$.items[1].payoutReference").value(nullValue()))
                 .andExpect(jsonPath("$.totalElements").value(2));
     }
 

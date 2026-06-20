@@ -1,5 +1,6 @@
 package com.example.settlement.application.service;
 
+import com.example.settlement.application.exception.SellerScopeForbiddenException;
 import com.example.settlement.application.port.SellerPayoutPort;
 import com.example.settlement.application.port.SellerPayoutPort.PayoutExecutionResult;
 import com.example.settlement.application.port.SettlementMetricsPort;
@@ -243,5 +244,34 @@ class ExecuteSellerPayoutsUseCaseTest {
 
         assertThatThrownBy(() -> useCase().list(PERIOD_ID, TENANT))
                 .isInstanceOf(PeriodNotFoundException.class);
+    }
+
+    // ── list: C-1 cross-seller → 404 SellerScopeForbiddenException ──────────
+
+    @Test
+    void list_cross_seller_restricted_operator_throws_seller_scope_forbidden_404() {
+        // Period has a payout for seller-B only; caller is restricted to seller-A.
+        SellerPayout other = pendingPayout("po-2", "seller-B");
+
+        given(periodRepository.findById(PERIOD_ID, TENANT)).willReturn(Optional.of(closedPeriod()));
+        given(payoutRepository.findByPeriodAndTenant(PERIOD_ID, TENANT))
+                .willReturn(List.of(other));
+
+        SellerScopeContext.set("seller-A");
+        assertThatThrownBy(() -> useCase().list(PERIOD_ID, TENANT))
+                .isInstanceOf(SellerScopeForbiddenException.class);
+    }
+
+    @Test
+    void list_empty_period_restricted_operator_returns_empty_list() {
+        // Period has zero payout rows (genuinely empty) — any caller gets [].
+        given(periodRepository.findById(PERIOD_ID, TENANT)).willReturn(Optional.of(closedPeriod()));
+        given(payoutRepository.findByPeriodAndTenant(PERIOD_ID, TENANT))
+                .willReturn(List.of());
+
+        SellerScopeContext.set("seller-A");
+        List<PayoutView> views = useCase().list(PERIOD_ID, TENANT);
+
+        assertThat(views).isEmpty();
     }
 }

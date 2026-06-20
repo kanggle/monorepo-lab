@@ -84,11 +84,16 @@ public class ExecuteSellerPayoutsUseCase {
         List<SellerPayout> allPayouts = payoutRepository.findByPeriodAndTenant(periodId, tenantId);
 
         // 4. Process PENDING rows; skip already-PAID/FAILED (idempotency, AC-3).
-        List<SellerPayout> processed = new ArrayList<>();
+        //    W-1: build result list from the value returned by save() so the view
+        //    reflects the actual persisted state (avoids relying on in-place mutation
+        //    aliasing if JPA's merge returns a different instance).
+        List<SellerPayout> resultList = new ArrayList<>(allPayouts.size());
         Instant now = clock.instant();
+        int processedCount = 0;
         for (SellerPayout payout : allPayouts) {
             if (payout.status() != PayoutStatus.PENDING) {
                 // Idempotent re-run: skip already-resolved rows (AC-3).
+                resultList.add(payout);
                 continue;
             }
 
@@ -102,19 +107,25 @@ public class ExecuteSellerPayoutsUseCase {
             } else {
                 payout.markFailed();
                 metrics.recordPayoutExecuted("FAILED");
+                // NOTE: markFailed() sets status=FAILED; the failure reason is logged here
+                // but not persisted to a column — a failure_reason column is deferred to
+                // the future =bank increment.
                 log.warn("payout FAILED: payoutId={} periodId={} sellerId={} reason={}",
                         payout.payoutId(), periodId, payout.sellerId(), result.reason());
             }
 
-            payoutRepository.save(payout);
-            processed.add(payout);
+            // W-1: use the saved instance (merged copy from JPA) for the view.
+            SellerPayout saved = payoutRepository.save(payout);
+            resultList.add(saved);
+            processedCount++;
         }
 
         log.info("executed payouts for periodId={} tenant={} processed={} total={}",
-                periodId, tenantId, processed.size(), allPayouts.size());
+                periodId, tenantId, processedCount, allPayouts.size());
 
-        // 5. Return all payout rows (post-execution) with seller-scope ABAC applied.
-        return toViews(allPayouts);
+        // 5. Return post-execution views built from saved instances (seller-scope applied
+        //    at the list path — execute always operates on the full period).
+        return toViews(resultList);
     }
 
     /**
@@ -138,15 +149,15 @@ public class ExecuteSellerPayoutsUseCase {
         List<SellerPayout> payouts = payoutRepository.findByPeriodAndTenant(periodId, tenantId);
 
         // Apply seller-scope ABAC — inside the tenant filter (isolate-then-attribute).
+        // C-1: reuses the same enforcement as the accrual read path (SettlementQueryService
+        // §assertSellerWithinScope): a restricted operator accessing rows that belong to a
+        // different seller gets SellerScopeForbiddenException → 404 (spec "cross-seller
+        // access → 404", M3). A period with genuinely zero payout rows returns [] for anyone.
         if (SellerScopeContext.isRestricted()) {
             String scopedSeller = SellerScopeContext.currentSellerScope();
-            boolean anyMatch = payouts.stream()
-                    .anyMatch(p -> p.sellerId().equals(scopedSeller));
-            if (!anyMatch && !payouts.isEmpty()) {
-                // Cross-seller: return empty list rather than 404 for the list endpoint
-                // (the list shows 0 rows for the scoped seller; 404 is reserved for the
-                // period-not-found case which is already guarded above).
-                return List.of();
+            if (!payouts.isEmpty() && payouts.stream().noneMatch(p -> p.sellerId().equals(scopedSeller))) {
+                // Period has payouts but none belong to this seller → cross-seller access.
+                throw new SellerScopeForbiddenException(scopedSeller);
             }
             payouts = payouts.stream()
                     .filter(p -> p.sellerId().equals(scopedSeller))
