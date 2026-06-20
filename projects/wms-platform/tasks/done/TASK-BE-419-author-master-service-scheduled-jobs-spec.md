@@ -1,6 +1,6 @@
 # TASK-BE-419 — Author missing master-service scheduled-jobs.md spec
 
-**Status:** ready
+**Status:** done
 **Type:** docs (spec authoring — close doc debt)
 
 ## Goal

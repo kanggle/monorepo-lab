@@ -1,6 +1,6 @@
 # TASK-ERP-BE-024 — Correct stale "notification fan-out v2-deferred" note in approval-api.md
 
-**Status:** ready
+**Status:** done
 **Type:** docs (spec accuracy)
 
 ## Goal
