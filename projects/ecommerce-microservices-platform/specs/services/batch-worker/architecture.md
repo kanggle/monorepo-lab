@@ -93,7 +93,7 @@ For full dependency rules, see `dependencies.md`.
 ## Key Jobs (planned)
 - ~~Expired session cleanup (auth-service sessions past inactivity timeout)~~ **REMOVED — IAM owns auth sessions (TASK-BE-132).**
 - Stale paid-order forward-confirm (`PENDING AND payment_id IS NOT NULL` beyond timeout → `PENDING → CONFIRMED` via order-service internal endpoint; recovery for a lost confirm event, NOT cancellation; disjoint from BE-138's `payment_id IS NULL` bucket)
-- Daily sales aggregation (order/payment summary)
+- ~~Daily sales aggregation (order/payment summary)~~ **DEFERRED — removed (TASK-BE-411): no consumer; FE-063 aggregates daily sales FE-side from `/api/orders`; any future daily money rollup belongs to settlement-service, not batch-worker. See `overview.md` Responsibilities.**
 - Elasticsearch index consistency check (product data sync verification)
 
 ## Integration Rules
