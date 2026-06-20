@@ -1,6 +1,6 @@
 # TASK-BE-422 — Fix nested-DTO deserialization defect in ecommerce account.* consumers (flat wire)
 
-**Status:** ready
+**Status:** done
 **Type:** bug fix (production-inert consumers — GDPR-relevant)
 **Severity:** HIGH — shipped account-lifecycle projections are silently inert in production.
 **Discovered:** during TASK-BE-421 review (2026-06-20).
