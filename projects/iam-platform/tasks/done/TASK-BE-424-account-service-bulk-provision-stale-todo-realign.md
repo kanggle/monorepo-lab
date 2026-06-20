@@ -8,7 +8,7 @@ account-service bulk-provisioning javadoc — BE-257 stale `TODO` reality-alignm
 
 # Status
 
-ready
+done
 
 # Owner
 
