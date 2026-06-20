@@ -8,7 +8,7 @@ reconciliation-api.md "Out of scope" stale drift — reverse cross-currency (FIN
 
 # Status
 
-ready
+done
 
 # Owner
 
