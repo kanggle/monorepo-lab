@@ -11,11 +11,12 @@
 - `org.springframework.boot:spring-boot-starter-data-jpa`
 - `org.springframework.boot:spring-boot-starter-validation`
 - `org.springframework.boot:spring-boot-starter-actuator`
-- `org.springframework.kafka:spring-kafka` (event consumer; no outbox in v1 — terminal consumer)
+- `org.springframework.kafka:spring-kafka` (event consumer **+ producer** since the period-close increment)
+- `libs/java-messaging` (`OutboxAutoConfiguration` / `OutboxMetricsAutoConfiguration`) — **introduced in the period-close increment** (TASK-BE-415) to publish `settlement.period.closed.v1` via the transactional outbox (was excluded in v1)
 - `org.flywaydb:flyway-core` + `flyway-database-postgresql`
 - `org.postgresql:postgresql`
 - `org.springdoc:springdoc-openapi-starter-webmvc-ui`
-- own database (`settlement_db` — `order_snapshot`, `order_snapshot_line`, `commission_accrual`, `seller_commission_rate`, `processed_event`)
+- own database (`settlement_db` — `order_snapshot`, `order_snapshot_line`, `commission_accrual`, `seller_commission_rate`, `processed_event`; **period-close increment adds** `settlement_period`, `seller_payout`, `outbox`)
 
 ## Allowed Service Interactions
 - exposes operator-plane HTTP API (reads + rate admin) through gateway-service; no direct service-to-service HTTP calls initiated
@@ -31,7 +32,11 @@
 
 ## Publishes To
 
-None in v1. `settlement.commission.accrued.v1` is forward-declared for the payout increment (no contract yet).
+| Target | Contract | Purpose |
+|---|---|---|
+| (none yet — no consumer) | `specs/contracts/events/settlement-events.md` — topic `settlement.period.closed` | `settlement.period.closed.v1` emitted on period close via the transactional outbox (period-close increment). No service subscribes yet. |
+
+`settlement.commission.accrued.v1` remains forward-declared / deferred (not defined or emitted).
 
 ## Forbidden Dependencies
 - direct database access to another service (per `service-boundaries.md`)
@@ -41,4 +46,4 @@ None in v1. `settlement.commission.accrued.v1` is forward-declared for the payou
 
 ## Notes
 All dependency changes that affect service boundaries must be reflected in related specs and contracts first.
-`libs/java-messaging` (`OutboxAutoConfiguration` / `OutboxMetricsAutoConfiguration`) is excluded in v1 — settlement-service is a terminal consumer with no outbox.
+`libs/java-messaging` (`OutboxAutoConfiguration` / `OutboxMetricsAutoConfiguration`) was excluded in v1 (terminal consumer) and is **introduced in the period-close increment** (TASK-BE-415) — settlement-service publishes exactly one event (`settlement.period.closed.v1`) via the transactional outbox.

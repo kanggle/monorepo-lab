@@ -15,6 +15,8 @@ Platform-wide observability rules are defined in `platform/observability.md`.
 | `settlement_reversal_total` | Counter | Total `REVERSAL` rows appended (per `PaymentRefunded`) |
 | `settlement_duplicate_event_total` | Counter | Total deduplicated (already-processed) events by type |
 | `settlement_snapshot_missing_total` | Counter | Total `PaymentCompleted` events where the `OrderPlaced` snapshot was absent (F2 — unattributable) |
+| `settlement_period_closed_total` | Counter | Total settlement periods closed (one per successful close) |
+| `settlement_payout_total` | Counter | Total seller payouts by terminal status — tag `status` ∈ `{PAID, FAILED}` (incremented when the simulated adapter resolves a payout) |
 
 ---
 
