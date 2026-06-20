@@ -119,21 +119,160 @@ accruals booked *after* this call; already-booked accruals are immutable (F3).
 
 ---
 
+## Period close + payout (period-close increment)
+
+Operator-plane (`roles ∋ ADMIN`), tenant-scoped like every other endpoint. A
+period / payout in another tenant resolves to **404** (M3). The two read-list
+shapes below are also **seller-scoped** for payouts (the `X-Seller-Scope` filter, as
+on the accrual reads). Mirrors the finance-platform ledger period endpoints.
+
+### POST /api/admin/settlements/periods
+Open a settlement period over a half-open `[from, to)` window (operator supplies the
+window — grain-agnostic).
+
+**Request Body**
+```json
+{ "from": "2026-06-01T00:00:00Z", "to": "2026-07-01T00:00:00Z" }
+```
+- `from` / `to` are ISO-8601 instants; the window is half-open `[from, to)`. Empty /
+  inverted window (`from ≥ to`) → **422 `PERIOD_WINDOW_INVALID`**.
+
+**Response 201**
+```json
+{
+  "periodId": "string (UUID)",
+  "from": "2026-06-01T00:00:00Z",
+  "to": "2026-07-01T00:00:00Z",
+  "status": "OPEN",
+  "closedAt": null,
+  "sellerCount": null
+}
+```
+
+---
+
+### POST /api/admin/settlements/periods/{periodId}/close
+Close the period (OPEN→CLOSED). Aggregates the EXISTING `commission_accrual` rows
+whose `occurredAt ∈ [from, to)` into one `seller_payout` per seller (skipping sellers
+whose `payableNetMinor ≤ 0`), creates those payouts **PENDING**, and emits
+`settlement.period.closed.v1`. Accrual rows are never mutated (F3). A second close →
+**409 `PERIOD_ALREADY_CLOSED`**. `periodId` not in the caller's tenant → **404**.
+
+**Response 200**
+```json
+{
+  "periodId": "string (UUID)",
+  "from": "2026-06-01T00:00:00Z",
+  "to": "2026-07-01T00:00:00Z",
+  "status": "CLOSED",
+  "closedAt": "2026-07-01T09:00:00Z",
+  "sellerCount": 2,
+  "payouts": [
+    {
+      "payoutId": "string (UUID)",
+      "sellerId": "string",
+      "payableNetMinor": 27000,
+      "commissionMinor": 3000,
+      "accrualCount": 1,
+      "status": "PENDING",
+      "payoutReference": null,
+      "paidAt": null
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/admin/settlements/periods
+List settlement periods for the caller's tenant, most recent first.
+
+**Query params**: `page` (int, default 0), `size` (int, default 20).
+
+**Response 200**
+```json
+{
+  "items": [
+    { "periodId": "string (UUID)", "from": "...", "to": "...", "status": "OPEN | CLOSED", "closedAt": "... | null", "sellerCount": 2 }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1
+}
+```
+
+---
+
+### GET /api/admin/settlements/periods/{periodId}/payouts
+List the `seller_payout` rows of a closed period (tenant-scoped + **seller-scoped**:
+the `X-Seller-Scope` filter applies exactly as on the accrual reads — absent / `'*'`
+→ all sellers, restricted → only the operator's `sellerId` rows, always inside the
+tenant filter). `periodId` not in the caller's tenant → **404**.
+
+**Response 200**
+```json
+{
+  "items": [
+    {
+      "payoutId": "string (UUID)",
+      "sellerId": "string",
+      "payableNetMinor": 27000,
+      "commissionMinor": 3000,
+      "accrualCount": 1,
+      "status": "PENDING | PAID | FAILED",
+      "payoutReference": "string | null",
+      "paidAt": "string (ISO 8601) | null"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1
+}
+```
+- `payoutReference` is `null` while `PENDING`; set when `PAID`. In this increment the
+  reference is **synthetic** (a clearly-marked simulated payout — no real
+  disbursement occurred).
+
+---
+
+### POST /api/admin/settlements/periods/{periodId}/payouts/execute
+Execute the simulated payouts for a closed period: run the `SellerPayoutPort`
+(simulated adapter) over the period's **PENDING** payouts, flipping each
+PENDING→PAID|FAILED. Idempotent on `(periodId, sellerId)` — already-PAID payouts are
+left untouched (a re-run only touches still-PENDING rows). The period must be CLOSED
+(executing an OPEN period → **409 `PERIOD_NOT_CLOSED`**). `periodId` not in the
+caller's tenant → **404**.
+
+**Response 200** — same shape as `GET …/payouts`, reflecting the post-execution
+statuses (PAID rows now carry a `payoutReference` + `paidAt`).
+
+> **Simulated — not a real disbursement.** This endpoint moves payout *status* via a
+> simulated adapter that records a synthetic reference; **no money moves**. A real
+> banking/PG adapter (`settlement.payout.mode=bank`) is a forward-declared seam.
+
+---
+
 ## Error codes
 
 | Code | HTTP | Meaning |
 |---|---|---|
 | `COMMISSION_RATE_INVALID` | 422 | `rateBps` outside `[0, 10000]` on `PUT /commission-rates/{sellerId}` |
-| `SETTLEMENT_NOT_FOUND` | 404 | seller / accrual / order not found in the caller's tenant **or** outside the caller's seller scope (M3 — 404-over-403, no cross-tenant/cross-seller existence disclosure) |
+| `PERIOD_WINDOW_INVALID` | 422 | empty / inverted window (`from ≥ to`) on `POST /periods` |
+| `PERIOD_ALREADY_CLOSED` | 409 | `POST /periods/{id}/close` on an already-CLOSED period |
+| `PERIOD_NOT_CLOSED` | 409 | `POST /periods/{id}/payouts/execute` on a still-OPEN period |
+| `SETTLEMENT_NOT_FOUND` | 404 | seller / accrual / order / period / payout not found in the caller's tenant **or** outside the caller's seller scope (M3 — 404-over-403, no cross-tenant/cross-seller existence disclosure) |
 | `TENANT_FORBIDDEN` | 403 | the tenant entitlement gate rejects (no `ecommerce` entitlement) |
 
 ---
 
 ## Out of scope (forward-declared — later increments)
 
-- **Settlement-period close / payout** endpoints (`POST /periods`, `POST
-  /periods/{id}/close`, payout list) — v1 is accrual + read only.
-- **Seller bank account / disbursement** surface.
-- A **consumer-facing** seller earnings view (v1 is operator-plane only).
+- **REAL seller bank account / disbursement** surface — this increment's payout
+  endpoints drive only a **simulated** adapter (synthetic reference, no money
+  movement). A real banking/PG adapter (`settlement.payout.mode=bank`) is an
+  unimplemented seam.
+- A **consumer-facing** seller earnings / payout view (this increment is
+  operator-plane only).
 - Partial / proportional refund clawback (v1 reverses a refund as a full order
   reversal).
+- Period **reopen** (the period state machine is OPEN→CLOSED).

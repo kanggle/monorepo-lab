@@ -2,11 +2,14 @@
 
 Implements **ADR-MONO-030 Step 4 facet b** (marketplace seller settlement / commission).
 
-`settlement-service` is a **terminal consumer** — it builds its commission ledger
-entirely from the order/payment event streams and **publishes nothing in v1** (a
-`settlement.commission.accrued.v1` is forward-declared for the payout increment).
-It reads only fields already published by the producer contracts below; it **never**
-calls order/payment HTTP APIs to backfill missing data (consumer rule).
+`settlement-service` builds its commission ledger entirely from the order/payment
+event streams (this contract). The **accrual/reversal consume path publishes
+nothing**; the only published event is `settlement.period.closed.v1` on the
+**period-close** path (see the producer contract
+[`settlement-events.md`](settlement-events.md) — introduced in the period-close
+increment). `settlement.commission.accrued.v1` remains forward-declared / deferred.
+This consumer reads only fields already published by the producer contracts below;
+it **never** calls order/payment HTTP APIs to backfill missing data (consumer rule).
 
 Authoritative producer schemas:
 [`order-events.md`](order-events.md) (OrderPlaced) + [`payment-events.md`](payment-events.md)
