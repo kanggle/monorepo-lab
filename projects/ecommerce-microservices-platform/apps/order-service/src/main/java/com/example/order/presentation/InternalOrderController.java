@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  * the ecommerce gateway routes only {@code /api/orders/**} and {@code /api/admin/orders/**}
  * to order-service, so this route has no external path and is reachable only on the
  * internal service network. A dedicated resource-server security chain
- * ({@code OrderInternalSecurityConfig}) validates the inbound {@code client_credentials}
+ * ({@code OrderSecurityConfig}) validates the inbound {@code client_credentials}
  * Bearer JWT (JWKS signature + timestamps + issuer + audience), fail-closed — a
  * missing/invalid token never reaches this controller (401 at the filter chain).
  *
