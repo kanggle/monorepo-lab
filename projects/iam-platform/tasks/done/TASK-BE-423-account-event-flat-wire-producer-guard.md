@@ -1,6 +1,6 @@
 # TASK-BE-423 — Producer-side flat-wire guard for account.status.changed / account.deleted
 
-**Status:** ready
+**Status:** done
 **Type:** test hardening (contract boundary regression guard)
 **Parent:** TASK-BE-422 edge-case (confirm the real on-wire shape) + TASK-BE-421.
 
