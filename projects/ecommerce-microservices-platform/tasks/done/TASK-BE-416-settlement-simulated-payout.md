@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-416
 title: settlement-service — SellerPayoutPort + 시뮬레이션 어댑터 + payout 실행 use-case/API + 메트릭
-status: ready
+status: done
 project: ecommerce-microservices-platform
 service: settlement-service
 type: feature
