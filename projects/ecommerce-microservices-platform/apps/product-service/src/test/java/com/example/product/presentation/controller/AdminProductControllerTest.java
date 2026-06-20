@@ -87,7 +87,7 @@ class AdminProductControllerTest {
         UUID id = UUID.randomUUID();
         ProductSummary summary = new ProductSummary(id, "상품", ProductStatus.ON_SALE, 10000L, null, null, "seller-a1");
         ProductListResult result = new ProductListResult(List.of(summary), 0, 1, 42L);
-        given(queryProductService.findAll(any(), any(), anyInt(), anyInt())).willReturn(result);
+        given(queryProductService.findAll(any(), any(), any(), anyInt(), anyInt())).willReturn(result);
 
         // No X-User-Role header at all — the read MUST NOT require ADMIN (the
         // operator-overview leg presents an IAM OIDC token with no ecommerce
@@ -109,7 +109,7 @@ class AdminProductControllerTest {
         // metric semantics: console-bff calls ?page=0&size=1 (no status filter);
         // totalElements is the tenant's full catalog size.
         ProductListResult result = new ProductListResult(List.of(), 0, 1, 7L);
-        given(queryProductService.findAll(isNull(), isNull(), eq(0), eq(1))).willReturn(result);
+        given(queryProductService.findAll(isNull(), isNull(), isNull(), eq(0), eq(1))).willReturn(result);
 
         mockMvc.perform(get("/api/admin/products")
                         .param("page", "0")
@@ -122,7 +122,7 @@ class AdminProductControllerTest {
     @DisplayName("GET /api/admin/products - size 가 MAX_PAGE_SIZE(100) 로 cap 된다 (공개 컨트롤러 미러)")
     void list_oversizedPage_isCappedAt100() throws Exception {
         ProductListResult result = new ProductListResult(List.of(), 0, 100, 0L);
-        given(queryProductService.findAll(isNull(), isNull(), eq(0), eq(100))).willReturn(result);
+        given(queryProductService.findAll(isNull(), isNull(), isNull(), eq(0), eq(100))).willReturn(result);
 
         mockMvc.perform(get("/api/admin/products")
                         .param("page", "0")

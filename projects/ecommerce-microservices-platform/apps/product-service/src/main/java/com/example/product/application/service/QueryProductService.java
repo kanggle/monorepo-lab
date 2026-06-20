@@ -29,10 +29,10 @@ public class QueryProductService {
     @Transactional(readOnly = true)
     @Cacheable(
             value = "product-list",
-            key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + T(java.util.Objects).toString(T(com.example.product.domain.seller.SellerScopeContext).currentSellerScope(), 'all') + ':' + T(java.util.Objects).toString(#categoryId, 'all') + ':' + T(java.util.Objects).toString(#status, 'all') + ':' + #page + ':' + #size"
+            key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + T(java.util.Objects).toString(T(com.example.product.domain.seller.SellerScopeContext).currentSellerScope(), 'all') + ':' + T(java.util.Objects).toString(#categoryId, 'all') + ':' + T(java.util.Objects).toString(#status, 'all') + ':' + T(java.util.Objects).toString(#name, 'all') + ':' + #page + ':' + #size"
     )
-    public ProductListResult findAll(UUID categoryId, ProductStatus status, int page, int size) {
-        return productQueryPort.findSummaries(categoryId, status, page, size);
+    public ProductListResult findAll(UUID categoryId, ProductStatus status, String name, int page, int size) {
+        return productQueryPort.findSummaries(categoryId, status, name, page, size);
     }
 
     @Transactional(readOnly = true)

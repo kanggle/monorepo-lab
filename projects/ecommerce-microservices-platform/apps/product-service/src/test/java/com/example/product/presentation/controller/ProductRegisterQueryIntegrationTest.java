@@ -92,7 +92,7 @@ class ProductRegisterQueryIntegrationTest {
 
         UUID id = registerProductService.register(command);
 
-        var result = queryProductService.findAll(null, null, 0, 20);
+        var result = queryProductService.findAll(null, null, null, 0, 20);
         assertThat(result.content()).isNotEmpty();
         assertThat(result.content().stream().anyMatch(p -> p.id().equals(id))).isTrue();
     }
@@ -170,9 +170,38 @@ class ProductRegisterQueryIntegrationTest {
                 List.of(new VariantCommand("기본", 3, 0)));
         registerProductService.register(command);
 
-        var result = queryProductService.findAll(null, ProductStatus.ON_SALE, 0, 20);
+        var result = queryProductService.findAll(null, ProductStatus.ON_SALE, null, 0, 20);
         assertThat(result.content()).isNotEmpty();
         assertThat(result.content()).allMatch(p -> p.status() == ProductStatus.ON_SALE);
+    }
+
+    @Test
+    @DisplayName("name 부분 일치(대소문자 무관) 필터로 목록 조회 (TASK-BE-420)")
+    void register_thenFilterByName_returnsMatchingProducts() {
+        registerProductService.register(new RegisterProductCommand(
+                "블루 셔츠", "설명", 10000L, null,
+                List.of(new VariantCommand("기본", 1, 0))));
+        registerProductService.register(new RegisterProductCommand(
+                "레드 바지", "설명", 20000L, null,
+                List.of(new VariantCommand("기본", 1, 0))));
+
+        var match = queryProductService.findAll(null, null, "셔츠", 0, 20);
+        assertThat(match.content()).isNotEmpty();
+        assertThat(match.content()).allMatch(p -> p.name().contains("셔츠"));
+        assertThat(match.content()).anyMatch(p -> p.name().equals("블루 셔츠"));
+        assertThat(match.content()).noneMatch(p -> p.name().equals("레드 바지"));
+
+        // 대소문자 무관 부분 일치
+        registerProductService.register(new RegisterProductCommand(
+                "Blue Shirt", "설명", 10000L, null,
+                List.of(new VariantCommand("기본", 1, 0))));
+        var caseInsensitive = queryProductService.findAll(null, null, "blue", 0, 20);
+        assertThat(caseInsensitive.content()).anyMatch(p -> p.name().equals("Blue Shirt"));
+
+        // 일치 없음
+        var noMatch = queryProductService.findAll(null, null, "존재하지않는상품명", 0, 20);
+        assertThat(noMatch.content()).isEmpty();
+        assertThat(noMatch.totalElements()).isEqualTo(0);
     }
 
     @Test
@@ -205,8 +234,8 @@ class ProductRegisterQueryIntegrationTest {
                     List.of(new VariantCommand("기본", 1, 0))));
         }
 
-        var page0 = queryProductService.findAll(null, null, 0, 2);
-        var page1 = queryProductService.findAll(null, null, 1, 2);
+        var page0 = queryProductService.findAll(null, null, null, 0, 2);
+        var page1 = queryProductService.findAll(null, null, null, 1, 2);
 
         assertThat(page0.content()).hasSize(2);
         assertThat(page0.size()).isEqualTo(2);

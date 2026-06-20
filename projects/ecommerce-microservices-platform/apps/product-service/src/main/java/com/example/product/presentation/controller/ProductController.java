@@ -34,10 +34,11 @@ public class ProductController {
     public ProductListResponse list(
             @RequestParam(required = false) UUID categoryId,
             @RequestParam(required = false) ProductStatus status,
+            @RequestParam(required = false) String name,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         int cappedSize = Math.min(size, MAX_PAGE_SIZE);
-        ProductListResult result = queryProductService.findAll(categoryId, status, page, cappedSize);
+        ProductListResult result = queryProductService.findAll(categoryId, status, name, page, cappedSize);
         return ProductListResponse.from(result);
     }
 

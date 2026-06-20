@@ -101,7 +101,7 @@ class ProductApiContractTest {
     void getProducts_response_containsSpecFields() throws Exception {
         UUID prodId = UUID.randomUUID();
         ProductSummary summary = new ProductSummary(prodId, "노트북", ProductStatus.ON_SALE, 1000000L, null);
-        given(queryProductService.findAll(any(), any(), any(int.class), any(int.class)))
+        given(queryProductService.findAll(any(), any(), any(), any(int.class), any(int.class)))
                 .willReturn(new ProductListResult(List.of(summary), 0, 20, 1));
 
         MvcResult result = mockMvc.perform(get("/api/products"))
