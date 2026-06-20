@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-415
 title: settlement-service — settlement_period close + outbox(settlement.period.closed.v1) + 기간 운영자 API
-status: ready
+status: done
 project: ecommerce-microservices-platform
 service: settlement-service
 type: feature
