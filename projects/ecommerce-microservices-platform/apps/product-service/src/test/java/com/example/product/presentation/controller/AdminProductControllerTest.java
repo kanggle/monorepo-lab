@@ -131,6 +131,19 @@ class AdminProductControllerTest {
                 .andExpect(jsonPath("$.size").value(100));
     }
 
+    @Test
+    @DisplayName("GET /api/admin/products?name=셔츠 - name 필터가 서비스로 전달된다 (공개 컨트롤러 미러, TASK-BE-420)")
+    void list_withNameFilter_passedThrough() throws Exception {
+        ProductListResult result = new ProductListResult(List.of(), 0, 20, 0L);
+        org.mockito.ArgumentCaptor<String> nameCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        given(queryProductService.findAll(any(), any(), nameCaptor.capture(), anyInt(), anyInt())).willReturn(result);
+
+        mockMvc.perform(get("/api/admin/products").param("name", "셔츠"))
+                .andExpect(status().isOk());
+
+        org.assertj.core.api.Assertions.assertThat(nameCaptor.getValue()).isEqualTo("셔츠");
+    }
+
     // ─── POST /api/admin/products (operator-plane write — TASK-BE-366) ──
 
     @Test

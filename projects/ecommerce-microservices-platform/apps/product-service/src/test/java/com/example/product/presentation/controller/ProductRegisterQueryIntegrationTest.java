@@ -197,11 +197,18 @@ class ProductRegisterQueryIntegrationTest {
                 List.of(new VariantCommand("기본", 1, 0))));
         var caseInsensitive = queryProductService.findAll(null, null, "blue", 0, 20);
         assertThat(caseInsensitive.content()).anyMatch(p -> p.name().equals("Blue Shirt"));
+        assertThat(caseInsensitive.content()).noneMatch(p -> p.name().equals("레드 바지"));
 
         // 일치 없음
         var noMatch = queryProductService.findAll(null, null, "존재하지않는상품명", 0, 20);
         assertThat(noMatch.content()).isEmpty();
         assertThat(noMatch.totalElements()).isEqualTo(0);
+
+        // blank(빈 문자열) name 은 no-filter 로 취급되어 전체 목록을 반환한다 (cleared search box)
+        var blank = queryProductService.findAll(null, null, "", 0, 20);
+        assertThat(blank.content()).hasSizeGreaterThanOrEqualTo(3);
+        assertThat(blank.content()).anyMatch(p -> p.name().equals("레드 바지"));
+        assertThat(blank.content()).anyMatch(p -> p.name().equals("블루 셔츠"));
     }
 
     @Test
