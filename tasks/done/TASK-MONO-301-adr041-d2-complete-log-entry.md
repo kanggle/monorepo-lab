@@ -1,6 +1,6 @@
 # TASK-MONO-301 — Add the D2 COMPLETE / D3 DESCOPED entries to the ADR-MONO-041 acceptance log
 
-**Status:** ready
+**Status:** done
 **Type:** TASK-MONO (root — shared `docs/adr/`) · docs accuracy
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Haiku (1-table-row doc fix)
 
