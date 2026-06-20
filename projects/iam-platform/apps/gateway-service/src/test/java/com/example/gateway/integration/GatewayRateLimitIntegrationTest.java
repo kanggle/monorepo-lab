@@ -9,7 +9,6 @@ import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +22,9 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -48,6 +50,16 @@ class GatewayRateLimitIntegrationTest {
     static WireMockServer authServiceMock;
     static WireMockServer accountServiceMock;
     static KeyPair keyPair;
+
+    /**
+     * Deterministic connection-reset downstream (replaces the flaky WireMock
+     * {@code Fault.CONNECTION_RESET_BY_PEER} stub — TASK-MONO-044 § AC #8 option a).
+     * Accepts every TCP connection and immediately closes it with
+     * {@code SO_LINGER=0}, forcing an RST so the gateway always sees a downstream
+     * connection failure. The gateway route {@code /api/connreset/**} points here.
+     */
+    static ServerSocket resetServer;
+    static volatile boolean resetServerRunning;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -93,12 +105,31 @@ class GatewayRateLimitIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"id\":\"account-123\"}")));
+
+        // Deterministic connection-reset downstream: accept then RST every connection.
+        resetServer = new ServerSocket(0);
+        resetServerRunning = true;
+        Thread t = new Thread(() -> {
+            while (resetServerRunning) {
+                try (Socket s = resetServer.accept()) {
+                    s.setSoLinger(true, 0); // close() sends RST instead of FIN
+                } catch (IOException ignored) {
+                    // server closed (afterAll) or transient accept error → loop check exits
+                }
+            }
+        }, "reset-downstream-accept");
+        t.setDaemon(true);
+        t.start();
     }
 
     @AfterAll
     static void afterAll() {
         if (authServiceMock != null) authServiceMock.stop();
         if (accountServiceMock != null) accountServiceMock.stop();
+        resetServerRunning = false;
+        if (resetServer != null) {
+            try { resetServer.close(); } catch (IOException ignored) { /* best-effort */ }
+        }
     }
 
     @DynamicPropertySource
@@ -113,6 +144,11 @@ class GatewayRateLimitIntegrationTest {
         registry.add("spring.cloud.gateway.routes[1].uri", accountServiceMock::baseUrl);
         registry.add("spring.cloud.gateway.routes[1].id", () -> "account-service");
         registry.add("spring.cloud.gateway.routes[1].predicates[0]", () -> "Path=/api/accounts/**");
+        // Deterministic connection-reset downstream (TASK-MONO-044 § AC #8 option a).
+        registry.add("spring.cloud.gateway.routes[2].uri",
+                () -> "http://127.0.0.1:" + resetServer.getLocalPort());
+        registry.add("spring.cloud.gateway.routes[2].id", () -> "connreset-downstream");
+        registry.add("spring.cloud.gateway.routes[2].predicates[0]", () -> "Path=/api/connreset/**");
         // login scope max=2 for fast rate-limit testing
         registry.add("gateway.rate-limit.login.max-requests", () -> "2");
         registry.add("gateway.rate-limit.login.window-seconds", () -> "60");
@@ -228,37 +264,23 @@ class GatewayRateLimitIntegrationTest {
     }
 
     /**
-     * TASK-MONO-044c-1 RC#3: disabled pending nightly task per spec § AC #6.
+     * Downstream connection reset → gateway 5xx.
      *
-     * <p><b>Sporadic failure mode</b>: WireMock's
-     * {@code Fault.CONNECTION_RESET_BY_PEER} stub races with the Reactor Netty
-     * client used by Spring Cloud Gateway. In ~5-10% of CI runs the gateway
-     * forwards the request before WireMock applies the fault, and the response
-     * comes back as {@code 200 OK} instead of {@code 5xx}. The CI run that
-     * surfaced this (Job 25355285563) also showed Redis hitting
-     * {@code recvAddress(..) failed: Connection reset by peer} concurrently —
-     * the JWT filter falls open on Redis errors and lets the request through,
-     * but that path is independent of the WireMock fault stub.
-     *
-     * <p>Production code path is correct (verified via unit tests on
-     * gateway error handling); this is a test-infrastructure flake.
-     *
-     * <p><b>Follow-up</b>: TASK-MONO-044 § AC #8 nightly regression task is
-     * the appropriate channel for restoring deterministic coverage. Options:
-     * (a) replace WireMock fault with a TCP-level proxy that closes the
-     * socket reliably, (b) raise the gateway's downstream timeout so the
-     * fault has time to apply, (c) Awaitility-based retry of the assertion.
+     * <p>RE-ENABLED (was {@code @Disabled}, TASK-MONO-044c-1 RC#3): the previous
+     * version used WireMock's {@code Fault.CONNECTION_RESET_BY_PEER} stub, which
+     * raced with the Reactor Netty client (~5-10% of CI runs returned 200 because
+     * the gateway forwarded before WireMock applied the fault). Per TASK-MONO-044
+     * § AC #8 option (a), the flaky stub is replaced by a real downstream
+     * ({@code resetServer}) that accepts every connection and RSTs it
+     * ({@code SO_LINGER=0}), via the dedicated {@code /api/connreset/**} route.
+     * The connection failure is now deterministic, so the test is reliable in the
+     * main suite (no nightly-only carve-out needed).
      */
     @Test
-    @Disabled("TASK-MONO-044c-1 RC#3: sporadic WireMock fault stub race; tracked for nightly via TASK-MONO-044 § AC #8")
     @DisplayName("다운스트림 연결 리셋(Fault) → 게이트웨이가 5xx 반환")
     void downstream_connectionFault_returns5xx() {
-        accountServiceMock.stubFor(get(urlEqualTo("/api/accounts/downstream-fail"))
-                .willReturn(aResponse()
-                        .withFault(com.github.tomakehurst.wiremock.http.Fault.CONNECTION_RESET_BY_PEER)));
-
         String token = createValidToken("account-123", "fan-platform");
-        webTestClient.get().uri("/api/accounts/downstream-fail")
+        webTestClient.get().uri("/api/connreset/downstream-fail")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().is5xxServerError();
