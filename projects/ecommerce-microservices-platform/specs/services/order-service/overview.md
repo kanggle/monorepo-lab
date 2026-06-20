@@ -32,6 +32,7 @@
 | REST | `GET /api/orders/{id}` | JWT (owner / ROLE_ADMIN) | order detail |
 | REST | `GET /api/orders` | JWT (owner) | user order history |
 | REST | `POST /api/orders/{id}/cancel` | JWT (owner) | cancel by user |
+| REST (internal) | `POST /api/internal/orders/confirm-paid-stale` | `client_credentials` Bearer (gateway-excluded, fail-closed) | system stale paid-order forward-confirm (`PENDING AND payment_id IS NOT NULL` → `CONFIRMED`); called by batch-worker (TASK-BE-410/412). Disjoint from BE-138 (`payment_id IS NULL`). |
 | Kafka consume | `payment.payment.completed`, `payment.payment.failed`, `payment.payment.refunded` | — | status transitions |
 | Kafka consume | `user.user.withdrawn` | — | user cleanup |
 | Kafka publish | `order.order.placed`, `order.order.cancelled` | — | downstream consumers (payment / shipping / notification / promotion) |
@@ -53,7 +54,8 @@
 ## Published Interfaces
 
 - [`../../contracts/http/order-api.md`](../../contracts/http/order-api.md) (HTTP)
-- [`../../contracts/events/order-events.md`](../../contracts/events/order-events.md) — `OrderPlaced`, `OrderCancelled`
+- [`../../contracts/http/internal/order-confirm-paid-stale.md`](../../contracts/http/internal/order-confirm-paid-stale.md) (internal system-command HTTP — `client_credentials`, gateway-excluded)
+- [`../../contracts/events/order-events.md`](../../contracts/events/order-events.md) — `OrderPlaced`, `OrderCancelled`, `OrderConfirmed`
 
 ## Dependent Systems
 

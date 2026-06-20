@@ -327,7 +327,41 @@ Change order status (admin only).
 
 ---
 
+## Internal Endpoints (gateway-excluded, system-to-system)
+
+These endpoints are **not** routed by the gateway (only `/api/orders/**` and `/api/admin/orders/**`
+are) and are reachable only on the internal service network. They authenticate with a
+`client_credentials` Bearer JWT (NOT a user/admin token) and are **fail-closed** (missing/invalid
+token → 401).
+
+### POST /api/internal/orders/confirm-paid-stale
+System stale paid-order **forward-confirm**. Recovers orders that paid but whose confirmation
+event was lost — `status='PENDING' AND payment_id IS NOT NULL` past `olderThanMinutes` — by
+transitioning each `PENDING → CONFIRMED` (the same transition the normal saga path performs) and
+emitting the standard `OrderConfirmed` event so downstream fulfillment fires. Called by
+batch-worker's `stalePaidOrderConfirmationJob` (TASK-BE-410 decision; impl TASK-BE-412/413).
+
+Full contract (auth, request/response, server-side predicate, idempotency, BE-138 disjointness):
+[`internal/order-confirm-paid-stale.md`](internal/order-confirm-paid-stale.md).
+
+**System PENDING → CONFIRMED recovery path & BE-138 boundary.** order-service has two
+PENDING-sweep recovery owners, **disjoint on `payment_id`**:
+
+| Owner | Predicate | Action | Event |
+|---|---|---|---|
+| BE-138 `OrderStuckDetector` (in order-service) | `PENDING AND payment_id IS NULL` | escalate to terminal `STUCK_RECOVERY_FAILED` (never confirms) | `OrderSagaRecoveryExhausted` |
+| This endpoint (batch-triggered, BE-410) | `PENDING AND payment_id IS NOT NULL` | forward-confirm `PENDING → CONFIRMED` | `OrderConfirmed` |
+
+No order is ever a candidate for both. The user-facing `POST /api/orders/{id}/cancel` and admin
+`POST /api/admin/orders/{id}/status` are unrelated (ownership/ADMIN-gated) and are NOT reused for
+this recovery.
+
+---
+
 ## Notes
 - `userId` is extracted from the authentication token, not from the request body.
 - An order may only be cancelled when its status is `PENDING` or `CONFIRMED`.
 - Internal stack traces must not appear in error responses.
+- The `/api/internal/orders/**` tree is gateway-excluded and authenticated by `client_credentials`
+  Bearer (system-to-system), distinct from the user/admin Bearer auth of all `/api/orders/**` and
+  `/api/admin/orders/**` endpoints.

@@ -49,7 +49,7 @@ spring:
 |---|---|---|---|---|
 | `ecommerce-web-store-client` | `authorization_code` + `refresh_token` | 필수 (`require_proof_key=true`) | `http://localhost:3000/api/auth/callback/iam`, `http://web.ecommerce.local/api/auth/callback/iam` | V0012 (TASK-MONO-027) |
 | `ecommerce-admin-dashboard-client` (RETIRED — admin-dashboard app removed, TASK-MONO-259; operator UI now in platform-console. Client seed retire migration deferred.) | `authorization_code` + `refresh_token` | 필수 | `http://localhost:3001/api/auth/callback/iam`, `http://admin.ecommerce.local/api/auth/callback/iam` | V0012 (TASK-MONO-027) |
-| `ecommerce-internal-services-client` | `client_credentials` | No | — | v2 DEFERRED |
+| `ecommerce-internal-services-client` | `client_credentials` | No | — | **ACTIVE (TASK-BE-410)** — internal service-to-service auth. First consumer: batch-worker → order-service `POST /api/internal/orders/confirm-paid-stale` (stale paid-order forward-confirm). Token minted/cached caller-side via `IamClientCredentialsTokenProvider` (mirrors product-service BE-402). Seed: `ecommerce-internal-services-client` row in IAM (Flyway V0012 follow-up / dev `.env` secret `ECOMMERCE_INTERNAL_SERVICES_CLIENT_SECRET`). |
 
 두 user-flow client 는 confidential (secret + PKCE 동시 사용) 로 등록:
 - `client_authentication_methods`: `client_secret_basic`

@@ -18,7 +18,7 @@ and `platform/architecture-decision-rule.md`.
 | Primary language / stack | Java 21, Spring Boot, Spring Batch |
 | Bounded Context | Scheduled / batch processing (periodic cleanup, aggregation, maintenance) |
 | Deployable unit | `apps/batch-worker/` |
-| Data store | PostgreSQL (shared with other ecommerce services for batch read/write) |
+| Data store | PostgreSQL — **own DB only** (`batch_job_execution_history` + ShedLock). batch-worker does **NOT** share or directly read/write other services' databases; all cross-service data access is via published HTTP contracts / events (`service-boundaries.md`, key invariant #3). |
 | Event publication | none (forward-declared; contracts TBD) |
 | Event consumption | none (scheduled trigger) |
 
@@ -77,6 +77,7 @@ Package organization may follow package-by-layer or package-by-feature if the la
 
 ## Consumed Interfaces
 - Consumes other services' published HTTP contracts (read-only) for data verification
+- **One internal system-command exception**: calls order-service `POST /api/internal/orders/confirm-paid-stale` (`client_credentials` Bearer) for stale paid-order forward-confirm — server-side predicate, not a DB write into order's store (TASK-BE-410 decision; contract `specs/contracts/http/internal/order-confirm-paid-stale.md`)
 - Consumes domain events from other services for batch processing triggers
 - Must not access other services' databases directly (per `service-boundaries.md`)
 
@@ -85,12 +86,13 @@ Package organization may follow package-by-layer or package-by-feature if the la
 - Kafka (event consumption/publication)
 - product-service via published HTTP contract (read-only, for index consistency check)
 - search-service via published HTTP contract (read-only, for index consistency check)
+- order-service via internal contract `order-confirm-paid-stale.md` (`client_credentials` Bearer; system-command, for stale paid-order forward-confirm)
 
 For full dependency rules, see `dependencies.md`.
 
 ## Key Jobs (planned)
 - ~~Expired session cleanup (auth-service sessions past inactivity timeout)~~ **REMOVED — IAM owns auth sessions (TASK-BE-132).**
-- Stale order cancellation (orders stuck in PENDING beyond timeout)
+- Stale paid-order forward-confirm (`PENDING AND payment_id IS NOT NULL` beyond timeout → `PENDING → CONFIRMED` via order-service internal endpoint; recovery for a lost confirm event, NOT cancellation; disjoint from BE-138's `payment_id IS NULL` bucket)
 - Daily sales aggregation (order/payment summary)
 - Elasticsearch index consistency check (product data sync verification)
 
