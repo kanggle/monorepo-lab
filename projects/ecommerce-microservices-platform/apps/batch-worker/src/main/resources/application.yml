@@ -72,6 +72,17 @@ management:
     tags:
       service: ${spring.application.name}
 
+product-service:
+  base-url: ${PRODUCT_SERVICE_BASE_URL:http://product-service:8081}
+
+search-service:
+  base-url: ${SEARCH_SERVICE_BASE_URL:http://search-service:8085}
+
+batch:
+  jobs:
+    search-consistency:
+      enabled: ${BATCH_SEARCH_CONSISTENCY_ENABLED:true}
+
 logging:
   level:
     com.example.batch: INFO

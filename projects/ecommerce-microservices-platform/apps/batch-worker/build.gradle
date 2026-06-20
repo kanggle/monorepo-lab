@@ -32,12 +32,20 @@ dependencies {
     // PostgreSQL
     runtimeOnly 'org.postgresql:postgresql'
 
+    // ShedLock — distributed scheduler lock for single-instance execution across replicas.
+    // Version pinned to 6.2.0 to match shipping-service (TASK-BE-360 / monorepo consistency).
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.2.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.2.0'
+
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.batch:spring-batch-test'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:kafka'
+    // MockWebServer for product-service / search-service HTTP stub in integration tests (TASK-BE-409).
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
 
 test {
