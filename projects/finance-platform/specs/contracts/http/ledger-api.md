@@ -665,19 +665,13 @@ EP's empty-200 stance from FIN-BE-033). This applies to both truly unsupported c
   operator call) + a **configurable base currency** (fixed KRW in v1).
 - **Reconciliation**: fuzzy / N:M / split matching; **per-currency-pair / per-account** FX-tolerance
   granularity (a per-tenant tolerance is live — § 13th increment).
-- **FX rate feed (ADR-002 remainder)**: a **real public FX API provider schema** (`mode=http`
-  against an actual provider's response shape — the http adapter is wired, the provider contract is a
-  stub) + a ShedLock single-leader poller guard. *(The `fx_rate_quote_history` append-only audit
-  trail is now implemented — TASK-FIN-BE-039; the **history read / per-pair drill endpoint** stays
-  deferred.)*
-
-Also out of scope (still forward-declared): the console FX history drill tab (separate PC-FE
-task) + per-tenant rate override + ShedLock single-leader poller guard.
-
 > **Now in scope (implemented — no longer forward-declared):** the GL/AP feed outbox
 > (`finance.ledger.{entry.posted,period.closed}.v1`) + reconciliation events; multi-currency +
 > cross-currency reconciliation (both directions); a **FIFO / lot-level** settlement carrying basis
 > (per-tenant + per-account cost-flow config §13, open-lots read §12) and the **live FX rate feed**
 > (omitted-rate fallback on `/revaluations` + `/settlements`, fx-rates read §14) and the
 > **`fx_rate_quote_history` append-only audit trail** (V13 — TASK-FIN-BE-039) and the
-> **per-pair FX rate history drill** (`/{foreignCurrency}/history` §14.1 — TASK-FIN-BE-040).
+> **per-pair FX rate history drill** (`/{foreignCurrency}/history` §14.1 — TASK-FIN-BE-040) and the
+> **real public FX API adapter** (`mode=real`, Frankfurter — TASK-FIN-BE-038) and the **ShedLock
+> single-leader poller guard** (V14 — TASK-FIN-BE-041) and the **per-tenant FX rate override**
+> (V15 — TASK-FIN-BE-042) and the **console FX rate history drill tab** (TASK-PC-FE-104).
