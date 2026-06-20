@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 /**
  * Seller onboarding + lifecycle use case (ADR-MONO-030 Step 3 §3.1 + Step 4 facet f,
  * ADR-MONO-042). Onboarding now mints a REAL IAM seller-operator account (fail-soft, D3)
@@ -95,6 +97,41 @@ public class RegisterSellerService {
             // null-safe + idempotent: no backing account → net-zero no-op (D4). OUTSIDE the tx.
             provisioner.lockAccount(TenantContext.currentTenant(), seller.getAccountId());
         }
+    }
+
+    /**
+     * Reverse lifecycle projection (ADR-MONO-042 D4-C, TASK-BE-421): an IAM
+     * {@code account.status.changed → LOCKED} on the backing account suspends the matching
+     * marketplace seller. This is the reverse of {@link #suspend(String)} and CRITICALLY does
+     * NOT call {@code provisioner.lockAccount} — the account is ALREADY locked (IAM is the
+     * source of this event), so re-locking would create a forward/back loop. The forward
+     * {@link #suspend(String)} re-emits {@code LOCKED}, which loops back here and is an
+     * already-SUSPENDED idempotent no-op.
+     *
+     * <p>Fail-soft / race-tolerant:
+     * <ul>
+     *   <li>no seller for this {@code account_id} → no-op (returns {@code false}); the consumer
+     *       logs and skips (a locked account need not back a seller in this tenant).</li>
+     *   <li>already SUSPENDED → {@code suspend()} returns {@code false}, no persist (idempotent
+     *       re-delivery + forward-loop-back).</li>
+     *   <li>CLOSED seller → {@code suspend()} throws {@link IllegalStateException}; the caller
+     *       tolerates the race (a CLOSED seller is terminal and need not be re-suspended).</li>
+     * </ul>
+     *
+     * @return {@code true} iff a seller was found and transitioned ACTIVE/PENDING → SUSPENDED.
+     * @throws IllegalStateException if the matched seller is CLOSED (caller tolerates the race).
+     */
+    public boolean suspendByLockedAccount(String accountId) {
+        Optional<Seller> match = persistence.findByAccountId(accountId);
+        if (match.isEmpty()) {
+            return false;
+        }
+        Seller seller = match.get();
+        if (seller.suspend()) {
+            persistence.update(seller); // SHORT tx — no IAM call (account already locked)
+            return true;
+        }
+        return false;
     }
 
     /**
