@@ -8,7 +8,7 @@ ADR-MONO-032 § 3.3 — add a "roadmap COMPLETE" pointer so the execution sketch
 
 # Status
 
-ready
+done
 
 # Owner
 
