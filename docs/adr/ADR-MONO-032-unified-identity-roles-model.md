@@ -113,6 +113,8 @@ The contract's own § Change Rule additionally mandates that the contract body b
 
 ### 3.3 Future-self (post-ACCEPTED execution roadmap — sketch, finalised at ACCEPTED)
 
+> **✅ ALL SIX STEPS COMPLETE — landed on `main` 2026-06-15 (TASK-MONO-265). See § 6's "D5 ROADMAP COMPLETE" note for the authoritative per-step ledger.** The `TASK-…` placeholders below are the original ACCEPTED-time sketch (kept for provenance); each was realized: step 0 = MONO-255, step 1 = MONO-256, step 2 = ADR-MONO-033 + BE-368/369/370, step 3 = ADR-MONO-034 + BE-371/372/373/374, step 4 = ADR-MONO-035 (4a BE-376 / 4b MONO-261-263 / 4c BE-377 / 4d BE-378), step 5 = MONO-265. **Nothing in this roadmap remains open** — `account_type` is fully removed and `roles` is the sole authorization axis.
+
 1. **`TASK-…`** (contract-first, D5 step 0) — rewrite `jwt-standard-claims.md` (§ Account Types → unified-identity; `account_type` Required→removed; § Role Strategy consumer-role folding; § SSO role/assignment-scoped; § Gateway Enforcement role-based). Model = **Opus** (breaking contract).
 2. **`TASK-…`** (dual-read gateways, D5 step 1, D3) — every gateway accepts legacy-`account_type` OR role-based admission. Model = **Opus** (5-gateway cross-cutting).
 3. **`TASK-…`** (IdP roles-only issuance + any-aud SSO, D5 step 2, D2) — stop requiring `account_type`; seed `CUSTOMER`/`FAN` roles; allow any entitled `aud`. Model = **Opus**.
