@@ -138,7 +138,7 @@ Consumed via Kafka; each consumer dedupes on the envelope `event_id` through a
 |---|---|---|
 | `OrderPlaced` | `order.order.placed` | **Line snapshot.** Upsert a per-order line cache `(order_id → [{seller_id, gross_minor}], tenant_id)`. Idempotent on `order_id`. The envelope's `tenant_id` is the **only** source of the order's tenant for settlement (see Multi-Tenancy below). |
 | `PaymentCompleted` | `payment.payment.completed` | **Accrual trigger.** The money is captured (real). Look up the snapshot by `orderId`; for each line compute the commission split and append an `ACCRUAL` row. Idempotent on `(order_id, payment_id)`. |
-| `PaymentRefunded` | `payment.payment.refunded` | **Reversal.** Append `REVERSAL` rows (negative) that net the order's accruals to zero. v1 treats a refund as a **full** reversal of the order's accruals; partial / proportional clawback is forward-declared. Idempotent on `(order_id, payment_id)`. |
+| `PaymentRefunded` | `payment.payment.refunded` | **Proportional reversal.** Append `REVERSAL` rows (negative) clawing back commission in proportion to the refund `amount` (`reverses_accrual_id` links each to its parent ACCRUAL; the final `fullyRefunded` refund reverses the exact remaining so the order nets to zero per seller). Idempotent on the envelope `event_id` (a payment may emit several partial refunds). See `contracts/events/settlement-subscriptions.md` § Proportional clawback rule. |
 
 Consumer group: `settlement-service`. Malformed / unattributable events route to
 the retry topic → DLQ (never fail the whole pipeline).

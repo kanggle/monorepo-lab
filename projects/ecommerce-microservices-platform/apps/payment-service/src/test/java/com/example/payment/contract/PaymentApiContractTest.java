@@ -50,6 +50,9 @@ class PaymentApiContractTest {
     @MockitoBean
     private PaymentProcessingService paymentProcessingService;
 
+    @MockitoBean
+    private com.example.payment.application.service.PaymentRefundService paymentRefundService;
+
     private static final String SPEC_REF = "specs/contracts/http/payment-api.md";
 
     // ─── GET /api/payments/orders/{orderId} — 200 ───────────────────────
@@ -94,6 +97,35 @@ class PaymentApiContractTest {
         assertFieldsMatch(result.getResponse().getContentAsString(),
                 Set.of("paymentId", "orderId", "status", "paymentMethod", "receiptUrl", "paidAt"),
                 SPEC_REF + " POST /api/payments/confirm 200");
+    }
+
+    // ─── POST /api/payments/{paymentId}/refund — 200 ────────────────────
+
+    @Test
+    @DisplayName("POST /api/payments/{paymentId}/refund 응답은 스펙 정의 필드만 포함한다")
+    void refundPayment_response_containsSpecFields() throws Exception {
+        Payment refunded = Payment.reconstitute(
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L, 10000L,
+                com.example.payment.domain.model.PaymentStatus.PARTIALLY_REFUNDED,
+                LocalDateTime.of(2026, 4, 6, 12, 0, 0),
+                LocalDateTime.of(2026, 4, 6, 12, 0, 0),
+                LocalDateTime.of(2026, 4, 6, 13, 0, 0),
+                "pk_test_123", "CARD", null);
+        given(paymentRefundService.refundPayment(eq("pay-1"), eq("user-1"), eq(10000L)))
+                .willReturn(refunded);
+
+        MvcResult result = mockMvc.perform(post("/api/payments/pay-1/refund")
+                        .header("X-User-Id", "user-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":10000}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertFieldsMatch(result.getResponse().getContentAsString(),
+                Set.of("paymentId", "orderId", "userId", "amount", "refundedAmount", "status", "refundedAt"),
+                SPEC_REF + " POST /api/payments/{paymentId}/refund 200");
     }
 
     // ─── Error Response Format ──────────────────────────────────────────

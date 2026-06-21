@@ -18,7 +18,7 @@ class PaymentPersistenceMapperTest {
     @DisplayName("도메인 -> JpaEntity 변환 시 모든 필드가 매핑된다 (tenantId 포함)")
     void toEntity_mapsAllFields() {
         Payment payment = Payment.reconstitute(
-                "pay-1", "order-1", "user-1", "ecommerce", 50000L,
+                "pay-1", "order-1", "user-1", "ecommerce", 50000L, 0L,
                 PaymentStatus.COMPLETED,
                 LocalDateTime.of(2025, 1, 1, 10, 0),
                 LocalDateTime.of(2025, 1, 1, 10, 5),
@@ -33,6 +33,7 @@ class PaymentPersistenceMapperTest {
         assertThat(entity.getUserId()).isEqualTo("user-1");
         assertThat(entity.getTenantId()).isEqualTo("ecommerce");
         assertThat(entity.getAmount()).isEqualTo(50000L);
+        assertThat(entity.getRefundedAmount()).isZero();
         assertThat(entity.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(entity.getCreatedAt()).isEqualTo(LocalDateTime.of(2025, 1, 1, 10, 0));
         assertThat(entity.getPaidAt()).isEqualTo(LocalDateTime.of(2025, 1, 1, 10, 5));
@@ -46,7 +47,7 @@ class PaymentPersistenceMapperTest {
     @DisplayName("JpaEntity -> 도메인 변환 시 모든 필드가 매핑된다 (tenantId 포함)")
     void toDomain_mapsAllFields() {
         Payment original = Payment.reconstitute(
-                "pay-1", "order-1", "user-1", "tenant-a", 30000L,
+                "pay-1", "order-1", "user-1", "tenant-a", 30000L, 30000L,
                 PaymentStatus.REFUNDED,
                 LocalDateTime.of(2025, 1, 1, 10, 0),
                 LocalDateTime.of(2025, 1, 1, 10, 5),
@@ -62,6 +63,7 @@ class PaymentPersistenceMapperTest {
         assertThat(restored.getUserId()).isEqualTo("user-1");
         assertThat(restored.getTenantId()).isEqualTo("tenant-a");
         assertThat(restored.getAmount()).isEqualTo(30000L);
+        assertThat(restored.getRefundedAmount()).isEqualTo(30000L);
         assertThat(restored.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
         assertThat(restored.getCreatedAt()).isEqualTo(LocalDateTime.of(2025, 1, 1, 10, 0));
         assertThat(restored.getPaidAt()).isEqualTo(LocalDateTime.of(2025, 1, 1, 10, 5));

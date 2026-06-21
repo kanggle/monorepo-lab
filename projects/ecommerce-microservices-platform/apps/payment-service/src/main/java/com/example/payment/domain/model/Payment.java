@@ -14,6 +14,8 @@ public class Payment {
     /** Outer-axis tenant (ADR-MONO-030 Step 4 facet c — TASK-BE-400, M1). */
     private String tenantId;
     private long amount;
+    /** Cumulative refunded minor units (0 ≤ refundedAmount ≤ amount). Partial refunds accumulate. */
+    private long refundedAmount;
     private PaymentStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime paidAt;
@@ -39,7 +41,7 @@ public class Payment {
 
     public static Payment reconstitute(String paymentId, String orderId, String userId,
                                         String tenantId,
-                                        long amount, PaymentStatus status,
+                                        long amount, long refundedAmount, PaymentStatus status,
                                         LocalDateTime createdAt, LocalDateTime paidAt,
                                         LocalDateTime refundedAt,
                                         String paymentKey, String paymentMethod,
@@ -50,6 +52,7 @@ public class Payment {
         payment.userId = userId;
         payment.tenantId = tenantId;
         payment.amount = amount;
+        payment.refundedAmount = refundedAmount;
         payment.status = status;
         payment.createdAt = createdAt;
         payment.paidAt = paidAt;
@@ -78,15 +81,47 @@ public class Payment {
         this.status = PaymentStatus.FAILED;
     }
 
+    /**
+     * Full refund of the remaining refundable amount (the OrderCancelled path).
+     * Idempotent: a no-op once already fully {@code REFUNDED}. Refunding the remainder
+     * of a {@code PARTIALLY_REFUNDED} payment closes it out to {@code REFUNDED}.
+     */
     public void refund() {
         if (this.status == PaymentStatus.REFUNDED) {
             return;
         }
-        if (this.status != PaymentStatus.COMPLETED) {
-            throw new InvalidPaymentException("COMPLETED 상태에서만 환불할 수 있습니다: " + status);
+        refund(getRemainingRefundable());
+    }
+
+    /**
+     * Partial (or full) refund of {@code amount} minor units. Allowed from
+     * {@code COMPLETED} or {@code PARTIALLY_REFUNDED}; {@code amount} must be
+     * {@code 0 < amount ≤ remaining refundable}. Accumulates {@code refundedAmount};
+     * transitions to {@code REFUNDED} when the cumulative reaches the captured total,
+     * else {@code PARTIALLY_REFUNDED}.
+     */
+    public void refund(long amount) {
+        if (this.status != PaymentStatus.COMPLETED && this.status != PaymentStatus.PARTIALLY_REFUNDED) {
+            throw new InvalidPaymentException(
+                    "COMPLETED 또는 PARTIALLY_REFUNDED 상태에서만 환불할 수 있습니다: " + status);
         }
-        this.status = PaymentStatus.REFUNDED;
+        long remaining = getRemainingRefundable();
+        if (amount <= 0 || amount > remaining) {
+            throw new InvalidPaymentException(
+                    "유효하지 않은 환불 금액입니다: " + amount + " (잔여 환불 가능액=" + remaining + ")");
+        }
+        this.refundedAmount += amount;
         this.refundedAt = LocalDateTime.now();
+        this.status = (this.refundedAmount == this.amount)
+                ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED;
+    }
+
+    public long getRemainingRefundable() {
+        return this.amount - this.refundedAmount;
+    }
+
+    public boolean isFullyRefunded() {
+        return this.refundedAmount == this.amount;
     }
 
     public boolean isOwnedBy(String userId) {
@@ -111,6 +146,10 @@ public class Payment {
 
     public long getAmount() {
         return amount;
+    }
+
+    public long getRefundedAmount() {
+        return refundedAmount;
     }
 
     public PaymentStatus getStatus() {

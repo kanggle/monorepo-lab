@@ -66,7 +66,9 @@ Published when a payment processing fails.
 
 ## PaymentRefunded
 
-Published when a payment refund is processed.
+Published when a payment refund is processed. Refunds may be **partial** — a payment
+can emit several `PaymentRefunded` events whose `amount`s sum (at most) to the captured
+total. Each event describes **one** refund.
 
 **Consumers:** order-service, settlement-service (commission reversal — ADR-MONO-030 Step 4 facet b; see `settlement-subscriptions.md`)
 
@@ -77,9 +79,21 @@ Published when a payment refund is processed.
   "orderId": "string (UUID)",
   "userId": "string (UUID)",
   "amount": 30000,
+  "totalRefunded": 30000,
+  "fullyRefunded": true,
   "refundedAt": "string (ISO 8601)"
 }
 ```
+
+- `amount` — the amount of **this** refund (a partial refund < the captured total).
+- `totalRefunded` — cumulative refunded for the payment **including** this event
+  (`≤` captured amount).
+- `fullyRefunded` — `true` iff `totalRefunded == captured amount` (this event closed
+  the payment out). Consumers gate full-refund effects on this flag, not on `amount`.
+
+**Back-compatibility:** `totalRefunded` / `fullyRefunded` are additive. A consumer
+reading a legacy event without them must treat the refund as a **full** refund
+(`fullyRefunded = true`), matching the pre-partial-refund behaviour.
 
 ---
 

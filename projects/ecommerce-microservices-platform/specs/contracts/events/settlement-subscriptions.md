@@ -29,7 +29,27 @@ to those events' **Consumers** lists (additive — no producer payload change).
 |---|---|---|---|
 | `order.order.placed` | `OrderPlaced` | `OrderPlacedSnapshotConsumer` | **Line snapshot.** Upsert `order_id → [{seller_id, gross_minor = unitPrice × quantity}]` + the envelope `tenant_id`. Idempotent on `order_id`. No accrual yet (money not captured). The snapshot is the **only** source of the order's `tenant_id` + per-line `seller_id` for settlement. |
 | `payment.payment.completed` | `PaymentCompleted` | `PaymentCompletedAccrualConsumer` | **Accrual.** Join the snapshot by `orderId`; per line compute `commission = round(gross × rate_bps / 10000)`, `seller_net = gross − commission`; append an `ACCRUAL` row per line. Idempotent on `(order_id, payment_id)`. |
-| `payment.payment.refunded` | `PaymentRefunded` | `PaymentRefundedReversalConsumer` | **Reversal.** Append `REVERSAL` rows (negatives) that net the order's accruals to zero. v1 = **full** reversal of the order's accruals (the refund is treated as whole-order; partial/proportional clawback against `PaymentRefunded.amount` is forward-declared). Idempotent on `(order_id, payment_id)`. |
+| `payment.payment.refunded` | `PaymentRefunded` | `PaymentRefundedReversalConsumer` | **Proportional reversal.** Append `REVERSAL` rows (negatives) clawing back commission in proportion to the refund. See the proportional rule below. Idempotent on the envelope `event_id` (each `PaymentRefunded` reverses exactly once — a payment may emit several partial refunds). |
+
+### Proportional clawback rule (`PaymentRefunded`)
+
+For a refund of `amount` against an order whose total captured equals its accrued
+gross (`accruedGross = Σ ACCRUAL.gross_minor`):
+
+- **Per accrual row** (`reverses_accrual_id` links each REVERSAL to its parent ACCRUAL),
+  reverse `round(orig_gross × amount / accruedGross)` of the gross, **clamped** to the
+  row's remaining un-reversed gross (cumulative cap — total reversed never exceeds
+  accrued). The reversed gross is re-split via the commission policy
+  (`commission = round(gross × rate_bps / 10000)`, `seller_net = remainder`) and
+  negated, so every REVERSAL row independently satisfies
+  `commission_minor + seller_net_minor = gross_minor` (DB `ck_commission_accrual_split`).
+- **On the final refund** (`fullyRefunded = true`) reverse the **exact remaining**
+  per field (`orig − already-reversed` for gross / commission / seller_net) rather than
+  a fresh proportional round. This absorbs all accumulated partial-rounding drift so the
+  order's accruals net **exactly** zero per seller.
+- **Idempotency** is the consumer's `event_id` dedupe (`processed_event`). The old
+  `(order_id, payment_id)` reversal gate is **removed** — it would block a second partial
+  refund of the same payment. No accruals (cancel-before-capture) → no-op.
 
 ## Excluded topics (by design — NOT consumed)
 

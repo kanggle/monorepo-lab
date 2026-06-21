@@ -102,43 +102,131 @@ class SettlementServiceTest {
         verify(accrualRepository, never()).appendAll(any());
     }
 
-    @Test
-    void reverse_negates_each_accrual_to_net_zero() {
-        when(accrualRepository.existsReversalFor("order-1", "refund-1")).thenReturn(false);
-        when(accrualRepository.findAccrualsByOrderId("order-1")).thenReturn(List.of(
-                new CommissionAccrual("a1", "tenantA", "order-1", "pay-1", "seller-1",
-                        AccrualType.ACCRUAL, 30_000L, 1000, 3_000L, 27_000L, NOW)));
-
-        service.reverse(new ReversePaymentCommand("order-1", "refund-1", NOW));
-
-        @SuppressWarnings("unchecked")
+    @SuppressWarnings("unchecked")
+    private List<CommissionAccrual> captureAppended() {
         ArgumentCaptor<List<CommissionAccrual>> captor = ArgumentCaptor.forClass(List.class);
         verify(accrualRepository).appendAll(captor.capture());
-        List<CommissionAccrual> reversals = captor.getValue();
-        assertThat(reversals).hasSize(1);
-        CommissionAccrual rev = reversals.get(0);
-        assertThat(rev.type()).isEqualTo(AccrualType.REVERSAL);
-        assertThat(rev.commissionMinor()).isEqualTo(-3_000L);
-        assertThat(rev.sellerNetMinor()).isEqualTo(-27_000L);
-        assertThat(rev.paymentId()).isEqualTo("refund-1");
+        return captor.getValue();
     }
 
     @Test
-    void reverse_is_idempotent_on_order_refund_key() {
-        when(accrualRepository.existsReversalFor("order-1", "refund-1")).thenReturn(true);
+    void reverse_fullyRefunded_negates_each_accrual_to_exactly_zero() {
+        when(accrualRepository.findAccrualsByOrderId("order-1")).thenReturn(List.of(
+                new CommissionAccrual("a1", "tenantA", "order-1", "pay-1", "seller-1",
+                        AccrualType.ACCRUAL, 30_000L, 1000, 3_000L, 27_000L, NOW)));
+        when(accrualRepository.findReversalsByOrderId("order-1")).thenReturn(List.of());
 
-        service.reverse(new ReversePaymentCommand("order-1", "refund-1", NOW));
+        // refundAmount == accruedGross, fullyRefunded == true
+        service.reverse(new ReversePaymentCommand("order-1", "refund-1", 30_000L, true, NOW));
 
-        verify(accrualRepository, never()).findAccrualsByOrderId(anyString());
-        verify(accrualRepository, never()).appendAll(any());
+        List<CommissionAccrual> reversals = captureAppended();
+        assertThat(reversals).hasSize(1);
+        CommissionAccrual rev = reversals.get(0);
+        assertThat(rev.type()).isEqualTo(AccrualType.REVERSAL);
+        assertThat(rev.grossMinor()).isEqualTo(-30_000L);
+        assertThat(rev.commissionMinor()).isEqualTo(-3_000L);
+        assertThat(rev.sellerNetMinor()).isEqualTo(-27_000L);
+        assertThat(rev.paymentId()).isEqualTo("refund-1");
+        assertThat(rev.reversesAccrualId()).isEqualTo("a1");
+        // each accrual nets to exactly zero per field
+        assertThat(30_000L + rev.grossMinor()).isZero();
+        assertThat(3_000L + rev.commissionMinor()).isZero();
+        assertThat(27_000L + rev.sellerNetMinor()).isZero();
+    }
+
+    @Test
+    void reverse_single_partial_reverses_half_per_line_with_split_invariant() {
+        // accruedGross = 40000, refundAmount = 20000 → fraction 1/2
+        when(accrualRepository.findAccrualsByOrderId("order-1")).thenReturn(List.of(
+                new CommissionAccrual("a1", "tenantA", "order-1", "pay-1", "seller-1",
+                        AccrualType.ACCRUAL, 30_000L, 1000, 3_000L, 27_000L, NOW),
+                new CommissionAccrual("a2", "tenantA", "order-1", "pay-1", "seller-2",
+                        AccrualType.ACCRUAL, 10_000L, 1000, 1_000L, 9_000L, NOW)));
+        when(accrualRepository.findReversalsByOrderId("order-1")).thenReturn(List.of());
+
+        service.reverse(new ReversePaymentCommand("order-1", "refund-1", 20_000L, false, NOW));
+
+        List<CommissionAccrual> reversals = captureAppended();
+        assertThat(reversals).hasSize(2);
+        // a1: portion = round(30000 × 20000 / 40000) = 15000 → split @1000bps = (1500, 13500)
+        CommissionAccrual r1 = reversals.stream().filter(r -> "a1".equals(r.reversesAccrualId()))
+                .findFirst().orElseThrow();
+        assertThat(r1.grossMinor()).isEqualTo(-15_000L);
+        assertThat(r1.commissionMinor()).isEqualTo(-1_500L);
+        assertThat(r1.sellerNetMinor()).isEqualTo(-13_500L);
+        // a2: portion = round(10000 × 20000 / 40000) = 5000 → split @1000bps = (500, 4500)
+        CommissionAccrual r2 = reversals.stream().filter(r -> "a2".equals(r.reversesAccrualId()))
+                .findFirst().orElseThrow();
+        assertThat(r2.grossMinor()).isEqualTo(-5_000L);
+        assertThat(r2.commissionMinor()).isEqualTo(-500L);
+        assertThat(r2.sellerNetMinor()).isEqualTo(-4_500L);
+        // AC-5: per-row split invariant commission + sellerNet == gross on every reversal row.
+        assertThat(reversals).allSatisfy(r ->
+                assertThat(r.commissionMinor() + r.sellerNetMinor()).isEqualTo(r.grossMinor()));
+    }
+
+    @Test
+    void reverse_two_partials_summing_to_full_net_exactly_zero_with_rounding_residue() {
+        // gross 30001 @ 1500bps → commission = round(30001 × 1500 / 10000) = round(4500.15) = 4500,
+        // sellerNet = 25501. accruedGross = 30001.
+        CommissionAccrual a1 = new CommissionAccrual("a1", "tenantA", "order-1", "pay-1", "seller-1",
+                AccrualType.ACCRUAL, 30_001L, 1500, 4_500L, 25_501L, NOW);
+        when(accrualRepository.findAccrualsByOrderId("order-1")).thenReturn(List.of(a1));
+        when(accrualRepository.findReversalsByOrderId("order-1")).thenReturn(List.of());
+
+        // 1st partial: refund 10000 (≈1/3). portion = round(30001 × 10000 / 30001) = 10000
+        // → split @1500bps: commission = round(10000 × 1500/10000) = 1500, sellerNet = 8500.
+        service.reverse(new ReversePaymentCommand("order-1", "refund-1", 10_000L, false, NOW));
+        List<CommissionAccrual> firstReversals = captureAppended();
+        assertThat(firstReversals).hasSize(1);
+        CommissionAccrual r1 = firstReversals.get(0);
+        assertThat(r1.grossMinor()).isEqualTo(-10_000L);
+        assertThat(r1.commissionMinor()).isEqualTo(-1_500L);
+        assertThat(r1.sellerNetMinor()).isEqualTo(-8_500L);
+
+        // 2nd refund closes the payment out: fullyRefunded = true. The repo now returns
+        // the 1st partial's reversal row, so the exact-remaining reversal absorbs the drift.
+        org.mockito.Mockito.reset(accrualRepository);
+        when(accrualRepository.findAccrualsByOrderId("order-1")).thenReturn(List.of(a1));
+        when(accrualRepository.findReversalsByOrderId("order-1")).thenReturn(List.of(r1));
+
+        service.reverse(new ReversePaymentCommand("order-1", "refund-2", 20_001L, true, NOW));
+        List<CommissionAccrual> secondReversals = captureAppended();
+        assertThat(secondReversals).hasSize(1);
+        CommissionAccrual r2 = secondReversals.get(0);
+        // exact remaining: gross 30001 − 10000 = 20001; commission 4500 − 1500 = 3000; net 25501 − 8500 = 17001
+        assertThat(r2.grossMinor()).isEqualTo(-20_001L);
+        assertThat(r2.commissionMinor()).isEqualTo(-3_000L);
+        assertThat(r2.sellerNetMinor()).isEqualTo(-17_001L);
+
+        // AC-6: after both refunds the accrual nets to EXACTLY zero per field.
+        assertThat(a1.grossMinor() + r1.grossMinor() + r2.grossMinor()).isZero();
+        assertThat(a1.commissionMinor() + r1.commissionMinor() + r2.commissionMinor()).isZero();
+        assertThat(a1.sellerNetMinor() + r1.sellerNetMinor() + r2.sellerNetMinor()).isZero();
     }
 
     @Test
     void reverse_is_noop_when_no_accruals_exist() {
-        when(accrualRepository.existsReversalFor("order-1", "refund-1")).thenReturn(false);
         when(accrualRepository.findAccrualsByOrderId("order-1")).thenReturn(List.of());
 
-        service.reverse(new ReversePaymentCommand("order-1", "refund-1", NOW));
+        service.reverse(new ReversePaymentCommand("order-1", "refund-1", 30_000L, true, NOW));
+
+        verify(accrualRepository, never()).appendAll(any());
+    }
+
+    @Test
+    void reverse_is_noop_when_a_legacy_full_reversal_without_parent_link_exists() {
+        // A pre-BE-425 REVERSAL row carries no reverses_accrual_id (it reversed the whole order
+        // under the old full-only semantics). The order is already settled — proportional clawback
+        // must NOT reverse it a second time.
+        when(accrualRepository.findAccrualsByOrderId("order-1")).thenReturn(List.of(
+                new CommissionAccrual("a1", "tenantA", "order-1", "pay-1", "seller-1",
+                        AccrualType.ACCRUAL, 30_000L, 1000, 3_000L, 27_000L, NOW)));
+        CommissionAccrual legacyReversal = new CommissionAccrual("rLegacy", "tenantA", "order-1",
+                "refund-old", "seller-1", AccrualType.REVERSAL, -30_000L, 1000, -3_000L, -27_000L, NOW);
+        when(accrualRepository.findReversalsByOrderId("order-1")).thenReturn(List.of(legacyReversal));
+
+        service.reverse(new ReversePaymentCommand("order-1", "refund-1", 30_000L, true, NOW));
 
         verify(accrualRepository, never()).appendAll(any());
     }

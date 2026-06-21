@@ -1,6 +1,8 @@
 package com.example.payment.application.service;
 
 import com.example.payment.application.event.PaymentRefundedEvent;
+import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
+import com.example.payment.domain.exception.PaymentNotFoundException;
 import com.example.payment.application.port.out.PaymentEventPublisher;
 import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
@@ -38,6 +40,9 @@ public class PaymentRefundService {
             return;
         }
 
+        // The full path refunds the remaining refundable (closes the payment out).
+        long thisRefund = payment.getRemainingRefundable();
+
         if (payment.getPaymentKey() != null) {
             // Adapter throws PgConfirmFailedException on 4xx and
             // PgGatewayUnavailableException on 5xx-exhaustion / circuit open
@@ -54,8 +59,43 @@ public class PaymentRefundService {
         paymentRepository.save(payment);
         paymentMetricRecorder.incrementPaymentRefunded();
 
-        paymentEventPublisher.publishPaymentRefunded(PaymentRefundedEvent.from(payment));
+        paymentEventPublisher.publishPaymentRefunded(PaymentRefundedEvent.from(payment, thisRefund));
 
         log.info("Payment refunded: paymentId={}, orderId={}", payment.getPaymentId(), orderId);
+    }
+
+    /**
+     * Partial (or full) refund of {@code amount} minor units for one payment (the HTTP
+     * path). The caller must be the payment owner. Validates the amount against the
+     * remaining refundable (domain {@code refund(amount)} rejects over-refund), cancels
+     * the amount at the PG, accumulates {@code refundedAmount}, and publishes a
+     * {@code PaymentRefunded} carrying this refund's amount + cumulative + fully-refunded.
+     *
+     * @return the refreshed payment after the refund.
+     */
+    @Transactional
+    public Payment refundPayment(String paymentId, String requesterUserId, long amount) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new PaymentNotFoundException(paymentId));
+        if (!payment.isOwnedBy(requesterUserId)) {
+            throw new UnauthorizedPaymentAccessException();
+        }
+
+        // Domain validates: 0 < amount ≤ remaining, status COMPLETED|PARTIALLY_REFUNDED.
+        payment.refund(amount);
+
+        if (payment.getPaymentKey() != null) {
+            paymentGateway.cancelPayment(payment.getPaymentKey(), "Partial refund", amount);
+        } else {
+            log.info("No paymentKey for paymentId={}, skipping PG partial cancel", paymentId);
+        }
+
+        paymentRepository.save(payment);
+        paymentMetricRecorder.incrementPaymentRefunded();
+        paymentEventPublisher.publishPaymentRefunded(PaymentRefundedEvent.from(payment, amount));
+
+        log.info("Payment partially refunded: paymentId={}, amount={}, totalRefunded={}, fullyRefunded={}",
+                paymentId, amount, payment.getRefundedAmount(), payment.isFullyRefunded());
+        return payment;
     }
 }

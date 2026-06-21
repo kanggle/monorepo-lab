@@ -35,6 +35,9 @@ class PaymentJpaEntity {
     @Column(name = "amount", nullable = false)
     private long amount;
 
+    @Column(name = "refunded_amount", nullable = false)
+    private long refundedAmount;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private PaymentStatus status;
@@ -64,6 +67,7 @@ class PaymentJpaEntity {
         entity.userId = payment.getUserId();
         entity.tenantId = payment.getTenantId();
         entity.amount = payment.getAmount();
+        entity.refundedAmount = payment.getRefundedAmount();
         entity.status = payment.getStatus();
         entity.createdAt = payment.getCreatedAt();
         entity.paidAt = payment.getPaidAt();

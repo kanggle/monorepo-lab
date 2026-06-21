@@ -25,14 +25,15 @@ public interface CommissionAccrualRepository {
      */
     boolean existsAccrualFor(String orderId, String paymentId);
 
-    /**
-     * {@code true} when a REVERSAL already exists for {@code (orderId, refundPaymentId)} —
-     * guards double-reversal (AC-6).
-     */
-    boolean existsReversalFor(String orderId, String refundPaymentId);
-
     /** Loads the ACCRUAL rows of an order (to negate them on refund). */
     List<CommissionAccrual> findAccrualsByOrderId(String orderId);
+
+    /**
+     * Loads the existing REVERSAL rows of an order (each carries {@code reversesAccrualId}).
+     * Proportional clawback uses these to compute per-accrual cumulative reversed across
+     * multiple partial refunds.
+     */
+    List<CommissionAccrual> findReversalsByOrderId(String orderId);
 
     /**
      * Operator-plane accrual listing for the current tenant + (optional) seller

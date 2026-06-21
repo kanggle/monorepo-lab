@@ -48,7 +48,7 @@
 | REST | `POST /api/admin/settlements/periods/{periodId}/payouts/execute` | JWT + ROLE_ADMIN | Execute simulated payouts (PENDING→PAID\|FAILED) |
 | Kafka consume | `order.order.placed` | — | Line snapshot for future accrual |
 | Kafka consume | `payment.payment.completed` | — | Accrual trigger (money captured) |
-| Kafka consume | `payment.payment.refunded` | — | Full reversal of order's accruals |
+| Kafka consume | `payment.payment.refunded` | — | Proportional reversal of order's accruals (full or partial refund) |
 | Kafka publish | `settlement.period.closed` | — | `settlement.period.closed.v1` on period close (transactional outbox) |
 
 자세한 spec 은 [`../../contracts/http/settlement-api.md`](../../contracts/http/settlement-api.md) + [`../../contracts/events/settlement-subscriptions.md`](../../contracts/events/settlement-subscriptions.md) 참조.
@@ -93,6 +93,5 @@
 - `settlement.commission.accrued.v1` — deferred (only `settlement.period.closed.v1`
   is emitted this increment).
 - Period reopen — the state machine is OPEN→CLOSED with no reopen.
-- Partial / proportional refund clawback — v1 treats every refund as a full reversal.
 - Multi-currency — KRW-only in v1 (matching order/payment).
 - Tiered / category-based commission — flat per-seller rate only.

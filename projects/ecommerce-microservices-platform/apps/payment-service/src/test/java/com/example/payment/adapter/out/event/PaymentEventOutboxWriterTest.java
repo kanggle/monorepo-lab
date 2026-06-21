@@ -63,7 +63,7 @@ class PaymentEventOutboxWriterTest {
                 Instant.parse("2026-03-25T01:00:00Z").toString(),
                 "payment-service",
                 "ecommerce",
-                new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 30000L,
+                new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 30000L, 30000L, true,
                         Instant.parse("2026-03-25T01:00:00Z").toString())
         );
 

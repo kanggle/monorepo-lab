@@ -2,6 +2,8 @@ package com.example.payment.application.service;
 
 import com.example.payment.application.event.PaymentRefundedEvent;
 import com.example.payment.application.exception.PgGatewayUnavailableException;
+import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
+import com.example.payment.domain.exception.PaymentNotFoundException;
 import com.example.payment.application.port.out.PaymentEventPublisher;
 import com.example.payment.application.port.out.PaymentGatewayPort;
 import com.example.payment.application.port.out.PaymentMetricRecorder;
@@ -21,6 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
@@ -51,7 +54,7 @@ class PaymentRefundServiceTest {
 
     private Payment completedPaymentWithPgKey() {
         return Payment.reconstitute(
-                "pay-1", "order-1", "user-1", "ecommerce", 30000L,
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
                 PaymentStatus.COMPLETED,
                 LocalDateTime.now(), LocalDateTime.now(), null,
                 "pk_test_123", "CARD", null
@@ -60,7 +63,7 @@ class PaymentRefundServiceTest {
 
     private Payment completedPaymentWithoutPgKey() {
         return Payment.reconstitute(
-                "pay-1", "order-1", "user-1", "ecommerce", 30000L,
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
                 PaymentStatus.COMPLETED,
                 LocalDateTime.now(), LocalDateTime.now(), null,
                 null, null, null
@@ -143,5 +146,75 @@ class PaymentRefundServiceTest {
         verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
         verify(paymentMetricRecorder, never()).incrementPaymentRefunded();
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+    }
+
+    // ── HTTP partial-refund path: refundPayment(paymentId, user, amount) ──────
+
+    @Test
+    @DisplayName("부분 환불 성공 시 PG에 cancelAmount를 전달하고 이벤트에 이번 환불액/누적/부분여부가 실린다")
+    void refundPaymentByAmount_partial_publishesEventWithThisRefundAndCumulative() {
+        Payment payment = completedPaymentWithPgKey(); // amount 30000
+        given(paymentRepository.findById("pay-1")).willReturn(Optional.of(payment));
+        given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        Payment result = paymentRefundService.refundPayment("pay-1", "user-1", 10000L);
+
+        // PG partial cancel invoked with the 3-arg (key, reason, amount) overload.
+        verify(paymentGateway).cancelPayment("pk_test_123", "Partial refund", 10000L);
+
+        assertThat(result.getStatus()).isEqualTo(PaymentStatus.PARTIALLY_REFUNDED);
+        assertThat(result.getRefundedAmount()).isEqualTo(10000L);
+
+        ArgumentCaptor<PaymentRefundedEvent> eventCaptor = ArgumentCaptor.forClass(PaymentRefundedEvent.class);
+        verify(paymentEventPublisher).publishPaymentRefunded(eventCaptor.capture());
+        PaymentRefundedEvent.Payload p = eventCaptor.getValue().payload();
+        assertThat(p.amount()).isEqualTo(10000L);        // THIS refund's amount
+        assertThat(p.totalRefunded()).isEqualTo(10000L); // cumulative
+        assertThat(p.fullyRefunded()).isFalse();
+        verify(paymentMetricRecorder).incrementPaymentRefunded();
+    }
+
+    @Test
+    @DisplayName("부분 환불이 잔여 전액과 같으면 이벤트의 fullyRefunded가 true가 된다")
+    void refundPaymentByAmount_closesOut_eventFullyRefundedTrue() {
+        Payment payment = completedPaymentWithPgKey(); // amount 30000
+        given(paymentRepository.findById("pay-1")).willReturn(Optional.of(payment));
+        given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        paymentRefundService.refundPayment("pay-1", "user-1", 30000L);
+
+        ArgumentCaptor<PaymentRefundedEvent> eventCaptor = ArgumentCaptor.forClass(PaymentRefundedEvent.class);
+        verify(paymentEventPublisher).publishPaymentRefunded(eventCaptor.capture());
+        PaymentRefundedEvent.Payload p = eventCaptor.getValue().payload();
+        assertThat(p.amount()).isEqualTo(30000L);
+        assertThat(p.totalRefunded()).isEqualTo(30000L);
+        assertThat(p.fullyRefunded()).isTrue();
+    }
+
+    @Test
+    @DisplayName("소유자가 아니면 UnauthorizedPaymentAccessException 발생, 환불/이벤트 없음")
+    void refundPaymentByAmount_nonOwner_throwsUnauthorized() {
+        Payment payment = completedPaymentWithPgKey();
+        given(paymentRepository.findById("pay-1")).willReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> paymentRefundService.refundPayment("pay-1", "attacker", 10000L))
+                .isInstanceOf(UnauthorizedPaymentAccessException.class);
+
+        verify(paymentGateway, never()).cancelPayment(any(), any(), anyLong());
+        verify(paymentRepository, never()).save(any());
+        verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 paymentId이면 PaymentNotFoundException 발생")
+    void refundPaymentByAmount_unknownId_throwsPaymentNotFound() {
+        given(paymentRepository.findById("missing")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> paymentRefundService.refundPayment("missing", "user-1", 10000L))
+                .isInstanceOf(PaymentNotFoundException.class);
+
+        verify(paymentRepository, never()).save(any());
+        verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
     }
 }

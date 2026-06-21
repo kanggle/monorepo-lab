@@ -59,10 +59,15 @@ public class CommissionAccrualJpaEntity {
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 
+    /** For REVERSAL rows, the parent ACCRUAL's id (per-accrual cumulative reversal). Null on ACCRUAL rows. */
+    @Column(name = "reverses_accrual_id")
+    private String reversesAccrualId;
+
     static CommissionAccrualJpaEntity of(String accrualId, String tenantId, String orderId,
                                          String paymentId, String sellerId, AccrualType type,
                                          long grossMinor, int rateBps, long commissionMinor,
-                                         long sellerNetMinor, Instant occurredAt) {
+                                         long sellerNetMinor, Instant occurredAt,
+                                         String reversesAccrualId) {
         CommissionAccrualJpaEntity e = new CommissionAccrualJpaEntity();
         e.accrualId = accrualId;
         e.tenantId = tenantId;
@@ -75,6 +80,7 @@ public class CommissionAccrualJpaEntity {
         e.commissionMinor = commissionMinor;
         e.sellerNetMinor = sellerNetMinor;
         e.occurredAt = occurredAt;
+        e.reversesAccrualId = reversesAccrualId;
         return e;
     }
 }

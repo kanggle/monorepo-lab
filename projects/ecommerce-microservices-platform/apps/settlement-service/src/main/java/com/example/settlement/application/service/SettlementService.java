@@ -14,8 +14,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Orchestrates the three settlement use-cases consumed from the order/payment event
@@ -29,8 +33,10 @@ import java.util.List;
  *       by its seller's effective rate, append ACCRUAL rows. Idempotent on
  *       {@code (orderId, paymentId)}; missing snapshot → {@link SnapshotNotFoundException}
  *       (F2).</li>
- *   <li><b>reverse</b> ({@code PaymentRefunded}) — negate the order's accruals to
- *       net-zero, append REVERSAL rows. Idempotent on {@code (orderId, refundPaymentId)}.</li>
+ *   <li><b>reverse</b> ({@code PaymentRefunded}) — proportionally claw back commission for a
+ *       (partial or full) refund, appending REVERSAL rows linked to their parent accruals.
+ *       Idempotent on the envelope {@code event_id} (the consumer dedupe) — a payment may emit
+ *       several partial refunds.</li>
  * </ul>
  */
 @Slf4j
@@ -80,20 +86,19 @@ public class SettlementService {
     }
 
     /**
-     * Reverses an order's accruals on refund (v1 = full). Loads the order's ACCRUAL
-     * rows and appends a negating REVERSAL per row → seller balance + platform
-     * commission return to their pre-order values (AC-5). Idempotent on
-     * {@code (orderId, refundPaymentId)} (AC-6). No accruals (cancel-before-capture,
-     * or already reversed) → no-op.
+     * Proportionally claws back an order's commission on a (partial or full) refund.
+     * For each ACCRUAL row, reverses {@code round(orig_gross × refundAmount / accruedGross)}
+     * of the gross — re-split via {@link CommissionPolicy} and negated so every REVERSAL
+     * row independently satisfies {@code commission + seller_net == gross} — clamped to the
+     * row's remaining un-reversed gross (cumulative cap). On the final refund
+     * ({@code cmd.fullyRefunded()}) it reverses the <b>exact remaining</b> per field so the
+     * order nets to exactly zero per seller, absorbing any partial-rounding drift.
+     *
+     * <p>Idempotency is the consumer's {@code event_id} dedupe — a payment may emit several
+     * partial refunds, each a distinct event. No accruals (cancel-before-capture) → no-op.
      */
     @Transactional
     public void reverse(ReversePaymentCommand cmd) {
-        if (accrualRepository.existsReversalFor(cmd.orderId(), cmd.paymentId())) {
-            log.debug("Reversal already booked for orderId={}, refundPaymentId={} — skipping",
-                    cmd.orderId(), cmd.paymentId());
-            return;
-        }
-
         List<CommissionAccrual> accruals = accrualRepository.findAccrualsByOrderId(cmd.orderId());
         if (accruals.isEmpty()) {
             log.info("No accruals to reverse for orderId={} (refundPaymentId={})",
@@ -101,11 +106,79 @@ public class SettlementService {
             return;
         }
 
-        List<CommissionAccrual> reversals = accruals.stream()
-                .map(a -> a.toReversal(cmd.paymentId(), cmd.occurredAt()))
-                .toList();
+        // Per-accrual cumulative already-reversed (positive magnitudes), keyed by parent accrualId.
+        List<CommissionAccrual> existingReversals = accrualRepository.findReversalsByOrderId(cmd.orderId());
+        // Legacy guard: a pre-BE-425 REVERSAL row has no reverses_accrual_id (it reversed the
+        // whole order under the old full-only semantics). Such a row is unattributable to a single
+        // accrual, so per-accrual already-reversed cannot be computed — and the order was already
+        // fully reversed. Treating it as 0 would let a (hypothetical) new refund reverse the order a
+        // SECOND time. This path is shielded upstream (the payment is REFUNDED → the domain rejects
+        // any further refund; a Kafka replay carries the same event_id → deduped), but guard
+        // explicitly: any legacy null-parent reversal ⇒ the order is already settled, no-op.
+        if (existingReversals.stream().anyMatch(r -> r.reversesAccrualId() == null)) {
+            log.info("Order orderId={} has legacy full-reversal rows (no parent link) — already "
+                    + "reversed; skipping proportional clawback (refundPaymentId={})",
+                    cmd.orderId(), cmd.paymentId());
+            return;
+        }
+        Map<String, long[]> reversedByAccrual = new HashMap<>(); // [gross, commission, sellerNet]
+        for (CommissionAccrual r : existingReversals) {
+            long[] acc = reversedByAccrual.computeIfAbsent(r.reversesAccrualId(), k -> new long[3]);
+            acc[0] += -r.grossMinor();        // reversal amounts are negative — negate to magnitude
+            acc[1] += -r.commissionMinor();
+            acc[2] += -r.sellerNetMinor();
+        }
+
+        long accruedGross = accruals.stream().mapToLong(CommissionAccrual::grossMinor).sum();
+        if (accruedGross <= 0) {
+            log.info("Order accrued gross is non-positive for orderId={} — nothing to reverse", cmd.orderId());
+            return;
+        }
+
+        List<CommissionAccrual> reversals = new ArrayList<>(accruals.size());
+        for (CommissionAccrual a : accruals) {
+            long[] already = reversedByAccrual.getOrDefault(a.accrualId(), new long[3]);
+            long remainingGross = a.grossMinor() - already[0];
+            if (remainingGross <= 0) {
+                continue; // this accrual is already fully reversed
+            }
+
+            CommissionSplit reverseSplit;
+            if (cmd.fullyRefunded()) {
+                // Reverse the exact remaining per field → per-row (and per-seller) exact zero.
+                long remCommission = a.commissionMinor() - already[1];
+                long remSellerNet = a.sellerNetMinor() - already[2];
+                reverseSplit = new CommissionSplit(-remainingGross, a.rateBps(), -remCommission, -remSellerNet);
+            } else {
+                long portion = Math.min(proportionalGross(a.grossMinor(), cmd.refundAmount(), accruedGross),
+                        remainingGross); // cumulative cap
+                if (portion <= 0) {
+                    continue;
+                }
+                reverseSplit = CommissionPolicy.split(portion, a.rateBps()).negated();
+            }
+            reversals.add(a.toReversal(cmd.paymentId(), cmd.occurredAt(), reverseSplit));
+        }
+
+        if (reversals.isEmpty()) {
+            log.info("Proportional reversal produced no rows for orderId={} (refundAmount={}, fully={})",
+                    cmd.orderId(), cmd.refundAmount(), cmd.fullyRefunded());
+            return;
+        }
         accrualRepository.appendAll(reversals);
-        log.info("Reversed {} accrual line(s) for orderId={}, refundPaymentId={}",
-                reversals.size(), cmd.orderId(), cmd.paymentId());
+        log.info("Reversed {} accrual line(s) for orderId={}, refundPaymentId={} (refundAmount={}, fully={})",
+                reversals.size(), cmd.orderId(), cmd.paymentId(), cmd.refundAmount(), cmd.fullyRefunded());
+    }
+
+    /**
+     * {@code round(grossMinor × refundAmount / accruedGross)} (HALF_UP) via BigDecimal — the
+     * same rounding vehicle as {@link CommissionPolicy} — to avoid {@code long} overflow on the
+     * intermediate product and keep money exact.
+     */
+    private static long proportionalGross(long grossMinor, long refundAmount, long accruedGross) {
+        return BigDecimal.valueOf(grossMinor)
+                .multiply(BigDecimal.valueOf(refundAmount))
+                .divide(BigDecimal.valueOf(accruedGross), 0, RoundingMode.HALF_UP)
+                .longValueExact();
     }
 }

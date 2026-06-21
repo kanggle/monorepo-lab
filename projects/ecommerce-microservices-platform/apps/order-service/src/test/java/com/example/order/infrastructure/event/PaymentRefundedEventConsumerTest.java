@@ -36,14 +36,20 @@ class PaymentRefundedEventConsumerTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    /** Full-refund event (fullyRefunded = true) — the default for the existing cases. */
     private PaymentRefundedEvent event(String orderId, String refundedAt) {
+        return event(orderId, refundedAt, 50000L, 50000L, true);
+    }
+
+    private PaymentRefundedEvent event(String orderId, String refundedAt,
+                                       long amount, long totalRefunded, Boolean fullyRefunded) {
         return new PaymentRefundedEvent(
                 UUID.randomUUID().toString(),
                 "PaymentRefunded",
                 "2026-03-24T00:00:00Z",
                 "payment-service",
                 new PaymentRefundedEvent.PaymentRefundedPayload(
-                        "pay-123", orderId, "user-1", 50000L, refundedAt
+                        "pay-123", orderId, "user-1", amount, totalRefunded, fullyRefunded, refundedAt
                 )
         );
     }
@@ -68,6 +74,30 @@ class PaymentRefundedEventConsumerTest {
                 eq("order-123"),
                 eq(Instant.parse("2026-03-24T23:30:00Z"))
         );
+    }
+
+    @Test
+    @DisplayName("fullyRefunded=true 이면 markRefunded를 호출한다 (전액 환불)")
+    void handle_fullyRefundedTrue_callsMarkRefunded() {
+        consumer.handle(event("order-123", "2026-03-24T12:00:00Z", 50000L, 50000L, true));
+
+        verify(paymentRefundConfirmationService).markRefunded(eq("order-123"), any());
+    }
+
+    @Test
+    @DisplayName("fullyRefunded=false 이면 markRefunded를 호출하지 않는다 (부분 환불 — 주문 상태 무변경)")
+    void handle_fullyRefundedFalse_doesNotCallMarkRefunded() {
+        consumer.handle(event("order-123", "2026-03-24T12:00:00Z", 10000L, 10000L, false));
+
+        verify(paymentRefundConfirmationService, never()).markRefunded(any(), any());
+    }
+
+    @Test
+    @DisplayName("fullyRefunded=null (레거시) 이면 markRefunded를 호출한다 (전액 환불로 간주)")
+    void handle_fullyRefundedNull_legacy_callsMarkRefunded() {
+        consumer.handle(event("order-123", "2026-03-24T12:00:00Z", 50000L, 50000L, null));
+
+        verify(paymentRefundConfirmationService).markRefunded(eq("order-123"), any());
     }
 
     @Test

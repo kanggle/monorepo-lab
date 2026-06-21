@@ -88,7 +88,7 @@ class SettlementConsumersTest {
         when(processedEventStore.isDuplicate("evt-2", "PaymentCompleted")).thenReturn(false);
 
         consumer.handle(new PaymentEvent("evt-2", "PaymentCompleted",
-                new PaymentEvent.Payload("order-1", "pay-1", "2026-06-13T00:00:00Z", null)));
+                new PaymentEvent.Payload("order-1", "pay-1", 30_000L, null, "2026-06-13T00:00:00Z", null)));
 
         ArgumentCaptor<AccruePaymentCommand> captor = ArgumentCaptor.forClass(AccruePaymentCommand.class);
         verify(settlementService).accrue(captor.capture());
@@ -102,7 +102,7 @@ class SettlementConsumersTest {
         when(processedEventStore.isDuplicate("evt-2", "PaymentCompleted")).thenReturn(true);
 
         consumer.handle(new PaymentEvent("evt-2", "PaymentCompleted",
-                new PaymentEvent.Payload("order-1", "pay-1", null, null)));
+                new PaymentEvent.Payload("order-1", "pay-1", 0L, null, null, null)));
 
         verify(settlementService, never()).accrue(any());
     }
@@ -113,7 +113,7 @@ class SettlementConsumersTest {
         when(processedEventStore.isDuplicate(anyString(), anyString())).thenReturn(false);
 
         consumer.handle(new PaymentEvent("evt-2", "PaymentCompleted",
-                new PaymentEvent.Payload(null, "pay-1", null, null)));
+                new PaymentEvent.Payload(null, "pay-1", 0L, null, null, null)));
 
         verify(settlementService, never()).accrue(any());
     }
@@ -121,17 +121,47 @@ class SettlementConsumersTest {
     // ── PaymentRefunded ────────────────────────────────────────────────────
 
     @Test
-    void paymentRefunded_reverses() {
+    void paymentRefunded_partial_propagates_amount_and_fullyRefunded_false() {
         var consumer = new PaymentRefundedReversalConsumer(settlementService, processedEventStore, objectMapper);
         when(processedEventStore.isDuplicate("evt-3", "PaymentRefunded")).thenReturn(false);
 
         consumer.handle(new PaymentEvent("evt-3", "PaymentRefunded",
-                new PaymentEvent.Payload("order-1", "refund-1", null, "2026-06-13T01:00:00Z")));
+                new PaymentEvent.Payload("order-1", "refund-1", 12_000L, false, null, "2026-06-13T01:00:00Z")));
 
         ArgumentCaptor<ReversePaymentCommand> captor = ArgumentCaptor.forClass(ReversePaymentCommand.class);
         verify(settlementService).reverse(captor.capture());
         assertThat(captor.getValue().orderId()).isEqualTo("order-1");
         assertThat(captor.getValue().paymentId()).isEqualTo("refund-1");
+        // refundAmount + fullyRefunded must flow through from the event payload.
+        assertThat(captor.getValue().refundAmount()).isEqualTo(12_000L);
+        assertThat(captor.getValue().fullyRefunded()).isFalse();
+    }
+
+    @Test
+    void paymentRefunded_full_propagates_fullyRefunded_true() {
+        var consumer = new PaymentRefundedReversalConsumer(settlementService, processedEventStore, objectMapper);
+        when(processedEventStore.isDuplicate("evt-4", "PaymentRefunded")).thenReturn(false);
+
+        consumer.handle(new PaymentEvent("evt-4", "PaymentRefunded",
+                new PaymentEvent.Payload("order-1", "refund-1", 30_000L, true, null, "2026-06-13T01:00:00Z")));
+
+        ArgumentCaptor<ReversePaymentCommand> captor = ArgumentCaptor.forClass(ReversePaymentCommand.class);
+        verify(settlementService).reverse(captor.capture());
+        assertThat(captor.getValue().refundAmount()).isEqualTo(30_000L);
+        assertThat(captor.getValue().fullyRefunded()).isTrue();
+    }
+
+    @Test
+    void paymentRefunded_legacy_null_fullyRefunded_treated_as_full() {
+        var consumer = new PaymentRefundedReversalConsumer(settlementService, processedEventStore, objectMapper);
+        when(processedEventStore.isDuplicate("evt-5", "PaymentRefunded")).thenReturn(false);
+
+        consumer.handle(new PaymentEvent("evt-5", "PaymentRefunded",
+                new PaymentEvent.Payload("order-1", "refund-1", 30_000L, null, null, "2026-06-13T01:00:00Z")));
+
+        ArgumentCaptor<ReversePaymentCommand> captor = ArgumentCaptor.forClass(ReversePaymentCommand.class);
+        verify(settlementService).reverse(captor.capture());
+        assertThat(captor.getValue().fullyRefunded()).isTrue();
     }
 
     @Test
@@ -140,7 +170,7 @@ class SettlementConsumersTest {
         when(processedEventStore.isDuplicate("evt-3", "PaymentRefunded")).thenReturn(true);
 
         consumer.handle(new PaymentEvent("evt-3", "PaymentRefunded",
-                new PaymentEvent.Payload("order-1", "refund-1", null, null)));
+                new PaymentEvent.Payload("order-1", "refund-1", 0L, null, null, null)));
 
         verify(settlementService, never()).reverse(any());
     }

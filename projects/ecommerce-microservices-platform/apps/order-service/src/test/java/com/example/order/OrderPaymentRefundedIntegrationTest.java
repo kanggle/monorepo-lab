@@ -79,6 +79,8 @@ class OrderPaymentRefundedIntegrationTest {
                         "orderId", orderId,
                         "userId", "user1",
                         "amount", 500000L,
+                        "totalRefunded", 500000L,
+                        "fullyRefunded", true,
                         "refundedAt", Instant.now().toString()
                 )
         ));

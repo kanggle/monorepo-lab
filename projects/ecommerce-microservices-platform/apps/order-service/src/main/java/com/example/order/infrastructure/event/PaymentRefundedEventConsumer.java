@@ -41,6 +41,17 @@ public class PaymentRefundedEventConsumer {
             return;
         }
 
+        // Partial refunds (fullyRefunded == false) do not change the order's status —
+        // the order is marked REFUNDED only when the payment is fully refunded. A legacy
+        // event without the flag (null) is treated as a full refund (back-compat).
+        Boolean fullyRefunded = event.payload().fullyRefunded();
+        boolean isFullRefund = (fullyRefunded == null) || fullyRefunded;
+        if (!isFullRefund) {
+            log.info("Partial PaymentRefunded for orderId={} — no order-status change (totalRefunded={})",
+                    event.payload().orderId(), event.payload().totalRefunded());
+            return;
+        }
+
         paymentRefundConfirmationService.markRefunded(
                 event.payload().orderId(), EventFieldParser.parseInstant(event.payload().refundedAt(), "refundedAt"));
     }
