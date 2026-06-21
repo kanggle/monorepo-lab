@@ -4,12 +4,15 @@ import com.example.payment.application.service.PaymentConfirmResult;
 import com.example.payment.application.service.PaymentConfirmService;
 import com.example.payment.application.service.PaymentProcessingService;
 import com.example.payment.application.service.PaymentQueryService;
+import com.example.payment.application.service.PaymentRefundService;
 import com.example.payment.domain.exception.InvalidPaymentException;
 import com.example.payment.domain.model.Payment;
 import com.example.payment.adapter.in.rest.dto.PaymentConfirmRequest;
 import com.example.payment.adapter.in.rest.dto.PaymentConfirmResponse;
 import com.example.payment.adapter.in.rest.dto.PaymentCreateRequest;
 import com.example.payment.adapter.in.rest.dto.PaymentDetailResponse;
+import com.example.payment.adapter.in.rest.dto.PaymentRefundRequest;
+import com.example.payment.adapter.in.rest.dto.PaymentRefundResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +28,7 @@ public class PaymentController {
     private final PaymentQueryService paymentQueryService;
     private final PaymentConfirmService paymentConfirmService;
     private final PaymentProcessingService paymentProcessingService;
+    private final PaymentRefundService paymentRefundService;
 
     @GetMapping("/orders/{orderId}")
     public ResponseEntity<PaymentDetailResponse> getPaymentByOrderId(
@@ -60,6 +64,17 @@ public class PaymentController {
                 userId, request.paymentKey(), request.orderId(), request.amount()
         );
         return ResponseEntity.ok(PaymentConfirmResponse.from(result));
+    }
+
+    @PostMapping("/{paymentId}/refund")
+    public ResponseEntity<PaymentRefundResponse> refundPayment(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @PathVariable String paymentId,
+            @Valid @RequestBody PaymentRefundRequest request
+    ) {
+        requireUserId(userId);
+        Payment payment = paymentRefundService.refundPayment(paymentId, userId, request.amount());
+        return ResponseEntity.ok(PaymentRefundResponse.from(payment));
     }
 
     private void requireUserId(String userId) {

@@ -45,15 +45,19 @@ public class CommissionAccrualRepositoryImpl implements CommissionAccrualReposit
     }
 
     @Override
-    public boolean existsReversalFor(String orderId, String refundPaymentId) {
-        return jpaRepository.existsByOrderIdAndPaymentIdAndType(orderId, refundPaymentId, AccrualType.REVERSAL);
-    }
-
-    @Override
     public List<CommissionAccrual> findAccrualsByOrderId(String orderId) {
         // Consume path: addressed by globally-unique orderId, tenant-agnostic (the
         // reversal must find the order's accruals regardless of ambient context).
         return jpaRepository.findByOrderIdAndType(orderId, AccrualType.ACCRUAL).stream()
+                .map(CommissionAccrualRepositoryImpl::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<CommissionAccrual> findReversalsByOrderId(String orderId) {
+        // The order's existing REVERSAL rows — each carries reverses_accrual_id, so the
+        // proportional clawback computes per-accrual cumulative reversed across partial refunds.
+        return jpaRepository.findByOrderIdAndType(orderId, AccrualType.REVERSAL).stream()
                 .map(CommissionAccrualRepositoryImpl::toDomain)
                 .toList();
     }
@@ -99,12 +103,12 @@ public class CommissionAccrualRepositoryImpl implements CommissionAccrualReposit
     private static CommissionAccrualJpaEntity toEntity(CommissionAccrual a) {
         return CommissionAccrualJpaEntity.of(a.accrualId(), a.tenantId(), a.orderId(), a.paymentId(),
                 a.sellerId(), a.type(), a.grossMinor(), a.rateBps(), a.commissionMinor(),
-                a.sellerNetMinor(), a.occurredAt());
+                a.sellerNetMinor(), a.occurredAt(), a.reversesAccrualId());
     }
 
     private static CommissionAccrual toDomain(CommissionAccrualJpaEntity e) {
         return new CommissionAccrual(e.getAccrualId(), e.getTenantId(), e.getOrderId(), e.getPaymentId(),
                 e.getSellerId(), e.getType(), e.getGrossMinor(), e.getRateBps(), e.getCommissionMinor(),
-                e.getSellerNetMinor(), e.getOccurredAt());
+                e.getSellerNetMinor(), e.getOccurredAt(), e.getReversesAccrualId());
     }
 }

@@ -4,9 +4,12 @@ import com.example.payment.application.service.PaymentConfirmResult;
 import com.example.payment.application.service.PaymentConfirmService;
 import com.example.payment.application.service.PaymentProcessingService;
 import com.example.payment.application.service.PaymentQueryService;
+import com.example.payment.application.service.PaymentRefundService;
 import com.example.payment.application.exception.UnauthorizedPaymentAccessException;
+import com.example.payment.domain.exception.InvalidPaymentException;
 import com.example.payment.domain.exception.PaymentNotFoundException;
 import com.example.payment.domain.model.Payment;
+import com.example.payment.domain.model.PaymentStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -44,6 +47,9 @@ class PaymentControllerTest {
 
     @MockitoBean
     private PaymentProcessingService paymentProcessingService;
+
+    @MockitoBean
+    private PaymentRefundService paymentRefundService;
 
     @Nested
     @DisplayName("GET /api/payments/orders/{orderId}")
@@ -237,6 +243,103 @@ class PaymentControllerTest {
                                     """))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/payments/{paymentId}/refund")
+    class RefundPayment {
+
+        private Payment partiallyRefundedPayment() {
+            return Payment.reconstitute(
+                    "pay-1", "order-1", "user-1", "ecommerce", 30000L, 10000L,
+                    PaymentStatus.PARTIALLY_REFUNDED,
+                    LocalDateTime.of(2026, 4, 6, 12, 0, 0),
+                    LocalDateTime.of(2026, 4, 6, 12, 0, 0),
+                    LocalDateTime.of(2026, 4, 6, 13, 0, 0),
+                    "pk_test_123", "CARD", null
+            );
+        }
+
+        @Test
+        @DisplayName("부분 환불 성공 시 200과 누적 환불액/상태를 반환한다")
+        void refund_partialSuccess_returns200() throws Exception {
+            given(paymentRefundService.refundPayment(eq("pay-1"), eq("user-1"), eq(10000L)))
+                    .willReturn(partiallyRefundedPayment());
+
+            mockMvc.perform(post("/api/payments/pay-1/refund")
+                            .header("X-User-Id", "user-1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"amount":10000}
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.paymentId").value("pay-1"))
+                    .andExpect(jsonPath("$.amount").value(30000))
+                    .andExpect(jsonPath("$.refundedAmount").value(10000))
+                    .andExpect(jsonPath("$.status").value("PARTIALLY_REFUNDED"));
+
+            verify(paymentRefundService).refundPayment("pay-1", "user-1", 10000L);
+        }
+
+        @Test
+        @DisplayName("초과 환불 시 400 / INVALID_PAYMENT_REQUEST 반환")
+        void refund_overRefund_returns400() throws Exception {
+            doThrow(new InvalidPaymentException("over-refund"))
+                    .when(paymentRefundService).refundPayment(eq("pay-1"), eq("user-1"), eq(40000L));
+
+            mockMvc.perform(post("/api/payments/pay-1/refund")
+                            .header("X-User-Id", "user-1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"amount":40000}
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_PAYMENT_REQUEST"));
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 paymentId이면 404 / PAYMENT_NOT_FOUND 반환")
+        void refund_notFound_returns404() throws Exception {
+            doThrow(new PaymentNotFoundException("missing"))
+                    .when(paymentRefundService).refundPayment(eq("missing"), eq("user-1"), eq(10000L));
+
+            mockMvc.perform(post("/api/payments/missing/refund")
+                            .header("X-User-Id", "user-1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"amount":10000}
+                                    """))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("PAYMENT_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("소유자가 아니면 403 / ACCESS_DENIED 반환")
+        void refund_nonOwner_returns403() throws Exception {
+            doThrow(new UnauthorizedPaymentAccessException())
+                    .when(paymentRefundService).refundPayment(eq("pay-1"), eq("attacker"), eq(10000L));
+
+            mockMvc.perform(post("/api/payments/pay-1/refund")
+                            .header("X-User-Id", "attacker")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"amount":10000}
+                                    """))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+
+        @Test
+        @DisplayName("X-User-Id 헤더 누락 시 400 / INVALID_PAYMENT_REQUEST 반환")
+        void refund_missingUserId_returns400() throws Exception {
+            mockMvc.perform(post("/api/payments/pay-1/refund")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"amount":10000}
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_PAYMENT_REQUEST"));
         }
     }
 }

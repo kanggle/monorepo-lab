@@ -190,4 +190,42 @@ public class TossPaymentsAdapter implements PaymentGatewayPort {
                 "cancel exhausted for paymentKey=" + paymentKey
                         + " (" + cause.getClass().getSimpleName() + ")", cause);
     }
+
+    @Override
+    @CircuitBreaker(name = CIRCUIT_NAME, fallbackMethod = "cancelAmountFallback")
+    @Retry(name = CIRCUIT_NAME)
+    @Bulkhead(name = CIRCUIT_NAME)
+    public void cancelPayment(String paymentKey, String cancelReason, long cancelAmount) {
+        log.info("Toss Payments partial cancel request: paymentKey={}, reason={}, cancelAmount={}",
+                paymentKey, cancelReason, cancelAmount);
+
+        Map<String, Object> body = Map.of("cancelReason", cancelReason, "cancelAmount", cancelAmount);
+
+        try {
+            restClient.post()
+                    .uri(CANCEL_PATH, paymentKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .toBodilessEntity();
+
+            log.info("Toss Payments partial cancel success: paymentKey={}, cancelAmount={}", paymentKey, cancelAmount);
+        } catch (HttpClientErrorException e) {
+            log.error("Toss Payments partial cancel 4xx: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw new PgConfirmFailedException("Cancel failed: status=" + e.getStatusCode() + ", body=" + e.getResponseBodyAsString(), e);
+        }
+    }
+
+    /** R4j fallback for the partial {@link #cancelPayment(String, String, long)}. */
+    @SuppressWarnings("unused")
+    public void cancelAmountFallback(String paymentKey, String cancelReason, long cancelAmount, Throwable cause) {
+        if (cause instanceof PgConfirmFailedException pce) {
+            throw pce;
+        }
+        log.warn("Toss Payments partial cancel fallback: paymentKey={}, cancelAmount={}, cause={}({})",
+                paymentKey, cancelAmount, cause.getClass().getSimpleName(), cause.getMessage());
+        throw new PgGatewayUnavailableException(
+                "partial cancel exhausted for paymentKey=" + paymentKey
+                        + " (" + cause.getClass().getSimpleName() + ")", cause);
+    }
 }

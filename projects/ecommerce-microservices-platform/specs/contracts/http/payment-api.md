@@ -122,6 +122,48 @@ Only the payment owner (userId matching X-User-Id) may access.
 
 ---
 
+### POST /api/payments/{paymentId}/refund
+Refund a payment, in full or in part. A partial refund returns the requested `amount`
+(must be `> 0` and `≤` the remaining refundable = captured `amount − totalRefunded`);
+repeated calls accumulate until the payment is fully refunded. Each call publishes a
+`PaymentRefunded` event (see `events/payment-events.md`). Only the payment owner
+(`userId` matching `X-User-Id`) may refund.
+
+**Request Headers**
+- `X-User-Id: string` (required)
+
+**Request Body**
+```json
+{
+  "amount": 10000
+}
+```
+
+**Response 200**
+```json
+{
+  "paymentId": "string (UUID)",
+  "orderId": "string (UUID)",
+  "userId": "string (UUID)",
+  "amount": 30000,
+  "refundedAmount": 10000,
+  "status": "PARTIALLY_REFUNDED",
+  "refundedAt": "string (ISO 8601)"
+}
+```
+- `amount` — the captured payment total. `refundedAmount` — cumulative refunded.
+- `status` is `PARTIALLY_REFUNDED` while `refundedAmount < amount`, `REFUNDED` once equal.
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | INVALID_PAYMENT_REQUEST | `amount` ≤ 0 or > remaining refundable, or payment not in a refundable state |
+| 401 | UNAUTHORIZED | Missing or invalid access token |
+| 403 | ACCESS_DENIED | Not the payment owner |
+| 404 | PAYMENT_NOT_FOUND | Payment does not exist |
+
+---
+
 ## Payment Status Values
 
 | Status | Description |
@@ -129,7 +171,8 @@ Only the payment owner (userId matching X-User-Id) may access.
 | `PENDING` | Payment initiated, waiting for user to complete PG authorization |
 | `COMPLETED` | Payment confirmed via Toss Payments |
 | `FAILED` | Payment confirmation failed |
-| `REFUNDED` | Payment has been refunded via Toss Payments |
+| `PARTIALLY_REFUNDED` | Part of the captured amount has been refunded; more remains refundable |
+| `REFUNDED` | Payment has been fully refunded via Toss Payments |
 
 ---
 

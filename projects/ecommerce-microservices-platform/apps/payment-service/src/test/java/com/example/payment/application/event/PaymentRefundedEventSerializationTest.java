@@ -18,7 +18,8 @@ class PaymentRefundedEventSerializationTest {
                 "evt-456", "PaymentRefunded", "2026-03-24T00:00:00Z",
                 "payment-service",
                 "ecommerce",
-                new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 30000L, "2026-03-24T00:00:00Z")
+                new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 10000L, 10000L, false,
+                        "2026-03-24T00:00:00Z")
         );
 
         String json = objectMapper.writeValueAsString(event);
@@ -27,9 +28,30 @@ class PaymentRefundedEventSerializationTest {
         assertThat(json).contains("\"event_type\"");
         assertThat(json).contains("\"occurred_at\"");
         assertThat(json).contains("\"tenant_id\"");
+        assertThat(json).contains("\"totalRefunded\"");
+        assertThat(json).contains("\"fullyRefunded\"");
         assertThat(json).doesNotContain("\"eventId\"");
         assertThat(json).doesNotContain("\"eventType\"");
         assertThat(json).doesNotContain("\"occurredAt\"");
+    }
+
+    @Test
+    @DisplayName("부분 환불 페이로드의 amount/totalRefunded/fullyRefunded 가 왕복 직렬화된다")
+    void roundTrip_partialRefundPayloadFields_arePreserved() throws Exception {
+        PaymentRefundedEvent original = new PaymentRefundedEvent(
+                "evt-789", "PaymentRefunded", "2026-03-24T00:00:00Z",
+                "payment-service",
+                "ecommerce",
+                new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 10000L, 25000L, false,
+                        "2026-03-24T00:00:00Z")
+        );
+
+        String json = objectMapper.writeValueAsString(original);
+        PaymentRefundedEvent restored = objectMapper.readValue(json, PaymentRefundedEvent.class);
+
+        assertThat(restored.payload().amount()).isEqualTo(10000L);
+        assertThat(restored.payload().totalRefunded()).isEqualTo(25000L);
+        assertThat(restored.payload().fullyRefunded()).isFalse();
     }
 
     @Test

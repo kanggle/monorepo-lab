@@ -43,6 +43,12 @@ public class StandaloneConfig {
             public void cancelPayment(String paymentKey, String cancelReason) {
                 log.info("STANDALONE: Simulated payment cancel for paymentKey {}", paymentKey);
             }
+
+            @Override
+            public void cancelPayment(String paymentKey, String cancelReason, long cancelAmount) {
+                log.info("STANDALONE: Simulated partial payment cancel for paymentKey {} (cancelAmount={})",
+                        paymentKey, cancelAmount);
+            }
         };
     }
 }

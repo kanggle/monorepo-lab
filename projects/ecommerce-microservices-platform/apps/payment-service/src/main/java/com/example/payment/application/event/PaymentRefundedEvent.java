@@ -27,10 +27,17 @@ public record PaymentRefundedEvent(
             String orderId,
             String userId,
             long amount,
+            long totalRefunded,
+            boolean fullyRefunded,
             String refundedAt
     ) {}
 
-    public static PaymentRefundedEvent from(Payment payment) {
+    /**
+     * Builds the event for one refund. {@code refundAmount} is the amount of THIS
+     * refund (a partial refund &lt; the captured total); {@code totalRefunded} +
+     * {@code fullyRefunded} come from the payment's cumulative state after the refund.
+     */
+    public static PaymentRefundedEvent from(Payment payment, long refundAmount) {
         return new PaymentRefundedEvent(
                 UUID.randomUUID().toString(),
                 "PaymentRefunded",
@@ -41,7 +48,9 @@ public record PaymentRefundedEvent(
                         payment.getPaymentId(),
                         payment.getOrderId(),
                         payment.getUserId(),
-                        payment.getAmount(),
+                        refundAmount,
+                        payment.getRefundedAmount(),
+                        payment.isFullyRefunded(),
                         payment.getRefundedAt().toInstant(ZoneOffset.UTC).toString()
                 )
         );

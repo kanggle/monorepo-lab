@@ -16,6 +16,8 @@ public record PaymentEvent(
         @JsonProperty("payload") Payload payload) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Payload(String orderId, String paymentId, String paidAt, String refundedAt) {
+    public record Payload(String orderId, String paymentId, long amount,
+                          /** Nullable for back-compat: a legacy refund event without this field is a full refund. */
+                          Boolean fullyRefunded, String paidAt, String refundedAt) {
     }
 }

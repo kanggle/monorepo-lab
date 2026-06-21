@@ -45,9 +45,13 @@ public class PaymentRefundedReversalConsumer {
             return;
         }
 
+        // Back-compat: a legacy refund event without fullyRefunded (null) is a full refund.
+        boolean fullyRefunded = event.payload().fullyRefunded() == null || event.payload().fullyRefunded();
         settlementService.reverse(new ReversePaymentCommand(
                 event.payload().orderId(),
                 event.payload().paymentId(),
+                event.payload().amount(),
+                fullyRefunded,
                 EventFieldParser.parseInstantOrNow(event.payload().refundedAt())));
     }
 }

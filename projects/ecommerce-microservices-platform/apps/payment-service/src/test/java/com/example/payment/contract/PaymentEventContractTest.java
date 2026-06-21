@@ -63,23 +63,26 @@ class PaymentEventContractTest {
         PaymentRefundedEvent event = new PaymentRefundedEvent(
                 "evt-2", "PaymentRefunded", "2026-03-25T00:00:00Z", "payment-service",
                 "ecommerce",
-                new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 30000L, "2026-03-25T01:00:00Z")
+                new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 30000L, 30000L, true,
+                        "2026-03-25T01:00:00Z")
         );
 
         assertFieldsMatch(objectMapper.writeValueAsString(event), ENVELOPE_FIELDS, SPEC_REF + " envelope");
     }
 
     @Test
-    @DisplayName("PaymentRefunded payload는 {paymentId, orderId, userId, amount, refundedAt}만 포함한다")
+    @DisplayName("PaymentRefunded payload는 {paymentId, orderId, userId, amount, totalRefunded, fullyRefunded, refundedAt}만 포함한다")
     void paymentRefunded_payload_matchesSpec() throws Exception {
         PaymentRefundedEvent event = new PaymentRefundedEvent(
                 "evt-2", "PaymentRefunded", "2026-03-25T00:00:00Z", "payment-service",
                 "ecommerce",
-                new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 30000L, "2026-03-25T01:00:00Z")
+                new PaymentRefundedEvent.Payload("pay-1", "order-1", "user-1", 10000L, 10000L, false,
+                        "2026-03-25T01:00:00Z")
         );
 
         JsonNode payload = objectMapper.readTree(objectMapper.writeValueAsString(event)).get("payload");
-        assertFieldsMatch(payload, Set.of("paymentId", "orderId", "userId", "amount", "refundedAt"),
+        assertFieldsMatch(payload, Set.of("paymentId", "orderId", "userId", "amount",
+                        "totalRefunded", "fullyRefunded", "refundedAt"),
                 SPEC_REF + " PaymentRefunded payload");
     }
 }

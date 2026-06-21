@@ -166,6 +166,111 @@ class PaymentTest {
     }
 
     @Test
+    @DisplayName("COMPLETED 상태에서 부분 환불 시 PARTIALLY_REFUNDED로 전이되고 누적액이 추적된다")
+    void refundAmount_partialFromCompleted_becomesPartiallyRefunded() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.confirm("pk_test_123", "CARD", null);
+
+        payment.refund(10000L);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PARTIALLY_REFUNDED);
+        assertThat(payment.getRefundedAmount()).isEqualTo(10000L);
+        assertThat(payment.getRemainingRefundable()).isEqualTo(20000L);
+        assertThat(payment.isFullyRefunded()).isFalse();
+        assertThat(payment.getRefundedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("PARTIALLY_REFUNDED 상태에서 잔여액 환불 시 REFUNDED로 전이된다")
+    void refundAmount_remainderFromPartiallyRefunded_becomesRefunded() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.confirm("pk_test_123", "CARD", null);
+        payment.refund(10000L);
+
+        payment.refund(20000L);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(payment.getRefundedAmount()).isEqualTo(30000L);
+        assertThat(payment.getRemainingRefundable()).isZero();
+        assertThat(payment.isFullyRefunded()).isTrue();
+    }
+
+    @Test
+    @DisplayName("정확히 잔여액과 같은 부분 환불은 REFUNDED로 전이된다")
+    void refundAmount_exactlyRemaining_becomesRefunded() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.confirm("pk_test_123", "CARD", null);
+
+        payment.refund(30000L);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(payment.isFullyRefunded()).isTrue();
+    }
+
+    @Test
+    @DisplayName("잔여 환불 가능액을 초과하는 환불 금액은 거부된다 (over-refund)")
+    void refundAmount_overRemaining_throwsInvalidPaymentException() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.confirm("pk_test_123", "CARD", null);
+        payment.refund(20000L);
+
+        assertThatThrownBy(() -> payment.refund(15000L))
+                .isInstanceOf(InvalidPaymentException.class);
+        // state unchanged after rejection
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PARTIALLY_REFUNDED);
+        assertThat(payment.getRefundedAmount()).isEqualTo(20000L);
+    }
+
+    @Test
+    @DisplayName("환불 금액이 0이면 거부된다")
+    void refundAmount_zero_throwsInvalidPaymentException() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.confirm("pk_test_123", "CARD", null);
+
+        assertThatThrownBy(() -> payment.refund(0L))
+                .isInstanceOf(InvalidPaymentException.class);
+    }
+
+    @Test
+    @DisplayName("환불 금액이 음수이면 거부된다")
+    void refundAmount_negative_throwsInvalidPaymentException() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.confirm("pk_test_123", "CARD", null);
+
+        assertThatThrownBy(() -> payment.refund(-5000L))
+                .isInstanceOf(InvalidPaymentException.class);
+    }
+
+    @Test
+    @DisplayName("무인자 refund()는 잔여 전액을 환불하고 멱등하게 동작한다 (부분 환불 후 잔여 마감)")
+    void refund_noArg_refundsRemainingAndIsIdempotent() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.confirm("pk_test_123", "CARD", null);
+        payment.refund(10000L); // partial first
+
+        payment.refund(); // closes out the remaining 20000
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(payment.getRefundedAmount()).isEqualTo(30000L);
+        assertThat(payment.isFullyRefunded()).isTrue();
+
+        // idempotent no-op once fully refunded
+        LocalDateTime refundedAt = payment.getRefundedAt();
+        assertThatNoException().isThrownBy(payment::refund);
+        assertThat(payment.getRefundedAmount()).isEqualTo(30000L);
+        assertThat(payment.getRefundedAt()).isEqualTo(refundedAt);
+    }
+
+    @Test
+    @DisplayName("PENDING 상태에서 refund(amount) 호출 시 예외가 발생한다")
+    void refundAmount_pendingPayment_throwsInvalidPaymentException() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+
+        assertThatThrownBy(() -> payment.refund(10000L))
+                .isInstanceOf(InvalidPaymentException.class);
+    }
+
+    @Test
     @DisplayName("PENDING 상태에서 refund 호출 시 예외가 발생한다")
     void refund_pendingPayment_throwsInvalidPaymentException() {
         Payment payment = Payment.create("order-1", "user-1", 30000L);
@@ -179,7 +284,7 @@ class PaymentTest {
     void reconstitute_restoresAllFields() {
         LocalDateTime now = LocalDateTime.now();
         Payment payment = Payment.reconstitute(
-                "pay-1", "order-1", "user-1", "tenant-a", 50000L,
+                "pay-1", "order-1", "user-1", "tenant-a", 50000L, 0L,
                 PaymentStatus.COMPLETED, now, now.plusMinutes(1), null,
                 "pk_test_123", "CARD", "https://receipt.url"
         );
@@ -189,6 +294,7 @@ class PaymentTest {
         assertThat(payment.getUserId()).isEqualTo("user-1");
         assertThat(payment.getTenantId()).isEqualTo("tenant-a");
         assertThat(payment.getAmount()).isEqualTo(50000L);
+        assertThat(payment.getRefundedAmount()).isZero();
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(payment.getCreatedAt()).isEqualTo(now);
         assertThat(payment.getPaidAt()).isEqualTo(now.plusMinutes(1));
