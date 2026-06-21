@@ -1,6 +1,6 @@
 # TASK-PC-FE-116 — console-web 미커버 순수/crypto shared·feature lib 단위테스트
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (test-only, 동작 무변경)
