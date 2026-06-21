@@ -13,10 +13,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Consumes {@code payment.payment.refunded} → appends REVERSAL rows that net the
- * order's accruals to zero (AC-5; v1 = full order reversal). Idempotent on the
- * envelope {@code event_id} and on {@code (order_id, payment_id)} (AC-6). No prior
- * accruals (cancel-before-capture, or already reversed) → no-op.
+ * Consumes {@code payment.payment.refunded} → proportionally claws back the order's
+ * commission (partial or full refund), appending REVERSAL rows linked to their parent
+ * accruals (see {@link SettlementService#reverse}). Idempotent on the envelope
+ * {@code event_id} (a payment may emit several partial refunds, each a distinct event).
+ * No prior accruals (cancel-before-capture) → no-op.
  */
 @Slf4j
 @Component

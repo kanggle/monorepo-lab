@@ -213,4 +213,21 @@ class SettlementServiceTest {
 
         verify(accrualRepository, never()).appendAll(any());
     }
+
+    @Test
+    void reverse_is_noop_when_a_legacy_full_reversal_without_parent_link_exists() {
+        // A pre-BE-425 REVERSAL row carries no reverses_accrual_id (it reversed the whole order
+        // under the old full-only semantics). The order is already settled — proportional clawback
+        // must NOT reverse it a second time.
+        when(accrualRepository.findAccrualsByOrderId("order-1")).thenReturn(List.of(
+                new CommissionAccrual("a1", "tenantA", "order-1", "pay-1", "seller-1",
+                        AccrualType.ACCRUAL, 30_000L, 1000, 3_000L, 27_000L, NOW)));
+        CommissionAccrual legacyReversal = new CommissionAccrual("rLegacy", "tenantA", "order-1",
+                "refund-old", "seller-1", AccrualType.REVERSAL, -30_000L, 1000, -3_000L, -27_000L, NOW);
+        when(accrualRepository.findReversalsByOrderId("order-1")).thenReturn(List.of(legacyReversal));
+
+        service.reverse(new ReversePaymentCommand("order-1", "refund-1", 30_000L, true, NOW));
+
+        verify(accrualRepository, never()).appendAll(any());
+    }
 }

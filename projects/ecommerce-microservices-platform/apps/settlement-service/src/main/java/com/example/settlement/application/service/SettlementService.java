@@ -33,8 +33,10 @@ import java.util.Map;
  *       by its seller's effective rate, append ACCRUAL rows. Idempotent on
  *       {@code (orderId, paymentId)}; missing snapshot → {@link SnapshotNotFoundException}
  *       (F2).</li>
- *   <li><b>reverse</b> ({@code PaymentRefunded}) — negate the order's accruals to
- *       net-zero, append REVERSAL rows. Idempotent on {@code (orderId, refundPaymentId)}.</li>
+ *   <li><b>reverse</b> ({@code PaymentRefunded}) — proportionally claw back commission for a
+ *       (partial or full) refund, appending REVERSAL rows linked to their parent accruals.
+ *       Idempotent on the envelope {@code event_id} (the consumer dedupe) — a payment may emit
+ *       several partial refunds.</li>
  * </ul>
  */
 @Slf4j
@@ -105,13 +107,23 @@ public class SettlementService {
         }
 
         // Per-accrual cumulative already-reversed (positive magnitudes), keyed by parent accrualId.
+        List<CommissionAccrual> existingReversals = accrualRepository.findReversalsByOrderId(cmd.orderId());
+        // Legacy guard: a pre-BE-425 REVERSAL row has no reverses_accrual_id (it reversed the
+        // whole order under the old full-only semantics). Such a row is unattributable to a single
+        // accrual, so per-accrual already-reversed cannot be computed — and the order was already
+        // fully reversed. Treating it as 0 would let a (hypothetical) new refund reverse the order a
+        // SECOND time. This path is shielded upstream (the payment is REFUNDED → the domain rejects
+        // any further refund; a Kafka replay carries the same event_id → deduped), but guard
+        // explicitly: any legacy null-parent reversal ⇒ the order is already settled, no-op.
+        if (existingReversals.stream().anyMatch(r -> r.reversesAccrualId() == null)) {
+            log.info("Order orderId={} has legacy full-reversal rows (no parent link) — already "
+                    + "reversed; skipping proportional clawback (refundPaymentId={})",
+                    cmd.orderId(), cmd.paymentId());
+            return;
+        }
         Map<String, long[]> reversedByAccrual = new HashMap<>(); // [gross, commission, sellerNet]
-        for (CommissionAccrual r : accrualRepository.findReversalsByOrderId(cmd.orderId())) {
-            String parent = r.reversesAccrualId();
-            if (parent == null) {
-                continue; // legacy full-reversal row without a parent link — not attributable
-            }
-            long[] acc = reversedByAccrual.computeIfAbsent(parent, k -> new long[3]);
+        for (CommissionAccrual r : existingReversals) {
+            long[] acc = reversedByAccrual.computeIfAbsent(r.reversesAccrualId(), k -> new long[3]);
             acc[0] += -r.grossMinor();        // reversal amounts are negative — negate to magnitude
             acc[1] += -r.commissionMinor();
             acc[2] += -r.sellerNetMinor();
