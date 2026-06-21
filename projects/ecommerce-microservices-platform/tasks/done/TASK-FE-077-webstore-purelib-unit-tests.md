@@ -1,6 +1,6 @@
 # TASK-FE-077 — web-store 미커버 순수 lib 단위테스트 (coupon format-discount + order shipping-steps)
 
-- **Status**: ready
+- **Status**: done
 - **Project**: ecommerce-microservices-platform
 - **App**: web-store (Next.js)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (test-only, 동작 무변경)
