@@ -8,7 +8,7 @@ Partial payment refunds + proportional commission clawback (payment + order + se
 
 # Status
 
-ready
+done
 
 # Owner
 
