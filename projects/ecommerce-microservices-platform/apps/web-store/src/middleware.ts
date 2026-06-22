@@ -24,6 +24,16 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/signup') ||
     pathname.startsWith('/products') ||
     pathname.startsWith('/api/auth') ||
+    // The same-origin BFF proxy (`/api/bff/[...path]`) enforces auth itself: it
+    // reads the server-side session token and attaches the bearer, returning
+    // 401 `X-Reauth: 1` (→ client-side full re-auth, F1) when the session is
+    // absent/expired. It must NOT be middleware-bounced to `/login` — a 307 to
+    // the login HTML breaks the client axios XHR (it follows the redirect, gets
+    // HTML, fails to parse as JSON → react-query `isError` → "불러오는데 실패").
+    // This also keeps public reads (product reviews/summary) loadable for
+    // anonymous visitors, since the backend allows them. Mirrors the documented
+    // intent of `authConfig.callbacks.authorized` in `shared/auth/auth.ts`.
+    pathname.startsWith('/api/bff') ||
     pathname.startsWith('/_next') ||
     pathname === '/favicon.ico'
   ) {
