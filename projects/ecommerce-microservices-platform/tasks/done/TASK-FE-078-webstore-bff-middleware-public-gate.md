@@ -1,6 +1,6 @@
 # TASK-FE-078 — web-store middleware 가 `/api/bff` 를 게이팅해 BFF 재인증/공개읽기 파손 수정
 
-- **Status**: ready
+- **Status**: done
 - **Project**: ecommerce-microservices-platform
 - **App**: web-store (Next.js)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (single-file 버그 수정)
