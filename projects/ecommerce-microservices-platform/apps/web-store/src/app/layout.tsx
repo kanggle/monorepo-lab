@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Noto_Sans_KR } from 'next/font/google';
 import { Providers } from './providers';
+import { WebVitals } from './web-vitals';
 import './globals.css';
 
 const notoSansKR = Noto_Sans_KR({
@@ -23,6 +24,7 @@ export default function RootLayout({
   return (
     <html lang="ko" className={notoSansKR.className}>
       <body>
+        <WebVitals />
         <Providers>{children}</Providers>
       </body>
     </html>
