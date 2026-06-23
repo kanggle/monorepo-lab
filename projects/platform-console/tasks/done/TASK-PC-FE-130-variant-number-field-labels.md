@@ -1,6 +1,6 @@
 # TASK-PC-FE-130 — 상품 등록/옵션 추가 폼의 숫자 칸(재고·추가 가격)이 기본값 0에 가려 무슨 칸인지 안 보이는 문제
 
-- **Status**: review
+- **Status**: done
 - **Project**: platform-console
 - **Service**: console-web
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (소형 UX/접근성 폼 개선 — 동작 불변)
