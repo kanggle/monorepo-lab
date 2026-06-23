@@ -12,11 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Return-leg tail of the storefront→warehouse loop (ADR-MONO-022 §D7): consumes
- * the ecommerce-internal {@code ShippingStatusChanged} event and, when the new
- * status is {@code SHIPPED}, flips the Order to {@code SHIPPED}.
+ * the ecommerce-internal {@code ShippingStatusChanged} event and flips the Order
+ * along the fulfillment edges — {@code SHIPPED} → Order {@code SHIPPED}, and
+ * {@code DELIVERED} → Order {@code SHIPPED → DELIVERED} (TASK-BE-429), completing
+ * the order lifecycle.
  *
- * <p>Other shipping transitions (IN_TRANSIT, DELIVERED) are ignored here — only
- * the SHIPPED edge participates in the order lifecycle today.
+ * <p>Intermediate transitions (IN_TRANSIT) are ignored — the order lifecycle has
+ * no matching state.
  */
 @Slf4j
 @Component
@@ -44,7 +46,10 @@ public class ShippingStatusChangedEventConsumer {
             return;
         }
 
-        if (!"SHIPPED".equals(event.payload().newStatus())) {
+        String newStatus = event.payload().newStatus();
+        boolean shipped = "SHIPPED".equals(newStatus);
+        boolean delivered = "DELIVERED".equals(newStatus);
+        if (!shipped && !delivered) {
             return;
         }
 
@@ -53,6 +58,10 @@ public class ShippingStatusChangedEventConsumer {
             return;
         }
 
-        orderShippingService.markShipped(event.payload().orderId());
+        if (shipped) {
+            orderShippingService.markShipped(event.payload().orderId());
+        } else {
+            orderShippingService.markDelivered(event.payload().orderId());
+        }
     }
 }

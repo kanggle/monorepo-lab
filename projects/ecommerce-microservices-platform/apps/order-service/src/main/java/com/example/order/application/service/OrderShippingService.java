@@ -13,9 +13,9 @@ import java.time.Clock;
 
 /**
  * Return-leg tail of the storefront→warehouse loop (ADR-MONO-022 §D7): when
- * shipping-service reports a Shipping record reached {@code SHIPPED}, flip the
- * Order {@code CONFIRMED → SHIPPED}. Idempotent on re-delivery and on an
- * already-SHIPPED order.
+ * shipping-service reports a Shipping record reached {@code SHIPPED} / {@code DELIVERED},
+ * flip the Order {@code CONFIRMED → SHIPPED} / {@code SHIPPED → DELIVERED}. Idempotent on
+ * re-delivery and on an already-SHIPPED / already-DELIVERED order.
  */
 @Slf4j
 @Service
@@ -44,6 +44,28 @@ public class OrderShippingService {
             }
         } catch (InvalidOrderException e) {
             log.warn("Cannot mark order shipped — invalid order state: orderId={}, reason={}",
+                    orderId, e.getMessage());
+        }
+    }
+
+    @Transactional
+    public void markDelivered(String orderId) {
+        Order order = orderRepository.findByIdAcrossTenants(orderId).orElse(null);
+        if (order == null) {
+            log.warn("Order not found for ShippingStatusChanged(DELIVERED) event: orderId={}", orderId);
+            return;
+        }
+
+        try {
+            String previousStatus = order.getStatus().name();
+            boolean changed = order.deliver(clock);
+            orderRepository.save(order);
+            if (changed) {
+                orderMetrics.recordStatusTransition(previousStatus, order.getStatus().name());
+                log.info("Order delivered: orderId={}", orderId);
+            }
+        } catch (InvalidOrderException e) {
+            log.warn("Cannot mark order delivered — invalid order state: orderId={}, reason={}",
                     orderId, e.getMessage());
         }
     }
