@@ -48,7 +48,7 @@ class TemplateRepositoryImplTest {
         Page<NotificationTemplateJpaEntity> jpaPage = new PageImpl<>(
                 List.of(entity), PageRequest.of(0, 20), 1L);
 
-        given(jpaRepository.findByTenantId(eq("ecommerce"), any(PageRequest.class))).willReturn(jpaPage);
+        given(jpaRepository.findByTenantIdOrderByCreatedAtDescTemplateIdAsc(eq("ecommerce"), any(PageRequest.class))).willReturn(jpaPage);
         given(mapper.toDomain(entity)).willReturn(template);
 
         PageQuery pageQuery = new PageQuery(0, 20, null, null);
@@ -67,7 +67,7 @@ class TemplateRepositoryImplTest {
         Page<NotificationTemplateJpaEntity> emptyPage = new PageImpl<>(
                 List.of(), PageRequest.of(0, 20), 0L);
 
-        given(jpaRepository.findByTenantId(eq("ecommerce"), any(PageRequest.class))).willReturn(emptyPage);
+        given(jpaRepository.findByTenantIdOrderByCreatedAtDescTemplateIdAsc(eq("ecommerce"), any(PageRequest.class))).willReturn(emptyPage);
 
         PageQuery pageQuery = new PageQuery(0, 20, null, null);
         PageResult<NotificationTemplate> result = repositoryImpl.findAll(pageQuery);

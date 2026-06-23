@@ -51,7 +51,7 @@ public class TemplateRepositoryImpl implements TemplateRepository {
     public PageResult<NotificationTemplate> findAll(PageQuery pageQuery) {
         PageRequest pageable = PageRequest.of(pageQuery.page(), pageQuery.size());
         Page<NotificationTemplate> page = jpaRepository
-                .findByTenantId(TenantContext.currentTenant(), pageable)
+                .findByTenantIdOrderByCreatedAtDescTemplateIdAsc(TenantContext.currentTenant(), pageable)
                 .map(mapper::toDomain);
         return new PageResult<>(
                 page.getContent(),
