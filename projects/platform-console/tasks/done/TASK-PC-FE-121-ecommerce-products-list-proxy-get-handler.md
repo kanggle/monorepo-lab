@@ -1,6 +1,6 @@
 # TASK-PC-FE-121 — 콘솔 E-Commerce 상품 운영 목록 프록시 GET 핸들러 누락 수정
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (single-route 누락 핸들러 추가 + 테스트)
