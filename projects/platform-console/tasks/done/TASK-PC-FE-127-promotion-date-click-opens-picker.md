@@ -1,6 +1,6 @@
 # TASK-PC-FE-127 — 프로모션 등록 폼 시작일/종료일: 필드 영역 아무 곳이나 클릭하면 달력이 열리도록
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **Service**: console-web
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (단순 UX — 공유 헬퍼 적용)
