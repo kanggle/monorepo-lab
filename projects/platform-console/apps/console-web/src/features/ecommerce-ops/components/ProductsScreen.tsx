@@ -93,7 +93,7 @@ export function ProductsScreen({ products }: ProductsScreenProps) {
     <section aria-labelledby="ecommerce-products-heading">
       <div className="mb-2 flex items-center justify-between">
         <h1 id="ecommerce-products-heading" className="text-2xl font-semibold">
-          E-Commerce 상품 운영
+          E-Commerce 상품
         </h1>
         <Link href="/ecommerce/products/new" data-testid="product-new-link">
           <Button>상품 등록</Button>

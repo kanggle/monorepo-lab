@@ -68,7 +68,7 @@ export function OrdersScreen({ orders }: OrdersScreenProps) {
     <section aria-labelledby="ecommerce-orders-heading">
       <div className="mb-2 flex items-center justify-between">
         <h1 id="ecommerce-orders-heading" className="text-2xl font-semibold">
-          E-Commerce 주문 운영
+          E-Commerce 주문
         </h1>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">

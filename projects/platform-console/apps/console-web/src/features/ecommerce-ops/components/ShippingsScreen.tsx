@@ -175,7 +175,7 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
           id="ecommerce-shippings-heading"
           className="text-2xl font-semibold"
         >
-          E-Commerce 배송 운영
+          E-Commerce 배송
         </h1>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">

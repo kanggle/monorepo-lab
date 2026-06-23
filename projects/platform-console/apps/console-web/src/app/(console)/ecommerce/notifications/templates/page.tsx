@@ -24,7 +24,7 @@ export default async function EcommerceNotificationsPage() {
       id="ecommerce-notifications-heading"
       className="mb-6 text-2xl font-semibold"
     >
-      E-Commerce 알림 템플릿 운영
+      E-Commerce 알림 템플릿
     </h1>
   );
 

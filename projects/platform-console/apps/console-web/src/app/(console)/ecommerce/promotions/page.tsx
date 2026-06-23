@@ -24,7 +24,7 @@ export default async function EcommercePromotionsPage() {
       id="ecommerce-promotions-heading"
       className="mb-6 text-2xl font-semibold"
     >
-      E-Commerce 프로모션 운영
+      E-Commerce 프로모션
     </h1>
   );
 

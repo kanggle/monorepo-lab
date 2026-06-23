@@ -59,7 +59,7 @@ test.describe('@federation multi-operator → switch ecommerce → sellers rende
 
       await page.goto('/ecommerce/sellers');
       await expect(
-        page.getByRole('heading', { name: 'E-Commerce 셀러 운영' }),
+        page.getByRole('heading', { name: 'E-Commerce 셀러' }),
       ).toBeVisible({ timeout: 20_000 });
 
       // The gate must NOT reject — assert the section did not degrade/forbid.

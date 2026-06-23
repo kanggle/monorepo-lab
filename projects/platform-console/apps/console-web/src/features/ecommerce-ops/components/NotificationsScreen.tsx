@@ -60,7 +60,7 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
           id="ecommerce-notifications-heading"
           className="text-2xl font-semibold"
         >
-          E-Commerce 알림 템플릿 운영
+          E-Commerce 알림 템플릿
         </h1>
         <Link
           href="/ecommerce/notifications/templates/new"

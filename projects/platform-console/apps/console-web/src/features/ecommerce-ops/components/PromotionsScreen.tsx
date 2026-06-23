@@ -104,7 +104,7 @@ export function PromotionsScreen({ promotions }: PromotionsScreenProps) {
           id="ecommerce-promotions-heading"
           className="text-2xl font-semibold"
         >
-          E-Commerce 프로모션 운영
+          E-Commerce 프로모션
         </h1>
         <Link
           href="/ecommerce/promotions/new"
