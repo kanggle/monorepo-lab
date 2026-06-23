@@ -35,7 +35,12 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
 
   const seeded = (query.page ?? 0) === 0;
   const listQ = useSellers(query, seeded ? sellers : undefined);
-  const data = listQ.data ?? sellers;
+  // Only the seeded (page 0) query may fall back to the server-rendered `sellers`
+  // seed. For a paginated query, falling back to the seed would flash the first
+  // page while the next page is still in flight — instead we render a loading
+  // placeholder until the real result lands.
+  const data = seeded ? listQ.data ?? sellers : listQ.data;
+  const loading = data === undefined;
 
   const apiError =
     listQ.error instanceof ApiError ? (listQ.error as ApiError) : null;
@@ -43,11 +48,10 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
   const degraded =
     listQ.isError && (!apiError || apiError.status >= 500) && !forbidden;
 
-  const rows = data.content;
-  const totalPages = Math.max(
-    1,
-    Math.ceil(data.totalElements / (data.size || 20)),
-  );
+  const rows = data?.content ?? [];
+  const totalPages = data
+    ? Math.max(1, Math.ceil(data.totalElements / (data.size || 20)))
+    : 1;
 
   return (
     <section aria-labelledby="ecommerce-sellers-heading">
@@ -87,6 +91,13 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
           ecommerce 셀러 정보를 일시적으로 불러올 수 없습니다. 콘솔의 다른
           기능은 계속 사용할 수 있습니다.
         </div>
+      ) : loading ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="seller-loading"
+        >
+          조회 중…
+        </p>
       ) : rows.length === 0 ? (
         <p
           className="text-sm text-muted-foreground"
@@ -175,11 +186,11 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
               className="text-sm text-muted-foreground"
               data-testid="seller-pageinfo"
             >
-              {`${data.page + 1} / ${totalPages} 페이지 · 총 ${data.totalElements}건`}
+              {`${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`}
             </span>
             <Button
               variant="secondary"
-              disabled={data.page + 1 >= totalPages}
+              disabled={(data?.page ?? 0) + 1 >= totalPages}
               onClick={() =>
                 setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
               }
