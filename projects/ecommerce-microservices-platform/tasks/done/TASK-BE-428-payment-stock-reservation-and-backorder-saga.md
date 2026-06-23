@@ -1,6 +1,6 @@
 # TASK-BE-428 — 결제완료 기반 재고예약 + 백오더 saga (PaymentCompleted → reserve → confirm / backorder → restock-retry / operator-cancel)
 
-- **Status**: review
+- **Status**: done
 - **Project**: ecommerce-microservices-platform
 - **Services**: product-service (신규 예약 컨텍스트), order-service (상태머신 + consumer)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (event-driven saga · 상태머신 · 트랜잭션 설계)
