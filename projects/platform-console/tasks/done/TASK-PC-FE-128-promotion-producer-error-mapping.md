@@ -1,6 +1,6 @@
 # TASK-PC-FE-128 — ecommerce promotion producer error-code mapping (errors.ts)
 
-Status: review
+Status: done
 Project: platform-console
 Service: console-web
 Type: fix
