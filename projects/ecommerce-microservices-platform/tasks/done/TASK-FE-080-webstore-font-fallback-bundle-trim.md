@@ -1,6 +1,6 @@
 # TASK-FE-080 — web-store no-regret 페이지로딩 윈 (한글 폰트 fallback + barrel import 트리셰이킹)
 
-- **Status**: review
+- **Status**: done
 - **Project**: ecommerce-microservices-platform
 - **App**: web-store (Next.js 15)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (config 수준, 런타임 로직 무변경)
