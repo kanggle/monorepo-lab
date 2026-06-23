@@ -42,7 +42,10 @@ vi.mock('@/shared/config/env', () => ({
   getServerEnv: () => ENV,
 }));
 
-import { POST as registerPOST } from '@/app/api/ecommerce/products/route';
+import {
+  GET as listGET,
+  POST as registerPOST,
+} from '@/app/api/ecommerce/products/route';
 import {
   PATCH as updatePATCH,
   DELETE as deleteDELETE,
@@ -87,6 +90,49 @@ const VALID_REGISTER = {
 beforeEach(() => {
   cookieJar.clear();
   vi.unstubAllGlobals();
+});
+
+const EMPTY_LIST = { content: [], page: 0, size: 20, totalElements: 0 };
+
+describe('GET /api/ecommerce/products (list) proxy', () => {
+  it('forwards the status filter + pagination to GET /admin/products with the domain-facing token', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(EMPTY_LIST));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await listGET(
+      new Request(
+        'http://console.local/api/ecommerce/products?status=HIDDEN&page=0&size=20',
+      ),
+    );
+    expect(res.status).toBe(200);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const parsed = new URL(String(url));
+    expect(parsed.origin + parsed.pathname).toBe(
+      'http://ecommerce.local/api/admin/products',
+    );
+    expect(parsed.searchParams.get('status')).toBe('HIDDEN');
+    expect(parsed.searchParams.get('page')).toBe('0');
+    expect(parsed.searchParams.get('size')).toBe('20');
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['X-Tenant-Id']).toBeUndefined();
+  });
+
+  it('503 → 503 (section degrades only)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ecomError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await listGET(
+      new Request('http://console.local/api/ecommerce/products?status=HIDDEN'),
+    );
+    expect(res.status).toBe(503);
+  });
 });
 
 describe('POST /api/ecommerce/products (register) proxy', () => {
