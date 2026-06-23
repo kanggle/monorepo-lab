@@ -8,7 +8,7 @@ console-web 인증 속도 향상: `/api/auth/refresh`의 operator 재교환 + as
 
 # Status
 
-review
+done
 
 # Owner
 
