@@ -208,6 +208,35 @@ describe('PATCH/DELETE /api/ecommerce/products/{id}', () => {
     expect(res.status).toBe(204);
   });
 
+  // TASK-PC-FE-131 — idempotent delete: re-deleting an already soft-deleted
+  // product yields the producer's 404 PRODUCT_NOT_FOUND; the delete goal is
+  // already met, so the proxy renders 204 (not a hard failure).
+  it('delete DELETE on an already-deleted product (404 PRODUCT_NOT_FOUND) → 204 (idempotent)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ecomError('PRODUCT_NOT_FOUND', 404)),
+    );
+    const res = await deleteDELETE(
+      new Request('http://console.local/api/ecommerce/products/p-gone', { method: 'DELETE' }),
+      { params: Promise.resolve({ id: 'p-gone' }) },
+    );
+    expect(res.status).toBe(204);
+  });
+
+  it('delete DELETE — a non-404 error (503) still degrades (mapping preserved)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ecomError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await deleteDELETE(
+      new Request('http://console.local/api/ecommerce/products/p-1', { method: 'DELETE' }),
+      { params: Promise.resolve({ id: 'p-1' }) },
+    );
+    expect(res.status).toBe(503);
+  });
+
   it('409 CONFLICT on update → 409 passthrough', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ecomError('CONFLICT', 409)));
