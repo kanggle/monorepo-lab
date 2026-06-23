@@ -1,6 +1,6 @@
 # TASK-PC-FE-123 — 콘솔 E-Commerce 주문 운영 목록 프록시 라우트 누락 수정
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (누락 라우트 신규 + 테스트)
