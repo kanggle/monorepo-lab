@@ -41,8 +41,8 @@ export function VariantEditor({ productId, variants }: VariantEditorProps) {
 
   // --- add state -----------------------------------------------------------
   const [addName, setAddName] = useState('');
-  const [addStock, setAddStock] = useState('0');
-  const [addPrice, setAddPrice] = useState('0');
+  const [addStock, setAddStock] = useState('');
+  const [addPrice, setAddPrice] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
 
   // --- delete confirm ------------------------------------------------------
@@ -106,8 +106,8 @@ export function VariantEditor({ productId, variants }: VariantEditorProps) {
       {
         onSuccess: () => {
           setAddName('');
-          setAddStock('0');
-          setAddPrice('0');
+          setAddStock('');
+          setAddPrice('');
         },
         onError: (e) => setAddError(errMsg(e, '옵션을 추가하지 못했습니다.')),
       },

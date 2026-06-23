@@ -60,7 +60,7 @@ export function ProductForm({ existing }: ProductFormProps) {
     existing?.thumbnailUrl ?? '',
   );
   const [variants, setVariants] = useState<VariantDraft[]>([
-    { optionName: '', stock: '0', additionalPrice: '0' },
+    { optionName: '', stock: '', additionalPrice: '' },
   ]);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -91,7 +91,7 @@ export function ProductForm({ existing }: ProductFormProps) {
     setVariants((vs) => vs.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
   }
   function addVariantRow() {
-    setVariants((vs) => [...vs, { optionName: '', stock: '0', additionalPrice: '0' }]);
+    setVariants((vs) => [...vs, { optionName: '', stock: '', additionalPrice: '' }]);
   }
   function removeVariantRow(i: number) {
     setVariants((vs) => (vs.length > 1 ? vs.filter((_, idx) => idx !== i) : vs));
@@ -248,8 +248,18 @@ export function ProductForm({ existing }: ProductFormProps) {
             옵션(variant) <span className="text-destructive">*</span>
           </legend>
           <p className="mb-3 text-xs text-muted-foreground">
-            상품 등록에는 최소 1개의 옵션이 필요합니다.
+            상품 등록에는 최소 1개의 옵션이 필요합니다. 재고·추가 가격을 비워두면 0으로 등록됩니다.
           </p>
+          <div
+            className="mb-1 hidden gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[1fr_6rem_8rem_auto]"
+            data-testid="product-form-variant-header"
+            aria-hidden="true"
+          >
+            <span>옵션명</span>
+            <span>재고</span>
+            <span>추가 가격</span>
+            <span />
+          </div>
           <div className="space-y-3">
             {variants.map((v, i) => (
               <div
