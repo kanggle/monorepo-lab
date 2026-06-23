@@ -6,6 +6,8 @@ public interface OrderMetricsPort {
 
     void recordOrderConfirmed();
 
+    void recordOrderBackordered();
+
     void recordOrderCancelled(String reason);
 
     void recordStatusTransition(String from, String to);

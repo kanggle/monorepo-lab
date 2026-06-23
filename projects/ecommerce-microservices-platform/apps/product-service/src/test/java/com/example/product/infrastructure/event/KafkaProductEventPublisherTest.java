@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.example.product.domain.event.OrderReservationFailedPayload;
 import com.example.product.domain.event.ProductCreatedPayload;
 import com.example.product.domain.event.ProductEvent;
 import com.example.product.infrastructure.metrics.ProductMetrics;
@@ -92,6 +93,19 @@ class KafkaProductEventPublisherTest {
 
         publisher.publish(event);
 
+        then(productMetrics).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("OrderReservationFailed는 product.product.reservation-failed 토픽으로 발행된다 (TASK-BE-428)")
+    void publish_orderReservationFailed_routesToReservationFailedTopic() {
+        ProductEvent event = ProductEvent.orderReservationFailed(
+                new OrderReservationFailedPayload("order-1", "INSUFFICIENT_STOCK",
+                        List.of(new OrderReservationFailedPayload.Shortage("var-1", 5, 2))));
+
+        publisher.publish(event);
+
+        then(kafkaTemplate).should().send(eq("product.product.reservation-failed"), any(), eq(event));
         then(productMetrics).shouldHaveNoInteractions();
     }
 }

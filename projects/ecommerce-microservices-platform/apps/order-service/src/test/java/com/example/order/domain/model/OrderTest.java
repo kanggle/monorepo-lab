@@ -150,6 +150,103 @@ class OrderTest {
         assertThat(OrderStatus.CONFIRMED.isCancellable()).isTrue();
     }
 
+    // ---- Backorder saga (TASK-BE-428) -----------------------------------------
+
+    private static Order pendingOrder() {
+        return Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
+                ADDRESS, FIXED_CLOCK);
+    }
+
+    @Test
+    @DisplayName("BACKORDERED 상태에서는 cancel이 가능하다")
+    void orderStatus_backordered_isCancellable() {
+        assertThat(OrderStatus.BACKORDERED.isCancellable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("PENDING 상태에서 markBackordered 호출 시 BACKORDERED로 전이되고 true를 반환한다")
+    void markBackordered_pendingOrder_becomesBackorderedAndReturnsTrue() {
+        Order order = pendingOrder();
+
+        boolean result = order.markBackordered(FIXED_CLOCK);
+
+        assertThat(result).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.BACKORDERED);
+    }
+
+    @Test
+    @DisplayName("이미 BACKORDERED 인 주문에 markBackordered 호출 시 멱등 no-op (false 반환)")
+    void markBackordered_alreadyBackordered_isIdempotentAndReturnsFalse() {
+        Order order = pendingOrder();
+        order.markBackordered(FIXED_CLOCK);
+
+        boolean result = order.markBackordered(FIXED_CLOCK);
+
+        assertThat(result).isFalse();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.BACKORDERED);
+    }
+
+    @Test
+    @DisplayName("CONFIRMED 인 주문에 늦은 markBackordered 가 와도 예외 없이 no-op (false 반환)")
+    void markBackordered_confirmedOrder_isNoOpAndReturnsFalse() {
+        Order order = pendingOrder();
+        order.confirm(FIXED_CLOCK);
+
+        boolean result = order.markBackordered(FIXED_CLOCK);
+
+        assertThat(result).isFalse();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    @DisplayName("CANCELLED 인 주문에 늦은 markBackordered 가 와도 예외 없이 no-op (false 반환)")
+    void markBackordered_cancelledOrder_isNoOpAndReturnsFalse() {
+        Order order = pendingOrder();
+        order.cancel(FIXED_CLOCK);
+
+        boolean result = order.markBackordered(FIXED_CLOCK);
+
+        assertThat(result).isFalse();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("markBackordered() 전이 시 Clock.fixed()로 주입한 시간이 updatedAt에 설정된다")
+    void markBackordered_withFixedClock_updatesTimestamp() {
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
+                ADDRESS, Clock.fixed(Instant.parse("2026-03-25T09:00:00Z"), ZoneOffset.UTC));
+
+        Instant backorderTime = Instant.parse("2026-03-25T11:00:00Z");
+        order.markBackordered(Clock.fixed(backorderTime, ZoneOffset.UTC));
+
+        assertThat(order.getUpdatedAt()).isEqualTo(backorderTime);
+    }
+
+    @Test
+    @DisplayName("BACKORDERED 상태에서 confirm 호출 시 CONFIRMED로 전이되고 true를 반환한다 (재입고 재예약)")
+    void confirm_backorderedOrder_becomesConfirmedAndReturnsTrue() {
+        Order order = pendingOrder();
+        order.markBackordered(FIXED_CLOCK);
+
+        boolean result = order.confirm(FIXED_CLOCK);
+
+        assertThat(result).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    @DisplayName("BACKORDERED 상태에서 cancel 호출 시 CANCELLED로 전이된다 (운영자 수동 취소)")
+    void cancel_backorderedOrder_becomesCancelled() {
+        Order order = pendingOrder();
+        order.markBackordered(FIXED_CLOCK);
+
+        order.cancel(FIXED_CLOCK);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
     @Test
     @DisplayName("PENDING 상태에서 confirm 호출 시 CONFIRMED로 전이되고 true를 반환한다")
     void confirm_pendingOrder_becomesConfirmedAndReturnsTrue() {

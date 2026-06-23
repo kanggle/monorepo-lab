@@ -34,6 +34,10 @@ public record ProductEvent(
         return of("ProductImagesUpdated", payload);
     }
 
+    public static ProductEvent orderReservationFailed(OrderReservationFailedPayload payload) {
+        return of("OrderReservationFailed", payload);
+    }
+
     private static ProductEvent of(String eventType, EventPayload payload) {
         // Tenant context propagation across the async boundary (M5): the envelope
         // carries the tenant owning the product. Background/reconciliation threads

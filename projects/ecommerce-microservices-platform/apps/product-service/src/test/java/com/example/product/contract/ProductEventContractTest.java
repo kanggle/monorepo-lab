@@ -95,4 +95,34 @@ class ProductEventContractTest {
         assertFieldsMatch(payloadNode, Set.of("productId", "variantId", "previousStock", "currentStock", "delta", "reason", "orderId"),
                 SPEC_REF + " StockChanged payload");
     }
+
+    // ─── OrderReservationFailed (TASK-BE-428) ───────────────────────────────
+
+    @Test
+    @DisplayName("OrderReservationFailed envelope은 스펙 정의 필드만 포함한다")
+    void orderReservationFailed_envelope_matchesSpec() throws Exception {
+        OrderReservationFailedPayload payload = new OrderReservationFailedPayload(
+                "order-1", "INSUFFICIENT_STOCK",
+                List.of(new OrderReservationFailedPayload.Shortage("var-1", 5, 2)));
+        ProductEvent event = ProductEvent.orderReservationFailed(payload);
+
+        assertFieldsMatch(objectMapper.writeValueAsString(event), ENVELOPE_FIELDS, SPEC_REF + " envelope");
+    }
+
+    @Test
+    @DisplayName("OrderReservationFailed payload는 {orderId, reason, shortages}만 포함하고 shortages[]는 {variantId, requested, available}")
+    void orderReservationFailed_payload_matchesSpec() throws Exception {
+        OrderReservationFailedPayload payload = new OrderReservationFailedPayload(
+                "order-1", "INSUFFICIENT_STOCK",
+                List.of(new OrderReservationFailedPayload.Shortage("var-1", 5, 2)));
+        ProductEvent event = ProductEvent.orderReservationFailed(payload);
+
+        JsonNode payloadNode = objectMapper.readTree(objectMapper.writeValueAsString(event)).get("payload");
+        assertFieldsMatch(payloadNode, Set.of("orderId", "reason", "shortages"),
+                SPEC_REF + " OrderReservationFailed payload");
+
+        JsonNode shortage = payloadNode.get("shortages").get(0);
+        assertFieldsMatch(shortage, Set.of("variantId", "requested", "available"),
+                SPEC_REF + " OrderReservationFailed payload shortages[]");
+    }
 }

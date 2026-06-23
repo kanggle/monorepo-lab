@@ -73,8 +73,10 @@ the default seller `default` (D8 net-zero).
 
 ## OrderConfirmed
 
-Published when an order is confirmed (status transitions `PENDING → CONFIRMED`).
-Co-committed with the status transition via the transactional outbox.
+Published when an order is confirmed (status transitions `PENDING → CONFIRMED`,
+or `BACKORDERED → CONFIRMED` when a held order is satisfied by a later
+replenishment — see the lifecycle note below). Co-committed with the status
+transition via the transactional outbox.
 
 **Consumers:** shipping-service
 
@@ -158,6 +160,22 @@ consume it without spec drift).
 ```
 
 ---
+
+## Order lifecycle & BACKORDERED (TASK-BE-428)
+
+`OrderStatus`: `PENDING → CONFIRMED → SHIPPED → DELIVERED`, with `CANCELLED`
+(from `PENDING|CONFIRMED|BACKORDERED`) and the terminal `STUCK_RECOVERY_FAILED`.
+
+**`BACKORDERED`** (payment-driven reservation saga, TASK-BE-428): after payment,
+product-service attempts an all-or-nothing stock reservation. On success it emits
+`StockChanged(ORDER_RESERVED)` and the order confirms (`PENDING → CONFIRMED`). If
+any line is short, product-service emits `OrderReservationFailed`
+(`product.product.reservation-failed`) and the order moves `PENDING → BACKORDERED`
+with **no stock decremented**. A later replenishment of the short variants triggers
+a FIFO re-reservation; on success the order moves `BACKORDERED → CONFIRMED` (a normal
+`OrderConfirmed`). A `BACKORDERED` order may be cancelled by an operator
+(`OrderCancelled` → refund fan-out). No new outbound event is published for the
+`BACKORDERED` transition itself — the status is observed via the order read API.
 
 ## Consumer Rules
 

@@ -53,6 +53,9 @@ class AdjustStockServiceTest {
     @Mock
     private ProductMetricPort productMetrics;
 
+    @Mock
+    private ReservationRetryService reservationRetryService;
+
     private EventPublishingHelper eventPublishingHelper;
     private AdjustStockService adjustStockService;
 
@@ -60,7 +63,8 @@ class AdjustStockServiceTest {
     void setUp() {
         eventPublishingHelper = new EventPublishingHelper(productEventPublisher);
         adjustStockService = new AdjustStockService(
-                productRepository, inventoryRepository, eventPublishingHelper, productMetrics);
+                productRepository, inventoryRepository, eventPublishingHelper, productMetrics,
+                reservationRetryService);
     }
 
     private Product makeProductWithVariant(UUID productId, UUID variantId, int stock, ProductStatus status) {
@@ -86,6 +90,8 @@ class AdjustStockServiceTest {
 
         assertThat(result.variantId()).isEqualTo(variantId);
         assertThat(result.currentStock()).isEqualTo(15);
+        // Positive adjustment retriggers waiting backordered reservations (TASK-BE-428 AC-4).
+        verify(reservationRetryService).onStockIncreased(variantId);
     }
 
     @Test
@@ -104,6 +110,8 @@ class AdjustStockServiceTest {
                 new AdjustStockCommand(productId, variantId, -3, "ADMIN_ADJUSTMENT"));
 
         assertThat(result.currentStock()).isEqualTo(7);
+        // Negative adjustment must NOT trigger backorder retry (TASK-BE-428).
+        verify(reservationRetryService, never()).onStockIncreased(any());
     }
 
     @Test

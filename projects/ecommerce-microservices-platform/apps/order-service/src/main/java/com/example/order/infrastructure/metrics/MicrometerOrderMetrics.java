@@ -13,6 +13,7 @@ public class MicrometerOrderMetrics implements OrderMetricsPort {
 
     private final Counter orderPlacedTotal;
     private final Counter orderConfirmedTotal;
+    private final Counter orderBackorderedTotal;
     private final Counter orderCancelledByUser;
     private final Counter orderCancelledByStockInsufficient;
     private final Counter orderCancelledByUserWithdrawn;
@@ -31,6 +32,10 @@ public class MicrometerOrderMetrics implements OrderMetricsPort {
 
         this.orderConfirmedTotal = Counter.builder("order_confirmed_total")
                 .description("Total orders confirmed (stock reserved)")
+                .register(registry);
+
+        this.orderBackorderedTotal = Counter.builder("order_backordered_total")
+                .description("Total orders held for backorder (paid but stock short)")
                 .register(registry);
 
         this.orderCancelledByUser = cancelledCounter(registry, "user");
@@ -62,6 +67,11 @@ public class MicrometerOrderMetrics implements OrderMetricsPort {
     @Override
     public void recordOrderConfirmed() {
         orderConfirmedTotal.increment();
+    }
+
+    @Override
+    public void recordOrderBackordered() {
+        orderBackorderedTotal.increment();
     }
 
     @Override

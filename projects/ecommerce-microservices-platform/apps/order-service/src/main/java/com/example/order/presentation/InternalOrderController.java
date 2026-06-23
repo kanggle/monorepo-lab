@@ -1,12 +1,16 @@
 package com.example.order.presentation;
 
+import com.example.order.application.dto.CancelOrderResult;
 import com.example.order.application.dto.ConfirmPaidStaleResult;
+import com.example.order.application.service.OperatorOrderCancellationService;
 import com.example.order.application.service.StalePaidOrderConfirmService;
 import com.example.order.presentation.dto.ConfirmPaidStaleRequest;
 import com.example.order.presentation.dto.ConfirmPaidStaleResponse;
+import com.example.order.presentation.dto.OperatorCancelOrderRequest;
 import com.example.order.presentation.exception.InvalidRequestException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,6 +33,13 @@ import org.springframework.web.bind.annotation.RestController;
  * event so downstream fulfillment fires. It is NOT the user cancel nor the admin status
  * endpoint (both carry ownership/role semantics that do not apply to a server-evaluated
  * batch sweep).
+ *
+ * <p>{@code POST {orderId}/cancel} is the operator manual-cancel path (TASK-BE-428): the
+ * console operator cancels an order (most often a {@code BACKORDERED} one that will never
+ * be replenished) without a customer ownership check, reusing the standard
+ * {@code OrderCancelled} → refund + coupon-restore fan-out. A non-cancellable order
+ * (SHIPPED/DELIVERED/terminal) surfaces {@code 422 ORDER_CANNOT_BE_CANCELLED} from the
+ * domain via the {@code GlobalExceptionHandler}; an unknown order surfaces {@code 404}.
  */
 @RestController
 @RequiredArgsConstructor
@@ -36,6 +47,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalOrderController {
 
     private final StalePaidOrderConfirmService stalePaidOrderConfirmService;
+    private final OperatorOrderCancellationService operatorOrderCancellationService;
 
     @PostMapping("/confirm-paid-stale")
     public ResponseEntity<ConfirmPaidStaleResponse> confirmPaidStale(
@@ -58,5 +70,14 @@ public class InternalOrderController {
 
         ConfirmPaidStaleResult result = stalePaidOrderConfirmService.sweep(olderThanMinutes, limit);
         return ResponseEntity.ok(ConfirmPaidStaleResponse.from(result));
+    }
+
+    @PostMapping("/{orderId}/cancel")
+    public ResponseEntity<CancelOrderResult> cancel(
+            @PathVariable String orderId,
+            @RequestBody(required = false) OperatorCancelOrderRequest request) {
+        String reason = request != null ? request.reason() : null;
+        CancelOrderResult result = operatorOrderCancellationService.cancel(orderId, reason);
+        return ResponseEntity.ok(result);
     }
 }
