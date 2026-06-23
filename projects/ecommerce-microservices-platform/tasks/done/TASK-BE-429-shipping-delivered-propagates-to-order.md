@@ -1,6 +1,6 @@
 # TASK-BE-429 — 배송 DELIVERED → 주문 DELIVERED 전파 (주문 생애주기 종착 연결)
 
-- **Status**: review
+- **Status**: done
 - **Project**: ecommerce-microservices-platform
 - **Service**: order-service
 - **Analysis model**: Opus 4.8 / **Implementation model**: Sonnet 4.6 (작은 additive lifecycle 연결 + 테스트)
