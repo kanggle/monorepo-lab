@@ -114,13 +114,33 @@ export async function POST() {
       });
     }
 
+    // --- Re-exchange operator + re-assume tenant CONCURRENTLY ------------
+    // (TASK-PC-FE-120) The operator re-exchange (§ 2.6, admin-service) and the
+    // assume-tenant re-exchange (§ 2.7, SAS) are independent RFC 8693 grants —
+    // both consume only the rotated base `access_token`, neither feeds the
+    // other. Firing them together turns the refresh latency from
+    // `oidc + operator + assume` into `oidc + max(operator, assume)` (collapsing
+    // the operator+assume serial leg of the cold-start cascade). They are still
+    // awaited in dependency order below: operator is the FATAL gate (its failure
+    // drops the whole session), assume is non-fatal (its failure drops only the
+    // tenant pair). Unlike a non-throwing fetch, exchangeForAssumedToken throws,
+    // so on the operator-fail early-return path (where assumePromise is never
+    // awaited) attach a no-op handler up-front to avoid an unhandled rejection —
+    // the real handling stays in the success-path try/catch below.
+    const activeTenant = jar.get(TENANT_COOKIE)?.value;
+    const operatorPromise = exchangeForOperatorToken(data.access_token);
+    const assumePromise = activeTenant
+      ? exchangeForAssumedToken(data.access_token, activeTenant)
+      : null;
+    if (assumePromise) void assumePromise.catch(() => {});
+
     // --- Re-exchange the operator token (§ 2.6 / ADR-MONO-014 D2) ---------
     // No operator-refresh state: the rotated IAM access token is re-exchanged
     // for a fresh operator token. Any exchange failure (fail-closed 401 or
     // unavailable) drops the WHOLE session — no stale operator token, no
     // GAP-token fallback on the operator boundary.
     try {
-      const op = await exchangeForOperatorToken(data.access_token);
+      const op = await operatorPromise;
       jar.set(OPERATOR_COOKIE, op.accessToken, {
         ...tokenCookieOpts,
         maxAge: op.expiresIn,
@@ -147,19 +167,16 @@ export async function POST() {
 
     // --- Re-assume the active tenant (ADR-MONO-020 D4 / § 2.7) ------------
     // The assumed (domain-facing) token has NO refresh token (D2) — it is
-    // re-minted from the rotated base IAM access token. If an active tenant is
-    // set, re-assume it now so the domain-facing credential stays scoped to
-    // the selected customer after a refresh. On any re-assume failure DROP
-    // BOTH the assumed token AND the active tenant (the operator falls back to
-    // the base/no-tenant state — NEVER a stale assumed token). The base IAM +
-    // operator session stays valid; only the tenant selection is reset.
-    const activeTenant = jar.get(TENANT_COOKIE)?.value;
-    if (activeTenant) {
+    // re-minted from the rotated base IAM access token. The exchange was
+    // already started up-front (concurrently with the operator re-exchange,
+    // TASK-PC-FE-120); it is awaited here only past the operator fatal gate. On
+    // any re-assume failure DROP BOTH the assumed token AND the active tenant
+    // (the operator falls back to the base/no-tenant state — NEVER a stale
+    // assumed token). The base IAM + operator session stays valid; only the
+    // tenant selection is reset.
+    if (assumePromise) {
       try {
-        const assumed = await exchangeForAssumedToken(
-          data.access_token,
-          activeTenant,
-        );
+        const assumed = await assumePromise;
         jar.set(ASSUMED_TOKEN_COOKIE, assumed.accessToken, {
           ...tokenCookieOpts,
           maxAge: assumed.expiresIn,
