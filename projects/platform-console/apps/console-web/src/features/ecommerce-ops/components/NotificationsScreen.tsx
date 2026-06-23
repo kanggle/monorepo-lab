@@ -39,7 +39,12 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
 
   const seeded = (query.page ?? 0) === 0;
   const listQ = useNotificationTemplates(query, seeded ? templates : undefined);
-  const data = listQ.data ?? templates;
+  // Only the seeded (page 0) query may fall back to the server-rendered `templates`
+  // seed. For a paginated query, falling back to the seed would flash the first
+  // page while the next page is still in flight — instead we render a loading
+  // placeholder until the real result lands.
+  const data = seeded ? listQ.data ?? templates : listQ.data;
+  const loading = data === undefined;
 
   const apiError =
     listQ.error instanceof ApiError ? (listQ.error as ApiError) : null;
@@ -47,11 +52,10 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
   const degraded =
     listQ.isError && (!apiError || apiError.status >= 500) && !forbidden;
 
-  const rows = data.content;
-  const totalPages = Math.max(
-    1,
-    Math.ceil(data.totalElements / (data.size || 20)),
-  );
+  const rows = data?.content ?? [];
+  const totalPages = data
+    ? Math.max(1, Math.ceil(data.totalElements / (data.size || 20)))
+    : 1;
 
   return (
     <section aria-labelledby="ecommerce-notifications-heading">
@@ -60,7 +64,7 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
           id="ecommerce-notifications-heading"
           className="text-2xl font-semibold"
         >
-          E-Commerce 알림 템플릿 운영
+          E-Commerce 알림 템플릿
         </h1>
         <Link
           href="/ecommerce/notifications/templates/new"
@@ -91,6 +95,13 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
           ecommerce 알림 템플릿 정보를 일시적으로 불러올 수 없습니다. 콘솔의
           다른 기능은 계속 사용할 수 있습니다.
         </div>
+      ) : loading ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="notification-loading"
+        >
+          조회 중…
+        </p>
       ) : rows.length === 0 ? (
         <p
           className="text-sm text-muted-foreground"
@@ -173,11 +184,11 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
               className="text-sm text-muted-foreground"
               data-testid="notification-pageinfo"
             >
-              {`${data.page + 1} / ${totalPages} 페이지 · 총 ${data.totalElements}건`}
+              {`${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`}
             </span>
             <Button
               variant="secondary"
-              disabled={data.page + 1 >= totalPages}
+              disabled={(data?.page ?? 0) + 1 >= totalPages}
               onClick={() =>
                 setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
               }

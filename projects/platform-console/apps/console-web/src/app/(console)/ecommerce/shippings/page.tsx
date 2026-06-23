@@ -25,7 +25,7 @@ export default async function EcommerceShippingsPage() {
       id="ecommerce-shippings-heading"
       className="mb-6 text-2xl font-semibold"
     >
-      E-Commerce 배송 운영
+      E-Commerce 배송
     </h1>
   );
 

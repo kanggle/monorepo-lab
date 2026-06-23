@@ -74,7 +74,12 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
 
   const seeded = (query.page ?? 0) === 0 && !query.status;
   const listQ = useShippings(query, seeded ? shippings : undefined);
-  const data = listQ.data ?? shippings;
+  // Only the seeded (page 0, no filter) query may fall back to the server-rendered
+  // `shippings` seed. For a filtered/paginated query, falling back to the seed would
+  // flash the full unfiltered list while the new query is still in flight — instead
+  // we render a loading placeholder until the real result lands.
+  const data = seeded ? listQ.data ?? shippings : listQ.data;
+  const loading = data === undefined;
 
   const apiError =
     listQ.error instanceof ApiError ? (listQ.error as ApiError) : null;
@@ -162,11 +167,10 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
     });
   }
 
-  const rows = data.content;
-  const totalPages = Math.max(
-    1,
-    Math.ceil(data.totalElements / (data.size || 20)),
-  );
+  const rows = data?.content ?? [];
+  const totalPages = data
+    ? Math.max(1, Math.ceil(data.totalElements / (data.size || 20)))
+    : 1;
 
   return (
     <section aria-labelledby="ecommerce-shippings-heading">
@@ -175,7 +179,7 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
           id="ecommerce-shippings-heading"
           className="text-2xl font-semibold"
         >
-          E-Commerce 배송 운영
+          E-Commerce 배송
         </h1>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
@@ -232,6 +236,13 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
           ecommerce 배송 정보를 일시적으로 불러올 수 없습니다. 콘솔의 다른
           기능은 계속 사용할 수 있습니다.
         </div>
+      ) : loading ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="shipping-loading"
+        >
+          조회 중…
+        </p>
       ) : rows.length === 0 ? (
         <p
           className="text-sm text-muted-foreground"
@@ -346,11 +357,11 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
               className="text-sm text-muted-foreground"
               data-testid="shipping-pageinfo"
             >
-              {`${data.page + 1} / ${totalPages} 페이지 · 총 ${data.totalElements}건`}
+              {`${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`}
             </span>
             <Button
               variant="secondary"
-              disabled={data.page + 1 >= totalPages}
+              disabled={(data?.page ?? 0) + 1 >= totalPages}
               onClick={() =>
                 setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
               }

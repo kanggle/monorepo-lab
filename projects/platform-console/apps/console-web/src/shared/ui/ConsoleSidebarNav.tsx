@@ -168,9 +168,9 @@ const GROUPS: NavGroup[] = [
             testid: 'nav-ecommerce-orders',
           },
           {
-            href: '/ecommerce/users',
-            label: '사용자',
-            testid: 'nav-ecommerce-users',
+            href: '/ecommerce/shippings',
+            label: '배송',
+            testid: 'nav-ecommerce-shippings',
           },
           {
             href: '/ecommerce/promotions',
@@ -178,19 +178,19 @@ const GROUPS: NavGroup[] = [
             testid: 'nav-ecommerce-promotions',
           },
           {
-            href: '/ecommerce/shippings',
-            label: '배송',
-            testid: 'nav-ecommerce-shippings',
-          },
-          {
-            href: '/ecommerce/notifications/templates',
-            label: '알림',
-            testid: 'nav-ecommerce-notifications',
+            href: '/ecommerce/users',
+            label: '사용자',
+            testid: 'nav-ecommerce-users',
           },
           {
             href: '/ecommerce/sellers',
             label: '셀러',
             testid: 'nav-ecommerce-sellers',
+          },
+          {
+            href: '/ecommerce/notifications/templates',
+            label: '알림',
+            testid: 'nav-ecommerce-notifications',
           },
         ],
       },

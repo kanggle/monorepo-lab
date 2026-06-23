@@ -24,7 +24,7 @@ export default async function EcommerceSellersPage() {
       id="ecommerce-sellers-heading"
       className="mb-6 text-2xl font-semibold"
     >
-      E-Commerce 셀러 운영
+      E-Commerce 셀러
     </h1>
   );
 

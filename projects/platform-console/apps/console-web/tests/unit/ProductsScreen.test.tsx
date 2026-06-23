@@ -76,7 +76,7 @@ describe('ProductsScreen — table + filter + delete confirm-gate', () => {
   it('renders the seeded products + register link', () => {
     render(<ProductsScreen products={LIST} />, { wrapper: wrapper() });
     expect(
-      screen.getByRole('heading', { name: 'E-Commerce 상품 운영' }),
+      screen.getByRole('heading', { name: 'E-Commerce 상품' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('product-table')).toBeInTheDocument();
     expect(screen.getByTestId('product-row-status-0')).toHaveTextContent(

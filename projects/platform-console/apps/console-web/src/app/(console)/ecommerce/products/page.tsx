@@ -29,7 +29,7 @@ export default async function EcommerceProductsPage() {
 
   const heading = (
     <h1 id="ecommerce-products-heading" className="mb-6 text-2xl font-semibold">
-      E-Commerce 상품 운영
+      E-Commerce 상품
     </h1>
   );
 
