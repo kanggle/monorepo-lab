@@ -94,15 +94,14 @@ const SHIPPING_LIST = {
   totalElements: 1,
 };
 
+// The producer's mutation response (PUT /status, POST /refresh-tracking) is the
+// 3-field `UpdateShippingStatusResponse` PROJECTION — NOT a full Shipping. It
+// has NO `orderId` / `createdAt`. The earlier fixture mocked a full Shipping,
+// which green-washed TASK-PC-FE-129: the real wire shape failed `ShippingSchema`
+// parse and turned a committed 200 into a false failure. (TASK-PC-FE-129)
 const SHIPPING = {
   shippingId: 'ship-1',
-  orderId: 'ord-1',
-  userId: 'u-1',
   status: 'SHIPPED',
-  trackingNumber: 'TRK-001',
-  carrier: 'CJ대한통운',
-  statusHistory: [],
-  createdAt: '2026-06-14T00:00:00Z',
   updatedAt: '2026-06-14T01:00:00Z',
 };
 
@@ -354,5 +353,40 @@ describe('shippings-api — ecommerce FLAT envelope + § 2.5 resilience', () => 
     );
     const res = await updateShippingStatus('ship-1', { status: 'IN_TRANSIT' });
     expect(res.status).toBe('FUTURE_V3');
+  });
+
+  // TASK-PC-FE-129 regression: the producer returns the 3-field projection
+  // `{ shippingId, status, updatedAt }` — NO `orderId` / `createdAt`. Parsing
+  // this with the full `ShippingSchema` (the previous bug) threw a ZodError that
+  // `callEcommerce` swallowed into a NETWORK_ERROR, surfacing a FALSE failure to
+  // the operator even though the backend committed the transition (200).
+  it('a SHIPPED→IN_TRANSIT 200 with the 3-field projection (no orderId/createdAt) resolves — not a false failure', async () => {
+    const projection = {
+      shippingId: 'demo-ship-0002',
+      status: 'IN_TRANSIT',
+      updatedAt: '2026-06-23T11:16:18Z',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(projection)));
+
+    const res = await updateShippingStatus('demo-ship-0002', {
+      status: 'IN_TRANSIT',
+    });
+
+    expect(res.shippingId).toBe('demo-ship-0002');
+    expect(res.status).toBe('IN_TRANSIT');
+    expect('orderId' in res).toBe(false);
+    expect('createdAt' in res).toBe(false);
+  });
+
+  it('refresh-tracking also tolerates the 3-field projection response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({ shippingId: 'ship-1', status: 'IN_TRANSIT' }),
+      ),
+    );
+    const res = await refreshTracking('ship-1');
+    expect(res.shippingId).toBe('ship-1');
+    expect(res.status).toBe('IN_TRANSIT');
   });
 });

@@ -68,15 +68,12 @@ const SHIPPING_LIST = {
   totalElements: 0,
 };
 
+// Mutation upstream response = the producer's 3-field UpdateShippingStatusResponse
+// projection (NO orderId/createdAt) — the real wire shape (TASK-PC-FE-129).
 const SHIPPING = {
   shippingId: 'ship-1',
-  orderId: 'ord-1',
-  userId: 'u-1',
   status: 'SHIPPED',
-  trackingNumber: 'TRK-001',
-  carrier: 'CJ대한통운',
-  statusHistory: [],
-  createdAt: '2026-06-14T00:00:00Z',
+  updatedAt: '2026-06-14T01:00:00Z',
 };
 
 beforeEach(() => {

@@ -7,10 +7,10 @@ import {
 import {
   ShippingListSchema,
   type ShippingList,
-  ShippingSchema,
-  type Shipping,
   type ShippingListParams,
   type UpdateShippingStatusBody,
+  UpdateShippingStatusResponseSchema,
+  type UpdateShippingStatusResponse,
   SHIPPING_DEFAULT_PAGE_SIZE,
   SHIPPING_MAX_PAGE_SIZE,
 } from './shipping-types';
@@ -108,12 +108,18 @@ export function listShippings(
  * Body: `{ status, trackingNumber?, carrier? }`.
  * `trackingNumber` + `carrier` are REQUIRED when `status=SHIPPED`.
  * Producer rejects SHIPPED without them (400 InvalidShipping).
- * Returns the updated Shipping resource.
+ *
+ * Returns the producer's `UpdateShippingStatusResponse` **3-field projection**
+ * `{ shippingId, status, updatedAt }` — NOT a full Shipping (TASK-PC-FE-129).
+ * Parsing this with the full `ShippingSchema` would throw on the real wire
+ * shape (missing `orderId`/`createdAt`) and turn a committed 200 into a false
+ * failure. The UI only awaits success then re-fetches the list, so the
+ * projection is sufficient.
  */
 export function updateShippingStatus(
   id: string,
   body: UpdateShippingStatusBody,
-): Promise<Shipping> {
+): Promise<UpdateShippingStatusResponse> {
   const env = getServerEnv();
   return callEcommerce(
     {
@@ -122,7 +128,7 @@ export function updateShippingStatus(
       path: `/shippings/${encodeURIComponent(id)}/status`,
       body,
     },
-    (j) => ShippingSchema.parse(j),
+    (j) => UpdateShippingStatusResponseSchema.parse(j),
     SHIPPING_LABEL,
   );
 }
@@ -132,8 +138,14 @@ export function updateShippingStatus(
  * Empty body. Best-effort: returns 200 with the (possibly unchanged) shipment.
  * When the carrier mode is mock or carrier is unreachable, the status is
  * unchanged (no error surfaced — best-effort per spec).
+ *
+ * Returns the same `UpdateShippingStatusResponse` 3-field projection as the
+ * status mutation (the producer's `refreshTracking` returns
+ * `UpdateShippingStatusResponse`, NOT a full Shipping — TASK-PC-FE-129).
  */
-export function refreshTracking(id: string): Promise<Shipping> {
+export function refreshTracking(
+  id: string,
+): Promise<UpdateShippingStatusResponse> {
   const env = getServerEnv();
   return callEcommerce(
     {
@@ -142,7 +154,7 @@ export function refreshTracking(id: string): Promise<Shipping> {
       path: `/shippings/${encodeURIComponent(id)}/refresh-tracking`,
       body: {},
     },
-    (j) => ShippingSchema.parse(j),
+    (j) => UpdateShippingStatusResponseSchema.parse(j),
     SHIPPING_LABEL,
   );
 }
