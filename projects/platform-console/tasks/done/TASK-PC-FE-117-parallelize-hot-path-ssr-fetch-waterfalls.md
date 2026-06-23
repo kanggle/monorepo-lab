@@ -8,7 +8,7 @@ console-web 핫패스 SSR fetch 워터폴 병렬화: `/console`(홈) + `/dashboa
 
 # Status
 
-review
+done
 
 # Owner
 
