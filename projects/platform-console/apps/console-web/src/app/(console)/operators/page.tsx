@@ -115,10 +115,21 @@ export default async function OperatorsPage() {
   //
   // TASK-PC-FE-045: the SELF profile (`operatorContext.defaultAccountId`) +
   // password moved to 계정 설정(`/account`); this page is 남 관리 only.
+  // TASK-PC-FE-118 — the create-form tenant options (catalog) and the caller's
+  // own operatorId (self) are independent of each other and both needed only
+  // on this success path (past the noTenant/permissionError/degraded gates
+  // above). Fire them concurrently to remove the SSR waterfall: page latency
+  // goes from `catalog + self` to `max(catalog, self)`. They are awaited
+  // individually (not via Promise.all) so the catalog try/catch keeps its
+  // "registry down → empty options, non-blocking" semantics without taking the
+  // independent self result down with it.
+  const catalogPromise = getCatalog();
+  const selfPromise = getSelfOperatorIdOrNull();
+
   let tenantOptions: string[] = [];
   let isPlatformOperator = false;
   try {
-    const catalog = await getCatalog();
+    const catalog = await catalogPromise;
     const tenants = selectableTenants(catalog.products);
     isPlatformOperator = tenants.includes('*');
     tenantOptions = tenants.filter((t) => t !== '*');
@@ -134,8 +145,9 @@ export default async function OperatorsPage() {
   // can disable the per-row "프로파일 편집" button on the self row. The helper
   // is fail-graceful (any failure → null) — the producer
   // 400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH is the authoritative
-  // gate; this is the UX layer.
-  const selfOperatorId = await getSelfOperatorIdOrNull();
+  // gate; this is the UX layer. Started up-front (concurrently with the
+  // catalog fetch above) and awaited here. (TASK-PC-FE-118)
+  const selfOperatorId = await selfPromise;
 
   return (
     <OperatorsScreen

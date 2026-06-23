@@ -34,6 +34,17 @@ export const dynamic = 'force-dynamic';
  * sections stay intact (mirrors the scm/wms section degrade discipline).
  */
 export default async function EcommercePage() {
+  // Speculatively fire the domain-health fan-out concurrently with the
+  // eligibility pre-flight (TASK-PC-FE-118, same pattern as TASK-PC-FE-117).
+  // domain-health is tenant-agnostic public actuator liveness (not per-tenant
+  // authorized data — TASK-PC-FE-061), so firing it before the eligibility
+  // gate is safe. On the gated branches below (registryDegraded / not-eligible
+  // / 401) this call is wasted, but those are degraded/rare while the eligible
+  // hot path runs the health card on every load. `getDomainHealthState()`
+  // never throws, so leaving `healthPromise` un-awaited on a gated branch
+  // raises no unhandled rejection.
+  const healthPromise = getDomainHealthState();
+
   // Eligibility pre-flight from the data-driven registry (§ 2.2).
   let eligible = false;
   let registryDegraded = false;
@@ -111,8 +122,10 @@ export default async function EcommercePage() {
   // Eligible — surface the ecommerce domain-health card (the public
   // /actuator/health leg, § 2.4.9.2). The health fan-out is tenant-agnostic
   // infra liveness; a BFF-unavailable / unauthorized envelope collapses to a
-  // compact note WITHOUT blanking the section (degrade-safe).
-  const healthState = await getDomainHealthState();
+  // compact note WITHOUT blanking the section (degrade-safe). The call was
+  // started up-front (concurrently with the eligibility pre-flight) and is
+  // awaited here only on the eligible path. (TASK-PC-FE-118)
+  const healthState = await healthPromise;
   if (healthState.unauthorized) {
     redirect('/login');
   }

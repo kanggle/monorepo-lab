@@ -122,11 +122,17 @@ describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
 
   it('registry degraded → degraded note (never blocks on an unproven negative)', async () => {
     getCatalogMock.mockResolvedValue({ products: [], degraded: true });
+    // TASK-PC-FE-118 — health is now fired speculatively up-front (concurrently
+    // with the catalog eligibility pre-flight) to remove the SSR waterfall, so
+    // it MAY be called on this gated branch. The decisive assertion is that the
+    // gated render OUTPUT is unaffected by the speculative call.
+    getDomainHealthStateMock.mockResolvedValue(healthState({}));
 
     await renderPage();
 
     expect(screen.getByTestId('ecommerce-degraded')).toBeInTheDocument();
-    expect(getDomainHealthStateMock).not.toHaveBeenCalled();
+    // The speculative health result does not leak into the degraded render.
+    expect(screen.queryByTestId('domain-health-card-ecommerce')).toBeNull();
   });
 
   it('not eligible (no ecommerce product) → not-eligible note, does not crash', async () => {
