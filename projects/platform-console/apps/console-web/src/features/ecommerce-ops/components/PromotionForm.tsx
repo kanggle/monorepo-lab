@@ -29,6 +29,16 @@ import { ConfirmDialog } from './ConfirmDialog';
  * Producer uses PUT (full replace) for updates — NOT PATCH.
  */
 
+/**
+ * `<input type="date">` yields `YYYY-MM-DD`; the promotion-service parses
+ * startDate/endDate as java.time.Instant (ISO-8601, trailing `Z` required), so a
+ * bare date is rejected with INVALID_PROMOTION_REQUEST. Widen the picked day to a
+ * UTC instant: start → 00:00:00Z, end → 23:59:59Z (end-of-day inclusive window).
+ */
+function dayToInstant(day: string, edge: 'start' | 'end'): string {
+  return `${day}T${edge === 'end' ? '23:59:59' : '00:00:00'}Z`;
+}
+
 export interface PromotionFormProps {
   /** When set, the form is in UPDATE mode for this promotion. */
   existing?: PromotionDetail;
@@ -64,8 +74,10 @@ export function PromotionForm({ existing }: PromotionFormProps) {
   const [maxIssuanceCount, setMaxIssuanceCount] = useState(
     existing ? String(existing.maxIssuanceCount) : '',
   );
-  const [startDate, setStartDate] = useState(existing?.startDate ?? '');
-  const [endDate, setEndDate] = useState(existing?.endDate ?? '');
+  // The producer returns Instant strings (e.g. 2026-07-01T00:00:00Z); the
+  // `type="date"` inputs need a bare YYYY-MM-DD, so slice the date part for edit.
+  const [startDate, setStartDate] = useState((existing?.startDate ?? '').slice(0, 10));
+  const [endDate, setEndDate] = useState((existing?.endDate ?? '').slice(0, 10));
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,8 +125,8 @@ export function PromotionForm({ existing }: PromotionFormProps) {
       discountValue: discountValueNum,
       maxDiscountAmount: maxDiscountAmountNum,
       maxIssuanceCount: maxIssuanceCountNum,
-      startDate: startDate.trim(),
-      endDate: endDate.trim(),
+      startDate: dayToInstant(startDate.trim(), 'start'),
+      endDate: dayToInstant(endDate.trim(), 'end'),
     };
 
     if (isEdit) {
