@@ -1,6 +1,6 @@
 # TASK-PC-FE-119 — 콘솔 E-Commerce 사이드바 메뉴 순서 재배열
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (single-file 순서 변경)
