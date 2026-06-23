@@ -118,7 +118,11 @@ function invalidate(
   qc: ReturnType<typeof useQueryClient>,
   productId?: string,
 ) {
+  // Refetch a mounted list (no flash) AND drop the inactive seeded cache so a
+  // remount after a cross-page register/update re-seeds from the fresh SSR
+  // render — an inactive seed-only query is not refetched (TASK-PC-FE-126).
   qc.invalidateQueries({ queryKey: [ECOMMERCE_KEY, 'list'] });
+  qc.removeQueries({ queryKey: [ECOMMERCE_KEY, 'list'], type: 'inactive' });
   if (productId) {
     qc.invalidateQueries({ queryKey: [ECOMMERCE_KEY, 'detail', productId] });
   }

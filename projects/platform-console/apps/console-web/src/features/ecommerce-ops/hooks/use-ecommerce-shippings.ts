@@ -85,7 +85,11 @@ export function useShippings(
 
 /** Invalidate the shippings list after a mutation. */
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
+  // Refetch a mounted list (no flash) AND drop the inactive seeded cache so a
+  // remount re-seeds from the fresh SSR render — an inactive seed-only query is
+  // not refetched (TASK-PC-FE-126).
   qc.invalidateQueries({ queryKey: [SHIPPINGS_KEY, 'list'] });
+  qc.removeQueries({ queryKey: [SHIPPINGS_KEY, 'list'], type: 'inactive' });
 }
 
 /**

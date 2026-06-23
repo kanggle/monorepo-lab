@@ -75,8 +75,11 @@ function invalidate(
   qc.invalidateQueries({
     queryKey: [PRODUCTS_DETAIL_KEY, 'detail', productId],
   });
-  // The primary-image thumbnail also appears in the list summaries.
+  // The primary-image thumbnail also appears in the list summaries. Refetch a
+  // mounted list (no flash) AND drop the inactive seeded cache so a remount
+  // re-seeds from the fresh SSR render (TASK-PC-FE-126).
   qc.invalidateQueries({ queryKey: [PRODUCTS_DETAIL_KEY, 'list'] });
+  qc.removeQueries({ queryKey: [PRODUCTS_DETAIL_KEY, 'list'], type: 'inactive' });
 }
 
 /** #11 — mint a presigned upload URL (server proxy). */
