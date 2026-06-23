@@ -1,6 +1,6 @@
 # TASK-PC-FE-124 — 콘솔 프로모션 폼이 날짜를 Instant(Z) 형식으로 전송하도록 수정
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **App**: console-web (Next.js)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (날짜 직렬화 버그픽스)
