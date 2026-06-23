@@ -30,6 +30,7 @@ public class AdjustStockService {
     private final InventoryRepository inventoryRepository;
     private final EventPublishingHelper eventPublishingHelper;
     private final ProductMetricPort productMetrics;
+    private final ReservationRetryService reservationRetryService;
 
     @Transactional
     @Caching(evict = {
@@ -42,6 +43,10 @@ public class AdjustStockService {
         StockSnapshot snapshot = adjustInventoryStock(command.variantId(), command.quantity());
         recordStockMetrics(command, snapshot.currentStock(), product);
         publishStockChangedEvent(command, command.variantId(), snapshot.previousStock(), snapshot.currentStock());
+        // A positive adjustment may satisfy waiting backordered reservations (TASK-BE-428, AC-4).
+        if (command.quantity() > 0) {
+            reservationRetryService.onStockIncreased(command.variantId());
+        }
         return new AdjustStockResult(command.variantId(), snapshot.currentStock());
     }
 

@@ -101,10 +101,38 @@ public class Order {
         if (this.status == OrderStatus.CONFIRMED) {
             return false;
         }
-        if (this.status != OrderStatus.PENDING) {
-            throw new InvalidOrderException("Order can only be confirmed in PENDING status: " + status);
+        // Confirm is reachable from PENDING (the normal reservation saga) or from
+        // BACKORDERED (a later replenishment re-reserved the held order — TASK-BE-428).
+        if (this.status != OrderStatus.PENDING && this.status != OrderStatus.BACKORDERED) {
+            throw new InvalidOrderException("Order can only be confirmed in PENDING or BACKORDERED status: " + status);
         }
         this.status = OrderStatus.CONFIRMED;
+        this.updatedAt = Instant.now(clock);
+        return true;
+    }
+
+    /**
+     * Hold the order for backorder (payment-driven reservation saga, TASK-BE-428): after
+     * payment, product-service could not all-or-nothing reserve stock for at least one
+     * line, so the order is held — no stock decremented — until a later replenishment
+     * re-reserves it ({@code BACKORDERED → CONFIRMED} via {@link #confirm(Clock)}).
+     *
+     * <p>Idempotent + late-event safe: returns {@code false} (no mutation) when already
+     * {@code BACKORDERED} (re-delivery) or when the order has already advanced
+     * ({@code CONFIRMED}/{@code SHIPPED}/{@code DELIVERED}/{@code CANCELLED}/
+     * {@code STUCK_RECOVERY_FAILED}) — a late {@code OrderReservationFailed} for an
+     * already-advanced order is a no-op the caller logs, never a thrown error. Only a
+     * {@code PENDING} order actually transitions.
+     *
+     * @param clock domain clock for the {@code updatedAt} stamp
+     * @return {@code true} if the order transitioned {@code PENDING → BACKORDERED};
+     *         {@code false} on a no-op
+     */
+    public boolean markBackordered(Clock clock) {
+        if (this.status != OrderStatus.PENDING) {
+            return false;
+        }
+        this.status = OrderStatus.BACKORDERED;
         this.updatedAt = Instant.now(clock);
         return true;
     }

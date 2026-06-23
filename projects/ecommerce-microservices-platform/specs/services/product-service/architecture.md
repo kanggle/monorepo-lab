@@ -20,7 +20,7 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/product-service/` |
 | Data store | PostgreSQL (owned) + S3 (product image storage via ProductImageBucketResolver port, TASK-BE-143) |
 | Event publication | Kafka via outbox (product.* lifecycle events) |
-| Event consumption | none (single-type rest-api) |
+| Event consumption | `OrderPlaced` / `OrderCancelled` from `order.order.*` and `PaymentCompleted` from `payment.payment.completed` (consumer group `product-service-reservation`) — the payment-driven stock-reservation + backorder saga (TASK-BE-428). See "Stock reservation saga" below. |
 
 ### Service Type Composition
 
@@ -86,6 +86,35 @@ Key domain concepts:
   - `ProductImagesUpdated` → `product.product.images-updated`
 - Publish failures are counted via `ProductMetrics.incrementEventPublishFailure(eventType)` and logged at ERROR level; no retry or dead-letter queue is wired in v1.
 - **Note**: the Identity table entry "Event publication | Kafka via outbox" reflects the intended target pattern; the v1 implementation is direct publish without a transactional outbox table. Adding the outbox is a forward-declared improvement.
+
+### Stock reservation saga (TASK-BE-428)
+
+product-service owns the **order-time sellability gate** (ADR-MONO-022 §D4): it
+reserves (decrements) variant stock when an order is paid, and is the producer of
+the `StockChanged(ORDER_RESERVED)` event the order-service confirm saga waits for.
+
+- **Aggregate**: `StockReservation` (`order_id` unique, `tenant_id`, `status`
+  `NEW|RESERVED|BACKORDERED|RELEASED`, `payment_received` flag, `@Version`) with
+  child `StockReservationLine` (`variant_id`, `product_id`, `quantity`). New tables
+  `stock_reservations` / `stock_reservation_lines` (Flyway, main + h2).
+- **Convergence (order-independent)**: `OrderPlaced` fills the lines; `PaymentCompleted`
+  sets `payment_received`. Whichever arrives first creates the row; a single
+  all-or-nothing reserve fires exactly once when both inputs are present and
+  `status=NEW`. (The two topics have no cross-topic ordering guarantee.)
+- **Reserve (all-or-nothing)**: in one transaction, verify every line has enough
+  stock, then decrement each (`Inventory.decrease`, optimistic-locked, no-negative
+  invariant). Success → `RESERVED` + one `StockChanged(ORDER_RESERVED, orderId)` per
+  line. Any shortage → **no decrement**, `BACKORDERED` + `OrderReservationFailed`.
+- **Restock retry (FIFO)**: any positive stock increase (`AdjustStockService` admin
+  restock, `WmsInventoryReconciliationService` positive delta) calls
+  `ReservationRetryService.onStockIncreased(variantId)`, which re-attempts
+  `BACKORDERED` reservations holding a line on that variant in `created_at` order.
+- **Release (compensation)**: `OrderCancelled` → reservation `RELEASED`; if it was
+  `RESERVED`, restore each line's stock + emit `StockChanged(ORDER_CANCELLED, orderId)`;
+  if `BACKORDERED`/`NEW`, release without stock change (so a later restock never
+  reserves for a cancelled order).
+- **Idempotency**: all three consumers dedupe on `event_id`; per-order convergence
+  and per-reservation transactions isolate concurrent retries/cancels.
 
 ## Integration Rules
 - HTTP behavior must follow published contracts

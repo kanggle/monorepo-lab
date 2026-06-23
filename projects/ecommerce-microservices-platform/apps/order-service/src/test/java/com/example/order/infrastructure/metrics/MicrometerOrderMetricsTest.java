@@ -38,6 +38,23 @@ class MicrometerOrderMetricsTest {
     }
 
     @Test
+    @DisplayName("백오더 보류 시 order_backordered_total이 증가한다")
+    void recordOrderBackordered_incrementsCounter() {
+        orderMetrics.recordOrderBackordered();
+        orderMetrics.recordOrderBackordered();
+
+        assertThat(registry.counter("order_backordered_total").count()).isEqualTo(2.0);
+    }
+
+    @Test
+    @DisplayName("운영자 취소(reason=operator)는 default(user) 카운터로 집계된다")
+    void recordOrderCancelled_operatorReason_incrementsUserCounter() {
+        orderMetrics.recordOrderCancelled("operator");
+
+        assertThat(registry.counter("order_cancelled_total", "reason", "user").count()).isEqualTo(1.0);
+    }
+
+    @Test
     @DisplayName("주문 취소 시 reason별 order_cancelled_total이 증가한다")
     void recordOrderCancelled_incrementsCounterByReason() {
         orderMetrics.recordOrderCancelled("user");

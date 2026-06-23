@@ -121,9 +121,44 @@ Published when inventory stock is adjusted for any variant.
 }
 ```
 
+**Topic:** `product.product.stock-changed`
+
 **reason values:** `RESTOCK`, `ORDER_RESERVED`, `ORDER_CANCELLED`, `ADMIN_ADJUSTMENT`
 
 **orderId:** nullable. Present when `reason` is `ORDER_RESERVED` or `ORDER_CANCELLED`. Identifies the order that triggered the stock change.
+
+**Producers of each reason:**
+- `ADMIN_ADJUSTMENT` — operator manual stock adjust (`AdjustStockService`).
+- `RESTOCK` — replenishment (operator restock or WMS inventory-received reconciliation).
+- `ORDER_RESERVED` — the payment-driven reservation saga decremented stock for a paid order (one event per reserved variant line; all carry the same `orderId`). Emitted by `ReservationService` on successful all-or-nothing reserve. `order-service` consumes this to transition the order `PENDING|BACKORDERED → CONFIRMED` (idempotent; duplicate `orderId` confirms once).
+- `ORDER_CANCELLED` — a previously `RESERVED` order was cancelled; the saga restored the decremented stock (one event per restored line, same `orderId`).
+
+---
+
+## OrderReservationFailed
+
+Published when the payment-driven reservation saga could **not** reserve stock for a paid order because at least one line was short. Per the all-or-nothing rule **no stock is decremented** — the whole order is held for backorder.
+
+**Topic:** `product.product.reservation-failed`
+
+**Consumers:** order-service (transitions the order `PENDING → BACKORDERED`)
+
+**Payload**
+```json
+{
+  "orderId": "string (UUID)",
+  "reason": "INSUFFICIENT_STOCK",
+  "shortages": [
+    {
+      "variantId": "string (UUID)",
+      "requested": 5,
+      "available": 2
+    }
+  ]
+}
+```
+
+`shortages` lists only the lines that were short at reservation time (informational; the order is backordered as a whole regardless of how many lines were short). A later replenishment of the short variants triggers a FIFO re-reservation; on success the saga emits `StockChanged(ORDER_RESERVED)` and the order confirms.
 
 ---
 

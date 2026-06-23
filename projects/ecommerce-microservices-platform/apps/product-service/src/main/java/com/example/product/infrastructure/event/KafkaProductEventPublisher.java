@@ -20,6 +20,7 @@ public class KafkaProductEventPublisher implements ProductEventPublisher {
     static final String TOPIC_PRODUCT_DELETED = "product.product.deleted";
     static final String TOPIC_STOCK_CHANGED = "product.product.stock-changed";
     static final String TOPIC_PRODUCT_IMAGES_UPDATED = "product.product.images-updated";
+    static final String TOPIC_RESERVATION_FAILED = "product.product.reservation-failed";
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ProductMetrics productMetrics;
@@ -32,6 +33,7 @@ public class KafkaProductEventPublisher implements ProductEventPublisher {
             case "ProductDeleted" -> TOPIC_PRODUCT_DELETED;
             case "StockChanged" -> TOPIC_STOCK_CHANGED;
             case "ProductImagesUpdated" -> TOPIC_PRODUCT_IMAGES_UPDATED;
+            case "OrderReservationFailed" -> TOPIC_RESERVATION_FAILED;
             default -> throw new IllegalArgumentException("Unknown event type: " + event.eventType());
         };
 

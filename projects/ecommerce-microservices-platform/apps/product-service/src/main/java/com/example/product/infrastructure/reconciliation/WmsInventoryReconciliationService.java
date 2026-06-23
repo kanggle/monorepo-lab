@@ -1,6 +1,7 @@
 package com.example.product.infrastructure.reconciliation;
 
 import com.example.product.application.service.EventPublishingHelper;
+import com.example.product.application.service.ReservationRetryService;
 import com.example.product.domain.event.ProductEvent;
 import com.example.product.domain.event.StockChangedPayload;
 import com.example.product.domain.model.Inventory;
@@ -32,6 +33,7 @@ public class WmsInventoryReconciliationService {
     private final WmsInventoryAvailableRepository inventoryAvailableRepository;
     private final InventoryRepository inventoryRepository;
     private final EventPublishingHelper eventPublishingHelper;
+    private final ReservationRetryService reservationRetryService;
     private final Clock clock;
 
     /** Reverse-identity stream: upsert skuId → skuCode (version-guarded, out-of-order tolerant). */
@@ -117,5 +119,11 @@ public class WmsInventoryReconciliationService {
                 "variant(wms-reconciliation)", ref.variantId());
         log.info("wms reconciliation applied. skuCode={}, variantId={}, {} -> {} (delta {}).",
                 skuCode, ref.variantId(), previousStock, newStock, appliedDelta);
+
+        // A positive warehouse-origin delta may satisfy waiting backordered reservations
+        // (TASK-BE-428, AC-4). Deferred to afterCommit inside the retry service.
+        if (appliedDelta > 0) {
+            reservationRetryService.onStockIncreased(ref.variantId());
+        }
     }
 }

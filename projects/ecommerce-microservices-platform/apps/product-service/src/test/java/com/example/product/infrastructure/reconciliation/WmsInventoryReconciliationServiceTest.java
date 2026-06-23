@@ -1,6 +1,7 @@
 package com.example.product.infrastructure.reconciliation;
 
 import com.example.product.application.service.EventPublishingHelper;
+import com.example.product.application.service.ReservationRetryService;
 import com.example.product.domain.event.ProductEvent;
 import com.example.product.domain.model.Inventory;
 import com.example.product.domain.repository.InventoryRepository;
@@ -33,6 +34,7 @@ class WmsInventoryReconciliationServiceTest {
     private WmsInventoryAvailableRepository inventoryAvailableRepository;
     private InventoryRepository inventoryRepository;
     private EventPublishingHelper eventPublishingHelper;
+    private ReservationRetryService reservationRetryService;
     private WmsInventoryReconciliationService service;
 
     private final UUID skuId = UUID.randomUUID();
@@ -47,9 +49,10 @@ class WmsInventoryReconciliationServiceTest {
         inventoryAvailableRepository = mock(WmsInventoryAvailableRepository.class);
         inventoryRepository = mock(InventoryRepository.class);
         eventPublishingHelper = mock(EventPublishingHelper.class);
+        reservationRetryService = mock(ReservationRetryService.class);
         service = new WmsInventoryReconciliationService(
                 skuSnapshotRepository, inventoryAvailableRepository,
-                inventoryRepository, eventPublishingHelper, FIXED);
+                inventoryRepository, eventPublishingHelper, reservationRetryService, FIXED);
     }
 
     private void givenResolvable(int currentStock) {
@@ -95,6 +98,20 @@ class WmsInventoryReconciliationServiceTest {
         service.reconcileAvailable(inventoryId, skuId, 130); // delta +30
 
         verify(inventoryRepository).save(argThatStockIs(80));
+        // Positive delta retriggers backordered reservations holding this variant (TASK-BE-428 AC-4).
+        verify(reservationRetryService).onStockIncreased(variantId);
+    }
+
+    @Test
+    @DisplayName("음수 delta는 백오더 재시도를 트리거하지 않는다 (TASK-BE-428)")
+    void negativeDelta_doesNotTriggerRetry() {
+        givenResolvable(50);
+        given(inventoryAvailableRepository.findById(inventoryId))
+                .willReturn(Optional.of(WmsInventoryAvailableEntity.of(inventoryId, skuId, 100, Instant.now(FIXED))));
+
+        service.reconcileAvailable(inventoryId, skuId, 95); // delta -5
+
+        verify(reservationRetryService, never()).onStockIncreased(any());
     }
 
     @Test
