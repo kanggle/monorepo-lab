@@ -1,6 +1,6 @@
 # TASK-FE-079 — web-store 성능 측정 baseline (Core Web Vitals RUM + Lighthouse 절차)
 
-- **Status**: ready
+- **Status**: review
 - **Project**: ecommerce-microservices-platform
 - **App**: web-store (Next.js 15)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (계측 추가, 런타임 동작 무변경)
