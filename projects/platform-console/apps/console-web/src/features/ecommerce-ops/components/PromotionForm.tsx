@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
+import { showPickerOnClick } from '@/shared/lib/show-picker';
 import {
   useCreatePromotion,
   useUpdatePromotion,
@@ -274,6 +275,7 @@ export function PromotionForm({ existing }: PromotionFormProps) {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
+            onClick={showPickerOnClick}
             className={inputCls}
             data-testid="promotion-form-start-date"
           />
@@ -287,6 +289,7 @@ export function PromotionForm({ existing }: PromotionFormProps) {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
+            onClick={showPickerOnClick}
             className={inputCls}
             data-testid="promotion-form-end-date"
           />
