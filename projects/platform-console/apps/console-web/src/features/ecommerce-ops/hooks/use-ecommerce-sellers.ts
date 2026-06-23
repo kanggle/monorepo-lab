@@ -96,9 +96,20 @@ export function useSeller(id: string | null, initial?: SellerDetail) {
 
 // --- mutations ------------------------------------------------------------
 
-/** Invalidate the list after a successful register. */
+/**
+ * Drop the cached list after a successful register. `removeQueries` (NOT
+ * `invalidateQueries`): the register form lives on a separate `/new` route, so
+ * the list query is INACTIVE at mutation time — a plain invalidate would only
+ * mark it stale, never refetch it. The form then navigates to the
+ * `force-dynamic` /ecommerce/sellers, whose fresh SSR seed must re-seed the
+ * query as `initialData`; but React Query ignores `initialData` when a cache
+ * entry already exists, and the seeded page-0 query is `refetchOnMount: false`
+ * + `staleTime: 30s` with window-focus/interval refetch off — so the stale
+ * pre-register snapshot would shadow the fresh seed (new seller missing until a
+ * hard reload). Removing the cache lets the fresh seed win. (TASK-PC-FE-126)
+ */
 function invalidateList(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: [SELLERS_KEY, 'list'] });
+  qc.removeQueries({ queryKey: [SELLERS_KEY, 'list'] });
 }
 
 export function useRegisterSeller() {

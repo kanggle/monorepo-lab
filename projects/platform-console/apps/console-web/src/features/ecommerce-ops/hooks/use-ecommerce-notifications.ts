@@ -108,12 +108,24 @@ export function useNotificationTemplate(
 
 // --- mutations ------------------------------------------------------------
 
-/** Invalidate the list + (optionally) one template's detail after a mutation. */
+/**
+ * After a mutation: DROP the list cache, INVALIDATE the (active) detail.
+ *
+ * `removeQueries` for the list (NOT invalidate): every template mutation lives
+ * on a separate route (`/new` create, `/[id]` update) and redirects to the
+ * `force-dynamic` list, so the list query is inactive at mutation time — a plain
+ * invalidate would never refetch it, and the seeded page-0 query
+ * (`refetchOnMount: false` + `staleTime: 30s`) would shadow the fresh SSR seed
+ * with the stale pre-mutation snapshot (new/changed template missing until a
+ * hard reload). Removing the cache lets the fresh seed re-seed it. The detail
+ * stays `invalidateQueries`: it IS active on `/[id]` during an update, so a
+ * seamless background refetch is correct there. (TASK-PC-FE-126)
+ */
 function invalidate(
   qc: ReturnType<typeof useQueryClient>,
   templateId?: string,
 ) {
-  qc.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY, 'list'] });
+  qc.removeQueries({ queryKey: [NOTIFICATIONS_KEY, 'list'] });
   if (templateId) {
     qc.invalidateQueries({
       queryKey: [NOTIFICATIONS_KEY, 'detail', templateId],

@@ -722,6 +722,26 @@ const MESSAGES: Record<string, string> = {
   TEMPLATE_ALREADY_EXISTS:
     '같은 유형·채널의 알림 템플릿이 이미 있습니다. 기존 템플릿을 수정하세요.',
   TEMPLATE_NOT_FOUND: '대상 알림 템플릿을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  // --- ecommerce promotions (TASK-PC-FE-126 / §2.4.10.2) -------------------
+  // The promotion form (create/update via PromotionForm) + coupon issuance
+  // surface producer codes via messageForCode. Without these, a 400
+  // INVALID_PROMOTION_REQUEST (the producer's date-order / percentage>100 /
+  // bad-date guard — GlobalExceptionHandler) or a 422 state guard falls through
+  // to the generic save-failed fallback ("저장하지 못했습니다.") so the operator
+  // can't tell WHAT was wrong — actionable text instead. (`VALIDATION_ERROR`,
+  // `ACCESS_DENIED` are already mapped above; coupon redemption/restore codes
+  // are web-store/customer paths, not console-reachable, so out of scope.)
+  INVALID_PROMOTION_REQUEST:
+    '프로모션 정보가 올바르지 않습니다. 기간(종료일이 시작일보다 이후)과 할인값(퍼센트 할인은 1~100)을 확인하세요.',
+  PROMOTION_NOT_FOUND: '대상 프로모션을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  PROMOTION_ALREADY_ENDED:
+    '이미 종료된 프로모션입니다. 종료된 프로모션은 수정할 수 없습니다.',
+  PROMOTION_HAS_ISSUED_COUPONS:
+    '이미 쿠폰이 발급된 프로모션이라 삭제할 수 없습니다.',
+  PROMOTION_NOT_ACTIVE:
+    '진행 중인 프로모션이 아니어서 쿠폰을 발급할 수 없습니다.',
+  COUPON_LIMIT_EXCEEDED:
+    '최대 발급 수량을 초과하여 쿠폰을 발급할 수 없습니다. 남은 수량을 확인하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {

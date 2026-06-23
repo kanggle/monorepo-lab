@@ -33,7 +33,8 @@ import {
  *
  * No tight auto-refetch loop (no `refetchInterval` / `refetchOnWindowFocus`);
  * a re-query is a filter/page change (a new queryKey), an explicit drill, or a
- * mutation-success `invalidateQueries`.
+ * mutation-success cache reset (list `removeQueries` so the destination
+ * force-dynamic page's fresh SSR seed wins; detail `invalidateQueries`).
  *
  * Mutation discipline (§ 2.4.10): NO `Idempotency-Key` (the producer defines
  * none) — confirm-gate (in the screen) + producer state guards (409/422)
@@ -113,12 +114,24 @@ export function useProduct(id: string | null, initial?: ProductDetail) {
 
 // --- mutations ------------------------------------------------------------
 
-/** Invalidate the list + (optionally) one product's detail after a mutation. */
+/**
+ * After a mutation: DROP the list cache, INVALIDATE the (active) detail.
+ *
+ * `removeQueries` for the list (NOT invalidate): every product mutation lives on
+ * a separate route (`/new` create, `/[id]` update/delete) and redirects to the
+ * `force-dynamic` list, so the list query is inactive at mutation time — a plain
+ * invalidate would never refetch it, and the seeded page-0 query
+ * (`refetchOnMount: false` + `staleTime: 30s`) would shadow the fresh SSR seed
+ * with the stale pre-mutation snapshot (new/changed product missing until a hard
+ * reload). Removing the cache lets the fresh seed re-seed it. The detail stays
+ * `invalidateQueries`: it IS active on `/[id]` during an update, so a seamless
+ * background refetch is correct there. (TASK-PC-FE-126)
+ */
 function invalidate(
   qc: ReturnType<typeof useQueryClient>,
   productId?: string,
 ) {
-  qc.invalidateQueries({ queryKey: [ECOMMERCE_KEY, 'list'] });
+  qc.removeQueries({ queryKey: [ECOMMERCE_KEY, 'list'] });
   if (productId) {
     qc.invalidateQueries({ queryKey: [ECOMMERCE_KEY, 'detail', productId] });
   }
