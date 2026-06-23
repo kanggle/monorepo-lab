@@ -57,6 +57,21 @@ class TemplateControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/notifications/templates - 멀티 role(콤마조인) 헤더에 ADMIN 포함 시 200")
+    void getTemplates_multiRoleContainingAdmin_returns200() throws Exception {
+        // The gateway (JwtHeaderEnrichmentFilter, ADR-MONO-035 4b-2a) joins the
+        // roles claim with ","; a multi-domain operator presents e.g.
+        // "ADMIN,WMS_OPERATOR". ADMIN membership must be admitted (not exact-equals).
+        PageResult<NotificationTemplate> pageResult = new PageResult<>(List.of(), 0, 20, 0L, 0);
+        given(templateService.getTemplates(any()))
+                .willReturn(pageResult);
+
+        mockMvc.perform(get("/api/notifications/templates")
+                        .header("X-User-Role", "ADMIN,WMS_OPERATOR"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("GET /api/notifications/templates/{id} - 템플릿 상세 조회 성공 (body 포함)")
     void getTemplate_returns200WithBody() throws Exception {
         NotificationTemplate template = NotificationTemplate.create(

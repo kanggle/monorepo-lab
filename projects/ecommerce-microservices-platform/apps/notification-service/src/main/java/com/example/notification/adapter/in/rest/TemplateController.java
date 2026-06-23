@@ -81,8 +81,27 @@ public class TemplateController {
     }
 
     private void validateAdminRole(String userRole) {
-        if (!ADMIN_ROLE.equals(userRole)) {
+        if (!hasAdminRole(userRole)) {
             throw new AdminAccessDeniedException("Not an admin user");
         }
+    }
+
+    /**
+     * The API gateway ({@code JwtHeaderEnrichmentFilter}, ADR-MONO-035 4b-2a)
+     * injects {@code X-User-Role} as the COMMA-JOINED {@code roles} claim — e.g.
+     * {@code "ADMIN,WMS_OPERATOR"} for a multi-domain operator. Admit when ADMIN
+     * is one of the joined roles; an exact-equals check wrongly 403s any operator
+     * who holds more than one role.
+     */
+    private static boolean hasAdminRole(String userRole) {
+        if (userRole == null || userRole.isBlank()) {
+            return false;
+        }
+        for (String role : userRole.split(",")) {
+            if (ADMIN_ROLE.equals(role.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
