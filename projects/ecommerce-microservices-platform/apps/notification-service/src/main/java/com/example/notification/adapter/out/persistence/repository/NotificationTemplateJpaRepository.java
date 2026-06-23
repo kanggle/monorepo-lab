@@ -14,8 +14,17 @@ interface NotificationTemplateJpaRepository extends JpaRepository<NotificationTe
     /**
      * Tenant-scoped admin template list (TASK-BE-372 M3) — backs the operator
      * "list templates" surface; excludes other tenants' rows.
+     *
+     * <p>Ordered newest-first ({@code createdAt DESC}) so a just-created template
+     * lands on page 0 instead of at a random offset — {@code templateId} is a
+     * random UUID, so without an explicit order a new row could fall onto a later
+     * page and appear "missing" (TASK-BE-427). {@code templateId ASC} is a
+     * deterministic tiebreaker that keeps pagination stable across requests when
+     * rows share a {@code createdAt}. Mirrors the notification list's
+     * {@code OrderByCreatedAtDesc}.
      */
-    Page<NotificationTemplateJpaEntity> findByTenantId(String tenantId, Pageable pageable);
+    Page<NotificationTemplateJpaEntity> findByTenantIdOrderByCreatedAtDescTemplateIdAsc(
+            String tenantId, Pageable pageable);
 
     /**
      * Tenant-scoped single-template lookup backing the admin detail / update path. A
