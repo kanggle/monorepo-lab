@@ -1,6 +1,6 @@
 # TASK-PC-FE-126 — E-Commerce 운영 목록이 등록(별도 페이지) 후 새로고침 전까지 새 행을 안 보여주는 버그
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **Service**: console-web
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (react-query 캐시 무효화 동작 버그픽스)
