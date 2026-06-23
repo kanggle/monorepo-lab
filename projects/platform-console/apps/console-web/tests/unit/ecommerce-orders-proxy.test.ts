@@ -43,6 +43,7 @@ vi.mock('@/shared/config/env', () => ({
   getServerEnv: () => ENV,
 }));
 
+import { GET as orderListGET } from '@/app/api/ecommerce/orders/route';
 import { GET as orderDetailGET } from '@/app/api/ecommerce/orders/[id]/route';
 import { POST as statusPOST } from '@/app/api/ecommerce/orders/[id]/status/route';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
@@ -79,6 +80,49 @@ const ORDER_DETAIL = {
 beforeEach(() => {
   cookieJar.clear();
   vi.unstubAllGlobals();
+});
+
+const ORDER_LIST_EMPTY = { content: [], page: 0, size: 20, totalElements: 0 };
+
+describe('GET /api/ecommerce/orders (list proxy)', () => {
+  it('forwards the status filter + pagination to GET /admin/orders with the domain-facing token', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(ORDER_LIST_EMPTY));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await orderListGET(
+      new Request(
+        'http://console.local/api/ecommerce/orders?status=CONFIRMED&page=0&size=20',
+      ),
+    );
+    expect(res.status).toBe(200);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const parsed = new URL(String(url));
+    expect(parsed.origin + parsed.pathname).toBe(
+      'http://ecommerce.local/api/admin/orders',
+    );
+    expect(parsed.searchParams.get('status')).toBe('CONFIRMED');
+    expect(parsed.searchParams.get('page')).toBe('0');
+    expect(parsed.searchParams.get('size')).toBe('20');
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['X-Tenant-Id']).toBeUndefined();
+  });
+
+  it('503 → 503 (section degrades only)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ecomError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await orderListGET(
+      new Request('http://console.local/api/ecommerce/orders?status=CONFIRMED'),
+    );
+    expect(res.status).toBe(503);
+  });
 });
 
 describe('GET /api/ecommerce/orders/{id} (detail proxy)', () => {
