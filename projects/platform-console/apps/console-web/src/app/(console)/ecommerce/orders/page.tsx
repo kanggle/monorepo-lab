@@ -26,7 +26,7 @@ export default async function EcommerceOrdersPage() {
 
   const heading = (
     <h1 id="ecommerce-orders-heading" className="mb-6 text-2xl font-semibold">
-      E-Commerce 주문 운영
+      E-Commerce 주문
     </h1>
   );
 

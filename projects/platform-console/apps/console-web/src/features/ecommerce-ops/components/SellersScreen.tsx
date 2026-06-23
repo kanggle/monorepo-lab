@@ -56,7 +56,7 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
           id="ecommerce-sellers-heading"
           className="text-2xl font-semibold"
         >
-          E-Commerce 셀러 운영
+          E-Commerce 셀러
         </h1>
         <Link
           href="/ecommerce/sellers/new"
