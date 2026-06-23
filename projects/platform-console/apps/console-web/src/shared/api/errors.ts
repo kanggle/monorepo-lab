@@ -715,6 +715,13 @@ const MESSAGES: Record<string, string> = {
     '이미지 형식 또는 크기가 올바르지 않습니다 (JPEG·PNG·WebP, 5MB 이하).',
   STORAGE_UNAVAILABLE:
     '이미지 저장소가 일시적으로 응답할 수 없습니다. 잠시 후 다시 시도하세요.',
+  // --- ecommerce notification templates (TASK-PC-FE-089 / §2.4.10.4) --------
+  // The form submit (create/update) surfaces producer codes via messageForCode;
+  // without these entries a 409/404 falls through to the generic save-failed
+  // fallback ("저장하지 못했습니다.") — actionable text instead (TASK-PC-FE-125).
+  TEMPLATE_ALREADY_EXISTS:
+    '같은 유형·채널의 알림 템플릿이 이미 있습니다. 기존 템플릿을 수정하세요.',
+  TEMPLATE_NOT_FOUND: '대상 알림 템플릿을 찾을 수 없습니다. 목록을 새로고침하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {
