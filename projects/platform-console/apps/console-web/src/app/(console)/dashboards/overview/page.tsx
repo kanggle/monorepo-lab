@@ -39,6 +39,20 @@ export const dynamic = 'force-dynamic';
  *     intact (per-source isolation generalised to the whole envelope).
  */
 export default async function OperatorOverviewPage() {
+  // Speculatively fire the domain-health fan-out concurrently with the
+  // operator-overview fetch (TASK-PC-FE-117). The two are independent BFF
+  // round-trips, so starting them together turns the success-path latency
+  // from `overview + health` into `max(overview, health)`.
+  //
+  // This deliberately reverses TASK-PC-FE-061's "fetch only in the success
+  // branch" posture: on the gated branches below (unauthorized / noTenant /
+  // bffUnavailable) this speculative call is wasted. The trade-off is net
+  // positive — those branches are degraded/rare (noTenant is effectively
+  // first-entry-only since the active-tenant default of TASK-PC-FE-036),
+  // while the hot success path runs on every load. `getDomainHealthState()`
+  // never throws, so leaving `healthPromise` un-awaited on a gated branch
+  // raises no unhandled rejection.
+  const healthPromise = getDomainHealthState();
   const state = await getOperatorOverviewState();
 
   if (state.unauthorized) {
@@ -105,9 +119,10 @@ export default async function OperatorOverviewPage() {
 
   // Active tenant is guaranteed past the gates above, so the domain-health
   // fan-out won't NO_ACTIVE_TENANT here. The summary card degrades on its own
-  // (null health → compact note) so it never blanks the overview. Fetched only
-  // in the success branch — no wasted call on a gated render. (TASK-PC-FE-061)
-  const healthState = await getDomainHealthState();
+  // (null health → compact note) so it never blanks the overview. The health
+  // call was started up-front (concurrently with the overview fetch) and is
+  // awaited here only on the success path. (TASK-PC-FE-061 / TASK-PC-FE-117)
+  const healthState = await healthPromise;
 
   return (
     <>

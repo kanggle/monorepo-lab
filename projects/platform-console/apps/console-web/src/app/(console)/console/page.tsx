@@ -23,15 +23,25 @@ export const dynamic = 'force-dynamic';
  * product's domain operations (TASK-PC-FE-065).
  */
 export default async function ConsoleHomePage() {
+  // Fire both independent server fetches concurrently to avoid an SSR
+  // waterfall (TASK-PC-FE-117): the catalog (IAM registry) and the per-domain
+  // health fan-out have no data dependency, so starting them together turns
+  // the page latency from `catalog + health` into `max(catalog, health)`.
+  // `getDomainHealthState()` never throws (it catches every error and returns
+  // a discriminated state), so leaving its promise un-awaited on the catalog
+  // 401-redirect path raises no unhandled rejection.
+  const catalogPromise = getCatalog();
+  const healthPromise = getDomainHealthState();
+
   let catalog;
   try {
-    catalog = await getCatalog();
+    catalog = await catalogPromise;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect('/login');
     throw err;
   }
 
-  const healthState = await getDomainHealthState();
+  const healthState = await healthPromise;
 
   // ProductKey ↔ domain-health domain key is 1:1 (iam/wms/scm/finance/erp).
   const healthByDomain: Partial<Record<ProductKey, TileTone>> = {};
