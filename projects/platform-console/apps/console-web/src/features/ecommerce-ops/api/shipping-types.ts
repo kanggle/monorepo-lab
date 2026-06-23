@@ -72,10 +72,16 @@ export const ShippingSummarySchema = z
   .object({
     shippingId: z.string(),
     orderId: z.string(),
-    userId: z.string(),
+    // The producer's list/detail DTOs (ShippingSummary / ShippingResponse) do
+    // NOT expose userId, and return null (not absent) for an unset tracking
+    // number / carrier. Match that wire shape: userId optional, tracking/carrier
+    // nullable — otherwise a non-empty list fails Zod parse and the section
+    // degrades the moment any shipping row exists. The UI never reads userId and
+    // renders carrier/trackingNumber as `?? '—'`.
+    userId: z.string().optional(),
     status: z.string(),
-    trackingNumber: z.string().optional(),
-    carrier: z.string().optional(),
+    trackingNumber: z.string().nullable().optional(),
+    carrier: z.string().nullable().optional(),
     createdAt: z.string(),
   })
   .passthrough();
@@ -86,10 +92,12 @@ export const ShippingSchema = z
   .object({
     shippingId: z.string(),
     orderId: z.string(),
-    userId: z.string(),
+    // Producer ShippingResponse omits userId and returns null for unset
+    // tracking/carrier (same wire shape as the list summary above).
+    userId: z.string().optional(),
     status: z.string(),
-    trackingNumber: z.string().optional(),
-    carrier: z.string().optional(),
+    trackingNumber: z.string().nullable().optional(),
+    carrier: z.string().nullable().optional(),
     statusHistory: z.array(ShippingStatusHistorySchema).default([]),
     createdAt: z.string(),
     updatedAt: z.string().optional(),
