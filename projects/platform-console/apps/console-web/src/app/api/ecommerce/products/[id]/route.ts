@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ApiError } from '@/shared/api/errors';
 import {
   updateProduct,
   deleteProduct,
@@ -49,6 +50,15 @@ export async function PATCH(
  * Same-origin ecommerce **delete product** mutation proxy
  * (console-integration-contract § 2.4.10 #5): `DELETE /admin/products/{id}`.
  * Producer returns 204; the proxy returns 204. Confirm-gated in the UI.
+ *
+ * **Idempotent delete (TASK-PC-FE-131)**: the producer soft-deletes, so a second
+ * delete of an already-removed product returns `404 PRODUCT_NOT_FOUND`. The
+ * delete goal (product absent) is already satisfied, so we render that as `204`
+ * rather than a hard failure — consistent with the § 2.4 operator-action
+ * idempotency principle ("the console renders the result"; `platform-console` is
+ * not `transactional`). The producer contract is unchanged; only the console
+ * seam treats not-found-on-delete as success. All other errors (401/403/409/422/
+ * 503/timeout) keep their existing `mapEcommerceError` mapping.
  */
 export async function DELETE(
   _req: Request,
@@ -60,6 +70,9 @@ export async function DELETE(
     await deleteProduct(id);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return new NextResponse(null, { status: 204 });
+    }
     return mapEcommerceError(err, requestId);
   }
 }

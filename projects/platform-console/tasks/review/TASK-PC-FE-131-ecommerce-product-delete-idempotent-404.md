@@ -1,9 +1,9 @@
 # TASK-PC-FE-131 — 이미 삭제된 상품을 다시 삭제하면 "상품을 삭제하지 못했습니다" 가 뜨는 버그 (DELETE 404 비멱등)
 
-- **Status**: ready
+- **Status**: review
 - **Project**: platform-console
 - **Service**: console-web
-- **Analysis model**: Opus 4.8 / **Implementation model**: Sonnet 4.6 (프록시 라우트 단순 멱등 매핑)
+- **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (프록시 라우트 단순 멱등 매핑)
 
 ## Goal
 
