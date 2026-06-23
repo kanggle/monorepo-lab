@@ -57,7 +57,20 @@ class ShippingStatusChangedEventConsumerTest {
     }
 
     @Test
-    @DisplayName("newStatus가 SHIPPED가 아니면 무시된다")
+    @DisplayName("newStatus=DELIVERED 이벤트 수신 시 markDelivered 호출 (TASK-BE-429)")
+    void handle_delivered_callsMarkDelivered() {
+        ShippingStatusChangedEvent event = event("order-1", "DELIVERED");
+        given(eventDeduplicationChecker.isDuplicate(event.eventId(), "ShippingStatusChanged"))
+                .willReturn(false);
+
+        consumer.handle(event);
+
+        verify(orderShippingService).markDelivered("order-1");
+        verify(orderShippingService, never()).markShipped(any());
+    }
+
+    @Test
+    @DisplayName("newStatus가 SHIPPED/DELIVERED가 아니면(IN_TRANSIT) 둘 다 무시된다")
     void handle_nonShipped_skips() {
         ShippingStatusChangedEvent event = event("order-1", "IN_TRANSIT");
         given(eventDeduplicationChecker.isDuplicate(event.eventId(), "ShippingStatusChanged"))
@@ -66,6 +79,7 @@ class ShippingStatusChangedEventConsumerTest {
         consumer.handle(event);
 
         verify(orderShippingService, never()).markShipped(any());
+        verify(orderShippingService, never()).markDelivered(any());
     }
 
     @Test

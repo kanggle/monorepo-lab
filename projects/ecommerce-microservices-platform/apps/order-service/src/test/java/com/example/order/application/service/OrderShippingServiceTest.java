@@ -108,4 +108,64 @@ class OrderShippingServiceTest {
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         verify(orderRepository, never()).save(any());
     }
+
+    private Order shippedOrder() {
+        Order order = confirmedOrder();
+        order.ship(FIXED_CLOCK);
+        return order;
+    }
+
+    @Test
+    @DisplayName("SHIPPED 주문에 DELIVERED 적용 시 DELIVERED로 전이된다 (TASK-BE-429)")
+    void markDelivered_shippedOrder_becomesDelivered() {
+        Order order = shippedOrder();
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+
+        orderShippingService.markDelivered(order.getOrderId());
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.DELIVERED);
+        verify(orderRepository).save(order);
+        verify(orderMetrics).recordStatusTransition("SHIPPED", "DELIVERED");
+    }
+
+    @Test
+    @DisplayName("이미 DELIVERED인 주문은 멱등하게 처리되고 메트릭이 기록되지 않는다")
+    void markDelivered_alreadyDelivered_idempotent() {
+        Order order = shippedOrder();
+        order.deliver(FIXED_CLOCK);
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        orderShippingService.markDelivered(order.getOrderId());
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.DELIVERED);
+        verify(orderRepository).save(order);
+        verify(orderMetrics, never()).recordStatusTransition(any(), any());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 주문에 DELIVERED 적용 시 무시된다")
+    void markDelivered_notFound_skips() {
+        given(orderRepository.findByIdAcrossTenants("nope")).willReturn(Optional.empty());
+
+        orderShippingService.markDelivered("nope");
+
+        verify(orderRepository, never()).save(any());
+        verify(orderMetrics, never()).recordStatusTransition(any(), any());
+    }
+
+    @Test
+    @DisplayName("아직 SHIPPED가 아닌(CONFIRMED) 주문에 DELIVERED 적용 시 invalid 상태로 무시된다")
+    void markDelivered_notShippedOrder_swallowsInvalidState() {
+        Order order = confirmedOrder();
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
+
+        orderShippingService.markDelivered(order.getOrderId());
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        verify(orderRepository, never()).save(any());
+        verify(orderMetrics, never()).recordStatusTransition(any(), any());
+    }
 }
