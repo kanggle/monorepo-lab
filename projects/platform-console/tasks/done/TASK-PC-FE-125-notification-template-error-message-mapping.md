@@ -1,6 +1,6 @@
 # TASK-PC-FE-125 — 알림 템플릿 등록/수정 실패 시 "저장하지 못했습니다" 만 떠 원인을 알 수 없는 버그 (producer 코드 미매핑)
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **Service**: console-web
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (프런트 에러 메시지 매핑 버그픽스)
