@@ -1,6 +1,6 @@
 # TASK-BE-427 — notification-service 템플릿 목록이 정렬 없이 조회돼 신규 등록 템플릿이 1페이지에서 누락되는 버그
 
-- **Status**: ready
+- **Status**: done
 - **Project**: ecommerce-microservices-platform
 - **Service**: notification-service
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (영속성 쿼리 버그픽스)
