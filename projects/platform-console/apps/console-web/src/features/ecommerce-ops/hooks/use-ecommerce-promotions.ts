@@ -110,7 +110,11 @@ function invalidate(
   qc: ReturnType<typeof useQueryClient>,
   promotionId?: string,
 ) {
+  // Refetch a mounted list (no flash) AND drop the inactive seeded cache so a
+  // remount after a cross-page create/update re-seeds from the fresh SSR render —
+  // an inactive seed-only query is not refetched (TASK-PC-FE-126).
   qc.invalidateQueries({ queryKey: [PROMOTIONS_KEY, 'list'] });
+  qc.removeQueries({ queryKey: [PROMOTIONS_KEY, 'list'], type: 'inactive' });
   if (promotionId) {
     qc.invalidateQueries({
       queryKey: [PROMOTIONS_KEY, 'detail', promotionId],

@@ -113,7 +113,18 @@ function invalidate(
   qc: ReturnType<typeof useQueryClient>,
   templateId?: string,
 ) {
+  // List refresh across the two mutation shapes (TASK-PC-FE-126):
+  //  - In-place (a mounted list, if any) → invalidate refetches it in the
+  //    background, keeping the prior rows visible (no loading flash).
+  //  - Create/update run on the SEPARATE `/new` + `[id]/edit` pages, so the list
+  //    is UNMOUNTED (its seeded page-0 query is inactive). A seeded query has
+  //    `refetchOnMount: false`, and an inactive query populated only from the SSR
+  //    seed is NOT refetched by invalidate/refetch (it never actually fetched) —
+  //    so the operator would return to a stale list missing the new row. Dropping
+  //    the inactive cache makes the next mount re-seed from the fresh SSR render
+  //    (the forms call `router.refresh()` on success).
   qc.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY, 'list'] });
+  qc.removeQueries({ queryKey: [NOTIFICATIONS_KEY, 'list'], type: 'inactive' });
   if (templateId) {
     qc.invalidateQueries({
       queryKey: [NOTIFICATIONS_KEY, 'detail', templateId],

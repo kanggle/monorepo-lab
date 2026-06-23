@@ -98,7 +98,11 @@ export function useSeller(id: string | null, initial?: SellerDetail) {
 
 /** Invalidate the list after a successful register. */
 function invalidateList(qc: ReturnType<typeof useQueryClient>) {
+  // Refetch a mounted list (no flash) AND drop the inactive seeded cache so a
+  // remount after a cross-page register re-seeds from the fresh SSR render — an
+  // inactive seed-only query is not refetched (TASK-PC-FE-126).
   qc.invalidateQueries({ queryKey: [SELLERS_KEY, 'list'] });
+  qc.removeQueries({ queryKey: [SELLERS_KEY, 'list'], type: 'inactive' });
 }
 
 export function useRegisterSeller() {
