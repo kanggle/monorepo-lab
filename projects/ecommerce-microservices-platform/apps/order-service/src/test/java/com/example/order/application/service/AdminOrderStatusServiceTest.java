@@ -77,31 +77,31 @@ class AdminOrderStatusServiceTest {
     }
 
     @Test
-    @DisplayName("CONFIRMED 상태 주문을 SHIPPED로 변경하면 성공하고 변경된 DTO를 반환한다")
-    void changeStatus_confirmedToShipped_successReturnsUpdatedOrder() {
+    @DisplayName("SHIPPED는 운영자가 직접 지정할 수 없고 IllegalArgumentException으로 거부된다 (배송 이벤트 구동 — ADR-MONO-022 §D7)")
+    void changeStatus_targetStatusIsShipped_throwsIllegalArgumentException() {
         String orderId = "order-002";
         Order order = createOrderWithStatus(orderId, OrderStatus.CONFIRMED);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(clock.instant()).willReturn(FIXED_NOW);
 
-        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "SHIPPED");
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "SHIPPED"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported target status: SHIPPED");
 
-        assertThat(result.status()).isEqualTo("SHIPPED");
+        verify(orderRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("SHIPPED 상태 주문을 DELIVERED로 변경하면 성공하고 변경된 DTO를 반환한다")
-    void changeStatus_shippedToDelivered_successReturnsUpdatedOrder() {
+    @DisplayName("DELIVERED는 운영자가 직접 지정할 수 없고 IllegalArgumentException으로 거부된다 (배송 이벤트 구동 — ADR-MONO-022 §D7)")
+    void changeStatus_targetStatusIsDelivered_throwsIllegalArgumentException() {
         String orderId = "order-003";
         Order order = createOrderWithStatus(orderId, OrderStatus.SHIPPED);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(clock.instant()).willReturn(FIXED_NOW);
 
-        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "DELIVERED");
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "DELIVERED"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported target status: DELIVERED");
 
-        assertThat(result.status()).isEqualTo("DELIVERED");
+        verify(orderRepository, never()).save(any());
     }
 
     @Test

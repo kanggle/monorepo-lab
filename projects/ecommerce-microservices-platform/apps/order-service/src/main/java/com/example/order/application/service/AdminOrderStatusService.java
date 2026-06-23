@@ -32,9 +32,12 @@ public class AdminOrderStatusService {
 
         switch (targetStatus) {
             case CONFIRMED -> order.confirm(clock);
-            case SHIPPED -> order.ship(clock);
-            case DELIVERED -> order.deliver(clock);
             case CANCELLED -> order.cancel(clock);
+            // SHIPPED / DELIVERED are NOT operator-settable on this endpoint. The Order
+            // reaches those states solely via the shipping-driven return-leg
+            // (ShippingStatusChanged -> OrderShippingService.markShipped/markDelivered,
+            // ADR-MONO-022 §D7). Submitting them here falls through to default and is
+            // rejected (400 INVALID_ORDER_REQUEST) to prevent order/shipping divergence.
             default -> throw new IllegalArgumentException("Unsupported target status: " + targetStatus);
         }
 
