@@ -105,6 +105,26 @@ export const ShippingSchema = z
   .passthrough();
 export type Shipping = z.infer<typeof ShippingSchema>;
 
+/**
+ * Mutation response — `UpdateShippingStatusResponse` (PUT `/status` and POST
+ * `/refresh-tracking`). The producer returns a **3-field projection**, NOT a
+ * full Shipping resource: `{ shippingId, status, updatedAt }`. Parsing a mutation
+ * response with the full `ShippingSchema` (which requires `orderId` + `createdAt`)
+ * throws on the real wire shape and turns a committed 200 into a false failure
+ * (TASK-PC-FE-129). `.passthrough()` + tolerant string `status` keep the read
+ * permissive; `updatedAt` is optional defensively (the producer always sends it).
+ */
+export const UpdateShippingStatusResponseSchema = z
+  .object({
+    shippingId: z.string(),
+    status: z.string(),
+    updatedAt: z.string().optional(),
+  })
+  .passthrough();
+export type UpdateShippingStatusResponse = z.infer<
+  typeof UpdateShippingStatusResponseSchema
+>;
+
 /** List endpoint envelope — paginated. */
 export const ShippingListSchema = z
   .object({

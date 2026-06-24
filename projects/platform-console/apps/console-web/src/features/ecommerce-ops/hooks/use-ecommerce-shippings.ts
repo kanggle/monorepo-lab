@@ -11,7 +11,7 @@ import { clampPageSize } from '@/shared/lib/pagination';
 import {
   ShippingListSchema,
   type ShippingList,
-  ShippingSchema,
+  UpdateShippingStatusResponseSchema,
   type ShippingListParams,
   type UpdateShippingStatusBody,
   SHIPPING_DEFAULT_PAGE_SIZE,
@@ -111,7 +111,9 @@ export function useUpdateShippingStatus() {
         `/api/ecommerce/shippings/${encodeURIComponent(id)}/status`,
         body,
       );
-      return ShippingSchema.parse(raw);
+      // Producer returns the 3-field UpdateShippingStatusResponse projection
+      // (NOT a full Shipping) — TASK-PC-FE-129.
+      return UpdateShippingStatusResponseSchema.parse(raw);
     },
     onSuccess: () => invalidate(qc),
   });
@@ -129,7 +131,9 @@ export function useRefreshTracking() {
         `/api/ecommerce/shippings/${encodeURIComponent(id)}/refresh-tracking`,
         {},
       );
-      return ShippingSchema.parse(raw);
+      // Producer returns the 3-field UpdateShippingStatusResponse projection
+      // (NOT a full Shipping) — TASK-PC-FE-129.
+      return UpdateShippingStatusResponseSchema.parse(raw);
     },
     onSuccess: () => invalidate(qc),
   });
