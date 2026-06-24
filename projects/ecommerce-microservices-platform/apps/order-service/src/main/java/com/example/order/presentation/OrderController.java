@@ -37,9 +37,13 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<PlaceOrderResponse> placeOrder(
             @RequestHeader("X-User-Id") @NotBlank(message = "X-User-Id header is required") String userId,
+            // Optional placement idempotency key (TASK-BE-430): the same key + user
+            // returns the original order instead of creating a duplicate. Absent →
+            // legacy non-idempotent placement (backward compatible).
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody PlaceOrderRequest request
     ) {
-        PlaceOrderResult result = orderPlacementService.placeOrder(request.toCommand(userId));
+        PlaceOrderResult result = orderPlacementService.placeOrder(request.toCommand(userId, idempotencyKey));
         return ResponseEntity.status(HttpStatus.CREATED).body(PlaceOrderResponse.from(result));
     }
 

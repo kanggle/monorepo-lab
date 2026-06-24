@@ -4,10 +4,9 @@ import type { CheckoutCartItem } from './types';
 
 interface CartDeps {
   items: CheckoutCartItem[];
-  removeItem: (productId: string, variantId: string) => void;
 }
 
-export function useCheckoutItems({ items, removeItem }: CartDeps) {
+export function useCheckoutItems({ items }: CartDeps) {
   const searchParams = useSearchParams();
   const completedRef = useRef(false);
   const snapshotRef = useRef<CheckoutCartItem[] | null>(null);
@@ -26,10 +25,13 @@ export function useCheckoutItems({ items, removeItem }: CartDeps) {
 
   const totalAmount = checkoutItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
+  // Marks the checkout as placed and snapshots the lines so the page keeps showing
+  // them (no empty flash) through the Toss redirect. The cart is NOT cleared here:
+  // clearing before payment raced the redirect and left orphan orders on
+  // failure/abandon (TASK-BE-430). The cart is cleared on the payment-complete page.
   const completeOrder = () => {
     completedRef.current = true;
     snapshotRef.current = checkoutItems;
-    checkoutItems.forEach((item) => removeItem(item.productId, item.variantId));
   };
 
   const isEmpty = !completedRef.current && checkoutItems.length === 0;

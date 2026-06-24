@@ -23,6 +23,12 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
 
     Optional<OrderJpaEntity> findByOrderIdAndTenantId(String orderId, String tenantId);
 
+    // Placement-idempotency lookup (TASK-BE-430): the original order for a
+    // re-submit/retry, keyed by the (tenant, user, client Idempotency-Key) the
+    // unique index enforces.
+    Optional<OrderJpaEntity> findByTenantIdAndUserIdAndIdempotencyKey(
+            String tenantId, String userId, String idempotencyKey);
+
     Page<OrderJpaEntity> findByTenantIdAndUserId(String tenantId, String userId, Pageable pageable);
 
     Page<OrderJpaEntity> findByTenantIdAndUserIdAndStatus(

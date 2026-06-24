@@ -5,6 +5,7 @@ import { isApiError, ERROR_MESSAGES } from '@repo/types/guards';
 import type { CheckoutFormProps } from '../model/types';
 import { placeOrder } from '@/entities/order';
 import { useTossPayment } from '../model/use-toss-payment';
+import { getOrCreateIdempotencyKey } from '../model/checkout-idempotency';
 import { useAddresses } from '@/entities/user';
 import { isValidPhone } from '@/shared/lib/validate-phone';
 import { useShippingAddressState } from '../model/use-shipping-address-state';
@@ -48,8 +49,15 @@ export function CheckoutForm({ items, totalAmount, discountAmount = 0, onOrderCo
         productName: item.productName, optionName: item.optionName,
         quantity: item.quantity, unitPrice: item.price,
       }));
-      const result = await placeOrder({ items: orderItems, shippingAddress: address });
+      // Stable per-cart idempotency key (TASK-BE-430): a retry of the same checkout
+      // (payment failure / back / double-submit) reuses it so the server returns the
+      // original order instead of creating a duplicate.
+      const idempotencyKey = getOrCreateIdempotencyKey(items);
+      const result = await placeOrder({ items: orderItems, shippingAddress: address }, idempotencyKey);
       const orderName = items[0].productName + (items.length > 1 ? ` 외 ${items.length - 1}건` : '');
+      // Mark the checkout placed (snapshot the lines so the page doesn't flash empty
+      // during the Toss redirect). The cart is cleared on the payment-complete page,
+      // NOT here — clearing before payment raced the redirect and left orphan orders.
       onOrderComplete();
       await requestPayment({ orderId: result.orderId, amount: finalAmount, orderName });
     } catch (err) {

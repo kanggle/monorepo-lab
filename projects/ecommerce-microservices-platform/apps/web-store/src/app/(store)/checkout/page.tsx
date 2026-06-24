@@ -12,8 +12,8 @@ import { NarrowContainer } from '@/shared/ui';
 export default function CheckoutPage() {
   const router = useRouter();
   const { isReady } = useRequireAuth();
-  const { items, removeItem } = useCart();
-  const { checkoutItems, totalAmount, completeOrder, isEmpty } = useCheckoutItems({ items, removeItem });
+  const { items } = useCart();
+  const { checkoutItems, totalAmount, completeOrder, isEmpty } = useCheckoutItems({ items });
   const [couponResult, setCouponResult] = useState<ApplyCouponResponse | null>(null);
 
   if (!isReady) return null;

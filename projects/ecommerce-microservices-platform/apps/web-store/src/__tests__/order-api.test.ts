@@ -52,8 +52,22 @@ describe('order-api', () => {
 
       const result = await placeOrder(request);
 
-      expect(mockPlaceOrder).toHaveBeenCalledWith(request);
+      expect(mockPlaceOrder).toHaveBeenCalledWith(request, undefined);
       expect(result).toEqual(response);
+    });
+
+    it('Idempotency-Key가 주어지면 헤더로 전달한다 (TASK-BE-430)', async () => {
+      const request = {
+        items: [{ productId: 'p1', variantId: 'v1', productName: 'A', quantity: 1, unitPrice: 1000 }],
+        shippingAddress: { recipient: '홍', phone: '010', zipCode: '1', address1: 'x', address2: '' },
+      };
+      mockPlaceOrder.mockResolvedValueOnce({ orderId: 'order-1' });
+
+      await placeOrder(request, 'idem-key-1');
+
+      expect(mockPlaceOrder).toHaveBeenCalledWith(request, {
+        headers: { 'Idempotency-Key': 'idem-key-1' },
+      });
     });
 
     it('API 에러를 그대로 전파한다', async () => {

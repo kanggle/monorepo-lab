@@ -18,6 +18,10 @@ public record PlaceOrderRequest(
         ShippingAddressRequest shippingAddress
 ) {
     public PlaceOrderCommand toCommand(String userId) {
+        return toCommand(userId, null);
+    }
+
+    public PlaceOrderCommand toCommand(String userId, String idempotencyKey) {
         List<PlaceOrderCommand.OrderItemCommand> itemCommands = items.stream()
                 .map(i -> new PlaceOrderCommand.OrderItemCommand(
                         i.productId(), i.variantId(), i.productName(), i.optionName(),
@@ -26,7 +30,7 @@ public record PlaceOrderRequest(
         PlaceOrderCommand.ShippingAddressCommand addrCommand = new PlaceOrderCommand.ShippingAddressCommand(
                 shippingAddress.recipient(), shippingAddress.phone(), shippingAddress.zipCode(),
                 shippingAddress.address1(), shippingAddress.address2());
-        return new PlaceOrderCommand(userId, itemCommands, addrCommand);
+        return new PlaceOrderCommand(userId, itemCommands, addrCommand, idempotencyKey);
     }
 
     public record OrderItemRequest(
