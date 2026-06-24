@@ -26,10 +26,14 @@ Published when a shipping record's status changes.
 **Consumers:** order-service, notification-service
 
 order-service's `ShippingStatusChangedEventConsumer` (group `order-service`) reads
-this event and, on `newStatus = SHIPPED`, flips the Order `CONFIRMED → SHIPPED`
-(return-leg tail of ADR-MONO-022 §D7). Other transitions are ignored by
-order-service. Consumption is idempotent (dedupe on `event_id` + idempotent
-`Order.ship`).
+this event and, on `newStatus = SHIPPED`, flips the Order `CONFIRMED → SHIPPED`,
+and on `newStatus = DELIVERED`, flips the Order `SHIPPED → DELIVERED` (return-leg
+tail of ADR-MONO-022 §D7). This event is the **sole** path by which an Order reaches
+`SHIPPED`/`DELIVERED` — the admin status endpoint
+(`POST /api/admin/orders/{orderId}/status`) does **not** offer those
+operator-initiated transitions (it rejects them `400 INVALID_ORDER_REQUEST`).
+Other transitions (e.g. `IN_TRANSIT`) are ignored by order-service. Consumption is
+idempotent (dedupe on `event_id` + idempotent `Order.ship` / `Order.deliver`).
 
 **Topic:** `shipping.shipping.status-changed`
 

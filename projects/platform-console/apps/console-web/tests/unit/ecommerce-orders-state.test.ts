@@ -71,12 +71,12 @@ describe('allowedTransitions() — order status state machine', () => {
     expect(allowedTransitions('PENDING')).toEqual(['CONFIRMED', 'CANCELLED']);
   });
 
-  it('CONFIRMED → [SHIPPED, CANCELLED]', () => {
-    expect(allowedTransitions('CONFIRMED')).toEqual(['SHIPPED', 'CANCELLED']);
+  it('CONFIRMED → [CANCELLED] (SHIPPED is shipping-event-driven, not operator)', () => {
+    expect(allowedTransitions('CONFIRMED')).toEqual(['CANCELLED']);
   });
 
-  it('SHIPPED → [DELIVERED]', () => {
-    expect(allowedTransitions('SHIPPED')).toEqual(['DELIVERED']);
+  it('SHIPPED → [] (DELIVERED is shipping-event-driven, not operator)', () => {
+    expect(allowedTransitions('SHIPPED')).toEqual([]);
   });
 
   it('DELIVERED → [] (terminal)', () => {

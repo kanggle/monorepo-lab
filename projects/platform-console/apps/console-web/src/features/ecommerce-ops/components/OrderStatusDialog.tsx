@@ -15,10 +15,12 @@ import { Button } from '@/shared/ui/Button';
  * surface (TASK-PC-FE-083 — § 2.4.10 #17). Mirrors the `ConfirmDialog`
  * integration in `ProductDetail`.
  *
- * Only shows buttons for **allowed transitions** from the current status
- * (PENDING → {CONFIRMED, CANCELLED}, CONFIRMED → {SHIPPED, CANCELLED},
- * SHIPPED → {DELIVERED}, terminal → none). The UI is the UX defence; the
- * producer is the final authority — 400/422/409/404 are surfaced inline.
+ * Only shows buttons for **allowed operator transitions** from the current status
+ * (PENDING → {CONFIRMED, CANCELLED}, CONFIRMED → {CANCELLED}, everything else →
+ * none). SHIPPED/DELIVERED are driven by the shipping return-leg
+ * (`ShippingStatusChanged`), not operator action — the order detail shows them
+ * read-only. The UI is the UX defence; the producer is the final authority —
+ * 400/422/409/404 are surfaced inline.
  *
  * Error mapping:
  *   - 400 InvalidOrder (wrong forward transition) → "전환이 허용되지 않습니다."
@@ -35,10 +37,10 @@ export interface OrderStatusDialogProps {
   onSuccess?: () => void;
 }
 
+// Operator-actionable targets only. SHIPPED/DELIVERED are not operator transitions
+// (shipping-event-driven), so they never appear as buttons here.
 const STATUS_LABELS: Record<string, string> = {
   CONFIRMED: '확인',
-  SHIPPED: '배송 시작',
-  DELIVERED: '배송 완료',
   CANCELLED: '취소',
 };
 

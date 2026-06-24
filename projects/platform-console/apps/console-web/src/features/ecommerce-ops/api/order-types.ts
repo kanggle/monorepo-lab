@@ -18,11 +18,15 @@ import { z } from 'zod';
  * fields the UI strictly needs are required, everything else passes through.
  * An unknown / future `status` enum parses to a generic string and NEVER throws.
  *
- * State machine (Order.java confirmed):
+ * State machine — OPERATOR-INITIATED transitions only (Order.java + ADR-MONO-022 §D7):
  *   PENDING → {CONFIRMED, CANCELLED}
- *   CONFIRMED → {SHIPPED, CANCELLED}
- *   SHIPPED → {DELIVERED}
- *   DELIVERED, CANCELLED, STUCK_RECOVERY_FAILED → (terminal — no operator action)
+ *   CONFIRMED → {CANCELLED}
+ *   SHIPPED, DELIVERED, CANCELLED, STUCK_RECOVERY_FAILED → (no operator action)
+ *
+ * SHIPPED and DELIVERED are reached SOLELY via the shipping-driven return-leg
+ * (the `ShippingStatusChanged` event flips the Order CONFIRMED→SHIPPED→DELIVERED),
+ * NOT by operator action — the order detail displays them read-only. The producer
+ * rejects an operator `status: SHIPPED|DELIVERED` with 400 INVALID_ORDER_REQUEST.
  */
 
 // ===========================================================================
@@ -39,11 +43,16 @@ export const ORDER_STATUS_VALUES = [
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUS_VALUES)[number];
 
-/** Allowed operator-triggered transitions from a given status. */
+/**
+ * Allowed operator-triggered transitions from a given status. SHIPPED/DELIVERED
+ * are intentionally absent — they are driven by the shipping return-leg
+ * (`ShippingStatusChanged`), not operator action, so the order detail shows them
+ * read-only.
+ */
 const TRANSITIONS: Record<string, OrderStatus[]> = {
   PENDING: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['SHIPPED', 'CANCELLED'],
-  SHIPPED: ['DELIVERED'],
+  CONFIRMED: ['CANCELLED'],
+  SHIPPED: [],
   DELIVERED: [],
   CANCELLED: [],
   STUCK_RECOVERY_FAILED: [],

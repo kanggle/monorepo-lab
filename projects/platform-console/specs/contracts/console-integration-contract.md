@@ -2454,6 +2454,17 @@ scope, no § 3 row — attestation count stays **16**).
   by the § 2.4.9.1 ecommerce overview snapshot (TASK-MONO-243); any residual KPI
   is a later facet.
 
+  **Order status transitions (#17) — operator-initiated set (TASK-MONO-303)**: the
+  console offers only `PENDING → CONFIRMED` and `PENDING|CONFIRMED → CANCELLED`.
+  `SHIPPED` and `DELIVERED` are **not** operator-settable from the order surface —
+  the Order reaches them solely via the shipping return-leg (the producer's
+  `ShippingStatusChanged` event flips `CONFIRMED → SHIPPED → DELIVERED`,
+  ADR-MONO-022 §D7). The order detail therefore **displays** SHIPPED/DELIVERED
+  read-only; `배송 시작`/`배송 완료` are initiated from the shipping surface
+  (#2.4.10.3 `PUT /shippings/{id}/status`), not here. Submitting
+  `status: SHIPPED|DELIVERED` to `POST /admin/orders/{id}/status` returns
+  `400 INVALID_ORDER_REQUEST` (producer guard).
+
 - **Mutation discipline (Phase-1 producer-verify gated)**: every mutation
   (#3–9, #11–14, #17) is **confirm-gated** in the UI and carries the
   domain-facing OIDC credential. Two ecommerce-specific items **MUST be verified

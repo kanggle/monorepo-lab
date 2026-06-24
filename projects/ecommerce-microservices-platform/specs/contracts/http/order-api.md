@@ -296,11 +296,16 @@ Get order detail (admin view). Includes order owner userId.
 ### POST /api/admin/orders/{orderId}/status
 Change order status (admin only).
 
-**Allowed transitions:**
+**Allowed transitions (operator-initiated):**
 - `PENDING` → `CONFIRMED`
-- `CONFIRMED` → `SHIPPED`
-- `SHIPPED` → `DELIVERED`
 - `PENDING` or `CONFIRMED` → `CANCELLED`
+
+`SHIPPED` and `DELIVERED` are **not** operator-settable on this endpoint. The Order
+reaches those states solely via the shipping-driven return-leg — the
+`ShippingStatusChanged` event consumed by order-service flips the Order
+`CONFIRMED → SHIPPED` / `SHIPPED → DELIVERED` (ADR-MONO-022 §D7). Submitting
+`status: SHIPPED` or `status: DELIVERED` here returns `400 INVALID_ORDER_REQUEST`,
+preventing order/shipping status divergence.
 
 **Request Body**
 ```json
