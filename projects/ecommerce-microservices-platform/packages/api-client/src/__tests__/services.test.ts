@@ -144,7 +144,23 @@ describe('Order API', () => {
 
     await api.placeOrder(data);
 
-    expect(client.post).toHaveBeenCalledWith('/api/orders', data);
+    // placeOrder forwards an optional per-request config (TASK-BE-430 Idempotency-Key);
+    // undefined when none is supplied.
+    expect(client.post).toHaveBeenCalledWith('/api/orders', data, undefined);
+  });
+
+  it('placeOrder는 config(Idempotency-Key 헤더)를 전달한다', async () => {
+    const client = createMockClient();
+    const api = createOrderApi(client);
+    const data = {
+      items: [{ productId: 'p1', variantId: 'v1', productName: 'A', quantity: 1, unitPrice: 1000 }],
+      shippingAddress: { recipient: 'T', phone: '0', zipCode: '1', address1: 'x', address2: '' },
+    };
+    const config = { headers: { 'Idempotency-Key': 'key-1' } };
+
+    await api.placeOrder(data, config);
+
+    expect(client.post).toHaveBeenCalledWith('/api/orders', data, config);
   });
 
   it('getOrders는 GET /api/orders를 호출한다', async () => {
