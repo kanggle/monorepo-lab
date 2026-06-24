@@ -184,7 +184,6 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
         배송 목록 · 상태 전이(PREPARING→SHIPPED→IN_TRANSIT→DELIVERED) · 운송장 추적 동기화.
-        ecommerce 배송 화면을 콘솔에서 운영합니다.
       </p>
 
       <form

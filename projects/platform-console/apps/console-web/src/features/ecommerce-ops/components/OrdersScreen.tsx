@@ -76,8 +76,7 @@ export function OrdersScreen({ orders }: OrdersScreenProps) {
         </h1>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
-        주문 목록 · 상세(아이템 + 배송지) · 상태 전이. admin-dashboard 주문 화면을
-        콘솔에서 운영합니다.
+        주문 목록 · 상세(아이템 + 배송지) · 상태 전이.
       </p>
 
       <form

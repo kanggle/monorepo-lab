@@ -70,8 +70,7 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
         </Link>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
-        셀러 목록 · 상세 · 등록. ecommerce 마켓플레이스 셀러를 콘솔에서 관리합니다.
-        (상태: ACTIVE만 · 수정/삭제 없음 — ADR-030 v1)
+        셀러 목록 · 상세 · 등록. (상태: ACTIVE만 · 수정/삭제 없음 — ADR-030 v1)
       </p>
 
       {forbidden ? (

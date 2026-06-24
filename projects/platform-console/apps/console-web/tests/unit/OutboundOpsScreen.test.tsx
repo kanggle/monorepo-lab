@@ -79,7 +79,7 @@ describe('OutboundOpsScreen — orders table + filter + pagination', () => {
   it('renders the seeded orders from the server-provided page', () => {
     render(<OutboundOpsScreen orders={ORDERS} />, { wrapper: wrapper() });
     expect(
-      screen.getByRole('heading', { name: 'WMS 출고 운영' }),
+      screen.getByRole('heading', { name: 'WMS 출고' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('outbound-table')).toBeInTheDocument();
     expect(screen.getByTestId('outbound-row-status-0')).toHaveTextContent(
@@ -326,7 +326,7 @@ describe('OutboundOpsScreen — confirm-gated actions', () => {
     );
     // The shell stays — not a blank crash.
     expect(
-      screen.getByRole('heading', { name: 'WMS 출고 운영' }),
+      screen.getByRole('heading', { name: 'WMS 출고' }),
     ).toBeInTheDocument();
   });
 
@@ -390,7 +390,7 @@ describe('OutboundOpsScreen — degrade & a11y', () => {
       expect(screen.getByTestId('outbound-degraded')).toBeInTheDocument(),
     );
     expect(
-      screen.getByRole('heading', { name: 'WMS 출고 운영' }),
+      screen.getByRole('heading', { name: 'WMS 출고' }),
     ).toBeInTheDocument();
   });
 
@@ -574,7 +574,7 @@ describe('OutboundOpsScreen — cancel action (TASK-PC-FE-085)', () => {
       ),
     );
     expect(
-      screen.getByRole('heading', { name: 'WMS 출고 운영' }),
+      screen.getByRole('heading', { name: 'WMS 출고' }),
     ).toBeInTheDocument();
   });
 
@@ -757,7 +757,7 @@ describe('OutboundOpsScreen — TMS retry action (TASK-PC-FE-087)', () => {
       ),
     );
     expect(
-      screen.getByRole('heading', { name: 'WMS 출고 운영' }),
+      screen.getByRole('heading', { name: 'WMS 출고' }),
     ).toBeInTheDocument();
   });
 

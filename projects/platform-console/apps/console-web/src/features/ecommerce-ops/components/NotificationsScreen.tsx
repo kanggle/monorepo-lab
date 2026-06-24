@@ -74,8 +74,7 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
         </Link>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
-        알림 템플릿 목록 · 생성 / 수정. 타입·채널은 생성 후 변경 불가. ecommerce
-        알림 템플릿을 콘솔에서 운영합니다.
+        알림 템플릿 목록 · 생성 / 수정. 타입·채널은 생성 후 변경 불가.
       </p>
 
       {forbidden ? (

@@ -107,8 +107,7 @@ export function ProductsScreen({ products }: ProductsScreenProps) {
         </Link>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
-        상품 목록 · 상세(옵션 + 재고) · 등록 / 수정 / 삭제. admin-dashboard 상품
-        화면을 콘솔에서 운영합니다.
+        상품 목록 · 상세(옵션 + 재고) · 등록 / 수정 / 삭제.
       </p>
 
       <form

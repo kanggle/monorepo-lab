@@ -95,7 +95,7 @@ export function UsersScreen({ users }: UsersScreenProps) {
         </h1>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
-        사용자 목록 · 상세(프로필). 사용자 현황을 콘솔에서 조회합니다.
+        사용자 목록 · 상세(프로필).
       </p>
 
       <form
