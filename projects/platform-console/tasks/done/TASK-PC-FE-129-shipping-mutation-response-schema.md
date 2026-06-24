@@ -1,6 +1,6 @@
 # TASK-PC-FE-129 — shipping mutation response schema (3-field projection)
 
-- **Status**: review
+- **Status**: done
 - **Project**: platform-console
 - **Area**: console-web / features/ecommerce-ops (shippings operator surface)
 - **Type**: bug fix (consumer contract drift)
