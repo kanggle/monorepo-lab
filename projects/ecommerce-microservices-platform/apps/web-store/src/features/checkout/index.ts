@@ -5,3 +5,7 @@ export { useTossPayment } from './model/use-toss-payment';
 export { usePaymentConfirmation } from './model/use-payment-confirmation';
 export type { PaymentConfirmationStatus } from './model/use-payment-confirmation';
 export type { CheckoutCartItem, CheckoutFormProps } from './model/types';
+export {
+  getOrCreateIdempotencyKey,
+  clearCheckoutIdempotencyKey,
+} from './model/checkout-idempotency';

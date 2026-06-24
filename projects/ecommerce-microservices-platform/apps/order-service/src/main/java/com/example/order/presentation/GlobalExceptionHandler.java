@@ -7,6 +7,7 @@ import com.example.order.domain.exception.InvalidOrderException;
 import com.example.order.domain.exception.OrderCannotBeCancelledException;
 import com.example.order.domain.exception.OrderNotFoundException;
 import com.example.web.dto.ErrorResponse;
+import com.example.order.application.exception.DuplicateOrderPlacementException;
 import com.example.order.application.exception.InvalidOrderStatusException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -112,6 +113,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("INVALID_ORDER_REQUEST", e.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateOrderPlacementException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateOrderPlacement(DuplicateOrderPlacementException e) {
+        // Concurrent same-Idempotency-Key race lost the unique-index contest
+        // (TASK-BE-430). No duplicate order was created; the client retries and
+        // receives the winning order via the idempotent replay path.
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("DUPLICATE_ORDER_REQUEST", "Order placement already in progress. Please retry."));
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)

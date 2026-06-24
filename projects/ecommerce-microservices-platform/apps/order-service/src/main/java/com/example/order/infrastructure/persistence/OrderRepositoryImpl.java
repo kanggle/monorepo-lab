@@ -92,6 +92,16 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    public Optional<Order> findByUserIdAndIdempotencyKey(String userId, String idempotencyKey) {
+        // Placement-idempotency replay lookup (TASK-BE-430): tenant-scoped to the
+        // request tenant, matching the (tenant_id, user_id, idempotency_key) unique
+        // index. A null/blank key never reaches here (the service guards it).
+        return jpaRepository.findByTenantIdAndUserIdAndIdempotencyKey(
+                        TenantContext.currentTenant(), userId, idempotencyKey)
+                .map(mapper::toDomain);
+    }
+
+    @Override
     public Optional<Order> findByIdForAdmin(String orderId) {
         // OPERATOR detail read: tenant filter + (when bound) net-zero seller-scope
         // filter, always nested after the tenant filter (AC-6). Absent / '*' scope =

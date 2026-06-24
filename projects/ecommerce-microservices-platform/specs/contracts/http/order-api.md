@@ -17,6 +17,12 @@ All endpoints require an authenticated user (Bearer token).
 ### POST /api/orders
 Place a new order.
 
+**Request Headers**
+| Header | Required | Description |
+|---|---|---|
+| `X-User-Id` | yes | Authenticated user id (gateway-trusted). |
+| `Idempotency-Key` | no (recommended) | Client-generated key making placement idempotent (TASK-BE-430). A repeat `POST` with the **same key + same user** returns the **original** order (201, same `orderId`) **without** creating a duplicate order or re-publishing `OrderPlaced`. Scoped per `(tenant, user, key)`; max 64 chars. Absent → legacy non-idempotent placement (every call creates a new order). A concurrent second request with an in-flight key returns `409 DUPLICATE_ORDER_REQUEST` (retry resolves to the original order). The web-store generates one key per checkout (stable across payment retries, reset after a completed payment). |
+
 **Request Body**
 ```json
 {
@@ -59,6 +65,7 @@ Absent → the default seller `default` (D8 net-zero).
 |---|---|---|
 | 400 | INVALID_ORDER_REQUEST | Missing or invalid field |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
+| 409 | DUPLICATE_ORDER_REQUEST | Concurrent placement with an in-flight `Idempotency-Key` (retry → original order) |
 
 ---
 

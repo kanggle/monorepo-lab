@@ -23,6 +23,14 @@ public interface OrderRepository {
     Optional<Order> findById(String orderId);
 
     /**
+     * Tenant-scoped lookup of an order by the client-supplied placement idempotency
+     * key (TASK-BE-430). Returns the original order for a re-submit/retry of the
+     * same checkout so placement is idempotent. Scoped to the request tenant +
+     * {@code userId}; empty when no order carries that key.
+     */
+    Optional<Order> findByUserIdAndIdempotencyKey(String userId, String idempotencyKey);
+
+    /**
      * Tenant-scoped admin lookup (OPERATOR detail path) with a nested net-zero
      * seller-scope filter: when a concrete seller scope is bound, the order is
      * visible only if it has at least one line attributed to that seller; absent /

@@ -1,12 +1,26 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useCart } from '@/features/cart';
+import { clearCheckoutIdempotencyKey } from '@/features/checkout';
 
 function CheckoutCompleteContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
+  const { clearCart } = useCart();
+
+  // Clear the cart + the checkout idempotency key only after a confirmed payment
+  // (TASK-BE-430). Doing this here — not at order placement — means a failed/abandoned
+  // payment keeps the cart so the user can retry, and the retry reuses the same key
+  // (no duplicate order). A completed payment starts the next purchase fresh.
+  useEffect(() => {
+    if (orderId) {
+      clearCart();
+      clearCheckoutIdempotencyKey();
+    }
+  }, [orderId, clearCart]);
 
   return (
     <div className="container" style={{ paddingTop: 'var(--space-16)', paddingBottom: 'var(--space-16)', maxWidth: '500px', textAlign: 'center' }}>

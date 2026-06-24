@@ -3,11 +3,15 @@ package com.example.order.application.service;
 import com.example.order.application.dto.PlaceOrderCommand;
 import com.example.order.application.dto.PlaceOrderResult;
 import com.example.order.application.event.OrderPlacedEvent;
+import com.example.order.application.exception.DuplicateOrderPlacementException;
 import com.example.order.application.port.OrderEventPublisher;
 import com.example.order.application.port.OrderMetricsPort;
 import com.example.order.domain.exception.InvalidOrderException;
 import com.example.order.domain.model.Order;
 import com.example.order.domain.repository.OrderRepository;
+import org.springframework.dao.DataIntegrityViolationException;
+
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -137,6 +141,73 @@ class OrderPlacementServiceTest {
                 .isInstanceOf(InvalidOrderException.class);
 
         verify(orderRepository, never()).save(any());
+    }
+
+    private static List<PlaceOrderCommand.OrderItemCommand> oneItem() {
+        return List.of(new PlaceOrderCommand.OrderItemCommand("p1", "v1", "노트북", "블랙", 1, 1000000L));
+    }
+
+    @Test
+    @DisplayName("멱등키 재요청(replay): 기존 주문 orderId를 반환하고 새 주문·이벤트·메트릭이 없다 (TASK-BE-430)")
+    void placeOrder_idempotentReplay_returnsExistingOrderIdNoSideEffects() {
+        Order existing = mock(Order.class);
+        given(existing.getOrderId()).willReturn("existing-1");
+        given(orderRepository.findByUserIdAndIdempotencyKey("user1", "key-1"))
+                .willReturn(Optional.of(existing));
+        PlaceOrderCommand command = new PlaceOrderCommand("user1", oneItem(), ADDRESS, "key-1");
+
+        PlaceOrderResult result = orderPlacementService.placeOrder(command);
+
+        assertThat(result.orderId()).isEqualTo("existing-1");
+        verify(orderRepository, never()).save(any());
+        verify(orderEventPublisher, never()).publishOrderPlaced(any());
+        verify(orderMetrics, never()).recordOrderPlaced();
+    }
+
+    @Test
+    @DisplayName("새 멱등키: 주문을 생성하고 키를 부여해 저장한다 (TASK-BE-430)")
+    void placeOrder_newIdempotencyKey_createsOrderWithKey() {
+        given(orderRepository.findByUserIdAndIdempotencyKey("user1", "key-2"))
+                .willReturn(Optional.empty());
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+        PlaceOrderCommand command = new PlaceOrderCommand("user1", oneItem(), ADDRESS, "key-2");
+
+        orderPlacementService.placeOrder(command);
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getIdempotencyKey()).isEqualTo("key-2");
+        verify(orderEventPublisher).publishOrderPlaced(any());
+    }
+
+    @Test
+    @DisplayName("동시 동일 멱등키 race: unique 위반 → DuplicateOrderPlacementException, 이벤트 미발행 (TASK-BE-430)")
+    void placeOrder_concurrentDuplicate_throwsAndNoEvent() {
+        given(orderRepository.findByUserIdAndIdempotencyKey("user1", "key-3"))
+                .willReturn(Optional.empty());
+        given(orderRepository.save(any()))
+                .willThrow(new DataIntegrityViolationException("uq_orders_idempotency"));
+        given(clock.instant()).willReturn(FIXED_NOW);
+        PlaceOrderCommand command = new PlaceOrderCommand("user1", oneItem(), ADDRESS, "key-3");
+
+        assertThatThrownBy(() -> orderPlacementService.placeOrder(command))
+                .isInstanceOf(DuplicateOrderPlacementException.class);
+
+        verify(orderEventPublisher, never()).publishOrderPlaced(any());
+    }
+
+    @Test
+    @DisplayName("멱등키 미전송: dedup 조회 없이 기존(비멱등) 동작 (TASK-BE-430 하위호환)")
+    void placeOrder_noIdempotencyKey_legacyBehaviorNoDedupLookup() {
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+        PlaceOrderCommand command = new PlaceOrderCommand("user1", oneItem(), ADDRESS); // 3-arg = null key
+
+        orderPlacementService.placeOrder(command);
+
+        verify(orderRepository, never()).findByUserIdAndIdempotencyKey(any(), any());
+        verify(orderEventPublisher).publishOrderPlaced(any());
     }
 
     @Test

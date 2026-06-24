@@ -18,8 +18,17 @@ const orderApi = createOrderApi(apiClient);
  * silent mock fallback here — mock ids are not valid UUIDs and would crash
  * downstream paths. See TASK-FE-061 (same pattern as product-api).
  */
-export async function placeOrder(data: PlaceOrderRequest): Promise<PlaceOrderResponse> {
-  return orderApi.placeOrder(data);
+export async function placeOrder(
+  data: PlaceOrderRequest,
+  idempotencyKey?: string,
+): Promise<PlaceOrderResponse> {
+  // Attach the checkout idempotency key (TASK-BE-430) so a re-submit/retry of the
+  // same checkout returns the original order instead of creating a duplicate. The
+  // BFF proxy forwards the `Idempotency-Key` header to order-service unchanged.
+  const config = idempotencyKey
+    ? { headers: { 'Idempotency-Key': idempotencyKey } }
+    : undefined;
+  return orderApi.placeOrder(data, config);
 }
 
 export async function getOrders(page = 0, size = 20): Promise<PaginatedResponse<OrderSummary>> {

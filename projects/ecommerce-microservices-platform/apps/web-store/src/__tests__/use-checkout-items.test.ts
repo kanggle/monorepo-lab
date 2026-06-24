@@ -36,20 +36,13 @@ const ITEM_C: CheckoutCartItem = {
   quantity: 3,
 };
 
-type RemoveItem = (productId: string, variantId: string) => void;
-
 describe('useCheckoutItems', () => {
-  let mockRemoveItem: ReturnType<typeof vi.fn<RemoveItem>>;
-
   beforeEach(() => {
-    mockRemoveItem = vi.fn<RemoveItem>();
     mockSearchParams = new URLSearchParams();
   });
 
   it('items 쿼리 파라미터가 없으면 모든 아이템을 반환한다', () => {
-    const { result } = renderHook(() =>
-      useCheckoutItems({ items: [ITEM_A, ITEM_B], removeItem: mockRemoveItem }),
-    );
+    const { result } = renderHook(() => useCheckoutItems({ items: [ITEM_A, ITEM_B] }));
 
     expect(result.current.checkoutItems).toEqual([ITEM_A, ITEM_B]);
     expect(result.current.totalAmount).toBe(10000 * 2 + 20000 * 1);
@@ -58,9 +51,7 @@ describe('useCheckoutItems', () => {
   it('items 쿼리 파라미터로 선택된 아이템만 필터링한다', () => {
     mockSearchParams = new URLSearchParams({ items: 'p1:v1' });
 
-    const { result } = renderHook(() =>
-      useCheckoutItems({ items: [ITEM_A, ITEM_B], removeItem: mockRemoveItem }),
-    );
+    const { result } = renderHook(() => useCheckoutItems({ items: [ITEM_A, ITEM_B] }));
 
     expect(result.current.checkoutItems).toEqual([ITEM_A]);
     expect(result.current.totalAmount).toBe(10000 * 2);
@@ -69,42 +60,39 @@ describe('useCheckoutItems', () => {
   it('여러 아이템이 쿼리 파라미터에 쉼표로 구분되어 있으면 모두 필터링한다', () => {
     mockSearchParams = new URLSearchParams({ items: 'p1:v1,p3:v3' });
 
-    const { result } = renderHook(() =>
-      useCheckoutItems({ items: [ITEM_A, ITEM_B, ITEM_C], removeItem: mockRemoveItem }),
-    );
+    const { result } = renderHook(() => useCheckoutItems({ items: [ITEM_A, ITEM_B, ITEM_C] }));
 
     expect(result.current.checkoutItems).toEqual([ITEM_A, ITEM_C]);
     expect(result.current.totalAmount).toBe(10000 * 2 + 5000 * 3);
   });
 
   it('아이템이 비어있으면 isEmpty가 true이다', () => {
-    const { result } = renderHook(() =>
-      useCheckoutItems({ items: [], removeItem: mockRemoveItem }),
-    );
+    const { result } = renderHook(() => useCheckoutItems({ items: [] }));
 
     expect(result.current.isEmpty).toBe(true);
     expect(result.current.checkoutItems).toEqual([]);
     expect(result.current.totalAmount).toBe(0);
   });
 
-  it('completeOrder 호출 시 각 아이템에 대해 removeItem을 호출한다', () => {
-    const { result } = renderHook(() =>
-      useCheckoutItems({ items: [ITEM_A, ITEM_B], removeItem: mockRemoveItem }),
+  it('completeOrder는 카트를 비우지 않는다 — 비우기는 결제 성공 페이지로 이동 (TASK-BE-430)', () => {
+    // completeOrder only snapshots + flags completion; the cart is cleared on the
+    // payment-complete page, so a failed/abandoned payment keeps the cart.
+    const { result, rerender } = renderHook(
+      ({ items }) => useCheckoutItems({ items }),
+      { initialProps: { items: [ITEM_A, ITEM_B] } },
     );
 
     act(() => {
       result.current.completeOrder();
     });
 
-    expect(mockRemoveItem).toHaveBeenCalledTimes(2);
-    expect(mockRemoveItem).toHaveBeenCalledWith('p1', 'v1');
-    expect(mockRemoveItem).toHaveBeenCalledWith('p2', 'v2');
+    // The live cart (source items) is untouched by completeOrder.
+    rerender({ items: [ITEM_A, ITEM_B] });
+    expect(result.current.checkoutItems).toEqual([ITEM_A, ITEM_B]);
   });
 
   it('completeOrder 후 isEmpty는 false이다 (스냅샷 유지)', () => {
-    const { result } = renderHook(() =>
-      useCheckoutItems({ items: [ITEM_A], removeItem: mockRemoveItem }),
-    );
+    const { result } = renderHook(() => useCheckoutItems({ items: [ITEM_A] }));
 
     act(() => {
       result.current.completeOrder();
@@ -116,7 +104,7 @@ describe('useCheckoutItems', () => {
 
   it('completeOrder 후 items가 비어도 스냅샷된 아이템을 유지한다', () => {
     const { result, rerender } = renderHook(
-      ({ items }) => useCheckoutItems({ items, removeItem: mockRemoveItem }),
+      ({ items }) => useCheckoutItems({ items }),
       { initialProps: { items: [ITEM_A, ITEM_B] } },
     );
 

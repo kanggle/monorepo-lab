@@ -29,7 +29,32 @@ public class Order {
     private Instant stuckRecoveryAt;
     private Long version;
 
+    /**
+     * Client-supplied idempotency key for the placement request (TASK-BE-430).
+     * Write-only on the aggregate: set once right after {@link #create} via
+     * {@link #assignIdempotencyKey}, persisted to enforce (tenant, user, key)
+     * uniqueness so a re-submit/retry returns the original order instead of a
+     * duplicate. Not restored on {@link #reconstitute} (nothing reads it back).
+     */
+    private String idempotencyKey;
+
     private Order() {
+    }
+
+    /**
+     * Stamps the placement idempotency key once, right after {@link #create}.
+     * Null/blank is ignored (key-less placement stays non-idempotent). Idempotent
+     * itself: a second non-blank assignment with the same value is a no-op; a
+     * different value after one is already set is rejected (programming error).
+     */
+    public void assignIdempotencyKey(String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        if (this.idempotencyKey != null && !this.idempotencyKey.equals(key)) {
+            throw new InvalidOrderException("Idempotency key already assigned");
+        }
+        this.idempotencyKey = key;
     }
 
     public static Order create(String userId, List<OrderItemData> itemDataList,

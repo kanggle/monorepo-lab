@@ -71,6 +71,15 @@ class OrderJpaEntity {
     @Version
     private Long version;
 
+    /**
+     * Client-supplied placement idempotency key (TASK-BE-430). Set once at insert
+     * from the domain aggregate; never mutated afterward (so a status/saga update
+     * preserves it — not touched by {@link #updateFrom}). Unique per
+     * (tenant_id, user_id, idempotency_key); NULL allowed (key-less placement).
+     */
+    @Column(name = "idempotency_key", length = 64, updatable = false)
+    private String idempotencyKey;
+
     static OrderJpaEntity fromDomain(Order order, String tenantId) {
         OrderJpaEntity entity = new OrderJpaEntity();
         entity.orderId = order.getOrderId();
@@ -87,6 +96,7 @@ class OrderJpaEntity {
         entity.stuckRecoveryAttemptCount = order.getStuckRecoveryAttemptCount();
         entity.stuckRecoveryAt = order.getStuckRecoveryAt();
         entity.version = order.getVersion();
+        entity.idempotencyKey = order.getIdempotencyKey();
 
         for (OrderItem item : order.getItems()) {
             OrderItemJpaEntity itemEntity = OrderItemJpaEntity.fromDomain(item, entity, tenantId);

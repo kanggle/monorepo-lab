@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios';
 import type { ApiClient } from '../client';
 import type {
   PaginatedResponse,
@@ -11,8 +12,10 @@ import type {
 
 export function createOrderApi(client: ApiClient) {
   return {
-    placeOrder: (data: PlaceOrderRequest) =>
-      client.post<PlaceOrderResponse>('/api/orders', data),
+    // `config` lets the caller attach per-request options — notably the
+    // `Idempotency-Key` header that makes order placement idempotent (TASK-BE-430).
+    placeOrder: (data: PlaceOrderRequest, config?: AxiosRequestConfig) =>
+      client.post<PlaceOrderResponse>('/api/orders', data, config),
 
     getOrders: (params?: OrderListParams) =>
       client.get<PaginatedResponse<OrderSummary>>('/api/orders', { params }),

@@ -158,16 +158,20 @@ describe('CheckoutForm', () => {
     await user.click(screen.getByRole('button', { name: /결제하기/ }));
 
     await waitFor(() => {
-      expect(mockSubmitOrder).toHaveBeenCalledWith({
-        items: [{ productId: 'p1', variantId: 'v1', productName: '노트북', optionName: '실버', quantity: 1, unitPrice: 1500000 }],
-        shippingAddress: {
-          recipient: '홍길동',
-          phone: '010-1234-5678',
-          zipCode: '12345',
-          address1: '서울시 강남구',
-          address2: '101호',
+      // Second arg is the generated idempotency key (TASK-BE-430).
+      expect(mockSubmitOrder).toHaveBeenCalledWith(
+        {
+          items: [{ productId: 'p1', variantId: 'v1', productName: '노트북', optionName: '실버', quantity: 1, unitPrice: 1500000 }],
+          shippingAddress: {
+            recipient: '홍길동',
+            phone: '010-1234-5678',
+            zipCode: '12345',
+            address1: '서울시 강남구',
+            address2: '101호',
+          },
         },
-      });
+        expect.any(String),
+      );
     });
   });
 
