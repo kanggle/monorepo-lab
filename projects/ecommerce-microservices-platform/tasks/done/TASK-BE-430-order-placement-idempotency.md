@@ -1,6 +1,6 @@
 # TASK-BE-430 — 주문 생성 멱등화 (중복 주문 방지: FE 키 + BE dedup + 카트비우기 이동)
 
-- **Status**: review
+- **Status**: done
 - **Project**: ecommerce-microservices-platform
 - **Service**: order-service (BE) + web-store (FE)
 - **Type**: bug fix — duplicate orders on checkout re-submit/retry
