@@ -288,12 +288,10 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
         id="wms-outbound-heading"
         className="mb-2 text-2xl font-semibold"
       >
-        WMS 출고 운영
+        WMS 출고
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
         출고 주문 목록 · 주문 상세(라인 + saga) · 피킹 → 패킹 → 출고 확정.
-        ecommerce 주문이 자동 생성한 출고 주문을 콘솔에서 SHIPPED 까지
-        진행합니다.
       </p>
 
       <OutboundOrdersTable

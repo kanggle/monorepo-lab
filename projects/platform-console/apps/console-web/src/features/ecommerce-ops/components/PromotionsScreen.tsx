@@ -118,8 +118,7 @@ export function PromotionsScreen({ promotions }: PromotionsScreenProps) {
         </Link>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
-        프로모션 목록 · 상세 · 생성 / 수정 / 삭제 + 쿠폰 발급. ecommerce
-        프로모션 화면을 콘솔에서 운영합니다.
+        프로모션 목록 · 상세 · 생성 / 수정 / 삭제 + 쿠폰 발급.
       </p>
 
       <form

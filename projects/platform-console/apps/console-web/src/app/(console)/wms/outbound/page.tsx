@@ -47,7 +47,7 @@ export default async function WmsOutboundPage() {
           id="wms-outbound-heading"
           className="mb-6 text-2xl font-semibold"
         >
-          WMS 출고 운영
+          WMS 출고
         </h1>
         <div
           role="status"
@@ -70,7 +70,7 @@ export default async function WmsOutboundPage() {
           id="wms-outbound-heading"
           className="mb-6 text-2xl font-semibold"
         >
-          WMS 출고 운영
+          WMS 출고
         </h1>
         <div
           role="status"
@@ -102,7 +102,7 @@ export default async function WmsOutboundPage() {
           id="wms-outbound-heading"
           className="mb-6 text-2xl font-semibold"
         >
-          WMS 출고 운영
+          WMS 출고
         </h1>
         <div
           role="status"
@@ -122,7 +122,7 @@ export default async function WmsOutboundPage() {
           id="wms-outbound-heading"
           className="mb-6 text-2xl font-semibold"
         >
-          WMS 출고 운영
+          WMS 출고
         </h1>
         <div
           role="status"
