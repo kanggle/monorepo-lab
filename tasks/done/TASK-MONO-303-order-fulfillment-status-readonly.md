@@ -1,6 +1,6 @@
 # TASK-MONO-303 — 주문 SHIPPED/DELIVERED 운영자 직접 전이 제거 (배송 이벤트 단일 구동)
 
-- **Status**: review
+- **Status**: done
 - **Type**: cross-project (ecommerce-microservices-platform + platform-console) — atomic PR
 - **Analysis model**: Opus 4.8 / **Implementation model**: Sonnet 4.6 (소규모 제거 + 스펙/계약 동기화 + 테스트)
 
