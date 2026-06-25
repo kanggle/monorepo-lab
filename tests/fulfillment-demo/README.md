@@ -212,3 +212,61 @@ a real failure risk; the code itself is CI-gated, so correctness does not depend
 The backorder auto-cancel/refund (ADR-MONO-022 v2(a)) + inventory reconciliation (v2(b))
 legs are likewise observable once IAM + inventory are wired (each has its own return-leg
 event already in `origin/main`).
+
+---
+
+## Full loop on the live federation stack — `docker-compose.ecommerce-fulfillment.yml` (TASK-BE-431)
+
+`docker-compose.optionb-live.yml` (above) runs outbound on `redpanda` and seeds the order
+directly to `RESERVED`, so it never exercises the ecommerce link **or** the inventory
+reservation. `docker-compose.ecommerce-fulfillment.yml` wires the **real** loop on the
+running `federation-hardening-e2e` stack: it puts both wms `outbound-service` **and**
+`inventory-service` on `ecommerce-kafka` (the broker the ecommerce shipping/product/order
+services use), so the cross-domain topics actually connect.
+
+Bring-up + drive (after `bootJar` of both wms services):
+
+```bash
+docker compose -p federation-hardening-e2e \
+  -f tests/fulfillment-demo/docker-compose.ecommerce-fulfillment.yml up -d
+# seed (UUIDs MUST agree across outbound read-model + inventory stock):
+docker exec -i fulfillment-demo-outbound-postgres  psql -U outbound  -d outbound_db  < tests/fulfillment-demo/seed/outbound-readmodel.sql
+docker exec -i fulfillment-demo-inventory-postgres psql -U inventory -d inventory_db < tests/fulfillment-demo/seed/inventory-ecommerce-stock.sql
+# place an order with the seeded SKU as variantId, then publish the confirm event
+# (product.product.stock-changed reason=ORDER_RESERVED) — see §3 / §3.5 above.
+```
+
+**Verified live (2026-06-25)** — the forward leg + the BE-431 reservation fix end-to-end:
+order CONFIRMED → `ecommerce.fulfillment.requested.v1` → outbound order `PICKING` →
+`outbound.picking.requested` → **inventory reserved** (stock `100 → 98`, reservation
+`RESERVED`) → saga `RESERVED`. Before BE-431 the picking.requested consumer NPE'd on the
+absent `pickingRequestId`/`inventoryId` wire fields, so the saga never left `REQUESTED`.
+
+### Gotchas hit while wiring this (all real, documented here)
+
+1. **TASK-BE-431** — outbound→inventory `picking.requested` wire mismatch. Fixed in this
+   branch (the consumer resolves the inventory row from the natural key).
+2. **inventory-service boot collision** — it ships `com.wms.inventory…OutboxPublisher`
+   **and** pulls the shared `com.example.messaging.outbox.OutboxAutoConfiguration`; both
+   claim the bean name `outboxPublisher` → `BeanDefinitionOverrideException` at boot. Only
+   surfaces running as a real app (the ITs don't hit it). Worked around here with
+   `SPRING_AUTOCONFIGURE_EXCLUDE=com.example.messaging.outbox.OutboxAutoConfiguration`
+   — a proper fix (rename the local bean or exclude in inventory's own config) is a
+   separate follow-up.
+3. **Read-model dedup** — `findBy*Code` resolution throws on duplicate snapshot rows;
+   seed exactly one row per code with the UUIDs that match the inventory stock seed.
+4. **`docker restart` reverts compose env** on this host — recreating outbound resets it
+   to the `optionb-live.yml` definition (redpanda). Use `compose up --force-recreate`,
+   never `docker restart`, to keep the `ecommerce-kafka` config.
+
+### What still needs the wms gateway (pick → pack → ship-confirm → ecommerce SHIPPED)
+
+The outbound write endpoints require `OUTBOUND_WRITE` on the JWT `roles` claim. The
+operator's wms assume-tenant token carries only `WMS_OPERATOR`; the **wms `gateway-service`
+translates `WMS_OPERATOR` → `OUTBOUND_*`** before forwarding. This compose calls
+outbound directly (no wms gateway), so the operator pick/pack/ship leg (and thus the
+return-leg flip to ecommerce `SHIPPED`) needs either the wms gateway added or the
+operator granted `OUTBOUND_WRITE` directly. The order is left staged at `RESERVED` /
+`PICKING`; driving Pick→Pack→Ship from the console `/wms/outbound` (which goes through the
+wms gateway) closes the loop — `WmsShippingConfirmedConsumer` is already subscribed on
+`ecommerce-kafka`.
