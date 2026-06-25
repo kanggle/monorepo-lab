@@ -4,6 +4,7 @@ import com.wms.inventory.application.query.InventoryListCriteria;
 import com.wms.inventory.application.result.InventoryView;
 import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.domain.model.Inventory;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +20,20 @@ public interface InventoryRepository {
     Optional<Inventory> findById(UUID id);
 
     Optional<Inventory> findByKey(UUID locationId, UUID skuId, UUID lotId);
+
+    /**
+     * Candidate stock rows for the {@code (warehouseId, skuId, lotId)} natural
+     * key with {@code available_qty > 0}, ordered by {@code available_qty DESC,
+     * id ASC} (deterministic greatest-available-first).
+     *
+     * <p>Used by {@code PickingRequestedConsumer} to resolve a reservation
+     * line whose {@code locationId} is null (the v1 norm — the picking source
+     * location is assigned later). {@code lotId} null matches rows with
+     * {@code lot_id IS NULL}. Returns an empty list when no stock row exists —
+     * the consumer treats that as zero available (shortfall → backorder),
+     * never as a not-found error.
+     */
+    List<Inventory> findAvailableByWarehouseSkuLot(UUID warehouseId, UUID skuId, UUID lotId);
 
     Optional<InventoryView> findViewById(UUID id);
 

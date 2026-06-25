@@ -74,14 +74,16 @@ class PickingFlowIntegrationTest extends InventoryServiceIntegrationBase {
     @DisplayName("end-to-end: outbound.picking.requested → inventory.reserved on Kafka")
     void pickingRequestedProducesInventoryReserved() throws Exception {
         UUID warehouseId = UUID.randomUUID();
-        // First seed an inventory row by calling ReserveStockUseCase's prerequisite path:
-        // we insert a row directly via SQL since BE-022's RECEIVE flow already covers
-        // the put-away path. Using direct insertion keeps this test focused on picking.
-        UUID inventoryId = seedInventoryRow(warehouseId, 100);
+        // Seed an inventory row directly via SQL since BE-022's RECEIVE flow
+        // already covers the put-away path. We pin its (sku, lot=null) so the
+        // consumer's natural-key resolution (locationId null in the v1 wire)
+        // finds exactly this row. Keeps the test focused on the picking leg.
+        UUID skuId = UUID.randomUUID();
+        UUID inventoryId = seedInventoryRow(warehouseId, skuId, 100);
         UUID pickingRequestId = UUID.randomUUID();
 
         publish(INBOUND_PICKING_REQUESTED,
-                buildPickingRequestedEvent(pickingRequestId, warehouseId, inventoryId, 30));
+                buildPickingRequestedEvent(pickingRequestId, warehouseId, skuId, 30));
 
         await().atMost(45, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
@@ -107,7 +109,7 @@ class PickingFlowIntegrationTest extends InventoryServiceIntegrationBase {
     @DisplayName("re-delivery with same pickingRequestId is a no-op")
     void redeliveryIsIdempotent() throws Exception {
         UUID warehouseId = UUID.randomUUID();
-        UUID inventoryId = seedInventoryRow(warehouseId, 100);
+        UUID inventoryId = seedInventoryRow(warehouseId, UUID.randomUUID(), 100);
         UUID pickingRequestId = UUID.randomUUID();
 
         // Use the use-case directly twice — the second call must short-circuit
@@ -134,7 +136,7 @@ class PickingFlowIntegrationTest extends InventoryServiceIntegrationBase {
         return inventoryRepository.findById(id).orElseThrow();
     }
 
-    private UUID seedInventoryRow(UUID warehouseId, int qty) {
+    private UUID seedInventoryRow(UUID warehouseId, UUID skuId, int qty) {
         UUID id = UUID.randomUUID();
         java.time.Instant now = java.time.Instant.now();
         jdbc.update("""
@@ -143,7 +145,7 @@ class PickingFlowIntegrationTest extends InventoryServiceIntegrationBase {
                  available_qty, reserved_qty, damaged_qty,
                  last_movement_at, version, created_at, created_by, updated_at, updated_by)
                 VALUES (?, ?, ?, ?, NULL, ?, 0, 0, ?, 0, ?, 'test', ?, 'test')
-                """, id, warehouseId, UUID.randomUUID(), UUID.randomUUID(), qty, now, now, now);
+                """, id, warehouseId, UUID.randomUUID(), skuId, qty, now, now, now);
         return id;
     }
 
@@ -184,25 +186,36 @@ class PickingFlowIntegrationTest extends InventoryServiceIntegrationBase {
         return null;
     }
 
-    private static String buildPickingRequestedEvent(UUID pickingRequestId, UUID warehouseId,
-                                                     UUID inventoryId, int qty) {
+    /**
+     * Builds the <em>real</em> producer wire shape (outbound-service
+     * {@code EventEnvelopeSerializer.pickingRequestedPayload}, TASK-BE-431):
+     * top-level {@code reservationId}; per-line {@code skuId}/{@code lotId}/
+     * {@code locationId:null}/{@code qtyToReserve}. The consumer resolves the
+     * concrete inventory row by natural key.
+     */
+    private static String buildPickingRequestedEvent(UUID reservationId, UUID warehouseId,
+                                                     UUID skuId, int qty) {
         Map<String, Object> root = new HashMap<>();
         root.put("eventId", UUID.randomUUID().toString());
         root.put("eventType", "outbound.picking.requested");
         root.put("eventVersion", 1);
         root.put("occurredAt", "2026-04-25T10:00:00Z");
         root.put("producer", "outbound-service");
-        root.put("aggregateType", "picking_request");
-        root.put("aggregateId", pickingRequestId.toString());
+        root.put("aggregateType", "outbound_saga");
+        root.put("aggregateId", UUID.randomUUID().toString());
         root.put("traceId", null);
-        root.put("actorId", "outbound-saga");
+        root.put("actorId", "system:erp-webhook");
         Map<String, Object> payload = new HashMap<>();
-        payload.put("pickingRequestId", pickingRequestId.toString());
+        payload.put("sagaId", UUID.randomUUID().toString());
+        payload.put("reservationId", reservationId.toString());
+        payload.put("orderId", UUID.randomUUID().toString());
         payload.put("warehouseId", warehouseId.toString());
-        payload.put("ttlSeconds", 86400);
         Map<String, Object> line = new HashMap<>();
-        line.put("inventoryId", inventoryId.toString());
-        line.put("quantity", qty);
+        line.put("orderLineId", UUID.randomUUID().toString());
+        line.put("skuId", skuId.toString());
+        line.put("lotId", null);
+        line.put("locationId", null);
+        line.put("qtyToReserve", qty);
         payload.put("lines", List.of(line));
         root.put("payload", payload);
         try {

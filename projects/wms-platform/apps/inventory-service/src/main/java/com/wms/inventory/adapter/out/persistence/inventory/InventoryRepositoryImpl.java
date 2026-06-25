@@ -84,6 +84,14 @@ public class InventoryRepositoryImpl implements InventoryRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<Inventory> findAvailableByWarehouseSkuLot(UUID warehouseId, UUID skuId, UUID lotId) {
+        return repository.findAvailableByWarehouseSkuLot(warehouseId, skuId, lotId).stream()
+                .map(InventoryPersistenceMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public Inventory insert(Inventory inventory) {
         InventoryJpaEntity entity = InventoryPersistenceMapper.toEntity(inventory);
         entityManager.persist(entity);

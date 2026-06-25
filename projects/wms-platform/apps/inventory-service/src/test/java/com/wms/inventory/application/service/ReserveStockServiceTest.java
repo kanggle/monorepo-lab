@@ -201,6 +201,48 @@ class ReserveStockServiceTest {
         assertThat(outbox.events.get(0)).isInstanceOf(InventoryReservedEvent.class);
     }
 
+    @Test
+    void signalReserveFailedEmitsReserveFailedWithoutMutation() {
+        UUID pickingRequestId = UUID.randomUUID();
+        UUID skuId = UUID.randomUUID();
+        ReserveStockUseCase.Shortfall shortfall = new ReserveStockUseCase.Shortfall(
+                null, skuId, null, null, 5, 0);
+
+        service.signalReserveFailed(pickingRequestId, "system:picking-requested-consumer",
+                List.of(shortfall));
+
+        assertThat(reservationRepo.byId).isEmpty();
+        assertThat(outbox.events).hasSize(1);
+        assertThat(outbox.events.get(0)).isInstanceOf(InventoryReserveFailedEvent.class);
+        InventoryReserveFailedEvent e = (InventoryReserveFailedEvent) outbox.events.get(0);
+        assertThat(e.pickingRequestId()).isEqualTo(pickingRequestId);
+        assertThat(e.reason()).isEqualTo("INSUFFICIENT_STOCK");
+        assertThat(e.insufficientLines()).hasSize(1);
+        assertThat(e.insufficientLines().get(0).inventoryId()).isNull();
+        assertThat(e.insufficientLines().get(0).skuId()).isEqualTo(skuId);
+        assertThat(e.insufficientLines().get(0).qtyRequested()).isEqualTo(5);
+        assertThat(e.insufficientLines().get(0).qtyAvailable()).isZero();
+    }
+
+    @Test
+    void signalReserveFailedIsIdempotentWhenReservationExists() {
+        UUID invId = seedInventory(100);
+        UUID pickingRequestId = UUID.randomUUID();
+        // First reserve succeeds.
+        service.reserve(new ReserveStockCommand(
+                pickingRequestId, UUID.randomUUID(),
+                List.of(new ReserveStockCommand.Line(invId, 30)),
+                86400, null, "u", null));
+        outbox.events.clear();
+
+        // A late shortfall signal for the same picking request must NOT emit a
+        // contradictory reserve.failed.
+        service.signalReserveFailed(pickingRequestId, "system:picking-requested-consumer",
+                List.of(new ReserveStockUseCase.Shortfall(null, UUID.randomUUID(), null, null, 5, 0)));
+
+        assertThat(outbox.events).isEmpty();
+    }
+
     private UUID seedInventory(int qty) {
         UUID id = UUID.randomUUID();
         seedInventoryWithId(id, qty);
@@ -230,6 +272,15 @@ class ReserveStockServiceTest {
             return entries.values().stream()
                     .filter(i -> i.locationId().equals(locationId) && i.skuId().equals(skuId))
                     .findFirst();
+        }
+        @Override public List<Inventory> findAvailableByWarehouseSkuLot(UUID warehouseId, UUID skuId, UUID lotId) {
+            return entries.values().stream()
+                    .filter(i -> i.warehouseId().equals(warehouseId) && i.skuId().equals(skuId)
+                            && java.util.Objects.equals(i.lotId(), lotId)
+                            && i.availableQty() > 0)
+                    .sorted(Comparator.comparingInt(Inventory::availableQty).reversed()
+                            .thenComparing(Inventory::id))
+                    .toList();
         }
         @Override public Optional<InventoryView> findViewById(UUID id) { throw new UnsupportedOperationException(); }
         @Override public Optional<InventoryView> findViewByKey(UUID a, UUID b, UUID c) { throw new UnsupportedOperationException(); }

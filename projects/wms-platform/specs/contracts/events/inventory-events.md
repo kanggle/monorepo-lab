@@ -412,36 +412,75 @@ Expected shape (what inventory-service parses):
 Effect: for each line, calls `ReceiveStockUseCase` → `Inventory.receive(qty)` at
 `(locationId, skuId, lotId)`, creating the row if absent. Publishes `inventory.received`.
 
-### C2. `outbound.picking.requested`
+### C2. `outbound.picking.requested`  ⚠️ Cross-service contract (TASK-BE-431)
 
 Topic: `wms.outbound.picking.requested.v1`
-Authoritative schema: `specs/contracts/events/outbound-events.md`
+Authoritative schema: `specs/contracts/events/outbound-events.md` §3 (producer SoT — owned
+jointly with this consumer).
 
-Expected shape:
+**Authoritative consumed shape** (mirrors the producer byte-for-byte — the previous
+`pickingRequestId` / per-line `inventoryId`+`quantity` description was stale and NPE'd at
+the consumer; corrected by TASK-BE-431):
 
 ```json
 {
   "eventId": "uuid",
   "eventType": "outbound.picking.requested",
   "payload": {
-    "pickingRequestId": "uuid",
+    "sagaId": "uuid",
+    "reservationId": "uuid",
+    "orderId": "uuid",
     "warehouseId": "uuid",
     "lines": [
       {
-        "locationId": "uuid",
+        "orderLineId": "uuid",
         "skuId": "uuid",
         "lotId": "uuid-or-null",
-        "quantity": 5
+        "locationId": "uuid-or-null",
+        "qtyToReserve": 5
       }
-    ],
-    "ttlSeconds": 86400
+    ]
   }
 }
 ```
 
-Effect: calls `ReserveStockUseCase` which creates a `Reservation` for all lines atomically.
-Publishes `inventory.reserved`. On failure, the event goes to DLT; outbound-service saga
-sweeper re-emits if no `inventory.reserved` received within 5 minutes.
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `reservationId` | UUID | no | Equals outbound `PickingRequest.id`; used as inventory's `pickingRequestId` (1:1). Also the dedupe/idempotency key for the reservation aggregate |
+| `warehouseId` | UUID | no | All lines belong to this warehouse |
+| `lines[].skuId` | UUID | no | |
+| `lines[].lotId` | UUID | yes | Null = any available lot (matches rows with `lot_id IS NULL`) |
+| `lines[].locationId` | UUID | yes | **Null in v1** — the picking source location is bound later at picking, so the consumer resolves the row(s) by `(warehouseId, skuId, lotId)` |
+| `lines[].qtyToReserve` | int | no | EA |
+
+> ⚠️ The producer does **not** send `inventoryId`. It cannot know inventory-service's
+> private `inventory` row PK — it only knows domain identity. The consumer
+> (`PickingRequestedConsumer`) **resolves and allocates** the concrete row(s).
+
+**Resolution + allocation policy** (`PickingRequestedConsumer.resolve`):
+
+- Top-level: read `reservationId`; use it as the `pickingRequestId` for the
+  `ReserveStockCommand` and the reservation aggregate.
+- Per line `(skuId, lotId, locationId?, qtyToReserve)`:
+  - `locationId` **present** → resolve the single row at `(locationId, skuId, lotId)` via
+    `InventoryRepository.findByKey` (treated as no-candidate when its `available_qty == 0`).
+  - `locationId` **null** (v1 norm) → resolve candidate rows for
+    `(warehouseId, skuId, lotId)` with `available_qty > 0` via
+    `InventoryRepository.findAvailableByWarehouseSkuLot`, ordered `available_qty DESC, id ASC`
+    (deterministic). Allocate `qtyToReserve` **greatest-available first**, spanning multiple
+    rows only when one row is insufficient — one `ReserveStockCommand.Line(inventoryId, qty)`
+    per row drawn from.
+- **Shortfall (incl. zero stock).** If any line's total available across resolved rows is
+  `< qtyToReserve`, the **whole event** fails with no mutation: `inventory.reserve.failed`
+  (§4a, reason `INSUFFICIENT_STOCK`) is emitted → outbound auto-backorder. When at least one
+  row resolved, `ReserveStockService.doReserve`'s pre-check emits it; when **no** row resolved
+  at all, `ReserveStockUseCase.signalReserveFailed` emits it directly from the natural-key
+  identity (the failure line carries a `null` `inventoryId` hint). Either path: **no NPE, no
+  DLT loop, the saga backorders.**
+
+Effect: on full coverage, calls `ReserveStockUseCase.reserveForPickingEvent` → creates one
+`Reservation` for all lines atomically and publishes `inventory.reserved`. Idempotent on
+`eventId` (dedupe table) and on `reservationId` (existing reservation short-circuits).
 
 ### C3. `outbound.picking.cancelled`
 

@@ -1,0 +1,138 @@
+# Full ecommerce ↔ wms fulfillment loop on the federation-hardening-e2e stack
+# (ADR-MONO-022). Unlike docker-compose.optionb-live.yml (which seeds the wms order
+# directly to RESERVED, bypassing the ecommerce link + inventory reservation), this
+# wires the REAL loop:
+#
+#   ecommerce order CONFIRMED → ecommerce.fulfillment.requested.v1 → wms outbound
+#   (REQUESTED) → outbound.picking.requested → wms inventory reserves (TASK-BE-431)
+#   → RESERVED → operator pick/pack/ship-confirm → wms.outbound.shipping.confirmed.v1
+#   → ecommerce shipping SHIPPED → ecommerce order SHIPPED.
+#
+# Both wms services run on `ecommerce-kafka` (the broker where ecommerce
+# shipping/product/order live) so the cross-domain topics actually connect — the
+# optionb demo put outbound on `redpanda`, a separate cluster, which is why the
+# loop never closed.
+#
+# Build prerequisite (host-prebuilt-jar convention):
+#   ./gradlew :projects:wms-platform:apps:outbound-service:bootJar \
+#             :projects:wms-platform:apps:inventory-service:bootJar
+# Up (joins the running federation-hardening-e2e project + its network):
+#   docker compose -p federation-hardening-e2e \
+#     -f tests/fulfillment-demo/docker-compose.ecommerce-fulfillment.yml up -d
+# Then seed (after both are healthy):
+#   docker exec -i fulfillment-demo-outbound-postgres   psql -U outbound  -d outbound_db   < tests/fulfillment-demo/seed/outbound-readmodel.sql
+#   docker exec -i fulfillment-demo-inventory-postgres  psql -U inventory -d inventory_db  < tests/fulfillment-demo/seed/inventory-ecommerce-stock.sql
+name: federation-hardening-e2e
+
+services:
+  fulfillment-demo-outbound-postgres:
+    image: postgres:16-alpine
+    container_name: fulfillment-demo-outbound-postgres
+    environment:
+      POSTGRES_USER: outbound
+      POSTGRES_PASSWORD: outbound
+      POSTGRES_DB: outbound_db
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U outbound -d outbound_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  fulfillment-demo-inventory-postgres:
+    image: postgres:16-alpine
+    container_name: fulfillment-demo-inventory-postgres
+    environment:
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: inventory
+      POSTGRES_DB: inventory_db
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory -d inventory_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  wms-outbound-service:
+    build:
+      context: ../../projects/wms-platform/apps/outbound-service
+      dockerfile: Dockerfile
+    image: wms-outbound-service:optionb-demo
+    container_name: fulfillment-demo-outbound-service
+    init: true
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://fulfillment-demo-outbound-postgres:5432/outbound_db
+      DB_USERNAME: outbound
+      DB_PASSWORD: outbound
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      OIDC_REQUIRED_TENANT_ID: wms
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # Same broker as ecommerce so the cross-domain fulfillment topics connect.
+      KAFKA_BOOTSTRAP_SERVERS: ecommerce-kafka:9092
+      KAFKA_CONSUMER_GROUP: outbound-service-ecommerce-fulfillment
+      MANAGEMENT_HEALTH_KAFKA_ENABLED: "false"
+      SERVER_PORT: "8084"
+      JAVA_TOOL_OPTIONS: "-Djava.net.preferIPv4Stack=true"
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+    networks: [fed-e2e]
+    depends_on:
+      fulfillment-demo-outbound-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8084/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
+
+  wms-inventory-service:
+    build:
+      context: ../../projects/wms-platform/apps/inventory-service
+      dockerfile: Dockerfile
+    image: wms-inventory-service:be431-demo
+    container_name: fulfillment-demo-inventory-service
+    init: true
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://fulfillment-demo-inventory-postgres:5432/inventory_db
+      DB_USERNAME: inventory
+      DB_PASSWORD: inventory
+      OIDC_ISSUER_URL: http://auth-service:8081
+      OIDC_JWK_SET_URI: http://auth-service:8081/oauth2/jwks
+      OIDC_REQUIRED_TENANT_ID: wms
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      KAFKA_BOOTSTRAP_SERVERS: ecommerce-kafka:9092
+      KAFKA_CONSUMER_GROUP: inventory-service-ecommerce-fulfillment
+      MANAGEMENT_HEALTH_KAFKA_ENABLED: "false"
+      # inventory-service ships its own com.wms.inventory...OutboxPublisher AND pulls
+      # the shared com.example.messaging.outbox auto-config, which both claim the bean
+      # name `outboxPublisher` → BeanDefinitionOverrideException at boot (latent; only
+      # surfaces running as a real app, not in the ITs). Exclude the shared auto-config
+      # so the service keeps its own outbox implementation.
+      SPRING_AUTOCONFIGURE_EXCLUDE: com.example.messaging.outbox.OutboxAutoConfiguration
+      SERVER_PORT: "8083"
+      JAVA_TOOL_OPTIONS: "-Djava.net.preferIPv4Stack=true"
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+    networks: [fed-e2e]
+    depends_on:
+      fulfillment-demo-inventory-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
+
+networks:
+  fed-e2e:
+    external: true
+    name: federation-hardening-e2e_fed-e2e
