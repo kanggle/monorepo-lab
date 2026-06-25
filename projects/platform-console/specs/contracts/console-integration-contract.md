@@ -253,6 +253,17 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   weakened here). The console sends wms's required `X-Request-Id` (the wms
   gateway echoes/generates it); `X-Actor-Id` is set by the wms gateway from
   the JWT — **the console does not forge it**.
+  - **Customer-tenant outbound scoping (TASK-MONO-304 / ADR-MONO-022 § D9)**:
+    when an operator has assumed a customer tenant (the domain-facing token
+    carries `tenant_id=<customer>`, e.g. `ecommerce`, admitted to wms via the
+    `entitled_domains` dual-accept), wms scopes the **outbound** surface
+    (§ 2.4.5.1) to that tenant's own `FULFILLMENT_ECOMMERCE` orders: `GET /orders`
+    returns only those rows, and any single-order read/mutation on a foreign /
+    B2B order returns `403 TENANT_SCOPE_DENIED` (mapped by the console to the
+    inline non-crashing "not available" state, § 2.5 — never a re-login loop).
+    This is derived entirely producer-side from the signed `tenant_id` claim;
+    the console still sends **no** `X-Tenant-Id`. Native wms (`tenant_id=wms`)
+    and platform (`*`) operators are unrestricted (full visibility), unchanged.
 
 - **Mutation discipline (alert-ack only)**:
   `POST /api/v1/admin/dashboard/alerts/{alertId}/acknowledge` requires an

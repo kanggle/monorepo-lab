@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.wms.outbound.adapter.out.persistence.entity.OrderEntity;
 import com.wms.outbound.adapter.out.persistence.repository.OrderJpaRepository;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,7 +70,7 @@ class OrderJpaRepositoryFilterIT {
     @DisplayName("findFiltered — all filters null runs on Postgres without 42P18")
     void findFiltered_allNull_doesNotFailPgTypeInference() {
         List<OrderEntity> result = orderRepository.findFiltered(
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 PageRequest.of(0, 20));
 
         assertThat(result).isNotNull();
@@ -78,8 +80,39 @@ class OrderJpaRepositoryFilterIT {
     @DisplayName("countFiltered — all filters null runs on Postgres without 42P18")
     void countFiltered_allNull_doesNotFailPgTypeInference() {
         long count = orderRepository.countFiltered(
-                null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null);
 
         assertThat(count).isGreaterThanOrEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("findFiltered — :tenantId pins results to a single tenant (TASK-MONO-304)")
+    void findFiltered_byTenantId_isolatesTenants() {
+        OrderEntity ecommerce = persistedOrder("ORD-EC-1", "FULFILLMENT_ECOMMERCE", "ecommerce");
+        OrderEntity b2b = persistedOrder("ORD-B2B-1", "MANUAL", null);
+        orderRepository.saveAll(List.of(ecommerce, b2b));
+
+        List<OrderEntity> scoped = orderRepository.findFiltered(
+                null, null, null, null, null, "ecommerce", null, null, null, null,
+                PageRequest.of(0, 20));
+        assertThat(scoped).extracting(OrderEntity::getOrderNo).containsExactly("ORD-EC-1");
+
+        long count = orderRepository.countFiltered(
+                null, null, null, null, null, "ecommerce", null, null, null, null);
+        assertThat(count).isEqualTo(1L);
+
+        // No tenant filter → both rows visible (native-wms / unrestricted path).
+        assertThat(orderRepository.countFiltered(
+                null, null, null, null, null, null, null, null, null, null))
+                .isEqualTo(2L);
+    }
+
+    private static OrderEntity persistedOrder(String orderNo, String source, String tenantId) {
+        Instant now = Instant.now();
+        return new OrderEntity(
+                UUID.randomUUID(), orderNo, source,
+                UUID.randomUUID(), UUID.randomUUID(), "RECEIVED",
+                null, null, null, null, null, tenantId,
+                now, "test", now, "test");
     }
 }

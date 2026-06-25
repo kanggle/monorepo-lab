@@ -124,6 +124,41 @@ Each side stays independently buildable/publishable (D8).
 
 Both projects are published as independent repos. The consumer side must **degrade gracefully** when the producer's topics are absent in a standalone deployment (no fulfillment event ⇒ ecommerce shipping stays manual-admin, as today; no wms intake ⇒ wms runs on ERP webhook/manual only). Versioned topics + grace-period migration policy (scm precedent). The integration is **additive to each project's standalone story**, never a hard runtime dependency.
 
+### D9 — Tenant-scoped outbound visibility for customer-tenant operators (TASK-MONO-304)
+
+**Context.** Once the ecommerce tenant is subscribed to the wms domain (its
+operators' tokens carry `wms` in `entitled_domains`), an ecommerce operator can
+open the platform console's wms-outbound surface (console-integration-contract
+§ 2.4.5.1). With no further change such an operator sees **every** wms outbound
+order across all tenants — wms's outbound read/mutation paths filter only on
+role, never on the order's `tenant_id` (which facet d introduced as *opaque
+correlation, explicitly non-filtering*).
+
+**Decision.** Make the outbound read **and** mutation surface tenant-scoped from
+the SIGNED `tenant_id` claim (never a client header):
+
+- **Native wms** (`tenant_id=wms`) / **platform** (`*`) / **internal** (no
+  security context, e.g. Kafka consumers) callers stay **unrestricted** — full
+  visibility, behaviour unchanged.
+- A **customer-tenant** caller (admitted via the `entitled_domains` dual-accept,
+  `tenant_id`≠wms) is restricted to its own tenant's `FULFILLMENT_ECOMMERCE`
+  orders: `GET /orders` is forced to `tenantId=<caller>` + `source=FULFILLMENT_ECOMMERCE`;
+  any read/mutation on a foreign / B2B (`null`-tenant) order → `403 TENANT_SCOPE_DENIED`.
+
+**Reconciliation with facet d.** Facet d deliberately kept `tenant_id` opaque and
+non-filtering because wms had no cross-tenant *reader* — every caller was native
+wms. D9 introduces exactly that new reader class (customer-tenant operators via
+the console), so the same column now also serves as the isolation key **for those
+callers only**. wms remains single-tenant for its native operators (no gate
+change for them); `tenant_id` stays nullable and is still opaque on the event
+wire. The isolation holds precisely because `tenant_id` is populated only for
+`FULFILLMENT_ECOMMERCE` orders.
+
+**Mechanism.** A `CallerScopeProvider` out-port resolves the caller's
+`CallerScope` from the security context; the application layer applies it (list
+filter + single-order/mutation guard). No new JWT claim, no client header, no
+console change — the console already forwards the assumed tenant-scoped token.
+
 ---
 
 ## 3. Consequences
@@ -168,6 +203,7 @@ Append-only.
 | 2026-06-08 | D4 v2(a) realized | (unchanged) | (unchanged) | **auto-refund/cancel saga built** (v2(b) inventory reconciliation still named) | "다음 작업 추천" → "진행" (on the recommendation to realize §D4 v2 auto-refund/cancel saga) | spec + impl PR (TASK-MONO-197) |
 | 2026-06-08 | D4 v2(b) ACCEPTED + realized | (unchanged) | **delta reconciliation built (Option B chosen)** — dual-bookkeeping drift narrowed; A/C/defer rejected | "다음 작업 추천" → "진행" + **AskUserQuestion: sync policy = "B: delta 재조정"** (over A wms-as-SoT / C batch / D defer) | spec + impl PR (TASK-MONO-198) |
 | 2026-06-18 | facet-d `tenant_id` threading realized (ADR-MONO-030 Step 4 facet d) | (unchanged) | (unchanged) | "다음 작업 추천" → "진행" (on realizing the deferred ADR-030 Step 4 facet d via the D5 correlation-round-trip pattern) | spec (contracts) + impl PR (TASK-MONO-296) |
+| 2026-06-25 | **D9 added + ACCEPTED** — tenant-scoped outbound visibility for customer-tenant operators | (unchanged) | (unchanged) | "ecommerce 운영자에게는 자기 테넌트 + source=FULFILLMENT_ECOMMERCE 출고만 보이게. 다른 테넌트 것을 요청하면 403으로 차단." (explicit user policy decision after reviewing that the ecommerce tenant otherwise sees ALL wms outbound) | spec (contracts/ADR) + impl PR (TASK-MONO-304) |
 
 (PROPOSED row appended 2026-06-08 per the ADR-MONO-008/016 § D6.3 format. ACCEPTED row appended same-session on the user's explicit "진행" intent on the §D7 plan — NOT self-ACCEPT. D1–D8 decision bodies unchanged; only Status + this row + the §1 note reconciled to ACCEPTED tense. §D7 ①~④ implementation tasks created at ACCEPTED: contracts → wms → ecommerce → e2e. **D4 v2(a) row (TASK-MONO-197): a realization of the already-named "auto-refund/cancel saga = v2", not a new architecture decision — no self-ACCEPT gate; D4's chosen approach is unchanged, only its v2(a) status flips named→built.** **D4 v2(b) row (TASK-MONO-198): unlike v2(a), the v2(b) *sync policy* WAS a new architecture decision (A wms-as-SoT vs B delta vs C batch) — resolved by an explicit AskUserQuestion (user chose B), so the ACCEPTED transition is user-driven, NOT self-ACCEPT.**
 **facet-d row (TASK-MONO-296): a realization of the already-named ADR-MONO-030 §3.1 M5 / §3.4 Step 4 "ADR-022 이행 이벤트 `tenant_id` 스레딩" deferred work via the established D5 `orderNo` correlation-round-trip pattern — same class as the v2(a)/v2(b) realization rows, NOT a new architecture decision and NOT a self-ACCEPT gate. The forward leg already threaded `tenantId` (`OrderConfirmedEvent.tenant_id` → `FulfillmentRequestedMessage.tenantId`); this realization completes the return leg: wms `outbound-service` captures the inbound envelope `tenantId`, persists it as an additive nullable `outbound_order.tenant_id` correlation column (NOT NULL / row-filtering / gate-change all explicitly avoided — wms stays single-tenant per ADR-MONO-030 §1.1; `tenant_id` is opaque correlation alongside `orderNo`), and echoes it onto the `wms.outbound.shipping.confirmed.v1` + `wms.outbound.order.cancelled.v1` envelopes. The ecommerce return consumers (`WmsShippingConfirmedConsumer`, both `WmsOutboundCancelledConsumer`s) bind it into `TenantContext` — local-row fallback by `orderNo` when absent (D8) — and clear it in a `finally` (Kafka listener threads). All contract edits additive/optional; the scm consumer of wms outbound events ignores the new field.**)

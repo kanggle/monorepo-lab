@@ -49,6 +49,29 @@ Responses:
 Enforced at the application layer, not in controllers. Roles are propagated
 through the command record and checked in the use-case service.
 
+#### Tenant scoping (TASK-MONO-304 / ADR-MONO-022 § D9)
+
+Beyond the role gate, every order read and mutation is **tenant-scoped** from
+the SIGNED `tenant_id` claim of the access token (never a client header):
+
+- **Native wms callers** (`tenant_id = wms`), platform callers (`tenant_id = *`),
+  and internal flows (no security context) are **unrestricted** — they see and
+  may act on every outbound order. Behaviour is unchanged.
+- **Customer-tenant callers** — e.g. an ecommerce operator admitted to wms via
+  the `entitled_domains` dual-accept (ADR-MONO-019 § D5), whose `tenant_id` is
+  their own tenant (`ecommerce`, …) — are **restricted** to their own tenant's
+  `FULFILLMENT_ECOMMERCE` orders:
+  - `GET /orders` is forced to `tenantId = <caller tenant>` **and**
+    `source = FULFILLMENT_ECOMMERCE` (any client-supplied `source` is overridden).
+  - Any single-order read or mutation (`GET /orders/{id}`, `…/saga`,
+    `…/picking-requests`, cancel, pick-confirm, packing create/seal/confirm,
+    shipping confirm, TMS retry) on an order whose `tenant_id` does not match the
+    caller — including B2B / `null`-tenant orders — returns **403
+    `TENANT_SCOPE_DENIED`**.
+
+The isolation key is `orders.tenant_id`, populated only for
+`FULFILLMENT_ECOMMERCE` orders (ADR-MONO-022 facet d) and `null` otherwise.
+
 ### Error Envelope
 
 Per `platform/error-handling.md`. Every error response:
@@ -88,6 +111,7 @@ Domain error → HTTP status mapping:
 | `DUPLICATE_REQUEST` | 409 | Same `Idempotency-Key`, different body hash |
 | `VALIDATION_ERROR` | 400 | Bad input (type, format, required field) |
 | `FORBIDDEN` | 403 | Caller lacks required role (e.g., `OUTBOUND_ADMIN` required for post-pick cancel) |
+| `TENANT_SCOPE_DENIED` | 403 | Tenant-scoped caller accessed an order outside its tenant scope (see § Authorization → Tenant scoping) |
 | `INTERNAL_ERROR` | 500 | Unexpected server-side error |
 
 ### Pagination

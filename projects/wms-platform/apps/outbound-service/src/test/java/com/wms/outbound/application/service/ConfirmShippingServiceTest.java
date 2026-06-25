@@ -80,7 +80,9 @@ class ConfirmShippingServiceTest {
         coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, outboxWriter, fixedClock);
         service = new ConfirmShippingService(orderPersistence, pickingPersistence,
                 pickingConfirmationPersistence, packingPersistence, sagaPersistence,
-                shipmentPersistence, coordinator, outboxWriter, eventPublisher, fixedClock);
+                shipmentPersistence, coordinator, outboxWriter, eventPublisher,
+                new com.wms.outbound.application.service.fakes.FakeCallerScopeProvider(),
+                fixedClock);
 
         orderId = UUID.randomUUID();
         skuId = UUID.randomUUID();

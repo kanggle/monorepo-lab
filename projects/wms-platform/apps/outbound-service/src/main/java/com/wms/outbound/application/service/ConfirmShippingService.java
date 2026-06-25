@@ -3,6 +3,7 @@ package com.wms.outbound.application.service;
 import com.example.common.id.UuidV7;
 import com.wms.outbound.application.command.ConfirmShippingCommand;
 import com.wms.outbound.application.port.in.ConfirmShippingUseCase;
+import com.wms.outbound.application.port.out.CallerScopeProvider;
 import com.wms.outbound.application.port.out.OrderPersistencePort;
 import com.wms.outbound.application.port.out.OutboxWriterPort;
 import com.wms.outbound.application.port.out.PackingPersistencePort;
@@ -69,6 +70,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
     private final OutboundSagaCoordinator sagaCoordinator;
     private final OutboxWriterPort outboxWriter;
     private final ApplicationEventPublisher eventPublisher;
+    private final CallerScopeProvider callerScopeProvider;
     private final Clock clock;
 
     public ConfirmShippingService(OrderPersistencePort orderPersistence,
@@ -80,6 +82,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
                                   OutboundSagaCoordinator sagaCoordinator,
                                   OutboxWriterPort outboxWriter,
                                   ApplicationEventPublisher eventPublisher,
+                                  CallerScopeProvider callerScopeProvider,
                                   Clock clock) {
         this.orderPersistence = orderPersistence;
         this.pickingPersistence = pickingPersistence;
@@ -90,6 +93,7 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
         this.sagaCoordinator = sagaCoordinator;
         this.outboxWriter = outboxWriter;
         this.eventPublisher = eventPublisher;
+        this.callerScopeProvider = callerScopeProvider;
         this.clock = clock;
     }
 
@@ -100,6 +104,8 @@ public class ConfirmShippingService implements ConfirmShippingUseCase {
 
         Order order = orderPersistence.findById(command.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
+        // Cross-tenant guard (TASK-MONO-304).
+        callerScopeProvider.current().requireOrderAccess(order.getTenantId(), order.getId());
         assertVersionAndStatus(order, command);
 
         ShippingAggregates agg = loadShippingAggregates(command.orderId());

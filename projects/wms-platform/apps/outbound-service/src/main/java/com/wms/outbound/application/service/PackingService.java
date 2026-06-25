@@ -8,6 +8,7 @@ import com.wms.outbound.application.command.SealPackingUnitCommand;
 import com.wms.outbound.application.port.in.ConfirmPackingUseCase;
 import com.wms.outbound.application.port.in.CreatePackingUnitUseCase;
 import com.wms.outbound.application.port.in.SealPackingUnitUseCase;
+import com.wms.outbound.application.port.out.CallerScopeProvider;
 import com.wms.outbound.application.port.out.OrderPersistencePort;
 import com.wms.outbound.application.port.out.OutboxWriterPort;
 import com.wms.outbound.application.port.out.PackingPersistencePort;
@@ -66,6 +67,7 @@ public class PackingService implements CreatePackingUnitUseCase,
     private final SagaPersistencePort sagaPersistence;
     private final OutboundSagaCoordinator sagaCoordinator;
     private final OutboxWriterPort outboxWriter;
+    private final CallerScopeProvider callerScopeProvider;
     private final Clock clock;
 
     public PackingService(OrderPersistencePort orderPersistence,
@@ -73,12 +75,14 @@ public class PackingService implements CreatePackingUnitUseCase,
                           SagaPersistencePort sagaPersistence,
                           OutboundSagaCoordinator sagaCoordinator,
                           OutboxWriterPort outboxWriter,
+                          CallerScopeProvider callerScopeProvider,
                           Clock clock) {
         this.orderPersistence = orderPersistence;
         this.packingPersistence = packingPersistence;
         this.sagaPersistence = sagaPersistence;
         this.sagaCoordinator = sagaCoordinator;
         this.outboxWriter = outboxWriter;
+        this.callerScopeProvider = callerScopeProvider;
         this.clock = clock;
     }
 
@@ -93,6 +97,9 @@ public class PackingService implements CreatePackingUnitUseCase,
 
         Order order = orderPersistence.findById(command.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
+
+        // Cross-tenant guard (TASK-MONO-304).
+        callerScopeProvider.current().requireOrderAccess(order.getTenantId(), order.getId());
 
         // Implicit startPacking on first unit creation when Order is PICKED.
         if (order.getStatus() == OrderStatus.PICKED) {
@@ -173,6 +180,9 @@ public class PackingService implements CreatePackingUnitUseCase,
         Order order = orderPersistence.findById(command.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
 
+        // Cross-tenant guard (TASK-MONO-304).
+        callerScopeProvider.current().requireOrderAccess(order.getTenantId(), order.getId());
+
         Instant now = clock.instant();
         unit.seal(now);
         PackingUnit saved = packingPersistence.save(unit);
@@ -249,6 +259,8 @@ public class PackingService implements CreatePackingUnitUseCase,
 
         Order order = orderPersistence.findById(command.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
+        // Cross-tenant guard (TASK-MONO-304).
+        callerScopeProvider.current().requireOrderAccess(order.getTenantId(), order.getId());
         if (command.expectedVersion() >= 0 && order.getVersion() != command.expectedVersion()) {
             throw new ObjectOptimisticLockingFailureException(Order.class, command.orderId());
         }

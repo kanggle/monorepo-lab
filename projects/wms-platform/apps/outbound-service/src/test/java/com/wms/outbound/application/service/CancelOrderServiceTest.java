@@ -5,10 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.wms.outbound.application.command.CancelOrderCommand;
 import com.wms.outbound.application.result.OrderResult;
+import com.wms.outbound.application.service.fakes.FakeCallerScopeProvider;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeOutboxWriterPort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
 import com.wms.outbound.domain.exception.OrderAlreadyShippedException;
+import com.wms.outbound.domain.exception.TenantScopeDeniedException;
 import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OrderLine;
 import com.wms.outbound.domain.model.OrderSource;
@@ -34,6 +36,7 @@ class CancelOrderServiceTest {
     private FakeOrderPersistencePort orderPersistence;
     private FakeSagaPersistencePort sagaPersistence;
     private FakeOutboxWriterPort outboxWriter;
+    private FakeCallerScopeProvider callerScopeProvider;
     private CancelOrderService service;
 
     @BeforeEach
@@ -41,8 +44,9 @@ class CancelOrderServiceTest {
         orderPersistence = new FakeOrderPersistencePort();
         sagaPersistence = new FakeSagaPersistencePort();
         outboxWriter = new FakeOutboxWriterPort();
+        callerScopeProvider = new FakeCallerScopeProvider();
         service = new CancelOrderService(orderPersistence, sagaPersistence,
-                outboxWriter, fixedClock);
+                outboxWriter, callerScopeProvider, fixedClock);
     }
 
     @Test
@@ -168,6 +172,45 @@ class CancelOrderServiceTest {
                 .isInstanceOf(OrderAlreadyShippedException.class);
     }
 
+    @Test
+    void tenantScopedCallerCannotCancelForeignTenantOrder() {
+        // TASK-MONO-304: a caller restricted to 'ecommerce' must be denied (403)
+        // a B2B / null-tenant order — the cross-tenant guard fires before any
+        // role check or mutation.
+        Order order = orderInState(OrderStatus.PICKING); // tenantId == null
+        orderPersistence.save(order);
+        sagaPersistence.save(OutboundSaga.newRequested(UUID.randomUUID(), order.getId(), T0));
+        callerScopeProvider.restrictTo("ecommerce");
+
+        CancelOrderCommand cmd = new CancelOrderCommand(
+                order.getId(), "should be denied", 0L, "ecommerce-op",
+                Set.of("ROLE_OUTBOUND_WRITE"));
+
+        assertThatThrownBy(() -> service.cancel(cmd))
+                .isInstanceOf(TenantScopeDeniedException.class);
+        assertThat(outboxWriter.published).isEmpty();
+        assertThat(orderPersistence.findById(order.getId()).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.PICKING);
+    }
+
+    @Test
+    void tenantScopedCallerCanCancelOwnTenantOrder() {
+        // The same restricted caller may cancel an order belonging to its tenant.
+        Order order = ecommerceOrderInState(OrderStatus.PICKING, "ecommerce");
+        orderPersistence.save(order);
+        sagaPersistence.save(OutboundSaga.newRequested(UUID.randomUUID(), order.getId(), T0));
+        callerScopeProvider.restrictTo("ecommerce");
+
+        CancelOrderCommand cmd = new CancelOrderCommand(
+                order.getId(), "customer changed mind", 0L, "ecommerce-op",
+                Set.of("ROLE_OUTBOUND_WRITE"));
+
+        OrderResult result = service.cancel(cmd);
+
+        assertThat(result.status()).isEqualTo("CANCELLED");
+        assertThat(outboxWriter.countByType("outbound.order.cancelled")).isEqualTo(1);
+    }
+
     private static Order orderInState(OrderStatus status) {
         UUID orderId = UUID.randomUUID();
         OrderLine line = new OrderLine(UUID.randomUUID(), orderId, 1,
@@ -175,6 +218,17 @@ class CancelOrderServiceTest {
         return new Order(orderId, "ORD-" + orderId, OrderSource.MANUAL,
                 UUID.randomUUID(), UUID.randomUUID(),
                 null, null, status, 0L,
+                T0, "creator", T0, "creator",
+                List.of(line));
+    }
+
+    private static Order ecommerceOrderInState(OrderStatus status, String tenantId) {
+        UUID orderId = UUID.randomUUID();
+        OrderLine line = new OrderLine(UUID.randomUUID(), orderId, 1,
+                UUID.randomUUID(), null, 5);
+        return new Order(orderId, "ORD-" + orderId, OrderSource.FULFILLMENT_ECOMMERCE,
+                UUID.randomUUID(), UUID.randomUUID(),
+                null, null, null /* shipTo */, tenantId, status, 0L,
                 T0, "creator", T0, "creator",
                 List.of(line));
     }

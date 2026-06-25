@@ -76,8 +76,11 @@ public class OrderQueryController {
             @RequestParam(required = false) Instant createdBefore,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        // tenantId is NOT a client-supplied filter — the cross-tenant scope is
+        // applied server-side from the signed JWT in OrderQueryService
+        // (TASK-MONO-304). Always pass null here.
         OrderQueryCommand command = new OrderQueryCommand(
-                status, warehouseId, customerPartnerId, source, orderNo,
+                status, warehouseId, customerPartnerId, source, orderNo, null,
                 requiredShipAfter, requiredShipBefore,
                 createdAfter, createdBefore,
                 page, size);
