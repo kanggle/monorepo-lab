@@ -1,7 +1,7 @@
 ---
 id: TASK-MONO-304
 title: "Tenant-scoped wms outbound visibility for customer-tenant operators (ADR-MONO-022 § D9)"
-status: ready
+status: done
 scope: cross-project
 projects: [wms-platform, platform-console]
 tags: [code, test, contract, adr, multi-tenant, security, authz]
