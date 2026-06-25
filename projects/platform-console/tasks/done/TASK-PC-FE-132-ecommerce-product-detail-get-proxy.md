@@ -1,6 +1,6 @@
 # TASK-PC-FE-132 — 상품 상세 클라이언트 리페치가 405 로 깨지는 버그 (detail GET 프록시 라우트 누락)
 
-- **Status**: review
+- **Status**: done
 - **Project**: platform-console
 - **Service**: console-web
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (누락 프록시 GET 라우트 1개 추가 + 회귀 테스트)
