@@ -25,6 +25,20 @@ import java.util.Set;
  */
 final class OperatorRoleDerivation {
 
+    /**
+     * Operator-tier roles granted by the {@code wms} domain entitlement (TASK-BE-433).
+     * {@code WMS_OPERATOR} is the coarse domain role; the rest are the granular
+     * service roles outbound/inbound/inventory authorize POST/PUT/PATCH/DELETE on
+     * ({@code *_WRITE}) plus read ({@code *_READ}) and {@code MASTER_READ}. ADMIN-tier
+     * roles are deliberately excluded (see the switch comment).
+     */
+    private static final List<String> WMS_OPERATOR_ROLES = List.of(
+            "WMS_OPERATOR",
+            "OUTBOUND_READ", "OUTBOUND_WRITE",
+            "INBOUND_READ", "INBOUND_WRITE",
+            "INVENTORY_READ", "INVENTORY_WRITE",
+            "MASTER_READ");
+
     private OperatorRoleDerivation() {
     }
 
@@ -54,19 +68,25 @@ final class OperatorRoleDerivation {
             if (key.isBlank()) {
                 continue;
             }
-            String role = switch (key) {
-                case "wms" -> "WMS_OPERATOR";
-                case "ecommerce" -> "ADMIN";
-                case "scm" -> "SCM_OPERATOR";
-                case "erp" -> "ERP_OPERATOR";
-                case "finance" -> "FINANCE_OPERATOR";
-                case "mes" -> "MES_OPERATOR";
-                case "fan", "fan-platform" -> "FAN_OPERATOR";
-                default -> null; // gap / unknown → no operator role
+            List<String> domainRoles = switch (key) {
+                // TASK-BE-433: the wms entitlement grants the operator the granular
+                // wms-service operator-tier roles the services actually authorize on
+                // (OUTBOUND/INBOUND/INVENTORY {READ,WRITE} + MASTER_READ), alongside
+                // the coarse WMS_OPERATOR. Without these the assume-tenant token carried
+                // only WMS_OPERATOR while outbound/inbound/inventory require their own
+                // *_WRITE roles → every wms-service write 403'd. ADMIN-tier roles
+                // (*_ADMIN / WMS_ADMIN — cancellation, force-saga-fail, master-data
+                // writes) are intentionally NOT granted by the operator entitlement.
+                case "wms" -> WMS_OPERATOR_ROLES;
+                case "ecommerce" -> List.of("ADMIN");
+                case "scm" -> List.of("SCM_OPERATOR");
+                case "erp" -> List.of("ERP_OPERATOR");
+                case "finance" -> List.of("FINANCE_OPERATOR");
+                case "mes" -> List.of("MES_OPERATOR");
+                case "fan", "fan-platform" -> List.of("FAN_OPERATOR");
+                default -> List.of(); // gap / unknown → no operator role
             };
-            if (role != null) {
-                roles.add(role);
-            }
+            roles.addAll(domainRoles);
         }
 
         return List.copyOf(roles);
