@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-- `TASK-MONO-306-adr-005-category-a-auto-resolving-terminal-refinement.md` — **READY**. Amend ADR-MONO-005 § 2.3 D3 to permit a domain-meaningful **auto-resolving terminal** (e.g. `CANCELLED`) for Category A sagas **iff** R1–R4 (clean self-serve resolution + guaranteed idempotent compensation + escalation event/metrics retained + `STUCK_RECOVERY_FAILED` defensive fallback); update § 2.6 D6 ecommerce-order row + § 6 history. Refinement only — default (operator-escalation terminal) unchanged, ADR stays ACCEPTED. **Prerequisite of TASK-BE-435** (HARDSTOP-09 gate: BE-435's `CANCELLED(PAYMENT_TIMEOUT)` contradicts the current line-67 MUST). Doc-only, HARDSTOP-03 clean. 분석=Opus 4.8 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-306-adr-005-category-a-auto-resolving-terminal-refinement.md` — **REVIEW** (impl in PR — ADR amendment). Amended ADR-MONO-005 § 2.3 D3 with the R1–R4-gated **auto-resolving-terminal refinement** (a Category A saga MAY use a domain-meaningful terminal such as `CANCELLED` instead of `STUCK_RECOVERY_FAILED` iff clean self-serve resolution + guaranteed idempotent compensation + escalation event/metrics retained + `STUCK_RECOVERY_FAILED` defensive fallback); § 2.6 D6 ecommerce-order row re-decided to `CANCELLED(PAYMENT_TIMEOUT)` (adopter TASK-BE-435); § 5 follow-ups + History amended. Refinement only — default operator-escalation terminal + D1–D8 bodies unchanged, ADR stays ACCEPTED. Doc-only, HARDSTOP-03 clean. **Unblocks TASK-BE-435.** 분석=Opus 4.8 / 구현=Opus 직접.
 
 ## done
 
