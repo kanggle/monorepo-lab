@@ -9,6 +9,27 @@ import { resolveEcommerceEligibility } from '../../products/_eligibility';
 export const dynamic = 'force-dynamic';
 
 /**
+ * Decode the dynamic `[id]` route segment to the raw seller_id value.
+ *
+ * Next.js delivers the segment percent-encoded for seller ids that carry
+ * non-ASCII / space characters (e.g. `셀러 1`, registered via the in-console
+ * seller form). `getSeller()` re-encodes the value for the upstream path, so
+ * passing the still-encoded segment double-encodes it (`%EC..` → `%25EC..`);
+ * Spring StrictHttpFirewall then rejects the `%25`-bearing path with `400`,
+ * which the section maps to a spurious "일시적으로 불러올 수 없습니다" degrade
+ * (TASK-PC-FE-133). Decoding here yields the raw id so `getSeller()` encodes
+ * exactly once. ASCII ids are unaffected (decode is a no-op); a malformed
+ * encoding falls back to the raw segment rather than throwing.
+ */
+function decodeSellerId(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+/**
  * ecommerce seller DETAIL route (TASK-PC-FE-090 — ADR-MONO-031 § 2.4.10 7th area).
  * Server component: eligibility pre-flight → seeded detail read → degrade
  * waterfall (registryDegraded → notEligible → forbidden → notFound → degraded
@@ -19,7 +40,8 @@ export default async function SellerDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = decodeSellerId(rawId);
   const { eligible, registryDegraded } = await resolveEcommerceEligibility();
 
   const heading = (
