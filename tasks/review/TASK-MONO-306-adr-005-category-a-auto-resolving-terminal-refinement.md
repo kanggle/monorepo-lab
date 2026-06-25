@@ -1,6 +1,6 @@
 # TASK-MONO-306 — Amend ADR-MONO-005 § 2.3 D3 to permit a domain-meaningful auto-resolving terminal for Category A sagas
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-MONO (monorepo-level — shared `docs/adr/`)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (portfolio-wide saga-escalation invariant refinement — decision-bearing ADR amendment, not a mechanical doc edit)
