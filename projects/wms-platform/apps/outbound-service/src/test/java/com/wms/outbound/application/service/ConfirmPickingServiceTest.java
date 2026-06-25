@@ -69,7 +69,9 @@ class ConfirmPickingServiceTest {
         coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, outboxWriter, fixedClock);
         service = new ConfirmPickingService(orderPersistence, pickingPersistence,
                 pickingConfirmationPersistence, sagaPersistence, coordinator,
-                outboxWriter, masterReadModel, fixedClock);
+                outboxWriter, masterReadModel,
+                new com.wms.outbound.application.service.fakes.FakeCallerScopeProvider(),
+                fixedClock);
 
         orderId = UUID.randomUUID();
         skuId = UUID.randomUUID();

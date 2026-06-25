@@ -8,6 +8,7 @@ import com.wms.outbound.domain.exception.OutboundDomainException;
 import com.wms.outbound.domain.exception.PackingUnitNotFoundException;
 import com.wms.outbound.domain.exception.PickingRequestNotFoundException;
 import com.wms.outbound.domain.exception.ShipmentNotFoundException;
+import com.wms.outbound.domain.exception.TenantScopeDeniedException;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +50,9 @@ public class GlobalExceptionHandler {
             PickingRequestNotFoundException.class, HttpStatus.NOT_FOUND,
             PackingUnitNotFoundException.class, HttpStatus.NOT_FOUND,
             ShipmentNotFoundException.class, HttpStatus.NOT_FOUND,
-            OrderNoDuplicateException.class, HttpStatus.CONFLICT);
+            OrderNoDuplicateException.class, HttpStatus.CONFLICT,
+            // Cross-tenant access denial (TASK-MONO-304 / ADR-MONO-022 § D9) → 403.
+            TenantScopeDeniedException.class, HttpStatus.FORBIDDEN);
 
     @ExceptionHandler(OutboundDomainException.class)
     public ResponseEntity<ApiErrorEnvelope> handleDomain(OutboundDomainException e) {

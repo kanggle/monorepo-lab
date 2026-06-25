@@ -62,7 +62,9 @@ class PackingServiceTest {
         outboxWriter = new FakeOutboxWriterPort();
         coordinator = new OutboundSagaCoordinator(sagaPersistence, orderPersistence, outboxWriter, fixedClock);
         service = new PackingService(orderPersistence, packingPersistence,
-                sagaPersistence, coordinator, outboxWriter, fixedClock);
+                sagaPersistence, coordinator, outboxWriter,
+                new com.wms.outbound.application.service.fakes.FakeCallerScopeProvider(),
+                fixedClock);
 
         orderId = UUID.randomUUID();
         skuId = UUID.randomUUID();

@@ -4,6 +4,7 @@ import com.example.common.id.UuidV7;
 import com.wms.outbound.application.command.ConfirmPickingCommand;
 import com.wms.outbound.application.command.ConfirmPickingLineCommand;
 import com.wms.outbound.application.port.in.ConfirmPickingUseCase;
+import com.wms.outbound.application.port.out.CallerScopeProvider;
 import com.wms.outbound.application.port.out.MasterReadModelPort;
 import com.wms.outbound.application.port.out.OrderPersistencePort;
 import com.wms.outbound.application.port.out.OutboxWriterPort;
@@ -58,6 +59,7 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
     private final OutboundSagaCoordinator sagaCoordinator;
     private final OutboxWriterPort outboxWriter;
     private final MasterReadModelPort masterReadModel;
+    private final CallerScopeProvider callerScopeProvider;
     private final Clock clock;
 
     public ConfirmPickingService(OrderPersistencePort orderPersistence,
@@ -67,6 +69,7 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
                                  OutboundSagaCoordinator sagaCoordinator,
                                  OutboxWriterPort outboxWriter,
                                  MasterReadModelPort masterReadModel,
+                                 CallerScopeProvider callerScopeProvider,
                                  Clock clock) {
         this.orderPersistence = orderPersistence;
         this.pickingPersistence = pickingPersistence;
@@ -75,6 +78,7 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
         this.sagaCoordinator = sagaCoordinator;
         this.outboxWriter = outboxWriter;
         this.masterReadModel = masterReadModel;
+        this.callerScopeProvider = callerScopeProvider;
         this.clock = clock;
     }
 
@@ -84,6 +88,9 @@ public class ConfirmPickingService implements ConfirmPickingUseCase {
         AuthorizationGuards.requireAnyRole(command.callerRoles(), ROLE_OUTBOUND_WRITE, ROLE_OUTBOUND_ADMIN);
 
         PickingAggregates agg = loadPickingAggregates(command.orderId());
+        // Cross-tenant guard (TASK-MONO-304).
+        callerScopeProvider.current().requireOrderAccess(
+                agg.order().getTenantId(), agg.order().getId());
 
         Instant now = clock.instant();
 

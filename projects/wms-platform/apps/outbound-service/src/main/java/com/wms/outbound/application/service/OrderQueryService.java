@@ -2,8 +2,10 @@ package com.wms.outbound.application.service;
 
 import com.wms.outbound.application.command.OrderQueryCommand;
 import com.wms.outbound.application.port.in.QueryOrderUseCase;
+import com.wms.outbound.application.port.out.CallerScopeProvider;
 import com.wms.outbound.application.port.out.OrderPersistencePort;
 import com.wms.outbound.application.port.out.SagaPersistencePort;
+import com.wms.outbound.application.security.CallerScope;
 import com.wms.outbound.application.result.OrderResult;
 import com.wms.outbound.application.result.OrderSummaryResult;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
@@ -29,11 +31,14 @@ public class OrderQueryService implements QueryOrderUseCase {
 
     private final OrderPersistencePort orderPersistence;
     private final SagaPersistencePort sagaPersistence;
+    private final CallerScopeProvider callerScopeProvider;
 
     public OrderQueryService(OrderPersistencePort orderPersistence,
-                             SagaPersistencePort sagaPersistence) {
+                             SagaPersistencePort sagaPersistence,
+                             CallerScopeProvider callerScopeProvider) {
         this.orderPersistence = orderPersistence;
         this.sagaPersistence = sagaPersistence;
+        this.callerScopeProvider = callerScopeProvider;
     }
 
     @Override
@@ -41,6 +46,9 @@ public class OrderQueryService implements QueryOrderUseCase {
     public OrderResult findById(UUID orderId) {
         Order order = orderPersistence.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
+        // Cross-tenant guard (TASK-MONO-304): a tenant-scoped caller may only
+        // read its own tenant's order; foreign / B2B orders → 403.
+        callerScopeProvider.current().requireOrderAccess(order.getTenantId(), orderId);
         OutboundSaga saga = sagaPersistence.findByOrderId(orderId).orElse(null);
         return OrderResultMapper.toResult(order, saga);
     }
@@ -48,8 +56,13 @@ public class OrderQueryService implements QueryOrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public PageResult list(OrderQueryCommand command) {
-        List<OrderSummaryResult> rows = orderPersistence.findSummaries(command);
-        long total = orderPersistence.count(command);
+        // Apply the caller's tenant scope (TASK-MONO-304): unrestricted callers
+        // see the command unchanged; tenant-scoped callers are pinned to their
+        // own tenant's FULFILLMENT_ECOMMERCE orders.
+        CallerScope scope = callerScopeProvider.current();
+        OrderQueryCommand scoped = scope.scopeListQuery(command);
+        List<OrderSummaryResult> rows = orderPersistence.findSummaries(scoped);
+        long total = orderPersistence.count(scoped);
         if (rows.isEmpty()) {
             return new PageResult(rows, total);
         }

@@ -114,7 +114,7 @@ public class OrderRepositoryImpl implements OrderPersistencePort {
     public List<OrderSummaryResult> findSummaries(OrderQueryCommand q) {
         List<OrderEntity> entities = orderRepo.findFiltered(
                 q.status(), q.warehouseId(), q.customerPartnerId(),
-                q.source(), q.orderNo(),
+                q.source(), q.orderNo(), q.tenantId(),
                 q.requiredShipAfter(), q.requiredShipBefore(),
                 q.createdAfter(), q.createdBefore(),
                 PageRequest.of(q.page(), q.size()));
@@ -155,7 +155,7 @@ public class OrderRepositoryImpl implements OrderPersistencePort {
     public long count(OrderQueryCommand q) {
         return orderRepo.countFiltered(
                 q.status(), q.warehouseId(), q.customerPartnerId(),
-                q.source(), q.orderNo(),
+                q.source(), q.orderNo(), q.tenantId(),
                 q.requiredShipAfter(), q.requiredShipBefore(),
                 q.createdAfter(), q.createdBefore());
     }

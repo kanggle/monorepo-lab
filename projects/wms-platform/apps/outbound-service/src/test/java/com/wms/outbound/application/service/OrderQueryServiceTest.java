@@ -6,9 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.wms.outbound.application.command.OrderQueryCommand;
 import com.wms.outbound.application.port.in.QueryOrderUseCase.PageResult;
 import com.wms.outbound.application.result.OrderResult;
+import com.wms.outbound.application.service.fakes.FakeCallerScopeProvider;
 import com.wms.outbound.application.service.fakes.FakeOrderPersistencePort;
 import com.wms.outbound.application.service.fakes.FakeSagaPersistencePort;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
+import com.wms.outbound.domain.exception.TenantScopeDeniedException;
 import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OrderLine;
 import com.wms.outbound.domain.model.OrderSource;
@@ -33,13 +35,15 @@ class OrderQueryServiceTest {
 
     private FakeOrderPersistencePort orderPersistence;
     private FakeSagaPersistencePort sagaPersistence;
+    private FakeCallerScopeProvider callerScopeProvider;
     private OrderQueryService service;
 
     @BeforeEach
     void setUp() {
         orderPersistence = new FakeOrderPersistencePort();
         sagaPersistence = new FakeSagaPersistencePort();
-        service = new OrderQueryService(orderPersistence, sagaPersistence);
+        callerScopeProvider = new FakeCallerScopeProvider();
+        service = new OrderQueryService(orderPersistence, sagaPersistence, callerScopeProvider);
     }
 
     @Test
@@ -76,7 +80,7 @@ class OrderQueryServiceTest {
         }
 
         OrderQueryCommand cmd = new OrderQueryCommand(
-                null, null, null, null, null, null, null, null, null, 0, 20);
+                null, null, null, null, null, null, null, null, null, null, 0, 20);
         PageResult page = service.list(cmd);
 
         assertThat(page.items()).hasSize(3);
@@ -87,6 +91,33 @@ class OrderQueryServiceTest {
                 .allMatch(r -> "REQUESTED".equals(r.sagaState()));
         // CRITICAL AC-03 assertion: the per-row N+1 path must remain unused.
         assertThat(sagaPersistence.findByOrderIdCallCount).isZero();
+    }
+
+    @Test
+    void findById_tenantScopedCaller_foreignOrder_raises403() {
+        // TASK-MONO-304: a caller restricted to 'ecommerce' may not read a
+        // B2B / null-tenant order — TenantScopeDeniedException (403).
+        Order order = orderInState(OrderStatus.PICKING); // tenantId == null
+        orderPersistence.save(order);
+        callerScopeProvider.restrictTo("ecommerce");
+
+        assertThatThrownBy(() -> service.findById(order.getId()))
+                .isInstanceOf(TenantScopeDeniedException.class);
+    }
+
+    @Test
+    void findById_tenantScopedCaller_ownOrder_succeeds() {
+        Order order = new Order(UUID.randomUUID(), "ORD-EC", OrderSource.FULFILLMENT_ECOMMERCE,
+                UUID.randomUUID(), UUID.randomUUID(), null, null, null /* shipTo */,
+                "ecommerce", OrderStatus.PICKING, 0L, T0, "creator", T0, "creator",
+                List.of(new OrderLine(UUID.randomUUID(), UUID.randomUUID(), 1,
+                        UUID.randomUUID(), null, 5)));
+        orderPersistence.save(order);
+        callerScopeProvider.restrictTo("ecommerce");
+
+        OrderResult result = service.findById(order.getId());
+
+        assertThat(result.orderId()).isEqualTo(order.getId());
     }
 
     private static Order orderInState(OrderStatus status) {

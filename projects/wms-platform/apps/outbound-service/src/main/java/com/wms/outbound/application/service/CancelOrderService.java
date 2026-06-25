@@ -2,6 +2,7 @@ package com.wms.outbound.application.service;
 
 import com.wms.outbound.application.command.CancelOrderCommand;
 import com.wms.outbound.application.port.in.CancelOrderUseCase;
+import com.wms.outbound.application.port.out.CallerScopeProvider;
 import com.wms.outbound.application.port.out.OrderPersistencePort;
 import com.wms.outbound.application.port.out.OutboxWriterPort;
 import com.wms.outbound.application.port.out.SagaPersistencePort;
@@ -59,15 +60,18 @@ public class CancelOrderService implements CancelOrderUseCase {
     private final OrderPersistencePort orderPersistence;
     private final SagaPersistencePort sagaPersistence;
     private final OutboxWriterPort outboxWriter;
+    private final CallerScopeProvider callerScopeProvider;
     private final Clock clock;
 
     public CancelOrderService(OrderPersistencePort orderPersistence,
                               SagaPersistencePort sagaPersistence,
                               OutboxWriterPort outboxWriter,
+                              CallerScopeProvider callerScopeProvider,
                               Clock clock) {
         this.orderPersistence = orderPersistence;
         this.sagaPersistence = sagaPersistence;
         this.outboxWriter = outboxWriter;
+        this.callerScopeProvider = callerScopeProvider;
         this.clock = clock;
     }
 
@@ -76,6 +80,10 @@ public class CancelOrderService implements CancelOrderUseCase {
     public OrderResult cancel(CancelOrderCommand command) {
         Order order = orderPersistence.findById(command.orderId())
                 .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
+
+        // Cross-tenant guard (TASK-MONO-304): a tenant-scoped caller may only
+        // mutate its own tenant's order; foreign / B2B orders → 403.
+        callerScopeProvider.current().requireOrderAccess(order.getTenantId(), order.getId());
 
         OrderStatus previousStatus = order.getStatus();
 

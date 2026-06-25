@@ -21,6 +21,10 @@ public interface OrderJpaRepository extends JpaRepository<OrderEntity, UUID> {
     // PostgreSQL 42P18 fix: a bare `:requiredShipAfter IS NULL` binds an untyped
     // null PostgreSQL cannot type on an unfiltered call → 500. Same as
     // AlertLogRepository (TASK-BE-331); the >=/<= keeps temporal typing. TASK-BE-332.
+    // The :tenantId guard is the cross-tenant isolation filter (TASK-MONO-304):
+    // NULL → no tenant filter (native wms / platform / internal caller); a
+    // customer tenant id → only that tenant's orders. Applied server-side from
+    // the signed JWT (CallerScope), never from a client query param.
     @Query("""
             SELECT o FROM OrderEntity o
             WHERE (:status IS NULL OR o.status = :status)
@@ -28,6 +32,7 @@ public interface OrderJpaRepository extends JpaRepository<OrderEntity, UUID> {
               AND (:customerPartnerId IS NULL OR o.customerPartnerId = :customerPartnerId)
               AND (:source IS NULL OR o.source = :source)
               AND (:orderNo IS NULL OR o.orderNo = :orderNo)
+              AND (:tenantId IS NULL OR o.tenantId = :tenantId)
               AND (CAST(:requiredShipAfter AS string) IS NULL OR o.requestedShipDate >= :requiredShipAfter)
               AND (CAST(:requiredShipBefore AS string) IS NULL OR o.requestedShipDate <= :requiredShipBefore)
               AND (CAST(:createdAfter AS string) IS NULL OR o.createdAt >= :createdAfter)
@@ -39,6 +44,7 @@ public interface OrderJpaRepository extends JpaRepository<OrderEntity, UUID> {
                                    @Param("customerPartnerId") UUID customerPartnerId,
                                    @Param("source") String source,
                                    @Param("orderNo") String orderNo,
+                                   @Param("tenantId") String tenantId,
                                    @Param("requiredShipAfter") LocalDate requiredShipAfter,
                                    @Param("requiredShipBefore") LocalDate requiredShipBefore,
                                    @Param("createdAfter") Instant createdAfter,
@@ -52,6 +58,7 @@ public interface OrderJpaRepository extends JpaRepository<OrderEntity, UUID> {
               AND (:customerPartnerId IS NULL OR o.customerPartnerId = :customerPartnerId)
               AND (:source IS NULL OR o.source = :source)
               AND (:orderNo IS NULL OR o.orderNo = :orderNo)
+              AND (:tenantId IS NULL OR o.tenantId = :tenantId)
               AND (CAST(:requiredShipAfter AS string) IS NULL OR o.requestedShipDate >= :requiredShipAfter)
               AND (CAST(:requiredShipBefore AS string) IS NULL OR o.requestedShipDate <= :requiredShipBefore)
               AND (CAST(:createdAfter AS string) IS NULL OR o.createdAt >= :createdAfter)
@@ -62,6 +69,7 @@ public interface OrderJpaRepository extends JpaRepository<OrderEntity, UUID> {
                        @Param("customerPartnerId") UUID customerPartnerId,
                        @Param("source") String source,
                        @Param("orderNo") String orderNo,
+                       @Param("tenantId") String tenantId,
                        @Param("requiredShipAfter") LocalDate requiredShipAfter,
                        @Param("requiredShipBefore") LocalDate requiredShipBefore,
                        @Param("createdAfter") Instant createdAfter,

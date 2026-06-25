@@ -1,6 +1,8 @@
 package com.wms.outbound.application.service;
 
 import com.wms.outbound.application.command.RetryTmsNotificationCommand;
+import com.wms.outbound.application.port.out.CallerScopeProvider;
+import com.wms.outbound.application.port.out.OrderPersistencePort;
 import com.wms.outbound.application.port.out.SagaPersistencePort;
 import com.wms.outbound.application.port.out.ShipmentPersistencePort;
 import com.wms.outbound.application.port.out.TmsAcknowledgement;
@@ -9,6 +11,7 @@ import com.wms.outbound.application.saga.OutboundSagaCoordinator;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
 import com.wms.outbound.domain.exception.ShipmentNotFoundException;
 import com.wms.outbound.domain.exception.TmsRetryNotAllowedException;
+import com.wms.outbound.domain.model.Order;
 import com.wms.outbound.domain.model.OutboundSaga;
 import com.wms.outbound.domain.model.SagaStatus;
 import com.wms.outbound.domain.model.Shipment;
@@ -32,13 +35,19 @@ public class RetryTmsPersistenceHelper {
     private final ShipmentPersistencePort shipmentPersistence;
     private final SagaPersistencePort sagaPersistence;
     private final OutboundSagaCoordinator sagaCoordinator;
+    private final OrderPersistencePort orderPersistence;
+    private final CallerScopeProvider callerScopeProvider;
 
     public RetryTmsPersistenceHelper(ShipmentPersistencePort shipmentPersistence,
                                      SagaPersistencePort sagaPersistence,
-                                     OutboundSagaCoordinator sagaCoordinator) {
+                                     OutboundSagaCoordinator sagaCoordinator,
+                                     OrderPersistencePort orderPersistence,
+                                     CallerScopeProvider callerScopeProvider) {
         this.shipmentPersistence = shipmentPersistence;
         this.sagaPersistence = sagaPersistence;
         this.sagaCoordinator = sagaCoordinator;
+        this.orderPersistence = orderPersistence;
+        this.callerScopeProvider = callerScopeProvider;
     }
 
     /**
@@ -55,6 +64,11 @@ public class RetryTmsPersistenceHelper {
     public ShipmentSnapshot loadAndValidate(UUID shipmentId) {
         Shipment shipment = shipmentPersistence.findById(shipmentId)
                 .orElseThrow(() -> new ShipmentNotFoundException(shipmentId));
+        // Cross-tenant guard (TASK-MONO-304): resolve the owning order's tenant
+        // and deny a tenant-scoped caller acting on a foreign / B2B shipment.
+        Order order = orderPersistence.findById(shipment.getOrderId())
+                .orElseThrow(() -> new OrderNotFoundException(shipment.getOrderId()));
+        callerScopeProvider.current().requireOrderAccess(order.getTenantId(), order.getId());
         if (shipment.getTmsStatus() != TmsStatus.NOTIFY_FAILED) {
             throw new TmsRetryNotAllowedException(shipmentId, shipment.getTmsStatus().name());
         }
