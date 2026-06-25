@@ -1,8 +1,10 @@
 # TASK-BE-437 — Fix the outbound→inventory `shipping.confirmed` contract (return / deduct leg)
 
-**Status:** review
+**Status:** done
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (cross-service contract design)
+
+> Done: merged via PR #1950 (squash `39eea069d`). All required CI checks green at merge (Build & Test JDK21 + Testcontainers integration). Root cause found live in the ADR-MONO-022 fulfillment loop (order 5f9f3571): real ship-confirm NPE'd at the inventory consumer so stock stayed reserved.
 
 ## Goal
 
