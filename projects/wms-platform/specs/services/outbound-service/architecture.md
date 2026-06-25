@@ -102,8 +102,10 @@ com.wms.outbound/
 │   │   ├── webhook/
 │   │   │   └── erp/             # ErpOrderWebhookController + signature/replay validators
 │   │   └── messaging/
-│   │       └── consumer/        # InventoryReservedConsumer, InventoryReleasedConsumer,
-│   │                            #   InventoryConfirmedConsumer (saga steps),
+│   │       └── consumer/        # FulfillmentRequestedConsumer (ADR-022 forward-leg),
+│   │                            #   InventoryReservedConsumer, InventoryReleasedConsumer,
+│   │                            #   InventoryConfirmedConsumer, InventoryReserveFailedConsumer (saga steps),
+│   │                            #   ManualShipConfirmConsumer (ADR-022 D4 v2(c) manual ship-confirm),
 │   │                            #   MasterLocationConsumer, MasterSkuConsumer, MasterPartnerConsumer
 │   └── out/
 │       ├── persistence/
@@ -229,6 +231,13 @@ Full schemas: `specs/contracts/events/outbound-events.md`.
 | `master.sku.*` | `wms.master.sku.v1` | Same |
 | `master.partner.*` | `wms.master.partner.v1` | Same; deactivated partners rejected as new order customer |
 | `master.lot.*` | `wms.master.lot.v1` | Local read-model refresh; lot expiry cascades to picking eligibility (LOT-tracked SKU order lines) |
+
+> **Cross-project + backorder consumers** (saga-adjacent; schemas owned by their own contracts, so kept out of the table above to avoid duplication):
+> - `ecommerce.fulfillment.requested.v1` → `FulfillmentRequestedConsumer` creates the wms outbound order (ADR-MONO-022 D1 forward-leg, TASK-BE-340).
+> - `ecommerce.shipping.manual-confirm-requested.v1` → `ManualShipConfirmConsumer`: operator-gated manual ship-confirm; iff saga `PACKING_CONFIRMED` reuses `ConfirmShippingUseCase` → `wms.outbound.shipping.confirmed.v1` → inventory deduction (ADR-MONO-022 D4 v2(c), TASK-MONO-305).
+> - `wms.inventory.reserve.failed.v1` → `InventoryReserveFailedConsumer`: out-of-stock during reserve → backorder signal (TASK-BE-431).
+>
+> Authoritative cross-project schemas: `specs/contracts/events/ecommerce-fulfillment-subscriptions.md`.
 
 Same dedupe + DLQ pattern as siblings:
 
