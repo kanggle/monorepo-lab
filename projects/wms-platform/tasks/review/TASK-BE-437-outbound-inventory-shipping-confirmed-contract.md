@@ -1,6 +1,6 @@
 # TASK-BE-437 — Fix the outbound→inventory `shipping.confirmed` contract (return / deduct leg)
 
-**Status:** ready
+**Status:** review
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (cross-service contract design)
 
