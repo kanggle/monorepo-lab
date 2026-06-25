@@ -63,7 +63,7 @@ Confirm the `OrderCancelled` → `release()` path treats a `NEW` reservation (th
 2. **`specs/services/order-service/architecture.md`** (Order state machine row, ~L24) — change the stuck-detector terminal from "terminal `STUCK_RECOVERY_FAILED`" to "`CANCELLED(PAYMENT_TIMEOUT)` (stuck-detector primary) with `STUCK_RECOVERY_FAILED` retained as defensive fallback." Mirror the same lifecycle note in `order-events.md` § "Order lifecycle & BACKORDERED".
 3. **`specs/services/payment-service/architecture.md`** — document the `OrderCancelled` consumer branch (COMPLETED→refund, PENDING→void) and the post-capture auto-refund guard; add the new `PaymentStatus` terminal value to the payment state machine.
 4. **`specs/contracts/events/payment-events.md`** — if the auto-void emits anything observable, document it; `PaymentRefunded` (partial-refund-aware, TASK-BE-425) already covers the COMPLETED→refund case — confirm no new field is needed.
-5. **ADR check** — this refines the ADR-MONO-005 § D3 Category A recovery outcome for ecommerce order (terminal changes from operator-handoff to auto-cancel+compensation). Confirm whether an ADR addendum/log entry is warranted or whether it is an in-spec refinement; record the decision in the task before closing. (Do **not** silently diverge from the ADR — if it pins `STUCK_RECOVERY_FAILED` as the mandated Category A terminal, an ADR note is required → potential HARDSTOP-09 if unresolved.)
+5. **ADR amendment — CONFIRMED PREREQUISITE (gate resolved 2026-06-25).** ADR-MONO-005 **does** pin `STUCK_RECOVERY_FAILED`: § 2.3 D3 line 67 is a `MUST` ("At cap the saga MUST transition to a terminal `STUCK_RECOVERY_FAILED`-shaped state"), and § 2.6 D6 line 101 records the ecommerce-order decision as compliant with that terminal ("No further change"). Changing the terminal to `CANCELLED(PAYMENT_TIMEOUT)` is therefore an architecture-decision change not in specs (**HARDSTOP-09**). The ADR amendment is tracked as the monorepo-level prerequisite **[TASK-MONO-306](../../../../tasks/ready/TASK-MONO-306-adr-005-category-a-auto-resolving-terminal-refinement.md)** (root `tasks/ready/`, shared `docs/adr/`). **Do not implement BE-435 until MONO-306 is merged** (or land the ADR amendment first within the same atomic PR). The escalation-event retention (§ A.3) satisfies MONO-306's R3 condition.
 
 ## Acceptance Criteria
 
@@ -91,6 +91,7 @@ Confirm the `OrderCancelled` → `release()` path treats a `NEW` reservation (th
 
 ## Dependencies / Prior Work
 
+- **TASK-MONO-306 (BLOCKING PREREQUISITE)** — ADR-MONO-005 § 2.3 D3 amendment permitting an auto-resolving Category A terminal. BE-435 must not be implemented until MONO-306 is merged (or the ADR amendment lands first in the same atomic PR). See § D.5.
 - **TASK-BE-138** — `OrderStuckDetector` / `OrderStuckRecoveryHandler` (the code being modified).
 - **TASK-BE-428** — payment-driven reservation saga (establishes that PENDING orders hold no reserved stock — the fact that makes § C free).
 - **TASK-BE-425** — partial-refund-aware `PaymentRefundService` / `PaymentRefunded` (the refund mechanism re-used in AC-2).
