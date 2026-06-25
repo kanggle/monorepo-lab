@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-307-ecommerce-integration-ci-lane.md` — **READY** (reframed 2026-06-26 after diagnostic run). **Rehab the ecommerce IT harness, then enable a Testcontainers integration CI lane.** ecommerce `@Tag("integration")` ITs run **nowhere** today (`:check` excludes them + no ecommerce integration CI job, unlike all sibling projects; local Docker blocked). A draft lane (parked PR #1956) ran them for the **first time ever** and exposed the harness has never been CI-viable: Postgres `Connection refused` + ApplicationContext `initializationError` across ~13 IT classes + manual-INSERT schema drift — **not** a BE-435 defect (BE-435 unit-verified, merged #1954). Real work = fix container lifecycle (singleton)/context-init/schema-drift (uncertain depth), then enable the lane (draft YAML preserved in task § Appendix). Phase 1 = order+payment only; other 11 services = follow-up phases. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
