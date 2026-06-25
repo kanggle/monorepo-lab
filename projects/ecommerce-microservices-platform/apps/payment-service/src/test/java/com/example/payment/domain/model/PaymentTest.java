@@ -279,6 +279,93 @@ class PaymentTest {
                 .isInstanceOf(InvalidPaymentException.class);
     }
 
+    // ── TASK-BE-435: void (order cancelled before capture) ───────────────────
+
+    @Test
+    @DisplayName("PENDING 상태에서 voidForOrderCancelled 호출 시 VOIDED로 전이되고 true를 반환한다")
+    void voidForOrderCancelled_pending_becomesVoided() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+
+        boolean transitioned = payment.voidForOrderCancelled();
+
+        assertThat(transitioned).isTrue();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.VOIDED);
+        assertThat(payment.isVoided()).isTrue();
+        assertThat(payment.getPaidAt()).isNull();
+        assertThat(payment.getRefundedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("VOIDED 상태에서 voidForOrderCancelled 재호출 시 멱등 no-op (false 반환, 예외 없음)")
+    void voidForOrderCancelled_alreadyVoided_isIdempotentNoOp() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.voidForOrderCancelled();
+
+        boolean transitioned = payment.voidForOrderCancelled();
+
+        assertThat(transitioned).isFalse();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.VOIDED);
+    }
+
+    @Test
+    @DisplayName("REFUNDED 상태에서 voidForOrderCancelled 호출 시 멱등 no-op (이미 머니세이프 terminal)")
+    void voidForOrderCancelled_refunded_isNoOp() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.confirm("pk_test_123", "CARD", null);
+        payment.refund();
+
+        boolean transitioned = payment.voidForOrderCancelled();
+
+        assertThat(transitioned).isFalse();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
+    @DisplayName("FAILED 상태에서 voidForOrderCancelled 호출 시 멱등 no-op")
+    void voidForOrderCancelled_failed_isNoOp() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.fail();
+
+        boolean transitioned = payment.voidForOrderCancelled();
+
+        assertThat(transitioned).isFalse();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("COMPLETED 상태에서 voidForOrderCancelled 호출 시 예외 (캡처된 결제는 void가 아닌 환불 대상)")
+    void voidForOrderCancelled_completed_throwsInvalidPaymentException() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.confirm("pk_test_123", "CARD", null);
+
+        assertThatThrownBy(payment::voidForOrderCancelled)
+                .isInstanceOf(InvalidPaymentException.class);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("VOIDED 상태에서 confirm 호출 시 예외가 발생한다 (뒤늦은 confirm은 자금 캡처 금지)")
+    void confirm_voidedPayment_throwsInvalidPaymentException() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.voidForOrderCancelled();
+
+        assertThatThrownBy(() -> payment.confirm("pk_test_123", "CARD", null))
+                .isInstanceOf(InvalidPaymentException.class);
+        // stays VOIDED — no capture
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.VOIDED);
+        assertThat(payment.getPaidAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("VOIDED 상태에서 refund(amount) 호출 시 예외가 발생한다 (void는 캡처 없음 → 환불 불가)")
+    void refundAmount_voidedPayment_throwsInvalidPaymentException() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        payment.voidForOrderCancelled();
+
+        assertThatThrownBy(() -> payment.refund(10000L))
+                .isInstanceOf(InvalidPaymentException.class);
+    }
+
     @Test
     @DisplayName("reconstitute로 복원된 Payment는 모든 필드를 유지한다 (tenantId 포함)")
     void reconstitute_restoresAllFields() {

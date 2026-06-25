@@ -1,5 +1,6 @@
 package com.example.order.application.saga;
 
+import com.example.order.application.event.OrderCancelledEvent;
 import com.example.order.application.event.OrderSagaRecoveryExhaustedEvent;
 import com.example.order.application.port.OrderEventPublisher;
 import com.example.order.application.port.OrderMetricsPort;
@@ -62,17 +63,27 @@ class OrderStuckRecoveryHandlerTest {
     }
 
     @Test
-    @DisplayName("cap 도달 (count 4 → 5): markExhausted + STUCK_RECOVERY_FAILED + alert 이벤트 발행")
-    void capReached_marksExhaustedAndPublishesAlert() {
+    @DisplayName("cap 도달 (count 4 → 5): auto-cancel CANCELLED(PAYMENT_TIMEOUT) + OrderCancelled + 정보성 exhausted alert + metric")
+    void capReached_autoCancelsAndPublishesCancelAndAlert() {
         Order order = pendingOrder("order-1", 4);
         when(orderRepository.findByIdAcrossTenants("order-1")).thenReturn(Optional.of(order));
 
         handler.recover("order-1", MAX_ATTEMPTS);
 
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.STUCK_RECOVERY_FAILED);
+        // Primary terminal is now CANCELLED (not STUCK_RECOVERY_FAILED).
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         verify(orderRepository).save(order);
         verify(metrics).recordStuckDetectorExhausted(OrderStatus.PENDING.name());
 
+        // (1) OrderCancelled with cancelReason = PAYMENT_TIMEOUT — drives payment refund/void.
+        ArgumentCaptor<OrderCancelledEvent> cancelCaptor =
+                ArgumentCaptor.forClass(OrderCancelledEvent.class);
+        verify(publisher).publishOrderCancelled(cancelCaptor.capture());
+        OrderCancelledEvent.Payload cancelPayload = cancelCaptor.getValue().payload();
+        assertThat(cancelPayload.orderId()).isEqualTo("order-1");
+        assertThat(cancelPayload.cancelReason()).isEqualTo("PAYMENT_TIMEOUT");
+
+        // (2) Informational OrderSagaRecoveryExhausted retained for operator visibility.
         ArgumentCaptor<OrderSagaRecoveryExhaustedEvent> captor =
                 ArgumentCaptor.forClass(OrderSagaRecoveryExhaustedEvent.class);
         verify(publisher).publishOrderSagaRecoveryExhausted(captor.capture());
@@ -81,6 +92,7 @@ class OrderStuckRecoveryHandlerTest {
         assertThat(payload.attemptCount()).isEqualTo(5);
         assertThat(payload.lastState()).isEqualTo(OrderStatus.PENDING.name());
         assertThat(payload.failureReason()).isEqualTo(OrderStuckRecoveryHandler.FAILURE_REASON);
+        assertThat(payload.failureReason()).isEqualTo("order_auto_cancelled_payment_timeout");
     }
 
     @Test

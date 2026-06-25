@@ -1,5 +1,6 @@
 package com.example.order.application.event;
 
+import com.example.order.domain.model.CancelReason;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,5 +57,32 @@ class OrderCancelledEventSerializationTest {
         assertThat(event.occurredAt()).isEqualTo("2026-03-25T00:00:00Z");
         assertThat(event.source()).isEqualTo("order-service");
         assertThat(event.payload().orderId()).isEqualTo("order-1");
+        // Legacy wire JSON has no cancelReason → deserializes to null; consumers treat null as OPERATOR.
+        assertThat(event.payload().cancelReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("wire JSON(outbox 직렬화)에 cancelReason 이 포함된다 — PAYMENT_TIMEOUT")
+    void serialize_cancelReason_isInWireJson() throws Exception {
+        Instant cancelledAt = Instant.parse("2026-03-25T12:00:00Z");
+        OrderCancelledEvent event = OrderCancelledEvent.of(
+                "order-1", "user-1", cancelledAt, CancelReason.PAYMENT_TIMEOUT, FIXED_CLOCK);
+
+        // This is the exact path SpringOrderEventPublisher.serialize() takes to the outbox row,
+        // so it is the source-of-truth wire payload published to order.order.cancelled.
+        String json = objectMapper.writeValueAsString(event);
+
+        assertThat(json).contains("\"cancelReason\":\"PAYMENT_TIMEOUT\"");
+    }
+
+    @Test
+    @DisplayName("기본 of(...) 4-arg 팩토리는 cancelReason=OPERATOR 로 직렬화된다 (back-compat)")
+    void serialize_defaultFactory_isOperator() throws Exception {
+        Instant cancelledAt = Instant.parse("2026-03-25T12:00:00Z");
+        OrderCancelledEvent event = OrderCancelledEvent.of("order-1", "user-1", cancelledAt, FIXED_CLOCK);
+
+        String json = objectMapper.writeValueAsString(event);
+
+        assertThat(json).contains("\"cancelReason\":\"OPERATOR\"");
     }
 }

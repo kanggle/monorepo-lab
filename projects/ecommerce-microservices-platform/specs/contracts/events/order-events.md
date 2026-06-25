@@ -126,19 +126,43 @@ Published when an order is cancelled.
 {
   "orderId": "string (UUID)",
   "userId": "string (UUID)",
-  "cancelledAt": "string (ISO 8601)"
+  "cancelledAt": "string (ISO 8601)",
+  "cancelReason": "OPERATOR"
 }
 ```
+
+- `cancelReason` (TASK-BE-435) — why the order was cancelled. One of
+  `"OPERATOR"` (a human-/user-initiated cancel: REST user cancel, operator internal
+  API, warehouse-backorder cancel, user-withdrawal cascade) or `"PAYMENT_TIMEOUT"`
+  (the stuck-detector auto-cancelled a payment-pending order that exhausted its grace
+  attempts — see `OrderSagaRecoveryExhausted` and the lifecycle note below).
+  payment-service branches on this to drive the money-safe refund/void compensation:
+  a `PAYMENT_TIMEOUT` cancel of a payment that nonetheless captured must refund/void.
+
+**Back-compatibility:** `cancelReason` is additive. A consumer reading a legacy
+`OrderCancelled` event without it MUST treat the cancel as `"OPERATOR"`, matching the
+pre-TASK-BE-435 behaviour (every cancel was an operator/user cancel; the stuck terminal
+was `STUCK_RECOVERY_FAILED`, not a cancel). Mirrors the `PaymentRefunded.fullyRefunded`
+back-compat note in `payment-events.md`.
 
 ---
 
 ## OrderSagaRecoveryExhausted
 
-Published by the order-service stuck-detector (TASK-BE-138, ADR-MONO-005 § D3
-Category A) when an order has remained in `PENDING + payment_id IS NULL` past
-the configured grace period for the maximum number of attempts and has been
-transitioned to the terminal `STUCK_RECOVERY_FAILED` status. Co-committed (T3)
-with that status transition through the standard transactional outbox.
+Published by the order-service stuck-detector (TASK-BE-138, ADR-MONO-005 § 2.3
+D3 Category A) when an order has remained in `PENDING + payment_id IS NULL` past
+the configured grace period for the maximum number of attempts.
+
+> **Re-scoped to informational (TASK-BE-435 / TASK-MONO-306 — ADR-MONO-005 § 2.3
+> D3 auto-resolving-terminal refinement).** The stuck-detector's **primary terminal
+> is now `CANCELLED(PAYMENT_TIMEOUT)`** (an `OrderCancelled` event with
+> `cancelReason = "PAYMENT_TIMEOUT"` is published — see above), **not**
+> `STUCK_RECOVERY_FAILED`. This alert is **retained as an informational
+> operator-visibility signal** co-committed (T3) alongside the cancel in the same
+> stuck-recovery transaction (R3): it preserves the observability that
+> `STUCK_RECOVERY_FAILED` previously provided, without being an operator hand-off
+> anymore. `STUCK_RECOVERY_FAILED` is retained as a defensive fallback (R4) for the
+> case where the cancel compensation cannot be co-committed.
 
 **Topic:** `order.alert.saga.recovery.exhausted`
 
@@ -155,7 +179,7 @@ consume it without spec drift).
   "attemptCount": 5,
   "placedAt": "string (ISO 8601)",
   "lastTransitionAt": "string (ISO 8601)",
-  "failureReason": "order_stuck_payment_pending_attempts_exhausted"
+  "failureReason": "order_auto_cancelled_payment_timeout"
 }
 ```
 
@@ -164,7 +188,15 @@ consume it without spec drift).
 ## Order lifecycle & BACKORDERED (TASK-BE-428)
 
 `OrderStatus`: `PENDING → CONFIRMED → SHIPPED → DELIVERED`, with `CANCELLED`
-(from `PENDING|CONFIRMED|BACKORDERED`) and the terminal `STUCK_RECOVERY_FAILED`.
+(from `PENDING|CONFIRMED|BACKORDERED`) and `STUCK_RECOVERY_FAILED`.
+
+**Stuck-detector terminal (TASK-BE-435 / TASK-MONO-306).** A payment-pending order
+(`PENDING + payment_id IS NULL`) that exhausts its grace attempts is **auto-cancelled
+to `CANCELLED(PAYMENT_TIMEOUT)`** (the stuck-detector **primary** terminal), publishing
+`OrderCancelled` with `cancelReason = "PAYMENT_TIMEOUT"` plus the informational
+`OrderSagaRecoveryExhausted` alert. `STUCK_RECOVERY_FAILED` is **retained as a defensive
+fallback** (R4) — reached only if the cancel compensation cannot be co-committed — and is
+no longer the primary terminal.
 
 **`BACKORDERED`** (payment-driven reservation saga, TASK-BE-428): after payment,
 product-service attempts an all-or-nothing stock reservation. On success it emits

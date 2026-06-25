@@ -108,16 +108,26 @@ class OrderStuckRecoveryIT {
     }
 
     @Test
-    @DisplayName("5회 sweep — 마지막 호출에 STUCK_RECOVERY_FAILED 전이 + alert outbox 1행 발행")
-    void fiveSweeps_marksExhaustedAndWritesAlertOutbox() {
+    @DisplayName("5회 sweep — 마지막 호출에 CANCELLED(PAYMENT_TIMEOUT) 전이 + OrderCancelled outbox 1행 + 정보성 alert outbox 1행 발행")
+    void fiveSweeps_autoCancelsAndWritesCancelAndAlertOutbox() {
         String orderId = seedStuckOrder();
 
         for (int i = 0; i < detector.maxAttempts(); i++) {
             detector.sweep();
         }
 
+        // Primary terminal is now CANCELLED (TASK-BE-435), not STUCK_RECOVERY_FAILED.
         Order reloaded = orderRepository.findById(orderId).orElseThrow();
-        assertThat(reloaded.getStatus()).isEqualTo(OrderStatus.STUCK_RECOVERY_FAILED);
+        assertThat(reloaded.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+
+        // The auto-cancel publishes an OrderCancelled outbox row whose wire payload carries
+        // cancelReason = PAYMENT_TIMEOUT (drives payment refund/void), co-committed with the
+        // retained informational OrderSagaRecoveryExhausted alert row.
+        List<Map<String, Object>> cancelRows = jdbc.queryForList(
+                "SELECT payload FROM outbox WHERE event_type = ? AND aggregate_id = ?",
+                "OrderCancelled", orderId);
+        assertThat(cancelRows).hasSize(1);
+        assertThat(cancelRows.get(0).get("payload").toString()).contains("PAYMENT_TIMEOUT");
         assertThat(countAlertOutboxRows(orderId)).isEqualTo(1);
     }
 

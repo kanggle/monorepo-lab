@@ -97,6 +97,24 @@ reading a legacy event without them must treat the refund as a **full** refund
 
 ---
 
+## OrderCancelled handling — no new event (TASK-BE-435)
+
+When payment-service consumes `OrderCancelled` (`order.order.cancelled`), it branches on the
+current payment state for money safety (see `specs/services/payment-service/architecture.md`
+§ "OrderCancelled consumer"):
+
+- **Captured payment** (`COMPLETED` / `PARTIALLY_REFUNDED`) → full auto-refund, which emits the
+  existing **`PaymentRefunded`** above. The partial-refund-aware `totalRefunded` / `fullyRefunded`
+  fields (TASK-BE-425) already cover this leg — **no new field is required**.
+- **Never-captured payment** (`PENDING`) → the payment row transitions to the terminal `VOIDED`
+  state. **No PG money movement occurred and no observable event is emitted** — voiding a
+  never-captured payment owes nothing to refund and notifies no downstream consumer. (The order
+  is already terminal via the order-service `OrderCancelled`; payment-service emits nothing extra.)
+
+`VOIDED` is therefore an internal payment-service state only; it does not appear on the event wire.
+
+---
+
 ## Consumer Rules
 
 - Consumers must handle duplicate events idempotently.

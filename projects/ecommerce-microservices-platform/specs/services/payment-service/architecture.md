@@ -129,6 +129,66 @@ Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-
 
 Source: `TossPaymentsAdapter` (`@CircuitBreaker(name="toss-payments", fallbackMethod="confirmFallback"/"cancelFallback")`). Fallback translates `CallNotPermittedException` / `BulkheadFullException` / retry-exhausted `HttpServerErrorException` / `ResourceAccessException` (timeout) uniformly to `PgGatewayUnavailableException`. `PaymentConfirmService` / `PaymentRefundService` distinguish the two exception kinds — only `PgConfirmFailedException` transitions the row state. Caller error codes: 502 `PG_CONFIRM_FAILED` vs 503 `PG_GATEWAY_UNAVAILABLE`.
 
+## Payment state machine (`PaymentStatus`)
+
+```
+PENDING ──confirm()──────────────▶ COMPLETED ──refund(part)──▶ PARTIALLY_REFUNDED ──refund(rest)──▶ REFUNDED
+   │                                   └──────────refund(full)───────────────────────────────────▶ REFUNDED
+   ├──fail() (PG 4xx rejection)──────▶ FAILED                  (terminal)
+   └──voidForOrderCancelled()────────▶ VOIDED                  (terminal — TASK-BE-435)
+```
+
+| Status | Meaning | Terminal |
+|---|---|---|
+| `PENDING` | Created from `OrderPlaced`, not yet captured | no |
+| `COMPLETED` | PG capture succeeded | no (refundable) |
+| `PARTIALLY_REFUNDED` | Some captured amount refunded; remainder refundable | no |
+| `REFUNDED` | Fully refunded | yes |
+| `FAILED` | PG-side definitive rejection (4xx) at confirm | yes |
+| `VOIDED` | **TASK-BE-435** — order was cancelled *before* capture; the never-captured PENDING payment is voided so any later `confirm()` is rejected. Distinct from `FAILED` (PG-rejected) for analytics. No PG money movement occurred, so no refund is owed and no observable event is emitted. | yes |
+
+`VOIDED` is an **additive enum value** stored in the existing `payments.status VARCHAR(20)` column (`@Enumerated(EnumType.STRING)`) — no Flyway migration is required (no destructive change; the column already stores enum names as strings).
+
+## OrderCancelled consumer — money-safe late-payment compensation (TASK-BE-435)
+
+`OrderCancelledEventConsumer` (`order.order.cancelled`, group `payment-service`) delegates to
+`PaymentRefundService.handleOrderCancelled(orderId)`, which **branches on the current `Payment`
+row state** so both event orderings are money-safe regardless of `cancelReason`
+(`OPERATOR` and `PAYMENT_TIMEOUT` both require money safety — the reason is informational here):
+
+| Payment state at `OrderCancelled` | Action |
+|---|---|
+| `COMPLETED` / `PARTIALLY_REFUNDED` (captured) | Full auto-refund via `PaymentRefundService.refundPayment(orderId)` (PG `cancelPayment` + `PaymentRefunded` for the remaining refundable). |
+| `PENDING` (not yet captured) | `voidPayment(orderId)` → `PENDING → VOIDED`. No PG call, no event — nothing was captured. A later `confirm()` is then rejected. |
+| `VOIDED` / `REFUNDED` / `FAILED` (terminal) | No-op (idempotent). |
+
+**Both orderings are safe:**
+- **COMPLETED → CANCELLED**: existing refund path reverses the capture.
+- **CANCELLED → COMPLETED**: the void rejects the late `confirm()` pre-capture.
+
+**Concurrency belt-and-suspenders (`PaymentConfirmService.confirm()`).** For the genuinely
+concurrent interleave where `confirm()` is mid-flight when `OrderCancelled` commits a `VOIDED`:
+1. **Pre-capture guard** — `confirm()` rejects when the row is already `VOIDED` (no PG call).
+2. **Post-capture guard** — after the (slow) PG capture, `confirm()` **re-reads** the row; if it
+   is now `VOIDED` (the cancel committed *during* the PG call), it **immediately PG-cancels the
+   just-captured amount** (`cancelPayment(paymentKey, "Order cancelled during confirm")`), does
+   **not** advance to `COMPLETED`, and publishes no `PaymentCompleted`. Funds are never retained.
+
+   Mechanism: a fresh `findByOrderId` re-read after capture. Under the project's Postgres
+   `READ_COMMITTED` default this read observes the committed `VOIDED`; this needs no schema
+   change (no optimistic-`@Version` column). If the void instead commits *after* this
+   transaction, the void path is a no-op on the now-`COMPLETED` row and the consumer's
+   COMPLETED→refund branch reverses it — also safe.
+
+**Idempotency (AC-7).** Duplicate `OrderCancelled` is a no-op (refund gates on already-`REFUNDED`
+/ remaining-refundable; void gates on terminal state). A retried `confirm()` is a no-op
+(`PENDING`-only capture + the VOIDED guards).
+
+**Auto-refund PG failure (TASK-BE-139).** The COMPLETED→refund leg goes through
+`TossPaymentsAdapter`; on `PgGatewayUnavailableException` the refund row stays unchanged and the
+`@Transactional` boundary rolls back, so the consumer's at-least-once redelivery / DLT re-drives
+the refund — the customer is never left silently un-refunded.
+
 ## Multi-Tenancy (ADR-MONO-030 Step 4 facet c — TASK-BE-400)
 
 payment-service adopts the `multi-tenant` trait M1-M7 pattern matching the sibling
@@ -153,7 +213,9 @@ shipping-service V7).
 - **Event consumer threads** (`OrderPlacedEventConsumer`, `OrderCancelledEventConsumer`):
   no HTTP context. Both consumers read `tenant_id` directly from the inbound event
   envelope (`OrderPlacedEvent.tenantId()` / `OrderCancelledEvent.tenantId()`), call
-  `TenantContext.set(event.tenantId())` before delegating to the application service,
+  `TenantContext.set(event.tenantId())` before delegating to the application service
+  (`OrderCancelledEventConsumer` → `PaymentRefundService.handleOrderCancelled`, the
+  state-branching money-safe handler — see "OrderCancelled consumer" above),
   and unconditionally clear it in a `finally` block to prevent thread-pool leakage.
   A null/blank `tenant_id` in the event resolves to the default tenant (`'ecommerce'`)
   via `TenantContext.set(null)` semantics (net-zero, D8).

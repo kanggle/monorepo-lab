@@ -202,6 +202,28 @@ class ReservationServiceTest {
     }
 
     @Test
+    @DisplayName("AC-4 (BE-435) NEW 예약 취소 (결제 전 stuck 주문) → 재고 변동 0, StockChanged 미발행, RELEASED")
+    void releaseNew_neverReserved_noStockMovementNoEvent() {
+        // Stuck payment-pending order: OrderPlaced recorded but payment never completed,
+        // so the reservation is still NEW (never reserved → no stock decremented).
+        stock.put(variantA, 10);
+        service.recordOrderPlaced(orderId, TENANT, List.of(line(variantA, productA, 4)));
+        assertThat(reservationRepository.findByOrderId(orderId).orElseThrow().getStatus())
+                .isEqualTo(ReservationStatus.NEW);
+        assertThat(stock.get(variantA)).isEqualTo(10); // nothing reserved yet
+
+        service.release(orderId); // stuck-detector cancel (PAYMENT_TIMEOUT)
+
+        assertThat(reservationRepository.findByOrderId(orderId).orElseThrow().getStatus())
+                .isEqualTo(ReservationStatus.RELEASED);
+        assertThat(stock.get(variantA)).isEqualTo(10); // ZERO stock decrement/restore
+        // No StockChanged emitted at all (neither ORDER_CANCELLED nor any other reason).
+        verify(eventPublishingHelper, never()).publishSafely(argCancelledFor(orderId), anyString(), any());
+        verify(eventPublishingHelper, never()).publishSafely(any(), anyString(), any());
+        verify(inventoryRepository, never()).save(any(Inventory.class));
+    }
+
+    @Test
     @DisplayName("AC-5 미존재 예약 취소 → no-op")
     void releaseUnknown_noOp() {
         service.release(UUID.randomUUID().toString());

@@ -5,6 +5,7 @@ import com.example.order.application.event.OrderCancelledEvent;
 import com.example.order.application.port.OrderEventPublisher;
 import com.example.order.application.port.OrderMetricsPort;
 import com.example.order.domain.exception.OrderNotFoundException;
+import com.example.order.domain.model.CancelReason;
 import com.example.order.domain.model.Order;
 import com.example.order.domain.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -48,7 +49,7 @@ public class OperatorOrderCancellationService {
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 
         String previousStatus = order.getStatus().name();
-        order.cancel(clock);
+        order.cancel(CancelReason.OPERATOR, clock);
         orderRepository.save(order);
         orderMetrics.recordOrderCancelled("operator");
         orderMetrics.recordStatusTransition(previousStatus, order.getStatus().name());
@@ -59,7 +60,7 @@ public class OperatorOrderCancellationService {
         // Reuse the existing cancel fan-out: payment-service refunds + promotion-service restores.
         orderEventPublisher.publishOrderCancelled(
                 OrderCancelledEvent.of(order.getOrderId(), order.getUserId(),
-                        order.getUpdatedAt(), clock));
+                        order.getUpdatedAt(), CancelReason.OPERATOR, clock));
 
         return new CancelOrderResult(order.getOrderId(), order.getStatus().name());
     }

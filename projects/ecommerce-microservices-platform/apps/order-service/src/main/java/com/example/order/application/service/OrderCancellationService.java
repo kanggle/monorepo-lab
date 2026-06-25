@@ -6,6 +6,7 @@ import com.example.order.application.exception.UnauthorizedOrderAccessException;
 import com.example.order.application.port.OrderEventPublisher;
 import com.example.order.application.port.OrderMetricsPort;
 import com.example.order.domain.exception.OrderNotFoundException;
+import com.example.order.domain.model.CancelReason;
 import com.example.order.domain.model.Order;
 import com.example.order.domain.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +36,7 @@ public class OrderCancellationService {
         }
 
         String previousStatus = order.getStatus().name();
-        order.cancel(clock);
+        order.cancel(CancelReason.OPERATOR, clock);
         orderRepository.save(order);
         orderMetrics.recordOrderCancelled("user");
         orderMetrics.recordStatusTransition(previousStatus, order.getStatus().name());
@@ -44,7 +45,7 @@ public class OrderCancellationService {
 
         orderEventPublisher.publishOrderCancelled(
                 OrderCancelledEvent.of(order.getOrderId(), order.getUserId(),
-                        order.getUpdatedAt(), clock));
+                        order.getUpdatedAt(), CancelReason.OPERATOR, clock));
 
         return new CancelOrderResult(order.getOrderId(), order.getStatus().name());
     }

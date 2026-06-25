@@ -37,6 +37,14 @@ public class PaymentConfirmService {
         if (!payment.isOwnedBy(userId)) {
             throw new UnauthorizedPaymentAccessException();
         }
+        // TASK-BE-435 belt-and-suspenders, pre-capture guard: if the order was already
+        // cancelled before capture, the Payment is VOIDED — reject the confirm so we never
+        // call the PG. (VOIDED is also "not PENDING", so the generic guard below would catch
+        // it; it is checked explicitly because losing the customer's money on a cancelled
+        // order is the money-safety-critical case, and the domain confirm() likewise rejects VOIDED.)
+        if (payment.getStatus() == PaymentStatus.VOIDED) {
+            throw new PaymentAlreadyCompletedException(orderId);
+        }
         if (payment.getStatus() != PaymentStatus.PENDING) {
             throw new PaymentAlreadyCompletedException(orderId);
         }
@@ -60,6 +68,31 @@ public class PaymentConfirmService {
             // DO NOT transition to FAILED. Propagate so the @Transactional
             // boundary rolls back and the user can idempotently retry.
             throw e;
+        }
+
+        // ── TASK-BE-435 belt-and-suspenders, post-capture auto-refund guard ──────────────
+        // Concurrency mechanism: a row re-read after the PG capture detects an OrderCancelled
+        // that committed a VOIDED transition AFTER our initial read but DURING the (slow) PG
+        // call — the genuinely-concurrent interleave the pre-capture guard cannot see. We just
+        // captured money for an order that is now cancelled, so we immediately cancel the
+        // just-captured amount at the PG and do NOT advance to COMPLETED (the row stays VOIDED,
+        // no PaymentCompleted is published). Funds are never retained.
+        //
+        // Why a re-read (vs. an optimistic @Version): both the void path and this confirm path
+        // read-modify-write the same row; in REPEATABLE_READ a re-read returns our own snapshot,
+        // but the project default is READ_COMMITTED (Postgres), under which this fresh read sees
+        // the committed VOIDED. The re-read is the simplest correct guard and needs no schema
+        // change. (If the void instead commits AFTER this transaction, the void path is a no-op
+        // on a COMPLETED row and the consumer's COMPLETED→refund branch reverses it — also safe.)
+        Payment latest = paymentRepository.findByOrderId(orderId).orElse(payment);
+        if (latest.isVoided()) {
+            if (paymentKey != null) {
+                paymentGateway.cancelPayment(paymentKey, "Order cancelled during confirm");
+            }
+            paymentMetricRecorder.incrementPaymentRefunded();
+            log.warn("Confirm captured funds for an already-cancelled order — auto-cancelled the "
+                    + "captured amount at the PG. orderId={}, paymentId={}", orderId, latest.getPaymentId());
+            throw new PaymentAlreadyCompletedException(orderId);
         }
 
         payment.confirm(paymentKey, pgResult.paymentMethod(), pgResult.receiptUrl());
