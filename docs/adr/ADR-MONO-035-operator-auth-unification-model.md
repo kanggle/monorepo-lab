@@ -140,6 +140,20 @@ Add `identity_id` to `auth_db.credentials` (value-convention cross-DB reference,
 
 > **STEP 4 + STEP 5 COMPLETE (2026-06-15, TASK-MONO-265).** The whole ADR-MONO-035 execution roadmap (4a → 4b → 4c → 4d → e2e) has landed on `main` (all 3-dim verified). `account_type` is fully removed (claim, column, gateway legs, header) and `roles` is the sole authorization axis for both consumers and operators; operators source their domain roles from the assume-tenant derivation; the operator login converges on the unified IAM OIDC credential with `password_hash` demoted to nullable break-glass; the central-identity correlation spans all three stores (`accounts`/`admin_operators`/`credentials`.`identity_id`). This closes **ADR-MONO-032 D5 step 4 + step 5**.
 
+> **O1 derivation refinement (2026-06-25, TASK-BE-433).** O1 emitted only the COARSE
+> domain operator role (`wms → WMS_OPERATOR`), which O1 itself called *"coarse-but-correct
+> for gateway admission"* — the wms `gateway-service` admits on non-empty `roles`. But the
+> wms **services** behind the gateway (`outbound`/`inbound`/`inventory`) authorize on
+> GRANULAR roles (`OUTBOUND_WRITE`, `INVENTORY_WRITE`, …), which O1 did not account for: a
+> `WMS_OPERATOR`-only assumed token passed the gateway yet **403'd at every wms-service
+> write**. The `wms` derivation now additionally emits the operator-tier service roles
+> (`{OUTBOUND,INBOUND,INVENTORY}_{READ,WRITE}` + `MASTER_READ`) alongside `WMS_OPERATOR`;
+> ADMIN-tier roles (`*_ADMIN` / `WMS_ADMIN` — cancellation, force-saga-fail, master-data
+> writes) remain ungranted by the operator entitlement. Still **domain-uniform**, not
+> per-assignment — the per-assignment refinement (O1-B) stays the deferred follow-up above.
+> Surfaced live in the TASK-BE-431/432 ecommerce↔wms fulfillment-loop demo (a wms operator
+> could not pick/pack/ship through a directly-called outbound-service).
+
 ---
 
 ## 4. Alternatives Considered

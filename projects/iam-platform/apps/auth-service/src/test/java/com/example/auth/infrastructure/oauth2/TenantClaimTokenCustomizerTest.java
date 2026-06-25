@@ -897,7 +897,7 @@ class TenantClaimTokenCustomizerTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("BE-376 assume-tenant: entitled [finance, wms] → roles derived [FINANCE_OPERATOR, WMS_OPERATOR]")
+    @DisplayName("BE-376/433 assume-tenant: entitled [finance, wms] → roles derived [FINANCE_OPERATOR + granular wms operator-tier set]")
     void assumeTenant_rolesDerivedFromEntitledDomains() {
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
@@ -914,8 +914,14 @@ class TenantClaimTokenCustomizerTest {
 
         JwtClaimsSet built = claimsBuilder.build();
         // roles derived from the selected tenant's entitled domains (no preserve / no seed).
+        // TASK-BE-433: the wms entitlement expands to the granular operator-tier service roles.
         assertThat(built.<List<String>>getClaim("roles"))
-                .containsExactly("FINANCE_OPERATOR", "WMS_OPERATOR");
+                .containsExactly("FINANCE_OPERATOR",
+                        "WMS_OPERATOR",
+                        "OUTBOUND_READ", "OUTBOUND_WRITE",
+                        "INBOUND_READ", "INBOUND_WRITE",
+                        "INVENTORY_READ", "INVENTORY_WRITE",
+                        "MASTER_READ");
         // entitled_domains rides the same fetch.
         assertThat(built.<List<String>>getClaim("entitled_domains")).containsExactly("finance", "wms");
         // existing assume-tenant assertions still pass alongside (BE-338 untouched).
