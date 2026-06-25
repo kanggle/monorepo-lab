@@ -1,6 +1,6 @@
 # TASK-BE-433 — wms operator entitlement derives granular wms-service roles
 
-**Status:** ready
+**Status:** done
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (auth issuance hot-path + role-model decision)
 
