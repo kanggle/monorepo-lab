@@ -65,9 +65,12 @@ const GROUPS: NavGroup[] = [
         label: 'IAM',
         testid: 'nav-iam',
         children: [
+          // Order: the two management (write) surfaces first — 계정 운영
+          // (/accounts, the catalog IAM tile target) + 운영자 관리 — then 감사·보안
+          // (read-only oversight) last, mirroring an operate-then-review flow.
           { href: '/accounts', label: '계정 운영', testid: 'nav-accounts' },
-          { href: '/audit', label: '감사 · 보안', testid: 'nav-audit' },
           { href: '/operators', label: '운영자 관리', testid: 'nav-operators' },
+          { href: '/audit', label: '감사 · 보안', testid: 'nav-audit' },
         ],
       },
     ],
