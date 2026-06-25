@@ -125,6 +125,33 @@ public class ReserveStockService implements ReserveStockUseCase {
         return view == null ? ReserveOutcome.BACKORDERED : ReserveOutcome.RESERVED;
     }
 
+    @Override
+    public void signalReserveFailed(UUID pickingRequestId, String actorId,
+                                    List<ReserveStockUseCase.Shortfall> shortfalls) {
+        if (shortfalls == null || shortfalls.isEmpty()) {
+            throw new IllegalArgumentException("signalReserveFailed requires at least one shortfall line");
+        }
+        // Idempotent replay: if a Reservation already exists for this picking
+        // request it reserved successfully on an earlier delivery — do not emit
+        // a contradictory reserve.failed.
+        if (reservationRepository.findByPickingRequestId(pickingRequestId).isPresent()) {
+            log.debug("Reservation already exists for pickingRequestId {}; skipping reserve.failed signal",
+                    pickingRequestId);
+            return;
+        }
+        Instant now = clock.instant();
+        List<InventoryReserveFailedEvent.Line> lines = shortfalls.stream()
+                .map(s -> new InventoryReserveFailedEvent.Line(
+                        s.inventoryId(), s.skuId(), s.lotId(), s.locationId(),
+                        s.qtyRequested(), s.qtyAvailable()))
+                .toList();
+        transactionTemplate.executeWithoutResult(status ->
+                outboxWriter.write(new InventoryReserveFailedEvent(
+                        pickingRequestId, "INSUFFICIENT_STOCK", lines, now, actorId)));
+        log.info("inventory.reserve.failed emitted (unresolved natural key) pickingRequestId={} shortLines={}",
+                pickingRequestId, lines.size());
+    }
+
     /** Optimistic-lock retry wrapper shared by the REST and event reserve paths. */
     private ReservationView withRetry(ReserveStockCommand command,
                                       java.util.function.Supplier<ReservationView> body) {

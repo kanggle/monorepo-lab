@@ -292,6 +292,7 @@ class AdjustStockServiceTest {
         final Map<UUID, Inventory> entries = new HashMap<>();
         @Override public Optional<Inventory> findById(UUID id) { return Optional.ofNullable(entries.get(id)); }
         @Override public Optional<Inventory> findByKey(UUID a, UUID b, UUID c) { throw new UnsupportedOperationException(); }
+        @Override public java.util.List<Inventory> findAvailableByWarehouseSkuLot(UUID a, UUID b, UUID c) { throw new UnsupportedOperationException(); }
         @Override public Optional<InventoryView> findViewById(UUID id) { throw new UnsupportedOperationException(); }
         @Override public Optional<InventoryView> findViewByKey(UUID a, UUID b, UUID c) { throw new UnsupportedOperationException(); }
         @Override public PageView<InventoryView> listViews(InventoryListCriteria c) { throw new UnsupportedOperationException(); }

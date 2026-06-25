@@ -182,6 +182,9 @@ class ReceiveStockServiceTest {
                             && java.util.Objects.equals(i.lotId(), lotId))
                     .findFirst();
         }
+        @Override public java.util.List<Inventory> findAvailableByWarehouseSkuLot(UUID warehouseId, UUID skuId, UUID lotId) {
+            throw new UnsupportedOperationException();
+        }
         @Override public Optional<InventoryView> findViewById(UUID id) {
             throw new UnsupportedOperationException();
         }
