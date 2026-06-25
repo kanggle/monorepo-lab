@@ -37,11 +37,15 @@ public class OrderCancelledEventConsumer {
         }
 
         // TASK-BE-400 (ADR-MONO-030 Step 4 facet c, M5): thread the event's tenant_id
-        // into TenantContext so the findByOrderId lookup in refundPayment is tenant-scoped.
+        // into TenantContext so the findByOrderId lookup is tenant-scoped.
         // Falls back to default tenant if the field is absent (net-zero D8).
         TenantContext.set(event.tenantId());
         try {
-            paymentRefundService.refundPayment(orderId);
+            // TASK-BE-435 §B: branch on the current Payment state.
+            // COMPLETED → full refund (money already captured); PENDING → void (reject any
+            // late confirm); already-terminal → no-op. cancelReason is informational here —
+            // both OPERATOR and PAYMENT_TIMEOUT cancels require money safety.
+            paymentRefundService.handleOrderCancelled(orderId);
         } finally {
             TenantContext.clear();
         }

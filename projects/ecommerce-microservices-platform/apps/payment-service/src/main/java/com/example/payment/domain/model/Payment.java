@@ -64,6 +64,14 @@ public class Payment {
     }
 
     public void confirm(String paymentKey, String paymentMethod, String receiptUrl) {
+        // VOIDED is a sub-case of "not PENDING" and the InvalidPaymentException below
+        // already rejects it, but it is called out explicitly because a late confirm of a
+        // VOIDED payment (order cancelled before capture, TASK-BE-435) is the money-safety
+        // critical reject: capturing funds for a cancelled order would lose the customer money.
+        if (this.status == PaymentStatus.VOIDED) {
+            throw new InvalidPaymentException(
+                    "주문이 취소되어 무효화(VOIDED)된 결제는 승인할 수 없습니다: " + status);
+        }
         if (this.status != PaymentStatus.PENDING) {
             throw new InvalidPaymentException("PENDING 상태에서만 결제를 승인할 수 있습니다: " + status);
         }
@@ -72,6 +80,47 @@ public class Payment {
         this.receiptUrl = receiptUrl;
         this.status = PaymentStatus.COMPLETED;
         this.paidAt = LocalDateTime.now();
+    }
+
+    /**
+     * Void this payment because the order was cancelled before the payment was captured
+     * (TASK-BE-435, the {@code OrderCancelled} → PENDING branch). Transitions
+     * {@code PENDING → VOIDED} so any later {@link #confirm} is rejected.
+     *
+     * <p>Idempotent and redelivery-safe: a no-op when already {@code VOIDED}, and a no-op
+     * for any other terminal state ({@code REFUNDED}/{@code FAILED}) — those already carry
+     * their own money-safe resolution and a duplicate {@code OrderCancelled} must not throw.
+     * Only an {@code unexpected} attempt to void a {@code COMPLETED}/{@code PARTIALLY_REFUNDED}
+     * payment throws, because a captured payment must be refunded (not voided) — that path is
+     * handled by the consumer's COMPLETED→refund branch, never by void.
+     *
+     * @return {@code true} if this call performed the PENDING→VOIDED transition;
+     *         {@code false} if it was an idempotent no-op (already terminal).
+     */
+    public boolean voidForOrderCancelled() {
+        if (this.status == PaymentStatus.VOIDED
+                || this.status == PaymentStatus.REFUNDED
+                || this.status == PaymentStatus.FAILED) {
+            return false; // idempotent / already terminal — no-op, do not throw on redelivery
+        }
+        if (this.status != PaymentStatus.PENDING) {
+            throw new InvalidPaymentException(
+                    "PENDING 상태에서만 결제를 무효화(VOIDED)할 수 있습니다: " + status);
+        }
+        this.status = PaymentStatus.VOIDED;
+        return true;
+    }
+
+    public boolean isVoided() {
+        return this.status == PaymentStatus.VOIDED;
+    }
+
+    public boolean isPending() {
+        return this.status == PaymentStatus.PENDING;
+    }
+
+    public boolean isCompleted() {
+        return this.status == PaymentStatus.COMPLETED;
     }
 
     public void fail() {

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 
 import static com.example.order.contract.ContractTestHelper.assertFieldsMatch;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * order-service 이벤트 스키마 컨트랙트 검증 테스트.
@@ -123,14 +124,29 @@ class OrderEventContractTest {
     }
 
     @Test
-    @DisplayName("OrderCancelled payload는 {orderId, userId, cancelledAt}만 포함한다")
+    @DisplayName("OrderCancelled payload는 {orderId, userId, cancelledAt, cancelReason}만 포함한다")
     void orderCancelled_payload_matchesSpec() throws Exception {
         OrderCancelledEvent event = OrderCancelledEvent.of("order-1", "user-1", Instant.parse("2026-03-25T12:00:00Z"), FIXED_CLOCK);
 
         JsonNode root = objectMapper.readTree(objectMapper.writeValueAsString(event));
         JsonNode payload = root.get("payload");
 
-        assertFieldsMatch(payload, Set.of("orderId", "userId", "cancelledAt"),
+        assertFieldsMatch(payload, Set.of("orderId", "userId", "cancelledAt", "cancelReason"),
                 SPEC_REF + " OrderCancelled payload");
+    }
+
+    @Test
+    @DisplayName("OrderCancelled.cancelReason 기본값은 OPERATOR (back-compat)이고 PAYMENT_TIMEOUT 도 직렬화된다")
+    void orderCancelled_cancelReason_defaultsOperatorAndCarriesPaymentTimeout() throws Exception {
+        OrderCancelledEvent legacy = OrderCancelledEvent.of(
+                "order-1", "user-1", Instant.parse("2026-03-25T12:00:00Z"), FIXED_CLOCK);
+        JsonNode legacyPayload = objectMapper.readTree(objectMapper.writeValueAsString(legacy)).get("payload");
+        assertEquals("OPERATOR", legacyPayload.get("cancelReason").asText());
+
+        OrderCancelledEvent timeout = OrderCancelledEvent.of(
+                "order-1", "user-1", Instant.parse("2026-03-25T12:00:00Z"),
+                com.example.order.domain.model.CancelReason.PAYMENT_TIMEOUT, FIXED_CLOCK);
+        JsonNode timeoutPayload = objectMapper.readTree(objectMapper.writeValueAsString(timeout)).get("payload");
+        assertEquals("PAYMENT_TIMEOUT", timeoutPayload.get("cancelReason").asText());
     }
 }

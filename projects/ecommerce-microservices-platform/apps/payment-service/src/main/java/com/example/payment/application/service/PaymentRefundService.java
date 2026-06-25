@@ -26,6 +26,47 @@ public class PaymentRefundService {
     private final PaymentMetricRecorder paymentMetricRecorder;
     private final PaymentGatewayPort paymentGateway;
 
+    /**
+     * Money-safe handler for an {@code OrderCancelled} event (TASK-BE-435 §B). Branches on the
+     * current {@code Payment} row state so both event orderings are safe:
+     * <ul>
+     *   <li><b>COMPLETED</b> (already captured) → full {@link #refundPayment(String)} auto-refund.</li>
+     *   <li><b>PENDING</b> (not yet confirmed) → {@link #voidPayment(String)} so any later
+     *       {@code confirm()} is rejected (no capture).</li>
+     *   <li>Already terminal (VOIDED/REFUNDED/FAILED) or absent → no-op (idempotent).</li>
+     * </ul>
+     * The branch is independent of {@code cancelReason}: an operator cancel and a
+     * PAYMENT_TIMEOUT stuck-cancel both require money safety. Idempotency is provided by the
+     * delegated methods (refund gates on already-REFUNDED; void gates on terminal state), so a
+     * duplicate {@code OrderCancelled} is a no-op (AC-7).
+     *
+     * <p>Each branch reads the row inside its own {@code @Transactional} delegate. A concurrent
+     * PENDING→COMPLETED flip between the read here and the delegate is the genuinely-concurrent
+     * interleave handled belt-and-suspenders by {@code PaymentConfirmService.confirm()} (which
+     * re-checks VOIDED under the row and auto-refunds a just-captured amount if the order was
+     * cancelled) — see that class. The dispatch read here is advisory.
+     */
+    public void handleOrderCancelled(String orderId) {
+        Optional<Payment> paymentOpt = paymentRepository.findByOrderId(orderId);
+        if (paymentOpt.isEmpty()) {
+            log.info("No payment found for orderId={}, OrderCancelled is a no-op", orderId);
+            return;
+        }
+        Payment payment = paymentOpt.get();
+        switch (payment.getStatus()) {
+            case COMPLETED, PARTIALLY_REFUNDED ->
+                // Captured (possibly partially refunded already) — refund the remainder.
+                    refundPayment(orderId);
+            case PENDING ->
+                // Never captured — void so a late confirm cannot capture.
+                    voidPayment(orderId);
+            default ->
+                // VOIDED / REFUNDED / FAILED — already money-safe terminal. No-op.
+                    log.info("OrderCancelled for orderId={} with terminal payment status {}, no-op",
+                            orderId, payment.getStatus());
+        }
+    }
+
     @Transactional
     public void refundPayment(String orderId) {
         Optional<Payment> paymentOpt = paymentRepository.findByOrderId(orderId);
@@ -62,6 +103,41 @@ public class PaymentRefundService {
         paymentEventPublisher.publishPaymentRefunded(PaymentRefundedEvent.from(payment, thisRefund));
 
         log.info("Payment refunded: paymentId={}, orderId={}", payment.getPaymentId(), orderId);
+    }
+
+    /**
+     * Void a PENDING payment whose order was cancelled before capture (TASK-BE-435, the
+     * {@code OrderCancelled} → PENDING branch). Transitions {@code PENDING → VOIDED} so any
+     * later {@code confirm()} is rejected and no funds are ever captured.
+     *
+     * <p>No PG money movement occurred (the payment was never captured), so there is NO PG
+     * cancel call and NO {@code PaymentRefunded} event — there is nothing to refund. The
+     * void is purely an internal terminal-state guard.
+     *
+     * <p>Idempotent: a no-op when the payment is absent or already terminal
+     * ({@code VOIDED}/{@code REFUNDED}/{@code FAILED}), so a duplicate {@code OrderCancelled}
+     * does not double-transition. A {@code COMPLETED} payment is NOT voided here — that case
+     * is the consumer's COMPLETED→{@link #refundPayment(String)} branch.
+     */
+    @Transactional
+    public void voidPayment(String orderId) {
+        Optional<Payment> paymentOpt = paymentRepository.findByOrderId(orderId);
+        if (paymentOpt.isEmpty()) {
+            log.info("No payment found for orderId={}, skipping void", orderId);
+            return;
+        }
+
+        Payment payment = paymentOpt.get();
+        boolean transitioned = payment.voidForOrderCancelled();
+        if (!transitioned) {
+            log.info("Payment for orderId={} already terminal ({}), void is a no-op",
+                    orderId, payment.getStatus());
+            return;
+        }
+
+        paymentRepository.save(payment);
+        log.info("Payment voided (order cancelled before capture): paymentId={}, orderId={}",
+                payment.getPaymentId(), orderId);
     }
 
     /**

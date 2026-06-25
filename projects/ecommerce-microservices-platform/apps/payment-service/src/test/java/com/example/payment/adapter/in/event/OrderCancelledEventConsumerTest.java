@@ -42,7 +42,7 @@ class OrderCancelledEventConsumerTest {
         return new OrderCancelledEvent(
                 UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",
                 "ecommerce",
-                new OrderCancelledEvent.OrderCancelledPayload(orderId, "user-1", "2026-03-23T00:00:00")
+                new OrderCancelledEvent.OrderCancelledPayload(orderId, "user-1", "2026-03-23T00:00:00", "OPERATOR")
         );
     }
 
@@ -50,34 +50,49 @@ class OrderCancelledEventConsumerTest {
         return new OrderCancelledEvent(
                 UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",
                 tenantId,
-                new OrderCancelledEvent.OrderCancelledPayload(orderId, "user-1", "2026-03-23T00:00:00")
+                new OrderCancelledEvent.OrderCancelledPayload(orderId, "user-1", "2026-03-23T00:00:00", "PAYMENT_TIMEOUT")
         );
     }
 
     @Test
-    @DisplayName("정상 이벤트 수신 시 refundPayment를 호출한다")
-    void handle_validEvent_callsRefundPayment() {
+    @DisplayName("정상 이벤트 수신 시 handleOrderCancelled를 호출한다 (상태 분기는 서비스가 수행)")
+    void handle_validEvent_callsHandleOrderCancelled() {
         consumer.handle(event("order-1"));
 
-        verify(paymentRefundService).refundPayment("order-1");
+        verify(paymentRefundService).handleOrderCancelled("order-1");
     }
 
     @Test
-    @DisplayName("이벤트의 tenant_id 가 TenantContext 에 설정된 후 refundPayment 가 호출된다 (M5)")
+    @DisplayName("이벤트의 tenant_id 가 TenantContext 에 설정된 후 handleOrderCancelled 가 호출된다 (M5)")
     void handle_eventWithTenantId_setsContextBeforeProcessing() {
         // tenant context cleared after handle() completes (finally block)
         consumer.handle(eventWithTenant("order-1", "tenant-a"));
 
-        verify(paymentRefundService).refundPayment("order-1");
+        verify(paymentRefundService).handleOrderCancelled("order-1");
         // After the call the context should be cleared (finally fired)
         assertThat(TenantContext.currentTenant()).isEqualTo("ecommerce"); // default (not tenant-a)
     }
 
     @Test
-    @DisplayName("refundPayment에서 예외가 발생하면 상위로 전파된다")
-    void handle_refundThrows_propagatesException() {
+    @DisplayName("cancelReason 이 없는 레거시 이벤트도 동일하게 handleOrderCancelled 를 호출한다 (back-compat, OPERATOR 취급)")
+    void handle_legacyEventWithoutCancelReason_stillHandles() {
+        OrderCancelledEvent legacy = new OrderCancelledEvent(
+                UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",
+                "ecommerce",
+                new OrderCancelledEvent.OrderCancelledPayload("order-1", "user-1", "2026-03-23T00:00:00", null)
+        );
+        assertThat(legacy.payload().effectiveCancelReason()).isEqualTo("OPERATOR");
+
+        consumer.handle(legacy);
+
+        verify(paymentRefundService).handleOrderCancelled("order-1");
+    }
+
+    @Test
+    @DisplayName("handleOrderCancelled에서 예외가 발생하면 상위로 전파된다")
+    void handle_serviceThrows_propagatesException() {
         doThrow(new RuntimeException("DB error"))
-                .when(paymentRefundService).refundPayment(any());
+                .when(paymentRefundService).handleOrderCancelled(any());
 
         assertThatThrownBy(() -> consumer.handle(event("order-1")))
                 .isInstanceOf(RuntimeException.class)
@@ -85,7 +100,7 @@ class OrderCancelledEventConsumerTest {
     }
 
     @Test
-    @DisplayName("payload가 null인 이벤트 수신 시 refundPayment를 호출하지 않는다")
+    @DisplayName("payload가 null인 이벤트 수신 시 handleOrderCancelled를 호출하지 않는다")
     void handle_nullPayload_skips() {
         OrderCancelledEvent nullPayloadEvent = new OrderCancelledEvent(
                 UUID.randomUUID().toString(), "OrderCancelled", "2026-03-23T00:00:00", "order-service",

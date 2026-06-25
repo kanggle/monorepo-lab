@@ -70,6 +70,145 @@ class PaymentRefundServiceTest {
         );
     }
 
+    private Payment pendingPayment() {
+        return Payment.reconstitute(
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
+                PaymentStatus.PENDING,
+                LocalDateTime.now(), null, null,
+                null, null, null
+        );
+    }
+
+    // ── TASK-BE-435: handleOrderCancelled branch (COMPLETED→refund / PENDING→void / terminal→no-op) ──
+
+    @Test
+    @DisplayName("COMPLETED 결제에 OrderCancelled → 전액 환불 (refund 경로), PG cancel 호출")
+    void handleOrderCancelled_completed_refunds() {
+        Payment payment = completedPaymentWithPgKey();
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        paymentRefundService.handleOrderCancelled("order-1");
+
+        verify(paymentGateway).cancelPayment("pk_test_123", "Order cancelled");
+        ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        verify(paymentEventPublisher).publishPaymentRefunded(any());
+    }
+
+    @Test
+    @DisplayName("PENDING 결제에 OrderCancelled → VOIDED 전이 (환불/PG cancel/이벤트 없음)")
+    void handleOrderCancelled_pending_voids() {
+        Payment payment = pendingPayment();
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        paymentRefundService.handleOrderCancelled("order-1");
+
+        ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.VOIDED);
+        // No money movement: void never touches the PG and emits no refund event.
+        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
+    }
+
+    @Test
+    @DisplayName("이미 VOIDED 결제에 중복 OrderCancelled → 멱등 no-op (저장/PG/이벤트 없음)")
+    void handleOrderCancelled_alreadyVoided_isNoOp() {
+        Payment payment = pendingPayment();
+        payment.voidForOrderCancelled();
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+
+        paymentRefundService.handleOrderCancelled("order-1");
+
+        verify(paymentRepository, never()).save(any());
+        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
+    }
+
+    @Test
+    @DisplayName("이미 REFUNDED 결제에 중복 OrderCancelled → 멱등 no-op (이중 환불 없음)")
+    void handleOrderCancelled_alreadyRefunded_isNoOp() {
+        Payment payment = completedPaymentWithPgKey();
+        payment.refund();
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+
+        paymentRefundService.handleOrderCancelled("order-1");
+
+        verify(paymentRepository, never()).save(any());
+        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
+    }
+
+    @Test
+    @DisplayName("Payment가 없는 orderId의 OrderCancelled → no-op")
+    void handleOrderCancelled_noPayment_isNoOp() {
+        given(paymentRepository.findByOrderId("order-x")).willReturn(Optional.empty());
+
+        paymentRefundService.handleOrderCancelled("order-x");
+
+        verify(paymentRepository, never()).save(any());
+        verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
+    }
+
+    @Test
+    @DisplayName("PARTIALLY_REFUNDED 결제에 OrderCancelled → 잔여액 환불 (refund 경로)")
+    void handleOrderCancelled_partiallyRefunded_refundsRemainder() {
+        Payment payment = completedPaymentWithPgKey();
+        payment.refund(10000L); // now PARTIALLY_REFUNDED, 20000 remaining
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        paymentRefundService.handleOrderCancelled("order-1");
+
+        ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        verify(paymentEventPublisher).publishPaymentRefunded(any());
+    }
+
+    // ── voidPayment direct unit ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("voidPayment: PENDING → VOIDED 저장, PG/이벤트 없음")
+    void voidPayment_pending_savesVoided() {
+        Payment payment = pendingPayment();
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        paymentRefundService.voidPayment("order-1");
+
+        ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.VOIDED);
+        verify(paymentGateway, never()).cancelPayment(any(), any());
+        verify(paymentEventPublisher, never()).publishPaymentRefunded(any());
+    }
+
+    @Test
+    @DisplayName("voidPayment: 이미 VOIDED 면 멱등 no-op (저장 없음)")
+    void voidPayment_alreadyVoided_isNoOp() {
+        Payment payment = pendingPayment();
+        payment.voidForOrderCancelled();
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+
+        paymentRefundService.voidPayment("order-1");
+
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("voidPayment: Payment 없으면 no-op")
+    void voidPayment_noPayment_isNoOp() {
+        given(paymentRepository.findByOrderId("order-x")).willReturn(Optional.empty());
+
+        paymentRefundService.voidPayment("order-x");
+
+        verify(paymentRepository, never()).save(any());
+    }
+
     @Test
     @DisplayName("COMPLETED 결제 환불 시 PG cancel 호출 후 REFUNDED 상태로 저장되고 이벤트가 발행된다")
     void refundPayment_completedWithPgKey_callsCancelAndSavesRefunded() {

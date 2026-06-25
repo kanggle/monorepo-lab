@@ -124,6 +124,32 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("cancel(Clock) 기본 사유는 OPERATOR 다 (back-compat)")
+    void cancel_defaultReason_isOperator() {
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
+                ADDRESS, FIXED_CLOCK);
+
+        order.cancel(FIXED_CLOCK);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.OPERATOR);
+    }
+
+    @Test
+    @DisplayName("PENDING 에서 cancel(PAYMENT_TIMEOUT) 시 CANCELLED + 사유 PAYMENT_TIMEOUT (stuck-detector 경로)")
+    void cancel_paymentTimeoutFromPending_becomesCancelledWithReason() {
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
+                ADDRESS, FIXED_CLOCK);
+
+        order.cancel(CancelReason.PAYMENT_TIMEOUT, FIXED_CLOCK);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.PAYMENT_TIMEOUT);
+    }
+
+    @Test
     @DisplayName("CANCELLED 상태에서 cancel 호출 시 예외가 발생한다")
     void cancel_cancelledOrder_throwsOrderCannotBeCancelledException() {
         Order order = Order.create("user1",

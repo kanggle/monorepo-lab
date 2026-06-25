@@ -23,6 +23,19 @@ public record OrderCancelledEvent(
     public record OrderCancelledPayload(
             String orderId,
             String userId,
-            String cancelledAt
-    ) {}
+            String cancelledAt,
+            /**
+             * TASK-BE-435: distinguishes a system stuck-detector cancel ({@code "PAYMENT_TIMEOUT"})
+             * from an operator cancel ({@code "OPERATOR"}). Additive / back-compatible — a legacy
+             * event without this field deserializes to {@code null}, treated as {@code "OPERATOR"}
+             * (matching pre-change behaviour). The payment-service branch is independent of the
+             * reason (both require money safety), so this field is informational here.
+             */
+            String cancelReason
+    ) {
+        /** Effective cancel reason, defaulting a null/legacy value to {@code "OPERATOR"}. */
+        public String effectiveCancelReason() {
+            return cancelReason == null ? "OPERATOR" : cancelReason;
+        }
+    }
 }

@@ -159,4 +159,51 @@ class PaymentConfirmServiceTest {
         verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
         verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
     }
+
+    // ── TASK-BE-435: money-safe confirm-vs-cancel interleave ─────────────────
+
+    @Test
+    @DisplayName("AC-3 pre-capture guard: 주문 취소로 VOIDED 된 결제 confirm 시 PG 호출 없이 거부된다 (자금 미캡처)")
+    void confirm_voidedBeforeCapture_rejectedWithoutPgCall() {
+        Payment payment = Payment.reconstitute(
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
+                PaymentStatus.VOIDED, java.time.LocalDateTime.now(), null, null, null, null, null);
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PaymentAlreadyCompletedException.class);
+
+        // Never hit the PG, never captured, never published.
+        verify(paymentGateway, never()).confirmPayment(any(), any(), org.mockito.ArgumentMatchers.anyLong());
+        verify(paymentRepository, never()).save(any());
+        verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.VOIDED);
+    }
+
+    @Test
+    @DisplayName("AC-3 post-capture guard: confirm 중 OrderCancelled 가 VOIDED 를 커밋하면 캡처된 금액을 즉시 PG cancel 하고 COMPLETED 로 진행하지 않는다 (자금 미보유)")
+    void confirm_voidedDuringCapture_autoCancelsCapturedAmount() {
+        // Initial read: PENDING (pre-capture guard passes). Post-capture re-read: VOIDED
+        // (OrderCancelled committed during the slow PG call).
+        Payment pending = Payment.create("order-1", "user-1", 30000L);
+        Payment voided = Payment.reconstitute(
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
+                PaymentStatus.VOIDED, java.time.LocalDateTime.now(), null, null, null, null, null);
+        given(paymentRepository.findByOrderId("order-1"))
+                .willReturn(Optional.of(pending))   // initial read
+                .willReturn(Optional.of(voided));   // post-capture re-read
+        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
+                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
+
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PaymentAlreadyCompletedException.class);
+
+        // Captured at PG, then immediately auto-cancelled (full cancel) — funds not retained.
+        verify(paymentGateway).confirmPayment("pk_test_123", "order-1", 30000L);
+        verify(paymentGateway).cancelPayment("pk_test_123", "Order cancelled during confirm");
+        // Did NOT advance to COMPLETED nor publish PaymentCompleted.
+        verify(paymentRepository, never()).save(any());
+        verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
+        verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
+    }
 }

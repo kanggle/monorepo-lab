@@ -30,6 +30,16 @@ public class Order {
     private Long version;
 
     /**
+     * Why this order was cancelled (TASK-BE-435). Set by {@link #cancel(CancelReason, Clock)}
+     * and read by the application layer to stamp {@code OrderCancelled.cancelReason} on the
+     * outbound event. Deliberately <b>not persisted</b> to a DB column and not restored on
+     * {@link #reconstitute}: no consumer reads the reason back off the order row — the event
+     * payload is the sole carrier — so a column would be dead storage plus a migration with no
+     * reader. The aggregate only needs it long enough to hand to the publisher in the same TX.
+     */
+    private CancelReason cancelReason;
+
+    /**
      * Client-supplied idempotency key for the placement request (TASK-BE-430).
      * Write-only on the aggregate: set once right after {@link #create} via
      * {@link #assignIdempotencyKey}, persisted to enforce (tenant, user, key)
@@ -186,12 +196,31 @@ public class Order {
         return true;
     }
 
+    /**
+     * Cancel with the default {@link CancelReason#OPERATOR} reason (back-compat: the
+     * pre-TASK-BE-435 cancel had no reason, and a missing reason is treated as
+     * {@code OPERATOR} end-to-end). Used by the user / operator / backorder / withdrawal
+     * cancel paths.
+     */
     public void cancel(Clock clock) {
+        cancel(CancelReason.OPERATOR, clock);
+    }
+
+    /**
+     * Cancel the order, tagging it with {@code reason} (TASK-BE-435). The
+     * {@link #isCancellable()} guard is unchanged — {@code PENDING} is permitted, which is
+     * what the stuck-detector auto-cancel ({@link CancelReason#PAYMENT_TIMEOUT}) needs to
+     * transition {@code PENDING → CANCELLED}. The reason is held on the aggregate (transient,
+     * see {@link #cancelReason}) for the application layer to stamp onto the {@code OrderCancelled}
+     * event in the same transaction.
+     */
+    public void cancel(CancelReason reason, Clock clock) {
         if (!status.isCancellable()) {
             throw new OrderCannotBeCancelledException(
                     "Order cannot be cancelled in current status: " + status);
         }
         this.status = OrderStatus.CANCELLED;
+        this.cancelReason = reason != null ? reason : CancelReason.OPERATOR;
         this.updatedAt = Instant.now(clock);
     }
 

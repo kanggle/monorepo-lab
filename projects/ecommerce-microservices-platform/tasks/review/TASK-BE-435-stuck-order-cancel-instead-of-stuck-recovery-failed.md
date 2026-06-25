@@ -1,6 +1,6 @@
 # TASK-BE-435 — Stuck payment-pending orders auto-CANCEL (with money-safe late-payment compensation) instead of terminal STUCK_RECOVERY_FAILED
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (payment-integrity race — concurrent ordering of `OrderCancelled` ↔ `PaymentCompleted` across order-service + payment-service; not a routine fix)
