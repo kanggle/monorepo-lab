@@ -47,6 +47,7 @@ import {
   POST as registerPOST,
 } from '@/app/api/ecommerce/products/route';
 import {
+  GET as detailGET,
   PATCH as updatePATCH,
   DELETE as deleteDELETE,
 } from '@/app/api/ecommerce/products/[id]/route';
@@ -175,6 +176,73 @@ describe('POST /api/ecommerce/products (register) proxy', () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ecomError('SERVICE_UNAVAILABLE', 503)));
     const res = await registerPOST(postReq(VALID_REGISTER));
+    expect(res.status).toBe(503);
+  });
+});
+
+// TASK-PC-FE-132 — the `useProduct` client hook refetches `GET /products/{id}`
+// (mount refetch + post-mutation invalidate). The detail route exported only
+// PATCH/DELETE, so the GET 405'd — surfacing as a stale/failed detail after a
+// stock adjust. The GET proxy reuses the server-side `getProduct` (public read
+// path), so a stock increase's post-success refetch now renders the new stock.
+const DETAIL = {
+  id: 'p-1',
+  name: 'Tee',
+  status: 'ON_SALE',
+  price: 12000,
+  variants: [{ id: 'v-1', optionName: 'M', stock: 7, additionalPrice: 0 }],
+  images: [],
+};
+
+describe('GET /api/ecommerce/products/{id} (detail) proxy', () => {
+  function detailReq(id: string) {
+    return new Request(`http://console.local/api/ecommerce/products/${id}`);
+  }
+
+  it('returns 200 + ProductDetail, fetching the public read path with the domain-facing token', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DETAIL));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await detailGET(detailReq('p-1'), {
+      params: Promise.resolve({ id: 'p-1' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.id).toBe('p-1');
+    expect(body.variants[0].stock).toBe(7);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    // public base (admin controller has no GET /{id}), NOT the admin base.
+    expect(String(url)).toBe('http://ecommerce.local/api/products/p-1');
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['X-Tenant-Id']).toBeUndefined();
+  });
+
+  it('404 PRODUCT_NOT_FOUND → 404 (mapping preserved)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ecomError('PRODUCT_NOT_FOUND', 404)),
+    );
+    const res = await detailGET(detailReq('p-gone'), {
+      params: Promise.resolve({ id: 'p-gone' }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('503 → 503 (section degrades only)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ecomError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await detailGET(detailReq('p-1'), {
+      params: Promise.resolve({ id: 'p-1' }),
+    });
     expect(res.status).toBe(503);
   });
 });

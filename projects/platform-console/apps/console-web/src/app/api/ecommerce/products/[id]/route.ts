@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ApiError } from '@/shared/api/errors';
 import {
+  getProduct,
   updateProduct,
   deleteProduct,
 } from '@/features/ecommerce-ops/api/products-api';
@@ -13,6 +14,33 @@ import {
 } from '../_proxy';
 
 export const runtime = 'nodejs';
+
+/**
+ * Same-origin ecommerce **product detail** read proxy
+ * (console-integration-contract § 2.4.10 #2): `GET /products/{id}` (public read
+ * path — the admin controller has no `GET /{id}`).
+ *
+ * Used by the `useProduct` client hook: the server-rendered detail is seeded as
+ * `initialData`, but a mount refetch (`staleTime: 0`) AND every post-mutation
+ * `invalidateQueries` re-fetch this same-origin route. Without a `GET` handler
+ * the route 405s (TASK-PC-FE-132). The domain-facing IAM OIDC token is attached
+ * server-side in `products-api.ts`; NO `X-Tenant-Id` (ecommerce resolves the
+ * tenant from the JWT claim). Errors map identically to the collection route
+ * (404 PRODUCT_NOT_FOUND / 503 section-degrade) via `mapEcommerceError`.
+ */
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const requestId = newRequestId();
+  const { id } = await params;
+  try {
+    const result = await getProduct(id);
+    return NextResponse.json(result);
+  } catch (err) {
+    return mapEcommerceError(err, requestId);
+  }
+}
 
 /**
  * Same-origin ecommerce **update product** mutation proxy
