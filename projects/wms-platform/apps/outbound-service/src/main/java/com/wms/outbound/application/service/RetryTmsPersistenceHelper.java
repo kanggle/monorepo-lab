@@ -8,6 +8,7 @@ import com.wms.outbound.application.port.out.ShipmentPersistencePort;
 import com.wms.outbound.application.port.out.TmsAcknowledgement;
 import com.wms.outbound.application.result.RetryTmsNotificationResult;
 import com.wms.outbound.application.saga.OutboundSagaCoordinator;
+import com.wms.outbound.application.security.CallerScope;
 import com.wms.outbound.domain.exception.OrderNotFoundException;
 import com.wms.outbound.domain.exception.ShipmentNotFoundException;
 import com.wms.outbound.domain.exception.TmsRetryNotAllowedException;
@@ -66,9 +67,15 @@ public class RetryTmsPersistenceHelper {
                 .orElseThrow(() -> new ShipmentNotFoundException(shipmentId));
         // Cross-tenant guard (TASK-MONO-304): resolve the owning order's tenant
         // and deny a tenant-scoped caller acting on a foreign / B2B shipment.
-        Order order = orderPersistence.findById(shipment.getOrderId())
-                .orElseThrow(() -> new OrderNotFoundException(shipment.getOrderId()));
-        callerScopeProvider.current().requireOrderAccess(order.getTenantId(), order.getId());
+        // Only restricted (customer-tenant) callers need the lookup — native wms /
+        // platform / internal callers skip it (no extra read, and the order is the
+        // authority for tenant_id only when actually scoping).
+        CallerScope scope = callerScopeProvider.current();
+        if (scope.isRestricted()) {
+            Order order = orderPersistence.findById(shipment.getOrderId())
+                    .orElseThrow(() -> new OrderNotFoundException(shipment.getOrderId()));
+            scope.requireOrderAccess(order.getTenantId(), order.getId());
+        }
         if (shipment.getTmsStatus() != TmsStatus.NOTIFY_FAILED) {
             throw new TmsRetryNotAllowedException(shipmentId, shipment.getTmsStatus().name());
         }
