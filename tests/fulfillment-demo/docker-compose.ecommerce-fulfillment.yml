@@ -94,7 +94,7 @@ services:
     build:
       context: ../../projects/wms-platform/apps/inventory-service
       dockerfile: Dockerfile
-    image: wms-inventory-service:be431-demo
+    image: wms-inventory-service:be432
     container_name: fulfillment-demo-inventory-service
     init: true
     restart: unless-stopped
@@ -110,12 +110,9 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ecommerce-kafka:9092
       KAFKA_CONSUMER_GROUP: inventory-service-ecommerce-fulfillment
       MANAGEMENT_HEALTH_KAFKA_ENABLED: "false"
-      # inventory-service ships its own com.wms.inventory...OutboxPublisher AND pulls
-      # the shared com.example.messaging.outbox auto-config, which both claim the bean
-      # name `outboxPublisher` → BeanDefinitionOverrideException at boot (latent; only
-      # surfaces running as a real app, not in the ITs). Exclude the shared auto-config
-      # so the service keeps its own outbox implementation.
-      SPRING_AUTOCONFIGURE_EXCLUDE: com.example.messaging.outbox.OutboxAutoConfiguration
+      # (The shared-outbox bean-name boot collision is now fixed in code — TASK-BE-432
+      #  excludes OutboxAutoConfiguration in InventoryServiceApplication — so the former
+      #  SPRING_AUTOCONFIGURE_EXCLUDE env workaround here is no longer needed.)
       SERVER_PORT: "8083"
       JAVA_TOOL_OPTIONS: "-Djava.net.preferIPv4Stack=true"
       OTEL_TRACES_EXPORTER: none

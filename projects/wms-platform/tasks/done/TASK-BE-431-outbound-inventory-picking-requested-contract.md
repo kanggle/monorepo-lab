@@ -1,8 +1,10 @@
 # TASK-BE-431 — Fix the outbound→inventory `picking.requested` contract (reservation leg)
 
-**Status:** ready
+**Status:** done
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (cross-service contract + allocation design)
+
+> Done: merged via PR #1933 (squash `1191e10a8`). Live-verified in the federation demo — inventory reserved (stock 100→98) and the saga advanced to RESERVED.
 
 ## Goal
 
