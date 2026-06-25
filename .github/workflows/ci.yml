@@ -1297,6 +1297,68 @@ jobs:
             projects/platform-console/apps/console-bff/build/test-results/integrationTest/
           retention-days: 7
 
+  ecommerce-integration-tests:
+    name: Integration (ecommerce, Testcontainers)
+    runs-on: ubuntu-latest
+    needs: [changes, build-and-test]
+    timeout-minutes: 30
+    # ecommerce integration suite boots Postgres + Kafka (libs/java-messaging
+    # outbox relay) via Testcontainers. Unlike sibling projects, ecommerce has no
+    # separate `integrationTest` task — its @Tag("integration") ITs live in src/test
+    # and are excluded from the Docker-free `check` unless `-PrunIntegration`
+    # (projects/ecommerce-microservices-platform/build.gradle). This lane re-includes
+    # them on the Docker-capable runner. Scoped to monorepo-lab; standalone repo
+    # extraction relies on its own Docker-free `check` signal.
+    # Phase 1 = order-service + payment-service (TASK-MONO-307; gates the TASK-BE-435
+    # money-safety ITs). Other ecommerce services are phased follow-ups.
+    # Activate for ecommerce changes or cross-project (libs/workflows).
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.ecommerce == 'true'
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Run ecommerce integration suites (order-service + payment-service)
+        # ecommerce has no `integrationTest` task; -PrunIntegration flips off the
+        # `excludeTags 'integration'` guard so the @Tag("integration") ITs run.
+        # This re-runs the (fast) unit tests too — acceptable for a complete gate.
+        run: >-
+          ./gradlew
+          :projects:ecommerce-microservices-platform:apps:order-service:test
+          :projects:ecommerce-microservices-platform:apps:payment-service:test
+          -PrunIntegration --no-daemon --stacktrace
+
+      - name: Upload ecommerce integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecommerce-integration-test-reports
+          path: |
+            projects/ecommerce-microservices-platform/apps/order-service/build/reports/tests/
+            projects/ecommerce-microservices-platform/apps/order-service/build/test-results/
+            projects/ecommerce-microservices-platform/apps/payment-service/build/reports/tests/
+            projects/ecommerce-microservices-platform/apps/payment-service/build/test-results/
+          retention-days: 7
+
   frontend-checks:
     name: Frontend lint & build (ecommerce + fan-platform)
     runs-on: ubuntu-latest

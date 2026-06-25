@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-307-ecommerce-integration-ci-lane.md` — **READY**. Add an `Integration (ecommerce, Testcontainers)` CI job (mirrors scm/finance jobs) so ecommerce `@Tag("integration")` ITs actually execute on the Linux runner — today they run **nowhere** (ecommerce `:check` excludes the tag + no ecommerce integration CI lane exists, unlike all sibling projects; local Docker blocked). **Phase 1 = order-service + payment-service** only (the TASK-BE-435 money-safety ITs + their pre-existing ITs, ~18 files), via `test -PrunIntegration`. ⚠️ these have never run in CI → first run may surface latent failures requiring triage (AC-3: lane must be genuinely GREEN, no `continue-on-error`). Other 11 services = phased follow-ups. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
