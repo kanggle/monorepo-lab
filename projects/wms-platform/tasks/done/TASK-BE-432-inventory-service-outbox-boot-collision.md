@@ -1,6 +1,6 @@
 # TASK-BE-432 — inventory-service can't boot: shared OutboxAutoConfiguration bean collision
 
-**Status:** ready
+**Status:** done
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (one-line exclude, established pattern)
 
