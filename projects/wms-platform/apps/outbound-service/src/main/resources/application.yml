@@ -144,6 +144,9 @@ outbound:
       master-partner: wms.master.partner.v1
       # TASK-BE-340 (ADR-MONO-022 D1): cross-project ecommerce fulfillment event.
       fulfillment-requested: ecommerce.fulfillment.requested.v1
+      # TASK-MONO-305 (ADR-MONO-022 D4 v2(c)): ecommerce operator manual ship-confirm
+      # → reuse the existing ConfirmShippingUseCase → inventory deduction.
+      manual-ship-confirm: ecommerce.shipping.manual-confirm-requested.v1
       # TASK-MONO-196 (ADR-MONO-022 D4): inventory reservation-shortfall signal
       # → outbound auto-backorder.
       inventory-reserve-failed: wms.inventory.reserve.failed.v1

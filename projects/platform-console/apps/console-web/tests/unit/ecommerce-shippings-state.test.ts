@@ -52,7 +52,12 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-import { allowedNextStatus } from '@/features/ecommerce-ops/api/shipping-types';
+import {
+  allowedNextStatus,
+  ShippingSummarySchema,
+  ShippingSchema,
+  UpdateShippingStatusBodySchema,
+} from '@/features/ecommerce-ops/api/shipping-types';
 import { getShippingsSectionState } from '@/features/ecommerce-ops/api/shippings-state';
 import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
 import { ACCESS_COOKIE } from '@/shared/lib/session';
@@ -88,6 +93,52 @@ describe('allowedNextStatus() — shipping status linear state machine', () => {
     expect(allowedNextStatus('DELIVERED')).toBeNull();
     expect(allowedNextStatus('IN_TRANSIT')).not.toBe('PREPARING');
     expect(allowedNextStatus('IN_TRANSIT')).not.toBe('SHIPPED');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// wmsRouted / deductWmsInventory schema (TASK-MONO-305 — ADR-MONO-022 D4 v2(c))
+// ---------------------------------------------------------------------------
+
+describe('shipping schemas — wmsRouted read + deductWmsInventory write', () => {
+  const summaryBase = {
+    shippingId: 'ship-1',
+    orderId: 'ord-1',
+    status: 'PREPARING',
+    createdAt: '2026-06-14T00:00:00Z',
+  };
+
+  it('ShippingSummary defaults wmsRouted to false when absent (no degrade)', () => {
+    const parsed = ShippingSummarySchema.parse(summaryBase);
+    expect(parsed.wmsRouted).toBe(false);
+  });
+
+  it('ShippingSummary carries wmsRouted=true when the producer sends it', () => {
+    const parsed = ShippingSummarySchema.parse({
+      ...summaryBase,
+      wmsRouted: true,
+    });
+    expect(parsed.wmsRouted).toBe(true);
+  });
+
+  it('Shipping (detail) defaults wmsRouted to false when absent', () => {
+    const parsed = ShippingSchema.parse(summaryBase);
+    expect(parsed.wmsRouted).toBe(false);
+  });
+
+  it('UpdateShippingStatusBody accepts deductWmsInventory', () => {
+    const parsed = UpdateShippingStatusBodySchema.parse({
+      status: 'SHIPPED',
+      carrier: 'CJ대한통운',
+      trackingNumber: 'TRK-001',
+      deductWmsInventory: true,
+    });
+    expect(parsed.deductWmsInventory).toBe(true);
+  });
+
+  it('UpdateShippingStatusBody leaves deductWmsInventory undefined when omitted', () => {
+    const parsed = UpdateShippingStatusBodySchema.parse({ status: 'IN_TRANSIT' });
+    expect(parsed.deductWmsInventory).toBeUndefined();
   });
 });
 

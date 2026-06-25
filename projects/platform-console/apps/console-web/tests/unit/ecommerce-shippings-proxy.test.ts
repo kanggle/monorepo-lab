@@ -166,6 +166,31 @@ describe('PUT /api/ecommerce/shippings/{id}/status (status update proxy)', () =>
     expect(h['Idempotency-Key']).toBeUndefined();
   });
 
+  it('forwards deductWmsInventory=true to the upstream (ADR-MONO-022 D4 v2(c))', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(SHIPPING));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await statusPUT(
+      new Request('http://console.local/api/ecommerce/shippings/ship-1/status', {
+        method: 'PUT',
+        body: JSON.stringify({
+          status: 'SHIPPED',
+          carrier: 'CJ대한통운',
+          trackingNumber: 'TRK-001',
+          deductWmsInventory: true,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'ship-1' }) },
+    );
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const forwarded = JSON.parse(init.body as string);
+    expect(forwarded.deductWmsInventory).toBe(true);
+    expect(forwarded.status).toBe('SHIPPED');
+  });
+
   it('uses PUT method (not POST) to the upstream', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(SHIPPING));

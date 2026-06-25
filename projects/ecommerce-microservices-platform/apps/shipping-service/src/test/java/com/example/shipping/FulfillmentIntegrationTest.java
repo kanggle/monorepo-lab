@@ -130,6 +130,76 @@ class FulfillmentIntegrationTest {
         assertThat(payload.get("lines").get(0).get("lineNo").asInt()).isEqualTo(1);
         assertThat(payload.get("lines").get(0).get("skuCode").asText()).isEqualTo("v1");
         assertThat(payload.get("lines").get(0).get("qtyOrdered").asInt()).isEqualTo(2);
+
+        // TASK-MONO-305: a forward-published order is persisted wms_routed=TRUE (same tx).
+        Boolean wmsRouted = jdbcTemplate.queryForObject(
+                "SELECT wms_routed FROM shippings WHERE order_id = ?", Boolean.class, orderId);
+        assertThat(wmsRouted).isTrue();
+    }
+
+    @Test
+    @DisplayName("manual-confirm: wmsRouted 주문을 deductWmsInventory=true 로 SHIPPED 전환 시 manual-confirm outbox row 작성")
+    void manualConfirm_wmsRoutedShipped_writesManualConfirmOutboxRow() throws Exception {
+        String orderId = "order-mc-" + System.nanoTime();
+        String userId = "user-mc-" + System.nanoTime();
+
+        // OrderConfirmed → Shipping PREPARING, wms_routed=TRUE (fulfillment enabled by default).
+        orderConfirmedEventConsumer.onMessage(orderConfirmedJson(orderId, userId));
+
+        String shippingId = jdbcTemplate.queryForObject(
+                "SELECT shipping_id FROM shippings WHERE order_id = ?", String.class, orderId);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/shippings/" + shippingId + "/status")
+                        .header("X-User-Role", "ADMIN")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status":"SHIPPED","trackingNumber":"TRK-MC-1","carrier":"CJ대한통운","deductWmsInventory":true}
+                                """))
+                .andExpect(status().isOk());
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT * FROM outbox WHERE aggregate_id = ? AND event_type = 'ManualShipConfirmRequested'", orderId);
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("aggregate_type")).isEqualTo("Shipping");
+
+        JsonNode envelope = objectMapper.readTree((String) rows.get(0).get("payload"));
+        assertThat(envelope.get("eventType").asText()).isEqualTo("ecommerce.shipping.manual-confirm-requested");
+        assertThat(envelope.get("aggregateType").asText()).isEqualTo("shipping");
+        assertThat(envelope.get("aggregateId").asText()).isEqualTo(orderId);
+        assertThat(envelope.get("tenantId").asText()).isEqualTo("ecommerce");
+
+        JsonNode payload = envelope.get("payload");
+        assertThat(payload.get("orderNo").asText()).isEqualTo(orderId);
+        assertThat(payload.get("carrierCode").asText()).isEqualTo("CJ대한통운");
+        assertThat(payload.get("trackingNo").asText()).isEqualTo("TRK-MC-1");
+    }
+
+    @Test
+    @DisplayName("manual-confirm: deductWmsInventory 미지정이면 manual-confirm outbox row 미작성 (기존 동작 유지)")
+    void manualConfirm_deductOff_noManualConfirmOutboxRow() throws Exception {
+        String orderId = "order-mcoff-" + System.nanoTime();
+        String userId = "user-mcoff-" + System.nanoTime();
+
+        orderConfirmedEventConsumer.onMessage(orderConfirmedJson(orderId, userId));
+
+        String shippingId = jdbcTemplate.queryForObject(
+                "SELECT shipping_id FROM shippings WHERE order_id = ?", String.class, orderId);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/shippings/" + shippingId + "/status")
+                        .header("X-User-Role", "ADMIN")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status":"SHIPPED","trackingNumber":"TRK-MCOFF-1","carrier":"CJ대한통운"}
+                                """))
+                .andExpect(status().isOk());
+
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = 'ManualShipConfirmRequested'",
+                Integer.class, orderId);
+        assertThat(count).isZero();
     }
 
     @Test

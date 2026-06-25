@@ -25,6 +25,7 @@ Authoritative producer schema: `projects/ecommerce-microservices-platform/specs/
 | Topic | ecommerce event | Handler (new) | Effect |
 |---|---|---|---|
 | `ecommerce.fulfillment.requested.v1` | `ecommerce.fulfillment.requested` | `FulfillmentRequestedConsumer` | Resolve codes→uuids via `MasterReadModelPort`; build `ReceiveOrderCommand` (`source = FULFILLMENT_ECOMMERCE`, additive `shipTo`); call `ReceiveOrderUseCase.receive(...)` → Order + saga created, `outbound.order.received` + `outbound.picking.requested` emitted in the same TX. |
+| `ecommerce.shipping.manual-confirm-requested.v1` | `ecommerce.shipping.manual-confirm-requested` | `ManualShipConfirmConsumer` (new) | Resolve `orderNo`→Order via `findByOrderNo`; **iff** saga `PACKING_CONFIRMED` call the existing `ConfirmShippingUseCase` → `wms.outbound.shipping.confirmed.v1` → inventory deduction. ADR-MONO-022 D4 v2(c). See § Manual ship-confirm. |
 
 ## Envelope
 
@@ -102,6 +103,36 @@ authoritative in `outbound-events.md`; consumed by ecommerce per `wms-shipment-s
 On the ecommerce side the cancel signal now (ADR-022 §D4 v2(a), TASK-MONO-197) **auto-cancels the
 ecommerce order + refunds** (order-service consumer), in addition to the ops alert (shipping-service)
 — wms emits the same event either way; the ecommerce-side reaction is wms-opaque.
+
+## Manual ship-confirm (ADR-MONO-022 D4 v2(c), TASK-MONO-305)
+
+A second subscribed topic — `ecommerce.shipping.manual-confirm-requested.v1` — lets an
+ecommerce operator who hand-ships an order (manual `PUT /api/shippings/{id}/status` →
+SHIPPED) **opt in** to also deducting wms physical inventory. This closes the
+reverse-direction gap: without it, a WMS-routed order shipped by hand leaves its wms
+reservation `RESERVED` forever (D4 v2(b) only reconciles the wms→ecommerce direction).
+
+New `ManualShipConfirmConsumer` (`@Profile("!standalone")`, group `outbound-service`) —
+same envelope convention + `EventEnvelopeParser` + `outbound_event_dedupe` (T8) as the
+fulfillment consumer:
+
+1. Resolve `payload.orderNo` → outbound `Order` via `OrderJpaRepository.findByOrderNo`.
+   **Miss ⇒ no-op** (the order never routed through wms — legitimate; debug log, no DLT).
+2. Load the saga by `order.id`:
+   - `PACKING_CONFIRMED` ⇒ call the **existing** `ConfirmShippingUseCase.confirm`
+     (carrierCode from the event; blank ⇒ wms default) → existing
+     `wms.outbound.shipping.confirmed.v1` → existing inventory deduction. **No new
+     inventory path; inventory data model untouched.**
+   - already `SHIPPED`/`COMPLETED` ⇒ terminal no-op (already deducted; idempotent).
+   - any earlier state ⇒ WARN no-op (not yet physically picked/packed — a forced
+     deduction would violate the physical invariant; never a silent forced skip).
+3. The ecommerce Order/Shipping are **already** SHIPPED (operator path); the return-leg
+   `wms.outbound.shipping.confirmed.v1` → ecommerce `markShippedByOrderId` is an
+   idempotent no-op (no loop).
+
+Idempotency: envelope `eventId` dedupe (T8) + saga terminal-state guard. Unparseable
+envelope / missing `orderNo` ⇒ non-retryable ⇒ DLT. Authoritative producer schema:
+`projects/ecommerce-microservices-platform/specs/contracts/events/fulfillment-events.md` § Event 2.
 
 ## Standalone-publish degradation (ADR-022 D8)
 

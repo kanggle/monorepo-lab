@@ -133,7 +133,7 @@ class WmsShippingConfirmedConsumerTest {
         com.example.shipping.domain.model.Shipping local = com.example.shipping.domain.model.Shipping.reconstitute(
                 "ship-9", "store-zeta", "order-9", "user-9",
                 com.example.shipping.domain.model.ShippingStatus.PREPARING,
-                null, null, java.util.List.of(),
+                null, null, false, java.util.List.of(),
                 java.time.Instant.now(), java.time.Instant.now());
         given(shippingRepository.findByOrderId("order-9")).willReturn(java.util.Optional.of(local));
         String[] boundDuringCall = new String[1];

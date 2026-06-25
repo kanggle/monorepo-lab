@@ -101,14 +101,19 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
   } | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
 
-  // ShipFormDialog (for PREPARING → SHIPPED — needs carrier + trackingNumber)
-  const [shipDialogId, setShipDialogId] = useState<string | null>(null);
+  // ShipFormDialog (for PREPARING → SHIPPED — needs carrier + trackingNumber).
+  // Carries the row's `wmsRouted` so the dialog can gate the WMS-deduct toggle
+  // (ADR-MONO-022 D4 v2(c)).
+  const [shipDialog, setShipDialog] = useState<{
+    id: string;
+    wmsRouted: boolean;
+  } | null>(null);
   const [shipError, setShipError] = useState<string | null>(null);
 
-  function openTransition(id: string, nextStatus: string) {
+  function openTransition(id: string, nextStatus: string, wmsRouted: boolean) {
     if (nextStatus === 'SHIPPED') {
       setShipError(null);
-      setShipDialogId(id);
+      setShipDialog({ id, wmsRouted });
     } else {
       setTransitionError(null);
       setPendingTransition({ id, nextStatus });
@@ -132,20 +137,29 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
     );
   }
 
-  function confirmShip(payload: { carrier: string; trackingNumber: string }) {
-    if (!shipDialogId) return;
+  function confirmShip(payload: {
+    carrier: string;
+    trackingNumber: string;
+    deductWmsInventory: boolean;
+  }) {
+    if (!shipDialog) return;
     setShipError(null);
     updateStatus.mutate(
       {
-        id: shipDialogId,
+        id: shipDialog.id,
         body: {
           status: 'SHIPPED',
           carrier: payload.carrier,
           trackingNumber: payload.trackingNumber,
+          // Only send the flag when set (true) — keep a `false` off the wire to
+          // match the existing minimal-body convention; the producer defaults it.
+          ...(payload.deductWmsInventory
+            ? { deductWmsInventory: true }
+            : {}),
         },
       },
       {
-        onSuccess: () => setShipDialogId(null),
+        onSuccess: () => setShipDialog(null),
         onError: (e) => {
           const code = e instanceof ApiError ? e.code : 'SERVICE_UNAVAILABLE';
           setShipError(messageForCode(code, '배송 시작에 실패했습니다.'));
@@ -311,7 +325,13 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
                             variant="secondary"
                             size="sm"
                             disabled={isAnyPending}
-                            onClick={() => openTransition(s.shippingId, next)}
+                            onClick={() =>
+                              openTransition(
+                                s.shippingId,
+                                next,
+                                s.wmsRouted ?? false,
+                              )
+                            }
                             data-testid={`shipping-transition-${i}`}
                           >
                             {nextStatusLabel(next)}
@@ -396,15 +416,17 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
         }}
       />
 
-      {/* ShipFormDialog for PREPARING → SHIPPED (needs carrier + trackingNumber) */}
+      {/* ShipFormDialog for PREPARING → SHIPPED (needs carrier + trackingNumber;
+          WMS-deduct toggle shown only on wmsRouted rows — ADR-MONO-022 D4 v2(c)) */}
       <ShipFormDialog
-        open={shipDialogId !== null}
-        shippingId={shipDialogId ?? ''}
+        open={shipDialog !== null}
+        shippingId={shipDialog?.id ?? ''}
+        wmsRouted={shipDialog?.wmsRouted ?? false}
         pending={updateStatus.isPending}
         errorMessage={shipError}
         onConfirm={confirmShip}
         onCancel={() => {
-          setShipDialogId(null);
+          setShipDialog(null);
           setShipError(null);
         }}
       />

@@ -19,6 +19,7 @@ public record ShippingListResponse(
                         s.status().name(),
                         s.trackingNumber(),
                         s.carrier(),
+                        s.wmsRouted(),
                         s.createdAt().toString(),
                         s.updatedAt().toString()
                 ))
@@ -32,6 +33,7 @@ public record ShippingListResponse(
             String status,
             String trackingNumber,
             String carrier,
+            boolean wmsRouted,
             String createdAt,
             String updatedAt
     ) {}

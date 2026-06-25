@@ -22,6 +22,7 @@ public class ShippingJpaMapper {
                 entity.getStatus(),
                 entity.getTrackingNumber(),
                 entity.getCarrier(),
+                entity.isWmsRouted(),
                 history,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
@@ -37,6 +38,7 @@ public class ShippingJpaMapper {
                 shipping.getStatus(),
                 shipping.getTrackingNumber(),
                 shipping.getCarrier(),
+                shipping.isWmsRouted(),
                 shipping.getCreatedAt(),
                 shipping.getUpdatedAt()
         );

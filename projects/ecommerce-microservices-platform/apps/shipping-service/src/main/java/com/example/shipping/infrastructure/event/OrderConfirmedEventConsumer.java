@@ -64,7 +64,12 @@ public class OrderConfirmedEventConsumer {
 
         shippingCommandService.createShipping(new CreateShippingCommand(tenantId, orderId, userId));
 
-        publishFulfillmentRequested(tenantId, event.payload());
+        // ADR-MONO-022 D4 v2(c): the order is wmsRouted iff the forward-leg fulfillment
+        // event was actually published. Mark it in the SAME transaction so a later manual
+        // ship-confirm can offer the wms-deduct option (one-tx consistency).
+        if (publishFulfillmentRequested(tenantId, event.payload())) {
+            shippingCommandService.markShippingWmsRouted(orderId);
+        }
     }
 
     /**
@@ -72,12 +77,16 @@ public class OrderConfirmedEventConsumer {
      * the wms-shaped fulfillment-intent event. Gated on {@code fulfillment.enabled}
      * (D8 standalone degradation). An unmapped SKU under {@code require-sku-mapping}
      * blocks publish for this order with an ops alert (no silent drop).
+     *
+     * @return {@code true} iff the fulfillment event was actually written to the
+     *         outbox (i.e. the order is wms-routed). {@code false} when publish is
+     *         disabled or blocked by an unmapped SKU.
      */
-    private void publishFulfillmentRequested(String tenantId, OrderConfirmedEvent.OrderConfirmedPayload order) {
+    private boolean publishFulfillmentRequested(String tenantId, OrderConfirmedEvent.OrderConfirmedPayload order) {
         if (!fulfillmentProperties.enabled()) {
             log.debug("Fulfillment publish disabled (fulfillment.enabled=false), skipping. orderId={}",
                     order.orderId());
-            return;
+            return false;
         }
 
         try {
@@ -86,10 +95,12 @@ public class OrderConfirmedEventConsumer {
                     order.orderId(), objectMapper.writeValueAsString(message));
             log.info("Fulfillment requested published: orderId={}, lines={}",
                     order.orderId(), message.payload().lines().size());
+            return true;
         } catch (UnmappedSkuException e) {
             // ALERT: ecommerce SKU with no wms mapping while require-sku-mapping=true.
             log.error("ALERT fulfillment blocked — unmapped SKU. orderId={}, reason={}",
                     order.orderId(), e.getMessage());
+            return false;
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(
                     "Failed to serialize fulfillment event for orderId=" + order.orderId(), e);

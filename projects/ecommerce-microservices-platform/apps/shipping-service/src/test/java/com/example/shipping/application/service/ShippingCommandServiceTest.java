@@ -76,7 +76,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
-                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", "ADMIN");
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", false, "ADMIN");
 
         UpdateShippingStatusResult result = shippingCommandService.updateStatus(command);
 
@@ -85,6 +85,7 @@ class ShippingCommandServiceTest {
                 eq("tenant-a"), eq(shipping.getShippingId()), eq("order-1"), eq("user-1"),
                 eq(ShippingStatus.PREPARING), eq(ShippingStatus.SHIPPED),
                 eq("TRK-001"), eq("CJ대한통운"));
+        verify(shippingEventPublisher, never()).publishManualShipConfirmRequested(any(), any(), any(), any());
     }
 
     @Test
@@ -93,7 +94,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.findByIdForTenant("nonexistent")).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
-                new UpdateShippingStatusCommand("nonexistent", ShippingStatus.SHIPPED, "TRK", "CJ", "ADMIN")))
+                new UpdateShippingStatusCommand("nonexistent", ShippingStatus.SHIPPED, "TRK", "CJ", false, "ADMIN")))
                 .isInstanceOf(ShippingNotFoundException.class);
     }
 
@@ -104,7 +105,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
 
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
-                new UpdateShippingStatusCommand(shipping.getShippingId(), ShippingStatus.DELIVERED, null, null, "ADMIN")))
+                new UpdateShippingStatusCommand(shipping.getShippingId(), ShippingStatus.DELIVERED, null, null, false, "ADMIN")))
                 .isInstanceOf(InvalidStatusTransitionException.class);
     }
 
@@ -112,7 +113,7 @@ class ShippingCommandServiceTest {
     @DisplayName("비관리자 역할로 상태 업데이트 시 AccessDeniedException")
     void updateStatus_nonAdminRole_throwsAccessDeniedException() {
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
-                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", "USER")))
+                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", false, "USER")))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -169,7 +170,7 @@ class ShippingCommandServiceTest {
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
                 shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운",
-                "ADMIN,ERP_OPERATOR,SCM_OPERATOR");
+                false, "ADMIN,ERP_OPERATOR,SCM_OPERATOR");
 
         assertThatCode(() -> shippingCommandService.updateStatus(command))
                 .doesNotThrowAnyException();
@@ -183,7 +184,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
-                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-002", "CJ대한통운", "ADMIN");
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-002", "CJ대한통운", false, "ADMIN");
 
         assertThatCode(() -> shippingCommandService.updateStatus(command))
                 .doesNotThrowAnyException();
@@ -194,7 +195,7 @@ class ShippingCommandServiceTest {
     void updateStatus_multiRoleWithoutAdmin_throwsAccessDeniedException() {
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
                 new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ",
-                        "SCM_OPERATOR,ERP_OPERATOR")))
+                        false, "SCM_OPERATOR,ERP_OPERATOR")))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -202,7 +203,7 @@ class ShippingCommandServiceTest {
     @DisplayName("null 헤더는 거부")
     void updateStatus_nullRole_throwsAccessDeniedException() {
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
-                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", null)))
+                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", false, null)))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -210,7 +211,112 @@ class ShippingCommandServiceTest {
     @DisplayName("SUPERADMIN 서브스트링만 있는 헤더는 거부 (부분일치 방지)")
     void updateStatus_superadminSubstringOnly_throwsAccessDeniedException() {
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
-                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", "SUPERADMIN")))
+                new UpdateShippingStatusCommand("ship-1", ShippingStatus.SHIPPED, "TRK", "CJ", false, "SUPERADMIN")))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ─── Manual ship-confirm wms deduction (TASK-MONO-305, ADR-MONO-022 D4 v2(c)) ──
+
+    private Shipping wmsRoutedPreparingShipping() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
+        shipping.markWmsRouted();
+        return shipping;
+    }
+
+    @Test
+    @DisplayName("SHIPPED + deductWmsInventory + wmsRouted 조합에서만 manual-confirm 발행")
+    void updateStatus_shippedDeductAndRouted_publishesManualConfirm() {
+        Shipping shipping = wmsRoutedPreparingShipping();
+        given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", true, "ADMIN");
+
+        shippingCommandService.updateStatus(command);
+
+        verify(shippingEventPublisher).publishManualShipConfirmRequested(
+                eq("tenant-a"), eq("order-1"), eq("CJ대한통운"), eq("TRK-001"));
+    }
+
+    @Test
+    @DisplayName("deductWmsInventory=false 면 wmsRouted 라도 manual-confirm 미발행")
+    void updateStatus_deductOff_doesNotPublishManualConfirm() {
+        Shipping shipping = wmsRoutedPreparingShipping();
+        given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", false, "ADMIN");
+
+        shippingCommandService.updateStatus(command);
+
+        verify(shippingEventPublisher, never()).publishManualShipConfirmRequested(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("wmsRouted=false 면 deductWmsInventory=true 라도 manual-confirm 미발행")
+    void updateStatus_notRouted_doesNotPublishManualConfirm() {
+        // create() leaves wmsRouted=false.
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
+        given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", true, "ADMIN");
+
+        shippingCommandService.updateStatus(command);
+
+        verify(shippingEventPublisher, never()).publishManualShipConfirmRequested(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("SHIPPED 가 아닌 전이(IN_TRANSIT)면 deduct+routed 라도 manual-confirm 미발행")
+    void updateStatus_nonShippedTarget_doesNotPublishManualConfirm() {
+        Shipping shipping = wmsRoutedPreparingShipping();
+        shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", fixedClock);
+        given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
+                shipping.getShippingId(), ShippingStatus.IN_TRANSIT, null, null, true, "ADMIN");
+
+        shippingCommandService.updateStatus(command);
+
+        verify(shippingEventPublisher, never()).publishManualShipConfirmRequested(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("markShippingWmsRouted: 조회된 행을 wmsRouted=true 로 저장")
+    void markShippingWmsRouted_existingRow_marksAndSaves() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        shippingCommandService.markShippingWmsRouted("order-1");
+
+        assertThat(shipping.isWmsRouted()).isTrue();
+        verify(shippingRepository).save(shipping);
+    }
+
+    @Test
+    @DisplayName("markShippingWmsRouted: 이미 routed 면 저장하지 않음 (멱등)")
+    void markShippingWmsRouted_alreadyRouted_idempotentNoSave() {
+        Shipping shipping = wmsRoutedPreparingShipping();
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+
+        shippingCommandService.markShippingWmsRouted("order-1");
+
+        verify(shippingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("markShippingWmsRouted: 미존재 주문이면 no-op (저장 안 함)")
+    void markShippingWmsRouted_missingRow_noOp() {
+        given(shippingRepository.findByOrderId("order-x")).willReturn(Optional.empty());
+
+        shippingCommandService.markShippingWmsRouted("order-x");
+
+        verify(shippingRepository, never()).save(any());
     }
 }

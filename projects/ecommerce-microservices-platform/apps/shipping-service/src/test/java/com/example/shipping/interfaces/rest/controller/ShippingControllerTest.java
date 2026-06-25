@@ -60,7 +60,7 @@ class ShippingControllerTest {
     @DisplayName("주문 ID로 배송 조회 성공 시 200 반환")
     void getShippingByOrderId_validRequest_returns200() throws Exception {
         ShippingResult result = new ShippingResult(
-                "ship-1", "order-1", ShippingStatus.PREPARING, null, null,
+                "ship-1", "order-1", ShippingStatus.PREPARING, null, null, true,
                 List.of(new ShippingResult.StatusHistoryEntryResult(ShippingStatus.PREPARING, NOW)),
                 NOW, NOW);
         given(shippingQueryService.getShippingByOrderId("order-1", "user-1")).willReturn(result);
@@ -71,6 +71,7 @@ class ShippingControllerTest {
                 .andExpect(jsonPath("$.shippingId").value("ship-1"))
                 .andExpect(jsonPath("$.orderId").value("order-1"))
                 .andExpect(jsonPath("$.status").value("PREPARING"))
+                .andExpect(jsonPath("$.wmsRouted").value(true))
                 .andExpect(jsonPath("$.statusHistory[0].status").value("PREPARING"));
     }
 
@@ -123,6 +124,44 @@ class ShippingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shippingId").value("ship-1"))
                 .andExpect(jsonPath("$.status").value("SHIPPED"));
+    }
+
+    @Test
+    @DisplayName("deductWmsInventory=true 본문이 command 로 전달된다")
+    void updateShippingStatus_deductWmsInventory_propagatedToCommand() throws Exception {
+        UpdateShippingStatusResult result = new UpdateShippingStatusResult("ship-1", ShippingStatus.SHIPPED, NOW);
+        org.mockito.ArgumentCaptor<com.example.shipping.application.command.UpdateShippingStatusCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.shipping.application.command.UpdateShippingStatusCommand.class);
+        given(shippingCommandService.updateStatus(captor.capture())).willReturn(result);
+
+        mockMvc.perform(put("/api/shippings/ship-1/status")
+                        .header("X-User-Role", "ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status": "SHIPPED", "trackingNumber": "TRK-001", "carrier": "CJ", "deductWmsInventory": true}
+                                """))
+                .andExpect(status().isOk());
+
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().deductWmsInventory()).isTrue();
+    }
+
+    @Test
+    @DisplayName("deductWmsInventory 미지정 시 command 는 false (기본값)")
+    void updateShippingStatus_deductWmsInventoryAbsent_defaultsFalse() throws Exception {
+        UpdateShippingStatusResult result = new UpdateShippingStatusResult("ship-1", ShippingStatus.SHIPPED, NOW);
+        org.mockito.ArgumentCaptor<com.example.shipping.application.command.UpdateShippingStatusCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.shipping.application.command.UpdateShippingStatusCommand.class);
+        given(shippingCommandService.updateStatus(captor.capture())).willReturn(result);
+
+        mockMvc.perform(put("/api/shippings/ship-1/status")
+                        .header("X-User-Role", "ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status": "SHIPPED", "trackingNumber": "TRK-001", "carrier": "CJ"}
+                                """))
+                .andExpect(status().isOk());
+
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().deductWmsInventory()).isFalse();
     }
 
     // ─── POST /api/shippings/{shippingId}/refresh-tracking (TASK-BE-293) ──
@@ -269,7 +308,7 @@ class ShippingControllerTest {
     @DisplayName("관리자 배송 목록 조회 성공 시 200 반환")
     void listShippings_admin_returns200() throws Exception {
         ShippingSummary summary = new ShippingSummary(
-                "ship-1", "order-1", ShippingStatus.PREPARING, null, null, NOW, NOW);
+                "ship-1", "order-1", ShippingStatus.PREPARING, null, null, true, NOW, NOW);
         PageResult<ShippingSummary> pageResult = new PageResult<>(List.of(summary), 0, 20, 1, 1);
         given(shippingQueryService.listShippings(any(), any(), any())).willReturn(pageResult);
 
@@ -280,6 +319,7 @@ class ShippingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.content[0].shippingId").value("ship-1"))
+                .andExpect(jsonPath("$.content[0].wmsRouted").value(true))
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(20))
                 .andExpect(jsonPath("$.totalElements").value(1));

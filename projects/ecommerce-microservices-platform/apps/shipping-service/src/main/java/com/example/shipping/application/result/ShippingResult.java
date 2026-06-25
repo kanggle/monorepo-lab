@@ -13,6 +13,7 @@ public record ShippingResult(
         ShippingStatus status,
         String trackingNumber,
         String carrier,
+        boolean wmsRouted,
         List<StatusHistoryEntryResult> statusHistory,
         Instant createdAt,
         Instant updatedAt
@@ -27,6 +28,7 @@ public record ShippingResult(
                 shipping.getStatus(),
                 shipping.getTrackingNumber(),
                 shipping.getCarrier(),
+                shipping.isWmsRouted(),
                 history,
                 shipping.getCreatedAt(),
                 shipping.getUpdatedAt()

@@ -105,6 +105,63 @@ contract: `projects/wms-platform/specs/contracts/events/ecommerce-fulfillment-su
 If the ecommerce stack is published/run without wms, this event is simply unconsumed and the
 Shipping record stays in `PREPARING` (today's manual-admin behavior). No hard dependency.
 
+## Event 2 — `ecommerce.shipping.manual-confirm-requested.v1` (ADR-MONO-022 D4 v2(c))
+
+Published when an operator manually marks a Shipping `SHIPPED` via
+`PUT /api/shippings/{id}/status` **and** elects (`deductWmsInventory=true`) to also
+deduct wms physical inventory, **and** the order is `wmsRouted` (the forward-leg
+fulfillment event was actually published for it). Lets the operator reconcile wms
+stock for a hand-shipped, warehouse-routed order without going through the wms
+console. Same transactional outbox + `OutboxPollingScheduler` as Event 1.
+
+### Topic
+`ecommerce.shipping.manual-confirm-requested.v1`
+- Partition key: `orderNo`. Retention ≥ 7 days. DLT: `<topic>.DLT` (consumer-side).
+
+### Envelope — wms-compatible (camelCase), by ACL design (same as Event 1)
+```json
+{
+  "eventId": "uuidv7",
+  "eventType": "ecommerce.shipping.manual-confirm-requested",
+  "occurredAt": "2026-06-25T10:00:00.000Z",
+  "aggregateType": "shipping",
+  "aggregateId": "<ecommerce orderId>",
+  "tenantId": "<ecommerce tenant (facet d) | null>",
+  "payload": { }
+}
+```
+
+### Payload
+```json
+{
+  "orderNo": "<ecommerce orderId == wms orderNo (D5 correlation key)>",
+  "carrierCode": "<operator-entered carrier | null>",
+  "trackingNo": "<operator-entered tracking number | null>"
+}
+```
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `orderNo` | string | no | ecommerce orderId; resolves the wms outbound order via `findByOrderNo`. |
+| `carrierCode` | string | yes | Operator-entered carrier. Passed to the wms ship-confirm; blank ⇒ wms default carrier resolution (does **not** block the deduction). |
+| `trackingNo` | string | yes | Operator-entered tracking; informational on the wms side. |
+
+### Consumer (wms)
+`outbound-service` — `ManualShipConfirmConsumer` (group `outbound-service`,
+`@Profile("!standalone")`). `findByOrderNo` → load saga → **iff `PACKING_CONFIRMED`**
+call `ConfirmShippingUseCase` (→ `wms.outbound.shipping.confirmed.v1` → inventory
+deduction). Authoritative consumer contract:
+`projects/wms-platform/specs/contracts/events/ecommerce-fulfillment-subscriptions.md`.
+
+### Delivery semantics / idempotency
+- At-least-once (outbox). Consumer dedupes on envelope `eventId` (T8) + saga
+  terminal-state guard (already-`SHIPPED` ⇒ no-op).
+- `findByOrderNo` miss (non-WMS-routed order) ⇒ safe no-op (debug log), NOT a DLT.
+- Saga not yet `PACKING_CONFIRMED` ⇒ WARN no-op (physically un-picked; never a forced skip).
+- Unparseable envelope / missing `orderNo` ⇒ non-retryable ⇒ DLT.
+
+---
+
 ## Not in v1
 
 - Multi-warehouse routing (single default warehouse).

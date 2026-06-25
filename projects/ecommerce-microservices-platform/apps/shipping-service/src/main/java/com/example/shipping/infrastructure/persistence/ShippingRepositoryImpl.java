@@ -31,7 +31,7 @@ public class ShippingRepositoryImpl implements ShippingRepository {
         if (existingOpt.isPresent()) {
             ShippingJpaEntity existing = existingOpt.get();
             existing.updateFrom(shipping.getStatus(), shipping.getTrackingNumber(),
-                    shipping.getCarrier(), shipping.getUpdatedAt());
+                    shipping.getCarrier(), shipping.isWmsRouted(), shipping.getUpdatedAt());
 
             // Add new status history entries
             int existingHistorySize = existing.getStatusHistory().size();

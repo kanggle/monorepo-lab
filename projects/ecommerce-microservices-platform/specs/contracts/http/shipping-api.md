@@ -26,6 +26,7 @@ Get shipping status for an order. Accessible by the order owner.
   "status": "PREPARING",
   "trackingNumber": "string | null",
   "carrier": "string | null",
+  "wmsRouted": "boolean (order routed through wms fulfillment; gates the console WMS-deduct toggle, ADR-MONO-022 D4 v2(c))",
   "statusHistory": [
     {
       "status": "PREPARING",
@@ -54,7 +55,8 @@ Update shipping status. Only forward transitions are allowed.
 {
   "status": "SHIPPED",
   "trackingNumber": "string (optional, required when status is SHIPPED)",
-  "carrier": "string (optional, required when status is SHIPPED)"
+  "carrier": "string (optional, required when status is SHIPPED)",
+  "deductWmsInventory": "boolean (optional, default false) — when true AND the order is wmsRouted AND status=SHIPPED, also publish ecommerce.shipping.manual-confirm-requested.v1 so wms deducts physical inventory (ADR-MONO-022 D4 v2(c)). No-op otherwise."
 }
 ```
 
@@ -96,6 +98,7 @@ List all shipping records.
       "status": "PREPARING",
       "trackingNumber": "string | null",
       "carrier": "string | null",
+      "wmsRouted": "boolean",
       "createdAt": "string (ISO 8601)",
       "updatedAt": "string (ISO 8601)"
     }

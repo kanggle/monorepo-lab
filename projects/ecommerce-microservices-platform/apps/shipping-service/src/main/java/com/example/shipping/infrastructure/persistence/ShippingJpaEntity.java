@@ -39,6 +39,9 @@ public class ShippingJpaEntity {
     @Column(name = "carrier")
     private String carrier;
 
+    @Column(name = "wms_routed", nullable = false)
+    private boolean wmsRouted;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -51,7 +54,7 @@ public class ShippingJpaEntity {
 
     static ShippingJpaEntity create(String shippingId, String tenantId, String orderId, String userId,
                                      ShippingStatus status, String trackingNumber, String carrier,
-                                     Instant createdAt, Instant updatedAt) {
+                                     boolean wmsRouted, Instant createdAt, Instant updatedAt) {
         ShippingJpaEntity entity = new ShippingJpaEntity();
         entity.shippingId = shippingId;
         entity.tenantId = tenantId;
@@ -60,15 +63,18 @@ public class ShippingJpaEntity {
         entity.status = status;
         entity.trackingNumber = trackingNumber;
         entity.carrier = carrier;
+        entity.wmsRouted = wmsRouted;
         entity.createdAt = createdAt;
         entity.updatedAt = updatedAt;
         return entity;
     }
 
-    void updateFrom(ShippingStatus status, String trackingNumber, String carrier, Instant updatedAt) {
+    void updateFrom(ShippingStatus status, String trackingNumber, String carrier,
+                    boolean wmsRouted, Instant updatedAt) {
         this.status = status;
         this.trackingNumber = trackingNumber;
         this.carrier = carrier;
+        this.wmsRouted = wmsRouted;
         this.updatedAt = updatedAt;
     }
 

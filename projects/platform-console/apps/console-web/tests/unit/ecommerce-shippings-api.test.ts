@@ -223,6 +223,35 @@ describe('shippings-api — endpoint wiring + base URL (ECOMMERCE_PUBLIC_BASE_UR
     expect(body.trackingNumber).toBe('TRK-001');
   });
 
+  it('forwards deductWmsInventory in the status body when set (ADR-MONO-022 D4 v2(c))', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(SHIPPING));
+    vi.stubGlobal('fetch', fetchMock);
+    await updateShippingStatus('ship-1', {
+      status: 'SHIPPED',
+      carrier: 'CJ대한통운',
+      trackingNumber: 'TRK-001',
+      deductWmsInventory: true,
+    });
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect(body.deductWmsInventory).toBe(true);
+  });
+
+  it('omits deductWmsInventory from the body when not provided (minimal body)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(SHIPPING));
+    vi.stubGlobal('fetch', fetchMock);
+    await updateShippingStatus('ship-1', {
+      status: 'SHIPPED',
+      carrier: 'CJ대한통운',
+      trackingNumber: 'TRK-001',
+    });
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect('deductWmsInventory' in body).toBe(false);
+  });
+
   it('refreshTracking — POST PUBLIC base /shippings/{id}/refresh-tracking (empty body)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(SHIPPING));
     vi.stubGlobal('fetch', fetchMock);

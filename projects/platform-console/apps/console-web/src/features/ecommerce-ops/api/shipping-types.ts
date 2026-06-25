@@ -82,6 +82,11 @@ export const ShippingSummarySchema = z
     status: z.string(),
     trackingNumber: z.string().nullable().optional(),
     carrier: z.string().nullable().optional(),
+    // Order routed through wms fulfillment — gates the console "WMS 재고 차감"
+    // toggle in ShipFormDialog (ADR-MONO-022 D4 v2(c)). Optional/defaulted so a
+    // producer that has not yet shipped the field (or a stale row) parses as
+    // `false` and the toggle simply stays hidden — never a degrade.
+    wmsRouted: z.boolean().optional().default(false),
     createdAt: z.string(),
   })
   .passthrough();
@@ -98,6 +103,8 @@ export const ShippingSchema = z
     status: z.string(),
     trackingNumber: z.string().nullable().optional(),
     carrier: z.string().nullable().optional(),
+    // See ShippingSummarySchema.wmsRouted — same wmsRouted gate, same tolerance.
+    wmsRouted: z.boolean().optional().default(false),
     statusHistory: z.array(ShippingStatusHistorySchema).default([]),
     createdAt: z.string(),
     updatedAt: z.string().optional(),
@@ -145,11 +152,18 @@ export type ShippingList = z.infer<typeof ShippingListSchema>;
  * `trackingNumber` + `carrier` are REQUIRED when `status=SHIPPED`
  * (producer rejects SHIPPED without them — InvalidShipping 400).
  * The UI enforces this via ShipFormDialog; the producer is the final authority.
+ *
+ * `deductWmsInventory` (optional, default false): when true AND the order is
+ * `wmsRouted` AND `status=SHIPPED`, the producer also publishes
+ * `ecommerce.shipping.manual-confirm-requested.v1` so wms deducts physical
+ * inventory (ADR-MONO-022 D4 v2(c)). No-op otherwise — the producer is the
+ * final authority on the gate; the UI only surfaces the toggle on wmsRouted rows.
  */
 export const UpdateShippingStatusBodySchema = z.object({
   status: z.string().min(1),
   trackingNumber: z.string().optional(),
   carrier: z.string().optional(),
+  deductWmsInventory: z.boolean().optional(),
 });
 export type UpdateShippingStatusBody = z.infer<
   typeof UpdateShippingStatusBodySchema

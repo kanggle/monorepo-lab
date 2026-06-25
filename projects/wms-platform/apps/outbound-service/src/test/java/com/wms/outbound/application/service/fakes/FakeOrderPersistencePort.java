@@ -30,6 +30,13 @@ public class FakeOrderPersistencePort implements OrderPersistencePort {
     }
 
     @Override
+    public Optional<Order> findByOrderNo(String orderNo) {
+        return store.values().stream()
+                .filter(o -> o.getOrderNo().equals(orderNo))
+                .findFirst();
+    }
+
+    @Override
     public boolean existsByOrderNo(String orderNo) {
         return store.values().stream().anyMatch(o -> o.getOrderNo().equals(orderNo));
     }

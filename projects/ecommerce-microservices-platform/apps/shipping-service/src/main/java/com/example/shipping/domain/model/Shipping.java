@@ -21,6 +21,7 @@ public class Shipping {
     private ShippingStatus status;
     private String trackingNumber;
     private String carrier;
+    private boolean wmsRouted;
     private List<StatusHistoryEntry> statusHistory = new ArrayList<>();
     private Instant createdAt;
     private Instant updatedAt;
@@ -44,6 +45,7 @@ public class Shipping {
         shipping.orderId = orderId;
         shipping.userId = userId;
         shipping.status = ShippingStatus.PREPARING;
+        shipping.wmsRouted = false;
         Instant now = Instant.now(clock);
         shipping.createdAt = now;
         shipping.updatedAt = now;
@@ -53,7 +55,7 @@ public class Shipping {
 
     public static Shipping reconstitute(String shippingId, String tenantId, String orderId, String userId,
                                          ShippingStatus status, String trackingNumber, String carrier,
-                                         List<StatusHistoryEntry> statusHistory,
+                                         boolean wmsRouted, List<StatusHistoryEntry> statusHistory,
                                          Instant createdAt, Instant updatedAt) {
         Shipping shipping = new Shipping();
         shipping.shippingId = shippingId;
@@ -63,10 +65,21 @@ public class Shipping {
         shipping.status = status;
         shipping.trackingNumber = trackingNumber;
         shipping.carrier = carrier;
+        shipping.wmsRouted = wmsRouted;
         shipping.statusHistory = new ArrayList<>(statusHistory);
         shipping.createdAt = createdAt;
         shipping.updatedAt = updatedAt;
         return shipping;
+    }
+
+    /**
+     * Marks this shipping as routed through the wms warehouse — set once the
+     * forward-leg fulfillment-intent event ({@code ecommerce.fulfillment.requested.v1})
+     * is actually published for the order (ADR-MONO-022 D4 v2(c)). Idempotent: a
+     * re-mark is a no-op. Gates the operator's later manual wms-inventory deduction.
+     */
+    public void markWmsRouted() {
+        this.wmsRouted = true;
     }
 
     public ShippingStatus transitionTo(ShippingStatus newStatus, String trackingNumber,
