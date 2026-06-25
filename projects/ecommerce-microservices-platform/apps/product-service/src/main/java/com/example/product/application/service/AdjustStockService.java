@@ -35,7 +35,11 @@ public class AdjustStockService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #command.productId()")
+            // allEntries (not a targeted key): the @Cacheable("product-detail")
+            // read key carries a seller-scope segment that the write path's
+            // SellerScopeContext may not match, so a targeted evict misses
+            // (TASK-BE-436). Mirrors RegisterProductService/ProductImageService.
+            @CacheEvict(value = "product-detail", allEntries = true)
     })
     public AdjustStockResult adjust(AdjustStockCommand command) {
         validateQuantity(command);

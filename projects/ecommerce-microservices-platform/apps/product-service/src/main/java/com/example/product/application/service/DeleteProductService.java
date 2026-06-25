@@ -24,7 +24,9 @@ public class DeleteProductService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #productId")
+            // allEntries: the read key carries a seller-scope segment a targeted
+            // evict cannot reliably match (TASK-BE-436).
+            @CacheEvict(value = "product-detail", allEntries = true)
     })
     public void delete(UUID productId) {
         productRepository.findById(productId)

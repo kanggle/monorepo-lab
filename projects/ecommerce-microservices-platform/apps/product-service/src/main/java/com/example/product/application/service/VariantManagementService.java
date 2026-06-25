@@ -26,7 +26,9 @@ public class VariantManagementService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #productId")
+            // allEntries: the read key carries a seller-scope segment a targeted
+            // evict cannot reliably match (TASK-BE-436).
+            @CacheEvict(value = "product-detail", allEntries = true)
     })
     public VariantDetail addVariant(UUID productId, String optionName, int stock, long additionalPrice) {
         Product product = productRepository.findById(productId)
@@ -43,7 +45,9 @@ public class VariantManagementService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #productId")
+            // allEntries: the read key carries a seller-scope segment a targeted
+            // evict cannot reliably match (TASK-BE-436).
+            @CacheEvict(value = "product-detail", allEntries = true)
     })
     public VariantDetail updateVariant(UUID productId, UUID variantId, String optionName, long additionalPrice) {
         Product product = productRepository.findById(productId)
@@ -59,7 +63,9 @@ public class VariantManagementService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "product-list", allEntries = true),
-            @CacheEvict(value = "product-detail", key = "T(com.example.product.domain.tenant.TenantContext).currentTenant() + ':' + #productId")
+            // allEntries: the read key carries a seller-scope segment a targeted
+            // evict cannot reliably match (TASK-BE-436).
+            @CacheEvict(value = "product-detail", allEntries = true)
     })
     public void removeVariant(UUID productId, UUID variantId) {
         Product product = productRepository.findById(productId)
