@@ -27,7 +27,11 @@ public class OrderEntity {
     @Column(name = "order_no", length = 40)
     private String orderNo;
 
-    @Column(name = "source", length = 20)
+    // length matches Flyway V16 (outbound_order.source widened 20→50 for
+    // FULFILLMENT_ECOMMERCE, TASK-BE-340/342). The annotation had drifted at 20,
+    // which only affected hbm2ddl-generated test schemas (create-drop) — prod is
+    // Flyway-authoritative. Corrected to 50 (TASK-MONO-304).
+    @Column(name = "source", length = 50)
     private String source;
 
     @Column(name = "customer_partner_id")

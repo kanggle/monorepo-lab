@@ -88,8 +88,8 @@ class OrderJpaRepositoryFilterIT {
     @Test
     @DisplayName("findFiltered — :tenantId pins results to a single tenant (TASK-MONO-304)")
     void findFiltered_byTenantId_isolatesTenants() {
-        OrderEntity ecommerce = persistedOrder("ORD-EC-1", "ecommerce");
-        OrderEntity b2b = persistedOrder("ORD-B2B-1", null);
+        OrderEntity ecommerce = persistedOrder("ORD-EC-1", "FULFILLMENT_ECOMMERCE", "ecommerce");
+        OrderEntity b2b = persistedOrder("ORD-B2B-1", "MANUAL", null);
         orderRepository.saveAll(List.of(ecommerce, b2b));
 
         List<OrderEntity> scoped = orderRepository.findFiltered(
@@ -107,10 +107,10 @@ class OrderJpaRepositoryFilterIT {
                 .isEqualTo(2L);
     }
 
-    private static OrderEntity persistedOrder(String orderNo, String tenantId) {
+    private static OrderEntity persistedOrder(String orderNo, String source, String tenantId) {
         Instant now = Instant.now();
         return new OrderEntity(
-                UUID.randomUUID(), orderNo, "FULFILLMENT_ECOMMERCE",
+                UUID.randomUUID(), orderNo, source,
                 UUID.randomUUID(), UUID.randomUUID(), "RECEIVED",
                 null, null, null, null, null, tenantId,
                 now, "test", now, "test");
