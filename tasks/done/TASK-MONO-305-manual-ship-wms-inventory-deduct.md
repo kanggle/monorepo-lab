@@ -1,6 +1,6 @@
 # TASK-MONO-305 — Operator-gated manual ship-confirm propagates to WMS inventory deduction
 
-- Status: ready
+- Status: done
 - Type: cross-project feature (ecommerce shipping-service ↔ wms outbound-service ↔ platform-console)
 - ADR: ADR-MONO-022 §D4 (extension — operator-gated manual reverse-confirm)
 - Analysis model: Opus 4.8 / Impl: Opus (event-driven cross-project saga wiring)
