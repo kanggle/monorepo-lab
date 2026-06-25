@@ -105,6 +105,13 @@ public class OrderRepositoryImpl implements OrderPersistencePort {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Order> findByOrderNo(String orderNo) {
+        return orderRepo.findByOrderNo(orderNo).map(e ->
+                OrderMapper.toDomain(e, lineRepo.findByOrderIdOrderByLineNumberAsc(e.getId())));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean existsByOrderNo(String orderNo) {
         return orderRepo.existsByOrderNo(orderNo);
     }

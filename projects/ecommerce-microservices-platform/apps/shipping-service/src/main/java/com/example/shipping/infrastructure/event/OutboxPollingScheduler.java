@@ -11,6 +11,7 @@ public class OutboxPollingScheduler extends com.example.messaging.outbox.OutboxP
 
     static final String TOPIC_SHIPPING_STATUS_CHANGED = "shipping.shipping.status-changed";
     static final String TOPIC_FULFILLMENT_REQUESTED = "ecommerce.fulfillment.requested.v1";
+    static final String TOPIC_MANUAL_SHIP_CONFIRM_REQUESTED = "ecommerce.shipping.manual-confirm-requested.v1";
 
     public OutboxPollingScheduler(OutboxPublisher outboxPublisher,
                                   KafkaTemplate<String, String> kafkaTemplate) {
@@ -22,6 +23,7 @@ public class OutboxPollingScheduler extends com.example.messaging.outbox.OutboxP
         return switch (eventType) {
             case "ShippingStatusChanged" -> TOPIC_SHIPPING_STATUS_CHANGED;
             case "FulfillmentRequested" -> TOPIC_FULFILLMENT_REQUESTED;
+            case "ManualShipConfirmRequested" -> TOPIC_MANUAL_SHIP_CONFIRM_REQUESTED;
             default -> throw new IllegalArgumentException("Unknown event type: " + eventType);
         };
     }

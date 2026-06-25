@@ -11,6 +11,7 @@ public record ShippingSummary(
         ShippingStatus status,
         String trackingNumber,
         String carrier,
+        boolean wmsRouted,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -21,6 +22,7 @@ public record ShippingSummary(
                 shipping.getStatus(),
                 shipping.getTrackingNumber(),
                 shipping.getCarrier(),
+                shipping.isWmsRouted(),
                 shipping.getCreatedAt(),
                 shipping.getUpdatedAt()
         );

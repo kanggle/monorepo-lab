@@ -50,6 +50,25 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
         outboxWriter.save("Fulfillment", orderId, "FulfillmentRequested", messageJson);
     }
 
+    @Override
+    public void publishManualShipConfirmRequested(String tenantId, String orderId,
+                                                  String carrier, String trackingNumber) {
+        // wms camelCase envelope (ACL convention, same as the forward leg). orderNo ==
+        // aggregateId == orderId (D5 correlation key). Stored whole as the outbox payload.
+        ManualShipConfirmRequestedMessage message = new ManualShipConfirmRequestedMessage(
+                UUID.randomUUID().toString(),
+                "ecommerce.shipping.manual-confirm-requested",
+                Instant.now(clock).toString(),
+                "shipping",
+                orderId,
+                tenantId,
+                new ManualShipConfirmRequestedMessage.Payload(orderId, carrier, trackingNumber)
+        );
+
+        String payload = serialize(message);
+        outboxWriter.save("Shipping", orderId, "ManualShipConfirmRequested", payload);
+    }
+
     private String serialize(Object event) {
         try {
             return objectMapper.writeValueAsString(event);

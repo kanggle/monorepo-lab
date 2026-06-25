@@ -7,5 +7,6 @@ public record UpdateShippingStatusCommand(
         ShippingStatus status,
         String trackingNumber,
         String carrier,
+        boolean deductWmsInventory,
         String userRole
 ) {}

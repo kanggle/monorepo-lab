@@ -10,6 +10,7 @@ public record ShippingResponse(
         String status,
         String trackingNumber,
         String carrier,
+        boolean wmsRouted,
         List<StatusHistoryResponse> statusHistory,
         String createdAt,
         String updatedAt
@@ -24,6 +25,7 @@ public record ShippingResponse(
                 result.status().name(),
                 result.trackingNumber(),
                 result.carrier(),
+                result.wmsRouted(),
                 history,
                 result.createdAt().toString(),
                 result.updatedAt().toString()

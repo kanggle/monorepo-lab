@@ -22,4 +22,20 @@ public interface ShippingEventPublisher {
      * {@code orderId} is the outbox aggregateId.
      */
     void publishFulfillmentRequested(String orderId, String messageJson);
+
+    /**
+     * Writes an outbox row for the operator-driven manual ship-confirm leg
+     * (ADR-MONO-022 D4 v2(c), {@code ecommerce.shipping.manual-confirm-requested.v1}).
+     * Emitted only when an operator marks a Shipping {@code SHIPPED} with
+     * {@code deductWmsInventory=true} on a {@code wmsRouted} order, so the wms
+     * outbound-service confirms the shipment and deducts physical inventory. The
+     * envelope is the wms camelCase shape (same ACL convention as the forward leg).
+     *
+     * @param tenantId       the shipping row tenant (envelope top-level).
+     * @param orderId        ecommerce orderId == wms orderNo (D5 correlation key).
+     * @param carrier        operator-entered carrier code, nullable (wms default if blank).
+     * @param trackingNumber operator-entered tracking number, nullable (informational on wms).
+     */
+    void publishManualShipConfirmRequested(String tenantId, String orderId,
+                                           String carrier, String trackingNumber);
 }

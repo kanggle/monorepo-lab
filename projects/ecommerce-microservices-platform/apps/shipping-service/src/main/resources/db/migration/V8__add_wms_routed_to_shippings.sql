@@ -1,0 +1,12 @@
+-- TASK-MONO-305 (ADR-MONO-022 D4 v2(c)).
+--
+-- Row-level wms_routed flag on the shipping-service root aggregate (shippings).
+-- TRUE iff the forward-leg fulfillment-intent event (ecommerce.fulfillment.requested.v1)
+-- was actually published for this order — i.e. the order is routed through the wms
+-- warehouse. Gates the operator's manual "deduct wms inventory" toggle on the
+-- SHIPPED transition (PUT /api/shippings/{id}/status, deductWmsInventory=true): a
+-- non-wms-routed order can never emit the manual-confirm event.
+--
+-- Default FALSE so every pre-existing row (and any order whose fulfillment publish
+-- was disabled / blocked) is treated as not-wms-routed (net-zero, D8).
+ALTER TABLE shippings ADD COLUMN wms_routed BOOLEAN NOT NULL DEFAULT FALSE;

@@ -39,6 +39,26 @@ public class ShippingCommandService {
     }
 
     /**
+     * Marks the Shipping for the given order as routed through the wms warehouse
+     * (ADR-MONO-022 D4 v2(c)) — invoked by the OrderConfirmed consumer in the SAME
+     * transaction, immediately after the forward-leg fulfillment-intent event is
+     * actually published. Idempotent: an already-routed (or missing) row is a no-op.
+     * Lets a later manual ship-confirm offer the operator the wms-deduct option.
+     */
+    @Transactional
+    public void markShippingWmsRouted(String orderId) {
+        shippingRepository.findByOrderId(orderId).ifPresentOrElse(
+                shipping -> {
+                    if (!shipping.isWmsRouted()) {
+                        shipping.markWmsRouted();
+                        shippingRepository.save(shipping);
+                        log.info("Shipping marked wmsRouted: orderId={}", orderId);
+                    }
+                },
+                () -> log.warn("markShippingWmsRouted: no shipping for orderId={}, skipping", orderId));
+    }
+
+    /**
      * Return-leg transition (ADR-MONO-022 §D7): mark the Shipping for the given
      * order {@code SHIPPED} with the wms-assigned tracking/carrier. Located by
      * {@code orderId} (the wms {@code orderNo} correlation key). Idempotent: an
@@ -90,6 +110,20 @@ public class ShippingCommandService {
                 saved.getTenantId(), saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
                 previousStatus, saved.getStatus(),
                 saved.getTrackingNumber(), saved.getCarrier());
+
+        // ADR-MONO-022 D4 v2(c): operator-elected wms inventory deduction for a
+        // hand-shipped, warehouse-routed order. Only when the target status is SHIPPED,
+        // the operator opted in (deductWmsInventory=true), AND the order was actually
+        // forward-leg fulfillment-published (wmsRouted) — otherwise no-op (existing behaviour).
+        if (saved.getStatus() == ShippingStatus.SHIPPED
+                && command.deductWmsInventory()
+                && saved.isWmsRouted()) {
+            shippingEventPublisher.publishManualShipConfirmRequested(
+                    saved.getTenantId(), saved.getOrderId(),
+                    saved.getCarrier(), saved.getTrackingNumber());
+            log.info("Manual ship-confirm requested (wms deduct): shippingId={}, orderId={}",
+                    saved.getShippingId(), saved.getOrderId());
+        }
 
         log.info("Shipping status updated: shippingId={}, {} -> {}",
                 saved.getShippingId(), previousStatus, saved.getStatus());

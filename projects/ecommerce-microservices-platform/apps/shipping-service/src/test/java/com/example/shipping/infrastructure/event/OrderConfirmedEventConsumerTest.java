@@ -86,6 +86,8 @@ class OrderConfirmedEventConsumerTest {
 
         verify(shippingCommandService).createShipping(new CreateShippingCommand("tenant-a", "order-1", "user-1"));
         verify(shippingEventPublisher).publishFulfillmentRequested(eq("order-1"), eq("{\"json\":true}"));
+        // Fulfillment actually published ⇒ order is wmsRouted ⇒ mark in same tx.
+        verify(shippingCommandService).markShippingWmsRouted("order-1");
     }
 
     @Test
@@ -99,6 +101,8 @@ class OrderConfirmedEventConsumerTest {
 
         verify(shippingCommandService).createShipping(new CreateShippingCommand("tenant-a", "order-1", "user-1"));
         verify(shippingEventPublisher, never()).publishFulfillmentRequested(any(), any());
+        // Not published ⇒ not wmsRouted ⇒ no mark.
+        verify(shippingCommandService, never()).markShippingWmsRouted(any());
     }
 
     @Test
@@ -114,6 +118,8 @@ class OrderConfirmedEventConsumerTest {
 
         verify(shippingCommandService).createShipping(new CreateShippingCommand("tenant-a", "order-1", "user-1"));
         verify(shippingEventPublisher, never()).publishFulfillmentRequested(any(), any());
+        // Unmapped SKU blocks publish ⇒ not wmsRouted ⇒ no mark.
+        verify(shippingCommandService, never()).markShippingWmsRouted(any());
     }
 
     @Test

@@ -51,8 +51,10 @@ public class ShippingController {
     ) {
         ShippingStatus targetStatus = parseStatus(request.status());
 
+        boolean deductWmsInventory = Boolean.TRUE.equals(request.deductWmsInventory());
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
-                shippingId, targetStatus, request.trackingNumber(), request.carrier(), userRole);
+                shippingId, targetStatus, request.trackingNumber(), request.carrier(),
+                deductWmsInventory, userRole);
         UpdateShippingStatusResult result = shippingCommandService.updateStatus(command);
         return ResponseEntity.ok(UpdateShippingStatusResponse.from(result));
     }
