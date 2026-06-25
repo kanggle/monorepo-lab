@@ -1,6 +1,6 @@
 # TASK-PC-FE-133 — 한글/공백 seller_id 셀러 상세에서 "셀러 정보를 일시적으로 불러올 수 없습니다" 가 뜨는 버그 ([id] 이중 인코딩 → firewall 400)
 
-- **Status**: ready
+- **Status**: review
 - **Project**: platform-console
 - **Service**: console-web
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (라우트 param 디코딩 단일 지점 fix)
