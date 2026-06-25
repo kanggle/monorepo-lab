@@ -1,6 +1,8 @@
 # TASK-MONO-306 — Amend ADR-MONO-005 § 2.3 D3 to permit a domain-meaningful auto-resolving terminal for Category A sagas
 
-**Status:** review
+**Status:** done
+
+> **DONE (2026-06-26, 3-dim verified — impl PR #1952 squash `e0052945251345cb7b20ed77a6e4cf49a931b093`).** ADR-MONO-005 § 2.3 D3 amended with the R1–R4 auto-resolving-terminal refinement; § 2.6 D6 ecommerce-order row re-decided to `CANCELLED(PAYMENT_TIMEOUT)`; § 5 + History amended. Default operator-escalation terminal + D1–D8 bodies byte-unchanged; ADR stays ACCEPTED. **3-dim:** (a) state=MERGED + `e0052945`; (b) `origin/main` tip = `e00529452` (squash of #1952); (c) pre-merge failing required = 0 (docs fast-lane: `changes` SUCCESS + 20 heavy jobs SKIPPED). Unblocks TASK-BE-435. 분석=Opus 4.8 / 구현=Opus 직접.
 
 **Type:** TASK-MONO (monorepo-level — shared `docs/adr/`)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (portfolio-wide saga-escalation invariant refinement — decision-bearing ADR amendment, not a mechanical doc edit)
