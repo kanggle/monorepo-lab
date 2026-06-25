@@ -1,6 +1,6 @@
 # TASK-BE-436 — 상품 상세 캐시가 재고 조정·수정·삭제 후 무효화되지 않는 버그 (product-detail @CacheEvict 키 불일치)
 
-- **Status**: review
+- **Status**: done
 - **Project**: ecommerce-microservices-platform
 - **Service**: product-service
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (캐시 무효화 키 정합 — 체계적 버그 클래스)
