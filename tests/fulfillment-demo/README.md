@@ -246,13 +246,13 @@ absent `pickingRequestId`/`inventoryId` wire fields, so the saga never left `REQ
 
 1. **TASK-BE-431** — outbound→inventory `picking.requested` wire mismatch. Fixed in this
    branch (the consumer resolves the inventory row from the natural key).
-2. **inventory-service boot collision** — it ships `com.wms.inventory…OutboxPublisher`
-   **and** pulls the shared `com.example.messaging.outbox.OutboxAutoConfiguration`; both
-   claim the bean name `outboxPublisher` → `BeanDefinitionOverrideException` at boot. Only
-   surfaces running as a real app (the ITs don't hit it). Worked around here with
-   `SPRING_AUTOCONFIGURE_EXCLUDE=com.example.messaging.outbox.OutboxAutoConfiguration`
-   — a proper fix (rename the local bean or exclude in inventory's own config) is a
-   separate follow-up.
+2. **inventory-service boot collision (fixed — TASK-BE-432)** — it shipped
+   `com.wms.inventory…OutboxPublisher` **and** pulled the shared
+   `com.example.messaging.outbox.OutboxAutoConfiguration`; both claimed the bean name
+   `outboxPublisher` → `BeanDefinitionOverrideException` at boot. Only surfaced running as
+   a real app (the ITs don't hit it). **Fixed** by excluding the shared auto-config in
+   `InventoryServiceApplication` (`@SpringBootApplication(exclude = OutboxAutoConfiguration.class)`),
+   the same pattern outbound-service used in TASK-BE-333.
 3. **Read-model dedup** — `findBy*Code` resolution throws on duplicate snapshot rows;
    seed exactly one row per code with the UUIDs that match the inventory stock seed.
 4. **`docker restart` reverts compose env** on this host — recreating outbound resets it
