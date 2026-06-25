@@ -7,9 +7,11 @@ import com.wms.inventory.application.port.out.EventDedupePort;
 import com.wms.inventory.application.port.out.ReservationRepository;
 import com.wms.inventory.domain.exception.StateTransitionInvalidException;
 import com.wms.inventory.domain.model.Reservation;
+import com.wms.inventory.domain.model.ReservationLine;
 import com.wms.inventory.domain.model.ReservationStatus;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -109,10 +111,15 @@ public class ShippingConfirmedConsumer {
      */
     private void applyConfirm(OutboundEventParser.Parsed envelope) {
         JsonNode payload = envelope.payload();
-        UUID pickingRequestId = UUID.fromString(payload.get("pickingRequestId").asText());
-        Optional<Reservation> existing = reservationRepository.findByPickingRequestId(pickingRequestId);
+        // The producer (outbound-service EventEnvelopeSerializer.shippingConfirmedPayload,
+        // authoritative schema outbound-events.md §7) emits `reservationId` (= outbound
+        // PickingRequest.id, 1:1 with inventory's pickingRequestId) — NOT a `pickingRequestId`
+        // field. The previous `pickingRequestId` read NPE'd on every real event; corrected by
+        // TASK-BE-437 (the return-leg sibling of the BE-431 forward-leg fix). See inventory-events.md §C4.
+        UUID reservationId = UUID.fromString(payload.get("reservationId").asText());
+        Optional<Reservation> existing = reservationRepository.findByPickingRequestId(reservationId);
         if (existing.isEmpty()) {
-            log.warn("Shipping confirm for unknown pickingRequestId {} — ignored", pickingRequestId);
+            log.warn("Shipping confirm for unknown reservationId {} — ignored", reservationId);
             return;
         }
         Reservation reservation = existing.get();
@@ -126,11 +133,22 @@ public class ShippingConfirmedConsumer {
         if (lines == null || !lines.isArray() || lines.isEmpty()) {
             throw new IllegalArgumentException("shipping.confirmed has no lines");
         }
+        // The producer carries domain identity (`skuId`, `lotId`, `qtyConfirmed`) — it cannot know
+        // inventory's private ReservationLine PK. Map each shipped line onto its owning
+        // ReservationLine by natural key (skuId, lotId) to obtain the reservationLineId the
+        // ConfirmReservationCommand requires (mirrors the BE-431 resolve-by-natural-key approach).
         List<ConfirmReservationCommand.Line> commandLines = new ArrayList<>(lines.size());
         for (JsonNode line : lines) {
-            UUID reservationLineId = UUID.fromString(line.get("reservationLineId").asText());
-            int shipped = line.get("shippedQuantity").asInt();
-            commandLines.add(new ConfirmReservationCommand.Line(reservationLineId, shipped));
+            UUID skuId = UUID.fromString(line.get("skuId").asText());
+            UUID lotId = line.hasNonNull("lotId") ? UUID.fromString(line.get("lotId").asText()) : null;
+            int shipped = line.get("qtyConfirmed").asInt();
+            ReservationLine match = reservation.lines().stream()
+                    .filter(rl -> rl.skuId().equals(skuId) && Objects.equals(rl.lotId(), lotId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "shipping.confirmed line (skuId=" + skuId + ", lotId=" + lotId
+                                    + ") has no matching reservation line on reservation " + reservation.id()));
+            commandLines.add(new ConfirmReservationCommand.Line(match.id(), shipped));
         }
         try {
             confirmReservation.confirm(new ConfirmReservationCommand(

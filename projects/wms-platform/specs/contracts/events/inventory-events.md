@@ -503,31 +503,59 @@ Expected shape:
 Effect: calls `ReleaseReservationUseCase` with `reason = CANCELLED`.
 Publishes `inventory.released`.
 
-### C4. `outbound.shipping.confirmed`
+### C4. `outbound.shipping.confirmed`  ⚠️ Cross-service contract (TASK-BE-437)
 
 Topic: `wms.outbound.shipping.confirmed.v1`
-Authoritative schema: `specs/contracts/events/outbound-events.md`
+Authoritative schema: `specs/contracts/events/outbound-events.md` §7 (producer SoT — owned
+jointly with this consumer).
 
-Expected shape:
+**Authoritative consumed shape** (mirrors the producer byte-for-byte — the previous
+`pickingRequestId` / per-line `reservationLineId`+`shippedQuantity` description was stale and
+NPE'd at the consumer on every real event; corrected by TASK-BE-437, the return-leg sibling of
+the BE-431 forward-leg fix):
 
 ```json
 {
   "eventId": "uuid",
   "eventType": "outbound.shipping.confirmed",
   "payload": {
-    "pickingRequestId": "uuid",
+    "sagaId": "uuid",
+    "reservationId": "uuid",
+    "orderId": "uuid",
+    "orderNo": "ORD-...",
+    "shipmentId": "uuid",
+    "shipmentNo": "SHP-...",
     "warehouseId": "uuid",
+    "shippedAt": "2026-04-29T15:00:00Z",
+    "carrierCode": "CJ-LOGISTICS",
     "lines": [
       {
-        "reservationLineId": "uuid",
-        "shippedQuantity": 5
+        "orderLineId": "uuid",
+        "skuId": "uuid",
+        "lotId": "uuid-or-null",
+        "locationId": "uuid",
+        "qtyConfirmed": 5
       }
     ]
   }
 }
 ```
 
-Effect: calls `ConfirmReservationUseCase`. Each `shippedQuantity` must equal `ReservationLine.quantity`
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `reservationId` | UUID | no | Equals outbound `PickingRequest.id`; used as inventory's `pickingRequestId` (1:1) to find the reservation to confirm. The producer does **not** send `pickingRequestId` |
+| `lines[].skuId` | UUID | no | Natural key (with `lotId`) the consumer maps to the owning `ReservationLine` to obtain its private `reservationLineId` — the producer cannot know inventory's row PK |
+| `lines[].lotId` | UUID | yes | |
+| `lines[].qtyConfirmed` | int | no | EA. The producer field is `qtyConfirmed`, **not** `shippedQuantity` |
+| `orderNo` / `orderId` / `sagaId` / `shipment*` / `warehouseId` / `shippedAt` / `carrierCode` | — | — | Additive / unused by inventory; ignored |
+
+> ⚠️ The producer carries domain identity only; the consumer
+> (`ShippingConfirmedConsumer`) reads top-level `reservationId` as the `pickingRequestId`
+> and **resolves each shipped line to its `ReservationLine` by `(skuId, lotId)`** to build the
+> `ConfirmReservationCommand`. A line with no matching reservation line is a hard error (not a
+> silent no-op).
+
+Effect: calls `ConfirmReservationUseCase`. Each `qtyConfirmed` must equal `ReservationLine.quantity`
 exactly (v1 no partial shipments). Publishes `inventory.confirmed`.
 
 ### C5. `master.location.*` and `master.sku.*`
