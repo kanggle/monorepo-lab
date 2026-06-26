@@ -67,7 +67,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+| ID | Title | Service | Tags |
+|---|---|---|---|
+| TASK-BE-438 | **READY**. master-service outbox v1→v2 마이그레이션(ADR-MONO-004 §6 row 1). v2 `AbstractOutboxPublisher<R>`로 전환 — 신규 Flyway `master_outbox`(UUID event_id) + 엔티티/리포 + write-path(UUID/occurred_at 생성) + 스케줄러 교체 + `MicrometerOutboxMetrics` + 테스트 재작성. backoff/헤더/lag 메트릭 획득. ADR "cosmetic" 표기지만 실측 schema-migration급. master IT=CI Linux 권위(로컬 Testcontainers 차단). 구현 보류=별도 세션(Opus). | master-service | code, event |
 
 ## in-progress
 
