@@ -376,27 +376,32 @@ describe('LedgerOpsScreen — tabbed shell', () => {
     );
   });
 
-  it('clicking the 분개 tab reveals the entry lookup (entry-id-driven)', () => {
+  it('clicking the 분개 tab reveals the entry lookup (entry-id-driven)', async () => {
     renderScreen();
     fireEvent.click(screen.getByTestId('ledger-tab-entry'));
-    expect(screen.getByTestId('ledger-entry-input')).toBeInTheDocument();
+    // The 분개 panel is a lazy (next/dynamic) boundary — it mounts on first
+    // activation (TASK-PC-FE-134), so await the deferred content.
+    expect(await screen.findByTestId('ledger-entry-input')).toBeInTheDocument();
     expect(screen.getByTestId('ledger-entry-none')).toBeInTheDocument();
   });
 
-  it('a seeded entryId that 404\'d renders notFound INLINE with the lookup still mounted', () => {
+  it('a seeded entryId that 404\'d renders notFound INLINE with the lookup still mounted', async () => {
     renderScreen({ initialEntryId: 'nope', initialNotFound: true });
-    // The screen opens on the entry tab when an entryId is supplied.
-    expect(screen.getByTestId('ledger-entry-not-found')).toBeInTheDocument();
+    // The screen opens on the entry tab when an entryId is supplied (the
+    // seeded initial-active panel starts visited and mounts lazily).
+    expect(
+      await screen.findByTestId('ledger-entry-not-found'),
+    ).toBeInTheDocument();
     // The lookup form stays mounted (not a whole-section block).
     expect(screen.getByTestId('ledger-entry-input')).toBeInTheDocument();
   });
 
-  it('a seeded entry renders the entry detail in the 분개 tab', () => {
+  it('a seeded entry renders the entry detail in the 분개 tab', async () => {
     renderScreen({
       initialEntryId: 'je-multi',
       initialEntry: MULTI_CURRENCY_ENTRY,
     });
-    expect(screen.getByTestId('ledger-entry-detail')).toBeInTheDocument();
+    expect(await screen.findByTestId('ledger-entry-detail')).toBeInTheDocument();
     expect(screen.getByTestId('ledger-line-rate-0').textContent).toBe('13.5');
   });
 });
@@ -421,7 +426,7 @@ describe('LedgerOpsScreen — read-only (NO mutation affordance anywhere)', () =
     expect(container.querySelector('[data-testid*="close-period"]')).toBeNull();
   });
 
-  it('console spy: no balance / line / account-code / token value reaches the console (confidential / F7)', () => {
+  it('console spy: no balance / line / account-code / token value reaches the console (confidential / F7)', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -436,6 +441,9 @@ describe('LedgerOpsScreen — read-only (NO mutation affordance anywhere)', () =
       />,
       { wrapper: wrapper() },
     );
+    // The 분개 panel is lazy — await its loaded content so the spy captures
+    // the entry detail's render too (TASK-PC-FE-134).
+    await screen.findByTestId('ledger-entry-detail');
     const all = [
       ...logSpy.mock.calls,
       ...infoSpy.mock.calls,
@@ -843,14 +851,16 @@ describe('LedgerOpsScreen — 계정 tab (TASK-PC-FE-074)', () => {
     expect(screen.getByTestId('ledger-tab-account').textContent).toContain('계정');
   });
 
-  it('clicking the 계정 tab reveals the account lookup form (no code → "none" placeholder)', () => {
+  it('clicking the 계정 tab reveals the account lookup form (no code → "none" placeholder)', async () => {
     renderScreen();
     fireEvent.click(screen.getByTestId('ledger-tab-account'));
-    expect(screen.getByTestId('ledger-account-input')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('ledger-account-input'),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('ledger-account-none')).toBeInTheDocument();
   });
 
-  it('a seeded accountCode opens the screen on the 계정 tab with AccountDetail populated (F5 scale)', () => {
+  it('a seeded accountCode opens the screen on the 계정 tab with AccountDetail populated (F5 scale)', async () => {
     renderScreen({
       initialAccountCode: 'CUSTOMER_WALLET:acc-1',
       initialAccountBalance: ACCOUNT_BALANCE,
@@ -861,7 +871,9 @@ describe('LedgerOpsScreen — 계정 tab (TASK-PC-FE-074)', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByTestId('ledger-account-detail')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('ledger-account-detail'),
+    ).toBeInTheDocument();
     const card = screen.getByTestId('ledger-account-balance');
     // F5: large minor-unit amount rendered via formatMoney.
     expect(card.textContent).toContain('1234567890123');
@@ -869,18 +881,20 @@ describe('LedgerOpsScreen — 계정 tab (TASK-PC-FE-074)', () => {
     expect(screen.getByTestId('ledger-account-entries-table')).toBeInTheDocument();
   });
 
-  it('a seeded accountCode that 404\'d renders the not-found notice inline (lookup form stays mounted)', () => {
+  it('a seeded accountCode that 404\'d renders the not-found notice inline (lookup form stays mounted)', async () => {
     renderScreen({
       initialAccountCode: 'CUSTOMER_WALLET:nope',
       initialAccountNotFound: true,
     });
-    expect(screen.getByTestId('ledger-account-not-found')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('ledger-account-not-found'),
+    ).toBeInTheDocument();
     // lookup form stays mounted.
     expect(screen.getByTestId('ledger-account-input')).toBeInTheDocument();
     expect(screen.queryByTestId('ledger-account-detail')).toBeNull();
   });
 
-  it('clicking a trial-balance account code drills into the 계정 tab (handleSelectAccount)', () => {
+  it('clicking a trial-balance account code drills into the 계정 tab (handleSelectAccount)', async () => {
     renderScreen();
     // The trial-balance tab is visible by default.
     expect(screen.getByTestId('ledger-tab-trial-balance')).toHaveAttribute(
@@ -894,22 +908,25 @@ describe('LedgerOpsScreen — 계정 tab (TASK-PC-FE-074)', () => {
       'aria-selected',
       'true',
     );
-    // The account panel is now visible (the account lookup form is mounted).
-    expect(screen.getByTestId('ledger-account-input')).toBeInTheDocument();
+    // The account panel is now visible (the account lookup form is mounted —
+    // lazily, so await it).
+    expect(
+      await screen.findByTestId('ledger-account-input'),
+    ).toBeInTheDocument();
     // The panel no longer shows the "none" placeholder since a code was
     // selected — the detail component or a loading state is rendered.
     // (The lookup input's internal state is initialized once — we assert
     // the tab switch, not the input's displayed value.)
   });
 
-  it('clicking an entryId in the account entries table switches to the 분개 조회 tab (handleSelectEntry)', () => {
+  it('clicking an entryId in the account entries table switches to the 분개 조회 tab (handleSelectEntry)', async () => {
     renderScreen({
       initialAccountCode: 'CUSTOMER_WALLET:acc-1',
       initialAccountBalance: ACCOUNT_BALANCE,
       initialAccountEntries: ACCOUNT_ENTRIES,
     });
-    // Should be on the 계정 tab.
-    const table = screen.getByTestId('ledger-account-entries-table');
+    // Should be on the 계정 tab (lazy panel — await its entries table).
+    const table = await screen.findByTestId('ledger-account-entries-table');
     // The entry id cells are buttons when onSelectEntry is wired.
     const entryIdBtn = within(table).getByTestId('ledger-account-entry-id-0');
     fireEvent.click(entryIdBtn);
@@ -918,8 +935,8 @@ describe('LedgerOpsScreen — 계정 tab (TASK-PC-FE-074)', () => {
       'aria-selected',
       'true',
     );
-    // The entry tab is now visible with the lookup form mounted.
-    expect(screen.getByTestId('ledger-entry-input')).toBeInTheDocument();
+    // The entry tab is now visible with the lookup form mounted (lazily).
+    expect(await screen.findByTestId('ledger-entry-input')).toBeInTheDocument();
     // (The JournalEntryLookup internal state is initialized once; we assert
     // the tab switch, not the input's displayed value.)
   });
@@ -965,6 +982,9 @@ describe('LedgerOpsScreen — WCAG AA (axe-clean)', () => {
       />,
       { wrapper: wrapper() },
     );
+    // The 분개 panel is lazy — await its loaded content so axe runs on the
+    // real panel, not the loading fallback (TASK-PC-FE-134).
+    await screen.findByTestId('ledger-entry-detail');
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
   });
@@ -983,6 +1003,7 @@ describe('LedgerOpsScreen — WCAG AA (axe-clean)', () => {
       />,
       { wrapper: wrapper() },
     );
+    await screen.findByTestId('ledger-account-detail');
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
   });
@@ -1035,10 +1056,12 @@ describe('LedgerOpsScreen — 대사 tab statement (TASK-PC-FE-075)', () => {
     );
   }
 
-  it('the 대사 tab contains the StatementLookup input (NO new tab added)', () => {
+  it('the 대사 tab contains the StatementLookup input (NO new tab added)', async () => {
     renderRecon();
     fireEvent.click(screen.getByTestId('ledger-tab-reconciliation'));
-    expect(screen.getByTestId('ledger-statement-input')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('ledger-statement-input'),
+    ).toBeInTheDocument();
     // The statement-detail read adds NO new tab — it is wired into the
     // existing 대사 tab. The tab count is whatever the screen declares
     // (4 original + 계정 [FE-074] + FX 포지션 로트 [FE-091] +
@@ -1049,7 +1072,7 @@ describe('LedgerOpsScreen — 대사 tab statement (TASK-PC-FE-075)', () => {
     expect(tabs).toHaveLength(7);
   });
 
-  it('a seeded statementId opens on the 대사 tab with StatementDetail rendered (F5 header values)', () => {
+  it('a seeded statementId opens on the 대사 tab with StatementDetail rendered (F5 header values)', async () => {
     renderRecon({
       initialStatementId: 'stmt-1',
       initialStatement: STATEMENT,
@@ -1059,7 +1082,9 @@ describe('LedgerOpsScreen — 대사 tab statement (TASK-PC-FE-075)', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByTestId('ledger-statement-header')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('ledger-statement-header'),
+    ).toBeInTheDocument();
     expect(
       screen.getByTestId('ledger-statement-account-code').textContent,
     ).toContain('CUSTOMER_WALLET:acc-1');
@@ -1074,39 +1099,39 @@ describe('LedgerOpsScreen — 대사 tab statement (TASK-PC-FE-075)', () => {
     ).toBe('1');
   });
 
-  it('match-row money is rendered via formatMoney (F5 — large KRW minor string, no Number coercion)', () => {
+  it('match-row money is rendered via formatMoney (F5 — large KRW minor string, no Number coercion)', async () => {
     renderRecon({
       initialStatementId: 'stmt-1',
       initialStatement: STATEMENT,
     });
-    const matchRow = screen.getByTestId('ledger-statement-match-row-0');
+    const matchRow = await screen.findByTestId('ledger-statement-match-row-0');
     // amount '9007199254740993' KRW (scale 0) → numeric portion present.
     expect(matchRow.textContent).toContain('9007199254740993');
     // externalRef present.
     expect(matchRow.textContent).toContain('ext-ref-001');
   });
 
-  it('clicking a match-row journalEntryId button switches to the 분개 조회 tab (handleSelectEntry)', () => {
+  it('clicking a match-row journalEntryId button switches to the 분개 조회 tab (handleSelectEntry)', async () => {
     renderRecon({
       initialStatementId: 'stmt-1',
       initialStatement: STATEMENT,
     });
-    fireEvent.click(screen.getByTestId('ledger-statement-match-entry-0'));
+    fireEvent.click(await screen.findByTestId('ledger-statement-match-entry-0'));
     // Now on the 분개 조회 tab.
     expect(screen.getByTestId('ledger-tab-entry')).toHaveAttribute(
       'aria-selected',
       'true',
     );
-    expect(screen.getByTestId('ledger-entry-input')).toBeInTheDocument();
+    expect(await screen.findByTestId('ledger-entry-input')).toBeInTheDocument();
   });
 
-  it('clicking a discrepancy-row link selects that discrepancy in the DiscrepancyDetail (stays on 대사 tab)', () => {
+  it('clicking a discrepancy-row link selects that discrepancy in the DiscrepancyDetail (stays on 대사 tab)', async () => {
     renderRecon({
       initialStatementId: 'stmt-1',
       initialStatement: STATEMENT,
     });
     // The discrepancy table in the statement.
-    const disc0 = screen.getByTestId('ledger-statement-disc-link-0');
+    const disc0 = await screen.findByTestId('ledger-statement-disc-link-0');
     expect(disc0.textContent).toContain('d-stmt-1');
     fireEvent.click(disc0);
     // Still on the 대사 tab (disc link does NOT switch tabs).
@@ -1116,7 +1141,7 @@ describe('LedgerOpsScreen — 대사 tab statement (TASK-PC-FE-075)', () => {
     );
   });
 
-  it('a seeded statementId that 404\'d renders the not-found notice inline (lookup form stays mounted)', () => {
+  it('a seeded statementId that 404\'d renders the not-found notice inline (lookup form stays mounted)', async () => {
     renderRecon({
       initialStatementId: 'nope',
       initialStatementNotFound: true,
@@ -1126,20 +1151,22 @@ describe('LedgerOpsScreen — 대사 tab statement (TASK-PC-FE-075)', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByTestId('ledger-statement-not-found')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('ledger-statement-not-found'),
+    ).toBeInTheDocument();
     // Lookup form stays mounted after a 404.
     expect(screen.getByTestId('ledger-statement-input')).toBeInTheDocument();
     // StatementDetail NOT rendered.
     expect(screen.queryByTestId('ledger-statement-header')).toBeNull();
   });
 
-  it('discrepancy queue (DiscrepancyQueue) is still rendered below the statement section', () => {
+  it('discrepancy queue (DiscrepancyQueue) is still rendered below the statement section', async () => {
     renderRecon({
       initialStatementId: 'stmt-1',
       initialStatement: STATEMENT,
     });
     // The existing discrepancy queue must still be present.
-    expect(screen.getByTestId('ledger-recon-table')).toBeInTheDocument();
+    expect(await screen.findByTestId('ledger-recon-table')).toBeInTheDocument();
   });
 
   it('the 대사 tab with a statement is axe-clean (WCAG AA)', async () => {
@@ -1149,5 +1176,74 @@ describe('LedgerOpsScreen — 대사 tab statement (TASK-PC-FE-075)', () => {
     });
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-134 — lazy panel code split: non-default panels mount only on
+// first tab visit, and stay mounted thereafter (lookup state preserved).
+// ---------------------------------------------------------------------------
+
+describe('LedgerOpsScreen — lazy panel code split (TASK-PC-FE-134)', () => {
+  function renderScreen(
+    overrides: Partial<Parameters<typeof LedgerOpsScreen>[0]> = {},
+  ) {
+    return render(
+      <LedgerOpsScreen
+        initialEntryId={null}
+        trialBalance={TRIAL_BALANCE}
+        periods={PERIODS}
+        discrepancies={DISCREPANCIES}
+        initialEntry={null}
+        {...overrides}
+      />,
+      { wrapper: wrapper() },
+    );
+  }
+
+  it('a plain load mounts ONLY the trial-balance panel — the non-default panels are deferred (empty tabpanels, no content / no loading fallback)', () => {
+    renderScreen();
+    // Default tab content is present.
+    expect(screen.getByTestId('ledger-tb-table')).toBeInTheDocument();
+    // Non-default panels are gated on `visited` → their content is absent
+    // until the tab is activated (and the lazy chunk is not even requested).
+    expect(screen.queryByTestId('ledger-account-input')).toBeNull();
+    expect(screen.queryByTestId('ledger-statement-input')).toBeNull();
+    expect(screen.queryByTestId('ledger-lots-account-input')).toBeNull();
+    expect(screen.queryByTestId('ledger-entry-input')).toBeNull();
+    // The ARIA tabpanel wrappers still exist, but they hold no element child
+    // (not even the loading fallback) before first visit.
+    expect(
+      screen.getByTestId('ledger-panel-account').childElementCount,
+    ).toBe(0);
+    expect(
+      screen.getByTestId('ledger-panel-lots').childElementCount,
+    ).toBe(0);
+    // No panel-loading fallback anywhere on a plain load.
+    expect(screen.queryByTestId('ledger-panel-loading')).toBeNull();
+  });
+
+  it('a visited panel stays mounted across tab round-trips — the lookup input value is preserved (no remount / state reset)', async () => {
+    renderScreen();
+    fireEvent.click(screen.getByTestId('ledger-tab-entry'));
+    const input = (await screen.findByTestId(
+      'ledger-entry-input',
+    )) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'je-typed-123' } });
+    expect(input.value).toBe('je-typed-123');
+
+    // Switch away to the default tab, then back to 분개.
+    fireEvent.click(screen.getByTestId('ledger-tab-trial-balance'));
+    expect(screen.getByTestId('ledger-tab-trial-balance')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    fireEvent.click(screen.getByTestId('ledger-tab-entry'));
+
+    // The panel was kept mounted (hidden-toggled, not unmounted), so the
+    // typed value persists — the chunk is already loaded, so the input is
+    // available synchronously (no second await).
+    const inputAgain = screen.getByTestId('ledger-entry-input') as HTMLInputElement;
+    expect(inputAgain.value).toBe('je-typed-123');
   });
 });

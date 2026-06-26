@@ -223,12 +223,15 @@ describe('LedgerOpsScreen — FX 포지션 로트 tab (TASK-PC-FE-091)', () => {
     expect(screen.getAllByRole('tab')).toHaveLength(7);
   });
 
-  it('clicking the tab reveals the lookup form; no (code,currency) yet → "none-input" placeholder, no fetch', () => {
+  it('clicking the tab reveals the lookup form; no (code,currency) yet → "none-input" placeholder, no fetch', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     renderScreen();
     fireEvent.click(screen.getByTestId('ledger-tab-lots'));
-    expect(screen.getByTestId('ledger-lots-account-input')).toBeInTheDocument();
+    // The lots panel is a lazy (next/dynamic) boundary (TASK-PC-FE-134).
+    expect(
+      await screen.findByTestId('ledger-lots-account-input'),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('ledger-lots-currency-input')).toBeInTheDocument();
     expect(screen.getByTestId('ledger-lots-none-input')).toBeInTheDocument();
     // The query is gated — no (code, currency) submitted yet → no fetch.
@@ -250,7 +253,8 @@ describe('LedgerOpsScreen — FX 포지션 로트 tab (TASK-PC-FE-091)', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderScreen();
     fireEvent.click(screen.getByTestId('ledger-tab-lots'));
-    fireEvent.change(screen.getByTestId('ledger-lots-account-input'), {
+    // The lots panel mounts lazily — await its lookup form (TASK-PC-FE-134).
+    fireEvent.change(await screen.findByTestId('ledger-lots-account-input'), {
       target: { value: 'CUSTOMER_WALLET:acc-1' },
     });
     fireEvent.change(screen.getByTestId('ledger-lots-currency-input'), {
@@ -269,9 +273,11 @@ describe('LedgerOpsScreen — FX 포지션 로트 tab (TASK-PC-FE-091)', () => {
     );
   });
 
-  it('the FX 포지션 로트 tab has no mutation affordance (STRICTLY READ-ONLY)', () => {
+  it('the FX 포지션 로트 tab has no mutation affordance (STRICTLY READ-ONLY)', async () => {
     const { container } = renderScreen();
     fireEvent.click(screen.getByTestId('ledger-tab-lots'));
+    // Await the lazily-mounted panel so the absence assertions are meaningful.
+    await screen.findByTestId('ledger-lots-account-input');
     expect(container.querySelector('[data-testid*="resolve"]')).toBeNull();
     expect(container.querySelector('[data-testid*="reason"]')).toBeNull();
     expect(container.querySelector('[data-testid*="idempotency"]')).toBeNull();
@@ -281,6 +287,8 @@ describe('LedgerOpsScreen — FX 포지션 로트 tab (TASK-PC-FE-091)', () => {
   it('the FX 포지션 로트 tab (lookup empty state) is axe-clean (WCAG AA)', async () => {
     const { container } = renderScreen();
     fireEvent.click(screen.getByTestId('ledger-tab-lots'));
+    // Await the lazily-mounted panel so axe runs on the real lookup form.
+    await screen.findByTestId('ledger-lots-account-input');
     const violations = await runAxe(container);
     expect(violations).toEqual([]);
   });

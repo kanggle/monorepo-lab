@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-134-ledger-ops-lazy-tab-panel-code-split.md` — **REVIEW** (impl PR open). console-web `/ledger` 초기 청크 코드 스플릿(behavior-preserving 번들 perf). `LedgerOpsScreen`('use client', 전 탭 정적 import + `hidden` 토글로 전부 즉시 마운트)를, 비-기본 6개 탭 패널(periods/entry/reconciliation/account/lots/fx-rates)을 `next/dynamic` 분리 + 최초-활성화-시-마운트(이후 유지, 상태 보존)로 전환. **추가 발견**: barrel(`features/ledger-ops/index.ts`)이 전 'use client' leaf 재-export → Server Component page 가 barrel import 시 RSC client-reference 수집이 leaf 전부를 페이지 초기 청크로 끌어와 dynamic 분리만으로는 thin wrapper 만 split 됨 → barrel 을 실 public API(LedgerOpsScreen+getLedgerSectionState+types/helpers)로 trim(leaf 는 lazy panel 경유로만 도달; 테스트는 direct `components/` 경로 사용; app→barrel 레이어링 유지). **실측**: 페이지 전용 청크 77→**23.1 KB(−70%)**, First Load 568→**518 KB**(/wms ≈516 와 동급, 더 이상 outlier 아님). 6 패널 청크는 탭 활성화 시 로드. 기본 Trial Balance·seeded 초기 활성 탭·ARIA·money(F5)·gate/error/degrade 불변. 회귀가드 2종 추가(plain load=trial-balance 만 마운트 / 방문 패널 round-trip 상태보존). 전체 vitest 2120 pass·tsc·lint clean. builds on PC-FE-072/074/075/091/092/104/106. 분석·구현=Opus 4.8.
 
 ## done
 

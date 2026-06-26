@@ -24,28 +24,20 @@
  * balance / periods / discrepancy queue ARE browsable index reads.)
  */
 export { LedgerOpsScreen } from './components/LedgerOpsScreen';
-export { TrialBalanceTable } from './components/TrialBalanceTable';
-export { PeriodsTable } from './components/PeriodsTable';
-export { PeriodDetail } from './components/PeriodDetail';
-export { JournalEntryLookup } from './components/JournalEntryLookup';
-export { JournalEntryDetail } from './components/JournalEntryDetail';
-export { DiscrepancyQueue } from './components/DiscrepancyQueue';
-export { DiscrepancyDetail } from './components/DiscrepancyDetail';
-export { DiscrepancyResolveDialog } from './components/DiscrepancyResolveDialog';
-// TASK-PC-FE-074 — account-level drill reads
-export { AccountLookup } from './components/AccountLookup';
-export { AccountDetail } from './components/AccountDetail';
-// TASK-PC-FE-075 — reconciliation statement-detail read
-export { StatementLookup } from './components/StatementLookup';
-export { StatementDetail } from './components/StatementDetail';
-// TASK-PC-FE-091 — FX position open-lots drill read
-export { PositionLotsLookup } from './components/PositionLotsLookup';
-export { PositionLotsTable } from './components/PositionLotsTable';
-// TASK-PC-FE-092 — FX 환율 피드 대시보드
-export { FxRatesTable } from './components/FxRatesTable';
-// TASK-PC-FE-104 — FX 환율 history 드릴
-export { FxRateHistoryTable } from './components/FxRateHistoryTable';
-export { FxRateHistoryLookup } from './components/FxRateHistoryLookup';
+// ── CODE SPLIT (TASK-PC-FE-134) ── the per-tab leaf components
+// (TrialBalanceTable / PeriodsTable / PeriodDetail / JournalEntry* /
+// Discrepancy* / Account* / Statement* / PositionLots* / FxRates* /
+// FxRateHistory*) are NO LONGER re-exported here. The `(console)/ledger`
+// page is a Server Component that imports this barrel; every `'use client'`
+// leaf re-exported here was being collected as an EAGER client reference for
+// that page and bundled into the page's initial chunk — defeating the
+// `LedgerOpsScreen` per-tab `next/dynamic` split (the heavy leaves stayed in
+// the page chunk while only the thin panel wrappers split out). The leaves are
+// reached at runtime only through the lazy panel boundaries inside
+// `LedgerOpsScreen`; the test suite imports them via their direct
+// `./components/<Name>` paths. `app/` still imports ONLY this barrel (the
+// layering rule holds) — the barrel's public surface is the screen + the
+// server state loader + the shared types/helpers below.
 export { getLedgerSectionState } from './api/ledger-state';
 export type { LedgerSectionState } from './api/ledger-state';
 export type {
