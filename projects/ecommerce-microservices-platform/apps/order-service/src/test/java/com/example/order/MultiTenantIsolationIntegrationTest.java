@@ -206,7 +206,7 @@ class MultiTenantIsolationIntegrationTest {
         // The place path co-commits an OrderPlaced row to the outbox; the row (and
         // its payload) persist even after the poller marks it PUBLISHED.
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT payload FROM outbox WHERE aggregate_id = ? AND event_type = 'OrderPlaced'", idA);
+                "SELECT payload FROM order_outbox WHERE aggregate_id = ? AND event_type = 'OrderPlaced'", idA);
         assertThat(rows).hasSize(1);
 
         JsonNode envelope = objectMapper.readTree((String) rows.get(0).get("payload"));

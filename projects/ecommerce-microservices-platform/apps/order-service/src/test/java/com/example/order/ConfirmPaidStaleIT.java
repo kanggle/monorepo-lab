@@ -63,7 +63,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
-                "outbox.polling.interval-ms=600000",
+                // TASK-BE-448 (outbox v2): keep the v2 poller dormant so the written
+                // order_outbox rows stay observable for the assertions below.
+                "order.outbox.initial-delay-ms=600000",
                 // Keep the BE-138 stuck-detector idle so it never races this test.
                 "order.saga.stuck-detector.initial-delay-ms=86400000",
                 "order.saga.stuck-detector.fixed-delay-ms=86400000"
@@ -128,14 +130,14 @@ class ConfirmPaidStaleIT {
 
     @BeforeEach
     void cleanState() {
-        jdbc.update("DELETE FROM outbox");
+        jdbc.update("DELETE FROM order_outbox");
         jdbc.update("DELETE FROM order_items");
         jdbc.update("DELETE FROM orders");
     }
 
     @AfterEach
     void tearDown() {
-        jdbc.update("DELETE FROM outbox");
+        jdbc.update("DELETE FROM order_outbox");
         jdbc.update("DELETE FROM order_items");
         jdbc.update("DELETE FROM orders");
     }
@@ -309,7 +311,7 @@ class ConfirmPaidStaleIT {
 
     private int countOutboxRows(String eventType, String orderId) {
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT 1 FROM outbox WHERE event_type = ? AND aggregate_id = ?",
+                "SELECT 1 FROM order_outbox WHERE event_type = ? AND aggregate_id = ?",
                 eventType, orderId);
         return rows.size();
     }
