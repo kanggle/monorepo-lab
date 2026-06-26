@@ -87,7 +87,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-135-console-feature-barrel-rsc-first-load-sweep.md` — **REVIEW** (impl PR open). console-web feature-barrel RSC client-reference First Load sweep (FE-134 패턴의 멀티-라우트 일반화). 지문: erp 4 라우트·ecommerce 11 라우트 First Load byte-동일 = 각 라우트가 피처 전체 로드(단일 barrel 이 복수 'use client' 라우트-엔트리 스크린 재-export → page 가 barrel import 시 RSC client-reference 수집이 형제 전부 끌어옴). **AC-0 결정=접근법 (A) `optimizePackageImports`** (`next.config.mjs` 한 블록, barrel/page/test 무변경; sub-barrel·테스트 리다이렉트 불필요). **실측**: erp 619.7→**557.7~522.2**(−62~−97.5), ecommerce ~612.7→**495.7~508.6**(−105~−117), byte-동일 해소·라우트별 슬라이스 로드, sanity(ledger/wms) 무변동. behavior-preserving(import 해석만), vitest 2120 pass·tsc·lint·build green. wms/scm 조사완료 제외. 분석·구현=Opus 4.8.
 
 ## done
 
