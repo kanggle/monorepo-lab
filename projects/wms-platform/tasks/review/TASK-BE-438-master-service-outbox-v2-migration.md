@@ -1,6 +1,6 @@
 # TASK-BE-438 (wms) — Migrate master-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (schema migration + write-path rewrite + publisher/metrics swap + cutover of an at-least-once delivery component; not a routine fix despite the ADR's "cosmetic" label)
