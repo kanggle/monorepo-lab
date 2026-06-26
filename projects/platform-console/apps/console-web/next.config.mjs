@@ -24,6 +24,19 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   ...(isStandalone ? { output: 'standalone' } : {}),
+  // TASK-PC-FE-135 — feature-barrel RSC client-reference First Load sweep.
+  // The erp/ecommerce sections are multi-route: a single feature barrel
+  // re-exports several 'use client' route-entry screens (+ leaves), so each
+  // route's Server Component page — importing that barrel — pulled EVERY
+  // sibling screen into its client graph (RSC client-reference collection,
+  // not tree-shaking). Result: all 4 erp routes / all 11 ecommerce routes
+  // shipped a byte-identical First Load (the whole feature). `optimizePackage
+  // Imports` rewrites the barrel import into direct per-symbol imports at
+  // build time, so each route's client graph includes only the symbols it
+  // actually references. Behavior-preserving (import resolution only).
+  experimental: {
+    optimizePackageImports: ['@/features/erp-ops', '@/features/ecommerce-ops'],
+  },
   async headers() {
     return [
       {

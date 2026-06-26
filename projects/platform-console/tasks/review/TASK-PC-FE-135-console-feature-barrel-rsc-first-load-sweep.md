@@ -8,7 +8,7 @@ console-web feature-barrel RSC client-reference First Load sweep: erp (4 routes)
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -123,3 +123,34 @@ FE-134 종료 직후 동일 패턴 적용 후보를 콘솔 무거운 피처 4종
 - **ecommerce-ops — STRONGEST(집계)**: barrel 24/24 'use client', 11 라우트 First Load byte-동일(607.4 KB) = 피처-전체-로드, 블래스트 반경 최대. → 본 task.
 - **wms-ops — WEAK**: barrel 2 컴포넌트·단일 라우트·3 섹션 first-paint 필요. → 제외.
 - **scm-ops — WEAK~MEDIUM**: barrel 3 컴포넌트·단일 주 라우트·SKU breakdown 섹션만 지연-적격(작은 win). → LOW, 별도 선택 task 후보(필요 시 별건).
+
+---
+
+# Implementation Result (2026-06-26)
+
+**AC-0 결정: 접근법 (A) `optimizePackageImports` 채택** — spike 로 실측 확인됨. `next.config.mjs` `experimental.optimizePackageImports: ['@/features/erp-ops', '@/features/ecommerce-ops']` 한 블록만 추가. barrel 구조·page import·테스트 **전부 무변경**(접근법 B/C 의 sub-barrel 재구성·테스트 direct-path 리다이렉트 불필요 — 레이어링 규칙도 그대로). `@/` path-alias 로컬 barrel 에서 정상 동작 확인.
+
+**측정 (`pnpm build`, baseline → with (A))** — byte-동일 지문 해소, 각 라우트가 자기 슬라이스만 로드:
+
+| route | baseline | with (A) | Δ |
+|---|---|---|---|
+| `/erp` | 619.7 | 557.7 | −62.0 |
+| `/erp/orgview` | 619.7 | **522.2** | **−97.5** |
+| `/erp/approval` | 619.7 | 536.9 | −82.8 |
+| `/erp/delegation` | 619.7 | 535.1 | −84.6 |
+| `/ecommerce/products` | 612.7 | 507.5 | −105.2 |
+| `/ecommerce/products/[id]` | 612.5 | 498.7 | −113.8 |
+| `/ecommerce/orders` | 612.7 | 501.0 | −111.7 |
+| `/ecommerce/orders/[id]` | 612.5 | **495.7** | **−116.8** |
+| `/ecommerce/users` | 612.7 | 500.9 | −111.8 |
+| `/ecommerce/sellers` | 612.7 | 499.5 | −113.2 |
+| `/ecommerce/shippings` | 612.7 | 507.9 | −104.8 |
+| `/ecommerce/promotions` | 612.7 | 507.2 | −105.5 |
+| `/ecommerce/notifications/templates` | 612.7 | 499.8 | −112.9 |
+| `/ecommerce/products/new` | 612.7 | 508.6 | −104.1 |
+| `/ledger` (sanity) | 517.8 | 517.8 | 0 |
+| `/wms` (sanity) | 515.6 | 515.6 | 0 |
+
+erp 4 라우트 −62~−97.5 KB, ecommerce 11 라우트 −105~−117 KB. 더 이상 byte-동일이 아니며 가벼운 라우트(`/erp/orgview`)가 가장 적게 로드. sanity(ledger/wms) 무변동 = 전역 회귀 없음. behavior-preserving(import 해석만 변경). vitest 무회귀·tsc·lint·build green.
+
+**확장성 노트**: `optimizePackageImports` 는 behavior-preserving 한 Next 공식 barrel 최적화로, 향후 멀티-라우트 피처 추가 시 같은 지문(라우트 간 First Load byte-동일)이 보이면 해당 barrel 을 목록에 추가하면 된다. 본 task 는 실측된 erp·ecommerce 두 피처로 범위 한정.
