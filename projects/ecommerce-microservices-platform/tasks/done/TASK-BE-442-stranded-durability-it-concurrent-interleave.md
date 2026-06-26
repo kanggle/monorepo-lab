@@ -1,11 +1,13 @@
 # TASK-BE-442 — Rework the stranded-refund durability IT to inject a genuinely-concurrent VOIDED-during-capture interleave
 
-**Status:** ready
+**Status:** done (superseded by [[TASK-BE-443]])
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (concurrency-modeling test rework that must prove a money-safety durability invariant without re-introducing flakiness)
 
 **Service:** payment-service
+
+> **SUPERSEDED (2026-06-26) by [[TASK-BE-443]].** Mapping confirm()'s control flow to make this IT reachable revealed the rework is **infeasible test-only**: confirm()'s post-capture re-read (`findByOrderId`, same `@Transactional` Hibernate Session) returns the **stale L1-managed PENDING** entity and discards the freshly-committed VOIDED columns (session entity-identity, above DB isolation) — so a concurrently-committed VOIDED is invisible and the stranded path is never reached. That is a **latent production money-safety defect** (the BE-435/437 post-capture guard is dead for the very race it exists to handle; no `@Version` → last-writer-wins COMPLETED + `PaymentCompleted` on a cancelled order). The IT rework therefore folds into **TASK-BE-443** (the production fresh-read fix + this IT, which becomes the regression proof). This task is closed as superseded; no separate implementation.
 
 > **Origin.** Surfaced by **TASK-BE-440**. Once BE-440 made the `OrderCancelled` consumer commit `VOIDED` in a proper transaction, `PaymentRefundStrandedDurabilityIntegrationTest.strandedEscalation_survivesConfirmRollback` started failing (`Expected size: 1 but was: 0`) — its **sequential** arrange became **unreachable**. The test is **quarantined** with `@Disabled("TASK-BE-442: …")` (the two BE-440 consumer-tx ITs stay lifted); this task reworks it so the BE-437 AC-2 durability invariant is actually exercised, then lifts the quarantine.
 

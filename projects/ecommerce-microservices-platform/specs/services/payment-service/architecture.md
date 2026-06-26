@@ -178,11 +178,24 @@ concurrent interleave where `confirm()` is mid-flight when `OrderCancelled` comm
    just-captured amount** (`cancelPayment(paymentKey, "Order cancelled during confirm")`), does
    **not** advance to `COMPLETED`, and publishes no `PaymentCompleted`. Funds are never retained.
 
-   Mechanism: a fresh `findByOrderId` re-read after capture. Under the project's Postgres
-   `READ_COMMITTED` default this read observes the committed `VOIDED`; this needs no schema
-   change (no optimistic-`@Version` column). If the void instead commits *after* this
-   transaction, the void path is a no-op on the now-`COMPLETED` row and the consumer's
-   COMPLETED→refund branch reverses it — also safe.
+   Mechanism: a **fresh, persistence-context-bypassing** re-read after capture —
+   `PaymentRepository.findByOrderIdFresh` (TASK-BE-443), which forces an `entityManager.refresh`.
+   A plain `findByOrderId` would **not** observe the concurrent `VOIDED`: `confirm()`'s pre-capture
+   read already loaded the row as a **managed** entity in this transaction's persistence context
+   (L1), and a derived query re-hydrates the matched row through the same session, where Hibernate's
+   managed-entity identity (session-level repeatable-read) returns the **stale `PENDING`** instance
+   and discards the freshly-read `VOIDED` columns — masking the race **regardless of DB isolation
+   level** (READ_COMMITTED governs what the SQL fetches, not whether Hibernate uses it for an
+   already-managed entity; the row carries no optimistic-`@Version`). `findByOrderIdFresh`'s
+   `refresh` re-SELECTs and overwrites the managed entity's stale fields with the committed `VOIDED`,
+   so the post-capture guard actually fires. The refresh needs no schema change and is a **no-op on
+   the success path** (in the no-race case the row is still `PENDING`, so `confirm()` proceeds to
+   capture-confirm unchanged). If the void instead commits *after* this transaction, the void path
+   is a no-op on the now-`COMPLETED` row and the consumer's COMPLETED→refund branch reverses it —
+   also safe. (Before BE-443 this guard was unreachable for the real concurrent race — the L1 cache
+   returned the stale `PENDING`, so a captured-but-cancelled order would have advanced to `COMPLETED`
+   with funds retained: a money-safety defect that only surfaced against a real DB, not the
+   mock-repo unit test. See the `PaymentRefundStrandedDurabilityIntegrationTest` interleave proof.)
 
 **Post-capture auto-refund failure — stranded-refund escalation (TASK-BE-437).** The
 post-capture `cancelPayment` call above can itself **fail at the PG**
