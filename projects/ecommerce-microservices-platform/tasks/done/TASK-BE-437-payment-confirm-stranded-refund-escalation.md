@@ -1,6 +1,8 @@
 # TASK-BE-437 — Money-safety: escalate a stranded refund when the HTTP confirm() post-capture auto-refund fails at the PG
 
-**Status:** review
+**Status:** done
+
+> **DONE (2026-06-26, 3-dim verified — impl PR #1959 squash `b4ce981cab...` `b4ce981c`).** Closed the BE-435 money-safety hole: `PaymentConfirmService.confirm()` post-capture `cancelPayment` was uncaught → PG failure stranded captured funds silently. Fix: catch both PG exceptions → `PaymentRefundStrandedRecorder` (separate `@Component`, `@Transactional(REQUIRES_NEW)`) writes a durable `PaymentRefundStranded` outbox escalation (topic `payment.alert.refund.stranded`) that **commits across the confirm() rollback** + `payment_refund_stranded_total` metric + ERROR log (F1 inner try/catch) → reject confirm. Success path unchanged. New event/port/outbox-writer/relay-topic/standalone-publisher wiring + specs (payment-events.md, architecture.md). **3-dim:** (a) MERGED + `b4ce981c`; (b) origin/main tip = `b4ce981c3`; (c) pre-merge 20 checks pass / 1 skipping / **0 fail** (Build & Test = ecommerce `:check` incl payment unit; PaymentConfirmServiceTest +3 GREEN). **⚠️ caveat (same as BE-435):** the AC-2 durability IT is `@Tag("integration")` → runs nowhere in automation until the ecommerce IT CI lane exists (TASK-MONO-307); the REQUIRES_NEW separation is structurally + unit verified, the cross-rollback commit proof is IT-only. **Follow-up (out of scope):** auto-reconciliation sweeper retrying the PG cancel for stranded payments (Category-A saga). 분석=Opus 4.8 / 구현=Opus backend-engineer + Opus 검수(confirm catch·REQUIRES_NEW recorder·relay topic 직접 diff).
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (payment-integrity money-safety + transactional-boundary/REQUIRES_NEW reasoning; not a routine fix)
