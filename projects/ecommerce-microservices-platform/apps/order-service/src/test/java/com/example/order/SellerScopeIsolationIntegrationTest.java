@@ -1,7 +1,6 @@
 package com.example.order;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -142,23 +141,28 @@ class SellerScopeIsolationIntegrationTest {
 
     @Test
     @DisplayName("다중 셀러 주문은 각 셀러 스코프 운영자에게 보이고 라인이 올바르게 귀속된다 (AC-3)")
-    @Disabled("TASK-BE-441: seller-scope ABAC AC-3 MockMvc assertion failed on CI — "
-            + "TASK-MONO-307 residual triage")
     void multiSellerOrder_visibleToEachSeller_linesAttributed() throws Exception {
         String orderId = placeOrder("user-multi-" + System.nanoTime(), multiSellerBody());
 
-        // visible to a1's scope...
+        // visible to a1's scope — the full multi-seller order is returned (EXISTS predicate,
+        // attribution not isolation) with BOTH lines carrying their captured seller_id. The
+        // @OneToMany items collection has no @OrderBy, so the JSON array order is not
+        // guaranteed by Postgres — assert both sellers are present order-independently (the
+        // prior $.items[0]/$.items[1] index assertion was the drifted expectation).
         mockMvc.perform(get("/api/admin/orders/{id}", orderId)
                         .header(ROLE_HEADER, "ADMIN").header(TENANT_HEADER, TENANT_A)
                         .header(SELLER_SCOPE_HEADER, SELLER_A1))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].sellerId").value(SELLER_A1))
-                .andExpect(jsonPath("$.items[1].sellerId").value(SELLER_A2));
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[*].sellerId",
+                        org.hamcrest.Matchers.containsInAnyOrder(SELLER_A1, SELLER_A2)));
         // ...and to a2's scope.
         mockMvc.perform(get("/api/admin/orders/{id}", orderId)
                         .header(ROLE_HEADER, "ADMIN").header(TENANT_HEADER, TENANT_A)
                         .header(SELLER_SCOPE_HEADER, SELLER_A2))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].sellerId",
+                        org.hamcrest.Matchers.containsInAnyOrder(SELLER_A1, SELLER_A2)));
     }
 
     @Test
