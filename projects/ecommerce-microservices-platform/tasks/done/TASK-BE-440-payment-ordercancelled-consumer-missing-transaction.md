@@ -1,6 +1,6 @@
 # TASK-BE-440 — OrderCancelled→refund/void consumer path persists without an active transaction
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (money-safety consumer tx-boundary + re-verify the BE-437 REQUIRES_NEW durability proof under the fix)

@@ -1,6 +1,6 @@
 # TASK-BE-439 — Order sweeper/read paths map detached entities outside a transaction → LazyInitializationException
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (contained tx-boundary / fetch-strategy fix + un-quarantine ITs; well-specified by the surfacing run)
