@@ -98,6 +98,22 @@ class PaymentEventOutboxRelayTest {
     }
 
     @Test
+    @DisplayName("PaymentRefundUnresolved 이벤트는 payment.alert.refund.unresolved 토픽으로 Kafka 전송된다 (TASK-BE-438)")
+    void sendToKafka_paymentRefundUnresolved_sendsToAlertTopic() {
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        relay.pollAndPublish();
+        verify(outboxPublisher).publishPendingEvents(senderCaptor.capture());
+
+        OutboxPublisher.SendOutcome outcome =
+                senderCaptor.getValue().send("PaymentRefundUnresolved", "pay-1", "{\"test\":1}");
+
+        assertThat(outcome).isEqualTo(OutboxPublisher.SendOutcome.SUCCESS);
+        verify(kafkaTemplate).send("payment.alert.refund.unresolved", "pay-1", "{\"test\":1}");
+    }
+
+    @Test
     @DisplayName("Kafka transient 실패 시 FAILURE_TRANSIENT 반환 + PaymentMetricRecorder.incrementEventPublishFailure 호출")
     void sendToKafka_transientFailure_returnsTransientAndIncrementsMetric() {
         when(kafkaTemplate.send(anyString(), anyString(), anyString()))

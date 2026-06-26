@@ -3,6 +3,7 @@ package com.example.payment.adapter.out.pg;
 import com.example.payment.application.exception.PgConfirmFailedException;
 import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
+import com.example.payment.application.port.out.PaymentGatewayStatus;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.github.resilience4j.bulkhead.Bulkhead;
@@ -163,6 +164,66 @@ class TossPaymentsAdapterTest {
 
         assertThatThrownBy(() -> adapter.cancelPayment("pk_test_123", "Order cancelled"))
                 .isInstanceOf(HttpServerErrorException.class);
+    }
+
+    // --- fetchStatus (TASK-BE-438 double-refund guard) ---
+
+    @Test
+    @DisplayName("fetchStatus 가 Toss status=CANCELED 면 PaymentGatewayStatus.CANCELED 로 매핑한다")
+    void fetchStatus_canceled_mapsToCanceled() {
+        wireMock.stubFor(get(urlPathEqualTo("/v1/payments/pk_test_123"))
+                .willReturn(okJson("""
+                        {"paymentKey":"pk_test_123","status":"CANCELED"}
+                        """)));
+
+        assertThat(adapter.fetchStatus("pk_test_123")).isEqualTo(PaymentGatewayStatus.CANCELED);
+    }
+
+    @Test
+    @DisplayName("fetchStatus 가 Toss status=DONE 면 PaymentGatewayStatus.CAPTURED 로 매핑한다")
+    void fetchStatus_done_mapsToCaptured() {
+        wireMock.stubFor(get(urlPathEqualTo("/v1/payments/pk_test_123"))
+                .willReturn(okJson("""
+                        {"paymentKey":"pk_test_123","status":"DONE"}
+                        """)));
+
+        assertThat(adapter.fetchStatus("pk_test_123")).isEqualTo(PaymentGatewayStatus.CAPTURED);
+    }
+
+    @Test
+    @DisplayName("fetchStatus 가 알 수 없는/누락된 status 면 PaymentGatewayStatus.UNKNOWN 으로 매핑한다 (RESOLVED 로 추정 금지)")
+    void fetchStatus_unknownStatus_mapsToUnknown() {
+        wireMock.stubFor(get(urlPathEqualTo("/v1/payments/pk_test_123"))
+                .willReturn(okJson("""
+                        {"paymentKey":"pk_test_123","status":"ABORTED"}
+                        """)));
+
+        assertThat(adapter.fetchStatus("pk_test_123")).isEqualTo(PaymentGatewayStatus.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("fetchStatus 4xx 는 PgConfirmFailedException 으로 변환된다 (read 오류를 RESOLVED 로 추정하지 않음)")
+    void fetchStatus_clientError_throwsPgConfirmFailed() {
+        wireMock.stubFor(get(urlPathEqualTo("/v1/payments/pk_test_123"))
+                .willReturn(aResponse()
+                        .withStatus(404)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"code":"NOT_FOUND_PAYMENT","message":"존재하지 않는 결제입니다."}
+                                """)));
+
+        assertThatThrownBy(() -> adapter.fetchStatus("pk_test_123"))
+                .isInstanceOf(PgConfirmFailedException.class);
+    }
+
+    @Test
+    @DisplayName("fetchStatusFallback 은 transport 실패를 PgGatewayUnavailableException 으로 변환한다")
+    void fetchStatusFallback_transport_translatesToGatewayUnavailable() {
+        ConnectException cause = new ConnectException("connection refused");
+
+        assertThatThrownBy(() -> adapter.fetchStatusFallback("pk_test_123", cause))
+                .isInstanceOf(PgGatewayUnavailableException.class)
+                .hasCauseInstanceOf(ConnectException.class);
     }
 
     // --- Fallback method classification (ADR-MONO-005 § D4) ---

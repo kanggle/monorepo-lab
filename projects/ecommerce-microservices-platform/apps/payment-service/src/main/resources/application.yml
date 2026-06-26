@@ -61,6 +61,17 @@ outbox:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
 
+# Stranded-refund auto-reconciliation sweeper (TASK-BE-438, ADR-MONO-005 § 2.3 D3 Category A)
+payment:
+  stranded-refund:
+    enabled: ${STRANDED_REFUND_SWEEPER_ENABLED:true}
+    fixed-delay-ms: ${STRANDED_REFUND_FIXED_DELAY_MS:60000}
+    initial-delay-ms: ${STRANDED_REFUND_INITIAL_DELAY_MS:30000}
+    batch-size: ${STRANDED_REFUND_BATCH_SIZE:50}
+    max-attempts: ${STRANDED_REFUND_MAX_ATTEMPTS:8}
+    initial-backoff-ms: ${STRANDED_REFUND_INITIAL_BACKOFF_MS:1000}
+    max-backoff-ms: ${STRANDED_REFUND_MAX_BACKOFF_MS:30000}
+
 toss:
   payments:
     secret-key: ${TOSS_PAYMENTS_SECRET_KEY:test_sk_placeholder}

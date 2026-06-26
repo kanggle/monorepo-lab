@@ -75,6 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
+| TASK-BE-438 | **REVIEW**. BE-437 후속 — 묶인 환불(stranded refund) 자동 재조정 sweeper(Category-A saga, ADR-MONO-005 §2.3 D3). `stranded_refund` 테이블(Flyway V7) 영속화 + `@Scheduled` `StrandedRefundSweeper`/`Reconciler`(REQUIRES_NEW per-record AOP-split)가 **PG 상태 선조회**(`fetchStatus`, 이미 취소면 RESOLVED, 이중환불 방지) 후 재취소, bounded-retry(backoff, max 8)→terminal `UNRESOLVED`+`PaymentRefundUnresolved` 에스컬레이션. 메트릭 resolved/unresolved/open gauge. `:payment-service:test` GREEN(단위 권위; @Tag IT는 MONO-307로 compile-only). | payment-service | code, event |
 
 ## in-progress
 

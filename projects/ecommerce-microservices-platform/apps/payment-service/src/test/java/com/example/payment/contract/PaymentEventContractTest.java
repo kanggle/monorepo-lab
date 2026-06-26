@@ -1,6 +1,7 @@
 package com.example.payment.contract;
 
 import com.example.payment.application.event.PaymentCompletedEvent;
+import com.example.payment.application.event.PaymentRefundUnresolvedEvent;
 import com.example.payment.application.event.PaymentRefundedEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -84,5 +85,36 @@ class PaymentEventContractTest {
         assertFieldsMatch(payload, Set.of("paymentId", "orderId", "userId", "amount",
                         "totalRefunded", "fullyRefunded", "refundedAt"),
                 SPEC_REF + " PaymentRefunded payload");
+    }
+
+    // ─── PaymentRefundUnresolved (TASK-BE-438 terminal escalation) ───────
+
+    @Test
+    @DisplayName("PaymentRefundUnresolved envelope은 스펙 정의 필드만 포함한다 (tenant_id 포함)")
+    void paymentRefundUnresolved_envelope_matchesSpec() throws Exception {
+        PaymentRefundUnresolvedEvent event = new PaymentRefundUnresolvedEvent(
+                "evt-3", "PaymentRefundUnresolved", "2026-06-26T03:00:00Z", "payment-service",
+                "ecommerce",
+                new PaymentRefundUnresolvedEvent.Payload("pay-1", "order-1", "pk_test_123", 30000L,
+                        "PgGatewayUnavailableException", 8, "attempt cap exhausted", "2026-06-26T03:00:00Z")
+        );
+
+        assertFieldsMatch(objectMapper.writeValueAsString(event), ENVELOPE_FIELDS, SPEC_REF + " envelope");
+    }
+
+    @Test
+    @DisplayName("PaymentRefundUnresolved payload는 {paymentId, orderId, paymentKey, amount, reason, attempts, lastError, occurredAt}만 포함한다")
+    void paymentRefundUnresolved_payload_matchesSpec() throws Exception {
+        PaymentRefundUnresolvedEvent event = new PaymentRefundUnresolvedEvent(
+                "evt-3", "PaymentRefundUnresolved", "2026-06-26T03:00:00Z", "payment-service",
+                "ecommerce",
+                new PaymentRefundUnresolvedEvent.Payload("pay-1", "order-1", "pk_test_123", 30000L,
+                        "PgGatewayUnavailableException", 8, "attempt cap exhausted", "2026-06-26T03:00:00Z")
+        );
+
+        JsonNode payload = objectMapper.readTree(objectMapper.writeValueAsString(event)).get("payload");
+        assertFieldsMatch(payload, Set.of("paymentId", "orderId", "paymentKey", "amount",
+                        "reason", "attempts", "lastError", "occurredAt"),
+                SPEC_REF + " PaymentRefundUnresolved payload");
     }
 }

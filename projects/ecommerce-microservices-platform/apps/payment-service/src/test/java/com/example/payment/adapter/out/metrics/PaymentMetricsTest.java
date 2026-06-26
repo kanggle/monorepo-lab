@@ -52,4 +52,38 @@ class PaymentMetricsTest {
         assertThat(registry.counter("payment_amount_sum").count()).isEqualTo(80000.0);
     }
 
+    @Test
+    @DisplayName("TASK-BE-438: stranded refund 자동복구 시 payment_refund_stranded_resolved_total 이 증가한다")
+    void incrementRefundStrandedResolved_incrementsCounter() {
+        paymentMetrics.incrementRefundStrandedResolved();
+        paymentMetrics.incrementRefundStrandedResolved();
+
+        assertThat(registry.counter("payment_refund_stranded_resolved_total").count()).isEqualTo(2.0);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-438: stranded refund terminal 시 payment_refund_stranded_unresolved_total 이 증가한다")
+    void incrementRefundStrandedUnresolved_incrementsCounter() {
+        paymentMetrics.incrementRefundStrandedUnresolved();
+
+        assertThat(registry.counter("payment_refund_stranded_unresolved_total").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-438: payment_refund_stranded_open 게이지는 등록된 supplier 의 현재 open 개수를 노출한다")
+    void registerStrandedOpenGauge_exposesCurrentOpenCount() {
+        long[] open = {3L};
+        paymentMetrics.registerStrandedOpenGauge(() -> open[0]);
+        assertThat(registry.get("payment_refund_stranded_open").gauge().value()).isEqualTo(3.0);
+
+        open[0] = 5L; // gauge reads through the supplier on each scrape
+        assertThat(registry.get("payment_refund_stranded_open").gauge().value()).isEqualTo(5.0);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-438: supplier 등록 전 open 게이지는 0 을 노출한다 (기본 supplier)")
+    void strandedOpenGauge_defaultsToZeroBeforeRegistration() {
+        assertThat(registry.get("payment_refund_stranded_open").gauge().value()).isEqualTo(0.0);
+    }
+
 }

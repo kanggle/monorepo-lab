@@ -4,6 +4,7 @@ import com.example.payment.application.exception.PgConfirmFailedException;
 import com.example.payment.application.exception.PgGatewayUnavailableException;
 import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
 import com.example.payment.application.port.out.PaymentGatewayPort;
+import com.example.payment.application.port.out.PaymentGatewayStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
@@ -68,6 +69,7 @@ public class TossPaymentsAdapter implements PaymentGatewayPort {
     static final String CIRCUIT_NAME = "toss-payments";
     static final String CONFIRM_PATH = "/v1/payments/confirm";
     static final String CANCEL_PATH = "/v1/payments/{paymentKey}/cancel";
+    static final String STATUS_PATH = "/v1/payments/{paymentKey}";
 
     private final RestClient restClient;
 
@@ -226,6 +228,65 @@ public class TossPaymentsAdapter implements PaymentGatewayPort {
                 paymentKey, cancelAmount, cause.getClass().getSimpleName(), cause.getMessage());
         throw new PgGatewayUnavailableException(
                 "partial cancel exhausted for paymentKey=" + paymentKey
+                        + " (" + cause.getClass().getSimpleName() + ")", cause);
+    }
+
+    /**
+     * Read-only PG state lookup for the stranded-refund double-refund guard (TASK-BE-438).
+     * Maps the Toss {@code status} field down to {@link PaymentGatewayStatus}:
+     * {@code CANCELED → CANCELED} (already reversed); {@code DONE} / {@code PARTIAL_CANCELED}
+     * → {@code CAPTURED} (still held, needs a cancel); anything else (incl. a missing/unparseable
+     * status) → {@code UNKNOWN}. A 4xx is a definitive read error; both 4xx and transport failure
+     * are surfaced to the caller, which treats them as transient (never infers resolution from a
+     * read error). Wrapped with the same R4j instance as confirm/cancel (TASK-BE-139).
+     */
+    @Override
+    @CircuitBreaker(name = CIRCUIT_NAME, fallbackMethod = "fetchStatusFallback")
+    @Retry(name = CIRCUIT_NAME)
+    @Bulkhead(name = CIRCUIT_NAME)
+    public PaymentGatewayStatus fetchStatus(String paymentKey) {
+        log.info("Toss Payments status request: paymentKey={}", paymentKey);
+        try {
+            JsonNode response = restClient.get()
+                    .uri(STATUS_PATH, paymentKey)
+                    .retrieve()
+                    .body(JsonNode.class);
+
+            String status = response != null && response.has("status")
+                    ? response.get("status").asText() : null;
+            PaymentGatewayStatus mapped = mapStatus(status);
+            log.info("Toss Payments status: paymentKey={}, raw={}, mapped={}", paymentKey, status, mapped);
+            return mapped;
+        } catch (HttpClientErrorException e) {
+            // 4xx — definitive read error (e.g. not found). Never infer CANCELED from it.
+            log.error("Toss Payments status 4xx: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw new PgConfirmFailedException("fetchStatus status=" + e.getStatusCode()
+                    + ", body=" + e.getResponseBodyAsString(), e);
+        }
+        // 5xx / IO / timeout propagate uncaught → R4j retry → fallback on exhaustion.
+    }
+
+    private static PaymentGatewayStatus mapStatus(String tossStatus) {
+        if (tossStatus == null) {
+            return PaymentGatewayStatus.UNKNOWN;
+        }
+        return switch (tossStatus) {
+            case "CANCELED" -> PaymentGatewayStatus.CANCELED;
+            case "DONE", "PARTIAL_CANCELED" -> PaymentGatewayStatus.CAPTURED;
+            default -> PaymentGatewayStatus.UNKNOWN;
+        };
+    }
+
+    /** R4j fallback for {@link #fetchStatus}. See {@link #confirmFallback} for the classification contract. */
+    @SuppressWarnings("unused")
+    public PaymentGatewayStatus fetchStatusFallback(String paymentKey, Throwable cause) {
+        if (cause instanceof PgConfirmFailedException pce) {
+            throw pce;
+        }
+        log.warn("Toss Payments status fallback: paymentKey={}, cause={}({})",
+                paymentKey, cause.getClass().getSimpleName(), cause.getMessage());
+        throw new PgGatewayUnavailableException(
+                "fetchStatus exhausted for paymentKey=" + paymentKey
                         + " (" + cause.getClass().getSimpleName() + ")", cause);
     }
 }

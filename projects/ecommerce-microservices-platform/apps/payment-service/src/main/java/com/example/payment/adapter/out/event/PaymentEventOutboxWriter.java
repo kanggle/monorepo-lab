@@ -3,6 +3,7 @@ package com.example.payment.adapter.out.event;
 import com.example.messaging.outbox.OutboxWriter;
 import com.example.payment.application.event.PaymentCompletedEvent;
 import com.example.payment.application.event.PaymentRefundStrandedEvent;
+import com.example.payment.application.event.PaymentRefundUnresolvedEvent;
 import com.example.payment.application.event.PaymentRefundedEvent;
 import com.example.payment.application.port.out.PaymentEventPublisher;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -36,6 +37,7 @@ public class PaymentEventOutboxWriter implements PaymentEventPublisher {
     static final String EVENT_TYPE_COMPLETED = "PaymentCompleted";
     static final String EVENT_TYPE_REFUNDED = "PaymentRefunded";
     static final String EVENT_TYPE_REFUND_STRANDED = "PaymentRefundStranded";
+    static final String EVENT_TYPE_REFUND_UNRESOLVED = "PaymentRefundUnresolved";
 
     private final OutboxWriter outboxWriter;
     private final ObjectMapper objectMapper;
@@ -66,6 +68,16 @@ public class PaymentEventOutboxWriter implements PaymentEventPublisher {
                 AGGREGATE_TYPE,
                 event.payload().paymentId(),
                 EVENT_TYPE_REFUND_STRANDED,
+                serialize(event)
+        );
+    }
+
+    @Override
+    public void publishPaymentRefundUnresolved(PaymentRefundUnresolvedEvent event) {
+        outboxWriter.save(
+                AGGREGATE_TYPE,
+                event.payload().paymentId(),
+                EVENT_TYPE_REFUND_UNRESOLVED,
                 serialize(event)
         );
     }
