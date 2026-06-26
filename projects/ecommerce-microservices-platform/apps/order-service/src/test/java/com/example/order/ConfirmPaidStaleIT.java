@@ -7,7 +7,6 @@ import com.example.order.support.InternalJwtTestHelper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -133,8 +132,8 @@ class ConfirmPaidStaleIT {
     // ---- AC-2: auth fail-closed ------------------------------------------------------
 
     @Test
-    @Disabled("TASK-BE-439: confirm-paid-stale sweeper LazyInitializationException (OrderJpaEntity.items, "
-            + "no Session) — findStalePaidUnconfirmed maps detached entities outside a tx (TASK-MONO-307 quarantine)")
+    // TASK-BE-439: quarantine lifted — fixed by @Transactional(readOnly = true) on
+    // OrderRepositoryImpl.findStalePaidUnconfirmed (session kept open through toDomain).
     @DisplayName("Bearer 없음 → 401, sweep 미실행")
     void noBearer_returns401() {
         String paidStale = seedOrder("pay-1", OrderStatus.PENDING, 7200);
@@ -176,8 +175,8 @@ class ConfirmPaidStaleIT {
     // ---- AC-3 / AC-4 / AC-5: predicate disjointness + saga-identical confirm + skip --
 
     @Test
-    @Disabled("TASK-BE-439: confirm-paid-stale sweeper LazyInitializationException (OrderJpaEntity.items, "
-            + "no Session) — findStalePaidUnconfirmed maps detached entities outside a tx (TASK-MONO-307 quarantine)")
+    // TASK-BE-439: quarantine lifted — fixed by @Transactional(readOnly = true) on
+    // OrderRepositoryImpl.findStalePaidUnconfirmed (session kept open through toDomain).
     @DisplayName("유효한 토큰 → 200; paid-unconfirmed 만 confirm, payment_id IS NULL 미선택, CONFIRMED skip, OrderConfirmed outbox 1행")
     void validBearer_confirmsOnlyPaidUnconfirmed() {
         String paidStale = seedOrder("pay-1", OrderStatus.PENDING, 7200);     // confirm

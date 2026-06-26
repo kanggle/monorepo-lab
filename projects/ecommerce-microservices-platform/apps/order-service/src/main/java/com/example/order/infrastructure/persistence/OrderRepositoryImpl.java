@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -207,7 +208,20 @@ public class OrderRepositoryImpl implements OrderRepository {
                 TenantContext.currentTenant(), userId, productId, status);
     }
 
+    /**
+     * Reads stuck PENDING orders (payment_id IS NULL) for the saga sweeper
+     * (TASK-BE-138). Annotated {@code @Transactional(readOnly = true)} so the
+     * JPA session stays open through the {@code .map(mapper::toDomain)} step:
+     * {@code OrderJpaMapper.toDomain} accesses the {@code @OneToMany(fetch = LAZY)}
+     * {@code items} collection, which requires an active session. Without this
+     * boundary the entities are detached after the query and {@code getItems()}
+     * throws {@code LazyInitializationException} (TASK-BE-439). The sweeper's
+     * per-order recovery runs in its own separate {@code REQUIRES_NEW} TX
+     * ({@code OrderStuckRecoveryHandler.recover}) that starts after this read TX
+     * commits — no contention.
+     */
     @Override
+    @Transactional(readOnly = true)
     public List<Order> findStuckPaymentPending(Instant placedBefore, int batchSize) {
         return jpaRepository.findStuckPaymentPending(
                         OrderStatus.PENDING, placedBefore, PageRequest.of(0, batchSize))
@@ -216,7 +230,18 @@ public class OrderRepositoryImpl implements OrderRepository {
                 .toList();
     }
 
+    /**
+     * Reads paid-but-unconfirmed PENDING orders for the stale-paid confirm sweep
+     * (TASK-BE-412). Annotated {@code @Transactional(readOnly = true)} for the
+     * same reason as {@link #findStuckPaymentPending}: without an open session,
+     * entities are detached and {@code OrderJpaMapper.toDomain}'s access of the
+     * lazy {@code items} collection throws {@code LazyInitializationException}
+     * (TASK-BE-439). Each order's per-order confirm runs in its own
+     * {@code REQUIRES_NEW} TX ({@code StalePaidOrderConfirmHandler.confirmIfStillPending})
+     * after this read TX commits.
+     */
     @Override
+    @Transactional(readOnly = true)
     public List<Order> findStalePaidUnconfirmed(Instant cutoff, int limit) {
         return jpaRepository.findStalePaidUnconfirmed(
                         OrderStatus.PENDING, cutoff, PageRequest.of(0, limit))
