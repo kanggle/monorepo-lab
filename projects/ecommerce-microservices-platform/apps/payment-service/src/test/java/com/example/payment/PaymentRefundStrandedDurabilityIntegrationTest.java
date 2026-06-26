@@ -61,14 +61,22 @@ import static org.mockito.Mockito.doThrow;
 })
 @Tag("integration")
 @Testcontainers
-// TASK-MONO-307: quarantined — the escalation row was not found (Expected size 1 but was 0). Most
-// likely a downstream symptom of the same OrderCancelled→refund/void consumer transaction bug
-// (TASK-BE-440): if the cancel consumer fails to commit the VOIDED transition, confirm() never
-// reaches the post-capture stranded path, so no escalation row is written. TASK-BE-440 must
-// determine whether this is the consumer-tx bug, a REQUIRES_NEW-in-full-context issue, or a
-// harness artifact, then re-enable.
-@Disabled("TASK-BE-440: PaymentRefundStranded durability IT found 0 escalation rows — likely the "
-        + "OrderCancelled consumer-tx bug breaking the VOIDED setup (TASK-MONO-307 quarantine)")
+// TASK-BE-442: DISTINCT root cause from the BE-440 consumer-tx bug (which is now fixed — the two
+// consumer-tx ITs in PaymentRefundIntegrationTest pass). This durability IT's arrange replays
+// OrderPlaced then OrderCancelled SEQUENTIALLY, each onMessage committing its own tx. With the
+// BE-440 fix the OrderCancelled now correctly COMMITS the payment to VOIDED *before* confirm()
+// runs, so confirm()'s pre-capture guard (PaymentConfirmService line 46: status == VOIDED) fires
+// and rejects BEFORE the PG capture — confirm() never reaches the post-capture auto-refund / stranded
+// escalation path, so 0 PaymentRefundStranded rows are written. The post-capture stranded path is
+// only reachable when VOIDED commits GENUINELY CONCURRENTLY (after confirm()'s initial read at
+// line 35 but DURING the slow PG capture at line 58); the sequential arrange cannot model that
+// interleave. Pre-fix it limped to the post-capture branch only because the VOIDED never committed.
+// Fixing this needs concurrency injection in the test (commit VOIDED during the confirmPayment mock
+// call) — separate test-design work that must not expand BE-440 scope nor risk the money-safety
+// invariant. Production confirm() is correct in all orderings. Re-quarantined for TASK-BE-442.
+@Disabled("TASK-BE-442: durability IT's sequential arrange commits VOIDED before confirm() so the "
+        + "pre-capture guard rejects before capture — the post-capture stranded path needs a "
+        + "genuinely-concurrent VOIDED-during-PG-capture interleave injected; distinct from BE-440")
 @DisplayName("PaymentRefundStranded REQUIRES_NEW durability 통합 테스트 (TASK-BE-437 AC-2)")
 class PaymentRefundStrandedDurabilityIntegrationTest {
 

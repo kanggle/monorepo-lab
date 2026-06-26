@@ -40,12 +40,26 @@ public class PaymentRefundService {
      * delegated methods (refund gates on already-REFUNDED; void gates on terminal state), so a
      * duplicate {@code OrderCancelled} is a no-op (AC-7).
      *
-     * <p>Each branch reads the row inside its own {@code @Transactional} delegate. A concurrent
-     * PENDING→COMPLETED flip between the read here and the delegate is the genuinely-concurrent
-     * interleave handled belt-and-suspenders by {@code PaymentConfirmService.confirm()} (which
-     * re-checks VOIDED under the row and auto-refunds a just-captured amount if the order was
-     * cancelled) — see that class. The dispatch read here is advisory.
+     * <p>This method is the proxy entry point for the {@code OrderCancelled} consumer
+     * ({@code OrderCancelledEventConsumer.handle}), so it carries the {@code @Transactional}
+     * boundary for the whole branch (TASK-BE-440). The delegated {@link #refundPayment(String)} /
+     * {@link #voidPayment(String)} are reached via self-invocation, which bypasses the Spring AOP
+     * proxy — their own {@code @Transactional} therefore does NOT start a transaction on the
+     * consumer thread; without the annotation here the {@code save}/{@code persist} would run with
+     * no active transaction ({@code InvalidDataAccessApiUsageException: No EntityManager with actual
+     * transaction available}). With this boundary the advisory dispatch read and the delegate's
+     * read-modify-write share ONE {@code REQUIRED} transaction (mirroring
+     * {@code PaymentConfirmService.confirm()}'s single boundary). The delegates' own
+     * {@code @Transactional} simply joins this transaction (and still works on the HTTP
+     * partial-refund entry point, which enters them through the proxy).
+     *
+     * <p>A concurrent PENDING→COMPLETED flip between the dispatch read here and the delegate is the
+     * genuinely-concurrent interleave handled belt-and-suspenders by
+     * {@code PaymentConfirmService.confirm()} (which re-checks VOIDED under the row and auto-refunds
+     * a just-captured amount if the order was cancelled) — see that class. The dispatch read here is
+     * advisory.
      */
+    @Transactional
     public void handleOrderCancelled(String orderId) {
         Optional<Payment> paymentOpt = paymentRepository.findByOrderId(orderId);
         if (paymentOpt.isEmpty()) {
