@@ -115,6 +115,51 @@ current payment state for money safety (see `specs/services/payment-service/arch
 
 ---
 
+## PaymentRefundStranded (money-safety alert — TASK-BE-437)
+
+Published when the synchronous HTTP `confirm()` **post-capture auto-refund** (the
+TASK-BE-435 belt-and-suspenders guard — see `specs/services/payment-service/architecture.md`
+§ "OrderCancelled consumer") captures funds for a concurrently-cancelled order and then
+**fails to reverse the capture at the PG** (`PgGatewayUnavailableException` 5xx/circuit-open/
+timeout, or `PgConfirmFailedException` 4xx). Without this alert the captured customer funds
+would be silently stranded — this synchronous path has no DLT/retry net (unlike the consumer
+refund path). The escalation is written to the transactional outbox in a **`REQUIRES_NEW`**
+boundary (separate bean `PaymentRefundStrandedRecorder`) so it **commits even though `confirm()`
+rolls back**.
+
+**Topic:** `payment.alert.refund.stranded`
+
+**Consumers:** notification-service / operator alert dashboard (out-of-scope for ecommerce v1;
+the topic is published so future alert subscribers can consume it without spec drift — same
+disposition as `OrderSagaRecoveryExhausted` in `order-events.md`).
+
+**Payload**
+```json
+{
+  "paymentId": "string (UUID)",
+  "orderId": "string (UUID)",
+  "paymentKey": "string (PG payment key)",
+  "amount": 30000,
+  "reason": "PgGatewayUnavailableException",
+  "occurredAt": "string (ISO 8601)"
+}
+```
+
+- `paymentKey` / `orderId` / `amount` — carried so a reconciliation/operator can **check PG
+  state first** before any compensating action (F3: a transient 5xx cancel *may* have actually
+  succeeded at the PG — acting blindly risks a double-refund).
+- `reason` — the PG failure kind (exception simple-name): `PgGatewayUnavailableException`
+  (transient 5xx/circuit-open/timeout — cancel outcome **unknown**) vs `PgConfirmFailedException`
+  (definitive 4xx — cancel **rejected**, money captured, needs intervention).
+
+**At-least-once / idempotency:** a client retry of the same `confirm()` re-reads `VOIDED` and may
+re-emit this escalation. The (future) alert consumer dedupes on `paymentId` / `event_id`.
+Acceptable and documented (AC-4). A full auto-reconciliation sweeper that retries the PG cancel is
+a deliberate **out-of-scope follow-up** (Category-A saga, ADR-MONO-005) — this event delivers the
+non-silent, operator-recoverable net only.
+
+---
+
 ## Consumer Rules
 
 - Consumers must handle duplicate events idempotently.

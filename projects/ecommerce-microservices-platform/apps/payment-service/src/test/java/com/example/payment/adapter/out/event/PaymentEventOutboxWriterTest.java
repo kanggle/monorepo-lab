@@ -2,6 +2,7 @@ package com.example.payment.adapter.out.event;
 
 import com.example.messaging.outbox.OutboxWriter;
 import com.example.payment.application.event.PaymentCompletedEvent;
+import com.example.payment.application.event.PaymentRefundStrandedEvent;
 import com.example.payment.application.event.PaymentRefundedEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,6 +72,25 @@ class PaymentEventOutboxWriterTest {
 
         String expectedPayload = objectMapper.writeValueAsString(event);
         verify(outboxWriter).save(eq("Payment"), eq("pay-1"), eq("PaymentRefunded"), eq(expectedPayload));
+    }
+
+    @Test
+    @DisplayName("publishPaymentRefundStranded 호출 시 outbox 에 Payment/PaymentRefundStranded/직렬화된 envelope 가 저장된다 (TASK-BE-437)")
+    void publishPaymentRefundStranded_savesToOutbox() throws Exception {
+        PaymentRefundStrandedEvent event = new PaymentRefundStrandedEvent(
+                UUID.randomUUID().toString(),
+                "PaymentRefundStranded",
+                Instant.parse("2026-06-25T02:00:00Z").toString(),
+                "payment-service",
+                "ecommerce",
+                new PaymentRefundStrandedEvent.Payload("pay-1", "order-1", "pk_test_123", 30000L,
+                        "PgGatewayUnavailableException", Instant.parse("2026-06-25T02:00:00Z").toString())
+        );
+
+        writer.publishPaymentRefundStranded(event);
+
+        String expectedPayload = objectMapper.writeValueAsString(event);
+        verify(outboxWriter).save(eq("Payment"), eq("pay-1"), eq("PaymentRefundStranded"), eq(expectedPayload));
     }
 
     @Test

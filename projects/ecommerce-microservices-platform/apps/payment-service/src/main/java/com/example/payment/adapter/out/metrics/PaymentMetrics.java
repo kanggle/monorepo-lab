@@ -14,6 +14,7 @@ public class PaymentMetrics implements PaymentMetricRecorder {
     private final Counter paymentCreatedTotal;
     private final Counter paymentCompletedTotal;
     private final Counter paymentRefundedTotal;
+    private final Counter paymentRefundStrandedTotal;
     private final Counter paymentAmountSum;
     private final MeterRegistry registry;
 
@@ -31,6 +32,11 @@ public class PaymentMetrics implements PaymentMetricRecorder {
 
         this.paymentRefundedTotal = Counter.builder("payment_refunded_total")
                 .description("Total refunds processed")
+                .register(registry);
+
+        this.paymentRefundStrandedTotal = Counter.builder("payment_refund_stranded_total")
+                .description("Total confirm() post-capture auto-refunds that failed at the PG, "
+                        + "leaving captured funds stranded pending operator action (TASK-BE-437)")
                 .register(registry);
 
         this.paymentAmountSum = Counter.builder("payment_amount_sum")
@@ -51,6 +57,11 @@ public class PaymentMetrics implements PaymentMetricRecorder {
     @Override
     public void incrementPaymentRefunded() {
         paymentRefundedTotal.increment();
+    }
+
+    @Override
+    public void incrementRefundStranded() {
+        paymentRefundStrandedTotal.increment();
     }
 
     @Override

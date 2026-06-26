@@ -1,6 +1,7 @@
 package com.example.payment.config;
 
 import com.example.payment.application.event.PaymentCompletedEvent;
+import com.example.payment.application.event.PaymentRefundStrandedEvent;
 import com.example.payment.application.event.PaymentRefundedEvent;
 import com.example.payment.application.port.out.PaymentEventPublisher;
 import com.example.payment.application.port.out.PaymentGatewayConfirmResult;
@@ -26,6 +27,11 @@ public class StandaloneConfig {
             @Override
             public void publishPaymentRefunded(PaymentRefundedEvent event) {
                 log.debug("[standalone] Payment refunded event (no-op): {}", event);
+            }
+
+            @Override
+            public void publishPaymentRefundStranded(PaymentRefundStrandedEvent event) {
+                log.debug("[standalone] Payment refund stranded event (no-op): {}", event);
             }
         };
     }

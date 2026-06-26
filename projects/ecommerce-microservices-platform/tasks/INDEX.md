@@ -86,6 +86,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-437 | **REVIEW** (impl in PR). Money-safety: payment-service HTTP `confirm()` 캡처-후 자동역환불 `cancelPayment` 실패 무방비 수정(BE-435 후속). 실패 시 `PaymentRefundStrandedRecorder`(별도 빈 REQUIRES_NEW)가 `PaymentRefundStranded` 아웃박스 escalation(`payment.alert.refund.stranded`) 발행→confirm 롤백 견딤 + `payment_refund_stranded_total` 메트릭 + ERROR(F1 내부 try/catch) → confirm reject. 성공 경로 무변경. payment-service unit GREEN. AC-2 durability IT는 `@Tag(integration)`→MONO-307까지 compile-only. 분석=Opus 4.8 / 구현=Opus backend-engineer + Opus 검수. | payment-service | code, event, payment, money-safety |
 
 ## done
 
