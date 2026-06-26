@@ -1,6 +1,6 @@
 # TASK-MONO-307 — Rehab the ecommerce integration-test harness for CI, then enable a Testcontainers integration lane
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-MONO (monorepo-level — shared `.github/workflows/ci.yml` + ecommerce IT harness)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (uncertain-depth IT-harness rehab — container lifecycle / resource / context-init across ~13 IT classes; not a mechanical config add)
@@ -75,6 +75,23 @@ A draft lane running `:order-service:test :payment-service:test -PrunIntegration
 - **F1 — green theatre** — never add the lane with `continue-on-error`; it must be a genuine gate (AC-2).
 - **F2 — masking a real bug** — a quarantine must reference a fix task and name what it suppresses (AC-4).
 - **F3 — scope creep into all 13 services** — Phase 1 is two services; the other 11 are separate phases (AC-5 makes the fix reusable for them).
+
+## Phase 1 — implementation outcome (2026-06-26)
+
+The lane was built and run on its PR. **First CI execution diagnosis** (the value of the lane — it surfaced the rot):
+
+**Harness fixes (this task, AC-5 reusable for the other 11 services):**
+1. **Docker-env override** (the dominant root of the diagnostic's class 1+2). The order/payment `build.gradle` `test {}` blocks **unconditionally** set a local-Windows `DOCKER_HOST=npipe:////./pipe/docker_engine_linux` + `-Dapi.version=1.44`, sabotaging Testcontainers on a Linux runner. Fix: a dedicated `integrationTest` `Test` task (mirrors scm/finance/erp/console-bff) which does **not** inherit that override and instead picks up the root `tasks.withType(Test).configureEach` env (conditional `DOCKER_HOST` + `DOCKER_API_VERSION=1.45`). The lane calls `:order-service:integrationTest :payment-service:integrationTest` (not `test -PrunIntegration`). Containers then started and tests executed (3 min run).
+2. **Schema drift** — `ConfirmPaidStaleIT` + `OrderStuckRecoveryIT` manual `INSERT INTO orders` omitted `tenant_id` (NOT NULL, no default, Flyway V8) → fixed with `tenant_id='ecommerce'`.
+3. **`@SpringBootConfiguration` ambiguity** (the diagnostic's class 2 — ~10 `initializationError`s). Bare `@SpringBootTest` ITs (no `classes=`) auto-detected BOTH `OrderServiceApplication` (main) and `TestOrderServiceApplication` (a `@WebMvcTest` slice helper) → `IllegalStateException: Found multiple @SpringBootConfiguration`. Fix: pinned `classes = OrderServiceApplication.class` on the 10 bare order ITs (matching the 4 that already did).
+
+**Latent product bugs surfaced → quarantined (AC-1/F2) + separate fix tasks (AC-4):**
+- **TASK-BE-439** (order-service) — `OrderStuckDetector`/confirm-paid-stale read paths map **detached** entities outside a tx; `OrderJpaMapper.toDomain` touches lazy `items` → `LazyInitializationException`; the sweeper's `catch` swallows it → **never recovers any stuck order** in production. Quarantined: `OrderStuckRecoveryIT` (class), `ConfirmPaidStaleIT` (`noBearer_returns401`, `validBearer_confirmsOnlyPaidUnconfirmed`).
+- **TASK-BE-440** (payment-service, money-safety) — the `OrderCancelled`→refund/void consumer path persists **without an active transaction** (`No EntityManager with actual transaction available`) → a captured payment for a cancelled order is not refunded via the event path. Quarantined: `PaymentRefundIntegrationTest` (`orderCancelled_refundsPayment`, `completedThenCancelled_paymentTimeout_refunds`) + `PaymentRefundStrandedDurabilityIntegrationTest` (class — likely a downstream symptom).
+
+**Second CI round** (after the config-ambiguity fix) ran the full suite — **64 tests** (was 29) — and surfaced the residual long tail: the lazy-init (BE-439) proved **pervasive** (also `OrderPlacement`, `OrderEventPublish`, `OrderOptimisticLock`), plus assertion/behavioural drift unrelated to the two systemic bugs → **TASK-BE-441** (triage: 403 error-code `UNAUTHORIZED`↔`ACCESS_DENIED`, seller-scope ABAC AC-3, `@Version` optimistic-lock not raised, `saveAll` not raised, refund-PENDING DLQ not propagated). All residuals are **method-level `@Disabled`** (class-level only where every test failed — `OrderStuckRecoveryIT`, `OrderPlacement`, `OrderOptimisticLock`), preserving the passing tests in each class.
+
+After the fixes + quarantines (~16 of 64 quarantined, all ticket-referenced), the lane gates the **~48 genuinely-passing** order + payment ITs (incl. the BE-438 reconciliation IT, multi-tenant isolation, event-dedup, payment processing/refund-happy-path, etc.). The singleton-container refactor was **not** needed for Phase 1 (tests run single-fork/sequential; the connection-refused signal was the Docker-env override, not simultaneous-container exhaustion) — left as an optional future optimisation. AC-4: every quarantine references its fix task ([[TASK-BE-439]], [[TASK-BE-440]], [[TASK-BE-441]]); AC-2: the lane is a genuine gate (no `continue-on-error`). The three follow-up fix tasks lift their quarantines and bring the lane to full coverage.
 
 ## Appendix — drafted lane YAML (preserve; insert after the `platform-console-bff-integration-tests` job in `.github/workflows/ci.yml`)
 

@@ -1297,6 +1297,63 @@ jobs:
             projects/platform-console/apps/console-bff/build/test-results/integrationTest/
           retention-days: 7
 
+  ecommerce-integration-tests:
+    name: Integration (ecommerce, Testcontainers)
+    runs-on: ubuntu-latest
+    needs: [changes, build-and-test]
+    timeout-minutes: 30
+    # ecommerce integration suite boots Postgres (Testcontainers) + embedded Kafka.
+    # ecommerce ITs carry @Tag("integration") and are excluded from the Docker-free
+    # `check`; a dedicated `:integrationTest` task (TASK-MONO-307) runs them on a
+    # Docker-capable runner. The task does NOT inherit the per-service `test`-task
+    # Windows `DOCKER_HOST=npipe:…` override, so Testcontainers uses the runner's
+    # native Docker (root build.gradle Docker env). Phase 1 = order-service +
+    # payment-service (gates the BE-435/437/438 money-safety ITs). Other ecommerce
+    # services = phased follow-ups.
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.ecommerce == 'true'
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Run ecommerce integration suites (order-service + payment-service)
+        run: >-
+          ./gradlew
+          :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
+          :projects:ecommerce-microservices-platform:apps:payment-service:integrationTest
+          --no-daemon --stacktrace
+
+      - name: Upload ecommerce integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecommerce-integration-test-reports
+          path: |
+            projects/ecommerce-microservices-platform/apps/order-service/build/reports/tests/integrationTest/
+            projects/ecommerce-microservices-platform/apps/order-service/build/test-results/integrationTest/
+            projects/ecommerce-microservices-platform/apps/payment-service/build/reports/tests/integrationTest/
+            projects/ecommerce-microservices-platform/apps/payment-service/build/test-results/integrationTest/
+          retention-days: 7
+
   frontend-checks:
     name: Frontend lint & build (ecommerce + fan-platform)
     runs-on: ubuntu-latest
