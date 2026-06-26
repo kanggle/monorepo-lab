@@ -37,6 +37,7 @@ import com.wms.master.domain.event.ZoneReactivatedEvent;
 import com.wms.master.domain.event.ZoneUpdatedEvent;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.slf4j.MDC;
 
 /**
@@ -62,9 +63,21 @@ public class EventEnvelopeSerializer {
         this.objectMapper = objectMapper;
     }
 
-    public String serialize(DomainEvent event) {
+    /**
+     * Serialize {@code event} into the contract envelope and return it together
+     * with the generated {@code eventId}.
+     *
+     * <p>The {@code eventId} is generated here (UUIDv7 — sortable, index-friendly)
+     * and embedded in the envelope JSON. Returning it lets the caller persist the
+     * SAME id as the {@code master_outbox} row's primary key, so the outbox row's
+     * {@code event_id} (and the Kafka {@code eventId} header the v2 publisher
+     * emits) matches the {@code eventId} inside the payload — consumers dedupe on
+     * one stable id regardless of whether they read the header or the body.
+     */
+    public Serialised serialize(DomainEvent event) {
+        UUID eventId = UuidV7.randomUuid();
         Map<String, Object> envelope = new LinkedHashMap<>();
-        envelope.put("eventId", UuidV7.randomUuid().toString());
+        envelope.put("eventId", eventId.toString());
         envelope.put("eventType", event.eventType());
         envelope.put("eventVersion", EVENT_VERSION);
         envelope.put("occurredAt", event.occurredAt().toString());
@@ -78,10 +91,14 @@ public class EventEnvelopeSerializer {
         envelope.put("payload", buildPayload(event));
 
         try {
-            return objectMapper.writeValueAsString(envelope);
+            return new Serialised(eventId, objectMapper.writeValueAsString(envelope));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to serialize event envelope", e);
         }
+    }
+
+    /** A serialized envelope plus the {@code eventId} generated for it. */
+    public record Serialised(UUID eventId, String json) {
     }
 
     private static String currentTraceId() {

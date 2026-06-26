@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.master.adapter.out.messaging.OutboxMetrics;
 import com.wms.master.integration.support.KafkaTestConsumer;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -38,6 +37,10 @@ class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
 
     private static final String WRITE_ROLE = "MASTER_WRITE";
     private static final String TOPIC = "wms.master.warehouse.v1";
+
+    // v2 outbox metric names (TASK-BE-438).
+    private static final String PENDING_COUNT = "master.outbox.pending.count";
+    private static final String PUBLISH_FAILURE_TOTAL = "master.outbox.publish.failure.total";
 
     @Autowired
     private TestRestTemplate rest;
@@ -120,14 +123,16 @@ class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
     @Transactional
     double pendingGauge() {
         io.micrometer.core.instrument.Gauge g =
-                meterRegistry.find(OutboxMetrics.PENDING_COUNT).gauge();
+                meterRegistry.find(PENDING_COUNT).gauge();
         return g == null ? -1.0 : g.value();
     }
 
     private double failureCounter() {
-        io.micrometer.core.instrument.Counter c =
-                meterRegistry.find(OutboxMetrics.PUBLISH_FAILURE_TOTAL).counter();
-        return c == null ? 0.0 : c.count();
+        // v2 (TASK-BE-438): the failure counter is tagged (event_type, reason),
+        // so sum across all series under the metric name.
+        return meterRegistry.find(PUBLISH_FAILURE_TOTAL).counters().stream()
+                .mapToDouble(io.micrometer.core.instrument.Counter::count)
+                .sum();
     }
 
     private static String shortSuffix() {

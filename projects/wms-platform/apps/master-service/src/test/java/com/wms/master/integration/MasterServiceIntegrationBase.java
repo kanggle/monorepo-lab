@@ -1,7 +1,7 @@
 package com.wms.master.integration;
 
 import com.redis.testcontainers.RedisContainer;
-import com.wms.master.adapter.out.messaging.OutboxMetrics;
+import com.wms.master.adapter.out.messaging.MasterOutboxPublisher;
 import com.wms.master.integration.support.JwtTestHelper;
 import java.time.Duration;
 import org.junit.jupiter.api.Tag;
@@ -67,12 +67,12 @@ public abstract class MasterServiceIntegrationBase {
 
     protected static final JwtTestHelper JWT = startJwt();
 
-    // Holds a direct strong reference to the OutboxMetrics bean so that the
-    // Gauge's StrongReferenceGaugeFunction is redundantly anchored here too,
-    // and the bean is guaranteed to be initialised before any test method runs.
+    // Holds a direct strong reference to the outbox publisher bean (TASK-BE-438)
+    // so it — and the master.outbox.pending.count gauge it registers in its
+    // constructor — is guaranteed to be initialised before any test method runs.
     @Autowired
     @SuppressWarnings("unused")
-    private OutboxMetrics outboxMetrics;
+    private MasterOutboxPublisher masterOutboxPublisher;
 
     static {
         POSTGRES.start();
@@ -106,9 +106,10 @@ public abstract class MasterServiceIntegrationBase {
                     "wms.oauth2.allowed-issuers=" + JwtTestHelper.LEGACY_ISSUER + ","
                             + JwtTestHelper.SAS_ISSUER,
                     "wms.oauth2.required-tenant-id=wms",
-                    // Speed up the polling scheduler in tests
-                    "outbox.polling.interval-ms=300",
-                    "outbox.polling.batch-size=100",
+                    // Speed up the v2 outbox publisher in tests (TASK-BE-438)
+                    "master.outbox.poll-ms=300",
+                    "master.outbox.initial-delay-ms=500",
+                    "master.outbox.batch-size=100",
                     // Keep idempotency TTL short in tests to avoid cross-test
                     // pollution if the same key is reused (should not happen
                     // but defensive)

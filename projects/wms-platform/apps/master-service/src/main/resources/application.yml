@@ -98,12 +98,14 @@ logging:
   pattern:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} actorId=%X{actorId:-}]"
 
-outbox:
-  polling:
-    interval-ms: 500
-    batch-size: 100
-
 master:
+  # Outbox v2 publisher (TASK-BE-438, AbstractOutboxPublisher). The poll loop
+  # runs on a fixed delay after an initial delay (lets the app finish booting +
+  # Kafka client warm up before the first drain); batch-size caps rows per tick.
+  outbox:
+    poll-ms: 500
+    initial-delay-ms: 5000
+    batch-size: 100
   idempotency:
     ttl-seconds: 86400
 

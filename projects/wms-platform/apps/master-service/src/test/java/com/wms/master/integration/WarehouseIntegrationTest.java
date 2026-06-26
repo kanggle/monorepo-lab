@@ -5,7 +5,6 @@ import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.master.adapter.out.messaging.OutboxMetrics;
 import com.wms.master.integration.support.KafkaTestConsumer;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -39,6 +38,12 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
     private static final String READ_ROLE = "MASTER_READ";
     private static final String ADMIN_ROLE = "MASTER_ADMIN";
     private static final String TOPIC = "wms.master.warehouse.v1";
+
+    // v2 outbox metric names (TASK-BE-438). The success/failure counters are now
+    // tagged with event_type (and reason), so callers sum across tag series.
+    private static final String PENDING_COUNT = "master.outbox.pending.count";
+    private static final String PUBLISH_SUCCESS_TOTAL = "master.outbox.publish.success.total";
+    private static final String PUBLISH_FAILURE_TOTAL = "master.outbox.publish.failure.total";
 
     @Autowired
     private TestRestTemplate rest;
@@ -194,11 +199,11 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
                             rest.getForEntity("/actuator/prometheus", String.class);
                     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
                     String body = response.getBody();
-                    assertThat(body).contains(OutboxMetrics.PENDING_COUNT.replace('.', '_'));
+                    assertThat(body).contains(PENDING_COUNT.replace('.', '_'));
                     assertThat(body).contains(
-                            OutboxMetrics.PUBLISH_SUCCESS_TOTAL.replace('.', '_'));
+                            PUBLISH_SUCCESS_TOTAL.replace('.', '_'));
                     assertThat(body).contains(
-                            OutboxMetrics.PUBLISH_FAILURE_TOTAL.replace('.', '_'));
+                            PUBLISH_FAILURE_TOTAL.replace('.', '_'));
                 });
         // sanity: ADMIN role unused here; kept as reference for role table completeness
         assertThat(ADMIN_ROLE).isNotBlank();
@@ -235,9 +240,12 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
     }
 
     private double successCounter() {
-        io.micrometer.core.instrument.Counter c =
-                meterRegistry.find(OutboxMetrics.PUBLISH_SUCCESS_TOTAL).counter();
-        return c == null ? 0.0 : c.count();
+        // v2 (TASK-BE-438): the success counter is tagged per event_type, so a
+        // single find().counter() could pick an arbitrary series. Sum every
+        // series under the metric name for a stable, monotonic total.
+        return meterRegistry.find(PUBLISH_SUCCESS_TOTAL).counters().stream()
+                .mapToDouble(io.micrometer.core.instrument.Counter::count)
+                .sum();
     }
 
     private static String shortSuffix() {
