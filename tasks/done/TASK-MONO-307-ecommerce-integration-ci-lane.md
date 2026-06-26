@@ -1,6 +1,6 @@
 # TASK-MONO-307 — Rehab the ecommerce integration-test harness for CI, then enable a Testcontainers integration lane
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO (monorepo-level — shared `.github/workflows/ci.yml` + ecommerce IT harness)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (uncertain-depth IT-harness rehab — container lifecycle / resource / context-init across ~13 IT classes; not a mechanical config add)
