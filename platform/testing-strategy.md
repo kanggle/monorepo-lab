@@ -92,6 +92,8 @@ A frontend with a Playwright `e2e-smoke/` suite gates every PR on **URL assertio
 
 **Rule** — when changing any redirect / guard / navigation behavior (an unauthenticated bounce destination, a `?redirect=<dest>` query param, a BFF base-URL switch, etc.), update the corresponding `e2e-smoke` URL assertions **in the same change**. Prefer a regex that tolerates a query string (`/\/login(\?|$)/`) over a bare glob (`**/login`) so a destination-preserving parameter does not silently break the match. Local `tsc` + `vitest` + `lint` GREEN is **necessary but not sufficient** for a navigation/URL change — confirm it against the Playwright smoke before merge.
 
+**Authed-flow verification needs a real browser, not `curl`.** Manually verifying a login-gated page (OIDC authorization-code + PKCE, `Secure` session cookies) cannot be done with `curl` — the PKCE round-trip and cookie handling require a real user-agent, so a `curl` probe stalls at the login redirect or returns 401. Drive authed local / manual verification with a headless browser (Playwright) that completes the login, not a raw HTTP client. (Agent personal-memory detail, this host: `env_console_demo_local_redeploy`.)
+
 ## Event Consumer / Producer Tests
 
 - Test event publishing and consuming with Testcontainers Kafka.

@@ -57,6 +57,12 @@ The `protect-main-branch` hook inspects the command string for direct-to-`main` 
 
 ---
 
+## `git commit && git push` Chained in One Bash Call Is Blocked Whole
+
+Chaining `git commit … && git push …` in a **single** Bash-tool invocation lets the `protect-main-branch` hook match the `push` half and block the **entire** call — so the commit never lands either. Run them as **two separate Bash calls**: commit first, confirm it succeeded, then push. (Agent personal-memory detail, this host: `project_console_web_ecommerce_ops_bug_class`.)
+
+---
+
 ## `.claude/` Self-Modification Is Classifier-Blocked
 
 The auto-mode classifier hard-blocks editing or committing files under `.claude/hooks/`, `.claude/agents/`, `.claude/commands/` even with explicit user approval (the same higher-safety layer as mass `push --delete`). Hand the exact patch to the user to apply + commit; do not attempt a shell-write bypass. `platform/` is **not** subject to this — only `.claude/`. (Agent personal-memory detail, this host: `env_classifier_claude_self_mod_block`.)
