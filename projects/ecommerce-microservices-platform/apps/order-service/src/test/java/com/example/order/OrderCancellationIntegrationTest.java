@@ -1,6 +1,5 @@
 package com.example.order;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
@@ -79,8 +78,6 @@ class OrderCancellationIntegrationTest {
 
     @Test
     @DisplayName("다른 사용자가 취소 시 403 반환")
-    @Disabled("TASK-BE-441: error-code drift — $.code expected UNAUTHORIZED but was ACCESS_DENIED "
-            + "(403) — TASK-MONO-307 residual triage")
     void cancelOrder_differentUser_returns403() throws Exception {
         String userId = "owner-cancel-" + System.nanoTime();
 
@@ -95,7 +92,9 @@ class OrderCancellationIntegrationTest {
         mockMvc.perform(post("/api/orders/" + orderId + "/cancel")
                         .header("X-User-Id", "attacker"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+                // Contract order-api.md §POST /api/orders/{orderId}/cancel: 403 | ACCESS_DENIED | Not the order owner.
+                // UNAUTHORIZED is the 401 code (missing header); ACCESS_DENIED is the correct 403 code.
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
 
     @Test
