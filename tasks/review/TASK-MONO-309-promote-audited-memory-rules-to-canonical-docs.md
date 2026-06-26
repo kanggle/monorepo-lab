@@ -8,7 +8,7 @@ Promote four audit-surfaced operational rules from auto-memory into canonical sh
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -56,13 +56,13 @@ This is a **documentation/governance task** — no implementation code. Each pro
 
 # Acceptance Criteria
 
-- [ ] R1: 대상 캐논 파일에 `prune -a` base-이미지 파괴 경고 1-2줄 additive 삽입. dangling-only(`-f`) vs `-a` 구분 명시.
-- [ ] R2: `platform/git-workflow-policy.md`에 Bash-tool commit+push 분리 규칙 additive 1줄.
-- [ ] R3: `platform/testing-strategy.md`에 "OIDC authed 검증 = headless browser (curl 불가)" 규칙 additive.
-- [ ] R4: 대상 결정 후 삽입, **또는** tracked 대상 부재로 판단 시 보류 사유를 task에 기록하고 메모리 유지로 종결.
-- [ ] 출처 메모리 4건에 `승격됨(MONO-309)` 주석 추가 (본문 detail은 보존).
-- [ ] 삽입은 전부 additive (기존 문장 byte-unchanged — `git diff`로 확인). HARDSTOP-04 회피.
-- [ ] impl code 0 (doc-only).
+- [x] R1: `TEMPLATE.md § Local Network Convention → Local Docker image hygiene` 신규 subsection — `prune -f`(dangling) vs `-a`(base 파괴) 구분 + 복구 명령 명시.
+- [x] R2: `platform/git-workflow-policy.md § git commit && git push Chained in One Bash Call Is Blocked Whole` 신규 섹션 additive.
+- [x] R3: `platform/testing-strategy.md § Frontend E2E Smoke` 끝에 "authed 검증 = headless browser (curl 불가)" additive 단락.
+- [x] R4: **보류(hold-with-reason)** — fed-e2e docker 자산이 untracked 데모 트리라 tracked 대상 부재 + platform/ 추상 규칙으로 일반화엔 너무 fed-e2e-특정. 메모리 `env_fed_e2e_kafka_stub_health_block`이 권위 홈으로 유지, 보류 사유를 해당 메모리에 기록.
+- [x] 출처 메모리 4건(`feedback_prune_old_image_after_rebuild`/`project_console_web_ecommerce_ops_bug_class`/`env_console_demo_local_redeploy`/`env_fed_e2e_kafka_stub_health_block`)에 `승격됨(MONO-309)` 또는 `승격 보류(MONO-309)` 주석 — 본문 detail 보존.
+- [x] 삽입 전부 additive (기존 문장 byte-unchanged). HARDSTOP-04 회피.
+- [x] impl code 0 (doc-only: TEMPLATE.md + platform/ 2파일 + task/INDEX).
 
 # Related Specs
 
@@ -93,9 +93,9 @@ This is a **documentation/governance task** — no implementation code. Each pro
 
 # Definition of Done
 
-- [ ] R1/R2/R3 캐논 삽입 + R4 결정(삽입 또는 보류-사유).
-- [ ] 출처 메모리 4건 `승격됨(MONO-309)` 주석.
-- [ ] `git diff` additive-only 검증 (HARDSTOP-04).
-- [ ] `tasks/INDEX.md` ready entry.
-- [ ] commit + push (branch `task/mono-309-promote-memory-rules`; substring `main`/`master` 회피 ✓).
+- [x] R1/R2/R3 캐논 삽입 + R4 보류-사유 기록.
+- [x] 출처 메모리 4건 주석.
+- [x] `git diff` additive-only (HARDSTOP-04) — 신규 섹션/단락만 추가, 기존 문장 0 변경.
+- [x] `tasks/INDEX.md` review entry (ready→review 이동).
+- [x] commit + push (branch `task/mono-309-impl-promote-rules`; substring `main`/`master` 회피 ✓).
 - [ ] PR open (사용자 요청 시).

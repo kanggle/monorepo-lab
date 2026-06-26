@@ -515,6 +515,10 @@ External tools that need direct TCP access to backing services use one of:
 2. **Per-developer `docker-compose.dev.yml` overlay** — adds `ports:` for the local machine only, never committed.
 3. **Traefik TCP routing** — declare a TCP router with a unique hostname (e.g., `wms-postgres.local:5432` via `entryPoints: [postgres]` on Traefik). Documented in `docs/guides/dev-tooling.md`.
 
+### Local Docker image hygiene
+
+After rebuilding a service image locally (`docker compose up -d --build` / `docker compose build`), reclaim only **dangling** layers with `docker image prune -f`. **Do not use `docker image prune -a` as routine cleanup**: `-a` removes every image not referenced by a *running* container — which includes the shared Java base image (`monorepo/java-service-base:v1`, ADR-MONO-041 D2) and any just-built service image whose container is momentarily stopped. Deleting those breaks the next Java build — the base image is local-only (`FROM monorepo/java-service-base:v1` → `pull access denied` because it lives in no registry), so a re-pull cannot recover it; it must be rebuilt (`docker build -t monorepo/java-service-base:v1 docker/java-service-base`). Reach for `-a` only when you have confirmed the base image will be restored. (Agent personal-memory detail, this host: `feedback_prune_old_image_after_rebuild`.)
+
 ### Legacy `PORT_PREFIX` (removed by TASK-MONO-024)
 
 The original three projects (ecommerce, wms, iam-platform) used to declare `${PORT_PREFIX:-N}XXXX:YYYY` host ports under prefixes 1/2/3. TASK-MONO-024 migrated all three to hostname routing. `fan-platform` was bootstrapped directly with hostname routing (no `PORT_PREFIX` ever used). All four active projects — ecommerce, wms, IAM, fan-platform — now use `*.local` hostname routing exclusively. `PORT_PREFIX` is no longer referenced anywhere in `projects/`. New projects must not introduce it.
