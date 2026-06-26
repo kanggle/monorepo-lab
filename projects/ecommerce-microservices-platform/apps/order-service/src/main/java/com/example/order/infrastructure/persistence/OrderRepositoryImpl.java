@@ -12,12 +12,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -207,20 +209,66 @@ public class OrderRepositoryImpl implements OrderRepository {
                 TenantContext.currentTenant(), userId, productId, status);
     }
 
+    /**
+     * Reads stuck PENDING orders (payment_id IS NULL) for the saga sweeper
+     * (TASK-BE-138). TASK-BE-439: the mapping to the domain {@code Order} runs
+     * outside the request thread (the {@code @Scheduled OrderStuckDetector}), where
+     * no session is open, so {@code OrderJpaMapper.toDomain}'s access of the LAZY
+     * {@code OrderJpaEntity.items} threw {@code LazyInitializationException} and the
+     * sweeper's {@code catch} silently swallowed it (recovering nothing).
+     *
+     * <p>Fixed with a two-step id-then-fetch: step 1 selects the matching order ids
+     * (paged/ordered scalar projection — no collection-fetch + {@code Pageable}
+     * in-memory-pagination warning, HHH90003004); step 2 reloads the full entities
+     * with their {@code items} via {@code LEFT JOIN FETCH} (no {@code Pageable}). The
+     * fetch join initialises {@code items} IN the query, so the subsequent
+     * {@code toDomain} never touches a lazy proxy — correct regardless of the
+     * caller's session/tx state. {@code @Transactional(readOnly = true)} spans the two
+     * queries in one read session. The per-order recovery runs in its own separate
+     * {@code REQUIRES_NEW} TX afterward — no contention.
+     */
     @Override
+    @Transactional(readOnly = true)
     public List<Order> findStuckPaymentPending(Instant placedBefore, int batchSize) {
-        return jpaRepository.findStuckPaymentPending(
-                        OrderStatus.PENDING, placedBefore, PageRequest.of(0, batchSize))
-                .stream()
-                .map(mapper::toDomain)
-                .toList();
+        List<String> ids = jpaRepository.findStuckPaymentPendingIds(
+                OrderStatus.PENDING, placedBefore, PageRequest.of(0, batchSize));
+        return loadOrderedWithItems(ids);
     }
 
+    /**
+     * Reads paid-but-unconfirmed PENDING orders for the stale-paid confirm sweep
+     * (TASK-BE-412). Same TASK-BE-439 detached-lazy hazard and same two-step
+     * id-then-fetch + {@code LEFT JOIN FETCH} fix as {@link #findStuckPaymentPending}:
+     * the mapping runs in the internal endpoint's non-transactional
+     * {@code StalePaidOrderConfirmService.sweep}, so {@code items} must be initialised
+     * inside the query. Each order's per-order confirm runs in its own
+     * {@code REQUIRES_NEW} TX ({@code StalePaidOrderConfirmHandler.confirmIfStillPending})
+     * afterward.
+     */
     @Override
+    @Transactional(readOnly = true)
     public List<Order> findStalePaidUnconfirmed(Instant cutoff, int limit) {
-        return jpaRepository.findStalePaidUnconfirmed(
-                        OrderStatus.PENDING, cutoff, PageRequest.of(0, limit))
-                .stream()
+        List<String> ids = jpaRepository.findStalePaidUnconfirmedIds(
+                OrderStatus.PENDING, cutoff, PageRequest.of(0, limit));
+        return loadOrderedWithItems(ids);
+    }
+
+    /**
+     * Step 2 of the operational sweeps (TASK-BE-439): reload the full entities +
+     * items for the swept ids via {@code LEFT JOIN FETCH}, then map to the domain
+     * preserving the step-1 {@code created_at ASC} order. The {@code IN}-fetch may
+     * return rows in any order, so we re-order by the id list. {@code items} is
+     * eagerly initialised by the fetch join, so {@code toDomain} is detach-safe.
+     */
+    private List<Order> loadOrderedWithItems(List<String> orderedIds) {
+        if (orderedIds.isEmpty()) {
+            return List.of();
+        }
+        Map<String, OrderJpaEntity> byId = jpaRepository.findAllWithItemsByOrderIdIn(orderedIds).stream()
+                .collect(Collectors.toMap(OrderJpaEntity::getOrderId, e -> e));
+        return orderedIds.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
                 .map(mapper::toDomain)
                 .toList();
     }

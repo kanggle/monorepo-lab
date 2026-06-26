@@ -7,7 +7,6 @@ import com.example.order.support.InternalJwtTestHelper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -25,6 +24,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -111,6 +112,19 @@ class ConfirmPaidStaleIT {
     @Autowired private OrderRepository orderRepository;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private TestRestTemplate rest;
+    @Autowired private PlatformTransactionManager txManager;
+
+    /**
+     * Reloads the order through the domain repository inside a read-only transaction so
+     * {@code OrderJpaMapper.toDomain} initialises the lazy {@code items} collection within
+     * an open session. Production callers of {@code findById} always run inside a
+     * request/service transaction (OSIV or {@code @Transactional}); this off-thread
+     * verification read does not, so it must supply its own session boundary.
+     */
+    private Order reload(String orderId) {
+        return new TransactionTemplate(txManager).execute(status ->
+                orderRepository.findById(orderId).orElseThrow());
+    }
 
     @BeforeEach
     void cleanState() {
@@ -133,8 +147,10 @@ class ConfirmPaidStaleIT {
     // ---- AC-2: auth fail-closed ------------------------------------------------------
 
     @Test
-    @Disabled("TASK-BE-439: confirm-paid-stale sweeper LazyInitializationException (OrderJpaEntity.items, "
-            + "no Session) — findStalePaidUnconfirmed maps detached entities outside a tx (TASK-MONO-307 quarantine)")
+    // TASK-BE-439: quarantine lifted. The production stale-paid sweep
+    // (OrderRepositoryImpl.findStalePaidUnconfirmed) now fetches items in-query; this
+    // IT's off-thread verification read goes through reload() (maps inside a read-only
+    // tx) so toDomain's lazy items access no longer throws LazyInitializationException.
     @DisplayName("Bearer 없음 → 401, sweep 미실행")
     void noBearer_returns401() {
         String paidStale = seedOrder("pay-1", OrderStatus.PENDING, 7200);
@@ -146,7 +162,7 @@ class ConfirmPaidStaleIT {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         // sweep never ran — the order is still PENDING
-        assertThat(orderRepository.findById(paidStale).orElseThrow().getStatus())
+        assertThat(reload(paidStale).getStatus())
                 .isEqualTo(OrderStatus.PENDING);
     }
 
@@ -176,8 +192,9 @@ class ConfirmPaidStaleIT {
     // ---- AC-3 / AC-4 / AC-5: predicate disjointness + saga-identical confirm + skip --
 
     @Test
-    @Disabled("TASK-BE-439: confirm-paid-stale sweeper LazyInitializationException (OrderJpaEntity.items, "
-            + "no Session) — findStalePaidUnconfirmed maps detached entities outside a tx (TASK-MONO-307 quarantine)")
+    // TASK-BE-439: quarantine lifted. Production stale-paid sweep fetches items in-query;
+    // this IT's off-thread verification reads go through reload() (read-only tx) so
+    // toDomain's lazy items access no longer throws LazyInitializationException.
     @DisplayName("유효한 토큰 → 200; paid-unconfirmed 만 confirm, payment_id IS NULL 미선택, CONFIRMED skip, OrderConfirmed outbox 1행")
     void validBearer_confirmsOnlyPaidUnconfirmed() {
         String paidStale = seedOrder("pay-1", OrderStatus.PENDING, 7200);     // confirm
@@ -199,13 +216,13 @@ class ConfirmPaidStaleIT {
         assertThat(confirmedIds).containsExactly(paidStale);
 
         // The recovered order is CONFIRMED.
-        assertThat(orderRepository.findById(paidStale).orElseThrow().getStatus())
+        assertThat(reload(paidStale).getStatus())
                 .isEqualTo(OrderStatus.CONFIRMED);
         // The payment_id IS NULL order (BE-138 bucket) is never selected → still PENDING.
-        assertThat(orderRepository.findById(paymentNull).orElseThrow().getStatus())
+        assertThat(reload(paymentNull).getStatus())
                 .isEqualTo(OrderStatus.PENDING);
         // The already-CONFIRMED order is untouched (it never matched the PENDING predicate).
-        assertThat(orderRepository.findById(alreadyConfirmed).orElseThrow().getStatus())
+        assertThat(reload(alreadyConfirmed).getStatus())
                 .isEqualTo(OrderStatus.CONFIRMED);
 
         // AC-4: an OrderConfirmed outbox row is written for the recovered order only.
