@@ -75,15 +75,29 @@ export function useLedgerOpsState({
   initialStatement = null,
   initialStatementNotFound = false,
 }: LedgerOpsScreenProps) {
-  const [active, setActive] = useState<TabKey>(
-    initialAccountCode
-      ? 'account'
-      : initialEntryId
-        ? 'entry'
-        : initialStatementId
-          ? 'reconciliation'
-          : 'trial-balance',
+  const initialActive: TabKey = initialAccountCode
+    ? 'account'
+    : initialEntryId
+      ? 'entry'
+      : initialStatementId
+        ? 'reconciliation'
+        : 'trial-balance';
+  const [active, setActiveRaw] = useState<TabKey>(initialActive);
+
+  // `visited` gates the lazy panel mounts (TASK-PC-FE-134 code split). A
+  // non-default panel's content is only mounted once its tab has been
+  // activated (the default 시산표 panel and the seeded initial-active panel
+  // start visited so their content shows on first paint); once visited it
+  // stays mounted (`hidden`-toggled by the view), preserving the lookup/query
+  // state across tab round-trips. Wrapping `setActive` keeps this invariant
+  // for both the tab strip and the cross-tab drill handlers.
+  const [visited, setVisited] = useState<ReadonlySet<TabKey>>(
+    () => new Set<TabKey>(['trial-balance', initialActive]),
   );
+  function setActive(tab: TabKey) {
+    setVisited((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+    setActiveRaw(tab);
+  }
 
   // Periods + reconciliation row-selection (drives the detail reads).
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
@@ -221,6 +235,7 @@ export function useLedgerOpsState({
   return {
     active,
     setActive,
+    visited,
     selectedPeriodId,
     setSelectedPeriodId,
     selectedDiscrepancyId,
