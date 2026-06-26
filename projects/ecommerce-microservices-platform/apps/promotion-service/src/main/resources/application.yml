@@ -55,10 +55,20 @@ management:
     tags:
       service: ${spring.application.name}
 
+# TASK-BE-444: outbox v2 (PromotionOutboxPublisher extends AbstractOutboxPublisher).
+# The legacy `outbox.polling.*` keys below are retained only because the lib
+# OutboxAutoConfiguration beans (unreferenced after the v2 swap) still bind them;
+# the v2 publisher reads the `promotion.outbox.*` keys.
 outbox:
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
+
+promotion:
+  outbox:
+    batch-size: ${PROMOTION_OUTBOX_BATCH_SIZE:100}
+    poll-ms: ${PROMOTION_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${PROMOTION_OUTBOX_INITIAL_DELAY_MS:5000}
 
 logging:
   level:
