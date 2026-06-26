@@ -1,6 +1,6 @@
 # TASK-BE-443 — confirm() post-capture re-read returns a stale persistence-context entity, so a concurrent VOIDED is never detected (money-safety)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (money-safety production fix to the confirm() post-capture guard + the durability IT that proves it)
