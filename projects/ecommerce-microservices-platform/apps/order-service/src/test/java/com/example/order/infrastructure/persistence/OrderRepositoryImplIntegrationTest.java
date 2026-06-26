@@ -7,6 +7,7 @@ import com.example.order.domain.model.ShippingAddress;
 import com.example.order.domain.repository.OrderRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.OptimisticLockException;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +17,7 @@ import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.test.context.EmbeddedKafka;
-import org.springframework.orm.jpa.JpaOptimisticLockingFailureException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -211,7 +212,10 @@ class OrderRepositoryImplIntegrationTest {
                             managed.getVersion()));
                     entityManager.flush();
                 })
-        ).isInstanceOf(JpaOptimisticLockingFailureException.class);
+        // flush() is called directly on the EntityManager (not through the @Repository
+        // boundary), so Hibernate's raw jakarta OptimisticLockException propagates
+        // untranslated rather than Spring's JpaOptimisticLockingFailureException.
+        ).isInstanceOf(OptimisticLockException.class);
     }
 
     @Test
@@ -335,11 +339,13 @@ class OrderRepositoryImplIntegrationTest {
                 null, null, null, 0, null, 0L
         );
 
-        // when & then
+        // when & then — OrderRepositoryImpl is a @Repository, so the IllegalStateException
+        // thrown by toEntities is wrapped by Spring's persistence-exception translation
+        // into InvalidDataAccessApiUsageException (the original message is preserved).
         assertThatThrownBy(() ->
                 transactionTemplate.executeWithoutResult(status ->
                         orderRepository.saveAll(List.of(nonExistent)))
-        ).isInstanceOf(IllegalStateException.class)
+        ).isInstanceOf(InvalidDataAccessApiUsageException.class)
                 .hasMessageContaining("Order not found for update");
     }
 
