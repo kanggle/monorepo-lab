@@ -194,8 +194,9 @@ class PaymentConfirmServiceTest {
                 "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
                 PaymentStatus.VOIDED, java.time.LocalDateTime.now(), null, null, null, null, null);
         given(paymentRepository.findByOrderId("order-1"))
-                .willReturn(Optional.of(pending))   // initial read
-                .willReturn(Optional.of(voided));   // post-capture re-read
+                .willReturn(Optional.of(pending));        // pre-capture read (cached/managed)
+        given(paymentRepository.findByOrderIdFresh("order-1"))
+                .willReturn(Optional.of(voided));         // post-capture FRESH re-read (TASK-BE-443)
         given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
                 .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
 
@@ -227,8 +228,9 @@ class PaymentConfirmServiceTest {
                 "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
                 PaymentStatus.VOIDED, java.time.LocalDateTime.now(), null, null, null, null, null);
         given(paymentRepository.findByOrderId("order-1"))
-                .willReturn(Optional.of(pending))   // initial read
-                .willReturn(Optional.of(voided));   // post-capture re-read
+                .willReturn(Optional.of(pending));        // pre-capture read (cached/managed)
+        given(paymentRepository.findByOrderIdFresh("order-1"))
+                .willReturn(Optional.of(voided));         // post-capture FRESH re-read (TASK-BE-443)
         given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
                 .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
         doThrow(new PgGatewayUnavailableException("cancel retry exhausted"))
@@ -259,8 +261,9 @@ class PaymentConfirmServiceTest {
                 "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
                 PaymentStatus.VOIDED, java.time.LocalDateTime.now(), null, null, null, null, null);
         given(paymentRepository.findByOrderId("order-1"))
-                .willReturn(Optional.of(pending))
-                .willReturn(Optional.of(voided));
+                .willReturn(Optional.of(pending));        // pre-capture read (cached/managed)
+        given(paymentRepository.findByOrderIdFresh("order-1"))
+                .willReturn(Optional.of(voided));         // post-capture FRESH re-read (TASK-BE-443)
         given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
                 .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
         doThrow(new PgConfirmFailedException("cancel rejected"))
@@ -288,8 +291,9 @@ class PaymentConfirmServiceTest {
                 "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
                 PaymentStatus.VOIDED, java.time.LocalDateTime.now(), null, null, null, null, null);
         given(paymentRepository.findByOrderId("order-1"))
-                .willReturn(Optional.of(pending))
-                .willReturn(Optional.of(voided));
+                .willReturn(Optional.of(pending));        // pre-capture read (cached/managed)
+        given(paymentRepository.findByOrderIdFresh("order-1"))
+                .willReturn(Optional.of(voided));         // post-capture FRESH re-read (TASK-BE-443)
         given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
                 .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
         doThrow(new PgGatewayUnavailableException("cancel retry exhausted"))

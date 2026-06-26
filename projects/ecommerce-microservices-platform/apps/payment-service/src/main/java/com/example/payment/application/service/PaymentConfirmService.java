@@ -79,13 +79,21 @@ public class PaymentConfirmService {
         // just-captured amount at the PG and do NOT advance to COMPLETED (the row stays VOIDED,
         // no PaymentCompleted is published). Funds are never retained.
         //
-        // Why a re-read (vs. an optimistic @Version): both the void path and this confirm path
-        // read-modify-write the same row; in REPEATABLE_READ a re-read returns our own snapshot,
-        // but the project default is READ_COMMITTED (Postgres), under which this fresh read sees
-        // the committed VOIDED. The re-read is the simplest correct guard and needs no schema
-        // change. (If the void instead commits AFTER this transaction, the void path is a no-op
-        // on a COMPLETED row and the consumer's COMPLETED→refund branch reverses it — also safe.)
-        Payment latest = paymentRepository.findByOrderId(orderId).orElse(payment);
+        // Why a FRESH re-read (TASK-BE-443 money-safety fix): the re-read MUST observe the
+        // committed VOIDED, but the pre-capture read above already loaded this row as a MANAGED
+        // entity in this transaction's persistence context (L1). A plain findByOrderId would run
+        // its SQL yet re-hydrate the matched row through the same session, where Hibernate's
+        // managed-entity identity (session-level repeatable-read) returns the STALE PENDING
+        // instance and discards the freshly-read VOIDED columns — masking the race regardless of
+        // the DB isolation level (READ_COMMITTED governs what the SQL fetches, not whether
+        // Hibernate uses it for an already-managed entity, and there is no @Version on the row).
+        // findByOrderIdFresh forces an entityManager.refresh so the committed VOIDED is actually
+        // seen. Vs. an optimistic @Version: a re-read needs no schema change and is the simplest
+        // correct guard. (If the void instead commits AFTER this transaction, the void path is a
+        // no-op on a COMPLETED row and the consumer's COMPLETED→refund branch reverses it — also
+        // safe.) In the no-race case the refresh is a no-op (row still PENDING) so confirm()
+        // proceeds to the success path below byte-for-byte unchanged.
+        Payment latest = paymentRepository.findByOrderIdFresh(orderId).orElse(payment);
         if (latest.isVoided()) {
             if (paymentKey != null) {
                 try {
