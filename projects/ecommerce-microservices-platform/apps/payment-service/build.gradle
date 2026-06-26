@@ -69,6 +69,30 @@ test {
     jvmArgs '-Dapi.version=1.44'
 }
 
+// Dedicated task that runs ONLY @Tag("integration") Testcontainers ITs (TASK-MONO-307).
+// Mirrors the sibling pattern (scm/finance/erp/console-bff). Crucially it does NOT inherit
+// the `test` task's local-Windows `DOCKER_HOST=npipe:…` / `api.version=1.44` override above —
+// it picks up the root build.gradle `tasks.withType(Test).configureEach` Docker env instead
+// (conditional DOCKER_HOST + DOCKER_API_VERSION=1.45), which is correct on a Linux CI runner.
+// Not wired into `check`, so the Docker-free fast feedback loop stays unchanged (AC-3).
+tasks.register('integrationTest', Test) {
+    description = 'Runs Testcontainers-backed @Tag("integration") integration tests (requires Docker).'
+    group = 'verification'
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter tasks.named('test')
+
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+
+    // Generous per-test timeout — embedded-Kafka + Postgres-container cold start on CI.
+    systemProperty 'junit.jupiter.execution.timeout.default', '5m'
+}
+
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"

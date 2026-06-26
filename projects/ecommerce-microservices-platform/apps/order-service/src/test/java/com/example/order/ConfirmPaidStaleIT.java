@@ -270,11 +270,12 @@ class ConfirmPaidStaleIT {
         String orderId = UUID.randomUUID().toString();
         Instant createdAt = Instant.now().minusSeconds(createdAtSecondsAgo);
         Instant paidAt = paymentId != null ? createdAt : null;
-        jdbc.update("INSERT INTO orders (order_id, user_id, status, total_price, " +
+        // tenant_id is NOT NULL with no default (Flyway V8) — TASK-MONO-307 schema-drift fix.
+        jdbc.update("INSERT INTO orders (order_id, user_id, tenant_id, status, total_price, " +
                         "recipient, phone, zip_code, address1, address2, " +
                         "created_at, updated_at, payment_id, paid_at, refunded_at, " +
                         "stuck_recovery_attempt_count, stuck_recovery_at, version) " +
-                        "VALUES (?, ?, ?, 0, '홍길동', '010-0000-0000', '12345', " +
+                        "VALUES (?, ?, 'ecommerce', ?, 0, '홍길동', '010-0000-0000', '12345', " +
                         "'서울시 강남구', NULL, ?, ?, ?, ?, NULL, 0, NULL, 0)",
                 orderId, "user-" + UUID.randomUUID(), status.name(),
                 java.sql.Timestamp.from(createdAt),
