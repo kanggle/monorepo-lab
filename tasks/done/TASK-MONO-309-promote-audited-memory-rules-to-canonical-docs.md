@@ -8,7 +8,7 @@ Promote four audit-surfaced operational rules from auto-memory into canonical sh
 
 # Status
 
-review
+done
 
 # Owner
 
