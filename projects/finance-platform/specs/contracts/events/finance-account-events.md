@@ -1,8 +1,11 @@
 # Event Contract — finance-account-events
 
 Kafka events published by `finance-platform/apps/account-service` through the
-**transactional outbox** (libs/java-messaging `BaseEventPublisher` +
-`AccountOutboxPollingScheduler extends OutboxPollingScheduler`).
+**transactional outbox v2** (libs/java-messaging `AbstractOutboxPublisher` — the
+`OutboxRow` path, ADR-MONO-004 § 5; TASK-FIN-BE-045): the `AccountEventPublisher`
+port impl (`OutboxAccountEventPublisher`) appends `account_outbox` rows, and the
+`AccountOutboxPublisher` relay forwards them to Kafka. The on-wire envelope shape
+and topics are unchanged from the prior `BaseEventPublisher` path.
 
 Authoritative architecture: [`account-service/architecture.md`](../../services/account-service/architecture.md).
 Domain rules: [`rules/domains/fintech.md`](../../../../../rules/domains/fintech.md)

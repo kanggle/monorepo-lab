@@ -16,12 +16,14 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-outbox:
-  polling:
-    # Tighten the loop in tests so the relay reacts within an awaitility
-    # timeout. Disabled by default; integration tests explicitly enable it.
-    enabled: false
-    interval-ms: 200
+account:
+  outbox:
+    polling:
+      # Disabled by default; integration tests explicitly enable it. Tighten
+      # the loop in tests so the relay reacts within an awaitility timeout.
+      enabled: false
+    polling-interval-ms: 200
+    initial-delay-ms: 200
     batch-size: 50
 
 financeplatform:

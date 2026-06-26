@@ -182,7 +182,7 @@ com.example.finance.account/
 │   ├── view/ (AccountView, BalanceView, TransactionView)  ← read-model DTOs
 │   ├── command/                            ← OpenAccount/Hold/Capture/Release/Transfer/UpgradeKyc
 │   ├── event/
-│   │   └── AccountEventPublisher.java      ← extends BaseEventPublisher (libs/java-messaging)
+│   │   └── AccountEventPublisher.java      ← outbox-append port (impl in infrastructure/outbox)
 │   └── port/outbound/
 │       ├── CompliancePort.java             ← KYC/AML/sanction screening (v1 stub adapter)
 │       ├── IdempotencyStore.java           ← Redis-or-DB dedupe port
@@ -190,8 +190,10 @@ com.example.finance.account/
 ├── infrastructure/                         ← outbound adapters + config
 │   ├── persistence/jpa/                    ← Spring Data + adapter beans (toDomain/fromDomain)
 │   │   (AccountJpaEntity/Repository/Adapter, BalanceJpaEntity..., TransactionJpaEntity...,
-│   │    AuditLogJpaEntity..., outbox + processed_events + idempotency_keys)
-│   ├── outbox/AccountOutboxPollingScheduler.java   ← extends libs OutboxPollingScheduler
+│   │    AuditLogJpaEntity..., idempotency_keys; retained-unused outbox + processed_events stubs)
+│   ├── outbox/AccountOutboxJpaEntity + AccountOutboxJpaRepository  ← v2 account_outbox (OutboxRow)
+│   ├── outbox/OutboxAccountEventPublisher.java     ← AccountEventPublisher impl (envelope + append)
+│   ├── outbox/AccountOutboxPublisher.java          ← extends libs AbstractOutboxPublisher (relay)
 │   ├── compliance/StubComplianceAdapter.java       ← v1 in-process screening (deterministic)
 │   ├── crypto/PiiEncryptor.java            ← AES-256-GCM column encryption (F7)
 │   ├── security/
@@ -347,10 +349,15 @@ same key + different payload → 409 `IDEMPOTENCY_KEY_CONFLICT`. Key scope =
 
 ## Outbox + audit_log invariants
 
-Transactional outbox (libs/java-messaging `BaseEventPublisher` +
-`AccountOutboxPollingScheduler extends OutboxPollingScheduler`): every event
-write shares the use-case `@Transactional` boundary (F1). Source =
-`"finance-platform-account-service"`. Topics → § contract
+Transactional outbox v2 (libs/java-messaging `AbstractOutboxPublisher` — the
+`OutboxRow` path, ADR-MONO-004 § 5; TASK-FIN-BE-045, mirroring ledger-service):
+the `AccountEventPublisher` port impl (`OutboxAccountEventPublisher`) builds the
+canonical envelope and appends an `account_outbox` row inside the use-case
+`@Transactional` boundary (F1); the `AccountOutboxPublisher` relay forwards rows
+to Kafka with exponential backoff + `eventId`/`eventType` headers and stamps
+`published_at` after the ACK. The on-wire envelope is the preserved 7-field shape
+(`{eventId, eventType, source, occurredAt, schemaVersion, partitionKey, payload}`)
+with Source = `"finance-platform-account-service"`. Topics → § contract
 `finance-account-events.md`. `audit_log` (append-only, no UPDATE/DELETE,
 written in the same Tx) records account status transitions, balance
 mutations, transaction settle/reversal, KYC-level changes, sanction-queue
@@ -464,7 +471,7 @@ All under `/api/finance/**` (gateway, when introduced, rewrites
 |---|---|---|
 | **transactional** T1 idempotency on mutations | ✅ | `Idempotency-Key` + `idempotency_keys` + Redis primary |
 | T2 atomic state-change + outbox | ✅ | publisher write inside use-case `@Transactional` |
-| T3 outbox table + polling relay | ✅ | `outbox`+`processed_events`; `AccountOutboxPollingScheduler` |
+| T3 outbox table + polling relay | ✅ | v2 `account_outbox` (`AbstractOutboxPublisher` — `AccountOutboxPublisher` relay); retained-unused `outbox`/`processed_events` stubs |
 | T4 state machine via dedicated module | ✅ | `AccountStatusMachine` / `TransactionStatusMachine`, no setter mutation |
 | T7 optimistic locking on aggregates | ✅ | `@Version` on `Account`, `Balance`, `Transaction` |
 | **regulated** | ✅ | KYC/AML gate (F4), PII encryption + masking (F7), operator-review queue (no auto-clear); `rules/traits/regulated.md` loaded |
@@ -476,7 +483,7 @@ All under `/api/finance/**` (gateway, when introduced, rewrites
 | Dir | Target | Protocol | Notes |
 |---|---|---|---|
 | In | finance `gateway-service` (v1 deferred) → direct JWT until then | HTTP `/api/finance/**` | tenant-validated JWT |
-| Out | MySQL `finance_db` | JDBC | accounts, account_status_history, balances, holds, transactions, audit_log, compliance_review_queue, reconciliation_discrepancy, outbox, processed_events, idempotency_keys |
+| Out | MySQL `finance_db` | JDBC | accounts, account_status_history, balances, holds, transactions, audit_log, compliance_review_queue, reconciliation_discrepancy, account_outbox (v2), idempotency_keys; retained-unused outbox + processed_events stubs |
 | Out | Redis | TCP | idempotency primary (SET NX-EX) |
 | Out | Kafka | TCP | `finance.{account,balance,transaction,compliance}.*.v1`; `acks=all`, `enable.idempotence=true` |
 | Out | IAM `/oauth2/jwks` | HTTPS | RS256 JWT verification (libs/java-security) |
@@ -488,8 +495,12 @@ No cross-service master-event consumption in v1 (account-service is a leaf).
 
 - Logback MDC `traceId / requestId / tenantId / accountId` (libs/java-observability;
   pattern already in skeleton `application.yml`).
-- Counters: `account_outbox_publish_failures_total`,
-  `compliance_sanction_hits_total`, `fund_movement_rejected_total{reason}`.
+- Outbox v2 metrics (libs `MicrometerOutboxMetrics`, prefix `account`):
+  `account.outbox.publish.success.total` / `account.outbox.publish.failure.total`
+  (eventType-tagged), `account.outbox.lag.seconds`, `account.outbox.pending.count`
+  gauge. (Replaces the v1 bespoke `account_outbox_publish_failures_total` counter
+  — renamed; TASK-FIN-BE-045.)
+- Counters: `compliance_sanction_hits_total`, `fund_movement_rejected_total{reason}`.
 - Tracing OTLP via `micrometer-tracing-bridge-otel`; sampling 1.0 (dev).
 - `/actuator/prometheus` internal docker network only.
 

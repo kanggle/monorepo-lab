@@ -103,10 +103,14 @@ financeplatform:
       # production-like runs; the IT suite seeds a known sanctioned ref.
       sanctioned-owner-refs: ${FINANCE_SANCTIONED_OWNER_REFS:}
 
-# Transactional outbox relay (libs/java-messaging). Enabled by default; slice
-# / unit runs disable it (no Kafka) via application-test.yml.
-outbox:
-  polling:
-    enabled: ${OUTBOX_POLLING_ENABLED:true}
-    interval-ms: 1000
+# Transactional outbox relay v2 (libs/java-messaging AbstractOutboxPublisher,
+# TASK-FIN-BE-045). Enabled by default; slice / unit runs disable it (no Kafka)
+# via application-test.yml. Polls account_outbox on a fixed delay after an
+# initial delay (lets the app + Kafka client warm up before the first drain).
+account:
+  outbox:
+    polling:
+      enabled: ${ACCOUNT_OUTBOX_POLLING_ENABLED:true}
+    polling-interval-ms: 1000
+    initial-delay-ms: 2000
     batch-size: 50
