@@ -1,6 +1,6 @@
 # TASK-BE-441 — Triage ecommerce IT Phase-1 residual failures (assertion drift + behavioral)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (per-test triage — each is test-expectation drift OR a small product behaviour question; classify then fix or re-ticket)
