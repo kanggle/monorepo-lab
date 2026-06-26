@@ -1,6 +1,6 @@
 # TASK-FIN-BE-045 (finance) — Migrate account-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-FIN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (schema migration + dual-axis write-path + relay cutover of an at-least-once delivery component in a money-critical, regulated, audit-heavy service — not a routine fix)
