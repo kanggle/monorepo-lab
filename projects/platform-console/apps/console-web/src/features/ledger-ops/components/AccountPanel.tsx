@@ -1,5 +1,3 @@
-'use client';
-
 import { messageForCode } from '@/shared/api/errors';
 import { AccountLookup } from './AccountLookup';
 import { AccountDetail } from './AccountDetail';

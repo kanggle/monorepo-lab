@@ -1,5 +1,3 @@
-'use client';
-
 import type { ApprovalListResponse } from '../api/approval-types';
 import { ApprovalScreen } from './ApprovalScreen';
 
