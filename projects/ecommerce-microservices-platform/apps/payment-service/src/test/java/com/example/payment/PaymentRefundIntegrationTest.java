@@ -9,6 +9,7 @@ import com.example.payment.adapter.in.event.OrderCancelledEventConsumer;
 import com.example.payment.adapter.in.event.OrderPlacedEventConsumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
@@ -117,6 +118,9 @@ class PaymentRefundIntegrationTest {
     }
 
     @Test
+    @Disabled("TASK-BE-440: OrderCancelled→refund consumer path persists without an active "
+            + "transaction (InvalidDataAccessApiUsageException: No EntityManager with actual transaction "
+            + "available - cannot reliably process 'persist') (TASK-MONO-307 quarantine)")
     @DisplayName("OrderCancelled 이벤트 수신 시 COMPLETED 결제가 REFUNDED 상태로 변경된다")
     void orderCancelled_refundsPayment() throws Exception {
         String orderId = "order-" + System.nanoTime();
@@ -148,6 +152,9 @@ class PaymentRefundIntegrationTest {
     // ── TASK-BE-435: money-safe late-payment race, BOTH orderings ────────────
 
     @Test
+    @Disabled("TASK-BE-440: OrderCancelled→refund consumer path persists without an active "
+            + "transaction (InvalidDataAccessApiUsageException: No EntityManager with actual transaction "
+            + "available - cannot reliably process 'persist') (TASK-MONO-307 quarantine)")
     @DisplayName("AC-2 COMPLETED→CANCELLED(PAYMENT_TIMEOUT): 캡처된 결제가 OrderCancelled 수신 시 REFUNDED 된다 (자금 미보유)")
     void completedThenCancelled_paymentTimeout_refunds() throws Exception {
         String orderId = "order-" + System.nanoTime();

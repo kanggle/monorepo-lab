@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = {
+@SpringBootTest(classes = OrderServiceApplication.class, properties = {
         "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
         "outbox.polling.interval-ms=500"
 })

@@ -75,6 +75,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
+| TASK-BE-439 | **READY**. TASK-MONO-307 ecommerce IT 레인이 노출한 latent 제품 버그: order sweeper/read 경로(`OrderRepositoryImpl.findStuckPaymentPending`/`findStalePaidUnconfirmed` → `OrderJpaMapper.toDomain`)가 detached 엔티티를 tx 밖에서 매핑해 lazy `OrderJpaEntity.items` 접근 시 `LazyInitializationException`; `OrderStuckDetector.sweep()`의 catch가 삼켜 **stuck 주문을 영영 복구 안 함**(silent). fetch-join/`@Transactional(readOnly)`/경량매핑 중 택1. 격리된 IT(OrderStuckRecoveryIT 클래스 + ConfirmPaidStaleIT 2메서드) 해제. | order-service | code, bug, saga |
+| TASK-BE-440 | **READY (money-safety)**. TASK-MONO-307이 노출: `OrderCancelled`→환불/void consumer 경로(`PaymentRefundService.handleOrderCancelled`, BE-435)가 활성 tx 없이 persist → `InvalidDataAccessApiUsageException: No EntityManager with actual transaction available`. 캡처된 결제가 이벤트 경로로 환불 안 됨(머니 손실 잠복). consumer tx 경계 수정 + BE-437 durability IT 재검증. 격리된 IT(PaymentRefundIntegrationTest 2메서드 + PaymentRefundStrandedDurabilityIntegrationTest 클래스) 해제. | payment-service | code, bug, payment, money-safety |
 
 ## in-progress
 

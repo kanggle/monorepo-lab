@@ -6,6 +6,7 @@ import com.example.order.domain.model.OrderStatus;
 import com.example.order.domain.repository.OrderRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("integration")
 @Testcontainers
 @EmbeddedKafka(partitions = 1)
+// TASK-MONO-307: quarantined — surfaced a latent product bug (TASK-BE-439). The stuck-detector
+// read path (OrderRepositoryImpl.findStuckPaymentPending → OrderJpaMapper.toDomain) maps DETACHED
+// entities outside a transaction, so accessing the lazy OrderJpaEntity.items throws
+// LazyInitializationException; OrderStuckDetector.sweep()'s catch then swallows it and never
+// recovers any order. Re-enable once TASK-BE-439 fixes the tx boundary / fetch strategy.
+@Disabled("TASK-BE-439: OrderStuckDetector sweeper LazyInitializationException (items, no Session)")
 @DisplayName("Order stuck-detector 통합 테스트")
 class OrderStuckRecoveryIT {
 

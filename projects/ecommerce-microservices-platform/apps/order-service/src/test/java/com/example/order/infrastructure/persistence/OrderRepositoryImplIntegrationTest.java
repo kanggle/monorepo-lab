@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>실제 PostgreSQL(Testcontainers) 환경에서 JPA dirty check 동작 및
  * 쿼리 발생 패턴을 Hibernate Statistics로 검증한다.</p>
  */
-@SpringBootTest(properties = {
+@SpringBootTest(classes = com.example.order.OrderServiceApplication.class, properties = {
         "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
         "spring.jpa.properties.hibernate.generate_statistics=true"
 })

@@ -23,7 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@SpringBootTest(classes = OrderServiceApplication.class,
+        properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @Tag("integration")
 @Testcontainers
 @AutoConfigureMockMvc
