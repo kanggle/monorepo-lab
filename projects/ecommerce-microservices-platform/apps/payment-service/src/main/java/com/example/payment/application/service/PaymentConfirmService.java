@@ -28,6 +28,7 @@ public class PaymentConfirmService {
     private final PaymentGatewayPort paymentGateway;
     private final PaymentEventPublisher paymentEventPublisher;
     private final PaymentMetricRecorder paymentMetricRecorder;
+    private final PaymentRefundStrandedRecorder paymentRefundStrandedRecorder;
 
     @Transactional
     public PaymentConfirmResult confirm(String userId, String paymentKey, String orderId, long amount) {
@@ -87,7 +88,35 @@ public class PaymentConfirmService {
         Payment latest = paymentRepository.findByOrderId(orderId).orElse(payment);
         if (latest.isVoided()) {
             if (paymentKey != null) {
-                paymentGateway.cancelPayment(paymentKey, "Order cancelled during confirm");
+                try {
+                    paymentGateway.cancelPayment(paymentKey, "Order cancelled during confirm");
+                } catch (PgGatewayUnavailableException | PgConfirmFailedException e) {
+                    // TASK-BE-437 money-safety escalation: the post-capture auto-refund failed at
+                    // the PG, so the just-captured customer funds are stranded with no DLT/retry on
+                    // this synchronous HTTP path. Durably record a PaymentRefundStranded escalation
+                    // in a REQUIRES_NEW boundary (separate bean) so it COMMITS even though confirm()
+                    // is about to roll back, increment the money-safety metric, and log — then still
+                    // reject the confirm (the order is cancelled; never advance VOIDED → COMPLETED).
+                    //
+                    // F1: never let a failure of the escalation itself mask the captured-funds loss.
+                    String reason = e.getClass().getSimpleName();
+                    try {
+                        paymentRefundStrandedRecorder.record(
+                                orderId, latest.getPaymentId(), paymentKey, latest.getAmount(), reason);
+                    } catch (RuntimeException recordFailure) {
+                        log.error("payment_refund_stranded_escalation_FAILED — captured funds may be "
+                                        + "stranded AND the escalation write failed. orderId={}, paymentId={}, "
+                                        + "paymentKey={}, amount={}, cause={}",
+                                orderId, latest.getPaymentId(), paymentKey, latest.getAmount(), reason,
+                                recordFailure);
+                    }
+                    paymentMetricRecorder.incrementRefundStranded();
+                    log.error("payment_refund_stranded — confirm() post-capture auto-refund failed at "
+                                    + "the PG; captured funds stranded pending operator action. orderId={}, "
+                                    + "paymentId={}, paymentKey={}, amount={}, cause={}",
+                            orderId, latest.getPaymentId(), paymentKey, latest.getAmount(), reason, e);
+                    throw new PaymentAlreadyCompletedException(orderId);
+                }
             }
             paymentMetricRecorder.incrementPaymentRefunded();
             log.warn("Confirm captured funds for an already-cancelled order — auto-cancelled the "

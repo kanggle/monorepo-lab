@@ -91,7 +91,7 @@ Required emphasis:
 - failure and retry scenario tests
 
 ## Outbox
-Domain events (`PaymentCompleted`, `PaymentRefunded`) are published via the
+Domain events (`PaymentCompleted`, `PaymentRefunded`, `PaymentRefundStranded`) are published via the
 **transactional outbox** pattern (`libs/java-messaging` —
 [ADR-006](../../../docs/adr/ADR-006-at-least-once-delivery-policy.md), Scenario
 A; impl TASK-BE-136). The outbound flow:
@@ -104,8 +104,9 @@ A; impl TASK-BE-136). The outbound flow:
 3. `PaymentEventOutboxRelay extends OutboxPollingScheduler` polls the
    `outbox` table at `outbox.polling.interval-ms` (default 1s), resolves the
    target Kafka topic (`PaymentCompleted` → `payment.payment.completed`,
-   `PaymentRefunded` → `payment.payment.refunded`), and marks the row
-   `PUBLISHED` only after broker ack.
+   `PaymentRefunded` → `payment.payment.refunded`,
+   `PaymentRefundStranded` → `payment.alert.refund.stranded` — TASK-BE-437),
+   and marks the row `PUBLISHED` only after broker ack.
 4. On Kafka send failure, the relay invokes
    `PaymentMetricRecorder.incrementEventPublishFailure(eventType)` —
    preserving the original `event_publish_failure_total{service=payment-service,event_type=...}`
@@ -179,6 +180,38 @@ concurrent interleave where `confirm()` is mid-flight when `OrderCancelled` comm
    change (no optimistic-`@Version` column). If the void instead commits *after* this
    transaction, the void path is a no-op on the now-`COMPLETED` row and the consumer's
    COMPLETED→refund branch reverses it — also safe.
+
+**Post-capture auto-refund failure — stranded-refund escalation (TASK-BE-437).** The
+post-capture `cancelPayment` call above can itself **fail at the PG**
+(`PgGatewayUnavailableException` 5xx/circuit-open/timeout, or `PgConfirmFailedException`
+4xx). Unlike the **consumer** refund path (protected by the Kafka `DefaultErrorHandler`
+retry-3×-then-DLT), this **synchronous HTTP** path has no net — an uncaught failure would
+let the exception propagate, roll back the `confirm()` `@Transactional`, and leave the
+captured customer funds **silently stranded** (the row is already `VOIDED`, the
+`OrderCancelled` consumer has already run its void branch and will not re-fire). `confirm()`
+therefore **catches** both PG exceptions and:
+
+1. **Durably records a `PaymentRefundStranded` escalation** to the outbox via
+   `PaymentRefundStrandedRecorder.record(...)` — a **separate `@Component`** whose method runs
+   `@Transactional(propagation = REQUIRES_NEW)`. Because it is a distinct bean (AOP proxy
+   boundary, exactly like order-service's `OrderStuckRecoveryHandler`), the escalation row
+   **commits in its own transaction** and **survives** the `confirm()` rollback — the alert is
+   not lost. (A private method on `PaymentConfirmService` would self-invoke past the proxy and
+   inherit the rolling-back outer TX, losing the alert.)
+2. Increments the money-safety counter `payment_refund_stranded_total`.
+3. `log.error(...)` with orderId / paymentId / paymentKey / amount / cause.
+4. Still **rejects** the confirm (`PaymentAlreadyCompletedException`) — a cancelled order must
+   never advance `VOIDED → COMPLETED`.
+
+The escalation payload (`paymentId`, `orderId`, `paymentKey`, `amount`, `reason`, `occurredAt`;
+see `contracts/events/payment-events.md` § `PaymentRefundStranded`) carries enough context for a
+reconciliation/operator to **check PG state first** — a transient 5xx cancel *may* have actually
+succeeded, so acting blindly risks a double-refund (F3). **F1 safety:** if the REQUIRES_NEW write
+itself throws, the call site logs + increments the metric anyway — the captured-funds loss is
+never invisible. **F2:** the escalation fires **only** on the catch path; a successful
+`cancelPayment` emits no `PaymentRefundStranded` (no false money-safety page). A full
+auto-reconciliation sweeper that retries the PG cancel is a deliberate out-of-scope follow-up
+(Category-A saga, ADR-MONO-005); this delivers the non-silent, operator-recoverable net only.
 
 **Idempotency (AC-7).** Duplicate `OrderCancelled` is a no-op (refund gates on already-`REFUNDED`
 / remaining-refundable; void gates on terminal state). A retried `confirm()` is a no-op

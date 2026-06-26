@@ -36,11 +36,15 @@ class PaymentTopicConfigTest {
     @Mock
     private PaymentGatewayPort paymentGateway;
 
+    @Mock
+    private PaymentRefundStrandedRecorder paymentRefundStrandedRecorder;
+
     @Test
     @DisplayName("PaymentConfirmService는 PaymentEventPublisher.publishPaymentCompleted를 호출한다")
     void confirmPayment_delegatesToEventPublisher() {
         PaymentConfirmService service = new PaymentConfirmService(
-                paymentRepository, paymentGateway, paymentEventPublisher, paymentMetrics
+                paymentRepository, paymentGateway, paymentEventPublisher, paymentMetrics,
+                paymentRefundStrandedRecorder
         );
 
         Payment payment = Payment.create("order-1", "user-1", 10000L);

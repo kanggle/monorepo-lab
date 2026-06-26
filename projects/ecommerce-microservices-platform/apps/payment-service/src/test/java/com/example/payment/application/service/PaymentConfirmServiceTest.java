@@ -47,10 +47,14 @@ class PaymentConfirmServiceTest {
     @Mock
     private PaymentMetricRecorder paymentMetricRecorder;
 
+    @Mock
+    private PaymentRefundStrandedRecorder paymentRefundStrandedRecorder;
+
     @BeforeEach
     void setUp() {
         paymentConfirmService = new PaymentConfirmService(
-                paymentRepository, paymentGateway, paymentEventPublisher, paymentMetricRecorder
+                paymentRepository, paymentGateway, paymentEventPublisher, paymentMetricRecorder,
+                paymentRefundStrandedRecorder
         );
     }
 
@@ -205,5 +209,102 @@ class PaymentConfirmServiceTest {
         verify(paymentRepository, never()).save(any());
         verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
         verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
+
+        // AC-3: cancelPayment succeeded → no stranded escalation, no money-safety metric.
+        verify(paymentRefundStrandedRecorder, never()).record(any(), any(), any(), anyLong(), any());
+        verify(paymentMetricRecorder, never()).incrementRefundStranded();
+        verify(paymentMetricRecorder).incrementPaymentRefunded();
+    }
+
+    // ── TASK-BE-437: stranded-refund escalation when the post-capture PG cancel fails ──────
+
+    @Test
+    @DisplayName("AC-1 post-capture cancel 이 PgGatewayUnavailableException(5xx/회로개방/타임아웃) 으로 실패하면 "
+            + "PaymentRefundStranded 에스컬레이션 기록 + money-safety 메트릭 증가 + confirm 거부, COMPLETED 미진행")
+    void confirm_postCaptureCancel_gatewayUnavailable_recordsStrandedEscalation() {
+        Payment pending = Payment.create("order-1", "user-1", 30000L);
+        Payment voided = Payment.reconstitute(
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
+                PaymentStatus.VOIDED, java.time.LocalDateTime.now(), null, null, null, null, null);
+        given(paymentRepository.findByOrderId("order-1"))
+                .willReturn(Optional.of(pending))   // initial read
+                .willReturn(Optional.of(voided));   // post-capture re-read
+        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
+                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
+        doThrow(new PgGatewayUnavailableException("cancel retry exhausted"))
+                .when(paymentGateway).cancelPayment("pk_test_123", "Order cancelled during confirm");
+
+        // Still rejects the confirm (must not advance VOIDED → COMPLETED).
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PaymentAlreadyCompletedException.class);
+
+        // Durable escalation recorded exactly once, with the failure-cause reason.
+        verify(paymentRefundStrandedRecorder)
+                .record(eq("order-1"), eq("pay-1"), eq("pk_test_123"), eq(30000L),
+                        eq("PgGatewayUnavailableException"));
+        verify(paymentMetricRecorder).incrementRefundStranded();
+        // Not the success-path refund metric; never advanced to COMPLETED; no PaymentCompleted.
+        verify(paymentMetricRecorder, never()).incrementPaymentRefunded();
+        verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
+        verify(paymentRepository, never()).save(any());
+        verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
+    }
+
+    @Test
+    @DisplayName("AC-1 post-capture cancel 이 PgConfirmFailedException(4xx 확정 거부) 으로 실패하면 "
+            + "PaymentRefundStranded 에스컬레이션 기록 + 메트릭 증가 + confirm 거부")
+    void confirm_postCaptureCancel_confirmFailed_recordsStrandedEscalation() {
+        Payment pending = Payment.create("order-1", "user-1", 30000L);
+        Payment voided = Payment.reconstitute(
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
+                PaymentStatus.VOIDED, java.time.LocalDateTime.now(), null, null, null, null, null);
+        given(paymentRepository.findByOrderId("order-1"))
+                .willReturn(Optional.of(pending))
+                .willReturn(Optional.of(voided));
+        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
+                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
+        doThrow(new PgConfirmFailedException("cancel rejected"))
+                .when(paymentGateway).cancelPayment("pk_test_123", "Order cancelled during confirm");
+
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PaymentAlreadyCompletedException.class);
+
+        verify(paymentRefundStrandedRecorder)
+                .record(eq("order-1"), eq("pay-1"), eq("pk_test_123"), eq(30000L),
+                        eq("PgConfirmFailedException"));
+        verify(paymentMetricRecorder).incrementRefundStranded();
+        verify(paymentMetricRecorder, never()).incrementPaymentRefunded();
+        verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
+        verify(paymentRepository, never()).save(any());
+        verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
+    }
+
+    @Test
+    @DisplayName("F1: 에스컬레이션 기록(REQUIRES_NEW)이 던져도 자금손실은 절대 swallow 되지 않는다 — "
+            + "money-safety 메트릭은 여전히 증가하고 confirm 은 거부된다")
+    void confirm_postCaptureCancel_escalationRecordItselfFails_stillCountsAndRejects() {
+        Payment pending = Payment.create("order-1", "user-1", 30000L);
+        Payment voided = Payment.reconstitute(
+                "pay-1", "order-1", "user-1", "ecommerce", 30000L, 0L,
+                PaymentStatus.VOIDED, java.time.LocalDateTime.now(), null, null, null, null, null);
+        given(paymentRepository.findByOrderId("order-1"))
+                .willReturn(Optional.of(pending))
+                .willReturn(Optional.of(voided));
+        given(paymentGateway.confirmPayment("pk_test_123", "order-1", 30000L))
+                .willReturn(new PaymentGatewayConfirmResult("CARD", "https://receipt.url"));
+        doThrow(new PgGatewayUnavailableException("cancel retry exhausted"))
+                .when(paymentGateway).cancelPayment("pk_test_123", "Order cancelled during confirm");
+        doThrow(new IllegalStateException("outbox DB down"))
+                .when(paymentRefundStrandedRecorder)
+                .record(any(), any(), any(), anyLong(), any());
+
+        // The escalation-write failure must not mask the loss: confirm still rejects,
+        // and the money-safety metric is still incremented.
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PaymentAlreadyCompletedException.class);
+
+        verify(paymentMetricRecorder).incrementRefundStranded();
+        verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
+        verify(paymentRepository, never()).save(any());
     }
 }
