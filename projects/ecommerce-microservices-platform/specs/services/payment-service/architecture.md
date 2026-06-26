@@ -95,24 +95,33 @@ Domain events (`PaymentCompleted`, `PaymentRefunded`, `PaymentRefundStranded`,
 `PaymentRefundUnresolved`) are published via the
 **transactional outbox** pattern (`libs/java-messaging` —
 [ADR-006](../../../docs/adr/ADR-006-at-least-once-delivery-policy.md), Scenario
-A; impl TASK-BE-136). The outbound flow:
+A; **outbox v2** — shared `AbstractOutboxPublisher`, ADR-MONO-004 § 5; migrated
+from v1 in TASK-BE-449). The outbound flow:
 
 1. The use-case service (`PaymentConfirmService` / `PaymentRefundService`) runs
    inside a `@Transactional` boundary. The state mutation on `payments` and
-   the envelope row on `outbox` commit atomically.
-2. `PaymentEventOutboxWriter` (`adapter.out.event`) serializes the event
-   record and calls `OutboxWriter.save(...)`. It does NOT touch Kafka.
-3. `PaymentEventOutboxRelay extends OutboxPollingScheduler` polls the
-   `outbox` table at `outbox.polling.interval-ms` (default 1s), resolves the
-   target Kafka topic (`PaymentCompleted` → `payment.payment.completed`,
+   the envelope row on `payment_outbox` commit atomically. (The v1 `outbox`
+   table — V3 — is retained but unused so the still-EntityScanned lib
+   `OutboxJpaEntity` validates under `ddl-auto=validate`.)
+2. `PaymentEventOutboxWriter` (`adapter.out.event`, `@Profile("!standalone")`)
+   persists a `PaymentOutboxEntity` (`payment_outbox`) directly. The row
+   `event_id` reuses the event envelope's own `event_id`, payload is the
+   byte-identical serialized envelope (wire-preserving). It does NOT touch Kafka.
+3. `PaymentOutboxPublisher extends AbstractOutboxPublisher<PaymentOutboxEntity>`
+   (`@Profile("!standalone")` + `@ConditionalOnProperty("outbox.polling.enabled")`)
+   polls `payment_outbox` (`@Scheduled`, `payment.outbox.poll-ms` default 1s),
+   resolves the target Kafka topic (`PaymentCompleted` → `payment.payment.completed`,
    `PaymentRefunded` → `payment.payment.refunded`,
    `PaymentRefundStranded` → `payment.alert.refund.stranded` — TASK-BE-437,
    `PaymentRefundUnresolved` → `payment.alert.refund.unresolved` — TASK-BE-438),
-   and marks the row `PUBLISHED` only after broker ack.
-4. On Kafka send failure, the relay invokes
+   adds `eventId`/`eventType` Kafka headers (additive), and sets `published_at`
+   only after broker ack. Exponential backoff (1s→…→30s) on failure.
+4. On Kafka send failure, the publisher's wrapped `OutboxMetrics` invokes
    `PaymentMetricRecorder.incrementEventPublishFailure(eventType)` —
    preserving the original `event_publish_failure_total{service=payment-service,event_type=...}`
-   metric label semantics so existing dashboards / alerts continue to work.
+   metric label semantics so existing dashboards / alerts continue to work — plus
+   the lib `payment.outbox.publish.{success,failure}.total` / `.lag.seconds` and a
+   preserved `payment.outbox.pending.count` gauge.
 
 **Delivery semantic:** at-least-once. The relay retries until broker ack;
 consumers must already be idempotent on `event_id` (existing dedupe layer).
