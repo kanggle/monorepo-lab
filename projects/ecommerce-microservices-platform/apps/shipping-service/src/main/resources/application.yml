@@ -55,6 +55,10 @@ management:
     tags:
       service: ${spring.application.name}
 
+# TASK-BE-446: outbox v2 (ShippingOutboxPublisher extends AbstractOutboxPublisher).
+# The legacy `outbox.polling.*` keys below are retained only because the lib
+# OutboxAutoConfiguration beans (unreferenced after the v2 swap) still bind them;
+# the v2 publisher reads the `shipping.outbox.*` keys.
 outbox:
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
@@ -83,6 +87,13 @@ fulfillment:
 # Secrets (api-key, webhook.secret) are env-injected ONLY (Secret Manager stand-in) — no
 # value is hard-coded; the defaults are blank so an unconfigured deploy is net-zero/fail-closed.
 shipping:
+  # TASK-BE-446: outbox v2 (ShippingOutboxPublisher extends AbstractOutboxPublisher).
+  # The legacy top-level `outbox.polling.*` keys are retained only because the lib
+  # OutboxAutoConfiguration beans (unreferenced after the v2 swap) still bind them.
+  outbox:
+    batch-size: ${SHIPPING_OUTBOX_BATCH_SIZE:100}
+    poll-ms: ${SHIPPING_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${SHIPPING_OUTBOX_INITIAL_DELAY_MS:5000}
   carrier:
     mode: ${SHIPPING_CARRIER_MODE:mock}
     # Aggregator API base URL + key (aggregator account credentials, env-injected).
