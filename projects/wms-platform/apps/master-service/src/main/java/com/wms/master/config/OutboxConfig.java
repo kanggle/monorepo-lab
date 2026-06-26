@@ -1,24 +1,53 @@
 package com.wms.master.config;
 
-import com.example.messaging.outbox.OutboxPublisher;
-import com.example.messaging.outbox.OutboxWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.adapter.out.messaging.EventEnvelopeSerializer;
-import com.wms.master.adapter.out.messaging.MasterOutboxPollingScheduler;
 import com.wms.master.adapter.out.messaging.OutboxDomainEventAdapter;
-import com.wms.master.adapter.out.messaging.OutboxMetrics;
+import com.wms.master.adapter.out.persistence.outbox.MasterOutboxRepository;
 import com.wms.master.application.port.out.DomainEventPort;
-import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * Outbox wiring for master-service (TASK-BE-438, outbox v2).
+ *
+ * <p>The publisher itself is the {@code @Component}
+ * {@link com.wms.master.adapter.out.messaging.MasterOutboxPublisher} (a thin
+ * {@code AbstractOutboxPublisher} subclass). This config supplies the two
+ * infrastructure beans that subclass needs by constructor injection
+ * ({@link Clock}, {@link TransactionTemplate}) plus the envelope serializer and
+ * the {@link DomainEventPort} write adapter.
+ *
+ * <p>The v1 stack — {@code MasterOutboxPollingScheduler}, the bespoke
+ * {@code OutboxMetrics} bean, and the lib {@code OutboxWriter}-based write path —
+ * is gone. The lib {@code OutboxAutoConfiguration} is intentionally retained
+ * (not excluded): its {@code OutboxJpaConfig} EntityScan is what keeps the v1
+ * {@code outbox}/{@code processed_events} tables required under
+ * {@code ddl-auto=validate}; see {@code V8__master_outbox_v2.sql}. The v1
+ * {@code OutboxWriter}/{@code OutboxPublisher} beans it still registers are no
+ * longer referenced or scheduled by master-service.
+ */
 @Configuration
 public class OutboxConfig {
+
+    /** UTC clock for the outbox publisher's lag metric + mark-published timestamps. */
+    @Bean
+    Clock outboxClock() {
+        return Clock.systemUTC();
+    }
+
+    /**
+     * Programmatic transaction boundary for the {@code AbstractOutboxPublisher}
+     * poll loop (it reads pending rows and marks them published in separate
+     * transactions on a background scheduler thread).
+     */
+    @Bean
+    TransactionTemplate outboxTransactionTemplate(PlatformTransactionManager transactionManager) {
+        return new TransactionTemplate(transactionManager);
+    }
 
     @Bean
     EventEnvelopeSerializer eventEnvelopeSerializer(ObjectMapper objectMapper) {
@@ -26,30 +55,8 @@ public class OutboxConfig {
     }
 
     @Bean
-    DomainEventPort domainEventPort(OutboxWriter outboxWriter,
+    DomainEventPort domainEventPort(MasterOutboxRepository outboxRepository,
                                     EventEnvelopeSerializer envelopeSerializer) {
-        return new OutboxDomainEventAdapter(outboxWriter, envelopeSerializer);
-    }
-
-    @Bean
-    OutboxMetrics outboxMetrics(MeterRegistry meterRegistry,
-                                PlatformTransactionManager transactionManager) {
-        // Gauge scrapes run outside an ambient Spring transaction (e.g., the
-        // Prometheus actuator thread). Give the metrics bean a read-only
-        // TransactionTemplate so the JPA query in the gauge always has a live
-        // session, regardless of the calling thread.
-        TransactionTemplate template = new TransactionTemplate(transactionManager);
-        template.setReadOnly(true);
-        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-        return new OutboxMetrics(meterRegistry, template);
-    }
-
-    @Bean
-    @Profile("!standalone")
-    MasterOutboxPollingScheduler masterOutboxPollingScheduler(
-            OutboxPublisher outboxPublisher,
-            KafkaTemplate<String, String> kafkaTemplate,
-            OutboxMetrics outboxMetrics) {
-        return new MasterOutboxPollingScheduler(outboxPublisher, kafkaTemplate, outboxMetrics);
+        return new OutboxDomainEventAdapter(outboxRepository, envelopeSerializer);
     }
 }

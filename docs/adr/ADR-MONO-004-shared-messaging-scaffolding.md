@@ -249,7 +249,7 @@ Surfaced by TASK-MONO-207 (federation-e2e spec flakiness) and pinned by TASK-MON
 
 | Follow-up | Trigger | Owner |
 |---|---|---|
-| Migrate `master-service` to `AbstractOutboxPublisher` v2 | Cosmetic; defer until next bundle | wms backlog |
+| ~~Migrate `master-service` to `AbstractOutboxPublisher` v2~~ — **DONE (TASK-BE-438)**: V8 `master_outbox` (UUID PK + `occurred_at` + `retries`/`last_error`), `MasterOutboxPublisher extends AbstractOutboxPublisher`, write-path + metrics cutover. Was labelled "cosmetic" but was in fact a schema migration + write-path rewrite. | ~~Cosmetic; defer until next bundle~~ | ~~wms backlog~~ |
 | Migrate GAP services + ecommerce services + fan-platform services off `BaseEventPublisher` to v2 | Schema review per service | per-project backlog |
 | Migrate `scm/inventory-visibility-service.EventDedupePort` to lib's `EventDedupePort` (same shape, different package) | Trivial rename | scm backlog |
 | Decide admin-service `AdminEventDedupeRepository` fate (extend lib `EventDedupePort` with `APPLIED_LATE` or keep custom) | Architectural call | wms admin-service backlog |

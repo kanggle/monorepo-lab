@@ -173,6 +173,19 @@ All master data changes publish events via the **transactional outbox pattern**
 
 Full event schemas: `specs/contracts/events/master-events.md`.
 
+**Publisher (outbox v2, TASK-BE-438).** Rows in `master_outbox` are drained to
+Kafka by `MasterOutboxPublisher`, a thin subclass of the shared
+`AbstractOutboxPublisher` (`libs/java-messaging`, ADR-MONO-004 § 5). It polls
+unpublished rows in occurrence order, sends each (key = `aggregate_id`; carries
+`eventId` + `eventType` record headers), marks `published_at` after broker ACK,
+and applies exponential backoff (1s → 2s → … → 30s cap) across failed ticks. The
+`master.<aggregate>.<action> → wms.master.<aggregate>.v1` mapping is enforced by
+its `TopicResolver` (rejects unmapped event types). Disabled under the
+`standalone` profile (no Kafka — rows accumulate undrained). Metrics:
+`master.outbox.pending.count` (gauge), `master.outbox.publish.success.total` /
+`master.outbox.publish.failure.total` (counters, tagged by `event_type`),
+`master.outbox.lag.seconds` (timer).
+
 ---
 
 ## Idempotency
@@ -231,7 +244,7 @@ needed (out of v1 scope; v1 does a local-only check).
 
 - Database: PostgreSQL (one logical DB per service; no cross-service reads)
 - Migrations: Flyway, `apps/master-service/src/main/resources/db/migration/`
-- Outbox table: `outbox` (libs/java-messaging shared schema — BIGSERIAL PK, status enum). `processed_events` stub is also created (master = producer-only in v1; the library's EntityScan validate requires both tables).
+- Outbox table: `master_outbox` (V8 — outbox v2, UUID `event_id` PK + `occurred_at` + `retries`/`last_error`; matches `OutboxRowEntity`). The original V2 `outbox` + `processed_events` tables are **retained but unused** (the lib EntityScan + `ddl-auto=validate` still require them — do not drop). See [`database-design.md`](database-design.md) § 2 + TASK-BE-438.
 
 Full schema reflection lives in [`database-design.md`](database-design.md); domain meaning per entity in [`domain-model.md`](domain-model.md).
 

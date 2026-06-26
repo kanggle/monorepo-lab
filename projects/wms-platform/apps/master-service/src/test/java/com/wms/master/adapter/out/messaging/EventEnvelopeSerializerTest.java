@@ -50,7 +50,7 @@ class EventEnvelopeSerializerTest {
         Warehouse wh = Warehouse.create("WH01", "Seoul", "Seoul", "Asia/Seoul", "actor-42");
         WarehouseCreatedEvent event = WarehouseCreatedEvent.from(wh);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.warehouse.created");
         assertThat(envelope.get("eventVersion").asInt()).isEqualTo(1);
@@ -72,7 +72,7 @@ class EventEnvelopeSerializerTest {
         Warehouse wh = Warehouse.create("WH01", "Seoul", null, "Asia/Seoul", "actor");
         WarehouseUpdatedEvent event = WarehouseUpdatedEvent.from(wh, List.of("name", "address"));
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         JsonNode changed = envelope.get("payload").get("changedFields");
         assertThat(changed.isArray()).isTrue();
@@ -86,7 +86,7 @@ class EventEnvelopeSerializerTest {
         wh.deactivate("actor");
         WarehouseDeactivatedEvent event = WarehouseDeactivatedEvent.from(wh, "closing");
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("payload").get("reason").asText()).isEqualTo("closing");
         assertThat(envelope.get("payload").get("warehouse").get("status").asText()).isEqualTo("INACTIVE");
@@ -99,7 +99,7 @@ class EventEnvelopeSerializerTest {
         wh.reactivate("actor");
         WarehouseReactivatedEvent event = WarehouseReactivatedEvent.from(wh);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("payload").get("warehouse").get("status").asText()).isEqualTo("ACTIVE");
         assertThat(envelope.get("payload").has("reason")).isFalse();
@@ -112,7 +112,7 @@ class EventEnvelopeSerializerTest {
             MDC.put("traceId", "trace-abc-123");
             Warehouse wh = Warehouse.create("WH01", "Seoul", null, "Asia/Seoul", "actor");
             JsonNode envelope = mapper.readTree(
-                    serializer.serialize(WarehouseCreatedEvent.from(wh)));
+                    serializer.serialize(WarehouseCreatedEvent.from(wh)).json());
             assertThat(envelope.get("traceId").asText()).isEqualTo("trace-abc-123");
         } finally {
             MDC.remove("traceId");
@@ -124,7 +124,7 @@ class EventEnvelopeSerializerTest {
         MDC.remove("traceId");
         Warehouse wh = Warehouse.create("WH01", "Seoul", null, "Asia/Seoul", "actor");
         JsonNode envelope = mapper.readTree(
-                serializer.serialize(WarehouseCreatedEvent.from(wh)));
+                serializer.serialize(WarehouseCreatedEvent.from(wh)).json());
         assertThat(envelope.get("traceId").isNull()).isTrue();
     }
 
@@ -136,7 +136,7 @@ class EventEnvelopeSerializerTest {
         Zone zone = Zone.create(warehouseId, "Z-A", "Ambient A", ZoneType.AMBIENT, "actor-42");
         ZoneCreatedEvent event = ZoneCreatedEvent.from(zone);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.created");
         assertThat(envelope.get("aggregateType").asText()).isEqualTo("zone");
@@ -156,7 +156,7 @@ class EventEnvelopeSerializerTest {
         Zone zone = Zone.create(UUID.randomUUID(), "Z-A", "Name", ZoneType.AMBIENT, "actor");
         ZoneUpdatedEvent event = ZoneUpdatedEvent.from(zone, List.of("name", "zoneType"));
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.updated");
         JsonNode changed = envelope.get("payload").get("changedFields");
@@ -171,7 +171,7 @@ class EventEnvelopeSerializerTest {
         zone.deactivate("actor");
         ZoneDeactivatedEvent event = ZoneDeactivatedEvent.from(zone, "closing");
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.deactivated");
         assertThat(envelope.get("payload").get("reason").asText()).isEqualTo("closing");
@@ -185,7 +185,7 @@ class EventEnvelopeSerializerTest {
         zone.reactivate("actor");
         ZoneReactivatedEvent event = ZoneReactivatedEvent.from(zone);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.zone.reactivated");
         assertThat(envelope.get("payload").get("zone").get("status").asText()).isEqualTo("ACTIVE");
@@ -205,7 +205,7 @@ class EventEnvelopeSerializerTest {
                 LocationType.STORAGE, 500, "actor-42");
         LocationCreatedEvent event = LocationCreatedEvent.from(loc);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.created");
         assertThat(envelope.get("aggregateType").asText()).isEqualTo("location");
@@ -231,7 +231,7 @@ class EventEnvelopeSerializerTest {
         LocationUpdatedEvent event = LocationUpdatedEvent.from(
                 loc, List.of("locationType", "capacityUnits"));
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.updated");
         JsonNode changed = envelope.get("payload").get("changedFields");
@@ -249,7 +249,7 @@ class EventEnvelopeSerializerTest {
         loc.deactivate("actor");
         LocationDeactivatedEvent event = LocationDeactivatedEvent.from(loc, "closing");
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.deactivated");
         assertThat(envelope.get("payload").get("reason").asText()).isEqualTo("closing");
@@ -266,7 +266,7 @@ class EventEnvelopeSerializerTest {
         loc.reactivate("actor");
         LocationReactivatedEvent event = LocationReactivatedEvent.from(loc);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.location.reactivated");
         assertThat(envelope.get("payload").get("location").get("status").asText()).isEqualTo("ACTIVE");
@@ -281,7 +281,7 @@ class EventEnvelopeSerializerTest {
                 BaseUom.EA, TrackingType.LOT, 1000, null, null, 30, "actor");
         SkuCreatedEvent event = SkuCreatedEvent.from(sku);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.sku.created");
         assertThat(envelope.get("aggregateType").asText()).isEqualTo("sku");
@@ -302,7 +302,7 @@ class EventEnvelopeSerializerTest {
                 BaseUom.EA, TrackingType.NONE, null, null, null, null, "actor");
         SkuUpdatedEvent event = SkuUpdatedEvent.from(sku, List.of("name", "weightGrams"));
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.sku.updated");
         JsonNode changed = envelope.get("payload").get("changedFields");
@@ -318,7 +318,7 @@ class EventEnvelopeSerializerTest {
         sku.deactivate("actor");
         SkuDeactivatedEvent event = SkuDeactivatedEvent.from(sku, "obsolete");
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.sku.deactivated");
         assertThat(envelope.get("payload").get("reason").asText()).isEqualTo("obsolete");
@@ -333,7 +333,7 @@ class EventEnvelopeSerializerTest {
         sku.reactivate("actor");
         SkuReactivatedEvent event = SkuReactivatedEvent.from(sku);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.sku.reactivated");
         assertThat(envelope.get("payload").get("sku").get("status").asText()).isEqualTo("ACTIVE");
@@ -349,7 +349,7 @@ class EventEnvelopeSerializerTest {
                 "B-1", "Jane", "jane@example.com", "+82-1", "Seoul", "actor-42");
         PartnerCreatedEvent event = PartnerCreatedEvent.from(partner);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.partner.created");
         assertThat(envelope.get("aggregateType").asText()).isEqualTo("partner");
@@ -370,7 +370,7 @@ class EventEnvelopeSerializerTest {
         PartnerUpdatedEvent event = PartnerUpdatedEvent.from(partner,
                 List.of("name", "partnerType"));
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.partner.updated");
         JsonNode changed = envelope.get("payload").get("changedFields");
@@ -386,7 +386,7 @@ class EventEnvelopeSerializerTest {
         partner.deactivate("actor");
         PartnerDeactivatedEvent event = PartnerDeactivatedEvent.from(partner, "discontinued");
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.partner.deactivated");
         assertThat(envelope.get("payload").get("reason").asText()).isEqualTo("discontinued");
@@ -401,7 +401,7 @@ class EventEnvelopeSerializerTest {
         partner.reactivate("actor");
         PartnerReactivatedEvent event = PartnerReactivatedEvent.from(partner);
 
-        JsonNode envelope = mapper.readTree(serializer.serialize(event));
+        JsonNode envelope = mapper.readTree(serializer.serialize(event).json());
 
         assertThat(envelope.get("eventType").asText()).isEqualTo("master.partner.reactivated");
         assertThat(envelope.get("payload").get("partner").get("status").asText()).isEqualTo("ACTIVE");
