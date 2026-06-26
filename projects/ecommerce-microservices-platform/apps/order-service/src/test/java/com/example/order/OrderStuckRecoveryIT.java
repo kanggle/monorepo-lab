@@ -15,6 +15,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -59,9 +61,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("integration")
 @Testcontainers
 @EmbeddedKafka(partitions = 1)
-// TASK-BE-439: quarantine lifted — fixed by adding @Transactional(readOnly = true) to
-// OrderRepositoryImpl.findStuckPaymentPending so the JPA session remains open through
-// OrderJpaMapper.toDomain's access of the lazy OrderJpaEntity.items collection.
+// TASK-BE-439: quarantine lifted. Two distinct fixes: (1) the production @Scheduled
+// sweep path (OrderStuckDetector.sweep → OrderRepositoryImpl.findStuckPaymentPending)
+// now eagerly fetches OrderJpaEntity.items in-query (two-step id-then-fetch), so the
+// detached toDomain mapping no longer throws LazyInitializationException and silently
+// swallows it; (2) this IT's verification reads call the domain repository's findById
+// directly off the test thread (no OSIV / no surrounding tx), so toDomain's lazy items
+// access threw — they now go through reload(), which maps inside a read-only tx.
 @DisplayName("Order stuck-detector 통합 테스트")
 class OrderStuckRecoveryIT {
 
@@ -82,6 +88,21 @@ class OrderStuckRecoveryIT {
     @Autowired private OrderStuckDetector detector;
     @Autowired private OrderRepository orderRepository;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private PlatformTransactionManager txManager;
+
+    /**
+     * Reloads the order through the domain repository inside a read-only transaction so
+     * {@code OrderJpaMapper.toDomain} initialises the lazy {@code items} collection within
+     * an open session. The returned domain {@link Order} is fully materialised (plain
+     * lists), so assertions run safely after the transaction commits. Production callers
+     * of {@code findById} always run inside a request/service transaction (OSIV or
+     * {@code @Transactional}); this off-thread verification read does not, so it must
+     * supply its own session boundary.
+     */
+    private Order reload(String orderId) {
+        return new TransactionTemplate(txManager).execute(status ->
+                orderRepository.findById(orderId).orElseThrow());
+    }
 
     @BeforeEach
     void cleanState() {
@@ -104,7 +125,7 @@ class OrderStuckRecoveryIT {
 
         detector.sweep();
 
-        Order reloaded = orderRepository.findById(orderId).orElseThrow();
+        Order reloaded = reload(orderId);
         assertThat(reloaded.getStuckRecoveryAttemptCount()).isEqualTo(1);
         assertThat(reloaded.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(countAlertOutboxRows(orderId)).isZero();
@@ -120,7 +141,7 @@ class OrderStuckRecoveryIT {
         }
 
         // Primary terminal is now CANCELLED (TASK-BE-435), not STUCK_RECOVERY_FAILED.
-        Order reloaded = orderRepository.findById(orderId).orElseThrow();
+        Order reloaded = reload(orderId);
         assertThat(reloaded.getStatus()).isEqualTo(OrderStatus.CANCELLED);
 
         // The auto-cancel publishes an OrderCancelled outbox row whose wire payload carries
@@ -141,7 +162,7 @@ class OrderStuckRecoveryIT {
 
         detector.sweep();
 
-        Order reloaded = orderRepository.findById(orderId).orElseThrow();
+        Order reloaded = reload(orderId);
         assertThat(reloaded.getStuckRecoveryAttemptCount()).isZero();
         assertThat(reloaded.getStatus()).isEqualTo(OrderStatus.PENDING);
     }
@@ -153,7 +174,7 @@ class OrderStuckRecoveryIT {
 
         detector.sweep();
 
-        Order reloaded = orderRepository.findById(orderId).orElseThrow();
+        Order reloaded = reload(orderId);
         assertThat(reloaded.getStuckRecoveryAttemptCount()).isZero();
         assertThat(reloaded.getStatus()).isEqualTo(OrderStatus.PENDING);
     }
