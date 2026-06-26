@@ -1,7 +1,10 @@
 package com.example.finance.account;
 
+import com.example.messaging.outbox.OutboxAutoConfiguration;
+import com.example.messaging.outbox.OutboxMetricsAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * finance-platform account-service entry point.
@@ -18,7 +21,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * fail-closed gate). See {@code projects/finance-platform/PROJECT.md} +
  * {@code specs/integration/iam-integration.md}.
  */
-@SpringBootApplication
+@SpringBootApplication(exclude = {
+        OutboxAutoConfiguration.class,
+        OutboxMetricsAutoConfiguration.class
+})
+@EnableScheduling
 public class AccountServiceApplication {
 
     public static void main(String[] args) {
