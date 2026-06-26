@@ -79,7 +79,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-134-ledger-ops-lazy-tab-panel-code-split.md` — **READY**. console-web `/ledger` 초기 청크 코드 스플릿(behavior-preserving 번들 perf). 빌드 산출물 실측상 `/ledger` 페이지 전용 청크 ~77 KB는 콘솔에서 **단일 페이지 전용 청크 중 최대**(무거운 외부 의존성 없음 — 순수 16개 탭 컴포넌트 코드량). `LedgerOpsScreen`이 `'use client'`로 전 탭을 정적 import + `hidden` 토글로 전부 즉시 마운트하는 구조를, 비-기본 6개 탭 패널(periods/entry/reconciliation/account/lots/fx-rates)을 `next/dynamic` 분리 + 최초-활성화-시-마운트(이후 유지, 상태 보존)로 전환. 기본 Trial Balance 탭·seeded 초기 활성 탭·ARIA·money(F5 `formatMoney`)·게이트/에러/degrade 분기 불변. 목표 초기 청크 77 KB → ~15-25 KB(구현 후 실측 기록). builds on PC-FE-072/074/075/091/092/104/106. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 또는 Opus.
 
 ## in-progress
 
