@@ -35,6 +35,7 @@ public class PaymentEventOutboxRelay extends OutboxPollingScheduler {
     static final String TOPIC_PAYMENT_COMPLETED = "payment.payment.completed";
     static final String TOPIC_PAYMENT_REFUNDED = "payment.payment.refunded";
     static final String TOPIC_PAYMENT_REFUND_STRANDED = "payment.alert.refund.stranded";
+    static final String TOPIC_PAYMENT_REFUND_UNRESOLVED = "payment.alert.refund.unresolved";
 
     private final PaymentMetricRecorder paymentMetricRecorder;
 
@@ -51,6 +52,7 @@ public class PaymentEventOutboxRelay extends OutboxPollingScheduler {
             case PaymentEventOutboxWriter.EVENT_TYPE_COMPLETED -> TOPIC_PAYMENT_COMPLETED;
             case PaymentEventOutboxWriter.EVENT_TYPE_REFUNDED -> TOPIC_PAYMENT_REFUNDED;
             case PaymentEventOutboxWriter.EVENT_TYPE_REFUND_STRANDED -> TOPIC_PAYMENT_REFUND_STRANDED;
+            case PaymentEventOutboxWriter.EVENT_TYPE_REFUND_UNRESOLVED -> TOPIC_PAYMENT_REFUND_UNRESOLVED;
             default -> throw new IllegalArgumentException("Unknown payment event type: " + eventType);
         };
     }

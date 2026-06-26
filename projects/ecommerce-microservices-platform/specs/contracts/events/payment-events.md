@@ -154,9 +154,64 @@ disposition as `OrderSagaRecoveryExhausted` in `order-events.md`).
 
 **At-least-once / idempotency:** a client retry of the same `confirm()` re-reads `VOIDED` and may
 re-emit this escalation. The (future) alert consumer dedupes on `paymentId` / `event_id`.
-Acceptable and documented (AC-4). A full auto-reconciliation sweeper that retries the PG cancel is
-a deliberate **out-of-scope follow-up** (Category-A saga, ADR-MONO-005) — this event delivers the
-non-silent, operator-recoverable net only.
+Acceptable and documented (AC-4). The full **auto-reconciliation sweeper** that retries the PG
+cancel (formerly an out-of-scope follow-up) is delivered by **TASK-BE-438** — see
+`PaymentRefundUnresolved` below for its terminal escalation.
+
+---
+
+## PaymentRefundUnresolved (terminal money-safety escalation — TASK-BE-438)
+
+Published when the **stranded-refund auto-reconciliation sweeper** (`StrandedRefundSweeper` +
+`StrandedRefundReconciler`; see `specs/services/payment-service/architecture.md` § "Stranded-refund
+reconciliation sweeper") **could not auto-heal** a `PaymentRefundStranded` stranding. The sweeper
+retries the PG cancel (PG-state-first, double-refund-safe) with bounded exponential backoff; a
+record reaches the terminal `UNRESOLVED` state when **either** the attempt budget
+(`payment.stranded-refund.max-attempts`, default 8) is exhausted **or** the PG issues a
+**definitive 4xx rejection** of the cancel (`PgConfirmFailedException`). At that point the machine
+has given up and an **operator must act** on captured funds it could not reverse (ADR-MONO-005
+§ 2.3 D3 Category-A terminal). Distinct topic so operator paging can route the terminal case
+separately from the transient one.
+
+The terminal status transition (`stranded_refund.status STRANDED → UNRESOLVED`) and this event are
+written to the transactional outbox in the reconciler's **`REQUIRES_NEW`** boundary and **co-commit**
+(F3 — a terminal record must never be buried without its escalation).
+
+**Topic:** `payment.alert.refund.unresolved`
+
+**Consumers:** notification-service / operator alert dashboard (out-of-scope for ecommerce v1; the
+topic is published so future alert subscribers can consume it without spec drift — same disposition
+as `PaymentRefundStranded` / `OrderSagaRecoveryExhausted`).
+
+**Payload**
+```json
+{
+  "paymentId": "string (UUID)",
+  "orderId": "string (UUID)",
+  "paymentKey": "string (PG payment key)",
+  "amount": 30000,
+  "reason": "PgGatewayUnavailableException",
+  "attempts": 8,
+  "lastError": "attempt cap (8) exhausted; last=cancel transient failure: PgGatewayUnavailableException",
+  "occurredAt": "string (ISO 8601)"
+}
+```
+
+- `reason` — the **original** stranding cause (the failing PG exception kind at `confirm()` time),
+  carried through from `PaymentRefundStranded`.
+- `attempts` — how many reconciliation attempts were made before terminating (recovery history).
+- `lastError` — the most recent failure detail (why the auto-reconciliation could not heal it).
+
+**Double-refund safety (the central invariant, F1).** Before re-issuing a cancel the sweeper reads
+the **actual PG state** (`GET /v1/payments/{paymentKey}`). An already-`CANCELED` payment is marked
+`RESOLVED` **without** a second cancel (the transient stranding's original cancel actually
+succeeded). A terminal `UNRESOLVED` is therefore reached only after the PG was observed to still
+hold the capture (or the read/cancel definitively failed) — never by re-cancelling a
+already-reversed payment.
+
+**At-least-once / idempotency:** terminal is terminal — an `UNRESOLVED` record is excluded from the
+sweeper's poll predicate and never re-selected, so the event fires **once** per stranding under
+normal operation. The (future) alert consumer dedupes on `paymentId` / `event_id`.
 
 ---
 

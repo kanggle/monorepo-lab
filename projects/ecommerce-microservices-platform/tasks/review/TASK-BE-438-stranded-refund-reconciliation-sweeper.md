@@ -1,6 +1,6 @@
 # TASK-BE-438 — Auto-reconciliation sweeper that retries stranded refunds (Category-A saga)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (Category-A choreographed-saga sweeper + PG-state reconciliation to prevent double-refund + bounded-retry/terminal/escalation + REQUIRES_NEW boundaries; money-integrity, not a routine fix)
