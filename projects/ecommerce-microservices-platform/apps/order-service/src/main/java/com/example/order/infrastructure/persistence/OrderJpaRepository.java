@@ -100,10 +100,24 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
     // tenants (only mutates the subject's own orders; tenant_id stays immutable).
     List<OrderJpaEntity> findByUserId(String userId);
 
-    @Query("SELECT o FROM OrderJpaEntity o " +
+    // ---- operational sweeps — two-step id-then-fetch (TASK-BE-439) ----------------
+    // Both sweeps map the loaded rows to the domain Order OUTSIDE the request thread
+    // (the @Scheduled detector / the internal endpoint's non-tx service), and
+    // OrderJpaMapper.toDomain reads the LAZY OrderJpaEntity.items. To guarantee items
+    // is materialised before the session closes — independent of any caller tx boundary —
+    // each sweep runs as TWO queries:
+    //   (1) a paged/ordered SELECT of the matching order ids (a scalar projection, so no
+    //       collection-fetch + Pageable in-memory-pagination warning, HHH90003004), then
+    //   (2) a LEFT JOIN FETCH of the full entities + items for those ids (no Pageable, so
+    //       the join fetch is applied in SQL with no warning).
+    // The impl re-orders the step-2 result to the step-1 (createdAt ASC) order. Both are
+    // tenant-agnostic operational sweeps keyed by globally-unique ids; the per-order TX
+    // re-loads + re-checks before any mutation, preserving each row's immutable tenant_id.
+
+    @Query("SELECT o.orderId FROM OrderJpaEntity o " +
            "WHERE o.status = :status AND o.paymentId IS NULL AND o.createdAt < :placedBefore " +
            "ORDER BY o.createdAt ASC")
-    List<OrderJpaEntity> findStuckPaymentPending(
+    List<String> findStuckPaymentPendingIds(
             @Param("status") OrderStatus status,
             @Param("placedBefore") Instant placedBefore,
             Pageable pageable);
@@ -111,13 +125,19 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
     // Paid-but-unconfirmed bucket (TASK-BE-412): the order paid (payment_id IS NOT NULL)
     // but its confirmation event was lost, so it sits in PENDING past the cutoff. Disjoint
     // from findStuckPaymentPending (payment_id IS NULL) — mutually exclusive on payment_id.
-    // Tenant-agnostic operational sweep keyed by globally-unique ids; the per-order TX
-    // re-loads + re-checks before any mutation, preserving each row's immutable tenant_id.
-    @Query("SELECT o FROM OrderJpaEntity o " +
+    @Query("SELECT o.orderId FROM OrderJpaEntity o " +
            "WHERE o.status = :status AND o.paymentId IS NOT NULL AND o.createdAt < :cutoff " +
            "ORDER BY o.createdAt ASC")
-    List<OrderJpaEntity> findStalePaidUnconfirmed(
+    List<String> findStalePaidUnconfirmedIds(
             @Param("status") OrderStatus status,
             @Param("cutoff") Instant cutoff,
             Pageable pageable);
+
+    // Step 2 (shared): load the full entities + their items for the swept ids. The
+    // LEFT JOIN FETCH initialises items IN the query, so OrderJpaMapper.toDomain never
+    // touches a lazy proxy regardless of the caller's session/tx state. No Pageable here
+    // (the id set is already capped by step 1), so no in-memory-pagination warning.
+    @Query("SELECT DISTINCT o FROM OrderJpaEntity o LEFT JOIN FETCH o.items "
+         + "WHERE o.orderId IN :orderIds")
+    List<OrderJpaEntity> findAllWithItemsByOrderIdIn(@Param("orderIds") List<String> orderIds);
 }
