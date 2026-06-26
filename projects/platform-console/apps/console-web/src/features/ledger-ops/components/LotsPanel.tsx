@@ -1,5 +1,3 @@
-'use client';
-
 import { messageForCode } from '@/shared/api/errors';
 import { PositionLotsLookup } from './PositionLotsLookup';
 import { PositionLotsTable } from './PositionLotsTable';

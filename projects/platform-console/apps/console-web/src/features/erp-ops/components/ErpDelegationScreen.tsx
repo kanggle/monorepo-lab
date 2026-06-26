@@ -1,5 +1,3 @@
-'use client';
-
 import type { DelegationFactListResponse } from '../api/types';
 import { DelegationScreen } from './DelegationScreen';
 import { DelegationFactCard } from './DelegationFactCard';

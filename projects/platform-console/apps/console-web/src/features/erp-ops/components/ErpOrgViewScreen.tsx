@@ -1,5 +1,3 @@
-'use client';
-
 import type { EmployeeOrgViewListResponse } from '../api/types';
 import { AsOfPicker } from './AsOfPicker';
 import { EmployeeOrgViewCard } from './EmployeeOrgViewCard';

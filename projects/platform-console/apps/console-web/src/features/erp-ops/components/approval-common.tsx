@@ -1,5 +1,3 @@
-'use client';
-
 import { isTerminalApprovalStatus } from '../api/approval-types';
 
 /**

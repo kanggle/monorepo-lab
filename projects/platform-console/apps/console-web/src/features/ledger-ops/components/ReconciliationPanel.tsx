@@ -1,5 +1,3 @@
-'use client';
-
 import { messageForCode } from '@/shared/api/errors';
 import type { DiscrepanciesResponse } from '../api/types';
 import { DiscrepancyQueue } from './DiscrepancyQueue';

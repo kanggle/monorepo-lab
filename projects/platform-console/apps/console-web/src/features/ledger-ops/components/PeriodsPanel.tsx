@@ -1,5 +1,3 @@
-'use client';
-
 import type { PeriodsResponse } from '../api/types';
 import { PeriodsTable } from './PeriodsTable';
 import { PeriodDetail } from './PeriodDetail';
