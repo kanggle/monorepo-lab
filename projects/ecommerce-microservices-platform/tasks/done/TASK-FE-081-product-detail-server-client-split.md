@@ -8,7 +8,7 @@ web-store 상품상세 클라이언트/서버 컴포넌트 분리: `ProductDetai
 
 # Status
 
-review
+done
 
 # Owner
 
