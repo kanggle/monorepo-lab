@@ -5,7 +5,7 @@ import com.example.fanplatform.membership.domain.membership.Membership;
 import com.example.fanplatform.membership.domain.membership.MembershipTier;
 import com.example.fanplatform.membership.domain.membership.status.MembershipStatus;
 import com.example.fanplatform.membership.infrastructure.jpa.MembershipJpaRepository;
-import com.example.messaging.outbox.OutboxJpaRepository;
+import com.example.fanplatform.membership.infrastructure.jpa.MembershipOutboxJpaRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,7 +36,7 @@ class ExpirySweepIntegrationTest extends MembershipServiceIntegrationBase {
     MembershipJpaRepository memberships;
 
     @Autowired
-    OutboxJpaRepository outbox;
+    MembershipOutboxJpaRepository outbox;
 
     @BeforeEach
     void clean() {

@@ -66,7 +66,7 @@ public abstract class MembershipServiceIntegrationBase {
      */
     protected void truncateAll() {
         jdbcTemplate.execute(
-                "TRUNCATE TABLE memberships, idempotency_keys, outbox, processed_events "
+                "TRUNCATE TABLE memberships, idempotency_keys, outbox, membership_outbox, processed_events "
                         + "RESTART IDENTITY CASCADE");
     }
 

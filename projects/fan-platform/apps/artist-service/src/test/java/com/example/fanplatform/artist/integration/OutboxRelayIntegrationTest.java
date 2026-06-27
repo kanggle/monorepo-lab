@@ -33,8 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code artist.registered.v1} Kafka message via the outbox relay.
  */
 @TestPropertySource(properties = {
-        "outbox.polling.enabled=true",
-        "outbox.polling.interval-ms=200"
+        "artist.outbox.poll-ms=200",
+        "artist.outbox.initial-delay-ms=200"
 })
 class OutboxRelayIntegrationTest extends ArtistServiceIntegrationBase {
 

@@ -1,7 +1,7 @@
 package com.example.fanplatform.membership.integration;
 
 import com.example.fanplatform.membership.infrastructure.jpa.MembershipJpaRepository;
-import com.example.messaging.outbox.OutboxJpaRepository;
+import com.example.fanplatform.membership.infrastructure.jpa.MembershipOutboxJpaRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +33,7 @@ class PaymentDeclineIntegrationTest extends MembershipServiceIntegrationBase {
     MembershipJpaRepository membershipJpaRepository;
 
     @Autowired
-    OutboxJpaRepository outboxJpaRepository;
+    MembershipOutboxJpaRepository outboxJpaRepository;
 
     @BeforeEach
     void clean() {

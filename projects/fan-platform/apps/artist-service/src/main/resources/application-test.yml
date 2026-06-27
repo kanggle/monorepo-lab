@@ -18,12 +18,19 @@ spring:
 
 outbox:
   polling:
-    # Tighten the loop in tests so the relay reacts within an awaitility
-    # timeout. Disabled by default for slice/unit tests; integration tests
-    # explicitly enable it.
+    # Legacy v1 knobs — inert (v1 scheduler removed, TASK-FAN-BE-022).
     enabled: false
     interval-ms: 200
     batch-size: 50
+
+# v2 outbox relay timing for tests. The relay (ArtistOutboxPublisher) is an
+# unconditional @Component (no enable gate, matching v1); a short poll keeps the
+# relay IT within its awaitility window.
+artist:
+  outbox:
+    poll-ms: 200
+    initial-delay-ms: 200
+    batch-size: 100
 
 fanplatform:
   oauth2:

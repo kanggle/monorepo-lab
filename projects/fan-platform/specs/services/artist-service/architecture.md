@@ -78,10 +78,10 @@ com.example.fanplatform.artist/
 │   │                                                      ActorContextJwtAuthenticationConverter,
 │   │                                                      PublicPaths, ActorContextResolver
 │   └── out/
-│       ├── persistence/                                ← JPA entities + adapters per repo port
+│       ├── persistence/                                ← JPA entities + adapters per repo port (+ ArtistOutboxJpaEntity/Repository)
 │       ├── cache/ArtistDirectoryCacheAdapter.java      ← Redis read-through, fail-open
-│       ├── event/ArtistEventPublisherAdapter.java      ← outbox writer (libs:java-messaging)
-│       └── messaging/ArtistOutboxPollingScheduler.java ← extends OutboxPollingScheduler
+│       ├── event/ArtistEventPublisherAdapter.java      ← v2 outbox write adapter (persists artist_outbox row; keeps artist_registered_total counter)
+│       └── messaging/ArtistOutboxPublisher.java        ← v2 relay (extends AbstractOutboxPublisher)
 ├── application/
 │   ├── ActorContext.java                               ← caller value object
 │   ├── exception/                                      ← application-layer exceptions
@@ -103,6 +103,7 @@ com.example.fanplatform.artist/
     ├── ServiceLevelOAuth2Config.java                   ← service-level JwtDecoder + validators
     ├── JpaConfig.java                                  ← @EnableJpaRepositories scan
     ├── ClockConfig.java
+    ├── OutboxConfig.java                               ← v2 TransactionTemplate bean
     └── RedisCacheConfig.java
 ```
 
@@ -191,23 +192,43 @@ user in the same tenant.
 
 ## Outbox + Kafka (event-driven-policy.md, integration-heavy.md I8)
 
-- Business writes (artist/group/fandom) and outbox INSERT share one transaction.
-- `ArtistOutboxPollingScheduler` (extends `libs:java-messaging`'s
-  `OutboxPollingScheduler`) polls PENDING rows and publishes to Kafka with
-  `acks=all`, `enable.idempotence=true`. On success, `published_at` is set; on
-  failure, `artist_outbox_publish_failures_total` increments and the row is
-  retried on the next tick.
-- Topic mapping (`.v1` suffix per `platform/event-driven-policy.md`):
+- **Outbox v2 (TASK-FAN-BE-022).** The write path is the **kept** port
+  `application/port/out/ArtistEventPublisher` implemented by the rewritten adapter
+  `adapter/out/event/ArtistEventPublisherAdapter`, which persists one
+  `artist_outbox` row (`extends OutboxRowEntity`, UUIDv7 `event_id` PK) inside the
+  same transaction as the artist/group write. This replaces the v1
+  `BaseEventPublisher` + lib `OutboxWriter` → `outbox` (BIGSERIAL, `status`) write
+  path. The write-side `artist_registered_total` Micrometer counter (incremented in
+  `publishArtistRegistered`) is preserved verbatim.
+- `ArtistOutboxPublisher` (extends `libs:java-messaging`'s
+  `AbstractOutboxPublisher`, ADR-MONO-004 § 5; under `adapter/out/messaging`) drains
+  `artist_outbox` (`WHERE published_at IS NULL ORDER BY occurred_at ASC`) and
+  publishes to Kafka with `acks=all`, `enable.idempotence=true`, plus
+  `eventId`/`eventType` record headers and exponential backoff. On success
+  `published_at` is set; on a per-event send failure the preserved
+  `artist_outbox_publish_failures_total` counter increments (plus the v2
+  `artist.outbox.publish.{success,failure}.total` / `.lag.seconds` metrics and the
+  `artist.outbox.pending.count` gauge) and the row is retried. The relay is an
+  unconditional `@Component` (matching the v1 scheduler — `@EnableScheduling`
+  already on the main class); it polls every `artist.outbox.poll-ms` (default
+  1000ms) in batches of `artist.outbox.batch-size` (default 100).
+- Topic mapping (`.v1` suffix per `platform/event-driven-policy.md`, ported
+  verbatim from the v1 scheduler):
   - `artist.registered`            → `artist.registered.v1`
   - `artist.published`             → `artist.published.v1`
   - `artist.updated`               → `artist.updated.v1`
   - `artist.archived`              → `artist.archived.v1`
   - `artist.group_created`         → `artist.group_created.v1`
   - `artist.group_member_changed`  → `artist.group_member_changed.v1`
-- Envelope shape (from `BaseEventPublisher`): `{ eventId, eventType, source,
-  occurredAt, schemaVersion, partitionKey, payload }`. `eventId` is **UUID v7**
-  per `TASK-MONO-025` (머지 완료, `libs/java-messaging` BaseEventPublisher 이
-  `UuidV7.randomString()` 발급).
+- The Kafka record key = `aggregateId` (artist/group id; partition_key left null →
+  relay fallback, preserving the v1 key).
+- Envelope shape (canonical 7-field, byte-identical to the v1
+  `BaseEventPublisher.writeEvent`): `{ eventId, eventType, source, occurredAt,
+  schemaVersion, partitionKey, payload }`. `eventId` is **UUID v7**
+  (`UuidV7.randomUuid()`) reused as both the envelope `eventId` and the row PK.
+- The lib `OutboxAutoConfiguration` is intentionally **retained** (not excluded):
+  its EntityScan keeps the v1 `outbox` / `processed_events` tables required under
+  `ddl-auto=validate`. The v1 `outbox` table is no longer written or polled.
 
 ---
 

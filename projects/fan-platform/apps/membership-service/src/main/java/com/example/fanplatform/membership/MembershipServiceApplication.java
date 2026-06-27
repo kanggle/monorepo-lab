@@ -11,7 +11,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * detail over a single {@code Membership} subscription aggregate (ACTIVE /
  * CANCELED) plus one internal workload-identity access-check endpoint consumed
  * by community-service. Kafka publication is via the transactional outbox
- * ({@code MembershipEventPublisher} → outbox → {@code MembershipOutboxPollingScheduler}).
+ * ({@code MembershipEventPublisher} port → {@code OutboxMembershipEventPublisher}
+ * → {@code membership_outbox} → {@code MembershipOutboxPublisher}, outbox v2).
  */
 @SpringBootApplication
 @EnableScheduling

@@ -69,7 +69,7 @@ public abstract class CommunityServiceIntegrationBase {
     protected void truncateAll() {
         jdbcTemplate.execute(
                 "TRUNCATE TABLE posts, post_status_history, comments, reactions, "
-                        + "follows, outbox, processed_events RESTART IDENTITY CASCADE");
+                        + "follows, outbox, community_outbox, processed_events RESTART IDENTITY CASCADE");
     }
 
     // Containers + JWKS are started in a static initializer (NOT @BeforeAll) so

@@ -88,13 +88,21 @@ logging:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} accountId=%X{accountId:-}]"
 
 outbox:
+  # Legacy v1 timing knobs — inert now that the v1 OutboxPollingScheduler is gone
+  # (TASK-FAN-BE-021). The lib OutboxAutoConfiguration is retained for its
+  # EntityScan only; no scheduler reads these keys anymore.
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
     enabled: true
 
 # TASK-FAN-BE-010: outbound workload-identity call to membership-service.
+# TASK-FAN-BE-021: v2 outbox relay (CommunityOutboxPublisher extends AbstractOutboxPublisher).
 community:
+  outbox:
+    poll-ms: ${COMMUNITY_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${COMMUNITY_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${COMMUNITY_OUTBOX_BATCH_SIZE:100}
   membership-service:
     base-url: ${MEMBERSHIP_SERVICE_BASE_URL:http://membership-service:8080}
     connect-timeout-ms: ${MEMBERSHIP_SERVICE_CONNECT_TIMEOUT_MS:2000}

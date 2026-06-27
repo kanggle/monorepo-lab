@@ -1,8 +1,8 @@
 package com.example.fanplatform.community.integration;
 
+import com.example.fanplatform.community.infrastructure.jpa.CommunityOutboxJpaEntity;
+import com.example.fanplatform.community.infrastructure.jpa.CommunityOutboxJpaRepository;
 import com.example.fanplatform.community.infrastructure.jpa.PostJpaRepository;
-import com.example.messaging.outbox.OutboxJpaEntity;
-import com.example.messaging.outbox.OutboxJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -41,21 +41,22 @@ import static org.awaitility.Awaitility.await;
  *
  * <p>Verifies the end-to-end transactional-outbox flow:
  * <ol>
- *   <li>HTTP POST publishes a post (writes a {@code outbox} row, status=PENDING);</li>
- *   <li>{@code CommunityOutboxPollingScheduler} polls within 10s and forwards
- *       the row to Kafka topic {@code community.post.published.v1} with the
- *       standard envelope ({@code eventId, eventType, source, occurredAt,
+ *   <li>HTTP POST publishes a post (writes a {@code community_outbox} row,
+ *       {@code published_at} null);</li>
+ *   <li>{@code CommunityOutboxPublisher} (v2 AbstractOutboxPublisher relay) polls
+ *       and forwards the row to Kafka topic {@code community.post.published.v1}
+ *       with the standard envelope ({@code eventId, eventType, source, occurredAt,
  *       schemaVersion, partitionKey, payload});</li>
- *   <li>after publishing, the outbox row's {@code published_at} is non-null
- *       and {@code status=PUBLISHED}.</li>
+ *   <li>after publishing, the {@code community_outbox} row's {@code published_at}
+ *       is non-null (v2 has no {@code status} column).</li>
  * </ol>
  *
- * <p>Polling is enabled for this test via {@code @TestPropertySource}; the
- * shared base disables it by default to keep test contexts deterministic.
+ * <p>The v2 relay is an unconditional {@code @Component}; the poll/initial-delay
+ * are tightened here so it drains within the awaitility window (TASK-FAN-BE-021).
  */
 @TestPropertySource(properties = {
-        "outbox.polling.enabled=true",
-        "outbox.polling.interval-ms=200"
+        "community.outbox.poll-ms=200",
+        "community.outbox.initial-delay-ms=200"
 })
 class OutboxRelayIntegrationTest extends CommunityServiceIntegrationBase {
 
@@ -66,7 +67,7 @@ class OutboxRelayIntegrationTest extends CommunityServiceIntegrationBase {
     TestRestTemplate rest;
 
     @Autowired
-    OutboxJpaRepository outboxJpaRepository;
+    CommunityOutboxJpaRepository outboxJpaRepository;
 
     @Autowired
     PostJpaRepository postJpaRepository;
@@ -161,16 +162,15 @@ class OutboxRelayIntegrationTest extends CommunityServiceIntegrationBase {
                 assertThat(payload.path("authorAccountId").asText()).isEqualTo(artistId);
             });
 
-            // After Kafka publish, the outbox row must be marked PUBLISHED with
-            // a non-null published_at.
+            // After Kafka publish, the community_outbox row must have a non-null
+            // published_at (v2 has no status column).
             await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                List<OutboxJpaEntity> rows = outboxJpaRepository.findAll().stream()
+                List<CommunityOutboxJpaEntity> rows = outboxJpaRepository.findAll().stream()
                         .filter(e -> postId.equals(e.getAggregateId()))
                         .filter(e -> "community.post.published".equals(e.getEventType()))
                         .toList();
                 assertThat(rows).isNotEmpty();
-                OutboxJpaEntity entity = rows.get(0);
-                assertThat(entity.getStatus()).isEqualTo("PUBLISHED");
+                CommunityOutboxJpaEntity entity = rows.get(0);
                 assertThat(entity.getPublishedAt()).isNotNull();
             });
         }
