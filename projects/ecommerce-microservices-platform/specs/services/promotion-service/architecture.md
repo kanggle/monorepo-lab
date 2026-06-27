@@ -92,10 +92,11 @@ Key domain concepts:
 
 ## Outbox
 
-- Pattern: Transactional Outbox
-- Table: `outbox` (libs/java-messaging 표준 schema)
-- Polling scheduler: `OutboxPollingScheduler` (libs `com.example.messaging.outbox.OutboxPollingScheduler` base 의 concrete subclass)
-- Topic 매핑:
+- Pattern: Transactional Outbox (**v2** — shared `AbstractOutboxPublisher`, ADR-MONO-004 § 5; migrated from v1 in TASK-BE-444)
+- Table: `promotion_outbox` (v2 shape — `event_id UUID` PK, `occurred_at`, `retries`/`last_error`; mirrors the wms `master_outbox` reference). The v1 `outbox` table is retained but unused (kept present-but-empty so the still-EntityScanned lib `OutboxJpaEntity` validates under `ddl-auto=validate`).
+- Write path: `SpringPromotionEventPublisher` (implements `PromotionEventPublisher`) persists a `PromotionOutboxEntity` row directly; the row `event_id` reuses the event envelope's own `event_id`, and the payload is the byte-identical `objectMapper.writeValueAsString(event)` (wire-preserving).
+- Relay: `PromotionOutboxPublisher extends AbstractOutboxPublisher<PromotionOutboxEntity>` — `@Scheduled` poll, exponential backoff (1s→…→30s), `eventId`/`eventType` Kafka headers, `MicrometerOutboxMetrics("promotion")` (+ preserved `promotion.outbox.pending.count` gauge). Runs unconditionally (no `@Profile`, matching the v1 scheduler).
+- Topic 매핑 (preserved verbatim — note **no** `.v1` suffix):
   - `CouponUsed` → `promotion.coupon.used`
   - `CouponExpired` → `promotion.coupon.expired`
 
