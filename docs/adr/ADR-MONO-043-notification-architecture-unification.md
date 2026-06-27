@@ -1,8 +1,8 @@
 # ADR-MONO-043 — Notification architecture unification: a shared notification contract + lifted consumer/delivery library + a console notification aggregator over the four per-domain notification-services
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
-**History:** PROPOSED 2026-06-26 (TASK-MONO-308 — records the **notification-architecture unification model**: how the four independently-bootstrapped per-domain notification-services [`erp`, `ecommerce`, `wms`, `fan`] — each a near-isolated silo with its own REST path convention, auth posture, schema, idempotency store, external-channel set, and UI consumer — converge onto (a) a shared domain-agnostic notification *contract*, (b) a lifted consumer/delivery *library* in `libs/`, and (c) a `console-bff` *aggregator* that fans the per-domain inboxes into the single shared-shell notification bell **without** coupling every console page to any one domain's availability. The convergence is **not** a mechanical refactor: lifting a notification envelope + consumer/dedupe/DLT/delivery machinery into shared code, defining a cross-domain inbox contract, and introducing a console aggregator each bake ownership/contract/failure-isolation postures → a task that did it without a record would HARDSTOP-09. This ADR records the decisions [D1–D8]. **Doc-only; ACCEPTED + implementation are separate user-explicit-intent-gated tasks [staged-child pattern, ADR-MONO-016/017/019/020/038]. Self-ACCEPT prohibited. Direction is CHOSEN-PROPOSED; finalised byte-unchanged at ACCEPTED.**)
+**History:** PROPOSED 2026-06-26 (TASK-MONO-308 — records the **notification-architecture unification model**: how the four independently-bootstrapped per-domain notification-services [`erp`, `ecommerce`, `wms`, `fan`] — each a near-isolated silo with its own REST path convention, auth posture, schema, idempotency store, external-channel set, and UI consumer — converge onto (a) a shared domain-agnostic notification *contract*, (b) a lifted consumer/delivery *library* in `libs/`, and (c) a `console-bff` *aggregator* that fans the per-domain inboxes into the single shared-shell notification bell **without** coupling every console page to any one domain's availability. The convergence is **not** a mechanical refactor: lifting a notification envelope + consumer/dedupe/DLT/delivery machinery into shared code, defining a cross-domain inbox contract, and introducing a console aggregator each bake ownership/contract/failure-isolation postures → a task that did it without a record would HARDSTOP-09. This ADR records the decisions [D1–D8]. **Doc-only; ACCEPTED + implementation are separate user-explicit-intent-gated tasks [staged-child pattern, ADR-MONO-016/017/019/020/038]. Self-ACCEPT prohibited. Direction is CHOSEN-PROPOSED; finalised byte-unchanged at ACCEPTED.**) · ACCEPTED 2026-06-28 (TASK-MONO-311 — user-explicit *"ADR-043 ACCEPTED"* satisfying the D8 gate [the exact intent form, not an ambiguous "진행"]; the gate was honored — the PROPOSED D1–D8 record was presented + a recommendation given, and acceptance awaited before this flip, **NOT a self-ACCEPT**. D1–D8 CHOSEN-PROPOSED directions **finalised byte-unchanged** — ACCEPTED *finalises*, does not re-decide; § 1 Context + § 2 Decision + § 4 Alternatives + § 5 Relationship byte-identical to the PROPOSED draft; the flip = Status + this clause + the § 6 ACCEPTED row + § 3.3 PAUSED→UNPAUSED. Implementation (D7 P1–P3) is now unblocked as separate user-gated tasks — P1 = the shared contract + `libs/` library [D3/D4].)
 
 **Builds on / Provenance:** 2026-06-26 live diagnosis + code investigation. The trigger was an operational incident — the platform-console header notification bell (`<NotificationBell />` in `projects/platform-console/apps/console-web/src/app/(console)/layout.tsx:110`) fired `GET /api/erp/notifications` on **every** console page (incl. `/wms/outbound`) and returned 503 because the `erp-gateway` was down. That exposed the architectural smell this ADR addresses: a **shared-shell** UI element hard-wired to a **single domain's** backend. A four-way topology sweep (one Explore pass per service) established the as-built fragmentation recorded in § 1.
 
@@ -113,9 +113,11 @@ ACCEPTED is a separate task gated on explicit user intent. At ACCEPTED: flip Sta
 - No contract spec is written, no library is lifted, no service is changed, no aggregator is built here. PROPOSED records the direction only (PR Separation Rule — spec-only, HARDSTOP-09 avoidance: a PROPOSED merge does **not** authorise implementation; ACCEPTED is required first).
 - The wms inbox-vs-delivery-only question (does wms gain a `/notifications` surface, or stay a pure delivery engine excluded from the bell?) is flagged for D7 phase-2, decided per-domain at conformance time, not here.
 
-### 3.3 Future-self / future-LLM-session — ACCEPTED execution chain (sketch)
+### 3.3 Execution chain — **UNPAUSED (ACCEPTED 2026-06-28, TASK-MONO-311)**
 
-1. ADR-MONO-043 PROPOSED→ACCEPTED transition task (user-explicit-intent-gated).
+> ACCEPTED — implementation is now unblocked. Step 1 (the ACCEPTED transition) is done by TASK-MONO-311; steps 2–4 are implement-ready (separate user-gated tasks; each preserves the § 3.1 hard invariants).
+
+1. ✅ ADR-MONO-043 PROPOSED→ACCEPTED transition task (user-explicit-intent-gated) — **DONE (TASK-MONO-311)**.
 2. Shared notification contract spec + `libs/` consumer/delivery/channel-SPI library (D3/D4) — root task(s).
 3. Per-domain conformance tasks ×4 (erp/ecommerce/wms/fan) — project tasks; includes the wms inbox decision.
 4. `console-bff` notification aggregator + console bell rewire (D2/D5) — platform-console tasks.
@@ -154,8 +156,8 @@ ADR is a spec → no unit/integration tests. Verification = doc review + HARDSTO
 
 | Stage | Task | PR | Note |
 |---|---|---|---|
-| PROPOSED | TASK-MONO-308 | #<this> | D1–D8 CHOSEN-PROPOSED; doc-only. |
-| ACCEPTED | TASK-MONO-3xx | — | user-explicit-intent-gated; D1–D8 finalised byte-unchanged. |
+| PROPOSED | TASK-MONO-308 | #1958 | D1–D8 CHOSEN-PROPOSED; doc-only. |
+| ACCEPTED | TASK-MONO-311 | (this PR) | User-explicit *"ADR-043 ACCEPTED"* (D8 gate, not self-ACCEPT). D1–D8 finalised byte-unchanged; flip = Status + History clause + this row + § 3.3 UNPAUSED. D7 P1–P3 now implement-ready (separate user-gated tasks). |
 
 ---
 
