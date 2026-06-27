@@ -15,7 +15,11 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EnableJpaRepositories(basePackages = "com.example.fanplatform.membership.infrastructure.jpa")
 @EntityScan(basePackages = {
         "com.example.fanplatform.membership.domain.membership",
-        "com.example.fanplatform.membership.domain.idempotency"
+        "com.example.fanplatform.membership.domain.idempotency",
+        // membership_outbox v2 entity (TASK-FAN-BE-020). MUST be scanned or the
+        // ddl-auto=validate boot fails — the mock-repo unit test won't catch a
+        // missing scan, only the full-boot IT does (payment §27 lesson).
+        "com.example.fanplatform.membership.infrastructure.jpa"
 })
 public class JpaConfig {
 }

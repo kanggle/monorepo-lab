@@ -1,7 +1,7 @@
 package com.example.fanplatform.membership.integration;
 
 import com.example.fanplatform.membership.infrastructure.jpa.MembershipJpaRepository;
-import com.example.messaging.outbox.OutboxJpaRepository;
+import com.example.fanplatform.membership.infrastructure.jpa.MembershipOutboxJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -36,7 +36,7 @@ class IdempotentSubscribeIntegrationTest extends MembershipServiceIntegrationBas
     MembershipJpaRepository membershipJpaRepository;
 
     @Autowired
-    OutboxJpaRepository outboxJpaRepository;
+    MembershipOutboxJpaRepository outboxJpaRepository;
 
     @Autowired
     ObjectMapper objectMapper;

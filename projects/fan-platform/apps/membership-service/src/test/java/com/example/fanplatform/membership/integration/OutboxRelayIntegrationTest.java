@@ -1,7 +1,7 @@
 package com.example.fanplatform.membership.integration;
 
 import com.example.fanplatform.membership.infrastructure.jpa.MembershipJpaRepository;
-import com.example.messaging.outbox.OutboxJpaRepository;
+import com.example.fanplatform.membership.infrastructure.jpa.MembershipOutboxJpaRepository;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,12 +21,14 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Outbox relay: subscribe → outbox row → Kafka publish → {@code published_at}
- * set. The poller is enabled for this class via @TestPropertySource.
+ * Outbox relay (TASK-FAN-BE-020, outbox v2): subscribe → {@code membership_outbox}
+ * row → Kafka publish → {@code published_at} set. The v2 relay
+ * ({@code MembershipOutboxPublisher}) is an unconditional {@code @Component}; the
+ * poll/initial-delay are tightened here so it drains within the awaitility window.
  */
 @TestPropertySource(properties = {
-        "outbox.polling.enabled=true",
-        "outbox.polling.interval-ms=200"
+        "membership.outbox.poll-ms=200",
+        "membership.outbox.initial-delay-ms=200"
 })
 class OutboxRelayIntegrationTest extends MembershipServiceIntegrationBase {
 
@@ -40,7 +42,7 @@ class OutboxRelayIntegrationTest extends MembershipServiceIntegrationBase {
     MembershipJpaRepository membershipJpaRepository;
 
     @Autowired
-    OutboxJpaRepository outboxJpaRepository;
+    MembershipOutboxJpaRepository outboxJpaRepository;
 
     @BeforeEach
     void clean() {
@@ -53,7 +55,7 @@ class OutboxRelayIntegrationTest extends MembershipServiceIntegrationBase {
     }
 
     @Test
-    @DisplayName("subscribe → activated outbox row drained to Kafka → published_at set")
+    @DisplayName("subscribe → activated membership_outbox row drained to Kafka → published_at set")
     void relayDrainsToKafka() {
         HttpHeaders h = new HttpHeaders();
         h.setContentType(MediaType.APPLICATION_JSON);
@@ -68,7 +70,6 @@ class OutboxRelayIntegrationTest extends MembershipServiceIntegrationBase {
                 .pollInterval(Duration.ofMillis(250))
                 .untilAsserted(() -> assertThat(outboxJpaRepository.findAll())
                         .isNotEmpty()
-                        .allMatch(e -> e.getPublishedAt() != null
-                                && "PUBLISHED".equals(e.getStatus())));
+                        .allMatch(e -> e.getPublishedAt() != null));
     }
 }

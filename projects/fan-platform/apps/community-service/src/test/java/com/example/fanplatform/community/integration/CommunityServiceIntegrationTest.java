@@ -2,9 +2,9 @@ package com.example.fanplatform.community.integration;
 
 import com.example.fanplatform.community.domain.follow.Follow;
 import com.example.fanplatform.community.infrastructure.jpa.FollowJpaRepository;
+import com.example.fanplatform.community.infrastructure.jpa.CommunityOutboxJpaEntity;
+import com.example.fanplatform.community.infrastructure.jpa.CommunityOutboxJpaRepository;
 import com.example.fanplatform.community.infrastructure.jpa.PostJpaRepository;
-import com.example.messaging.outbox.OutboxJpaEntity;
-import com.example.messaging.outbox.OutboxJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -48,7 +48,7 @@ class CommunityServiceIntegrationTest extends CommunityServiceIntegrationBase {
     FollowJpaRepository followJpaRepository;
 
     @Autowired
-    OutboxJpaRepository outboxJpaRepository;
+    CommunityOutboxJpaRepository outboxJpaRepository;
 
     @Autowired
     ObjectMapper objectMapper;
@@ -113,7 +113,7 @@ class CommunityServiceIntegrationTest extends CommunityServiceIntegrationBase {
         assertThat(postJpaRepository.findByIdAndTenantId(postId, "fan-platform")).isPresent();
 
         // outbox row exists for community.post.published
-        List<OutboxJpaEntity> postOutbox = outboxJpaRepository.findAll().stream()
+        List<CommunityOutboxJpaEntity> postOutbox = outboxJpaRepository.findAll().stream()
                 .filter(e -> postId.equals(e.getAggregateId()))
                 .toList();
         assertThat(postOutbox).isNotEmpty();

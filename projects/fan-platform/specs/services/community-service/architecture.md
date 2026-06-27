@@ -81,7 +81,7 @@ com.example.fanplatform.community/
 │   ├── PostAccessGuard.java             ← visibility + membership check
 │   ├── PostMediaRefSerializer.java
 │   └── event/
-│       └── CommunityEventPublisher.java  ← outbox writer (libs:java-messaging)
+│       └── CommunityEventPublisher.java  ← outbox write port (v2; impl in infrastructure/outbox)
 ├── domain/
 │   ├── post/                            ← Post aggregate, PostType, PostVisibility
 │   │   ├── Post.java                    ← @Entity (JPA)
@@ -93,9 +93,9 @@ com.example.fanplatform.community/
 │   ├── tenant/TenantContext.java
 │   └── membership/MembershipChecker.java  ← port
 └── infrastructure/
-    ├── config/JpaConfig.java + ClockConfig.java
-    ├── jpa/                              ← Spring Data adapters per repository
-    ├── outbox/CommunityOutboxPollingScheduler.java
+    ├── config/JpaConfig.java + ClockConfig.java + OutboxConfig.java
+    ├── jpa/                              ← Spring Data adapters per repository (+ CommunityOutboxJpaEntity/Repository)
+    ├── outbox/OutboxCommunityEventPublisher.java (v2 write adapter) + CommunityOutboxPublisher.java (v2 relay, extends AbstractOutboxPublisher)
     ├── cache/FeedCacheRepository.java    ← Redis (fail-open)
     ├── membership/HttpMembershipChecker.java (prod default, FAN-BE-010) + AlwaysAllowMembershipChecker.java (inert fallback) + auto-config
     └── security/                         ← service-level OAuth2 + tenant validators
@@ -177,14 +177,38 @@ applies the same tiering at the row level — locked items are returned with
 
 ## Outbox + Kafka (event-driven-policy.md, integration-heavy.md I8)
 
-- Business writes (post/comment/reaction/status) and outbox INSERT share one transaction.
-- `CommunityOutboxPollingScheduler` (extends `libs:java-messaging`'s `OutboxPollingScheduler`) polls PENDING rows and publishes to Kafka with `acks=all`, `enable.idempotence=true`. On success, `published_at` is set; on failure, the metric `community_outbox_publish_failures_total` increments and the row is retried on the next tick.
-- Topic mapping (`.v1` suffix per `platform/event-driven-policy.md`):
+- **Outbox v2 (TASK-FAN-BE-021).** The write path is the port
+  `application/event/CommunityEventPublisher` implemented by
+  `infrastructure/outbox/OutboxCommunityEventPublisher`, which persists one
+  `community_outbox` row (`extends OutboxRowEntity`, UUIDv7 `event_id` PK) inside
+  the same transaction as the post/comment/reaction/status write. This replaces the
+  v1 `BaseEventPublisher` + lib `OutboxWriter` → `outbox` (BIGSERIAL, `status`)
+  write path.
+- `CommunityOutboxPublisher` (extends `libs:java-messaging`'s
+  `AbstractOutboxPublisher`, ADR-MONO-004 § 5) drains `community_outbox`
+  (`WHERE published_at IS NULL ORDER BY occurred_at ASC`) and publishes to Kafka
+  with `acks=all`, `enable.idempotence=true`, plus `eventId`/`eventType` record
+  headers and exponential backoff. On success `published_at` is set; on a per-event
+  send failure the preserved `community_outbox_publish_failures_total` counter
+  increments (plus the v2 `community.outbox.publish.{success,failure}.total` /
+  `.lag.seconds` metrics and the `community.outbox.pending.count` gauge) and the
+  row is retried. The relay is an unconditional `@Component` (matching the v1
+  scheduler — `@EnableScheduling` already on the main class); it polls every
+  `community.outbox.poll-ms` (default 1000ms) in batches of
+  `community.outbox.batch-size` (default 100).
+- Topic mapping (`.v1` suffix per `platform/event-driven-policy.md`, ported
+  verbatim from the v1 scheduler):
   - `community.post.published` → `community.post.published.v1`
   - `community.post.status_changed` → `community.post.status_changed.v1`
   - `community.comment.added` → `community.comment.added.v1`
   - `community.reaction.added` → `community.reaction.added.v1`
-- Envelope shape (from `BaseEventPublisher`): `{ eventId, eventType, source, occurredAt, schemaVersion, partitionKey, payload }`.
+- The Kafka record key = `aggregateId` (postId; partition_key left null → relay
+  fallback, preserving the v1 key).
+- Envelope shape (canonical 7-field, byte-identical to the v1
+  `BaseEventPublisher.writeEvent`): `{ eventId, eventType, source, occurredAt, schemaVersion, partitionKey, payload }`.
+- The lib `OutboxAutoConfiguration` is intentionally **retained** (not excluded):
+  its EntityScan keeps the v1 `outbox` / `processed_events` tables required under
+  `ddl-auto=validate`. The v1 `outbox` table is no longer written or polled.
 
 ---
 

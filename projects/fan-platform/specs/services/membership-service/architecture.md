@@ -90,7 +90,7 @@ com.example.fanplatform.membership/
 │   ├── GetMembershipUseCase.java
 │   ├── CheckAccessUseCase.java               ← hasAccess(accountId, tier, tenantId) computation
 │   └── event/
-│       └── MembershipEventPublisher.java     ← outbox writer (libs:java-messaging)
+│       └── MembershipEventPublisher.java     ← outbox write port (v2; impl in infrastructure/outbox)
 ├── domain/
 │   ├── membership/
 │   │   ├── Membership.java                   ← @Entity (JPA) — subscription aggregate
@@ -103,9 +103,9 @@ com.example.fanplatform.membership/
 │   │   └── AccessPolicy.java                 ← tierGrants + windowed-active evaluation
 │   └── tenant/TenantContext.java
 └── infrastructure/
-    ├── config/JpaConfig.java + ClockConfig.java
-    ├── jpa/                                   ← Spring Data adapter for MembershipRepository
-    ├── outbox/MembershipOutboxPollingScheduler.java
+    ├── config/JpaConfig.java + ClockConfig.java + OutboxConfig.java
+    ├── jpa/                                   ← Spring Data adapters (MembershipRepository + MembershipOutboxJpaEntity/Repository)
+    ├── outbox/OutboxMembershipEventPublisher.java (v2 write adapter) + MembershipOutboxPublisher.java (v2 relay, extends AbstractOutboxPublisher)
     ├── payment/MockPaymentGatewayAdapter.java ← deterministic PG mock (NO real PG)
     └── security/                              ← service-level OAuth2 + tenant validators + workload-identity decoder for /internal/**
 ```
@@ -339,24 +339,43 @@ simply not found → `allowed=false` (deny), never leaked.
 
 ## Outbox + Kafka (event-driven-policy.md, integration-heavy.md I8)
 
-- Business writes (membership row + state transition) and the outbox INSERT share
-  one transaction.
-- `MembershipOutboxPollingScheduler` (extends `libs:java-messaging`'s
-  `OutboxPollingScheduler`) polls PENDING rows and publishes to Kafka with
-  `acks=all`, `enable.idempotence=true`. On success `published_at` is set; on
-  failure the metric `membership_outbox_publish_failures_total` increments and the
-  row is retried on the next tick.
-- Topic mapping (`.v1` suffix per `platform/event-driven-policy.md`):
+- **Outbox v2 (TASK-FAN-BE-020).** The write path is the port
+  `application/event/MembershipEventPublisher` implemented by
+  `infrastructure/outbox/OutboxMembershipEventPublisher`, which persists one
+  `membership_outbox` row (`extends OutboxRowEntity`, UUIDv7 `event_id` PK) inside
+  the same `@Transactional` boundary as the membership row + state transition. This
+  replaces the v1 `BaseEventPublisher` + lib `OutboxWriter` → `outbox` (BIGSERIAL,
+  `status`) write path.
+- `MembershipOutboxPublisher` (extends `libs:java-messaging`'s
+  `AbstractOutboxPublisher`, ADR-MONO-004 § 5) drains `membership_outbox`
+  (`WHERE published_at IS NULL ORDER BY occurred_at ASC`) and publishes to Kafka
+  with `acks=all`, `enable.idempotence=true`, plus `eventId`/`eventType` record
+  headers and exponential backoff. On success `published_at` is set; on a per-event
+  send failure the preserved `membership_outbox_publish_failures_total` counter
+  increments (plus the v2 `membership.outbox.publish.{success,failure}.total` /
+  `.lag.seconds` metrics and the `membership.outbox.pending.count` gauge) and the
+  row is retried on the next tick. The relay is an unconditional `@Component`
+  (matching the v1 scheduler — `@EnableScheduling` already on the main class);
+  it polls every `membership.outbox.poll-ms` (default 1000ms) in batches of
+  `membership.outbox.batch-size` (default 100).
+- Topic mapping (`.v1` suffix per `platform/event-driven-policy.md`, ported
+  verbatim from the v1 scheduler):
   - `fan.membership.activated` → `fan.membership.activated.v1` (on subscribe → ACTIVE)
   - `fan.membership.canceled` → `fan.membership.canceled.v1` (on cancel → CANCELED)
   - `fan.membership.expired` → `fan.membership.expired.v1` (on expiry sweep — TASK-FAN-BE-014)
+- The Kafka record key = `aggregateId` (partition_key left null → relay fallback,
+  preserving the v1 key).
 - **`fan.membership.expired.v1` is emitted by the expiry sweeper (TASK-FAN-BE-014).**
   See § Expiry Sweeper. The membership keeps `status=ACTIVE` (read-time expiry);
   the event is a one-time notification trigger gated by the `expiry_notified_at`
   marker.
-- Envelope shape (from `BaseEventPublisher`): `{ eventId, eventType, source,
-  occurredAt, schemaVersion, partitionKey, payload }`. Consumer =
-  notification-service (`EXPIRY_REMINDER`).
+- Envelope shape (canonical 7-field, byte-identical to the v1
+  `BaseEventPublisher.writeEvent`): `{ eventId, eventType, source, occurredAt,
+  schemaVersion, partitionKey, payload }`. Consumer = notification-service
+  (`EXPIRY_REMINDER`).
+- The lib `OutboxAutoConfiguration` is intentionally **retained** (not excluded):
+  its EntityScan keeps the v1 `outbox` / `processed_events` tables required under
+  `ddl-auto=validate`. The v1 `outbox` table is no longer written or polled.
 
 ---
 

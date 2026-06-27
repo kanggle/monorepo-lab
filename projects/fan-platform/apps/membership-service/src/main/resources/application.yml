@@ -81,10 +81,20 @@ logging:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} accountId=%X{accountId:-}]"
 
 outbox:
+  # Legacy v1 timing knobs — inert now that the v1 OutboxPollingScheduler is gone
+  # (TASK-FAN-BE-020). The lib OutboxAutoConfiguration is retained for its
+  # EntityScan only; no scheduler reads these keys anymore.
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
     enabled: true
+
+# v2 outbox relay (MembershipOutboxPublisher extends AbstractOutboxPublisher).
+membership:
+  outbox:
+    poll-ms: ${MEMBERSHIP_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${MEMBERSHIP_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${MEMBERSHIP_OUTBOX_BATCH_SIZE:100}
 
 fanplatform:
   # Expiry sweeper (TASK-FAN-BE-014). Detects ACTIVE memberships past their window

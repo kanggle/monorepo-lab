@@ -1,0 +1,39 @@
+package com.example.fanplatform.membership.infrastructure.jpa;
+
+import com.example.messaging.outbox.OutboxRowEntity;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * JPA entity backing {@code membership_outbox} (TASK-FAN-BE-020, outbox v2).
+ *
+ * <p>Extends the shared {@link OutboxRowEntity} {@code @MappedSuperclass} from
+ * {@code libs/java-messaging} (ADR-MONO-004 § 5), so the generic
+ * {@code AbstractOutboxPublisher} drives this table through the
+ * {@link com.example.messaging.outbox.OutboxRow} contract. All column mappings
+ * (UUID {@code event_id} PK, {@code occurred_at}, {@code retries},
+ * {@code last_error}, …) are inherited from the superclass; this class only
+ * binds the table name and exposes constructors. Mirrors the scm
+ * {@code ProcurementOutboxJpaEntity} (the CI-validated Postgres v2 reference).
+ *
+ * <p>Lives under {@code com.example.fanplatform.membership.infrastructure.jpa}
+ * so it is picked up by the application's {@code @EntityScan} (this package was
+ * added in {@code JpaConfig}) and the repository by the existing
+ * {@code @EnableJpaRepositories(basePackages = "…infrastructure.jpa")}.
+ */
+@Entity
+@Table(name = "membership_outbox")
+public class MembershipOutboxJpaEntity extends OutboxRowEntity {
+
+    protected MembershipOutboxJpaEntity() {
+        super();
+    }
+
+    public MembershipOutboxJpaEntity(UUID eventId, String eventType, String aggregateType,
+                                     String aggregateId, String partitionKey, String payload,
+                                     Instant occurredAt) {
+        super(eventId, eventType, aggregateType, aggregateId, partitionKey, payload, occurredAt);
+    }
+}
