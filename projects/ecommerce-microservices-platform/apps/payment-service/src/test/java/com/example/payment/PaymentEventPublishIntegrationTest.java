@@ -50,7 +50,10 @@ import static org.mockito.BDDMockito.given;
  */
 @SpringBootTest(properties = {
         "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
-        "outbox.polling.interval-ms=300",
+        // TASK-BE-449 outbox v2: relay enabled (gate kept), v2 timing knobs fast so the
+        // @Scheduled poller drains within the 15 s consumer deadline below.
+        "payment.outbox.poll-ms=300",
+        "payment.outbox.initial-delay-ms=0",
         "outbox.polling.enabled=true"
 })
 @Tag("integration")
@@ -128,7 +131,7 @@ class PaymentEventPublishIntegrationTest {
         paymentConfirmService.confirm(userId, "pk_test_" + orderId, orderId, 30000L);
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT * FROM outbox WHERE event_type = 'PaymentCompleted' AND payload LIKE ?",
+                "SELECT * FROM payment_outbox WHERE event_type = 'PaymentCompleted' AND payload LIKE ?",
                 "%" + orderId + "%");
 
         assertThat(rows).hasSize(1);
@@ -165,11 +168,10 @@ class PaymentEventPublishIntegrationTest {
         }
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT * FROM outbox WHERE event_type = 'PaymentCompleted' AND payload LIKE ?",
+                "SELECT * FROM payment_outbox WHERE event_type = 'PaymentCompleted' AND payload LIKE ?",
                 "%" + orderId + "%");
         assertThat(rows).hasSize(1);
-        assertThat(rows.get(0).get("status")).isEqualTo("PUBLISHED");
-        assertThat(rows.get(0).get("published_at")).isNotNull();
+        assertThat(rows.get(0).get("published_at")).isNotNull(); // v2: no status column; published_at marks drained
     }
 
     @Test
@@ -204,12 +206,11 @@ class PaymentEventPublishIntegrationTest {
         }
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT * FROM outbox WHERE event_type = 'PaymentRefunded' AND payload LIKE ?",
+                "SELECT * FROM payment_outbox WHERE event_type = 'PaymentRefunded' AND payload LIKE ?",
                 "%" + orderId + "%");
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).get("aggregate_type")).isEqualTo("Payment");
-        assertThat(rows.get(0).get("status")).isEqualTo("PUBLISHED");
-        assertThat(rows.get(0).get("published_at")).isNotNull();
+        assertThat(rows.get(0).get("published_at")).isNotNull(); // v2: no status column; published_at marks drained
     }
 
     private ConsumerRecord<String, String> pollForRecord(Consumer<String, String> consumer, String orderIdMarker) {

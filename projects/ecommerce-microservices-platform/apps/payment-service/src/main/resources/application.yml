@@ -63,6 +63,13 @@ outbox:
 
 # Stranded-refund auto-reconciliation sweeper (TASK-BE-438, ADR-MONO-005 § 2.3 D3 Category A)
 payment:
+  # TASK-BE-449: outbox v2 (PaymentOutboxPublisher extends AbstractOutboxPublisher).
+  # The relay on/off gate stays the top-level `outbox.polling.enabled` (preserved for
+  # the unit/slice/standalone tests that disable polling); these are the v2 timing knobs.
+  outbox:
+    batch-size: ${PAYMENT_OUTBOX_BATCH_SIZE:100}
+    poll-ms: ${PAYMENT_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${PAYMENT_OUTBOX_INITIAL_DELAY_MS:5000}
   stranded-refund:
     enabled: ${STRANDED_REFUND_SWEEPER_ENABLED:true}
     fixed-delay-ms: ${STRANDED_REFUND_FIXED_DELAY_MS:60000}

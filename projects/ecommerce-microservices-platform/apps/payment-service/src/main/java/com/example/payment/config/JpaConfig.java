@@ -13,6 +13,12 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * {@code @SpringBootApplication} base package. Without this, the
  * {@code PaymentJpaRepository} would not be picked up.
  *
+ * <p><b>TASK-BE-449 (outbox v2):</b> {@code adapter.out.event} is also scanned
+ * so the v2 {@code PaymentOutboxEntity} / {@code PaymentOutboxRepository} (which
+ * live with the outbox publisher/writer, an event-output concern) are registered.
+ * Mock-repo unit tests do not exercise this wiring — only the full-context
+ * {@code @SpringBootTest} integration lane catches a missing scan package.
+ *
  * <p><b>Package placement rationale (TASK-BE-137 W4):</b> the lib's
  * {@code OutboxJpaConfig} javadoc recommends an
  * {@code infrastructure.config} package. That recommendation reflects
@@ -29,7 +35,13 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * which excludes JPA config beans by default.
  */
 @Configuration
-@EnableJpaRepositories(basePackages = "com.example.payment.adapter.out.persistence")
-@EntityScan(basePackages = "com.example.payment.adapter.out.persistence")
+@EnableJpaRepositories(basePackages = {
+        "com.example.payment.adapter.out.persistence",
+        "com.example.payment.adapter.out.event"
+})
+@EntityScan(basePackages = {
+        "com.example.payment.adapter.out.persistence",
+        "com.example.payment.adapter.out.event"
+})
 public class JpaConfig {
 }

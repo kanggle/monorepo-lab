@@ -126,7 +126,7 @@ class StrandedRefundReconciliationIntegrationTest {
         assertThat(reloaded.getStatus()).isEqualTo(StrandedRefundStatus.UNRESOLVED);
 
         List<Map<String, Object>> unresolved = jdbcTemplate.queryForList(
-                "SELECT * FROM outbox WHERE event_type = 'PaymentRefundUnresolved' AND payload LIKE ?",
+                "SELECT * FROM payment_outbox WHERE event_type = 'PaymentRefundUnresolved' AND payload LIKE ?",
                 "%" + paymentId + "%");
         assertThat(unresolved).as("terminal escalation must co-commit with the UNRESOLVED transition").hasSize(1);
     }

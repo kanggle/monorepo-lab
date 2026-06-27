@@ -1,6 +1,5 @@
 package com.example.payment.adapter.out.event;
 
-import com.example.messaging.outbox.OutboxWriter;
 import com.example.payment.application.event.PaymentCompletedEvent;
 import com.example.payment.application.event.PaymentRefundStrandedEvent;
 import com.example.payment.application.event.PaymentRefundUnresolvedEvent;
@@ -8,24 +7,29 @@ import com.example.payment.application.event.PaymentRefundedEvent;
 import com.example.payment.application.port.out.PaymentEventPublisher;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * Transactional outbox writer for payment domain events (ADR-006 Scenario A).
+ * Transactional outbox writer for payment domain events (ADR-006 Scenario A;
+ * TASK-BE-449 outbox v2).
  *
- * <p>Persists the serialized event envelope to the {@code outbox} table inside
- * the caller's {@code @Transactional} boundary so the payment state mutation
- * and event publication commit atomically. The Kafka publish itself is
- * deferred to {@link PaymentEventOutboxRelay}, which polls the outbox and
- * retries on broker failure — closing the silent-loss gap that the prior
- * direct {@code KafkaTemplate.send} path left open.
+ * <p>Persists one {@link PaymentOutboxEntity} ({@code payment_outbox} table) per
+ * event inside the caller's {@code @Transactional} boundary so the payment state
+ * mutation and event publication commit atomically. The Kafka publish is deferred
+ * to {@link PaymentOutboxPublisher}, which polls the outbox and retries on broker
+ * failure.
  *
- * <p>Envelope shape (event_id / event_type / occurred_at / source / payload)
- * is preserved from the existing {@link PaymentCompletedEvent} /
- * {@link PaymentRefundedEvent} records — no change to the published contract.
+ * <p>Replaces the v1 lib {@code OutboxWriter}. Wire is preserved exactly: the row
+ * {@code payload} is the byte-identical serialized envelope (event_id / event_type /
+ * occurred_at / source / tenant_id / payload), the routing-key {@code eventType}
+ * constants and {@code aggregate_type}/{@code aggregate_id} (Kafka key = {@code paymentId})
+ * are unchanged. The row {@code event_id} reuses the event's own envelope
+ * {@code event_id} so the Kafka header {@code eventId} matches the payload.
  */
 @Slf4j
 @Component
@@ -39,47 +43,38 @@ public class PaymentEventOutboxWriter implements PaymentEventPublisher {
     static final String EVENT_TYPE_REFUND_STRANDED = "PaymentRefundStranded";
     static final String EVENT_TYPE_REFUND_UNRESOLVED = "PaymentRefundUnresolved";
 
-    private final OutboxWriter outboxWriter;
+    private final PaymentOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
     @Override
     public void publishPaymentCompleted(PaymentCompletedEvent event) {
-        outboxWriter.save(
-                AGGREGATE_TYPE,
-                event.payload().paymentId(),
-                EVENT_TYPE_COMPLETED,
-                serialize(event)
-        );
+        save(event.eventId(), EVENT_TYPE_COMPLETED, event.payload().paymentId(), event.occurredAt(), event);
     }
 
     @Override
     public void publishPaymentRefunded(PaymentRefundedEvent event) {
-        outboxWriter.save(
-                AGGREGATE_TYPE,
-                event.payload().paymentId(),
-                EVENT_TYPE_REFUNDED,
-                serialize(event)
-        );
+        save(event.eventId(), EVENT_TYPE_REFUNDED, event.payload().paymentId(), event.occurredAt(), event);
     }
 
     @Override
     public void publishPaymentRefundStranded(PaymentRefundStrandedEvent event) {
-        outboxWriter.save(
-                AGGREGATE_TYPE,
-                event.payload().paymentId(),
-                EVENT_TYPE_REFUND_STRANDED,
-                serialize(event)
-        );
+        save(event.eventId(), EVENT_TYPE_REFUND_STRANDED, event.payload().paymentId(), event.occurredAt(), event);
     }
 
     @Override
     public void publishPaymentRefundUnresolved(PaymentRefundUnresolvedEvent event) {
-        outboxWriter.save(
+        save(event.eventId(), EVENT_TYPE_REFUND_UNRESOLVED, event.payload().paymentId(), event.occurredAt(), event);
+    }
+
+    private void save(String eventId, String eventType, String paymentId, String occurredAt, Object event) {
+        outboxRepository.save(new PaymentOutboxEntity(
+                UUID.fromString(eventId),
+                eventType,
                 AGGREGATE_TYPE,
-                event.payload().paymentId(),
-                EVENT_TYPE_REFUND_UNRESOLVED,
-                serialize(event)
-        );
+                paymentId,
+                null, // partition_key: publisher falls back to aggregateId (paymentId)
+                serialize(event),
+                Instant.parse(occurredAt)));
     }
 
     private String serialize(Object event) {

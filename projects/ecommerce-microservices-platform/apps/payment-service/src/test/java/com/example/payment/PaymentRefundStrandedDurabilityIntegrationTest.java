@@ -194,13 +194,13 @@ class PaymentRefundStrandedDurabilityIntegrationTest {
 
         // The confirm() TX rolled back: no PaymentCompleted row.
         List<Map<String, Object>> completed = jdbcTemplate.queryForList(
-                "SELECT * FROM outbox WHERE event_type = 'PaymentCompleted' AND payload LIKE ?",
+                "SELECT * FROM payment_outbox WHERE event_type = 'PaymentCompleted' AND payload LIKE ?",
                 "%" + orderId + "%");
         assertThat(completed).as("PaymentCompleted must NOT be written — confirm rolled back").isEmpty();
 
         // But the REQUIRES_NEW escalation committed independently and survives.
         List<Map<String, Object>> stranded = jdbcTemplate.queryForList(
-                "SELECT * FROM outbox WHERE event_type = 'PaymentRefundStranded' AND payload LIKE ?",
+                "SELECT * FROM payment_outbox WHERE event_type = 'PaymentRefundStranded' AND payload LIKE ?",
                 "%" + orderId + "%");
         assertThat(stranded).as("PaymentRefundStranded must survive the confirm rollback").hasSize(1);
         assertThat(stranded.get(0).get("aggregate_type")).isEqualTo("Payment");
