@@ -4,6 +4,7 @@ rootProject.name = 'monorepo-lab'
 include(
     'libs:java-common',
     'libs:java-messaging',
+    'libs:java-notification',
     'libs:java-observability',
     'libs:java-security',
     'libs:java-test-support',
