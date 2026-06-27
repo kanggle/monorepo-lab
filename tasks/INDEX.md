@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-312-lib-outbox-v1-dead-code-removal.md` — **READY** (authored 2026-06-28, outbox v2 sweep #1997~#2004 후속). **`libs/java-messaging` outbox v1 dead-code 제거.** v2 마이그레이션이 전 플랫폼 100% 완료되며 6개 v1 클래스(`OutboxPublisher`/`OutboxPollingScheduler`/`OutboxWriter`/`OutboxJpaEntity`/`OutboxJpaRepository`/`BaseEventPublisher`)가 프로덕션 consumer 0건이 됨(origin/main grep 확인). 6개 클래스 + 4개 lib 단위테스트 삭제 + **보존 config 정밀 수술**: `OutboxAutoConfiguration`은 v1 `@Bean` 2개만 제거(클래스는 ~수십 서비스가 `exclude=`로 클래스명 하드코딩 → 삭제 불가), `OutboxJpaConfig`의 `@EntityScan`은 `OutboxJpaEntity`만 빼고 **`ProcessedEventJpaEntity`(v2 멱등성 dedup, 라이브)는 유지** + iam security `orm.xml`의 `OutboxJpaEntity` override 제거(부팅 회귀 가드). 서비스 `exclude=`/javadoc cosmetic 정리는 Out-of-Scope(churn 회피). 단일 atomic PR(`refactor(lib):`), 회귀 가드 = lib `:test` + 전 서비스 컴파일 + iam security `:check`. 분석=Opus 4.8 / 구현 권장=Sonnet 4.6 (저위험 dead-code 삭제 + config 1줄 수술 + orm.xml 1편집).
 
 ## in-progress
 
