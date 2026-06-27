@@ -105,6 +105,11 @@ oauth:
     # Naver does not return an id_token — JWKS verification is not applied (mirrors Kakao).
 
 auth:
+  # TASK-BE-450 — v2 outbox relay (AuthOutboxPublisher) cadence + batch size.
+  outbox:
+    poll-ms: ${AUTH_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${AUTH_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${AUTH_OUTBOX_BATCH_SIZE:100}
   jwt:
     issuer: iam
     access-token-ttl-seconds: ${JWT_ACCESS_TTL:1800}

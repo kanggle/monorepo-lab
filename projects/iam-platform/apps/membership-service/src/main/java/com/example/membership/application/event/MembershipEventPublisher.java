@@ -1,35 +1,26 @@
 package com.example.membership.application.event;
 
-import com.example.membership.domain.event.MembershipDomainEvent;
 import com.example.membership.domain.subscription.Subscription;
-import com.example.messaging.event.BaseEventPublisher;
-import com.example.messaging.outbox.OutboxWriter;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Component;
 
-@Component
-public class MembershipEventPublisher extends BaseEventPublisher {
+/**
+ * Outbox-based publisher port for membership-service Kafka events (TASK-BE-454 —
+ * outbox v1 → v2). Previously a concrete {@code extends BaseEventPublisher}; now a
+ * port whose v2 implementation is
+ * {@link com.example.membership.infrastructure.outbox.OutboxMembershipEventPublisher}
+ * (the {@code AbstractOutboxPublisher} / {@code OutboxRow} path — ADR-MONO-004 § 5).
+ *
+ * <p>Each event uses the domain factory ({@link Subscription#buildActivatedEvent()}
+ * etc.) for its {@code eventType()} + {@code payload()}, wrapped in the standard
+ * envelope (eventId, eventType, source="membership-service", occurredAt,
+ * schemaVersion, partitionKey, payload). The wire shape is preserved byte-identically
+ * across the v1 → v2 swap (the v1 {@code BaseEventPublisher.writeEvent} 7-field
+ * envelope). Kafka key (= partitionKey) is the subscription's {@code accountId}.
+ */
+public interface MembershipEventPublisher {
 
-    private static final String AGGREGATE_TYPE = "membership";
-    private static final String SOURCE = "membership-service";
+    void publishActivated(Subscription s);
 
-    public MembershipEventPublisher(OutboxWriter outboxWriter, ObjectMapper objectMapper) {
-        super(outboxWriter, objectMapper);
-    }
+    void publishExpired(Subscription s);
 
-    public void publishActivated(Subscription s) {
-        write(s.getAccountId(), s.buildActivatedEvent());
-    }
-
-    public void publishExpired(Subscription s) {
-        write(s.getAccountId(), s.buildExpiredEvent());
-    }
-
-    public void publishCancelled(Subscription s) {
-        write(s.getAccountId(), s.buildCancelledEvent());
-    }
-
-    private void write(String aggregateId, MembershipDomainEvent event) {
-        writeEvent(AGGREGATE_TYPE, aggregateId, event.eventType(), SOURCE, event.payload());
-    }
+    void publishCancelled(Subscription s);
 }

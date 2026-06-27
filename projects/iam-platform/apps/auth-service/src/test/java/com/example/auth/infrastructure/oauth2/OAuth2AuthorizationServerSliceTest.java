@@ -89,8 +89,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class OAuth2AuthorizationServerSliceTest {
 
-    // Kafka is excluded from auto-config but AuthOutboxPollingScheduler still
-    // declares KafkaTemplate as a constructor dependency — mock it out.
+    // Kafka is excluded from auto-config but the v2 AuthOutboxPublisher relay
+    // still declares KafkaTemplate as a constructor dependency — mock it out.
     @MockitoBean
     @SuppressWarnings("rawtypes")
     KafkaTemplate kafkaTemplate;

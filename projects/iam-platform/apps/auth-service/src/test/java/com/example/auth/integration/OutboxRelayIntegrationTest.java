@@ -2,7 +2,7 @@ package com.example.auth.integration;
 
 import com.example.auth.application.event.AuthEventPublisher;
 import com.example.auth.domain.session.SessionContext;
-import com.example.messaging.outbox.OutboxJpaRepository;
+import com.example.auth.infrastructure.persistence.AuthOutboxJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -50,7 +50,7 @@ class OutboxRelayIntegrationTest extends AbstractIntegrationTest {
     private AuthEventPublisher authEventPublisher;
 
     @Autowired
-    private OutboxJpaRepository outboxJpaRepository;
+    private AuthOutboxJpaRepository outboxJpaRepository;
 
     @Autowired
     private ObjectMapper objectMapper;

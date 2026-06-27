@@ -62,6 +62,11 @@ management:
       enabled: true
 
 admin:
+  # TASK-BE-452 — v2 outbox relay (AdminOutboxPublisher) cadence + batch size.
+  outbox:
+    poll-ms: ${ADMIN_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${ADMIN_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${ADMIN_OUTBOX_BATCH_SIZE:100}
   permission-cache:
     ttl-seconds: ${ADMIN_PERM_CACHE_TTL_SECONDS:10}
     key-prefix: ${ADMIN_PERM_CACHE_KEY_PREFIX:admin:operator:perm:}

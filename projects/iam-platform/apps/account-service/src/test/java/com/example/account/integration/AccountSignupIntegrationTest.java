@@ -7,7 +7,7 @@ import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.AccountStatusHistoryRepository;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.tenant.TenantId;
-import com.example.messaging.outbox.OutboxPollingScheduler;
+import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -68,7 +68,7 @@ class AccountSignupIntegrationTest extends AbstractIntegrationTest {
     private KafkaTemplate kafkaTemplate;
 
     @MockitoBean
-    private OutboxPollingScheduler outboxPollingScheduler;
+    private AccountOutboxPublisher accountOutboxPublisher;
 
     @Test
     @DisplayName("회원가입 후 계정이 ACTIVE 상태로 생성된다")

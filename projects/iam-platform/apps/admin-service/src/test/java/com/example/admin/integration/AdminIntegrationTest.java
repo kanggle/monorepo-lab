@@ -211,7 +211,7 @@ class AdminIntegrationTest extends AbstractIntegrationTest {
         // Outbox row emitted for admin.action.performed.
         await().atMost(java.time.Duration.ofSeconds(5)).untilAsserted(() -> {
             List<Map<String, Object>> events = jdbcTemplate.queryForList(
-                    "SELECT event_type FROM outbox WHERE event_type = 'admin.action.performed'");
+                    "SELECT event_type FROM admin_outbox WHERE event_type = 'admin.action.performed'");
             assertThat(events).isNotEmpty();
         });
     }

@@ -103,7 +103,7 @@ class ActivateSubscriptionIntegrationTest extends AbstractIntegrationTest {
         // bypass via TRUNCATE which does not fire row-level triggers.
         jdbcTemplate.execute("TRUNCATE TABLE subscription_status_history");
         jdbcTemplate.update("DELETE FROM subscriptions");
-        jdbcTemplate.update("DELETE FROM outbox");
+        jdbcTemplate.update("DELETE FROM membership_outbox");
     }
 
     private void stubAccountStatus(String accountId, String statusValue) {
@@ -132,7 +132,7 @@ class ActivateSubscriptionIntegrationTest extends AbstractIntegrationTest {
 
         await().atMost(java.time.Duration.ofSeconds(5)).untilAsserted(() -> {
             List<Map<String, Object>> events = jdbcTemplate.queryForList(
-                    "SELECT event_type FROM outbox WHERE event_type = 'membership.subscription.activated'");
+                    "SELECT event_type FROM membership_outbox WHERE event_type = 'membership.subscription.activated'");
             assertThat(events).isNotEmpty();
         });
     }

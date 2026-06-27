@@ -19,7 +19,7 @@ and `platform/architecture-decision-rule.md`.
 | Bounded Context | OIDC Authorization Server (token issuance + JWKS + refresh rotation + revoke + reuse detection) |
 | Deployable unit | `apps/auth-service/` |
 | Data store | MySQL (credentials + refresh tokens + login history + JPA OAuth2 영속화) |
-| Event publication | Kafka via outbox (auth.token.* + auth.login.* + auth.reuse.detected) |
+| Event publication | Kafka via transactional outbox v2 (auth.token.* + auth.login.* + auth.session.*) — see § Outbox (v2) |
 | Event consumption | none (single-type identity-platform) |
 
 ### Service Type Composition
@@ -222,6 +222,15 @@ presentation → application → domain
 - **HTTP 컨트랙트 (내부, → account-service)**: [specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/auth-to-account.md) — tenant-info lookup (응답 array `[{accountId, tenantId, tenantType}]`, TASK-BE-229), 계정 상태 조회. entitled_domains lookup (TASK-BE-324) — **fail-soft** (caller 가 claim 생략).
 - **HTTP 컨트랙트 (내부, → admin-service)** (TASK-BE-327, 신규 outbound edge): [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) — assume-tenant 발급 시점의 1회성 assignment 확인 (`GET /internal/operator-assignments/check`). IAM `client_credentials` Bearer JWT (`IamClientCredentialsTokenProvider` 재사용). **fail-CLOSED**: 실패 시 발급 거부. per-request 도메인→IAM callback 이 아니라 issuance-time one-shot (ADR-020 § 3.1 은 후자만 금지).
 - **이벤트 발행**: [specs/contracts/events/auth-events.md](../../contracts/events/) — `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`. 모두 **outbox 경유**, 페이로드에 `tenant_id` 포함
+
+### Outbox (v2)
+
+> TASK-BE-450 — outbox v1 → v2 migration (finance account-service / erp approval-service MySQL precedent, ADR-MONO-004 § 5).
+>
+> - **Write path**: `application.event.AuthEventPublisher` is now a **port**; the impl `infrastructure.outbox.OutboxAuthEventPublisher` builds the canonical 7-field envelope (`{eventId, eventType, source="auth-service", occurredAt, schemaVersion=1, partitionKey, payload}` — **byte-identical** to the v1 `BaseEventPublisher.writeEvent` wire) and persists an `auth_outbox` row (`infrastructure.persistence.AuthOutboxJpaEntity implements OutboxRow`, MySQL `CHAR(36)` UUIDv7 PK = envelope `eventId`) inside the caller's `@Transactional`.
+> - **Relay**: `infrastructure.outbox.AuthOutboxPublisher extends AbstractOutboxPublisher<AuthOutboxJpaEntity>` — `@Component`, no `@ConditionalOnProperty` gate (the v1 `AuthOutboxPollingScheduler` had none; `@EnableScheduling` already on `AuthApplication`). Plain `MicrometerOutboxMetrics(registry,"auth")` (the v1 scheduler had no custom failure counter) + `auth.outbox.pending.count` gauge. `topicFor` ported VERBATIM from the v1 `resolveTopic` — iam topics are **bare** (no `.v1` suffix): each `auth.*` event → identically-named topic; reject-unmapped.
+> - **KEEP-auto-config**: the lib `OutboxAutoConfiguration` is NOT excluded — the v1 `outbox` (BIGINT/status) + `processed_events` tables are retained (still EntityScanned, required under `ddl-auto=validate`). In-flight v1 `outbox` rows at cutover are abandoned (low-volume, re-derivable).
+> - **Migration**: `db/migration/V0027__auth_outbox_v2.sql`.
 - **퍼시스턴스**: MySQL — `credentials`, `refresh_tokens`, `social_identities`, `outbox_events`, `processed_events` (idempotency). 모두 `tenant_id` NOT NULL. `credentials.email`은 `(tenant_id, email)` unique. `oauth_clients` 는 SAS 등록 client (V0008~). **public client lineage**: `demo-spa-client` (V0008) + `platform-console-web` (V0015, TASK-BE-296) 는 `client_authentication_methods=["none"]` + `client_secret_hash=NULL` + PKCE 필수. `platform-console-web` 의 redirect 는 `http://console.local/api/auth/callback`, scope `openid profile email tenant.read`, refresh rotation 은 `PublicClientRefreshTokenAuthenticationConverter` + `SasRefreshTokenAuthenticationProvider` 경로로 demo-spa-client 와 동일하게 처리됨 (ADR-003 옵션 B closure — converter 는 NONE 인증 client 전부에 fire, 신규 wiring 없음). 상세: [specs/features/multi-tenancy.md](../../features/multi-tenancy.md) "Platform Console", [specs/contracts/http/console-registry-api.md](../../contracts/http/console-registry-api.md)
 - **Redis**: `login:fail:{tenant_id}:{email_hash}` 카운터 (`rules/traits/transactional.md` T1; `rules/traits/multi-tenant.md` M1 테넌트 prefix; `rules/traits/regulated.md` R4 — email 은 평문이 아닌 SHA256 해시. 정규 키 스키마는 [redis-keys.md](./redis-keys.md)), `refresh:blacklist:{tenant_id}:{jti}`, `jwks:cache` (서명 키는 테넌트 공통)
 

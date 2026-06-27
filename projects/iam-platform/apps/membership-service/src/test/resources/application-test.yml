@@ -33,6 +33,12 @@ server:
   port: 0
 
 membership:
+  # TASK-BE-454: v2 outbox relay cadence. Long poll + short initial-delay; ITs that
+  # need fast publishing override membership.outbox.poll-ms via @DynamicPropertySource.
+  outbox:
+    poll-ms: 60000
+    initial-delay-ms: 1000
+    batch-size: 10
   oauth2:
     allowed-issuers: http://localhost:8081,iam
     required-tenant-id: fan-platform

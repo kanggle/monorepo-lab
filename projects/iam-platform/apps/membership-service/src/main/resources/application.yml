@@ -50,6 +50,13 @@ iam:
     client-secret: ${MEMBERSHIP_SERVICE_CLIENT_SECRET:membership-service-secret}
 
 membership:
+  # TASK-BE-454: v2 outbox relay (MembershipOutboxPublisher) cadence. The legacy
+  # `outbox.topic-mapping` block above feeds the now-unused lib v1 relay
+  # (KEEP-auto-config); the v2 relay reads these `membership.outbox.*` keys.
+  outbox:
+    poll-ms: ${MEMBERSHIP_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${MEMBERSHIP_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${MEMBERSHIP_OUTBOX_BATCH_SIZE:100}
   # TASK-BE-253: OIDC Resource Server validators.
   oauth2:
     # Acceptable iss claim values during the D2-b deprecation window.

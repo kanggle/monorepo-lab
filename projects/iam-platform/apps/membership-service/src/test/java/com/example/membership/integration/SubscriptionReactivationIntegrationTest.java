@@ -100,7 +100,7 @@ class SubscriptionReactivationIntegrationTest extends AbstractIntegrationTest {
         wireMock.resetAll();
         jdbcTemplate.execute("TRUNCATE TABLE subscription_status_history");
         jdbcTemplate.update("DELETE FROM subscriptions");
-        jdbcTemplate.update("DELETE FROM outbox");
+        jdbcTemplate.update("DELETE FROM membership_outbox");
     }
 
     @Test

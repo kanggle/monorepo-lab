@@ -9,9 +9,9 @@ import com.example.account.domain.repository.ProfileRepository;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.status.StatusChangeReason;
 import com.example.account.domain.tenant.TenantId;
-import com.example.messaging.outbox.OutboxPollingScheduler;
-import com.example.messaging.outbox.OutboxJpaEntity;
-import com.example.messaging.outbox.OutboxJpaRepository;
+import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
+import com.example.account.infrastructure.persistence.AccountOutboxJpaEntity;
+import com.example.account.infrastructure.persistence.AccountOutboxJpaRepository;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -88,7 +88,7 @@ class AccountAnonymizationSchedulerIntegrationTest extends AbstractIntegrationTe
     private ProfileRepository profileRepository;
 
     @Autowired
-    private OutboxJpaRepository outboxRepository;
+    private AccountOutboxJpaRepository outboxRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -98,7 +98,7 @@ class AccountAnonymizationSchedulerIntegrationTest extends AbstractIntegrationTe
     private KafkaTemplate kafkaTemplate;
 
     @MockitoBean
-    private OutboxPollingScheduler outboxPollingScheduler;
+    private AccountOutboxPublisher accountOutboxPublisher;
 
     @Test
     @DisplayName("30일 초과 DELETED + masked_at NULL — 배치 실행 후 PII 마스킹, masked_at 설정, account.deleted(anonymized=true) 발행")
@@ -134,7 +134,7 @@ class AccountAnonymizationSchedulerIntegrationTest extends AbstractIntegrationTe
         long outboxRowsAfter = countOutboxByAggregate(account.getId());
         assertThat(outboxRowsAfter).isGreaterThan(outboxRowsBefore);
 
-        OutboxJpaEntity anonymizedEvent = findOutboxByAggregate(account.getId()).stream()
+        AccountOutboxJpaEntity anonymizedEvent = findOutboxByAggregate(account.getId()).stream()
                 .filter(e -> "account.deleted".equals(e.getEventType()))
                 .filter(e -> e.getPayload().contains("\"anonymized\":true"))
                 .findFirst()
@@ -278,7 +278,7 @@ class AccountAnonymizationSchedulerIntegrationTest extends AbstractIntegrationTe
                 accountId);
     }
 
-    private List<OutboxJpaEntity> findOutboxByAggregate(String aggregateId) {
+    private List<AccountOutboxJpaEntity> findOutboxByAggregate(String aggregateId) {
         return outboxRepository.findAll().stream()
                 .filter(e -> aggregateId.equals(e.getAggregateId()))
                 .toList();

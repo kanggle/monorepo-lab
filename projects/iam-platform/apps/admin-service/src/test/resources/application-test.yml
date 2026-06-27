@@ -40,6 +40,11 @@ server:
   port: 0
 
 admin:
+  # TASK-BE-452 — v2 outbox relay cadence (fast poll for the IT relay assertions).
+  outbox:
+    poll-ms: 500
+    initial-delay-ms: 1000
+    batch-size: 50
   jwt:
     active-signing-kid: v1
     signing-keys:

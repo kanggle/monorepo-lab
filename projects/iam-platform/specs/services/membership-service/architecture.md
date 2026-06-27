@@ -140,7 +140,16 @@ presentation → application → domain
 - **HTTP 컨트랙트 (외부)**: [specs/contracts/http/membership-api.md](../../contracts/http/membership-api.md)
 - **HTTP 컨트랙트 (내부 수신)**: [specs/contracts/http/internal/community-to-membership.md](../../contracts/http/internal/community-to-membership.md)
 - **이벤트 발행**: [specs/contracts/events/membership-events.md](../../contracts/events/membership-events.md) — `membership.subscription.activated`, `membership.subscription.expired`
-- **퍼시스턴스**: MySQL (`membership_db`) — `membership_plans`, `subscriptions`, `subscription_status_history`, `content_access_policies`, `outbox_events`
+- **퍼시스턴스**: MySQL (`membership_db`) — `membership_plans`, `subscriptions`, `subscription_status_history`, `content_access_policies`, `outbox` (v1, KEEP-auto-config), `membership_outbox` (v2, TASK-BE-454)
+
+### Outbox (v2)
+
+> TASK-BE-454 — outbox v1 → v2 migration (in-worktree auth-service / finance account-service MySQL precedent, ADR-MONO-004 § 5).
+>
+> - **Write path**: `application.event.MembershipEventPublisher` is now a **port**; the impl `infrastructure.outbox.OutboxMembershipEventPublisher` builds the canonical 7-field envelope (`{eventId, eventType, source="membership-service", occurredAt, schemaVersion=1, partitionKey, payload}` — **byte-identical** to the v1 `BaseEventPublisher.writeEvent` wire) and persists a `membership_outbox` row (`infrastructure.persistence.MembershipOutboxJpaEntity implements OutboxRow`, MySQL `CHAR(36)` UUIDv7 PK = envelope `eventId`) inside the caller's `@Transactional`. Each event's `eventType`+`payload` come VERBATIM from the domain factories (`Subscription#buildActivatedEvent()` / `buildExpiredEvent()` / `buildCancelledEvent()`); key = `accountId`.
+> - **Relay**: `infrastructure.outbox.MembershipOutboxPublisher extends AbstractOutboxPublisher<MembershipOutboxJpaEntity>` — `@Component`, no `@ConditionalOnProperty` gate (the v1 `MembershipOutboxPollingScheduler` had none; `@EnableScheduling` already on `MembershipApplication`). Plain `MicrometerOutboxMetrics(registry,"membership")` (the v1 scheduler had no custom failure counter) + `membership.outbox.pending.count` gauge. `topicFor` ported VERBATIM from the v1 `resolveTopic` — iam topics are **bare** (no `.v1` suffix): each `membership.*` event → identically-named topic; reject-unmapped.
+> - **KEEP-auto-config**: the lib `OutboxAutoConfiguration` is NOT excluded — the v1 `outbox` (BIGINT/status) + `processed_events` tables are retained (still EntityScanned, required under `ddl-auto=validate`). In-flight v1 `outbox` rows at cutover are abandoned (low-volume, re-derivable).
+> - **Migration**: `db/migration/V0007__membership_outbox_v2.sql`.
 
 ## Testing Expectations
 

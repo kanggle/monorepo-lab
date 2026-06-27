@@ -99,6 +99,13 @@ iam:
     client-secret: ${SECURITY_SERVICE_CLIENT_SECRET:secret}
 
 security:
+  # TASK-BE-453: v2 outbox relay (SecurityOutboxPublisher) cadence. The legacy
+  # `outbox.polling.*` block above drives the now-unused lib v1 relay
+  # (KEEP-auto-config); the v2 relay reads these `security.outbox.*` keys.
+  outbox:
+    poll-ms: ${SECURITY_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${SECURITY_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${SECURITY_OUTBOX_BATCH_SIZE:100}
   detection:
     velocity:
       threshold: ${DETECT_VELOCITY_THRESHOLD:10}

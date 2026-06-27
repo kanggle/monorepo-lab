@@ -19,7 +19,7 @@ and `platform/architecture-decision-rule.md`.
 | Bounded Context | Account / Profile + Tenant lifecycle (per `rules/domains/saas.md`) |
 | Deployable unit | `apps/account-service/` |
 | Data store | MySQL (owned, not shared) |
-| Event publication | Kafka via outbox (`account.status.changed` 등 계정 lifecycle events) |
+| Event publication | Kafka via transactional outbox v2 (`account.*` 계정 lifecycle + `tenant.subscription.changed` entitlement events) — see § Outbox (v2) |
 | Event consumption | `LoginSucceeded` from `auth.login.succeeded` (updates `accounts.last_login_succeeded_at` from auth-service login events) |
 
 ### Service Type Composition
@@ -174,7 +174,17 @@ presentation → application → domain
   - [specs/contracts/http/internal/security-to-account.md](../../contracts/http/internal/) (자동 잠금 명령 수신)
   - [specs/contracts/http/internal/admin-to-account.md](../../contracts/http/internal/) (관리자 상태 변경 수신)
   - `account-internal-provisioning.md` (신규, `/internal/tenants/{tenantId}/accounts` — WMS 등 enterprise 소비자 대상)
-- **이벤트 발행**: [specs/contracts/events/account-events.md](../../contracts/events/) — `account.created`, `account.status.changed`, `account.locked`, `account.unlocked`, `account.deleted`. 모두 outbox 경유. **모든 페이로드에 `tenant_id` 필수**
+- **이벤트 발행**: [specs/contracts/events/account-events.md](../../contracts/events/) — `account.created`, `account.status.changed`, `account.locked`, `account.unlocked`, `account.roles.changed`, `account.deleted`, `tenant.subscription.changed`. 모두 outbox 경유. **모든 페이로드에 `tenant_id` 필수**
+
+### Outbox (v2)
+
+> TASK-BE-451 — outbox v1 → v2 migration (finance account-service / erp approval-service MySQL precedent, ADR-MONO-004 § 5).
+>
+> - **Two publishers, one table.** Both `application.event.AccountEventPublisher` (account.* lifecycle) and `application.event.TenantDomainSubscriptionEventPublisher` (tenant.subscription.changed) are now **ports**; their impls `infrastructure.outbox.OutboxAccountEventPublisher` + `OutboxTenantDomainSubscriptionEventPublisher` persist into the SAME `account_outbox` table (`infrastructure.persistence.AccountOutboxJpaEntity implements OutboxRow`, MySQL `CHAR(36)` UUIDv7 PK).
+> - **FLAT wire preserved (NOT a 7-field envelope).** The v1 path used `BaseEventPublisher.saveEvent` (serialize-as-is, NO envelope). TASK-BE-422/423 contractually locked the flat top-level shape (ecommerce account.* consumers parse root-level fields). The v2 adapters reproduce the EXACT v1 bytes — **no double-wrap**. Where the flat payload already carries its own `eventId` (account.locked, tenant.subscription.changed), that value is reused as the row PK so the relay's additive `eventId` Kafka header matches the payload.
+> - **Relay**: `infrastructure.outbox.AccountOutboxPublisher extends AbstractOutboxPublisher<AccountOutboxJpaEntity>` — `@Component`, no `@ConditionalOnProperty` gate, plain `MicrometerOutboxMetrics(registry,"account")` + `account.outbox.pending.count` gauge. `topicFor` ported VERBATIM from the v1 `AccountOutboxPollingScheduler.resolveTopic` — covers BOTH publishers' event types (account.* + tenant.subscription.changed, TASK-BE-348); iam topics are bare (no `.v1`); reject-unmapped.
+> - **KEEP-auto-config**: the lib `OutboxAutoConfiguration` is NOT excluded; the v1 `outbox` + `processed_events` tables are retained (EntityScanned, required under `ddl-auto=validate`). In-flight v1 rows at cutover are abandoned.
+> - **Migration**: `db/migration/V0026__account_outbox_v2.sql`.
 - **퍼시스턴스**: MySQL — `tenants`, `accounts`, `profiles`, `account_status_history`, `outbox_events`. 도메인 테이블의 unique index는 `(tenant_id, email)` 등 복합 형태
 - **Redis**: 가입 이메일 검증 코드 TTL, 중복 가입 요청 dedupe (key 패턴에 `tenant_id` 포함)
 

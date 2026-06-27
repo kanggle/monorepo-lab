@@ -6,10 +6,10 @@ import com.example.community.domain.post.PostType;
 import com.example.community.domain.post.PostVisibility;
 import com.example.community.domain.post.status.ActorType;
 import com.example.community.domain.reaction.Reaction;
+import com.example.community.infrastructure.persistence.CommunityOutboxJpaEntity;
+import com.example.community.infrastructure.persistence.CommunityOutboxJpaRepository;
 import com.example.community.infrastructure.persistence.PostJpaRepository;
 import com.example.community.infrastructure.persistence.ReactionJpaRepository;
-import com.example.messaging.outbox.OutboxJpaEntity;
-import com.example.messaging.outbox.OutboxJpaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,7 +52,7 @@ class AddReactionIntegrationTest extends CommunityIntegrationTestBase {
     private ReactionJpaRepository reactionJpaRepository;
 
     @Autowired
-    private OutboxJpaRepository outboxJpaRepository;
+    private CommunityOutboxJpaRepository outboxJpaRepository;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -96,7 +96,7 @@ class AddReactionIntegrationTest extends CommunityIntegrationTestBase {
         assertThat(reactions.get(0).getEmojiCode()).isEqualTo("HEART");
 
         // Outbox: 1 entry with event_type community.reaction.added
-        List<OutboxJpaEntity> outboxRows = outboxJpaRepository.findAll().stream()
+        List<CommunityOutboxJpaEntity> outboxRows = outboxJpaRepository.findAll().stream()
                 .filter(e -> postId.equals(e.getAggregateId()))
                 .filter(e -> "community.reaction.added".equals(e.getEventType()))
                 .toList();

@@ -4,7 +4,7 @@ import com.example.account.application.result.TenantDomainSubscriptionResult;
 import com.example.account.application.service.TenantDomainSubscriptionMutationUseCase;
 import com.example.account.application.service.TenantDomainSubscriptionQueryUseCase;
 import com.example.account.domain.tenant.SubscriptionStatus;
-import com.example.messaging.outbox.OutboxPollingScheduler;
+import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -82,9 +82,9 @@ class SubscriptionPlaneSeparationIntegrationTest extends AbstractIntegrationTest
     @Autowired
     private ObjectMapper objectMapper;
 
-    // Prevent the outbox poller from racing the assertions / talking to Kafka.
+    // Prevent the v2 outbox relay from racing the assertions / talking to Kafka.
     @MockitoBean
-    private OutboxPollingScheduler outboxPollingScheduler;
+    private AccountOutboxPublisher accountOutboxPublisher;
 
     @MockitoBean
     @SuppressWarnings("rawtypes")
@@ -92,7 +92,7 @@ class SubscriptionPlaneSeparationIntegrationTest extends AbstractIntegrationTest
 
     @BeforeEach
     void clean() {
-        jdbcTemplate.update("DELETE FROM outbox");
+        jdbcTemplate.update("DELETE FROM account_outbox");
         jdbcTemplate.update(
                 "DELETE FROM tenant_domain_subscription WHERE tenant_id = ? AND domain_key = ?",
                 TENANT, DOMAIN);
@@ -121,8 +121,8 @@ class SubscriptionPlaneSeparationIntegrationTest extends AbstractIntegrationTest
 
     private JsonNode lastEventPayload() throws Exception {
         String json = jdbcTemplate.queryForObject(
-                "SELECT payload FROM outbox WHERE aggregate_id = ? AND event_type = ? "
-                        + "ORDER BY id DESC LIMIT 1",
+                "SELECT payload FROM account_outbox WHERE aggregate_id = ? AND event_type = ? "
+                        + "ORDER BY created_at DESC LIMIT 1",
                 String.class, TENANT + ":" + DOMAIN, "tenant.subscription.changed");
         return objectMapper.readTree(json);
     }

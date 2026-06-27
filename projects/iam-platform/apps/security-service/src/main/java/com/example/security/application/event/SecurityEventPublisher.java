@@ -1,131 +1,38 @@
 package com.example.security.application.event;
 
-import com.example.messaging.event.BaseEventPublisher;
-import com.example.messaging.outbox.OutboxWriter;
 import com.example.security.domain.detection.AccountLockClient;
 import com.example.security.domain.pii.PiiMaskingRecord;
 import com.example.security.domain.suspicious.SuspiciousEvent;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
- * Outbox-based publisher for security-service Kafka events.
+ * Outbox-based publisher port for security-service Kafka events (TASK-BE-453 —
+ * outbox v1 → v2). Previously a concrete {@code extends BaseEventPublisher}; now a
+ * port whose v2 implementation is
+ * {@link com.example.security.infrastructure.outbox.OutboxSecurityEventPublisher}
+ * (the {@code AbstractOutboxPublisher} / {@code OutboxRow} path — ADR-MONO-004 § 5).
  *
  * <p>All events share the standard envelope declared in
- * {@code specs/contracts/events/auth-events.md} (eventId, eventType, source,
- * occurredAt, schemaVersion, partitionKey, payload).</p>
+ * {@code specs/contracts/events/security-events.md} (eventId, eventType, source,
+ * occurredAt, schemaVersion, partitionKey, payload). The wire shape is preserved
+ * byte-identically across the v1 → v2 swap (the v1 {@code BaseEventPublisher.writeEvent}
+ * 7-field envelope, {@code source = "security-service"}).
  */
-@Component
-public class SecurityEventPublisher extends BaseEventPublisher {
+public interface SecurityEventPublisher {
 
-    public static final String TOPIC_SUSPICIOUS_DETECTED = "security.suspicious.detected";
-    public static final String TOPIC_AUTO_LOCK_TRIGGERED = "security.auto.lock.triggered";
-    public static final String TOPIC_AUTO_LOCK_PENDING = "security.auto.lock.pending";
-    public static final String TOPIC_PII_MASKED = "security.pii.masked";
+    String TOPIC_SUSPICIOUS_DETECTED = "security.suspicious.detected";
+    String TOPIC_AUTO_LOCK_TRIGGERED = "security.auto.lock.triggered";
+    String TOPIC_AUTO_LOCK_PENDING = "security.auto.lock.pending";
+    String TOPIC_PII_MASKED = "security.pii.masked";
 
-    private static final String AGGREGATE_TYPE = "security";
-    private static final String SOURCE = "security-service";
+    void publishSuspiciousDetected(SuspiciousEvent event);
 
-    public SecurityEventPublisher(OutboxWriter outboxWriter, ObjectMapper objectMapper) {
-        super(outboxWriter, objectMapper);
-    }
-
-    /**
-     * TASK-BE-248 Phase 2b: every publish method must carry a non-blank tenantId.
-     * {@link SuspiciousEvent} already rejects null tenantId at construction time, so
-     * this guard is a final defence against a blank-string edge case.
-     */
-    private static void requireTenantId(SuspiciousEvent event) {
-        String tenantId = event.getTenantId();
-        if (tenantId == null || tenantId.isBlank()) {
-            throw new IllegalArgumentException(
-                    "tenantId required for SecurityEvent publish (eventId=" + event.getId() + ")");
-        }
-    }
-
-    /**
-     * TASK-MONO-046-8a: each publish opens its own outbox-write transaction
-     * (REQUIRED). Callers from DetectSuspiciousActivityUseCase and
-     * IssueAutoLockCommandUseCase invoke these methods outside any active TX
-     * (recordSuspiciousEvent / updateLockResult opened + closed their own TX
-     * before returning), so without an explicit @Transactional here the outbox
-     * INSERT failed with "No EntityManager with actual transaction available".
-     * Use REQUIRED so any caller that already holds a TX (e.g., PiiMaskingService)
-     * still participates in it instead of forking a nested TX.
-     */
-    @Transactional(propagation = Propagation.REQUIRED)
-    public void publishSuspiciousDetected(SuspiciousEvent event) {
-        requireTenantId(event);
-        Map<String, Object> payload = buildSuspiciousEventBase(event);
-        payload.put("actionTaken", event.getActionTaken().name());
-        payload.put("evidence", event.getEvidence());
-        payload.put("triggerEventId", event.getTriggerEventId());
-        payload.put("detectedAt", event.getDetectedAt().toString());
-        writeEnvelope(TOPIC_SUSPICIOUS_DETECTED, event.getAccountId(), payload);
-    }
-
-    @Transactional(propagation = Propagation.REQUIRED)
-    public void publishAutoLockTriggered(SuspiciousEvent event, AccountLockClient.Status status) {
-        requireTenantId(event);
-        Map<String, Object> payload = buildSuspiciousEventBase(event);
-        payload.put("lockRequestResult", mapStatus(status));
-        payload.put("lockRequestedAt", Instant.now().toString());
-        writeEnvelope(TOPIC_AUTO_LOCK_TRIGGERED, event.getAccountId(), payload);
-    }
+    void publishAutoLockTriggered(SuspiciousEvent event, AccountLockClient.Status status);
 
     /**
      * Emitted when all retries to account-service have been exhausted. Consumed
      * by the operator manual-intervention path.
      */
-    @Transactional(propagation = Propagation.REQUIRED)
-    public void publishAutoLockPending(SuspiciousEvent event) {
-        requireTenantId(event);
-        Map<String, Object> payload = buildSuspiciousEventBase(event);
-        payload.put("reason", "ACCOUNT_SERVICE_UNREACHABLE");
-        payload.put("raisedAt", Instant.now().toString());
-        writeEnvelope(TOPIC_AUTO_LOCK_PENDING, event.getAccountId(), payload);
-    }
-
-    /**
-     * Builds the common fields shared by every {@link SuspiciousEvent}-based publish
-     * method in the documented insertion order: {@code suspiciousEventId, tenantId,
-     * accountId, ruleCode, riskScore}. Returned as a mutable {@link LinkedHashMap} so
-     * callers can append method-specific fields after the common prefix. Mirrors the
-     * {@code AuthEventPublisher#buildLoginSucceededBase} pattern (TASK-BE-131).
-     *
-     * <p>TASK-BE-248 Phase 1: {@code tenant_id} is now always included in the outbox
-     * payload so downstream consumers can validate the field presence. Null/blank tenantId
-     * is rejected by {@link #requireTenantId(SuspiciousEvent)} before this is called.
-     */
-    private Map<String, Object> buildSuspiciousEventBase(SuspiciousEvent event) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("suspiciousEventId", event.getId());
-        payload.put("tenantId", event.getTenantId());
-        payload.put("accountId", event.getAccountId());
-        payload.put("ruleCode", event.getRuleCode());
-        payload.put("riskScore", event.getRiskScore());
-        return payload;
-    }
-
-    /**
-     * Maps the client-side status enum to the normalized contract vocabulary
-     * (SUCCESS | ALREADY_LOCKED | FAILURE). This MUST match the value persisted
-     * to {@code suspicious_events.lock_request_result} — see
-     * {@code DetectSuspiciousActivityUseCase#triggerAutoLock}.
-     */
-    private String mapStatus(AccountLockClient.Status status) {
-        return switch (status) {
-            case SUCCESS -> "SUCCESS";
-            case ALREADY_LOCKED -> "ALREADY_LOCKED";
-            case INVALID_TRANSITION, FAILURE -> "FAILURE";
-        };
-    }
+    void publishAutoLockPending(SuspiciousEvent event);
 
     /**
      * TASK-BE-258: Emits {@code security.pii.masked} as a GDPR compliance audit trail.
@@ -133,23 +40,7 @@ public class SecurityEventPublisher extends BaseEventPublisher {
      *
      * @param record  the masking result carrying accountId, tenantId, maskedAt, tableNames
      * @param eventId the originating {@code account.deleted} event ID (used as idempotency
-     *                reference in the outbox; the outbox writer will generate a new UUID for
-     *                the outbox row itself)
+     *                reference; the outbox row mints its own UUIDv7 PK)
      */
-    public void publishPiiMasked(PiiMaskingRecord record, String eventId) {
-        if (record.tenantId() == null || record.tenantId().isBlank()) {
-            throw new IllegalArgumentException(
-                    "tenantId required for PiiMasked publish (sourceEventId=" + eventId + ")");
-        }
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("accountId", record.accountId());
-        payload.put("tenantId", record.tenantId());
-        payload.put("maskedAt", record.maskedAt().toString());
-        payload.put("tableNames", record.tableNames());
-        writeEnvelope(TOPIC_PII_MASKED, record.accountId(), payload);
-    }
-
-    private void writeEnvelope(String eventType, String partitionKey, Map<String, Object> payload) {
-        writeEvent(AGGREGATE_TYPE, partitionKey, eventType, SOURCE, payload);
-    }
+    void publishPiiMasked(PiiMaskingRecord record, String eventId);
 }

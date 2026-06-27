@@ -173,7 +173,17 @@ presentation → application → domain
 - **HTTP 컨트랙트 (내부 발신)**: [specs/contracts/http/internal/community-to-membership.md](../../contracts/http/internal/community-to-membership.md)
 - **HTTP 컨트랙트 (내부 발신, account-service)**: [specs/contracts/http/internal/community-to-account.md](../../contracts/http/internal/community-to-account.md)
 - **이벤트 발행**: [specs/contracts/events/community-events.md](../../contracts/events/community-events.md) — `community.post.published`, `community.comment.created`, `community.reaction.added`
-- **퍼시스턴스**: MySQL (`community_db`) — `posts`, `post_status_history`, `comments`, `reactions`, `feed_subscriptions`, `outbox_events`
+- **퍼시스턴스**: MySQL (`community_db`) — `posts`, `post_status_history`, `comments`, `reactions`, `feed_subscriptions`, `outbox` (v1, KEEP-auto-config), `community_outbox` (v2, TASK-BE-455)
+
+### Outbox (v2)
+
+> TASK-BE-455 — outbox v1 → v2 migration (in-worktree auth-service / finance account-service MySQL precedent, ADR-MONO-004 § 5).
+>
+> - **Write path**: `application.event.CommunityEventPublisher` is now a **port**; the impl `infrastructure.outbox.OutboxCommunityEventPublisher` builds the canonical 7-field envelope (`{eventId, eventType, source="community-service", occurredAt, schemaVersion=1, partitionKey, payload}` — **byte-identical** to the v1 `BaseEventPublisher.writeEvent` wire) and persists a `community_outbox` row (`infrastructure.persistence.CommunityOutboxJpaEntity implements OutboxRow`, MySQL `CHAR(36)` UUIDv7 PK = envelope `eventId`) inside the caller's `@Transactional`. Each publish method's payload-Map is copied VERBATIM from the v1 publisher; key = `postId`.
+> - **Relay**: `infrastructure.outbox.CommunityOutboxPublisher extends AbstractOutboxPublisher<CommunityOutboxJpaEntity>` — `@Component`, no `@ConditionalOnProperty` gate (the v1 `CommunityOutboxPollingScheduler` had none; `@EnableScheduling` already on `CommunityApplication`). Plain `MicrometerOutboxMetrics(registry,"community")` (the v1 scheduler had no custom failure counter) + `community.outbox.pending.count` gauge. `topicFor` ported VERBATIM from the v1 `resolveTopic` — iam topics are **bare** (no `.v1` suffix): each `community.*` event → identically-named topic; reject-unmapped.
+> - **Clock bean**: community-service ALREADY declares a `Clock systemUTC()` bean (`infrastructure.config.ClockConfig`); the new `OutboxConfig` adds ONLY a `TransactionTemplate` (a second `Clock` would be a duplicate-bean conflict).
+> - **KEEP-auto-config**: the lib `OutboxAutoConfiguration` is NOT excluded — the v1 `outbox` (BIGINT/status) + `processed_events` tables are retained (still EntityScanned, required under `ddl-auto=validate`). In-flight v1 `outbox` rows at cutover are abandoned (low-volume, re-derivable).
+> - **Migration**: `db/migration/V0006__community_outbox_v2.sql`.
 
 ## Testing Expectations
 

@@ -83,6 +83,12 @@ outbox:
     batch-size: 50
 
 community:
+  # TASK-BE-455: v2 outbox relay cadence. Fast poll + short initial-delay so the
+  # CommunityOutboxRelayIntegrationTest sees rows relayed within its await window.
+  outbox:
+    poll-ms: 500
+    initial-delay-ms: 500
+    batch-size: 50
   oauth2:
     allowed-issuers: http://localhost:8081,iam
     required-tenant-id: fan-platform

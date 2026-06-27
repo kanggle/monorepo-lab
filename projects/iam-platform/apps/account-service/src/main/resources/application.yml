@@ -57,6 +57,11 @@ server:
   port: 8082
 
 account:
+  # TASK-BE-451 — v2 outbox relay (AccountOutboxPublisher) cadence + batch size.
+  outbox:
+    poll-ms: ${ACCOUNT_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${ACCOUNT_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${ACCOUNT_OUTBOX_BATCH_SIZE:100}
   deletion:
     grace-period-days: ${DELETION_GRACE_PERIOD_DAYS:30}
   auth-service:

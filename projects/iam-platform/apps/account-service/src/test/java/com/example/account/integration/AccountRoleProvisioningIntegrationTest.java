@@ -4,7 +4,7 @@ import com.example.account.application.port.AuthServicePort;
 import com.example.account.domain.account.AccountRole;
 import com.example.account.domain.repository.AccountRoleRepository;
 import com.example.account.domain.tenant.TenantId;
-import com.example.messaging.outbox.OutboxPollingScheduler;
+import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -73,7 +73,7 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
 
     @MockitoBean private AuthServicePort authServicePort;
     @MockitoBean @SuppressWarnings("rawtypes") private KafkaTemplate kafkaTemplate;
-    @MockitoBean private OutboxPollingScheduler outboxPollingScheduler;
+    @MockitoBean private AccountOutboxPublisher accountOutboxPublisher;
 
     @BeforeEach
     void ensureWmsTenantExists() {
@@ -196,7 +196,7 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
         // Find the latest account.roles.changed outbox row for this account.
         Map<String, Object> row = jdbc.queryForMap("""
                 SELECT payload
-                  FROM outbox
+                  FROM account_outbox
                  WHERE aggregate_id = ? AND event_type = 'account.roles.changed'
                  ORDER BY id DESC LIMIT 1
                 """, accountId);
@@ -222,7 +222,7 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
         String accountId = createAccount(WMS_TENANT_ID, email, List.of("WAREHOUSE_ADMIN"));
 
         long outboxBefore = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM outbox
+                SELECT COUNT(*) FROM account_outbox
                  WHERE aggregate_id = ? AND event_type = 'account.roles.changed'
                 """, Long.class, accountId);
 
@@ -247,7 +247,7 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
                 .containsExactlyInAnyOrder("WAREHOUSE_ADMIN", "INBOUND_OPERATOR");
 
         long outboxAfter = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM outbox
+                SELECT COUNT(*) FROM account_outbox
                  WHERE aggregate_id = ? AND event_type = 'account.roles.changed'
                 """, Long.class, accountId);
         assertThat(outboxAfter).isEqualTo(outboxBefore + 1);
@@ -260,7 +260,7 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
         String accountId = createAccount(WMS_TENANT_ID, email, List.of("WAREHOUSE_ADMIN"));
 
         long outboxBefore = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM outbox
+                SELECT COUNT(*) FROM account_outbox
                  WHERE aggregate_id = ? AND event_type = 'account.roles.changed'
                 """, Long.class, accountId);
 
@@ -276,7 +276,7 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk());
 
         long outboxAfter = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM outbox
+                SELECT COUNT(*) FROM account_outbox
                  WHERE aggregate_id = ? AND event_type = 'account.roles.changed'
                 """, Long.class, accountId);
         assertThat(outboxAfter).isEqualTo(outboxBefore);  // no new event
@@ -310,7 +310,7 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         // Outbox payload check — afterRoles must NOT contain the removed role.
         Map<String, Object> row = jdbc.queryForMap("""
-                SELECT payload FROM outbox
+                SELECT payload FROM account_outbox
                  WHERE aggregate_id = ? AND event_type = 'account.roles.changed'
                  ORDER BY id DESC LIMIT 1
                 """, accountId);
@@ -329,7 +329,7 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
         String accountId = createAccount(WMS_TENANT_ID, email, List.of("WAREHOUSE_ADMIN"));
 
         long outboxBefore = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM outbox
+                SELECT COUNT(*) FROM account_outbox
                  WHERE aggregate_id = ? AND event_type = 'account.roles.changed'
                 """, Long.class, accountId);
 
@@ -345,7 +345,7 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk());
 
         long outboxAfter = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM outbox
+                SELECT COUNT(*) FROM account_outbox
                  WHERE aggregate_id = ? AND event_type = 'account.roles.changed'
                 """, Long.class, accountId);
         assertThat(outboxAfter).isEqualTo(outboxBefore);

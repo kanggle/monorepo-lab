@@ -98,6 +98,11 @@ oidc:
   issuer-url: http://localhost
 
 auth:
+  # TASK-BE-450 — v2 outbox relay cadence (fast poll for the IT relay assertions).
+  outbox:
+    poll-ms: 500
+    initial-delay-ms: 1000
+    batch-size: 50
   jwt:
     issuer: iam
     access-token-ttl-seconds: 1800

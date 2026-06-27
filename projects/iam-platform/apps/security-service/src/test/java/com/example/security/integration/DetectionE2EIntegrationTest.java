@@ -1,8 +1,8 @@
 package com.example.security.integration;
 
-import com.example.messaging.outbox.OutboxJpaEntity;
-import com.example.messaging.outbox.OutboxJpaRepository;
 import com.example.security.domain.Tenants;
+import com.example.security.infrastructure.persistence.SecurityOutboxJpaEntity;
+import com.example.security.infrastructure.persistence.SecurityOutboxJpaRepository;
 import com.example.security.infrastructure.persistence.SuspiciousEventJpaEntity;
 import com.example.security.infrastructure.persistence.SuspiciousEventJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -84,8 +84,9 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
         registry.add("security.detection.auto-lock.initial-backoff-ms", () -> "50");
         registry.add("security.detection.auto-lock.connect-timeout-ms", () -> "2000");
         registry.add("security.detection.auto-lock.read-timeout-ms", () -> "2000");
-        // Speed up outbox polling for event-visibility assertions (if needed).
-        registry.add("outbox.polling.interval-ms", () -> "1000");
+        // Speed up the v2 outbox relay for event-visibility assertions (TASK-BE-453).
+        registry.add("security.outbox.poll-ms", () -> "500");
+        registry.add("security.outbox.initial-delay-ms", () -> "500");
     }
 
     @AfterAll
@@ -96,7 +97,7 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Autowired private SuspiciousEventJpaRepository suspiciousEventJpaRepository;
-    @Autowired private OutboxJpaRepository outboxJpaRepository;
+    @Autowired private SecurityOutboxJpaRepository outboxJpaRepository;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private KafkaListenerEndpointRegistry listenerRegistry;
 
@@ -178,7 +179,7 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
         // the one we just located in the suspicious_events table — outbox findAll()
         // ordering is not guaranteed.
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-            OutboxJpaEntity matching = outboxJpaRepository.findAll().stream()
+            SecurityOutboxJpaEntity matching = outboxJpaRepository.findAll().stream()
                     .filter(e -> "security.auto.lock.triggered".equals(e.getEventType()))
                     .filter(e -> accountId.equals(e.getAggregateId()))
                     .filter(e -> {

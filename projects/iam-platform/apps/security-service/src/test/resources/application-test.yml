@@ -108,6 +108,13 @@ security-service:
 # without code changes. Values are intentionally close to defaults so
 # integration tests remain deterministic.
 security:
+  # TASK-BE-453: v2 outbox relay cadence. Long poll + initial-delay so the
+  # background relay does not race the test assertions; ITs that need fast
+  # publishing override security.outbox.poll-ms via @DynamicPropertySource.
+  outbox:
+    poll-ms: 60000
+    initial-delay-ms: 1000
+    batch-size: 10
   detection:
     velocity:
       threshold: 5
