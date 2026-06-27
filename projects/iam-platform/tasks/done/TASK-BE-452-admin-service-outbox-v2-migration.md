@@ -1,6 +1,6 @@
 # TASK-BE-452 (iam) — Migrate admin-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (schema migration + DUAL-publisher port conversion with TWO distinct wire shapes — one FLAT, one SELF-BUILT envelope — preserved byte-identically + relay cutover in an audit-heavy regulated service)
