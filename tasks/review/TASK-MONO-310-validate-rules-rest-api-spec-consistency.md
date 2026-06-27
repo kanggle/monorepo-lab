@@ -8,7 +8,7 @@ TASK-MONO-310
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -60,10 +60,10 @@ The remaining `/validate-rules` findings are out of scope here: the `.claude/` i
 
 # Acceptance Criteria
 
-- [ ] `rest-api.md § Versioning`이 `/api/v{n}/{resource}` 정규 전체경로를 명시하고 `versioning-policy.md`+`naming-conventions.md`를 권위로 인용.
-- [ ] `rest-api.md § Testing Requirements`에 Unit test 레이어 + `testing-strategy.md` 5단 피라미드 포인터 추가.
-- [ ] 두 수정 모두 additive (기존 의미 유지, contract 변경 없음).
-- [ ] impl code 0 (doc-only).
+- [x] `rest-api.md § Versioning`이 `/api/v{n}/{resource}` 정규 전체경로를 명시하고 `versioning-policy.md`+`naming-conventions.md`를 권위로 인용.
+- [x] `rest-api.md § Testing Requirements`에 Unit test 레이어 + `testing-strategy.md` 5단 피라미드 포인터 추가.
+- [x] 두 수정 모두 additive (기존 의미 유지, contract 변경 없음 — `git diff` numstat 추가 위주).
+- [x] impl code 0 (doc-only).
 
 # Related Specs
 
@@ -92,7 +92,7 @@ The remaining `/validate-rules` findings are out of scope here: the `.claude/` i
 
 # Definition of Done
 
-- [ ] `rest-api.md` 2개 섹션 수정 (impl PR).
-- [ ] `tasks/INDEX.md` 갱신.
-- [ ] commit + push (branch `task/mono-310-validate-rules-remediation`).
-- [ ] PR open (사용자 요청 시) → merge → close-chore review→done.
+- [x] `rest-api.md` 2개 섹션 수정 (impl PR).
+- [x] `tasks/INDEX.md` 갱신 (ready→review).
+- [x] commit + push.
+- [ ] PR merge → close-chore review→done.

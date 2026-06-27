@@ -25,7 +25,7 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 - See `platform/api-gateway-policy.md`
 
 ## Versioning
-- Use URI path versioning for public endpoints (`/v1/`, `/v2/`)
+- Use URI path versioning for public endpoints. The canonical full path is `/api/v{n}/{resource}` (e.g. `/api/v1/orders`) — the `/api/` prefix is mandatory per `platform/versioning-policy.md` and `platform/naming-conventions.md`; `v1` / `v2` denotes only the version segment.
 - Follow `platform/versioning-policy.md` and `.claude/skills/cross-cutting/api-versioning/SKILL.md`
 
 ## Error Handling
@@ -74,10 +74,11 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 
 # Testing Requirements
 
+- Unit tests for domain / service-layer logic (the base of the `platform/testing-strategy.md` pyramid)
 - Controller slice tests (`@WebMvcTest`) for every controller
 - Contract tests against `specs/contracts/http/` for every public endpoint
 - Integration tests with Testcontainers for end-to-end happy paths and key error cases
-- See `testing/contract-test.md`, `testing/e2e-test.md`
+- See `platform/testing-strategy.md` (full five-level pyramid), `testing/contract-test.md`, `testing/e2e-test.md`
 
 ---
 
