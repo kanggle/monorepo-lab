@@ -1,0 +1,72 @@
+plugins {
+    id 'io.spring.dependency-management'
+}
+
+// -------------------------------------------------------------------------
+// libs/java-notification — Shared notification consumer / delivery library.
+//
+// The D4 deliverable of ADR-MONO-043 (notification architecture unification).
+// Lifts the common consumer/dedupe + Category-C delivery engine + external-
+// channel adapter SPI out of the four per-domain notification-services into a
+// configurable, composition-over-inheritance shared library (ADR-MONO-038
+// posture: lib owns control flow + ports + DTOs; service owns adapters +
+// service-specific strategies — channels, recipients, topics, error envelope,
+// metrics, the @Scheduled trigger, the per-row REQUIRES_NEW boundary, and the
+// outbox emission all stay service-side).
+//
+// HARDSTOP-03: project-agnostic — carries NO domain event types, NO recipient-
+// resolution logic, NO service names, NO channel credentials. Root package is
+// `com.example.platform.notification` (NOT `com.example.notification`, which
+// collides with the ecommerce service package).
+//
+// This module MUST NOT depend on OutboxAutoConfiguration or pull any service;
+// it reuses libs/java-messaging's EventDedupePort + EventEnvelope only.
+// -------------------------------------------------------------------------
+
+dependencies {
+    // Shared utilities (UuidV7, etc.)
+    implementation project(':libs:java-common')
+
+    // EventDedupePort + EventEnvelope are reused by the consumer support (D4).
+    implementation project(':libs:java-messaging')
+
+    // Spring Data JPA — for the optional @MappedSuperclass delivery-record base.
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // Spring Kafka — type access for the consumer-support seam (envelope-validated handler).
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // Spring TX — Propagation/@Transactional references documented in the dispatcher.
+    implementation 'org.springframework:spring-tx'
+
+    // Jackson (NotificationView NON_NULL serialization shape + channel payload JSON).
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Bean Validation (envelope field assertions in the consumer support).
+    implementation 'jakarta.validation:jakarta.validation-api'
+
+    // Micrometer (compileOnly — metrics binders are optional, injected by the service).
+    compileOnly 'io.micrometer:micrometer-core'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // Test — mirrors libs/java-web-servlet (junit5 + assertj + mockito) plus
+    // jackson-databind for the NotificationView serialization assertion.
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params'
+    testImplementation 'org.assertj:assertj-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind'
+    // Instant (de)serialization for the NotificationView NON_NULL omission test.
+    testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}
