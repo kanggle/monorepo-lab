@@ -53,7 +53,7 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 2s
 
-  # Kafka — outbox relay target (libs/java-messaging OutboxPollingScheduler).
+  # Kafka — outbox relay target (libs/java-messaging AbstractOutboxPublisher, v2).
   # Until TASK-ERP-BE-007 wired a local broker into docker-compose, this fell
   # back to the Spring Boot default (localhost:9092) with no broker present, so
   # the relay never drained. KAFKA_BOOTSTRAP now points at the compose broker.
@@ -120,10 +120,19 @@ erpplatform:
       # final form). DB-table primary inside the mutation Tx.
       ttl-seconds: ${ERP_IDEMPOTENCY_TTL_SECONDS:86400}
 
-# Transactional outbox relay (libs/java-messaging). Enabled by default; slice
-# / unit runs disable it (no Kafka) via application-test.yml.
+# Transactional outbox relay (libs/java-messaging v2 AbstractOutboxPublisher).
+# TASK-ERP-BE-026 outbox v2: `enabled` is the relay gate (preserved v1 name —
+# @ConditionalOnProperty on MasterdataOutboxPublisher; slice/unit tests set it
+# false via application-test.yml). `interval-ms`/`batch-size` here are legacy v1
+# keys (no longer read; v2 timing lives under `masterdata.outbox.*` below).
 outbox:
   polling:
     enabled: ${OUTBOX_POLLING_ENABLED:true}
     interval-ms: 1000
     batch-size: 50
+
+masterdata:
+  outbox:
+    poll-ms: ${MASTERDATA_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${MASTERDATA_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${MASTERDATA_OUTBOX_BATCH_SIZE:100}

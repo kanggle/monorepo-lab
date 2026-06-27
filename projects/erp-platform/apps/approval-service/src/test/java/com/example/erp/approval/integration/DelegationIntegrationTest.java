@@ -111,7 +111,7 @@ class DelegationIntegrationTest extends AbstractApprovalIntegrationTest {
         String grantId = createGrant("emp-a", "emp-d", FROM, TO, "k-dg-create-1");
 
         Long delegatedOutbox = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, grantId, "erp.approval.delegated");
         assertThat(delegatedOutbox).isEqualTo(1L);
         Long auditRows = jdbcTemplate.queryForObject(
@@ -159,13 +159,13 @@ class DelegationIntegrationTest extends AbstractApprovalIntegrationTest {
         assertThat(revokedAudit).isEqualTo(1L);
         // The create still produced exactly one delegated.v1 (unchanged).
         Long delegatedOutbox = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, grantId, "erp.approval.delegated");
         assertThat(delegatedOutbox).isEqualTo(1L);
         // TASK-ERP-BE-015: an actual ACTIVE→REVOKED transition writes the revoke event
         // to the outbox inside the same Tx (A7).
         Long revokedOutbox = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, grantId, "erp.approval.delegation.revoked");
         assertThat(revokedOutbox).isEqualTo(1L);
 
@@ -177,7 +177,7 @@ class DelegationIntegrationTest extends AbstractApprovalIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("REVOKED"));
         Long revokedOutboxAfter = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, grantId, "erp.approval.delegation.revoked");
         assertThat(revokedOutboxAfter).isEqualTo(1L);
 

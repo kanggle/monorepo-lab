@@ -108,10 +108,10 @@ class ApprovalLifecycleIntegrationTest extends AbstractApprovalIntegrationTest {
         assertThat(auditCount).isEqualTo(2L);
 
         Long submittedOutbox = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, id, "erp.approval.submitted");
         Long approvedOutbox = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, id, "erp.approval.approved");
         assertThat(submittedOutbox).isEqualTo(1L);
         assertThat(approvedOutbox).isEqualTo(1L);
@@ -133,7 +133,7 @@ class ApprovalLifecycleIntegrationTest extends AbstractApprovalIntegrationTest {
                 "SELECT status FROM approval_request WHERE id = ?", String.class, id);
         assertThat(dbStatus).isEqualTo("DRAFT");
         Long outbox = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ?", Long.class, id);
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ?", Long.class, id);
         assertThat(outbox).isEqualTo(0L);
     }
 
@@ -237,7 +237,7 @@ class ApprovalLifecycleIntegrationTest extends AbstractApprovalIntegrationTest {
                 "SELECT COUNT(*) FROM approval_action WHERE approval_request_id = ? AND transition = ?",
                 Long.class, id, "APPROVED");
         Long approvedOutbox = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, id, "erp.approval.approved");
         assertThat(approvedActions).isEqualTo(1L);
         assertThat(approvedOutbox).isEqualTo(1L);
@@ -308,7 +308,7 @@ class ApprovalLifecycleIntegrationTest extends AbstractApprovalIntegrationTest {
                 .andExpect(jsonPath("$.data.finalizedAt").doesNotExist());
 
         Long approvedAfterStage0 = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, id, "erp.approval.approved");
         assertThat(approvedAfterStage0).isEqualTo(0L);   // intermediate stage emits NO event
         Long auditAfterStage0 = jdbcTemplate.queryForObject(
@@ -327,10 +327,10 @@ class ApprovalLifecycleIntegrationTest extends AbstractApprovalIntegrationTest {
                 .andExpect(jsonPath("$.data.finalizedAt").exists());
 
         Long approvedFinal = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, id, "erp.approval.approved");
         Long submittedFinal = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, id, "erp.approval.submitted");
         Long auditFinal = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM approval_audit_log WHERE aggregate_id = ?",
@@ -378,7 +378,7 @@ class ApprovalLifecycleIntegrationTest extends AbstractApprovalIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("REJECTED"));
 
         Long rejectedOutbox = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, id, "erp.approval.rejected");
         assertThat(rejectedOutbox).isEqualTo(1L);
     }
@@ -423,7 +423,7 @@ class ApprovalLifecycleIntegrationTest extends AbstractApprovalIntegrationTest {
                 "SELECT COUNT(*) FROM approval_action WHERE approval_request_id = ? AND transition = ?",
                 Long.class, id, "APPROVED");
         Long approvedOutbox = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT COUNT(*) FROM approval_outbox WHERE aggregate_id = ? AND event_type = ?",
                 Long.class, id, "erp.approval.approved");
         assertThat(approveActions).isEqualTo(1L);   // one intermediate approve only
         assertThat(approvedOutbox).isEqualTo(0L);   // no event on intermediate stage

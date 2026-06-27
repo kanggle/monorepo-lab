@@ -18,8 +18,18 @@ spring:
 
 outbox:
   polling:
+    # Gate (preserved v1 name). Disabled by default for slice/unit tests;
+    # integration tests explicitly enable it via @TestPropertySource.
     enabled: false
     interval-ms: 200
+    batch-size: 50
+
+masterdata:
+  # TASK-ERP-BE-026 outbox v2 timing — tight loop so the relay reacts within an
+  # awaitility timeout once an integration test flips outbox.polling.enabled=true.
+  outbox:
+    poll-ms: 200
+    initial-delay-ms: 0
     batch-size: 50
 
 erpplatform:

@@ -682,20 +682,56 @@ Errors:
 
 ## Outbox + audit_log invariants
 
-### Transactional outbox
+### Transactional outbox (v2 — TASK-ERP-BE-025)
 
-Transactional outbox (`libs/java-messaging` `BaseEventPublisher` +
-`ApprovalOutboxPollingScheduler extends OutboxPollingScheduler`): every transition
-event write shares the use-case `@Transactional` boundary (T3 / E4 / A7 atomicity).
-Source = `"erp-platform-approval-service"`. Topics → § contract
-[`erp-approval-events.md`](../../contracts/events/erp-approval-events.md).
+Transactional outbox on the shared v2 path (`libs/java-messaging`
+`AbstractOutboxPublisher` — the `OutboxRow` path, ADR-MONO-004 § 5), replacing the
+v1 `BaseEventPublisher` write path + `ApprovalOutboxPollingScheduler extends
+OutboxPollingScheduler` relay. Mirrors the finance account-service MySQL dual-axis
+precedent (TASK-FIN-BE-045) + the scm procurement-service relay/metric pattern
+(TASK-SCM-BE-032).
 
-| Transition | Topic (partition key = `approvalRequestId`) | Emitted when |
+- **Write adapter** — `OutboxApprovalEventPublisher implements ApprovalEventPublisher`
+  (the `ApprovalEventPublisher` is now a port interface) builds the canonical
+  7-field envelope (`eventId, eventType, source, occurredAt, schemaVersion=1,
+  partitionKey, payload`, `source = "erp-platform-approval-service"`, payload maps
+  + NON_NULL omissions verbatim from v1) and persists one `approval_outbox` row
+  (MySQL `CHAR(36)` UUIDv7 PK = envelope `eventId`; `partition_key = aggregateId`,
+  NOT NULL) in the use-case `@Transactional` boundary (T3 / E4 / A7 atomicity).
+- **Relay** — `ApprovalOutboxPublisher extends AbstractOutboxPublisher<ApprovalOutboxJpaEntity>`
+  (`@ConditionalOnProperty("outbox.polling.enabled")` — preserved v1 gate name)
+  drains `approval_outbox` to Kafka with exponential backoff + `eventId`/`eventType`
+  headers; the wire (topics, value JSON, key = aggregateId) is byte-identical to v1.
+- **KEEP-auto-config.** The lib `OutboxAutoConfiguration` is RETAINED (not excluded);
+  the v1 `outbox` + `processed_events` tables stay (EntityScanned under
+  `ddl-auto=validate`). The v2 relay no longer drives the v1 `outbox`; in-flight v1
+  rows at cutover are abandoned (re-derivable).
+- **Dormant relay preserved.** approval-service has NO `@EnableScheduling` (it had
+  none under v1 either), so the `@Scheduled` relay is dormant — events are written
+  to `approval_outbox` but not drained until scheduling is enabled (a separate,
+  out-of-scope concern). Behaviour-preserving: the ITs assert only the outbox ROW
+  is written, never Kafka receipt.
+- **Preserved failure metric.** `approval_outbox_publish_failures_total` (the v1
+  `onKafkaSendFailure` hook — name + description verbatim) still increments on a
+  per-event Kafka send failure, via a wrapping `OutboxMetrics`. New
+  `approval.outbox.pending.count` gauge added.
+
+| Transition / event | Topic (partition key = `approvalRequestId` / `grantId`) | Emitted when |
 |---|---|---|
 | submit | `erp.approval.submitted.v1` | `DRAFT → SUBMITTED` commits |
 | approve | `erp.approval.approved.v1` | `SUBMITTED → APPROVED` commits |
 | reject | `erp.approval.rejected.v1` | `SUBMITTED → REJECTED` commits |
 | withdraw | `erp.approval.withdrawn.v1` | `* → WITHDRAWN` commits |
+| delegate (grant create) | `erp.approval.delegated.v1` | DelegationGrant created |
+| delegation revoke | `erp.approval.delegation.revoked.v1` | ACTIVE→REVOKED commits |
+
+> **Delegation-gap fix (TASK-ERP-BE-025).** The v1 `ApprovalOutboxPollingScheduler`
+> mapped only the four transition topics, so the `delegated` + `delegation.revoked`
+> events (which `ApprovalEventPublisher` already emitted, and which
+> [`erp-approval-events.md`](../../contracts/events/erp-approval-events.md) already
+> defines) were written to the outbox then poison-pilled by the relay's
+> reject-unmapped — a latent v1 head-of-line-blocking bug. The v2 `topicFor` maps
+> ALL SIX event types, aligning the relay with the contract.
 
 Forward consumers = v2 `notification-service` (fan-out) + v2 read-model full-view
 (approval-fact projection). **None consumed in this increment** — this is the v1.0
