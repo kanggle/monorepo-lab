@@ -1,6 +1,6 @@
 # TASK-BE-448 (ecommerce) — Migrate order-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (saga-critical schema migration + write-path rewrite + publisher/metrics swap with a preserved custom failure metric; multiple downstream consumers + a CI Testcontainers lane)

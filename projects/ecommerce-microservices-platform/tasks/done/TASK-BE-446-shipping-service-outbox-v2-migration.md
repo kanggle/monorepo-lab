@@ -1,6 +1,6 @@
 # TASK-BE-446 (ecommerce) — Migrate shipping-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (schema migration + multi-shape write-path rewrite + publisher/metrics swap; medium coupling — wms fulfillment loop consumer)

@@ -1,6 +1,6 @@
 # TASK-BE-447 (ecommerce) — Migrate settlement-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (schema migration + write-path rewrite + publisher/metrics swap; standalone-profile gating)
