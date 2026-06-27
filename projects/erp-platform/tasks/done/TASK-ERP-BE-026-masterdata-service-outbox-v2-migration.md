@@ -1,6 +1,6 @@
 # TASK-ERP-BE-026 (erp) — Migrate masterdata-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-ERP-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (dual-axis MySQL schema migration + write-path port/adapter split + relay swap with a preserved custom failure metric + a preserved gate)
