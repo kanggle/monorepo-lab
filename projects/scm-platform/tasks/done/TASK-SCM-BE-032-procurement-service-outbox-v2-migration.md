@@ -1,6 +1,6 @@
 # TASK-SCM-BE-032 (scm) — Migrate procurement-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-SCM-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (dual-axis schema migration + write-path port/adapter split + relay swap with a preserved custom failure metric + a preserved gate; producer with a CI Testcontainers lane)
