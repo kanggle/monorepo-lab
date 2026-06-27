@@ -1,6 +1,6 @@
 # TASK-BE-451 (iam) — Migrate account-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (schema migration + DUAL-publisher write-path port conversion preserving a contractually-locked FLAT wire + relay cutover — wire compatibility with ecommerce account.* consumers is non-negotiable)
