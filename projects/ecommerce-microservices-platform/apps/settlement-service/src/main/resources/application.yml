@@ -60,6 +60,11 @@ settlement:
     # Platform default commission rate in basis points (1000 = 10%). 0 = net-zero
     # degrade (single-store keeps everything, D8 / AC-9). Per-seller overrides win.
     default-rate-bps: ${SETTLEMENT_DEFAULT_RATE_BPS:0}
+  # TASK-BE-447: outbox v2 (SettlementOutboxPublisher extends AbstractOutboxPublisher).
+  outbox:
+    batch-size: ${SETTLEMENT_OUTBOX_BATCH_SIZE:100}
+    poll-ms: ${SETTLEMENT_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${SETTLEMENT_OUTBOX_INITIAL_DELAY_MS:5000}
 
 logging:
   level:

@@ -110,18 +110,27 @@ Package organization should preserve aggregate boundaries and domain ownership.
 
 ## Outbox
 
-- **Introduced in this increment (period-close + simulated payout).** settlement-service
-  was a terminal consumer in v1 (no publication); the period-close increment makes it
-  a **producer** for exactly one event, so the outbox is now introduced. The service
-  adds the `libs:java-messaging` dependency (previously **excluded**) and enables
-  `OutboxAutoConfiguration` / `OutboxMetricsAutoConfiguration`, plus the standard
-  ecommerce `outbox` table (same DDL order-service / payment-service use:
-  `id BIGSERIAL PK, aggregate_type, aggregate_id, event_type, payload TEXT,
-  created_at, published_at, status` + `idx_outbox_status_created`).
+- **Outbox v2 (TASK-BE-447).** Migrated to the shared `AbstractOutboxPublisher`
+  (ADR-MONO-004 § 5) from the v1 stack (lib `OutboxPollingScheduler` relay + lib
+  `OutboxWriter`/`OutboxJpaEntity` write path). Table is now `settlement_outbox`
+  (v2 shape — `event_id UUID` PK, `occurred_at`, `retries`/`last_error`; mirrors
+  `master_outbox`/`promotion_outbox`). The v1 `outbox` table (V2 migration) is
+  retained but unused (kept so the still-EntityScanned lib `OutboxJpaEntity`
+  validates under `ddl-auto=validate`). The locally-owned `processed_event`
+  consumer-dedupe table is unrelated and untouched.
+- Write path: `SpringSettlementEventPublisher` (implements `SettlementEventPublisher`,
+  `@Profile("!standalone")`) persists a `SettlementOutboxEntity` row directly; the row
+  `event_id` reuses the event envelope's own `event_id`, payload is the byte-identical
+  serialized envelope (wire-preserving). Standalone keeps `NoopSettlementEventPublisher`
+  (no outbox row written).
+- Relay: `SettlementOutboxPublisher extends AbstractOutboxPublisher<SettlementOutboxEntity>`
+  (`@Profile("!standalone")`) — `@Scheduled` poll, backoff, `eventId`/`eventType`
+  headers, `MicrometerOutboxMetrics("settlement")` (+ preserved
+  `settlement.outbox.pending.count` gauge).
 - **`settlement.period.closed.v1`** is appended to the outbox **in the same
   `@Transactional` boundary** as the period close + `seller_payout` row creation
   (transactional outbox — mirrors order/payment co-commit discipline). The dispatcher
-  relays it to topic `settlement.period.closed`. See
+  relays it to topic `settlement.period.closed` (preserved verbatim). See
   `specs/contracts/events/settlement-events.md` for the producer schema.
 - **`settlement.commission.accrued.v1` is still forward-declared** — it is NOT
   defined or emitted in this increment (deferred to a later increment).
