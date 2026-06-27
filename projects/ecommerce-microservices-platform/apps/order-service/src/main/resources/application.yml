@@ -61,6 +61,13 @@ outbox:
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
 
 order:
+  # TASK-BE-448: outbox v2 (OrderOutboxPublisher extends AbstractOutboxPublisher).
+  # The legacy top-level `outbox.polling.*` keys are retained only because the lib
+  # OutboxAutoConfiguration beans (unreferenced after the v2 swap) still bind them.
+  outbox:
+    batch-size: ${ORDER_OUTBOX_BATCH_SIZE:100}
+    poll-ms: ${ORDER_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${ORDER_OUTBOX_INITIAL_DELAY_MS:5000}
   internal:
     # Resource-server validation for the gateway-excluded /api/internal/** route
     # (TASK-BE-412): validates the inbound client_credentials Bearer JWT. JWKS / issuer /

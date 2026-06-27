@@ -86,12 +86,15 @@ Package organization should preserve aggregate boundaries and domain ownership.
 
 ## Outbox
 
-- Pattern: Transactional Outbox
-- Table: `outbox` (libs/java-messaging 표준 schema)
-- Polling scheduler: `OutboxPollingScheduler` (libs `com.example.messaging.outbox.OutboxPollingScheduler` base 의 concrete subclass)
-- Topic 매핑:
+- Pattern: Transactional Outbox (**v2** — shared `AbstractOutboxPublisher`, ADR-MONO-004 § 5; migrated from v1 in TASK-BE-448)
+- Table: `order_outbox` (v2 shape — `event_id UUID` PK, `occurred_at`, `retries`/`last_error`; mirrors `master_outbox`/`promotion_outbox`). The v1 `outbox` table (V5) is retained but unused (kept so the still-EntityScanned lib `OutboxJpaEntity` validates under `ddl-auto=validate`).
+- Write path: `SpringOrderEventPublisher` (implements `OrderEventPublisher`, `@Profile("!standalone")`) persists an `OrderOutboxEntity` row directly; the row `event_id` reuses the event envelope's own `event_id`, payload is the byte-identical serialized envelope (wire-preserving). Standalone keeps `StandaloneOrderEventPublisher` (synchronous REST).
+- Relay: `OrderOutboxPublisher extends AbstractOutboxPublisher<OrderOutboxEntity>` (`@Profile("!standalone")`) — `@Scheduled` poll, backoff, `eventId`/`eventType` headers, `MicrometerOutboxMetrics("order")` (+ preserved `order.outbox.pending.count` gauge). The v1 `onKafkaSendFailure → OrderMetricsPort.recordEventPublishFailure` hook (the `event_publish_failure_total{service=order-service}` counter) is preserved by wrapping the lib metrics.
+- Topic 매핑 (preserved verbatim):
   - `OrderPlaced` → `order.order.placed`
+  - `OrderConfirmed` → `order.order.confirmed`
   - `OrderCancelled` → `order.order.cancelled`
+  - `OrderSagaRecoveryExhausted` → `order.alert.saga.recovery.exhausted`
 
 ## Integration Rules
 - outbound events must follow published event contracts
