@@ -1,6 +1,5 @@
 package com.example.scmplatform.procurement.integration;
 
-import com.example.messaging.outbox.OutboxJpaRepository;
 import com.example.scmplatform.procurement.application.ActorContext;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
 import com.example.scmplatform.procurement.application.command.SubmitPurchaseOrderCommand;
@@ -9,6 +8,7 @@ import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
 import com.example.scmplatform.procurement.domain.supplier.Supplier;
 import com.example.scmplatform.procurement.infrastructure.persistence.jpa.PoStatusHistoryJpaRepository;
+import com.example.scmplatform.procurement.infrastructure.persistence.jpa.ProcurementOutboxJpaRepository;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
@@ -39,10 +39,11 @@ import static org.mockito.Mockito.doThrow;
  * The PO must remain in DRAFT status (atomicity invariant from
  * rules/traits/transactional.md T3 + T4).
  *
- * <p>Approach: spy on {@link OutboxJpaRepository} and force its {@code save}
- * to throw a {@link RuntimeException} on first invocation. The application
- * service wraps everything in a single {@code @Transactional} boundary so
- * the DB rollback restores DRAFT status + removes any partially-written rows.
+ * <p>Approach: spy on {@link ProcurementOutboxJpaRepository} (the v2 outbox
+ * write repository — TASK-SCM-BE-032) and force its {@code save} to throw a
+ * {@link RuntimeException} on first invocation. The application service wraps
+ * everything in a single {@code @Transactional} boundary so the DB rollback
+ * restores DRAFT status + removes any partially-written rows.
  */
 @Tag("integration")
 @DisplayName("IT-5: State machine atomicity — outbox failure rolls back PO + history")
@@ -62,14 +63,14 @@ class StateMachineAtomicityIntegrationTest extends AbstractProcurementIntegratio
     private PurchaseOrderApplicationService service;
 
     @MockitoSpyBean
-    private OutboxJpaRepository outboxJpaRepository;
+    private ProcurementOutboxJpaRepository outboxRepository;
 
     @Autowired
     private PoStatusHistoryJpaRepository historyJpa;
 
     @AfterEach
     void resetMock() throws IOException {
-        Mockito.reset(outboxJpaRepository);
+        Mockito.reset(outboxRepository);
         if (supplierMock != null) {
             supplierMock.shutdown();
         }
@@ -90,7 +91,7 @@ class StateMachineAtomicityIntegrationTest extends AbstractProcurementIntegratio
 
         // Force outbox repository to throw on save — simulating an outbox write failure.
         doThrow(new RuntimeException("outbox write failure — simulated"))
-                .when(outboxJpaRepository).save(any());
+                .when(outboxRepository).save(any());
 
         // Act: submit must fail because outbox write throws inside the transaction.
         assertThatThrownBy(() ->

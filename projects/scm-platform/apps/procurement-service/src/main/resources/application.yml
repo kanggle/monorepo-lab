@@ -90,10 +90,20 @@ logging:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-} accountId=%X{accountId:-}]"
 
 outbox:
+  # TASK-SCM-BE-032 outbox v2: `enabled` is the relay gate (preserved name —
+  # @ConditionalOnProperty on ProcurementOutboxPublisher; slice/unit tests set
+  # it false). `interval-ms`/`batch-size` here are legacy v1 keys (no longer read;
+  # v2 timing lives under `procurement.outbox.*` below).
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}
     enabled: true
+
+procurement:
+  outbox:
+    poll-ms: ${PROCUREMENT_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${PROCUREMENT_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${PROCUREMENT_OUTBOX_BATCH_SIZE:100}
 
 scmplatform:
   oauth2:
