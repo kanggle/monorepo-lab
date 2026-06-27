@@ -1,6 +1,6 @@
 # TASK-FAN-BE-022 (fan) — Migrate artist-service outbox v1 → v2 (AbstractOutboxPublisher)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-FAN-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (dual-axis schema migration + write-adapter rewrite preserving a write-side counter + relay swap with a preserved failure metric; producer with a CI Testcontainers lane)
