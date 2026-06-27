@@ -42,7 +42,7 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 2s
 
-  # Kafka — outbox relay target (libs/java-messaging OutboxPollingScheduler).
+  # Kafka — outbox relay target (libs/java-messaging AbstractOutboxPublisher, v2).
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP:kafka:9092}
 
@@ -108,10 +108,19 @@ erpplatform:
       connect-timeout-ms: ${ERP_MASTERDATA_CONNECT_TIMEOUT_MS:2000}
       read-timeout-ms: ${ERP_MASTERDATA_READ_TIMEOUT_MS:3000}
 
-# Transactional outbox relay (libs/java-messaging). Enabled by default; slice
-# / unit runs disable it (no Kafka) via application-test.yml.
+# Transactional outbox relay (libs/java-messaging v2 AbstractOutboxPublisher).
+# TASK-ERP-BE-025 outbox v2: `enabled` is the relay gate (preserved v1 name —
+# @ConditionalOnProperty on ApprovalOutboxPublisher; slice/unit tests set it
+# false via application-test.yml). `interval-ms`/`batch-size` here are legacy v1
+# keys (no longer read; v2 timing lives under `approval.outbox.*` below).
 outbox:
   polling:
     enabled: ${OUTBOX_POLLING_ENABLED:true}
     interval-ms: 1000
     batch-size: 50
+
+approval:
+  outbox:
+    poll-ms: ${APPROVAL_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${APPROVAL_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${APPROVAL_OUTBOX_BATCH_SIZE:100}

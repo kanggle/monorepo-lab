@@ -554,11 +554,38 @@ Errors:
 
 ## Outbox + audit_log invariants
 
-Transactional outbox (`libs/java-messaging` `BaseEventPublisher` +
-`MasterdataOutboxPollingScheduler extends OutboxPollingScheduler`): every
-event write shares the use-case `@Transactional` boundary (E2 atomicity).
-Source = `"erp-platform-masterdata-service"`. Topics → § contract
-[`erp-masterdata-events.md`](../../contracts/events/erp-masterdata-events.md).
+Transactional outbox on the shared v2 path (`libs/java-messaging`
+`AbstractOutboxPublisher` — the `OutboxRow` path, ADR-MONO-004 § 5; TASK-ERP-BE-026),
+replacing the v1 `BaseEventPublisher` write path + `MasterdataOutboxPollingScheduler
+extends OutboxPollingScheduler` relay. Mirrors the finance account-service MySQL
+dual-axis precedent (TASK-FIN-BE-045) + the scm procurement-service relay/metric
+pattern (TASK-SCM-BE-032). Every event write shares the use-case `@Transactional`
+boundary (E2 atomicity). Source = `"erp-platform-masterdata-service"`. Topics → §
+contract [`erp-masterdata-events.md`](../../contracts/events/erp-masterdata-events.md)
+(all five `erp.masterdata.{department,employee,jobgrade,costcenter,businesspartner}.changed.v1`,
+verbatim).
+
+- **Write adapter** — `OutboxMasterdataEventPublisher implements MasterdataEventPublisher`
+  (the `MasterdataEventPublisher` is now a port interface) builds the canonical
+  7-field envelope (`eventId, eventType, source, occurredAt, schemaVersion=1,
+  partitionKey, payload`, payload maps verbatim — incl. the `before`/`after`/`reason`
+  keys written UNCONDITIONALLY as JSON null) and persists one `masterdata_outbox` row
+  (MySQL `CHAR(36)` UUIDv7 PK = envelope `eventId`; `partition_key = aggregateId`,
+  NOT NULL).
+- **Relay** — `MasterdataOutboxPublisher extends AbstractOutboxPublisher<MasterdataOutboxJpaEntity>`
+  (`@ConditionalOnProperty("outbox.polling.enabled")` — preserved v1 gate name)
+  drains `masterdata_outbox` with exponential backoff + `eventId`/`eventType`
+  headers; the wire (topics, value JSON, key = aggregateId) is byte-identical to v1.
+- **KEEP-auto-config.** The lib `OutboxAutoConfiguration` is RETAINED (not excluded);
+  the v1 `outbox` + `processed_events` tables stay (EntityScanned under
+  `ddl-auto=validate`). In-flight v1 rows at cutover are abandoned (re-derivable).
+- **Dormant relay preserved.** masterdata-service has NO `@EnableScheduling` (none
+  under v1 either), so the `@Scheduled` relay is dormant — events are written but not
+  drained until scheduling is enabled (a separate, out-of-scope concern).
+- **Preserved failure metric.** `masterdata_outbox_publish_failures_total` (the v1
+  `onKafkaSendFailure` hook — name + description verbatim) still increments on a
+  per-event Kafka send failure, via a wrapping `OutboxMetrics`. New
+  `masterdata.outbox.pending.count` gauge added.
 
 `audit_log` (append-only, no UPDATE/DELETE, written in the same Tx) records
 **every** mutation: aggregate create / effective-revision append / retire /
