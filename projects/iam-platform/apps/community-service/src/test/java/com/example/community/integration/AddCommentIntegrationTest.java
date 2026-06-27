@@ -6,9 +6,9 @@ import com.example.community.domain.post.PostType;
 import com.example.community.domain.post.PostVisibility;
 import com.example.community.domain.post.status.ActorType;
 import com.example.community.infrastructure.persistence.CommentJpaRepository;
+import com.example.community.infrastructure.persistence.CommunityOutboxJpaEntity;
+import com.example.community.infrastructure.persistence.CommunityOutboxJpaRepository;
 import com.example.community.infrastructure.persistence.PostJpaRepository;
-import com.example.messaging.outbox.OutboxJpaEntity;
-import com.example.messaging.outbox.OutboxJpaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,7 +53,7 @@ class AddCommentIntegrationTest extends CommunityIntegrationTestBase {
     private CommentJpaRepository commentJpaRepository;
 
     @Autowired
-    private OutboxJpaRepository outboxJpaRepository;
+    private CommunityOutboxJpaRepository outboxJpaRepository;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -95,7 +95,7 @@ class AddCommentIntegrationTest extends CommunityIntegrationTestBase {
         assertThat(commentCount).isEqualTo(1);
 
         // Outbox row for community.comment.created
-        List<OutboxJpaEntity> outboxRows = outboxJpaRepository.findAll().stream()
+        List<CommunityOutboxJpaEntity> outboxRows = outboxJpaRepository.findAll().stream()
                 .filter(e -> postId.equals(e.getAggregateId()))
                 .filter(e -> "community.comment.created".equals(e.getEventType()))
                 .toList();

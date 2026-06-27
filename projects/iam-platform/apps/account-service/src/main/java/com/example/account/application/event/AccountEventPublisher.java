@@ -1,137 +1,60 @@
 package com.example.account.application.event;
 
-import com.example.account.application.util.DigestUtils;
 import com.example.account.domain.account.Account;
-import com.example.account.domain.event.AccountDomainEvent;
-import com.example.messaging.event.BaseEventPublisher;
-import com.example.messaging.outbox.OutboxWriter;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
- * TASK-BE-248: All publish* methods require an explicit {@code tenantId} argument.
- * A null or blank tenantId throws {@link IllegalArgumentException} immediately,
- * so any call-site that omits the tenant context fails fast at runtime (and,
- * thanks to the signature change, fails to compile if a caller does not supply
- * the argument at all).
+ * Port for account-service lifecycle event publishing (TASK-BE-451 — outbox
+ * v1 → v2).
  *
- * <p>The tenantId value is validated here at the publisher boundary; payload
- * composition (event field names, optional-actor handling, UUID v7 stamping)
- * lives in {@link AccountEventFactory}. The explicit parameter serves as a
- * compile-time contract — callers must consciously supply the tenant context.
+ * <p>Previously a concrete {@code BaseEventPublisher} subclass that wrote to the
+ * shared lib {@code outbox} table via {@code OutboxWriter.saveEvent} (FLAT wire —
+ * no canonical envelope). It is now a port; the implementation
+ * {@link com.example.account.infrastructure.outbox.OutboxAccountEventPublisher}
+ * builds the SAME flat payload (via {@link AccountEventFactory}) and persists an
+ * {@code account_outbox} row driven by the v2 {@code AbstractOutboxPublisher} relay.
+ *
+ * <p><b>Wire shape preserved (FLAT, NOT a 7-field envelope).</b> TASK-BE-422/423
+ * locked the flat top-level shape — the ecommerce account.* consumers parse
+ * root-level fields. The v2 adapter reproduces the EXACT v1 bytes; do NOT wrap.
+ *
+ * <p>Every method signature (incl. the tenantId-required guard contract) is
+ * preserved verbatim from the v1 concrete class so no call site changes.
  */
-@Component
-public class AccountEventPublisher extends BaseEventPublisher {
+public interface AccountEventPublisher {
 
-    private final AccountEventFactory factory;
+    void publishAccountCreated(Account account, String tenantId, String locale);
 
-    public AccountEventPublisher(OutboxWriter outboxWriter, ObjectMapper objectMapper,
-                                 AccountEventFactory factory) {
-        super(outboxWriter, objectMapper);
-        this.factory = factory;
-    }
+    void publishStatusChanged(Account account, String tenantId, String previousStatus,
+                              String reasonCode, String actorType, String actorId,
+                              Instant occurredAt);
 
-    /**
-     * Writes the {@code account.created} outbox row.
-     *
-     * <p>{@code @Transactional} (REQUIRED) ensures the outbox write participates in the
-     * caller's transaction when one exists, or opens its own when called directly
-     * (e.g. integration tests). Required because {@link com.example.messaging.outbox.OutboxJpaConfig}
-     * sets {@code enableDefaultTransactions = false} on the outbox JPA config — without an
-     * explicit transaction boundary the {@code save} call would fail with
-     * "No EntityManager with actual transaction available" (TASK-MONO-023c).
-     */
-    @Transactional
-    public void publishAccountCreated(Account account, String tenantId, String locale) {
-        requireTenantId(tenantId);
-        String emailHash = DigestUtils.sha256Short(account.getEmail(), 10);
-        save(account.getId(), factory.createdEvent(account, emailHash, locale));
-    }
+    void publishAccountLocked(Account account, String tenantId, String reasonCode,
+                              String actorType, String actorId, Instant lockedAt);
 
-    /** @see #publishAccountCreated for transaction rationale. */
-    @Transactional
-    public void publishStatusChanged(Account account, String tenantId, String previousStatus,
-                                     String reasonCode, String actorType, String actorId,
-                                     Instant occurredAt) {
-        requireTenantId(tenantId);
-        save(account.getId(), factory.statusChangedEvent(account, previousStatus, reasonCode,
-                actorType, actorId, occurredAt));
-    }
+    void publishAccountUnlocked(Account account, String tenantId, String reasonCode,
+                                String actorType, String actorId, Instant unlockedAt);
 
-    /** @see #publishAccountCreated for transaction rationale. */
-    @Transactional
-    public void publishAccountLocked(Account account, String tenantId, String reasonCode,
-                                     String actorType, String actorId, Instant lockedAt) {
-        requireTenantId(tenantId);
-        save(account.getId(), factory.lockedEvent(account, reasonCode, actorType, actorId, lockedAt));
-    }
-
-    /** @see #publishAccountCreated for transaction rationale. */
-    @Transactional
-    public void publishAccountUnlocked(Account account, String tenantId, String reasonCode,
-                                       String actorType, String actorId, Instant unlockedAt) {
-        requireTenantId(tenantId);
-        save(account.getId(), factory.unlockedEvent(account, reasonCode, actorType, actorId, unlockedAt));
-    }
-
-    /** @see #publishAccountCreated for transaction rationale. */
-    @Transactional
-    public void publishAccountDeleted(Account account, String tenantId, String reasonCode,
-                                      String actorType, String actorId,
-                                      Instant deletedAt, Instant gracePeriodEndsAt) {
-        requireTenantId(tenantId);
-        save(account.getId(), factory.deletedEvent(account, reasonCode, actorType, actorId,
-                deletedAt, gracePeriodEndsAt, false));
-    }
+    void publishAccountDeleted(Account account, String tenantId, String reasonCode,
+                               String actorType, String actorId,
+                               Instant deletedAt, Instant gracePeriodEndsAt);
 
     /**
-     * TASK-BE-231: Published when the provisioning API mutates an account's role set.
-     *
-     * <p>TASK-BE-255: Signature widened to carry both {@code beforeRoles} and
-     * {@code afterRoles} plus the {@code changedBy} attribution string. The legacy
-     * {@code roles} payload field is now an alias for {@code afterRoles} so
-     * existing v2 consumers keep working unchanged. Add/remove use cases pass the
-     * pre-mutation snapshot as {@code beforeRoles}; replace-all does the same.
-     *
-     * @see #publishAccountCreated for transaction rationale.
+     * TASK-BE-231 / TASK-BE-255 — emitted when the provisioning API mutates an
+     * account's role set. Carries both {@code beforeRoles} and {@code afterRoles}
+     * plus the {@code changedBy} attribution; the legacy {@code roles} payload field
+     * aliases {@code afterRoles}.
      */
-    @Transactional
-    public void publishRolesChanged(Account account, String tenantId,
-                                    java.util.List<String> beforeRoles,
-                                    java.util.List<String> afterRoles,
-                                    String changedBy,
-                                    String actorType, String actorId,
-                                    java.time.Instant occurredAt) {
-        requireTenantId(tenantId);
-        save(account.getId(), factory.rolesChangedEvent(account,
-                beforeRoles, afterRoles, changedBy, actorType, actorId, occurredAt));
-    }
+    void publishRolesChanged(Account account, String tenantId,
+                             List<String> beforeRoles,
+                             List<String> afterRoles,
+                             String changedBy,
+                             String actorType, String actorId,
+                             Instant occurredAt);
 
-    /** @see #publishAccountCreated for transaction rationale. */
-    @Transactional
-    public void publishAccountDeletedAnonymized(Account account, String tenantId, String reasonCode,
-                                                String actorType, String actorId,
-                                                Instant deletedAt, Instant gracePeriodEndsAt) {
-        requireTenantId(tenantId);
-        save(account.getId(), factory.deletedEvent(account, reasonCode, actorType, actorId,
-                deletedAt, gracePeriodEndsAt, true));
-    }
-
-    private void save(String accountId, AccountDomainEvent event) {
-        saveEvent("Account", accountId, event.eventType(), event.payload());
-    }
-
-    /**
-     * Guard: tenantId must be non-null and non-blank. Enforced at every publish
-     * entry point so the constraint is caught as early as possible (TASK-BE-248).
-     */
-    private static void requireTenantId(String tenantId) {
-        if (!StringUtils.hasText(tenantId)) {
-            throw new IllegalArgumentException("tenantId required");
-        }
-    }
+    void publishAccountDeletedAnonymized(Account account, String tenantId, String reasonCode,
+                                         String actorType, String actorId,
+                                         Instant deletedAt, Instant gracePeriodEndsAt);
 }

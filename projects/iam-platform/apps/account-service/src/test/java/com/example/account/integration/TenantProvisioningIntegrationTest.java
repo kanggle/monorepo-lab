@@ -9,7 +9,7 @@ import com.example.account.domain.repository.AccountStatusHistoryRepository;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.status.StatusChangeReason;
 import com.example.account.domain.tenant.TenantId;
-import com.example.messaging.outbox.OutboxPollingScheduler;
+import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,7 +64,7 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
 
     @MockitoBean private AuthServicePort authServicePort;
     @MockitoBean @SuppressWarnings("rawtypes") private KafkaTemplate kafkaTemplate;
-    @MockitoBean private OutboxPollingScheduler outboxPollingScheduler;
+    @MockitoBean private AccountOutboxPublisher accountOutboxPublisher;
 
     @BeforeEach
     void ensureWmsTenantExists() {
@@ -120,7 +120,7 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
 
         // Verify outbox event contains tenant_id = wms
         List<String> outboxPayloads = jdbc.queryForList(
-                "SELECT payload FROM outbox WHERE aggregate_id = ? AND event_type = 'account.created'",
+                "SELECT payload FROM account_outbox WHERE aggregate_id = ? AND event_type = 'account.created'",
                 String.class, accountId);
         assertThat(outboxPayloads).hasSize(1);
         JsonNode payload = objectMapper.readTree(outboxPayloads.get(0));

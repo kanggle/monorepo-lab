@@ -4,7 +4,7 @@ import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.tenant.TenantId;
-import com.example.messaging.outbox.OutboxPollingScheduler;
+import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,12 +70,12 @@ class AccountEventPublisherIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    // The outbox poller runs on a Spring schedule and would race with the
-    // assertions below by flipping `status` to PUBLISHED (and attempting to
-    // talk to Kafka). Stub it out — this test only cares about what was
-    // written to the outbox table by AccountEventPublisher.
+    // The v2 outbox relay runs on a Spring schedule and would race with the
+    // assertions below by stamping published_at (and attempting to talk to Kafka).
+    // Stub it out — this test only cares about what the write adapter persisted
+    // to account_outbox (TASK-BE-451).
     @MockitoBean
-    private OutboxPollingScheduler outboxPollingScheduler;
+    private AccountOutboxPublisher accountOutboxPublisher;
 
     @MockitoBean
     @SuppressWarnings("rawtypes")
@@ -83,7 +83,7 @@ class AccountEventPublisherIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void cleanOutbox() {
-        jdbcTemplate.update("DELETE FROM outbox");
+        jdbcTemplate.update("DELETE FROM account_outbox");
     }
 
     private Account lockedAccount(String id) {
@@ -104,14 +104,15 @@ class AccountEventPublisherIntegrationTest extends AbstractIntegrationTest {
         // event_type so rows from other tests don't bleed in (outbox is
         // truncated in @BeforeEach; each test uses a unique accountId).
         Map<String, Object> row = jdbcTemplate.queryForMap(
-                "SELECT aggregate_type, aggregate_id, event_type, payload, status " +
-                        "FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT aggregate_type, aggregate_id, event_type, payload, published_at " +
+                        "FROM account_outbox WHERE aggregate_id = ? AND event_type = ?",
                 accountId, "account.locked");
 
         assertThat(row.get("aggregate_type")).isEqualTo("Account");
         assertThat(row.get("aggregate_id")).isEqualTo(accountId);
         assertThat(row.get("event_type")).isEqualTo("account.locked");
-        assertThat(row.get("status")).isEqualTo("PENDING");
+        // v2: pending = published_at IS NULL (no status column).
+        assertThat(row.get("published_at")).isNull();
 
         JsonNode payload = objectMapper.readTree((String) row.get("payload"));
 
@@ -147,7 +148,7 @@ class AccountEventPublisherIntegrationTest extends AbstractIntegrationTest {
                 lockedAccount(accountId), TenantId.FAN_PLATFORM.value(), "AUTO_DETECT", "system", null, lockedAt);
 
         String payloadJson = jdbcTemplate.queryForObject(
-                "SELECT payload FROM outbox WHERE aggregate_id = ? AND event_type = ?",
+                "SELECT payload FROM account_outbox WHERE aggregate_id = ? AND event_type = ?",
                 String.class, accountId, "account.locked");
 
         JsonNode payload = objectMapper.readTree(payloadJson);

@@ -200,7 +200,8 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
 
         // Clear social_identities / outbox / refresh_tokens so assertions are deterministic
         jdbcTemplate.update("DELETE FROM social_identities");
-        jdbcTemplate.update("DELETE FROM outbox");
+        // TASK-BE-450: the v2 write path persists to auth_outbox (not the retained-but-unused v1 outbox).
+        jdbcTemplate.update("DELETE FROM auth_outbox");
         jdbcTemplate.update("DELETE FROM refresh_tokens");
         jdbcTemplate.update("DELETE FROM device_sessions");
 
@@ -546,7 +547,7 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
 
     private void assertOutboxLoginMethod(String accountId, String expectedLoginMethod) throws Exception {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT payload FROM outbox WHERE aggregate_id = ? AND event_type = 'auth.login.succeeded'",
+                "SELECT payload FROM auth_outbox WHERE aggregate_id = ? AND event_type = 'auth.login.succeeded'",
                 accountId);
         assertThat(rows)
                 .as("outbox auth.login.succeeded row for account " + accountId)

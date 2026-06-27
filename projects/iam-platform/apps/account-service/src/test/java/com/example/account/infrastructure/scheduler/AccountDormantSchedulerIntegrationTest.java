@@ -7,10 +7,10 @@ import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.status.StatusChangeReason;
 import com.example.account.domain.tenant.TenantId;
-import com.example.messaging.outbox.OutboxPollingScheduler;
+import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
 import com.example.account.infrastructure.persistence.AccountStatusHistoryJpaRepository;
-import com.example.messaging.outbox.OutboxJpaEntity;
-import com.example.messaging.outbox.OutboxJpaRepository;
+import com.example.account.infrastructure.persistence.AccountOutboxJpaEntity;
+import com.example.account.infrastructure.persistence.AccountOutboxJpaRepository;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -86,7 +86,7 @@ class AccountDormantSchedulerIntegrationTest extends AbstractIntegrationTest {
     private AccountStatusHistoryJpaRepository historyRepository;
 
     @Autowired
-    private OutboxJpaRepository outboxRepository;
+    private AccountOutboxJpaRepository outboxRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -99,7 +99,7 @@ class AccountDormantSchedulerIntegrationTest extends AbstractIntegrationTest {
     private KafkaTemplate kafkaTemplate;
 
     @MockitoBean
-    private OutboxPollingScheduler outboxPollingScheduler;
+    private AccountOutboxPublisher accountOutboxPublisher;
 
     @Test
     @DisplayName("365일 초과 ACTIVE 계정이 DORMANT로 전환되고 account.status.changed 이벤트가 outbox에 적재된다")
@@ -126,11 +126,11 @@ class AccountDormantSchedulerIntegrationTest extends AbstractIntegrationTest {
         assertThat(history.get(0).getActorId()).isNull();
 
         // Outbox: account.status.changed enqueued with previousStatus=ACTIVE, currentStatus=DORMANT.
-        List<OutboxJpaEntity> outboxRows = findOutboxByAggregateId(account.getId());
+        List<AccountOutboxJpaEntity> outboxRows = findOutboxByAggregateId(account.getId());
         assertThat(outboxRows)
-                .extracting(OutboxJpaEntity::getEventType)
+                .extracting(AccountOutboxJpaEntity::getEventType)
                 .contains("account.status.changed");
-        OutboxJpaEntity statusEvent = outboxRows.stream()
+        AccountOutboxJpaEntity statusEvent = outboxRows.stream()
                 .filter(e -> "account.status.changed".equals(e.getEventType()))
                 .findFirst().orElseThrow();
         assertThat(statusEvent.getAggregateType()).isEqualTo("Account");
@@ -160,7 +160,7 @@ class AccountDormantSchedulerIntegrationTest extends AbstractIntegrationTest {
 
         // No outbox row produced for this account by the dormant batch.
         assertThat(findOutboxByAggregateId(account.getId()))
-                .extracting(OutboxJpaEntity::getEventType)
+                .extracting(AccountOutboxJpaEntity::getEventType)
                 .doesNotContain("account.status.changed");
     }
 
@@ -230,11 +230,11 @@ class AccountDormantSchedulerIntegrationTest extends AbstractIntegrationTest {
         assertThat(history.get(0).getActorId()).isNull();
 
         // Outbox: account.status.changed 1건 적재.
-        List<OutboxJpaEntity> outboxRows = findOutboxByAggregateId(account.getId());
+        List<AccountOutboxJpaEntity> outboxRows = findOutboxByAggregateId(account.getId());
         assertThat(outboxRows)
-                .extracting(OutboxJpaEntity::getEventType)
+                .extracting(AccountOutboxJpaEntity::getEventType)
                 .contains("account.status.changed");
-        OutboxJpaEntity statusEvent = outboxRows.stream()
+        AccountOutboxJpaEntity statusEvent = outboxRows.stream()
                 .filter(e -> "account.status.changed".equals(e.getEventType()))
                 .findFirst().orElseThrow();
         assertThat(statusEvent.getAggregateType()).isEqualTo("Account");
@@ -266,7 +266,7 @@ class AccountDormantSchedulerIntegrationTest extends AbstractIntegrationTest {
 
         // outbox에 account.status.changed 이벤트가 적재되지 않아야 한다.
         assertThat(findOutboxByAggregateId(account.getId()))
-                .extracting(OutboxJpaEntity::getEventType)
+                .extracting(AccountOutboxJpaEntity::getEventType)
                 .doesNotContain("account.status.changed");
     }
 
@@ -336,7 +336,7 @@ class AccountDormantSchedulerIntegrationTest extends AbstractIntegrationTest {
                 accountId);
     }
 
-    private List<OutboxJpaEntity> findOutboxByAggregateId(String aggregateId) {
+    private List<AccountOutboxJpaEntity> findOutboxByAggregateId(String aggregateId) {
         return outboxRepository.findAll().stream()
                 .filter(e -> aggregateId.equals(e.getAggregateId()))
                 .toList();

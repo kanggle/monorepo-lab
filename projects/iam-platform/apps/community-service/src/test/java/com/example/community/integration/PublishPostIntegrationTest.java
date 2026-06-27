@@ -2,10 +2,10 @@ package com.example.community.integration;
 
 import org.junit.jupiter.api.Tag;
 import com.example.community.infrastructure.persistence.PostJpaRepository;
+import com.example.community.infrastructure.persistence.CommunityOutboxJpaEntity;
+import com.example.community.infrastructure.persistence.CommunityOutboxJpaRepository;
 import com.example.community.infrastructure.persistence.PostStatusHistoryJpaEntity;
 import com.example.community.infrastructure.persistence.PostStatusHistoryJpaRepository;
-import com.example.messaging.outbox.OutboxJpaEntity;
-import com.example.messaging.outbox.OutboxJpaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,7 +47,7 @@ class PublishPostIntegrationTest extends CommunityIntegrationTestBase {
     private PostStatusHistoryJpaRepository historyJpaRepository;
 
     @Autowired
-    private OutboxJpaRepository outboxJpaRepository;
+    private CommunityOutboxJpaRepository outboxJpaRepository;
 
     private void stubAccountProfile(String accountId, String displayName) {
         ACCOUNT_WM.stubFor(get(urlPathMatching("/internal/accounts/.*/profile"))
@@ -96,7 +96,7 @@ class PublishPostIntegrationTest extends CommunityIntegrationTestBase {
         assertThat(histories.get(0).getActorId()).isEqualTo(artistId);
 
         // Outbox: 1 unpublished entry with event_type "community.post.published"
-        List<OutboxJpaEntity> outboxRows = outboxJpaRepository.findAll().stream()
+        List<CommunityOutboxJpaEntity> outboxRows = outboxJpaRepository.findAll().stream()
                 .filter(e -> postId.equals(e.getAggregateId()))
                 .toList();
         assertThat(outboxRows).hasSize(1);

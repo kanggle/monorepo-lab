@@ -4,7 +4,7 @@ import com.example.account.domain.account.Account;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.tenant.TenantId;
-import com.example.messaging.outbox.OutboxPollingScheduler;
+import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -92,7 +92,7 @@ class SignupAuthServiceDelayIntegrationTest extends AbstractIntegrationTest {
     private KafkaTemplate kafkaTemplate;
 
     @MockitoBean
-    private OutboxPollingScheduler outboxPollingScheduler;
+    private AccountOutboxPublisher accountOutboxPublisher;
 
     @BeforeEach
     void resetWireMock() {

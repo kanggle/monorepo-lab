@@ -4,7 +4,7 @@ import com.example.account.application.port.AuthServicePort;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.AccountRoleRepository;
 import com.example.account.domain.tenant.TenantId;
-import com.example.messaging.outbox.OutboxPollingScheduler;
+import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -63,7 +63,7 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
 
     @MockitoBean private AuthServicePort authServicePort;
     @MockitoBean @SuppressWarnings("rawtypes") private KafkaTemplate kafkaTemplate;
-    @MockitoBean private OutboxPollingScheduler outboxPollingScheduler;
+    @MockitoBean private AccountOutboxPublisher accountOutboxPublisher;
 
     @BeforeEach
     void ensureTenantsExist() {
@@ -126,7 +126,7 @@ class BulkProvisioningIntegrationTest extends AbstractIntegrationTest {
                     "SELECT id FROM accounts WHERE email = ? AND tenant_id = ?",
                     String.class, email, WMS_TENANT_ID);
             List<String> outboxPayloads = jdbc.queryForList(
-                    "SELECT payload FROM outbox WHERE aggregate_id = ? AND event_type = 'account.created'",
+                    "SELECT payload FROM account_outbox WHERE aggregate_id = ? AND event_type = 'account.created'",
                     String.class, accountId);
             assertThat(outboxPayloads).hasSize(1);
             JsonNode payload = objectMapper.readTree(outboxPayloads.get(0));

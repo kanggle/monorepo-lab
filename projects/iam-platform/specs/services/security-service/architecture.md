@@ -164,8 +164,17 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
 - **이벤트 발행**: [specs/contracts/events/security-events.md](../../contracts/events/) — `suspicious.detected`, `auto.lock.triggered`, `auto.lock.pending`, `security.pii.masked` (TASK-BE-258)
 - **HTTP 컨트랙트 (내부 query)**: [specs/contracts/http/security-query-api.md](../../contracts/http/) — 읽기 전용
 - **HTTP 컨트랙트 (out-going)**: [specs/contracts/http/internal/security-to-account.md](../../contracts/http/internal/) — 자동 잠금 명령
-- **퍼시스턴스**: MySQL — `login_history` (append-only), `suspicious_events`, `processed_events` (dedup), `outbox_events`
+- **퍼시스턴스**: MySQL — `login_history` (append-only), `suspicious_events`, `processed_events` (dedup), `outbox_events` (v1, KEEP-auto-config), `security_outbox` (v2, TASK-BE-453)
 - **Redis**: `security:event-dedup:{eventId}` TTL 24h
+
+### Outbox (v2)
+
+> TASK-BE-453 — outbox v1 → v2 migration (in-worktree auth-service / finance account-service MySQL precedent, ADR-MONO-004 § 5).
+>
+> - **Write path**: `application.event.SecurityEventPublisher` is now a **port**; the impl `infrastructure.outbox.OutboxSecurityEventPublisher` builds the canonical 7-field envelope (`{eventId, eventType, source="security-service", occurredAt, schemaVersion=1, partitionKey, payload}` — **byte-identical** to the v1 `BaseEventPublisher.writeEvent` wire) and persists a `security_outbox` row (`infrastructure.persistence.SecurityOutboxJpaEntity implements OutboxRow`, MySQL `CHAR(36)` UUIDv7 PK = envelope `eventId`) inside the caller's `@Transactional`. The three `SuspiciousEvent`-based methods keep `@Transactional(REQUIRED)`; `publishPiiMasked` keeps no `@Transactional` (called within `PiiMaskingService`'s TX).
+> - **Relay**: `infrastructure.outbox.SecurityOutboxPublisher extends AbstractOutboxPublisher<SecurityOutboxJpaEntity>` — `@Component`, no `@ConditionalOnProperty` gate (the v1 `SecurityOutboxPollingScheduler` had none; `@EnableScheduling` already on `SecurityApplication`). Plain `MicrometerOutboxMetrics(registry,"security")` (the v1 scheduler had no custom failure counter) + `security.outbox.pending.count` gauge. `topicFor` ported VERBATIM from the v1 `resolveTopic` — iam topics are **bare** (no `.v1` suffix): each `security.*` event → identically-named topic; reject-unmapped.
+> - **KEEP-auto-config**: the lib `OutboxAutoConfiguration` is NOT excluded — the v1 `outbox_events` (BIGINT/status; the lib `OutboxJpaEntity` is re-pointed to it via `META-INF/orm.xml`) + `processed_events` tables are retained (still EntityScanned, required under `ddl-auto=validate`). In-flight v1 `outbox_events` rows at cutover are abandoned (low-volume, re-derivable).
+> - **Migration**: `db/migration/V0011__security_outbox_v2.sql`.
 
 ## Testing Expectations
 

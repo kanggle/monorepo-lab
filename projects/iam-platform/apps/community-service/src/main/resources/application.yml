@@ -77,6 +77,13 @@ server:
   port: 8086
 
 community:
+  # TASK-BE-455: v2 outbox relay (CommunityOutboxPublisher) cadence. The legacy
+  # `outbox.polling.*` block above drives the now-unused lib v1 relay
+  # (KEEP-auto-config); the v2 relay reads these `community.outbox.*` keys.
+  outbox:
+    poll-ms: ${COMMUNITY_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${COMMUNITY_OUTBOX_INITIAL_DELAY_MS:5000}
+    batch-size: ${COMMUNITY_OUTBOX_BATCH_SIZE:100}
   # TASK-BE-253: OIDC Resource Server validators.
   oauth2:
     # Acceptable iss claim values during the D2-b deprecation window.

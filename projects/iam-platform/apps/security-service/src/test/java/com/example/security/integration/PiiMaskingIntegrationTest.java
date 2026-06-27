@@ -279,7 +279,7 @@ class PiiMaskingIntegrationTest extends AbstractIntegrationTest {
 
         await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> {
             List<Map<String, Object>> outbox = jdbcTemplate.queryForList(
-                    "SELECT event_type, payload FROM outbox_events " +
+                    "SELECT event_type, payload FROM security_outbox " +
                     "WHERE event_type = 'security.pii.masked' " +
                     "AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.payload.accountId')) = ?",
                     accountId);

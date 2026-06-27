@@ -48,7 +48,7 @@ import static org.awaitility.Awaitility.await;
  *
  * <p>Outbound auth-service calls are mocked because signup is performed by
  * direct repository write here, not via the public API. The
- * {@code AccountOutboxPollingScheduler} is left running because consuming a
+ * {@code AccountOutboxPublisher} relay is left running because consuming a
  * Kafka event does not enqueue outbox rows.
  */
 @SpringBootTest

@@ -7,7 +7,7 @@ import com.example.auth.domain.session.RevokeReason;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.infrastructure.persistence.CredentialJpaEntity;
 import com.example.auth.infrastructure.persistence.CredentialJpaRepository;
-import com.example.messaging.outbox.OutboxJpaRepository;
+import com.example.auth.infrastructure.persistence.AuthOutboxJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.security.password.Argon2idPasswordHasher;
@@ -85,7 +85,7 @@ class DeviceSessionIntegrationTest extends AbstractIntegrationTest {
     }
     @Autowired private ObjectMapper objectMapper;
     @Autowired private DeviceSessionRepository deviceSessionRepository;
-    @Autowired private OutboxJpaRepository outboxJpaRepository;
+    @Autowired private AuthOutboxJpaRepository outboxJpaRepository;
     @Autowired private CredentialJpaRepository credentialJpaRepository;
 
     private static final String TEST_EMAIL = "session-it@example.com";

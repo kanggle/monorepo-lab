@@ -75,7 +75,7 @@ class SubscriptionExpirySchedulerIntegrationTest extends AbstractIntegrationTest
     void cleanup() {
         jdbcTemplate.update("DELETE FROM subscription_status_history");
         jdbcTemplate.update("DELETE FROM subscriptions");
-        jdbcTemplate.update("DELETE FROM outbox");
+        jdbcTemplate.update("DELETE FROM membership_outbox");
     }
 
     @Test
@@ -96,7 +96,7 @@ class SubscriptionExpirySchedulerIntegrationTest extends AbstractIntegrationTest
             assertThat(reloaded.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);
 
             List<Map<String, Object>> events = jdbcTemplate.queryForList(
-                    "SELECT event_type FROM outbox WHERE event_type = 'membership.subscription.expired'");
+                    "SELECT event_type FROM membership_outbox WHERE event_type = 'membership.subscription.expired'");
             assertThat(events).hasSize(1);
 
             List<Map<String, Object>> history = jdbcTemplate.queryForList(
@@ -125,7 +125,7 @@ class SubscriptionExpirySchedulerIntegrationTest extends AbstractIntegrationTest
         assertThat(reloaded.getExpiresAt()).isNull();
 
         Integer expiredEvents = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE event_type = 'membership.subscription.expired'",
+                "SELECT COUNT(*) FROM membership_outbox WHERE event_type = 'membership.subscription.expired'",
                 Integer.class);
         assertThat(expiredEvents).isEqualTo(0);
     }
