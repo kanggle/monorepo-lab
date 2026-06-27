@@ -8,7 +8,7 @@ TASK-MONO-310
 
 # Status
 
-review
+done
 
 # Owner
 
