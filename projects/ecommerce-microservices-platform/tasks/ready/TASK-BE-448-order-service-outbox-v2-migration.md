@@ -25,7 +25,7 @@ Replace order-service's v1 outbox stack with the shared v2 `AbstractOutboxPublis
 ## Scope
 
 **In scope (order-service only):**
-1. `V10__order_outbox_v2.sql` — `order_outbox` (mirror `master_outbox`; partial pending index). Retain v1 `outbox` (V5) + `processed_events` (V6) — EntityScan validate.
+1. `V11__order_outbox_v2.sql` — `order_outbox` (mirror `master_outbox`; partial pending index). Retain v1 `outbox` (V5) + `processed_events` (V6) — EntityScan validate. (V10 already taken by `V10__add_order_idempotency_key.sql` — next free version is V11.)
 2. `OrderOutboxEntity extends OutboxRowEntity` + `OrderOutboxRepository` — both under `com.example.order.infrastructure.persistence` (the `@EnableJpaRepositories` base package).
 3. Rewrite `SpringOrderEventPublisher` (`@Profile("!standalone")`) to persist an `OrderOutboxEntity` per event: `event_id = UUID.fromString(event.eventId())`, `occurred_at = Instant.parse(event.occurredAt())`, `aggregate_type = "Order"`, `aggregate_id = orderId`, `payload = writeValueAsString(event)` (unchanged). Standalone keeps `StandaloneOrderEventPublisher`.
 4. `OrderOutboxPublisher extends AbstractOutboxPublisher<OrderOutboxEntity>` (`@Profile("!standalone")`) — `TopicResolver` switch ported verbatim (4 types + reject-unmapped), `MicrometerOutboxMetrics("order")` **wrapped** to also fire `OrderMetricsPort.recordEventPublishFailure(eventType)` on a per-event send failure (preserving the v1 hook + `event_publish_failure_total` counter), preserved `order.outbox.pending.count` gauge, `@Scheduled`.

@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * is intentionally retained (not excluded): its EntityScan (and the application's
  * explicit {@code @EntityScan("com.example.messaging")}) keep the v1 {@code outbox}
  * (V5) and {@code processed_events} (V6) tables required under {@code ddl-auto=validate};
- * see {@code V10__order_outbox_v2.sql}.
+ * see {@code V11__order_outbox_v2.sql}.
  */
 @Configuration
 public class OutboxConfig {
