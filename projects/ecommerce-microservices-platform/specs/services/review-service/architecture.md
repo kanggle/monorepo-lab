@@ -86,10 +86,11 @@ Key domain concepts:
 
 ## Outbox
 
-- Pattern: Transactional Outbox
-- Table: `outbox` (libs/java-messaging 표준 schema)
-- Polling scheduler: `ReviewOutboxPollingScheduler` (libs `com.example.messaging.outbox.OutboxPollingScheduler` base 의 concrete subclass)
-- Topic 매핑:
+- Pattern: Transactional Outbox (**v2** — shared `AbstractOutboxPublisher`, ADR-MONO-004 § 5; migrated from v1 in TASK-BE-445)
+- Table: `review_outbox` (v2 shape — `event_id UUID` PK, `occurred_at`, `retries`/`last_error`; mirrors the wms `master_outbox` / ecommerce `promotion_outbox` reference). The v1 `outbox` table is retained but unused (kept present so the still-EntityScanned lib `OutboxJpaEntity` validates under `ddl-auto=validate`).
+- Write path: `OutboxReviewEventPublisher` (implements `ReviewEventPublisher`) persists a `ReviewOutboxEntity` row directly; the row `event_id` reuses the event's own `eventId`, and the payload is the byte-identical `objectMapper.writeValueAsString(ReviewEventMessage)` (wire-preserving).
+- Relay: `ReviewOutboxPublisher extends AbstractOutboxPublisher<ReviewOutboxEntity>` — `@Scheduled` poll, exponential backoff, `eventId`/`eventType` Kafka headers, `MicrometerOutboxMetrics("review")` (+ preserved `review.outbox.pending.count` gauge). Runs unconditionally (no `@Profile`, matching the v1 scheduler).
+- Topic 매핑 (preserved verbatim):
   - `ReviewCreated` → `review.review.created`
   - `ReviewUpdated` → `review.review.updated`
   - `ReviewDeleted` → `review.review.deleted`

@@ -12,6 +12,10 @@ dependencies {
 
     // Observability
     implementation project(':libs:java-observability')
+    // Actuator brings micrometer-core onto the compile classpath (MeterRegistry /
+    // Gauge used by the v2 ReviewOutboxPublisher) + provides the MeterRegistry bean
+    // (TASK-BE-445). Mirrors promotion-service.
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
     // Messaging (Outbox pattern)
     implementation project(':libs:java-messaging')

@@ -43,10 +43,20 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
+# TASK-BE-445: outbox v2 (ReviewOutboxPublisher extends AbstractOutboxPublisher).
+# The legacy `outbox.polling.*` keys below are retained only because the lib
+# OutboxAutoConfiguration beans (unreferenced after the v2 swap) still bind them;
+# the v2 publisher reads the `review.outbox.*` keys.
 outbox:
   polling:
     interval-ms: 1000
     batch-size: 50
+
+review:
+  outbox:
+    batch-size: ${REVIEW_OUTBOX_BATCH_SIZE:100}
+    poll-ms: ${REVIEW_OUTBOX_POLL_MS:1000}
+    initial-delay-ms: ${REVIEW_OUTBOX_INITIAL_DELAY_MS:5000}
 
 server:
   port: ${SERVER_PORT:8091}
