@@ -90,11 +90,14 @@ Key domain concepts:
 
 ## Outbox
 
-- Pattern: Transactional Outbox
-- Table: `outbox` (libs/java-messaging 표준 schema)
-- Polling scheduler: `OutboxPollingScheduler` (libs `com.example.messaging.outbox.OutboxPollingScheduler` base 의 concrete subclass)
-- Topic 매핑:
+- Pattern: Transactional Outbox (**v2** — shared `AbstractOutboxPublisher`, ADR-MONO-004 § 5; migrated from v1 in TASK-BE-446)
+- Table: `shipping_outbox` (v2 shape — `event_id UUID` PK, `occurred_at`, `retries`/`last_error`; mirrors `master_outbox`/`promotion_outbox`). The v1 `outbox` table is retained but unused (kept so the still-EntityScanned lib `OutboxJpaEntity` validates under `ddl-auto=validate`).
+- Write path: `SpringShippingEventPublisher` (implements `ShippingEventPublisher`) persists a `ShippingOutboxEntity` row directly. The two structured envelopes reuse their own `event_id` as the row PK; the forward fulfillment leg stores the opaque pre-serialized `messageJson` verbatim with a fresh UUID PK (the wms consumer dedupes on the payload `eventId`, not the Kafka header — wire-safe).
+- Relay: `ShippingOutboxPublisher extends AbstractOutboxPublisher<ShippingOutboxEntity>` — `@Scheduled` poll, backoff, `eventId`/`eventType` headers, `MicrometerOutboxMetrics("shipping")` (+ preserved `shipping.outbox.pending.count` gauge). Runs unconditionally (no `@Profile`).
+- Topic 매핑 (preserved verbatim — **mixed conventions**: status-changed has no `.v1`, the two fulfillment legs do):
   - `ShippingStatusChanged` → `shipping.shipping.status-changed`
+  - `FulfillmentRequested` → `ecommerce.fulfillment.requested.v1`
+  - `ManualShipConfirmRequested` → `ecommerce.shipping.manual-confirm-requested.v1`
 
 ## Integration Rules
 - HTTP behavior must follow published contracts

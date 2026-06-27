@@ -1,0 +1,157 @@
+package com.example.shipping.infrastructure.event;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * Unit test for {@link ShippingOutboxPublisher} (TASK-BE-446, outbox v2). Pins
+ * the shipping-service specifics: the mixed-convention topic mapping (incl.
+ * reject-unmapped), the v2 headers + topic + preserved key/value on a real
+ * publish, mark-published, {@code shipping}-prefixed metrics, the pending-count
+ * gauge, and kafka-failure backoff.
+ */
+class ShippingOutboxPublisherTest {
+
+    private static final Instant OCCURRED = Instant.parse("2026-06-27T00:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-06-27T00:00:02Z"), ZoneOffset.UTC);
+
+    @Test
+    void topicFor_mapsEachEventTypeToItsPreservedTopic() {
+        // mixed conventions preserved verbatim: status-changed has no .v1, the
+        // two fulfillment legs do.
+        assertThat(ShippingOutboxPublisher.topicFor("ShippingStatusChanged"))
+                .isEqualTo("shipping.shipping.status-changed");
+        assertThat(ShippingOutboxPublisher.topicFor("FulfillmentRequested"))
+                .isEqualTo("ecommerce.fulfillment.requested.v1");
+        assertThat(ShippingOutboxPublisher.topicFor("ManualShipConfirmRequested"))
+                .isEqualTo("ecommerce.shipping.manual-confirm-requested.v1");
+    }
+
+    @Test
+    void topicFor_rejectsUnmappedEventTypes() {
+        assertThatThrownBy(() -> ShippingOutboxPublisher.topicFor(null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ShippingOutboxPublisher.topicFor("OrderPlaced"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void publishPending_sendsToMappedTopicWithHeaders_preservesKeyAndValue_thenMarksPublished() {
+        ShippingOutboxRepository repository = mock(ShippingOutboxRepository.class);
+        KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
+        MeterRegistry registry = new SimpleMeterRegistry();
+
+        UUID eventId = UUID.randomUUID();
+        String payload = "{\"event_id\":\"" + eventId + "\"}";
+        ShippingOutboxEntity row = new ShippingOutboxEntity(
+                eventId, "ShippingStatusChanged", "Shipping", "ship-1", null, payload, OCCURRED);
+
+        given(repository.findPending(any(Pageable.class))).willReturn(List.of(row));
+        given(repository.findById(eventId)).willReturn(Optional.of(row));
+        given(repository.countByPublishedAtIsNull()).willReturn(0L);
+        given(kafka.send(any(ProducerRecord.class)))
+                .willReturn(CompletableFuture.completedFuture((SendResult<String, String>) null));
+
+        ShippingOutboxPublisher publisher = new ShippingOutboxPublisher(
+                repository, kafka, new SyncTransactionTemplate(), CLOCK, registry, 100);
+
+        publisher.publishPending();
+
+        ArgumentCaptor<ProducerRecord<String, String>> captor = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafka).send(captor.capture());
+        ProducerRecord<String, String> sent = captor.getValue();
+        assertThat(sent.topic()).isEqualTo("shipping.shipping.status-changed");
+        assertThat(sent.key()).isEqualTo("ship-1");
+        assertThat(sent.value()).isEqualTo(payload);
+        assertThat(new String(sent.headers().lastHeader("eventId").value())).isEqualTo(eventId.toString());
+        assertThat(new String(sent.headers().lastHeader("eventType").value())).isEqualTo("ShippingStatusChanged");
+
+        assertThat(row.getPublishedAt()).isEqualTo(CLOCK.instant());
+        verify(repository).save(row);
+
+        assertThat(registry.find("shipping.outbox.publish.success.total")
+                .tag("event_type", "ShippingStatusChanged").counter().count()).isEqualTo(1.0d);
+        assertThat(registry.find("shipping.outbox.lag.seconds").timer().count()).isEqualTo(1L);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void constructor_registersPreservedPendingCountGauge() {
+        ShippingOutboxRepository repository = mock(ShippingOutboxRepository.class);
+        KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
+        MeterRegistry registry = new SimpleMeterRegistry();
+        given(repository.countByPublishedAtIsNull()).willReturn(7L);
+
+        new ShippingOutboxPublisher(repository, kafka, new SyncTransactionTemplate(), CLOCK, registry, 100);
+
+        io.micrometer.core.instrument.Gauge gauge =
+                registry.find("shipping.outbox.pending.count").gauge();
+        assertThat(gauge).isNotNull();
+        assertThat(gauge.value()).isEqualTo(7.0d);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void publishPending_kafkaFailure_leavesRowPending_recordsFailure_andBacksOff() {
+        ShippingOutboxRepository repository = mock(ShippingOutboxRepository.class);
+        KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
+        MeterRegistry registry = new SimpleMeterRegistry();
+
+        UUID eventId = UUID.randomUUID();
+        ShippingOutboxEntity row = new ShippingOutboxEntity(
+                eventId, "FulfillmentRequested", "Fulfillment", "order-1", null, "{}", OCCURRED);
+        given(repository.findPending(any(Pageable.class))).willReturn(List.of(row));
+
+        CompletableFuture<SendResult<String, String>> failed = new CompletableFuture<>();
+        failed.completeExceptionally(new RuntimeException("kafka down"));
+        given(kafka.send(any(ProducerRecord.class))).willReturn(failed);
+
+        ShippingOutboxPublisher publisher = new ShippingOutboxPublisher(
+                repository, kafka, new SyncTransactionTemplate(), CLOCK, registry, 100);
+
+        publisher.publishPending();
+        publisher.publishPending();
+
+        assertThat(row.getPublishedAt()).isNull();
+        verify(kafka).send(any(ProducerRecord.class));
+        verify(repository, never()).save(any());
+        assertThat(registry.find("shipping.outbox.publish.failure.total").counter().count()).isEqualTo(1.0d);
+    }
+
+    private static final class SyncTransactionTemplate extends TransactionTemplate {
+        @Override
+        public <T> T execute(TransactionCallback<T> action) {
+            return action.doInTransaction(mock(TransactionStatus.class));
+        }
+
+        @Override
+        public void executeWithoutResult(java.util.function.Consumer<TransactionStatus> action) {
+            action.accept(mock(TransactionStatus.class));
+        }
+    }
+}
