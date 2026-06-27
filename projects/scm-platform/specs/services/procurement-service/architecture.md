@@ -143,14 +143,16 @@ com.example.scmplatform.procurement/
 │   ├── command/                              ← use-case input records
 │   │   (Draft/Submit/Acknowledge/Confirm/Cancel/ReceiveAsn)
 │   ├── event/
-│   │   └── ProcurementEventPublisher.java    ← extends BaseEventPublisher (libs/java-messaging)
+│   │   └── ProcurementEventPublisher.java    ← outbox write port (v2; impl in infrastructure/outbox)
 │   └── port/outbound/
 │       └── SupplierAdapterPort.java          ← supplier integration port
 ├── infrastructure/                           ← outbound adapters + config
 │   ├── persistence/jpa/                      ← Spring Data + adapter beans
-│   │   (PurchaseOrderJpaRepository, PurchaseOrderRepositoryAdapter, ...)
+│   │   (PurchaseOrderJpaRepository, PurchaseOrderRepositoryAdapter,
+│   │    ProcurementOutboxJpaEntity, ProcurementOutboxJpaRepository, ...)
 │   ├── outbox/
-│   │   └── ProcurementOutboxPollingScheduler.java
+│   │   ├── OutboxProcurementEventPublisher.java  ← v2 write adapter (persists procurement_outbox row)
+│   │   └── ProcurementOutboxPublisher.java       ← v2 relay (extends AbstractOutboxPublisher)
 │   ├── supplier/                             ← v1 mock REST adapter
 │   │   ├── RestSupplierAdapter.java          ← @Resilience4j-decorated
 │   │   ├── SupplierApiClient.java
@@ -396,10 +398,11 @@ Source: `RestSupplierAdapter` (`@CircuitBreaker(name="supplier", fallbackMethod=
 
 ### Transactional outbox (T2 + T3, S1)
 
-Every event publish goes through `ProcurementEventPublisher`, which extends
-`BaseEventPublisher` (libs/java-messaging) and writes to the `outbox` table
-inside the same `@Transactional` boundary as the state change. Topics and
-event-type constants:
+Every event publish goes through the `ProcurementEventPublisher` **port**, whose
+v2 adapter `OutboxProcurementEventPublisher` (infrastructure/outbox) persists one
+`procurement_outbox` row inside the same `@Transactional` boundary as the state
+change (TASK-SCM-BE-032, outbox v2 — replaces the v1 `BaseEventPublisher` +
+`OutboxWriter` write path). Topics and event-type constants:
 
 | Event type constant | Kafka topic | Aggregate |
 |---|---|---|
@@ -411,11 +414,23 @@ event-type constants:
 | `EVENT_PO_CLOSED` | `scm.procurement.po.closed.v1` | purchase_order |
 | `EVENT_ASN_RECEIVED` | `scm.procurement.asn.received.v1` | asn |
 
-`ProcurementOutboxPollingScheduler` (extends libs `OutboxPollingScheduler`)
-polls every `outbox.polling.interval-ms` (default 1000ms) in batches of
-`outbox.polling.batch-size` (default 50). Disabled in slice tests via
-`outbox.polling.enabled=false`. Failed publishes increment the
-`procurement_outbox_publish_failures_total` Micrometer counter.
+`ProcurementOutboxPublisher` (extends libs `AbstractOutboxPublisher`,
+ADR-MONO-004 § 5) drains `procurement_outbox` (`WHERE published_at IS NULL ORDER
+BY occurred_at ASC`), publishes to Kafka with `eventId`/`eventType` record headers
+and exponential backoff (1s → 2s → … → 30s cap), then marks the row published.
+It polls every `procurement.outbox.poll-ms` (default 1000ms) in batches of
+`procurement.outbox.batch-size` (default 100); the relay is gated by the preserved
+`outbox.polling.enabled` property (disabled in slice/unit tests). The Kafka record
+**value** is the byte-identical canonical envelope JSON and the **key** is the
+`aggregate_id` (PO id / ASN id), exactly as the v1 path. Failed publishes increment
+the preserved `procurement_outbox_publish_failures_total` Micrometer counter (plus
+the v2 `procurement.outbox.publish.{success,failure}.total` / `.lag.seconds`
+metrics and the `procurement.outbox.pending.count` gauge).
+
+The lib `OutboxAutoConfiguration` is intentionally **retained** (not excluded):
+its EntityScan keeps the v1 `outbox` / `processed_events` tables required under
+`ddl-auto=validate`. The v1 `outbox` table is no longer written or polled
+(abandoned-on-cutover); `processed_events` remains the consumer-dedupe table.
 
 Source = `"scm-platform-procurement-service"` on every published envelope.
 
@@ -590,8 +605,8 @@ All other paths require JWT or are denied (`anyRequest().denyAll()`).
 | Trait Rule | Status | Mechanism |
 |---|---|---|
 | **T1** Idempotency on mutating endpoints | ✅ | `Idempotency-Key` header required on all REST mutations; `idempotency_keys` table + Redis primary |
-| **T2** Atomic state-change + outbox write | ✅ | `ProcurementEventPublisher.writeEvent` runs inside `@Transactional` use case |
-| **T3** Outbox table + polling relay | ✅ | `outbox` + `processed_events` tables; `ProcurementOutboxPollingScheduler` polls every 1s |
+| **T2** Atomic state-change + outbox write | ✅ | `OutboxProcurementEventPublisher` (v2 write adapter) persists a `procurement_outbox` row inside the `@Transactional` use case |
+| **T3** Outbox table + polling relay | ✅ | `procurement_outbox` (v2) drained by `ProcurementOutboxPublisher` (extends `AbstractOutboxPublisher`) every `procurement.outbox.poll-ms`; v1 `outbox`/`processed_events` retained for EntityScan validate |
 | **T4** State machine enforced via dedicated module | ✅ | `PoStatusMachine.ensureTransitionAllowed` — no setter mutations |
 | **T7** Optimistic locking on aggregates | ✅ | `@Version` on `PurchaseOrder`, `Supplier`, `AdvanceShipmentNotice` |
 | **I2** Circuit breaker on external calls | ✅ | `@CircuitBreaker(name="supplier")` 50%/10-call window |
