@@ -22,9 +22,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * slice isolation).
  */
 @Configuration
-@EntityScan(basePackageClasses = {OutboxJpaEntity.class, ProcessedEventJpaEntity.class})
+@EntityScan(basePackageClasses = {ProcessedEventJpaEntity.class})
 @EnableJpaRepositories(
-        basePackageClasses = {OutboxJpaRepository.class, ProcessedEventJpaRepository.class},
+        basePackageClasses = {ProcessedEventJpaRepository.class},
         enableDefaultTransactions = false
 )
 public class OutboxJpaConfig {

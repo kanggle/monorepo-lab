@@ -119,7 +119,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-312-lib-outbox-v1-dead-code-removal.md` — **REVIEW** (authored + implemented 2026-06-28, outbox v2 sweep #1997~#2004 후속). **`libs/java-messaging` outbox v1 dead-code 제거 완료.** 삭제: 6개 v1 클래스(`OutboxPublisher`/`OutboxPollingScheduler`/`OutboxWriter`/`OutboxJpaEntity`/`OutboxJpaRepository`/`BaseEventPublisher`) + 4개 lib 단위테스트. **보존 config 수술**: `OutboxAutoConfiguration`은 v1 `@Bean` 2개 제거(클래스 보존 — ~수십 서비스가 `exclude=`로 하드코딩), `OutboxJpaConfig`는 `@EntityScan`+`@EnableJpaRepositories` 둘 다에서 `OutboxJpaEntity`/`OutboxJpaRepository` 트림하고 **`ProcessedEventJpaEntity`/`ProcessedEventJpaRepository`(v2 dedup, 라이브) 유지**, `OutboxSchedulerConfig`는 보존(게이트 `outbox.polling.enabled`는 v2가 사용; dangling `{@link OutboxPollingScheduler}` javadoc만 중화). iam security `orm.xml`(vestigial OutboxJpaEntity override) 파일 삭제. 서비스 `exclude=`/javadoc=Out-of-Scope. **로컬 검증**: AC-1~6 GREEN(`:libs:java-messaging:test` GREEN, 전 모듈 `compileJava`+`compileTestJava` 153-task GREEN, AC-2 grep clean[javadoc만 잔존]), AC-7 부분(security-service `:test` GREEN; Testcontainers @SpringBootTest IT=로컬 Docker 차단→CI 권위 위임). PR=요청 시. 분석=Opus 4.8 / 구현=Opus 직접.
 
 ## done
 
