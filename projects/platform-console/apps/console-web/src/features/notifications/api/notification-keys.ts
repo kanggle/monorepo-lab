@@ -2,11 +2,9 @@
  * Client-safe TanStack Query key factories for `features/notifications`
  * (TASK-PC-FE-052).
  *
- * Server-only modules (`notification-api.ts` reads cookies via
- * `getDomainFacingToken`) must NOT be imported from client components.
- * This module is intentionally **dependency-free** so the client hooks
- * (`hooks/use-notifications.ts`) can import the keys without dragging
- * server-only code into the client bundle.
+ * Intentionally **dependency-free** so the client hooks
+ * (`hooks/use-notifications.ts`) can import the keys without dragging any
+ * server-only code (cookie/session reads) into the client bundle.
  */
 
 export const NOTIFICATION_KEY = 'notifications';
@@ -24,9 +22,4 @@ export function notificationInboxKey(
     page,
     size,
   ] as const;
-}
-
-/** Key for a single notification detail query. */
-export function notificationDetailKey(id: string) {
-  return [NOTIFICATION_KEY, 'detail', id] as const;
 }

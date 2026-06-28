@@ -1,20 +1,21 @@
 import { z } from 'zod';
 
 /**
- * Feature-local types for the erp `notification-service` in-app inbox surface
- * (TASK-PC-FE-052 — ADR-MONO-016 § D3 notification first increment;
- * console bell + proxy consuming TASK-ERP-BE-011).
+ * Feature-local types for the console notification bell (TASK-PC-FE-052;
+ * ADR-MONO-016 § D3 first increment). Since ADR-MONO-043 P3b (TASK-PC-FE-137)
+ * the bell consumes the **console-bff notification aggregator**
+ * (`/api/console/notifications/**`) — one cross-domain merged feed — rather than
+ * the retired erp-direct path. The erp-direct server client + `/api/erp/notifications`
+ * proxy routes were removed in TASK-PC-FE-138.
  *
- * Authoritative producer contract (do NOT redefine — consume):
- *   `erp-platform/specs/contracts/http/notification-api.md`
- *     base path `/api/erp/notifications`
- *     GET  /notifications           (inbox; optional unread/page/size filter)
- *     GET  /notifications/{id}      (single notification)
- *     POST /notifications/{id}/read (idempotent mark-read; no body, no Idempotency-Key)
+ * Authoritative contracts (do NOT redefine — consume):
+ *   `platform/contracts/notification-inbox-contract.md` (§1 envelope, §4 aggregator)
+ *   `erp-platform/specs/contracts/http/notification-api.md` (erp producer — the
+ *     `sourceType`/`sourceId` extension + APPROVAL deep-link vocabulary).
  *
- * FIRST INCREMENT ONLY — source type APPROVAL only; v2 adds MASTERDATA /
- * PERMISSION additively. The bell UI handles unknown source types with a
- * generic label and no deep-link (forward-tolerant).
+ * FIRST INCREMENT — erp source type APPROVAL drives the deep-link fallback;
+ * the bell handles unknown source types / domains with a generic label and no
+ * deep-link (forward-tolerant).
  *
  * NON_NULL absent-field convention (producer § `@JsonInclude(NON_NULL)`):
  * `readAt` is ABSENT from the JSON while `read == false`, never serialized
@@ -49,12 +50,11 @@ export const NotificationSchema = z
   .object({
     id: z.string(),
     // ADR-MONO-043 §1 attribution — the owning domain ("erp" | "fan" | …).
-    // OPTIONAL on the base shape so the legacy erp-direct envelopes (which
-    // predate cross-domain attribution and don't carry it on the wire) still
-    // parse; the aggregator feed re-asserts it as REQUIRED in
-    // `AggregatedNotificationSchema` below (P3a injects/preserves it on every
-    // merged item so the bell can label + route per domain and mark-read can
-    // address the owner).
+    // OPTIONAL on the base shape (the mark-read detail response isn't consumed
+    // for attribution, so it need not carry it); the aggregator feed re-asserts
+    // it as REQUIRED in `AggregatedNotificationSchema` below (P3a injects/
+    // preserves it on every merged item so the bell can label + route per
+    // domain and mark-read can address the owner).
     sourceDomain: z.string().optional(),
     // Free-string tolerance: unknown future type renders generically, no throw.
     type: z.string(),
@@ -79,7 +79,8 @@ export type Notification = z.infer<typeof NotificationSchema>;
  * Aggregator feed item — `sourceDomain` is GUARANTEED present (the console-bff
  * aggregator injects/preserves it on every merged item, contract §4) so the
  * bell can key/label/route per domain and mark-read can address the owner. The
- * base `NotificationSchema` keeps it optional for the legacy erp-direct path.
+ * base `NotificationSchema` keeps it optional (the mark-read detail response
+ * doesn't require attribution).
  */
 export const AggregatedNotificationSchema = NotificationSchema.extend({
   sourceDomain: z.string(),
@@ -114,20 +115,6 @@ export const NotificationDetailResponseSchema = z.object({
 });
 export type NotificationDetailResponse = z.infer<
   typeof NotificationDetailResponseSchema
->;
-
-/**
- * Legacy erp-direct inbox envelope (`{ data, meta }`). Retained for the
- * erp-direct server client `notification-api.ts` (no longer consumed by the
- * bell after the P3b aggregator rewire — slated for removal in a follow-up
- * close-chore once the erp-direct proxy routes are dropped).
- */
-export const NotificationListResponseSchema = z.object({
-  data: z.array(NotificationSchema),
-  meta: NotificationMetaSchema,
-});
-export type NotificationListResponse = z.infer<
-  typeof NotificationListResponseSchema
 >;
 
 // ---------------------------------------------------------------------------
