@@ -2,7 +2,6 @@ package com.example.order;
 
 import com.example.order.domain.model.Order;
 import com.example.order.domain.repository.OrderRepository;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
@@ -26,8 +25,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(classes = OrderServiceApplication.class,
         properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
-@Disabled("TASK-BE-439: order read/mapping LazyInitializationException (OrderJpaEntity.items, "
-        + "detached entity, no Session) — TASK-MONO-307 quarantine")
 @Tag("integration")
 @Testcontainers
 @AutoConfigureMockMvc

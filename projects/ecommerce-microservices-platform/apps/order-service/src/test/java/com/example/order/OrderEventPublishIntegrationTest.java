@@ -4,7 +4,6 @@ import com.example.order.domain.model.Order;
 import com.example.order.domain.model.OrderStatus;
 import com.example.order.domain.repository.OrderRepository;
 import com.example.order.infrastructure.event.OrderOutboxPublisher;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -168,8 +167,6 @@ class OrderEventPublishIntegrationTest {
 
     @Test
     @DisplayName("DB 저장과 order_outbox 저장이 원자적으로 동작한다 — 커밋 후 일관된다")
-    @Disabled("TASK-BE-439: order read/mapping LazyInitializationException (OrderJpaEntity.items, "
-            + "detached entity, no Session) — TASK-MONO-307 quarantine")
     void placeOrder_commitSuccess_dbAndOutboxConsistent() throws Exception {
         String userId = "atomic-user-" + System.nanoTime();
 
