@@ -85,7 +85,23 @@ public class OrderRepositoryImpl implements OrderRepository {
         return entities;
     }
 
+    // TASK-BE-456 — the by-id reads below each `.map(mapper::toDomain)`, and
+    // OrderJpaMapper.toDomain eagerly reads the LAZY OrderJpaEntity.items. In a
+    // request these run inside the service-layer @Transactional so the session
+    // stays open; but called outside a tx (the order-service integration tests
+    // invoke orderRepository.findById directly — OrderPlacementIT /
+    // OrderOptimisticLockIT / OrderEventPublishIT) the entity is detached and
+    // items access throws LazyInitializationException (the same TASK-BE-439
+    // detached-mapping hazard the operational sweeps hit). A single-row by-id
+    // read has no Pageable, so the simple, uniform fix is
+    // @Transactional(readOnly = true) spanning the query + toDomain (propagation
+    // REQUIRED joins the request tx when present; opens a read session when
+    // called standalone) — no fetch-join / HHH90003004 in-memory-pagination
+    // concern. Defense-in-depth: the production request paths were already safe;
+    // this makes the reads detach-safe regardless of the caller's session state.
+
     @Override
+    @Transactional(readOnly = true)
     public Optional<Order> findById(String orderId) {
         // Tenant-scoped (HTTP read path): a cross-tenant id resolves to empty → 404
         // (M3, existence hidden). The system/saga path uses findByIdAcrossTenants.
@@ -94,6 +110,7 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<Order> findByUserIdAndIdempotencyKey(String userId, String idempotencyKey) {
         // Placement-idempotency replay lookup (TASK-BE-430): tenant-scoped to the
         // request tenant, matching the (tenant_id, user_id, idempotency_key) unique
@@ -104,6 +121,7 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<Order> findByIdForAdmin(String orderId) {
         // OPERATOR detail read: tenant filter + (when bound) net-zero seller-scope
         // filter, always nested after the tenant filter (AC-6). Absent / '*' scope =
@@ -115,6 +133,7 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<Order> findByIdAcrossTenants(String orderId) {
         // System/saga/sweep path: the order is addressed by its globally-unique id
         // (a consumed payment/stock/withdrawal/wms event, or the stuck-detector
@@ -150,6 +169,7 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Order> findByUserIdAndStatusIn(String userId, Collection<OrderStatus> statuses) {
         return jpaRepository.findByUserIdAndStatusIn(userId, statuses).stream()
                 .map(mapper::toDomain)
@@ -157,6 +177,7 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Order> findAllByUserIdAcrossTenants(String userId) {
         // GDPR PII-anonymization cascade (ADR-MONO-037 P3-B): every order for the
         // subject, any status, any tenant. Keyed by the globally-unique user_id, so
