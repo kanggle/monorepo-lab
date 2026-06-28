@@ -48,10 +48,14 @@ export type NotificationMeta = z.infer<typeof NotificationMetaSchema>;
 export const NotificationSchema = z
   .object({
     id: z.string(),
-    // ADR-MONO-043 §1 attribution — the owning domain ("erp" | "fan" | …). The
-    // console-bff aggregator (P3a) injects/preserves it on every merged item so
-    // the bell can label + route per domain and mark-read can address the owner.
-    sourceDomain: z.string(),
+    // ADR-MONO-043 §1 attribution — the owning domain ("erp" | "fan" | …).
+    // OPTIONAL on the base shape so the legacy erp-direct envelopes (which
+    // predate cross-domain attribution and don't carry it on the wire) still
+    // parse; the aggregator feed re-asserts it as REQUIRED in
+    // `AggregatedNotificationSchema` below (P3a injects/preserves it on every
+    // merged item so the bell can label + route per domain and mark-read can
+    // address the owner).
+    sourceDomain: z.string().optional(),
     // Free-string tolerance: unknown future type renders generically, no throw.
     type: z.string(),
     title: z.string(),
@@ -71,6 +75,19 @@ export const NotificationSchema = z
   .passthrough();
 export type Notification = z.infer<typeof NotificationSchema>;
 
+/**
+ * Aggregator feed item — `sourceDomain` is GUARANTEED present (the console-bff
+ * aggregator injects/preserves it on every merged item, contract §4) so the
+ * bell can key/label/route per domain and mark-read can address the owner. The
+ * base `NotificationSchema` keeps it optional for the legacy erp-direct path.
+ */
+export const AggregatedNotificationSchema = NotificationSchema.extend({
+  sourceDomain: z.string(),
+});
+export type AggregatedNotification = z.infer<
+  typeof AggregatedNotificationSchema
+>;
+
 // ---------------------------------------------------------------------------
 // envelope response schemas.
 // ---------------------------------------------------------------------------
@@ -83,7 +100,7 @@ export type Notification = z.infer<typeof NotificationSchema>;
  */
 export const NotificationInboxResponseSchema = z.object({
   asOf: z.string().optional(),
-  items: z.array(NotificationSchema),
+  items: z.array(AggregatedNotificationSchema),
   meta: NotificationMetaSchema,
   degradedDomains: z.array(z.string()).default([]),
 });

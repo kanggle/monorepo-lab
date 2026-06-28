@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/shared/lib/cn';
 import { useNotificationInbox, useMarkNotificationRead } from '../hooks/use-notifications';
-import { isApprovalSource, type Notification } from '../api/notification-types';
+import {
+  isApprovalSource,
+  type AggregatedNotification,
+} from '../api/notification-types';
 
 /**
  * TASK-PC-FE-052 — Console header notification bell. A bell icon button with
@@ -69,7 +72,9 @@ function typeLabel(type: string): string {
 }
 
 interface NotificationRowProps {
-  notification: Notification;
+  // Aggregator items always carry `sourceDomain` (required) — the bell only
+  // ever renders the merged aggregator feed, so mark-read can address the owner.
+  notification: AggregatedNotification;
   onClose: () => void;
 }
 
