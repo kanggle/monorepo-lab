@@ -195,6 +195,7 @@ These two failures are invisible to Docker-free `:check` (unit + slice load no S
 - Testcontainers tests must clean up or use isolated data per test (unique emails, IDs, etc.).
 - Use `@DisplayName` with Korean descriptions for test readability.
 - **E2E tag rule (ADR-MONO-010 D4)** — Every test class extending an e2e base class (`*E2ETestBase` or equivalent) MUST carry either `@Tag("smoke")` or `@Tag("full")` directly on the class, OR carry method-level `@Tag("smoke")` / `@Tag("full")` on each `@Test` / `@Nested` method. Tests that carry only `@Tag("e2e")` are treated as `full` (conservative default) and SHOULD be classified explicitly in a follow-up PR. The naming suffixes (`*SmokeE2ETest` / `*FullE2ETest`) are recommended but not required — `@Tag` is the authoritative classifier.
+- **Gradle test-cache after a mocked constructor changes** — when you change the constructor dependencies of a class a test mocks (e.g. add a field/arg to an `@InjectMocks` target, or change what Mockito injects), run that module's `:test` once with `--rerun-tasks` to re-establish the baseline. A stale compiled-test cache can fail the first incremental run with confusing errors even though the source is correct; one `--rerun-tasks` run resolves it. Do not chase the failure as a logic bug before re-running clean.
 
 ---
 
