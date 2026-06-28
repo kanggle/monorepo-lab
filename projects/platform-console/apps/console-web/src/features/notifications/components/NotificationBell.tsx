@@ -78,9 +78,14 @@ function NotificationRow({ notification: n, onClose }: NotificationRowProps) {
   const { mutate: markRead } = useMarkNotificationRead();
 
   const handleClick = () => {
-    // Fire-and-forget mark-read — failure must NOT block navigation.
-    markRead(n.id);
-    if (isApprovalSource(n)) {
+    // Fire-and-forget mark-read addressed to the owning domain — failure must
+    // NOT block navigation (the aggregator dispatches per-domain credential).
+    markRead({ sourceDomain: n.sourceDomain, id: n.id });
+    // Prefer the §1 deepLink when the domain supplies one; else fall back to the
+    // erp approval deep-link (sourceType/sourceId extension).
+    if (n.deepLink) {
+      router.push(n.deepLink);
+    } else if (isApprovalSource(n) && n.sourceId) {
       router.push(`/erp?approval=${encodeURIComponent(n.sourceId)}`);
     }
     onClose();
@@ -134,7 +139,7 @@ export function NotificationBell() {
   // endpoint). When errored / loading the count is treated as 0 (badge
   // hidden per degrade posture).
   const unreadCount =
-    !isError && data ? data.data.filter((n) => !n.read).length : 0;
+    !isError && data ? data.items.filter((n) => !n.read).length : 0;
 
   useEffect(() => {
     if (!open) return;
@@ -239,7 +244,7 @@ export function NotificationBell() {
           {/* Notification list */}
           {!isError && !isLoading && data && (
             <>
-              {data.data.length === 0 ? (
+              {data.items.length === 0 ? (
                 <div
                   data-testid="notification-empty"
                   className="px-3 py-4 text-sm text-muted-foreground"
@@ -248,13 +253,23 @@ export function NotificationBell() {
                 </div>
               ) : (
                 <div className="max-h-80 overflow-y-auto">
-                  {data.data.map((n) => (
+                  {data.items.map((n) => (
                     <NotificationRow
-                      key={n.id}
+                      key={`${n.sourceDomain}:${n.id}`}
                       notification={n}
                       onClose={closeDropdown}
                     />
                   ))}
+                </div>
+              )}
+              {/* D5 per-domain degrade hint — a domain's feed failed to load but
+                  the bell still shows the rest (never blanks the shell). */}
+              {data.degradedDomains.length > 0 && (
+                <div
+                  data-testid="notification-degraded"
+                  className="border-t border-border px-3 py-2 text-xs text-muted-foreground"
+                >
+                  일부 도메인 알림을 불러오지 못했습니다
                 </div>
               )}
             </>
