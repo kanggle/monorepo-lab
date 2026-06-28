@@ -81,6 +81,10 @@ class NotificationInboxControllerSliceTest {
         mockMvc.perform(get("/api/erp/notifications").with(caller("emp-1")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value("ntf-1"))
+                // ADR-MONO-043 P2: contract § 1 sourceDomain present + always "erp".
+                .andExpect(jsonPath("$.data[0].sourceDomain").value("erp"))
+                // deepLink is null → omitted (NON_NULL), per contract § 1.
+                .andExpect(jsonPath("$.data[0].deepLink").doesNotExist())
                 .andExpect(jsonPath("$.data[0].read").value(false))
                 .andExpect(jsonPath("$.data[0].readAt").doesNotExist())
                 .andExpect(jsonPath("$.meta.totalElements").value(1));
@@ -92,6 +96,7 @@ class NotificationInboxControllerSliceTest {
         mockMvc.perform(get("/api/erp/notifications/ntf-1").with(caller("emp-1")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value("ntf-1"))
+                .andExpect(jsonPath("$.data.sourceDomain").value("erp"))
                 .andExpect(jsonPath("$.data.sourceId").value("appr-1"));
     }
 
