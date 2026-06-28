@@ -466,21 +466,21 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
     // + TASK-PC-FE-049: 2 read-model GET routes = 12
     // + TASK-PC-FE-051: 3 approval GET routes (requests list, requests/[id]
     //   detail, inbox) = 15
-    // + TASK-PC-FE-052: 2 notification GET routes (notifications inbox,
-    //   notifications/[id] detail) = 17
-    // + TASK-PC-FE-054: 1 delegation GET route (delegations list) = 18
+    // + TASK-PC-FE-054: 1 delegation GET route (delegations list) = 16
     // + TASK-PC-FE-055: 2 read-model delegation-fact GET routes
-    //   (delegations list + delegations/[grantId] detail) = 20 total GET route files.
-    expect(getRouteFiles).toBe(20);
+    //   (delegations list + delegations/[grantId] detail) = 18 total GET route files.
+    // (TASK-PC-FE-138: the 2 erp-direct notification GET routes were removed —
+    //  the bell now reads the console-bff aggregator under /api/console.)
+    expect(getRouteFiles).toBe(18);
     // POST routes: 5 masters × {create on list route, update on [id] route,
     // retire on [id]/retire route} = 15, + department move-parent = 16
     // + TASK-PC-FE-051: 2 approval POST routes (requests create, the
     //   [id]/[transition] dynamic transition route) = 18
-    // + TASK-PC-FE-052: 1 notification POST route (notifications/[id]/read
-    //   idempotent mark-read) = 19
     // + TASK-PC-FE-054: 2 delegation POST routes (delegations create,
-    //   delegations/{id}/revoke) = 21.
-    expect(postRouteFiles).toBe(21);
+    //   delegations/{id}/revoke) = 20.
+    // (TASK-PC-FE-138: the 1 erp-direct notification POST route (mark-read) was
+    //  removed — mark-read now goes through the /api/console aggregator.)
+    expect(postRouteFiles).toBe(20);
   });
 });
 
