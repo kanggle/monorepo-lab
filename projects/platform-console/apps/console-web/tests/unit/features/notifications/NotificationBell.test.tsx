@@ -20,8 +20,8 @@ import type { ReactNode } from 'react';
  *   - outside-click closes the dropdown;
  *   - Escape closes the dropdown.
  *
- * Same-origin `/api/erp/notifications` fetch mocked. QueryClientProvider
- * wraps each test (mirrors ApprovalScreen.test.tsx).
+ * Same-origin `/api/console/notifications` (console-bff aggregator) fetch
+ * mocked. QueryClientProvider wraps each test (mirrors ApprovalScreen.test.tsx).
  */
 
 const mockPush = vi.fn();
@@ -57,6 +57,7 @@ function errorResponse(code: string, status: number) {
 
 const UNREAD_NOTIFICATION = {
   id: 'ntf-1',
+  sourceDomain: 'erp',
   type: 'APPROVAL_SUBMITTED',
   title: '결재 상신 통지',
   body: '상신됨',
@@ -69,6 +70,7 @@ const UNREAD_NOTIFICATION = {
 
 const READ_NOTIFICATION = {
   id: 'ntf-2',
+  sourceDomain: 'erp',
   type: 'APPROVAL_APPROVED',
   title: '결재 승인 통지',
   body: '승인됨',
@@ -81,6 +83,7 @@ const READ_NOTIFICATION = {
 
 const UNKNOWN_SOURCE_NOTIFICATION = {
   id: 'ntf-3',
+  sourceDomain: 'erp',
   type: 'FUTURE_EVENT',
   title: '미래 알림',
   body: '...',
@@ -90,21 +93,27 @@ const UNKNOWN_SOURCE_NOTIFICATION = {
   createdAt: '2026-06-05T03:00:00Z',
 };
 
+// The console-bff aggregator response shape (P3b): { items, meta, degradedDomains }.
 const LIST_WITH_UNREAD = {
-  data: [UNREAD_NOTIFICATION, READ_NOTIFICATION],
+  items: [UNREAD_NOTIFICATION, READ_NOTIFICATION],
   meta: { page: 0, size: 20, totalElements: 2, timestamp: 'x' },
+  degradedDomains: [],
 };
 
 const LIST_ALL_READ = {
-  data: [READ_NOTIFICATION],
+  items: [READ_NOTIFICATION],
   meta: { page: 0, size: 20, totalElements: 1, timestamp: 'x' },
+  degradedDomains: [],
 };
 
 const EMPTY_LIST = {
-  data: [],
+  items: [],
   meta: { page: 0, size: 20, totalElements: 0, timestamp: 'x' },
+  degradedDomains: [],
 };
 
+// Mark-read returns the owning domain's `{ data, meta }` envelope (passed
+// through by the aggregator + proxy).
 const MARK_READ_RESPONSE = {
   data: { ...UNREAD_NOTIFICATION, read: true, readAt: '2026-06-05T10:00:00Z' },
   meta: { timestamp: 'x' },
@@ -223,7 +232,7 @@ describe('NotificationBell — row click (mark-read + deep-link)', () => {
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some((c) =>
-          String(c[0]).includes('/api/erp/notifications/ntf-1/read'),
+          String(c[0]).includes('/api/console/notifications/erp/ntf-1/read'),
         ),
       ).toBe(true),
     );
@@ -237,8 +246,9 @@ describe('NotificationBell — row click (mark-read + deep-link)', () => {
 
   it('clicking a non-APPROVAL source row: mark-read fires but NO router.push', async () => {
     const listWithUnknown = {
-      data: [UNKNOWN_SOURCE_NOTIFICATION],
+      items: [UNKNOWN_SOURCE_NOTIFICATION],
       meta: { page: 0, size: 20, totalElements: 1, timestamp: 'x' },
+      degradedDomains: [],
     };
     const readResponse = {
       data: { ...UNKNOWN_SOURCE_NOTIFICATION, read: true, readAt: '2026-06-05T10:00:00Z' },
@@ -264,7 +274,7 @@ describe('NotificationBell — row click (mark-read + deep-link)', () => {
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some((c) =>
-          String(c[0]).includes('/api/erp/notifications/ntf-3/read'),
+          String(c[0]).includes('/api/console/notifications/erp/ntf-3/read'),
         ),
       ).toBe(true),
     );

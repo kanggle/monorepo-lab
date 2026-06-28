@@ -5,9 +5,9 @@ import { apiClient } from '@/shared/api/client';
 import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
-  NotificationListResponseSchema,
+  NotificationInboxResponseSchema,
   NotificationDetailResponseSchema,
-  type NotificationListResponse,
+  type NotificationInboxResponse,
   NOTIFICATION_DEFAULT_PAGE_SIZE,
   NOTIFICATION_MAX_PAGE_SIZE,
 } from '../api/notification-types';
@@ -17,44 +17,47 @@ import {
 } from '../api/notification-keys';
 
 /**
- * Client-side notification hooks (TASK-PC-FE-052). Every call goes to the
- * same-origin `/api/erp/notifications/**` proxy (the typed API client's
- * single backend entry point); the proxy attaches the HttpOnly domain-facing
- * IAM OIDC token server-side — the browser never reads a token or calls erp
- * directly (contract § 2.3).
+ * Client-side notification hooks. After ADR-MONO-043 P3b the bell reads the
+ * **console-bff notification aggregator** via the same-origin
+ * `/api/console/notifications/**` proxy (was the erp-direct
+ * `/api/erp/notifications/**`). The proxy attaches the HttpOnly domain-facing
+ * IAM OIDC token + `X-Tenant-Id` server-side and forwards to console-bff,
+ * which fans in the per-domain inboxes with per-domain failure isolation (D5)
+ * + per-domain credential dispatch (D6) — the browser never reads a token or
+ * calls a domain directly.
  *
- * NO `refetchInterval` / polling (erp-ops discipline — same rule as the
- * approval / read-model hooks). The inbox is fetched **passively on mount**
- * so the bell badge reflects the unread count without requiring a click; a
- * modest `staleTime` keeps SPA navigation from refetch-storming (this is a
- * cache-freshness TTL, NOT a polling interval). The count refreshes after a
- * mark-read via prefix invalidation.
+ * NO `refetchInterval` / polling. The inbox is fetched **passively on mount**
+ * so the bell badge reflects the unread count without a click; a modest
+ * `staleTime` keeps SPA navigation from refetch-storming (cache-freshness TTL,
+ * NOT a polling interval). The count refreshes after a mark-read via prefix
+ * invalidation.
  *
- * Hooks deliberately DO NOT throw to an error boundary — query `isError`
- * is surfaced so the `NotificationBell` can degrade gracefully when the erp
- * inbox is unavailable (non-erp operators 403, 503, timeout, network).
+ * Hooks deliberately DO NOT throw to an error boundary — query `isError` is
+ * surfaced so the `NotificationBell` degrades gracefully. (The aggregator
+ * itself always returns 200 with `degradedDomains` per D5; `isError` here
+ * covers transport/proxy failure, e.g. console-bff unreachable.)
  */
 
 const clampSize = (size?: number): number =>
   clampPageSize(size, NOTIFICATION_DEFAULT_PAGE_SIZE, NOTIFICATION_MAX_PAGE_SIZE);
 
 // ---------------------------------------------------------------------------
-// useNotificationInbox — the caller's recipient-scoped inbox.
+// useNotificationInbox — the merged cross-domain inbox (console-bff aggregator).
 // ---------------------------------------------------------------------------
 
 async function fetchNotificationInbox(opts: {
   unread?: boolean;
   page?: number;
   size?: number;
-}): Promise<NotificationListResponse> {
+}): Promise<NotificationInboxResponse> {
   const qs = new URLSearchParams();
   if (opts.unread !== undefined) qs.set('unread', String(opts.unread));
   qs.set('page', String(Math.max(0, opts.page ?? 0)));
   qs.set('size', String(clampSize(opts.size)));
   const raw = await apiClient.get<unknown>(
-    `/api/erp/notifications?${qs.toString()}`,
+    `/api/console/notifications/inbox?${qs.toString()}`,
   );
-  return NotificationListResponseSchema.parse(raw);
+  return NotificationInboxResponseSchema.parse(raw);
 }
 
 export function useNotificationInbox(opts?: {
@@ -90,9 +93,12 @@ export function useNotificationInbox(opts?: {
 export function useMarkNotificationRead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    // Mark-read is now addressed to the OWNING domain (the aggregator dispatches
+    // it with that domain's credential — contract § 4.5). The bell passes the
+    // item's `sourceDomain` + `id`.
+    mutationFn: async ({ sourceDomain, id }: { sourceDomain: string; id: string }) => {
       const raw = await apiClient.post<unknown>(
-        `/api/erp/notifications/${encodeURIComponent(id)}/read`,
+        `/api/console/notifications/${encodeURIComponent(sourceDomain)}/${encodeURIComponent(id)}/read`,
       );
       const env = (raw ?? {}) as { data?: unknown };
       return NotificationDetailResponseSchema.parse({

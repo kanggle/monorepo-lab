@@ -48,13 +48,25 @@ export type NotificationMeta = z.infer<typeof NotificationMetaSchema>;
 export const NotificationSchema = z
   .object({
     id: z.string(),
+    // ADR-MONO-043 §1 attribution — the owning domain ("erp" | "fan" | …).
+    // OPTIONAL on the base shape so the legacy erp-direct envelopes (which
+    // predate cross-domain attribution and don't carry it on the wire) still
+    // parse; the aggregator feed re-asserts it as REQUIRED in
+    // `AggregatedNotificationSchema` below (P3a injects/preserves it on every
+    // merged item so the bell can label + route per domain and mark-read can
+    // address the owner).
+    sourceDomain: z.string().optional(),
     // Free-string tolerance: unknown future type renders generically, no throw.
     type: z.string(),
     title: z.string(),
     body: z.string(),
-    // Free-string tolerance: v2 adds MASTERDATA / PERMISSION additively.
-    sourceType: z.string(),
-    sourceId: z.string(),
+    // §1 optional in-app link (NON_NULL — absent when the domain supplies none).
+    deepLink: z.string().optional(),
+    // erp non-normative extensions (contract §1.2) — OPTIONAL now that the feed
+    // is cross-domain (non-erp items omit them). Used only for the erp deep-link
+    // fallback when `deepLink` is absent.
+    sourceType: z.string().optional(),
+    sourceId: z.string().optional(),
     read: z.boolean(),
     createdAt: z.string(),
     // ABSENT while read == false (NON_NULL convention — never null in the wire).
@@ -63,16 +75,37 @@ export const NotificationSchema = z
   .passthrough();
 export type Notification = z.infer<typeof NotificationSchema>;
 
+/**
+ * Aggregator feed item — `sourceDomain` is GUARANTEED present (the console-bff
+ * aggregator injects/preserves it on every merged item, contract §4) so the
+ * bell can key/label/route per domain and mark-read can address the owner. The
+ * base `NotificationSchema` keeps it optional for the legacy erp-direct path.
+ */
+export const AggregatedNotificationSchema = NotificationSchema.extend({
+  sourceDomain: z.string(),
+});
+export type AggregatedNotification = z.infer<
+  typeof AggregatedNotificationSchema
+>;
+
 // ---------------------------------------------------------------------------
 // envelope response schemas.
 // ---------------------------------------------------------------------------
 
-export const NotificationListResponseSchema = z.object({
-  data: z.array(NotificationSchema),
+/**
+ * The console-bff notification **aggregator** response (ADR-MONO-043 P3a /
+ * §4): one merged feed across the operator-facing domains, with per-domain
+ * `degradedDomains` attribution. Always HTTP 200 (D5 failure isolation — a
+ * downed domain appears in `degradedDomains`, never collapses the bell).
+ */
+export const NotificationInboxResponseSchema = z.object({
+  asOf: z.string().optional(),
+  items: z.array(AggregatedNotificationSchema),
   meta: NotificationMetaSchema,
+  degradedDomains: z.array(z.string()).default([]),
 });
-export type NotificationListResponse = z.infer<
-  typeof NotificationListResponseSchema
+export type NotificationInboxResponse = z.infer<
+  typeof NotificationInboxResponseSchema
 >;
 
 export const NotificationDetailResponseSchema = z.object({
@@ -81,6 +114,20 @@ export const NotificationDetailResponseSchema = z.object({
 });
 export type NotificationDetailResponse = z.infer<
   typeof NotificationDetailResponseSchema
+>;
+
+/**
+ * Legacy erp-direct inbox envelope (`{ data, meta }`). Retained for the
+ * erp-direct server client `notification-api.ts` (no longer consumed by the
+ * bell after the P3b aggregator rewire — slated for removal in a follow-up
+ * close-chore once the erp-direct proxy routes are dropped).
+ */
+export const NotificationListResponseSchema = z.object({
+  data: z.array(NotificationSchema),
+  meta: NotificationMetaSchema,
+});
+export type NotificationListResponse = z.infer<
+  typeof NotificationListResponseSchema
 >;
 
 // ---------------------------------------------------------------------------
