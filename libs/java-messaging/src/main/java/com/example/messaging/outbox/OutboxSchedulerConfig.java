@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
- * Dedicated {@link ThreadPoolTaskScheduler} for {@link OutboxPollingScheduler}.
+ * Dedicated {@link ThreadPoolTaskScheduler} for outbox relay polling.
  *
  * <h2>Why a dedicated scheduler (TASK-BE-077)</h2>
  *
@@ -41,11 +41,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  *
  * <h2>Disabling the scheduler</h2>
  *
- * <p>Set {@code outbox.polling.enabled=false} to skip both this bean and
- * the {@link OutboxPollingScheduler} wiring (see
- * {@code OutboxAutoConfiguration}). Production leaves the default
- * ({@code true}). Test profiles may opt out when they do not exercise the
- * relay path.
+ * <p>Set {@code outbox.polling.enabled=false} to skip this bean. The same
+ * property gates each service's v2 {@code AbstractOutboxPublisher} relay
+ * subclass ({@code @ConditionalOnProperty("outbox.polling.enabled")}).
+ * Production leaves the default ({@code true}). Test profiles may opt out
+ * when they do not exercise the relay path.
  */
 @Configuration
 @ConditionalOnProperty(name = "outbox.polling.enabled", havingValue = "true", matchIfMissing = true)

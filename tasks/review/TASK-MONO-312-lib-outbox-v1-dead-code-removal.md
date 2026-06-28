@@ -8,7 +8,7 @@ TASK-MONO-312
 
 # Status
 
-ready
+review
 
 # Owner
 
