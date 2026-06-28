@@ -1,7 +1,9 @@
 package com.kanggle.platformconsole.bff;
 
+import com.kanggle.platformconsole.bff.infrastructure.config.NotificationAggregatorProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
  * console-bff Spring Boot entry point.
@@ -18,6 +20,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * </ul>
  */
 @SpringBootApplication
+@EnableConfigurationProperties(NotificationAggregatorProperties.class)
 public class ConsoleBffApplication {
 
     public static void main(String[] args) {
