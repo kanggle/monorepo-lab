@@ -5,6 +5,7 @@ import com.example.fanplatform.notification.application.MarkNotificationReadUseC
 import com.example.fanplatform.notification.domain.notification.Notification;
 import com.example.fanplatform.notification.domain.notification.NotificationNotFoundException;
 import com.example.fanplatform.notification.domain.notification.NotificationPage;
+import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import com.example.fanplatform.notification.domain.notification.NotificationType;
 import com.example.fanplatform.notification.presentation.advice.GlobalExceptionHandler;
 import com.example.fanplatform.notification.presentation.filter.TenantClaimEnforcer;
@@ -71,10 +72,26 @@ class NotificationInboxControllerSliceTest {
         mockMvc.perform(get("/api/fan/notifications").header("Authorization", bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value("n1"))
+                .andExpect(jsonPath("$.data[0].sourceDomain").value("fan"))
                 .andExpect(jsonPath("$.data[0].type").value("WELCOME"))
                 .andExpect(jsonPath("$.data[0].status").value("UNREAD"))
+                .andExpect(jsonPath("$.data[0].deepLink").doesNotExist())
                 .andExpect(jsonPath("$.data[0].readAt").doesNotExist())
                 .andExpect(jsonPath("$.meta.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("GET inbox ?unread=true maps the normative filter onto status UNREAD (contract § 2.1)")
+    void unreadAliasMapsToStatusFilter() throws Exception {
+        when(listNotifications.list(any(), eq(NotificationStatus.UNREAD), anyInt(), anyInt()))
+                .thenReturn(new NotificationPage(List.of(sample()), 0, 20, 1));
+
+        mockMvc.perform(get("/api/fan/notifications?unread=true").header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].sourceDomain").value("fan"));
+
+        org.mockito.Mockito.verify(listNotifications)
+                .list(any(), eq(NotificationStatus.UNREAD), anyInt(), anyInt());
     }
 
     @Test

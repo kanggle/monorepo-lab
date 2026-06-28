@@ -40,12 +40,18 @@ public class NotificationInboxController {
 
     @GetMapping
     public ResponseEntity<ApiEnvelope<List<NotificationResponse>>> list(
+            @RequestParam(required = false) Boolean unread,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         validatePaging(page, size);
-        NotificationStatus statusFilter = parseStatus(status);
+        // `unread` is the normative cross-domain filter (notification-inbox-contract.md § 2.1);
+        // it maps onto fan's status enum. The pre-existing `status=UNREAD|READ` param is kept
+        // for backward compatibility and used only when `unread` is absent.
+        NotificationStatus statusFilter = unread != null
+                ? (unread ? NotificationStatus.UNREAD : NotificationStatus.READ)
+                : parseStatus(status);
 
         NotificationPage result = listNotifications.list(actor, statusFilter, page, Math.min(size, MAX_SIZE));
         List<NotificationResponse> data = result.content().stream()
