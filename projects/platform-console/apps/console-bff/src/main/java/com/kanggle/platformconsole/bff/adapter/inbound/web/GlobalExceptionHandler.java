@@ -1,6 +1,7 @@
 package com.kanggle.platformconsole.bff.adapter.inbound.web;
 
 import com.kanggle.platformconsole.bff.adapter.outbound.http.MissingTenantException;
+import com.kanggle.platformconsole.bff.application.usecase.UnknownNotificationDomainException;
 import com.kanggle.platformconsole.bff.application.usecase.UpstreamUnauthorizedException;
 import com.kanggle.platformconsole.bff.domain.credential.MissingCredentialException;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -51,6 +52,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ObjectNode> handleUpstreamUnauthorized(UpstreamUnauthorizedException ex) {
         // § 2.4.9.1 / § 2.4.4 D3: any outbound leg 401 → composition-level 401.
         return error(HttpStatus.UNAUTHORIZED, "TOKEN_INVALID", ex.getMessage());
+    }
+
+    @ExceptionHandler(UnknownNotificationDomainException.class)
+    public ResponseEntity<ObjectNode> handleUnknownNotificationDomain(UnknownNotificationDomainException ex) {
+        // ADR-MONO-043 P3a / contract § 2.3: an unknown owner domain is treated
+        // as an unknown notification (no existence leak) → 404 NOTIFICATION_NOT_FOUND.
+        return error(HttpStatus.NOT_FOUND, "NOTIFICATION_NOT_FOUND", ex.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

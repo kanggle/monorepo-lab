@@ -88,3 +88,12 @@ consolebff:
     # operator-overview leg). gateway-service /actuator/health, credential-less.
     ecommerce:
       base-url: ${CONSOLE_BFF_OUTBOUND_ECOMMERCE_BASE_URL:http://ecommerce.local}
+  # Notification aggregator (ADR-MONO-043 D2 / P3a) — the operator-facing inbox
+  # domain set the shared-shell bell fans in. Phase-1 is erp-only; Phase-2 extends
+  # this list (one entry per conforming per-domain inbox) with ZERO controller
+  # change — the aggregator iterates whatever domains are configured, routes each
+  # to its read port + per-domain credential (D6), and degrades per-domain (D5).
+  # Each value is BOTH the sourceDomain attribution (contract § 1 / § 4.2) and the
+  # {sourceDomain} path segment of POST /api/console/notifications/{sourceDomain}/{id}/read.
+  notifications:
+    domains: ${CONSOLE_BFF_NOTIFICATION_DOMAINS:erp}
