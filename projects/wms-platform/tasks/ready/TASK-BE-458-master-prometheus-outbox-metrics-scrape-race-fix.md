@@ -88,3 +88,33 @@ backend
 - [ ] AC-1…AC-4 satisfied
 - [ ] Root-cause note in close summary
 - [ ] Ready for review
+
+---
+
+# Investigation Findings (2026-06-29)
+
+A first re-enable attempt (PR #2029, closed unmerged) ran the test on the
+`Integration (master-service + …)` CI lane and revealed the **task premise is
+inaccurate**: the actual failure is **HTTP 404**, not the "200 OK with the three
+outbox lines missing" the `@DisabledIfEnvironmentVariable` reason describes.
+
+- junit XML: `expected: 200 OK but was: 404 NOT_FOUND` — `/actuator/prometheus`
+  returns 404 for the entire 30s Awaitility budget.
+- The endpoint IS exposed (`management.endpoints.web.exposure.include` lists
+  `prometheus` in both the main and test `application-integration.yml`) and
+  `io.micrometer:micrometer-registry-prometheus` is an `implementation` dep on
+  the `:integrationTest` classpath. Yet the `PrometheusScrapeEndpoint` does not
+  answer in the integration context.
+- Two fixes were tried and **both still 404'd**:
+  - `@DirtiesContext(AFTER_CLASS)` on `PublisherResilienceIntegrationTest` — made
+    it worse (a rebuilt context re-registers collectors against the JVM-static
+    Prometheus `CollectorRegistry`).
+  - `management.metrics.enable.kafka=false` in `MasterServiceIntegrationBase`.
+- The meter-churn theory in the original `@Disabled` note does not explain a 404.
+
+**Real next step**: reproduce `:integrationTest` LOCALLY (Docker is blocked on the
+current dev host, so CI was the only signal and each round was blind). Confirm
+whether the `PrometheusScrapeEndpoint` bean is created in the `@SpringBootTest`
+context under Spring Boot 3.4.1 (registry/endpoint-wiring, a Security 404, or a
+management-port split are the leading hypotheses), then fix the actual cause. Do
+NOT re-attempt blind on CI. Spring Boot version at investigation time: 3.4.1.
