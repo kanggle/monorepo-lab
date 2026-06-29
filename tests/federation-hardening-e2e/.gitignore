@@ -3,3 +3,27 @@ playwright-report/
 test-results/
 node_modules/
 dist/
+
+# --- Local demo overlays / seeds / ad-hoc verify scripts (intentionally uncommitted;
+#     project memory env_console_demo_local_redeploy / env_webstore_standalone_bringup_against_fed_e2e).
+#     docker-compose.federation-e2e.*.yml is ALSO used by tracked base/demo/replenishment
+#     compose, so the local overlays are listed by exact name rather than glob. ---
+docker/docker-compose.federation-e2e.ecommerce.yml
+docker/docker-compose.federation-e2e.ecommerce-extra.yml
+docker/docker-compose.federation-e2e.erp-fullstack.yml
+docker/docker-compose.federation-e2e.ledger.yml
+docker/zz-*.yml
+docker/erp-gateway.nginx.conf
+docker/toss-mock.nginx.conf
+# Local demo seeds (tracked seeds are seed-domains/seed-scm*/seed-wms* — these prefixes don't collide)
+fixtures/seed-ecommerce-*.sql
+fixtures/seed-erp-*.sql
+fixtures/seed-fe*.sql
+fixtures/seed-ledger.sql
+fixtures/seed-omni-*.sql
+fixtures/*.sh
+# Ad-hoc outbound demo specs + config + screenshots (no tracked *.png / pw.*.config.ts)
+specs/wms-outbound-*.spec.ts
+specs/verify-*.spec.ts
+pw.*.config.ts
+*.png

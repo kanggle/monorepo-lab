@@ -40,3 +40,8 @@ Desktop.ini
 */data/*.mv.db
 */data/*.lock.db
 cycle1.log
+
+# Local web-store standalone-bringup verify scripts + screenshots (intentionally
+# uncommitted; project memory env_webstore_standalone_bringup_against_fed_e2e)
+projects/ecommerce-microservices-platform/apps/web-store/verify-webstore-*.mjs
+projects/ecommerce-microservices-platform/apps/web-store/webstore-*.png

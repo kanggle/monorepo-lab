@@ -1,0 +1,5 @@
+# Local demo overlays (intentionally uncommitted; project memory
+# project_ecommerce_wms_fulfillment_loop_wiring). Tracked siblings:
+# docker-compose.{ecommerce-fulfillment,fulfillment-demo}.yml + seed/{inventory-ecommerce-stock,outbound-readmodel}.sql.
+docker-compose.optionb-*.yml
+seed/optionb-*.sql
