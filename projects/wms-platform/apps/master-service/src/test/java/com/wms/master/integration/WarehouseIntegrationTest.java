@@ -9,10 +9,10 @@ import com.wms.master.integration.support.KafkaTestConsumer;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
@@ -39,11 +39,14 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
     private static final String ADMIN_ROLE = "MASTER_ADMIN";
     private static final String TOPIC = "wms.master.warehouse.v1";
 
-    // v2 outbox metric names (TASK-BE-438). The success/failure counters are now
-    // tagged with event_type (and reason), so callers sum across tag series.
+    // v2 outbox metric names (TASK-BE-438). The success counter is tagged with
+    // event_type (and reason), so callers sum across tag series.
     private static final String PENDING_COUNT = "master.outbox.pending.count";
     private static final String PUBLISH_SUCCESS_TOTAL = "master.outbox.publish.success.total";
-    private static final String PUBLISH_FAILURE_TOTAL = "master.outbox.publish.failure.total";
+
+    // Sequence for the prometheus test's warehouse code, kept in the WH900–WH999
+    // slot (outside shortSuffix()'s WH10–WH899 range) to avoid code collisions.
+    private static final AtomicInteger METRICS_WH_SEQ = new AtomicInteger(0);
 
     @Autowired
     private TestRestTemplate rest;
@@ -161,64 +164,52 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
-    // TASK-BE-458 investigation (2026-06-29): re-enabling this on CI shows the
-    // ACTUAL failure is NOT the "HTTP 200 with missing outbox lines" the
-    // disabledReason below describes. On the GitHub `Integration (master-service…)`
-    // lane, /actuator/prometheus returns HTTP 404 for the full 30s budget
-    // (junit XML: "expected: 200 OK but was: 404 NOT_FOUND"). The endpoint is
-    // exposed (management.endpoints.web.exposure.include lists prometheus, and
-    // micrometer-registry-prometheus is on the :integrationTest classpath), yet
-    // the PrometheusScrapeEndpoint is not answering in the integration context —
-    // a deeper issue than meter-churn. Two attempts were tried and both still
-    // 404'd: (a) @DirtiesContext(AFTER_CLASS) on PublisherResilienceIntegrationTest
-    // (made it worse — a rebuilt context re-registers against the JVM-static
-    // Prometheus CollectorRegistry); (b) management.metrics.enable.kafka=false.
-    // Root cause of the 404 needs LOCAL :integrationTest reproduction (Docker is
-    // blocked on the current dev host). Keeping disabled until then. See
-    // TASK-BE-458 § Investigation Findings.
+    // TASK-BE-458: previously @DisabledIfEnvironmentVariable(CI) on a meter-churn
+    // race hypothesis. The actual cause (reproduced locally + on CI) was a flat
+    // HTTP 404 from /actuator/prometheus throughout the budget — Spring Boot
+    // disables metrics-export auto-configuration in @SpringBootTest by default,
+    // so no PrometheusMeterRegistry bean is created and the scrape endpoint is
+    // never mapped. Fixed by @AutoConfigureObservability(tracing = false) on
+    // MasterServiceIntegrationBase; the test now runs on CI. The outbox gauges
+    // are still registered with strongReference(true) + an @Autowired hold on
+    // the publisher (TASK-BE-020/438), so the meter functions cannot be GC'd.
     @Test
-    @DisplayName("prometheus actuator endpoint exposes the three outbox metrics")
-    @DisabledIfEnvironmentVariable(
-            named = "CI",
-            matches = "true",
-            disabledReason =
-                    "TASK-BE-020 added strongReference(true) on the outbox.pending_count "
-                            + "gauge and an @Autowired OutboxMetrics field on "
-                            + "MasterServiceIntegrationBase, which removes the GC-eligibility "
-                            + "race for the gauge function. That alone is not enough on "
-                            + "GitHub-hosted runners: when this test runs after "
-                            + "PublisherResilienceIntegrationTest pauses + unpauses the Kafka "
-                            + "container, the /actuator/prometheus scrape body comes back with "
-                            + "HTTP 200 but the three outbox meter family lines are missing for "
-                            + "a window, and the contains(...) assertion fails despite the 30s "
-                            + "Awaitility budget. The deeper cause appears to be in scrape-body "
-                            + "composition while micrometer-kafka re-attaches its client meters "
-                            + "to the restarted broker, not in our gauge's lifecycle. Passes "
-                            + "locally (WSL2). Re-enable once the scrape-body race is "
-                            + "characterized — likely needs either test-suite ordering, a "
-                            + "CompositeMeterRegistry split, or moving the assertion to a "
-                            + "dedicated suite that does not share context with the Kafka "
-                            + "pause/unpause tests. Tracked as a follow-up to TASK-BE-020.")
+    @DisplayName("prometheus actuator endpoint exposes the outbox pending gauge + success counter")
     void prometheusEndpoint_exposesOutboxMetrics() {
-        // Permit-all endpoint per SecurityConfig — no auth.
-        // Retry for up to 30 s to let the endpoint stabilise after
-        // PublisherResilienceIntegrationTest unpauses the Kafka container.
-        // OutboxMetrics meters are now registered with strongReference(true) and
-        // the base class holds an @Autowired reference, so the gauge function
-        // itself can no longer disappear due to GC pressure (TASK-BE-020) — but
-        // see the @DisabledIfEnvironmentVariable above for why CI still gates.
+        // Generate one successful publish so the success-counter family is
+        // registered, making this assertion deterministic in isolation as well
+        // as in the full suite. The success counter is tagged per event_type and
+        // is created lazily on first publish, so without this the metric line is
+        // absent unless an earlier test in the same JVM happened to publish. The
+        // failure-counter family is induced + asserted by
+        // PublisherResilienceIntegrationTest, so it is intentionally not required
+        // here (asserting it would re-couple this test to cross-class ordering).
+        // Use a code in the WH900–WH999 slot: shortSuffix() only emits WH10–WH899,
+        // so this never collides with the random codes the other test methods /
+        // classes create (warehouseCode is unique-constrained, ^WH\d{2,3}$). Keeps
+        // this test from adding to the suite's small-code-space collision risk.
+        String metricsCode = "WH" + (900 + METRICS_WH_SEQ.getAndIncrement());
+        String createBody = """
+                {"warehouseCode":"%s","name":"Metrics WH","address":"Seoul","timezone":"Asia/Seoul"}
+                """.formatted(metricsCode);
+        ResponseEntity<String> created =
+                post("/api/v1/master/warehouses", createBody, UUID.randomUUID().toString(), WRITE_ROLE);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        // Permit-all endpoint per SecurityConfig — no auth. The scrape is mapped
+        // only because MasterServiceIntegrationBase carries
+        // @AutoConfigureObservability; otherwise Spring Boot disables metrics
+        // export in @SpringBootTest and /actuator/prometheus 404s. Retry until
+        // the outbox publisher has flushed the row and registered the counter.
         await().atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
                     ResponseEntity<String> response =
                             rest.getForEntity("/actuator/prometheus", String.class);
                     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-                    String body = response.getBody();
-                    assertThat(body).contains(PENDING_COUNT.replace('.', '_'));
-                    assertThat(body).contains(
-                            PUBLISH_SUCCESS_TOTAL.replace('.', '_'));
-                    assertThat(body).contains(
-                            PUBLISH_FAILURE_TOTAL.replace('.', '_'));
+                    String scrape = response.getBody();
+                    assertThat(scrape).contains(PENDING_COUNT.replace('.', '_'));
+                    assertThat(scrape).contains(PUBLISH_SUCCESS_TOTAL.replace('.', '_'));
                 });
         // sanity: ADMIN role unused here; kept as reference for role table completeness
         assertThat(ADMIN_ROLE).isNotBlank();
