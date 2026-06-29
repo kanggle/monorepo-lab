@@ -9,7 +9,6 @@ import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -113,6 +112,15 @@ class GatewayRateLimitIntegrationTest {
         registry.add("spring.cloud.gateway.routes[1].uri", accountServiceMock::baseUrl);
         registry.add("spring.cloud.gateway.routes[1].id", () -> "account-service");
         registry.add("spring.cloud.gateway.routes[1].predicates[0]", () -> "Path=/api/accounts/**");
+        // Dead downstream for the connection-fault test: 127.0.0.1:1 is privileged +
+        // unbound, so the forward fails deterministically (the downstream is
+        // unreachable) — unlike WireMock's Fault.CONNECTION_RESET_BY_PEER, which
+        // raced with the Reactor Netty client and intermittently surfaced as 200
+        // (TASK-BE-457/460). Either way the failure must map to a 5xx, not an
+        // empty 200.
+        registry.add("spring.cloud.gateway.routes[2].uri", () -> "http://127.0.0.1:1");
+        registry.add("spring.cloud.gateway.routes[2].id", () -> "dead-service");
+        registry.add("spring.cloud.gateway.routes[2].predicates[0]", () -> "Path=/api/dead/**");
         // login scope max=2 for fast rate-limit testing
         registry.add("gateway.rate-limit.login.max-requests", () -> "2");
         registry.add("gateway.rate-limit.login.window-seconds", () -> "60");
@@ -228,53 +236,26 @@ class GatewayRateLimitIntegrationTest {
     }
 
     /**
-     * TASK-MONO-044c-1 RC#3: disabled pending nightly task per spec § AC #6.
+     * Downstream connection failure on an authenticated route must map to a 5xx via
+     * {@code GatewayErrorConfig} (ConnectException → 503), not be masked as an empty
+     * 200.
      *
-     * <p><b>Sporadic failure mode</b>: WireMock's
-     * {@code Fault.CONNECTION_RESET_BY_PEER} stub races with the Reactor Netty
-     * client used by Spring Cloud Gateway. In ~5-10% of CI runs the gateway
-     * forwards the request before WireMock applies the fault, and the response
-     * comes back as {@code 200 OK} instead of {@code 5xx}. The CI run that
-     * surfaced this (Job 25355285563) also showed Redis hitting
-     * {@code recvAddress(..) failed: Connection reset by peer} concurrently —
-     * the JWT filter falls open on Redis errors and lets the request through,
-     * but that path is independent of the WireMock fault stub.
-     *
-     * <p>Production code path is correct (verified via unit tests on
-     * gateway error handling); this is a test-infrastructure flake.
-     *
-     * <p><b>Follow-up</b>: TASK-MONO-044 § AC #8 nightly regression task is
-     * the appropriate channel for restoring deterministic coverage. Options:
-     * (a) replace WireMock fault with a TCP-level proxy that closes the
-     * socket reliably, (b) raise the gateway's downstream timeout so the
-     * fault has time to apply, (c) Awaitility-based retry of the assertion.
-     *
-     * <p><b>TASK-BE-457 investigation (2026-06-29)</b>: re-enabling this on CI
-     * showed both deterministic-fault approaches still return {@code 200 OK},
-     * not 5xx. (a) An accept-then-RST TCP server resets mid-flight, after Spring
-     * Cloud Gateway has committed a 200, and {@code GatewayErrorConfig} will not
-     * override an already-committed status. (b) A refused connection (unbound
-     * port) ALSO returned 200 — and the gateway logs reveal why the lane is
-     * unreliable: the iam {@code Integration} lane has Redis testcontainer
-     * instability ({@code Connection refused} on the Lettuce client / access
-     * -invalidation check), so {@code JwtAuthenticationFilter} fail-opens and the
-     * fault request is logged as {@code GET /api/fault 200}. The 5xx mapping is
-     * entangled with Redis-down fail-open and response-commit timing rather than
-     * the WireMock fault race above. Needs LOCAL {@code :integrationTest}
-     * reproduction (Docker blocked on the current dev host) to separate the
-     * gateway error-mapping behaviour from the lane's Redis flakiness. See
-     * TASK-BE-457 § Investigation Findings.
+     * <p>History: was {@code @Disabled} on a hypothesised WireMock
+     * {@code Fault.CONNECTION_RESET_BY_PEER} stub race. Local {@code :integrationTest}
+     * reproduction (TASK-BE-457) showed the real cause was in production code:
+     * {@code JwtAuthenticationFilter} wrapped the downstream {@code chain.filter(...)}
+     * in its Redis fail-open {@code onErrorResume}, so a downstream failure was
+     * mis-classified as a Redis outage and the chain was re-invoked → empty 200, and
+     * {@code GatewayErrorConfig} was never reached. Fixed under TASK-BE-460 (auth
+     * pipeline and forwarding separated). This test now drives a deterministic
+     * unreachable downstream (route to a dead {@code 127.0.0.1:1}) instead of the
+     * flaky WireMock fault.
      */
     @Test
-    @Disabled("TASK-MONO-044c-1 RC#3: sporadic WireMock fault stub race; tracked for nightly via TASK-MONO-044 § AC #8")
-    @DisplayName("다운스트림 연결 리셋(Fault) → 게이트웨이가 5xx 반환")
+    @DisplayName("다운스트림 도달 실패 → 게이트웨이가 5xx 반환")
     void downstream_connectionFault_returns5xx() {
-        accountServiceMock.stubFor(get(urlEqualTo("/api/accounts/downstream-fail"))
-                .willReturn(aResponse()
-                        .withFault(com.github.tomakehurst.wiremock.http.Fault.CONNECTION_RESET_BY_PEER)));
-
         String token = createValidToken("account-123", "fan-platform");
-        webTestClient.get().uri("/api/accounts/downstream-fail")
+        webTestClient.get().uri("/api/dead/x")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().is5xxServerError();
