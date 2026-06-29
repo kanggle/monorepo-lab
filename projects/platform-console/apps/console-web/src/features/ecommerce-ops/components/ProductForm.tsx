@@ -1,20 +1,10 @@
 'use client';
 
-import { useId, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
-import { ApiError, messageForCode } from '@/shared/api/errors';
-import {
-  useRegisterProduct,
-  useUpdateProduct,
-} from '../hooks/use-ecommerce-products';
-import {
-  PRODUCT_STATUS_VALUES,
-  type ProductDetail,
-  type RegisterProductBody,
-  type UpdateProductBody,
-} from '../api/types';
+import { PRODUCT_STATUS_VALUES, type ProductDetail } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ProductVariantsFieldset } from './ProductVariantsFieldset';
+import { useProductForm } from './use-product-form';
 
 /**
  * Register / update product form (TASK-PC-FE-081 — § 2.4.10 #3/#4). Used by
@@ -28,141 +18,51 @@ import { ConfirmDialog } from './ConfirmDialog';
  *     → `/ecommerce/products/{id}`.
  *
  * Confirm-gated submit; 409/422 surfaced inline (NO `Idempotency-Key`).
+ *
+ * TASK-PC-FE-139: form state/validation/submit live in {@link useProductForm};
+ * the register-mode variant editor in {@link ProductVariantsFieldset}. This
+ * container only wires the hook to the markup (behavior-preserving split).
  */
-
-interface VariantDraft {
-  optionName: string;
-  stock: string;
-  additionalPrice: string;
-}
 
 export interface ProductFormProps {
   /** When set, the form is in UPDATE mode for this product. */
   existing?: ProductDetail;
 }
 
+const inputCls =
+  'mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+const labelCls = 'block text-sm font-medium text-foreground';
+
 export function ProductForm({ existing }: ProductFormProps) {
-  const router = useRouter();
-  const isEdit = existing !== undefined;
-  const nameId = useId();
-  const descId = useId();
-  const priceId = useId();
-  const statusId = useId();
-  const thumbId = useId();
-
-  const [name, setName] = useState(existing?.name ?? '');
-  const [description, setDescription] = useState(existing?.description ?? '');
-  const [price, setPrice] = useState(
-    existing ? String(existing.price) : '',
-  );
-  const [status, setStatus] = useState(existing?.status ?? 'ON_SALE');
-  const [thumbnailUrl, setThumbnailUrl] = useState(
-    existing?.thumbnailUrl ?? '',
-  );
-  const [variants, setVariants] = useState<VariantDraft[]>([
-    { optionName: '', stock: '', additionalPrice: '' },
-  ]);
-
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [conflict, setConflict] = useState(false);
-
-  const register = useRegisterProduct();
-  const update = useUpdateProduct();
-  const pending = register.isPending || update.isPending;
-
-  const priceNum = Number(price);
-  const priceValid = price !== '' && Number.isInteger(priceNum) && priceNum >= (isEdit ? 0 : 1);
-  const variantsValid =
-    isEdit ||
-    variants.length > 0 &&
-      variants.every(
-        (v) =>
-          v.optionName.trim() !== '' &&
-          Number.isInteger(Number(v.stock)) &&
-          Number(v.stock) >= 0 &&
-          Number.isInteger(Number(v.additionalPrice)) &&
-          Number(v.additionalPrice) >= 0,
-      );
-  const nameValid = isEdit || name.trim() !== '';
-  const formValid = nameValid && priceValid && variantsValid;
-
-  function setVariant(i: number, patch: Partial<VariantDraft>) {
-    setVariants((vs) => vs.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
-  }
-  function addVariantRow() {
-    setVariants((vs) => [...vs, { optionName: '', stock: '', additionalPrice: '' }]);
-  }
-  function removeVariantRow(i: number) {
-    setVariants((vs) => (vs.length > 1 ? vs.filter((_, idx) => idx !== i) : vs));
-  }
-
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!formValid) return;
-    setError(null);
-    setConflict(false);
-    setConfirmOpen(true);
-  }
-
-  function handleError(err: unknown) {
-    const code = err instanceof ApiError ? err.code : 'SERVICE_UNAVAILABLE';
-    const status = err instanceof ApiError ? err.status : 0;
-    if (status === 409 && code === 'CONFLICT') {
-      setConflict(true);
-      setError(messageForCode('CONFLICT', '상품 상태가 변경되었습니다.'));
-      return;
-    }
-    setConflict(false);
-    setError(messageForCode(code, '저장하지 못했습니다.'));
-  }
-
-  function confirmSubmit() {
-    if (isEdit) {
-      const body: UpdateProductBody = {
-        name: name.trim() || undefined,
-        description: description.trim() || undefined,
-        price: price !== '' ? priceNum : undefined,
-        status: status as UpdateProductBody['status'],
-        thumbnailUrl: thumbnailUrl.trim() || undefined,
-      };
-      update.mutate(
-        { id: existing!.id, body },
-        {
-          onSuccess: () => {
-            setConfirmOpen(false);
-            router.push(`/ecommerce/products/${existing!.id}`);
-            router.refresh();
-          },
-          onError: handleError,
-        },
-      );
-      return;
-    }
-    const body: RegisterProductBody = {
-      name: name.trim(),
-      description: description.trim() || undefined,
-      price: priceNum,
-      thumbnailUrl: thumbnailUrl.trim() || undefined,
-      variants: variants.map((v) => ({
-        optionName: v.optionName.trim(),
-        stock: Number(v.stock),
-        additionalPrice: Number(v.additionalPrice),
-      })),
-    };
-    register.mutate(body, {
-      onSuccess: () => {
-        setConfirmOpen(false);
-        router.push('/ecommerce/products');
-        router.refresh();
-      },
-      onError: handleError,
-    });
-  }
-
-  const inputCls =
-    'mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
-  const labelCls = 'block text-sm font-medium text-foreground';
+  const {
+    router,
+    isEdit,
+    ids: { nameId, descId, priceId, statusId, thumbId },
+    fields: {
+      name,
+      setName,
+      description,
+      setDescription,
+      price,
+      setPrice,
+      status,
+      setStatus,
+      thumbnailUrl,
+      setThumbnailUrl,
+    },
+    variants,
+    setVariant,
+    addVariantRow,
+    removeVariantRow,
+    confirmOpen,
+    error,
+    conflict,
+    pending,
+    formValid,
+    onSubmit,
+    confirmSubmit,
+    cancelConfirm,
+  } = useProductForm(existing);
 
   return (
     <form onSubmit={onSubmit} className="max-w-2xl space-y-5" data-testid="product-form">
@@ -243,86 +143,13 @@ export function ProductForm({ existing }: ProductFormProps) {
       )}
 
       {!isEdit && (
-        <fieldset className="rounded-md border border-border p-4" data-testid="product-form-variants">
-          <legend className="px-1 text-sm font-medium text-foreground">
-            옵션(variant) <span className="text-destructive">*</span>
-          </legend>
-          <p className="mb-3 text-xs text-muted-foreground">
-            상품 등록에는 최소 1개의 옵션이 필요합니다. 재고·추가 가격을 비워두면 0으로 등록됩니다.
-          </p>
-          <div
-            className="mb-1 hidden gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[1fr_6rem_8rem_auto]"
-            data-testid="product-form-variant-header"
-            aria-hidden="true"
-          >
-            <span>옵션명</span>
-            <span>재고</span>
-            <span>추가 가격</span>
-            <span />
-          </div>
-          <div className="space-y-3">
-            {variants.map((v, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_6rem_8rem_auto]"
-                data-testid={`product-form-variant-${i}`}
-              >
-                <input
-                  aria-label={`옵션명 ${i + 1}`}
-                  placeholder="옵션명"
-                  value={v.optionName}
-                  onChange={(e) => setVariant(i, { optionName: e.target.value })}
-                  className={inputCls}
-                  data-testid={`product-form-variant-name-${i}`}
-                />
-                <input
-                  aria-label={`재고 ${i + 1}`}
-                  inputMode="numeric"
-                  placeholder="재고"
-                  value={v.stock}
-                  onChange={(e) =>
-                    setVariant(i, { stock: e.target.value.replace(/[^0-9]/g, '') })
-                  }
-                  className={inputCls}
-                  data-testid={`product-form-variant-stock-${i}`}
-                />
-                <input
-                  aria-label={`추가 가격 ${i + 1}`}
-                  inputMode="numeric"
-                  placeholder="추가 가격"
-                  value={v.additionalPrice}
-                  onChange={(e) =>
-                    setVariant(i, {
-                      additionalPrice: e.target.value.replace(/[^0-9]/g, ''),
-                    })
-                  }
-                  className={inputCls}
-                  data-testid={`product-form-variant-addprice-${i}`}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => removeVariantRow(i)}
-                  disabled={variants.length <= 1}
-                  data-testid={`product-form-variant-remove-${i}`}
-                >
-                  삭제
-                </Button>
-              </div>
-            ))}
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={addVariantRow}
-            className="mt-3"
-            data-testid="product-form-variant-add"
-          >
-            옵션 추가
-          </Button>
-        </fieldset>
+        <ProductVariantsFieldset
+          variants={variants}
+          setVariant={setVariant}
+          addVariantRow={addVariantRow}
+          removeVariantRow={removeVariantRow}
+          inputCls={inputCls}
+        />
       )}
 
       {error && !confirmOpen && (
@@ -358,11 +185,7 @@ export function ProductForm({ existing }: ProductFormProps) {
         errorMessage={error}
         conflict={conflict}
         onConfirm={confirmSubmit}
-        onCancel={() => {
-          setConfirmOpen(false);
-          setError(null);
-          setConflict(false);
-        }}
+        onCancel={cancelConfirm}
       />
     </form>
   );
