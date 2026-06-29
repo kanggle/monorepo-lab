@@ -72,7 +72,7 @@ export function ErpMastersScreen({
       <p className="mb-6 text-sm text-muted-foreground">
         {mastersWritable
           ? '부서·직원·직급·비용센터·거래처 마스터를 조회하고 등록/수정/폐기할 수 있습니다 (TASK-PC-FE-048). 권한이 없는 작업은 실행 시 안내됩니다.'
-          : '부서·직원·직급·비용센터·거래처 마스터 조회 (읽기 전용). erp 운영 표면을 콘솔 안에서 조회합니다.'}
+          : '부서·직원·직급·비용센터·거래처 마스터 조회 (읽기 전용).'}
       </p>
 
       <AsOfPicker />

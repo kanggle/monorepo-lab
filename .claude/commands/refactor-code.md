@@ -37,6 +37,8 @@ Examples:
 
 ## Refactoring Categories
 
+> **Authoritative source**: the operation names and their allowed scope live in [`platform/refactoring-policy.md`](../../platform/refactoring-policy.md) — that policy wins. The labels below are this command's working vocabulary and map to the policy's canonical operations as: `duplication`→Reduce Duplication, `long-method`→Extract Method, `class extraction`→Extract Class, `layer-violation`→Move to Correct Layer, `pattern-mismatch`→Replace Pattern, `dead-code`→Remove Dead Code, `naming`→Rename, `complexity`→Simplify Conditional, `inline`→Inline, `restructure package`→Restructure Package. Prioritization order is also defined there.
+
 | Category | Description |
 |---|---|
 | **duplication** / `reduce duplication` | Duplicated logic across classes or methods |
