@@ -7,6 +7,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.ApplicationContextInitializer;
@@ -34,6 +35,14 @@ import org.testcontainers.utility.DockerImageName;
  * gradle task so the fast feedback loop stays Docker-free.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// Spring Boot disables metrics-export auto-configuration in @SpringBootTest by
+// default, so the PrometheusMeterRegistry bean is never created and the
+// /actuator/prometheus (PrometheusScrapeEndpoint) is not mapped → 404. This
+// re-enables metrics export (the scrape endpoint WarehouseIntegrationTest
+// asserts on) while leaving tracing off so no tracing exporter dials out.
+// (TASK-BE-458 — the real cause of the prometheus 404, not the meter-churn race
+// the old @DisabledIfEnvironmentVariable note hypothesised.)
+@AutoConfigureObservability(tracing = false)
 @ActiveProfiles("integration")
 @ContextConfiguration(initializers = MasterServiceIntegrationBase.Initializer.class)
 @ExtendWith(org.testcontainers.junit.jupiter.TestcontainersExtension.class)
