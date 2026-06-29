@@ -4,13 +4,18 @@ import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.po.status.ActorType;
 import com.example.scmplatform.procurement.domain.supplier.Supplier;
 import com.example.scmplatform.procurement.infrastructure.persistence.jpa.PurchaseOrderJpaRepository;
+import com.example.scmplatform.procurement.infrastructure.security.WebhookSignatureFilter;
+import com.example.scmplatform.procurement.infrastructure.security.WebhookSignatureVerifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -48,14 +53,33 @@ class ProcurementWebhookReplayIntegrationTest extends AbstractProcurementIntegra
     private static final String URL = "/api/procurement/webhooks/supplier-ack";
     private static final String WEBHOOK_SECRET = "scm-supplier-webhook-secret";
 
-    @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private WebApplicationContext wac;
+
+    @Autowired
+    private WebhookSignatureVerifier webhookSignatureVerifier;
 
     @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
     private PurchaseOrderJpaRepository poJpaForSetup;
+
+    /**
+     * Builds MockMvc with the {@link WebhookSignatureFilter} added explicitly, so
+     * the filter deterministically runs in front of the controller regardless of
+     * how {@code @AutoConfigureMockMvc} treats the {@code FilterRegistrationBean}
+     * registration. The filter's own path guard keeps it scoped to the webhook
+     * routes.
+     */
+    @BeforeEach
+    void setUpMockMvcWithFilter() {
+        mockMvc = MockMvcBuilders.webAppContextSetup(wac)
+                .addFilters(new WebhookSignatureFilter(webhookSignatureVerifier, objectMapper))
+                .build();
+    }
 
     // ---- helpers ----
 
