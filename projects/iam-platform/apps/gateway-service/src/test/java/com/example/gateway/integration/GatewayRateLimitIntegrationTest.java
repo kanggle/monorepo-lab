@@ -22,11 +22,9 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.io.IOException;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
@@ -52,15 +50,18 @@ class GatewayRateLimitIntegrationTest {
     static WireMockServer accountServiceMock;
     static KeyPair keyPair;
 
-    // TASK-BE-458 sibling (TASK-BE-457): a deterministic TCP-level fault
-    // downstream. On every accepted connection it sets SO_LINGER=0 and closes
-    // immediately, so the peer (Spring Cloud Gateway's Reactor Netty client)
-    // always receives a TCP RST before any HTTP response — a real, race-free
-    // "connection reset by peer". This replaces WireMock's
-    // Fault.CONNECTION_RESET_BY_PEER, whose reset timing raced the gateway's
-    // forward (~5-10% of CI runs leaked a 200 OK).
-    static ServerSocket faultDownstream;
-    static Thread faultDownstreamThread;
+    // TASK-BE-457: a deterministic "downstream connection failure" port. We grab
+    // an ephemeral loopback port and immediately release it, so NOTHING listens —
+    // every connect attempt is refused (ECONNREFUSED → ConnectException).
+    //
+    // Why connection-refused and not an accept-then-reset server: a mid-flight
+    // RST lets Spring Cloud Gateway commit a 200 response before the reset error
+    // reaches GatewayErrorConfig, which then refuses to override an already
+    // committed status (see its isCommitted() guard) — that is exactly the
+    // ~5-10% "200 OK leak" that got this test disabled. A refused connect fails
+    // BEFORE any response is committed, so GatewayErrorConfig deterministically
+    // maps the ConnectException to 503.
+    static int faultDownstreamPort;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -107,32 +108,18 @@ class GatewayRateLimitIntegrationTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"id\":\"account-123\"}")));
 
-        // Deterministic connection-reset downstream (TASK-BE-457). Accept-loop on
-        // an ephemeral loopback port; every connection is reset immediately.
-        faultDownstream = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
-        faultDownstreamThread = new Thread(() -> {
-            while (!faultDownstream.isClosed()) {
-                try (Socket socket = faultDownstream.accept()) {
-                    // SO_LINGER=0 makes close() send a RST (not a graceful FIN),
-                    // and we never write an HTTP response — so the gateway can
-                    // never observe a 2xx, only a connection fault → 5xx.
-                    socket.setSoLinger(true, 0);
-                } catch (IOException closed) {
-                    // ServerSocket closed in @AfterAll → exit the accept loop.
-                    return;
-                }
-            }
-        }, "be457-fault-downstream");
-        faultDownstreamThread.setDaemon(true);
-        faultDownstreamThread.start();
+        // Reserve an ephemeral loopback port and immediately release it, so
+        // connections to it are refused (TASK-BE-457). The try-with-resources
+        // close happens before any test runs, leaving the port unbound.
+        try (ServerSocket probe = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            faultDownstreamPort = probe.getLocalPort();
+        }
     }
 
     @AfterAll
-    static void afterAll() throws IOException {
+    static void afterAll() {
         if (authServiceMock != null) authServiceMock.stop();
         if (accountServiceMock != null) accountServiceMock.stop();
-        if (faultDownstream != null) faultDownstream.close();
-        if (faultDownstreamThread != null) faultDownstreamThread.interrupt();
     }
 
     @DynamicPropertySource
@@ -147,9 +134,9 @@ class GatewayRateLimitIntegrationTest {
         registry.add("spring.cloud.gateway.routes[1].uri", accountServiceMock::baseUrl);
         registry.add("spring.cloud.gateway.routes[1].id", () -> "account-service");
         registry.add("spring.cloud.gateway.routes[1].predicates[0]", () -> "Path=/api/accounts/**");
-        // TASK-BE-457: route the fault path at the connection-reset downstream.
+        // TASK-BE-457: route the fault path at the unbound (refused) port.
         registry.add("spring.cloud.gateway.routes[2].uri",
-                () -> "http://127.0.0.1:" + faultDownstream.getLocalPort());
+                () -> "http://127.0.0.1:" + faultDownstreamPort);
         registry.add("spring.cloud.gateway.routes[2].id", () -> "fault-downstream");
         registry.add("spring.cloud.gateway.routes[2].predicates[0]", () -> "Path=/api/fault/**");
         // login scope max=2 for fast rate-limit testing
@@ -272,24 +259,25 @@ class GatewayRateLimitIntegrationTest {
      *
      * <p><b>Original flake</b>: WireMock's {@code Fault.CONNECTION_RESET_BY_PEER}
      * stub raced the Reactor Netty client used by Spring Cloud Gateway — in
-     * ~5-10% of CI runs the reset was not applied in time and the response came
-     * back {@code 200 OK} instead of {@code 5xx}. The gateway's production
-     * error path was never in doubt (covered by unit tests); the flake lived
-     * entirely in WireMock's fault-timing.
+     * ~5-10% of CI runs the reset landed mid-flight, after the gateway had
+     * already committed a {@code 200 OK}, so {@code GatewayErrorConfig} (which
+     * will not override an already-committed status) left it at 200 instead of
+     * 5xx. The gateway's production error path was never in doubt; the flake was
+     * the reset *timing*.
      *
-     * <p><b>Fix</b>: drive the fault from a deterministic TCP-level downstream
-     * ({@link #faultDownstream}) instead of a WireMock fault. That server resets
-     * (SO_LINGER=0, immediate close, no HTTP response) on every connection, so
-     * the gateway always observes a real connection fault and maps it to 5xx —
-     * no timing window, no leaked 200. Asserts {@code is5xxServerError()} (not a
-     * single hardcoded code) because CONNECTION_RESET vs premature-close may
-     * surface as 502 or 503.
+     * <p><b>Fix</b>: inject the fault as a refused connection ({@code /api/fault}
+     * routes at {@link #faultDownstreamPort}, an unbound loopback port). The
+     * gateway's connect attempt fails with {@code ConnectException} BEFORE any
+     * response is committed, so {@code GatewayErrorConfig} deterministically maps
+     * it to 503 — no timing window, no leaked 200. Asserts
+     * {@code is5xxServerError()} (not a hardcoded code) since the mapping is a
+     * 5xx (503 SERVICE_UNAVAILABLE).
      */
     @Test
-    @DisplayName("다운스트림 연결 리셋(Fault) → 게이트웨이가 5xx 반환")
+    @DisplayName("다운스트림 연결 실패(refused) → 게이트웨이가 5xx 반환")
     void downstream_connectionFault_returns5xx() {
         String token = createValidToken("account-123", "fan-platform");
-        webTestClient.get().uri("/api/fault/reset")
+        webTestClient.get().uri("/api/fault/refused")
                 .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().is5xxServerError();
