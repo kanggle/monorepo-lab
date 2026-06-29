@@ -330,12 +330,22 @@ End-user OAuth2 (the fan's access token). All routes are tenant + account scoped
 
 | Method | Path | Semantics |
 |---|---|---|
-| `GET` | `/api/fan/notifications?status={UNREAD\|READ}&page=&size=&sort=` | the caller's own notifications, newest first; `status` optional filter; paginated envelope |
+| `GET` | `/api/fan/notifications?unread={true\|false}&page=&size=&sort=` | the caller's own notifications, newest first; `unread` optional filter; paginated envelope |
 | `POST` | `/api/fan/notifications/{id}/read` | `UNREAD → READ` (sets `readAt`); re-marking a READ notification is an idempotent 200 no-op |
 
 - The recipient is always the authenticated `accountId` (`sub`); a fan can read
   ONLY their own notifications. A notification belonging to another account or
   tenant → 404 `NOTIFICATION_NOT_FOUND` (no existence leak).
+- **Read filter** — `unread` is the normative cross-domain param
+  ([`platform/contracts/notification-inbox-contract.md`](../../../../../platform/contracts/notification-inbox-contract.md) § 2.1): `unread=true`
+  → unread only, `unread=false` → read only, absent → all. The pre-existing
+  `status={UNREAD|READ}` param is retained as a **back-compat alias**, applied
+  only when `unread` is absent (ADR-MONO-043 P2 / TASK-FAN-BE-023).
+- **Item shape** — list/detail items conform to the § 1 envelope: each carries
+  `sourceDomain="fan"` (attribution for the console-bff aggregator) and a
+  nullable `deepLink` (currently `null` — fan derives no in-app link yet, omitted
+  under NON_NULL). The fan-native `status`/`membershipId` fields are preserved as
+  non-normative domain extensions (contract § 1.2).
 - Response envelope + pagination follow `platform/` (same `PageResponse` shape as
   membership/community list endpoints).
 
