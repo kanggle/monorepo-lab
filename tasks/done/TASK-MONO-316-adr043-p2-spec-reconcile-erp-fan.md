@@ -8,7 +8,7 @@ ADR-MONO-043 P2 spec reconcile — sync erp + fan notification specs to the ship
 
 # Status
 
-ready
+done
 
 # Owner
 

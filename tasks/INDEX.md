@@ -109,9 +109,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
-## ready
-
-- `TASK-MONO-316-adr043-p2-spec-reconcile-erp-fan.md` — **READY** (authored 2026-06-29, ADR-043 P2 spec-vs-impl drift sweep). **erp + fan notification 스펙을 이미 머지된 P2 코드에 reconcile** (code-ahead drift). erp `notification-api.md § Common shape`에 `sourceDomain`/`deepLink` 추가(+200 예시), fan `architecture.md` GET 필터 `status=`→`unread=` normative(+`status` back-compat alias) + §1 conformance(`sourceDomain="fan"`/nullable `deepLink`) 노트. **doc-only**, cross-project(erp+fan) 단일 atomic PR, 권위=`platform/contracts/notification-inbox-contract.md`. RG-3(platform-console `console-integration-contract` aggregator 재서술)=활성 ADR-043 console 세션 영역이라 Out-of-Scope. 분석=Opus 4.8 / 구현=Opus 직접.
+(empty)
 
 ## in-progress
 
@@ -122,6 +120,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 (empty)
 
 ## done
+
+- `TASK-MONO-316-adr043-p2-spec-reconcile-erp-fan.md` — **DONE (2026-06-29, 3-dim verified — impl PR #2018 squash `7eeb575ca`)**. ADR-043 P2 spec-vs-impl drift sweep 산출물. erp+fan notification 스펙을 이미 머지된 P2 코드(ERP-BE-027 #2009 / FAN-BE-023 #2010)에 reconcile(code-ahead drift): erp `notification-api.md`에 `sourceDomain`/`deepLink` 추가(+200 예시), fan `architecture.md` GET 필터 `status=`→`unread=` normative(+`status` back-compat alias) + §1 conformance 필드. grep으로 머지 DTO/컨트롤러 대조 검증(phantom 배제). doc-only(AC-4 code 0변경). RG-3(console-integration-contract)=활성 ADR-043 console 세션 영역이라 Out-of-Scope. **3-dim**: (a) MERGED + `7eeb575ca`; (b) origin/main tip = `7eeb575ca`; (c) pre-merge failing required = 0 (doc fast-lane: `changes` pass + FE E2E smoke pass + 나머지 skip). 동 PR commit-2로 미티켓 백로그 3건 티켓화(BE-457/BE-458/SCM-BE-033, ready 잔류). 분석=Opus 4.8 / 구현=Opus 직접.
 
 - `TASK-MONO-312-lib-outbox-v1-dead-code-removal.md` — **DONE (2026-06-28, 3-dim verified — impl PR #2015 squash `f3513fc4f`)**. outbox v2 sweep(#1997~#2004) 후속: `libs/java-messaging`의 v1 outbox dead-code 제거(프로덕션 consumer 0건 검증). 삭제 6개 v1 클래스(`OutboxPublisher`/`OutboxPollingScheduler`/`OutboxWriter`/`OutboxJpaEntity`/`OutboxJpaRepository`/`BaseEventPublisher`) + 4개 lib 단위테스트(−918 lines). **보존 config 수술**: `OutboxAutoConfiguration` v1 `@Bean` 2개 제거(클래스 보존 — ~수십 서비스가 `exclude=`로 하드코딩, `@Import(OutboxJpaConfig)`로 라이브 ProcessedEvent 유지), `OutboxJpaConfig`는 `@EntityScan`+`@EnableJpaRepositories` 둘 다에서 v1 entity/repo 트림하고 **`ProcessedEventJpaEntity`/`ProcessedEventJpaRepository`(v2 dedup, 라이브) 유지**, `OutboxSchedulerConfig` 보존(게이트 `outbox.polling.enabled`=v2 사용; dangling `{@link}` javadoc만 중화). iam security `orm.xml`(vestigial OutboxJpaEntity override) 삭제. 서비스 `exclude=`/javadoc cosmetic=Out-of-Scope. **3-dim**: (a) MERGED + `f3513fc4f`; (b) origin/main tip = `f3513fc4f`; (c) pre-merge failing required = 0 (Build&Test + Integration×9[iam Testcontainers 6m8s=AC-7 완결] + E2E smoke×5 전부 GREEN). 분석=Opus 4.8 / 구현=Opus 직접.
 
