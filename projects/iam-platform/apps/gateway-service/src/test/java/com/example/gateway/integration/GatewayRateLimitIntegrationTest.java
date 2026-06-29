@@ -248,6 +248,22 @@ class GatewayRateLimitIntegrationTest {
      * (a) replace WireMock fault with a TCP-level proxy that closes the
      * socket reliably, (b) raise the gateway's downstream timeout so the
      * fault has time to apply, (c) Awaitility-based retry of the assertion.
+     *
+     * <p><b>TASK-BE-457 investigation (2026-06-29)</b>: re-enabling this on CI
+     * showed both deterministic-fault approaches still return {@code 200 OK},
+     * not 5xx. (a) An accept-then-RST TCP server resets mid-flight, after Spring
+     * Cloud Gateway has committed a 200, and {@code GatewayErrorConfig} will not
+     * override an already-committed status. (b) A refused connection (unbound
+     * port) ALSO returned 200 — and the gateway logs reveal why the lane is
+     * unreliable: the iam {@code Integration} lane has Redis testcontainer
+     * instability ({@code Connection refused} on the Lettuce client / access
+     * -invalidation check), so {@code JwtAuthenticationFilter} fail-opens and the
+     * fault request is logged as {@code GET /api/fault 200}. The 5xx mapping is
+     * entangled with Redis-down fail-open and response-commit timing rather than
+     * the WireMock fault race above. Needs LOCAL {@code :integrationTest}
+     * reproduction (Docker blocked on the current dev host) to separate the
+     * gateway error-mapping behaviour from the lane's Redis flakiness. See
+     * TASK-BE-457 § Investigation Findings.
      */
     @Test
     @Disabled("TASK-MONO-044c-1 RC#3: sporadic WireMock fault stub race; tracked for nightly via TASK-MONO-044 § AC #8")

@@ -161,6 +161,21 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
+    // TASK-BE-458 investigation (2026-06-29): re-enabling this on CI shows the
+    // ACTUAL failure is NOT the "HTTP 200 with missing outbox lines" the
+    // disabledReason below describes. On the GitHub `Integration (master-service…)`
+    // lane, /actuator/prometheus returns HTTP 404 for the full 30s budget
+    // (junit XML: "expected: 200 OK but was: 404 NOT_FOUND"). The endpoint is
+    // exposed (management.endpoints.web.exposure.include lists prometheus, and
+    // micrometer-registry-prometheus is on the :integrationTest classpath), yet
+    // the PrometheusScrapeEndpoint is not answering in the integration context —
+    // a deeper issue than meter-churn. Two attempts were tried and both still
+    // 404'd: (a) @DirtiesContext(AFTER_CLASS) on PublisherResilienceIntegrationTest
+    // (made it worse — a rebuilt context re-registers against the JVM-static
+    // Prometheus CollectorRegistry); (b) management.metrics.enable.kafka=false.
+    // Root cause of the 404 needs LOCAL :integrationTest reproduction (Docker is
+    // blocked on the current dev host). Keeping disabled until then. See
+    // TASK-BE-458 § Investigation Findings.
     @Test
     @DisplayName("prometheus actuator endpoint exposes the three outbox metrics")
     @DisabledIfEnvironmentVariable(

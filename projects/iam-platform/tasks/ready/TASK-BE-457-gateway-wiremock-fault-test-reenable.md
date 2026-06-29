@@ -89,3 +89,35 @@ After this task, `gateway-service` has no `@Disabled` integration test for the c
 - [ ] AC-1…AC-4 satisfied
 - [ ] Root-cause note recorded in the close summary
 - [ ] Ready for review
+
+---
+
+# Investigation Findings (2026-06-29)
+
+A first re-enable attempt (PR #2030, closed unmerged) ran the test on the
+`Integration (iam, Testcontainers)` CI lane. Both deterministic-fault approaches
+returned **HTTP 200**, not 5xx:
+
+- **accept-then-RST TCP server**: resets mid-flight, after Spring Cloud Gateway
+  has already committed a 200; `GatewayErrorConfig` will not override an
+  already-committed status (its `isCommitted()` guard) — this is exactly the
+  ~5-10% "200 OK leak" path the original note describes, hit deterministically.
+- **refused connection (unbound loopback port)**: ALSO returned 200. Gateway logs
+  reveal the lane has **Redis testcontainer instability** (`Connection refused` on
+  the Lettuce client and the access-invalidation check), so
+  `JwtAuthenticationFilter` fail-opens and the fault request is logged as
+  `GET /api/fault 200`. junit XML: `expected:<SERVER_ERROR> but was:<SUCCESSFUL>`.
+
+So the 5xx mapping is entangled with **Redis-down fail-open + response-commit
+timing**, not the WireMock fault-stub race the original note assumes.
+`GatewayErrorConfig` DOES map `ConnectException → 503`, but only when the response
+is not already committed — establishing that ordering deterministically is the
+real problem.
+
+**Real next step**: reproduce `:integrationTest` LOCALLY (Docker blocked on the
+current dev host). First stabilise the lane's Redis (the reconnect failures may be
+an independent infra flake) so the fault behaviour is observable in isolation,
+then decide whether the gateway returning 200 on a downstream connection failure
+is a test-harness gap or a real `GatewayErrorConfig`/commit-ordering bug worth its
+own fix task. Do NOT re-attempt blind on CI. Spring Boot version at investigation
+time: 3.4.1.
