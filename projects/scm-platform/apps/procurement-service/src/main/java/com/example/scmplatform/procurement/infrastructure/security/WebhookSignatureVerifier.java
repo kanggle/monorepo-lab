@@ -1,6 +1,5 @@
 package com.example.scmplatform.procurement.infrastructure.security;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -43,7 +42,7 @@ public class WebhookSignatureVerifier {
             @Value("${scmplatform.procurement.supplier.webhook-freshness-seconds:300}")
             long freshnessSeconds,
             SeenSignatureStore store,
-            @Qualifier("webhookClock") Clock clock) {
+            Clock clock) {
         this.secret = secret;
         this.freshnessSeconds = freshnessSeconds;
         this.store = store;
