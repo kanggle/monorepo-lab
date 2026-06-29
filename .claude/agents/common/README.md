@@ -42,6 +42,7 @@ capabilities: [...]           # what the agent can do — used by dispatcher sco
 languages: [...]              # languages worked in (java, kotlin, typescript, sql, yaml, ...)
 domains: [all]                # carries no project leak — matches every domain
 service_types: [...]          # optional, used by dispatcher when service_type matches
+skills: <comma-separated>     # optional, skill packs the agent loads (paths under .claude/skills/, e.g. database/migration-strategy)
 triggers: [...]               # optional keyword triggers
 ---
 ```

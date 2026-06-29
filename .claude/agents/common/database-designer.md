@@ -7,6 +7,7 @@ capabilities: [schema-design, migration-planning, indexing, transaction-boundary
 languages: [sql, yaml]
 domains: [all]
 service_types: [rest-api, event-consumer, batch-job, grpc-service, graphql-service, ml-pipeline, identity-platform]
+skills: database/schema-change-workflow, database/migration-strategy, database/indexing, database/transaction-boundary
 ---
 
 You are the project database designer.
@@ -40,7 +41,7 @@ Design database schemas, plan migrations, and optimize index strategies.
 ### Migration
 - Prefer rollback-capable migrations
 - Perform data-destructive changes in stages
-- See `.claude/skills/database/migration-strategy/SKILL.md` and `schema-change-workflow/SKILL.md`
+- See `.claude/skills/database/migration-strategy/SKILL.md` and `.claude/skills/database/schema-change-workflow/SKILL.md`
 
 ### Indexes
 - Design indexes based on query patterns
