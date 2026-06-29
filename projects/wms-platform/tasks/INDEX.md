@@ -70,6 +70,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-438 | **READY**. master-service outbox v1→v2 마이그레이션(ADR-MONO-004 §6 row 1). v2 `AbstractOutboxPublisher<R>`로 전환 — 신규 Flyway `master_outbox`(UUID event_id) + 엔티티/리포 + write-path(UUID/occurred_at 생성) + 스케줄러 교체 + `MicrometerOutboxMetrics` + 테스트 재작성. backoff/헤더/lag 메트릭 획득. ADR "cosmetic" 표기지만 실측 schema-migration급. master IT=CI Linux 권위(로컬 Testcontainers 차단). 구현 보류=별도 세션(Opus). | master-service | code, event |
+| TASK-BE-458 | **READY** (2026-06-29 code-marker sweep). master-service `WarehouseIntegrationTest.prometheusEndpoint_exposesOutboxMetrics` 가 `@DisabledIfEnvironmentVariable(CI)` — BE-020이 micrometer-kafka 미터 re-attach(브로커 재시작 후) vs `/actuator/prometheus` scrape-body race를 follow-up으로 미뤘으나 **티켓 미생성**(sweep 확인). race 진단·결정론화 후 guard 제거. 회귀 가드=≥20-run green(Kafka pause/unpause 순서 포함) + master `:integrationTest`. 구현 권장=Sonnet 4.6. | master-service | code, test |
 
 ## in-progress
 
