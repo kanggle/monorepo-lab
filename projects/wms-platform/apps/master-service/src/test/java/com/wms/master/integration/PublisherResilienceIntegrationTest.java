@@ -18,7 +18,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -33,21 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Runs under {@code @Tag("integration")} only, because the whole point is
  * real broker behavior.
- *
- * <p>{@code @DirtiesContext(AFTER_CLASS)} (TASK-BE-458): pausing/unpausing the
- * shared Kafka container forces this context's Kafka clients into a reconnect
- * storm, during which micrometer-kafka continuously re-attaches its client
- * meters to the restarted broker. That meter churn races the
- * {@code /actuator/prometheus} scrape-body composition, so any later test class
- * reusing this cached context (notably
- * {@link WarehouseIntegrationTest#prometheusEndpoint_exposesOutboxMetrics()})
- * intermittently scrapes a body missing the outbox meter families. This is the
- * ONLY context-polluting class in the suite, so discarding its context after the
- * class guarantees every subsequent class boots a fresh context whose clients
- * connect once, cleanly, to the now-stable broker — no reconnect churn, no
- * scrape race.
  */
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
 
     private static final String WRITE_ROLE = "MASTER_WRITE";

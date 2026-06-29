@@ -165,18 +165,17 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
     void prometheusEndpoint_exposesOutboxMetrics() {
         // Permit-all endpoint per SecurityConfig — no auth.
         //
-        // CI gate removed (TASK-BE-458). The historical flake was NOT in this
-        // test or the outbox gauge lifecycle (TASK-BE-020 already pinned the
-        // gauge with strongReference(true) + an @Autowired reference on the base
-        // class). It was that this test could reuse the SAME cached context as
-        // PublisherResilienceIntegrationTest, whose Kafka pause/unpause drove a
-        // reconnect storm; micrometer-kafka's continuous client-meter re-attach
-        // then raced the /actuator/prometheus scrape-body composition, dropping
-        // the outbox meter families for longer than the 30s budget. That class
-        // now carries @DirtiesContext(AFTER_CLASS), so this test always runs in
-        // a fresh context whose Kafka clients connect once, cleanly — no churn.
-        // The 30s Awaitility budget below now only absorbs ordinary
-        // first-scrape/registration timing, not a broker-restart meter storm.
+        // CI gate removed (TASK-BE-458). The flake was the micrometer-kafka
+        // client meters (kafka.consumer.* / kafka.producer.*) churning as the
+        // Kafka client refreshed metadata / reconnected — amplified after
+        // PublisherResilienceIntegrationTest's pause-unpause — which raced the
+        // /actuator/prometheus scrape-body composition and dropped the outbox
+        // meter families for longer than the 30s budget. The integration profile
+        // now disables kafka client metrics (management.metrics.enable.kafka
+        // =false in MasterServiceIntegrationBase), so the scrape only ever
+        // composes the stable app meters and the three outbox families are
+        // always present. The outbox gauge lifecycle itself was already pinned by
+        // TASK-BE-020 (strongReference(true) + an @Autowired base-class ref).
         await().atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {

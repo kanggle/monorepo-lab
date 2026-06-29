@@ -113,7 +113,18 @@ public abstract class MasterServiceIntegrationBase {
                     // Keep idempotency TTL short in tests to avoid cross-test
                     // pollution if the same key is reused (should not happen
                     // but defensive)
-                    "master.idempotency.ttl-seconds=120"
+                    "master.idempotency.ttl-seconds=120",
+                    // TASK-BE-458: disable micrometer-kafka client meters in the
+                    // integration profile. Their register/remove churn as the
+                    // kafka client refreshes metadata / reconnects (amplified by
+                    // PublisherResilienceIntegrationTest's broker pause-unpause)
+                    // raced the /actuator/prometheus scrape and intermittently
+                    // dropped the master.outbox.* meter families from the body.
+                    // No test asserts kafka.* client metrics — only the app's
+                    // own outbox meters — so denying them is safe and removes the
+                    // sole churn source. Production observability is unaffected
+                    // (integration profile only).
+                    "management.metrics.enable.kafka=false"
             ).applyTo(context.getEnvironment());
         }
     }
