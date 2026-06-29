@@ -1,22 +1,13 @@
 'use client';
 
-import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
-import { ApiError, messageForCode } from '@/shared/api/errors';
-import {
-  useShippings,
-  useUpdateShippingStatus,
-  useRefreshTracking,
-} from '../hooks/use-ecommerce-shippings';
-import {
-  SHIPPING_DEFAULT_PAGE_SIZE,
-  SHIPPING_STATUS_VALUES,
-  allowedNextStatus,
-  type ShippingList,
-  type ShippingListParams,
-} from '../api/shipping-types';
+import { messageForCode } from '@/shared/api/errors';
+import { type ShippingList } from '../api/shipping-types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ShipFormDialog } from './ShipFormDialog';
+import { ShippingsTable } from './ShippingsTable';
+import { STATUS_FILTER_OPTIONS, statusLabel } from './shipping-labels';
+import { useShippingsScreen } from './use-shippings-screen';
 
 /**
  * ecommerce shipping operations list section (TASK-PC-FE-088 — § 2.4.10.3).
@@ -34,157 +25,43 @@ import { ShipFormDialog } from './ShipFormDialog';
  *
  * Resilience (§ 2.5): 401 handled by the server route (whole-session re-login);
  * 403 → inline actionable; 503/timeout → this section degrades only.
+ *
+ * TASK-PC-FE-140: query/state/mutations live in {@link useShippingsScreen}, the
+ * list table + pagination in {@link ShippingsTable}, display labels in
+ * `shipping-labels`. This container wires them to the heading/filter/branch +
+ * the two dialogs (behavior-preserving split).
  */
 
 export interface ShippingsScreenProps {
   shippings: ShippingList;
 }
 
-const STATUS_FILTER_OPTIONS = ['', ...SHIPPING_STATUS_VALUES] as const;
-
-const STATUS_LABELS: Record<string, string> = {
-  PREPARING: '준비중',
-  SHIPPED: '발송',
-  IN_TRANSIT: '배송중',
-  DELIVERED: '배송완료',
-};
-
-function statusLabel(s: string): string {
-  return STATUS_LABELS[s] ?? s;
-}
-
-const NEXT_STATUS_LABELS: Record<string, string> = {
-  SHIPPED: '배송 시작',
-  IN_TRANSIT: '배송중',
-  DELIVERED: '배송완료',
-};
-
-function nextStatusLabel(s: string): string {
-  return NEXT_STATUS_LABELS[s] ?? s;
-}
-
 export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
-  const statusFid = useId();
-
-  const [statusFilter, setStatusFilter] = useState('');
-  const [query, setQuery] = useState<ShippingListParams>({
-    page: 0,
-    size: shippings.size || SHIPPING_DEFAULT_PAGE_SIZE,
-  });
-
-  const seeded = (query.page ?? 0) === 0 && !query.status;
-  const listQ = useShippings(query, seeded ? shippings : undefined);
-  // Only the seeded (page 0, no filter) query may fall back to the server-rendered
-  // `shippings` seed. For a filtered/paginated query, falling back to the seed would
-  // flash the full unfiltered list while the new query is still in flight — instead
-  // we render a loading placeholder until the real result lands.
-  const data = seeded ? listQ.data ?? shippings : listQ.data;
-  const loading = data === undefined;
-
-  const apiError =
-    listQ.error instanceof ApiError ? (listQ.error as ApiError) : null;
-  const forbidden = apiError?.status === 403;
-  const degraded =
-    listQ.isError && (!apiError || apiError.status >= 500) && !forbidden;
-
-  // --- status transition --------------------------------------------------
-  const updateStatus = useUpdateShippingStatus();
-  const refreshTracking = useRefreshTracking();
-
-  // Shared pending guard — disables all row actions while any mutation is inflight.
-  const isAnyPending = updateStatus.isPending || refreshTracking.isPending;
-
-  // Confirm dialog (for non-SHIPPED transitions — just confirm-gated)
-  const [pendingTransition, setPendingTransition] = useState<{
-    id: string;
-    nextStatus: string;
-  } | null>(null);
-  const [transitionError, setTransitionError] = useState<string | null>(null);
-
-  // ShipFormDialog (for PREPARING → SHIPPED — needs carrier + trackingNumber).
-  // Carries the row's `wmsRouted` so the dialog can gate the WMS-deduct toggle
-  // (ADR-MONO-022 D4 v2(c)).
-  const [shipDialog, setShipDialog] = useState<{
-    id: string;
-    wmsRouted: boolean;
-  } | null>(null);
-  const [shipError, setShipError] = useState<string | null>(null);
-
-  function openTransition(id: string, nextStatus: string, wmsRouted: boolean) {
-    if (nextStatus === 'SHIPPED') {
-      setShipError(null);
-      setShipDialog({ id, wmsRouted });
-    } else {
-      setTransitionError(null);
-      setPendingTransition({ id, nextStatus });
-    }
-  }
-
-  function confirmTransition() {
-    if (!pendingTransition) return;
-    setTransitionError(null);
-    updateStatus.mutate(
-      { id: pendingTransition.id, body: { status: pendingTransition.nextStatus } },
-      {
-        onSuccess: () => setPendingTransition(null),
-        onError: (e) => {
-          const code = e instanceof ApiError ? e.code : 'SERVICE_UNAVAILABLE';
-          setTransitionError(
-            messageForCode(code, '상태를 변경하지 못했습니다.'),
-          );
-        },
-      },
-    );
-  }
-
-  function confirmShip(payload: {
-    carrier: string;
-    trackingNumber: string;
-    deductWmsInventory: boolean;
-  }) {
-    if (!shipDialog) return;
-    setShipError(null);
-    updateStatus.mutate(
-      {
-        id: shipDialog.id,
-        body: {
-          status: 'SHIPPED',
-          carrier: payload.carrier,
-          trackingNumber: payload.trackingNumber,
-          // Only send the flag when set (true) — keep a `false` off the wire to
-          // match the existing minimal-body convention; the producer defaults it.
-          ...(payload.deductWmsInventory
-            ? { deductWmsInventory: true }
-            : {}),
-        },
-      },
-      {
-        onSuccess: () => setShipDialog(null),
-        onError: (e) => {
-          const code = e instanceof ApiError ? e.code : 'SERVICE_UNAVAILABLE';
-          setShipError(messageForCode(code, '배송 시작에 실패했습니다.'));
-        },
-      },
-    );
-  }
-
-  function triggerRefresh(id: string) {
-    refreshTracking.mutate(id);
-  }
-
-  function submitFilter(e: React.FormEvent) {
-    e.preventDefault();
-    setQuery({
-      status: statusFilter || undefined,
-      page: 0,
-      size: shippings.size || SHIPPING_DEFAULT_PAGE_SIZE,
-    });
-  }
-
-  const rows = data?.content ?? [];
-  const totalPages = data
-    ? Math.max(1, Math.ceil(data.totalElements / (data.size || 20)))
-    : 1;
+  const {
+    statusFid,
+    statusFilter,
+    setStatusFilter,
+    submitFilter,
+    forbidden,
+    degraded,
+    loading,
+    rows,
+    isAnyPending,
+    openTransition,
+    triggerRefresh,
+    pagination,
+    pendingTransition,
+    transitionError,
+    confirmTransition,
+    cancelTransition,
+    transitionConfirmLabel,
+    transitionDescription,
+    updateStatusPending,
+    shipDialog,
+    shipError,
+    confirmShip,
+    cancelShip,
+  } = useShippingsScreen(shippings);
 
   return (
     <section aria-labelledby="ecommerce-shippings-heading">
@@ -264,156 +141,26 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
           표시할 배송이 없습니다.
         </p>
       ) : (
-        <>
-          <table className="mb-3 data-table" data-testid="shipping-table">
-            <caption className="sr-only">배송 목록</caption>
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th scope="col" className="p-2">
-                  배송 ID
-                </th>
-                <th scope="col" className="p-2">
-                  주문 ID
-                </th>
-                <th scope="col" className="p-2">
-                  상태
-                </th>
-                <th scope="col" className="p-2">
-                  택배사
-                </th>
-                <th scope="col" className="p-2">
-                  운송장 번호
-                </th>
-                <th scope="col" className="p-2">
-                  생성일
-                </th>
-                <th scope="col" className="p-2">
-                  작업
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((s, i) => {
-                const next = allowedNextStatus(s.status);
-                return (
-                  <tr
-                    key={s.shippingId}
-                    data-testid={`shipping-row-${i}`}
-                    className="border-b border-border"
-                  >
-                    <td className="p-2 text-xs break-all">{s.shippingId}</td>
-                    <td className="p-2 text-xs break-all">{s.orderId}</td>
-                    <td
-                      className="p-2"
-                      data-testid={`shipping-row-status-${i}`}
-                    >
-                      {statusLabel(s.status)}
-                    </td>
-                    <td className="p-2 text-sm">
-                      {s.carrier ?? '—'}
-                    </td>
-                    <td className="p-2 text-xs">
-                      {s.trackingNumber ?? '—'}
-                    </td>
-                    <td className="p-2 text-sm text-muted-foreground">
-                      {new Date(s.createdAt).toLocaleDateString('ko-KR')}
-                    </td>
-                    <td className="p-2">
-                      <div className="flex gap-2">
-                        {next !== null && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={isAnyPending}
-                            onClick={() =>
-                              openTransition(
-                                s.shippingId,
-                                next,
-                                s.wmsRouted ?? false,
-                              )
-                            }
-                            data-testid={`shipping-transition-${i}`}
-                          >
-                            {nextStatusLabel(next)}
-                          </Button>
-                        )}
-                        {s.status !== 'PREPARING' && s.status !== 'DELIVERED' && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={isAnyPending}
-                            onClick={() => triggerRefresh(s.shippingId)}
-                            data-testid={`shipping-refresh-${i}`}
-                          >
-                            추적 동기화
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <nav
-            className="flex items-center justify-between"
-            aria-label="배송 페이지 이동"
-          >
-            <Button
-              variant="secondary"
-              disabled={(query.page ?? 0) <= 0}
-              onClick={() =>
-                setQuery((q) => ({
-                  ...q,
-                  page: Math.max(0, (q.page ?? 0) - 1),
-                }))
-              }
-              data-testid="shipping-prev"
-            >
-              이전
-            </Button>
-            <span
-              className="text-sm text-muted-foreground"
-              data-testid="shipping-pageinfo"
-            >
-              {`${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={(data?.page ?? 0) + 1 >= totalPages}
-              onClick={() =>
-                setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-              }
-              data-testid="shipping-next"
-            >
-              다음
-            </Button>
-          </nav>
-        </>
+        <ShippingsTable
+          rows={rows}
+          isAnyPending={isAnyPending}
+          openTransition={openTransition}
+          triggerRefresh={triggerRefresh}
+          pagination={pagination}
+        />
       )}
 
       {/* Confirm dialog for non-SHIPPED transitions */}
       <ConfirmDialog
         open={pendingTransition !== null}
         title="배송 상태를 변경할까요?"
-        description={
-          pendingTransition
-            ? `배송 #${pendingTransition.id} 상태를 "${nextStatusLabel(pendingTransition.nextStatus)}"(으)로 변경합니다.`
-            : ''
-        }
-        confirmLabel={
-          pendingTransition
-            ? nextStatusLabel(pendingTransition.nextStatus)
-            : '확인'
-        }
+        description={transitionDescription}
+        confirmLabel={transitionConfirmLabel}
         tone="default"
-        pending={updateStatus.isPending}
+        pending={updateStatusPending}
         errorMessage={transitionError}
         onConfirm={confirmTransition}
-        onCancel={() => {
-          setPendingTransition(null);
-          setTransitionError(null);
-        }}
+        onCancel={cancelTransition}
       />
 
       {/* ShipFormDialog for PREPARING → SHIPPED (needs carrier + trackingNumber;
@@ -422,13 +169,10 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
         open={shipDialog !== null}
         shippingId={shipDialog?.id ?? ''}
         wmsRouted={shipDialog?.wmsRouted ?? false}
-        pending={updateStatus.isPending}
+        pending={updateStatusPending}
         errorMessage={shipError}
         onConfirm={confirmShip}
-        onCancel={() => {
-          setShipDialog(null);
-          setShipError(null);
-        }}
+        onCancel={cancelShip}
       />
     </section>
   );
