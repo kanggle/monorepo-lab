@@ -12,7 +12,6 @@ import java.util.UUID;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
@@ -163,35 +162,18 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
 
     @Test
     @DisplayName("prometheus actuator endpoint exposes the three outbox metrics")
-    @DisabledIfEnvironmentVariable(
-            named = "CI",
-            matches = "true",
-            disabledReason =
-                    "TASK-BE-020 added strongReference(true) on the outbox.pending_count "
-                            + "gauge and an @Autowired OutboxMetrics field on "
-                            + "MasterServiceIntegrationBase, which removes the GC-eligibility "
-                            + "race for the gauge function. That alone is not enough on "
-                            + "GitHub-hosted runners: when this test runs after "
-                            + "PublisherResilienceIntegrationTest pauses + unpauses the Kafka "
-                            + "container, the /actuator/prometheus scrape body comes back with "
-                            + "HTTP 200 but the three outbox meter family lines are missing for "
-                            + "a window, and the contains(...) assertion fails despite the 30s "
-                            + "Awaitility budget. The deeper cause appears to be in scrape-body "
-                            + "composition while micrometer-kafka re-attaches its client meters "
-                            + "to the restarted broker, not in our gauge's lifecycle. Passes "
-                            + "locally (WSL2). Re-enable once the scrape-body race is "
-                            + "characterized — likely needs either test-suite ordering, a "
-                            + "CompositeMeterRegistry split, or moving the assertion to a "
-                            + "dedicated suite that does not share context with the Kafka "
-                            + "pause/unpause tests. Tracked as a follow-up to TASK-BE-020.")
     void prometheusEndpoint_exposesOutboxMetrics() {
         // Permit-all endpoint per SecurityConfig — no auth.
         // Retry for up to 30 s to let the endpoint stabilise after
         // PublisherResilienceIntegrationTest unpauses the Kafka container.
-        // OutboxMetrics meters are now registered with strongReference(true) and
-        // the base class holds an @Autowired reference, so the gauge function
-        // itself can no longer disappear due to GC pressure (TASK-BE-020) — but
-        // see the @DisabledIfEnvironmentVariable above for why CI still gates.
+        // OutboxMetrics meters are registered with strongReference(true) and the
+        // base class holds an @Autowired reference, so the gauge function cannot
+        // disappear due to GC pressure (TASK-BE-020). The former CI flake — the
+        // outbox meter families intermittently missing from the scrape after the
+        // broker pause/unpause — was the micrometer-kafka client gauges churning
+        // during scrape; TASK-BE-458 disables those `kafka.*` client meters in
+        // the integration profile (application-integration.yml), so the scrape is
+        // now deterministic and this test runs on CI (guard removed).
         await().atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
