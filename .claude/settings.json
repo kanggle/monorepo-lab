@@ -10,7 +10,11 @@
       "Edit(/.claude/skills/service-types/**)",
       "Bash(pnpm --filter web-store exec playwright --version)",
       "Bash(pnpm exec *)",
-      "Bash(pnpm --filter web-store run e2e:smoke)"
+      "Bash(pnpm --filter web-store run e2e:smoke)",
+      "Bash(./gradlew :projects:scm-platform:apps:procurement-service:test :projects:scm-platform:apps:inventory-visibility-service:test)",
+      "Bash(./gradlew :projects:finance-platform:apps:ledger-service:test --console=plain)",
+      "Bash(./gradlew projects *)",
+      "Bash(xargs -I{} git branch -r --contains {} origin/main)"
     ]
   },
   "hooks": {
@@ -41,10 +45,6 @@
           {
             "type": "command",
             "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/protect-main-branch.ps1"
-          },
-          {
-            "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/warn-shared-checkout-switch.ps1"
           },
           {
             "type": "command",
