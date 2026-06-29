@@ -1,13 +1,29 @@
 # ADR-008: 내부 전용 엔드포인트(`/api/internal/**`)의 인증 경계를 네트워크-단독에서 앱-레이어 방어심층으로 승격
 
-- **Status**: PROPOSED (2026-06-29)
+- **Status**: WITHDRAWN (2026-06-29)
 - **Date**: 2026-06-29
 - **Authors**: backend (code-marker discovery sweep — `TASK-BE-118-fix-002` 미티켓 TODO 승격)
 - **Supersedes**: —
-- **Superseded by**: —
-- **History**: PROPOSED 2026-06-29 — `auth-service` `SecurityConfig` 의 `TASK-BE-118-fix-002` TODO("내부 클러스터 IP 대역 제한(NetworkPolicy) 또는 mTLS/서비스계정 토큰 기반 인증을 별도 ADR로 승격 후 여기서 강제할 것")가 미티켓 상태로 잔존함이 발굴 스윕에서 확인됨. 본 ADR 은 그 결정을 정식화한다. **ACCEPTANCE 는 user-gated** — 사용자가 D2 방향(권장: 앱-레이어 토큰 게이트)을 확정한 뒤 별도로 ACCEPTED 전환 + per-service 구현 task 등록(ADR-007 / ADR-MONO-022 선례와 동형).
+- **Superseded by**: — (철회 — 새 결정으로 대체된 것이 아니라 **전제 자체가 무효**)
+- **History**: PROPOSED 2026-06-29 → **WITHDRAWN 2026-06-29** (동일자, 미채택). 구현 착수 시점에 ADR 의 전제가 phantom 임이 드러남(아래 철회 노트). PROPOSED 본문은 **기록 보존용**으로 남기되 **채택되지 않았다**.
 
 ---
+
+## ⚠️ 철회 노트 (WITHDRAWN, 2026-06-29)
+
+**이 ADR 은 채택되지 않으며 철회한다. 전제(라이브 앱-레이어 인증 갭)가 phantom 이었다.** BE-460 구현 착수 시점에 다음이 확인되었다:
+
+1. **트리거가 decommissioned 코드였다.** 본 ADR 의 1차 근거인 `auth-service` `SecurityConfig` 의 `/api/internal/** permitAll` + `AdminUserRepublishController` 는 **`TASK-BE-132` 로 폐기된(decommissioned) auth-service** 안에 있다 — `settings.gradle` 의 ecommerce `include` 에서 제외되어 **Gradle 빌드에 포함되지 않으며**(주석: "apps:auth-service excluded from build by TASK-BE-132"), 서비스 자체 `specs/services/auth-service/architecture.md` line 1 이 "DEPRECATED — decommissioned 2026-05-04 ... Replaced by IAM" 이라 명시한다. 컴파일·배포·실행되지 않는 죽은 코드의 `permitAll` 은 **라이브 보안 노출이 아니다**.
+
+2. **라이브 형제 서비스는 이미 — 더 강하게 — 해결돼 있다.** ecommerce 에서 `/api/internal/**` 를 실제 노출하는 유일한 빌드-포함 서비스는 **order-service** 이며, `OrderSecurityConfig`(`TASK-BE-412`)가 **이미 fail-closed 로 보호**한다: `@Order(1)` 전용 resource-server `SecurityFilterChain` 이 `client_credentials` Bearer JWT 를 검증(JWKS 서명 + `exp`/`nbf`/`iat` + issuer + audience). 이는 본 ADR 의 D2/D3 가 제안한 **공유시크릿 토큰보다 우월한** 메커니즘이다(IAM `/internal/**` resource-server 패턴 BE-317/319b/402 와 정합). `batch-worker` 는 그 내부 엔드포인트를 호출하는 **클라이언트**(JWT 제시)일 뿐 내부 엔드포인트를 노출하지 않는다.
+
+**결론**: ecommerce 에 미해결 앱-레이어 내부-엔드포인트 갭은 **존재하지 않는다**. 내부 엔드포인트 인증의 **사실상 표준은 이미 `client_credentials` JWT resource-server(BE-412)** 이며, 본 ADR 의 공유시크릿 제안은 불필요하고 그보다 열등하다. 미래에 또 다른 라이브 서비스가 `/api/internal/**` 를 추가한다면 **BE-412 / IAM `/internal/**` 패턴을 따른다**(이 ADR 이 아니라).
+
+**프로세스 교훈**: code-marker(특히 보안 `permitAll`/TODO)를 갭으로 올리기 전 ① 그 파일의 모듈이 빌드에 포함되는지(decommissioned/excluded 아닌지), ② 같은 능력의 라이브 형제가 이미 해결했는지 — 둘 다 cross-check 필수. "코드에 `permitAll` TODO 가 있다"는 라이브 갭의 증거가 아니다.
+
+---
+
+> 아래 PROPOSED 본문(Context/Decision/대안/Consequences)은 **기록 보존용**이며 위 철회 노트에 의해 **무효(채택되지 않음)**.
 
 ## Context
 
