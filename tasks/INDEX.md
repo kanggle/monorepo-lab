@@ -109,7 +109,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
-- `TASK-MONO-317-adr-mono-043-followup-declines.md` — **READY** (2026-06-29). **ADR-MONO-043 § 7 follow-up close-out.** ADR-043 (notification unification) is functionally complete (ACCEPTED + P1/P2-erp-fan/P3 landed → incident resolved, D5 live); this records the remaining surface-expansion follow-ups as **DECLINED** — wms → delivery-only (no inbox/UI/demand), ecommerce shape (category mismatch: customer-facing notifications have no place in the operator bell), engine-level lib integration (net-zero premise false → HARDSTOP-06; ADR-038 M3 "share the leaf shape, keep the engine service-side"). Doc-only (§7 resolution + §6 row; D1–D8 + §1–§5 byte-unchanged). Prevents future backlog-sweep phantom rediscovery. 분석=Opus 4.8 / 구현 권장=Sonnet (doc-only close-out).
+(empty)
 
 ## in-progress
 
@@ -120,6 +120,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 (empty)
 
 ## done
+
+- `TASK-MONO-317-adr-mono-043-followup-declines.md` — **DONE (2026-06-29, 3-dim verified — impl PR #2025 squash `1ec575d05`)**. ADR-MONO-043 §7 follow-up close-out: recorded the remaining surface-expansion follow-ups as **DECLINED** — wms → delivery-only (no inbox/UI/operator-demand), ecommerce shape (category mismatch — customer-facing notifications have no place in the operator bell), engine-level `libs/java-notification` integration (net-zero premise false → HARDSTOP-06; ADR-038 §5 M3 "share the leaf shape, keep the divergent engine service-side"). Doc-only (§7 resolution + §6 audit row; **D1–D8 + §1–§5 byte-unchanged**, diff hunks confined to §6/§7). Re-open only on a concrete operator-console need (shape-conformance 1건 + `consolebff.notifications.domains` config 한 줄, console-web 0). Prevents future backlog-sweep phantom rediscovery (MONO-308 precedent). **3-dim**: (a) MERGED + `1ec575d05`; (b) origin/main tip = `1ec575d05`; (c) pre-merge failing required = 0 (doc fast-lane: `changes` pass + all code lanes SKIPPED, mergeStateStatus CLEAN). 분석=Opus 4.8 / 구현=Opus 직접.
 
 - `TASK-MONO-316-adr043-p2-spec-reconcile-erp-fan.md` — **DONE (2026-06-29, 3-dim verified — impl PR #2018 squash `7eeb575ca`)**. ADR-043 P2 spec-vs-impl drift sweep 산출물. erp+fan notification 스펙을 이미 머지된 P2 코드(ERP-BE-027 #2009 / FAN-BE-023 #2010)에 reconcile(code-ahead drift): erp `notification-api.md`에 `sourceDomain`/`deepLink` 추가(+200 예시), fan `architecture.md` GET 필터 `status=`→`unread=` normative(+`status` back-compat alias) + §1 conformance 필드. grep으로 머지 DTO/컨트롤러 대조 검증(phantom 배제). doc-only(AC-4 code 0변경). RG-3(console-integration-contract)=활성 ADR-043 console 세션 영역이라 Out-of-Scope. **3-dim**: (a) MERGED + `7eeb575ca`; (b) origin/main tip = `7eeb575ca`; (c) pre-merge failing required = 0 (doc fast-lane: `changes` pass + FE E2E smoke pass + 나머지 skip). 동 PR commit-2로 미티켓 백로그 3건 티켓화(BE-457/BE-458/SCM-BE-033, ready 잔류). 분석=Opus 4.8 / 구현=Opus 직접.
 
