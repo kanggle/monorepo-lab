@@ -27,7 +27,7 @@ import java.time.Instant;
  *
  * <ul>
  *   <li>{@code /actuator/health}, {@code /actuator/info}, {@code /actuator/prometheus} — public</li>
- *   <li>{@code /api/procurement/webhooks/**} — public (shared-secret verified inside controllers)</li>
+ *   <li>{@code /api/procurement/webhooks/**} — public (HMAC-SHA256 + timestamp + replay verified by {@link WebhookSignatureFilter})</li>
  *   <li>{@code /api/procurement/**} — bearer token required</li>
  *   <li>everything else — denied</li>
  * </ul>

@@ -6,7 +6,6 @@ import com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvali
 import com.example.scmplatform.procurement.domain.po.PoOrigin;
 import com.example.scmplatform.procurement.domain.po.status.ActorType;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
-import com.example.scmplatform.procurement.infrastructure.security.WebhookSignatureVerifier;
 import com.example.scmplatform.procurement.presentation.advice.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -32,19 +31,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * {@link WebMvcTest} slice tests for {@link SupplierAckWebhookController}.
  *
- * <p>The supplier-ack webhook is a public endpoint (shared-secret verified inside
- * the controller). Security filter chain is bypassed via
- * {@code @AutoConfigureMockMvc(addFilters = false)}.
+ * <p>The supplier-ack webhook is a public endpoint. HMAC-SHA256 signature +
+ * timestamp + replay verification is now enforced by {@code WebhookSignatureFilter}
+ * (a servlet filter), which is out of scope for this controller slice — the
+ * filter chain is bypassed via {@code @AutoConfigureMockMvc(addFilters = false)},
+ * so these tests cover the controller's request binding + business mapping only.
  *
- * <p>Test count: 4
+ * <p>Test count: 2
  */
 @WebMvcTest(SupplierAckWebhookController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import({GlobalExceptionHandler.class, WebhookSignatureVerifier.class})
+@Import(GlobalExceptionHandler.class)
 class SupplierAckWebhookControllerSliceTest {
 
     private static final String URL = "/api/procurement/webhooks/supplier-ack";
-    private static final String WEBHOOK_SECRET = "scm-supplier-webhook-secret";
 
     @Autowired
     MockMvc mockMvc;
@@ -77,36 +77,16 @@ class SupplierAckWebhookControllerSliceTest {
     // ---- tests ----
 
     @Test
-    @DisplayName("POST /webhooks/supplier-ack — 200 happy path transitions to ACKNOWLEDGED")
+    @DisplayName("POST /webhooks/supplier-ack — 200 happy path transitions to ACKNOWLEDGED (signature enforced by filter, out of slice)")
     void ackHappyPath() throws Exception {
         when(service.acknowledge(any())).thenReturn(acknowledgedView());
 
         mockMvc.perform(post(URL)
-                        .header("X-Supplier-Signature", WEBHOOK_SECRET)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value("po-001"))
                 .andExpect(jsonPath("$.data.status").value("ACKNOWLEDGED"));
-    }
-
-    @Test
-    @DisplayName("POST /webhooks/supplier-ack — 401 when signature is missing")
-    void ackMissingSignature() throws Exception {
-        mockMvc.perform(post(URL)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRequestJson()))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @DisplayName("POST /webhooks/supplier-ack — 401 when signature is wrong")
-    void ackWrongSignature() throws Exception {
-        mockMvc.perform(post(URL)
-                        .header("X-Supplier-Signature", "wrong-secret")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRequestJson()))
-                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -117,7 +97,6 @@ class SupplierAckWebhookControllerSliceTest {
                         PoStatus.DRAFT, PoStatus.ACKNOWLEDGED, ActorType.SUPPLIER));
 
         mockMvc.perform(post(URL)
-                        .header("X-Supplier-Signature", WEBHOOK_SECRET)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isUnprocessableEntity())

@@ -3,7 +3,6 @@ package com.example.scmplatform.procurement.presentation.controller;
 import com.example.scmplatform.procurement.application.AsnView;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
 import com.example.scmplatform.procurement.application.command.ReceiveAsnCommand;
-import com.example.scmplatform.procurement.infrastructure.security.WebhookSignatureVerifier;
 import com.example.scmplatform.procurement.presentation.dto.ApiEnvelope;
 import com.example.scmplatform.procurement.presentation.dto.AsnResponse;
 import com.example.scmplatform.procurement.presentation.dto.AsnWebhookRequest;
@@ -12,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,8 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
  * tuple is unique in the DB; a duplicate webhook delivery returns the
  * previously-stored ASN.
  *
- * <p>Signature verification is delegated to {@link WebhookSignatureVerifier}
- * (infrastructure/security) — this controller contains no security logic.
+ * <p>Signature verification (HMAC-SHA256 + timestamp freshness + replay) is
+ * performed by {@code WebhookSignatureFilter} (infrastructure/security) before
+ * the request reaches this controller — it contains no security logic.
  */
 @RestController
 @RequestMapping("/api/procurement/webhooks/asn")
@@ -32,13 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class AsnWebhookController {
 
     private final PurchaseOrderApplicationService service;
-    private final WebhookSignatureVerifier signatureVerifier;
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<AsnResponse>> receive(
-            @RequestHeader(value = "X-Supplier-Signature", required = false) String signature,
             @Valid @RequestBody AsnWebhookRequest req) {
-        signatureVerifier.verify(signature);
         ReceiveAsnCommand cmd = new ReceiveAsnCommand(
                 req.tenantId(),
                 req.poId(),
