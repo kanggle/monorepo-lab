@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-BE-033-webhook-hmac-replay-protection.md` — **READY** (authored 2026-06-29, code-marker discovery sweep). procurement-service `WebhookSignatureVerifier` 가 현재 **고정 공유시크릿 비교**(timestamp/nonce 없음) — javadoc이 `integration-heavy.md` I6를 "Partial"로 자인하나 **티켓 미생성**(sweep 확인). HMAC-SHA256(raw-body, constant-time) + timestamp freshness window + nonce replay 거부로 업그레이드, I6 "Partial"→충족. 스펙(architecture.md + webhook contract) 선행 갱신. 회귀 가드=unit(valid/invalid sig·stale ts·replay nonce·constant-time) + Testcontainers replay-store IT. Target=`procurement-service`. 분석=Opus 4.8 / 구현 권장=Opus(보안 설계).
 
 ## in-progress
 

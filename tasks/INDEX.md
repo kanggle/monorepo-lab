@@ -111,7 +111,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## ready
 
-(empty)
+- `TASK-MONO-316-adr043-p2-spec-reconcile-erp-fan.md` — **READY** (authored 2026-06-29, ADR-043 P2 spec-vs-impl drift sweep). **erp + fan notification 스펙을 이미 머지된 P2 코드에 reconcile** (code-ahead drift). erp `notification-api.md § Common shape`에 `sourceDomain`/`deepLink` 추가(+200 예시), fan `architecture.md` GET 필터 `status=`→`unread=` normative(+`status` back-compat alias) + §1 conformance(`sourceDomain="fan"`/nullable `deepLink`) 노트. **doc-only**, cross-project(erp+fan) 단일 atomic PR, 권위=`platform/contracts/notification-inbox-contract.md`. RG-3(platform-console `console-integration-contract` aggregator 재서술)=활성 ADR-043 console 세션 영역이라 Out-of-Scope. 분석=Opus 4.8 / 구현=Opus 직접.
 
 ## in-progress
 

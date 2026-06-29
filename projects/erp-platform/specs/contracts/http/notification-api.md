@@ -52,9 +52,11 @@ All endpoints:
 `Notification`:
 ```json
 { "id": "ntf-...",
+  "sourceDomain": "erp",
   "type": "APPROVAL_SUBMITTED|APPROVAL_APPROVED|APPROVAL_REJECTED|APPROVAL_WITHDRAWN",
   "title": "결재 상신 통지",
   "body": "...",
+  "deepLink": "<relative console route; ABSENT until erp derives one>",
   "sourceType": "APPROVAL",
   "sourceId": "appr-...",
   "read": false,
@@ -63,6 +65,14 @@ All endpoints:
 ```
 
 - `id` — the notification's own id (`ntf-...`), distinct from `sourceId`.
+- `sourceDomain` — the owning-domain attribution field of the cross-domain
+  envelope ([`notification-inbox-contract.md`](../../../../../platform/contracts/notification-inbox-contract.md) § 1); always the
+  constant `"erp"`. The console-bff aggregator (ADR-MONO-043 D2/P3) uses it to
+  label + route each merged item.
+- `deepLink` — optional in-app link the shell may navigate to (contract § 1,
+  nullable). Currently `null` for erp (no console approval route is derived
+  yet), so it is **ABSENT** under the NON_NULL convention. A future task may map
+  `sourceType`/`sourceId` to a console route.
 - `type` — the four approval-notification types fanned out by
   [`notification-subscriptions.md`](../events/notification-subscriptions.md)
   (1:1 with the consumed `eventType`).
@@ -158,7 +168,7 @@ mechanism (which guards accumulating mutations such as approval transitions in
 
 **200** (first call — transitions to read):
 ```json
-{ "data": { "id": "ntf-...", "type": "APPROVAL_SUBMITTED",
+{ "data": { "id": "ntf-...", "sourceDomain": "erp", "type": "APPROVAL_SUBMITTED",
             "title": "결재 상신 통지", "body": "...",
             "sourceType": "APPROVAL", "sourceId": "appr-...",
             "read": true, "createdAt": "<ISO-8601>",
