@@ -109,7 +109,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
-(empty)
+- `TASK-MONO-317-adr-mono-043-followup-declines.md` — **READY** (2026-06-29). **ADR-MONO-043 § 7 follow-up close-out.** ADR-043 (notification unification) is functionally complete (ACCEPTED + P1/P2-erp-fan/P3 landed → incident resolved, D5 live); this records the remaining surface-expansion follow-ups as **DECLINED** — wms → delivery-only (no inbox/UI/demand), ecommerce shape (category mismatch: customer-facing notifications have no place in the operator bell), engine-level lib integration (net-zero premise false → HARDSTOP-06; ADR-038 M3 "share the leaf shape, keep the engine service-side"). Doc-only (§7 resolution + §6 row; D1–D8 + §1–§5 byte-unchanged). Prevents future backlog-sweep phantom rediscovery. 분석=Opus 4.8 / 구현 권장=Sonnet (doc-only close-out).
 
 ## in-progress
 

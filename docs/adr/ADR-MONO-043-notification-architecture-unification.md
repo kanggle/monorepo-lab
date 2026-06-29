@@ -158,11 +158,18 @@ ADR is a spec → no unit/integration tests. Verification = doc review + HARDSTO
 |---|---|---|---|
 | PROPOSED | TASK-MONO-308 | #1958 | D1–D8 CHOSEN-PROPOSED; doc-only. |
 | ACCEPTED | TASK-MONO-311 | (this PR) | User-explicit *"ADR-043 ACCEPTED"* (D8 gate, not self-ACCEPT). D1–D8 finalised byte-unchanged; flip = Status + History clause + this row + § 3.3 UNPAUSED. D7 P1–P3 now implement-ready (separate user-gated tasks). |
+| Follow-up close-out | TASK-MONO-317 | (this PR) | § 7 follow-ups resolved (2026-06-29, user-decided): wms → delivery-only; ecommerce shape + engine-level integration → **DECLINED** (no operator-console driver / HARDSTOP-06; ADR-038 § 5 M3). Records the decline only — D1–D8 + § 1–§ 5 byte-unchanged; no code/contract/library change. |
 
 ---
 
 ## 7. Outstanding follow-ups
 
-- The wms inbox-vs-delivery-only decision (D7 phase-2 / § 3.2).
-- Whether the shared external-channel SPI (D4) subsumes the existing Slack/email/FCM adapters or wraps them (decided at lift time).
-- Whether `account.created` (ecommerce's one cross-platform consumed topic) implies a shared "identity-sourced notification" pattern worth its own note, or stays an ecommerce-local edge.
+**Resolution (2026-06-29, TASK-MONO-317 — user-decided close-out).** The value-delivering scope landed and resolved the originating incident: D1–D6 + D7 phases 1–3 for erp/fan shipped (P1a contract `platform/contracts/notification-inbox-contract.md`; P1b `libs/java-notification`; P2 erp/fan shape; P3a `console-bff` aggregator; P3b bell rewire — the shared-shell bell no longer couples to a single domain's availability, D5 live). The remaining surface-expansion follow-ups are **DECLINED** as a deliberate close-out (no pre-emptive implementation):
+
+- **wms inbox-vs-delivery-only (D7 P2 / § 3.2) — DECLINED → delivery-only.** wms has no inbox surface and no UI consumer; it is a pure delivery engine (`wms.notification.delivered.v1` re-emit, no downstream). Surfacing it in the operator bell would mean building a new inbox surface with no operator demand. Resolution: wms stays delivery-only, excluded from the console bell (a decision, not an implementation).
+- **ecommerce shape-conformance (D7 P2) — DECLINED (category mismatch).** ecommerce notifications are customer-facing (order/shipping → web-store inbox). Surfacing them in the **operator** console bell is a category error — operators have no need for customers' order notifications. No operator use case → conformance carries no value.
+- **Engine-level integration into `libs/java-notification` (D4 deepening) — DECLINED (risk > benefit).** The "net-zero adoption" premise proved false: each domain's delivery engine genuinely diverges (status enum, backoff, dedupe model, DB dialect). Forcing convergence is a behaviour/schema change (HARDSTOP-06), not net-zero. Per the **ADR-MONO-038 § 5 M3** precedent ("share the leaf shape, keep the divergent engine service-side"), this is declined; the shared **shape** (P1a contract) is the unification boundary.
+- **Shared external-channel SPI subsume-vs-wrap (D4) — SETTLED at lift time.** P1b `libs/java-notification` provides the channel SPI; domains wire their own adapters. No further decision pending.
+- **`account.created` identity-sourced-notification pattern — stays an ecommerce-local edge.** No shared pattern extracted.
+
+**Re-open condition (all DECLINED items):** a concrete need to surface a specific domain's notifications in the **operator console bell**. The standard is already in place (P1a contract + P1b library + the `consolebff.notifications.domains` config), so re-opening costs one domain's shape-conformance + one config line (zero console-web change). **No pre-emptive work.**
