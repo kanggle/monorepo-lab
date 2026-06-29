@@ -212,8 +212,7 @@ export function WmsOpsScreen({
         WMS 운영
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        재고 스냅샷 · 알림 (읽기 + 알림 확인). wms 운영 표면을 콘솔 안에서
-        조회합니다.
+        재고 스냅샷 · 알림 (읽기 + 알림 확인).
       </p>
 
       {lagBanner && (
