@@ -33,9 +33,25 @@ is a third, separate axis. `SUPPLIER` / `SYSTEM` actors are not token-derived
 
 Webhook endpoints (`/api/procurement/webhooks/**`):
 - Public (no JWT) — supplier callers have no IAM identity.
-- Verified by `X-Supplier-Signature: <shared-secret>` header (v1 simple
-  shared secret; HMAC + timestamp + replay protection deferred to v2 per
-  rules/traits/integration-heavy.md I6).
+- Authenticated by **HMAC-SHA256 + timestamp + replay protection** (v2, per
+  rules/traits/integration-heavy.md I6), enforced by a servlet filter before
+  the controllers:
+  - `X-Supplier-Signature` (required) — lowercase-hex HMAC-SHA256 digest.
+  - `X-Supplier-Timestamp` (required) — epoch **seconds** the signature was
+    produced.
+  - **Signing input:** `timestamp + "." + rawBody` (the raw request bytes,
+    pre-deserialization), keyed with the shared secret. The body must be HMAC'd
+    over the raw bytes — a re-serialized body changes the digest.
+  - **Freshness:** the timestamp must be within **300 seconds** of server time
+    (`|now − ts| > 300s` rejects both stale and future-skewed deliveries).
+  - **Replay:** the signature is the replay nonce; it is recorded for the
+    window (Redis `SETNX`, TTL = window + 60s) and a repeated signature within
+    the window is rejected.
+  - **401 reasons** (all rendered as `{ "code": "UNAUTHORIZED", "message": <reason> }`):
+    `WEBHOOK_SIGNATURE_INVALID` (missing/invalid/mismatched signature or
+    malformed hex), `WEBHOOK_TIMESTAMP_INVALID` (missing/non-numeric/stale/
+    future-skewed timestamp), `WEBHOOK_REPLAY_DETECTED` (signature already seen
+    within the window).
 - Tenant-scoped via the request body `tenantId` field; the database
   `(tenant_id, supplier_asn_ref)` UNIQUE constraint is the structural
   backstop for replays.
@@ -225,7 +241,11 @@ that also writes `po_status_history`, `audit_log`, and the
 `scm.procurement.po.acknowledged.v1` outbox entry.
 
 **Headers:**
-- `X-Supplier-Signature: <shared-secret>` (required)
+- `X-Supplier-Signature: <lowercase-hex HMAC-SHA256>` (required)
+- `X-Supplier-Timestamp: <epoch-seconds>` (required)
+
+See the webhook authentication block above for the signing input
+(`timestamp + "." + rawBody`), the 300s freshness window, and replay rejection.
 
 **Request body:**
 ```json
@@ -248,8 +268,9 @@ Validation:
 the call returns the current PO without state change (idempotent no-op,
 logged at INFO).
 
-**Errors:** `WEBHOOK_SIGNATURE_INVALID` (401, raised as
-`ResponseStatusException` and mapped by `GlobalExceptionHandler`),
+**Errors:** `WEBHOOK_SIGNATURE_INVALID` / `WEBHOOK_TIMESTAMP_INVALID` /
+`WEBHOOK_REPLAY_DETECTED` (401, written directly by `WebhookSignatureFilter`
+as `{ "code": "UNAUTHORIZED", "message": <reason> }`),
 `PO_NOT_FOUND` (404), `PO_STATUS_TRANSITION_INVALID` (422 — only when the
 PO is in a status that disallows ack, e.g. CANCELED), `VALIDATION_ERROR`
 (422).
@@ -263,7 +284,12 @@ Inbound webhook — supplier delivers an Advance Shipment Notice. Creates an
 S2 idempotency) and applies each line to the matching PO line. Status
 transitions per ASN coverage (CONFIRMED → PARTIALLY_RECEIVED → RECEIVED).
 
-**Headers:** `X-Supplier-Signature: <shared-secret>`.
+**Headers:**
+- `X-Supplier-Signature: <lowercase-hex HMAC-SHA256>` (required)
+- `X-Supplier-Timestamp: <epoch-seconds>` (required)
+
+See the webhook authentication block above for the signing input
+(`timestamp + "." + rawBody`), the 300s freshness window, and replay rejection.
 
 **Request body:**
 ```json
@@ -313,7 +339,9 @@ Validation:
 **Idempotency:** duplicate webhook with the same `(tenantId, supplierAsnRef)`
 returns the previously-stored ASN with the original receivedAt.
 
-**Errors:** `WEBHOOK_SIGNATURE_INVALID` (401), `PO_NOT_FOUND` (404),
+**Errors:** `WEBHOOK_SIGNATURE_INVALID` / `WEBHOOK_TIMESTAMP_INVALID` /
+`WEBHOOK_REPLAY_DETECTED` (401, written directly by `WebhookSignatureFilter`),
+`PO_NOT_FOUND` (404),
 `PO_STATUS_TRANSITION_INVALID` (422 — e.g., applying ASN to a CANCELED PO),
 `ASN_OVERRECEIPT` (422 — cumulative received > ordered on the line),
 `VALIDATION_ERROR` (422).
@@ -337,8 +365,10 @@ returns the previously-stored ASN with the original receivedAt.
 | `IDEMPOTENCY_KEY_REQUIRED` | 400 | Mutating endpoint called without the `Idempotency-Key` header |
 | `IDEMPOTENCY_KEY_MISMATCH` | 422 | Same `Idempotency-Key` reused with a different payload hash |
 | `VALIDATION_ERROR` | 400/422 | Bean Validation, malformed body, or type mismatch |
-| `UNAUTHORIZED` | 401 | Missing / invalid bearer token; webhook signature missing |
-| `WEBHOOK_SIGNATURE_INVALID` | 401 | Webhook `X-Supplier-Signature` does not match |
+| `UNAUTHORIZED` | 401 | Missing / invalid bearer token; or webhook HMAC failure (the `message` carries the specific reason below) |
+| `WEBHOOK_SIGNATURE_INVALID` | 401 | Webhook `X-Supplier-Signature` missing, malformed-hex, or HMAC mismatch (rendered as `{code:UNAUTHORIZED, message:WEBHOOK_SIGNATURE_INVALID}`) |
+| `WEBHOOK_TIMESTAMP_INVALID` | 401 | Webhook `X-Supplier-Timestamp` missing, non-numeric, or outside the 300s freshness window |
+| `WEBHOOK_REPLAY_DETECTED` | 401 | Webhook signature already seen within the freshness window (replay) |
 | `TENANT_FORBIDDEN` | 403 | `tenant_id` claim not in `{scm, *}` |
 | `PERMISSION_DENIED` | 403 | Authenticated but lacks required scope/role |
 | `PO_NOT_FOUND` | 404 | PO does not exist (or belongs to another tenant) |

@@ -232,8 +232,8 @@ external `/api/v1/procurement/**` namespace and rewrites the prefix (see
 | `POST` | `/api/procurement/po/{poId}/submit` | JWT | `Idempotency-Key` required | DRAFT → SUBMITTED + supplier dispatch |
 | `POST` | `/api/procurement/po/{poId}/confirm` | JWT (operator) | `Idempotency-Key` required | ACKNOWLEDGED → CONFIRMED |
 | `POST` | `/api/procurement/po/{poId}/cancel` | JWT | `Idempotency-Key` required | DRAFT/SUBMITTED/ACK → CANCELED |
-| `POST` | `/api/procurement/webhooks/supplier-ack` | shared-secret | `(tenantId, poId)` natural | supplier acknowledgement (SUBMITTED → ACK) |
-| `POST` | `/api/procurement/webhooks/asn` | shared-secret | `(tenantId, supplierAsnRef)` UNIQUE | supplier ASN delivery (CONFIRMED → PARTIAL/RECEIVED) |
+| `POST` | `/api/procurement/webhooks/supplier-ack` | HMAC-SHA256 + timestamp + replay | `(tenantId, poId)` natural | supplier acknowledgement (SUBMITTED → ACK) |
+| `POST` | `/api/procurement/webhooks/asn` | HMAC-SHA256 + timestamp + replay | `(tenantId, supplierAsnRef)` UNIQUE | supplier ASN delivery (CONFIRMED → PARTIAL/RECEIVED) |
 | `GET` | `/actuator/health` | none | n/a | liveness/readiness |
 | `GET` | `/actuator/info` | none | n/a | build info |
 | `GET` | `/actuator/prometheus` | network-isolated | n/a | metrics scrape (internal docker network only) |
@@ -241,11 +241,26 @@ external `/api/v1/procurement/**` namespace and rewrites the prefix (see
 Formal request/response shapes live in
 [`procurement-api.md`](../../contracts/http/procurement-api.md).
 
-> **Webhook security (v1)**: a fixed shared secret is verified against the
-> `X-Supplier-Signature` header. Per `rules/traits/integration-heavy.md` I6,
-> v2 webhook upgrade adds HMAC + timestamp + replay protection — tracked as
-> a follow-up. The webhook endpoints themselves are publicly routable (no
-> JWT) because the supplier issuing the call has no IAM identity.
+> **Webhook security (v2)**: inbound supplier webhooks authenticate via
+> **HMAC-SHA256**. The signing input is `timestamp + "." + rawBody` (the raw
+> request bytes, pre-deserialization) keyed with the shared secret; the digest
+> is sent as the lowercase-hex `X-Supplier-Signature` header alongside an
+> `X-Supplier-Timestamp` header carrying the epoch-seconds signing time. A
+> `WebhookSignatureFilter` (servlet `OncePerRequestFilter`, scoped to
+> `/api/procurement/webhooks/*`) verifies the request before it reaches the
+> controllers: (1) the timestamp must fall within a **300s freshness window**
+> (`Math.abs(now − ts) > 300s` rejects both stale and future-skewed deliveries);
+> (2) the HMAC is compared **constant-time** (`MessageDigest.isEqual`); and
+> (3) the signature itself is the **replay nonce** — recorded in Redis with
+> `SETNX` for the window (TTL = window + 60s), so a repeated signature within
+> the window is rejected as a replay. The nonce write happens **last**, only
+> after the signature and timestamp are valid, so a forged signature cannot
+> poison the store. Invalid input yields a 401 `UNAUTHORIZED` envelope written
+> directly by the filter (it runs before the `DispatcherServlet`, so the
+> `@ExceptionHandler` advice does not apply) with one of three reasons:
+> `WEBHOOK_SIGNATURE_INVALID`, `WEBHOOK_TIMESTAMP_INVALID`,
+> `WEBHOOK_REPLAY_DETECTED`. The webhook endpoints remain publicly routable
+> (no JWT) because the supplier issuing the call has no IAM identity.
 
 ---
 
@@ -611,7 +626,7 @@ All other paths require JWT or are denied (`anyRequest().denyAll()`).
 | **T7** Optimistic locking on aggregates | ✅ | `@Version` on `PurchaseOrder`, `Supplier`, `AdvanceShipmentNotice` |
 | **I2** Circuit breaker on external calls | ✅ | `@CircuitBreaker(name="supplier")` 50%/10-call window |
 | **I3** Retry with jitter | ✅ | `@Retry(name="supplier")` 3-attempt exponential + randomized 0.5 |
-| **I6** Webhook signature + timestamp + replay | ⚠️ Partial | v1 = shared-secret only; HMAC + timestamp + replay deferred to v2 (tracked) |
+| **I6** Webhook signature + timestamp + replay | ✅ | `WebhookSignatureFilter` verifies HMAC-SHA256 over `timestamp + "." + rawBody` (constant-time `MessageDigest.isEqual`) + 300s freshness window + Redis `SETNX` signature-nonce replay rejection |
 | **I7** Vendor SDK isolation | ✅ | All HTTP types confined to `infrastructure/supplier/` |
 | **I8** Vendor types never reach domain | ✅ | `SupplierSubmissionResult(supplierReceiptRef, status)` translated record |
 | **I9** Bulkhead on external calls | ✅ | `@Bulkhead(name="supplier")` 20 concurrent calls |
@@ -624,7 +639,7 @@ All other paths require JWT or are denied (`anyRequest().denyAll()`).
 | Direction | Target | Protocol | Notes |
 |---|---|---|---|
 | In | scm-platform `gateway-service` | HTTP `/api/v1/procurement/**` (rewritten to `/api/procurement/**`) | tenant-validated JWT |
-| In | Supplier (mock) | HTTP webhook `/api/procurement/webhooks/{supplier-ack,asn}` | shared-secret signature |
+| In | Supplier (mock) | HTTP webhook `/api/procurement/webhooks/{supplier-ack,asn}` | HMAC-SHA256 signature + timestamp |
 | Out | PostgreSQL `scm_procurement` | JDBC | 9 tables (suppliers, supplier_credentials, purchase_orders, purchase_order_lines, po_status_history, advance_shipment_notices, asn_lines, audit_log, outbox + processed_events + idempotency_keys) |
 | Out | Redis | TCP | idempotency primary store (NX-EX) |
 | Out | Kafka | TCP | publishes 7 `scm.procurement.*.v1` topics; producer with `acks=all`, `enable.idempotence=true` |

@@ -8,7 +8,7 @@ Upgrade procurement webhook signature verification to HMAC-SHA256 + timestamp + 
 
 # Status
 
-ready
+review
 
 # Owner
 

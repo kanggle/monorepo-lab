@@ -3,8 +3,6 @@ package com.example.scmplatform.procurement.presentation.controller;
 import com.example.scmplatform.procurement.application.AsnView;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
 import com.example.scmplatform.procurement.domain.error.AsnOverreceiptException;
-import com.example.scmplatform.procurement.domain.error.PoNotFoundException;
-import com.example.scmplatform.procurement.infrastructure.security.WebhookSignatureVerifier;
 import com.example.scmplatform.procurement.presentation.advice.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -31,19 +29,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * {@link WebMvcTest} slice tests for {@link AsnWebhookController}.
  *
- * <p>The ASN webhook is a public endpoint (shared-secret verified inside the
- * controller). Security filter chain is bypassed via
- * {@code @AutoConfigureMockMvc(addFilters = false)}.
+ * <p>The ASN webhook is a public endpoint. HMAC-SHA256 signature + timestamp +
+ * replay verification is now enforced by {@code WebhookSignatureFilter} (a
+ * servlet filter), which is out of scope for this controller slice — the filter
+ * chain is bypassed via {@code @AutoConfigureMockMvc(addFilters = false)}, so
+ * these tests cover the controller's request binding + business mapping only.
  *
- * <p>Test count: 4
+ * <p>Test count: 2
  */
 @WebMvcTest(AsnWebhookController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import({GlobalExceptionHandler.class, WebhookSignatureVerifier.class})
+@Import(GlobalExceptionHandler.class)
 class AsnWebhookControllerSliceTest {
 
     private static final String URL = "/api/procurement/webhooks/asn";
-    private static final String WEBHOOK_SECRET = "scm-supplier-webhook-secret";
 
     @Autowired
     MockMvc mockMvc;
@@ -82,12 +81,11 @@ class AsnWebhookControllerSliceTest {
     // ---- tests ----
 
     @Test
-    @DisplayName("POST /webhooks/asn — 200 happy path with valid signature")
+    @DisplayName("POST /webhooks/asn — 200 happy path (signature enforced by filter, out of slice)")
     void receiveAsnHappyPath() throws Exception {
         when(service.receiveAsn(any())).thenReturn(asnView());
 
         mockMvc.perform(post(URL)
-                        .header("X-Supplier-Signature", WEBHOOK_SECRET)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isOk())
@@ -100,32 +98,12 @@ class AsnWebhookControllerSliceTest {
     }
 
     @Test
-    @DisplayName("POST /webhooks/asn — 401 when signature is missing")
-    void receiveAsnMissingSignature() throws Exception {
-        mockMvc.perform(post(URL)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRequestJson()))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @DisplayName("POST /webhooks/asn — 401 when signature is wrong")
-    void receiveAsnWrongSignature() throws Exception {
-        mockMvc.perform(post(URL)
-                        .header("X-Supplier-Signature", "wrong-secret")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRequestJson()))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
     @DisplayName("POST /webhooks/asn — 422 ASN_OVERRECEIPT when shipped qty exceeds PO balance")
     void receiveAsnOverreceipt() throws Exception {
         when(service.receiveAsn(any()))
                 .thenThrow(new AsnOverreceiptException("ASN qty exceeds remaining line balance"));
 
         mockMvc.perform(post(URL)
-                        .header("X-Supplier-Signature", WEBHOOK_SECRET)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isUnprocessableEntity())

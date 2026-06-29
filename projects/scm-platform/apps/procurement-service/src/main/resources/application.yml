@@ -118,6 +118,12 @@ scmplatform:
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
   procurement:
     supplier:
+      # Inbound webhook HMAC verification (I6). The shared secret keys the
+      # HMAC-SHA256 over `timestamp + "." + rawBody`; the freshness window
+      # bounds clock skew / replay-by-delay. Dev default is intentionally weak;
+      # production overrides via SUPPLIER_WEBHOOK_SECRET.
+      webhook-secret: ${SUPPLIER_WEBHOOK_SECRET:scm-supplier-webhook-secret}
+      webhook-freshness-seconds: ${SUPPLIER_WEBHOOK_FRESHNESS_SECONDS:300}
       mock:
         base-url: ${SUPPLIER_MOCK_BASE_URL:http://supplier-mock:9090}
         connect-timeout-ms: ${SUPPLIER_CONNECT_TIMEOUT_MS:2000}

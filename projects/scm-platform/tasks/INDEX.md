@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-BE-033-webhook-hmac-replay-protection.md` — **READY** (authored 2026-06-29, code-marker discovery sweep). procurement-service `WebhookSignatureVerifier` 가 현재 **고정 공유시크릿 비교**(timestamp/nonce 없음) — javadoc이 `integration-heavy.md` I6를 "Partial"로 자인하나 **티켓 미생성**(sweep 확인). HMAC-SHA256(raw-body, constant-time) + timestamp freshness window + nonce replay 거부로 업그레이드, I6 "Partial"→충족. 스펙(architecture.md + webhook contract) 선행 갱신. 회귀 가드=unit(valid/invalid sig·stale ts·replay nonce·constant-time) + Testcontainers replay-store IT. Target=`procurement-service`. 분석=Opus 4.8 / 구현 권장=Opus(보안 설계).
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-BE-033-webhook-hmac-replay-protection.md` — **REVIEW** (구현 완료 2026-06-29). procurement 웹훅을 **HMAC-SHA256 + timestamp + replay**로 업그레이드(I6 "Partial"→✅). 서명 입력=`timestamp + "." + rawBody`(raw bytes, 필터에서 `CachedBodyHttpServletRequestWrapper`로 캐싱), constant-time `MessageDigest.isEqual`, 300s freshness window, **서명=replay nonce**(Redis `SETNX`, TTL=window+60s, 검증 통과 후 마지막에 기록→store poison 방지). `WebhookSignatureFilter`(`/api/procurement/webhooks/*`)가 컨트롤러 이전 검증→401 `UNAUTHORIZED` 직접 작성(필터는 `@ExceptionHandler` 밖). 컨트롤러는 검증 제거. 스펙 선행(architecture.md webhook 보안 v2 + I6 row + procurement-api.md 웹훅 헤더/에러). **검증**: `:test` GREEN(verifier 13 + filter 5 + slice 2+2 = 신규/변경, 163 total 0 fail); Testcontainers replay IT는 CI 권위(로컬 Docker 차단). AC-5의 `integration-heavy.md` I6 상태는 shared trait 파일이 아니라 procurement `architecture.md` conformance row에 존재→그곳을 ✅로 갱신(shared rules/ 미수정=HARDSTOP 회피). 구현=backend-engineer(opus) 위임 + 리드 crypto 검수(HMAC/constant-time/replay-ordering/decodeHex 전수 확인). Target=`procurement-service`.
 
 ## done
 
