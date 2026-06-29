@@ -8,7 +8,7 @@ Author ADR-008 (PROPOSED) — `/api/internal/**` 내부 엔드포인트 인증 �
 
 # Status
 
-ready
+done
 
 # Owner
 
