@@ -75,6 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
+| TASK-BE-459 | **READY** (2026-06-29, code-marker 발굴). Author `ADR-008 PROPOSED` — `/api/internal/**` 내부 엔드포인트 인증 경계를 네트워크-단독(현행 filter `permitAll`) → **앱-레이어 방어심층**(네트워크경계 유지 + 공유시크릿 토큰 게이트 constant-time + prod fail-closed + NetworkPolicy 승격 + 감사)으로. `BE-118-fix-002` deferred TODO 의 미티켓 갭. doc-only(ADR + README). 버린 대안=네트워크-단독·mTLS/메시·IAM-JWT. ACCEPTANCE + per-service 구현(auth/order/batch-worker)=user-gated 후속. 분석=Opus 4.8 / 구현=Opus(직접). | auth-service (정책=ecommerce 전반) | adr, docs |
 
 ## in-progress
 

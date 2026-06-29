@@ -11,6 +11,7 @@
 | [ADR-005](ADR-005-korean-search-analyzer.md) | Elasticsearch 한국어 analyzer로 nori 채택 | Accepted |
 | [ADR-006](ADR-006-at-least-once-delivery-policy.md) | At-Least-Once Delivery Policy (서비스별 outbox vs best-effort 결정) | Accepted |
 | [ADR-007](ADR-007-logistics-aggregator-carrier-integration.md) | 택배 연동을 단일 택배사 직연동이 아닌 물류 중개 플랫폼(aggregator)으로 수렴한 이유 | Accepted |
+| [ADR-008](ADR-008-internal-endpoint-auth-boundary.md) | 내부 전용 엔드포인트(`/api/internal/**`) 인증 경계를 네트워크-단독 → 앱-레이어 방어심층으로 승격 | Proposed |
 
 ## ADR 작성 원칙
 
