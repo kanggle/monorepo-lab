@@ -38,26 +38,27 @@ spring:
         # < the Awaitility window in PublisherResilienceIntegrationTest (20 s).
         delivery.timeout.ms: 10000
 
-# Disable micrometer Kafka **client** metrics in the in-JVM @SpringBootTest
-# integration suite ONLY (test classpath; production application.yml keeps
-# Kafka client metrics — auto-bound by KafkaMetricsAutoConfiguration).
+# TASK-BE-458 — make the prometheus outbox-metrics scrape deterministic on CI so
+# WarehouseIntegrationTest.prometheusEndpoint_exposesOutboxMetrics can re-enable.
+# Test classpath ONLY — production application.yml is untouched.
 #
-# WHY (TASK-BE-458 — root cause of the flaky prometheusEndpoint_exposesOutboxMetrics):
-# PublisherResilienceIntegrationTest pauses + unpauses the SHARED static Kafka
-# container (SIGSTOP/SIGCONT) mid-suite. micrometer-kafka's KafkaClientMetrics
-# then churns its `kafka.*` client gauges as the producer/consumer re-attach to
-# the restarted broker. When WarehouseIntegrationTest later scrapes
-# /actuator/prometheus, that churn disrupts the scrape-body composition over the
-# shared PrometheusMeterRegistry (the `kafka.*` collectors are re-registering /
-# their gauge functions read a reconnecting client), so the `master.outbox.*`
-# meter families intermittently fail to appear for a window that on slow
-# GitHub-hosted runners outlasts the 30 s Awaitility budget — even though the
-# outbox meters themselves are healthy (TASK-BE-020 already fixed the gauge GC
-# race). Removing the `kafka.*` client meters from the test registry eliminates
-# the disruptor entirely → the outbox scrape is deterministic regardless of the
-# broker pause/unpause ordering. The test asserts OUTBOX metrics, never kafka
-# client metrics, so fidelity is unaffected.
+# (1) Pin actuator exposure for the in-JVM @SpringBootTest integration context.
+#     The first CI run of the re-enabled test returned 404 on /actuator/prometheus
+#     (NOT the "200-but-missing-lines" the original TASK-BE-020 note described), so
+#     the integration profile must guarantee the endpoint is exposed rather than
+#     rely on inherited defaults.
+# (2) Disable micrometer Kafka **client** metrics. PublisherResilienceIntegrationTest
+#     pauses/unpauses the SHARED static Kafka container mid-suite; micrometer-kafka's
+#     KafkaClientMetrics then churns its `kafka.*` client gauges as the producer/
+#     consumer re-attach to the restarted broker, which can disrupt the scrape-body
+#     composition over the shared PrometheusMeterRegistry. The test asserts OUTBOX
+#     metrics, never kafka client metrics, so removing them is fidelity-neutral and
+#     removes that disruptor. Production keeps kafka metrics (KafkaMetricsAutoConfiguration).
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
   metrics:
     enable:
       kafka: false
