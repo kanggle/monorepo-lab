@@ -1311,10 +1311,11 @@ jobs:
     # payment-service (gates the BE-435/437/438 money-safety ITs). Phase 2 (MONO-319) adds
     # product-service (12 ITs: cache eviction, multi-tenant + seller-scope isolation,
     # seller-provisioning, optimistic lock). AC-3 (MONO-319) batch 1 adds user + promotion
-    # + gateway; batch 2 adds review. (shipping + settlement deferred: their first CI
-    # run surfaced real gaps — settlement a duplicate-bean app-boot failure, shipping a
-    # fulfillment-outbox drift — tracked separately.) Remaining: batch-worker + search +
-    # notification.
+    # + gateway; batch 2 adds review; batch 3 adds shipping. 4 of the 12 IT-carrying
+    # services remain unlane'd, each deferred with a real (non-mechanical) first-run gap:
+    # settlement (duplicate-bean app-boot failure, BE-415), search (ES test image lacks the
+    # analysis-nori plugin), batch-worker (IT base lacks Testcontainers DB wiring),
+    # notification (template unique-constraint + admin-auth). Tracked as follow-ups.
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
@@ -1340,7 +1341,7 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Run ecommerce integration suites (order + payment + product + user + promotion + gateway + review)
+      - name: Run ecommerce integration suites (order + payment + product + user + promotion + gateway + review + shipping)
         run: >-
           ./gradlew
           :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
@@ -1350,6 +1351,7 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:promotion-service:integrationTest
           :projects:ecommerce-microservices-platform:apps:gateway-service:integrationTest
           :projects:ecommerce-microservices-platform:apps:review-service:integrationTest
+          :projects:ecommerce-microservices-platform:apps:shipping-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload ecommerce integration test reports on failure
@@ -1372,6 +1374,8 @@ jobs:
             projects/ecommerce-microservices-platform/apps/gateway-service/build/test-results/integrationTest/
             projects/ecommerce-microservices-platform/apps/review-service/build/reports/tests/integrationTest/
             projects/ecommerce-microservices-platform/apps/review-service/build/test-results/integrationTest/
+            projects/ecommerce-microservices-platform/apps/shipping-service/build/reports/tests/integrationTest/
+            projects/ecommerce-microservices-platform/apps/shipping-service/build/test-results/integrationTest/
           retention-days: 7
 
   frontend-checks:
