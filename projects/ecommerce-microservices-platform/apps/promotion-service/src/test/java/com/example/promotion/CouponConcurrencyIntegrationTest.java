@@ -23,7 +23,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -68,13 +67,20 @@ class CouponConcurrencyIntegrationTest {
     @Test
     @DisplayName("동시에 쿠폰 발급 요청 시 수량 제한이 정확하게 동작한다")
     void concurrentIssuance_limitsCorrectly() throws Exception {
-        Clock clock = Clock.fixed(Instant.parse("2026-03-28T12:00:00Z"), ZoneOffset.UTC);
+        // Window must contain the runtime clock (CouponCommandService validates
+        // isActive against its injected system Clock), so it is relative to now —
+        // a fixed calendar window would make every issuance throw
+        // PromotionNotActiveException once that window is in the past (TASK-MONO-319:
+        // the bare-@SpringBootTest config ambiguity previously masked this by aborting
+        // the test before its body ran).
+        Clock clock = Clock.systemUTC();
+        Instant now = Instant.now(clock);
 
         Promotion promotion = Promotion.create(
                 "동시성 테스트", "동시 발급 테스트",
                 DiscountType.FIXED, 1000, 0, 5,
-                Instant.parse("2026-03-01T00:00:00Z"),
-                Instant.parse("2026-04-01T00:00:00Z"), clock
+                now.minusSeconds(86_400),
+                now.plusSeconds(30L * 86_400), clock
         );
         promotionRepository.save(promotion);
 
@@ -117,13 +123,15 @@ class CouponConcurrencyIntegrationTest {
     @Test
     @DisplayName("동시에 같은 쿠폰을 적용해도 한 번만 성공한다")
     void concurrentApply_onlyOneSucceeds() throws Exception {
-        Clock clock = Clock.fixed(Instant.parse("2026-03-28T12:00:00Z"), ZoneOffset.UTC);
+        // Now-relative window — see concurrentIssuance_limitsCorrectly for why.
+        Clock clock = Clock.systemUTC();
+        Instant now = Instant.now(clock);
 
         Promotion promotion = Promotion.create(
                 "적용 동시성 테스트", "동시 적용 테스트",
                 DiscountType.FIXED, 1000, 0, 100,
-                Instant.parse("2026-03-01T00:00:00Z"),
-                Instant.parse("2026-04-01T00:00:00Z"), clock
+                now.minusSeconds(86_400),
+                now.plusSeconds(30L * 86_400), clock
         );
         promotionRepository.save(promotion);
 
