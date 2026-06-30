@@ -36,12 +36,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * headers + preserved key ({@code reviewId}) + value (byte-identical
  * ReviewEventMessage envelope) → the row's {@code published_at} is set.
  *
- * <p><b>Verification note (TASK-BE-445 AC-7):</b> review-service has no
- * Testcontainers CI lane (only order/payment do), so this {@code @Tag("integration")}
- * test is excluded from the Docker-free {@code :test} task and does not run in CI
- * today. Authored for compile-time verification + activation if a lane is added.
+ * <p><b>Verification note (TASK-BE-445 AC-7):</b> originally review-service had no
+ * Testcontainers CI lane (only order/payment did). TASK-MONO-319 added a dedicated
+ * {@code integrationTest} lane for review-service, so this {@code @Tag("integration")}
+ * test now runs on CI.
  */
-@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@SpringBootTest(classes = ReviewServiceApplication.class, properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @Tag("integration")
 @Testcontainers
 @EmbeddedKafka(partitions = 1, topics = "review.review.created")
