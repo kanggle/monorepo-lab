@@ -359,9 +359,11 @@ jobs:
           java-version: '21'
 
       # Build the GAP auth-service bootJar (the iam-e2e Dockerfile COPYs it).
+      # The monorepo has a single root gradlew (no projects/iam-platform/gradlew),
+      # so run from the workspace root with the fully-qualified path.
       - name: Build auth-service bootJar
-        working-directory: projects/iam-platform
-        run: ./gradlew :apps:auth-service:bootJar --no-daemon
+        working-directory: ${{ github.workspace }}
+        run: ./gradlew :projects:iam-platform:apps:auth-service:bootJar --no-daemon
 
       - name: Issuer hostname resolves on the host (browser + Next.js server)
         # PC-FE-028: both the browser AND the Next.js server must resolve the
