@@ -93,83 +93,110 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         String token = authHeader.substring(7);
 
-        // 4. Validate token and enrich request
-        return tokenValidator.validate(token)
-                .flatMap(claims -> {
-                    String accountId = extractAccountId(claims);
-                    if (accountId == null) {
-                        return writeUnauthorized(exchange,
-                                "Access token is missing, expired, or has an invalid signature");
-                    }
-
-                    // 5. Extract and validate tenant_id claim
-                    String tenantId = extractTenantId(claims);
-                    if (tenantId == null) {
-                        EdgeGatewayProperties.TenantProperties.LegacyFallbackProperties fallback =
-                                properties.getTenant().getLegacyFallback();
-                        if (fallback.isEnabled()) {
-                            tenantId = fallback.getDefaultTenantId();
-                            log.warn("tenant_id claim missing in JWT for accountId={}, using fallback tenantId={}",
-                                    accountId, tenantId);
-                            recordFallbackCounter();
-                        } else {
-                            log.debug("tenant_id claim missing in JWT for accountId={}, rejecting (fallback disabled)",
-                                    accountId);
-                            return writeUnauthorized(exchange,
-                                    "Access token is missing, expired, or has an invalid signature");
-                        }
-                    }
-
-                    // 6. Check internal provisioning route tenant scope
-                    String pathTenantId = extractPathTenantId(path);
-                    if (pathTenantId != null && !pathTenantId.equals(tenantId)) {
-                        log.warn("SECURITY: tenant scope mismatch on path={}, pathTenantId={}, jwtTenantId={}, accountId={}",
-                                path, pathTenantId, tenantId, accountId);
-                        return writeForbidden(exchange,
-                                "Tenant scope mismatch: path tenantId does not match token claim");
-                    }
-
-                    final String resolvedTenantId = tenantId;
-
-                    // 7. Check if account's access tokens were force-invalidated after token issuance
-                    long iatEpochMilli = extractIatEpochMilli(claims);
-                    return redisTemplate.opsForValue()
-                            .get(ACCESS_INVALIDATE_KEY_PREFIX + accountId)
-                            .defaultIfEmpty("")
-                            .flatMap(storedValue -> {
-                                if (!storedValue.isEmpty()) {
-                                    try {
-                                        long invalidatedAtMilli = Long.parseLong(storedValue);
-                                        if (iatEpochMilli <= invalidatedAtMilli) {
-                                            return writeUnauthorized(exchange,
-                                                    "Access token is missing, expired, or has an invalid signature");
-                                        }
-                                    } catch (NumberFormatException ignored) {
-                                        // corrupt key — fail open, let token through
-                                    }
-                                }
-
-                                return chain.filter(strippedExchange.mutate()
-                                        .request(buildEnrichedRequest(stripped, accountId, resolvedTenantId, claims))
-                                        .build());
-                            })
-                            .onErrorResume(e -> {
-                                // Redis unavailable — fail open to avoid outage
-                                log.warn("Redis unavailable for access invalidation check: {}", e.getMessage());
-                                return chain.filter(strippedExchange.mutate()
-                                        .request(buildEnrichedRequest(stripped, accountId, resolvedTenantId, claims))
-                                        .build());
-                            });
-                })
+        // 4. Authenticate + authorize. This pipeline (and ALL its error handling)
+        //    covers ONLY auth: it emits the enriched ServerHttpRequest to forward, or
+        //    writes a 401/403 response and emits empty. The downstream chain.filter()
+        //    is invoked afterwards (step 5) so a downstream failure propagates to
+        //    GatewayErrorConfig (→ 5xx) instead of being swallowed here as a fail-open
+        //    200 — the auth filter must not wrap the downstream call in its own
+        //    onErrorResume (TASK-BE-460).
+        Mono<ServerHttpRequest> authorized = tokenValidator.validate(token)
+                .flatMap(claims -> authorizeRequest(exchange, stripped, path, claims))
                 .onErrorResume(JwtVerificationException.class, e -> {
                     log.debug("JWT verification failed: {}", e.getMessage());
                     return writeUnauthorized(exchange,
-                            "Access token is missing, expired, or has an invalid signature");
+                            "Access token is missing, expired, or has an invalid signature")
+                            .then(Mono.empty());
                 })
-                .onErrorResume(Exception.class, e -> {
+                .onErrorResume(e -> {
                     log.error("Unexpected error during JWT verification: {}", e.getMessage(), e);
                     return writeUnauthorized(exchange,
-                            "Access token is missing, expired, or has an invalid signature");
+                            "Access token is missing, expired, or has an invalid signature")
+                            .then(Mono.empty());
+                });
+
+        // 5. Forward downstream OUTSIDE the auth error handling so connection
+        //    failures surface to GatewayErrorConfig (→ 503) rather than being masked.
+        return authorized.flatMap(enriched ->
+                chain.filter(strippedExchange.mutate().request(enriched).build()));
+    }
+
+    /**
+     * Resolves the authenticated, enriched request to forward, or writes a 401/403
+     * response and completes empty. Covers tenant-claim validation, internal-route
+     * tenant scope, and the Redis force-invalidation check. The Redis check is
+     * fail-open <em>only</em> for Redis errors (treated as "no invalidation record"):
+     * the fail-open must not extend to the downstream call, which is invoked by the
+     * caller after this pipeline (TASK-BE-460).
+     */
+    private Mono<ServerHttpRequest> authorizeRequest(ServerWebExchange exchange,
+                                                     ServerHttpRequest stripped,
+                                                     String path,
+                                                     Map<String, Object> claims) {
+        String accountId = extractAccountId(claims);
+        if (accountId == null) {
+            return writeUnauthorized(exchange,
+                    "Access token is missing, expired, or has an invalid signature")
+                    .then(Mono.empty());
+        }
+
+        // Extract and validate tenant_id claim
+        String tenantId = extractTenantId(claims);
+        if (tenantId == null) {
+            EdgeGatewayProperties.TenantProperties.LegacyFallbackProperties fallback =
+                    properties.getTenant().getLegacyFallback();
+            if (fallback.isEnabled()) {
+                tenantId = fallback.getDefaultTenantId();
+                log.warn("tenant_id claim missing in JWT for accountId={}, using fallback tenantId={}",
+                        accountId, tenantId);
+                recordFallbackCounter();
+            } else {
+                log.debug("tenant_id claim missing in JWT for accountId={}, rejecting (fallback disabled)",
+                        accountId);
+                return writeUnauthorized(exchange,
+                        "Access token is missing, expired, or has an invalid signature")
+                        .then(Mono.empty());
+            }
+        }
+
+        // Check internal provisioning route tenant scope
+        String pathTenantId = extractPathTenantId(path);
+        if (pathTenantId != null && !pathTenantId.equals(tenantId)) {
+            log.warn("SECURITY: tenant scope mismatch on path={}, pathTenantId={}, jwtTenantId={}, accountId={}",
+                    path, pathTenantId, tenantId, accountId);
+            return writeForbidden(exchange,
+                    "Tenant scope mismatch: path tenantId does not match token claim")
+                    .then(Mono.empty());
+        }
+
+        final String resolvedTenantId = tenantId;
+
+        // Check if account's access tokens were force-invalidated after token issuance.
+        // The onErrorResume is scoped to the Redis get ONLY — a Redis outage fails open
+        // (treated as no invalidation record); it must not swallow downstream errors.
+        long iatEpochMilli = extractIatEpochMilli(claims);
+        return redisTemplate.opsForValue()
+                .get(ACCESS_INVALIDATE_KEY_PREFIX + accountId)
+                .defaultIfEmpty("")
+                .onErrorResume(e -> {
+                    log.warn("Redis unavailable for access invalidation check: {}", e.getMessage());
+                    return Mono.just("");
+                })
+                .flatMap(storedValue -> {
+                    if (!storedValue.isEmpty()) {
+                        try {
+                            long invalidatedAtMilli = Long.parseLong(storedValue);
+                            if (iatEpochMilli <= invalidatedAtMilli) {
+                                return writeUnauthorized(exchange,
+                                        "Access token is missing, expired, or has an invalid signature")
+                                        .then(Mono.empty());
+                            }
+                        } catch (NumberFormatException ignored) {
+                            // corrupt key — fail open, let token through
+                        }
+                    }
+                    return Mono.just(
+                            buildEnrichedRequest(stripped, accountId, resolvedTenantId, claims));
                 });
     }
 
