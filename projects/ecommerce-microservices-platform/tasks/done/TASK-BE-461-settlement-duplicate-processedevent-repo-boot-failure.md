@@ -1,6 +1,6 @@
 # TASK-BE-461 — settlement-service fails to boot: duplicate `processedEventJpaRepository` bean (BE-415 outbox lib collides with the local processed-event repo)
 
-**Status:** ready
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (outbox/dedupe wiring + a small design judgment on which `processed_event` owner survives)
@@ -131,6 +131,36 @@ pattern) so this can never regress silently.
 
 ## Definition of Done
 
-- AC-0…AC-4 satisfied.
-- settlement-service boots; its `integrationTest` lane is GREEN on CI.
-- Ready for review.
+- [x] AC-0…AC-4 satisfied.
+- [x] settlement-service boots; its `integrationTest` lane is GREEN on CI.
+- [x] Ready for review (PR #2064 merged to main GREEN, mergeCommit 668819c11).
+
+---
+
+## Closure (2026-07-01, PR #2064)
+
+settlement-service boots and all 16 of its ITs are GREEN; settlement is the 12th and
+final ecommerce IT-carrying service in the `ecommerce-integration-tests` CI job. The
+first full-context run peeled four stacked latent bugs (each masked by the one before),
+all fixed here:
+
+1. **Boot (the duplicate bean)** — `@SpringBootApplication(exclude = OutboxAutoConfiguration.class)`
+   + `@EntityScan` scoped to `com.example.settlement` (was `+ com.example.messaging`,
+   which pulled the lib `ProcessedEventJpaEntity` a second way). Mirrors `com.wms.inventory`
+   (BE-432). The lib auto-config's sole remaining effect was registering the lib
+   processed-event (v1 outbox beans were removed in MONO-312); settlement uses its own.
+2. **MANDATORY tx** — the SettlementLedger ITs drive the consumers' `handle()` directly,
+   bypassing the `@KafkaListener onMessage` tx boundary, so the MANDATORY processed-event
+   dedupe had no tx. Added `@Transactional` to the three consumers' `handle()` — a no-op in
+   prod (onMessage self-invokes handle()), a per-message tx when the IT calls handle()
+   through the proxy.
+3. **Outbox-v2 drift** — SettlementPeriodCloseIT queried the legacy `outbox` table; BE-447
+   moved settlement's rows to `settlement_outbox`. Repointed the 4 test SQLs.
+4. **`line_index` NOT NULL** (real prod bug) — `@OrderColumn(name = "line_index")` on
+   `OrderSnapshotJpaEntity.lines` uses a two-phase insert-then-update, requiring the column
+   to be NULLABLE; V1's NOT NULL failed every OrderPlaced snapshot-line write. V5 migration
+   drops the NOT NULL (Hibernate still fills the index 0,1,2,… via its follow-up UPDATE).
+
+AC-4 (boots in fed-e2e/nightly compose) follows from the boot fix — the prod context is
+identical to the IT context that now loads; the duplicate-bean / line_index failures would
+have hit any real OrderPlaced consume.
