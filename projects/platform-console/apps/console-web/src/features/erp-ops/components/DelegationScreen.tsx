@@ -1,17 +1,15 @@
 'use client';
 
-import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { showPickerOnClick } from '@/shared/lib/show-picker';
 import type { DelegationGrant } from '../api/delegation-types';
-import { isActiveGrant } from '../api/delegation-types';
-import {
-  useDelegations,
-  useCreateDelegation,
-  useRevokeDelegation,
-} from '../hooks/use-erp-ops';
 import { approvalErrorMessage } from './approval-error';
-import { fmtDateTime } from './format-datetime';
+import { DelegationGrantList } from './DelegationGrantList';
+import {
+  useDelegationScreen,
+  useDelegationCreate,
+  useDelegationRevoke,
+} from './use-delegation-screen';
 
 /**
  * ERP "위임(대결) 관리" screen (TASK-PC-FE-054 — PC-FE-053 follow-up;
@@ -38,85 +36,30 @@ import { fmtDateTime } from './format-datetime';
  *
  * NON_NULL absent fields: validTo (→ "무기한"), reason (→ hidden),
  * revokedAt / revokedBy (→ hidden) — never a crash.
+ *
+ * TASK-PC-FE-150 — behaviour-preserving split: the screen's state +
+ * mutations live in `use-delegation-screen.ts`; the two grant lists in
+ * the presentational `DelegationGrantList`. Render output / DOM /
+ * data-testid / ARIA / wire bodies are unchanged.
  */
-
-function newIdemKey(): string {
-  const g = globalThis as unknown as {
-    crypto?: { randomUUID?: () => string };
-  };
-  return (
-    g.crypto?.randomUUID?.() ??
-    `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  );
-}
-
-function fmt(ts: string | undefined): string {
-  return fmtDateTime(ts);
-}
-
-// ---------------------------------------------------------------------------
-// Status badge.
-// ---------------------------------------------------------------------------
-
-function DelegationStatusBadge({ grant }: { grant: DelegationGrant }) {
-  if (grant.status === 'REVOKED') {
-    return (
-      <span
-        data-testid="delegation-status-badge"
-        data-status="REVOKED"
-        className="inline-block rounded px-1.5 py-0.5 text-xs bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-100"
-      >
-        회수됨
-      </span>
-    );
-  }
-  // ACTIVE — check if expired
-  const active = isActiveGrant(grant);
-  if (!active) {
-    return (
-      <span
-        data-testid="delegation-status-badge"
-        data-status="ACTIVE_EXPIRED"
-        className="inline-block rounded px-1.5 py-0.5 text-xs bg-muted text-muted-foreground"
-      >
-        만료
-      </span>
-    );
-  }
-  return (
-    <span
-      data-testid="delegation-status-badge"
-      data-status="ACTIVE"
-      className="inline-block rounded px-1.5 py-0.5 text-xs bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-100"
-    >
-      활성
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Period display helper.
-// ---------------------------------------------------------------------------
-
-function periodText(grant: DelegationGrant): string {
-  const from = fmt(grant.validFrom);
-  const to = grant.validTo ? fmt(grant.validTo) : '무기한';
-  return `${from} ~ ${to}`;
-}
 
 // ---------------------------------------------------------------------------
 // DelegationScreen.
 // ---------------------------------------------------------------------------
 
 export function DelegationScreen() {
-  const [createOpen, setCreateOpen] = useState(false);
-  const [revokeTarget, setRevokeTarget] = useState<DelegationGrant | null>(null);
-
-  const delegatorQ = useDelegations('DELEGATOR');
-  const delegateQ = useDelegations('DELEGATE');
-
-  const delegatorGrants = delegatorQ.data?.data ?? [];
-  const delegateGrants = delegateQ.data?.data ?? [];
+  const {
+    createOpen,
+    openCreate,
+    closeCreate,
+    revokeTarget,
+    openRevoke,
+    closeRevoke,
+    delegatorQ,
+    delegateQ,
+    delegatorGrants,
+    delegateGrants,
+  } = useDelegationScreen();
 
   return (
     <section
@@ -132,7 +75,7 @@ export function DelegationScreen() {
         </h2>
         <Button
           variant="primary"
-          onClick={() => setCreateOpen(true)}
+          onClick={openCreate}
           data-testid="delegation-create"
         >
           위임 생성
@@ -140,111 +83,29 @@ export function DelegationScreen() {
       </div>
 
       {/* DELEGATOR — grants I issued */}
-      <div className="mb-6" data-testid="delegation-list-delegator">
-        <h3 className="mb-2 text-sm font-semibold text-foreground">
-          내가 위임한 (delegator)
-        </h3>
-        {delegatorQ.isError && (
-          <p
-            className="mb-2 text-sm text-destructive"
-            role="status"
-            data-testid="delegation-error"
-          >
-            {approvalErrorMessage(delegatorQ.error)}
-          </p>
-        )}
-        {delegatorQ.isLoading ? (
-          <p className="text-sm text-muted-foreground">불러오는 중…</p>
-        ) : delegatorGrants.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            위임한 grant 가 없습니다.
-          </p>
-        ) : (
-          <ul className="space-y-1">
-            {delegatorGrants.map((g: DelegationGrant) => (
-              <li
-                key={g.id}
-                data-testid={`delegation-row-${g.id}`}
-                className="flex items-center justify-between rounded border border-border px-3 py-2 text-sm"
-              >
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium">{g.delegateId}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {periodText(g)}
-                  </span>
-                </div>
-                <div className="ml-2 flex items-center gap-2">
-                  <DelegationStatusBadge grant={g} />
-                  {/* Revoke action only on ACTIVE (not expired) delegator grants */}
-                  {isActiveGrant(g) && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => setRevokeTarget(g)}
-                      data-testid={`delegation-revoke-${g.id}`}
-                      className="text-xs text-destructive"
-                    >
-                      회수
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <DelegationGrantList
+        testid="delegation-list-delegator"
+        heading="내가 위임한 (delegator)"
+        query={delegatorQ}
+        grants={delegatorGrants}
+        emptyText="위임한 grant 가 없습니다."
+        idField="delegateId"
+        onRevoke={openRevoke}
+      />
 
       {/* DELEGATE — grants delegated to me */}
-      <div className="mb-6" data-testid="delegation-list-delegate">
-        <h3 className="mb-2 text-sm font-semibold text-foreground">
-          나에게 위임된 (delegate)
-        </h3>
-        {delegateQ.isError && (
-          <p
-            className="mb-2 text-sm text-destructive"
-            role="status"
-            data-testid="delegation-error"
-          >
-            {approvalErrorMessage(delegateQ.error)}
-          </p>
-        )}
-        {delegateQ.isLoading ? (
-          <p className="text-sm text-muted-foreground">불러오는 중…</p>
-        ) : delegateGrants.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            나에게 위임된 grant 가 없습니다.
-          </p>
-        ) : (
-          <ul className="space-y-1">
-            {delegateGrants.map((g: DelegationGrant) => (
-              <li
-                key={g.id}
-                data-testid={`delegation-row-${g.id}`}
-                className="flex items-center justify-between rounded border border-border px-3 py-2 text-sm"
-              >
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium">{g.delegatorId}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {periodText(g)}
-                  </span>
-                </div>
-                <div className="ml-2">
-                  <DelegationStatusBadge grant={g} />
-                  {/* NO revoke action — revoke is delegator-only */}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <DelegationGrantList
+        testid="delegation-list-delegate"
+        heading="나에게 위임된 (delegate)"
+        query={delegateQ}
+        grants={delegateGrants}
+        emptyText="나에게 위임된 grant 가 없습니다."
+        idField="delegatorId"
+      />
 
-      {createOpen && (
-        <DelegationCreateDialog onClose={() => setCreateOpen(false)} />
-      )}
+      {createOpen && <DelegationCreateDialog onClose={closeCreate} />}
       {revokeTarget && (
-        <DelegationRevokeDialog
-          grant={revokeTarget}
-          onClose={() => setRevokeTarget(null)}
-        />
+        <DelegationRevokeDialog grant={revokeTarget} onClose={closeRevoke} />
       )}
     </section>
   );
@@ -255,32 +116,19 @@ export function DelegationScreen() {
 // ===========================================================================
 
 function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
-  const [delegateId, setDelegateId] = useState('');
-  const [validFrom, setValidFrom] = useState('');
-  const [validTo, setValidTo] = useState('');
-  const [reason, setReason] = useState('');
-  const createM = useCreateDelegation();
-
-  const ok =
-    delegateId.trim() !== '' &&
-    validFrom.trim() !== '';
-  const canConfirm = ok && !createM.isPending;
-
-  function onConfirm() {
-    if (!canConfirm) return;
-    createM.mutate(
-      {
-        input: {
-          delegateId: delegateId.trim(),
-          validFrom: validFrom.trim(),
-          ...(validTo.trim() ? { validTo: validTo.trim() } : {}),
-          ...(reason.trim() ? { reason: reason.trim() } : {}),
-        },
-        idempotencyKey: newIdemKey(),
-      },
-      { onSuccess: () => onClose() },
-    );
-  }
+  const {
+    delegateId,
+    setDelegateId,
+    validFrom,
+    setValidFrom,
+    validTo,
+    setValidTo,
+    reason,
+    setReason,
+    createM,
+    canConfirm,
+    onConfirm,
+  } = useDelegationCreate(onClose);
 
   return (
     <div
@@ -409,21 +257,10 @@ function DelegationRevokeDialog({
   grant: DelegationGrant;
   onClose: () => void;
 }) {
-  const [reason, setReason] = useState('');
-  const revokeM = useRevokeDelegation();
-  const ok = reason.trim() !== '';
-
-  function onConfirm() {
-    if (!ok || revokeM.isPending) return;
-    revokeM.mutate(
-      {
-        id: grant.id,
-        reason: reason.trim(),
-        idempotencyKey: newIdemKey(),
-      },
-      { onSuccess: () => onClose() },
-    );
-  }
+  const { reason, setReason, revokeM, ok, onConfirm } = useDelegationRevoke(
+    grant,
+    onClose,
+  );
 
   return (
     <div
