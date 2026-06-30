@@ -8,7 +8,7 @@ Activate the web-store GAP RP-initiated-logout E2E in nightly CI (add the `web-s
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -57,15 +57,15 @@ so RP-initiated logout is gated nightly.
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — `web-store-iam-logout-e2e` job added to `nightly-e2e.yml`; additive
-  (does not modify `frontend-e2e-fullstack`).
-- [ ] **AC-2** — Job boots the lean GAP stack (`docker-compose.iam-e2e.yml`), waits for
+- [x] **AC-1** — `web-store-iam-logout-e2e` job added to `nightly-e2e.yml`; additive
+  (does not modify `frontend-e2e-fullstack`). (#2043)
+- [x] **AC-2** — Job boots the lean GAP stack (`docker-compose.iam-e2e.yml`), waits for
   `auth-service` healthy, seeds the CONSUMER credential, builds web-store, and runs
   `rp-initiated-logout.spec.ts` with `SKIP_GAP_E2E=0`.
-- [ ] **AC-3** — Repo-scoped (`if: github.repository == 'kanggle/monorepo-lab'`) and
+- [x] **AC-3** — Repo-scoped (`if: github.repository == 'kanggle/monorepo-lab'`) and
   YAML-valid.
-- [ ] **AC-4** — First nightly run (or a manual `workflow_dispatch`) is GREEN; the
-  build-step env wiring confirmed on the Linux runner.
+- [x] **AC-4** — `workflow_dispatch` run `28431315032` GREEN — the logout job passed
+  end-to-end (`✓ 1 passed (20.4s)`); build-step env wiring confirmed on the Linux runner.
 
 > **Verification note**: this is a **nightly CI job that cannot be run on a local
 > Windows host** (needs a Linux runner + the GAP docker stack; the web-store prod
@@ -103,6 +103,38 @@ unverified. AC-1/AC-3 met; AC-2/AC-4 pending. The job stays additive + non-block
 
 ---
 
+# Status update (2026-06-30 #2) — GREEN end-to-end (AC-2/AC-4 met)
+
+Three runner-side root causes were diagnosed and fixed; `workflow_dispatch` run
+`28431315032` is GREEN (`✓ 1 passed (20.4s)`):
+
+1. **"Boot lean GAP stack" compose context** — `docker-compose.iam-e2e.yml` referenced the
+   iam project as `../iam`, but the directory is `iam-platform`. Fixed all three references
+   (mysql init volume, auth-service build context, JWT keys volume) → `../iam-platform`.
+2. **Missing shared base image** — the auth-service image is `FROM monorepo/java-service-base:v1`
+   (not on any registry). Added the "Build shared java-service-base image" step before
+   `compose up --build` (same pattern as the other compose-based nightly jobs, ADR-MONO-041 D2).
+3. **Credential login rejected as "Invalid email or password."** — TASK-BE-407 made GAP's
+   form-login resolve the authoritative `tenant_type` from account-service
+   (`CredentialAuthenticationProvider.tenantTypePort.resolve()`, a NON-fail-soft call AFTER
+   the password verifies). The lean stack omitted account-service on a now-stale assumption,
+   so the resolve failed closed and `login.html`'s `th:switch` default case rendered the
+   generic credential error. The password itself verified fine; the roles claim (web-store's
+   role-guard surface) is fail-soft and falls back to the local `RoleSeedPolicy` seed
+   (`ecommerce → CUSTOMER`), so it never needed account-service. Fix: a tiny static nginx
+   stub (`account-mock`, `apps/web-store/e2e/fixtures/account-mock.nginx.conf`) that answers
+   the one non-fail-soft call `GET /internal/tenants/{tid} → {"tenantType":"B2C"}` and 404s
+   the rest; auth-service pointed at it via `ACCOUNT_SERVICE_URL`.
+
+`next start` (the Playwright `webServer`, run after `pnpm --filter web-store build`) emits a
+harmless "does not work with output: standalone" warning but serves the regular `.next`
+build fine — confirmed by the runner serving the login page; no webServer change needed.
+
+All four ACs met. Status → `review` pending the impl PR merge + the standard 3-dimension
+merge verification, then `review/ → done/`.
+
+---
+
 # Related Specs
 
 - `projects/ecommerce-microservices-platform/apps/web-store/e2e/CI-IAM-E2E-HANDOFF.md` (the source YAML)
@@ -129,5 +161,5 @@ unverified. AC-1/AC-3 met; AC-2/AC-4 pending. The job stays additive + non-block
 
 # Definition of Done
 
-- [ ] AC-1…AC-4 satisfied
-- [ ] Ready for review
+- [x] AC-1…AC-4 satisfied
+- [x] Ready for review
