@@ -386,6 +386,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ADR-MONO-041 D2: the iam-e2e auth-service image `FROM monorepo/java-service-base:v1`.
+      # No image registry → build the shared base locally before `compose up --build`.
+      - name: Build shared java-service-base image (ADR-MONO-041 D2)
+        working-directory: ${{ github.workspace }}
+        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
+
       - name: Boot lean GAP stack
         run: docker compose -f docker-compose.iam-e2e.yml up -d --build
 

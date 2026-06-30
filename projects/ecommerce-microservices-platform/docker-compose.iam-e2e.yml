@@ -52,7 +52,7 @@ services:
       COMMUNITY_DB_PASSWORD: community_pass
       MEMBERSHIP_DB_PASSWORD: membership_pass
     volumes:
-      - ../iam/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - ../iam-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
       interval: 10s
@@ -77,9 +77,22 @@ services:
     command: ["sleep", "infinity"]
     networks: [iam-e2e]
 
+  # Static account-service stub. TASK-BE-407 made GAP form-login resolve the
+  # authoritative tenant_type from account-service (a NON-fail-soft call), so the
+  # lean stack can no longer omit it outright — without a responder the login
+  # fails closed as "Invalid email or password". This nginx stub answers only
+  # GET /internal/tenants/{tid} with a tenant_type; every other /internal/** call
+  # (roles, entitled-domains) is fail-soft and 404s back to the local seed.
+  # See account-mock.nginx.conf for the full rationale.
+  account-mock:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./apps/web-store/e2e/fixtures/account-mock.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [iam-e2e]
+
   auth-service:
     build:
-      context: ../iam
+      context: ../iam-platform
       dockerfile: apps/auth-service/Dockerfile
     environment:
       <<: *iam-service-env
@@ -88,12 +101,17 @@ services:
       DB_PASSWORD: auth_pass
       JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
       JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
+      # TASK-BE-407: form-login resolves tenant_type from account-service. Point
+      # at the static stub (see the account-mock service) so the lean stack's
+      # CredentialAuthenticationProvider does not fail closed.
+      ACCOUNT_SERVICE_URL: http://account-mock:8080
     volumes:
-      - ../iam/apps/auth-service/src/test/resources/keys:/app/keys:ro
+      - ../iam-platform/apps/auth-service/src/test/resources/keys:/app/keys:ro
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       kafka: { condition: service_started }
+      account-mock: { condition: service_started }
     ports: ["8081:8081"]
     networks: [iam-e2e]
     healthcheck:
