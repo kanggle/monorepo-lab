@@ -19,10 +19,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.elasticsearch.ElasticsearchContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
 import java.util.Map;
@@ -31,24 +27,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @Tag("integration")
-@Testcontainers
 @EmbeddedKafka(partitions = 1)
 @DisplayName("인덱스 동기화 통합 테스트")
 class IndexSyncIntegrationTest {
 
-    @SuppressWarnings("resource")
-    @Container
-    static ElasticsearchContainer elasticsearch =
-            new ElasticsearchContainer(
-                    DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:8.11.1")
-                            .asCompatibleSubstituteFor("docker.elastic.co/elasticsearch/elasticsearch")
-            )
-                    .withEnv("xpack.security.enabled", "false")
-                    .withEnv("ES_JAVA_OPTS", "-Xms512m -Xmx512m");
-
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.elasticsearch.uris", () -> "http://" + elasticsearch.getHttpHostAddress());
+        registry.add("spring.elasticsearch.uris", NoriElasticsearchContainer::httpUri);
     }
 
     @Autowired

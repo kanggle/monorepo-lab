@@ -2,6 +2,7 @@ package com.example.search.adapter.outbound.elasticsearch;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.GetRequest;
+import com.example.search.NoriElasticsearchContainer;
 import com.example.search.domain.model.SearchDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,10 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.elasticsearch.ElasticsearchContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.util.Map;
 
@@ -22,23 +19,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @Tag("integration")
-@Testcontainers
 @DisplayName("ElasticsearchIndexAdapter 통합 테스트")
 class ElasticsearchIndexAdapterTest {
 
-    @SuppressWarnings("resource")
-    @Container
-    static ElasticsearchContainer elasticsearch =
-            new ElasticsearchContainer(
-                    DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:8.11.1")
-                            .asCompatibleSubstituteFor("docker.elastic.co/elasticsearch/elasticsearch")
-            )
-                    .withEnv("xpack.security.enabled", "false")
-                    .withEnv("ES_JAVA_OPTS", "-Xms512m -Xmx512m");
-
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.elasticsearch.uris", () -> "http://" + elasticsearch.getHttpHostAddress());
+        registry.add("spring.elasticsearch.uris", NoriElasticsearchContainer::httpUri);
     }
 
     @Autowired
