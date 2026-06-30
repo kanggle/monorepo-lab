@@ -1,19 +1,16 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { showPickerOnClick } from '@/shared/lib/show-picker';
-import { ApiError, messageForCode } from '@/shared/api/errors';
-import { useAuditQuery } from '../hooks/use-audit';
+import { messageForCode } from '@/shared/api/errors';
 import {
   AUDIT_SOURCES,
-  AUDIT_DEFAULT_PAGE_SIZE,
   isSecuritySource,
   type AuditPage,
-  type AuditQueryParams,
   type AuditSource,
 } from '../api/types';
-import { AuditRowCells, auditRowKey } from './AuditRowCells';
+import { AuditTable } from './AuditTable';
+import { useAuditScreen, type FilterState } from './use-audit-screen';
 
 /**
  * IAM unified audit + security read surface (TASK-PC-FE-003 — Phase 2
@@ -44,6 +41,10 @@ import { AuditRowCells, auditRowKey } from './AuditRowCells';
  * Resilience (§ 2.5): 401 handled by the server route (re-login); 403/422
  * → inline actionable; 503/timeout → this section degrades only (the
  * console shell stays intact).
+ *
+ * Container/presentational split (TASK-PC-FE-149): the filter / source /
+ * pagination state + permission/degrade derivations live in
+ * `useAuditScreen`; the list table + pagination render in `AuditTable`.
  */
 
 export interface AuditScreenProps {
@@ -67,123 +68,36 @@ const SOURCE_LABEL: Record<AuditSource, string> = {
   suspicious: '의심 활동 (suspicious)',
 };
 
-interface FilterState {
-  accountId: string;
-  actionCode: string;
-  from: string;
-  to: string;
-  source: '' | AuditSource;
-  tenantId: string;
-}
-
-const EMPTY_FILTERS: FilterState = {
-  accountId: '',
-  actionCode: '',
-  from: '',
-  to: '',
-  source: '',
-  tenantId: '',
-};
-
 export function AuditScreen({
   initial,
   securityEventReadGranted,
   superAdminTenants = [],
 }: AuditScreenProps) {
-  const accountFid = useId();
-  const actionFid = useId();
-  const fromFid = useId();
-  const toFid = useId();
-  const sourceFid = useId();
-  const tenantFid = useId();
-
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
-  const [query, setQuery] = useState<AuditQueryParams>({
-    page: initial.page,
-    size: initial.size,
-  });
-  const [rangeError, setRangeError] = useState<string | null>(null);
-
-  const securityKnownDenied = securityEventReadGranted === false;
-
-  const seeded =
-    (query.page ?? 0) === initial.page &&
-    !query.accountId &&
-    !query.actionCode &&
-    !query.from &&
-    !query.to &&
-    !query.source &&
-    !query.tenantId;
-
-  const audit = useAuditQuery(query, seeded ? initial : undefined);
-  const data = audit.data;
-
-  // 403 (permission / tenant-scope) and 422 surface as ApiError on the
-  // client query — render inline, never crash, never a re-login loop.
-  const apiError =
-    audit.error instanceof ApiError ? (audit.error as ApiError) : null;
-  const permissionDenied = apiError?.status === 403;
-  const validationDenied = apiError?.status === 422;
-  // A degrade signal: the client query failed with a non-ApiError (the
-  // proxy mapped 503/timeout → 503 → ApiError 503; treat ≥500 as degrade).
-  const degraded =
-    audit.isError &&
-    (!apiError || apiError.status >= 500) &&
-    !permissionDenied &&
-    !validationDenied;
-
-  const permissionMessage = useMemo(() => {
-    if (!apiError) return null;
-    if (apiError.code === 'TENANT_SCOPE_DENIED') {
-      return messageForCode('TENANT_SCOPE_DENIED');
-    }
-    if (apiError.status === 403) {
-      // The intersection-permission rule: a security source without
-      // security.event.read 403s — give the specific explanation.
-      if (isSecuritySource(query.source)) {
-        return messageForCode('SECURITY_EVENT_READ_REQUIRED');
-      }
-      return messageForCode('PERMISSION_DENIED', apiError.message);
-    }
-    if (apiError.status === 422) {
-      return messageForCode(apiError.code, apiError.message);
-    }
-    return null;
-  }, [apiError, query.source]);
-
-  function submitFilters(e: React.FormEvent) {
-    e.preventDefault();
-    setRangeError(null);
-    const from = filters.from.trim();
-    const to = filters.to.trim();
-    // Client guard — pre-empt the producer 422 (from > to). ISO-8601 from
-    // <input type="datetime-local"> compares lexicographically.
-    if (from && to && from > to) {
-      setRangeError(messageForCode('AUDIT_RANGE_INVALID'));
-      return;
-    }
-    const source =
-      filters.source === '' ? undefined : (filters.source as AuditSource);
-    setQuery({
-      accountId: filters.accountId.trim() || undefined,
-      actionCode: filters.actionCode.trim() || undefined,
-      from: from || undefined,
-      to: to || undefined,
-      source,
-      tenantId: filters.tenantId.trim() || undefined,
-      page: 0,
-      size: initial.size || AUDIT_DEFAULT_PAGE_SIZE,
-    });
-  }
-
-  function resetFilters() {
-    setFilters(EMPTY_FILTERS);
-    setRangeError(null);
-    setQuery({ page: 0, size: initial.size || AUDIT_DEFAULT_PAGE_SIZE });
-  }
-
-  const rows = data?.content ?? [];
-  const totalPages = data ? Math.max(1, data.totalPages) : 1;
+  const {
+    accountFid,
+    actionFid,
+    fromFid,
+    toFid,
+    sourceFid,
+    tenantFid,
+    filters,
+    setFilters,
+    submitFilters,
+    resetFilters,
+    rangeError,
+    securityKnownDenied,
+    data,
+    rows,
+    totalPages,
+    permissionDenied,
+    validationDenied,
+    degraded,
+    permissionMessage,
+    prevDisabled,
+    nextDisabled,
+    goPrev,
+    goNext,
+  } = useAuditScreen({ initial, securityEventReadGranted });
 
   return (
     <section aria-labelledby="audit-heading">
@@ -410,88 +324,15 @@ export function AuditScreen({
               없음)
             </p>
           ) : (
-            <>
-              <table
-                className="data-table"
-                data-testid="audit-table"
-              >
-                <caption className="sr-only">감사 로그 통합 조회 결과</caption>
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <th scope="col" className="p-2">
-                      소스
-                    </th>
-                    <th scope="col" className="p-2">
-                      액션 / 이벤트
-                    </th>
-                    <th scope="col" className="p-2">
-                      행위자 / 계정
-                    </th>
-                    <th scope="col" className="p-2">
-                      대상 / 위치
-                    </th>
-                    <th scope="col" className="p-2">
-                      결과
-                    </th>
-                    <th scope="col" className="p-2">
-                      발생 시각 (UTC)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, i) => {
-                    const key = auditRowKey(row, i);
-                    return (
-                      <tr
-                        key={key}
-                        data-testid={`audit-row-${i}`}
-                        data-source={(row as { source: string }).source}
-                        className="border-b border-border"
-                      >
-                        <AuditRowCells row={row} />
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              <nav
-                className="mt-4 flex items-center justify-between"
-                aria-label="페이지 이동"
-              >
-                <Button
-                  variant="secondary"
-                  disabled={(query.page ?? 0) <= 0}
-                  onClick={() =>
-                    setQuery((q) => ({
-                      ...q,
-                      page: Math.max(0, (q.page ?? 0) - 1),
-                    }))
-                  }
-                  data-testid="audit-prev"
-                >
-                  이전
-                </Button>
-                <span
-                  className="text-sm text-muted-foreground"
-                  data-testid="audit-pageinfo"
-                >
-                  {data
-                    ? `${data.page + 1} / ${totalPages} 페이지 · 총 ${data.totalElements}건`
-                    : '—'}
-                </span>
-                <Button
-                  variant="secondary"
-                  disabled={!data || data.page + 1 >= data.totalPages}
-                  onClick={() =>
-                    setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-                  }
-                  data-testid="audit-next"
-                >
-                  다음
-                </Button>
-              </nav>
-            </>
+            <AuditTable
+              rows={rows}
+              data={data}
+              totalPages={totalPages}
+              prevDisabled={prevDisabled}
+              nextDisabled={nextDisabled}
+              onPrev={goPrev}
+              onNext={goNext}
+            />
           )}
         </>
       )}
