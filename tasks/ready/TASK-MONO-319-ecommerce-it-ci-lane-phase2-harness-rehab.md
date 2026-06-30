@@ -135,10 +135,62 @@ npipe path).
 **AC-1 reframed**: product-service ITs run GREEN **on CI**; locally they are flaky (host npipe),
 green on retry — do not treat a single local failure as a regression.
 
-**Phase 2 done in this PR**: product-service dedicated `integrationTest` task added + wired into
-the `ecommerce-integration-tests` CI job (order + payment + product). AC-3 (remaining 9 services)
-= per-service follow-ups: each just needs the same `integrationTest` task block + a CI-job entry
-(no harness rehab — the ITs already compile and the harness is CI-viable).
+**Phase 2 done (#2055 bump + #2056 lane, both MERGED to main)**: product-service dedicated
+`integrationTest` task added + wired into the `ecommerce-integration-tests` CI job
+(order + payment + product), GREEN. The first CI run surfaced + fixed two real harness gaps the
+local npipe flake had masked: (a) Redis `RedisConnectionFailureException` on 4 cache-path ITs →
+`spring.cache.type=none` in their `@DynamicPropertySource`; (b) an unstubbed `@MockitoBean`
+`SellerAccountProvisioner` NPE → `@BeforeEach` stub `ProvisioningResult.failed()`.
+
+---
+
+# Resume playbook (next session) — AC-3 nine-service rollout
+
+State at handoff: main @ `aa2a002ee`, all Phase-1/2 PRs merged, MONO-319 stays in `ready/`.
+Lane has order + payment + product. **AC-3 = add the remaining 9 services.**
+
+**Per-service IT inventory (2026-06-30 scan; verify before each):**
+
+| service | IT classes | dedicated `integrationTest` task? | Redis/@Cacheable? |
+|---|---|---|---|
+| gateway-service | 2 | **YES already** (build.gradle:52) — only needs the CI-job entry | no |
+| user-service | 7 | no — add task | no |
+| promotion-service | 6 | no — add task | no |
+| batch-worker | 6 (3 @Tag) | no — add task | no |
+| shipping-service | 4 | no — add task | no |
+| settlement-service | 4 | no — add task | no |
+| review-service | 3 | no — add task | no |
+| search-service | 2 (4 @Tag) | no — add task | no |
+| notification-service | 2 | no — add task | no |
+
+**None of the 9 use Redis/@Cacheable** → the product-service Redis gap is unlikely to recur; watch
+instead for Kafka / WireMock-stub / unstubbed-`@MockitoBean` NPE gaps (search-service likely needs
+an Elasticsearch/OpenSearch container — check its ITs first).
+
+**Steps (mechanical, repeat per service):**
+1. **Add the dedicated task** to each service's `build.gradle` (except gateway, which has it). Copy
+   the exact block from `product-service/build.gradle` (the `tasks.register('integrationTest', Test)`
+   stanza with `includeTags 'integration'`, 5m timeout, NOT in `check`). It auto-inherits the root
+   `tasks.withType(Test)` Docker env.
+2. **Wire into CI** — `.github/workflows/ci.yml`, job `ecommerce-integration-tests` (~line 1300):
+   add each `:projects:ecommerce-microservices-platform:apps:<svc>:integrationTest` to the gradle
+   run step, and add its `build/reports/tests/integrationTest/` + `build/test-results/integrationTest/`
+   to the failure-upload `path:` list.
+3. **Push → first CI run is the gate** (local is the npipe flake, NOT authority — see correction
+   above). For any RED: `gh run download <run-id> -n ecommerce-integration-test-reports -D <dir>`,
+   parse the per-class JUnit XML (PowerShell `[xml]` → testsuite tests/failures/errors + testcase
+   failure messages) — the gh job log is a 153 KB single-line classpath-noise blob and swallows the
+   server-side 500 stack, so the **XML artifact is the authority**. Fix per-service gaps the same
+   way (cache off / mock stub / missing container) mirroring a passing sibling IT in that service.
+4. **Job-time budget**: the lane grows 12→21 services × (Postgres + embedded Kafka). The job is
+   `timeout-minutes: 30`. If it approaches the cap, either split into 3+3+3 batches across separate
+   jobs, or raise the timeout. Watch the wall-clock as services are added.
+5. **CI path-filter**: editing each service's `build.gradle` (under `projects/ecommerce-…`) trips the
+   `ecommerce` change-filter, so the job runs on the PR automatically — no path-filter edit needed.
+
+Recommended cadence: batch 3 services per PR (e.g. user+promotion+gateway first), so a RED is easy
+to triage and the job-time growth is observable. `(분석=Opus 4.8 / 구현 권장=Opus — 첫 CI run의 갭
+진단은 판단 필요; 레인 배선 자체는 Sonnet 가능)`
 
 ---
 
