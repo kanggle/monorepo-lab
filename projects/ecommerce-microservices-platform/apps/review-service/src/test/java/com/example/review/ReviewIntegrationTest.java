@@ -29,7 +29,7 @@ import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+@SpringBootTest(classes = ReviewServiceApplication.class)
 @Tag("integration")
 @Testcontainers
 @AutoConfigureMockMvc

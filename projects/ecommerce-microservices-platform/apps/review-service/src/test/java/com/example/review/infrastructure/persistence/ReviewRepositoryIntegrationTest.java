@@ -7,6 +7,7 @@ import com.example.review.application.result.ReviewSummaryResult;
 import com.example.review.application.result.MyReviewListResult;
 import com.example.review.domain.model.Review;
 import com.example.review.domain.model.ReviewStatus;
+import com.example.review.ReviewServiceApplication;
 import com.example.review.domain.repository.ReviewRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
@@ -31,7 +32,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(classes = ReviewServiceApplication.class)
 @Tag("integration")
 @Testcontainers
 @Transactional
