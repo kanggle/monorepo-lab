@@ -19,7 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@SpringBootTest(classes = PromotionServiceApplication.class, properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @Tag("integration")
 @Testcontainers
 @AutoConfigureMockMvc

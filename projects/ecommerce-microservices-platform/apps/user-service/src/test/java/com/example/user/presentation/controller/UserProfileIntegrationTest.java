@@ -172,7 +172,7 @@ class UserProfileIntegrationTest {
         void listUsers_withoutAdminRole_returns403() throws Exception {
             mockMvc.perform(get("/api/admin/users"))
                     .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
         }
 
         @Test
@@ -223,7 +223,7 @@ class UserProfileIntegrationTest {
 
             mockMvc.perform(get("/api/admin/users/{userId}", userId))
                     .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
         }
 
         @Test
