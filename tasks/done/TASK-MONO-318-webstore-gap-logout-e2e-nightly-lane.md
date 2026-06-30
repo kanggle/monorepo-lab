@@ -8,7 +8,7 @@ Activate the web-store GAP RP-initiated-logout E2E in nightly CI (add the `web-s
 
 # Status
 
-review
+done
 
 # Owner
 
