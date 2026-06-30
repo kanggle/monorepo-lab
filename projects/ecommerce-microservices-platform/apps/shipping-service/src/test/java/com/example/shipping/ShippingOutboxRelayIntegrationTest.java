@@ -30,12 +30,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@link ShippingOutboxPublisher} drains it to Kafka with the {@code eventId}/{@code eventType}
  * headers + preserved key ({@code shippingId}) → the row's {@code published_at} is set.
  *
- * <p><b>Verification note (TASK-BE-446 AC-7):</b> originally shipping-service had no
- * Testcontainers CI lane (only order/payment did). TASK-MONO-319 added a dedicated
- * {@code integrationTest} lane for shipping-service, so this {@code @Tag("integration")}
- * test now runs on CI.
+ * <p><b>Verification note (TASK-BE-446 AC-7):</b> shipping-service has no
+ * Testcontainers CI lane (only order/payment do), so this {@code @Tag("integration")}
+ * test is excluded from the Docker-free {@code :test} task and does not run in CI
+ * today. Authored for compile-time verification + activation if a lane is added.
  */
-@SpringBootTest(classes = ShippingServiceApplication.class, properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @Tag("integration")
 @Testcontainers
 @EmbeddedKafka(partitions = 1, topics = "shipping.shipping.status-changed")
