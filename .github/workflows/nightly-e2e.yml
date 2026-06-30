@@ -329,6 +329,120 @@ jobs:
           retention-days: 7
 
   # ===========================================================================
+  # web-store GAP RP-initiated logout e2e (TASK-INT-023 spec → TASK-MONO-318 lane).
+  #
+  # Additive sibling of frontend-e2e-fullstack. Boots the LEAN GAP stack
+  # (docker-compose.iam-e2e.yml = auth-service + mysql only, no ecommerce backend)
+  # and runs rp-initiated-logout.spec.ts with SKIP_GAP_E2E=0. Independent of the
+  # ecommerce-boot-jars-nightly artifact (builds its own auth-service bootJar), so
+  # no `needs:`. The lean stack has no account-service — login works off
+  # auth_db.credentials alone (the GAP token pipeline emits no account_type claim,
+  # which web-store's signIn accepts).
+  # ===========================================================================
+  web-store-iam-logout-e2e:
+    name: Web-store GAP logout e2e (RP-initiated end_session, real GAP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Extracted portfolio repos have no GAP/iam stack; smoke covers them in ci.yml.
+    if: github.repository == 'kanggle/monorepo-lab'
+    defaults:
+      run:
+        working-directory: projects/ecommerce-microservices-platform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Build the GAP auth-service bootJar (the iam-e2e Dockerfile COPYs it).
+      - name: Build auth-service bootJar
+        working-directory: projects/iam-platform
+        run: ./gradlew :apps:auth-service:bootJar --no-daemon
+
+      - name: Issuer hostname resolves on the host (browser + Next.js server)
+        # PC-FE-028: both the browser AND the Next.js server must resolve the
+        # `auth-service` OIDC issuer host.
+        working-directory: ${{ github.workspace }}
+        run: echo "127.0.0.1 auth-service" | sudo tee -a /etc/hosts
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9.15.0'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: projects/ecommerce-microservices-platform/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Boot lean GAP stack
+        run: docker compose -f docker-compose.iam-e2e.yml up -d --build
+
+      - name: Wait for auth-service healthy
+        run: |
+          for i in $(seq 1 40); do
+            s=$(docker inspect -f '{{.State.Health.Status}}' \
+                 "$(docker compose -f docker-compose.iam-e2e.yml ps -q auth-service)")
+            [ "$s" = "healthy" ] && exit 0
+            sleep 5
+          done
+          docker compose -f docker-compose.iam-e2e.yml logs auth-service
+          exit 1
+
+      - name: Seed CONSUMER credential
+        run: |
+          docker compose -f docker-compose.iam-e2e.yml exec -T mysql \
+            mysql -uroot -prootpass \
+            < apps/web-store/e2e/fixtures/iam-consumer-seed.sql
+
+      - name: Install Playwright browsers (chromium, with system deps)
+        run: pnpm --filter web-store exec playwright install --with-deps chromium
+
+      # The Playwright webServer runs `pnpm start`, which needs a prod build.
+      # NextAuth/OIDC values are read at runtime by the server (set on the run
+      # step below); the build only needs AUTH_TRUST_HOST baked harmlessly.
+      - name: Build web-store (Next.js prod build)
+        env:
+          AUTH_TRUST_HOST: 'true'
+        run: pnpm --filter web-store build
+
+      - name: Run RP-initiated logout spec
+        working-directory: projects/ecommerce-microservices-platform/apps/web-store
+        env:
+          CI: '1'                                  # makes playwright.config start the webServer
+          SKIP_GAP_E2E: '0'                        # un-skip the GAP spec
+          OIDC_ISSUER_URL: http://auth-service:8081
+          ECOMMERCE_WEB_STORE_CLIENT_ID: ecommerce-web-store-client
+          ECOMMERCE_WEB_STORE_CLIENT_SECRET: ecommerce-dev
+          NEXTAUTH_SECRET: ci-iam-e2e-secret
+          NEXTAUTH_URL: http://localhost:3000
+          AUTH_TRUST_HOST: 'true'
+        run: pnpm --filter web-store exec playwright test rp-initiated-logout.spec.ts
+
+      - name: Tear down lean GAP stack
+        if: always()
+        run: docker compose -f docker-compose.iam-e2e.yml down -v
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-iam-logout-nightly
+          path: |
+            projects/ecommerce-microservices-platform/apps/web-store/playwright-report/
+            projects/ecommerce-microservices-platform/apps/web-store/test-results/
+          retention-days: 7
+
+  # ===========================================================================
   # Backend full e2e jobs (ADR-MONO-011 / TASK-MONO-079, Phase 3).
   #
   # The 4 jobs below run @Tag("full") subsets of the 4 backend e2e suites
