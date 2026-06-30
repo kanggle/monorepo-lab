@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * test is excluded from the Docker-free {@code :test} task and does not run in CI
  * today. Authored for compile-time verification + activation if a lane is added.
  */
-@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@SpringBootTest(classes = SettlementServiceApplication.class, properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @Tag("integration")
 @Testcontainers
 @EmbeddedKafka(partitions = 1, topics = "settlement.period.closed")

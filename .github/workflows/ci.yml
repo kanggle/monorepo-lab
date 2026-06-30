@@ -1314,8 +1314,9 @@ jobs:
     # + gateway; batch 2 adds review; batch 3 adds shipping; batch 4 adds batch-worker
     # (singleton-container base fix) + notification (test admin-auth + per-method isolation);
     # batch 5 adds search (singleton nori-enabled ES image built via ImageFromDockerfile).
-    # 11 of the 12 IT-carrying services are now lane'd; only settlement remains (duplicate-bean
-    # app-boot failure, BE-415 — tracked as TASK-BE-461).
+    # TASK-BE-461 adds settlement (excluded the lib OutboxAutoConfiguration that BE-415
+    # pulled in, which collided with settlement's local processed-event repo). All 12
+    # IT-carrying ecommerce services are now lane'd.
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
@@ -1341,7 +1342,7 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Run ecommerce integration suites (11 services — all IT-carrying except settlement)
+      - name: Run ecommerce integration suites (all 12 IT-carrying services)
         run: >-
           ./gradlew
           :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
@@ -1355,6 +1356,7 @@ jobs:
           :projects:ecommerce-microservices-platform:apps:batch-worker:integrationTest
           :projects:ecommerce-microservices-platform:apps:notification-service:integrationTest
           :projects:ecommerce-microservices-platform:apps:search-service:integrationTest
+          :projects:ecommerce-microservices-platform:apps:settlement-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload ecommerce integration test reports on failure
@@ -1385,6 +1387,8 @@ jobs:
             projects/ecommerce-microservices-platform/apps/notification-service/build/test-results/integrationTest/
             projects/ecommerce-microservices-platform/apps/search-service/build/reports/tests/integrationTest/
             projects/ecommerce-microservices-platform/apps/search-service/build/test-results/integrationTest/
+            projects/ecommerce-microservices-platform/apps/settlement-service/build/reports/tests/integrationTest/
+            projects/ecommerce-microservices-platform/apps/settlement-service/build/test-results/integrationTest/
           retention-days: 7
 
   frontend-checks:

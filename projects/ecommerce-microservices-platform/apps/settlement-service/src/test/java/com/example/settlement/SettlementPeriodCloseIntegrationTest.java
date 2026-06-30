@@ -84,7 +84,7 @@ class SettlementPeriodCloseIntegrationTest {
     @AfterEach
     void cleanup() {
         TenantContext.clear();
-        jdbc.update("DELETE FROM outbox");
+        jdbc.update("DELETE FROM settlement_outbox");
         jdbc.update("DELETE FROM seller_payout");
         jdbc.update("DELETE FROM settlement_period");
         jdbc.update("DELETE FROM commission_accrual");
@@ -130,11 +130,11 @@ class SettlementPeriodCloseIntegrationTest {
 
         // Exactly one outbox row for settlement.period.closed.v1 (co-committed, AC-5/AC-6).
         Long outboxRows = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE event_type = ?", Long.class,
+                "SELECT COUNT(*) FROM settlement_outbox WHERE event_type = ?", Long.class,
                 SettlementPeriodClosedEvent.EVENT_TYPE);
         assertThat(outboxRows).isEqualTo(1L);
         String payload = jdbc.queryForObject(
-                "SELECT payload FROM outbox WHERE event_type = ?", String.class,
+                "SELECT payload FROM settlement_outbox WHERE event_type = ?", String.class,
                 SettlementPeriodClosedEvent.EVENT_TYPE);
         assertThat(payload).contains("\"tenant_id\":\"tenantA\"")
                 .contains("\"seller_count\":2")
@@ -187,7 +187,7 @@ class SettlementPeriodCloseIntegrationTest {
         Long payoutCount = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM seller_payout WHERE period_id = ?", Long.class, opened.periodId());
         assertThat(payoutCount).isEqualTo(0L);
-        Long outboxCount = jdbc.queryForObject("SELECT COUNT(*) FROM outbox", Long.class);
+        Long outboxCount = jdbc.queryForObject("SELECT COUNT(*) FROM settlement_outbox", Long.class);
         assertThat(outboxCount).isEqualTo(0L);
     }
 

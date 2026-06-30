@@ -1,0 +1,12 @@
+-- TASK-BE-461: settlement_order_snapshot_line.line_index is maintained by Hibernate's
+-- @OrderColumn(name = "line_index") on OrderSnapshotJpaEntity.lines (the @OneToMany list).
+-- @OrderColumn uses a two-phase persist: it INSERTs each child row WITHOUT the order
+-- column and then issues a follow-up UPDATE to set the 0-based index — so the column MUST
+-- be NULLABLE. The original V1 `line_index INT NOT NULL` made the initial INSERT violate
+-- the constraint, so every OrderPlaced snapshot-line write failed with a
+-- DataIntegrityViolationException. This was latent because settlement-service could not
+-- boot a full context (the duplicate processedEventJpaRepository bean, also fixed in
+-- BE-461) and no Testcontainers IT had ever run; the first settlement IT lane (TASK-MONO-319)
+-- surfaced it. Hibernate still populates line_index via its follow-up UPDATE, so rows end
+-- up correctly ordered (0,1,2,…) once the transaction commits.
+ALTER TABLE settlement_order_snapshot_line ALTER COLUMN line_index DROP NOT NULL;
