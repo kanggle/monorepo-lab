@@ -43,6 +43,12 @@ public class OrderPlacedSnapshotConsumer {
         handle(objectMapper.readValue(payload, OrderPlacedEvent.class));
     }
 
+    // @Transactional so handle()'s MANDATORY processed-event dedupe + snapshot write are
+    // atomic when handle() is invoked directly through the proxy (the IT drives handle()
+    // without the @KafkaListener onMessage tx boundary). A no-op in prod, where onMessage
+    // self-invokes handle() so this proxy advice is bypassed and onMessage's tx remains the
+    // single boundary — behaviour unchanged (TASK-BE-461).
+    @Transactional
     public void handle(OrderPlacedEvent event) {
         if (processedEventStore.isDuplicate(event.eventId(), "OrderPlaced")) {
             return;

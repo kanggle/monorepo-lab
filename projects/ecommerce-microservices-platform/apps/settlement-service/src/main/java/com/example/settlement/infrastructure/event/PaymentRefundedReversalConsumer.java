@@ -35,6 +35,12 @@ public class PaymentRefundedReversalConsumer {
         handle(objectMapper.readValue(payload, PaymentEvent.class));
     }
 
+    // @Transactional so handle()'s MANDATORY processed-event dedupe + reversal write are
+    // atomic when handle() is invoked directly through the proxy (the IT drives handle()
+    // without the @KafkaListener onMessage tx boundary). A no-op in prod, where onMessage
+    // self-invokes handle() so this proxy advice is bypassed and onMessage's tx remains the
+    // single boundary — behaviour unchanged (TASK-BE-461).
+    @Transactional
     public void handle(PaymentEvent event) {
         if (processedEventStore.isDuplicate(event.eventId(), "PaymentRefunded")) {
             return;
