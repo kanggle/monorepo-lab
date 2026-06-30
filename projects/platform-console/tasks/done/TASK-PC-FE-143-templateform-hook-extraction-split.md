@@ -8,7 +8,7 @@ console-web `ecommerce-ops/TemplateForm` 로직 훅 추출 분할: 알림 템플
 
 # Status
 
-review
+done
 
 # Owner
 
