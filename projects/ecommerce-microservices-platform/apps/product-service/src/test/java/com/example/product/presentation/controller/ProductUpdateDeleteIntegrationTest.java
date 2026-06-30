@@ -57,6 +57,10 @@ class ProductUpdateDeleteIntegrationTest {
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:0");
+        // No Redis container in this IT harness — disable the cache abstraction so the
+        // @Cacheable/@CacheEvict product path does not attempt a Redis connection
+        // (TASK-MONO-319; mirrors the sibling ITs that set spring.cache.type).
+        registry.add("spring.cache.type", () -> "none");
     }
 
     @MockitoBean
