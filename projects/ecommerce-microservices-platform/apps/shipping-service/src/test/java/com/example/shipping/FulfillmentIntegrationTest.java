@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@SpringBootTest(classes = ShippingServiceApplication.class, properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @Tag("integration")
 @Testcontainers
 @AutoConfigureMockMvc
@@ -110,7 +110,7 @@ class FulfillmentIntegrationTest {
         orderConfirmedEventConsumer.onMessage(orderConfirmedJson(orderId, userId));
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT * FROM outbox WHERE aggregate_id = ? AND event_type = 'FulfillmentRequested'", orderId);
+                "SELECT * FROM shipping_outbox WHERE aggregate_id = ? AND event_type = 'FulfillmentRequested'", orderId);
 
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).get("aggregate_type")).isEqualTo("Fulfillment");
@@ -159,7 +159,7 @@ class FulfillmentIntegrationTest {
                 .andExpect(status().isOk());
 
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT * FROM outbox WHERE aggregate_id = ? AND event_type = 'ManualShipConfirmRequested'", orderId);
+                "SELECT * FROM shipping_outbox WHERE aggregate_id = ? AND event_type = 'ManualShipConfirmRequested'", orderId);
 
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).get("aggregate_type")).isEqualTo("Shipping");
@@ -197,7 +197,7 @@ class FulfillmentIntegrationTest {
                 .andExpect(status().isOk());
 
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox WHERE aggregate_id = ? AND event_type = 'ManualShipConfirmRequested'",
+                "SELECT COUNT(*) FROM shipping_outbox WHERE aggregate_id = ? AND event_type = 'ManualShipConfirmRequested'",
                 Integer.class, orderId);
         assertThat(count).isZero();
     }
