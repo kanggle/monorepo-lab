@@ -52,7 +52,7 @@ services:
       COMMUNITY_DB_PASSWORD: community_pass
       MEMBERSHIP_DB_PASSWORD: membership_pass
     volumes:
-      - ../iam/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - ../iam-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
       interval: 10s
@@ -79,7 +79,7 @@ services:
 
   auth-service:
     build:
-      context: ../iam
+      context: ../iam-platform
       dockerfile: apps/auth-service/Dockerfile
     environment:
       <<: *iam-service-env
@@ -89,7 +89,7 @@ services:
       JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
       JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
     volumes:
-      - ../iam/apps/auth-service/src/test/resources/keys:/app/keys:ro
+      - ../iam-platform/apps/auth-service/src/test/resources/keys:/app/keys:ro
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
