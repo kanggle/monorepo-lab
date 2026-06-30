@@ -8,7 +8,7 @@ console-web erp-ops `approval-api.ts`(435줄) behavior-preserving 분할 — 연
 
 # Status
 
-review
+done
 
 # Owner
 

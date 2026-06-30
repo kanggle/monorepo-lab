@@ -8,7 +8,7 @@ console-web erp-ops `DelegationScreen.tsx`(466줄) behavior-preserving 분할 �
 
 # Status
 
-review
+done
 
 # Owner
 

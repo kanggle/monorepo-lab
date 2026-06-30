@@ -8,7 +8,7 @@ console-web `wms-ops/api/wms-api.ts` god-file 분할: 506줄 단일 API 클라�
 
 # Status
 
-review
+done
 
 # Owner
 

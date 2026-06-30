@@ -1,6 +1,6 @@
 # TASK-PC-FE-144 — split the `scm-ops/components/ScmOpsScreen.tsx` god-file (container/presentational)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
 **Owner:** frontend-engineer
 **Task Tags:** refactoring, console-web, scm-ops, behavior-preserving

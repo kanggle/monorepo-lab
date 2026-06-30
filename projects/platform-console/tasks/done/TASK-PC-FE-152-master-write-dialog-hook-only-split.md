@@ -8,7 +8,7 @@ console-web erp-ops `MasterWriteDialog.tsx`(383줄) behavior-preserving 분할 �
 
 # Status
 
-review
+done
 
 # Owner
 

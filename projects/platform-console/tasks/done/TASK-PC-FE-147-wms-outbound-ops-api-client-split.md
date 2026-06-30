@@ -8,7 +8,7 @@ console-web `wms-outbound-ops/api/outbound-api.ts` (495줄) → 도메인 그룹
 
 # Status
 
-review
+done
 
 # Owner
 
