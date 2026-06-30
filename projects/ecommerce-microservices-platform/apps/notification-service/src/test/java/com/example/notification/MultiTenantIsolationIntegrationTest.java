@@ -4,6 +4,7 @@ import com.example.notification.adapter.in.event.OrderPlacedEventConsumer;
 import com.example.notification.application.port.out.NotificationSender;
 import com.example.notification.domain.model.NotificationChannel;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -117,6 +118,19 @@ class MultiTenantIsolationIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    /**
+     * Per-method isolation: the static Postgres container is shared across all methods of
+     * this class, and every method seeds an (ORDER_PLACED, EMAIL) template for tenant A/B.
+     * Without cleanup the `(tenant_id, type, channel)` unique constraint
+     * ({@code uq_template_tenant_type_channel}) makes the second method's seed collide
+     * (DuplicateKeyException). Truncate the seeded tables before each method.
+     */
+    @BeforeEach
+    void cleanTemplatesAndNotifications() {
+        jdbcTemplate.update("DELETE FROM notifications");
+        jdbcTemplate.update("DELETE FROM notification_templates");
+    }
 
     /** Seeds an ORDER_PLACED/EMAIL template for a tenant; returns the template id. */
     private String seedTemplate(String tenantId, String subject) {

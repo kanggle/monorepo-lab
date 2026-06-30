@@ -98,6 +98,7 @@ class NotificationIntegrationTest {
         // 1. 템플릿 준비 (다른 테스트에서 이미 생성되었을 수 있으므로 확인 후 생성)
         if (!templateRepository.existsByTypeAndChannel(TemplateType.ORDER_PLACED, NotificationChannel.EMAIL)) {
             mockMvc.perform(post("/api/notifications/templates")
+                            .header("X-User-Role", "ADMIN")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"type\":\"ORDER_PLACED\",\"channel\":\"EMAIL\"," +
                                     "\"subject\":\"Order {{orderId}} placed\"," +
@@ -210,6 +211,7 @@ class NotificationIntegrationTest {
     void templateCrud_flow() throws Exception {
         // Create
         var createResult = mockMvc.perform(post("/api/notifications/templates")
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"type\":\"PAYMENT_COMPLETED\",\"channel\":\"EMAIL\"," +
                                 "\"subject\":\"Payment for {{orderId}}\",\"body\":\"Paid {{amount}} won.\"}"))
@@ -220,12 +222,14 @@ class NotificationIntegrationTest {
                 createResult.getResponse().getContentAsString()).get("templateId").asText();
 
         // List
-        mockMvc.perform(get("/api/notifications/templates"))
+        mockMvc.perform(get("/api/notifications/templates")
+                        .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray());
 
         // Update
         mockMvc.perform(put("/api/notifications/templates/" + templateId)
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"subject\":\"Updated payment subject\",\"body\":\"Updated body\"}"))
                 .andExpect(status().isOk())
@@ -233,6 +237,7 @@ class NotificationIntegrationTest {
 
         // Duplicate create should fail
         mockMvc.perform(post("/api/notifications/templates")
+                        .header("X-User-Role", "ADMIN")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"type\":\"PAYMENT_COMPLETED\",\"channel\":\"EMAIL\"," +
                                 "\"subject\":\"Dup\",\"body\":\"Dup\"}"))

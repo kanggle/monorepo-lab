@@ -69,10 +69,22 @@ class SearchIndexConsistencyIntegrationTest extends AbstractIntegrationTest {
 
     @AfterEach
     void drainQueues() {
-        // Drain any unconsumed MockWebServer responses between tests to keep server state clean
-        while (productServer.getRequestCount() > 0) {
-            try { productServer.takeRequest(1, java.util.concurrent.TimeUnit.MILLISECONDS); }
-            catch (Exception ignored) { break; }
+        // Drain received requests between tests to keep server state clean. NOTE:
+        // MockWebServer#getRequestCount() is cumulative (monotonic) and never decreases,
+        // so the old `while (getRequestCount() > 0)` loop never terminated → the @AfterEach
+        // hung until the 5-minute per-test timeout. Drain via takeRequest() returning null
+        // (queue empty) instead, for BOTH stub servers.
+        drain(productServer);
+        drain(searchServer);
+    }
+
+    private static void drain(MockWebServer server) {
+        try {
+            while (server.takeRequest(1, java.util.concurrent.TimeUnit.MILLISECONDS) != null) {
+                // discard the recorded request
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
