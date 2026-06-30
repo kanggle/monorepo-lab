@@ -1,7 +1,9 @@
 package com.example.product.presentation.controller;
 
 import com.example.product.ProductServiceApplication;
+import com.example.product.application.port.SellerAccountProvisioner.ProvisioningResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -87,6 +91,20 @@ class SellerAdminReadCrossTenantIsolationIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    /**
+     * Stub the (bean-overridden) IAM provisioner so the seller-register flow gets a
+     * concrete {@link ProvisioningResult} instead of an unstubbed mock's {@code null}
+     * (which NPEs the onboarding path → HTTP 500). {@code failed()} keeps it fail-soft:
+     * the seller is still persisted (PENDING_PROVISIONING) and the POST returns 201 —
+     * all this read-surface test needs. No account/identity ids are stored, so the two
+     * sellers cannot collide on a unique constraint (TASK-MONO-319).
+     */
+    @BeforeEach
+    void stubProvisioner() {
+        given(sellerAccountProvisioner.provision(anyString(), anyString(), anyString()))
+                .willReturn(ProvisioningResult.failed());
+    }
 
     private void registerSeller(String tenantId, String sellerId, String displayName) throws Exception {
         String body = """
