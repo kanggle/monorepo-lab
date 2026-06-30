@@ -8,7 +8,7 @@ console-web `ecommerce-ops/PromotionForm` 로직 훅 추출 분할: 폼 상태·
 
 # Status
 
-review
+done
 
 # Owner
 

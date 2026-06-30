@@ -8,7 +8,7 @@ console-web `ecommerce-ops/VariantEditor` 컨테이너/프레젠테이셔널 분
 
 # Status
 
-review
+done
 
 # Owner
 
