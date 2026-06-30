@@ -35,14 +35,12 @@ import static java.time.Duration.ofSeconds;
  * preserved key ({@code couponId}) + value (byte-identical envelope payload) →
  * the row's {@code published_at} is set.
  *
- * <p><b>Verification note (TASK-BE-444 AC-7):</b> promotion-service has no
- * Testcontainers CI lane (only order/payment do), so this {@code @Tag("integration")}
- * test is excluded from the Docker-free {@code :test} task and does not run in
- * CI today. It is authored for compile-time verification + activation if a lane
- * is added; the authoritative gate for this service is the unit suite +
- * mirroring the CI-validated {@code master_outbox} pattern.
+ * <p><b>Verification note (TASK-BE-444 AC-7):</b> originally promotion-service had no
+ * Testcontainers CI lane (only order/payment did), so this {@code @Tag("integration")}
+ * test was excluded from the Docker-free {@code :test} task. TASK-MONO-319 added a
+ * dedicated {@code integrationTest} lane for promotion-service, so it now runs on CI.
  */
-@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
+@SpringBootTest(classes = PromotionServiceApplication.class, properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @Tag("integration")
 @Testcontainers
 @EmbeddedKafka(partitions = 1, topics = "promotion.coupon.used")

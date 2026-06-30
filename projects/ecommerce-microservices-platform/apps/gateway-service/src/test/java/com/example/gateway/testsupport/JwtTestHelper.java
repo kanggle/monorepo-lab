@@ -151,6 +151,36 @@ public final class JwtTestHelper {
         return sign(claims.build());
     }
 
+    /**
+     * Builds and signs a CONSUMER token carrying the {@code CUSTOMER} role and an explicit
+     * {@code tenant_id} (issuer {@code https://test.local/issuer}, {@code aud: ecommerce}).
+     * Unlike {@link #signTokenWithIssuerAndTenant(String, String)} this also sets the
+     * {@code roles} claim, so the token passes {@code AccountTypeEnforcementFilter}'s
+     * role-based admission (ADR-MONO-035 4b-2a — a storefront consumer must carry
+     * {@code CUSTOMER}; the {@code account_type} OR-branch was removed). Without the role
+     * claim every request 403s at admission before reaching the rate limiter. Used by the
+     * cross-tenant rate-limit isolation IT, where each tenant needs a distinct
+     * {@code tenant_id} bucket. Valid for 5 minutes.
+     *
+     * @param tenantId {@code tenant_id} claim, or {@code null} to omit
+     */
+    public String signCustomerTokenForTenant(String tenantId) {
+        Instant now = Instant.now();
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
+                .subject("user-" + UUID.randomUUID())
+                .issuer("https://test.local/issuer")
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .audience(List.of("ecommerce"))
+                .claim("account_type", "CONSUMER")
+                .claim("roles", List.of("CUSTOMER"));
+        if (tenantId != null) {
+            claims.claim("tenant_id", tenantId);
+        }
+        return sign(claims.build());
+    }
+
     private String sign(JWTClaimsSet claimsSet) {
         JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256)
                 .keyID(rsaJwk.getKeyID())

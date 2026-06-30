@@ -84,7 +84,11 @@ class CrossTenantRateLimitIsolationIntegrationTest {
     private ReactiveStringRedisTemplate redisTemplate;
 
     private String tokenForTenant(String tenantId) {
-        return jwtHelper.signTokenWithIssuerAndTenant("https://test.local/issuer", tenantId);
+        // Carries roles=[CUSTOMER] so the token passes AccountTypeEnforcementFilter's
+        // role-based admission (ADR-MONO-035 4b-2a) and actually reaches the rate limiter;
+        // a bare signTokenWithIssuerAndTenant token (no roles) 403s at admission before the
+        // limiter runs, masking the 429. The distinct tenant_id keys the per-tenant bucket.
+        return jwtHelper.signCustomerTokenForTenant(tenantId);
     }
 
     @Test
