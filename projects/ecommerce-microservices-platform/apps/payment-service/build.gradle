@@ -96,6 +96,6 @@ tasks.register('integrationTest', Test) {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.20.4"
+        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
     }
 }
