@@ -8,7 +8,7 @@ console-web erp-ops `DepartmentWriteDialog.tsx`(415줄) behavior-preserving 분�
 
 # Status
 
-review
+done
 
 # Owner
 

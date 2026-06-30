@@ -1,6 +1,6 @@
 # TASK-PC-FE-145 — split the `scm-ops/api/scm-api.ts` god-file (endpoint-group barrel)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Refactor only** (Reduce Module Size / Long File — 0 behavior change, 0 contract change)
 **Owner:** frontend-engineer
 **Task Tags:** refactoring, console-web, scm-ops, behavior-preserving

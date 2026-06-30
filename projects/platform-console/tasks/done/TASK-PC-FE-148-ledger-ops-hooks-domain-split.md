@@ -8,7 +8,7 @@ console-web `features/ledger-ops/hooks/use-ledger-ops.ts`(558줄 fat 데이터-�
 
 # Status
 
-review
+done
 
 # Owner
 
