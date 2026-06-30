@@ -8,7 +8,7 @@ Activate the web-store GAP RP-initiated-logout E2E in nightly CI (add the `web-s
 
 # Status
 
-review
+ready
 
 # Owner
 
@@ -74,6 +74,32 @@ so RP-initiated logout is gated nightly.
 > (`1 passed (51.0s)`, per the handoff). AC-4 (the runner-side build-env wiring) is
 > confirmed on the first nightly / `workflow_dispatch`, not locally. The job is
 > additive + non-blocking, so a first-run env tweak does not affect main or PRs.
+
+---
+
+# Status update (2026-06-30) — back in `ready`: job NOT yet end-to-end green
+
+The job was added (#2043) and one runner-side bug fixed (#2044), but it is **not yet
+green end-to-end** — it is being un-blocked one CI step at a time across nightly runs.
+Moved back to `ready/` because finishing it is actionable work (not awaiting a merge).
+
+1. **Step "Build auth-service bootJar" — FIXED (#2044).** The handoff YAML ran
+   `./gradlew :apps:auth-service:bootJar` with `working-directory: projects/iam-platform`,
+   but the monorepo has a single ROOT gradlew. Corrected to run from `${{ github.workspace }}`
+   with `:projects:iam-platform:apps:auth-service:bootJar` (verified locally — `auth-service.jar`
+   builds). The job now passes this step.
+2. **Step "Boot lean GAP stack" — NEXT BLOCKER (red as of nightly run 28427113105).**
+   `docker compose -f docker-compose.iam-e2e.yml up -d --build` fails. Root cause not yet
+   captured: local repro was blocked (the dev host's Docker daemon pipe was down at the time),
+   and `gh run view --log` did not return the step output.
+
+**Resume from here**: with **stable local Docker** (local Testcontainers works post-1.21.3),
+reproduce by `cd projects/ecommerce-microservices-platform && docker compose -f
+docker-compose.iam-e2e.yml up -d --build` to capture the compose failure (likely a build
+context / jar-path / image issue), **or** download the nightly run logs from the GitHub UI.
+Then the remaining steps (seed, `pnpm --filter web-store build`, playwright) are still
+unverified. AC-1/AC-3 met; AC-2/AC-4 pending. The job stays additive + non-blocking
+(no impact on main/PRs) while red.
 
 ---
 
