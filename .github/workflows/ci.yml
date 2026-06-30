@@ -1307,9 +1307,10 @@ jobs:
     # `check`; a dedicated `:integrationTest` task (TASK-MONO-307) runs them on a
     # Docker-capable runner. The task does NOT inherit the per-service `test`-task
     # Windows `DOCKER_HOST=npipe:…` override, so Testcontainers uses the runner's
-    # native Docker (root build.gradle Docker env). Phase 1 = order-service +
-    # payment-service (gates the BE-435/437/438 money-safety ITs). Other ecommerce
-    # services = phased follow-ups.
+    # native Docker (root build.gradle Docker env). Phase 1 (MONO-307) = order-service +
+    # payment-service (gates the BE-435/437/438 money-safety ITs). Phase 2 (MONO-319) adds
+    # product-service (12 ITs: cache eviction, multi-tenant + seller-scope isolation,
+    # seller-provisioning, optimistic lock). Remaining 9 services = phased follow-ups.
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
@@ -1335,11 +1336,12 @@ jobs:
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
 
-      - name: Run ecommerce integration suites (order-service + payment-service)
+      - name: Run ecommerce integration suites (order + payment + product)
         run: >-
           ./gradlew
           :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
           :projects:ecommerce-microservices-platform:apps:payment-service:integrationTest
+          :projects:ecommerce-microservices-platform:apps:product-service:integrationTest
           --no-daemon --stacktrace
 
       - name: Upload ecommerce integration test reports on failure
@@ -1352,6 +1354,8 @@ jobs:
             projects/ecommerce-microservices-platform/apps/order-service/build/test-results/integrationTest/
             projects/ecommerce-microservices-platform/apps/payment-service/build/reports/tests/integrationTest/
             projects/ecommerce-microservices-platform/apps/payment-service/build/test-results/integrationTest/
+            projects/ecommerce-microservices-platform/apps/product-service/build/reports/tests/integrationTest/
+            projects/ecommerce-microservices-platform/apps/product-service/build/test-results/integrationTest/
           retention-days: 7
 
   frontend-checks:

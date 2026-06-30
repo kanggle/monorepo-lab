@@ -98,6 +98,50 @@ task + config fixes) until product-service IT is green locally. (4) Add the CI l
 
 ---
 
+# Scoping CORRECTION (2026-06-30, Phase 2 diagnosis) — premise above was wrong
+
+Phase 1 (TC bump #2055) is **DONE** (merged, CI-green; order/payment IT lanes pass under
+1.21.3). The first-container Docker-detection root cause was then captured (`--info` on a
+single product-service IT, surfacing the real cause under the cached `IllegalStateException`):
+
+```
+NpipeSocketClientProviderStrategy: failed with exception
+  MalformedChunkCodingException: Bad chunk header
+→ Could not find a valid Docker environment
+```
+
+**This is a FLAKY host-transport issue, NOT an ecommerce-IT-harness defect.** The scoping
+finding #2 above ("NOT a flake (consistent)", "ecommerce-IT-harness-specific") is **wrong** —
+it generalised from only 2 runs. With more runs the failure is plainly intermittent:
+
+- product-service `:integrationTest` (clean dedicated task, identical config): **run #1 PASS /
+  run #2 FAIL** back-to-back (~1 pass per 3 runs). The Npipe `MalformedChunkCodingException`
+  bites intermittently.
+- `wms master-service:integrationTest` passed once and also shares the exact same root Docker
+  convention — its "green" was the same flaky draw, not a harness difference.
+- Disproven along the way: the `~/.testcontainers.properties` npipe strategy pin (removing it
+  did not help — Npipe is the only Windows strategy TC auto-selects anyway); and a JaCoCo-agent
+  hypothesis (disabling it did not help).
+
+**Corrected verdict**: there is **no ecommerce-specific harness bug to rehab**. The real
+deliverable is simply **add a dedicated `integrationTest` task per service + wire it into the
+`ecommerce-integration-tests` CI job** (MONO-307 pattern). **CI Linux (unix socket) is the
+authority** — it has no npipe and no `MalformedChunkCoding` flake (the existing order/payment
+lanes prove ecommerce ITs run reliably there). Local Windows IT is flaky-but-passes-on-retry;
+it is NOT a reliable gate (this also corrects project memory
+`project_testcontainers_docker_desktop_blocker`'s "local is IT-verification authority" for the
+npipe path).
+
+**AC-1 reframed**: product-service ITs run GREEN **on CI**; locally they are flaky (host npipe),
+green on retry — do not treat a single local failure as a regression.
+
+**Phase 2 done in this PR**: product-service dedicated `integrationTest` task added + wired into
+the `ecommerce-integration-tests` CI job (order + payment + product). AC-3 (remaining 9 services)
+= per-service follow-ups: each just needs the same `integrationTest` task block + a CI-job entry
+(no harness rehab — the ITs already compile and the harness is CI-viable).
+
+---
+
 # Related Specs
 
 - `tasks/done/TASK-MONO-307-ecommerce-integration-ci-lane.md` (Phase 1 pattern + phase boundary)
