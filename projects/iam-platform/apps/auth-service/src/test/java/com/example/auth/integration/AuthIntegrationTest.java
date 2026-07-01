@@ -328,7 +328,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(9)
-    @DisplayName("Locked account → 403 ACCOUNT_LOCKED")
+    @DisplayName("Locked account → 423 ACCOUNT_LOCKED")
     void loginLockedAccount() throws Exception {
         // Seed a locked-user credential row
         Argon2idPasswordHasher hasher = new Argon2idPasswordHasher();
@@ -355,7 +355,7 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
                         .content("""
                                 {"email":"%s","password":"%s"}
                                 """.formatted(LOCKED_EMAIL, TEST_PASSWORD)))
-                .andExpect(status().isForbidden())
+                .andExpect(status().isLocked())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"));
     }
 
