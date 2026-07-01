@@ -70,6 +70,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-079 | 리뷰/평점 시스템 — 상품 리뷰 작성, 평점 관리, 평균 평점 집계 | review-service (신규) | code, api, event |
 | TASK-BE-080 | 위시리스트/찜 기능 — 사용자별 관심 상품 목록 관리 | user-service | code, api |
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
+| TASK-BE-464 | notification-service Web Push(VAPID) 실연동 — 구독 레지스트리 + 등록/해지 API + WebPushSender(BE-463 stub 승격). 선행=BE-463 merge, blocks=FE-083 | notification-service | code, api, migration, push |
+| TASK-FE-083 | web-store Web Push 구독 — Service Worker + opt-in UI + 브라우저 배너 표시. 선행=BE-464 merge | web-store | code, push |
 ## ready
 
 | ID | Title | Service | Tags |
@@ -84,6 +86,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-463 | notification-service PUSH 채널 stub/log sender — sender 부재로 조용히 skip되던 갭 해소, PUSH 를 render→send 경로에 연결(실 provider=BE-464 후속). impl 브랜치 `be-463-push-notification-sender`. | notification-service | code, test |
 
 ## done
 
