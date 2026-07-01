@@ -204,8 +204,20 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
 
         // --- Generate new access token ---
         Set<String> authorizedScopes = authorization.getAuthorizedScopes();
+        // TASK-BE-465: recover the ORIGINAL resource-owner Authentication that SAS
+        // stored on the authorization at authorization_code time. SAS keys it under
+        // `Principal.class.getName()` ("java.security.Principal") — the exact key its
+        // own OAuth2AuthorizationCodeAuthenticationProvider writes and the built-in
+        // refresh provider reads. Reading it under
+        // `Authentication.class.getName()` ("org.springframework.security.core.Authentication")
+        // ALWAYS returned null, so every refresh fell back to `clientPrincipal` below
+        // → the rotated access token was minted with `sub` = client_id and `roles` =
+        // RoleSeedPolicy default (the account_id/tenant/roles carried on the stored
+        // principal's `details` map were lost). Downstream gateways bind
+        // `X-User-Id ← sub` as a UUID, so a client_id `sub` broke every authenticated
+        // call (e.g. user-service 400) ~5 min after login, on the first token refresh.
         Authentication principal = authorization.getAttribute(
-                org.springframework.security.core.Authentication.class.getName());
+                java.security.Principal.class.getName());
 
         DefaultOAuth2TokenContext.Builder contextBuilder = DefaultOAuth2TokenContext.builder()
                 .registeredClient(registeredClient)
