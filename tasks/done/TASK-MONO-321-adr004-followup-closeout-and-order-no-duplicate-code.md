@@ -1,6 +1,6 @@
 # TASK-MONO-321 — Close the last two ADR-MONO-004 §6 follow-ups + reconcile `ORDER_NO_DUPLICATE` error code
 
-**Status:** review
+**Status:** done
 
 **Type:** monorepo-level (shared: `platform/`, `docs/adr/`; project touch: wms outbound-service)
 
