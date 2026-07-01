@@ -467,9 +467,9 @@ Owned by `account-service` (Identity Platform — multi-tenant account lifecycle
 |---|---|---|
 | ACCOUNT_NOT_FOUND | 404 | Account does not exist (or cross-tenant — see `multi-tenant.md` M3) |
 | ACCOUNT_ALREADY_EXISTS | 409 | Account with the given email/identifier already exists in this tenant |
-| ACCOUNT_LOCKED | 423 | Account is locked (failed login threshold exceeded). **TODO**: IAM `auth-service` handler currently returns 403; correct to 423 in a follow-up code-side fix |
+| ACCOUNT_LOCKED | 423 | Account is locked (failed login threshold exceeded) |
 | ACCOUNT_DELETED | 410 | Account is soft-deleted (anonymized) |
-| ACCOUNT_DORMANT | 423 | Account is in dormant state; reactivation flow required. **TODO**: IAM `auth-service` handler currently returns 403; correct to 423 in a follow-up code-side fix |
+| ACCOUNT_DORMANT | 423 | Account is in dormant state; reactivation flow required |
 | ACCOUNT_STATUS_UNKNOWN | 500 | Account status is in an unexpected value (defensive guard, audit candidate) |
 | ACCOUNT_SERVICE_UNREACHABLE | 503 | Internal `account-service` call failed (per `integration-heavy.md` I3); transient |
 | EMAIL_ALREADY_VERIFIED | 409 | Email already verified; second verify attempt rejected (`EmailAlreadyVerifiedException`) |

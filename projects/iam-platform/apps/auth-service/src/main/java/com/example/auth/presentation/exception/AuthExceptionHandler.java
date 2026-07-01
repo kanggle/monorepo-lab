@@ -81,13 +81,25 @@ public class AuthExceptionHandler extends CommonGlobalExceptionHandler {
 
     @ExceptionHandler(AccountLockedException.class)
     public ResponseEntity<ErrorResponse> handleAccountLocked(AccountLockedException e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+        // ACCOUNT_LOCKED → 423 LOCKED per platform/error-handling.md § Account (TASK-BE-462).
+        return ResponseEntity.status(HttpStatus.LOCKED)
                 .body(ErrorResponse.of("ACCOUNT_LOCKED", "Account is locked"));
     }
 
+    /**
+     * Account-status login rejections map per carried error code, per
+     * {@code platform/error-handling.md} § Account (TASK-BE-462) — not a blanket 403:
+     * {@code ACCOUNT_DORMANT} → 423, {@code ACCOUNT_DELETED} → 410,
+     * {@code ACCOUNT_STATUS_UNKNOWN} (and any unrecognised status) → 500.
+     */
     @ExceptionHandler(AccountStatusException.class)
     public ResponseEntity<ErrorResponse> handleAccountStatus(AccountStatusException e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+        HttpStatus status = switch (e.getErrorCode()) {
+            case "ACCOUNT_DORMANT" -> HttpStatus.LOCKED;               // 423
+            case "ACCOUNT_DELETED" -> HttpStatus.GONE;                 // 410
+            default -> HttpStatus.INTERNAL_SERVER_ERROR;               // ACCOUNT_STATUS_UNKNOWN / unrecognised → 500
+        };
+        return ResponseEntity.status(status)
                 .body(ErrorResponse.of(e.getErrorCode(), e.getMessage()));
     }
 

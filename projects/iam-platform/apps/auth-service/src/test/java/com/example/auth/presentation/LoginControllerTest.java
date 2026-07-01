@@ -65,14 +65,14 @@ class LoginControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/auth/login returns 403 for locked account")
+    @DisplayName("POST /api/auth/login returns 423 for locked account")
     void loginAccountLocked() throws Exception {
         when(loginUseCase.execute(any())).thenThrow(new AccountLockedException());
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"test@example.com\",\"password\":\"password123\"}"))
-                .andExpect(status().isForbidden())
+                .andExpect(status().isLocked())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"));
     }
 
