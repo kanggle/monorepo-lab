@@ -1,9 +1,10 @@
 # TASK-BE-463 — notification-service PUSH 채널이 sender 부재로 조용히 skip되는 갭 해소 (stub/log sender)
 
-- **Status**: review
+- **Status**: done
 - **Project**: ecommerce-microservices-platform
 - **Service**: notification-service
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (소규모 outbound 어댑터 추가)
+- **DONE (2026-07-01, 3-dim verified — impl PR #2076 squash `daf928de3`)**. stub/log `PushNotificationSender`(@Component, supportedChannel=PUSH, non-throwing INFO-log send) 추가 → senderMap[PUSH] 자동 충전, PUSH 를 render→send 경로에 연결(기존 "No sender available for channel PUSH" silent-drop 해소). 발송 서비스 코드 무변경. 계약/스펙 무변경(PUSH 는 architecture.md 에 이미 선언된 확장 슬롯). **3-dim**: (a) state=MERGED + `daf928de3`; (b) origin/main tip=`daf928de3` 일치; (c) pre-merge failing required=0 — 특히 `Integration (…notification-service…, Testcontainers)` PASS 로 senderMap[PUSH] 풀 wiring(AC-2) CI 검증. 신규 단위 `PushNotificationSenderUnitTest` GREEN. 실 provider 연동=후속 TASK-BE-464(Web Push/VAPID) → TASK-FE-083. 분석=Opus 4.8 / 구현=Opus 직접.
 
 ## Goal
 
