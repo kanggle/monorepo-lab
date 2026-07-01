@@ -8,7 +8,7 @@ TASK-FE-057 리뷰 수정 — SENT 필터링, 알림 유형 표시, window.alert
 
 # Status
 
-review
+done
 
 # Owner
 

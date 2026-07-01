@@ -8,7 +8,7 @@ web-store 알림 — 알림 목록/상세 조회 및 알림 설정 관리
 
 # Status
 
-backlog
+done
 
 # Owner
 
