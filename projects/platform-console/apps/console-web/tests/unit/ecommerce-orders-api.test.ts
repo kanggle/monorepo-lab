@@ -354,4 +354,47 @@ describe('orders-api — ecommerce FLAT envelope + § 2.5 resilience', () => {
     const d = await getOrder('ord-1');
     expect(d.status).toBe('FUTURE_V3');
   });
+
+  // Regression: the producer serializes genuinely-nullable domain fields as JSON
+  // `null` (Jackson default — no NON_NULL inclusion). `shippingAddress.address2`
+  // is null for every order without a second address line, and OrderItem
+  // `variantId` / `optionName` are nullable on the aggregate. A plain
+  // `z.string().optional()` rejects `null`, and that parse throw was caught in
+  // ecommerce-client and mis-surfaced as a FAKE 503 degrade ("일시적으로 불러올
+  // 수 없습니다") — the order-detail page never rendered. The detail read MUST
+  // tolerate `null` on these fields.
+  it('detail read tolerates null address2 / variantId / optionName (no fake degrade)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...ORDER_DETAIL,
+          items: [
+            {
+              productId: 'p-1',
+              variantId: null,
+              productName: 'Tee',
+              optionName: null,
+              quantity: 1,
+              unitPrice: 15000,
+              sellerId: 's-1',
+            },
+          ],
+          shippingAddress: {
+            recipient: '홍길동',
+            phone: '010-1234-5678',
+            zipCode: '12345',
+            address1: '서울시 강남구',
+            address2: null,
+          },
+          updatedAt: null,
+        }),
+      ),
+    );
+    const d = await getOrder('ord-1');
+    expect(d.orderId).toBe('ord-1');
+    expect(d.shippingAddress.address2).toBeNull();
+    expect(d.items[0].variantId).toBeNull();
+    expect(d.items[0].optionName).toBeNull();
+  });
 });
