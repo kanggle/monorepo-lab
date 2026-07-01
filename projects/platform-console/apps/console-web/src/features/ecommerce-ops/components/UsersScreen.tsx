@@ -205,8 +205,8 @@ export function UsersScreen({ users }: UsersScreenProps) {
                   data-testid={`user-row-${i}`}
                   className="border-b border-border"
                 >
-                  <td className="p-2 text-xs break-all">{u.email}</td>
-                  <td className="p-2">{u.name}</td>
+                  <td className="p-2 text-xs break-all">{u.email ?? '-'}</td>
+                  <td className="p-2">{u.name ?? '-'}</td>
                   <td className="p-2 text-muted-foreground">
                     {u.nickname ?? '-'}
                   </td>

@@ -68,12 +68,12 @@ export function UserDetail({ user }: UserDetailProps) {
             className="break-all text-xs"
             data-testid="user-detail-email"
           >
-            {data.email}
+            {data.email ?? '-'}
           </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">이름</dt>
-          <dd data-testid="user-detail-name">{data.name}</dd>
+          <dd data-testid="user-detail-name">{data.name ?? '-'}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">닉네임</dt>

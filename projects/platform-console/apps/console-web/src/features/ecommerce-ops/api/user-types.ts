@@ -14,6 +14,16 @@ import { z } from 'zod';
  * fields the UI strictly needs are required, everything else passes through.
  * An unknown / future `status` enum parses to a generic string and NEVER throws.
  *
+ * `email` / `name` are NULLABLE: user-service made both columns nullable
+ * (V5__user_profile_email_name_nullable) and serializes them as JSON `null`
+ * for minimally-created profiles (IAM `account.created` before first
+ * profile-update) and anonymized/withdrawn accounts (`account.deleted`
+ * reaction, which nulls — not tombstones — email/name). These rows are NOT
+ * filtered out of the admin list, so a plain `z.string()` throws the moment any
+ * such user exists, and that parse failure is mis-surfaced as a fake degrade
+ * ("일시적으로 불러올 수 없습니다"). Same bug class as the order-detail
+ * null-address2 fix — see order-types.ts.
+ *
  * READ-ONLY surface: no mutation schemas, no state machine, no
  * allowedTransitions. Users are display-only status in this console surface.
  */
@@ -37,8 +47,8 @@ export type UserStatus = (typeof USER_STATUS_VALUES)[number];
 export const UserSummarySchema = z
   .object({
     userId: z.string(),
-    email: z.string(),
-    name: z.string(),
+    email: z.string().nullable().optional(),
+    name: z.string().nullable().optional(),
     nickname: z.string().nullable().optional(),
     status: z.string(),
     createdAt: z.string(),
@@ -61,8 +71,8 @@ export type UserList = z.infer<typeof UserListSchema>;
 export const UserDetailSchema = z
   .object({
     userId: z.string(),
-    email: z.string(),
-    name: z.string(),
+    email: z.string().nullable().optional(),
+    name: z.string().nullable().optional(),
     nickname: z.string().nullable().optional(),
     status: z.string(),
     createdAt: z.string(),
