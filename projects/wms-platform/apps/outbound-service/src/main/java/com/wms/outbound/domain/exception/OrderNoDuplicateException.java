@@ -3,7 +3,8 @@ package com.wms.outbound.domain.exception;
 /**
  * Raised when an attempt is made to insert an order with an
  * {@code orderNo} that already exists. Mapped to {@code 409} with code
- * {@code CONFLICT}.
+ * {@code ORDER_NO_DUPLICATE} (per {@code outbound-service} § Error Codes /
+ * {@code platform/error-handling.md}; mirror of inbound {@code ASN_NO_DUPLICATE}).
  */
 public class OrderNoDuplicateException extends OutboundDomainException {
 
@@ -20,6 +21,6 @@ public class OrderNoDuplicateException extends OutboundDomainException {
 
     @Override
     public String errorCode() {
-        return "CONFLICT";
+        return "ORDER_NO_DUPLICATE";
     }
 }
