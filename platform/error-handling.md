@@ -215,7 +215,7 @@ Owned by `outbound-service`. See `rules/domains/wms.md` and
 |---|---|---|
 | ORDER_NOT_FOUND | 404 | Outbound order does not exist |
 | ORDER_ALREADY_SHIPPED | 422 | Operation attempted on an already-shipped order |
-| ORDER_NO_DUPLICATE | 409 | `orderNo` is already taken (mirror of inbound `ASN_NO_DUPLICATE`). Note: current `OrderNoDuplicateException` returns `CONFLICT` (Transactional Trait generic) — code rename to `ORDER_NO_DUPLICATE` is a deferred housekeeping item. |
+| ORDER_NO_DUPLICATE | 409 | `orderNo` is already taken (mirror of inbound `ASN_NO_DUPLICATE`) |
 | PICKING_REQUEST_NOT_FOUND | 404 | Picking request (assignment from order to picker) does not exist |
 | PICKING_QUANTITY_EXCEEDED | 422 | Picked quantity exceeds ordered quantity |
 | PICKING_INCOMPLETE | 422 | Packing attempted before picking is complete |
