@@ -95,13 +95,23 @@ export const OrderListSchema = z
   .passthrough();
 export type OrderList = z.infer<typeof OrderListSchema>;
 
-/** #16 detail — order item line. */
+/**
+ * #16 detail — order item line.
+ *
+ * TOLERANCE (header invariant): the producer serializes genuinely-nullable
+ * domain fields as JSON `null` (Jackson default — no `NON_NULL` inclusion).
+ * `OrderItem.variantId` / `optionName` are nullable on the aggregate (no
+ * placement-time normalization), so they must accept `null` here — otherwise a
+ * plain `z.string()` throws on `null`, and that parse failure is caught
+ * downstream and mis-surfaced as a fake 503 "일시적으로 불러올 수 없습니다"
+ * degrade (ecommerce-client rethrows any non-ApiError as EcommerceUnavailable).
+ */
 export const OrderItemSchema = z
   .object({
     productId: z.string(),
-    variantId: z.string(),
+    variantId: z.string().nullable().optional(),
     productName: z.string(),
-    optionName: z.string(),
+    optionName: z.string().nullable().optional(),
     quantity: z.number().int(),
     unitPrice: z.number(),
     sellerId: z.string(),
@@ -109,14 +119,24 @@ export const OrderItemSchema = z
   .passthrough();
 export type OrderItem = z.infer<typeof OrderItemSchema>;
 
-/** #16 detail — shipping address. */
+/**
+ * #16 detail — shipping address.
+ *
+ * `address2` is nullable on the aggregate (the optional detailed-address line,
+ * also cleared to `null` on GDPR anonymization — ADR-MONO-037 P3-B). The
+ * producer serializes it as JSON `null` when empty, so the schema must accept
+ * `null` (not just `undefined`). This was THE root cause of the order-detail
+ * page degrading for essentially every order without a second address line —
+ * `z.string().optional()` rejects `null`, and the parse throw was mis-surfaced
+ * as a fake "일시적으로 불러올 수 없습니다" degrade.
+ */
 export const ShippingAddressSchema = z
   .object({
     recipient: z.string(),
     phone: z.string(),
     zipCode: z.string(),
     address1: z.string(),
-    address2: z.string().optional(),
+    address2: z.string().nullable().optional(),
   })
   .passthrough();
 export type ShippingAddress = z.infer<typeof ShippingAddressSchema>;
@@ -131,7 +151,7 @@ export const OrderDetailSchema = z
     items: z.array(OrderItemSchema).default([]),
     shippingAddress: ShippingAddressSchema,
     createdAt: z.string(),
-    updatedAt: z.string().optional(),
+    updatedAt: z.string().nullable().optional(),
   })
   .passthrough();
 export type OrderDetail = z.infer<typeof OrderDetailSchema>;
