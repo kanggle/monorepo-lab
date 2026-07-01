@@ -294,4 +294,38 @@ describe('users-api — ecommerce FLAT envelope + § 2.5 resilience', () => {
     const d = await getUser('u-1');
     expect(d.nickname).toBeNull();
   });
+
+  // Regression: user-service made email/name NULLABLE (V5) and serializes them
+  // as JSON `null` for minimally-created profiles (IAM account.created before
+  // first profile-update) and anonymized/withdrawn accounts. Those rows are NOT
+  // filtered from the admin list. A plain `z.string()` on email/name threw the
+  // moment any such user existed, and that parse failure was mis-surfaced as a
+  // fake degrade — breaking the whole users list/detail. Both reads MUST
+  // tolerate null email/name.
+  it('detail read tolerates null email/name (anonymized / minimal profile)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({ ...USER_DETAIL, email: null, name: null }),
+      ),
+    );
+    const d = await getUser('u-1');
+    expect(d.email).toBeNull();
+    expect(d.name).toBeNull();
+  });
+
+  it('list read tolerates a row with null email/name (no fake degrade)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...USER_LIST,
+          content: [{ ...USER_LIST.content[0], email: null, name: null }],
+        }),
+      ),
+    );
+    const list = await listUsers();
+    expect(list.content[0].email).toBeNull();
+    expect(list.content[0].name).toBeNull();
+  });
 });
