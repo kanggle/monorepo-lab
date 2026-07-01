@@ -284,7 +284,7 @@ Owned by `search-service`. See `rules/domains/ecommerce.md`.
 
 ## Auth  `[domain: ecommerce]`
 
-Owned by `auth-service` — ecommerce-local credential and OAuth flow (distinct from IAM IdP; the ecommerce standalone repo retains its own auth flow per `project_gap_idp_promotion.md` § standalone frozen policy).
+Owned by `auth-service` — ecommerce-local credential and OAuth flow (distinct from IAM IdP; the ecommerce standalone repo retains its own auth flow).
 
 | Code | HTTP | Description |
 |---|---|---|
