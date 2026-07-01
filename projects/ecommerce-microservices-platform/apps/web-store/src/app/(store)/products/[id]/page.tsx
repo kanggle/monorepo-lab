@@ -1,6 +1,6 @@
 export const revalidate = 60;
 
-import { Suspense, cache } from 'react';
+import { cache } from 'react';
 import dynamic from 'next/dynamic';
 import { getProduct } from '@/entities/product';
 import { ProductDetailWithCart } from '@/widgets/product-detail-with-cart';
@@ -63,9 +63,12 @@ export default async function ProductDetailPage({ params }: Props) {
   return (
     <div className="container" style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-16)' }}>
       <ProductDetailWithCart product={product} />
-      <Suspense fallback={<ReviewListSkeleton count={3} />}>
-        <ReviewList productId={product.id} />
-      </Suspense>
+      {/* ReviewList is dynamically imported with its own `loading` skeleton (a
+          single lazy/Suspense boundary). A second explicit <Suspense> around it
+          was redundant and re-parented React 19.2 async-info on cleanup
+          ("cleaning up async info that was not on the parent Suspense
+          boundary"). One boundary only. (TASK-FE-082) */}
+      <ReviewList productId={product.id} />
     </div>
   );
 }
