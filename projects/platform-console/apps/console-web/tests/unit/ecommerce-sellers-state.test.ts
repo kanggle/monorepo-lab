@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *
  * Covers:
  *   - SellerSummarySchema parses without throwing (passthrough tolerance).
- *   - SELLER_STATUS_VALUES const is ACTIVE-only (v1).
+ *   - SELLER_STATUS_VALUES const covers the full ADR-042 lifecycle (PC-FE-154).
  *   - `getSellersSectionState` degrade / notEligible / forbidden branches.
  *   - `getSellerDetailSectionState` notFound / degrade / notEligible branches.
  *   - Happy path: returns sellers / detail on 200.
@@ -68,10 +68,14 @@ import { ACCESS_COOKIE } from '@/shared/lib/session';
 // seller-types — schema tolerance
 // ---------------------------------------------------------------------------
 
-describe('seller-types — schema passthrough tolerance + ACTIVE-only status', () => {
-  it('SELLER_STATUS_VALUES contains only ACTIVE (v1)', () => {
-    expect(SELLER_STATUS_VALUES).toContain('ACTIVE');
-    expect(SELLER_STATUS_VALUES).toHaveLength(1);
+describe('seller-types — schema passthrough tolerance + lifecycle status', () => {
+  it('SELLER_STATUS_VALUES covers the full ADR-042 lifecycle (PC-FE-154)', () => {
+    expect(SELLER_STATUS_VALUES).toEqual([
+      'PENDING_PROVISIONING',
+      'ACTIVE',
+      'SUSPENDED',
+      'CLOSED',
+    ]);
   });
 
   it('SellerSummarySchema parses with extra unknown fields (passthrough)', () => {

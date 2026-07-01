@@ -29,7 +29,11 @@ import {
  *
  * Mutation discipline: NO `Idempotency-Key` (the producer defines none) —
  * confirm-gate is the double-submit defence.
- * status=ACTIVE only (v1). NO update/delete hooks (producer defines none).
+ *
+ * Lifecycle hooks (provision/suspend/close — TASK-PC-FE-154, ADR-MONO-042): the
+ * seller domain has no update/delete (CRUD); mutation = state transitions. Each
+ * hooks POSTs a bodyless request to its `/api/ecommerce/sellers/{id}/{action}`
+ * proxy (→ 204) and invalidates the seller's detail + the list on success.
  */
 
 const SELLERS_KEY = 'ecommerce-sellers';
@@ -115,4 +119,43 @@ export function useRegisterSeller() {
       ),
     onSuccess: () => invalidateList(qc),
   });
+}
+
+// --- lifecycle transitions (provision / suspend / close) ------------------
+
+/** Invalidate the seller's detail + the list after a lifecycle transition. */
+function invalidateSeller(
+  qc: ReturnType<typeof useQueryClient>,
+  sellerId: string,
+) {
+  qc.invalidateQueries({ queryKey: [SELLERS_KEY, 'detail', sellerId] });
+  invalidateList(qc);
+}
+
+/**
+ * Factory for the three bodyless lifecycle mutations. Each takes the `sellerId`,
+ * POSTs to its action proxy (→ 204), and refreshes detail + list so the badge
+ * and the status-valid action set reflect the new state without a full reload.
+ */
+function useSellerLifecycle(action: 'provision' | 'suspend' | 'close') {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sellerId: string) =>
+      apiClient.post<void>(
+        `/api/ecommerce/sellers/${encodeURIComponent(sellerId)}/${action}`,
+      ),
+    onSuccess: (_d, sellerId) => invalidateSeller(qc, sellerId),
+  });
+}
+
+export function useProvisionSeller() {
+  return useSellerLifecycle('provision');
+}
+
+export function useSuspendSeller() {
+  return useSellerLifecycle('suspend');
+}
+
+export function useCloseSeller() {
+  return useSellerLifecycle('close');
 }
