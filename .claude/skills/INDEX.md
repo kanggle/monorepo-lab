@@ -86,6 +86,8 @@ No single spec — this file is the skill catalog itself. Each row points at the
 | Set up an `identity-platform` service end-to-end | `service-types/identity-platform-setup/SKILL.md` |
 | Code review checklist | `review-checklist/SKILL.md` |
 
+> **`category` frontmatter convention**: each `SKILL.md`'s `category` matches its top-level folder under `.claude/skills/` — one of `backend`, `frontend`, `messaging`, `database`, `testing`, `infra`, `search`, `service-types`, `cross-cutting`. The sole exception is `review-checklist/SKILL.md`, which lives at the skills root because it applies across all domains rather than one; it therefore uses `category: root`. `root` is the intended value for a top-level (domain-agnostic) skill, not drift.
+
 ---
 
 ## Default Skill Sets by Task Type

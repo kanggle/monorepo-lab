@@ -44,7 +44,7 @@ Main context never reads specs, skills, or source code directly — subagents do
 
 ### Phase 1: Implement
 
-Follow the full `/implement-task` batch mode procedure:
+Follow the full `/implement-task` batch mode procedure. **`/implement-task` (batch mode, Phase 5) is the canonical source** for the steps below — if the implementation procedure changes, edit `implement-task.md` first, then mirror it here:
 
 1. Read `CLAUDE.md`
 2. List all task files in `tasks/ready/` (exclude `.gitkeep`)
@@ -58,13 +58,13 @@ Follow the full `/implement-task` batch mode procedure:
 10. Execute via worktree-isolated subagents following `/implement-task` batch mode Phase 5 rules:
     - Parallel rounds for independent tasks, `subagent_type` per task category per `/implement-task` Phase 5 (`"backend-engineer"` / `"frontend-engineer"`; `"refactoring-engineer"` for simple-refactor; `"api-designer"` + `"event-architect"` for contract-change)
     - Sequential rounds for dependent tasks
-    - Merge worktree branches between rounds
+    - Merge worktree branches between rounds, then verify main builds/compiles before the next round (per `/implement-task` Phase 5 step 3, merge sub-step)
     - Mark dependents of failed tasks as blocked
 11. Collect implementation results
 
 ### Phase 2: Review
 
-After Phase 1 completes, follow the full `/review-task` batch mode procedure:
+After Phase 1 completes, follow the full `/review-task` batch mode procedure. **`/review-task` (batch mode) is the canonical source** for the steps below — edit `review-task.md` first if the review procedure changes, then mirror it here:
 
 1. List all task files in `tasks/review/` (includes tasks from Phase 1 + any pre-existing review tasks)
 2. If argument is a service name, filter to tasks matching that Target Service
@@ -74,7 +74,7 @@ After Phase 1 completes, follow the full `/review-task` batch mode procedure:
     - Each agent reviews one task against specs, architecture, code quality, and testing checklists
     - No issues → move to `tasks/done/`
     - Issues found → create fix task in `tasks/ready/`, move original to `tasks/done/`
-6. Merge all worktree branches
+6. Merge each successful agent's worktree branch into main with an explicit `git merge`, then **verify main builds before proceeding** (mirrors `/review-task` batch Rules and `/implement-task` Phase 5 step 3)
 7. Collect review results
 
 ### Phase 3: Summary
