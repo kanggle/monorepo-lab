@@ -8,7 +8,7 @@ Correct `auth-service` account-status error HTTP statuses to match the platform 
 
 # Status
 
-review
+done
 
 # Owner
 
