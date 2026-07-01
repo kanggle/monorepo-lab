@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import {
@@ -102,9 +103,12 @@ export default async function ConsoleLayout({
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <span className="text-sm font-semibold tracking-tight text-foreground">
+          <Link
+            href="/dashboards/overview"
+            className="rounded-sm text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             Platform Console
-          </span>
+          </Link>
           <div className="flex items-center gap-3">
             <TenantSwitcher tenants={tenants} activeTenant={activeTenant} />
             <NotificationBell />
