@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { formatDateTime } from '@/shared/lib/datetime';
 import {
@@ -88,7 +89,6 @@ export function SellerDetail({ seller }: SellerDetailProps) {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const actions = sellerActionsFor(data.status);
-  const tone = sellerStatusTone(data.status);
   const activeMeta = pendingAction ? ACTION_META[pendingAction] : null;
   const activeM = pendingAction ? mutationFor(pendingAction) : null;
 
@@ -139,11 +139,9 @@ export function SellerDetail({ seller }: SellerDetailProps) {
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd data-testid="seller-detail-status">
-            <span
-              className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${tone.className}`}
-            >
-              {tone.label}
-            </span>
+            <StatusBadge tone={sellerStatusTone(data.status)}>
+              {data.status}
+            </StatusBadge>
           </dd>
         </div>
         <div>

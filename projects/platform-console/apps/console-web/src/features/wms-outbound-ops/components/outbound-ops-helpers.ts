@@ -1,4 +1,5 @@
 import { messageForCode } from '@/shared/api/errors';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Pure helpers for the wms outbound operations surface (TASK-PC-FE-101 split).
@@ -18,6 +19,28 @@ export const STATUS_FILTER_OPTIONS = [
   'CANCELLED',
   'BACKORDERED',
 ] as const;
+
+/**
+ * Maps an outbound order status to a shared semantic {@link StatusTone}
+ * (rendered via the shared `<StatusBadge>` — TASK-PC-FE-158). Unknown / absent
+ * / future status → `neutral`, so the console never crashes on a producer enum
+ * it does not know (TOLERANCE invariant). The raw status string stays the badge
+ * label at the call site, keeping status-text assertions + the status filter in
+ * lock-step with the producer enum.
+ */
+const OUTBOUND_STATUS_TONE: Record<string, StatusTone> = {
+  PICKING: 'warning',
+  PICKED: 'progress',
+  PACKING: 'progress',
+  PACKED: 'progress',
+  SHIPPED: 'success',
+  CANCELLED: 'danger',
+  BACKORDERED: 'warning',
+};
+
+export function outboundStatusTone(status: string | undefined): StatusTone {
+  return status ? (OUTBOUND_STATUS_TONE[status] ?? 'neutral') : 'neutral';
+}
 
 export const ACTION_COPY: Record<
   ActionKind,

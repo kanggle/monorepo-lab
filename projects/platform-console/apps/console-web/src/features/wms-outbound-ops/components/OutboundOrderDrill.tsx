@@ -1,10 +1,11 @@
 'use client';
 
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { messageForCode } from '@/shared/api/errors';
 import { cancelNeedsAdmin } from '../api/types';
 import type { OutboundOrderDetail, OutboundSaga } from '../api/types';
-import type { ActionKind } from './outbound-ops-helpers';
+import { outboundStatusTone, type ActionKind } from './outbound-ops-helpers';
 
 /**
  * Order-drill region of the wms outbound screen (TASK-PC-FE-101 split) — the
@@ -120,7 +121,9 @@ export function OutboundOrderDrill({
             <div>
               <dt className="text-muted-foreground">상태</dt>
               <dd data-testid="outbound-drill-status">
-                {detail.status}
+                <StatusBadge tone={outboundStatusTone(detail.status)}>
+                  {detail.status}
+                </StatusBadge>
               </dd>
             </div>
             <div>

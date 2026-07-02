@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useSellers } from '../hooks/use-ecommerce-sellers';
 import { formatDateTime } from '@/shared/lib/datetime';
@@ -143,16 +144,9 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
                   <td className="p-2 font-mono text-xs">{s.sellerId}</td>
                   <td className="p-2">{s.displayName}</td>
                   <td className="p-2" data-testid={`seller-row-status-${i}`}>
-                    {(() => {
-                      const tone = sellerStatusTone(s.status);
-                      return (
-                        <span
-                          className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${tone.className}`}
-                        >
-                          {tone.label}
-                        </span>
-                      );
-                    })()}
+                    <StatusBadge tone={sellerStatusTone(s.status)}>
+                      {s.status}
+                    </StatusBadge>
                   </td>
                   <td className="p-2 text-sm text-muted-foreground">
                     {formatDateTime(s.createdAt)}

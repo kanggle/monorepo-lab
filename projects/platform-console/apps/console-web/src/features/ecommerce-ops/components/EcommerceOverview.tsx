@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import type {
   EcommerceOverviewState,
   AreaCount,
@@ -207,7 +208,6 @@ function RecentSellers({
       empty={!rows || rows.length === 0}
     >
       {rows?.map((s) => {
-        const tone = sellerStatusTone(s.status);
         return (
           <li
             key={s.sellerId}
@@ -216,11 +216,9 @@ function RecentSellers({
             <span className="min-w-0 flex-1 truncate text-foreground">
               {s.displayName}
             </span>
-            <span
-              className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${tone.className}`}
-            >
-              {tone.label}
-            </span>
+            <StatusBadge tone={sellerStatusTone(s.status)} className="shrink-0">
+              {s.status}
+            </StatusBadge>
             <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
               {formatDateTime(s.createdAt)}
             </span>

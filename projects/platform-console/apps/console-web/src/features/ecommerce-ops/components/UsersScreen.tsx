@@ -3,12 +3,14 @@
 import { useId, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useUsers } from '../hooks/use-ecommerce-users';
 import { formatDateTime } from '@/shared/lib/datetime';
 import {
   USER_DEFAULT_PAGE_SIZE,
   USER_STATUS_VALUES,
+  userStatusTone,
   type UserList,
   type UserListParams,
 } from '../api/user-types';
@@ -32,19 +34,6 @@ export interface UsersScreenProps {
 }
 
 const STATUS_FILTER_OPTIONS = ['', ...USER_STATUS_VALUES] as const;
-
-const STATUS_BADGE: Record<string, string> = {
-  ACTIVE: 'bg-green-100 text-green-800',
-  SUSPENDED: 'bg-yellow-100 text-yellow-800',
-  WITHDRAWN: 'bg-gray-100 text-gray-600',
-};
-
-function statusBadgeClass(status: string): string {
-  return (
-    STATUS_BADGE[status] ??
-    'bg-muted text-muted-foreground'
-  );
-}
 
 export function UsersScreen({ users }: UsersScreenProps) {
   const statusFid = useId();
@@ -212,11 +201,9 @@ export function UsersScreen({ users }: UsersScreenProps) {
                     {u.nickname ?? '-'}
                   </td>
                   <td className="p-2" data-testid={`user-row-status-${i}`}>
-                    <span
-                      className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${statusBadgeClass(u.status)}`}
-                    >
+                    <StatusBadge tone={userStatusTone(u.status)}>
                       {u.status}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className="p-2 text-sm text-muted-foreground">
                     {formatDateTime(u.createdAt)}
