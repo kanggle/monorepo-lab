@@ -1,6 +1,6 @@
 # TASK-PC-FE-155 — ecommerce landing **operator-area quick-links** (drop the stale "준비중" note)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Route:** `app/(console)/ecommerce/page.tsx` (section landing)
 **Parent:** ADR-MONO-031 §2.4.10 console-absorption (7 operator areas). Follows TASK-PC-FE-081…090 + TASK-PC-FE-154.
 
