@@ -31,6 +31,22 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+// Overview snapshot is unit-tested elsewhere; stub it so this concurrency test
+// stays focused on the health/eligibility parallel-fetch proof.
+const getEcommerceOverviewState = vi.fn().mockResolvedValue({
+  notEligible: false,
+  counts: [],
+  orderStatus: [],
+  recentOrders: null,
+  recentOrdersStatus: 'ok',
+  recentSellers: null,
+  recentSellersStatus: 'ok',
+});
+vi.mock('@/features/ecommerce-ops', () => ({
+  getEcommerceOverviewState: () => getEcommerceOverviewState(),
+  EcommerceOverview: () => <div data-testid="ecommerce-overview" />,
+}));
+
 import EcommercePage from '@/app/(console)/ecommerce/page';
 
 const ELIGIBLE_CATALOG = {

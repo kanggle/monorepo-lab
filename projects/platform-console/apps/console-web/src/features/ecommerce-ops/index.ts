@@ -222,6 +222,19 @@ export type {
 export { SELLER_STATUS_VALUES } from './api/seller-types';
 
 // ---------------------------------------------------------------------------
+// Overview snapshot (TASK-PC-FE-156 — /ecommerce landing operator overview;
+// console-web direct fan-out over the existing list endpoints, no BFF/producer)
+// ---------------------------------------------------------------------------
+export { EcommerceOverview } from './components/EcommerceOverview';
+export { getEcommerceOverviewState } from './api/overview-state';
+export type {
+  EcommerceOverviewState,
+  AreaCount,
+  OrderStatusCount,
+  CellStatus,
+} from './api/overview-state';
+
+// ---------------------------------------------------------------------------
 // Image facet (TASK-PC-FE-082 — ADR-MONO-031 Phase 1b CLOSING slice). The
 // product-image management surface is embedded in `ProductDetail` (no separate
 // route / sidebar leaf); `ImageManager` is exported for completeness/tests.

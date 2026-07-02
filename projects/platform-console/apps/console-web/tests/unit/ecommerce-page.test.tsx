@@ -11,19 +11,19 @@ import type {
 /**
  * TASK-MONO-241 — the `/ecommerce` drill-in route (ADR-MONO-030 Step 4 facet
  * a-후속). Closes the "catalog ecommerce tile (`baseRoute=/ecommerce`) click →
- * 404" gap MONO-240 left open. Surfaces the ecommerce domain-health card + an
- * operator-area quick-launch grid (7 shipped areas, TASK-PC-FE-155 — replacing
- * the Phase-1 products-only link + stale "준비중" note). STRICTLY READ-ONLY;
+ * 404" gap MONO-240 left open. Surfaces the ecommerce domain-health card + the
+ * operator overview snapshot (`EcommerceOverview`, TASK-PC-FE-156 — replaced the
+ * PC-FE-155 plain quick-launch grid; the overview's own rendering is unit-tested
+ * in `ecommerce-overview.test.tsx`, so here it is stubbed). STRICTLY READ-ONLY;
  * degrade-safe like scm/wms.
  *
  * Asserts:
- *   - eligible → renders the ecommerce section + the health card + the 7
- *     operator-area links; NO "준비중" coming-soon note.
+ *   - eligible → renders the ecommerce section + the health card + the overview.
  *   - registry degraded → degraded note (never blocks on an unproven negative).
  *   - not eligible → "no ecommerce-scoped access" note (does not crash).
  *   - registry 401 → redirect('/login').
  *   - health bff unavailable → section still renders + health-unavailable note
- *     + the (static, non-health-gated) quick-launch grid (degrade-safe).
+ *     + the overview (not health-gated, degrade-safe).
  */
 
 const { redirectMock } = vi.hoisted(() => ({ redirectMock: vi.fn() }));
@@ -63,6 +63,16 @@ vi.mock('@/features/domain-health', async (importOriginal) => {
     getDomainHealthState: getDomainHealthStateMock,
   };
 });
+
+// The overview snapshot is unit-tested separately; stub it here so the page
+// test stays focused on the section's eligibility/degrade/health branches.
+const { getEcommerceOverviewStateMock } = vi.hoisted(() => ({
+  getEcommerceOverviewStateMock: vi.fn(),
+}));
+vi.mock('@/features/ecommerce-ops', () => ({
+  getEcommerceOverviewState: getEcommerceOverviewStateMock,
+  EcommerceOverview: () => <div data-testid="ecommerce-overview" />,
+}));
 
 import EcommercePage from '@/app/(console)/ecommerce/page';
 
@@ -104,6 +114,16 @@ function healthState(over: Partial<DomainHealthState>): DomainHealthState {
 beforeEach(() => {
   vi.clearAllMocks();
   cleanup();
+  // Default: overview fan-out resolves to an (empty) snapshot on the eligible path.
+  getEcommerceOverviewStateMock.mockResolvedValue({
+    notEligible: false,
+    counts: [],
+    orderStatus: [],
+    recentOrders: null,
+    recentOrdersStatus: 'ok',
+    recentSellers: null,
+    recentSellersStatus: 'ok',
+  });
 });
 
 async function renderPage() {
@@ -111,19 +131,7 @@ async function renderPage() {
 }
 
 describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
-  // The 7 shipped operator areas — hrefs must match ConsoleSidebarNav's
-  // ecommerce children (TASK-PC-FE-155).
-  const OPS_LINKS: ReadonlyArray<[string, string]> = [
-    ['ecommerce-products-link', '/ecommerce/products'],
-    ['ecommerce-orders-link', '/ecommerce/orders'],
-    ['ecommerce-shippings-link', '/ecommerce/shippings'],
-    ['ecommerce-promotions-link', '/ecommerce/promotions'],
-    ['ecommerce-users-link', '/ecommerce/users'],
-    ['ecommerce-sellers-link', '/ecommerce/sellers'],
-    ['ecommerce-notifications-link', '/ecommerce/notifications/templates'],
-  ];
-
-  it('eligible → renders the section, the health card, and the 7 operator-area links (no 준비중 note)', async () => {
+  it('eligible → renders the section, the health card, and the overview (no 준비중 note)', async () => {
     getCatalogMock.mockResolvedValue(ELIGIBLE_CATALOG);
     getDomainHealthStateMock.mockResolvedValue(healthState({}));
 
@@ -137,10 +145,9 @@ describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
     expect(
       screen.getByTestId('domain-health-card-ecommerce'),
     ).toBeInTheDocument();
-    // All 7 operator-area quick-links present, each with the sidebar-parallel href.
-    for (const [testid, href] of OPS_LINKS) {
-      expect(screen.getByTestId(testid)).toHaveAttribute('href', href);
-    }
+    // The operator overview snapshot is composed onto the eligible path.
+    expect(screen.getByTestId('ecommerce-overview')).toBeInTheDocument();
+    expect(getEcommerceOverviewStateMock).toHaveBeenCalledWith(true);
     // The stale "준비중" coming-soon note is gone.
     expect(screen.queryByTestId('ecommerce-ops-coming-soon')).toBeNull();
   });
@@ -189,10 +196,9 @@ describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
     expect(
       screen.getByTestId('ecommerce-health-unavailable'),
     ).toBeInTheDocument();
-    // The shell + the static quick-launch grid still render — the grid is not
-    // health-gated, so a health degrade never blanks the operator links.
-    expect(screen.getByTestId('ecommerce-ops-links')).toBeInTheDocument();
-    expect(screen.getByTestId('ecommerce-products-link')).toBeInTheDocument();
+    // The shell + the overview still render — the overview is not health-gated,
+    // so a health degrade never blanks the operator snapshot.
+    expect(screen.getByTestId('ecommerce-overview')).toBeInTheDocument();
     expect(screen.queryByTestId('ecommerce-ops-coming-soon')).toBeNull();
   });
 });
