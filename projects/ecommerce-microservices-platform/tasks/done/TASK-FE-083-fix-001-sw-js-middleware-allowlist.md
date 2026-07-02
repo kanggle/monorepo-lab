@@ -1,6 +1,7 @@
 # TASK-FE-083-fix-001 — web-store 인증 미들웨어가 `/sw.js` 를 차단해 Service Worker 등록이 막히는 버그
 
-- **Status**: review
+- **Status**: done
+- **DONE (2026-07-02, 3-dim verified — PR #2097 `dc9077608`)**: state=MERGED + tip 일치 + pre-merge failing=0(Frontend unit tests[Node20 middleware 테스트 포함]+lint&build+E2E smoke GREEN). `/sw.js` 공개 allowlist + matcher 제외로 SW 등록 차단 해소.
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)

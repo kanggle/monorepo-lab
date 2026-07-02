@@ -84,12 +84,12 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-FE-083-fix-001 | **REVIEW (2026-07-02)**. FE-083 후속 버그픽스 — web-store 인증 미들웨어가 `/sw.js` 를 /login 으로 307 리다이렉트해 Service Worker 등록이 막히던 것 수정(공개 경로 allowlist + matcher 제외). 라이브 fed-e2e 기동으로 발견. 신규 middleware 테스트. impl 브랜치 `fe-083-fix-sw-middleware`. | web-store | code, bug, test |
 
 ## done
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-083-fix-001 | **DONE (2026-07-02, 3-dim — PR #2097 `dc9077608`)**. FE-083 후속 버그픽스 — web-store 인증 미들웨어가 `/sw.js` 를 /login 307 리다이렉트해 SW 등록이 막히던 것 수정(공개 allowlist + matcher 제외). 라이브 fed-e2e 기동으로 발견(앱 실행 전 미적발). 신규 middleware 테스트. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, bug, test |
 | TASK-FE-083 | **DONE (2026-07-02, 3-dim verified — PR #2090 `6f514106e`)**. web-store Web Push 구독 — `public/sw.js`(push 배너·notificationclick) + `use-push-subscription`(권한→SW→VAPID subscribe→백엔드 등록/해지) + `PushOptIn`(3-way 권한 UX, NotificationSettings 통합) + `@repo/types`/`@repo/api-client` push 메서드. 테스트 3종(CI Node20 GREEN). 라이브 배너=fed-e2e 수동 스모크. **Web Push E2E(BE-463→BE-464→FE-083) 완결.** 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, push |
 | TASK-BE-464 | **DONE (2026-07-02, 3-dim verified — PR #2088 `517d28660`)**. notification-service Web Push(VAPID) 실연동 — V6 `push_subscriptions` + 등록/해지 API + `GET vapid-public-key`(200/503) + `WebPushSender`(BE-463 stub 대체·404/410 lazy prune·per-endpoint 실패 격리) + `MartijndwarsWebPushGateway`(web-push:5.1.1 + BouncyCastle 1.78.1 명시추가·미설정 skip graceful). 단위 5종 + notification-service Testcontainers IT(풀 wiring/Flyway/엔티티) GREEN. 실 브라우저 발송=후속 FE-083. 분석=Opus 4.8 / 구현=Opus 직접. | notification-service | code, api, migration, push |
 | TASK-BE-463 | **DONE (2026-07-01, 3-dim verified — PR #2076 `daf928de3`)**. notification-service PUSH 채널 stub/log `PushNotificationSender`(@Component, supportedChannel=PUSH) — sender 부재로 조용히 drop되던 갭 해소, senderMap[PUSH] 자동 충전으로 render→send 경로 연결(발송 서비스 무변경, 계약 무변경). notification-service Testcontainers IT PASS 로 wiring 검증. 실 provider=후속 BE-464(Web Push/VAPID)→FE-083. 분석=Opus 4.8 / 구현=Opus 직접. | notification-service | code, test |
