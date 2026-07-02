@@ -72,7 +72,7 @@ const clampSize = (size?: number): number =>
 // READS
 // ===========================================================================
 
-/** GET /api/promotions/summary — period-based counts (TASK-PC-FE-160).
+/** GET /api/promotions/summary — period-based counts (TASK-PC-FE-164).
  *  Returns { today, week, month, total } for the tenant. */
 export function getPromotionsSummary(): Promise<PromotionAreaSummary> {
   const env = getServerEnv();

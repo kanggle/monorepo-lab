@@ -125,7 +125,7 @@ export function listProducts(
   );
 }
 
-/** GET /admin/products/summary — period-based counts (TASK-PC-FE-160).
+/** GET /admin/products/summary — period-based counts (TASK-PC-FE-164).
  *  Returns { today, week, month, total } for the tenant. */
 export function getProductsSummary(): Promise<ProductAreaSummary> {
   const env = getServerEnv();

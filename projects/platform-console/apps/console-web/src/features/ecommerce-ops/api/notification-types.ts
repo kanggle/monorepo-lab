@@ -132,7 +132,7 @@ export const UpdateTemplateBodySchema = z.object({
 export type UpdateTemplateBody = z.infer<typeof UpdateTemplateBodySchema>;
 
 // ===========================================================================
-// SUMMARY (TASK-PC-FE-160 — period-based counts)
+// SUMMARY (TASK-PC-FE-164 — period-based counts)
 // ===========================================================================
 
 /** GET /api/notifications/templates/summary — period-based count.

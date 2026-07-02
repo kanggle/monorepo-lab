@@ -5,7 +5,7 @@
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (uniform additive read endpoint replicated per service; the only non-mechanical part is the shared KST calendar-boundary rule)
 
-> Cross-project feature — the consuming half is **TASK-PC-FE-160** (platform-console overview + contract). Both land in **one atomic PR** (branch `feat/ecommerce-ops-period-metrics`). This task is the producer half.
+> Cross-project feature — the consuming half is **TASK-PC-FE-164** (platform-console overview + contract). Both land in **one atomic PR** (branch `feat/ecommerce-ops-period-metrics`). This task is the producer half.
 
 ---
 
@@ -65,7 +65,7 @@ ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(KST)
 
 **Authorization / tenancy**: unchanged. The endpoints are admin reads under the same `@RequestMapping` base as each area's existing list read, so they inherit the same gateway admission (`/api/admin/**` → `roles ∋ ADMIN`, or the shipping/promotion gateway rule for those non-`/admin` paths) and the repository `WHERE tenant_id` chokepoint. No new RBAC, no new gateway route class (the base path is already routed).
 
-**Out of scope:** date-range params on the list endpoints; coupon counts (the 프로모션 area counts *promotions*, not coupons — ignore `Coupon.issuedAt`); any time-series/grouped-by-day payload (only the 3 period totals + grand total); a shared `libs/` boundary util; console/front-end changes (TASK-PC-FE-160).
+**Out of scope:** date-range params on the list endpoints; coupon counts (the 프로모션 area counts *promotions*, not coupons — ignore `Coupon.issuedAt`); any time-series/grouped-by-day payload (only the 3 period totals + grand total); a shared `libs/` boundary util; console/front-end changes (TASK-PC-FE-164).
 
 ## Acceptance Criteria
 
@@ -77,12 +77,12 @@ ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(KST)
 
 ## Related Specs
 
-- `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.4.9.1 (ecommerce overview snapshot leg) + § 2.4.10 (ecommerce operator binding) — the consumer contract updated in TASK-PC-FE-160.
+- `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.4.9.1 (ecommerce overview snapshot leg) + § 2.4.10 (ecommerce operator binding) — the consumer contract updated in TASK-PC-FE-164.
 - ADR-MONO-017 (console fan-out model; D3.B "no producer /summary" — this task revisits that for the operator overview specifically), ADR-MONO-030 Step 2/3 (tenant chokepoint + product-service marketplace inner axis hosting sellers).
 
 ## Related Contracts
 
-- New reads, added to console-integration-contract § 2.4.10 as summary endpoints (#18 orders-summary and the per-area subsection equivalents) — see TASK-PC-FE-160.
+- New reads, added to console-integration-contract § 2.4.10 as summary endpoints (#18 orders-summary and the per-area subsection equivalents) — see TASK-PC-FE-164.
 
 ## Edge Cases
 
@@ -95,5 +95,5 @@ ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(KST)
 ## Failure Scenarios
 
 - **Missing `TenantContext`** (no tenant claim) — same behavior as the sibling list reads (the gateway `TenantClaimValidator` rejects a blank `tenant_id` before the controller; the count queries never run tenant-less).
-- **DB unavailable** — the count query throws; the existing `GlobalExceptionHandler` maps it to the service's standard `503`/`500` envelope. The console overview treats a non-200 summary cell as "점검 필요" (degraded), never blanks the section (consumer resilience — TASK-PC-FE-160).
+- **DB unavailable** — the count query throws; the existing `GlobalExceptionHandler` maps it to the service's standard `503`/`500` envelope. The console overview treats a non-200 summary cell as "점검 필요" (degraded), never blanks the section (consumer resilience — TASK-PC-FE-164).
 - **Clock/zone misconfig** — `ZoneId.of("Asia/Seoul")` is hard-coded (not server-local `ZoneId.systemDefault()`), so a UTC-configured container still computes Korean calendar periods correctly.
