@@ -4,7 +4,7 @@
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
 - **Analysis model**: Opus 4.8 / **Implementation model (권장)**: Sonnet 또는 Opus (Service Worker + PushManager 브라우저 통합 + 구독 등록 연동)
-- **Depends on**: TASK-BE-464 (구독 등록 API `POST/DELETE /api/users/me/push-subscriptions` + VAPID 공개키 노출). BE-464 merge 후 착수.
+- **Depends on**: TASK-BE-464 (구독 등록 API `POST/DELETE /api/notifications/me/push-subscriptions` + VAPID 공개키 노출). BE-464 merge 후 착수.
 
 ## Goal
 
@@ -15,8 +15,8 @@
 **In scope** (web-store frontend only):
 
 1. **Service Worker** — push 수신용 SW 등록(`public/sw.js` 또는 next-pwa 등 방식 택1). `push` 이벤트 → `registration.showNotification(title, { body, icon, data })`. `notificationclick` → 관련 주문/페이지로 focus/open.
-2. **구독 opt-in 플로우** — 사용자 액션(설정/알림 토글)에서 `Notification.requestPermission()` → 허용 시 `registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: <VAPID public key> })` → 결과 PushSubscription 을 `POST /api/users/me/push-subscriptions` 로 전송. opt-out 시 `subscription.unsubscribe()` + `DELETE`.
-3. **VAPID 공개키 주입** — `NEXT_PUBLIC_VAPID_PUBLIC_KEY`(빌드타임 env) 또는 BE-464 가 노출하는 `GET .../vapid-public-key` 조회(BE-464 계약의 택1과 정합). base64url → Uint8Array 변환 유틸.
+2. **구독 opt-in 플로우** — 사용자 액션(설정/알림 토글)에서 `Notification.requestPermission()` → 허용 시 `registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: <VAPID public key> })` → 결과 PushSubscription 을 `POST /api/notifications/me/push-subscriptions` 로 전송. opt-out 시 `subscription.unsubscribe()` + `DELETE`.
+3. **VAPID 공개키 주입** — BE-464 계약이 **엔드포인트 방식**을 채택했으므로 `GET /api/notifications/vapid-public-key` 조회로 공개키를 획득(빌드타임 `NEXT_PUBLIC_VAPID_PUBLIC_KEY` 는 미채택). base64url → Uint8Array 변환 유틸(`applicationServerKey` 용).
 4. **UI** — 알림 수신 토글(권한 상태 3-way: default/granted/denied 반영), denied 시 브라우저 설정 안내 카피. web-store 기존 사용자 설정/마이페이지 위치에 배치.
 5. **테스트** — 구독 등록/해지 훅 단위(fetch mock), base64url 변환 유틸, 권한 상태별 토글 렌더(vitest).
 
@@ -25,7 +25,7 @@
 ## Acceptance Criteria
 
 - **AC-1 — SW 등록.** web-store 로드 시(또는 opt-in 시) Service Worker 가 등록되고 push 이벤트 핸들러가 배너를 표시한다.
-- **AC-2 — 구독 등록.** opt-in 시 권한 요청 → `pushManager.subscribe(VAPID)` → `POST /api/users/me/push-subscriptions` 로 endpoint+keys 전송. 성공 시 토글이 granted 상태로 반영.
+- **AC-2 — 구독 등록.** opt-in 시 권한 요청 → `pushManager.subscribe(VAPID)` → `POST /api/notifications/me/push-subscriptions` 로 endpoint+keys 전송. 성공 시 토글이 granted 상태로 반영.
 - **AC-3 — 해지.** opt-out 시 `unsubscribe()` + `DELETE` 로 백엔드 구독 제거.
 - **AC-4 — 권한 상태 UX.** default/granted/denied 3-way 를 UI 가 정확히 반영하고, denied 는 재요청 대신 브라우저 설정 안내를 노출(브라우저는 denied 후 프로그램적 재프롬프트 불가).
 - **AC-5 — end-to-end(데모/라이브 증명).** granted 사용자에게 백엔드 PUSH 발송(BE-464) → 브라우저 배너 표시. 라이브 검증은 fed-e2e 스택 기동 하 수동/스모크(자동화는 브라우저 push 시뮬 한계로 best-effort).
@@ -38,7 +38,7 @@
 
 ## Related Contracts
 
-- `specs/contracts/http/notification-api.md` — BE-464 가 추가하는 `POST/DELETE /api/users/me/push-subscriptions`(+공개키) 소비. 프런트는 계약 소비자(신규 계약 필드 추가 없음).
+- `specs/contracts/http/notification-api.md` — BE-464 가 추가하는 `POST/DELETE /api/notifications/me/push-subscriptions`(+공개키) 소비. 프런트는 계약 소비자(신규 계약 필드 추가 없음).
 
 ## Edge Cases
 
