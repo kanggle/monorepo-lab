@@ -3,6 +3,7 @@ package com.example.notification.adapter.in.rest;
 import com.example.web.dto.ErrorResponse;
 import com.example.notification.domain.exception.AdminAccessDeniedException;
 import com.example.notification.domain.exception.NotificationNotFoundException;
+import com.example.notification.domain.exception.PushNotConfiguredException;
 import com.example.notification.domain.exception.TemplateAlreadyExistsException;
 import com.example.notification.domain.exception.TemplateNotFoundException;
 import com.example.notification.domain.exception.UnauthorizedNotificationAccessException;
@@ -48,6 +49,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedNotificationAccessException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of("ACCESS_DENIED", e.getMessage()));
+    }
+
+    @ExceptionHandler(PushNotConfiguredException.class)
+    public ResponseEntity<ErrorResponse> handlePushNotConfigured(PushNotConfiguredException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of("PUSH_NOT_CONFIGURED", e.getMessage()));
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)

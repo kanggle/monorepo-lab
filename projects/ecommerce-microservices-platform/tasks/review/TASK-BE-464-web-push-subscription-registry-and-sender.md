@@ -1,9 +1,10 @@
 # TASK-BE-464 — notification-service Web Push(VAPID) 실연동: 구독 레지스트리 + 등록 API + WebPushSender
 
-- **Status**: ready
+- **Status**: review
 - **Project**: ecommerce-microservices-platform
 - **Service**: notification-service
-- **Analysis model**: Opus 4.8 / **Implementation model (권장)**: Opus (신규 계약 + 마이그레이션 + 외부 provider 어댑터 + 만료 구독 정리)
+- **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
+- **IMPLEMENTED (2026-07-02, `:notification-service:test` GREEN, Docker-free)**: V6 `push_subscriptions`(UNIQUE(tenant_id,endpoint)+idx(user_id)) + `PushSubscription` 도메인 + `PushSubscriptionRepository`/`ManagePushSubscriptionUseCase`/`WebPushGateway` 포트 + `PushSubscriptionService`(endpoint 멱등 upsert·소유자 스코프 해지) + JPA 영속성 + `PushSubscriptionController`(POST 201/200·DELETE 204·GET vapid-public-key 200/503) + `WebPushSender`(BE-463 stub 대체, userId→구독 조회·VAPID 발송·404/410 lazy prune·1건 실패가 나머지 미차단) + `MartijndwarsWebPushGateway`(nl.martijndwars:web-push:5.1.1 + BouncyCastle 1.78.1 명시 추가 — web-push 는 BC 미번들, 소비자 제공 필요; 미설정 시 skip+WARN graceful) + GlobalExceptionHandler 503. 신규 단위 5종(service/sender/controller-slice/domain/mapper). AC-2 풀 wiring = notification-service Testcontainers IT 레인(CI Linux) 권위. 실 브라우저 발송(AC-2 라이브)=후속 TASK-FE-083.
 - **Depends on**: TASK-BE-463 (stub `PushNotificationSender` — 본 task 가 그 로그 라인을 실 VAPID 발송으로 대체하며 stub 을 제거/승격). BE-463 merge 후 착수.
 - **Blocks**: TASK-FE-083 (web-store Service Worker/opt-in — 본 task 의 등록 엔드포인트 + VAPID 공개키가 전제).
 
