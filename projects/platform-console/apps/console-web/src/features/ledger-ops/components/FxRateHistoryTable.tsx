@@ -1,6 +1,7 @@
 'use client';
 
 import type { FxRateHistoryResponse } from '../api/types';
+import { formatDateTime } from '@/shared/lib/datetime';
 
 /**
  * FX 환율 history 드릴 테이블 (TASK-PC-FE-104 — § 2.4.7.1 / ledger-api.md § 14.1).
@@ -100,8 +101,8 @@ export function FxRateHistoryTable({ data, onRefresh }: FxRateHistoryTableProps)
                   {/* F5: rate is rendered as-is (string). NEVER Number()/parseFloat(). */}
                   {q.rate}
                 </td>
-                <td className="p-2 text-muted-foreground">{q.asOf}</td>
-                <td className="p-2 text-muted-foreground">{q.fetchedAt}</td>
+                <td className="p-2 text-muted-foreground">{formatDateTime(q.asOf)}</td>
+                <td className="p-2 text-muted-foreground">{formatDateTime(q.fetchedAt)}</td>
                 <td className="p-2 text-muted-foreground">{q.source}</td>
               </tr>
             ))}

@@ -18,7 +18,7 @@ import {
   useWithdrawApproval,
 } from '../hooks/use-erp-ops';
 import { approvalErrorMessage } from './approval-error';
-import { fmtDateTime } from './format-datetime';
+import { formatDateTime } from '@/shared/lib/datetime';
 import { SUBJECT_LABEL, statusLabel, StatusBadge } from './approval-common';
 
 // ===========================================================================
@@ -26,7 +26,7 @@ import { SUBJECT_LABEL, statusLabel, StatusBadge } from './approval-common';
 // ===========================================================================
 
 function fmt(ts: string | undefined): string {
-  return fmtDateTime(ts);
+  return formatDateTime(ts, '—');
 }
 
 export function ApprovalDetail({

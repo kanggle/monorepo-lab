@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useNotificationTemplates } from '../hooks/use-ecommerce-notifications';
+import { formatDateTime } from '@/shared/lib/datetime';
 import {
   NOTIFICATION_DEFAULT_PAGE_SIZE,
   TEMPLATE_TYPE_LABELS,
@@ -144,7 +145,7 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
                   <td className="p-2">{formatType(t.type)}</td>
                   <td className="p-2">{t.channel}</td>
                   <td className="p-2">{t.subject}</td>
-                  <td className="p-2">{t.createdAt}</td>
+                  <td className="p-2">{formatDateTime(t.createdAt)}</td>
                   <td className="p-2">
                     <Link
                       href={`/ecommerce/notifications/templates/${t.templateId}/edit`}

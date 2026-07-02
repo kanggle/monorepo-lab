@@ -8,7 +8,7 @@ import type {
 } from '../api/delegation-types';
 import { isActiveGrant } from '../api/delegation-types';
 import { approvalErrorMessage } from './approval-error';
-import { fmtDateTime } from './format-datetime';
+import { formatDateTime } from '@/shared/lib/datetime';
 
 /**
  * Presentational delegation grant list (TASK-PC-FE-150 — behaviour-
@@ -64,7 +64,7 @@ export function DelegationStatusBadge({ grant }: { grant: DelegationGrant }) {
 // ---------------------------------------------------------------------------
 
 function fmt(ts: string | undefined): string {
-  return fmtDateTime(ts);
+  return formatDateTime(ts, '—');
 }
 
 function periodText(grant: DelegationGrant): string {

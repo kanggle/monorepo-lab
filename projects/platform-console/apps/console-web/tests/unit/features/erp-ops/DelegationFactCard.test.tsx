@@ -210,7 +210,7 @@ describe('<DelegationFactCard> — ABSENT fields graceful (AC-2)', () => {
     render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() });
 
     const revokedAtCell = screen.getByTestId('delegation-fact-revokedAt-0');
-    expect(revokedAtCell.textContent).toContain('2026-05-20');
+    expect(revokedAtCell.textContent).toContain('2026. 5. 20. 19:00:00');
   });
 
   it('renders reason when present', () => {
