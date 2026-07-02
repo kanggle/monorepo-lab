@@ -42,6 +42,28 @@ export interface UpdateNotificationPreferencesRequest {
   pushEnabled: boolean;
 }
 
+// Web Push (VAPID) subscription types (TASK-BE-464 / TASK-FE-083)
+
+export interface VapidPublicKeyResponse {
+  publicKey: string;
+}
+
+export interface PushSubscriptionKeys {
+  p256dh: string;
+  auth: string;
+}
+
+/** W3C PushSubscription serialization posted to register a browser subscription. */
+export interface RegisterPushSubscriptionRequest {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: PushSubscriptionKeys;
+}
+
+export interface RegisterPushSubscriptionResponse {
+  subscriptionId: string;
+}
+
 // Notification Template types (admin)
 
 export interface NotificationTemplateSummary {

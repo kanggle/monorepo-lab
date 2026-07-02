@@ -70,7 +70,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-079 | 리뷰/평점 시스템 — 상품 리뷰 작성, 평점 관리, 평균 평점 집계 | review-service (신규) | code, api, event |
 | TASK-BE-080 | 위시리스트/찜 기능 — 사용자별 관심 상품 목록 관리 | user-service | code, api |
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
-| TASK-FE-083 | web-store Web Push 구독 — Service Worker + opt-in UI + 브라우저 배너 표시. 선행=BE-464 merge | web-store | code, push |
 ## ready
 
 | ID | Title | Service | Tags |
@@ -85,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-083 | **REVIEW (2026-07-02 구현 완료, 승격+구현 번들)**. web-store Web Push 구독 — `public/sw.js`(push 배너·notificationclick) + `use-push-subscription`(권한→SW→VAPID subscribe→백엔드 등록/해지) + `PushOptIn`(3-way 권한 UX, NotificationSettings 통합) + `@repo/types`/`@repo/api-client` push 메서드. 테스트 3종. ⚠️로컬 vitest 불가→CI Node20 권위. 라이브 배너=fed-e2e 수동 스모크. impl 브랜치 `fe-083-web-push-ui`. | web-store | code, push |
 
 ## done
 
