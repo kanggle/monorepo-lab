@@ -16,6 +16,15 @@ public record TenantContext(String tenantId, String tenantType) {
     public static final String DEFAULT_TENANT_ID = "fan-platform";
     public static final String DEFAULT_TENANT_TYPE = "B2C_CONSUMER";
 
+    /**
+     * Platform-scope sentinel (ADR-002; multi-tenancy.md §Tenant Model). SUPER_ADMIN
+     * cross-tenant operators carry {@code tenant_id = "*"} rather than a concrete tenant.
+     * It is NOT a row in account-service's {@code tenants} table — see
+     * {@link com.example.auth.infrastructure.tenant.TenantTypeResolver} for why the
+     * {@code tenant_type} lookup must short-circuit on it (TASK-BE-466).
+     */
+    public static final String PLATFORM_SCOPE_TENANT_ID = "*";
+
     public TenantContext {
         Objects.requireNonNull(tenantId, "tenantId must not be null");
         if (tenantId.isBlank()) {
