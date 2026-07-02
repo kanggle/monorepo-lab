@@ -48,6 +48,10 @@ export function UserDetail({ user }: UserDetailProps) {
       {/* User profile header */}
       <dl className="mb-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <div>
+          <dt className="text-muted-foreground">이름</dt>
+          <dd data-testid="user-detail-name">{data.name ?? '-'}</dd>
+        </div>
+        <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd data-testid="user-detail-status">
             <span
@@ -65,10 +69,6 @@ export function UserDetail({ user }: UserDetailProps) {
           >
             {data.email ?? '-'}
           </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">이름</dt>
-          <dd data-testid="user-detail-name">{data.name ?? '-'}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">닉네임</dt>

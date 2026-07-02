@@ -55,12 +55,12 @@ export function OrderDetail({ order }: OrderDetailProps) {
           </dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">사용자 ID</dt>
-          <dd className="break-all text-xs">{data.userId}</dd>
-        </div>
-        <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd data-testid="order-detail-status">{data.status}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">사용자 ID</dt>
+          <dd className="break-all text-xs">{data.userId}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">총액</dt>
