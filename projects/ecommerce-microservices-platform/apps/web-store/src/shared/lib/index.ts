@@ -1,3 +1,4 @@
+export { formatDateTime, formatDate } from './datetime';
 export { maskPhone } from './mask-phone';
 export { isValidPhone } from './validate-phone';
 export {

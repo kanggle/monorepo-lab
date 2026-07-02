@@ -9,6 +9,7 @@ import { removeFromWishlist } from '../api/wishlist-api';
 import { wishlistKeys } from '../model/query-keys';
 import { WishlistItemInfo } from './WishlistItemInfo';
 import { WishlistItemActions } from './WishlistItemActions';
+import { formatDateTime } from '@/shared/lib';
 
 interface WishlistItemCardProps {
   item: WishlistItem;
@@ -39,11 +40,7 @@ export function WishlistItemCard({ item }: WishlistItemCardProps) {
     [removeMutation],
   );
 
-  const formattedDate = new Date(item.addedAt).toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const formattedDate = formatDateTime(item.addedAt);
 
   const content = (
     <div

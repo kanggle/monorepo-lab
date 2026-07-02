@@ -1,6 +1,7 @@
 import type { PaymentResponse } from '@repo/types';
 import { PaymentStatusBadge } from '@/entities/payment';
 import { PriceDisplay } from '@/shared/ui';
+import { formatDateTime } from '@/shared/lib';
 
 interface Props {
   payment: PaymentResponse | null;
@@ -26,12 +27,12 @@ export function OrderPaymentInfo({ payment, paymentError }: Props) {
           </p>
           {payment.paidAt && (
             <p style={{ margin: 'var(--space-1) 0', color: 'var(--color-text-secondary)' }}>
-              결제일: {new Date(payment.paidAt).toLocaleString('ko-KR')}
+              결제일: {formatDateTime(payment.paidAt)}
             </p>
           )}
           {payment.refundedAt && (
             <p style={{ margin: 'var(--space-1) 0', color: 'var(--color-text-secondary)' }}>
-              환불일: {new Date(payment.refundedAt).toLocaleString('ko-KR')}
+              환불일: {formatDateTime(payment.refundedAt)}
             </p>
           )}
         </>

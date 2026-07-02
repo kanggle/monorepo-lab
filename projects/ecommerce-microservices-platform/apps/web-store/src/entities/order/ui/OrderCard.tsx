@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { OrderSummary } from '@repo/types';
 import { OrderStatusBadge } from './OrderStatusBadge';
+import { formatDateTime } from '@/shared/lib';
 
 interface OrderCardProps {
   order: OrderSummary;
@@ -22,7 +23,7 @@ export function OrderCard({ order }: OrderCardProps) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <p style={{ margin: '0 0 var(--space-1)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
-            {new Date(order.createdAt).toLocaleString('ko-KR')}
+            {formatDateTime(order.createdAt)}
           </p>
           {order.firstItemName && (
             <p style={{

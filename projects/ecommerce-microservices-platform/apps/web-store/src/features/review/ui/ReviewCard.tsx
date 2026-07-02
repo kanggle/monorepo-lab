@@ -2,6 +2,7 @@
 
 import { StarRating } from './StarRating';
 import { ReviewForm } from './ReviewForm';
+import { formatDateTime } from '@/shared/lib';
 
 interface ReviewCardBaseProps {
   reviewId: string;
@@ -129,7 +130,7 @@ export function ReviewCard({
           color: 'var(--color-text-secondary)',
         }}
       >
-        {new Date(createdAt).toLocaleDateString('ko-KR')}
+        {formatDateTime(createdAt)}
       </p>
     </div>
   );

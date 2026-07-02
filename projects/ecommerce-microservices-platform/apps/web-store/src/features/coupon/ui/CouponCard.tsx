@@ -3,6 +3,7 @@
 import type { CouponSummary, CouponStatus } from '@repo/types';
 import { StatusBadge } from '@/shared/ui';
 import { formatDiscountValue, formatMaxDiscount } from '../lib/format-discount';
+import { formatDate } from '@/shared/lib';
 
 const STATUS_LABELS: Record<CouponStatus, string> = {
   ISSUED: '사용가능',
@@ -86,7 +87,7 @@ export function CouponCard({ coupon, selectable, selected, disabled, onSelect }:
             fontSize: 'var(--font-size-xs)',
             color: 'var(--color-text-secondary)',
           }}>
-            {new Date(coupon.expiresAt).toLocaleDateString('ko-KR')}까지
+            {formatDate(coupon.expiresAt)}까지
           </div>
         </div>
         <StatusBadge status={coupon.status} labels={STATUS_LABELS} colors={STATUS_COLORS} />

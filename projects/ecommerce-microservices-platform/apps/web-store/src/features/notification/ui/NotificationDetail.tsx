@@ -5,6 +5,7 @@ import { ErrorMessage } from '@repo/ui';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { useNotificationDetail } from '../model/use-notification-detail';
 import { CHANNEL_LABELS } from '../lib/constants';
+import { formatDateTime } from '@/shared/lib';
 
 interface Props {
   notificationId: string;
@@ -57,7 +58,7 @@ export function NotificationDetail({ notificationId }: Props) {
               </span>
             </div>
             <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-              {new Date(notification.sentAt).toLocaleString('ko-KR')}
+              {formatDateTime(notification.sentAt)}
             </p>
           </div>
 

@@ -9,6 +9,7 @@ import { OrderItemsSection } from './OrderItemsSection';
 import { OrderShippingInfo } from './OrderShippingInfo';
 import { OrderPaymentInfo } from './OrderPaymentInfo';
 import { ShippingTracker } from './ShippingTracker';
+import { formatDateTime } from '@/shared/lib';
 
 interface Props {
   orderId: string;
@@ -98,10 +99,10 @@ export function OrderDetailView({ orderId }: Props) {
 
           <section style={{ marginBottom: 'var(--space-8)' }}>
             <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-              주문일: {new Date(order.createdAt).toLocaleString('ko-KR')}
+              주문일: {formatDateTime(order.createdAt)}
             </p>
             <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-              최종 수정일: {new Date(order.updatedAt).toLocaleString('ko-KR')}
+              최종 수정일: {formatDateTime(order.updatedAt)}
             </p>
           </section>
 

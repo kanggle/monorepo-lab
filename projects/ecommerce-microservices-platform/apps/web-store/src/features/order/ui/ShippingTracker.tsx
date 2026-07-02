@@ -4,6 +4,7 @@ import { Skeleton } from '@/shared/ui/Skeleton';
 import { useShippingTracking } from '../model/use-shipping-tracking';
 import { getStepIndex, getDeliveredDate } from '../lib/shipping-steps';
 import { ShippingStepIndicator } from './ShippingStepIndicator';
+import { formatDateTime } from '@/shared/lib';
 
 interface Props {
   orderId: string;
@@ -72,7 +73,7 @@ export function ShippingTracker({ orderId }: Props) {
       {/* Delivered Date */}
       {deliveredDate && (
         <p style={{ margin: 'var(--space-1) 0', color: 'var(--color-text-secondary)' }}>
-          배송 완료일: {new Date(deliveredDate).toLocaleString('ko-KR')}
+          배송 완료일: {formatDateTime(deliveredDate)}
         </p>
       )}
     </section>
