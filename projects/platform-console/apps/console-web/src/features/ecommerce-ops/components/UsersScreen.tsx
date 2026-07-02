@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useUsers } from '../hooks/use-ecommerce-users';
+import { formatDateTime } from '@/shared/lib/datetime';
 import {
   USER_DEFAULT_PAGE_SIZE,
   USER_STATUS_VALUES,
@@ -218,7 +219,7 @@ export function UsersScreen({ users }: UsersScreenProps) {
                     </span>
                   </td>
                   <td className="p-2 text-sm text-muted-foreground">
-                    {new Date(u.createdAt).toLocaleDateString('ko-KR')}
+                    {formatDateTime(u.createdAt)}
                   </td>
                   <td className="p-2">
                     <Link href={`/ecommerce/users/${u.userId}`}>

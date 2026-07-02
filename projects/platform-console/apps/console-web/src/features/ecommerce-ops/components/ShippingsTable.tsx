@@ -3,6 +3,7 @@
 import { Button } from '@/shared/ui/Button';
 import { allowedNextStatus, type ShippingList } from '../api/shipping-types';
 import { statusLabel, nextStatusLabel } from './shipping-labels';
+import { formatDateTime } from '@/shared/lib/datetime';
 
 interface ShippingsTableProps {
   rows: ShippingList['content'];
@@ -84,7 +85,7 @@ export function ShippingsTable({
                   {s.trackingNumber ?? '—'}
                 </td>
                 <td className="p-2 text-sm text-muted-foreground">
-                  {new Date(s.createdAt).toLocaleDateString('ko-KR')}
+                  {formatDateTime(s.createdAt)}
                 </td>
                 <td className="p-2">
                   <div className="flex gap-2">

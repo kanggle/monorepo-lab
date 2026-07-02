@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useSellers } from '../hooks/use-ecommerce-sellers';
+import { formatDateTime } from '@/shared/lib/datetime';
 import {
   SELLER_DEFAULT_PAGE_SIZE,
   sellerStatusTone,
@@ -154,7 +155,7 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
                     })()}
                   </td>
                   <td className="p-2 text-sm text-muted-foreground">
-                    {new Date(s.createdAt).toLocaleDateString('ko-KR')}
+                    {formatDateTime(s.createdAt)}
                   </td>
                   <td className="p-2">
                     <Link
