@@ -20,30 +20,34 @@ export function OrderCard({ order }: OrderCardProps) {
         marginBottom: 'var(--space-3)',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <p style={{ margin: '0 0 var(--space-1)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
-            {formatDateTime(order.createdAt)}
-          </p>
-          {order.firstItemName && (
-            <p style={{
-              margin: '0 0 var(--space-1)',
-              fontSize: 'var(--font-size-sm)',
-              fontWeight: 'var(--font-weight-semibold)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              maxWidth: '280px',
-            }}>
-              {order.firstItemName}{order.itemCount > 1 ? ` 외 ${order.itemCount - 1}건` : ''}
-            </p>
-          )}
-          <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-            {order.totalPrice.toLocaleString()}원
-          </p>
-        </div>
+      {/* Line 1: date (left) + status badge (right). */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-1)' }}>
+        <p style={{ margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
+          {formatDateTime(order.createdAt)}
+        </p>
         <OrderStatusBadge status={order.status} />
       </div>
+      {/* Line 2: product name · total price on a single truncating line. Name and
+          price are separate spans so each keeps its own textContent + styling. */}
+      <p style={{
+        margin: 0,
+        fontSize: 'var(--font-size-sm)',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}>
+        {order.firstItemName && (
+          <>
+            <span style={{ fontWeight: 'var(--font-weight-semibold)' }}>
+              {order.firstItemName}{order.itemCount > 1 ? ` 외 ${order.itemCount - 1}건` : ''}
+            </span>
+            <span style={{ color: 'var(--color-text-secondary)' }}> · </span>
+          </>
+        )}
+        <span style={{ color: 'var(--color-text-secondary)' }}>
+          {order.totalPrice.toLocaleString()}원
+        </span>
+      </p>
     </Link>
   );
 }

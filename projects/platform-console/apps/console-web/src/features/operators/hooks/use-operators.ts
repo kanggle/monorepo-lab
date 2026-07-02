@@ -385,3 +385,76 @@ export function useSetOperatorOrgScope() {
     },
   });
 }
+
+// --- mutation: assign-operator (POST; reason ONLY, no key) — TASK-PC-FE-157 -
+// Creates the (operator, active-tenant) assignment row ("내 직원에게 내 테넌트
+// 접근 부여"). The proxy route is POST-only; it attaches the operator token +
+// active tenant + `X-Operator-Reason` server-side. The tenantId in the path is
+// the ACTIVE tenant (the producer confines the mutation to it). NO idempotency
+// key (the (operator, tenant) PK is the natural dedupe; a re-create is
+// 409 ASSIGNMENT_ALREADY_EXISTS, mapped inline).
+
+interface AssignArgs {
+  operatorId: string;
+  /** The target tenant (= active tenant slug; producer confines to it). */
+  tenantId: string;
+  /** Operator audit reason — required, non-empty trimmed. */
+  reason: string;
+}
+
+export function useAssignOperator() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ operatorId, tenantId, reason }: AssignArgs) => {
+      await apiClient.post<unknown>(
+        `/api/operators/${encodeURIComponent(operatorId)}/assignments/${encodeURIComponent(tenantId)}`,
+        { reason },
+      );
+      return true;
+    },
+    onSuccess: (_data, vars) => {
+      // The newly-assigned operator now falls inside the active-tenant list
+      // scope → refresh the list + that operator's assignment row.
+      invalidateOperators(qc);
+      qc.invalidateQueries({
+        queryKey: [OPERATORS_KEY, 'assignments', vars.operatorId],
+      });
+    },
+  });
+}
+
+// --- mutation: unassign-operator (DELETE; reason ONLY, no key) — PC-FE-157 --
+// Removes the (operator, active-tenant) assignment row. The proxy route is
+// DELETE-only; the reason travels in the request body (→ `X-Operator-Reason`
+// server-side). A home-tenant-only operator (no explicit assignment) →
+// 404 ASSIGNMENT_NOT_FOUND (mapped inline).
+
+interface UnassignArgs {
+  operatorId: string;
+  /** The assignment's tenant (= active tenant slug). */
+  tenantId: string;
+  /** Operator audit reason — required, non-empty trimmed. */
+  reason: string;
+}
+
+export function useUnassignOperator() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ operatorId, tenantId, reason }: UnassignArgs) => {
+      // DELETE with a body — `apiClient.delete` forwards `opts.body`
+      // (serialised by the shared fetch core); the DELETE route handler reads
+      // `{ reason }` and forwards it as `X-Operator-Reason`.
+      await apiClient.delete<unknown>(
+        `/api/operators/${encodeURIComponent(operatorId)}/assignments/${encodeURIComponent(tenantId)}`,
+        { body: { reason } },
+      );
+      return true;
+    },
+    onSuccess: (_data, vars) => {
+      invalidateOperators(qc);
+      qc.invalidateQueries({
+        queryKey: [OPERATORS_KEY, 'assignments', vars.operatorId],
+      });
+    },
+  });
+}

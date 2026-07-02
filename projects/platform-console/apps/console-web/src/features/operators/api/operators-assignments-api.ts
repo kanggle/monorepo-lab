@@ -1,6 +1,8 @@
 import {
   OperatorAssignmentsResponseSchema,
   type OperatorAssignmentsResponse,
+  OperatorAssignmentSchema,
+  type OperatorAssignment,
   SetOrgScopeResultSchema,
   type SetOrgScopeResult,
   type SetOrgScopeInput,
@@ -8,11 +10,12 @@ import {
 import { callGapOperators, OPERATORS_PREFIX } from './operators-client';
 
 /**
- * operators api — org-scope assignments surface (TASK-PC-FE-110 split;
- * TASK-PC-FE-050 / TASK-BE-339). Reads the (operator, active-tenant)
- * assignment row and sets / clears its `org_scope` (부서 subtree-root id
- * 배열). Re-exported verbatim through the `operators-api` barrel. 0 behavior
- * change.
+ * operators api — tenant-assignment surface (TASK-PC-FE-110 split;
+ * TASK-PC-FE-050 / TASK-BE-339 org-scope + TASK-PC-FE-157 / TASK-BE-347
+ * assignment create/remove). Reads the (operator, active-tenant) assignment
+ * row, sets / clears its `org_scope` (부서 subtree-root id 배열), and
+ * creates / removes the assignment row itself ("내 직원에게 내 테넌트 접근
+ * 부여"). Re-exported verbatim through the `operators-api` barrel.
  */
 
 // ---------------------------------------------------------------------------
@@ -77,5 +80,63 @@ export async function setOperatorOrgScope(
       body: { orgScope: input.orgScope },
     },
     (json) => SetOrgScopeResultSchema.parse(json),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 11. assign-operator — POST /api/admin/operators/{operatorId}/assignments/{tenantId}
+//     TASK-PC-FE-157 / TASK-BE-347 (ADR-MONO-024 D3-i). Creates the
+//     (operator, tenant) `operator_tenant_assignment` row ("내 직원에게 내
+//     테넌트 접근 부여"). The created row is whole-tenant (org_scope=null ⟺
+//     ["*"], permission_set_id=null = operator-level role 상속); org_scope is
+//     later refined via the org-scope PUT above.
+//
+//     PER-ENDPOINT HEADER MATRIX: `X-Operator-Reason` REQUIRED (producer
+//     `400 REASON_REQUIRED` otherwise); NO `Idempotency-Key` (the (operator,
+//     tenant) PK is the natural dedupe — a re-create is `409
+//     ASSIGNMENT_ALREADY_EXISTS`, mirroring the /roles + /status non-uniform
+//     matrix). Tenant confinement is producer-side (`TenantScopeGuard` on the
+//     path `tenantId` — a `TENANT_ADMIN @ acme` may assign to acme only;
+//     SUPER_ADMIN `'*'` net-zero). `201` returns the created assignment.
+// ---------------------------------------------------------------------------
+
+export async function assignOperatorToTenant(
+  operatorId: string,
+  tenantId: string,
+  reason: string,
+): Promise<OperatorAssignment> {
+  return callGapOperators(
+    {
+      method: 'POST',
+      path: `${OPERATORS_PREFIX}/${encodeURIComponent(operatorId)}/assignments/${encodeURIComponent(tenantId)}`,
+      reason,
+      // No body — the assignment is fully specified by the path (operatorId,
+      // tenantId). The producer creates a whole-tenant row.
+    },
+    (json) => OperatorAssignmentSchema.parse(json),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 12. unassign-operator — DELETE /api/admin/operators/{operatorId}/assignments/{tenantId}
+//     TASK-PC-FE-157 / TASK-BE-347. Removes the (operator, tenant) assignment
+//     row. `X-Operator-Reason` REQUIRED; NO `Idempotency-Key`. `204` no
+//     content. A home-tenant-only operator (no explicit assignment) → `404
+//     ASSIGNMENT_NOT_FOUND` (maps inline). Confinement identical to POST.
+// ---------------------------------------------------------------------------
+
+export async function unassignOperatorFromTenant(
+  operatorId: string,
+  tenantId: string,
+  reason: string,
+): Promise<void> {
+  await callGapOperators(
+    {
+      method: 'DELETE',
+      path: `${OPERATORS_PREFIX}/${encodeURIComponent(operatorId)}/assignments/${encodeURIComponent(tenantId)}`,
+      reason,
+      expectNoContent: true,
+    },
+    () => undefined,
   );
 }
