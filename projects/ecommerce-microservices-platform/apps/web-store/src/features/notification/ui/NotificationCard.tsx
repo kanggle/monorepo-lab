@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { NotificationSummary } from '@repo/types';
 import { CHANNEL_LABELS } from '../lib/constants';
+import { formatDateTime } from '@/shared/lib';
 
 export function NotificationCard({ notification }: { notification: NotificationSummary }) {
   return (
@@ -23,7 +24,7 @@ export function NotificationCard({ notification }: { notification: NotificationS
             fontSize: 'var(--font-size-xs)',
             color: 'var(--color-text-secondary)',
           }}>
-            {new Date(notification.sentAt).toLocaleString('ko-KR')}
+            {formatDateTime(notification.sentAt)}
           </p>
           <p style={{
             margin: '0 0 var(--space-1)',
