@@ -60,12 +60,22 @@ server-component 우선, 성능/접근성/web-vitals 예산.
 ## Tech Stack
 
 - **Next.js 15** (App Router) · **React 19** · **TypeScript 5**
-- **Tailwind CSS** + shadcn/ui-style primitives (`shared/ui/`)
+- **Tailwind CSS** (`darkMode: 'class'`, CSS-variable-backed tokens) + shadcn/ui-style primitives (`shared/ui/`) + **next-themes** (light/dark) — see [§ Styling & Theming](#styling--theming)
 - **React Query** (서버 상태 캐싱·변이; client-only) — *Phase 2 (TASK-PC-FE-001)*
 - **zod** (env / API 응답 스키마 검증) — *Phase 2*
 - **Vitest** + **@testing-library/react** · **Playwright** (E2E) — *Phase 2*
 
 > Phase-1 skeleton 은 의도적으로 의존성을 최소화한다(next/react/tailwind만). React Query·zod·테스트 하네스는 `TASK-PC-FE-001` 에서 도입한다 (skeleton README/agent deviation 기록과 정합).
+
+## Styling & Theming
+
+Vercel-style design-token system (TASK-PC-FE-038). This is the **canonical**
+theming for the operator suite; `web-store` mirrors the same "near-white primary
+in dark" approach with its own plain-CSS token set.
+
+- **Design tokens** — semantic colours are CSS custom properties on `:root` in `app/globals.css` (Geist neutrals as HSL channel triples): `--background` / `--foreground` / `--border` / `--muted(-foreground)` / `--primary(-foreground)` / `--accent(-foreground)` / `--destructive(-foreground)` / `--ring`. `tailwind.config.ts` maps its colour scale to `hsl(var(--token))`, so components use semantic classes (`bg-background` / `text-foreground` / `border-border` …) and the whole palette rethemes from one token set.
+- **Light / dark** — `tailwind.config.ts` `darkMode: 'class'`; `globals.css` `.dark` flips the token palette. **next-themes** (`shared/ui/ThemeProvider`, wrapped in the root `app/layout.tsx`) drives the `.dark` class on `<html>` with `attribute="class"`, `defaultTheme="system"`, `enableSystem`, `disableTransitionOnChange`, and injects a pre-hydration script so the correct theme paints with no flash (root `<html suppressHydrationWarning>`). `shared/ui/ThemeToggle` (top bar, `(console)/layout.tsx`) flips light/dark and renders a mount-guarded sun/moon icon to avoid an SSR/client hydration mismatch.
+- **Shared table style** — the `.data-table` component class (`globals.css`, TASK-PC-FE-042) gives every console table the rounded, bordered Vercel look from one class: `border-separate` + `border-spacing-0` + `overflow-hidden` clips the rounded outer frame (the collapsed-border model ignores `border-radius`), and horizontal dividers move to cell `border-b` since the separate-borders model ignores per-`<tr>` borders.
 
 ## Internal Structure Rule
 
