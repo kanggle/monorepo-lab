@@ -82,7 +82,7 @@ export default async function OperatorsPage() {
         >
           {state.permissionError.code === 'TENANT_SCOPE_DENIED'
             ? '선택한 테넌트에 대한 운영자 관리 권한이 없습니다.'
-            : '운영자 관리는 SUPER_ADMIN(operator.manage 권한)만 수행할 수 있습니다.'}
+            : '운영자 관리는 operator.manage 권한이 필요합니다 (SUPER_ADMIN 또는 자기 테넌트 TENANT_ADMIN).'}
         </div>
       </section>
     );
