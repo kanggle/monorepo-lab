@@ -9,6 +9,8 @@ import {
   type UserList,
   UserDetailSchema,
   type UserDetail,
+  UserAreaSummarySchema,
+  type UserAreaSummary,
   type UserListParams,
   USER_DEFAULT_PAGE_SIZE,
   USER_MAX_PAGE_SIZE,
@@ -68,6 +70,21 @@ const clampSize = (size?: number): number =>
 // ===========================================================================
 // READS
 // ===========================================================================
+
+/** GET /admin/users/summary — period-based counts (TASK-PC-FE-160).
+ *  Returns { today, week, month, total } for the tenant. */
+export function getUsersSummary(): Promise<UserAreaSummary> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'GET',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: '/users/summary',
+    },
+    (j) => UserAreaSummarySchema.parse(j),
+    USER_LABEL,
+  );
+}
 
 /** GET /admin/users?status&email&page&size (paginated user summaries). */
 export function listUsers(params: UserListParams = {}): Promise<UserList> {

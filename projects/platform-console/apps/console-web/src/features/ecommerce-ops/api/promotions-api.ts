@@ -13,6 +13,8 @@ import {
   type PromotionMutationResponse,
   IssueCouponResponseSchema,
   type IssueCouponResponse,
+  PromotionAreaSummarySchema,
+  type PromotionAreaSummary,
   type PromotionListParams,
   type CreatePromotionBody,
   type UpdatePromotionBody,
@@ -69,6 +71,21 @@ const clampSize = (size?: number): number =>
 // ===========================================================================
 // READS
 // ===========================================================================
+
+/** GET /api/promotions/summary — period-based counts (TASK-PC-FE-160).
+ *  Returns { today, week, month, total } for the tenant. */
+export function getPromotionsSummary(): Promise<PromotionAreaSummary> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'GET',
+      base: env.ECOMMERCE_PUBLIC_BASE_URL,
+      path: '/promotions/summary',
+    },
+    (j) => PromotionAreaSummarySchema.parse(j),
+    PROMOTION_LABEL,
+  );
+}
 
 /** GET /api/promotions?status&page&size (paginated summaries). */
 export function listPromotions(

@@ -2,6 +2,7 @@ package com.example.product.domain.repository;
 
 import com.example.product.domain.model.Seller;
 
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -43,4 +44,10 @@ public interface SellerRepository {
      * the standalone / single-seller degradation anchor (D8, AC-5).
      */
     Seller ensureDefaultSeller();
+
+    /** Total sellers for the current tenant. */
+    long countByTenant();
+
+    /** Sellers created in [from, to) for the current tenant. */
+    long countByTenantCreatedBetween(Instant from, Instant to);
 }

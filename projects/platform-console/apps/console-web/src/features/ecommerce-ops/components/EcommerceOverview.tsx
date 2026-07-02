@@ -10,7 +10,9 @@ import { sellerStatusTone } from '../api/seller-types';
 import type { OrderStatus } from '../api/order-types';
 
 /**
- * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156).
+ * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156;
+ * TASK-PC-FE-160 — count cards now show period metrics: 오늘/주간/월간 +
+ * 전체 total as secondary context from the `/summary` endpoints).
  * Server component — STRICTLY READ-ONLY, no `'use client'`. Renders the
  * `getEcommerceOverviewState` fan-out result: per-area count cards (each a
  * quick-launch `Link`, PC-FE-155 back-compat testids), order-status
@@ -58,7 +60,7 @@ function CountCard({ area }: { area: AreaCount }) {
     <Link
       href={area.href}
       data-testid={area.testid}
-      className="flex min-w-[7.5rem] flex-1 flex-col gap-1 rounded-md border border-border bg-background px-4 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="flex min-w-[9rem] flex-1 flex-col gap-2 rounded-md border border-border bg-background px-4 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <span
         className="flex items-center gap-1.5 text-sm text-muted-foreground"
@@ -78,12 +80,48 @@ function CountCard({ area }: { area: AreaCount }) {
         </span>
       </span>
       {ok ? (
-        <span
-          className="text-2xl font-semibold tabular-nums text-foreground"
-          data-testid={`${area.key}-count`}
-        >
-          {area.count!.toLocaleString()}
-        </span>
+        <>
+          {/* Period counts — 오늘 / 주간 / 월간 (primary content). */}
+          <dl className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <dt className="text-[0.65rem] text-muted-foreground">오늘</dt>
+              <dd
+                className="text-lg font-semibold tabular-nums text-foreground"
+                data-testid={`${area.key}-count-today`}
+              >
+                {area.today!.toLocaleString()}
+              </dd>
+            </div>
+            <div className="flex flex-col items-center">
+              <dt className="text-[0.65rem] text-muted-foreground">주간</dt>
+              <dd
+                className="text-lg font-semibold tabular-nums text-foreground"
+                data-testid={`${area.key}-count-week`}
+              >
+                {area.week!.toLocaleString()}
+              </dd>
+            </div>
+            <div className="flex flex-col items-center">
+              <dt className="text-[0.65rem] text-muted-foreground">월간</dt>
+              <dd
+                className="text-lg font-semibold tabular-nums text-foreground"
+                data-testid={`${area.key}-count-month`}
+              >
+                {area.month!.toLocaleString()}
+              </dd>
+            </div>
+          </dl>
+          {/* Total (secondary context — back-compat testid `<key>-count`). */}
+          <span className="text-xs text-muted-foreground">
+            전체{' '}
+            <span
+              className="font-medium tabular-nums text-foreground"
+              data-testid={`${area.key}-count`}
+            >
+              {area.count!.toLocaleString()}
+            </span>
+          </span>
+        </>
       ) : (
         <span
           className="text-sm font-medium text-muted-foreground"

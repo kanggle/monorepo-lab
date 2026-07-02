@@ -151,6 +151,22 @@ export const RegisterSellerBodySchema = z.object({
 export type RegisterSellerBody = z.infer<typeof RegisterSellerBodySchema>;
 
 // ===========================================================================
+// SUMMARY (TASK-PC-FE-160 — period-based counts)
+// ===========================================================================
+
+/** GET /admin/sellers/summary — period-based count.
+ *  Response: { today, week, month, total } all non-negative integers. */
+export const SellerAreaSummarySchema = z
+  .object({
+    today: z.number().int().nonnegative(),
+    week: z.number().int().nonnegative(),
+    month: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type SellerAreaSummary = z.infer<typeof SellerAreaSummarySchema>;
+
+// ===========================================================================
 // List query params + pagination defaults
 // ===========================================================================
 

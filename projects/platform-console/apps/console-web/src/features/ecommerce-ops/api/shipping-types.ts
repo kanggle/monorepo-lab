@@ -174,6 +174,22 @@ export const RefreshTrackingBodySchema = z.object({}).passthrough();
 export type RefreshTrackingBody = z.infer<typeof RefreshTrackingBodySchema>;
 
 // ===========================================================================
+// SUMMARY (TASK-PC-FE-160 — period-based counts)
+// ===========================================================================
+
+/** GET /api/shippings/summary — period-based count.
+ *  Response: { today, week, month, total } all non-negative integers. */
+export const ShippingAreaSummarySchema = z
+  .object({
+    today: z.number().int().nonnegative(),
+    week: z.number().int().nonnegative(),
+    month: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type ShippingAreaSummary = z.infer<typeof ShippingAreaSummarySchema>;
+
+// ===========================================================================
 // List query params + pagination defaults
 // ===========================================================================
 

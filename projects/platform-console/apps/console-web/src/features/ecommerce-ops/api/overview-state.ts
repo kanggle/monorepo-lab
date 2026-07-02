@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation';
 import { ApiError } from '@/shared/api/errors';
-import { listProducts } from './products-api';
-import { listOrders } from './orders-api';
-import { listUsers } from './users-api';
-import { listPromotions } from './promotions-api';
-import { listShippings } from './shippings-api';
-import { listSellers } from './sellers-api';
-import { listTemplates } from './notifications-api';
+import { getProductsSummary } from './products-api';
+import { getOrdersSummary, listOrders } from './orders-api';
+import { getUsersSummary } from './users-api';
+import { getPromotionsSummary } from './promotions-api';
+import { getShippingsSummary } from './shippings-api';
+import { getSellersSummary, listSellers } from './sellers-api';
+import { getTemplatesSummary } from './notifications-api';
 import {
   ORDER_STATUS_VALUES,
   type OrderStatus,
@@ -17,16 +17,19 @@ import type { SellerSummary } from './seller-types';
 /**
  * Server-side ecommerce **operator overview snapshot** fan-out for the
  * `/ecommerce` landing (TASK-PC-FE-156 — realizes the "operator-overview
- * snapshot leg" the §2.4.10 landing deferred).
+ * snapshot leg" the §2.4.10 landing deferred; TASK-PC-FE-160 — switches the
+ * 7 area count legs from `list*({page:0,size:1})` to dedicated `/summary`
+ * endpoints that return period-based counts: today / week / month / total).
  *
- * ── ARCHITECTURE (console-web direct fan-out; no backend/producer change) ──
- * Per ADR-MONO-017 D3.B there is NO producer `/summary` aggregation endpoint;
- * counts are derived from the existing list endpoints' `totalElements` with
- * `?page=0&size=1`. Per §2.4.10 the ecommerce operator surface is console-web →
- * ecommerce gateway DIRECT (domain-facing IAM OIDC token), so this snapshot
- * reuses the feature's own `list*` api functions server-side. No console-bff
- * leg (contrast: the console-wide §2.4.9.1 operator overview is a BFF fan-out —
- * this one is domain-internal, so the direct model fits).
+ * ── ARCHITECTURE (console-web direct fan-out; per-service `/summary` endpoints) ──
+ * Per TASK-PC-FE-160 each area now calls a dedicated `GET .../summary` endpoint
+ * (uniform response `{ today, week, month, total }`) instead of the previous
+ * `list*({page:0,size:1})` leg. Per §2.4.10 the ecommerce operator surface is
+ * console-web → ecommerce gateway DIRECT (domain-facing IAM OIDC token), so
+ * each summary call reuses the feature's own `get*Summary()` api functions
+ * server-side. No console-bff leg (contrast: the console-wide §2.4.9.1
+ * operator overview is a BFF fan-out — this one is domain-internal, so the
+ * direct model fits).
  *
  * ── RESILIENCE (§2.4.10 / §2.5) — the decisive rule ──
  * The fan-out is bounded + parallel. Each cell CATCHES its own error into a
@@ -38,14 +41,19 @@ import type { SellerSummary } from './seller-types';
 
 export type CellStatus = 'ok' | 'forbidden' | 'degraded';
 
-/** One operator-area count card (label + count + per-cell status + its link). */
+/** One operator-area count card (label + period counts + per-cell status + its link). */
 export interface AreaCount {
   key: string;
   label: string;
   href: string;
   testid: string;
-  /** `totalElements`, or `null` when the cell did not resolve. */
+  /** `total` from the summary, or `null` when the cell did not resolve.
+   *  Kept as `count` for back-compat with existing tests / consumers. */
   count: number | null;
+  /** Period-scoped counts from the `/summary` endpoint (null when degraded/forbidden). */
+  today: number | null;
+  week: number | null;
+  month: number | null;
   status: CellStatus;
 }
 
@@ -77,24 +85,33 @@ const EMPTY: EcommerceOverviewState = {
   recentSellersStatus: 'degraded',
 };
 
+/** Period summary shape returned by each `/summary` endpoint. */
+interface AreaSummary {
+  today: number;
+  week: number;
+  month: number;
+  total: number;
+}
+
 /**
- * The 7 operator areas, keyed to their list endpoint. Labels/hrefs/testids
+ * The 7 operator areas, keyed to their `/summary` endpoint. Labels/hrefs/testids
  * mirror `ConsoleSidebarNav` + the PC-FE-155 landing grid (back-compat testids).
+ * TASK-PC-FE-160: `count` thunk replaced by `summary` thunk returning period data.
  */
 const AREAS: ReadonlyArray<{
   key: string;
   label: string;
   href: string;
   testid: string;
-  count: () => Promise<{ totalElements: number }>;
+  summary: () => Promise<AreaSummary>;
 }> = [
-  { key: 'products', label: '상품', href: '/ecommerce/products', testid: 'ecommerce-products-link', count: () => listProducts({ page: 0, size: 1 }) },
-  { key: 'orders', label: '주문', href: '/ecommerce/orders', testid: 'ecommerce-orders-link', count: () => listOrders({ page: 0, size: 1 }) },
-  { key: 'shippings', label: '배송', href: '/ecommerce/shippings', testid: 'ecommerce-shippings-link', count: () => listShippings({ page: 0, size: 1 }) },
-  { key: 'promotions', label: '프로모션', href: '/ecommerce/promotions', testid: 'ecommerce-promotions-link', count: () => listPromotions({ page: 0, size: 1 }) },
-  { key: 'users', label: '사용자', href: '/ecommerce/users', testid: 'ecommerce-users-link', count: () => listUsers({ page: 0, size: 1 }) },
-  { key: 'sellers', label: '셀러', href: '/ecommerce/sellers', testid: 'ecommerce-sellers-link', count: () => listSellers({ page: 0, size: 1 }) },
-  { key: 'notifications', label: '알림 템플릿', href: '/ecommerce/notifications/templates', testid: 'ecommerce-notifications-link', count: () => listTemplates({ page: 0, size: 1 }) },
+  { key: 'products', label: '상품', href: '/ecommerce/products', testid: 'ecommerce-products-link', summary: getProductsSummary },
+  { key: 'orders', label: '주문', href: '/ecommerce/orders', testid: 'ecommerce-orders-link', summary: getOrdersSummary },
+  { key: 'shippings', label: '배송', href: '/ecommerce/shippings', testid: 'ecommerce-shippings-link', summary: getShippingsSummary },
+  { key: 'promotions', label: '프로모션', href: '/ecommerce/promotions', testid: 'ecommerce-promotions-link', summary: getPromotionsSummary },
+  { key: 'users', label: '사용자', href: '/ecommerce/users', testid: 'ecommerce-users-link', summary: getUsersSummary },
+  { key: 'sellers', label: '셀러', href: '/ecommerce/sellers', testid: 'ecommerce-sellers-link', summary: getSellersSummary },
+  { key: 'notifications', label: '알림 템플릿', href: '/ecommerce/notifications/templates', testid: 'ecommerce-notifications-link', summary: getTemplatesSummary },
 ];
 
 /** Recent-activity page size (clamped to [1, max] by the list clients). */
@@ -136,9 +153,9 @@ export async function getEcommerceOverviewState(
   }
 
   try {
-    const [countCells, statusCells, recentOrdersCell, recentSellersCell] =
+    const [summaryCells, statusCells, recentOrdersCell, recentSellersCell] =
       await Promise.all([
-        Promise.all(AREAS.map((a) => cell(a.count()))),
+        Promise.all(AREAS.map((a) => cell(a.summary()))),
         Promise.all(
           ORDER_STATUS_VALUES.map((s) =>
             cell(listOrders({ status: s, page: 0, size: 1 })),
@@ -148,14 +165,33 @@ export async function getEcommerceOverviewState(
         cell(listSellers({ page: 0, size: RECENT_SIZE })),
       ]);
 
-    const counts: AreaCount[] = AREAS.map((a, i) => ({
-      key: a.key,
-      label: a.label,
-      href: a.href,
-      testid: a.testid,
-      count: countCells[i].value?.totalElements ?? null,
-      status: countCells[i].status,
-    }));
+    const counts: AreaCount[] = AREAS.map((a, i) => {
+      const c = summaryCells[i];
+      if (c.status === 'ok' && c.value !== null) {
+        return {
+          key: a.key,
+          label: a.label,
+          href: a.href,
+          testid: a.testid,
+          count: c.value.total,
+          today: c.value.today,
+          week: c.value.week,
+          month: c.value.month,
+          status: 'ok',
+        };
+      }
+      return {
+        key: a.key,
+        label: a.label,
+        href: a.href,
+        testid: a.testid,
+        count: null,
+        today: null,
+        week: null,
+        month: null,
+        status: c.status,
+      };
+    });
 
     const orderStatus: OrderStatusCount[] = ORDER_STATUS_VALUES.map((s, i) => ({
       status: s,

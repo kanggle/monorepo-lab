@@ -5,6 +5,7 @@ import com.example.common.page.PageResult;
 import com.example.shipping.domain.model.Shipping;
 import com.example.shipping.domain.model.ShippingStatus;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,6 +51,18 @@ public interface ShippingRepository {
 
     /** Tenant-SCOPED admin list filtered by status (current request tenant). */
     PageResult<Shipping> findByStatus(ShippingStatus status, PageQuery pageQuery);
+
+    /**
+     * Tenant-SCOPED total count of all shipments for the current request tenant.
+     * Resolves tenant via {@code TenantContext.currentTenant()} inside the impl.
+     */
+    long countAll();
+
+    /**
+     * Tenant-SCOPED count of shipments created within [{@code from}, {@code to}).
+     * Resolves tenant via {@code TenantContext.currentTenant()} inside the impl.
+     */
+    long countCreatedBetween(Instant from, Instant to);
 
     /**
      * In-flight shipments eligible for the unattended auto-collect tracking sweep

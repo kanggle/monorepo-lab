@@ -140,4 +140,12 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
     @Query("SELECT DISTINCT o FROM OrderJpaEntity o LEFT JOIN FETCH o.items "
          + "WHERE o.orderId IN :orderIds")
     List<OrderJpaEntity> findAllWithItemsByOrderIdIn(@Param("orderIds") List<String> orderIds);
+
+    // ---- admin summary counts — tenant-scoped (TASK-BE-468) ----------------
+    // Used by the GET /api/admin/orders/summary endpoint to compute KST
+    // calendar-period-to-date counts (today / week / month / total).
+
+    long countByTenantId(String tenantId);
+
+    long countByTenantIdAndCreatedAtBetween(String tenantId, Instant from, Instant to);
 }

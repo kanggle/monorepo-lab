@@ -185,6 +185,18 @@ export type AdjustStockBody = z.infer<typeof AdjustStockBodySchema>;
 // list query params + pagination defaults
 // ===========================================================================
 
+/** GET /admin/products/summary — period-based count (TASK-PC-FE-160).
+ *  Response: { today, week, month, total } all non-negative integers. */
+export const ProductAreaSummarySchema = z
+  .object({
+    today: z.number().int().nonnegative(),
+    week: z.number().int().nonnegative(),
+    month: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type ProductAreaSummary = z.infer<typeof ProductAreaSummarySchema>;
+
 export const PRODUCT_DEFAULT_PAGE_SIZE = 20;
 export const PRODUCT_MAX_PAGE_SIZE = 100;
 
@@ -296,6 +308,18 @@ export const IssueCouponBodySchema = z.object({
   userIds: z.array(z.string().min(1)).min(1),
 });
 export type IssueCouponBody = z.infer<typeof IssueCouponBodySchema>;
+
+/** GET /api/promotions/summary — period-based count (TASK-PC-FE-160).
+ *  Response: { today, week, month, total } all non-negative integers. */
+export const PromotionAreaSummarySchema = z
+  .object({
+    today: z.number().int().nonnegative(),
+    week: z.number().int().nonnegative(),
+    month: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type PromotionAreaSummary = z.infer<typeof PromotionAreaSummarySchema>;
 
 export const PROMOTION_DEFAULT_PAGE_SIZE = 20;
 export const PROMOTION_MAX_PAGE_SIZE = 100;

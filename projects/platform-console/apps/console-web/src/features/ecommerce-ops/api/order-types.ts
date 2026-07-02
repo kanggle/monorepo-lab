@@ -178,6 +178,22 @@ export const OrderStatusChangeBodySchema = z.object({
 export type OrderStatusChangeBody = z.infer<typeof OrderStatusChangeBodySchema>;
 
 // ===========================================================================
+// SUMMARY (TASK-PC-FE-160 — period-based counts)
+// ===========================================================================
+
+/** GET /admin/orders/summary — period-based count.
+ *  Response: { today, week, month, total } all non-negative integers. */
+export const OrderAreaSummarySchema = z
+  .object({
+    today: z.number().int().nonnegative(),
+    week: z.number().int().nonnegative(),
+    month: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type OrderAreaSummary = z.infer<typeof OrderAreaSummarySchema>;
+
+// ===========================================================================
 // List query params + pagination defaults
 // ===========================================================================
 

@@ -1,6 +1,7 @@
 package com.example.shipping.interfaces.rest.controller;
 
 import com.example.shipping.application.command.UpdateShippingStatusCommand;
+import com.example.shipping.application.result.ShippingPeriodCountResult;
 import com.example.shipping.application.result.ShippingResult;
 import com.example.shipping.application.result.ShippingSummary;
 import com.example.shipping.application.result.UpdateShippingStatusResult;
@@ -13,6 +14,7 @@ import com.example.shipping.domain.model.ShippingStatus;
 import com.example.shipping.interfaces.rest.dto.request.UpdateShippingStatusRequest;
 import com.example.shipping.interfaces.rest.dto.response.ShippingListResponse;
 import com.example.shipping.interfaces.rest.dto.response.ShippingResponse;
+import com.example.shipping.interfaces.rest.dto.response.ShippingSummaryResponse;
 import com.example.shipping.interfaces.rest.dto.response.UpdateShippingStatusResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -33,6 +35,14 @@ public class ShippingController {
     private final ShippingCommandService shippingCommandService;
     private final ShippingQueryService shippingQueryService;
     private final RefreshTrackingService refreshTrackingService;
+
+    @GetMapping("/summary")
+    public ResponseEntity<ShippingSummaryResponse> getSummary(
+            @RequestHeader("X-User-Role") @NotBlank(message = "X-User-Role header is required") String userRole
+    ) {
+        ShippingPeriodCountResult result = shippingQueryService.getSummary(userRole);
+        return ResponseEntity.ok(ShippingSummaryResponse.from(result));
+    }
 
     @GetMapping("/orders/{orderId}")
     public ResponseEntity<ShippingResponse> getShippingByOrderId(

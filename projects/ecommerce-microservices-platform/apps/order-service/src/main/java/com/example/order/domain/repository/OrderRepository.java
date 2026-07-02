@@ -88,6 +88,19 @@ public interface OrderRepository {
     PageResult<Order> findByStatusWithItems(OrderStatus status, PageQuery pageQuery);
 
     /**
+     * Total count of orders belonging to the current request tenant. Used by the
+     * admin summary endpoint (TASK-BE-468) for the {@code total} figure.
+     */
+    long countAllForTenant();
+
+    /**
+     * Count of orders belonging to the current request tenant whose
+     * {@code created_at} falls in [{@code from}, {@code to}). Used by the admin
+     * summary endpoint (TASK-BE-468) for the today / week / month figures.
+     */
+    long countCreatedBetween(Instant from, Instant to);
+
+    /**
      * Returns orders stuck in {@code PENDING} with no payment recorded whose
      * {@code created_at} predates {@code placedBefore}. Used by the saga
      * stuck-detector (TASK-BE-138) to identify choreographed-saga rows that

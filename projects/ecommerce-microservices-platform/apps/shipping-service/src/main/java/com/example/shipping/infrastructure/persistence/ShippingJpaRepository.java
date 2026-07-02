@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +32,12 @@ public interface ShippingJpaRepository extends JpaRepository<ShippingJpaEntity, 
 
     /** Tenant-scoped admin list filtered by status — backs {@code findByStatus}. */
     Page<ShippingJpaEntity> findByTenantIdAndStatus(String tenantId, ShippingStatus status, Pageable pageable);
+
+    /** Tenant-scoped total count — backs {@code countAll}. */
+    long countByTenantId(String tenantId);
+
+    /** Tenant-scoped count within a createdAt window — backs period-count queries. */
+    long countByTenantIdAndCreatedAtBetween(String tenantId, Instant from, Instant to);
 
     Page<ShippingJpaEntity> findByStatus(ShippingStatus status, Pageable pageable);
 

@@ -6,6 +6,7 @@ import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.notification.application.port.in.ManageTemplateUseCase;
 import com.example.notification.application.port.out.TemplateRepository;
+import com.example.notification.application.result.TemplateSummaryResult;
 import com.example.notification.application.result.TemplateResult;
 import com.example.notification.domain.exception.TemplateAlreadyExistsException;
 import com.example.notification.domain.exception.TemplateNotFoundException;
@@ -13,6 +14,10 @@ import com.example.notification.domain.model.NotificationTemplate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.DayOfWeek;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +28,25 @@ public class TemplateService implements ManageTemplateUseCase {
 
     public PageResult<NotificationTemplate> getTemplates(PageQuery pageQuery) {
         return templateRepository.findAll(pageQuery);
+    }
+
+    @Override
+    public TemplateSummaryResult getTemplateSummary() {
+        ZoneId kst = ZoneId.of("Asia/Seoul");
+        ZonedDateTime now = ZonedDateTime.now(kst);
+        ZonedDateTime todayStart = now.toLocalDate().atStartOfDay(kst);
+        ZonedDateTime weekStart = now.toLocalDate().with(DayOfWeek.MONDAY).atStartOfDay(kst);
+        ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(kst);
+
+        long total = templateRepository.countAll();
+        long today = templateRepository.countCreatedBetween(
+                todayStart.toLocalDateTime(), now.toLocalDateTime());
+        long week = templateRepository.countCreatedBetween(
+                weekStart.toLocalDateTime(), now.toLocalDateTime());
+        long month = templateRepository.countCreatedBetween(
+                monthStart.toLocalDateTime(), now.toLocalDateTime());
+
+        return new TemplateSummaryResult(today, week, month, total);
     }
 
     @Override

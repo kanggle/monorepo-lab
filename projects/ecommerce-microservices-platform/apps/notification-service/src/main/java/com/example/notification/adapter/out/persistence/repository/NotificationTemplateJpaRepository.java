@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 interface NotificationTemplateJpaRepository extends JpaRepository<NotificationTemplateJpaEntity, String> {
@@ -46,4 +47,17 @@ interface NotificationTemplateJpaRepository extends JpaRepository<NotificationTe
      * second tenant may own its own (type, channel) template.
      */
     boolean existsByTypeAndChannelAndTenantId(TemplateType type, NotificationChannel channel, String tenantId);
+
+    /**
+     * Tenant-scoped total template count — backs the summary endpoint calendar-period
+     * denominator (TASK-BE-468).
+     */
+    long countByTenantId(String tenantId);
+
+    /**
+     * Tenant-scoped range count for calendar-period summary (TASK-BE-468).
+     * {@code from} is inclusive, {@code to} is exclusive (KST wall-clock boundary converted
+     * to {@code LocalDateTime} by the service layer).
+     */
+    long countByTenantIdAndCreatedAtBetween(String tenantId, LocalDateTime from, LocalDateTime to);
 }
