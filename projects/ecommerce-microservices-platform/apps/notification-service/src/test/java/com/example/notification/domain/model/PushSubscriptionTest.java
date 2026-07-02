@@ -10,9 +10,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PushSubscriptionTest {
 
     @Test
-    @DisplayName("register 는 새 id/기본 테넌트/타임스탬프로 구독을 생성한다")
+    @DisplayName("register 는 새 id/기본 테넌트/타임스탬프/User-Agent로 구독을 생성한다")
     void register_createsSubscription() {
-        PushSubscription sub = PushSubscription.register("user-1", "https://push/ep", "p256", "auth");
+        PushSubscription sub = PushSubscription.register("user-1", "https://push/ep", "p256", "auth", "Mozilla/5.0 Chrome");
 
         assertThat(sub.getSubscriptionId()).isNotBlank();
         assertThat(sub.getTenantId()).isEqualTo("ecommerce"); // TenantContext unset → default
@@ -20,25 +20,33 @@ class PushSubscriptionTest {
         assertThat(sub.getEndpoint()).isEqualTo("https://push/ep");
         assertThat(sub.getP256dh()).isEqualTo("p256");
         assertThat(sub.getAuth()).isEqualTo("auth");
+        assertThat(sub.getUserAgent()).isEqualTo("Mozilla/5.0 Chrome");
         assertThat(sub.getCreatedAt()).isNotNull();
         assertThat(sub.getUpdatedAt()).isNotNull();
     }
 
     @Test
+    @DisplayName("register 는 null/blank User-Agent 를 null 로 정규화한다(검증하지 않음)")
+    void register_normalizesBlankUserAgentToNull() {
+        assertThat(PushSubscription.register("user-1", "ep", "p", "a", null).getUserAgent()).isNull();
+        assertThat(PushSubscription.register("user-1", "ep", "p", "a", "   ").getUserAgent()).isNull();
+    }
+
+    @Test
     @DisplayName("register 는 빈 endpoint/키를 거부한다")
     void register_rejectsBlank() {
-        assertThatThrownBy(() -> PushSubscription.register("user-1", "", "p", "a"))
+        assertThatThrownBy(() -> PushSubscription.register("user-1", "", "p", "a", "ua"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> PushSubscription.register("user-1", "ep", " ", "a"))
+        assertThatThrownBy(() -> PushSubscription.register("user-1", "ep", " ", "a", "ua"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> PushSubscription.register("", "ep", "p", "a"))
+        assertThatThrownBy(() -> PushSubscription.register("", "ep", "p", "a", "ua"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    @DisplayName("updateKeys 는 키만 회전하고 endpoint/생성시각은 보존한다")
+    @DisplayName("updateKeys 는 키만 회전하고 endpoint/생성시각/User-Agent는 보존한다")
     void updateKeys_rotatesKeys() {
-        PushSubscription sub = PushSubscription.register("user-1", "https://push/ep", "old-p", "old-a");
+        PushSubscription sub = PushSubscription.register("user-1", "https://push/ep", "old-p", "old-a", "Firefox");
         String endpoint = sub.getEndpoint();
 
         sub.updateKeys("new-p", "new-a");
@@ -46,5 +54,6 @@ class PushSubscriptionTest {
         assertThat(sub.getP256dh()).isEqualTo("new-p");
         assertThat(sub.getAuth()).isEqualTo("new-a");
         assertThat(sub.getEndpoint()).isEqualTo(endpoint);
+        assertThat(sub.getUserAgent()).isEqualTo("Firefox"); // UA is not rotated on re-register
     }
 }

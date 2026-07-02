@@ -15,6 +15,7 @@ public class PushSubscriptionPersistenceMapper {
                 entity.getEndpoint(),
                 entity.getP256dh(),
                 entity.getAuth(),
+                entity.getUserAgent(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
@@ -28,6 +29,7 @@ public class PushSubscriptionPersistenceMapper {
         entity.setEndpoint(subscription.getEndpoint());
         entity.setP256dh(subscription.getP256dh());
         entity.setAuth(subscription.getAuth());
+        entity.setUserAgent(subscription.getUserAgent());
         entity.setCreatedAt(subscription.getCreatedAt());
         entity.setUpdatedAt(subscription.getUpdatedAt());
         return entity;

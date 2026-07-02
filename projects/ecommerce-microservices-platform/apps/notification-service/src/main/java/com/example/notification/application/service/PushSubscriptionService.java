@@ -11,6 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class PushSubscriptionService implements ManagePushSubscriptionUseCase {
@@ -30,11 +33,23 @@ public class PushSubscriptionService implements ManagePushSubscriptionUseCase {
                     return new RegisterSubscriptionResult(saved.getSubscriptionId(), false);
                 })
                 .orElseGet(() -> {
+                    // Capture the device's User-Agent only when creating a NEW row; a re-register
+                    // of an existing endpoint rotates keys only and leaves the original label intact.
                     PushSubscription created = PushSubscription.register(
-                            command.userId(), command.endpoint(), command.p256dh(), command.auth());
+                            command.userId(), command.endpoint(), command.p256dh(), command.auth(),
+                            command.userAgent());
                     PushSubscription saved = subscriptionRepository.save(created);
                     return new RegisterSubscriptionResult(saved.getSubscriptionId(), true);
                 });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PushSubscription> listByUser(String userId) {
+        // Newest device first, so the UI lists the most recently added browser at the top.
+        return subscriptionRepository.findByUserId(userId).stream()
+                .sorted(Comparator.comparing(PushSubscription::getCreatedAt).reversed())
+                .toList();
     }
 
     @Override

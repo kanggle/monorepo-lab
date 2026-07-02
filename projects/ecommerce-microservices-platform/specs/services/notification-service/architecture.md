@@ -85,7 +85,7 @@ Key domain concepts:
 - Notification (recipient, channel, subject, body, status, sent/failed timestamps)
 - NotificationTemplate (type, channel, subject template, body template, variables)
 - UserNotificationPreference (user reference, channel opt-in/out settings)
-- PushSubscription (user reference, browser endpoint + p256dh/auth keys — Web Push delivery target, TASK-BE-464)
+- PushSubscription (user reference, browser endpoint + p256dh/auth keys + user_agent device label — Web Push delivery target, TASK-BE-464; user_agent capture + list-by-user surface added TASK-FE-085)
 
 ## Domain Constraints
 - notification-service must NOT own user profile or order data

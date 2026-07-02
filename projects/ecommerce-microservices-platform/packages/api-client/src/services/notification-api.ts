@@ -8,6 +8,7 @@ import type {
   VapidPublicKeyResponse,
   RegisterPushSubscriptionRequest,
   RegisterPushSubscriptionResponse,
+  ListPushSubscriptionsResponse,
 } from '@repo/types';
 
 export function createNotificationApi(client: ApiClient) {
@@ -44,6 +45,12 @@ export function createNotificationApi(client: ApiClient) {
       client.post<RegisterPushSubscriptionResponse>(
         '/api/notifications/me/push-subscriptions',
         data,
+      ),
+
+    // List the user's registered push devices/browsers (TASK-FE-085).
+    listPushSubscriptions: () =>
+      client.get<ListPushSubscriptionsResponse>(
+        '/api/notifications/me/push-subscriptions',
       ),
 
     deletePushSubscription: (endpoint: string) =>

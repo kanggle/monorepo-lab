@@ -23,13 +23,15 @@ public class PushSubscription {
     private String endpoint;
     private String p256dh;
     private String auth;
+    private String userAgent;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
     private PushSubscription() {
     }
 
-    public static PushSubscription register(String userId, String endpoint, String p256dh, String auth) {
+    public static PushSubscription register(String userId, String endpoint, String p256dh, String auth,
+                                            String userAgent) {
         requireText(userId, "userId");
         requireText(endpoint, "endpoint");
         requireText(p256dh, "p256dh");
@@ -42,6 +44,9 @@ public class PushSubscription {
         subscription.endpoint = endpoint;
         subscription.p256dh = p256dh;
         subscription.auth = auth;
+        // User-Agent is a best-effort device label, not domain-critical: an absent or blank
+        // header is stored as null so the UI shows "unknown device" rather than an empty string.
+        subscription.userAgent = (userAgent == null || userAgent.isBlank()) ? null : userAgent;
         subscription.createdAt = LocalDateTime.now();
         subscription.updatedAt = LocalDateTime.now();
         return subscription;
@@ -49,6 +54,7 @@ public class PushSubscription {
 
     public static PushSubscription reconstitute(String subscriptionId, String tenantId, String userId,
                                                 String endpoint, String p256dh, String auth,
+                                                String userAgent,
                                                 LocalDateTime createdAt, LocalDateTime updatedAt) {
         PushSubscription subscription = new PushSubscription();
         subscription.subscriptionId = subscriptionId;
@@ -57,6 +63,7 @@ public class PushSubscription {
         subscription.endpoint = endpoint;
         subscription.p256dh = p256dh;
         subscription.auth = auth;
+        subscription.userAgent = userAgent;
         subscription.createdAt = createdAt;
         subscription.updatedAt = updatedAt;
         return subscription;
@@ -99,6 +106,10 @@ public class PushSubscription {
 
     public String getAuth() {
         return auth;
+    }
+
+    public String getUserAgent() {
+        return userAgent;
     }
 
     public LocalDateTime getCreatedAt() {
