@@ -1,6 +1,6 @@
 # TASK-PC-FE-160 — E-Commerce 운영 개요: 기간별(오늘/주간/월간) 지표
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-PC-FE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (consumer API + server-component overview change; no new architectural decision)
