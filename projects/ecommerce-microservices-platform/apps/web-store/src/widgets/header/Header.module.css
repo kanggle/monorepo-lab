@@ -69,33 +69,46 @@
 .actions {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
+}
+
+/* Shared circular control for the header action row (theme, cart, profile).
+   36×36 hit area so the three controls line up on size and spacing. */
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.iconButton:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .cartLink {
   position: relative;
-  display: flex;
-  align-items: center;
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
   text-decoration: none;
-  transition: color var(--transition-fast);
-}
-
-.cartLink:hover {
-  color: var(--color-accent);
 }
 
 .cartIcon {
-  font-size: var(--font-size-lg);
-  margin-right: var(--space-1);
+  display: inline-flex;
+  line-height: 0;
 }
 
 .cartBadge {
   position: absolute;
-  top: -6px;
-  right: -10px;
+  top: -4px;
+  right: -4px;
   min-width: 18px;
   height: 18px;
   padding: 0 4px;
@@ -136,8 +149,8 @@
 }
 
 .profileAvatar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-full);
   background: var(--color-primary);
   color: var(--color-on-primary);
