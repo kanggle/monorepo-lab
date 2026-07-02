@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the ecommerce `user-service` operator surface —
@@ -38,6 +39,22 @@ export const USER_STATUS_VALUES = [
   'WITHDRAWN',
 ] as const;
 export type UserStatus = (typeof USER_STATUS_VALUES)[number];
+
+const USER_STATUS_TONE: Record<UserStatus, StatusTone> = {
+  ACTIVE: 'success',
+  SUSPENDED: 'warning',
+  WITHDRAWN: 'neutral',
+};
+
+/**
+ * Maps a (possibly unknown) user status to a shared semantic {@link StatusTone}
+ * (rendered via the shared `<StatusBadge>` — TASK-PC-FE-158). Unknown/future
+ * status → `neutral` (TOLERANCE invariant). The raw status string stays the
+ * badge label at the call site.
+ */
+export function userStatusTone(status: string): StatusTone {
+  return USER_STATUS_TONE[status as UserStatus] ?? 'neutral';
+}
 
 // ===========================================================================
 // READ shapes

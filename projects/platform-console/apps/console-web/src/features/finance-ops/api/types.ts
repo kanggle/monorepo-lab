@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the finance `account-service`'s read-only
@@ -184,6 +185,25 @@ export const KNOWN_ACCOUNT_STATUSES = [
 ] as const;
 export type KnownAccountStatus = (typeof KNOWN_ACCOUNT_STATUSES)[number];
 
+/**
+ * Account status → shared semantic {@link StatusTone} (rendered via the shared
+ * `<StatusBadge>` — TASK-PC-FE-159). The regulated states are surfaced HONESTLY
+ * (§ 2.4.7): ACTIVE is good (success); PENDING_KYC / RESTRICTED need attention
+ * (warning); FROZEN is a hard block (danger); CLOSED is terminal-inactive
+ * (neutral). An unknown/future status → `neutral` (tolerant — never a throw).
+ */
+const ACCOUNT_STATUS_TONE: Record<KnownAccountStatus, StatusTone> = {
+  PENDING_KYC: 'warning',
+  ACTIVE: 'success',
+  RESTRICTED: 'warning',
+  FROZEN: 'danger',
+  CLOSED: 'neutral',
+};
+
+export function accountStatusTone(status: string): StatusTone {
+  return ACCOUNT_STATUS_TONE[status as KnownAccountStatus] ?? 'neutral';
+}
+
 export const KNOWN_KYC_LEVELS = ['NONE', 'BASIC', 'FULL'] as const;
 export type KnownKycLevel = (typeof KNOWN_KYC_LEVELS)[number];
 
@@ -227,6 +247,29 @@ export const KNOWN_TXN_STATUSES = [
   'SETTLED',
 ] as const;
 export type KnownTxnStatus = (typeof KNOWN_TXN_STATUSES)[number];
+
+/**
+ * Transaction status → shared semantic {@link StatusTone} (rendered via the
+ * shared `<StatusBadge>` — TASK-PC-FE-159). COMPLETED / SETTLED are the happy
+ * terminals (success); ACTIVE / CAPTURED are mid-lifecycle (progress); PENDING
+ * awaits settlement (warning); FAILED / REVERSED are surfaced HONESTLY as
+ * terminal-bad (danger); RELEASED is a benign hold-release (neutral). An
+ * unknown/future status → `neutral` (tolerant — never a throw).
+ */
+const TXN_STATUS_TONE: Record<KnownTxnStatus, StatusTone> = {
+  PENDING: 'warning',
+  COMPLETED: 'success',
+  FAILED: 'danger',
+  REVERSED: 'danger',
+  CAPTURED: 'progress',
+  RELEASED: 'neutral',
+  ACTIVE: 'progress',
+  SETTLED: 'success',
+};
+
+export function txnStatusTone(status: string): StatusTone {
+  return TXN_STATUS_TONE[status as KnownTxnStatus] ?? 'neutral';
+}
 
 /** Producer txn type enum. Free string for tolerance — unknown/future
  *  values render with a generic label. */

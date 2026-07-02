@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import {
   KNOWN_PERIOD_STATUSES,
+  periodStatusTone,
   type Period,
   type PeriodsQueryParams,
   type PeriodsResponse,
@@ -27,16 +29,6 @@ export interface PeriodsTableProps {
   selectedPeriodId: string | null;
   onSelect: (periodId: string) => void;
 }
-
-function periodStatusVariant(status: string): 'normal' | 'warn' {
-  // CLOSED is the steady state (normal); OPEN is in-progress (warn accent).
-  if (status === 'OPEN') return 'warn';
-  return 'normal';
-}
-const STATUS_CLASS: Record<'normal' | 'warn', string> = {
-  normal: 'rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground',
-  warn: 'rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-100',
-};
 
 function labelForUnknown<T extends string>(
   value: string,
@@ -121,12 +113,12 @@ export function PeriodsTable({
                 >
                   <td className="p-2">{p.periodId}</td>
                   <td className="p-2">
-                    <span
-                      className={STATUS_CLASS[periodStatusVariant(p.status)]}
+                    <StatusBadge
+                      tone={periodStatusTone(p.status)}
                       data-testid={`ledger-period-status-${i}`}
                     >
                       {labelForUnknown(p.status, KNOWN_PERIOD_STATUSES)}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className="p-2">{p.from ?? '—'}</td>
                   <td className="p-2">{p.to ?? '—'}</td>

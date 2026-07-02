@@ -1,9 +1,13 @@
 'use client';
 
 import { useUser } from '../hooks/use-ecommerce-users';
-import type { UserDetail as UserDetailType } from '../api/user-types';
+import {
+  userStatusTone,
+  type UserDetail as UserDetailType,
+} from '../api/user-types';
 import { DetailHeader } from './DetailHeader';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 
 /**
  * ecommerce user detail section (TASK-PC-FE-084 — § 2.4.10 users). The console
@@ -15,16 +19,6 @@ import { formatDateTime } from '@/shared/lib/datetime';
  * notFound → "사용자를 찾을 수 없습니다" empty state (rendered by the page
  * waterfall, not here; this component is only rendered on the happy path).
  */
-
-const STATUS_BADGE: Record<string, string> = {
-  ACTIVE: 'bg-green-100 text-green-800',
-  SUSPENDED: 'bg-yellow-100 text-yellow-800',
-  WITHDRAWN: 'bg-gray-100 text-gray-600',
-};
-
-function statusBadgeClass(status: string): string {
-  return STATUS_BADGE[status] ?? 'bg-muted text-muted-foreground';
-}
 
 export interface UserDetailProps {
   user: UserDetailType;
@@ -55,11 +49,9 @@ export function UserDetail({ user }: UserDetailProps) {
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd data-testid="user-detail-status">
-            <span
-              className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${statusBadgeClass(data.status)}`}
-            >
+            <StatusBadge tone={userStatusTone(data.status)}>
               {data.status}
-            </span>
+            </StatusBadge>
           </dd>
         </div>
         <div>

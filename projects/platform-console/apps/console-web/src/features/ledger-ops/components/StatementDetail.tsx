@@ -1,7 +1,12 @@
 'use client';
 
-import { formatMoney, discrepancyMoney } from '../api/types';
+import {
+  formatMoney,
+  discrepancyMoney,
+  discrepancyStatusTone,
+} from '../api/types';
 import type { Statement, Discrepancy } from '../api/types';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 
 /**
  * Statement detail view (TASK-PC-FE-075 — § 2.4.7.1).
@@ -268,7 +273,11 @@ export function StatementDetail({
                       </button>
                     </td>
                     <td className="p-2">{d.type}</td>
-                    <td className="p-2">{d.status}</td>
+                    <td className="p-2">
+                      <StatusBadge tone={discrepancyStatusTone(d.status)}>
+                        {d.status}
+                      </StatusBadge>
+                    </td>
                     <td className="p-2">{amounts.expected}</td>
                     <td className="p-2">{amounts.actual}</td>
                   </tr>

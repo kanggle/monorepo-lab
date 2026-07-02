@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import type {
   EcommerceOverviewState,
   AreaCount,
   CellStatus,
 } from '../api/overview-state';
 import { sellerStatusTone } from '../api/seller-types';
-import type { OrderStatus } from '../api/order-types';
+import { orderStatusTone, type OrderStatus } from '../api/order-types';
 
 /**
  * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156).
@@ -86,7 +87,7 @@ export function EcommerceOverview({
 
       {/* Order-status distribution. */}
       <div className="mb-8">
-        <h3 className="mb-3 text-sm font-semibold text-foreground">주문 상태</h3>
+        <h3 className="mb-3 text-sm font-semibold text-foreground">주문/배송 상태</h3>
         <dl
           data-testid="ecommerce-order-status"
           className="flex flex-wrap gap-x-8 gap-y-3 rounded-md border border-border bg-background px-4 py-4"
@@ -177,9 +178,9 @@ function RecentOrders({
             {o.firstItemName}
             {o.itemCount > 1 ? ` 외 ${o.itemCount - 1}건` : ''}
           </span>
-          <span className="shrink-0 text-muted-foreground">
+          <StatusBadge tone={orderStatusTone(o.status)} className="shrink-0">
             {ORDER_STATUS_LABELS[o.status as OrderStatus] ?? o.status}
-          </span>
+          </StatusBadge>
           <span className="shrink-0 tabular-nums text-foreground">
             ₩{o.totalPrice.toLocaleString('ko-KR')}
           </span>
@@ -207,7 +208,6 @@ function RecentSellers({
       empty={!rows || rows.length === 0}
     >
       {rows?.map((s) => {
-        const tone = sellerStatusTone(s.status);
         return (
           <li
             key={s.sellerId}
@@ -216,11 +216,9 @@ function RecentSellers({
             <span className="min-w-0 flex-1 truncate text-foreground">
               {s.displayName}
             </span>
-            <span
-              className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${tone.className}`}
-            >
-              {tone.label}
-            </span>
+            <StatusBadge tone={sellerStatusTone(s.status)} className="shrink-0">
+              {s.status}
+            </StatusBadge>
             <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
               {formatDateTime(s.createdAt)}
             </span>

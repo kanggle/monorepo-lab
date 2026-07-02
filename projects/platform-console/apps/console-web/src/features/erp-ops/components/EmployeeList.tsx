@@ -2,11 +2,14 @@
 
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import {
   isRetired,
   KNOWN_EMPLOYMENT_STATUSES,
   KNOWN_MASTER_STATUSES,
   labelForUnknownEnum,
+  masterStatusTone,
+  employmentStatusTone,
   type CreateEmployeeInput,
   type UpdateEmployeeInput,
   type EmployeeListResponse,
@@ -136,23 +139,23 @@ export function EmployeeList({
                     <td className="p-2">{e.employeeNumber}</td>
                     <td className="p-2">{e.name}</td>
                     <td className="p-2">
-                      <span
+                      <StatusBadge
+                        tone={masterStatusTone(e.status)}
                         data-testid={`erp-employee-status-${i}`}
-                        className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
                       >
                         {labelForUnknownEnum(e.status, KNOWN_MASTER_STATUSES)}
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td className="p-2">
-                      <span
+                      <StatusBadge
+                        tone={employmentStatusTone(e.employmentStatus)}
                         data-testid={`erp-employee-employment-${i}`}
-                        className={`rounded px-1.5 py-0.5 text-xs ${isSeparated ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-100' : 'bg-muted text-muted-foreground'}`}
                       >
                         {labelForUnknownEnum(
                           e.employmentStatus,
                           KNOWN_EMPLOYMENT_STATUSES,
                         )}
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td className="p-2">{e.departmentId ?? '—'}</td>
                     <td className="p-2">

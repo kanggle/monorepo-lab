@@ -1,7 +1,12 @@
 'use client';
 
 import { Button } from '@/shared/ui/Button';
-import { allowedNextStatus, type ShippingList } from '../api/shipping-types';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
+import {
+  allowedNextStatus,
+  shippingStatusTone,
+  type ShippingList,
+} from '../api/shipping-types';
 import { statusLabel, nextStatusLabel } from './shipping-labels';
 import { formatDateTime } from '@/shared/lib/datetime';
 
@@ -76,7 +81,9 @@ export function ShippingsTable({
                   className="p-2"
                   data-testid={`shipping-row-status-${i}`}
                 >
-                  {statusLabel(s.status)}
+                  <StatusBadge tone={shippingStatusTone(s.status)}>
+                    {statusLabel(s.status)}
+                  </StatusBadge>
                 </td>
                 <td className="p-2 text-sm">
                   {s.carrier ?? '—'}

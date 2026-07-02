@@ -1,5 +1,6 @@
 import type { Account } from '../api/types';
-import { KNOWN_ACCOUNT_STATUSES } from '../api/types';
+import { KNOWN_ACCOUNT_STATUSES, accountStatusTone } from '../api/types';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 
 /**
  * Account detail (TASK-PC-FE-009 — § 2.4.7).
@@ -22,28 +23,11 @@ export interface AccountDetailProps {
   account: Account;
 }
 
-function statusVariant(status: string): 'normal' | 'warn' | 'danger' {
-  if (status === 'ACTIVE') return 'normal';
-  if (status === 'FROZEN' || status === 'CLOSED' || status === 'RESTRICTED') {
-    return 'danger';
-  }
-  if (status === 'PENDING_KYC') return 'warn';
-  return 'normal';
-}
-
-const STATUS_CLASS: Record<'normal' | 'warn' | 'danger', string> = {
-  normal: 'rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground',
-  warn: 'rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-100',
-  danger:
-    'rounded bg-destructive/15 px-1.5 py-0.5 text-xs text-destructive',
-};
-
 export function AccountDetail({ account }: AccountDetailProps) {
   const known = (KNOWN_ACCOUNT_STATUSES as readonly string[]).includes(
     account.status,
   );
   const label = known ? account.status : `${account.status} (unknown)`;
-  const variant = statusVariant(account.status);
 
   return (
     <section
@@ -70,12 +54,12 @@ export function AccountDetail({ account }: AccountDetailProps) {
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd className="text-foreground">
-            <span
-              className={STATUS_CLASS[variant]}
+            <StatusBadge
+              tone={accountStatusTone(account.status)}
               data-testid="finance-account-status"
             >
               {label}
-            </span>
+            </StatusBadge>
           </dd>
         </div>
         <div>

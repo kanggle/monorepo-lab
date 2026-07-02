@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * erp-ops shared types — common building blocks (TASK-PC-FE-109 split of the
@@ -44,6 +45,21 @@ export type EffectivePeriod = z.infer<typeof EffectivePeriodSchema>;
 export const KNOWN_MASTER_STATUSES = ['ACTIVE', 'RETIRED'] as const;
 export type KnownMasterStatus = (typeof KNOWN_MASTER_STATUSES)[number];
 
+/**
+ * Master `status` → shared semantic {@link StatusTone} (rendered via the shared
+ * `<StatusBadge>` — TASK-PC-FE-159). ACTIVE is live (success); RETIRED is
+ * honestly surfaced as inactive (neutral — never hidden, § 2.4.8). An
+ * unknown/future status → `neutral` (tolerant).
+ */
+const MASTER_STATUS_TONE: Record<KnownMasterStatus, StatusTone> = {
+  ACTIVE: 'success',
+  RETIRED: 'neutral',
+};
+
+export function masterStatusTone(status: string): StatusTone {
+  return MASTER_STATUS_TONE[status as KnownMasterStatus] ?? 'neutral';
+}
+
 /** Producer employee `employmentStatus` enum surfaced HONESTLY (a
  *  `SEPARATED` employee is shown as such, never filtered out —
  *  § 2.4.8). Free string for tolerance. */
@@ -54,6 +70,26 @@ export const KNOWN_EMPLOYMENT_STATUSES = [
 ] as const;
 export type KnownEmploymentStatus =
   (typeof KNOWN_EMPLOYMENT_STATUSES)[number];
+
+/**
+ * Employee `employmentStatus` → shared semantic {@link StatusTone}
+ * (TASK-PC-FE-159). EMPLOYED is active (success); ON_LEAVE is a temporary
+ * pause (warning); SEPARATED is honestly surfaced as terminated (neutral —
+ * never filtered out, § 2.4.8). An unknown/future status → `neutral`.
+ */
+const EMPLOYMENT_STATUS_TONE: Record<KnownEmploymentStatus, StatusTone> = {
+  EMPLOYED: 'success',
+  ON_LEAVE: 'warning',
+  SEPARATED: 'neutral',
+};
+
+export function employmentStatusTone(
+  status: string | undefined,
+): StatusTone {
+  return status
+    ? (EMPLOYMENT_STATUS_TONE[status as KnownEmploymentStatus] ?? 'neutral')
+    : 'neutral';
+}
 
 /** Producer business-partner `partnerType` enum. Free string for
  *  tolerance — unknown / future values render with a generic

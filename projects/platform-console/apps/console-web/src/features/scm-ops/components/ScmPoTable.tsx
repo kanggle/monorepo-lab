@@ -2,9 +2,14 @@
 
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { messageForCode } from '@/shared/api/errors';
 import type { PoPage, PurchaseOrder, PoQueryParams } from '../api/types';
-import { KNOWN_PO_STATUSES, type PoFilterState } from './scm-ops-helpers';
+import {
+  KNOWN_PO_STATUSES,
+  poStatusTone,
+  type PoFilterState,
+} from './scm-ops-helpers';
 
 /**
  * Procurement PO list region of the scm ops screen (TASK-PC-FE-144 split) —
@@ -178,7 +183,11 @@ export function ScmPoTable({
                 >
                   <td className="p-2">{p.poNumber ?? p.id}</td>
                   <td className="p-2">{p.supplierId ?? '—'}</td>
-                  <td className="p-2">{p.status ?? '—'}</td>
+                  <td className="p-2">
+                    <StatusBadge tone={poStatusTone(p.status)}>
+                      {p.status ?? '—'}
+                    </StatusBadge>
+                  </td>
                   <td className="p-2">
                     {p.totalAmount ?? '—'} {p.currency ?? ''}
                   </td>
