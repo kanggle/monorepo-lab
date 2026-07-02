@@ -10,7 +10,7 @@
 | Project | `ecommerce-microservices-platform` |
 | Service Type | `frontend-app` |
 | Architecture Style | **Feature-Sliced Design** — app/widgets/features/entities/shared, see [architecture.md § Architecture Style](architecture.md) |
-| Stack | Next.js (App Router), TypeScript, Tailwind, Toss Payments widget, `@repo/api-client` / `@repo/ui` / `@repo/types` / `@repo/utils` |
+| Stack | Next.js (App Router), TypeScript, CSS-variable design tokens + CSS Modules (**no Tailwind**), Toss Payments widget, `@repo/api-client` / `@repo/ui` / `@repo/types` / `@repo/utils` |
 | Deployable unit | `web/web-store/` (or `apps/web-store/` per repo layout) |
 | Bounded Context | `ecommerce-storefront` (customer-facing) |
 | Persistent stores | none — auth session via cookie / next-auth; transient client state for cart + UI prefs |
@@ -59,7 +59,7 @@ middleware-gated paths 외엔 `/login` 으로 redirect.
 ## Owned Data
 
 - None (server-side). All persistent data fetched from backend via gateway.
-- Client-side state: cart (UI state), authentication session, UI preferences (locale / theme).
+- Client-side state: cart (UI state), authentication session, UI preferences — including the light/dark **theme** choice persisted in `localStorage` (`webstore-theme`); see [architecture.md § Styling & Theming](architecture.md).
 
 ## Published Interfaces
 
