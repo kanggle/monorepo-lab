@@ -1,6 +1,6 @@
 # TASK-PC-FE-163 — IAM 개요(가이드) 화면 추가
 
-- **Status**: review
+- **Status**: done
 - **Type**: TASK-PC-FE (console-web)
 - **Depends on**: TASK-PC-FE-157 (operator↔tenant assignment UI — TENANT_ADMIN 선택가능화), TASK-BE-345/346 (TENANT_ADMIN / TENANT_BILLING_ADMIN seed)
 
