@@ -1,7 +1,7 @@
 ---
 id: TASK-BE-466
 title: platform-scope 센티넬 '*' tenant_type 조회 400 → 로그인 fail-closed 폭사 수정
-status: ready
+status: done
 project: iam-platform
 service: auth-service
 type: bugfix
