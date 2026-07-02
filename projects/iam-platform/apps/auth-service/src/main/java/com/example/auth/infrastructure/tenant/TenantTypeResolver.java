@@ -41,6 +41,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *       This is a safe, explicit default (the previous hardcode silently produced
  *       {@code B2B_ENTERPRISE} for every non-fan tenant). The miss is NOT cached so a
  *       later-provisioned tenant resolves correctly on the next call.</li>
+ *   <li>platform-scope sentinel {@code "*"} ({@link TenantContext#PLATFORM_SCOPE_TENANT_ID})
+ *       → short-circuits to {@link TenantContext#DEFAULT_TENANT_TYPE} WITHOUT a network call.
+ *       It is not a real tenant (account-service 400s on {@code GET /internal/tenants/*}); a
+ *       platform-scope token's tenant_type is a non-authoritative hint (TASK-BE-466).</li>
  * </ul>
  */
 @Slf4j
@@ -68,6 +72,17 @@ public class TenantTypeResolver implements TenantTypePort {
     @Override
     public String resolve(String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {
+            return TenantContext.DEFAULT_TENANT_TYPE;
+        }
+        // TASK-BE-466: the platform-scope sentinel "*" (ADR-002 — SUPER_ADMIN cross-tenant
+        // operators) is NOT a real tenant. account-service has no tenants."*" row and returns
+        // 400 for GET /internal/tenants/*, which getTenantType maps to a fail-closed
+        // AccountServiceUnavailableException (non-404 4xx). Left un-guarded, that killed EVERY
+        // platform-scope login/refresh with an /login?error redirect (regression since BE-407).
+        // tenant_type is only a routing hint, and platform authz keys off tenant_id="*" (not
+        // tenant_type), so short-circuit BEFORE the lookup to the network-free default — no
+        // real tenant is ever classified here.
+        if (TenantContext.PLATFORM_SCOPE_TENANT_ID.equals(tenantId)) {
             return TenantContext.DEFAULT_TENANT_TYPE;
         }
         String cached = cache.get(tenantId);

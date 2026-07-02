@@ -100,4 +100,16 @@ class TenantTypeResolverTest {
         assertThat(resolver.resolve(null)).isEqualTo(TenantContext.DEFAULT_TENANT_TYPE);
         assertThat(resolver.resolve("  ")).isEqualTo(TenantContext.DEFAULT_TENANT_TYPE);
     }
+
+    @Test
+    @DisplayName("핵심 회귀(BE-466): platform-scope 센티넬 '*' → DEFAULT_TENANT_TYPE, 포트 미호출 "
+            + "(account-service /internal/tenants/* 400 → fail-closed 로그인 폭사 방지)")
+    void resolve_platformScopeSentinel_returnsDefault_noPortCall() {
+        String result = resolver.resolve(TenantContext.PLATFORM_SCOPE_TENANT_ID);
+
+        assertThat(result).isEqualTo(TenantContext.DEFAULT_TENANT_TYPE);
+        // Must NOT hit account-service: "*" is not a real tenant (GET /internal/tenants/* → 400,
+        // which getTenantType maps to AccountServiceUnavailableException and would kill login).
+        verify(accountServicePort, never()).getTenantType(TenantContext.PLATFORM_SCOPE_TENANT_ID);
+    }
 }
