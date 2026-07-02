@@ -1,6 +1,7 @@
 # TASK-FE-083-fix-002 — web-store BFF 프록시가 204/205/304 응답에 본문을 실어 `TypeError` → 500 을 반환하는 버그
 
-- **Status**: review
+- **Status**: done
+- **DONE (2026-07-02, 3-dim verified — PR #2103 `da9e656a7`)**: state=MERGED + origin/main tip=`da9e656a7` 일치 + pre-merge failing=0(Frontend unit tests[Node20, 신규 bff-proxy 204/304/200 테스트]+lint&build+E2E smoke GREEN). BFF 프록시가 null-body-status(204/205/304)에 본문을 안 싣도록 교정 → 모든 백엔드 204 가 500 으로 변질되던 잠복 버그 해소(라이브 push 구독 해지에서 발견).
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
