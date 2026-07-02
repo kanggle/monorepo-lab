@@ -61,6 +61,7 @@ export const NotificationTemplateSummarySchema = z
     channel: z.string(),
     subject: z.string(),
     createdAt: z.string(),
+    updatedAt: z.string().optional().nullable(),
   })
   .passthrough();
 export type NotificationTemplateSummary = z.infer<
