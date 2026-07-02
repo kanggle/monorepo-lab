@@ -219,7 +219,8 @@ List notification templates.
       "type": "ORDER_PLACED",
       "channel": "EMAIL",
       "subject": "string",
-      "createdAt": "string (ISO 8601)"
+      "createdAt": "string (ISO 8601)",
+      "updatedAt": "string (ISO 8601)"
     }
   ],
   "page": 0,

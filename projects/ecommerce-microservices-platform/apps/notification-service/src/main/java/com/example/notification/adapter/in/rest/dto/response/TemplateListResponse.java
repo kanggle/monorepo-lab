@@ -16,7 +16,8 @@ public record TemplateListResponse(
             String type,
             String channel,
             String subject,
-            String createdAt
+            String createdAt,
+            String updatedAt
     ) {
         public static TemplateSummary from(NotificationTemplate t) {
             return new TemplateSummary(
@@ -24,7 +25,8 @@ public record TemplateListResponse(
                     t.getType().name(),
                     t.getChannel().name(),
                     t.getSubject(),
-                    t.getCreatedAt().toString()
+                    t.getCreatedAt().toString(),
+                    t.getUpdatedAt().toString()
             );
         }
     }

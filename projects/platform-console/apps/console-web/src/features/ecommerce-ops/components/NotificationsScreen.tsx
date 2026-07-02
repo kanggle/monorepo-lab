@@ -131,6 +131,9 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
                   등록일
                 </th>
                 <th scope="col" className="p-2">
+                  수정일
+                </th>
+                <th scope="col" className="p-2">
                   작업
                 </th>
               </tr>
@@ -146,6 +149,7 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
                   <td className="p-2">{t.channel}</td>
                   <td className="p-2">{t.subject}</td>
                   <td className="p-2">{formatDateTime(t.createdAt)}</td>
+                  <td className="p-2">{formatDateTime(t.updatedAt)}</td>
                   <td className="p-2">
                     <Link
                       href={`/ecommerce/notifications/templates/${t.templateId}/edit`}
