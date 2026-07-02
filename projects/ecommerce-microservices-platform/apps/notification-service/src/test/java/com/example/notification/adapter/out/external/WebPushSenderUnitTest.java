@@ -40,7 +40,7 @@ class WebPushSenderUnitTest {
     }
 
     private PushSubscription sub(String endpoint) {
-        return PushSubscription.register("user-1", endpoint, "p256", "auth");
+        return PushSubscription.register("user-1", endpoint, "p256", "auth", "test-agent");
     }
 
     @Test

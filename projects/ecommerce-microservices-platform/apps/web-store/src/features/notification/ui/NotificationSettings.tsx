@@ -8,6 +8,7 @@ import { useNotificationPreferences } from '../model/use-notification-preference
 import { useUpdatePreferences } from '../model/use-update-preferences';
 import { SettingToggle } from './SettingToggle';
 import { PushOptIn } from './PushOptIn';
+import { PushDeviceList } from './PushDeviceList';
 import { BackLink } from '@/shared/ui';
 
 type PreferenceField = 'emailEnabled' | 'smsEnabled' | 'pushEnabled';
@@ -133,6 +134,7 @@ export function NotificationSettings() {
       )}
 
       <PushOptIn />
+      <PushDeviceList />
     </div>
   );
 }
