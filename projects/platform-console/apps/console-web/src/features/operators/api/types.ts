@@ -25,9 +25,20 @@ import { z } from 'zod';
 // --- roles ----------------------------------------------------------------
 
 /** The producer's documented operator roles. The selectors offer these;
- *  the list tolerates any string (forward-compatible). */
+ *  the list tolerates any string (forward-compatible).
+ *
+ *  TASK-PC-FE-157 — the two tenant-scoped delegation roles
+ *  (`TENANT_ADMIN` / `TENANT_BILLING_ADMIN`, iam rbac.md Seed Roles /
+ *  ADR-MONO-024) are now offered so a SUPER_ADMIN can appoint a tenant
+ *  admin through the UI (the missing first step of the delegation chain).
+ *  No-escalation stays PRODUCER-enforced (`403 ROLE_GRANT_FORBIDDEN` when
+ *  the actor lacks the granted role's permissions — e.g. a TENANT_ADMIN,
+ *  lacking `subscription.manage`, cannot grant `TENANT_BILLING_ADMIN`);
+ *  offering the checkbox never bypasses that — the failure maps inline. */
 export const KNOWN_OPERATOR_ROLES = [
   'SUPER_ADMIN',
+  'TENANT_ADMIN',
+  'TENANT_BILLING_ADMIN',
   'SUPPORT_LOCK',
   'SUPPORT_READONLY',
   'SECURITY_ANALYST',
@@ -35,7 +46,9 @@ export const KNOWN_OPERATOR_ROLES = [
 export type KnownOperatorRole = (typeof KNOWN_OPERATOR_ROLES)[number];
 
 /** The privilege-elevating role — granting it (create or edit-roles) gets
- *  explicit elevated confirm copy (security UX). */
+ *  explicit elevated confirm copy (security UX). SUPER_ADMIN is the platform-
+ *  wide grant; the TENANT_* roles are tenant-confined so they keep the
+ *  standard (still reason+confirm-gated) copy. */
 export const ELEVATED_ROLE: KnownOperatorRole = 'SUPER_ADMIN';
 
 // --- operator status ------------------------------------------------------

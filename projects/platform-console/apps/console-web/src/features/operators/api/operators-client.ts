@@ -59,7 +59,7 @@ import { ApiError, OperatorsUnavailableError } from '@/shared/api/errors';
 
 export const OPERATORS_PREFIX = '/api/admin/operators';
 
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
+type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
 export interface CallOptions {
   method: HttpMethod;
