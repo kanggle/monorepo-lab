@@ -13,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PushSubscriptionService 단위 테스트")
@@ -35,12 +37,14 @@ class PushSubscriptionServiceTest {
     @InjectMocks
     private PushSubscriptionService service;
 
+    private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0";
+
     private RegisterPushSubscriptionCommand cmd(String endpoint) {
-        return new RegisterPushSubscriptionCommand("user-1", endpoint, null, "p256", "auth");
+        return new RegisterPushSubscriptionCommand("user-1", endpoint, null, "p256", "auth", UA);
     }
 
     @Test
-    @DisplayName("신규 endpoint 등록 시 새 구독을 저장하고 created=true 를 반환한다")
+    @DisplayName("신규 endpoint 등록 시 새 구독을 저장하고 created=true 를 반환한다(User-Agent 저장)")
     void register_new_created() {
         given(subscriptionRepository.findByEndpoint("https://push/new")).willReturn(Optional.empty());
         given(subscriptionRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
@@ -49,13 +53,32 @@ class PushSubscriptionServiceTest {
 
         assertThat(result.created()).isTrue();
         assertThat(result.subscriptionId()).isNotBlank();
-        verify(subscriptionRepository).save(any(PushSubscription.class));
+
+        ArgumentCaptor<PushSubscription> captor = ArgumentCaptor.forClass(PushSubscription.class);
+        verify(subscriptionRepository).save(captor.capture());
+        assertThat(captor.getValue().getUserAgent()).isEqualTo(UA);
+    }
+
+    @Test
+    @DisplayName("listByUser 는 사용자의 구독을 createdAt 내림차순으로 반환한다")
+    void listByUser_sortedByCreatedAtDesc() {
+        PushSubscription older = PushSubscription.reconstitute(
+                "s1", "t", "user-1", "https://push/a", "p", "a", "UA-A",
+                java.time.LocalDateTime.of(2026, 6, 1, 10, 0), java.time.LocalDateTime.of(2026, 6, 1, 10, 0));
+        PushSubscription newer = PushSubscription.reconstitute(
+                "s2", "t", "user-1", "https://push/b", "p", "a", "UA-B",
+                java.time.LocalDateTime.of(2026, 7, 1, 10, 0), java.time.LocalDateTime.of(2026, 7, 1, 10, 0));
+        given(subscriptionRepository.findByUserId("user-1")).willReturn(List.of(older, newer));
+
+        List<PushSubscription> result = service.listByUser("user-1");
+
+        assertThat(result).extracting(PushSubscription::getSubscriptionId).containsExactly("s2", "s1");
     }
 
     @Test
     @DisplayName("기존 endpoint 재등록 시 키만 갱신하고 created=false 를 반환한다(중복행 없음)")
     void register_existing_refreshed() {
-        PushSubscription existing = PushSubscription.register("user-1", "https://push/ep", "old-p", "old-a");
+        PushSubscription existing = PushSubscription.register("user-1", "https://push/ep", "old-p", "old-a", UA);
         given(subscriptionRepository.findByEndpoint("https://push/ep")).willReturn(Optional.of(existing));
         given(subscriptionRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
@@ -69,7 +92,7 @@ class PushSubscriptionServiceTest {
     @Test
     @DisplayName("소유자가 해지하면 endpoint 를 삭제한다")
     void unregister_owner_deletes() {
-        PushSubscription sub = PushSubscription.register("user-1", "https://push/ep", "p", "a");
+        PushSubscription sub = PushSubscription.register("user-1", "https://push/ep", "p", "a", UA);
         given(subscriptionRepository.findByEndpoint("https://push/ep")).willReturn(Optional.of(sub));
 
         service.unregister("user-1", "https://push/ep");
@@ -80,7 +103,7 @@ class PushSubscriptionServiceTest {
     @Test
     @DisplayName("다른 사용자의 endpoint 해지는 no-op(삭제 안 함)")
     void unregister_nonOwner_noop() {
-        PushSubscription sub = PushSubscription.register("owner", "https://push/ep", "p", "a");
+        PushSubscription sub = PushSubscription.register("owner", "https://push/ep", "p", "a", UA);
         given(subscriptionRepository.findByEndpoint("https://push/ep")).willReturn(Optional.of(sub));
 
         service.unregister("intruder", "https://push/ep");

@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-085 | **REVIEW (PR 대기)**. 알림 설정 "푸시 수신 기기" 목록 — 백엔드 `GET /me/push-subscriptions`(목록, 키 미노출) + `user_agent` V7 캡처 + `listByUser`, 프런트 `PushDeviceList`(UA→기기명 라벨·등록일·`이 기기` 배지·기기별 해지). 교차-레이어 원자 PR. 백엔드 컴파일+단위/슬라이스 GREEN(로컬), 프런트=CI Node20. 분석=Opus 4.8 / 구현=BE 위임+FE 직접. | notification-service, web-store | code, api, migration, ui, push |
 
 ## done
 

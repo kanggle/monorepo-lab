@@ -33,6 +33,9 @@ public class PushSubscriptionJpaEntity {
     @Column(name = "auth", nullable = false)
     private String auth;
 
+    @Column(name = "user_agent", length = 512)
+    private String userAgent;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

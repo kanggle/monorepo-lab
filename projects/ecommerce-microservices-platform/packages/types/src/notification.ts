@@ -64,6 +64,23 @@ export interface RegisterPushSubscriptionResponse {
   subscriptionId: string;
 }
 
+/**
+ * One registered Web Push device/browser in the user's subscription list
+ * (TASK-FE-085). Keys (p256dh/auth) are never exposed; `endpoint` lets the
+ * current browser mark its own row. `userAgent` is the header captured at
+ * registration (may be null) — the client parses it into a device label.
+ */
+export interface PushSubscriptionDevice {
+  id: string;
+  endpoint: string;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+export interface ListPushSubscriptionsResponse {
+  subscriptions: PushSubscriptionDevice[];
+}
+
 // Notification Template types (admin)
 
 export interface NotificationTemplateSummary {

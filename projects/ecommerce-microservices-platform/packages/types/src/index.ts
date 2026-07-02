@@ -80,6 +80,8 @@ export type {
   PushSubscriptionKeys,
   RegisterPushSubscriptionRequest,
   RegisterPushSubscriptionResponse,
+  PushSubscriptionDevice,
+  ListPushSubscriptionsResponse,
   NotificationTemplateSummary,
   NotificationTemplateDetail,
   CreateNotificationTemplateRequest,

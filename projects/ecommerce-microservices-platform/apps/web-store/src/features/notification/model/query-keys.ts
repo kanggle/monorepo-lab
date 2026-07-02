@@ -5,4 +5,5 @@ export const notificationKeys = {
   details: () => [...notificationKeys.all, 'detail'] as const,
   detail: (id: string) => [...notificationKeys.details(), id] as const,
   preferences: () => [...notificationKeys.all, 'preferences'] as const,
+  pushDevices: () => [...notificationKeys.all, 'push-devices'] as const,
 };
