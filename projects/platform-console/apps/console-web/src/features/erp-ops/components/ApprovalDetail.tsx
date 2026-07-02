@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { CloseButton } from '@/shared/ui/CloseButton';
 import {
   type ApprovalRequest,
   type ApprovalHistoryEntry,
@@ -344,14 +345,11 @@ export function ApprovalDetail({
                   회수
                 </Button>
               )}
-              <Button
-                variant="secondary"
+              <CloseButton
                 onClick={onClose}
                 disabled={pending}
                 data-testid="approval-detail-close"
-              >
-                닫기
-              </Button>
+              />
             </div>
           </>
         )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef } from 'react';
-import { Button } from '@/shared/ui/Button';
+import { CloseButton } from '@/shared/ui/CloseButton';
 import type { PurchaseOrder } from '../api/types';
 
 /**
@@ -83,14 +83,11 @@ export function PoDetailDialog({ open, po, onClose }: PoDetailDialogProps) {
           >
             발주(PO) 상세 — {po.poNumber ?? po.id}
           </h2>
-          <Button
+          <CloseButton
             ref={closeRef}
-            variant="secondary"
             onClick={onClose}
             data-testid="scm-po-close"
-          >
-            닫기
-          </Button>
+          />
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
