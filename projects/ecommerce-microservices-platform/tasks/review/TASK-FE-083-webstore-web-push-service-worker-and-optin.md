@@ -1,10 +1,11 @@
 # TASK-FE-083 — web-store Web Push 구독: Service Worker + opt-in UI + 배너 표시
 
-- **Status**: backlog
+- **Status**: review
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
-- **Analysis model**: Opus 4.8 / **Implementation model (권장)**: Sonnet 또는 Opus (Service Worker + PushManager 브라우저 통합 + 구독 등록 연동)
-- **Depends on**: TASK-BE-464 (구독 등록 API `POST/DELETE /api/notifications/me/push-subscriptions` + VAPID 공개키 노출). BE-464 merge 후 착수.
+- **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
+- **Depends on**: TASK-BE-464 (구독 등록 API + VAPID 공개키 — ✅ merged PR #2088 `517d28660`).
+- **IMPLEMENTED (2026-07-02, backlog→ready→review 승격+구현 번들)**: `public/sw.js`(push→showNotification, notificationclick→/my/notifications) + `features/notification/lib/web-push.ts`(isPushSupported·urlBase64ToUint8Array·registerServiceWorker) + `push-subscription-api.ts`(@repo/api-client 경유) + `use-push-subscription.ts`(권한요청→SW등록→VAPID subscribe→백엔드 등록 / 해지=백엔드 삭제→unsubscribe, 브라우저 API 전부 feature-guard) + `PushOptIn.tsx`(3-way 권한 UX·미지원 안내, `NotificationSettings`에 통합) + `@repo/types`/`@repo/api-client` push 메서드 3종. 테스트 3종(web-push util / PushOptIn UI / use-push-subscription hook). VAPID 공개키=엔드포인트 방식(BE-464 계약). ⚠️로컬 vitest 불가(Node24↔vitest4, `env_webstore_vitest4_node24_module_evaluator`)→CI Node20 권위. 라이브 배너(AC-5)=fed-e2e 스택 하 수동 스모크.
 
 ## Goal
 

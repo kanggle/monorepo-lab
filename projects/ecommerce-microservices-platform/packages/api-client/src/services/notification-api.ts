@@ -5,6 +5,9 @@ import type {
   NotificationDetail,
   NotificationPreferences,
   UpdateNotificationPreferencesRequest,
+  VapidPublicKeyResponse,
+  RegisterPushSubscriptionRequest,
+  RegisterPushSubscriptionResponse,
 } from '@repo/types';
 
 export function createNotificationApi(client: ApiClient) {
@@ -29,6 +32,24 @@ export function createNotificationApi(client: ApiClient) {
       client.put<NotificationPreferences>(
         '/api/notifications/me/preferences',
         data,
+      ),
+
+    // Web Push (VAPID) — browser subscription management (TASK-FE-083).
+    getVapidPublicKey: () =>
+      client.get<VapidPublicKeyResponse>(
+        '/api/notifications/vapid-public-key',
+      ),
+
+    registerPushSubscription: (data: RegisterPushSubscriptionRequest) =>
+      client.post<RegisterPushSubscriptionResponse>(
+        '/api/notifications/me/push-subscriptions',
+        data,
+      ),
+
+    deletePushSubscription: (endpoint: string) =>
+      client.delete<void>(
+        '/api/notifications/me/push-subscriptions',
+        { data: { endpoint } },
       ),
   };
 }

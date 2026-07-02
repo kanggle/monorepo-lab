@@ -1,6 +1,8 @@
 export { NotificationList } from './ui/NotificationList';
 export { NotificationDetail } from './ui/NotificationDetail';
 export { NotificationSettings } from './ui/NotificationSettings';
+export { PushOptIn } from './ui/PushOptIn';
+export { usePushSubscription } from './model/use-push-subscription';
 export { useNotifications } from './model/use-notifications';
 export { useNotificationDetail } from './model/use-notification-detail';
 export { useNotificationPreferences } from './model/use-notification-preferences';

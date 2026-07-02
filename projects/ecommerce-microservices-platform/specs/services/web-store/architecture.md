@@ -110,6 +110,12 @@ Dependencies flow **downward only**. Upper layers may import from lower layers, 
 - Follow Next.js App Router conventions: Server Components by default, `'use client'` only when needed
 - Heavy below-the-fold client components (e.g., `ReviewList`) are code-split via `next/dynamic` and wrapped in a `<Suspense>` boundary. The `next/dynamic` `loading` prop renders a skeleton during chunk fetch; the Suspense boundary is a forward-compatibility marker for a future `experimental.ppr` / `useSuspenseQuery` migration where it becomes load-bearing. SSR remains enabled for SEO content.
 
+## Web Push (Service Worker) — TASK-FE-083
+- A service worker `public/sw.js` (plain JS, served static — not bundled) handles the `push` event (renders a `showNotification` banner) and `notificationclick` (focuses/opens `/my/notifications`). It is registered lazily, only when the user opts in.
+- The browser subscription opt-in lives in the notification feature (`features/notification`): `usePushSubscription` orchestrates permission request → SW registration → `pushManager.subscribe({ applicationServerKey })` (VAPID public key fetched via `@repo/api-client` `getVapidPublicKey`) → `registerPushSubscription`; `PushOptIn` renders the permission-aware UI inside `NotificationSettings`.
+- This is the **browser subscription** axis (this device receives push), distinct from the server-side `pushEnabled` preference (whether the backend sends push). Both must be on to receive.
+- Feature-detected (`isPushSupported`): where Service Worker / Push / Notification APIs are absent, the UI degrades to a support notice. Web Push requires a secure context (HTTPS; localhost exempt).
+
 ## Image Strategy
 - `next.config.ts` defines an explicit `images.remotePatterns` whitelist instead of `images.unoptimized: true`. This enables Sharp-driven WebP conversion + per-viewport srcset.
 - Whitelisted hostnames: `images.unsplash.com` (hero banner), `placehold.co` (fallback placeholders), `localhost` / `127.0.0.1` (dev MinIO presigned URLs), and one env-driven hostname `NEXT_PUBLIC_OBJECT_STORAGE_HOSTNAME` for staging / prod object storage (S3 / MinIO behind public DNS).

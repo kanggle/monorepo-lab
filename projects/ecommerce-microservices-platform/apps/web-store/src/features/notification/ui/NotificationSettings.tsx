@@ -8,6 +8,7 @@ import { Skeleton } from '@/shared/ui/Skeleton';
 import { useNotificationPreferences } from '../model/use-notification-preferences';
 import { useUpdatePreferences } from '../model/use-update-preferences';
 import { SettingToggle } from './SettingToggle';
+import { PushOptIn } from './PushOptIn';
 
 type PreferenceField = 'emailEnabled' | 'smsEnabled' | 'pushEnabled';
 
@@ -141,6 +142,8 @@ export function NotificationSettings() {
           )}
         </div>
       )}
+
+      <PushOptIn />
     </div>
   );
 }
