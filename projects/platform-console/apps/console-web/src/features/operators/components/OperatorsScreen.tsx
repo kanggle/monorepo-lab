@@ -8,6 +8,8 @@ import {
   useEditOperatorRoles,
   useChangeOperatorStatus,
   useSetOperatorProfile,
+  useAssignOperator,
+  useUnassignOperator,
 } from '../hooks/use-operators';
 import {
   type OperatorPage,
@@ -16,6 +18,7 @@ import {
   type CreateOperatorInput,
 } from '../api/types';
 import { CreateOperatorForm } from './CreateOperatorForm';
+import { AssignOperatorForm } from './AssignOperatorForm';
 import { OperatorConfirmDialog } from './OperatorConfirmDialog';
 import { OperatorProfileEditDialog } from './OperatorProfileEditDialog';
 import { OrgScopeDialog } from './OrgScopeDialog';
@@ -67,6 +70,11 @@ export interface OperatorsScreenProps {
    *  the producer's `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH` is
    *  the fail-safe). `null` ⇒ gate inactive — producer is still authoritative. */
   selfOperatorId?: string | null;
+  /** TASK-PC-FE-157 — the active tenant slug (from the server render). When
+   *  present, the 테넌트 배정 form + the per-row 배정 해제 action target it.
+   *  Absent ⇒ the assignment surface is hidden (the page already gates on a
+   *  selected tenant, so this is normally set on the render path). */
+  activeTenant?: string | null;
 }
 
 export function OperatorsScreen({
@@ -74,6 +82,7 @@ export function OperatorsScreen({
   tenantOptions = [],
   isPlatformOperator = false,
   selfOperatorId = null,
+  activeTenant = null,
 }: OperatorsScreenProps) {
   const [statusFilter, setStatusFilter] = useState<'' | OperatorStatus>('');
   const [query, setQuery] = useState<{
@@ -91,6 +100,8 @@ export function OperatorsScreen({
   const editRoles = useEditOperatorRoles();
   const changeStatus = useChangeOperatorStatus();
   const setProfile = useSetOperatorProfile();
+  const assign = useAssignOperator();
+  const unassign = useUnassignOperator();
 
   const [pending, setPending] = useState<PendingAction | null>(null);
   /** TASK-PC-FE-017 — track which row's profile-edit dialog is open by
@@ -139,10 +150,14 @@ export function OperatorsScreen({
         return editRoles;
       case 'change-status':
         return changeStatus;
+      case 'assign':
+        return assign;
+      case 'unassign':
+        return unassign;
       default:
         return null;
     }
-  }, [pending?.kind, create, editRoles, changeStatus]);
+  }, [pending?.kind, create, editRoles, changeStatus, assign, unassign]);
 
   // 403 (permission / tenant-scope) on the LIST read surfaces as ApiError
   // — render the whole section as inline "not permitted", never crash,
@@ -187,6 +202,8 @@ export function OperatorsScreen({
     create.reset();
     editRoles.reset();
     changeStatus.reset();
+    assign.reset();
+    unassign.reset();
   }
 
   function openCreate(draft: CreateOperatorInput) {
@@ -232,6 +249,34 @@ export function OperatorsScreen({
     setProfileEditOperatorId(operator.operatorId);
   }
 
+  // TASK-PC-FE-157 — assign a (free-text) operator to the ACTIVE tenant. The
+  // target may be outside the active-tenant list scope (the point of
+  // assigning is to bring an operator INTO this tenant), so it is an
+  // operatorId string, not a row. Guarded by the same reason+confirm dialog.
+  function openAssign(operatorId: string) {
+    if (!activeTenant) return;
+    resetMutations();
+    setPending({
+      kind: 'assign',
+      assignOperatorId: operatorId,
+      tenantId: activeTenant,
+      // Granting tenant access is privilege-sensitive → elevated confirm copy.
+      elevated: true,
+    });
+  }
+
+  // TASK-PC-FE-157 — remove a row operator's assignment to the ACTIVE tenant.
+  function openUnassign(operator: OperatorSummary) {
+    if (!activeTenant) return;
+    resetMutations();
+    setPending({
+      kind: 'unassign',
+      operator,
+      tenantId: activeTenant,
+      elevated: true,
+    });
+  }
+
   function closeDialog() {
     setPending(null);
   }
@@ -269,6 +314,36 @@ export function OperatorsScreen({
         {
           operatorId: pending.operator.operatorId,
           status: pending.nextStatus,
+          reason,
+        },
+        { onSuccess: () => setPending(null) },
+      );
+      return;
+    }
+    if (
+      pending.kind === 'assign' &&
+      pending.assignOperatorId &&
+      pending.tenantId
+    ) {
+      assign.mutate(
+        {
+          operatorId: pending.assignOperatorId,
+          tenantId: pending.tenantId,
+          reason,
+        },
+        { onSuccess: () => setPending(null) },
+      );
+      return;
+    }
+    if (
+      pending.kind === 'unassign' &&
+      pending.operator &&
+      pending.tenantId
+    ) {
+      unassign.mutate(
+        {
+          operatorId: pending.operator.operatorId,
+          tenantId: pending.tenantId,
           reason,
         },
         { onSuccess: () => setPending(null) },
@@ -330,6 +405,17 @@ export function OperatorsScreen({
             pending={create.isPending}
           />
 
+          {/* TASK-PC-FE-157 — assign an existing operator to the active
+              tenant (delegation onboarding). Shown only when the active
+              tenant is known (the page already gates on a selected tenant). */}
+          {activeTenant && (
+            <AssignOperatorForm
+              activeTenant={activeTenant}
+              onSubmitOperatorId={openAssign}
+              pending={assign.isPending}
+            />
+          )}
+
           <OperatorsTable
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
@@ -347,6 +433,7 @@ export function OperatorsScreen({
             onChangeStatus={openChangeStatus}
             onEditProfile={openProfileEdit}
             onOrgScope={(op) => setOrgScopeOperatorId(op.operatorId)}
+            onUnassign={activeTenant ? openUnassign : undefined}
           />
         </>
       )}

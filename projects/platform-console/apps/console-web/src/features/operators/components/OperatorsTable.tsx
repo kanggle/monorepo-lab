@@ -35,6 +35,9 @@ export interface OperatorsTableProps {
   onChangeStatus: (op: OperatorSummary) => void;
   onEditProfile: (op: OperatorSummary) => void;
   onOrgScope: (op: OperatorSummary) => void;
+  /** TASK-PC-FE-157 — remove this operator's assignment to the active tenant.
+   *  Omitted (⇒ button hidden) when no active tenant is resolved. */
+  onUnassign?: (op: OperatorSummary) => void;
 }
 
 export function OperatorsTable({
@@ -52,6 +55,7 @@ export function OperatorsTable({
   onChangeStatus,
   onEditProfile,
   onOrgScope,
+  onUnassign,
 }: OperatorsTableProps) {
   return (
     <>
@@ -212,6 +216,20 @@ export function OperatorsTable({
                       >
                         조직 스코프
                       </Button>
+                      {/* TASK-PC-FE-157 — remove this operator's assignment to
+                          the active tenant. A home-tenant-only operator has no
+                          explicit assignment → producer 404 maps inline. */}
+                      {onUnassign && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="text-destructive"
+                          onClick={() => onUnassign(op)}
+                          data-testid={`action-unassign-${op.operatorId}`}
+                        >
+                          배정 해제
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

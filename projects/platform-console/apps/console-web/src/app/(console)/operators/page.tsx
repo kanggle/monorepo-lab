@@ -3,6 +3,7 @@ import { getOperatorsListState, OperatorsScreen } from '@/features/operators';
 import { getSelfOperatorIdOrNull } from '@/features/operators/api/operators-api';
 import { getCatalog } from '@/features/catalog';
 import { selectableTenants } from '@/features/tenant';
+import { getActiveTenant } from '@/shared/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -149,12 +150,20 @@ export default async function OperatorsPage() {
   // catalog fetch above) and awaited here. (TASK-PC-FE-118)
   const selfOperatorId = await selfPromise;
 
+  // TASK-PC-FE-157 — the active tenant slug drives the tenant-assignment
+  // surface (배정 / 배정 해제 target it). Past the `state.noTenant` gate above
+  // an active tenant is selected; read it for the client component. Any
+  // failure ⇒ null (the assignment surface simply hides — the producer is
+  // authoritative on scope anyway).
+  const activeTenant = await getActiveTenant().catch(() => null);
+
   return (
     <OperatorsScreen
       initial={state.page}
       tenantOptions={tenantOptions}
       isPlatformOperator={isPlatformOperator}
       selfOperatorId={selfOperatorId}
+      activeTenant={activeTenant}
     />
   );
 }

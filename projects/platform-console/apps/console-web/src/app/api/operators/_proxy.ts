@@ -146,6 +146,20 @@ export const SetOrgScopeBodySchema = z
   .strict();
 export type SetOrgScopeBody = z.infer<typeof SetOrgScopeBodySchema>;
 
+/**
+ * assign / unassign tenant-assignment (TASK-PC-FE-157 / TASK-BE-347). The
+ * assignment is fully specified by the path (operatorId, tenantId); the body
+ * carries ONLY the audit `reason` (mirror of /roles + /status — the client
+ * supplies the reason-capture gate's value; the api layer forwards it as
+ * `X-Operator-Reason`). NO `Idempotency-Key` per the producer matrix (the
+ * (operator, tenant) PK is the natural dedupe). `.strict()` rejects unknown
+ * top-level keys. Shared by POST (assign) and DELETE (unassign).
+ */
+export const AssignmentReasonBodySchema = z
+  .object({ reason: z.string() })
+  .strict();
+export type AssignmentReasonBody = z.infer<typeof AssignmentReasonBodySchema>;
+
 export function mapError(err: unknown, requestId: string): NextResponse {
   if (err instanceof ApiError && err.status === 401) {
     return NextResponse.json(
