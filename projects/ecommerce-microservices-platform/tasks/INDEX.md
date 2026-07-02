@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-084 | **REVIEW (PR 대기)**. web-store 주문 내역 `OrderCard` 3줄→2줄 압축 — 1줄=날짜+상태 배지, 2줄=`상품명 외 N건 · 총액원`(span 분리, ellipsis). 순수 UI, 기존 테스트 무수정 통과. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, ui |
 
 ## done
 
