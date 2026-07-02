@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { ErrorMessage } from '@repo/ui';
 import { Skeleton } from '@/shared/ui/Skeleton';
+import { BackLink } from '@/shared/ui';
 import { useNotificationDetail } from '../model/use-notification-detail';
 import { CHANNEL_LABELS } from '../lib/constants';
 import { formatDateTime } from '@/shared/lib';
@@ -29,18 +29,7 @@ export function NotificationDetail({ notificationId }: Props) {
 
       {notification && (
         <div>
-          <Link
-            href="/my/notifications"
-            style={{
-              display: 'inline-block',
-              fontSize: 'var(--font-size-sm)',
-              color: 'var(--color-text-secondary)',
-              marginBottom: 'var(--space-4)',
-              textDecoration: 'none',
-            }}
-          >
-            &larr; 알림 목록
-          </Link>
+          <BackLink href="/my/notifications">알림 목록</BackLink>
 
           <div style={{ marginBottom: 'var(--space-6)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>

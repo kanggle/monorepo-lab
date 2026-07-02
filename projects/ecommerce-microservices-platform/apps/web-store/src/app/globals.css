@@ -313,6 +313,35 @@ input, select, textarea {
   background: rgba(231, 76, 60, 0.08);
 }
 
+/* Ghost button — transparent, text-colored, fills a subtle surface on hover.
+   Mirrors the console `ghost` variant; used for the shared back-to-list
+   control so every "상세 → 목록" affordance reads the same. */
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--color-bg-secondary);
+  border-color: transparent;
+  color: var(--color-text);
+}
+
+.btn-sm {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+/* Back-to-list control (shared BackLink): a compact ghost button returning
+   from a storefront detail/settings page to its list — spaced from the content
+   below, with a small gap between the ← glyph and its label. */
+.back-link {
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  text-decoration: none;
+}
+
 /* Form Elements */
 .input {
   width: 100%;

@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { OrderStatusBadge } from '@/entities/order';
 import { ErrorMessage } from '@repo/ui';
 import { Skeleton } from '@/shared/ui/Skeleton';
+import { BackLink } from '@/shared/ui';
 import { useOrderDetail, CANCELLABLE_STATUSES } from '../model/use-order-detail';
 import { OrderItemsSection } from './OrderItemsSection';
 import { OrderShippingInfo } from './OrderShippingInfo';
@@ -81,9 +81,7 @@ export function OrderDetailView({ orderId }: Props) {
 
       {order && (
         <div>
-          <Link href="/my/orders" style={{ display: 'inline-block', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)', textDecoration: 'none' }}>
-            &larr; 주문내역
-          </Link>
+          <BackLink href="/my/orders">주문내역</BackLink>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-8)' }}>
             <h1 className="page-title" style={{ margin: 0 }}>주문 상세</h1>
             <OrderStatusBadge status={order.status} />
