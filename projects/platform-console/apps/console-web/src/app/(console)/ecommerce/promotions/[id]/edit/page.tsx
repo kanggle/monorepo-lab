@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import {
+  DetailHeader,
   getPromotionDetailSectionState,
   PromotionForm,
 } from '@/features/ecommerce-ops';
@@ -79,15 +80,13 @@ export default async function PromotionEditPage({
 
   return (
     <section>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">프로모션 수정</h1>
-        <Link
-          href={`/ecommerce/promotions/${id}`}
-          className="text-sm underline"
-        >
-          상세로
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="promotion-edit-heading"
+        title="프로모션 수정"
+        backHref={`/ecommerce/promotions/${id}`}
+        backLabel="상세"
+        backTestId="promotion-edit-back"
+      />
       <PromotionForm existing={state.detail} />
     </section>
   );
