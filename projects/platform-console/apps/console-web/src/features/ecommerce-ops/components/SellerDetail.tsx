@@ -132,12 +132,6 @@ export function SellerDetail({ seller }: SellerDetailProps) {
 
       <dl className="mb-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <div>
-          <dt className="text-muted-foreground">셀러 ID</dt>
-          <dd className="font-mono text-xs" data-testid="seller-detail-id">
-            {data.sellerId}
-          </dd>
-        </div>
-        <div>
           <dt className="text-muted-foreground">셀러 이름</dt>
           <dd data-testid="seller-detail-display-name">{data.displayName}</dd>
         </div>
@@ -149,6 +143,12 @@ export function SellerDetail({ seller }: SellerDetailProps) {
             >
               {tone.label}
             </span>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">셀러 ID</dt>
+          <dd className="font-mono text-xs" data-testid="seller-detail-id">
+            {data.sellerId}
           </dd>
         </div>
         <div>
