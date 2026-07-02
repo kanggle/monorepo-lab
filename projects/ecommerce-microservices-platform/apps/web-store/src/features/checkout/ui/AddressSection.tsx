@@ -81,7 +81,7 @@ function SavedAddressOption({ addr, selected, onSelect }: SavedAddressOptionProp
         border: selected ? '2px solid var(--color-primary)' : '1px solid var(--color-border-light)',
         borderRadius: 'var(--radius-md)',
         cursor: 'pointer',
-        background: selected ? 'rgba(26, 26, 46, 0.03)' : 'var(--color-white)',
+        background: selected ? 'rgba(26, 26, 46, 0.03)' : 'var(--color-surface)',
         transition: 'all var(--transition-fast)',
       }}
     >
@@ -96,7 +96,7 @@ function SavedAddressOption({ addr, selected, onSelect }: SavedAddressOptionProp
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '2px' }}>
           <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>{addr.label}</span>
           {addr.isDefault && (
-            <span style={{ display: 'inline-block', padding: '1px 6px', fontSize: '0.65rem', fontWeight: 'var(--font-weight-semibold)', backgroundColor: 'var(--color-primary)', color: '#fff', borderRadius: 'var(--radius-full)' }}>기본</span>
+            <span style={{ display: 'inline-block', padding: '1px 6px', fontSize: '0.65rem', fontWeight: 'var(--font-weight-semibold)', backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)', borderRadius: 'var(--radius-full)' }}>기본</span>
           )}
         </div>
         <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
@@ -126,7 +126,7 @@ function NewAddressOption({ selected, onSelect }: NewAddressOptionProps) {
         border: selected ? '2px solid var(--color-primary)' : '1px solid var(--color-border-light)',
         borderRadius: 'var(--radius-md)',
         cursor: 'pointer',
-        background: selected ? 'rgba(26, 26, 46, 0.03)' : 'var(--color-white)',
+        background: selected ? 'rgba(26, 26, 46, 0.03)' : 'var(--color-surface)',
         transition: 'all var(--transition-fast)',
       }}
     >

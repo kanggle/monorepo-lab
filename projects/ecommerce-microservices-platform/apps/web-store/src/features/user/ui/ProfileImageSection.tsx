@@ -41,7 +41,7 @@ export function ProfileImageSection({
         />
       ) : (
         <div
-          style={{ width: 80, height: 80, borderRadius: 'var(--radius-full)', background: 'var(--color-primary)', color: 'var(--color-white)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)' }}
+          style={{ width: 80, height: 80, borderRadius: 'var(--radius-full)', background: 'var(--color-primary)', color: 'var(--color-on-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)' }}
         >
           {profileName?.charAt(0).toUpperCase()}
         </div>

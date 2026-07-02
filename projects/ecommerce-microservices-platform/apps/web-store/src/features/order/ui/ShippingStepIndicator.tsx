@@ -41,7 +41,7 @@ export function ShippingStepIndicator({ currentIndex }: ShippingStepIndicatorPro
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: isCompleted ? 'var(--color-primary)' : 'var(--color-border-light)',
-                  color: isCompleted ? 'var(--color-white)' : 'var(--color-text-secondary)',
+                  color: isCompleted ? 'var(--color-on-primary)' : 'var(--color-text-secondary)',
                   fontWeight: 'var(--font-weight-bold)',
                   fontSize: 'var(--font-size-sm)',
                   transition: 'background-color 0.2s',

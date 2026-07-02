@@ -6,4 +6,6 @@ export { Pagination } from './Pagination';
 export { PaginationNav } from './PaginationNav';
 export { Skeleton, SkeletonText, SkeletonCard, SkeletonProductGrid, SkeletonList, SkeletonListItem } from './Skeleton';
 export { StatusBadge } from './StatusBadge';
+export { ThemeScript } from './ThemeScript';
+export { ThemeToggle } from './ThemeToggle';
 export { Toast } from './Toast';
