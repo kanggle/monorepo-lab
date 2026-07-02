@@ -1,6 +1,7 @@
 # TASK-FE-085 — 알림 설정에 "푸시 수신 기기" 목록 표시 (목록 API + 기기명)
 
-- **Status**: review
+- **Status**: done
+- **DONE (2026-07-02, 3-dim verified — PR #2119 `87ebff41a`)**: state=MERGED + origin/main tip=`87ebff41a` 일치 + pre-merge failing=0(Frontend lint&build+unit[신규 device-label/PushDeviceList]+E2E + notification-service Testcontainers Integration + ecommerce boot jars GREEN). 알림 설정 "푸시 수신 기기" 목록(GET 목록 API + user_agent V7 캡처 + 기기명 라벨 + 이 기기 배지 + 기기별 해지).
 - **Project**: ecommerce-microservices-platform
 - **Service**: notification-service (백엔드) + web-store (프런트)
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (백엔드=backend-engineer 위임, 프런트=직접)
