@@ -1,6 +1,7 @@
 # TASK-BE-464 — notification-service Web Push(VAPID) 실연동: 구독 레지스트리 + 등록 API + WebPushSender
 
-- **Status**: review
+- **Status**: done
+- **DONE (2026-07-02, 3-dim verified — impl PR #2088 squash `517d28660`)**: (a) state=MERGED + `517d28660`; (b) origin/main tip=`517d28660` 일치; (c) pre-merge failing required=0 — `Integration (…notification-service…, Testcontainers)` PASS 로 풀 컨텍스트 부팅+Flyway V6+엔티티 검증+빈 wiring(AC-2) 확증, `Package boot jars (ecommerce)` PASS. 실 브라우저 발송(라이브)=후속 TASK-FE-083.
 - **Project**: ecommerce-microservices-platform
 - **Service**: notification-service
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
