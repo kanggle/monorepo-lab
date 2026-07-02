@@ -1,6 +1,6 @@
 # TASK-BE-468 — Admin period-summary (오늘/주간/월간) count endpoints across the 6 operator-facing services
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (uniform additive read endpoint replicated per service; the only non-mechanical part is the shared KST calendar-boundary rule)
