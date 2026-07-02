@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { ErrorMessage } from '@repo/ui';
 import { getErrorMessage } from '@repo/types/guards';
 import { Skeleton } from '@/shared/ui/Skeleton';
@@ -10,6 +9,7 @@ import { useUpdatePreferences } from '../model/use-update-preferences';
 import { SettingToggle } from './SettingToggle';
 import { PushOptIn } from './PushOptIn';
 import { PushDeviceList } from './PushDeviceList';
+import { BackLink } from '@/shared/ui';
 
 type PreferenceField = 'emailEnabled' | 'smsEnabled' | 'pushEnabled';
 
@@ -74,18 +74,7 @@ export function NotificationSettings() {
 
   return (
     <div>
-      <Link
-        href="/my/notifications"
-        style={{
-          display: 'inline-block',
-          fontSize: 'var(--font-size-sm)',
-          color: 'var(--color-text-secondary)',
-          marginBottom: 'var(--space-4)',
-          textDecoration: 'none',
-        }}
-      >
-        &larr; 알림 목록
-      </Link>
+      <BackLink href="/my/notifications">알림 목록</BackLink>
 
       <h1 className="page-title">알림 설정</h1>
 
