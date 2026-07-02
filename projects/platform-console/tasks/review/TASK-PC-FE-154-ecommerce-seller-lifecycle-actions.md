@@ -1,6 +1,6 @@
 # TASK-PC-FE-154 — console ecommerce **seller lifecycle actions** (provision / suspend / close)
 
-**Status:** ready
+**Status:** review
 **Area:** platform-console / console-web · **Feature:** `features/ecommerce-ops` (sellers slice)
 **Parent:** ADR-MONO-042 (seller onboarding + lifecycle: `PENDING_PROVISIONING → ACTIVE`, `→ SUSPENDED`, `→ CLOSED`) · ADR-MONO-031 §2.4.10 console-absorption pattern (7th operator area).
 **Precondition:** TASK-PC-FE-090 (seller list + detail + register — DONE). Producer already ships the lifecycle endpoints (`AdminSellerController` provision/suspend/close, ADR-042 D3/D4).
