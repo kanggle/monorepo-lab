@@ -136,7 +136,7 @@ Dependencies flow **downward only**. Upper layers may import from lower layers, 
 - Consumer-role guard: only a token carrying `roles ∋ CUSTOMER` may sign in. An operator (whose ecommerce assumed token carries `ADMIN` / no `CUSTOMER`) is rejected at the `signIn()` + `session()` callbacks (returned session has no `accountId`) and bounced to `/login?error=account_type_mismatch` (legacy error-code string retained for UI compatibility). Role-based per ADR-MONO-035 4b — the legacy `account_type` claim was removed in ADR-MONO-032 D5 step 4.
 - Bearer token wiring: NextAuth keeps the IAM-issued access token in an HttpOnly JWT cookie. The client-side `AuthProvider` reads `useSession().data.accessToken` and pushes it into `src/shared/auth/token-bridge.ts`, which `@repo/api-client`'s axios interceptor reads synchronously to attach `Authorization: Bearer ...` on every outbound request.
 - Server-side (RSC, route handlers, server actions): use `getWebStoreSession()` from `src/shared/auth/session.ts`. Do not import the bridge from server code.
-- 401 handling: NextAuth does not auto-refresh IAM tokens. On 401 the api-client's `onAuthError` clears the bridge and redirects to `/api/auth/signin/gap`, re-running the OIDC flow.
+- 401 handling: NextAuth does not auto-refresh IAM tokens. On 401 the api-client's `onAuthError` (`shared/config/api.ts`) clears client cart state and redirects to `/login?from=<intended-path>` (F6) — the login page then re-runs the IAM OIDC flow (`signIn('iam')`) and bounces back. (The legacy `/signup` route likewise forwards into `/api/auth/signin/iam`.)
 - Public paths (no auth required): `/`, `/products/*`, `/login`, `/signup` (redirects into IAM), `/api/auth/*`. Everything else is gated by `src/middleware.ts`.
 
 ## Testing Expectations
