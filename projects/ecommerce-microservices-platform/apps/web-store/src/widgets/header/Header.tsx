@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/features/auth';
 import { useCart } from '@/features/cart';
+import { ThemeToggle } from '@/shared/ui/ThemeToggle';
 import { ProfileDropdown } from './ProfileDropdown';
 import styles from './Header.module.css';
 
@@ -36,6 +37,7 @@ export function Header() {
         </nav>
 
         <div className={styles.actions}>
+          <ThemeToggle />
           {!isLoading && isAuthenticated && (
             <Link href="/cart" className={styles.cartLink} aria-label="장바구니">
               <span className={styles.cartIcon} aria-hidden="true">

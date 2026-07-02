@@ -52,7 +52,7 @@ export function CouponCard({ coupon, selectable, selected, disabled, onSelect }:
         marginBottom: 'var(--space-3)',
         opacity: isDisabled ? 0.5 : 1,
         cursor: selectable && !isDisabled ? 'pointer' : 'default',
-        background: selected ? 'var(--color-primary-50, #f0f4ff)' : 'var(--color-white)',
+        background: selected ? 'var(--color-primary-50)' : 'var(--color-surface)',
         transition: 'border var(--transition-fast), background var(--transition-fast)',
       }}
     >

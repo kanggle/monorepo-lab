@@ -84,7 +84,7 @@ export function AddressSearch({ onSelect }: AddressSearchProps) {
         >
           <div
             style={{
-              background: 'var(--color-white)',
+              background: 'var(--color-surface)',
               borderRadius: 'var(--radius-lg)',
               overflow: 'hidden',
               width: '100%',
@@ -101,7 +101,7 @@ export function AddressSearch({ onSelect }: AddressSearchProps) {
                 top: 8,
                 right: 12,
                 zIndex: 1,
-                background: 'var(--color-white)',
+                background: 'var(--color-surface)',
                 border: 'none',
                 fontSize: 'var(--font-size-xl)',
                 cursor: 'pointer',

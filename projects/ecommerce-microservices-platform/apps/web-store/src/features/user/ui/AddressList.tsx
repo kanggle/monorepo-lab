@@ -23,7 +23,7 @@ const styles = {
   cardDefault: { border: '2px solid var(--color-primary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', background: 'rgba(26, 26, 46, 0.03)' } as const,
   card: { border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' } as const,
   labelText: { fontWeight: 'var(--font-weight-bold)' } as const,
-  badge: { display: 'inline-block', padding: '2px 8px', fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', backgroundColor: 'var(--color-primary)', color: '#fff', borderRadius: 'var(--radius-full)' } as const,
+  badge: { display: 'inline-block', padding: '2px 8px', fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)', borderRadius: 'var(--radius-full)' } as const,
 };
 
 interface AddressListProps {

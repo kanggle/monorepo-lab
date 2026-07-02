@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Noto_Sans_KR } from 'next/font/google';
 import { Providers } from './providers';
 import { WebVitals } from './web-vitals';
+import { ThemeScript } from '@/shared/ui/ThemeScript';
 import './globals.css';
 
 // Only the `latin` subset is self-hosted (the full Korean subset is multiple MB
@@ -29,7 +30,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko" className={notoSansKR.className}>
+    <html lang="ko" className={notoSansKR.className} suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body>
         <WebVitals />
         <Providers>{children}</Providers>

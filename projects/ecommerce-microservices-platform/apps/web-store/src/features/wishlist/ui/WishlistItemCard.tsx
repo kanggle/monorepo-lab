@@ -54,7 +54,7 @@ export function WishlistItemCard({ item }: WishlistItemCardProps) {
         padding: 'var(--space-4)',
         border: '1px solid var(--color-border-light)',
         borderRadius: 'var(--radius-md)',
-        background: 'var(--color-white)',
+        background: 'var(--color-surface)',
         opacity: isDeleted ? 0.6 : 1,
         transition: 'box-shadow var(--transition-fast)',
       }}

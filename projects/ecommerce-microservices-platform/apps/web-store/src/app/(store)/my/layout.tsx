@@ -35,7 +35,7 @@ export default function MyLayout({ children }: { children: React.ReactNode }) {
         style={{
           width: '200px',
           flexShrink: 0,
-          background: 'var(--color-white)',
+          background: 'var(--color-surface)',
           border: '1px solid var(--color-border-light)',
           borderRadius: 'var(--radius-lg)',
           padding: 'var(--space-4)',
@@ -54,7 +54,7 @@ export default function MyLayout({ children }: { children: React.ReactNode }) {
                   borderRadius: 'var(--radius-md)',
                   fontSize: 'var(--font-size-sm)',
                   fontWeight: active ? 'var(--font-weight-semibold)' : 'var(--font-weight-medium)',
-                  color: active ? 'var(--color-white)' : 'var(--color-text-secondary)',
+                  color: active ? 'var(--color-on-primary)' : 'var(--color-text-secondary)',
                   background: active ? 'var(--color-primary)' : 'transparent',
                   textDecoration: 'none',
                   transition: 'background var(--transition-fast), color var(--transition-fast)',

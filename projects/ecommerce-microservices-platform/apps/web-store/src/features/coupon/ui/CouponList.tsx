@@ -57,7 +57,7 @@ export function CouponList() {
             style={{
               fontSize: 'var(--font-size-sm)',
               background: statusFilter === value ? 'var(--color-primary)' : 'transparent',
-              color: statusFilter === value ? 'var(--color-white)' : 'var(--color-text-secondary)',
+              color: statusFilter === value ? 'var(--color-on-primary)' : 'var(--color-text-secondary)',
               border: statusFilter === value ? 'none' : '1px solid var(--color-border-light)',
             }}
           >

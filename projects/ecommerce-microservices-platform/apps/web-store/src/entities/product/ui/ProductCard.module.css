@@ -6,7 +6,7 @@
   text-decoration: none;
   color: inherit;
   transition: transform var(--transition-normal), box-shadow var(--transition-normal);
-  background: var(--color-white);
+  background: var(--color-surface);
 }
 
 .card:hover {
