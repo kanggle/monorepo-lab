@@ -13,6 +13,7 @@ import type { PromotionDetail as PromotionDetailType } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { CouponIssueDialog } from './CouponIssueDialog';
 import { DetailHeader } from './DetailHeader';
+import { formatPromotionDay } from './promotion-format';
 
 /**
  * ecommerce promotion detail section (TASK-PC-FE-086 — ADR-031 Phase 3b).
@@ -139,11 +140,15 @@ export function PromotionDetail({ promotion }: PromotionDetailProps) {
         </div>
         <div>
           <dt className="text-muted-foreground">시작일</dt>
-          <dd data-testid="promotion-detail-start">{data.startDate}</dd>
+          <dd data-testid="promotion-detail-start">
+            {formatPromotionDay(data.startDate)}
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">종료일</dt>
-          <dd data-testid="promotion-detail-end">{data.endDate}</dd>
+          <dd data-testid="promotion-detail-end">
+            {formatPromotionDay(data.endDate)}
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">프로모션 ID</dt>
