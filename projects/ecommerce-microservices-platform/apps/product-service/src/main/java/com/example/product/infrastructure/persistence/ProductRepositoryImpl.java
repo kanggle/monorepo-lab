@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
+
 @Repository
 class ProductRepositoryImpl implements ProductRepository, ProductQueryPort {
 
@@ -64,6 +65,16 @@ class ProductRepositoryImpl implements ProductRepository, ProductQueryPort {
     @Override
     public void softDelete(UUID productId) {
         jpaRepository.softDeleteById(productId, TenantContext.currentTenant(), Instant.now());
+    }
+
+    @Override
+    public long countByTenant() {
+        return jpaRepository.countByTenantId(TenantContext.currentTenant());
+    }
+
+    @Override
+    public long countByTenantCreatedBetween(Instant from, Instant to) {
+        return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
     }
 
     @Override

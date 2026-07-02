@@ -84,6 +84,22 @@ export const UserDetailSchema = z
 export type UserDetail = z.infer<typeof UserDetailSchema>;
 
 // ===========================================================================
+// SUMMARY (TASK-PC-FE-160 — period-based counts)
+// ===========================================================================
+
+/** GET /admin/users/summary — period-based count.
+ *  Response: { today, week, month, total } all non-negative integers. */
+export const UserAreaSummarySchema = z
+  .object({
+    today: z.number().int().nonnegative(),
+    week: z.number().int().nonnegative(),
+    month: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type UserAreaSummary = z.infer<typeof UserAreaSummarySchema>;
+
+// ===========================================================================
 // List query params + pagination defaults
 // ===========================================================================
 

@@ -5,6 +5,7 @@ import com.example.common.page.PageResult;
 import com.example.user.domain.model.ProfileStatus;
 import com.example.user.domain.model.UserProfile;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,4 +24,8 @@ public interface UserProfileRepository {
     PageResult<UserProfile> findByEmailContaining(String email, PageQuery pageQuery);
 
     PageResult<UserProfile> findAll(PageQuery pageQuery);
+
+    long countForTenant();
+
+    long countForTenantCreatedBetween(Instant from, Instant to);
 }

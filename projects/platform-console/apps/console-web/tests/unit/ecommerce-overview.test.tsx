@@ -8,9 +8,10 @@ import type {
 } from '@/features/ecommerce-ops';
 
 /**
- * TASK-PC-FE-156 — `EcommerceOverview` presentation: count cards (each a
- * quick-launch link with back-compat testid), degraded/forbidden placeholders,
- * order-status distribution, and recent activity panels.
+ * TASK-PC-FE-156 / TASK-PC-FE-160 — `EcommerceOverview` presentation:
+ * count cards show period metrics (오늘/주간/월간) with 전체 total as
+ * secondary context. Back-compat testids (`<key>-count`, `<key>-count-degraded`)
+ * are preserved; new testids (`<key>-count-today/week/month`) added.
  */
 
 vi.mock('next/link', () => ({
@@ -30,6 +31,9 @@ const area = (over: Partial<AreaCount> & Pick<AreaCount, 'key'>): AreaCount => (
   href: `/ecommerce/${over.key}`,
   testid: `ecommerce-${over.key}-link`,
   count: 0,
+  today: 0,
+  week: 0,
+  month: 0,
   status: 'ok',
   ...over,
 });
@@ -37,8 +41,8 @@ const area = (over: Partial<AreaCount> & Pick<AreaCount, 'key'>): AreaCount => (
 const baseState = (over: Partial<EcommerceOverviewState> = {}): EcommerceOverviewState => ({
   notEligible: false,
   counts: [
-    area({ key: 'products', testid: 'ecommerce-products-link', count: 12 }),
-    area({ key: 'orders', testid: 'ecommerce-orders-link', count: 7 }),
+    area({ key: 'products', testid: 'ecommerce-products-link', count: 100, today: 3, week: 12, month: 30 }),
+    area({ key: 'orders', testid: 'ecommerce-orders-link', count: 70, today: 5, week: 25, month: 60 }),
   ],
   orderStatus: [
     { status: 'PENDING', count: 3, cellStatus: 'ok' },
@@ -68,7 +72,7 @@ const baseState = (over: Partial<EcommerceOverviewState> = {}): EcommerceOvervie
   ...over,
 });
 
-describe('EcommerceOverview (TASK-PC-FE-156)', () => {
+describe('EcommerceOverview (TASK-PC-FE-156 / TASK-PC-FE-160)', () => {
   it('notEligible → renders nothing', () => {
     const { container } = render(
       <EcommerceOverview state={baseState({ notEligible: true, counts: [] })} />,
@@ -76,28 +80,55 @@ describe('EcommerceOverview (TASK-PC-FE-156)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders count cards as quick-launch links with the count value', () => {
+  it('renders count cards as quick-launch links with period values and total', () => {
     render(<EcommerceOverview state={baseState()} />);
+    // Link href + testid
     const products = screen.getByTestId('ecommerce-products-link');
     expect(products).toHaveAttribute('href', '/ecommerce/products');
-    expect(screen.getByTestId('products-count')).toHaveTextContent('12');
     expect(screen.getByTestId('ecommerce-orders-link')).toBeInTheDocument();
+
+    // Period counts (오늘/주간/월간)
+    expect(screen.getByTestId('products-count-today')).toHaveTextContent('3');
+    expect(screen.getByTestId('products-count-week')).toHaveTextContent('12');
+    expect(screen.getByTestId('products-count-month')).toHaveTextContent('30');
+
+    // Total — back-compat testid `<key>-count`
+    expect(screen.getByTestId('products-count')).toHaveTextContent('100');
   });
 
-  it('a degraded count cell renders a placeholder instead of a number', () => {
+  it('zero period values render as "0", not degraded', () => {
     render(
       <EcommerceOverview
         state={baseState({
           counts: [
-            area({ key: 'products', testid: 'ecommerce-products-link', count: null, status: 'degraded' }),
-            area({ key: 'users', testid: 'ecommerce-users-link', count: null, status: 'forbidden' }),
+            area({ key: 'products', testid: 'ecommerce-products-link', count: 0, today: 0, week: 0, month: 0 }),
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByTestId('products-count-today')).toHaveTextContent('0');
+    expect(screen.getByTestId('products-count')).toHaveTextContent('0');
+    expect(screen.queryByTestId('products-count-degraded')).toBeNull();
+  });
+
+  it('a degraded count cell renders a placeholder instead of period numbers', () => {
+    render(
+      <EcommerceOverview
+        state={baseState({
+          counts: [
+            area({ key: 'products', testid: 'ecommerce-products-link', count: null, today: null, week: null, month: null, status: 'degraded' }),
+            area({ key: 'users', testid: 'ecommerce-users-link', count: null, today: null, week: null, month: null, status: 'forbidden' }),
           ],
         })}
       />,
     );
     expect(screen.getByTestId('products-count-degraded')).toHaveTextContent('점검 필요');
     expect(screen.getByTestId('users-count-degraded')).toHaveTextContent('권한 없음');
+    // Period + total testids must NOT appear for degraded cells.
     expect(screen.queryByTestId('products-count')).toBeNull();
+    expect(screen.queryByTestId('products-count-today')).toBeNull();
+    expect(screen.queryByTestId('products-count-week')).toBeNull();
+    expect(screen.queryByTestId('products-count-month')).toBeNull();
   });
 
   it('renders the order-status distribution and recent panels', () => {

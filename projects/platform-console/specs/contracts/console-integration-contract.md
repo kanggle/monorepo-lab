@@ -2463,6 +2463,33 @@ scope, no § 3 row — attestation count stays **16**).
   | 15 | list orders | `GET /admin/orders?status&page&size` | read |
   | 16 | order detail | `GET /admin/orders/{id}` | read |
   | 17 | **change order status** | `POST /admin/orders/{id}/status` | mutation |
+  | 18 | products period summary | `GET /admin/products/summary` | read |
+  | 19 | sellers period summary | `GET /admin/sellers/summary` | read |
+  | 20 | orders period summary | `GET /admin/orders/summary` | read |
+
+  **Operator-overview period summaries (#18–20 here + the per-area equivalents
+  in §§ 2.4.10.2–.6) — TASK-BE-468 / TASK-PC-FE-160**: each operator area exposes
+  a dedicated `GET .../summary` read that returns the KST **calendar-period-to-date**
+  counts consumed by the § 2.4.9.1 운영 개요 (`getEcommerceOverviewState`) — chosen
+  over adding date-range params to the list reads (one round-trip per area, list
+  contract untouched; revisits ADR-MONO-017 D3.B "no producer /summary" for the
+  overview specifically). Uniform response shape across all 7 endpoints:
+
+  ```json
+  { "today": 3, "week": 12, "month": 40, "total": 47 }
+  ```
+
+  All values `long`, tenant-scoped, never negative; `total` = cumulative row count
+  (the pre-existing overview number), `today`/`week`/`month` = rows whose
+  `createdAt` ≥ the KST period start (오늘 = Asia/Seoul 자정, 주간 = 이번 주 월요일
+  00:00 KST, 월간 = 이달 1일 00:00 KST) through now. Invariant `today ≤ week ≤
+  month ≤ total`. The 7 endpoints (per hosting service): `/admin/products/summary`
+  & `/admin/sellers/summary` (product-service), `/admin/orders/summary`
+  (order-service), `/shippings/summary` (shipping-service), `/promotions/summary`
+  (promotion-service), `/admin/users/summary` (user-service),
+  `/notifications/templates/summary` (notification-service). Same admission +
+  tenant chokepoint as each area's list read; the console degrades a non-200
+  summary cell to "점검 필요"/"권한 없음" (never blanks the section).
 
   **Out of this binding (deferred, not silently dropped)**: seller admin
   (`AdminSellerController POST /admin/sellers`) and search reindex

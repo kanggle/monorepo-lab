@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,4 +26,8 @@ interface UserProfileJpaRepository extends JpaRepository<UserProfileJpaEntity, U
     Page<UserProfileJpaEntity> findByTenantIdAndEmailContaining(String tenantId, String email, Pageable pageable);
 
     Page<UserProfileJpaEntity> findByTenantId(String tenantId, Pageable pageable);
+
+    long countByTenantId(String tenantId);
+
+    long countByTenantIdAndCreatedAtBetween(String tenantId, Instant from, Instant to);
 }

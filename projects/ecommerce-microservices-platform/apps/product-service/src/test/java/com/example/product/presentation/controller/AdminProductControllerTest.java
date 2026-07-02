@@ -8,6 +8,7 @@ import com.example.product.application.dto.VariantDetail;
 import com.example.product.application.service.AdjustStockService;
 import com.example.product.application.service.DeleteProductService;
 import com.example.product.application.service.ProductImageService;
+import com.example.product.application.service.ProductSummaryService;
 import com.example.product.application.service.QueryProductService;
 import com.example.product.application.service.RegisterProductService;
 import com.example.product.application.service.UpdateProductService;
@@ -54,6 +55,9 @@ class AdminProductControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private ProductSummaryService productSummaryService;
 
     @MockitoBean
     private QueryProductService queryProductService;

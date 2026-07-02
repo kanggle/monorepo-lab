@@ -5,6 +5,7 @@ import com.example.notification.adapter.in.rest.dto.request.UpdateTemplateReques
 import com.example.notification.adapter.in.rest.dto.response.TemplateDetailResponse;
 import com.example.notification.adapter.in.rest.dto.response.TemplateIdResponse;
 import com.example.notification.adapter.in.rest.dto.response.TemplateListResponse;
+import com.example.notification.adapter.in.rest.dto.response.TemplateSummaryResponse;
 import com.example.notification.application.command.CreateTemplateCommand;
 import com.example.notification.application.command.UpdateTemplateCommand;
 import com.example.common.page.PageQuery;
@@ -29,6 +30,14 @@ public class TemplateController {
     private static final String ADMIN_ROLE = "ADMIN";
 
     private final ManageTemplateUseCase templateService;
+
+    @GetMapping("/summary")
+    public ResponseEntity<TemplateSummaryResponse> getTemplateSummary(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole
+    ) {
+        validateAdminRole(userRole);
+        return ResponseEntity.ok(TemplateSummaryResponse.from(templateService.getTemplateSummary()));
+    }
 
     @GetMapping
     public ResponseEntity<TemplateListResponse> getTemplates(

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Optional;
 
 interface SellerJpaRepository extends JpaRepository<SellerJpaEntity, SellerJpaEntity.SellerId> {
@@ -30,4 +31,15 @@ interface SellerJpaRepository extends JpaRepository<SellerJpaEntity, SellerJpaEn
     @Query("SELECT COUNT(s) > 0 FROM SellerJpaEntity s WHERE s.tenantId = :tenantId AND s.sellerId = :sellerId")
     boolean existsByTenantIdAndSellerId(@Param("tenantId") String tenantId,
                                         @Param("sellerId") String sellerId);
+
+    /** Total sellers for a tenant (all-time). */
+    @Query("SELECT COUNT(s) FROM SellerJpaEntity s WHERE s.tenantId = :tenantId")
+    long countByTenantId(@Param("tenantId") String tenantId);
+
+    /** Sellers created in [from, to) for a tenant. */
+    @Query("SELECT COUNT(s) FROM SellerJpaEntity s WHERE s.tenantId = :tenantId "
+            + "AND s.createdAt >= :from AND s.createdAt < :to")
+    long countByTenantIdAndCreatedAtBetween(@Param("tenantId") String tenantId,
+                                            @Param("from") Instant from,
+                                            @Param("to") Instant to);
 }

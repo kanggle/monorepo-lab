@@ -1,6 +1,7 @@
 package com.example.shipping.application.service;
 
 import com.example.web.exception.AccessDeniedException;
+import com.example.shipping.application.result.ShippingPeriodCountResult;
 import com.example.shipping.application.result.ShippingResult;
 import com.example.shipping.application.result.ShippingSummary;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
@@ -12,6 +13,10 @@ import com.example.shipping.domain.repository.ShippingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.DayOfWeek;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +53,23 @@ public class ShippingQueryService {
                 pageResult.totalElements(),
                 pageResult.totalPages()
         );
+    }
+
+    public ShippingPeriodCountResult getSummary(String userRole) {
+        validateAdminRole(userRole);
+
+        ZoneId kst = ZoneId.of("Asia/Seoul");
+        ZonedDateTime now = ZonedDateTime.now(kst);
+        ZonedDateTime todayStart = now.toLocalDate().atStartOfDay(kst);
+        ZonedDateTime weekStart = now.toLocalDate().with(DayOfWeek.MONDAY).atStartOfDay(kst);
+        ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(kst);
+
+        long total = shippingRepository.countAll();
+        long today = shippingRepository.countCreatedBetween(todayStart.toInstant(), now.toInstant());
+        long week = shippingRepository.countCreatedBetween(weekStart.toInstant(), now.toInstant());
+        long month = shippingRepository.countCreatedBetween(monthStart.toInstant(), now.toInstant());
+
+        return new ShippingPeriodCountResult(today, week, month, total);
     }
 
     private void validateAdminRole(String userRole) {

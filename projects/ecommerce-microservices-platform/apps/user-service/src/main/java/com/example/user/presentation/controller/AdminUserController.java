@@ -4,6 +4,7 @@ import com.example.user.application.service.UserProfileService;
 import com.example.web.exception.AccessDeniedException;
 import com.example.user.domain.model.ProfileStatus;
 import com.example.user.presentation.dto.response.AdminUserListResponse;
+import com.example.user.presentation.dto.response.UserCountSummaryResponse;
 import com.example.user.presentation.dto.response.UserProfileResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,14 @@ public class AdminUserController {
     private static final String ROLE_ADMIN = "ADMIN";
 
     private final UserProfileService userProfileService;
+
+    @GetMapping("/summary")
+    public ResponseEntity<UserCountSummaryResponse> getUserCountSummary(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole) {
+        validateAdminRole(userRole);
+        var result = userProfileService.getCountSummary();
+        return ResponseEntity.ok(UserCountSummaryResponse.from(result));
+    }
 
     @GetMapping
     public ResponseEntity<AdminUserListResponse> listUsers(

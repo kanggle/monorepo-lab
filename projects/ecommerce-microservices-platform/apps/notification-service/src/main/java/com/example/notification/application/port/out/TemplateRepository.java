@@ -6,6 +6,7 @@ import com.example.notification.domain.model.NotificationChannel;
 import com.example.notification.domain.model.NotificationTemplate;
 import com.example.notification.domain.model.TemplateType;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 public interface TemplateRepository {
@@ -29,4 +30,13 @@ public interface TemplateRepository {
 
     /** Tenant-scoped admin template list (tenant from {@code TenantContext}). */
     PageResult<NotificationTemplate> findAll(PageQuery pageQuery);
+
+    /** Tenant-scoped total count (tenant from {@code TenantContext}). */
+    long countAll();
+
+    /**
+     * Tenant-scoped count of templates whose {@code createdAt} falls within
+     * [{@code from}, {@code to}) (tenant from {@code TenantContext}).
+     */
+    long countCreatedBetween(LocalDateTime from, LocalDateTime to);
 }

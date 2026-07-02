@@ -60,4 +60,15 @@ interface ProductJpaRepository extends JpaRepository<ProductJpaEntity, UUID> {
     @Modifying
     @Query("UPDATE ProductJpaEntity p SET p.deletedAt = :deletedAt WHERE p.id = :id AND p.tenantId = :tenantId")
     void softDeleteById(@Param("id") UUID id, @Param("tenantId") String tenantId, @Param("deletedAt") Instant deletedAt);
+
+    /** Total non-deleted products for a tenant (all-time). */
+    @Query("SELECT COUNT(p) FROM ProductJpaEntity p WHERE p.tenantId = :tenantId AND p.deletedAt IS NULL")
+    long countByTenantId(@Param("tenantId") String tenantId);
+
+    /** Non-deleted products created in [from, to) for a tenant. */
+    @Query("SELECT COUNT(p) FROM ProductJpaEntity p WHERE p.tenantId = :tenantId "
+            + "AND p.createdAt >= :from AND p.createdAt < :to AND p.deletedAt IS NULL")
+    long countByTenantIdAndCreatedAtBetween(@Param("tenantId") String tenantId,
+                                            @Param("from") Instant from,
+                                            @Param("to") Instant to);
 }

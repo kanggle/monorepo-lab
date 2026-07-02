@@ -1,6 +1,7 @@
 package com.example.promotion.application.service;
 
 import com.example.web.exception.AccessDeniedException;
+import com.example.promotion.application.result.PromotionCountSummary;
 import com.example.promotion.application.result.PromotionDetail;
 import com.example.promotion.application.result.PromotionSummary;
 import com.example.common.page.PageResult;
@@ -13,6 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.DayOfWeek;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +51,23 @@ public class PromotionQueryService {
                 result.totalElements(),
                 result.totalPages()
         );
+    }
+
+    public PromotionCountSummary getPromotionSummary(String userRole) {
+        validateAdminRole(userRole);
+
+        ZoneId kst = ZoneId.of("Asia/Seoul");
+        ZonedDateTime now = ZonedDateTime.now(clock).withZoneSameInstant(kst);
+        ZonedDateTime todayStart = now.toLocalDate().atStartOfDay(kst);
+        ZonedDateTime weekStart  = now.toLocalDate().with(DayOfWeek.MONDAY).atStartOfDay(kst);
+        ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(kst);
+
+        long total = promotionRepository.countAll();
+        long today = promotionRepository.countByCreatedAtBetween(todayStart.toInstant(), now.toInstant());
+        long week  = promotionRepository.countByCreatedAtBetween(weekStart.toInstant(), now.toInstant());
+        long month = promotionRepository.countByCreatedAtBetween(monthStart.toInstant(), now.toInstant());
+
+        return new PromotionCountSummary(today, week, month, total);
     }
 
     private void validateAdminRole(String userRole) {
