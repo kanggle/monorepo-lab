@@ -1,6 +1,6 @@
 # TASK-PC-FE-159 — adopt shared `StatusBadge` on the remaining status columns
 
-**Status:** backlog
+**Status:** in-progress
 **Area:** platform-console / console-web · **Paths:** `features/{ecommerce-ops,finance-ops,ledger-ops,erp-ops,scm-ops,scm-replenishment}`
 **Parent / depends on:** TASK-PC-FE-158 (shared `StatusBadge` extraction — `shared/ui/StatusBadge.tsx`). This is the
 incremental roll-out follow-up that PC-FE-158 explicitly scoped out.

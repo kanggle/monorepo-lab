@@ -4,9 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useProduct, useDeleteProduct } from '../hooks/use-ecommerce-products';
-import type { ProductDetail as ProductDetailType, Variant } from '../api/types';
+import {
+  productStatusTone,
+  type ProductDetail as ProductDetailType,
+  type Variant,
+} from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { VariantEditor } from './VariantEditor';
 import { StockAdjustDialog } from './StockAdjustDialog';
@@ -89,7 +94,11 @@ export function ProductDetail({ product }: ProductDetailProps) {
         </div>
         <div>
           <dt className="text-muted-foreground">상태</dt>
-          <dd data-testid="product-detail-status">{data.status}</dd>
+          <dd data-testid="product-detail-status">
+            <StatusBadge tone={productStatusTone(data.status)}>
+              {data.status}
+            </StatusBadge>
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">가격</dt>

@@ -46,6 +46,10 @@ export interface StatusBadgeProps {
   children: ReactNode;
   /** Optional extra classes appended after the tone classes. */
   className?: string;
+  /** Optional test id — forwarded to the rendered `<span>`. Lets a migrating
+   *  call site keep its existing `*-status` testid on the badge itself (the
+   *  status element), rather than hoisting it to a wrapping cell. */
+  'data-testid'?: string;
 }
 
 /**
@@ -56,10 +60,12 @@ export function StatusBadge({
   tone = 'neutral',
   children,
   className,
+  'data-testid': testId,
 }: StatusBadgeProps) {
   return (
     <span
       className={`${statusToneClass(tone)}${className ? ` ${className}` : ''}`}
+      data-testid={testId}
     >
       {children}
     </span>

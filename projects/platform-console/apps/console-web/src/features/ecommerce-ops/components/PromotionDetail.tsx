@@ -4,12 +4,16 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   usePromotion,
   useDeletePromotion,
 } from '../hooks/use-ecommerce-promotions';
-import type { PromotionDetail as PromotionDetailType } from '../api/types';
+import {
+  promotionStatusTone,
+  type PromotionDetail as PromotionDetailType,
+} from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { CouponIssueDialog } from './CouponIssueDialog';
 import { DetailHeader } from './DetailHeader';
@@ -109,7 +113,11 @@ export function PromotionDetail({ promotion }: PromotionDetailProps) {
         </div>
         <div>
           <dt className="text-muted-foreground">상태</dt>
-          <dd data-testid="promotion-detail-status">{data.status}</dd>
+          <dd data-testid="promotion-detail-status">
+            <StatusBadge tone={promotionStatusTone(data.status)}>
+              {data.status}
+            </StatusBadge>
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">할인 유형</dt>

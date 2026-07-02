@@ -7,7 +7,7 @@ import type {
   CellStatus,
 } from '../api/overview-state';
 import { sellerStatusTone } from '../api/seller-types';
-import type { OrderStatus } from '../api/order-types';
+import { orderStatusTone, type OrderStatus } from '../api/order-types';
 
 /**
  * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156).
@@ -178,9 +178,9 @@ function RecentOrders({
             {o.firstItemName}
             {o.itemCount > 1 ? ` 외 ${o.itemCount - 1}건` : ''}
           </span>
-          <span className="shrink-0 text-muted-foreground">
+          <StatusBadge tone={orderStatusTone(o.status)} className="shrink-0">
             {ORDER_STATUS_LABELS[o.status as OrderStatus] ?? o.status}
-          </span>
+          </StatusBadge>
           <span className="shrink-0 tabular-nums text-foreground">
             ₩{o.totalPrice.toLocaleString('ko-KR')}
           </span>

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the ecommerce `shipping-service` operator surface —
@@ -33,6 +34,23 @@ export const SHIPPING_STATUS_VALUES = [
   'DELIVERED',
 ] as const;
 export type ShippingStatus = (typeof SHIPPING_STATUS_VALUES)[number];
+
+/**
+ * Shipping status → shared semantic {@link StatusTone} (rendered via the shared
+ * `<StatusBadge>` — TASK-PC-FE-158/159). PREPARING awaits dispatch (warning);
+ * SHIPPED/IN_TRANSIT are mid-flight (progress); DELIVERED is the happy terminal
+ * (success). An unknown/future status → `neutral` (TOLERANCE).
+ */
+const SHIPPING_STATUS_TONE: Record<ShippingStatus, StatusTone> = {
+  PREPARING: 'warning',
+  SHIPPED: 'progress',
+  IN_TRANSIT: 'progress',
+  DELIVERED: 'success',
+};
+
+export function shippingStatusTone(status: string): StatusTone {
+  return SHIPPING_STATUS_TONE[status as ShippingStatus] ?? 'neutral';
+}
 
 /**
  * Strictly linear single-successor state machine.

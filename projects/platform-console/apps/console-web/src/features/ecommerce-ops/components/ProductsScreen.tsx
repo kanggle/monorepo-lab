@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useProducts,
@@ -12,6 +13,7 @@ import {
 import {
   PRODUCT_DEFAULT_PAGE_SIZE,
   PRODUCT_STATUS_VALUES,
+  productStatusTone,
   type ProductList,
   type ProductListParams,
 } from '../api/types';
@@ -180,7 +182,11 @@ export function ProductsScreen({ products }: ProductsScreenProps) {
               {rows.map((p, i) => (
                 <tr key={p.id} data-testid={`product-row-${i}`} className="border-b border-border">
                   <td className="p-2">{p.name}</td>
-                  <td className="p-2" data-testid={`product-row-status-${i}`}>{p.status}</td>
+                  <td className="p-2" data-testid={`product-row-status-${i}`}>
+                    <StatusBadge tone={productStatusTone(p.status)}>
+                      {p.status}
+                    </StatusBadge>
+                  </td>
                   <td className="p-2">{p.price.toLocaleString('ko-KR')}원</td>
                   <td className="p-2">
                     <div className="flex gap-2">
