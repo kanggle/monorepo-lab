@@ -5,6 +5,7 @@ import { useOrder } from '../hooks/use-ecommerce-orders';
 import type { OrderDetail as OrderDetailType } from '../api/order-types';
 import { OrderStatusDialog } from './OrderStatusDialog';
 import { DetailHeader } from './DetailHeader';
+import { formatDateTime } from '@/shared/lib/datetime';
 
 /**
  * ecommerce order detail section (TASK-PC-FE-083 — § 2.4.10 #16). The console
@@ -71,14 +72,14 @@ export function OrderDetail({ order }: OrderDetailProps) {
         <div>
           <dt className="text-muted-foreground">주문일</dt>
           <dd className="text-xs">
-            {new Date(data.createdAt).toLocaleString('ko-KR')}
+            {formatDateTime(data.createdAt)}
           </dd>
         </div>
         {data.updatedAt && (
           <div>
             <dt className="text-muted-foreground">수정일</dt>
             <dd className="text-xs">
-              {new Date(data.updatedAt).toLocaleString('ko-KR')}
+              {formatDateTime(data.updatedAt)}
             </dd>
           </div>
         )}

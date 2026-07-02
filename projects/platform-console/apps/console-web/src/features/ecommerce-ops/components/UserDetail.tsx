@@ -3,6 +3,7 @@
 import { useUser } from '../hooks/use-ecommerce-users';
 import type { UserDetail as UserDetailType } from '../api/user-types';
 import { DetailHeader } from './DetailHeader';
+import { formatDateTime } from '@/shared/lib/datetime';
 
 /**
  * ecommerce user detail section (TASK-PC-FE-084 — § 2.4.10 users). The console
@@ -99,14 +100,14 @@ export function UserDetail({ user }: UserDetailProps) {
         <div>
           <dt className="text-muted-foreground">가입일</dt>
           <dd className="text-xs" data-testid="user-detail-created-at">
-            {new Date(data.createdAt).toLocaleString('ko-KR')}
+            {formatDateTime(data.createdAt)}
           </dd>
         </div>
         {data.updatedAt && (
           <div>
             <dt className="text-muted-foreground">수정일</dt>
             <dd className="text-xs" data-testid="user-detail-updated-at">
-              {new Date(data.updatedAt).toLocaleString('ko-KR')}
+              {formatDateTime(data.updatedAt)}
             </dd>
           </div>
         )}

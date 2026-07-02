@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useOrders } from '../hooks/use-ecommerce-orders';
+import { formatDateTime } from '@/shared/lib/datetime';
 import {
   ORDER_DEFAULT_PAGE_SIZE,
   ORDER_STATUS_VALUES,
@@ -188,7 +189,7 @@ export function OrdersScreen({ orders }: OrdersScreenProps) {
                     {o.totalPrice.toLocaleString('ko-KR')}원
                   </td>
                   <td className="p-2 text-sm text-muted-foreground">
-                    {new Date(o.createdAt).toLocaleDateString('ko-KR')}
+                    {formatDateTime(o.createdAt)}
                   </td>
                   <td className="p-2">
                     <Link href={`/ecommerce/orders/${o.orderId}`}>

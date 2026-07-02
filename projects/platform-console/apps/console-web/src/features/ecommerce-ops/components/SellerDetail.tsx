@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
+import { formatDateTime } from '@/shared/lib/datetime';
 import {
   useSeller,
   useProvisionSeller,
@@ -154,14 +155,14 @@ export function SellerDetail({ seller }: SellerDetailProps) {
         <div>
           <dt className="text-muted-foreground">등록일</dt>
           <dd className="text-xs" data-testid="seller-detail-created-at">
-            {new Date(data.createdAt).toLocaleString('ko-KR')}
+            {formatDateTime(data.createdAt)}
           </dd>
         </div>
         {data.updatedAt != null && data.updatedAt !== '' && (
           <div>
             <dt className="text-muted-foreground">수정일</dt>
             <dd className="text-xs" data-testid="seller-detail-updated-at">
-              {new Date(data.updatedAt).toLocaleString('ko-KR')}
+              {formatDateTime(data.updatedAt)}
             </dd>
           </div>
         )}
