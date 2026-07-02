@@ -16,7 +16,7 @@ vi.mock('@/shared/auth/session', () => ({
 // next/server's NextRequest/NextResponse work under the node test env. Import
 // the route AFTER mocks are registered.
 import { NextRequest } from 'next/server';
-import { GET, POST } from '@/app/api/bff/[...path]/route';
+import { GET, POST, DELETE } from '@/app/api/bff/[...path]/route';
 
 function makeCtx(segments: string[]) {
   return { params: Promise.resolve({ path: segments }) };
@@ -121,6 +121,63 @@ describe('BFF proxy — F2 server-side bearer attach', () => {
     expect(res.headers.get('X-Reauth')).toBe('1');
     const body = (await res.json()) as { code: string };
     expect(body.code).toBe('REAUTH_REQUIRED');
+  });
+
+  it('백엔드 204 No Content → 예외 없이 204 로 통과(본문 없음) [FE-083-fix-002]', async () => {
+    getWebStoreSession.mockResolvedValue({
+      accessToken: 'tok',
+      accountId: 'a',
+      tenantId: 't',
+      roles: ['CUSTOMER'],
+    });
+    // A null-body status: a body here would make the Response constructor throw.
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    const req = new NextRequest('http://localhost:3000/api/bff/api/notifications/me/push-subscriptions', {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ endpoint: 'https://fcm.example/abc' }),
+    });
+
+    // Before the fix this rejected with `TypeError: Response constructor: Invalid
+    // response status code 204` and Next translated it to a 500.
+    const res = await DELETE(req, makeCtx(['api', 'notifications', 'me', 'push-subscriptions']));
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe('');
+  });
+
+  it('백엔드 304 Not Modified → 예외 없이 304 로 통과 [FE-083-fix-002]', async () => {
+    getWebStoreSession.mockResolvedValue({
+      accessToken: 'tok',
+      accountId: 'a',
+      tenantId: 't',
+      roles: ['CUSTOMER'],
+    });
+    fetchMock.mockResolvedValue(new Response(null, { status: 304 }));
+
+    const req = new NextRequest('http://localhost:3000/api/bff/api/products', { method: 'GET' });
+    const res = await GET(req, makeCtx(['api', 'products']));
+    expect(res.status).toBe(304);
+  });
+
+  it('본문 있는 응답(200)은 본문·status 를 그대로 통과 [FE-083-fix-002 회귀]', async () => {
+    getWebStoreSession.mockResolvedValue({
+      accessToken: 'tok',
+      accountId: 'a',
+      tenantId: 't',
+      roles: ['CUSTOMER'],
+    });
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/bff/api/orders', { method: 'GET' });
+    const res = await GET(req, makeCtx(['api', 'orders']));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
   });
 
   it('업스트림 네트워크 실패 → 502', async () => {

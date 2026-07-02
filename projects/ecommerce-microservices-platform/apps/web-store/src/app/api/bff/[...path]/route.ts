@@ -112,7 +112,15 @@ async function forward(
     }
   });
 
-  const resBody = await backendRes.arrayBuffer();
+  // Null-body statuses (204 No Content, 205 Reset Content, 304 Not Modified) MUST
+  // NOT carry a body: per the Fetch spec the `Response` constructor throws a
+  // TypeError when given one, and even an empty ArrayBuffer counts as a (non-null)
+  // body. Passing it through verbatim therefore turned every backend 204 into a
+  // 500 at this proxy (e.g. the push-subscription DELETE). Forward such responses
+  // with a null body; carry the arrayBuffer body only for statuses that permit one.
+  const isNullBodyStatus =
+    backendRes.status === 204 || backendRes.status === 205 || backendRes.status === 304;
+  const resBody = isNullBodyStatus ? null : await backendRes.arrayBuffer();
   return new NextResponse(resBody, {
     status: backendRes.status,
     statusText: backendRes.statusText,

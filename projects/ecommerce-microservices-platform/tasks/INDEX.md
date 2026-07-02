@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-083-fix-002 | **REVIEW (PR 대기)**. FE-083 후속 버그픽스 — web-store BFF 프록시(`api/bff/[...path]`)가 백엔드 204/205/304 응답에 (빈) 본문을 실어 `Response` 생성자 `TypeError`→500 으로 변질. 라이브 fed-e2e push 구독 해지 시 발견(백엔드는 204 정상 삭제, UI 만 실패 오인). null-body-status 시 본문 `null` 전달 + 프록시 204/304/200 테스트. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, bug, test |
 
 ## done
 
