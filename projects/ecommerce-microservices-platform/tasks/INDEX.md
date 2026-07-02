@@ -84,12 +84,12 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-FE-083 | **REVIEW (2026-07-02 구현 완료, 승격+구현 번들)**. web-store Web Push 구독 — `public/sw.js`(push 배너·notificationclick) + `use-push-subscription`(권한→SW→VAPID subscribe→백엔드 등록/해지) + `PushOptIn`(3-way 권한 UX, NotificationSettings 통합) + `@repo/types`/`@repo/api-client` push 메서드. 테스트 3종. ⚠️로컬 vitest 불가→CI Node20 권위. 라이브 배너=fed-e2e 수동 스모크. impl 브랜치 `fe-083-web-push-ui`. | web-store | code, push |
 
 ## done
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-083 | **DONE (2026-07-02, 3-dim verified — PR #2090 `6f514106e`)**. web-store Web Push 구독 — `public/sw.js`(push 배너·notificationclick) + `use-push-subscription`(권한→SW→VAPID subscribe→백엔드 등록/해지) + `PushOptIn`(3-way 권한 UX, NotificationSettings 통합) + `@repo/types`/`@repo/api-client` push 메서드. 테스트 3종(CI Node20 GREEN). 라이브 배너=fed-e2e 수동 스모크. **Web Push E2E(BE-463→BE-464→FE-083) 완결.** 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, push |
 | TASK-BE-464 | **DONE (2026-07-02, 3-dim verified — PR #2088 `517d28660`)**. notification-service Web Push(VAPID) 실연동 — V6 `push_subscriptions` + 등록/해지 API + `GET vapid-public-key`(200/503) + `WebPushSender`(BE-463 stub 대체·404/410 lazy prune·per-endpoint 실패 격리) + `MartijndwarsWebPushGateway`(web-push:5.1.1 + BouncyCastle 1.78.1 명시추가·미설정 skip graceful). 단위 5종 + notification-service Testcontainers IT(풀 wiring/Flyway/엔티티) GREEN. 실 브라우저 발송=후속 FE-083. 분석=Opus 4.8 / 구현=Opus 직접. | notification-service | code, api, migration, push |
 | TASK-BE-463 | **DONE (2026-07-01, 3-dim verified — PR #2076 `daf928de3`)**. notification-service PUSH 채널 stub/log `PushNotificationSender`(@Component, supportedChannel=PUSH) — sender 부재로 조용히 drop되던 갭 해소, senderMap[PUSH] 자동 충전으로 render→send 경로 연결(발송 서비스 무변경, 계약 무변경). notification-service Testcontainers IT PASS 로 wiring 검증. 실 provider=후속 BE-464(Web Push/VAPID)→FE-083. 분석=Opus 4.8 / 구현=Opus 직접. | notification-service | code, test |
 | TASK-BE-459 | **DONE (2026-06-29, impl PR #2022 squash `4b699e48f`, 3-dim verified)**. Authored `ADR-008 PROPOSED` — `/api/internal/**` 내부 엔드포인트 인증 경계를 네트워크-단독(현행 filter `permitAll`) → **앱-레이어 방어심층**(네트워크경계 유지 + NetworkPolicy 명시 승격 + 공유시크릿 토큰 게이트 constant-time + prod fail-closed + 감사). `BE-118-fix-002` deferred-but-untickected TODO 정식화. 버린 대안=네트워크-단독·mTLS/메시·IAM-JWT(각 기각사유). doc-only(ADR + README). **3-dim**: (a) MERGED+`4b699e48f`; (b) origin/main tip 일치; (c) pre-merge failing=0 (doc fast-lane). ACCEPTANCE + per-service 구현(auth/order/batch-worker)=user-gated 후속. 분석=Opus 4.8 / 구현=Opus 직접. | auth-service (정책=ecommerce 전반) | adr, docs |

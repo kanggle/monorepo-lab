@@ -1,6 +1,7 @@
 # TASK-FE-083 — web-store Web Push 구독: Service Worker + opt-in UI + 배너 표시
 
-- **Status**: review
+- **Status**: done
+- **DONE (2026-07-02, 3-dim verified — impl PR #2090 squash `6f514106e`)**: (a) state=MERGED + `6f514106e`; (b) origin/main tip=`6f514106e` 일치; (c) pre-merge failing required=0 (Frontend lint&build + unit tests[Node20] + E2E smoke + 전 백엔드 레인 GREEN). CI 2-round fix: ①`@repo/types` barrel 이 명시적 named-export 라 신규 push 타입 누락→api-client build TS2305(export 추가); ②TS5.7+ Uint8Array 제네릭→`applicationServerKey` BufferSource 불일치(명시 ArrayBuffer 백킹). 라이브 브라우저 배너(AC-5)=fed-e2e 수동 스모크 잔여. **Web Push end-to-end(BE-463 stub→BE-464 실 VAPID→FE-083 브라우저) 완결.**
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
