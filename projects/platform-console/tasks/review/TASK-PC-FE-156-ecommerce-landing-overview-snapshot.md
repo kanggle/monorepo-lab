@@ -1,6 +1,6 @@
 # TASK-PC-FE-156 — elevate the ecommerce landing into an **operator overview snapshot**
 
-**Status:** ready
+**Status:** review
 **Area:** platform-console / console-web · **Route:** `app/(console)/ecommerce/page.tsx` + `features/ecommerce-ops`
 **Parent:** ADR-MONO-031 §2.4.10 console-absorption. Follows TASK-PC-FE-155 (landing quick-links). Realizes the
 "operator-overview snapshot leg" that the §2.4.10 landing doc-comment had marked a deferred follow-up.
