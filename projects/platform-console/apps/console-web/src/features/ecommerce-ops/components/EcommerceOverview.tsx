@@ -87,7 +87,7 @@ export function EcommerceOverview({
 
       {/* Order-status distribution. */}
       <div className="mb-8">
-        <h3 className="mb-3 text-sm font-semibold text-foreground">주문 상태</h3>
+        <h3 className="mb-3 text-sm font-semibold text-foreground">주문/배송 상태</h3>
         <dl
           data-testid="ecommerce-order-status"
           className="flex flex-wrap gap-x-8 gap-y-3 rounded-md border border-border bg-background px-4 py-4"
