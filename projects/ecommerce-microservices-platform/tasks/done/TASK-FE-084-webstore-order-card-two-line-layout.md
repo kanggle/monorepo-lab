@@ -1,6 +1,7 @@
 # TASK-FE-084 — web-store 주문 내역 카드를 3줄 → 2줄 레이아웃으로 압축
 
-- **Status**: review
+- **Status**: done
+- **DONE (2026-07-02, 3-dim verified — PR #2111 `d9e840819`)**: state=MERGED + origin/main tip=`d9e840819` 일치 + pre-merge failing=0(Frontend unit tests[Node20, 기존 OrderCard 테스트 무수정]+lint&build+E2E smoke GREEN). 주문 내역 카드 3줄→2줄(날짜+상태 / 상품명·총액) 압축.
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
