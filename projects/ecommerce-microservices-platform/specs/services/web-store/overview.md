@@ -11,16 +11,16 @@
 | Service Type | `frontend-app` |
 | Architecture Style | **Feature-Sliced Design** — app/widgets/features/entities/shared, see [architecture.md § Architecture Style](architecture.md) |
 | Stack | Next.js (App Router), TypeScript, CSS-variable design tokens + CSS Modules (**no Tailwind**), Toss Payments widget, `@repo/api-client` / `@repo/ui` / `@repo/types` / `@repo/utils` |
-| Deployable unit | `web/web-store/` (or `apps/web-store/` per repo layout) |
+| Deployable unit | `apps/web-store/` |
 | Bounded Context | `ecommerce-storefront` (customer-facing) |
 | Persistent stores | none — auth session via cookie / next-auth; transient client state for cart + UI prefs |
-| Backend dependencies | `gateway-service` (all API traffic), IAM IdP (auth, indirect via gateway) |
+| Backend dependencies | `gateway-service` (all backend API traffic); IAM IdP (auth **directly** via OIDC — discovery / `/oauth2/*`, not through gateway) |
 
 ## Responsibilities
 
 - **End-to-end customer journey** — product browsing → detail → search → cart → checkout → payment → order history → profile.
-- **SSR/SSG for SEO** — product listing/detail pages server-rendered for crawler visibility; non-product pages client-rendered.
-- **Search + filters** — query `search-service` via gateway; results page with filter + sort UX.
+- **SSG/ISR for SEO** — product listing/detail pages statically generated + revalidated (`revalidate=60`) for crawler visibility; account / checkout pages client-rendered.
+- **Search + filters** — query `search-service` via gateway; results render on the catalog page `/products?query=…` (filter + sort via query params — there is no separate `/search` route).
 - **Cart state** — client-side (authenticated 사용자에게만 노출); server-side sync via `cart-service` (planned) or `order-service` cart endpoints.
 - **Checkout + payment** — order creation via `order-service`, payment via Toss Payments widget redirect → `payment-service` confirmation callback.
 - **Auth flows** — login / signup / refresh via `/api/auth/...` (IAM OIDC via NextAuth v5; auth-service decommissioned 2026-05-04 — TASK-BE-132 + TASK-FE-067 done).
@@ -29,23 +29,34 @@
 
 ## Public surface (pages)
 
-자세한 spec 은 [architecture.md § Key Features](architecture.md) 참조.
+자세한 spec 은 [architecture.md § Feature Structure](architecture.md) 참조.
 
 | Path | Pattern | Auth | Purpose |
 |---|---|---|---|
-| `/` | SSG | public | landing + featured products |
-| `/products` | SSR | public | catalog listing (filter / sort) |
-| `/products/[slug]` | SSG/ISR | public | product detail (PDP) |
-| `/search` | SSR | public | search results |
-| `/login`, `/signup` | CSR | public | auth flows |
+| `/` | ISR (`revalidate=60`) | public | landing + featured products |
+| `/products` | ISR (`revalidate=60`) | public | catalog listing + **search results** (`?query=…`, filter / sort) |
+| `/products/[id]` | ISR (`revalidate=60`) | public | product detail (PDP) |
+| `/login` | CSR | public | login (delegates to IAM `signIn('iam')`) |
+| `/signup` | redirect | public | legacy alias → `/api/auth/signin/iam` |
 | `/cart` | CSR | gated | cart management (authenticated only) |
-| `/checkout` | CSR | gated | order + payment flow |
-| `/checkout/confirm` | CSR | gated | Toss Payments redirect callback |
-| `/orders` | CSR | gated | order history |
-| `/orders/[id]` | CSR | gated | order detail + tracking |
-| `/profile` | CSR | gated | profile + addresses + saved cards |
+| `/checkout` | CSR | gated | order + payment entry |
+| `/checkout/payment` | CSR | gated | Toss Payments widget |
+| `/checkout/payment/success`, `/checkout/payment/fail` | CSR | gated | PG redirect callbacks |
+| `/checkout/complete` | CSR | gated | order completion |
+| `/my/orders`, `/my/orders/[id]` | CSR | gated | order history + detail |
+| `/my/profile` | CSR | gated | profile |
+| `/my/addresses` | CSR | gated | address book |
+| `/my/coupons` | CSR | gated | issued coupons |
+| `/my/wishlist` | CSR | gated | wishlist |
+| `/my/reviews` | CSR | gated | my product reviews |
+| `/my/notifications`, `/my/notifications/settings` | CSR | gated | notification inbox + preferences (incl. Web Push opt-in) |
 
-middleware-gated paths 외엔 `/login` 으로 redirect.
+The customer account area lives under `/my/*`. `/orders` and `/orders/[id]` also
+exist as legacy top-level aliases of `/my/orders*`.
+
+Public paths (no auth): `/`, `/products/*`, `/login`, `/signup`, `/api/auth/*`
+(architecture.md § Authentication). Everything else is middleware-gated →
+redirect to `/login?from=<intended-path>`.
 
 ## Key invariants
 
