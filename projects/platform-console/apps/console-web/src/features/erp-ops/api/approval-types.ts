@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the erp `approval-service` workflow surface
@@ -47,6 +48,29 @@ export const APPROVAL_STATUSES = [
   'WITHDRAWN',
 ] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+
+/**
+ * Approval status → shared semantic {@link StatusTone} (the palette lives in
+ * `shared/ui/StatusBadge`; the erp badge keeps its own `<span>` for the
+ * `data-status` / `data-terminal` attributes but styles it via
+ * `statusToneClass` — TASK-PC-FE-159). DRAFT and WITHDRAWN are inactive
+ * (neutral — a withdrawn request is recalled, NOT a failure, so it is not
+ * danger); SUBMITTED awaits first action (warning); IN_REVIEW is mid-routing
+ * (progress); APPROVED is the happy terminal (success); REJECTED is
+ * terminal-bad (danger). An unknown/future status → `neutral` (tolerant).
+ */
+const APPROVAL_STATUS_TONE: Record<ApprovalStatus, StatusTone> = {
+  DRAFT: 'neutral',
+  SUBMITTED: 'warning',
+  IN_REVIEW: 'progress',
+  APPROVED: 'success',
+  REJECTED: 'danger',
+  WITHDRAWN: 'neutral',
+};
+
+export function approvalStatusTone(status: string): StatusTone {
+  return APPROVAL_STATUS_TONE[status as ApprovalStatus] ?? 'neutral';
+}
 
 export const APPROVAL_SUBJECT_TYPES = ['DEPARTMENT', 'EMPLOYEE'] as const;
 export type ApprovalSubjectType = (typeof APPROVAL_SUBJECT_TYPES)[number];

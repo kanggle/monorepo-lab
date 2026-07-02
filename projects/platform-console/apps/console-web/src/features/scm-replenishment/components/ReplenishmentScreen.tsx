@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useSuggestions,
@@ -12,6 +13,7 @@ import {
 import {
   REPL_DEFAULT_PAGE_SIZE,
   KNOWN_SUGGESTION_STATUSES,
+  suggestionStatusTone,
   canApprove,
   canDismiss,
   type SuggestionPage,
@@ -369,7 +371,9 @@ export function ReplenishmentScreen({ suggestions }: ReplenishmentScreenProps) {
                       {s.triggerAvailableQty ?? '—'}
                     </td>
                     <td className="p-2" data-testid={`repl-row-status-${i}`}>
-                      {s.status ?? '—'}
+                      <StatusBadge tone={suggestionStatusTone(s.status)}>
+                        {s.status ?? '—'}
+                      </StatusBadge>
                     </td>
                     <td className="p-2">{s.materializedPoId ?? '—'}</td>
                     <td className="p-2">

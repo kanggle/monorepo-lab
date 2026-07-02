@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import {
   isRetired,
   KNOWN_MASTER_STATUSES,
   labelForUnknownEnum,
+  masterStatusTone,
   type CreateCostCenterInput,
   type UpdateCostCenterInput,
   type CostCenterListResponse,
@@ -126,12 +128,12 @@ export function CostCenterList({
                     <td className="p-2">{c.code}</td>
                     <td className="p-2">{c.name}</td>
                     <td className="p-2">
-                      <span
+                      <StatusBadge
+                        tone={masterStatusTone(c.status)}
                         data-testid={`erp-costcenter-status-${i}`}
-                        className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
                       >
                         {labelForUnknownEnum(c.status, KNOWN_MASTER_STATUSES)}
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td className="p-2">{c.departmentId ?? '—'}</td>
                     <td className="p-2">
