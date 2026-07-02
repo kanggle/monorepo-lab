@@ -592,7 +592,7 @@ const MESSAGES: Record<string, string> = {
     '로그인 이력·의심 활동을 조회하려면 보안 이벤트 조회 권한(security.event.read)이 필요합니다.',
   // --- operators (TASK-PC-FE-004 / §2.4.3) -------------------------------
   OPERATOR_MANAGE_REQUIRED:
-    '운영자 관리는 SUPER_ADMIN(operator.manage 권한)만 수행할 수 있습니다.',
+    '운영자 관리는 operator.manage 권한이 필요합니다 (SUPER_ADMIN 또는 자기 테넌트 TENANT_ADMIN).',
   TENANT_SCOPE_DENIED_CREATE:
     "플랫폼 스코프(*) 운영자는 플랫폼 스코프 운영자만 생성할 수 있습니다. 이 작업을 수행할 권한이 없습니다.",
   OPERATOR_EMAIL_CONFLICT:
