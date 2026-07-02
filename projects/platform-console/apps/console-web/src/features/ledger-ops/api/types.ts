@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the finance `ledger-service`'s read-only
@@ -255,6 +256,21 @@ export type JournalEntry = z.infer<typeof JournalEntrySchema>;
 export const KNOWN_PERIOD_STATUSES = ['OPEN', 'CLOSED'] as const;
 export type KnownPeriodStatus = (typeof KNOWN_PERIOD_STATUSES)[number];
 
+/**
+ * Period status → shared semantic {@link StatusTone} (rendered via the shared
+ * `<StatusBadge>` — TASK-PC-FE-159). OPEN is the live accounting period
+ * (in-progress); CLOSED is finalised/reconciled (success). An unknown/future
+ * status → `neutral` (tolerant — never a throw).
+ */
+const PERIOD_STATUS_TONE: Record<KnownPeriodStatus, StatusTone> = {
+  OPEN: 'progress',
+  CLOSED: 'success',
+};
+
+export function periodStatusTone(status: string): StatusTone {
+  return PERIOD_STATUS_TONE[status as KnownPeriodStatus] ?? 'neutral';
+}
+
 /** One close-snapshot account row (per-account debit/credit, no base
  *  totals — the close snapshot is the simpler shape per ledger-api.md
  *  § 6/§ 8). F5 Money. */
@@ -323,6 +339,21 @@ export type KnownDiscrepancyType = (typeof KNOWN_DISCREPANCY_TYPES)[number];
 export const KNOWN_DISCREPANCY_STATUSES = ['OPEN', 'RESOLVED'] as const;
 export type KnownDiscrepancyStatus =
   (typeof KNOWN_DISCREPANCY_STATUSES)[number];
+
+/**
+ * Discrepancy status → shared semantic {@link StatusTone} (rendered via the
+ * shared `<StatusBadge>` — TASK-PC-FE-159). OPEN is an unreconciled item
+ * needing attention (warning); RESOLVED is cleared (success). An unknown/future
+ * status → `neutral` (tolerant — never a throw).
+ */
+const DISCREPANCY_STATUS_TONE: Record<KnownDiscrepancyStatus, StatusTone> = {
+  OPEN: 'warning',
+  RESOLVED: 'success',
+};
+
+export function discrepancyStatusTone(status: string): StatusTone {
+  return DISCREPANCY_STATUS_TONE[status as KnownDiscrepancyStatus] ?? 'neutral';
+}
 
 /** The resolution sub-object — present only when `status === 'RESOLVED'`
  *  (reconciliation-api.md § 5). The `resolutionType` is surfaced honestly

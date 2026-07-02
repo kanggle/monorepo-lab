@@ -2,11 +2,13 @@
 
 import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import {
   formatMoney,
   discrepancyMoney,
   KNOWN_DISCREPANCY_TYPES,
   KNOWN_DISCREPANCY_STATUSES,
+  discrepancyStatusTone,
   type Discrepancy,
   type DiscrepanciesQueryParams,
   type DiscrepanciesResponse,
@@ -49,15 +51,6 @@ function statusLabel(status: string): string {
     ? status
     : `${status} (unknown)`;
 }
-function statusVariant(status: string): 'normal' | 'warn' {
-  if (status === 'OPEN') return 'warn';
-  return 'normal';
-}
-const STATUS_CLASS: Record<'normal' | 'warn', string> = {
-  normal: 'rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground',
-  warn: 'rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-100',
-};
-
 const STATUS_OPTIONS = ['OPEN', 'RESOLVED', ''] as const;
 
 export function DiscrepancyQueue({
@@ -210,12 +203,12 @@ export function DiscrepancyQueue({
                       {formatMoney(m.actual)}
                     </td>
                     <td className="p-2">
-                      <span
-                        className={STATUS_CLASS[statusVariant(d.status)]}
+                      <StatusBadge
+                        tone={discrepancyStatusTone(d.status)}
                         data-testid={`ledger-recon-status-${i}`}
                       >
                         {statusLabel(d.status)}
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td className="p-2">
                       <Button

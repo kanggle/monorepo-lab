@@ -7,11 +7,13 @@ import {
   discrepancyMoney,
   KNOWN_DISCREPANCY_TYPES,
   KNOWN_DISCREPANCY_STATUSES,
+  discrepancyStatusTone,
   type Discrepancy,
   type ResolutionType,
 } from '../api/types';
 import { useDiscrepancy, useResolveDiscrepancy } from '../hooks/use-ledger-ops';
 import { DiscrepancyResolveDialog } from './DiscrepancyResolveDialog';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 
 /**
  * Reconciliation discrepancy detail (TASK-PC-FE-072 — § 2.4.7.1 /
@@ -129,7 +131,9 @@ export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
             className="text-foreground"
             data-testid="ledger-recon-detail-status"
           >
-            {statusLabel(d.status)}
+            <StatusBadge tone={discrepancyStatusTone(d.status)}>
+              {statusLabel(d.status)}
+            </StatusBadge>
           </dd>
         </div>
         <div>
