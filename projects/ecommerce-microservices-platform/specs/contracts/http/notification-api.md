@@ -123,6 +123,86 @@ Update notification preferences for the authenticated user.
 
 ---
 
+### GET /api/notifications/vapid-public-key
+Return the server's VAPID public key so a browser client can create a Web Push
+subscription (`pushManager.subscribe({ applicationServerKey })`). The VAPID
+**public** key is not a secret; this endpoint is unauthenticated and lets the
+frontend stay independent of build-time config and survive key rotation.
+
+> Alternative (documented, not chosen): bake the key into the frontend at build
+> time via `NEXT_PUBLIC_VAPID_PUBLIC_KEY`. The endpoint approach is the contract
+> here so the backend keypair is the single source of truth.
+
+**Response 200**
+```json
+{
+  "publicKey": "string (base64url-encoded VAPID application server key)"
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 503 | PUSH_NOT_CONFIGURED | Server has no VAPID keypair configured (push disabled) |
+
+---
+
+### POST /api/notifications/me/push-subscriptions
+Register (or refresh) a Web Push subscription for the authenticated user. The
+body is the W3C `PushSubscription` serialization produced by the browser. The
+operation is **idempotent on `endpoint`** — re-posting the same endpoint with
+rotated keys updates the stored keys rather than creating a duplicate. A user
+may hold multiple subscriptions (one per browser/device).
+
+**Request Body**
+```json
+{
+  "endpoint": "string (push service URL, unique per browser subscription)",
+  "expirationTime": "number | null (epoch millis, optional)",
+  "keys": {
+    "p256dh": "string (base64url client public key)",
+    "auth": "string (base64url auth secret)"
+  }
+}
+```
+
+**Response 201** (new subscription) / **200** (existing endpoint refreshed)
+```json
+{
+  "subscriptionId": "string (UUID)"
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | VALIDATION_ERROR | Missing/invalid `endpoint` or `keys` |
+| 401 | UNAUTHORIZED | Missing or invalid access token |
+
+---
+
+### DELETE /api/notifications/me/push-subscriptions
+Remove one of the authenticated user's Web Push subscriptions (opt-out or
+browser `unsubscribe()`). The subscription is identified by its `endpoint`.
+Idempotent — deleting an already-absent endpoint returns 204.
+
+**Request Body**
+```json
+{
+  "endpoint": "string (the subscription endpoint to remove)"
+}
+```
+
+**Response 204** — no body.
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | VALIDATION_ERROR | Missing `endpoint` |
+| 401 | UNAUTHORIZED | Missing or invalid access token |
+
+---
+
 ### GET /api/notifications/templates (Admin)
 List notification templates.
 
@@ -282,3 +362,9 @@ Update a notification template.
 - Admin endpoints require admin role via `X-User-Role` header forwarded by gateway.
 - Notification sending is triggered by event consumption, not by HTTP API calls.
 - Internal stack traces must not appear in error responses.
+- **Web Push (`PUSH` channel)**: actual delivery requires the user to hold at least one
+  active push subscription (registered via `POST /api/notifications/me/push-subscriptions`)
+  **and** `pushEnabled = true`. With no subscription the `PUSH` channel is a silent no-op
+  (email/SMS still deliver). Subscriptions that the push service reports as gone (`404`/`410`
+  at delivery time) are lazily pruned server-side; the client should re-subscribe and
+  re-register. VAPID keypair is server-owned config — see `GET /api/notifications/vapid-public-key`.

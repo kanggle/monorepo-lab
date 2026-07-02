@@ -70,13 +70,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | TASK-BE-079 | 리뷰/평점 시스템 — 상품 리뷰 작성, 평점 관리, 평균 평점 집계 | review-service (신규) | code, api, event |
 | TASK-BE-080 | 위시리스트/찜 기능 — 사용자별 관심 상품 목록 관리 | user-service | code, api |
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
-| TASK-BE-464 | notification-service Web Push(VAPID) 실연동 — 구독 레지스트리 + 등록/해지 API + WebPushSender(BE-463 stub 승격). 선행=BE-463 merge, blocks=FE-083 | notification-service | code, api, migration, push |
 | TASK-FE-083 | web-store Web Push 구독 — Service Worker + opt-in UI + 브라우저 배너 표시. 선행=BE-464 merge | web-store | code, push |
 ## ready
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
+| TASK-BE-464 | **READY (2026-07-02 승격)**. notification-service Web Push(VAPID) 실연동 — `push_subscriptions` 레지스트리(Flyway V6) + 등록/해지 API(`POST/DELETE /api/notifications/me/push-subscriptions`) + `GET /api/notifications/vapid-public-key` + `WebPushSender`(BE-463 stub 대체·404/410 lazy prune). 계약 초안 완료(PR 동봉). 라이브러리=`nl.martijndwars:web-push`, VAPID=env/secret. blocks=FE-083. | notification-service | code, api, migration, push |
 
 ## in-progress
 
