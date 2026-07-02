@@ -37,9 +37,9 @@ export function Header() {
         </nav>
 
         <div className={styles.actions}>
-          <ThemeToggle />
+          <ThemeToggle className={styles.iconButton} />
           {!isLoading && isAuthenticated && (
-            <Link href="/cart" className={styles.cartLink} aria-label="장바구니">
+            <Link href="/cart" className={`${styles.iconButton} ${styles.cartLink}`} aria-label="장바구니">
               <span className={styles.cartIcon} aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
@@ -53,7 +53,7 @@ export function Header() {
             </Link>
           )}
           {isLoading ? (
-            <div style={{ width: 32, height: 32 }} />
+            <div style={{ width: 36, height: 36 }} />
           ) : isAuthenticated ? (
             <ProfileDropdown userName={user?.name} onLogout={logout} />
           ) : (

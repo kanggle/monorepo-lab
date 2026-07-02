@@ -31,8 +31,8 @@ export function ProfileDropdown({ userName, onLogout }: ProfileDropdownProps) {
             <Image
               src={profileImageUrl}
               alt="프로필"
-              width={32}
-              height={32}
+              width={36}
+              height={36}
               style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
             />
           ) : (
