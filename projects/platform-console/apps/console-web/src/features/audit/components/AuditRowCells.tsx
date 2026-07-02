@@ -1,4 +1,5 @@
 import type { AuditRow } from '../api/types';
+import { formatDateTime } from '@/shared/lib/datetime';
 
 /**
  * Renders one audit row's cells **discriminated by its `source`**
@@ -57,7 +58,7 @@ export function AuditRowCells({ row }: { row: AuditRow }) {
         </Cell>
         <Cell testid="cell-outcome">{r.outcome}</Cell>
         <Cell testid="cell-time" muted>
-          {r.occurredAt}
+          {formatDateTime(r.occurredAt)}
         </Cell>
       </>
     );
@@ -89,7 +90,7 @@ export function AuditRowCells({ row }: { row: AuditRow }) {
           {('outcome' in r ? r.outcome : null) ?? null}
         </Cell>
         <Cell testid="cell-time" muted>
-          {r.occurredAt}
+          {formatDateTime(r.occurredAt)}
         </Cell>
       </>
     );

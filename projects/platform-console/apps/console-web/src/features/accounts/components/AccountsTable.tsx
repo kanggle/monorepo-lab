@@ -3,6 +3,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { Button } from '@/shared/ui/Button';
 import type { AccountPage, AccountSummary } from '../api/types';
+import { formatDateTime } from '@/shared/lib/datetime';
 import { AccountStatusBadge } from './AccountStatusBadge';
 import type { AccountsQuery, ActionKind } from './accounts-screen-helpers';
 
@@ -81,7 +82,7 @@ export function AccountsTable({
               <td className="p-2">
                 <AccountStatusBadge status={acc.status} />
               </td>
-              <td className="p-2 text-muted-foreground">{acc.createdAt}</td>
+              <td className="p-2 text-muted-foreground">{formatDateTime(acc.createdAt)}</td>
               <td className="p-2">
                 <div className="flex flex-wrap gap-2">
                   <Button

@@ -2,6 +2,7 @@
 
 import { formatMoney, positionLotMoney } from '../api/types';
 import type { PositionLotsResponse } from '../api/types';
+import { formatDateTime } from '@/shared/lib/datetime';
 
 /**
  * FX position open-lots table + summary (TASK-PC-FE-091 — § 2.4.7.1).
@@ -153,7 +154,7 @@ export function PositionLotsTable({ lots, onSelectEntry }: PositionLotsTableProp
                   data-testid={`ledger-lots-row-${i}`}
                   className="border-b border-border"
                 >
-                  <td className="p-2 text-muted-foreground">{lot.acquiredAt}</td>
+                  <td className="p-2 text-muted-foreground">{formatDateTime(lot.acquiredAt)}</td>
                   <td className="p-2" data-testid={`ledger-lots-seq-${i}`}>
                     {lot.seq}
                   </td>

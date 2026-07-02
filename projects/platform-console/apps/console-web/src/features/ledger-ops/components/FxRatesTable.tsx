@@ -1,6 +1,7 @@
 'use client';
 
 import type { FxRatesResponse } from '../api/types';
+import { formatDateTime } from '@/shared/lib/datetime';
 
 /**
  * FX 환율 피드 대시보드 테이블 (TASK-PC-FE-092 — § 2.4.7.1).
@@ -180,8 +181,8 @@ export function FxRatesTable({ data, onRefresh, refreshing = false, onSelectPair
                   {rate.rate}
                 </td>
                 <td className="p-2 text-muted-foreground">{rate.source}</td>
-                <td className="p-2 text-muted-foreground">{rate.asOf}</td>
-                <td className="p-2 text-muted-foreground">{rate.fetchedAt}</td>
+                <td className="p-2 text-muted-foreground">{formatDateTime(rate.asOf)}</td>
+                <td className="p-2 text-muted-foreground">{formatDateTime(rate.fetchedAt)}</td>
                 <td className="p-2 text-muted-foreground">
                   {humanizeAge(rate.ageSeconds)}
                 </td>

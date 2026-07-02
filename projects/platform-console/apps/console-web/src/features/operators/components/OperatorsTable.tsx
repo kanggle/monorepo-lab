@@ -8,6 +8,7 @@ import {
   type OperatorSummary,
   type OperatorStatus,
 } from '../api/types';
+import { formatDateTime } from '@/shared/lib/datetime';
 import { OperatorRoleChips, OperatorStatusBadge } from './OperatorBadges';
 
 /**
@@ -152,7 +153,7 @@ export function OperatorsTable({
                     <OperatorRoleChips roles={op.roles} />
                   </td>
                   <td className="p-2 text-muted-foreground">
-                    {op.createdAt}
+                    {formatDateTime(op.createdAt)}
                   </td>
                   <td className="p-2">
                     <div className="flex flex-wrap gap-2">

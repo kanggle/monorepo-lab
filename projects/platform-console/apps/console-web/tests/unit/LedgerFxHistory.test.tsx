@@ -70,8 +70,8 @@ describe('FxRateHistoryTable — heading + time-series rows', () => {
     const row0 = within(table).getByTestId('ledger-fx-history-row-0');
     expect(row0).toBeInTheDocument();
     expect(row0.textContent).toContain('1300.12345678');
-    expect(row0.textContent).toContain('2026-06-15T07:00:00Z');
-    expect(row0.textContent).toContain('2026-06-15T07:00:05Z');
+    expect(row0.textContent).toContain('2026. 6. 15. 16:00:00');
+    expect(row0.textContent).toContain('2026. 6. 15. 16:00:05');
     expect(row0.textContent).toContain('stub');
   });
 

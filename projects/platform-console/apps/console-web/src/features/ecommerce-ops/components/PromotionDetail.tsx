@@ -14,6 +14,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { CouponIssueDialog } from './CouponIssueDialog';
 import { DetailHeader } from './DetailHeader';
 import { formatPromotionDay } from './promotion-format';
+import { formatDateTime } from '@/shared/lib/datetime';
 
 /**
  * ecommerce promotion detail section (TASK-PC-FE-086 — ADR-031 Phase 3b).
@@ -165,13 +166,13 @@ export function PromotionDetail({ promotion }: PromotionDetailProps) {
         {data.createdAt && (
           <div>
             <dt className="text-muted-foreground">생성일</dt>
-            <dd className="text-xs">{data.createdAt}</dd>
+            <dd className="text-xs">{formatDateTime(data.createdAt)}</dd>
           </div>
         )}
         {data.updatedAt && (
           <div>
             <dt className="text-muted-foreground">수정일</dt>
-            <dd className="text-xs">{data.updatedAt}</dd>
+            <dd className="text-xs">{formatDateTime(data.updatedAt)}</dd>
           </div>
         )}
       </dl>

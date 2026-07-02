@@ -77,7 +77,7 @@ describe('OperatorOverviewScreen — render all cards', () => {
       '42',
     );
     expect(screen.getByTestId('overview-audit-latest')).toHaveTextContent(
-      '2026-04-12T10:00:00Z',
+      '2026. 4. 12. 19:00:00',
     );
     expect(
       screen.getByTestId('overview-operators-active'),

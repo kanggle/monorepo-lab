@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { useOperatorOverview } from '../hooks/use-overview';
+import { formatDateTime } from '@/shared/lib/datetime';
 import {
   OVERVIEW_QUICK_LINKS,
   type OperatorOverview,
@@ -261,7 +262,7 @@ export function OperatorOverviewScreen({
             data-testid="overview-audit-latest"
           >
             {audit.latestOccurredAt
-              ? `최근 활동: ${audit.latestOccurredAt} (UTC)`
+              ? `최근 활동: ${formatDateTime(audit.latestOccurredAt)}`
               : '표시할 최근 활동이 없습니다.'}
           </p>
         </OverviewCard>
