@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
-import { Button } from '@/shared/ui/Button';
 import { useUser } from '../hooks/use-ecommerce-users';
 import type { UserDetail as UserDetailType } from '../api/user-types';
+import { DetailHeader } from './DetailHeader';
 
 /**
  * ecommerce user detail section (TASK-PC-FE-084 — § 2.4.10 users). The console
@@ -39,16 +38,12 @@ export function UserDetail({ user }: UserDetailProps) {
       aria-labelledby="user-detail-heading"
       data-testid="user-detail"
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 id="user-detail-heading" className="text-2xl font-semibold">
-          사용자 상세
-        </h1>
-        <Link href="/ecommerce/users">
-          <Button variant="ghost" data-testid="user-detail-back">
-            목록
-          </Button>
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="user-detail-heading"
+        title="사용자 상세"
+        backHref="/ecommerce/users"
+        backTestId="user-detail-back"
+      />
 
       {/* User profile header */}
       <dl className="mb-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">

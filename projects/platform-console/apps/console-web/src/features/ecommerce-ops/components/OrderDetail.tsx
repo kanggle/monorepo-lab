@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/shared/ui/Button';
 import { useOrder } from '../hooks/use-ecommerce-orders';
 import type { OrderDetail as OrderDetailType } from '../api/order-types';
 import { OrderStatusDialog } from './OrderStatusDialog';
+import { DetailHeader } from './DetailHeader';
 
 /**
  * ecommerce order detail section (TASK-PC-FE-083 — § 2.4.10 #16). The console
@@ -37,16 +36,12 @@ export function OrderDetail({ order }: OrderDetailProps) {
       aria-labelledby="order-detail-heading"
       data-testid="order-detail"
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 id="order-detail-heading" className="text-2xl font-semibold">
-          주문 상세
-        </h1>
-        <Link href="/ecommerce/orders">
-          <Button variant="ghost" data-testid="order-detail-back">
-            목록
-          </Button>
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="order-detail-heading"
+        title="주문 상세"
+        backHref="/ecommerce/orders"
+        backTestId="order-detail-back"
+      />
 
       {/* Order header */}
       <dl className="mb-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">

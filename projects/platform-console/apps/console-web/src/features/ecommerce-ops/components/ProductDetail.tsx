@@ -11,6 +11,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { VariantEditor } from './VariantEditor';
 import { StockAdjustDialog } from './StockAdjustDialog';
 import { ImageManager } from './ImageManager';
+import { DetailHeader } from './DetailHeader';
 
 /**
  * ecommerce product detail section (TASK-PC-FE-081 — § 2.4.10 #2). The console
@@ -53,35 +54,39 @@ export function ProductDetail({ product }: ProductDetailProps) {
 
   return (
     <section aria-labelledby="product-detail-heading" data-testid="product-detail">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 id="product-detail-heading" className="text-2xl font-semibold">
-          {data.name}
-        </h1>
-        <div className="flex gap-2">
-          <Link href={`/ecommerce/products/${data.id}/edit`}>
-            <Button variant="secondary" data-testid="product-detail-edit">
-              수정
+      <DetailHeader
+        headingId="product-detail-heading"
+        title="상품 상세"
+        backHref="/ecommerce/products"
+        backTestId="product-detail-back"
+        actions={
+          <>
+            <Link href={`/ecommerce/products/${data.id}/edit`}>
+              <Button variant="secondary" data-testid="product-detail-edit">
+                수정
+              </Button>
+            </Link>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setDelError(null);
+                setConfirmDelete(true);
+              }}
+              data-testid="product-detail-delete"
+            >
+              삭제
             </Button>
-          </Link>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setDelError(null);
-              setConfirmDelete(true);
-            }}
-            data-testid="product-detail-delete"
-          >
-            삭제
-          </Button>
-          <Link href="/ecommerce/products">
-            <Button variant="ghost" data-testid="product-detail-back">
-              목록
-            </Button>
-          </Link>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <dl className="mb-8 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div className="col-span-2 sm:col-span-4">
+          <dt className="text-muted-foreground">상품명</dt>
+          <dd data-testid="product-detail-name" className="font-medium">
+            {data.name}
+          </dd>
+        </div>
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd data-testid="product-detail-status">{data.status}</dd>

@@ -12,6 +12,7 @@ import {
 import type { PromotionDetail as PromotionDetailType } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { CouponIssueDialog } from './CouponIssueDialog';
+import { DetailHeader } from './DetailHeader';
 
 /**
  * ecommerce promotion detail section (TASK-PC-FE-086 — ADR-031 Phase 3b).
@@ -58,51 +59,52 @@ export function PromotionDetail({ promotion }: PromotionDetailProps) {
       aria-labelledby="promotion-detail-heading"
       data-testid="promotion-detail"
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1
-          id="promotion-detail-heading"
-          className="text-2xl font-semibold"
-        >
-          {data.name}
-        </h1>
-        <div className="flex gap-2">
-          {canEdit && (
-            <Link href={`/ecommerce/promotions/${data.promotionId}/edit`}>
-              <Button
-                variant="secondary"
-                data-testid="promotion-detail-edit"
-              >
-                수정
-              </Button>
-            </Link>
-          )}
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setDelError(null);
-              setConfirmDelete(true);
-            }}
-            data-testid="promotion-detail-delete"
-          >
-            삭제
-          </Button>
-          {canIssue && (
+      <DetailHeader
+        headingId="promotion-detail-heading"
+        title="프로모션 상세"
+        backHref="/ecommerce/promotions"
+        backTestId="promotion-detail-back"
+        actions={
+          <>
+            {canEdit && (
+              <Link href={`/ecommerce/promotions/${data.promotionId}/edit`}>
+                <Button
+                  variant="secondary"
+                  data-testid="promotion-detail-edit"
+                >
+                  수정
+                </Button>
+              </Link>
+            )}
             <Button
-              onClick={() => setCouponOpen(true)}
-              data-testid="promotion-detail-issue"
+              variant="secondary"
+              onClick={() => {
+                setDelError(null);
+                setConfirmDelete(true);
+              }}
+              data-testid="promotion-detail-delete"
             >
-              쿠폰 발급
+              삭제
             </Button>
-          )}
-          <Link href="/ecommerce/promotions">
-            <Button variant="ghost" data-testid="promotion-detail-back">
-              목록
-            </Button>
-          </Link>
-        </div>
-      </div>
+            {canIssue && (
+              <Button
+                onClick={() => setCouponOpen(true)}
+                data-testid="promotion-detail-issue"
+              >
+                쿠폰 발급
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <dl className="mb-8 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div className="col-span-2 sm:col-span-4">
+          <dt className="text-muted-foreground">프로모션명</dt>
+          <dd data-testid="promotion-detail-name" className="font-medium">
+            {data.name}
+          </dd>
+        </div>
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd data-testid="promotion-detail-status">{data.status}</dd>

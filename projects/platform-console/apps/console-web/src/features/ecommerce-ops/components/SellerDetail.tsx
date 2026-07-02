@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
-import { Button } from '@/shared/ui/Button';
 import { useSeller } from '../hooks/use-ecommerce-sellers';
 import type { SellerDetail as SellerDetailType } from '../api/seller-types';
+import { DetailHeader } from './DetailHeader';
 
 /**
  * ecommerce seller detail section (TASK-PC-FE-090 — § 2.4.10.5 sellers).
@@ -27,16 +26,12 @@ export function SellerDetail({ seller }: SellerDetailProps) {
       aria-labelledby="seller-detail-heading"
       data-testid="seller-detail"
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 id="seller-detail-heading" className="text-2xl font-semibold">
-          셀러 상세
-        </h1>
-        <Link href="/ecommerce/sellers">
-          <Button variant="ghost" data-testid="seller-detail-back">
-            목록
-          </Button>
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="seller-detail-heading"
+        title="셀러 상세"
+        backHref="/ecommerce/sellers"
+        backTestId="seller-detail-back"
+      />
 
       <dl className="mb-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <div>
