@@ -185,7 +185,7 @@ export type AdjustStockBody = z.infer<typeof AdjustStockBodySchema>;
 // list query params + pagination defaults
 // ===========================================================================
 
-/** GET /admin/products/summary — period-based count (TASK-PC-FE-160).
+/** GET /admin/products/summary — period-based count (TASK-PC-FE-164).
  *  Response: { today, week, month, total } all non-negative integers. */
 export const ProductAreaSummarySchema = z
   .object({
@@ -309,7 +309,7 @@ export const IssueCouponBodySchema = z.object({
 });
 export type IssueCouponBody = z.infer<typeof IssueCouponBodySchema>;
 
-/** GET /api/promotions/summary — period-based count (TASK-PC-FE-160).
+/** GET /api/promotions/summary — period-based count (TASK-PC-FE-164).
  *  Response: { today, week, month, total } all non-negative integers. */
 export const PromotionAreaSummarySchema = z
   .object({

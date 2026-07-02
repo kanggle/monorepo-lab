@@ -64,7 +64,7 @@ const clampSize = (size?: number): number =>
 // READS
 // ===========================================================================
 
-/** GET /admin/sellers/summary — period-based counts (TASK-PC-FE-160).
+/** GET /admin/sellers/summary — period-based counts (TASK-PC-FE-164).
  *  Returns { today, week, month, total } for the tenant. */
 export function getSellersSummary(): Promise<SellerAreaSummary> {
   const env = getServerEnv();

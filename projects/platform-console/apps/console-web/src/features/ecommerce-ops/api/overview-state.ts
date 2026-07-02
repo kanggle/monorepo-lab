@@ -17,12 +17,12 @@ import type { SellerSummary } from './seller-types';
 /**
  * Server-side ecommerce **operator overview snapshot** fan-out for the
  * `/ecommerce` landing (TASK-PC-FE-156 — realizes the "operator-overview
- * snapshot leg" the §2.4.10 landing deferred; TASK-PC-FE-160 — switches the
+ * snapshot leg" the §2.4.10 landing deferred; TASK-PC-FE-164 — switches the
  * 7 area count legs from `list*({page:0,size:1})` to dedicated `/summary`
  * endpoints that return period-based counts: today / week / month / total).
  *
  * ── ARCHITECTURE (console-web direct fan-out; per-service `/summary` endpoints) ──
- * Per TASK-PC-FE-160 each area now calls a dedicated `GET .../summary` endpoint
+ * Per TASK-PC-FE-164 each area now calls a dedicated `GET .../summary` endpoint
  * (uniform response `{ today, week, month, total }`) instead of the previous
  * `list*({page:0,size:1})` leg. Per §2.4.10 the ecommerce operator surface is
  * console-web → ecommerce gateway DIRECT (domain-facing IAM OIDC token), so
@@ -96,7 +96,7 @@ interface AreaSummary {
 /**
  * The 7 operator areas, keyed to their `/summary` endpoint. Labels/hrefs/testids
  * mirror `ConsoleSidebarNav` + the PC-FE-155 landing grid (back-compat testids).
- * TASK-PC-FE-160: `count` thunk replaced by `summary` thunk returning period data.
+ * TASK-PC-FE-164: `count` thunk replaced by `summary` thunk returning period data.
  */
 const AREAS: ReadonlyArray<{
   key: string;

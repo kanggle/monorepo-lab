@@ -2468,7 +2468,7 @@ scope, no § 3 row — attestation count stays **16**).
   | 20 | orders period summary | `GET /admin/orders/summary` | read |
 
   **Operator-overview period summaries (#18–20 here + the per-area equivalents
-  in §§ 2.4.10.2–.6) — TASK-BE-468 / TASK-PC-FE-160**: each operator area exposes
+  in §§ 2.4.10.2–.6) — TASK-BE-468 / TASK-PC-FE-164**: each operator area exposes
   a dedicated `GET .../summary` read that returns the KST **calendar-period-to-date**
   counts consumed by the § 2.4.9.1 운영 개요 (`getEcommerceOverviewState`) — chosen
   over adding date-range params to the list reads (one round-trip per area, list

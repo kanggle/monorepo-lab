@@ -84,7 +84,7 @@ export const UserDetailSchema = z
 export type UserDetail = z.infer<typeof UserDetailSchema>;
 
 // ===========================================================================
-// SUMMARY (TASK-PC-FE-160 — period-based counts)
+// SUMMARY (TASK-PC-FE-164 — period-based counts)
 // ===========================================================================
 
 /** GET /admin/users/summary — period-based count.

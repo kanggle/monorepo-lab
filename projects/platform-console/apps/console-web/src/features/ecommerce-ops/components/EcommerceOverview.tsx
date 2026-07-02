@@ -11,7 +11,7 @@ import type { OrderStatus } from '../api/order-types';
 
 /**
  * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156;
- * TASK-PC-FE-160 — count cards now show period metrics: 오늘/주간/월간 +
+ * TASK-PC-FE-164 — count cards now show period metrics: 오늘/주간/월간 +
  * 전체 total as secondary context from the `/summary` endpoints).
  * Server component — STRICTLY READ-ONLY, no `'use client'`. Renders the
  * `getEcommerceOverviewState` fan-out result: per-area count cards (each a

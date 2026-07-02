@@ -178,7 +178,7 @@ export const OrderStatusChangeBodySchema = z.object({
 export type OrderStatusChangeBody = z.infer<typeof OrderStatusChangeBodySchema>;
 
 // ===========================================================================
-// SUMMARY (TASK-PC-FE-160 — period-based counts)
+// SUMMARY (TASK-PC-FE-164 — period-based counts)
 // ===========================================================================
 
 /** GET /admin/orders/summary — period-based count.

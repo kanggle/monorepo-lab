@@ -3,8 +3,8 @@ import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
 import { ORDER_STATUS_VALUES } from '@/features/ecommerce-ops/api/order-types';
 
 /**
- * TASK-PC-FE-156 / TASK-PC-FE-160 — `getEcommerceOverviewState` server fan-out.
- * PC-FE-160 switches the 7 area count legs from `list*({page:0,size:1})` to
+ * TASK-PC-FE-156 / TASK-PC-FE-164 — `getEcommerceOverviewState` server fan-out.
+ * PC-FE-164 switches the 7 area count legs from `list*({page:0,size:1})` to
  * dedicated `get*Summary()` calls returning `{ today, week, month, total }`.
  * Covers: not-eligible short-circuit, period-count mapping, order-status
  * distribution, recent slices, per-cell degrade/forbidden, and the
@@ -104,7 +104,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-160)', () => {
+describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
   it('not eligible → no fan-out, notEligible flag', async () => {
     const state = await getEcommerceOverviewState(false);
     expect(state.notEligible).toBe(true);

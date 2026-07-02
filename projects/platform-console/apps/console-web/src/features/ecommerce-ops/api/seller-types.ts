@@ -151,7 +151,7 @@ export const RegisterSellerBodySchema = z.object({
 export type RegisterSellerBody = z.infer<typeof RegisterSellerBodySchema>;
 
 // ===========================================================================
-// SUMMARY (TASK-PC-FE-160 — period-based counts)
+// SUMMARY (TASK-PC-FE-164 — period-based counts)
 // ===========================================================================
 
 /** GET /admin/sellers/summary — period-based count.

@@ -78,7 +78,7 @@ const clampSize = (size?: number): number =>
 // READS
 // ===========================================================================
 
-/** GET /api/shippings/summary — period-based counts (TASK-PC-FE-160).
+/** GET /api/shippings/summary — period-based counts (TASK-PC-FE-164).
  *  Returns { today, week, month, total } for the tenant. */
 export function getShippingsSummary(): Promise<ShippingAreaSummary> {
   const env = getServerEnv();

@@ -8,7 +8,7 @@ import type {
 } from '@/features/ecommerce-ops';
 
 /**
- * TASK-PC-FE-156 / TASK-PC-FE-160 — `EcommerceOverview` presentation:
+ * TASK-PC-FE-156 / TASK-PC-FE-164 — `EcommerceOverview` presentation:
  * count cards show period metrics (오늘/주간/월간) with 전체 total as
  * secondary context. Back-compat testids (`<key>-count`, `<key>-count-degraded`)
  * are preserved; new testids (`<key>-count-today/week/month`) added.
@@ -72,7 +72,7 @@ const baseState = (over: Partial<EcommerceOverviewState> = {}): EcommerceOvervie
   ...over,
 });
 
-describe('EcommerceOverview (TASK-PC-FE-156 / TASK-PC-FE-160)', () => {
+describe('EcommerceOverview (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
   it('notEligible → renders nothing', () => {
     const { container } = render(
       <EcommerceOverview state={baseState({ notEligible: true, counts: [] })} />,
