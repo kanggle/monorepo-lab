@@ -6,32 +6,12 @@ import {
   DomainHealthCard,
   getDomainHealthState,
 } from '@/features/domain-health';
+import {
+  EcommerceOverview,
+  getEcommerceOverviewState,
+} from '@/features/ecommerce-ops';
 
 export const dynamic = 'force-dynamic';
-
-/**
- * The 7 shipped ecommerce operator areas, mirroring the `ConsoleSidebarNav`
- * ecommerce children (§ 2.4.10). The 상품 tile keeps its original
- * `ecommerce-products-link` testid (back-compat); the rest use nav-parallel
- * testids. A new area must be added here AND in `ConsoleSidebarNav`.
- */
-const ECOMMERCE_OPS_AREAS: ReadonlyArray<{
-  href: string;
-  label: string;
-  testid: string;
-}> = [
-  { href: '/ecommerce/products', label: '상품 운영', testid: 'ecommerce-products-link' },
-  { href: '/ecommerce/orders', label: '주문 운영', testid: 'ecommerce-orders-link' },
-  { href: '/ecommerce/shippings', label: '배송 운영', testid: 'ecommerce-shippings-link' },
-  { href: '/ecommerce/promotions', label: '프로모션 운영', testid: 'ecommerce-promotions-link' },
-  { href: '/ecommerce/users', label: '사용자', testid: 'ecommerce-users-link' },
-  { href: '/ecommerce/sellers', label: '셀러 운영', testid: 'ecommerce-sellers-link' },
-  {
-    href: '/ecommerce/notifications/templates',
-    label: '알림 템플릿',
-    testid: 'ecommerce-notifications-link',
-  },
-];
 
 /**
  * ecommerce operations section route (TASK-MONO-241 — ADR-MONO-030 Step 4
@@ -45,13 +25,14 @@ const ECOMMERCE_OPS_AREAS: ReadonlyArray<{
  *
  * Server component. STRICTLY READ-ONLY. Content = the ecommerce domain-health
  * summary (the `/actuator/health` leg surfaced as the 6th Domain Health card,
- * § 2.4.9.2) + an operator-area **quick-launch grid** linking all 7 shipped
- * operator surfaces (products / orders / users / promotions / shippings /
- * notifications / sellers — TASK-PC-FE-081…090 + 154). The grid mirrors the
- * `ConsoleSidebarNav` ecommerce children (the primary nav path); it is a
- * redundant in-section convenience entry, so a new area must be added in both
- * places. (TASK-PC-FE-155 retired the Phase-1 products-only link + the stale
- * "주문·셀러 준비중" note that predated PC-FE-083…090.)
+ * § 2.4.9.2) + the **operator overview snapshot** (`EcommerceOverview` /
+ * `getEcommerceOverviewState`, TASK-PC-FE-156): per-area entity counts (each
+ * card is the quick-launch link to that area — supersedes the PC-FE-155 plain
+ * grid, back-compat testids retained), order-status distribution, and recent
+ * orders + sellers. The snapshot is a console-web DIRECT fan-out over the
+ * existing ecommerce list endpoints (`totalElements` via `size=1`; ADR-MONO-017
+ * D3.B — no producer `/summary`, no console-bff leg). Per-area/leg degrade is
+ * cell-local; a 401 in any leg triggers a whole-session re-login.
  *
  * Eligibility (§ 2.2): resolved from the data-driven registry — the app layer
  * is the layer allowed to compose `features/*`. A registry 401 → whole-session
@@ -146,18 +127,25 @@ export default async function EcommercePage() {
     );
   }
 
-  // Eligible — surface the ecommerce domain-health card (the public
-  // /actuator/health leg, § 2.4.9.2). The health fan-out is tenant-agnostic
-  // infra liveness; a BFF-unavailable / unauthorized envelope collapses to a
-  // compact note WITHOUT blanking the section (degrade-safe). The call was
-  // started up-front (concurrently with the eligibility pre-flight) and is
-  // awaited here only on the eligible path. (TASK-PC-FE-118)
+  // Eligible — fire the operator overview snapshot fan-out (TASK-PC-FE-156)
+  // concurrently with awaiting the already-started domain-health call. Both are
+  // eligible-path work; the overview is a server-side direct fan-out over the
+  // ecommerce list endpoints (per-cell degrade; a 401 in any leg redirects).
+  const overviewPromise = getEcommerceOverviewState(true);
+
+  // Surface the ecommerce domain-health card (the public /actuator/health leg,
+  // § 2.4.9.2). The health fan-out is tenant-agnostic infra liveness; a
+  // BFF-unavailable / unauthorized envelope collapses to a compact note WITHOUT
+  // blanking the section (degrade-safe). The call was started up-front
+  // (concurrently with the eligibility pre-flight). (TASK-PC-FE-118)
   const healthState = await healthPromise;
   if (healthState.unauthorized) {
     redirect('/login');
   }
   const ecommerceCard =
     healthState.health?.cards.find((c) => c.domain === 'ecommerce') ?? null;
+
+  const overviewState = await overviewPromise;
 
   return (
     <section aria-labelledby="ecommerce-heading" data-testid="ecommerce-section">
@@ -186,28 +174,9 @@ export default async function EcommercePage() {
         )}
       </div>
 
-      {/* 운영 영역 quick-launch 그리드 — 7 shipped operator surfaces
-          (TASK-PC-FE-081…090 + 154). Labels/hrefs mirror ConsoleSidebarNav's
-          ecommerce children; the sidebar remains the primary nav path (§ 2.4.10,
-          TASK-PC-FE-155). */}
-      <div className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold text-foreground">운영</h2>
-        <div
-          data-testid="ecommerce-ops-links"
-          className="flex flex-wrap gap-3"
-        >
-          {ECOMMERCE_OPS_AREAS.map((area) => (
-            <Link
-              key={area.href}
-              href={area.href}
-              data-testid={area.testid}
-              className="rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {area.label} →
-            </Link>
-          ))}
-        </div>
-      </div>
+      {/* Operator overview snapshot — per-area counts (each card = quick-launch
+          link), order-status distribution, recent activity (TASK-PC-FE-156). */}
+      <EcommerceOverview state={overviewState} />
     </section>
   );
 }

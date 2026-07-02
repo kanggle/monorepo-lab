@@ -2829,6 +2829,41 @@ same-origin route handlers → ecommerce gateway direct, NO console-bff write le
 > `admin-dashboard` counterpart for sellers); adds no § 3 row and changes none
 > (count stays **16**).
 
+#### 2.4.10.6 ecommerce operator **overview snapshot** — `/ecommerce` landing (TASK-PC-FE-156 / ADR-MONO-031 — realizes the deferred overview leg)
+
+The `/ecommerce` section landing (TASK-MONO-241 drill-in; PC-FE-155 quick-links)
+is elevated into an **operator overview snapshot**: per-area entity counts,
+order-status distribution, and a recent-activity glance. It reuses the domain's
+existing consumed list endpoints — **no new producer endpoint, no producer
+retrofit, no console-bff leg**.
+
+- **Read model (console-web DIRECT fan-out).** Unlike the console-wide operator
+  overview (§ 2.4.9.1, a console-bff bounded fan-out), this is a **domain-internal**
+  snapshot, so it runs server-side in the console-web landing over the same
+  `§ 2.4.10 / .1 / .2 / .3 / .4 / .5` list endpoints already consumed
+  (credential = domain-facing IAM OIDC token, `getDomainFacingToken()`; NO
+  `X-Tenant-Id` — the JWT `tenant_id` claim carries it; gateway-routed).
+- **Counts.** Each area count = the list endpoint's `totalElements` read with
+  `?page=0&size=1` (products/orders/users/promotions/shippings/sellers/notification-templates).
+- **Order-status distribution.** `GET /orders?status=<S>&page=0&size=1`.`totalElements`
+  for each `OrderStatus` bucket.
+- **Recent activity.** `GET /orders?page=0&size=5` + `GET /sellers?page=0&size=5` `content`.
+- **No aggregation endpoint (ADR-MONO-017 D3.B).** There is deliberately **no**
+  producer `/summary` / `/dashboard-card` endpoint; deriving counts from
+  `totalElements` is the sealed pattern. Re-introducing an aggregation endpoint
+  for this snapshot is a contract defect.
+- **Per-area brief status ("각 서비스별 간략 상태").** Derived from each fan-out
+  cell's outcome (`ok` / `403 → 권한 없음` / `503|timeout|other → 점검 필요`); true
+  per-microservice actuator health is not reachable from console-web direct
+  calls, so reachability is the honest, zero-backend signal. The aggregate
+  ecommerce `/actuator/health` card (§ 2.4.9.2) stays on top of the snapshot.
+- **Resilience (§ 2.5).** Per-cell degrade is cell-local (one area's failure
+  never blanks the snapshot); a `401` in ANY leg triggers a whole-session
+  `redirect('/login')` (no partial authed state). Read-only; no auto-refetch.
+
+> **Not a § 3 parity row**: consumes only already-listed endpoints in a new
+> read composition; adds no § 3 row and changes none (count stays **16**).
+
 ### 2.5 Resilience
 
 - Console/BFF fan-out applies circuit-breaker / retry / timeout per `platform/` baselines (`integration-heavy` trait).
