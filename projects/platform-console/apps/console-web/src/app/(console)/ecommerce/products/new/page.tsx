@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ProductForm } from '@/features/ecommerce-ops';
+import { DetailHeader, ProductForm } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../_eligibility';
 
 export const dynamic = 'force-dynamic';
@@ -58,12 +58,12 @@ export default async function NewProductPage() {
 
   return (
     <section>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">상품 등록</h1>
-        <Link href="/ecommerce/products" className="text-sm underline">
-          목록으로
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="product-new-heading"
+        title="상품 등록"
+        backHref="/ecommerce/products"
+        backTestId="product-new-back"
+      />
       <ProductForm />
     </section>
   );
