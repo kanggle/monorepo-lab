@@ -76,7 +76,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
-| TASK-BE-464 | **READY (2026-07-02 승격)**. notification-service Web Push(VAPID) 실연동 — `push_subscriptions` 레지스트리(Flyway V6) + 등록/해지 API(`POST/DELETE /api/notifications/me/push-subscriptions`) + `GET /api/notifications/vapid-public-key` + `WebPushSender`(BE-463 stub 대체·404/410 lazy prune). 계약 초안 완료(PR 동봉). 라이브러리=`nl.martijndwars:web-push`, VAPID=env/secret. blocks=FE-083. | notification-service | code, api, migration, push |
 
 ## in-progress
 
@@ -86,6 +85,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-464 | **REVIEW (2026-07-02 구현 완료, `:notification-service:test` GREEN)**. notification-service Web Push(VAPID) 실연동 — V6 `push_subscriptions` + 등록/해지 API + `GET vapid-public-key` + `WebPushSender`(BE-463 stub 대체·404/410 lazy prune) + `MartijndwarsWebPushGateway`(web-push:5.1.1 + BouncyCastle 1.78.1). 단위 5종 GREEN. AC-2 풀 wiring=CI IT 레인 권위. impl 브랜치 `be-464-web-push-impl`. blocks=FE-083. | notification-service | code, api, migration, push |
 
 ## done
 

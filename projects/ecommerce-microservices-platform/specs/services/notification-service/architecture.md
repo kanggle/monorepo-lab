@@ -58,10 +58,10 @@ Recommended internal areas:
 - domain/exception (domain exceptions)
 
 Key domain concepts:
-- Entities: Notification, NotificationTemplate, UserNotificationPreference
+- Entities: Notification, NotificationTemplate, UserNotificationPreference, PushSubscription (TASK-BE-464 — Web Push registry)
 - Value Objects: NotificationChannel (EMAIL, SMS, PUSH), NotificationStatus (PENDING, SENT, FAILED), TemplateType
-- Ports (inbound): SendNotificationUseCase, QueryNotificationUseCase, ManageTemplateUseCase, ManagePreferenceUseCase
-- Ports (outbound): NotificationSender, NotificationRepository, TemplateRepository, PreferenceRepository
+- Ports (inbound): SendNotificationUseCase, QueryNotificationUseCase, ManageTemplateUseCase, ManagePreferenceUseCase, ManagePushSubscriptionUseCase
+- Ports (outbound): NotificationSender, NotificationRepository, TemplateRepository, PreferenceRepository, PushSubscriptionRepository, WebPushGateway (VAPID provider seam)
 
 ## Allowed Dependencies
 - adapter/in -> application (inbound ports)
@@ -85,6 +85,7 @@ Key domain concepts:
 - Notification (recipient, channel, subject, body, status, sent/failed timestamps)
 - NotificationTemplate (type, channel, subject template, body template, variables)
 - UserNotificationPreference (user reference, channel opt-in/out settings)
+- PushSubscription (user reference, browser endpoint + p256dh/auth keys — Web Push delivery target, TASK-BE-464)
 
 ## Domain Constraints
 - notification-service must NOT own user profile or order data

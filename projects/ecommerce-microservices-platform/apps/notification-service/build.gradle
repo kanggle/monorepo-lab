@@ -44,6 +44,14 @@ dependencies {
     // Mail
     implementation 'org.springframework.boot:spring-boot-starter-mail'
 
+    // Web Push (VAPID) — browser push delivery (TASK-BE-464). web-push does NOT bundle
+    // BouncyCastle; the consumer must supply it (verified: bcprov absent from web-push's
+    // dependency tree). No other service uses BC, so there is no version conflict — pin a
+    // current jdk18on build. The provider is registered in MartijndwarsWebPushGateway.
+    implementation 'nl.martijndwars:web-push:5.1.1'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+    implementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
