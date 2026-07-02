@@ -1,6 +1,6 @@
 # TASK-PC-FE-157 — Operator ↔ Tenant Assignment console UI (delegation onboarding)
 
-- **Status**: ready
+- **Status**: done
 - **Domain**: saas-console (platform-console)
 - **Type**: feature (frontend)
 - **분석=Opus 4.8 / 구현 권장=Opus 4.8 (RBAC-sensitive mutation surface)**
