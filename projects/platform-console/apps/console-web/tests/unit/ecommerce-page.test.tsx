@@ -11,17 +11,19 @@ import type {
 /**
  * TASK-MONO-241 — the `/ecommerce` drill-in route (ADR-MONO-030 Step 4 facet
  * a-후속). Closes the "catalog ecommerce tile (`baseRoute=/ecommerce`) click →
- * 404" gap MONO-240 left open. v1 surfaces the ecommerce domain-health card +
- * a "준비중" note; STRICTLY READ-ONLY; degrade-safe like scm/wms.
+ * 404" gap MONO-240 left open. Surfaces the ecommerce domain-health card + an
+ * operator-area quick-launch grid (7 shipped areas, TASK-PC-FE-155 — replacing
+ * the Phase-1 products-only link + stale "준비중" note). STRICTLY READ-ONLY;
+ * degrade-safe like scm/wms.
  *
  * Asserts:
- *   - eligible → renders the ecommerce section + the health card + the
- *     "상세 운영 표면 준비중" note.
+ *   - eligible → renders the ecommerce section + the health card + the 7
+ *     operator-area links; NO "준비중" coming-soon note.
  *   - registry degraded → degraded note (never blocks on an unproven negative).
  *   - not eligible → "no ecommerce-scoped access" note (does not crash).
  *   - registry 401 → redirect('/login').
  *   - health bff unavailable → section still renders + health-unavailable note
- *     (degrade-safe; the section never blanks the shell).
+ *     + the (static, non-health-gated) quick-launch grid (degrade-safe).
  */
 
 const { redirectMock } = vi.hoisted(() => ({ redirectMock: vi.fn() }));
@@ -32,8 +34,17 @@ vi.mock('next/navigation', () => ({
   },
 }));
 vi.mock('next/link', () => ({
-  default: ({ children, href }: { children: ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
+  default: ({
+    children,
+    href,
+    ...rest
+  }: {
+    children: ReactNode;
+    href: string;
+  } & Record<string, unknown>) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
@@ -100,7 +111,19 @@ async function renderPage() {
 }
 
 describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
-  it('eligible → renders the ecommerce section, the health card, and the 준비중 note', async () => {
+  // The 7 shipped operator areas — hrefs must match ConsoleSidebarNav's
+  // ecommerce children (TASK-PC-FE-155).
+  const OPS_LINKS: ReadonlyArray<[string, string]> = [
+    ['ecommerce-products-link', '/ecommerce/products'],
+    ['ecommerce-orders-link', '/ecommerce/orders'],
+    ['ecommerce-shippings-link', '/ecommerce/shippings'],
+    ['ecommerce-promotions-link', '/ecommerce/promotions'],
+    ['ecommerce-users-link', '/ecommerce/users'],
+    ['ecommerce-sellers-link', '/ecommerce/sellers'],
+    ['ecommerce-notifications-link', '/ecommerce/notifications/templates'],
+  ];
+
+  it('eligible → renders the section, the health card, and the 7 operator-area links (no 준비중 note)', async () => {
     getCatalogMock.mockResolvedValue(ELIGIBLE_CATALOG);
     getDomainHealthStateMock.mockResolvedValue(healthState({}));
 
@@ -114,10 +137,12 @@ describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
     expect(
       screen.getByTestId('domain-health-card-ecommerce'),
     ).toBeInTheDocument();
-    // The deferred-ops note.
-    expect(
-      screen.getByTestId('ecommerce-ops-coming-soon'),
-    ).toBeInTheDocument();
+    // All 7 operator-area quick-links present, each with the sidebar-parallel href.
+    for (const [testid, href] of OPS_LINKS) {
+      expect(screen.getByTestId(testid)).toHaveAttribute('href', href);
+    }
+    // The stale "준비중" coming-soon note is gone.
+    expect(screen.queryByTestId('ecommerce-ops-coming-soon')).toBeNull();
   });
 
   it('registry degraded → degraded note (never blocks on an unproven negative)', async () => {
@@ -164,9 +189,10 @@ describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
     expect(
       screen.getByTestId('ecommerce-health-unavailable'),
     ).toBeInTheDocument();
-    // The shell + 준비중 note still render — degrade never blanks the section.
-    expect(
-      screen.getByTestId('ecommerce-ops-coming-soon'),
-    ).toBeInTheDocument();
+    // The shell + the static quick-launch grid still render — the grid is not
+    // health-gated, so a health degrade never blanks the operator links.
+    expect(screen.getByTestId('ecommerce-ops-links')).toBeInTheDocument();
+    expect(screen.getByTestId('ecommerce-products-link')).toBeInTheDocument();
+    expect(screen.queryByTestId('ecommerce-ops-coming-soon')).toBeNull();
   });
 });

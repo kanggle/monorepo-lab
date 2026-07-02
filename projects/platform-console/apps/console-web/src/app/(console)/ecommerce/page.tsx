@@ -10,6 +10,30 @@ import {
 export const dynamic = 'force-dynamic';
 
 /**
+ * The 7 shipped ecommerce operator areas, mirroring the `ConsoleSidebarNav`
+ * ecommerce children (§ 2.4.10). The 상품 tile keeps its original
+ * `ecommerce-products-link` testid (back-compat); the rest use nav-parallel
+ * testids. A new area must be added here AND in `ConsoleSidebarNav`.
+ */
+const ECOMMERCE_OPS_AREAS: ReadonlyArray<{
+  href: string;
+  label: string;
+  testid: string;
+}> = [
+  { href: '/ecommerce/products', label: '상품 운영', testid: 'ecommerce-products-link' },
+  { href: '/ecommerce/orders', label: '주문 운영', testid: 'ecommerce-orders-link' },
+  { href: '/ecommerce/shippings', label: '배송 운영', testid: 'ecommerce-shippings-link' },
+  { href: '/ecommerce/promotions', label: '프로모션 운영', testid: 'ecommerce-promotions-link' },
+  { href: '/ecommerce/users', label: '사용자', testid: 'ecommerce-users-link' },
+  { href: '/ecommerce/sellers', label: '셀러 운영', testid: 'ecommerce-sellers-link' },
+  {
+    href: '/ecommerce/notifications/templates',
+    label: '알림 템플릿',
+    testid: 'ecommerce-notifications-link',
+  },
+];
+
+/**
  * ecommerce operations section route (TASK-MONO-241 — ADR-MONO-030 Step 4
  * facet a-후속). The drill-in destination for the `ecommerce` catalog tile
  * (`baseRoute=/ecommerce`, added by TASK-MONO-240) — this route closes the
@@ -19,12 +43,15 @@ export const dynamic = 'force-dynamic';
  * existing "coming soon" path (this route does not hard-crash when ecommerce
  * is unavailable).
  *
- * Server component. STRICTLY READ-ONLY. v1 content = the ecommerce
- * domain-health summary (the `/actuator/health` leg surfaced as the 6th
- * Domain Health card, § 2.4.9.2) + a "상세 운영 표면 준비중" note. The rich
- * operations surface (product/order/seller management) and the
- * operator-overview snapshot leg are deferred follow-ups (facet a-후속-2 /
- * later facets).
+ * Server component. STRICTLY READ-ONLY. Content = the ecommerce domain-health
+ * summary (the `/actuator/health` leg surfaced as the 6th Domain Health card,
+ * § 2.4.9.2) + an operator-area **quick-launch grid** linking all 7 shipped
+ * operator surfaces (products / orders / users / promotions / shippings /
+ * notifications / sellers — TASK-PC-FE-081…090 + 154). The grid mirrors the
+ * `ConsoleSidebarNav` ecommerce children (the primary nav path); it is a
+ * redundant in-section convenience entry, so a new area must be added in both
+ * places. (TASK-PC-FE-155 retired the Phase-1 products-only link + the stale
+ * "주문·셀러 준비중" note that predated PC-FE-083…090.)
  *
  * Eligibility (§ 2.2): resolved from the data-driven registry — the app layer
  * is the layer allowed to compose `features/*`. A registry 401 → whole-session
@@ -159,32 +186,27 @@ export default async function EcommercePage() {
         )}
       </div>
 
-      {/* 상품 운영 (TASK-PC-FE-081 — § 2.4.10 product CRUD). */}
+      {/* 운영 영역 quick-launch 그리드 — 7 shipped operator surfaces
+          (TASK-PC-FE-081…090 + 154). Labels/hrefs mirror ConsoleSidebarNav's
+          ecommerce children; the sidebar remains the primary nav path (§ 2.4.10,
+          TASK-PC-FE-155). */}
       <div className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-foreground">운영</h2>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/ecommerce/products"
-            data-testid="ecommerce-products-link"
-            className="rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            상품 운영 →
-          </Link>
+        <div
+          data-testid="ecommerce-ops-links"
+          className="flex flex-wrap gap-3"
+        >
+          {ECOMMERCE_OPS_AREAS.map((area) => (
+            <Link
+              key={area.href}
+              href={area.href}
+              data-testid={area.testid}
+              className="rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {area.label} →
+            </Link>
+          ))}
         </div>
-      </div>
-
-      <div
-        data-testid="ecommerce-ops-coming-soon"
-        className="rounded-md border border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground"
-      >
-        <p className="mb-1 font-medium text-foreground">
-          추가 운영 표면 준비중
-        </p>
-        <p>
-          주문 · 셀러 관리 운영 화면은 후속 작업에서 제공됩니다. 상품 운영(목록 ·
-          상세 · 등록 · 수정 · 삭제 · 옵션 · 재고)은 위 “상품 운영”에서 사용할 수
-          있습니다.
-        </p>
       </div>
     </section>
   );
