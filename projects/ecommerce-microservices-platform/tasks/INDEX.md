@@ -84,12 +84,12 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-FE-085 | **REVIEW (PR 대기)**. 알림 설정 "푸시 수신 기기" 목록 — 백엔드 `GET /me/push-subscriptions`(목록, 키 미노출) + `user_agent` V7 캡처 + `listByUser`, 프런트 `PushDeviceList`(UA→기기명 라벨·등록일·`이 기기` 배지·기기별 해지). 교차-레이어 원자 PR. 백엔드 컴파일+단위/슬라이스 GREEN(로컬), 프런트=CI Node20. 분석=Opus 4.8 / 구현=BE 위임+FE 직접. | notification-service, web-store | code, api, migration, ui, push |
 
 ## done
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-085 | **DONE (2026-07-02, 3-dim — PR #2119 `87ebff41a`)**. 알림 설정 "푸시 수신 기기" 목록 — 백엔드 `GET /me/push-subscriptions`(목록, 키 미노출) + `user_agent` V7 캡처 + `listByUser`, 프런트 `PushDeviceList`(UA→기기명 라벨·등록일·`이 기기` 배지·기기별 해지). 교차-레이어 원자 PR. 백엔드 IT + 프런트 lint/unit/e2e GREEN. 분석=Opus 4.8 / 구현=BE 위임+FE 직접. | notification-service, web-store | code, api, migration, ui, push |
 | TASK-FE-084 | **DONE (2026-07-02, 3-dim — PR #2111 `d9e840819`)**. web-store 주문 내역 `OrderCard` 3줄→2줄 압축 — 1줄=날짜+상태 배지, 2줄=`상품명 외 N건 · 총액원`(span 분리, ellipsis). 순수 UI, 기존 테스트 무수정 통과. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, ui |
 | TASK-FE-083-fix-002 | **DONE (2026-07-02, 3-dim — PR #2103 `da9e656a7`)**. FE-083 후속 버그픽스 — web-store BFF 프록시(`api/bff/[...path]`)가 백엔드 204/205/304 응답에 (빈) 본문을 실어 `Response` 생성자 `TypeError`→500 으로 변질(모든 백엔드 204 가 클라 500). 라이브 fed-e2e push 구독 해지에서 발견(백엔드는 204 정상 삭제, UI 만 실패 오인). null-body-status 시 본문 `null` 전달 + 프록시 204/304/200 테스트. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, bug, test |
 | TASK-FE-083-fix-001 | **DONE (2026-07-02, 3-dim — PR #2097 `dc9077608`)**. FE-083 후속 버그픽스 — web-store 인증 미들웨어가 `/sw.js` 를 /login 307 리다이렉트해 SW 등록이 막히던 것 수정(공개 allowlist + matcher 제외). 라이브 fed-e2e 기동으로 발견(앱 실행 전 미적발). 신규 middleware 테스트. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, bug, test |
