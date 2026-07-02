@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-083-fix-001 | **REVIEW (2026-07-02)**. FE-083 후속 버그픽스 — web-store 인증 미들웨어가 `/sw.js` 를 /login 으로 307 리다이렉트해 Service Worker 등록이 막히던 것 수정(공개 경로 allowlist + matcher 제외). 라이브 fed-e2e 기동으로 발견. 신규 middleware 테스트. impl 브랜치 `fe-083-fix-sw-middleware`. | web-store | code, bug, test |
 
 ## done
 

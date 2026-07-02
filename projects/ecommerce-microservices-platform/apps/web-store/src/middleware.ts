@@ -35,6 +35,11 @@ export async function middleware(request: NextRequest) {
     // intent of `authConfig.callbacks.authorized` in `shared/auth/auth.ts`.
     pathname.startsWith('/api/bff') ||
     pathname.startsWith('/_next') ||
+    // The Web Push service worker script (TASK-FE-083) must be publicly fetchable:
+    // `navigator.serviceWorker.register('/sw.js')` and the browser's periodic SW
+    // update fetches run without app auth context, so a 307 to /login would break
+    // registration. Also excluded from the matcher below so middleware never runs on it.
+    pathname === '/sw.js' ||
     pathname === '/favicon.ico'
   ) {
     return NextResponse.next();
@@ -58,8 +63,9 @@ export const config = {
      *  - /api/auth (next-auth handler)
      *  - /_next/static, /_next/image
      *  - /favicon.ico, /robots.txt, /sitemap.xml
+     *  - /sw.js (Web Push service worker — must be public, TASK-FE-083-fix-001)
      *  - All public asset extensions handled by the negative lookahead
      */
-    '/((?!api/auth|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)',
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|sw.js).*)',
   ],
 };
