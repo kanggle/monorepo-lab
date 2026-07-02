@@ -15,9 +15,10 @@ import { z } from 'zod';
  *
  * TOLERANCE invariant: read shapes are permissive (`.passthrough()`); only the
  * fields the UI strictly needs are required, everything else passes through.
- * An unknown / future field never throws.
+ * An unknown / future field (or status) never throws.
  *
- * status=ACTIVE only (v1). NO update, NO delete (producer defines none — ADR-030 v1).
+ * Lifecycle actions (provision/suspend/close) added by TASK-PC-FE-154 (ADR-MONO-042).
+ * The seller domain has NO update/delete (CRUD); mutation = state transitions.
  *
  * Base URL: ECOMMERCE_ADMIN_BASE_URL + /sellers (the ADMIN subtree `/api/admin/sellers`
  * — unlike promotions/notifications/shippings which use ECOMMERCE_PUBLIC_BASE_URL).
@@ -27,8 +28,66 @@ import { z } from 'zod';
 // SELLER STATUS
 // ===========================================================================
 
-export const SELLER_STATUS_VALUES = ['ACTIVE'] as const;
+/**
+ * Full seller lifecycle (ADR-MONO-042): a seller is born `PENDING_PROVISIONING`,
+ * becomes `ACTIVE` on provision, and can be `SUSPENDED` (reversible lock) or
+ * `CLOSED` (terminal). The producer may emit a future value — read shapes keep
+ * `status: z.string()` so anything unknown passes through and renders neutral.
+ */
+export const SELLER_STATUS_VALUES = [
+  'PENDING_PROVISIONING',
+  'ACTIVE',
+  'SUSPENDED',
+  'CLOSED',
+] as const;
 export type SellerStatus = (typeof SELLER_STATUS_VALUES)[number];
+
+/** Badge tone (label + Tailwind classes) for a seller status. */
+export interface SellerStatusTone {
+  label: string;
+  className: string;
+}
+
+const SELLER_STATUS_TONES: Record<SellerStatus, SellerStatusTone> = {
+  ACTIVE: { label: 'ACTIVE', className: 'bg-green-100 text-green-800' },
+  PENDING_PROVISIONING: {
+    label: 'PENDING_PROVISIONING',
+    className: 'bg-amber-100 text-amber-800',
+  },
+  SUSPENDED: { label: 'SUSPENDED', className: 'bg-gray-200 text-gray-700' },
+  CLOSED: { label: 'CLOSED', className: 'bg-red-100 text-red-800' },
+};
+
+/**
+ * Maps a (possibly unknown) status string to a badge tone. A value outside the
+ * known lifecycle renders with a neutral tone using the raw string as its label
+ * — the console never crashes on a future producer status (TOLERANCE invariant).
+ */
+export function sellerStatusTone(status: string): SellerStatusTone {
+  return (
+    SELLER_STATUS_TONES[status as SellerStatus] ?? {
+      label: status,
+      className: 'bg-muted text-muted-foreground',
+    }
+  );
+}
+
+/** The lifecycle actions valid from a given status (drives the detail UI). */
+export type SellerLifecycleAction = 'provision' | 'suspend' | 'close';
+
+export function sellerActionsFor(status: string): SellerLifecycleAction[] {
+  switch (status) {
+    case 'PENDING_PROVISIONING':
+      return ['provision'];
+    case 'ACTIVE':
+      return ['suspend', 'close'];
+    case 'SUSPENDED':
+      return ['close'];
+    default:
+      // CLOSED (terminal) or any unknown status → no actions.
+      return [];
+  }
+}
 
 // ===========================================================================
 // READ shapes

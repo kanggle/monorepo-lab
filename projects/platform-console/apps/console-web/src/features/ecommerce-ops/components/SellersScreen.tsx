@@ -7,6 +7,7 @@ import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useSellers } from '../hooks/use-ecommerce-sellers';
 import {
   SELLER_DEFAULT_PAGE_SIZE,
+  sellerStatusTone,
   type SellerList,
   type SellerListParams,
 } from '../api/seller-types';
@@ -70,7 +71,8 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
         </Link>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
-        셀러 목록 · 상세 · 등록. (상태: ACTIVE만 · 수정/삭제 없음 — ADR-030 v1)
+        셀러 목록 · 상세 · 등록. 라이프사이클 관리(프로비저닝 · 정지 · 폐점)는 상세
+        화면에서. (수정/삭제 대신 상태 전이 — ADR-042)
       </p>
 
       {forbidden ? (
@@ -140,9 +142,16 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
                   <td className="p-2 font-mono text-xs">{s.sellerId}</td>
                   <td className="p-2">{s.displayName}</td>
                   <td className="p-2" data-testid={`seller-row-status-${i}`}>
-                    <span className="inline-block rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
-                      {s.status}
-                    </span>
+                    {(() => {
+                      const tone = sellerStatusTone(s.status);
+                      return (
+                        <span
+                          className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${tone.className}`}
+                        >
+                          {tone.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="p-2 text-sm text-muted-foreground">
                     {new Date(s.createdAt).toLocaleDateString('ko-KR')}

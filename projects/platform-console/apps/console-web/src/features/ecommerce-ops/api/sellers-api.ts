@@ -113,3 +113,38 @@ export function registerSeller(
     SELLER_LABEL,
   );
 }
+
+// ---------------------------------------------------------------------------
+// LIFECYCLE actions (TASK-PC-FE-154, ADR-MONO-042 D3/D4). Each is a bodyless
+// POST that the producer answers with 204 No Content — consumed as a void
+// mutation (`parse === undefined` → callEcommerce returns undefined). Idempotent
+// + null-safe producer-side; the console re-reads state on success.
+// ---------------------------------------------------------------------------
+
+function sellerLifecycle(sellerId: string, action: string): Promise<void> {
+  const env = getServerEnv();
+  return callEcommerce<void>(
+    {
+      method: 'POST',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: `/sellers/${encodeURIComponent(sellerId)}/${action}`,
+    },
+    undefined,
+    SELLER_LABEL,
+  );
+}
+
+/** POST /api/admin/sellers/{id}/provision — re-provision a PENDING seller. */
+export function provisionSeller(sellerId: string): Promise<void> {
+  return sellerLifecycle(sellerId, 'provision');
+}
+
+/** POST /api/admin/sellers/{id}/suspend — ACTIVE → SUSPENDED (+ lock account). */
+export function suspendSeller(sellerId: string): Promise<void> {
+  return sellerLifecycle(sellerId, 'suspend');
+}
+
+/** POST /api/admin/sellers/{id}/close — → CLOSED terminal (+ deactivate account). */
+export function closeSeller(sellerId: string): Promise<void> {
+  return sellerLifecycle(sellerId, 'close');
+}

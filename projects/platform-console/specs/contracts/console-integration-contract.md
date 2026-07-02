@@ -2763,8 +2763,12 @@ net-new operator surface with no `admin-dashboard` parity counterpart — ADR-MO
 Step 4 facet f, marketplace seller axis). Unblocked by **TASK-BE-375**
 (`AdminSellerController` operator plane: `GET /api/admin/sellers` list +
 `GET /api/admin/sellers/{sellerId}` detail + `POST /api/admin/sellers` register).
-This is a **list + detail + register** surface (MVP); no deactivate/suspend
-(ADR-030 v1 — the backend exposes only those three endpoints).
+This started as a **list + detail + register** surface (MVP, TASK-PC-FE-090); the
+**operator lifecycle actions** (provision / suspend / close) were added by
+**TASK-PC-FE-154** once the producer shipped them (ADR-MONO-042 D3/D4). The seller
+domain has **no** update/delete (CRUD); its mutation surface is **state transitions**
+(`PENDING_PROVISIONING → ACTIVE`, `ACTIVE → SUSPENDED`, `→ CLOSED`), so provision/
+suspend/close ARE the seller "edit/delete" equivalent.
 
 This sub-binding **inherits § 2.4.10's cross-cutting rules verbatim** and does
 not restate them: the **credential** (domain-facing IAM OIDC access token —
@@ -2790,20 +2794,32 @@ same-origin route handlers → ecommerce gateway direct, NO console-bff write le
 | 1 | `GET` | `/api/admin/sellers?page=&size=` | paginated list (rows: `sellerId, displayName, status, createdAt`) |
 | 2 | `GET` | `/api/admin/sellers/{sellerId}` | seller detail (full); missing/cross-tenant → 404 |
 | 3 | `POST` | `/api/admin/sellers` | register; body `{sellerId, displayName}` → 201 `{sellerId}` |
+| 4 | `POST` | `/api/admin/sellers/{sellerId}/provision` | re-provision a `PENDING_PROVISIONING` seller (ADR-042 D3 retry; idempotent — already-ACTIVE is a no-op) → 204 / 404 |
+| 5 | `POST` | `/api/admin/sellers/{sellerId}/suspend` | `ACTIVE → SUSPENDED` + lock the backing account (ADR-042 D4; idempotent, null-safe) → 204 / 404 |
+| 6 | `POST` | `/api/admin/sellers/{sellerId}/close` | `→ CLOSED` terminal + deactivate the backing account (ADR-042 D4; idempotent, null-safe) → 204 / 404 |
 
   Error envelope = the same flat ecommerce shape `{ code, message, timestamp }`
   (400 `VALIDATION_ERROR`, 403 `ACCESS_DENIED`, 404 `SELLER_NOT_FOUND`,
   409 `CONFLICT` [duplicate `sellerId` within tenant]),
-  consumed with the § 2.4.10 ecommerce parser.
+  consumed with the § 2.4.10 ecommerce parser. The lifecycle POSTs (#4–#6)
+  carry **no request body** and return **204 No Content** (consumed as a void
+  mutation — the same `callEcommerce(..., undefined, ...)` / proxy `204` path as
+  the product DELETE binding).
 
-- **status=ACTIVE only** (v1). The backend exposes no suspend/deactivate
-  endpoint; the console does not attempt any status mutation. Per-tenant
-  `default` seller appears in the list as a real ACTIVE row — expected.
+- **Seller statuses** = `PENDING_PROVISIONING` · `ACTIVE` · `SUSPENDED` · `CLOSED`.
+  The list/detail render each with a status-tone badge (no hard-coded ACTIVE
+  green). The per-tenant `default` seller appears as a real ACTIVE row — expected.
+  Unknown/future producer status strings pass through (`.passthrough()`) and
+  render with a neutral tone — never a crash.
 
-- **No update, no delete** (producer defines none — ADR-030 v1; this is not
-  a silent omission). The console's register form validates `sellerId` ≤ 64
-  chars non-blank, `displayName` non-blank; 409 `CONFLICT` (duplicate
-  `sellerId`) surfaced inline.
+- **No update/delete (CRUD); lifecycle = state transitions.** The producer
+  defines no `PUT`/`DELETE`; seller mutation is the transition set above. The
+  console surfaces exactly the **status-valid** transitions per seller
+  (PENDING → provision; ACTIVE → suspend / close; SUSPENDED → close; CLOSED →
+  none), each **confirm-gated** (`ConfirmDialog`, `pending` + inline error). There
+  is **no producer reactivation path** (`SUSPENDED → ACTIVE` is not an endpoint;
+  provision only targets PENDING). The register form still validates `sellerId`
+  ≤ 64 chars non-blank, `displayName` non-blank; 409 `CONFLICT` surfaced inline.
 
 - **Producer immutability**: cross-reference only — any change to the ecommerce
   seller contract is an ecommerce project-internal spec-first change;
