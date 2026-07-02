@@ -11,10 +11,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
@@ -23,12 +27,14 @@ import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AccessTokenAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2RefreshTokenAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContext;
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -36,6 +42,9 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -264,6 +273,102 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(authEventPublisher).publishTokenReuseDetected(
                 eq("account-001"), eq("fan-platform"), eq(tokenValue),
                 any(), any(), any(), any(), eq(true), eq(1));
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-465: identity preservation on rotation — the rotated access token
+    // MUST be generated from the ORIGINAL resource-owner Authentication (stored by
+    // SAS under `java.security.Principal`), NOT the client principal. A key mismatch
+    // regression made every refresh fall back to the client principal, so the rotated
+    // token carried `sub` = client_id (breaking `X-User-Id ← sub` UUID binding
+    // downstream) and lost the account's `details` (account_id / tenant / roles).
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("authenticate: rotation reuses the stored resource-owner principal "
+            + "(account_id preserved) — regression for sub=client_id on refresh")
+    void authenticate_happyPath_generatesTokenFromStoredResourceOwnerPrincipal() {
+        RegisteredClient registeredClient = buildDemoSpaClient();
+        OAuth2ClientAuthenticationToken clientPrincipal = buildAuthenticatedClient(registeredClient);
+
+        String tokenValue = "rotated-rt-" + UUID.randomUUID();
+        String accountId = "01928c4a-7e9f-7c00-9a40-d2b1f5e8c500";
+
+        // The resource-owner Authentication SAS persisted at authorization_code time,
+        // carrying the account identity on its `details` map (exactly what
+        // CredentialAuthenticationProvider / SocialLoginBrowserController set).
+        Map<String, Object> details = new HashMap<>();
+        details.put("tenant_id", "ecommerce");
+        details.put("tenant_type", "B2C_CONSUMER");
+        details.put("account_id", accountId);
+        UsernamePasswordAuthenticationToken resourceOwner =
+                new UsernamePasswordAuthenticationToken(
+                        "shopper@example.com", null,
+                        List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        resourceOwner.setDetails(details);
+
+        OAuth2RefreshToken sasRt = new OAuth2RefreshToken(
+                tokenValue, Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
+        OAuth2Authorization authorization = OAuth2Authorization.withRegisteredClient(registeredClient)
+                .id(UUID.randomUUID().toString())
+                .principalName("shopper@example.com")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizedScopes(Set.of("openid"))
+                .token(sasRt)
+                // SAS stores the resource-owner principal under this exact key.
+                .attribute(java.security.Principal.class.getName(), resourceOwner)
+                .build();
+
+        OAuth2RefreshTokenAuthenticationToken auth = mock(OAuth2RefreshTokenAuthenticationToken.class);
+        when(auth.getPrincipal()).thenReturn(clientPrincipal);
+        when(auth.getRefreshToken()).thenReturn(tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        // Not in the domain store → the reuse/expiry block is skipped (just-issued race path).
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.empty());
+
+        Instant now = Instant.now();
+        OAuth2Token generatedAccess = mock(OAuth2Token.class);
+        when(generatedAccess.getTokenValue()).thenReturn("new-access-jwt");
+        when(generatedAccess.getIssuedAt()).thenReturn(now);
+        when(generatedAccess.getExpiresAt()).thenReturn(now.plusSeconds(300));
+        OAuth2Token generatedRefresh = mock(OAuth2Token.class);
+        when(generatedRefresh.getTokenValue()).thenReturn("new-refresh-opaque");
+        when(generatedRefresh.getIssuedAt()).thenReturn(now);
+        when(generatedRefresh.getExpiresAt()).thenReturn(now.plusSeconds(3600));
+        // access token generated first, refresh token second.
+        doReturn(generatedAccess, generatedRefresh).when(tokenGenerator).generate(any());
+
+        // The rotation write path registers a TransactionSynchronization inside the
+        // TransactionTemplate callback; with a mocked PlatformTransactionManager no real
+        // synchronization is initialized, so activate one for the duration of the call
+        // (a real AbstractPlatformTransactionManager does this in getTransaction()).
+        Authentication result;
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            result = provider.authenticate(auth);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        assertThat(result).isInstanceOf(OAuth2AccessTokenAuthenticationToken.class);
+
+        // The ACCESS token must be generated from a context whose principal is the
+        // stored resource owner (carrying account_id) — NOT the client principal.
+        ArgumentCaptor<OAuth2TokenContext> ctxCaptor = ArgumentCaptor.forClass(OAuth2TokenContext.class);
+        verify(tokenGenerator, times(2)).generate(ctxCaptor.capture());
+        OAuth2TokenContext accessCtx = ctxCaptor.getAllValues().get(0);
+        Authentication ctxPrincipal = accessCtx.getPrincipal();
+
+        assertThat(ctxPrincipal)
+                .as("rotation must reuse the stored resource-owner principal, not the client")
+                .isSameAs(resourceOwner);
+        assertThat(ctxPrincipal).isNotSameAs(clientPrincipal);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> ctxDetails = (Map<String, Object>) ctxPrincipal.getDetails();
+        assertThat(ctxDetails)
+                .as("the account identity that drives sub=account_id + roles must survive rotation")
+                .containsEntry("account_id", accountId);
     }
 
     // -----------------------------------------------------------------------
