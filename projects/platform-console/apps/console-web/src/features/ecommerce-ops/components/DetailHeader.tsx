@@ -7,13 +7,18 @@ export interface DetailHeaderProps {
   headingId: string;
   /** Page title. Convention across ecommerce-ops detail pages: "OO 상세". */
   title: string;
-  /** List route the "목록" button returns to. */
+  /** Route the back button returns to (a list, or a parent detail). */
   backHref: string;
-  /** Stable test id for the "목록" back button. */
+  /** Stable test id for the back button. */
   backTestId: string;
   /**
+   * Back button label. Defaults to "목록" (return to list); pass "상세" on an
+   * edit page whose back button returns to the parent item's detail.
+   */
+  backLabel?: string;
+  /**
    * Optional extra action buttons (수정 / 삭제 / 쿠폰 발급 …) rendered to the
-   * left of the always-present "목록" button.
+   * left of the always-present back button.
    */
   actions?: ReactNode;
 }
@@ -30,6 +35,7 @@ export function DetailHeader({
   title,
   backHref,
   backTestId,
+  backLabel = '목록',
   actions,
 }: DetailHeaderProps) {
   return (
@@ -41,7 +47,7 @@ export function DetailHeader({
         {actions}
         <Link href={backHref}>
           <Button variant="ghost" data-testid={backTestId}>
-            목록
+            {backLabel}
           </Button>
         </Link>
       </div>

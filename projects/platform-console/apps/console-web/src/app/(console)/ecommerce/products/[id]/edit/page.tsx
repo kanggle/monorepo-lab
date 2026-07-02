@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import {
+  DetailHeader,
   getProductDetailSectionState,
   ProductForm,
 } from '@/features/ecommerce-ops';
@@ -75,12 +76,13 @@ export default async function ProductEditPage({
 
   return (
     <section>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">상품 수정</h1>
-        <Link href={`/ecommerce/products/${id}`} className="text-sm underline">
-          상세로
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="product-edit-heading"
+        title="상품 수정"
+        backHref={`/ecommerce/products/${id}`}
+        backLabel="상세"
+        backTestId="product-edit-back"
+      />
       <ProductForm existing={state.detail} />
     </section>
   );
