@@ -1,11 +1,53 @@
-# TASK-BE-467 — Confine account MUTATION endpoints to the target account's tenant (GAP-ACCOUNT-01)
+# TASK-BE-467 — Multi-tenant admin account-mutation propagation + confinement (was: GAP-ACCOUNT-01)
 
-- **Status**: ready
+- **Status**: blocked-analysis (premise revised — see below; NOT ready to implement as originally scoped)
 - **Domain**: iam (admin-service + account-service)
-- **Type**: security fix (backend)
-- **분석=Opus 4.8 / 구현 권장=Opus 4.8 (security-critical cross-service)**
+- **Type**: correctness + latent-confinement (backend) — **downgraded from "security-critical vuln"**
+- **분석=Opus 4.8 / 구현 권장=Opus 4.8**
 
-## Goal
+## ⚠️ REVISED after code verification (2026-07-02) — original premise was WRONG
+
+The Explore-agent framing ("account mutations are cross-tenant-OPEN → exploitable
+today") is **inaccurate**. Direct code read of `AccountStatusUseCase` /
+`GdprDeleteUseCase` / `DataExportUseCase` (account-service) shows every admin-
+reachable mutation use-case does `accountRepository.findById(TenantId.FAN_PLATFORM,
+accountId)` — **hard-pinned to FAN_PLATFORM** (TASK-BE-228 debt; the "until
+TASK-BE-229" comments are stale — BE-229 shipped the auth *login* tenant claim
+but never removed this admin-path pin). `findById(tenant, id)` is tenant-scoped
+(returns empty for a foreign tenant), so:
+
+- A cross-tenant lock/gdpr/export attempt → `findById(FAN, foreignId)` → **404**,
+  NOT a silent cross-tenant mutation. **There is no exploitable-today hole.**
+- The REAL issues are: **(A) correctness bug** — admin can only mutate
+  FAN_PLATFORM accounts; ecommerce/acme/globex accounts 404 (the read path shows
+  them, but lock/gdpr/export fail); **(B) latent confinement** — required WHEN the
+  FAN pin is removed.
+
+**Consequence:** the confinement cannot be "added" standalone. The account-service
+mutation path does not *use* a tenant at all — the fix is to **honor the real
+tenant (finish the BE-228 FAN-pin removal for the admin mutation path) AND confine
+it**, which is a behavior-changing change (enables non-FAN admin mutations) tangled
+with the deferred multi-tenant-account work — NOT the small "add a guard" patch
+originally agreed.
+
+**Corrected fix shape** (for when this is scheduled): account-service admin-
+mutation controllers read `X-Tenant-Id` → thread into the use-case → replace the
+`TenantId.FAN_PLATFORM` literal with `TenantId.of(header)` (absent → FAN_PLATFORM =
+net-zero). Because `findById(realTenant, id)` is already tenant-scoped, a wrong
+tenant → 404 = enumeration-safe confinement **for free**. admin-service resolves
+the active tenant via `QueryTenantScopeGate` and stamps it as `X-Tenant-Id` (as
+the ORIGINAL design below already describes). Session-revoke is a separate
+enforcement point (auth-service credentials/refresh_tokens tenant_id). Scope must
+touch ONLY the admin-reachable mutation use-cases — NOT the consumer-facing
+FAN-pinned use-cases (signup/verify-email/profile/last-login = genuine BE-229
+Phase-3 debt, out of scope).
+
+**Lesson**: verify REAL-GAP (module-liveness + grep cross-check) before acting —
+the Explore sweep missed the FAN pin two call-frames below the controller.
+
+---
+
+## Goal (ORIGINAL — assumed the mutation path honored a passed tenant; kept for the design skeleton)
 
 Close **GAP-ACCOUNT-01**: the admin account **mutation** endpoints
 (`lock` / `unlock` / session-`revoke` / `gdpr-delete` / `export` / `bulk-lock`)
