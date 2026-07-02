@@ -100,6 +100,27 @@ describe('EcommerceOverview (TASK-PC-FE-156)', () => {
     expect(screen.queryByTestId('products-count')).toBeNull();
   });
 
+  it('each count card shows a per-service status indicator reflecting its cell status', () => {
+    render(
+      <EcommerceOverview
+        state={baseState({
+          counts: [
+            area({ key: 'products', testid: 'ecommerce-products-link', count: 12, status: 'ok' }),
+            area({ key: 'orders', testid: 'ecommerce-orders-link', count: null, status: 'degraded' }),
+            area({ key: 'users', testid: 'ecommerce-users-link', count: null, status: 'forbidden' }),
+          ],
+        })}
+      />,
+    );
+    const products = screen.getByTestId('products-service-status');
+    expect(products).toHaveAttribute('data-status', 'ok');
+    expect(products).toHaveTextContent('정상');
+    expect(screen.getByTestId('orders-service-status')).toHaveAttribute('data-status', 'degraded');
+    expect(screen.getByTestId('orders-service-status')).toHaveTextContent('점검 필요');
+    expect(screen.getByTestId('users-service-status')).toHaveAttribute('data-status', 'forbidden');
+    expect(screen.getByTestId('users-service-status')).toHaveTextContent('권한 없음');
+  });
+
   it('renders the order-status distribution and recent panels', () => {
     render(<EcommerceOverview state={baseState()} />);
     expect(screen.getByTestId('order-status-PENDING')).toHaveTextContent('3');
