@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import {
+  DetailHeader,
   getNotificationDetailSectionState,
   TemplateForm,
 } from '@/features/ecommerce-ops';
@@ -80,15 +81,12 @@ export default async function TemplateEditPage({
 
   return (
     <section>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">알림 템플릿 수정</h1>
-        <Link
-          href="/ecommerce/notifications/templates"
-          className="text-sm underline"
-        >
-          목록으로
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="notification-template-edit-heading"
+        title="알림 템플릿 수정"
+        backHref="/ecommerce/notifications/templates"
+        backTestId="notification-edit-back"
+      />
       <TemplateForm existing={state.detail} />
     </section>
   );

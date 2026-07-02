@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { PromotionForm } from '@/features/ecommerce-ops';
+import { DetailHeader, PromotionForm } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../products/_eligibility';
 
 export const dynamic = 'force-dynamic';
@@ -58,12 +58,12 @@ export default async function NewPromotionPage() {
 
   return (
     <section>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">프로모션 등록</h1>
-        <Link href="/ecommerce/promotions" className="text-sm underline">
-          목록으로
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="promotion-new-heading"
+        title="프로모션 등록"
+        backHref="/ecommerce/promotions"
+        backTestId="promotion-new-back"
+      />
       <PromotionForm />
     </section>
   );

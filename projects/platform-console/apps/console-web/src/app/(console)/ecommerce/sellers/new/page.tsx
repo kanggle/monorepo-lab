@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { SellerRegisterForm } from '@/features/ecommerce-ops';
+import { DetailHeader, SellerRegisterForm } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../products/_eligibility';
 
 export const dynamic = 'force-dynamic';
@@ -58,12 +58,12 @@ export default async function NewSellerPage() {
 
   return (
     <section>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">셀러 등록</h1>
-        <Link href="/ecommerce/sellers" className="text-sm underline">
-          목록으로
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="seller-new-heading"
+        title="셀러 등록"
+        backHref="/ecommerce/sellers"
+        backTestId="seller-new-back"
+      />
       <SellerRegisterForm />
     </section>
   );

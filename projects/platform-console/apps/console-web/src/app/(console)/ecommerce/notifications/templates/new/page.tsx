@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { TemplateForm } from '@/features/ecommerce-ops';
+import { DetailHeader, TemplateForm } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../../products/_eligibility';
 
 export const dynamic = 'force-dynamic';
@@ -58,15 +58,12 @@ export default async function NewTemplatePage() {
 
   return (
     <section>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">알림 템플릿 등록</h1>
-        <Link
-          href="/ecommerce/notifications/templates"
-          className="text-sm underline"
-        >
-          목록으로
-        </Link>
-      </div>
+      <DetailHeader
+        headingId="notification-template-new-heading"
+        title="알림 템플릿 등록"
+        backHref="/ecommerce/notifications/templates"
+        backTestId="notification-new-back"
+      />
       <TemplateForm />
     </section>
   );
