@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
+import { formatPromotionDay } from './promotion-format';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   usePromotions,
@@ -234,8 +235,8 @@ export function PromotionsScreen({ promotions }: PromotionsScreenProps) {
                   <td className="p-2">
                     {p.issuedCount} / {p.maxIssuanceCount}
                   </td>
-                  <td className="p-2">{p.startDate}</td>
-                  <td className="p-2">{p.endDate}</td>
+                  <td className="p-2">{formatPromotionDay(p.startDate)}</td>
+                  <td className="p-2">{formatPromotionDay(p.endDate)}</td>
                   <td
                     className="p-2"
                     data-testid={`promotion-row-status-${i}`}
