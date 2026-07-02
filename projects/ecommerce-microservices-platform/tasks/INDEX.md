@@ -84,12 +84,12 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-FE-083-fix-002 | **REVIEW (PR 대기)**. FE-083 후속 버그픽스 — web-store BFF 프록시(`api/bff/[...path]`)가 백엔드 204/205/304 응답에 (빈) 본문을 실어 `Response` 생성자 `TypeError`→500 으로 변질. 라이브 fed-e2e push 구독 해지 시 발견(백엔드는 204 정상 삭제, UI 만 실패 오인). null-body-status 시 본문 `null` 전달 + 프록시 204/304/200 테스트. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, bug, test |
 
 ## done
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-083-fix-002 | **DONE (2026-07-02, 3-dim — PR #2103 `da9e656a7`)**. FE-083 후속 버그픽스 — web-store BFF 프록시(`api/bff/[...path]`)가 백엔드 204/205/304 응답에 (빈) 본문을 실어 `Response` 생성자 `TypeError`→500 으로 변질(모든 백엔드 204 가 클라 500). 라이브 fed-e2e push 구독 해지에서 발견(백엔드는 204 정상 삭제, UI 만 실패 오인). null-body-status 시 본문 `null` 전달 + 프록시 204/304/200 테스트. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, bug, test |
 | TASK-FE-083-fix-001 | **DONE (2026-07-02, 3-dim — PR #2097 `dc9077608`)**. FE-083 후속 버그픽스 — web-store 인증 미들웨어가 `/sw.js` 를 /login 307 리다이렉트해 SW 등록이 막히던 것 수정(공개 allowlist + matcher 제외). 라이브 fed-e2e 기동으로 발견(앱 실행 전 미적발). 신규 middleware 테스트. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, bug, test |
 | TASK-FE-083 | **DONE (2026-07-02, 3-dim verified — PR #2090 `6f514106e`)**. web-store Web Push 구독 — `public/sw.js`(push 배너·notificationclick) + `use-push-subscription`(권한→SW→VAPID subscribe→백엔드 등록/해지) + `PushOptIn`(3-way 권한 UX, NotificationSettings 통합) + `@repo/types`/`@repo/api-client` push 메서드. 테스트 3종(CI Node20 GREEN). 라이브 배너=fed-e2e 수동 스모크. **Web Push E2E(BE-463→BE-464→FE-083) 완결.** 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, push |
 | TASK-BE-464 | **DONE (2026-07-02, 3-dim verified — PR #2088 `517d28660`)**. notification-service Web Push(VAPID) 실연동 — V6 `push_subscriptions` + 등록/해지 API + `GET vapid-public-key`(200/503) + `WebPushSender`(BE-463 stub 대체·404/410 lazy prune·per-endpoint 실패 격리) + `MartijndwarsWebPushGateway`(web-push:5.1.1 + BouncyCastle 1.78.1 명시추가·미설정 skip graceful). 단위 5종 + notification-service Testcontainers IT(풀 wiring/Flyway/엔티티) GREEN. 실 브라우저 발송=후속 FE-083. 분석=Opus 4.8 / 구현=Opus 직접. | notification-service | code, api, migration, push |
