@@ -1,10 +1,12 @@
 # TASK-PC-FE-173 — WMS "재고" 전용 메뉴/페이지 분리 + 미노출 재고 기능 표면화
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **New route:** `app/(console)/wms/inventory` · **Nav:** `WMS ▸ 재고`
 **Follows:** TASK-PC-FE-170 (개요에서 부적합 요소 정리) — 같은 원칙으로 재고 조회 테이블을 개요에서 전용 페이지로 분리.
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (frontend-engineer 위임) · **검증:** Opus 재검증.
 **Implemented:** branch `task/pc-fe-173-wms-inventory-dedicated-page`. `pnpm lint` + `tsc --noEmit` + `vitest`(wms 9 files / 102 tests) 독립 green.
+**Renumbered:** from PC-FE-172 (동시 세션이 ecommerce 작업을 172로 리넘버 → id 충돌; rebase 전 안전 구간에서 wms 참조만 173으로 치환).
+**Merged:** PR #2164 (squash `d04f45b6`, 2026-07-04) — CI 전체 GREEN(failing 0, CLEAN) + 3차원 머지 검증 후 close.
 
 ## Goal
 
