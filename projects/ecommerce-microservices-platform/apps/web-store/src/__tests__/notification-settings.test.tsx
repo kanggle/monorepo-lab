@@ -86,6 +86,31 @@ describe('NotificationSettings', () => {
     expect(screen.getByRole('switch', { name: '푸시' })).toBeChecked();
   });
 
+  it('푸시가 활성화되면 푸시 영역(옵트인+기기목록)을 표시한다 [FE-086]', async () => {
+    mockGetMyPreferences.mockResolvedValueOnce(MOCK_PREFERENCES); // pushEnabled: true
+
+    render(<TestQueryProvider><NotificationSettings /></TestQueryProvider>);
+
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: '푸시' })).toBeChecked();
+    });
+    // The push area is grouped under the 푸시 toggle and contains the opt-in.
+    expect(screen.getByTestId('push-area')).toBeInTheDocument();
+    expect(screen.getByTestId('push-optin')).toBeInTheDocument();
+  });
+
+  it('푸시가 비활성화되면 푸시 영역을 표시하지 않는다 [FE-086]', async () => {
+    mockGetMyPreferences.mockResolvedValueOnce({ ...MOCK_PREFERENCES, pushEnabled: false });
+
+    render(<TestQueryProvider><NotificationSettings /></TestQueryProvider>);
+
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: '푸시' })).not.toBeChecked();
+    });
+    expect(screen.queryByTestId('push-area')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('push-optin')).not.toBeInTheDocument();
+  });
+
   it('토글 클릭 시 설정을 변경하고 저장한다', async () => {
     mockGetMyPreferences.mockResolvedValueOnce(MOCK_PREFERENCES);
     mockUpdateMyPreferences.mockResolvedValueOnce({ ...MOCK_PREFERENCES, smsEnabled: true });
