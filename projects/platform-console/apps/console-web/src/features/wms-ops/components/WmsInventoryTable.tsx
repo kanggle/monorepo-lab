@@ -3,19 +3,29 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { messageForCode } from '@/shared/api/errors';
-import type { InventoryPage, InventoryQueryParams } from '../api/types';
+import { formatDateTime } from '@/shared/lib/datetime';
+import type { InventoryPage, InventoryQueryParams, InventoryRow } from '../api/types';
 import type { InvFilterState } from './wms-ops-helpers';
 
 /**
- * Inventory-snapshot region of the wms ops screen (TASK-PC-FE-103 split) — the
- * filter form + forbidden / degraded / empty notices + the inventory table +
- * pagination nav. Pure presentation: all state + handlers live in the
- * `WmsOpsScreen` container and arrive via props.
+ * Inventory-snapshot region — TASK-PC-FE-172 dedicated `/wms/inventory`
+ * screen. Was previously mounted on the `/wms` 개요 screen (TASK-PC-FE-103
+ * split); now rendered ONLY by `WmsInventoryScreen` (the query table is
+ * unfit for a glance-overview — PC-FE-170 same principle). Free to grow
+ * inventory-specific affordances (extra filters/columns/row detail) since
+ * it no longer shares a surface with the 개요 screen. Pure presentation:
+ * all state + handlers live in the container and arrive via props.
  */
 export interface WmsInventoryTableProps {
   whFid: string;
   skuFid: string;
   lowFid: string;
+  /** TASK-PC-FE-172 — 위치 ID filter input id. */
+  locFid: string;
+  /** TASK-PC-FE-172 — 로트 ID filter input id. */
+  lotFid: string;
+  /** TASK-PC-FE-172 — 최소 보유 filter input id. */
+  minFid: string;
   filters: InvFilterState;
   onFiltersChange: Dispatch<SetStateAction<InvFilterState>>;
   onSubmit: (e: FormEvent) => void;
@@ -25,12 +35,18 @@ export interface WmsInventoryTableProps {
   query: InventoryQueryParams;
   onPrevPage: () => void;
   onNextPage: () => void;
+  /** TASK-PC-FE-172 — per-row "상세" → composite-key by-key lookup
+   *  (the container owns the detail panel state / fetch). */
+  onSelect: (row: InventoryRow) => void;
 }
 
 export function WmsInventoryTable({
   whFid,
   skuFid,
   lowFid,
+  locFid,
+  lotFid,
+  minFid,
   filters,
   onFiltersChange,
   onSubmit,
@@ -40,6 +56,7 @@ export function WmsInventoryTable({
   query,
   onPrevPage,
   onNextPage,
+  onSelect,
 }: WmsInventoryTableProps) {
   const invRows = data.content;
   const invTotalPages = Math.max(1, data.page.totalPages);
@@ -89,6 +106,60 @@ export function WmsInventoryTable({
               onFiltersChange((f) => ({ ...f, skuId: e.target.value }))
             }
             data-testid="wms-inv-filter-sku"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor={locFid}
+            className="block text-sm font-medium text-foreground"
+          >
+            위치 ID
+          </label>
+          <input
+            id={locFid}
+            type="text"
+            value={filters.locationId}
+            onChange={(e) =>
+              onFiltersChange((f) => ({ ...f, locationId: e.target.value }))
+            }
+            data-testid="wms-inv-filter-location"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor={lotFid}
+            className="block text-sm font-medium text-foreground"
+          >
+            로트 ID
+          </label>
+          <input
+            id={lotFid}
+            type="text"
+            value={filters.lotId}
+            onChange={(e) =>
+              onFiltersChange((f) => ({ ...f, lotId: e.target.value }))
+            }
+            data-testid="wms-inv-filter-lot"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor={minFid}
+            className="block text-sm font-medium text-foreground"
+          >
+            최소 보유
+          </label>
+          <input
+            id={minFid}
+            type="number"
+            value={filters.minOnHand}
+            onChange={(e) =>
+              onFiltersChange((f) => ({ ...f, minOnHand: e.target.value }))
+            }
+            data-testid="wms-inv-filter-minonhand"
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />
         </div>
@@ -172,7 +243,16 @@ export function WmsInventoryTable({
                   보유
                 </th>
                 <th scope="col" className="p-2">
+                  손상
+                </th>
+                <th scope="col" className="p-2">
+                  최근 조정
+                </th>
+                <th scope="col" className="p-2">
                   저재고
+                </th>
+                <th scope="col" className="p-2">
+                  <span className="sr-only">상세</span>
                 </th>
               </tr>
             </thead>
@@ -189,6 +269,10 @@ export function WmsInventoryTable({
                   <td className="p-2">{r.availableQty ?? '—'}</td>
                   <td className="p-2">{r.reservedQty ?? '—'}</td>
                   <td className="p-2">{r.onHandQty ?? '—'}</td>
+                  <td className="p-2">{r.damagedQty ?? '—'}</td>
+                  <td className="p-2">
+                    {r.lastAdjustedAt ? formatDateTime(r.lastAdjustedAt) : '—'}
+                  </td>
                   <td className="p-2">
                     {r.lowStockFlag ? (
                       <span
@@ -200,6 +284,16 @@ export function WmsInventoryTable({
                     ) : (
                       '—'
                     )}
+                  </td>
+                  <td className="p-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => onSelect(r)}
+                      data-testid={`wms-inv-detail-${i}`}
+                    >
+                      상세
+                    </Button>
                   </td>
                 </tr>
               ))}

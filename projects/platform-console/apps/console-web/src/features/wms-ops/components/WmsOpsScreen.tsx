@@ -3,27 +3,21 @@
 import { useId, useMemo, useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
-  useWmsInventory,
   useWmsAlerts,
   useWmsShipments,
   useAcknowledgeAlert,
 } from '../hooks/use-wms-ops';
 import {
   WMS_DEFAULT_PAGE_SIZE,
-  type InventoryPage,
   type AlertPage,
   type AlertRow,
-  type InventoryQueryParams,
   type ShipmentPage,
   type ShipmentQueryParams,
 } from '../api/types';
 import { AcknowledgeAlertDialog } from './AcknowledgeAlertDialog';
-import { WmsInventoryTable } from './WmsInventoryTable';
 import { WmsShipmentsTable } from './WmsShipmentsTable';
 import { WmsAlertsTable } from './WmsAlertsTable';
 import {
-  type InvFilterState,
-  EMPTY_INV_FILTERS,
   type ShipFilterState,
   EMPTY_SHIP_FILTERS,
   alertLabel,
@@ -33,7 +27,7 @@ import {
  * wms operations section (TASK-PC-FE-007 — ADR-MONO-013 Phase 4 slice 1).
  * The first NON-IAM federated domain screen.
  *
- * Server-rendered initial inventory + alerts pages are passed in; client
+ * Server-rendered initial shipments + alerts pages are passed in; client
  * re-query handles filter / pagination changes. The read-model is
  * eventually consistent — `lagSeconds` (when the producer surfaced
  * `X-Read-Model-Lag-Seconds`) is shown as a NON-blocking hint banner; the
@@ -51,14 +45,19 @@ import {
  * shell + IAM sections stay intact).
  *
  * ── MODULE SPLIT (TASK-PC-FE-103) ── this container owns ALL state, the
- * mutation, and the lag banner; the three read regions (inventory snapshot,
- * shipments, alerts) are rendered by the prop-driven `WmsInventoryTable` /
- * `WmsShipmentsTable` / `WmsAlertsTable` presentational children, and the
- * filter shapes + alert label formatter live in `wms-ops-helpers.ts`.
+ * mutation, and the lag banner; the read regions (shipments, alerts) are
+ * rendered by the prop-driven `WmsShipmentsTable` / `WmsAlertsTable`
+ * presentational children, and the filter shapes + alert label formatter
+ * live in `wms-ops-helpers.ts`.
+ *
+ * ── INVENTORY SPLIT (TASK-PC-FE-172) ── the inventory query table (filters
+ * + pagination — unfit for a glance-overview, PC-FE-170 same principle) has
+ * moved OFF this screen to the dedicated `/wms/inventory` route
+ * (`WmsInventoryScreen` + `WmsInventoryTable`). This screen keeps only the
+ * count-tile inventory snapshot (`WmsOverview`, passed in via `overview`).
  */
 
 export interface WmsOpsScreenProps {
-  inventory: InventoryPage;
   alerts: AlertPage;
   shipments: ShipmentPage;
   /** NON-blocking eventual-consistency hint (seconds), or null. */
@@ -71,42 +70,13 @@ export interface WmsOpsScreenProps {
 }
 
 export function WmsOpsScreen({
-  inventory,
   alerts,
   shipments,
   lagSeconds,
   overview,
 }: WmsOpsScreenProps) {
-  const whFid = useId();
-  const skuFid = useId();
-  const lowFid = useId();
   const shipWhFid = useId();
   const shipCarrierFid = useId();
-
-  const [invFilters, setInvFilters] =
-    useState<InvFilterState>(EMPTY_INV_FILTERS);
-  const [invQuery, setInvQuery] = useState<InventoryQueryParams>({
-    page: 0,
-    size: inventory.page.size || WMS_DEFAULT_PAGE_SIZE,
-  });
-
-  const invSeeded =
-    (invQuery.page ?? 0) === 0 &&
-    !invQuery.warehouseId &&
-    !invQuery.skuId &&
-    !invQuery.lotId &&
-    !invQuery.locationId &&
-    !invQuery.lowStockOnly &&
-    invQuery.minOnHand === undefined;
-
-  const inv = useWmsInventory(invQuery, invSeeded ? inventory : undefined);
-  const invData = inv.data ?? inventory;
-
-  const invApiError =
-    inv.error instanceof ApiError ? (inv.error as ApiError) : null;
-  const invForbidden = invApiError?.status === 403;
-  const invDegraded =
-    inv.isError && (!invApiError || invApiError.status >= 500) && !invForbidden;
 
   // ── Shipments (택배/출고 read — carrier code / tracking no) ─────────────
   const [shipFilters, setShipFilters] =
@@ -196,17 +166,6 @@ export function WmsOpsScreen({
     );
   }
 
-  function submitInvFilters(e: React.FormEvent) {
-    e.preventDefault();
-    setInvQuery({
-      warehouseId: invFilters.warehouseId.trim() || undefined,
-      skuId: invFilters.skuId.trim() || undefined,
-      lowStockOnly: invFilters.lowStockOnly || undefined,
-      page: 0,
-      size: inventory.page.size || WMS_DEFAULT_PAGE_SIZE,
-    });
-  }
-
   const lagBanner = useMemo(() => {
     if (lagSeconds === null || lagSeconds <= 0) return null;
     return `데이터가 약 ${Math.round(lagSeconds)}초 지연될 수 있습니다 (읽기 모델은 최종 일관성 — 표시값이 잠시 과거일 수 있습니다).`;
@@ -218,7 +177,7 @@ export function WmsOpsScreen({
         WMS 개요
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        재고 스냅샷 · 알림 (읽기 + 알림 확인).
+        배송 · 알림 (읽기 + 알림 확인).
       </p>
 
       {/* Operator overview snapshot band (TASK-PC-FE-166) — per-area counts,
@@ -234,25 +193,6 @@ export function WmsOpsScreen({
           {lagBanner}
         </div>
       )}
-
-      <WmsInventoryTable
-        whFid={whFid}
-        skuFid={skuFid}
-        lowFid={lowFid}
-        filters={invFilters}
-        onFiltersChange={setInvFilters}
-        onSubmit={submitInvFilters}
-        forbidden={invForbidden}
-        degraded={invDegraded}
-        data={invData}
-        query={invQuery}
-        onPrevPage={() =>
-          setInvQuery((q) => ({ ...q, page: Math.max(0, (q.page ?? 0) - 1) }))
-        }
-        onNextPage={() =>
-          setInvQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-        }
-      />
 
       <WmsShipmentsTable
         shipWhFid={shipWhFid}

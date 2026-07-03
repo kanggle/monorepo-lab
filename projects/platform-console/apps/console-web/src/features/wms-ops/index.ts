@@ -11,10 +11,13 @@
  * a first-class contract element.
  */
 export { WmsOpsScreen } from './components/WmsOpsScreen';
+export { WmsInventoryScreen } from './components/WmsInventoryScreen';
 export { AcknowledgeAlertDialog } from './components/AcknowledgeAlertDialog';
 export { WmsOverview } from './components/WmsOverview';
 export { getWmsSectionState } from './api/wms-state';
 export type { WmsSectionState } from './api/wms-state';
+export { getWmsInventoryState } from './api/inventory-state';
+export type { WmsInventorySectionState } from './api/inventory-state';
 export { getWmsOverviewState } from './api/overview-state';
 export type {
   WmsOverviewState,

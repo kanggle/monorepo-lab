@@ -5,11 +5,7 @@ import type { RegistryProduct } from '@/shared/api/registry-types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { WmsOpsScreen } from '@/features/wms-ops';
-import type {
-  InventoryPage,
-  AlertPage,
-  ShipmentPage,
-} from '@/features/wms-ops';
+import type { AlertPage, ShipmentPage } from '@/features/wms-ops';
 
 /**
  * Regression (TASK-PC-FE-007 AC): the `/wms` surface is an in-console NAV
@@ -36,10 +32,6 @@ const wms: RegistryProduct = {
   baseRoute: '/wms',
 };
 
-const INVENTORY: InventoryPage = {
-  content: [],
-  page: { number: 0, size: 20, totalElements: 0, totalPages: 0 },
-};
 const ALERTS: AlertPage = {
   content: [],
   page: { number: 0, size: 20, totalElements: 0, totalPages: 0 },
@@ -70,7 +62,6 @@ describe('wms nav — additive, does not disturb the catalog routing (FE-001/FE-
   it('the wms section mounts as an in-console destination (read + ack only)', () => {
     render(
       <WmsOpsScreen
-        inventory={INVENTORY}
         alerts={ALERTS}
         shipments={SHIPMENTS}
         lagSeconds={null}
@@ -81,7 +72,6 @@ describe('wms nav — additive, does not disturb the catalog routing (FE-001/FE-
       screen.getByRole('heading', { name: 'WMS 개요' }),
     ).toBeInTheDocument();
     // The empty seeded pages render their empty states (no crash).
-    expect(screen.getByTestId('wms-inv-empty')).toBeInTheDocument();
     expect(screen.getByTestId('wms-ship-empty')).toBeInTheDocument();
     expect(screen.getByTestId('wms-alerts-empty')).toBeInTheDocument();
   });
