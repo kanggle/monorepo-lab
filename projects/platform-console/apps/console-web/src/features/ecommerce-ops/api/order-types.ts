@@ -216,7 +216,7 @@ export const OrderAreaSummarySchema = z
 export type OrderAreaSummary = z.infer<typeof OrderAreaSummarySchema>;
 
 // ===========================================================================
-// INSIGHTS (TASK-PC-FE-170 — top-5 product/seller rankings)
+// INSIGHTS (TASK-PC-FE-172 — top-5 product/seller rankings)
 // ===========================================================================
 
 /** One ranked entry in an insights ranking — `{ id, label, value }`.
@@ -226,7 +226,7 @@ export const RankedEntrySchema = z
   .passthrough();
 export type RankedEntry = z.infer<typeof RankedEntrySchema>;
 
-/** GET /admin/orders/insights — top-5 product/seller rankings (TASK-PC-FE-170).
+/** GET /admin/orders/insights — top-5 product/seller rankings (TASK-PC-FE-172).
  *  Each ranking is a `RankedEntry[]`; `.passthrough()` keeps the read tolerant. */
 export const OrderInsightsSchema = z
   .object({

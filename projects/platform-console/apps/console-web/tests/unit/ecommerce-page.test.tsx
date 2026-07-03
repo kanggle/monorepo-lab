@@ -13,7 +13,7 @@ import type { CatalogState } from '@/shared/api/registry-types';
  * `ecommerce-overview.test.tsx`, so here it is stubbed). STRICTLY READ-ONLY;
  * degrade-safe like scm/wms.
  *
- * TASK-PC-FE-170 removed the former 도메인 상태 `DomainHealthCard` block from
+ * TASK-PC-FE-172 removed the former 도메인 상태 `DomainHealthCard` block from
  * this page (the per-area service-status dots on each count card supersede it),
  * so there is no longer a domain-health leg here — 401 safety is preserved by
  * `getCatalog()`'s 401→/login and the overview leg's own 401→/login.

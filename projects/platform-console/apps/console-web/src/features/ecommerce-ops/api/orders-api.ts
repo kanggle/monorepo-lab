@@ -106,7 +106,7 @@ export function getOrdersSummary(): Promise<OrderAreaSummary> {
   );
 }
 
-/** GET /admin/orders/insights — top-5 product/seller rankings (TASK-PC-FE-170). */
+/** GET /admin/orders/insights — top-5 product/seller rankings (TASK-PC-FE-172). */
 export function getOrderInsights(): Promise<OrderInsights> {
   const env = getServerEnv();
   return callEcommerce(

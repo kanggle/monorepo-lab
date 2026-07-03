@@ -1,7 +1,7 @@
 import type { CellStatus, RankedEntry } from '../api/overview-state';
 
 /**
- * Top-N horizontal ranking bar chart (TASK-PC-FE-170). Pure CSS/flex — the
+ * Top-N horizontal ranking bar chart (TASK-PC-FE-172). Pure CSS/flex — the
  * project has NO chart library and `EcommerceOverview` is strictly server
  * rendered, so this stays a server component (NO `'use client'`, no recharts).
  *
