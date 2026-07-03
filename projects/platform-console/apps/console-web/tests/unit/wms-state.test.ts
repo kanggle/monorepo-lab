@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   - 503/timeout → `degraded` (wms section only — shell intact);
  *   - the read-model-lag hint is surfaced when present.
  *
- * TASK-PC-FE-172 — the inventory query table (and this state's `inventory`
+ * TASK-PC-FE-173 — the inventory query table (and this state's `inventory`
  * fan-out) moved to the dedicated `/wms/inventory` route; see
  * `wms-inventory-state.test.ts` for `getWmsInventoryState`.
  *

@@ -5,7 +5,7 @@ import type { InventoryPage } from './types';
 
 /**
  * Server-side wms **inventory** section state for the dedicated
- * `(console)/wms/inventory` route (TASK-PC-FE-172 — the inventory query
+ * `(console)/wms/inventory` route (TASK-PC-FE-173 — the inventory query
  * table split off the `/wms` 개요, mirroring `wms-state.ts` / the
  * `wms-outbound-ops/api/outbound-state.ts` single-read shape).
  *

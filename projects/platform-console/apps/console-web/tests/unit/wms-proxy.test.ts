@@ -150,7 +150,7 @@ describe('GET /api/wms/inventory proxy', () => {
   });
 });
 
-describe('GET /api/wms/inventory/by-key proxy (TASK-PC-FE-172)', () => {
+describe('GET /api/wms/inventory/by-key proxy (TASK-PC-FE-173)', () => {
   const ITEM = { locationId: 'loc-1', skuId: 'sku-1', warehouseId: 'wh-1' };
 
   it('attaches the IAM OIDC access token (NOT the operator token), forwards the composite key', async () => {

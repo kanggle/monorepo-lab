@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 
 /**
  * Same-origin wms inventory **by-key** detail read proxy for client
- * components (TASK-PC-FE-172 — the `/wms/inventory` row "상세" panel; the
+ * components (TASK-PC-FE-173 — the `/wms/inventory` row "상세" panel; the
  * typed API client's single backend entry point — no browser-direct wms
  * call, architecture.md § Forbidden Dependencies / contract § 2.3). The
  * HttpOnly **IAM OIDC access token** is attached server-side in

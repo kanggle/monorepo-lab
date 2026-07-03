@@ -8,7 +8,7 @@ import type { InventoryPage } from '@/features/wms-ops';
 import { runAxe } from '../a11y/axe-helper';
 
 /**
- * `features/wms-ops` `WmsInventoryScreen` — TASK-PC-FE-172, the inventory
+ * `features/wms-ops` `WmsInventoryScreen` — TASK-PC-FE-173, the inventory
  * query table split off the `/wms` 개요 into a dedicated `/wms/inventory`
  * screen, plus the previously-uncoded-but-unused capabilities it surfaces:
  *   - extended filters (창고/SKU/저재고 + 위치 ID / 로트 ID / 최소 보유) +
@@ -279,7 +279,7 @@ describe('WmsInventoryScreen — extended filter submit & pagination', () => {
   });
 });
 
-describe('WmsInventoryScreen — row detail (getInventoryByKey, TASK-PC-FE-172)', () => {
+describe('WmsInventoryScreen — row detail (getInventoryByKey, TASK-PC-FE-173)', () => {
   it('shows a placeholder before any row is selected', () => {
     renderScreen();
     expect(screen.getByTestId('wms-inv-detail-panel')).toBeInTheDocument();

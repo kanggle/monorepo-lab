@@ -35,7 +35,7 @@ import type { AlertPage, ShipmentPage } from './types';
  * set `X-Read-Model-Lag-Seconds`) is surfaced as a NON-blocking banner — the
  * section still renders (eventual-consistency honesty).
  *
- * TASK-PC-FE-172 — the inventory query table moved OFF this screen to the
+ * TASK-PC-FE-173 — the inventory query table moved OFF this screen to the
  * dedicated `/wms/inventory` route (`getWmsInventoryState`, `inventory-
  * state.ts`); this section no longer fetches/exposes `inventory` (the
  * 개요's inventory count tile is a SEPARATE fan-out, `overview-state.ts` —

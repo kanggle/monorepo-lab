@@ -120,7 +120,7 @@ export function useWmsInventory(
   });
 }
 
-// --- inventory by-key detail read (TASK-PC-FE-172) -----------------------
+// --- inventory by-key detail read (TASK-PC-FE-173) -----------------------
 
 /** Composite key — location+sku+lot (no single `[id]`, § the by-key route). */
 export interface InventoryByKey {
@@ -151,7 +151,7 @@ async function fetchInventoryByKey(key: InventoryByKey): Promise<InventoryRow> {
 }
 
 /**
- * TASK-PC-FE-172 — the `/wms/inventory` row "상세" panel. `enabled`-gated on
+ * TASK-PC-FE-173 — the `/wms/inventory` row "상세" panel. `enabled`-gated on
  * a selected composite key (`null` ⇒ no fetch). A `404` (zero stock at that
  * key) surfaces as an `ApiError(404, …)` on `.error` — the screen
  * distinguishes it from a degrade and renders "재고 없음" (no retry storm —

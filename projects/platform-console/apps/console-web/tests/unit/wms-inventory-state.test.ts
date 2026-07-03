@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * `features/wms-ops/api/inventory-state.ts` — the server-side inventory
- * section state for the dedicated `/wms/inventory` route (TASK-PC-FE-172,
+ * section state for the dedicated `/wms/inventory` route (TASK-PC-FE-173,
  * mirrors `wms-state.test.ts`):
  *   - not wms-eligible → `notEligible` block, NO wms call fabricated
  *     (no cross-tenant call; the console never sends a tenant — wms
@@ -84,7 +84,7 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('getWmsInventoryState — eligibility gate (§ 2.4.5, TASK-PC-FE-172)', () => {
+describe('getWmsInventoryState — eligibility gate (§ 2.4.5, TASK-PC-FE-173)', () => {
   it('not eligible → notEligible block, NO wms call fabricated', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn();

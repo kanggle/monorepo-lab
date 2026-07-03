@@ -34,7 +34,7 @@ export const dynamic = 'force-dynamic';
  * re-login; 403 → inline "not available to your role"; 503/timeout → only
  * this section degrades (the `(console)` shell stays).
  *
- * TASK-PC-FE-172 — the inventory query table (filters + pagination) moved
+ * TASK-PC-FE-173 — the inventory query table (filters + pagination) moved
  * OFF this 개요 screen to the dedicated `/wms/inventory` route; this page
  * keeps only the count-tile inventory snapshot (`WmsOverview`, below).
  */

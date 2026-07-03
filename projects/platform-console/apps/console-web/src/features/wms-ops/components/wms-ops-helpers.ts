@@ -10,12 +10,12 @@ export interface InvFilterState {
   warehouseId: string;
   skuId: string;
   lowStockOnly: boolean;
-  /** TASK-PC-FE-172 — dedicated `/wms/inventory` screen only: 위치 ID filter
+  /** TASK-PC-FE-173 — dedicated `/wms/inventory` screen only: 위치 ID filter
    *  (producer/proxy already supported this param; no form field existed). */
   locationId: string;
-  /** TASK-PC-FE-172 — 로트 ID filter. */
+  /** TASK-PC-FE-173 — 로트 ID filter. */
   lotId: string;
-  /** TASK-PC-FE-172 — 최소 보유 filter; form input is a STRING (parsed to a
+  /** TASK-PC-FE-173 — 최소 보유 filter; form input is a STRING (parsed to a
    *  number on submit — empty/non-numeric → undefined, `0` is a valid
    *  value). */
   minOnHand: string;

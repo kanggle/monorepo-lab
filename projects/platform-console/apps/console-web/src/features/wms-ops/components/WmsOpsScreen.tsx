@@ -50,7 +50,7 @@ import {
  * presentational children, and the filter shapes + alert label formatter
  * live in `wms-ops-helpers.ts`.
  *
- * ── INVENTORY SPLIT (TASK-PC-FE-172) ── the inventory query table (filters
+ * ── INVENTORY SPLIT (TASK-PC-FE-173) ── the inventory query table (filters
  * + pagination — unfit for a glance-overview, PC-FE-170 same principle) has
  * moved OFF this screen to the dedicated `/wms/inventory` route
  * (`WmsInventoryScreen` + `WmsInventoryTable`). This screen keeps only the

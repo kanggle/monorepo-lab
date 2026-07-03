@@ -15,7 +15,7 @@ import { WmsInventoryTable } from './WmsInventoryTable';
 import { type InvFilterState, EMPTY_INV_FILTERS } from './wms-ops-helpers';
 
 /**
- * wms **재고** (inventory) section — TASK-PC-FE-172, split off the `/wms`
+ * wms **재고** (inventory) section — TASK-PC-FE-173, split off the `/wms`
  * 개요 (the query table — filters + pagination — is unfit for a
  * glance-overview, PC-FE-170 same principle). This container owns the
  * (now-extended) inventory filter/query state, the pagination handlers, and
@@ -167,7 +167,7 @@ export function WmsInventoryScreen({
         onSelect={onSelect}
       />
 
-      {/* ── Row detail panel (TASK-PC-FE-172, `getInventoryByKey`) ──────── */}
+      {/* ── Row detail panel (TASK-PC-FE-173, `getInventoryByKey`) ──────── */}
       <h2 className="mb-3 text-lg font-medium text-foreground">재고 상세</h2>
       <div
         data-testid="wms-inv-detail-panel"

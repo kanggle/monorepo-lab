@@ -8,7 +8,7 @@ import type { InventoryPage, InventoryQueryParams, InventoryRow } from '../api/t
 import type { InvFilterState } from './wms-ops-helpers';
 
 /**
- * Inventory-snapshot region — TASK-PC-FE-172 dedicated `/wms/inventory`
+ * Inventory-snapshot region — TASK-PC-FE-173 dedicated `/wms/inventory`
  * screen. Was previously mounted on the `/wms` 개요 screen (TASK-PC-FE-103
  * split); now rendered ONLY by `WmsInventoryScreen` (the query table is
  * unfit for a glance-overview — PC-FE-170 same principle). Free to grow
@@ -20,11 +20,11 @@ export interface WmsInventoryTableProps {
   whFid: string;
   skuFid: string;
   lowFid: string;
-  /** TASK-PC-FE-172 — 위치 ID filter input id. */
+  /** TASK-PC-FE-173 — 위치 ID filter input id. */
   locFid: string;
-  /** TASK-PC-FE-172 — 로트 ID filter input id. */
+  /** TASK-PC-FE-173 — 로트 ID filter input id. */
   lotFid: string;
-  /** TASK-PC-FE-172 — 최소 보유 filter input id. */
+  /** TASK-PC-FE-173 — 최소 보유 filter input id. */
   minFid: string;
   filters: InvFilterState;
   onFiltersChange: Dispatch<SetStateAction<InvFilterState>>;
@@ -35,7 +35,7 @@ export interface WmsInventoryTableProps {
   query: InventoryQueryParams;
   onPrevPage: () => void;
   onNextPage: () => void;
-  /** TASK-PC-FE-172 — per-row "상세" → composite-key by-key lookup
+  /** TASK-PC-FE-173 — per-row "상세" → composite-key by-key lookup
    *  (the container owns the detail panel state / fetch). */
   onSelect: (row: InventoryRow) => void;
 }

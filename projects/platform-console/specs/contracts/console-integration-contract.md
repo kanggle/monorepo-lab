@@ -217,7 +217,7 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   Assignment / Settings, `WMS_ADMIN`+ heavy writes) is **explicitly out of v1
   console scope** — deferred to a later slice, not silently dropped.
 
-  **Console-side routing note (TASK-PC-FE-172, non-normative — no producer
+  **Console-side routing note (TASK-PC-FE-173, non-normative — no producer
   change)**: operations #1 (inventory snapshot) and #2 (inventory by-key) are
   served on the console's dedicated `/wms/inventory` surface (split off the
   `/wms` 개요's query table — a glance-overview is unfit for a filtered/

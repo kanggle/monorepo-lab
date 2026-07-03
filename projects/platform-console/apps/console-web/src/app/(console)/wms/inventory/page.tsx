@@ -10,7 +10,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 /**
- * wms **재고** (inventory) section route (TASK-PC-FE-172 — the inventory
+ * wms **재고** (inventory) section route (TASK-PC-FE-173 — the inventory
  * query table split off the `/wms` 개요; the third wms surface, after
  * `/wms` § 2.4.5 and `/wms/outbound` § 2.4.5.1). An in-console nav
  * destination, NOT a catalog product re-route.

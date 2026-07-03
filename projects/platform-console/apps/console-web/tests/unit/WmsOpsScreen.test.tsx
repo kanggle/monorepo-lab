@@ -12,7 +12,7 @@ import { runAxe } from '../a11y/axe-helper';
  *   - shipments / 택배 read table + filters + pagination (TASK-PC-FE-079 —
  *     carrier code / tracking no, READ-only, no mutation affordance)
  *   - (the inventory snapshot table moved OFF this screen to the dedicated
- *     `/wms/inventory` route — TASK-PC-FE-172; see `WmsInventoryScreen.test.tsx`)
+ *     `/wms/inventory` route — TASK-PC-FE-173; see `WmsInventoryScreen.test.tsx`)
  *   - adjustments/shipments are READ-only (no edit affordance)
  *   - alert acknowledge is CONFIRM-GATED (no one-click ack) + reason-free
  *     (no reason capture — wms surface has no X-Operator-Reason)
