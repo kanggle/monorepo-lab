@@ -84,12 +84,12 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-FE-087 | **REVIEW (PR 대기)**. FE-086 후속 — 알림 설정 PushOptIn 에서 제목("이 브라우저에서 푸시 받기")·설명("허용하면 주문·배송…") 제거하고 버튼만 푸시 토글 아래 표시(미지원/차단 안내·색상·기기목록 유지). 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, ui |
 
 ## done
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-087 | **DONE (2026-07-03, 3-dim — PR #2142 `0c3e86d7f`)**. FE-086 후속 — 알림 설정 PushOptIn 에서 제목·설명 제거하고 버튼만 푸시 토글 아래 표시(미지원/차단 안내·색상·기기목록 유지). 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, ui |
 | TASK-FE-086 | **DONE (2026-07-03, 3-dim — PR #2137 `10afe5a75`)**. 알림 설정 UI — 푸시 채널 활성화 시 "이 브라우저에서 푸시 받기"+"푸시 수신 기기"를 푸시 토글 아래 한 영역으로 그룹화(`pushEnabled` 게이팅), 옵트인 버튼 글자색을 좌측 사이드바 선택 메뉴 색(`--color-on-primary`)과 정합. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, ui |
 | TASK-FE-085-fix-001 | **DONE (2026-07-03, 3-dim — PR #2133 `26422a408`)**. FE-085 후속 — PushOptIn 구독/해지 시 "푸시 수신 기기" 목록이 즉시 갱신 안 되던 버그(서로 다른 React Query 캐시, 목록 미invalidate). `usePushSubscription` 이 구독/해지 성공 시 `pushDevices` 쿼리 invalidate. 라이브 fed-e2e 발견(백엔드 정상, 프런트 캐시 갭). 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, bug, test |
 | TASK-FE-085 | **DONE (2026-07-02, 3-dim — PR #2119 `87ebff41a`)**. 알림 설정 "푸시 수신 기기" 목록 — 백엔드 `GET /me/push-subscriptions`(목록, 키 미노출) + `user_agent` V7 캡처 + `listByUser`, 프런트 `PushDeviceList`(UA→기기명 라벨·등록일·`이 기기` 배지·기기별 해지). 교차-레이어 원자 PR. 백엔드 IT + 프런트 lint/unit/e2e GREEN. 분석=Opus 4.8 / 구현=BE 위임+FE 직접. | notification-service, web-store | code, api, migration, ui, push |

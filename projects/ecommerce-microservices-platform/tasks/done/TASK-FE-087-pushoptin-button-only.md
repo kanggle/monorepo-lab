@@ -1,6 +1,7 @@
 # TASK-FE-087 — 알림 설정 PushOptIn: 제목·설명 제거하고 버튼만 표시
 
-- **Status**: review
+- **Status**: done
+- **DONE (2026-07-03, 3-dim verified — PR #2142 `0c3e86d7f`)**: state=MERGED + origin/main tip=`0c3e86d7f` 일치 + pre-merge failing=0(Frontend lint&build+unit[제목/설명 미표시 케이스]+E2E GREEN). PushOptIn 제목·설명 제거, 버튼만 푸시 토글 아래 표시.
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
