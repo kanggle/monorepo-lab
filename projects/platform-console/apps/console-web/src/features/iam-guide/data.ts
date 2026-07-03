@@ -53,17 +53,25 @@ export interface SeedRole {
   name: string;
   /** 한 줄 의도. */
   intent: string;
+  /** 사람이 읽는 한글 역할명(부제) — 화면에서 role.name 옆에 표시. */
+  koName: string;
+  /**
+   * 스코프 평면. `platform` = 플랫폼 전역 운영 role(SUPER_ADMIN 및 플랫폼 측
+   * CS·보안팀 — grant 가 플랫폼 스코프로 프로비저닝됨). `tenant` = grant row 의
+   * `tenant_id` 로 자기 테넌트에 confine 되는 위임 role(ADR-MONO-024 D2).
+   */
+  scope: 'platform' | 'tenant';
   /** 보유 권한 키 집합(합집합 평가). */
   permissions: string[];
-  /** SUPER_ADMIN 처럼 특권/플랫폼 스코프 role 은 시각적으로 구분. */
+  /** SUPER_ADMIN 처럼 특권 role(플랫폼 `*` 센티넬 보유) 은 시각적으로 구분. */
   elevated?: boolean;
-  /** 테넌트-scoped(grant row 의 tenant_id 로 confine) role 표기. */
-  tenantScoped?: boolean;
 }
 
 export const SEED_ROLES: SeedRole[] = [
   {
     name: 'SUPER_ADMIN',
+    koName: '플랫폼 관리자',
+    scope: 'platform',
     intent: '전체 권한. 플랫폼 스코프(`*`) — 모든 테넌트 무제약 관리·온보딩.',
     permissions: [
       'account.read',
@@ -80,11 +88,15 @@ export const SEED_ROLES: SeedRole[] = [
   },
   {
     name: 'SUPPORT_READONLY',
+    koName: 'CS 상담원',
+    scope: 'platform',
     intent: 'CS L1. 조회 전용 — 계정·감사·보안이벤트 열람, 변이 불가.',
     permissions: ['account.read', 'audit.read', 'security.event.read'],
   },
   {
     name: 'SUPPORT_LOCK',
+    koName: 'CS 상담원 (계정 제어)',
+    scope: 'platform',
     intent:
       'CS L2. 계정 제어(잠금/해제/세션종료) + 감사 조회. 보안이벤트·계정목록은 불가.',
     permissions: [
@@ -96,23 +108,27 @@ export const SEED_ROLES: SeedRole[] = [
   },
   {
     name: 'SECURITY_ANALYST',
+    koName: '보안 분석가',
+    scope: 'platform',
     intent:
       '보안팀. 감사·보안이벤트 조회 + 의심 세션 긴급 종료. 계정 lock/unlock 은 CS 경유.',
     permissions: ['audit.read', 'security.event.read', 'account.force_logout'],
   },
   {
     name: 'TENANT_ADMIN',
+    koName: '테넌트 위임관리자',
+    scope: 'tenant',
     intent:
       '테넌트-scoped 위임관리자(ADR-MONO-024). 자기 테넌트 운영자 관리 + 자기 테넌트 한정 sub-delegation. IAM 평면 전용.',
     permissions: ['operator.manage', 'tenant.admin.delegate'],
-    tenantScoped: true,
   },
   {
     name: 'TENANT_BILLING_ADMIN',
+    koName: '테넌트 구독관리자',
+    scope: 'tenant',
     intent:
       '테넌트-scoped entitlement 관리자(ADR-MONO-024). 자기 테넌트 도메인 구독 관리. TENANT_ADMIN 과 별도 role.',
     permissions: ['subscription.manage'],
-    tenantScoped: true,
   },
 ];
 

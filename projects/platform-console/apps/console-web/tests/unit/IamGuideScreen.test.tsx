@@ -22,10 +22,26 @@ describe('IamGuideScreen', () => {
     for (const role of SEED_ROLES) {
       const card = screen.getByTestId(`iam-guide-role-${role.name}`);
       expect(card).toBeInTheDocument();
-      // The role name appears, and every permission chip is listed.
+      // The role name + Korean subtitle appear, and every permission chip.
       expect(within(card).getByText(role.name)).toBeInTheDocument();
+      expect(within(card).getByText(role.koName)).toBeInTheDocument();
       for (const perm of role.permissions) {
         expect(within(card).getByText(perm)).toBeInTheDocument();
+      }
+    }
+  });
+
+  it('labels each role with its scope tier (플랫폼/테넌트 스코프)', () => {
+    render(<IamGuideScreen />);
+    for (const role of SEED_ROLES) {
+      const badge = screen.getByTestId(`iam-guide-scope-${role.name}`);
+      if (role.scope === 'platform') {
+        expect(badge).toHaveTextContent('플랫폼 스코프');
+        expect(badge).not.toHaveTextContent('테넌트');
+        // Only SUPER_ADMIN carries the wildcard sentinel marker.
+        if (role.elevated) expect(badge).toHaveTextContent('플랫폼 스코프(*)');
+      } else {
+        expect(badge).toHaveTextContent('테넌트 스코프');
       }
     }
   });
