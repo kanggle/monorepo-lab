@@ -10,15 +10,18 @@ Elevate the `/erp` section landing (currently a small links-only page, ~70 lines
 snapshot** — masterdata counts + recent activity — matching the ecommerce landing (PC-FE-156). One of the 4
 per-domain overview tasks that must land **before** the cross-domain "운영 → 개요" rename (TASK-PC-FE-162).
 
-## Open design decision (resolve at backlog → ready)
+## Read-leg decision (RESOLVED — TASK-PC-FE-168)
 
-- **Data source / read leg.** erp is a **console-bff READ leg** domain (read-only masterdata: 부서/직급/직원/원가센터/
-  거래처, PC-FE-010; nav PC-FE-034; notification bell rewire PC-FE-137). Decide reuse of the existing erp read leg
-  vs a new console-bff erp overview leg. Prefer consumed endpoints' `totalElements` (ADR-MONO-017 D3.B — no
-  producer `/summary`).
-- **Which metrics** for erp (e.g. 부서/직원/거래처 counts + recent masterdata changes / recent notifications).
-  erp is read-only masterdata, so "recent activity" may be thin — decide whether a distribution row is meaningful
-  or whether counts + a recent-changes list suffice.
+- **Data source / read leg — RESOLVED: console-web DIRECT fan-out.** The "console-bff READ leg" framing was a
+  premise error: erp already reaches its producer server-side via `getDomainFacingToken()` (§ 2.4.8 direct client) —
+  same model as ecommerce. Per the PC-FE-168 shared decision, the overview reuses the existing erp `list*` reads'
+  `totalElements` (`?page=0&size=1`); **NO console-bff leg, NO producer `/summary`, NO producer retrofit**
+  (ADR-MONO-017 D3.B). Follow the PC-FE-166 (wms) template.
+- **Placement caveat:** erp is split into 4 routes (`/erp` masters, `/erp/orgview`, `/erp/approval`, `/erp/delegation`
+  — PC-FE-076). The overview belongs on the `/erp` **masters** route (`getErpMastersState`).
+- **Which metrics** (still finalize before ready): 부서/직원/거래처(+직급/원가센터) master `totalElements`; optionally
+  approval-inbox pending + delegation-facts counts. erp is read-only masterdata, so a status distribution may be
+  thin — counts + (optional) a recent/pending list likely suffice. Thinnest of the 4.
 
 ## Scope (to be finalized)
 

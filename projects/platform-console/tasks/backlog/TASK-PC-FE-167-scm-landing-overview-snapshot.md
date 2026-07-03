@@ -11,14 +11,17 @@ Elevate the `/scm` section landing (currently health card + links) into an **ope
 per-area counts + key status distribution + recent activity — matching the ecommerce landing (PC-FE-156). One of
 the 4 per-domain overview tasks that must land **before** the cross-domain "운영 → 개요" rename (TASK-PC-FE-162).
 
-## Open design decision (resolve at backlog → ready)
+## Read-leg decision (RESOLVED — TASK-PC-FE-168)
 
-- **Data source / read leg.** scm is a **console-bff READ leg** domain (§2.4.9.1/§2.4.9.2), unlike ecommerce's
-  DIRECT model (§2.4.10). Decide: reuse existing scm section list reads on the console side vs a console-bff scm
-  overview leg. Prefer reusing consumed endpoints' `totalElements` (ADR-MONO-017 D3.B — no producer `/summary`).
-- **Which metrics** for scm (e.g. procurement PO counts, inventory-visibility, replenishment-suggestion backlog +
-  suggestion status distribution + recent POs/suggestions). Define with the scm section owner / architecture.md.
-  Note scm already has some operator surfaces (replenishment gate PC-FE-077, config PC-FE-080) to draw counts from.
+- **Data source / read leg — RESOLVED: console-web DIRECT fan-out.** The "console-bff READ leg" framing was a
+  premise error: the scm section already reaches its producer server-side via `getDomainFacingToken()`
+  (`SCM_GATEWAY_BASE_URL`, § 2.4.6 direct client) — same model as ecommerce (§ 2.4.10). Per the PC-FE-168 shared
+  decision, the overview reuses the existing scm `list*` reads' `totalElements` (`?page=0&size=1`); **NO console-bff
+  leg, NO producer `/summary`, NO producer retrofit** (ADR-MONO-017 D3.B). Follow the PC-FE-166 (wms) template.
+  Carry the § 2.4.6 scm S5 `meta.warning` freshness honesty + the 429 bounded-backoff discipline (no re-storm).
+- **Which metrics** (still finalize before ready): procurement PO `totalElements` + PO-status distribution + recent
+  POs; optionally replenishment-suggestion backlog (PC-FE-077) / config surfaces (PC-FE-080). Confirm the concrete
+  set with the scm section owner + architecture.md.
 
 ## Scope (to be finalized)
 

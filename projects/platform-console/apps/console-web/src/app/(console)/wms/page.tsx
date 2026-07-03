@@ -2,7 +2,12 @@ import Link from 'next/link';
 import { getCatalog } from '@/features/catalog';
 import { ApiError } from '@/shared/api/errors';
 import { redirect } from 'next/navigation';
-import { getWmsSectionState, WmsOpsScreen } from '@/features/wms-ops';
+import {
+  getWmsSectionState,
+  getWmsOverviewState,
+  WmsOpsScreen,
+  WmsOverview,
+} from '@/features/wms-ops';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,7 +70,16 @@ export default async function WmsPage() {
     );
   }
 
-  const state = await getWmsSectionState(eligible);
+  // Fire the operator overview-snapshot fan-out (TASK-PC-FE-166) concurrently
+  // with the section-state fan-out. Both are console-web DIRECT reads over the
+  // wms admin-service (per PC-FE-168 the bff-domain landings reuse the direct
+  // read leg, NOT a console-bff leg); both perform a whole-session
+  // `redirect('/login')` internally on a 401 (no partial authed state). The
+  // overview does per-cell degrade; the section-state gates the tables.
+  const [overviewState, state] = await Promise.all([
+    getWmsOverviewState(eligible),
+    getWmsSectionState(eligible),
+  ]);
 
   if (state.notEligible) {
     return (
@@ -138,6 +152,7 @@ export default async function WmsPage() {
       alerts={state.alerts}
       shipments={state.shipments}
       lagSeconds={state.lagSeconds}
+      overview={<WmsOverview state={overviewState} />}
     />
   );
 }

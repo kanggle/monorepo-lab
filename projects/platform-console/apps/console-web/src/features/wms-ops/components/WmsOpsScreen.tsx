@@ -63,6 +63,11 @@ export interface WmsOpsScreenProps {
   shipments: ShipmentPage;
   /** NON-blocking eventual-consistency hint (seconds), or null. */
   lagSeconds: number | null;
+  /** Optional operator overview-snapshot slot rendered above the tables
+   *  (TASK-PC-FE-166 — the server page computes `getWmsOverviewState` and
+   *  passes a `<WmsOverview>` node; a server component slotted into this
+   *  client screen, the RSC-idiomatic way). Absent ⇒ no snapshot band. */
+  overview?: React.ReactNode;
 }
 
 export function WmsOpsScreen({
@@ -70,6 +75,7 @@ export function WmsOpsScreen({
   alerts,
   shipments,
   lagSeconds,
+  overview,
 }: WmsOpsScreenProps) {
   const whFid = useId();
   const skuFid = useId();
@@ -214,6 +220,10 @@ export function WmsOpsScreen({
       <p className="mb-6 text-sm text-muted-foreground">
         재고 스냅샷 · 알림 (읽기 + 알림 확인).
       </p>
+
+      {/* Operator overview snapshot band (TASK-PC-FE-166) — per-area counts,
+          alert-ack distribution, recent shipments; server-rendered slot. */}
+      {overview}
 
       {lagBanner && (
         <div

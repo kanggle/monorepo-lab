@@ -10,15 +10,20 @@ Elevate the `/finance` section landing into an **operator overview snapshot** �
 activity — matching the ecommerce landing (PC-FE-156). One of the 4 per-domain overview tasks that must land
 **before** the cross-domain "운영 → 개요" rename (TASK-PC-FE-162).
 
-## Open design decision (resolve at backlog → ready)
+## Read-leg decision (RESOLVED — TASK-PC-FE-168) — ⚠️ finance is the DEGENERATE case
 
-- **Data source / read leg.** finance is a **console-bff READ leg** domain (§2.4.9.1/§2.4.9.2). The `finance/page.tsx`
-  landing already surfaces some `count`-shaped data (accounts/balances/transactions read-only) — inventory what is
-  already fetched and reuse it before adding any new read. Prefer consumed endpoints' totals (ADR-MONO-017 D3.B —
-  no producer `/summary`).
-- **Which metrics** for finance (e.g. account count, ledger/transaction volume, reconciliation-pending count +
-  status distribution + recent transactions). Care: finance is money-sensitive — counts/volumes only, NO synthetic
-  balance/₩ aggregation on the overview (mirror the operator-overview "no synthetic aggregation" discipline).
+- **Data source / read leg — RESOLVED: console-web DIRECT (same as all 4), BUT finance has no count fan-out.** The
+  "console-bff READ leg" framing was a premise error — finance already reaches its producer server-side via
+  `getDomainFacingToken()` (§ 2.4.7 direct client), same model as ecommerce. **However**, the PC-FE-168 review found
+  finance v1 has **NO list/search GET** (`getFinanceSectionState` is account-id-driven — account/balances/
+  transactions are all keyed by an operator-supplied `accountId`; there is no "list accounts" endpoint). So there is
+  **no `totalElements` to fan out over** and — per the money-sensitivity rule — **NO synthetic ₩/balance
+  aggregation** is permitted either. **A wms-style count overview does NOT exist for finance.**
+- **⚠️ Scope re-judgment required before ready (not just metric-set finalization).** Options for 160: (a) **drop/park
+  160** — finance keeps its account-lookup landing (no overview snapshot); (b) surface only a minimal
+  non-count band (e.g. the account-lookup + a recent-transactions glance *once an account is supplied* — still no
+  aggregate). This needs a product decision; do NOT force a count grid. If (a), 160 becomes a no-op and PC-FE-162's
+  "all 4 done" gate should treat finance as N/A.
 
 ## Scope (to be finalized)
 
