@@ -120,4 +120,18 @@ public interface OrderRepository {
      * ever a candidate for both.
      */
     List<Order> findStalePaidUnconfirmed(Instant cutoff, int limit);
+
+    /**
+     * Tenant-scoped, CANCELLED-excluded product ranking rows aggregated from
+     * {@code order_items} (TASK-BE-469), the source for the admin insights
+     * endpoint's product rankings (by order-count and by revenue).
+     */
+    List<ProductOrderRankingRow> aggregateProductRanking();
+
+    /**
+     * Tenant-scoped, CANCELLED-excluded seller ranking rows aggregated from
+     * {@code order_items} (TASK-BE-469), the source for the admin insights
+     * endpoint's seller rankings (by order-count and by revenue).
+     */
+    List<SellerOrderRankingRow> aggregateSellerRanking();
 }

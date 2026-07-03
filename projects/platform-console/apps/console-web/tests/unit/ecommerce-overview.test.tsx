@@ -69,6 +69,13 @@ const baseState = (over: Partial<EcommerceOverviewState> = {}): EcommerceOvervie
     },
   ],
   recentSellersStatus: 'ok',
+  insights: {
+    topProductsByOrderCount: [{ id: 'p1', label: '상품P', value: 50 }],
+    topProductsByRevenue: [{ id: 'p1', label: '상품P', value: 500000 }],
+    topSellersByOrderCount: [{ id: 's1', label: '셀러 원', value: 40 }],
+    topSellersByRevenue: [{ id: 's1', label: '셀러 원', value: 400000 }],
+  },
+  insightsStatus: 'ok',
   ...over,
 });
 
@@ -166,5 +173,79 @@ describe('EcommerceOverview (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
       />,
     );
     expect(screen.getByTestId('ecommerce-recent-orders')).toHaveTextContent('점검 필요');
+  });
+
+  // ── TASK-PC-FE-170 — the four ranking charts ─────────────────────────────
+
+  it('renders the four ranking charts with titles, rows, and formatted values', () => {
+    render(<EcommerceOverview state={baseState()} />);
+
+    expect(screen.getByText('판매 순위')).toBeInTheDocument();
+    // The four chart panels are present.
+    expect(screen.getByTestId('ecommerce-rank-products-orders')).toBeInTheDocument();
+    expect(screen.getByTestId('ecommerce-rank-products-revenue')).toBeInTheDocument();
+    expect(screen.getByTestId('ecommerce-rank-sellers-orders')).toBeInTheDocument();
+    expect(screen.getByTestId('ecommerce-rank-sellers-revenue')).toBeInTheDocument();
+    // Chart titles.
+    expect(screen.getByText('상품별 주문횟수')).toBeInTheDocument();
+    expect(screen.getByText('상품별 매출')).toBeInTheDocument();
+    expect(screen.getByText('셀러별 주문횟수')).toBeInTheDocument();
+    expect(screen.getByText('셀러별 매출')).toBeInTheDocument();
+
+    // count format → `건`; currency format → `₩` KRW.
+    const ordersRow = screen.getByTestId('ecommerce-rank-products-orders-row-p1');
+    expect(ordersRow).toHaveTextContent('상품P');
+    expect(ordersRow).toHaveTextContent('50건');
+    const revenueRow = screen.getByTestId('ecommerce-rank-products-revenue-row-p1');
+    expect(revenueRow).toHaveTextContent('₩500,000');
+
+    // Seller charts display the overlaid displayName.
+    expect(
+      screen.getByTestId('ecommerce-rank-sellers-orders-row-s1'),
+    ).toHaveTextContent('셀러 원');
+  });
+
+  it('insights degraded → the four charts show the degrade placeholder', () => {
+    render(
+      <EcommerceOverview
+        state={baseState({ insights: null, insightsStatus: 'degraded' })}
+      />,
+    );
+    const chart = screen.getByTestId('ecommerce-rank-products-orders');
+    expect(chart).toHaveTextContent('데이터를 불러올 수 없습니다');
+  });
+
+  it('insights forbidden → the four charts show 권한 없음', () => {
+    render(
+      <EcommerceOverview
+        state={baseState({ insights: null, insightsStatus: 'forbidden' })}
+      />,
+    );
+    expect(
+      screen.getByTestId('ecommerce-rank-sellers-revenue'),
+    ).toHaveTextContent('권한 없음');
+  });
+
+  it('insights ok but a ranking empty → that chart shows the empty note', () => {
+    render(
+      <EcommerceOverview
+        state={baseState({
+          insights: {
+            topProductsByOrderCount: [],
+            topProductsByRevenue: [{ id: 'p1', label: '상품P', value: 1 }],
+            topSellersByOrderCount: [],
+            topSellersByRevenue: [],
+          },
+          insightsStatus: 'ok',
+        })}
+      />,
+    );
+    expect(
+      screen.getByTestId('ecommerce-rank-products-orders'),
+    ).toHaveTextContent('데이터가 없습니다.');
+    // A sibling with data still renders its row.
+    expect(
+      screen.getByTestId('ecommerce-rank-products-revenue-row-p1'),
+    ).toHaveTextContent('상품P');
   });
 });

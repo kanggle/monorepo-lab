@@ -226,9 +226,11 @@ export { SELLER_STATUS_VALUES } from './api/seller-types';
 // console-web direct fan-out over the existing list endpoints, no BFF/producer)
 // ---------------------------------------------------------------------------
 export { EcommerceOverview } from './components/EcommerceOverview';
+export { RankingBarChart } from './components/RankingBarChart';
 export { getEcommerceOverviewState } from './api/overview-state';
 export type {
   EcommerceOverviewState,
+  EcommerceInsights,
   AreaCount,
   OrderStatusCount,
   CellStatus,

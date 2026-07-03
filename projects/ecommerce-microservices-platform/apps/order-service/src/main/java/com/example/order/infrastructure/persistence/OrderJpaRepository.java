@@ -148,4 +148,23 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
     long countByTenantId(String tenantId);
 
     long countByTenantIdAndCreatedAtBetween(String tenantId, Instant from, Instant to);
+
+    // ---- admin insights aggregation — tenant-scoped rankings (TASK-BE-469) ----
+    // Grouped over order line-items, excluding CANCELLED orders (not realised sales).
+    // COUNT(DISTINCT i.order.orderId) = distinct orders including the product/seller;
+    // SUM(i.unitPrice * i.quantity) = revenue. Never null (a group only exists if rows exist).
+
+    @Query("SELECT i.productId, MAX(i.productName), COUNT(DISTINCT i.order.orderId), SUM(i.unitPrice * i.quantity) "
+         + "FROM OrderItemJpaEntity i "
+         + "WHERE i.tenantId = :tenantId AND i.order.status <> :excluded "
+         + "GROUP BY i.productId")
+    List<Object[]> aggregateProductRanking(@Param("tenantId") String tenantId,
+                                           @Param("excluded") OrderStatus excluded);
+
+    @Query("SELECT i.sellerId, COUNT(DISTINCT i.order.orderId), SUM(i.unitPrice * i.quantity) "
+         + "FROM OrderItemJpaEntity i "
+         + "WHERE i.tenantId = :tenantId AND i.order.status <> :excluded "
+         + "GROUP BY i.sellerId")
+    List<Object[]> aggregateSellerRanking(@Param("tenantId") String tenantId,
+                                          @Param("excluded") OrderStatus excluded);
 }

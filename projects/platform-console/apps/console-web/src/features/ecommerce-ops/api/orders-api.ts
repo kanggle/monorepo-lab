@@ -13,6 +13,8 @@ import {
   type OrderStatusChangeResponse,
   OrderAreaSummarySchema,
   type OrderAreaSummary,
+  OrderInsightsSchema,
+  type OrderInsights,
   type OrderListParams,
   type OrderStatusChangeBody,
   ORDER_DEFAULT_PAGE_SIZE,
@@ -100,6 +102,16 @@ export function getOrdersSummary(): Promise<OrderAreaSummary> {
       path: '/orders/summary',
     },
     (j) => OrderAreaSummarySchema.parse(j),
+    ORDER_LABEL,
+  );
+}
+
+/** GET /admin/orders/insights — top-5 product/seller rankings (TASK-PC-FE-170). */
+export function getOrderInsights(): Promise<OrderInsights> {
+  const env = getServerEnv();
+  return callEcommerce(
+    { method: 'GET', base: env.ECOMMERCE_ADMIN_BASE_URL, path: '/orders/insights' },
+    (j) => OrderInsightsSchema.parse(j),
     ORDER_LABEL,
   );
 }

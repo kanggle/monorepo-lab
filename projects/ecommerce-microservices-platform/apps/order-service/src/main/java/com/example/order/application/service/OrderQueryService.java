@@ -3,6 +3,7 @@ package com.example.order.application.service;
 import com.example.order.application.dto.AdminOrderDetail;
 import com.example.order.application.dto.AdminOrderSummary;
 import com.example.order.application.dto.OrderDetail;
+import com.example.order.application.dto.OrderInsights;
 import com.example.order.application.dto.OrderSummary;
 import com.example.order.application.exception.UnauthorizedOrderAccessException;
 import com.example.order.domain.exception.OrderNotFoundException;
@@ -13,15 +14,20 @@ import com.example.common.page.PageResult;
 import com.example.common.summary.PeriodSummary;
 import com.example.common.time.KstPeriodBounds;
 import com.example.order.domain.repository.OrderRepository;
+import com.example.order.domain.repository.ProductOrderRankingRow;
+import com.example.order.domain.repository.SellerOrderRankingRow;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
 public class OrderQueryService {
+
+    private static final int INSIGHTS_TOP_N = 5;
 
     private final OrderRepository orderRepository;
 
@@ -89,6 +95,40 @@ public class OrderQueryService {
         long month = orderRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
 
         return new PeriodSummary(today, week, month, total);
+    }
+
+    /**
+     * Returns tenant-scoped, CANCELLED-excluded top-5 rankings of products and
+     * sellers by order-count and by revenue, aggregated from {@code order_items}
+     * (TASK-BE-469). Ties are broken by id ASC for deterministic ordering.
+     */
+    @Transactional(readOnly = true)
+    public OrderInsights getInsights() {
+        List<ProductOrderRankingRow> products = orderRepository.aggregateProductRanking();
+        List<SellerOrderRankingRow> sellers = orderRepository.aggregateSellerRanking();
+        return new OrderInsights(
+                topN(products, ProductOrderRankingRow::orderCount, ProductOrderRankingRow::productId,
+                        p -> new OrderInsights.RankedEntry(p.productId(), p.productName(), p.orderCount())),
+                topN(products, ProductOrderRankingRow::revenue, ProductOrderRankingRow::productId,
+                        p -> new OrderInsights.RankedEntry(p.productId(), p.productName(), p.revenue())),
+                topN(sellers, SellerOrderRankingRow::orderCount, SellerOrderRankingRow::sellerId,
+                        s -> new OrderInsights.RankedEntry(s.sellerId(), s.sellerId(), s.orderCount())),
+                topN(sellers, SellerOrderRankingRow::revenue, SellerOrderRankingRow::sellerId,
+                        s -> new OrderInsights.RankedEntry(s.sellerId(), s.sellerId(), s.revenue())));
+    }
+
+    // Sort DESC by the metric, ties broken by id ASC (deterministic), take top N, map.
+    private static <T> List<OrderInsights.RankedEntry> topN(
+            List<T> rows,
+            java.util.function.ToLongFunction<T> metric,
+            Function<T, String> id,
+            Function<T, OrderInsights.RankedEntry> mapper) {
+        return rows.stream()
+                .sorted(java.util.Comparator.comparingLong(metric).reversed()
+                        .thenComparing(id))
+                .limit(INSIGHTS_TOP_N)
+                .map(mapper)
+                .toList();
     }
 
     private static <T> PageResult<T> mapPageResult(PageResult<Order> source, Function<Order, T> mapper) {

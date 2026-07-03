@@ -5,6 +5,8 @@ import com.example.order.domain.model.OrderStatus;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.order.domain.repository.OrderRepository;
+import com.example.order.domain.repository.ProductOrderRankingRow;
+import com.example.order.domain.repository.SellerOrderRankingRow;
 import com.example.order.domain.seller.SellerScopeContext;
 import com.example.order.domain.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -232,6 +234,25 @@ public class OrderRepositoryImpl implements OrderRepository {
     @Override
     public long countCreatedBetween(Instant from, Instant to) {
         return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductOrderRankingRow> aggregateProductRanking() {
+        return jpaRepository.aggregateProductRanking(TenantContext.currentTenant(), OrderStatus.CANCELLED).stream()
+                .map(r -> new ProductOrderRankingRow(
+                        (String) r[0], (String) r[1],
+                        ((Number) r[2]).longValue(), ((Number) r[3]).longValue()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SellerOrderRankingRow> aggregateSellerRanking() {
+        return jpaRepository.aggregateSellerRanking(TenantContext.currentTenant(), OrderStatus.CANCELLED).stream()
+                .map(r -> new SellerOrderRankingRow(
+                        (String) r[0], ((Number) r[1]).longValue(), ((Number) r[2]).longValue()))
+                .toList();
     }
 
     @Override

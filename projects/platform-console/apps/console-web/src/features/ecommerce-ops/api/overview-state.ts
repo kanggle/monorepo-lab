@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { ApiError } from '@/shared/api/errors';
 import { getProductsSummary } from './products-api';
-import { getOrdersSummary, listOrders } from './orders-api';
+import { getOrdersSummary, getOrderInsights, listOrders } from './orders-api';
 import { getUsersSummary } from './users-api';
 import { getPromotionsSummary } from './promotions-api';
 import { getShippingsSummary } from './shippings-api';
@@ -11,8 +11,9 @@ import {
   ORDER_STATUS_VALUES,
   type OrderStatus,
   type OrderSummary,
+  type RankedEntry,
 } from './order-types';
-import type { SellerSummary } from './seller-types';
+import { SELLER_MAX_PAGE_SIZE, type SellerSummary } from './seller-types';
 
 /**
  * Server-side ecommerce **operator overview snapshot** fan-out for the
@@ -41,6 +42,10 @@ import type { SellerSummary } from './seller-types';
 
 export type CellStatus = 'ok' | 'forbidden' | 'degraded';
 
+/** Re-exported so co-located components import the ranking row type from here
+ *  (the overview-state module is the feature-internal composition point). */
+export type { RankedEntry } from './order-types';
+
 /** One operator-area count card (label + period counts + per-cell status + its link). */
 export interface AreaCount {
   key: string;
@@ -64,6 +69,19 @@ export interface OrderStatusCount {
   cellStatus: CellStatus;
 }
 
+/**
+ * The four top-5 rankings surfaced by the 판매 순위 charts (TASK-PC-FE-170).
+ * Product rankings carry the product name as `label`; seller rankings have the
+ * raw `sellerId` label OVERLAID with the resolved `displayName` (falling back to
+ * the id when the name leg degraded — never blank).
+ */
+export interface EcommerceInsights {
+  topProductsByOrderCount: RankedEntry[];
+  topProductsByRevenue: RankedEntry[];
+  topSellersByOrderCount: RankedEntry[];
+  topSellersByRevenue: RankedEntry[];
+}
+
 export interface EcommerceOverviewState {
   /** True when the operator is not ecommerce-eligible — no fan-out was run. */
   notEligible: boolean;
@@ -73,6 +91,9 @@ export interface EcommerceOverviewState {
   recentOrdersStatus: CellStatus;
   recentSellers: SellerSummary[] | null;
   recentSellersStatus: CellStatus;
+  /** Top-5 product/seller rankings (null when the insights leg did not resolve). */
+  insights: EcommerceInsights | null;
+  insightsStatus: CellStatus;
 }
 
 const EMPTY: EcommerceOverviewState = {
@@ -83,6 +104,8 @@ const EMPTY: EcommerceOverviewState = {
   recentOrdersStatus: 'degraded',
   recentSellers: null,
   recentSellersStatus: 'degraded',
+  insights: null,
+  insightsStatus: 'degraded',
 };
 
 /** Period summary shape returned by each `/summary` endpoint. */
@@ -153,17 +176,26 @@ export async function getEcommerceOverviewState(
   }
 
   try {
-    const [summaryCells, statusCells, recentOrdersCell, recentSellersCell] =
-      await Promise.all([
-        Promise.all(AREAS.map((a) => cell(a.summary()))),
-        Promise.all(
-          ORDER_STATUS_VALUES.map((s) =>
-            cell(listOrders({ status: s, page: 0, size: 1 })),
-          ),
+    const [
+      summaryCells,
+      statusCells,
+      recentOrdersCell,
+      recentSellersCell,
+      insightsCell,
+      sellerNamesCell,
+    ] = await Promise.all([
+      Promise.all(AREAS.map((a) => cell(a.summary()))),
+      Promise.all(
+        ORDER_STATUS_VALUES.map((s) =>
+          cell(listOrders({ status: s, page: 0, size: 1 })),
         ),
-        cell(listOrders({ page: 0, size: RECENT_SIZE })),
-        cell(listSellers({ page: 0, size: RECENT_SIZE })),
-      ]);
+      ),
+      cell(listOrders({ page: 0, size: RECENT_SIZE })),
+      cell(listSellers({ page: 0, size: RECENT_SIZE })),
+      cell(getOrderInsights()),
+      // Separate seller fetch (top-volume name map — NOT the recent-5 above).
+      cell(listSellers({ page: 0, size: SELLER_MAX_PAGE_SIZE })),
+    ]);
 
     const counts: AreaCount[] = AREAS.map((a, i) => {
       const c = summaryCells[i];
@@ -199,6 +231,32 @@ export async function getEcommerceOverviewState(
       cellStatus: statusCells[i].status,
     }));
 
+    // Seller-name overlay: build `sellerId → displayName` from the dedicated
+    // name-map leg (only when it resolved). A degraded leg → empty map → the
+    // seller rankings fall back to the raw id label (never blank).
+    const sellerNames = new Map<string, string>();
+    if (sellerNamesCell.status === 'ok' && sellerNamesCell.value) {
+      for (const s of sellerNamesCell.value.content) {
+        sellerNames.set(s.sellerId, s.displayName);
+      }
+    }
+    const overlaySellers = (entries: RankedEntry[]): RankedEntry[] =>
+      entries.map((e) => ({ ...e, label: sellerNames.get(e.id) ?? e.label }));
+
+    const insights: EcommerceInsights | null =
+      insightsCell.status === 'ok' && insightsCell.value
+        ? {
+            topProductsByOrderCount: insightsCell.value.topProductsByOrderCount,
+            topProductsByRevenue: insightsCell.value.topProductsByRevenue,
+            topSellersByOrderCount: overlaySellers(
+              insightsCell.value.topSellersByOrderCount,
+            ),
+            topSellersByRevenue: overlaySellers(
+              insightsCell.value.topSellersByRevenue,
+            ),
+          }
+        : null;
+
     return {
       notEligible: false,
       counts,
@@ -208,6 +266,8 @@ export async function getEcommerceOverviewState(
       recentSellers:
         recentSellersCell.value?.content.slice(0, RECENT_SIZE) ?? null,
       recentSellersStatus: recentSellersCell.status,
+      insights,
+      insightsStatus: insightsCell.status,
     };
   } catch (err) {
     // Only a `401` re-thrown by a cell reaches here → whole-session re-login.
