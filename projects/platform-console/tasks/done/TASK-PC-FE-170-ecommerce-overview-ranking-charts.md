@@ -1,6 +1,6 @@
 # TASK-PC-FE-170 — E-Commerce 개요: remove 도메인 상태 block + add 4 ranking charts (products/sellers × order-count/revenue)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-PC-FE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus 4.8 (server-component fan-out surgery + a new chart primitive + test churn across page/overview/state suites)
