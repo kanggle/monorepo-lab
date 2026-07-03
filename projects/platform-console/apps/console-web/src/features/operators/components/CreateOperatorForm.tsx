@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import {
   KNOWN_OPERATOR_ROLES,
@@ -8,6 +8,7 @@ import {
   passwordPolicyError,
   type CreateOperatorInput,
 } from '../api/types';
+import { checkAccountExistsForTenant } from '../api/account-existence';
 
 /**
  * Create-operator form (console-integration-contract § 2.4.3). Collects
@@ -49,7 +50,24 @@ export interface CreateOperatorFormProps {
    *  `KNOWN_OPERATOR_ROLES` checkbox (never an empty list — the producer
    *  403 is still the final authority). */
   grantableRoles?: string[] | null;
+  /** TASK-PC-FE-179 — pre-flight "does this email have a signed-up account in
+   *  the selected tenant?" probe. Default calls the accounts search BFF; tests
+   *  inject a stub so the leaf never touches the network. Returns `true`
+   *  (exists) / `false` (definitively absent) / `null` (unknown — skip the
+   *  warning; fail-soft). */
+  checkAccountExists?: (
+    email: string,
+    tenantId: string,
+    signal?: AbortSignal,
+  ) => Promise<boolean | null>;
 }
+
+type AccountProbeState =
+  | 'idle'
+  | 'checking'
+  | 'exists'
+  | 'absent'
+  | 'unavailable';
 
 export function CreateOperatorForm({
   tenantOptions,
@@ -58,6 +76,7 @@ export function CreateOperatorForm({
   serverError,
   pending = false,
   grantableRoles = null,
+  checkAccountExists = checkAccountExistsForTenant,
 }: CreateOperatorFormProps) {
   const emailId = useId();
   const nameId = useId();
@@ -88,6 +107,50 @@ export function CreateOperatorForm({
   const canSubmit = emailOk && nameOk && tenantOk && pwOk && !pending;
 
   const grantsElevated = roles.includes(ELEVATED_ROLE);
+
+  // TASK-PC-FE-179 — dangling-operator pre-flight. Debounce-probe whether the
+  // email is a signed-up account in the SELECTED tenant. This is ADVISORY only:
+  // `canSubmit` above does NOT depend on it (ADR-MONO-035 O6 fail-soft — the
+  // create is never blocked; the producer stays the final authority). The
+  // platform sentinel `*` has no meaningful account search → left idle.
+  const [acctState, setAcctState] = useState<AccountProbeState>('idle');
+  const probeTenant = tenant.trim();
+  const probeEmail = email.trim();
+  const probeEligible = emailOk && tenantOk && probeTenant !== '*';
+
+  useEffect(() => {
+    if (!probeEligible) {
+      setAcctState('idle');
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    setAcctState('checking');
+    const timer = setTimeout(() => {
+      checkAccountExists(probeEmail, probeTenant, controller.signal)
+        .then((exists) => {
+          if (cancelled) return;
+          setAcctState(
+            exists === null ? 'unavailable' : exists ? 'exists' : 'absent',
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setAcctState('unavailable');
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [probeEligible, probeEmail, probeTenant, checkAccountExists]);
+
+  // Advisory copy: only a DEFINITIVE "absent" (not unknown/checking) drives a
+  // warning, and its severity depends on whether a break-glass password was
+  // set (a present password ⇒ the operator can still use the local login).
+  const showDangling = acctState === 'absent' && password === '';
+  const showAbsentButPw = acctState === 'absent' && password !== '';
+  const showExistsOk = acctState === 'exists';
 
   // feat/iam-grantable-roles-filter — render only the KNOWN_OPERATOR_ROLES
   // that are also in the server-provided grantable set. `null` (fetch
@@ -259,6 +322,40 @@ export function CreateOperatorForm({
           </p>
         )}
       </div>
+
+      {showDangling && (
+        <p
+          role="status"
+          data-testid="create-operator-account-warning"
+          className="sm:col-span-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          이 이메일은 <span className="font-medium">{probeTenant}</span> 테넌트에
+          가입된 계정이 아닙니다. break-glass 비밀번호도 비어 있어, 지금 생성하면
+          아무도 로그인할 수 없는 <span className="font-medium">허수 운영자</span>가
+          됩니다. 먼저 이 이메일로 회원가입하거나, 비상 로컬 비밀번호를 입력하세요.
+          (생성 자체는 막지 않습니다.)
+        </p>
+      )}
+      {showAbsentButPw && (
+        <p
+          role="status"
+          data-testid="create-operator-account-breakglass-note"
+          className="sm:col-span-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          이 이메일은 <span className="font-medium">{probeTenant}</span> 테넌트에
+          가입된 계정이 아니지만, 입력한 break-glass 로컬 비밀번호로 로그인할 수
+          있습니다. (통합 IAM 로그인은 이 이메일로 회원가입해야 가능합니다.)
+        </p>
+      )}
+      {showExistsOk && (
+        <p
+          role="status"
+          data-testid="create-operator-account-ok"
+          className="sm:col-span-2 text-xs text-muted-foreground"
+        >
+          ✓ 이 테넌트에 가입된 계정입니다 — OIDC(통합 IAM) 로그인 가능.
+        </p>
+      )}
 
       <fieldset className="sm:col-span-2">
         <legend

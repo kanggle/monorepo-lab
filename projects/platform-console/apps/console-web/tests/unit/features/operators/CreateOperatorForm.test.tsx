@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+} from '@testing-library/react';
 import { CreateOperatorForm } from '@/features/operators/components/CreateOperatorForm';
 import {
   KNOWN_OPERATOR_ROLES,
@@ -164,5 +169,126 @@ describe('CreateOperatorForm — optional break-glass password (ADR-MONO-035 O2)
     fireEvent.click(screen.getByTestId('create-operator-submit'));
     expect(drafts).toHaveLength(1);
     expect(drafts[0].password).toBe('Str0ng!pass9');
+  });
+});
+
+describe('CreateOperatorForm — dangling-account pre-flight (TASK-PC-FE-179)', () => {
+  function fillEmailTenant(email = 'ghost@example.com', tenant = 'wms') {
+    fireEvent.change(screen.getByTestId('create-operator-email'), {
+      target: { value: email },
+    });
+    fireEvent.change(screen.getByTestId('create-operator-tenant'), {
+      target: { value: tenant },
+    });
+  }
+
+  it('email absent in tenant + NO password ⇒ dangling-operator warning (non-blocking)', async () => {
+    const check = vi.fn().mockResolvedValue(false); // definitively absent
+    render(
+      <CreateOperatorForm
+        tenantOptions={['wms']}
+        isPlatformOperator={false}
+        onSubmitDraft={NOOP}
+        grantableRoles={['SUPPORT_LOCK']}
+        checkAccountExists={check}
+      />,
+    );
+    fillEmailTenant();
+
+    await screen.findByTestId('create-operator-account-warning');
+    expect(check).toHaveBeenCalledWith('ghost@example.com', 'wms', expect.anything());
+    // Non-blocking: displayName is required for submit, but the warning itself
+    // must never disable the button. Fill name and assert submit is enabled.
+    fireEvent.change(screen.getByTestId('create-operator-displayName'), {
+      target: { value: 'Ghost' },
+    });
+    expect(screen.getByTestId('create-operator-submit')).not.toBeDisabled();
+  });
+
+  it('email absent + break-glass password present ⇒ softened note, no dangling warning', async () => {
+    const check = vi.fn().mockResolvedValue(false);
+    render(
+      <CreateOperatorForm
+        tenantOptions={['wms']}
+        isPlatformOperator={false}
+        onSubmitDraft={NOOP}
+        grantableRoles={['SUPPORT_LOCK']}
+        checkAccountExists={check}
+      />,
+    );
+    fillEmailTenant();
+    fireEvent.change(screen.getByTestId('create-operator-password'), {
+      target: { value: 'Str0ng!pass9' },
+    });
+
+    await screen.findByTestId('create-operator-account-breakglass-note');
+    expect(
+      screen.queryByTestId('create-operator-account-warning'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('email exists in tenant ⇒ OIDC-ok note, no warning', async () => {
+    const check = vi.fn().mockResolvedValue(true);
+    render(
+      <CreateOperatorForm
+        tenantOptions={['wms']}
+        isPlatformOperator={false}
+        onSubmitDraft={NOOP}
+        grantableRoles={['SUPPORT_LOCK']}
+        checkAccountExists={check}
+      />,
+    );
+    fillEmailTenant('real@example.com');
+
+    await screen.findByTestId('create-operator-account-ok');
+    expect(
+      screen.queryByTestId('create-operator-account-warning'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('lookup unavailable (null) ⇒ no warning / ok / note (fail-soft)', async () => {
+    const check = vi.fn().mockResolvedValue(null); // unknown
+    render(
+      <CreateOperatorForm
+        tenantOptions={['wms']}
+        isPlatformOperator={false}
+        onSubmitDraft={NOOP}
+        grantableRoles={['SUPPORT_LOCK']}
+        checkAccountExists={check}
+      />,
+    );
+    fillEmailTenant();
+
+    await waitFor(() => expect(check).toHaveBeenCalled());
+    expect(
+      screen.queryByTestId('create-operator-account-warning'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('create-operator-account-ok'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('create-operator-account-breakglass-note'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('platform-scope tenant (*) ⇒ probe skipped, no lookup call', async () => {
+    const check = vi.fn().mockResolvedValue(false);
+    render(
+      <CreateOperatorForm
+        tenantOptions={['wms']}
+        isPlatformOperator
+        onSubmitDraft={NOOP}
+        grantableRoles={['SUPPORT_LOCK']}
+        checkAccountExists={check}
+      />,
+    );
+    fillEmailTenant('admin@example.com', '*');
+
+    // Give the debounce window a chance to (not) fire, then assert no probe.
+    await new Promise((r) => setTimeout(r, 500));
+    expect(check).not.toHaveBeenCalled();
+    expect(
+      screen.queryByTestId('create-operator-account-warning'),
+    ).not.toBeInTheDocument();
   });
 });

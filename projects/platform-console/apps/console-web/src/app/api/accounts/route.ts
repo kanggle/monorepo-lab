@@ -26,9 +26,16 @@ export async function GET(req: Request) {
   const size = url.searchParams.has('size')
     ? Number(url.searchParams.get('size'))
     : undefined;
+  // Explicit tenant scope (TASK-BE-357). Omitted ⇒ searchAccounts defaults it
+  // to the active tenant (the /accounts screen path — unchanged). The
+  // operator-create dangling-account pre-check (TASK-PC-FE-179) passes the
+  // SELECTED tenant so the lookup targets the tenant the operator will be
+  // created in, not the tenant switcher. The producer gates cross-tenant
+  // reads against the caller's scope (403 → the pre-check treats it as unknown).
+  const tenantId = url.searchParams.get('tenantId') ?? undefined;
 
   try {
-    const result = await searchAccounts({ email, page, size });
+    const result = await searchAccounts({ email, page, size, tenantId });
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
