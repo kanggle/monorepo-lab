@@ -209,7 +209,13 @@ describe('OrgScopeDialog — current scope + tri-state payloads', () => {
         /zero-scope/,
       ),
     );
-    expect(screen.getByTestId('org-scope-mode-block')).toBeChecked();
+    // The block radio's checked state is derived in a separate render cycle
+    // from the summary text above; assert it via waitFor too so a one-tick lag
+    // under a slow/parallel CI runner can't flake this ("not checked"). The
+    // summary-text waitFor alone did not gate the radio's settle.
+    await waitFor(() =>
+      expect(screen.getByTestId('org-scope-mode-block')).toBeChecked(),
+    );
   });
 });
 
