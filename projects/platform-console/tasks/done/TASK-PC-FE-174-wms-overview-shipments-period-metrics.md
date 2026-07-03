@@ -1,6 +1,6 @@
 # TASK-PC-FE-174 — WMS 운영 개요: 배송 기간별(오늘/주간/월간/전체) 지표
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-PC-FE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet (consumer-only front-end change reusing an existing producer param; no new architectural decision, no producer change)
