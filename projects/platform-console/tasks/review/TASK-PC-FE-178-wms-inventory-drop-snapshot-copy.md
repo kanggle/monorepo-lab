@@ -1,6 +1,6 @@
 # TASK-PC-FE-178 — WMS 재고 화면 카피에서 "스냅샷" jargon 제거
 
-**Status:** ready
+**Status:** review
 **Area:** platform-console / console-web · **Route:** `/wms/inventory` · **Nav:** 변경 없음
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (사용자 카피 4문구 교체, 로직/테스트 무변경)
 
