@@ -1,6 +1,6 @@
 # TASK-BE-467 — Multi-tenant admin account-mutation propagation + confinement (was: GAP-ACCOUNT-01)
 
-- **Status**: review
+- **Status**: done
 - **Domain**: iam (admin-service + account-service)
 - **Type**: correctness + latent-confinement (backend) — **downgraded from "security-critical vuln"**
 - **분석=Opus 4.8 / 구현 권장=Opus 4.8**
