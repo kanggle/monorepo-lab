@@ -8,7 +8,7 @@ IAM 회원가입 화면 (SAS `/signup` Thymeleaf 페이지 → `POST /api/accoun
 
 # Status
 
-ready
+review
 
 # Owner
 
