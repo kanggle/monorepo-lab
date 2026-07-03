@@ -1,9 +1,9 @@
 # TASK-PC-FE-176 — 운영자 계정 생성 폼: break-glass 비밀번호 **필수 → 선택** (ADR-MONO-035 O2 정합)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Scope:** `features/operators` create 폼 + 프록시 스키마
 **Type:** spec-drift 정정 (폼이 ACCEPTED ADR·백엔드 DTO·계약보다 더 엄격) — 동작 정합
-**Implemented:** branch `task/pc-fe-176-operator-create-password-optional`. `next lint` + `tsc --noEmit` + `vitest` green.
+**Implemented:** branch `task/pc-fe-176-operator-create-password-optional` → **#2175 merged** (squash `41cedd06d`). `next lint` + `tsc --noEmit` + `vitest` (86/86) green; CI 21 checks pass.
 **Analysis model:** Opus 4.8 · **Impl model:** Opus.
 
 ## Goal
