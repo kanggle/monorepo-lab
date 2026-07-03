@@ -1,6 +1,6 @@
 # TASK-PC-FE-176 — "Platform Console" 브랜드 클릭 시 사이드바 drill을 최상위 메뉴로 초기화
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Route:** 전역 셸(모든 콘솔 라우트) · **Nav:** `ConsoleSidebarNav` drill 상태 · **Contract:** 변경 없음
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (단일 useEffect 가드 제거, 신규 아키텍처 결정 없음)
 
