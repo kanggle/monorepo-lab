@@ -77,10 +77,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **Console domain-landing overview series** (naming follows capability: per-domain overview first, cross-domain rename last). Reference impl = `TASK-PC-FE-156` (ecommerce overview snapshot, DONE). Each domain task's data-source/read-leg + metric set + spec/AC must be finalized before `backlog → ready`.
 
-**Execution order**: ① **PC-FE-168** shared read-leg decision ✅ **DONE** (#2148) → ② **PC-FE-166** (wms) ✅ **DONE** (#2148) → ③ **PC-FE-167 (scm) / 161 (erp)** ✅ **DONE** (#2152) · **PC-FE-160 (finance)** ⚠️ degenerate/parked → ④ **PC-FE-162** cross-domain "운영 → 개요" rename capstone (after the domains are done). ecommerce PC-FE-156 (direct-model) is already DONE and is the reference for the shape.
+**Execution order (series COMPLETE except the parked finance)**: ① **PC-FE-168** ✅ DONE (#2148) → ② **PC-FE-166** (wms) ✅ DONE (#2148) → ③ **PC-FE-167 (scm) / 161 (erp)** ✅ DONE (#2152) · **PC-FE-160 (finance)** ⚠️ **PARKED** (degenerate — no list GET) → ④ **PC-FE-162** capstone ✅ **IMPLEMENTED → review**. ecommerce PC-FE-156 (direct-model) is the reference for the shape.
 
-- `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — `/finance` landing. **⚠️ DEGENERATE (168 finding):** finance v1 has no list/search GET → no count overview possible, no synthetic ₩ aggregation. Needs a scope re-judgment (park, or a minimal non-count band). **Blocks PC-FE-162** (treat as N/A if parked).
-- `TASK-PC-FE-162-console-landing-rename-ops-to-overview.md` — **capstone (runs LAST)**: atomic cross-domain rename of all 5 landing headings `<도메인> 운영 → <도메인> 개요` (+ optional nav-leaf). **Blocked by PC-FE-166/167/160/161** (ecommerce PC-FE-156 already DONE); do NOT promote until those 4 are `done`.
+- `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — `/finance` landing. **⚠️ PARKED / DECLINED (2026-07-03, user-approved):** finance v1 has no list/search GET → no count overview possible, no synthetic ₩. finance keeps `Finance 운영` (honest lookup surface); N/A for the PC-FE-162 capstone. **Do NOT re-pick from a backlog sweep** — resume only if the producer adds a list GET or a concrete non-count operator need appears (see task body).
 
 ## ready
 
@@ -92,7 +91,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-162-console-landing-rename-ops-to-overview.md` — **IMPLEMENTED**. Cross-domain landing rename capstone, **re-scoped** (user-approved): the 3 overview-capable `운영` landings (ecommerce/wms/scm) → `개요` (h1 all branches + `nav-{wms,scm,ecommerce}-ops` label; testids/hrefs unchanged). finance stays `Finance 운영` (PARKED — no overview, avoid a lying label); erp stays `ERP 마스터` (a masters-CRUD route, not a `운영` landing). Net: no lying `개요` label. Heading-text test assertions updated. `pnpm lint`/`tsc`/`vitest` green. Bundled with the PC-FE-160 finance park.
 
 ## done
 

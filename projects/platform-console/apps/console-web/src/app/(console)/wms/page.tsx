@@ -56,7 +56,7 @@ export default async function WmsPage() {
     return (
       <section aria-labelledby="wms-heading">
         <h1 id="wms-heading" className="mb-6 text-2xl font-semibold">
-          WMS 운영
+          WMS 개요
         </h1>
         <div
           role="status"
@@ -85,7 +85,7 @@ export default async function WmsPage() {
     return (
       <section aria-labelledby="wms-heading">
         <h1 id="wms-heading" className="mb-6 text-2xl font-semibold">
-          WMS 운영
+          WMS 개요
         </h1>
         <div
           role="status"
@@ -114,7 +114,7 @@ export default async function WmsPage() {
     return (
       <section aria-labelledby="wms-heading">
         <h1 id="wms-heading" className="mb-6 text-2xl font-semibold">
-          WMS 운영
+          WMS 개요
         </h1>
         <div
           role="status"
@@ -132,7 +132,7 @@ export default async function WmsPage() {
     return (
       <section aria-labelledby="wms-heading">
         <h1 id="wms-heading" className="mb-6 text-2xl font-semibold">
-          WMS 운영
+          WMS 개요
         </h1>
         <div
           role="status"

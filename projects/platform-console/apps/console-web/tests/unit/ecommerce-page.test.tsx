@@ -139,7 +139,7 @@ describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
 
     expect(screen.getByTestId('ecommerce-section')).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'E-Commerce 운영' }),
+      screen.getByRole('heading', { name: 'E-Commerce 개요' }),
     ).toBeInTheDocument();
     // The 6th domain-health card renders inside the section.
     expect(

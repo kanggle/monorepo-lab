@@ -90,7 +90,7 @@ const GROUPS: NavGroup[] = [
         label: 'WMS',
         testid: 'nav-wms',
         children: [
-          { href: '/wms', label: '운영', testid: 'nav-wms-ops' },
+          { href: '/wms', label: '개요', testid: 'nav-wms-ops' },
           { href: '/wms/outbound', label: '출고', testid: 'nav-wms-outbound' },
         ],
       },
@@ -106,7 +106,7 @@ const GROUPS: NavGroup[] = [
         label: 'SCM',
         testid: 'nav-scm',
         children: [
-          { href: '/scm', label: '운영', testid: 'nav-scm-ops' },
+          { href: '/scm', label: '개요', testid: 'nav-scm-ops' },
           {
             href: '/scm/replenishment',
             label: '보충',
@@ -166,7 +166,7 @@ const GROUPS: NavGroup[] = [
         label: 'E-Commerce',
         testid: 'nav-ecommerce',
         children: [
-          { href: '/ecommerce', label: '운영', testid: 'nav-ecommerce-ops' },
+          { href: '/ecommerce', label: '개요', testid: 'nav-ecommerce-ops' },
           {
             href: '/ecommerce/products',
             label: '상품',

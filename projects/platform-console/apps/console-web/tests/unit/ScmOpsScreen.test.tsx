@@ -112,7 +112,7 @@ describe('ScmOpsScreen — render & read tables (read-only)', () => {
       wrapper: wrapper(),
     });
     expect(
-      screen.getByRole('heading', { name: 'SCM 운영' }),
+      screen.getByRole('heading', { name: 'SCM 개요' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('scm-po-table')).toBeInTheDocument();
     expect(screen.getByTestId('scm-po-pageinfo')).toHaveTextContent(
@@ -281,7 +281,7 @@ describe('ScmOpsScreen — per-section degrade & a11y', () => {
     );
     // The scm heading + inventory-visibility views (with S5) still render.
     expect(
-      screen.getByRole('heading', { name: 'SCM 운영' }),
+      screen.getByRole('heading', { name: 'SCM 개요' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('scm-snap-table')).toBeInTheDocument();
     expect(

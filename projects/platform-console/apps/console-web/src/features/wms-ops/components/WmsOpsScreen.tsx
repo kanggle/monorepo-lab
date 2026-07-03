@@ -215,7 +215,7 @@ export function WmsOpsScreen({
   return (
     <section aria-labelledby="wms-heading">
       <h1 id="wms-heading" className="mb-2 text-2xl font-semibold">
-        WMS 운영
+        WMS 개요
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
         재고 스냅샷 · 알림 (읽기 + 알림 확인).

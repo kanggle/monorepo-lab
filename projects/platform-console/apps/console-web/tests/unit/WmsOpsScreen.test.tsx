@@ -116,7 +116,7 @@ describe('WmsOpsScreen — render & read tables', () => {
   it('renders the inventory snapshot + alerts from the server-provided pages', () => {
     renderScreen();
     expect(
-      screen.getByRole('heading', { name: 'WMS 운영' }),
+      screen.getByRole('heading', { name: 'WMS 개요' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('wms-inv-table')).toBeInTheDocument();
     const row = within(screen.getByTestId('wms-inv-row-0'));
@@ -343,7 +343,7 @@ describe('WmsOpsScreen — shipments / 택배 filter & pagination', () => {
       expect(screen.getByTestId('wms-ship-forbidden')).toBeInTheDocument(),
     );
     expect(
-      screen.getByRole('heading', { name: 'WMS 운영' }),
+      screen.getByRole('heading', { name: 'WMS 개요' }),
     ).toBeInTheDocument();
   });
 });
@@ -482,7 +482,7 @@ describe('WmsOpsScreen — alert acknowledge (confirm-gated, reason-free)', () =
     );
     // The shell of the screen stays — not a blank crash.
     expect(
-      screen.getByRole('heading', { name: 'WMS 운영' }),
+      screen.getByRole('heading', { name: 'WMS 개요' }),
     ).toBeInTheDocument();
   });
 });
@@ -508,7 +508,7 @@ describe('WmsOpsScreen — per-section degrade & a11y', () => {
     // The wms heading + alerts table still render — only the inventory
     // block degraded (not a blank crash).
     expect(
-      screen.getByRole('heading', { name: 'WMS 운영' }),
+      screen.getByRole('heading', { name: 'WMS 개요' }),
     ).toBeInTheDocument();
     expect(screen.getByTestId('wms-alerts-table')).toBeInTheDocument();
   });

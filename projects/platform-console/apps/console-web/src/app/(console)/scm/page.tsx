@@ -58,7 +58,7 @@ export default async function ScmPage() {
     return (
       <section aria-labelledby="scm-heading">
         <h1 id="scm-heading" className="mb-6 text-2xl font-semibold">
-          SCM 운영
+          SCM 개요
         </h1>
         <div
           role="status"
@@ -86,7 +86,7 @@ export default async function ScmPage() {
     return (
       <section aria-labelledby="scm-heading">
         <h1 id="scm-heading" className="mb-6 text-2xl font-semibold">
-          SCM 운영
+          SCM 개요
         </h1>
         <div
           role="status"
@@ -115,7 +115,7 @@ export default async function ScmPage() {
     return (
       <section aria-labelledby="scm-heading">
         <h1 id="scm-heading" className="mb-6 text-2xl font-semibold">
-          SCM 운영
+          SCM 개요
         </h1>
         <div
           role="status"
@@ -133,7 +133,7 @@ export default async function ScmPage() {
     return (
       <section aria-labelledby="scm-heading">
         <h1 id="scm-heading" className="mb-6 text-2xl font-semibold">
-          SCM 운영
+          SCM 개요
         </h1>
         <div
           role="status"
@@ -156,7 +156,7 @@ export default async function ScmPage() {
     return (
       <section aria-labelledby="scm-heading">
         <h1 id="scm-heading" className="mb-6 text-2xl font-semibold">
-          SCM 운영
+          SCM 개요
         </h1>
         <div
           role="status"

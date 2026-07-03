@@ -80,7 +80,7 @@ export default async function EcommercePage() {
 
   const heading = (
     <h1 id="ecommerce-heading" className="mb-6 text-2xl font-semibold">
-      E-Commerce 운영
+      E-Commerce 개요
     </h1>
   );
 
