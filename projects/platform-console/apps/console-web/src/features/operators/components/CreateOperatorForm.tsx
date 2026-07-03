@@ -80,7 +80,11 @@ export function CreateOperatorForm({
   const emailOk = /.+@.+\..+/.test(email.trim());
   const nameOk = displayName.trim().length >= 1;
   const tenantOk = tenant.trim().length >= 1;
-  const pwOk = password.length > 0 && pwError === null;
+  // ADR-MONO-035 O2 / TASK-BE-377: the password is OPTIONAL (a demoted
+  // break-glass local login). Blank ⇒ an OIDC-only operator (primary login is
+  // the unified IAM credential of this email's account). Only a NON-blank
+  // password must satisfy the policy — `pwError` is already null when blank.
+  const pwOk = password === '' || pwError === null;
   const canSubmit = emailOk && nameOk && tenantOk && pwOk && !pending;
 
   const grantsElevated = roles.includes(ELEVATED_ROLE);
@@ -115,7 +119,10 @@ export function CreateOperatorForm({
       {
         email: email.trim(),
         displayName: displayName.trim(),
-        password,
+        // Omit when blank ⇒ the producer creates an OIDC-only operator (no
+        // break-glass password_hash stored). A blank string must NOT be sent
+        // (the producer @Size(min=10) would reject "" — it is not null).
+        ...(password === '' ? {} : { password }),
         roles,
         tenantId: tenant.trim(),
       },
@@ -187,15 +194,14 @@ export function CreateOperatorForm({
           htmlFor={pwId}
           className="block text-sm font-medium text-foreground"
         >
-          초기 비밀번호 <span aria-hidden="true">*</span>
+          break-glass 로컬 비밀번호{' '}
+          <span className="text-muted-foreground">(선택)</span>
         </label>
         <input
           id={pwId}
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          required
-          aria-required="true"
           aria-invalid={pwError !== null}
           autoComplete="new-password"
           data-testid="create-operator-password"
@@ -205,7 +211,9 @@ export function CreateOperatorForm({
           className="mt-1 text-xs text-muted-foreground"
           id={`${pwId}-policy`}
         >
-          10자 이상, 영문·숫자·특수문자 각 1자 이상.
+          비워두면 OIDC-only 운영자로 생성됩니다 — 주 로그인은 이 이메일의 통합
+          IAM 계정 자격증명입니다. 입력 시 IdP 장애 대비용 비상 로컬 로그인이며,
+          10자 이상·영문·숫자·특수문자 각 1자 이상이어야 합니다.
         </p>
         {pwError && (
           <p

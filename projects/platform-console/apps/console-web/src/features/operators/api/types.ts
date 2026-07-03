@@ -145,8 +145,13 @@ export interface OperatorListParams {
 export interface CreateOperatorInput {
   email: string;
   displayName: string;
-  /** Plaintext — server-side only, NEVER logged/echoed (security invariant). */
-  password: string;
+  /**
+   * OPTIONAL break-glass local password (ADR-MONO-035 O2 / TASK-BE-377).
+   * Omitted ⇒ an OIDC-only operator (primary login is the unified IAM
+   * credential of this email's account). Plaintext — server-side only, NEVER
+   * logged/echoed (security invariant).
+   */
+  password?: string;
   roles: string[];
   /** Tenant the new operator belongs to. '*' is the SUPER_ADMIN platform
    *  sentinel — only a platform-scope operator may create another. The UI
