@@ -8,7 +8,7 @@ IAM 회원가입 폼 서버사이드 프록시 전환 (client fetch → auth-ser
 
 # Status
 
-review
+done
 
 # Owner
 
