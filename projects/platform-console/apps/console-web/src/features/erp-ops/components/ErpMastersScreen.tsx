@@ -35,6 +35,10 @@ export interface ErpMastersScreenProps {
   initialBusinessPartners: BusinessPartnerListResponse | null;
   /** TASK-PC-FE-046/048: enable the write affordances across all 5 masters. */
   mastersWritable?: boolean;
+  /** Optional operator overview-snapshot slot rendered above the master lists
+   *  (TASK-PC-FE-161 — the server page computes `getErpMastersOverviewState`
+   *  and passes an `<ErpMastersOverview>` node). Absent ⇒ no snapshot band. */
+  overview?: React.ReactNode;
 }
 
 /** Maps a list response's rows to `{ id, code, name }` parent/FK options. */
@@ -59,6 +63,7 @@ export function ErpMastersScreen({
   initialCostCenters,
   initialBusinessPartners,
   mastersWritable = false,
+  overview,
 }: ErpMastersScreenProps) {
   const departments = toOptions(initialDepartments);
   const jobGrades = toOptions(initialJobGrades);
@@ -74,6 +79,9 @@ export function ErpMastersScreen({
           ? '부서·직원·직급·비용센터·거래처 마스터를 조회하고 등록/수정/폐기할 수 있습니다 (TASK-PC-FE-048). 권한이 없는 작업은 실행 시 안내됩니다.'
           : '부서·직원·직급·비용센터·거래처 마스터 조회 (읽기 전용).'}
       </p>
+
+      {/* Operator overview snapshot band (TASK-PC-FE-161) — server-rendered slot. */}
+      {overview}
 
       <AsOfPicker />
 

@@ -1,7 +1,9 @@
 import {
   ErpMastersScreen,
+  ErpMastersOverview,
   ErpSectionNotice,
   getErpMastersState,
+  getErpMastersOverviewState,
   resolveErpEligibility,
 } from '@/features/erp-ops';
 
@@ -41,7 +43,15 @@ export default async function ErpMastersPage({
   const sp = (await searchParams) ?? {};
   const asOf = sp.asOf?.trim() || null;
 
-  const state = await getErpMastersState(eligible, asOf);
+  // Fire the masters overview-snapshot fan-out (TASK-PC-FE-161) concurrently
+  // with the masters section state. Both are console-web DIRECT reads over the
+  // erp masterdata-service (PC-FE-168 read-leg decision), both thread `asOf`
+  // (E3) and redirect('/login') on a 401 internally. The overview does per-cell
+  // degrade; the section state gates the master lists below.
+  const [overviewState, state] = await Promise.all([
+    getErpMastersOverviewState(eligible, asOf),
+    getErpMastersState(eligible, asOf),
+  ]);
 
   if (state.notEligible) {
     return <ErpSectionNotice kind="notEligible" heading={HEADING} />;
@@ -60,6 +70,7 @@ export default async function ErpMastersPage({
       initialJobGrades={state.jobGrades}
       initialCostCenters={state.costCenters}
       initialBusinessPartners={state.businessPartners}
+      overview={<ErpMastersOverview state={overviewState} />}
       // TASK-PC-FE-046/048 — erp masterdata write across all 5 masters.
       // Eligible operators see the write affordances; the producer's E6
       // fail-CLOSED authz is the authority (a 403 is surfaced inline — the
