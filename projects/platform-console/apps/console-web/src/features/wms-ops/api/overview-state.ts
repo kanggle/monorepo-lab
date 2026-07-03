@@ -3,6 +3,7 @@ import { ApiError } from '@/shared/api/errors';
 import { listInventory } from './wms-inventory-api';
 import { listShipments } from './wms-shipments-api';
 import { listAlerts } from './wms-alerts-api';
+import { kstPeriodBounds } from './kst-period';
 import type { ShipmentRow } from './types';
 
 /**
@@ -37,6 +38,15 @@ import type { ShipmentRow } from './types';
 
 export type CellStatus = 'ok' | 'forbidden' | 'degraded';
 
+/** KST period-to-date counts for a FLOW area (배송) — 오늘/주간/월간. Each is
+ *  `null` when that period's sub-read did not resolve (the tile stays `ok` as
+ *  long as the total read did; the null bucket renders "—"). */
+export interface WmsAreaPeriod {
+  today: number | null;
+  week: number | null;
+  month: number | null;
+}
+
 /** One operator-area count tile (label + total count + per-cell status). */
 export interface WmsAreaCount {
   key: string;
@@ -45,6 +55,10 @@ export interface WmsAreaCount {
    *  not resolve (degraded/forbidden). */
   count: number | null;
   status: CellStatus;
+  /** Period-to-date breakdown for a FLOW area (배송, PC-FE-174). `null` for a
+   *  point-in-time LEVEL area (재고) which has no time dimension — that tile
+   *  renders its single total only. */
+  period?: WmsAreaPeriod | null;
 }
 
 /** One alert-acknowledgement distribution bucket. */
@@ -113,15 +127,52 @@ export async function getWmsOverviewState(
     return { ...EMPTY, notEligible: true };
   }
 
+  // KST period-to-date windows for the 배송 flow metrics (PC-FE-174). Computed
+  // console-side (no producer `/summary` retrofit — ADR-MONO-017 D3.B) and
+  // passed as the existing `shippedAtFrom`/`shippedAtTo` window.
+  const b = kstPeriodBounds();
+
   try {
-    const [invCell, shipCell, unackedCell, ackedCell, recentCell] =
-      await Promise.all([
-        cell(listInventory({ page: 0, size: 1 })),
-        cell(listShipments({ page: 0, size: 1 })),
-        cell(listAlerts({ acknowledged: false, page: 0, size: 1 })),
-        cell(listAlerts({ acknowledged: true, page: 0, size: 1 })),
-        cell(listShipments({ page: 0, size: RECENT_SIZE })),
-      ]);
+    const [
+      invCell,
+      shipCell,
+      shipTodayCell,
+      shipWeekCell,
+      shipMonthCell,
+      unackedCell,
+      ackedCell,
+      recentCell,
+    ] = await Promise.all([
+      cell(listInventory({ page: 0, size: 1 })),
+      cell(listShipments({ page: 0, size: 1 })),
+      cell(
+        listShipments({
+          shippedAtFrom: b.todayStartInstant,
+          shippedAtTo: b.nowInstant,
+          page: 0,
+          size: 1,
+        }),
+      ),
+      cell(
+        listShipments({
+          shippedAtFrom: b.weekStartInstant,
+          shippedAtTo: b.nowInstant,
+          page: 0,
+          size: 1,
+        }),
+      ),
+      cell(
+        listShipments({
+          shippedAtFrom: b.monthStartInstant,
+          shippedAtTo: b.nowInstant,
+          page: 0,
+          size: 1,
+        }),
+      ),
+      cell(listAlerts({ acknowledged: false, page: 0, size: 1 })),
+      cell(listAlerts({ acknowledged: true, page: 0, size: 1 })),
+      cell(listShipments({ page: 0, size: RECENT_SIZE })),
+    ]);
 
     // Count tiles cover the WMS operational-scale areas only — 재고 and 배송
     // (business objects whose totals read as a scale snapshot). Alerts are a
@@ -129,9 +180,21 @@ export async function getWmsOverviewState(
     // count merely duplicates the (미확인 + 확인) sum in the alert-status
     // distribution below (PC-FE-170); so alerts are represented solely by that
     // distribution and no total-alerts fan-out leg is issued.
+    //
+    // 재고 is a point-in-time LEVEL (no time dimension) → single-total snapshot,
+    // no period. 배송 is a FLOW → 오늘/주간/월간 period-to-date + 전체 total
+    // (PC-FE-174); the tile status follows the TOTAL read, so a degraded period
+    // sub-read only nulls that one bucket (rendered "—").
     const counts: WmsAreaCount[] = [
       areaCount('inventory', '재고', invCell),
-      areaCount('shipments', '배송', shipCell),
+      shipmentAreaCount(
+        'shipments',
+        '배송',
+        shipCell,
+        shipTodayCell,
+        shipWeekCell,
+        shipMonthCell,
+      ),
     ];
 
     const alertStatus: WmsAlertStatusCount[] = [
@@ -166,14 +229,52 @@ export async function getWmsOverviewState(
   }
 }
 
-/** Map a page-count cell (`WmsResult<{page:{totalElements}}>`) to an area tile. */
-function areaCount(
+/** A page-count cell — the shape every count leg resolves to. */
+type PageCountCell = Cell<{ data: { page: { totalElements: number } } }>;
+
+/** `totalElements` of a resolved count cell, or `null` when it did not resolve. */
+function totalElements(c: PageCountCell): number | null {
+  return c.status === 'ok' && c.value !== null
+    ? c.value.data.page.totalElements
+    : null;
+}
+
+/** Map a page-count cell to a point-in-time LEVEL area tile (no period, e.g. 재고). */
+function areaCount(key: string, label: string, c: PageCountCell): WmsAreaCount {
+  const count = totalElements(c);
+  if (c.status === 'ok' && count !== null) {
+    return { key, label, count, status: 'ok', period: null };
+  }
+  return { key, label, count: null, status: c.status, period: null };
+}
+
+/**
+ * Map the four 배송 count reads (total + today/week/month windows) to a FLOW
+ * area tile. The tile status follows the TOTAL read; each period bucket is the
+ * `totalElements` of its windowed read, or `null` if that sub-read degraded
+ * (rendered "—" — the tile does not collapse for a single failed window).
+ */
+function shipmentAreaCount(
   key: string,
   label: string,
-  c: Cell<{ data: { page: { totalElements: number } } }>,
+  total: PageCountCell,
+  today: PageCountCell,
+  week: PageCountCell,
+  month: PageCountCell,
 ): WmsAreaCount {
-  if (c.status === 'ok' && c.value !== null) {
-    return { key, label, count: c.value.data.page.totalElements, status: 'ok' };
+  const count = totalElements(total);
+  if (total.status === 'ok' && count !== null) {
+    return {
+      key,
+      label,
+      count,
+      status: 'ok',
+      period: {
+        today: totalElements(today),
+        week: totalElements(week),
+        month: totalElements(month),
+      },
+    };
   }
-  return { key, label, count: null, status: c.status };
+  return { key, label, count: null, status: total.status, period: null };
 }

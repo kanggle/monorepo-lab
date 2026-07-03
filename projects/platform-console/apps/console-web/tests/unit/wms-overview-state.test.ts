@@ -34,6 +34,7 @@ vi.mock('@/features/wms-ops/api/wms-alerts-api', () => ({
 }));
 
 import { getWmsOverviewState } from '@/features/wms-ops/api/overview-state';
+import { kstPeriodBounds } from '@/features/wms-ops/api/kst-period';
 
 /** wms `WmsResult<Page>` envelope: { data: { content, page:{totalElements} }, lagSeconds }. */
 const wmsResult = (totalElements: number, content: unknown[] = []) => ({
@@ -58,13 +59,31 @@ const shipRow = (shipmentId: string) => ({
   shippedAt: '2026-07-01T00:00:00Z',
 });
 
-/** Default happy fan-out: every leg resolves. */
+/** The KST period windows the fan-out passes as `shippedAtFrom` (PC-FE-174).
+ *  Day/week/month starts are stable within a test run, so keying the shipments
+ *  mock on them reliably distinguishes the three windowed reads. */
+const bounds = kstPeriodBounds();
+
+/** Default happy fan-out: every leg resolves. 배송 period reads (keyed by
+ *  `shippedAtFrom`) return distinct counts; the total read (no window) is 7. */
 function seedHappy() {
   m.listInventory.mockResolvedValue(wmsResult(42));
-  m.listShipments.mockImplementation((p: { size?: number } = {}) =>
-    Promise.resolve(
-      p.size === 5 ? wmsResult(7, [shipRow('sh1'), shipRow('sh2')]) : wmsResult(7),
-    ),
+  m.listShipments.mockImplementation(
+    (p: { size?: number; shippedAtFrom?: string } = {}) => {
+      if (p.size === 5) {
+        return Promise.resolve(wmsResult(7, [shipRow('sh1'), shipRow('sh2')]));
+      }
+      switch (p.shippedAtFrom) {
+        case bounds.todayStartInstant:
+          return Promise.resolve(wmsResult(2));
+        case bounds.weekStartInstant:
+          return Promise.resolve(wmsResult(5));
+        case bounds.monthStartInstant:
+          return Promise.resolve(wmsResult(6));
+        default:
+          return Promise.resolve(wmsResult(7)); // total (no window)
+      }
+    },
   );
   m.listAlerts.mockImplementation(
     (p: { acknowledged?: boolean } = {}) => {
@@ -104,8 +123,31 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
     expect(byKey.shipments.count).toBe(7);
     expect(byKey.alerts).toBeUndefined();
 
+    // 재고 is a point-in-time LEVEL → no period breakdown (PC-FE-174).
+    expect(byKey.inventory.period).toBeNull();
+    // 배송 is a FLOW → 오늘/주간/월간 period-to-date + 전체 total.
+    expect(byKey.shipments.period).toEqual({ today: 2, week: 5, month: 6 });
+
     // Counts derive from a page=0,size=1 read (totalElements only).
     expect(m.listInventory).toHaveBeenCalledWith({ page: 0, size: 1 });
+    // The three 배송 windowed reads carry the today/week/month `shippedAtFrom`
+    // bounds + a `shippedAtTo` upper bound (a live `now`, so only its presence
+    // is asserted — the day/week/month starts are stable and exact).
+    const windowed = m.listShipments.mock.calls
+      .map((c) => c[0])
+      .filter((a) => a?.shippedAtFrom);
+    expect(windowed).toHaveLength(3);
+    expect(new Set(windowed.map((a) => a.shippedAtFrom))).toEqual(
+      new Set([
+        bounds.todayStartInstant,
+        bounds.weekStartInstant,
+        bounds.monthStartInstant,
+      ]),
+    );
+    for (const a of windowed) {
+      expect(typeof a.shippedAtTo).toBe('string');
+      expect(a).toMatchObject({ page: 0, size: 1 });
+    }
 
     // No no-filter total-alerts fan-out leg — alerts are surfaced only by the
     // ack distribution, whose two legs both carry an `acknowledged` filter.
@@ -176,6 +218,37 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
     expect(state.recentShipmentsStatus).toBe('degraded');
     // The shipments COUNT leg (size=1) still resolved.
     expect(state.counts.find((c) => c.key === 'shipments')!.count).toBe(7);
+  });
+
+  it('a degraded 배송 period sub-read → that bucket null, tile stays ok on the total', async () => {
+    seedHappy();
+    // The 오늘 window read 503s; the total + week + month reads still resolve.
+    m.listShipments.mockImplementation(
+      (p: { size?: number; shippedAtFrom?: string } = {}) => {
+        if (p.size === 5) {
+          return Promise.resolve(wmsResult(7, [shipRow('sh1')]));
+        }
+        if (p.shippedAtFrom === bounds.todayStartInstant) {
+          return Promise.reject(
+            new WmsUnavailableError('timeout', 'TIMEOUT', 'slow'),
+          );
+        }
+        if (p.shippedAtFrom === bounds.weekStartInstant) {
+          return Promise.resolve(wmsResult(5));
+        }
+        if (p.shippedAtFrom === bounds.monthStartInstant) {
+          return Promise.resolve(wmsResult(6));
+        }
+        return Promise.resolve(wmsResult(7)); // total
+      },
+    );
+
+    const state = await getWmsOverviewState(true);
+    const ship = state.counts.find((c) => c.key === 'shipments')!;
+    // Total read resolved → tile ok; only the 오늘 bucket is null.
+    expect(ship.status).toBe('ok');
+    expect(ship.count).toBe(7);
+    expect(ship.period).toEqual({ today: null, week: 5, month: 6 });
   });
 
   it('401 in any leg → whole-session redirect(/login) (not a per-cell degrade)', async () => {
