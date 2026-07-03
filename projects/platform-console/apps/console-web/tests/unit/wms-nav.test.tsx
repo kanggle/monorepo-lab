@@ -78,7 +78,7 @@ describe('wms nav — additive, does not disturb the catalog routing (FE-001/FE-
       { wrapper: wrapper() },
     );
     expect(
-      screen.getByRole('heading', { name: 'WMS 운영' }),
+      screen.getByRole('heading', { name: 'WMS 개요' }),
     ).toBeInTheDocument();
     // The empty seeded pages render their empty states (no crash).
     expect(screen.getByTestId('wms-inv-empty')).toBeInTheDocument();

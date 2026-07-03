@@ -125,7 +125,7 @@ export function ScmOpsScreen({
   return (
     <section aria-labelledby="scm-heading">
       <h1 id="scm-heading" className="mb-2 text-2xl font-semibold">
-        SCM 운영
+        SCM 개요
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
         조달(발주) 조회 · 재고 가시성 (읽기 전용). scm 운영 표면을 콘솔

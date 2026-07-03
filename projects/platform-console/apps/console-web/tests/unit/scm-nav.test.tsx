@@ -88,7 +88,7 @@ describe('scm nav — additive, does not disturb catalog routing (FE-001/002/007
       { wrapper: wrapper() },
     );
     expect(
-      screen.getByRole('heading', { name: 'SCM 운영' }),
+      screen.getByRole('heading', { name: 'SCM 개요' }),
     ).toBeInTheDocument();
     // The empty seeded pages render their empty states (no crash).
     expect(screen.getByTestId('scm-po-empty')).toBeInTheDocument();
