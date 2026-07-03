@@ -1,6 +1,8 @@
 package com.example.auth.infrastructure.client;
 
 import com.example.auth.application.exception.AccountServiceUnavailableException;
+import com.example.auth.application.exception.SignupEmailConflictException;
+import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
@@ -157,6 +159,50 @@ public class AccountServiceClient implements AccountServicePort {
     private <T> T callResilient(Supplier<T> call) {
         return CircuitBreaker.decorateSupplier(circuitBreaker,
                 Retry.decorateSupplier(retry, call)).get();
+    }
+
+    /**
+     * TASK-BE-470-fix-001: server-side proxy for the browser signup page. Calls the
+     * <b>public</b> {@code POST /api/accounts/signup} (no bearer token) and maps the
+     * account-api error contract to typed exceptions the {@code /signup} controller
+     * renders. Not wrapped in the retry/circuit-breaker pipeline: signup is a
+     * user-driven, non-idempotent write, so a blind retry could double-create; the
+     * caller shows an inline error and the user retries deliberately.
+     */
+    @Override
+    public void signup(String email, String password, String displayName) {
+        Map<String, String> body = new java.util.HashMap<>();
+        body.put("email", email);
+        body.put("password", password);
+        if (displayName != null && !displayName.isBlank()) {
+            body.put("displayName", displayName);
+        }
+        try {
+            restClient().post()
+                    .uri("/api/accounts/signup")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException e) {
+            int status = e.getStatusCode().value();
+            if (status == 409) {
+                throw new SignupEmailConflictException("Email already registered");
+            }
+            if (status == 400 || status == 422) {
+                throw new SignupInvalidException("Signup validation failed");
+            }
+            // 429 (rate limit) or any other 4xx from the public endpoint: treat as a
+            // transient failure so the page shows the generic "try again" message
+            // rather than misreporting it as a validation problem.
+            log.warn("Signup proxy got client error {} from account-service", e.getStatusCode());
+            throw new AccountServiceUnavailableException("Signup temporarily unavailable", e);
+        } catch (RuntimeException e) {
+            log.error("Signup proxy failed: msg={} type={} cause={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
+            throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
     }
 
     @Override
