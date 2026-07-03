@@ -4,9 +4,11 @@ interface ToggleProps {
   checked: boolean;
   disabled: boolean;
   onChange: (checked: boolean) => void;
+  /** Bottom divider line. Defaults to true; pass false to butt against a following section. */
+  divider?: boolean;
 }
 
-export function SettingToggle({ label, description, checked, disabled, onChange }: ToggleProps) {
+export function SettingToggle({ label, description, checked, disabled, onChange, divider = true }: ToggleProps) {
   return (
     <div
       style={{
@@ -14,7 +16,7 @@ export function SettingToggle({ label, description, checked, disabled, onChange 
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 'var(--space-4) 0',
-        borderBottom: '1px solid var(--color-border-light)',
+        borderBottom: divider ? '1px solid var(--color-border-light)' : 'none',
       }}
     >
       <div>

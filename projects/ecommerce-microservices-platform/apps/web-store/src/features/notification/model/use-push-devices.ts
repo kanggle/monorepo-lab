@@ -30,8 +30,27 @@ export function usePushDevices() {
 
   const removal = useMutation({
     mutationFn: (endpoint: string) => deletePushSubscription(endpoint),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: notificationKeys.pushDevices() }),
+    onSuccess: async (_data, endpoint) => {
+      // If the removed device IS this browser, also tear down its Web Push
+      // subscription and invalidate the shared subscription state so the opt-in
+      // button (usePushSubscription) flips back to "받기" without a reload.
+      // Re-read the live subscription (not the possibly-stale currentEndpoint)
+      // so a just-subscribed device is matched correctly.
+      if (isPushSupported()) {
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          const subscription = await registration.pushManager.getSubscription();
+          if (subscription && subscription.endpoint === endpoint) {
+            await subscription.unsubscribe();
+            setCurrentEndpoint(null);
+          }
+        } catch {
+          /* browser unsubscribe failed — server record is already gone, ignore */
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: notificationKeys.pushDevices() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.pushSubscription() });
+    },
   });
 
   return {

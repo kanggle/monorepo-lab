@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   isPushSupported,
   registerServiceWorker,
@@ -36,7 +36,6 @@ export function usePushSubscription(): UsePushSubscriptionResult {
   const queryClient = useQueryClient();
   const [supported, setSupported] = useState(false);
   const [permission, setPermission] = useState<PushPermission>('unsupported');
-  const [subscribed, setSubscribed] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,15 +47,20 @@ export function usePushSubscription(): UsePushSubscriptionResult {
     }
     setSupported(true);
     setPermission(Notification.permission as PushPermission);
-
-    // Reflect an already-active subscription for this browser, if any.
-    navigator.serviceWorker.ready
-      .then((registration) => registration.pushManager.getSubscription())
-      .then((subscription) => setSubscribed(subscription !== null))
-      .catch(() => {
-        /* no active service worker yet — leave subscribed=false */
-      });
   }, []);
+
+  // `subscribed` is a SHARED query (not local state) so a "해지" performed in the
+  // device list (which invalidates this key after tearing down the browser
+  // subscription) flips the opt-in button back to "받기" without a reload.
+  const { data: subscribed = false } = useQuery({
+    queryKey: notificationKeys.pushSubscription(),
+    queryFn: async () => {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      return subscription !== null;
+    },
+    enabled: supported,
+  });
 
   const subscribe = useCallback(async () => {
     setError(null);
@@ -83,7 +87,7 @@ export function usePushSubscription(): UsePushSubscriptionResult {
           auth: json.keys?.auth ?? '',
         },
       });
-      setSubscribed(true);
+      queryClient.setQueryData(notificationKeys.pushSubscription(), true);
       // Reflect the newly-registered device in the "push devices" list (TASK-FE-085-fix-001).
       queryClient.invalidateQueries({ queryKey: notificationKeys.pushDevices() });
     } catch {
@@ -104,7 +108,7 @@ export function usePushSubscription(): UsePushSubscriptionResult {
         await deletePushSubscription(subscription.endpoint);
         await subscription.unsubscribe();
       }
-      setSubscribed(false);
+      queryClient.setQueryData(notificationKeys.pushSubscription(), false);
       // Drop the removed device from the "push devices" list (TASK-FE-085-fix-001).
       queryClient.invalidateQueries({ queryKey: notificationKeys.pushDevices() });
     } catch {
