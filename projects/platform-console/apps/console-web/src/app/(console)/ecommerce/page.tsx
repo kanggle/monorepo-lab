@@ -24,10 +24,10 @@ export const dynamic = 'force-dynamic';
  * TASK-PC-FE-156): per-area entity counts (each card is the quick-launch link
  * to that area — supersedes the PC-FE-155 plain grid, back-compat testids
  * retained), order-status distribution, top-5 product/seller ranking charts
- * (TASK-PC-FE-170), and recent orders + sellers. The snapshot is a console-web
+ * (TASK-PC-FE-172), and recent orders + sellers. The snapshot is a console-web
  * DIRECT fan-out over the existing ecommerce list/summary/insights endpoints
  * (ADR-MONO-017 D3.B — no console-bff leg). Per-area/leg degrade is cell-local;
- * a 401 in any leg triggers a whole-session re-login. (TASK-PC-FE-170 removed
+ * a 401 in any leg triggers a whole-session re-login. (TASK-PC-FE-172 removed
  * the former 도메인 상태 DomainHealthCard block — the per-area service-status
  * dots on each count card supersede it.)
  *
@@ -126,7 +126,7 @@ export default async function EcommercePage() {
 
       {/* Operator overview snapshot — per-area counts (each card = quick-launch
           link), order-status distribution, ranking charts, recent activity
-          (TASK-PC-FE-156 / TASK-PC-FE-170). */}
+          (TASK-PC-FE-156 / TASK-PC-FE-172). */}
       <EcommerceOverview state={overviewState} />
     </section>
   );

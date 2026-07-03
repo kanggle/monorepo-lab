@@ -224,7 +224,7 @@ describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
     expect(redirectMock).toHaveBeenCalledWith('/login');
   });
 
-  // ── TASK-PC-FE-170 — insights leg + seller-name overlay ──────────────────
+  // ── TASK-PC-FE-172 — insights leg + seller-name overlay ──────────────────
 
   it('insights ok → populated + seller labels overlaid from the name map', async () => {
     seedHappy();

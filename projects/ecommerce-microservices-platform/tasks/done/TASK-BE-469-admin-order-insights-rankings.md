@@ -5,7 +5,7 @@
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (single additive read endpoint; the only non-mechanical part is the two group-by aggregation queries + top-N sort)
 
-> Cross-project feature — the consuming half is **TASK-PC-FE-170** (platform-console overview charts + 도메인 상태 removal + contract). Both land in **one atomic PR** (branch `task/ecom-overview-charts`). This task is the producer half.
+> Cross-project feature — the consuming half is **TASK-PC-FE-172** (platform-console overview charts + 도메인 상태 removal + contract). Both land in **one atomic PR** (branch `task/ecom-overview-charts`). This task is the producer half.
 
 ---
 
@@ -60,12 +60,12 @@ Add **`GET /api/admin/orders/insights`** on the existing `AdminOrderController` 
 
 ## Related Specs
 
-- `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.4.10 (#21 order insights) — the consumer contract updated in TASK-PC-FE-170.
+- `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.4.10 (#21 order insights) — the consumer contract updated in TASK-PC-FE-172.
 - ADR-MONO-030 Step 2/3 (tenant chokepoint + order-line seller attribution — `OrderItem.sellerId`), TASK-BE-468 (sibling period-summary reads on the same controller).
 
 ## Related Contracts
 
-- New read, added to console-integration-contract § 2.4.10 as endpoint #21 (`GET /admin/orders/insights`) — see TASK-PC-FE-170.
+- New read, added to console-integration-contract § 2.4.10 as endpoint #21 (`GET /admin/orders/insights`) — see TASK-PC-FE-172.
 
 ## Edge Cases
 
@@ -78,5 +78,5 @@ Add **`GET /api/admin/orders/insights`** on the existing `AdminOrderController` 
 ## Failure Scenarios
 
 - **Missing `TenantContext`** — same as sibling reads (gateway `TenantClaimValidator` rejects a blank `tenant_id` before the controller; the aggregation never runs tenant-less).
-- **DB unavailable** — the aggregation query throws; `GlobalExceptionHandler` maps it to the standard `503`/`500` envelope. The console treats a non-200 insights leg as a degraded chart panel ("데이터를 불러올 수 없습니다"), never blanks the section (TASK-PC-FE-170).
+- **DB unavailable** — the aggregation query throws; `GlobalExceptionHandler` maps it to the standard `503`/`500` envelope. The console treats a non-200 insights leg as a degraded chart panel ("데이터를 불러올 수 없습니다"), never blanks the section (TASK-PC-FE-172).
 - **Large tenant (many products/sellers)** — the aggregation fetches all groups then sorts in-memory for the two orderings; acceptable at demo scale. A future push-down (`ORDER BY … LIMIT` per metric) is noted but not required here.

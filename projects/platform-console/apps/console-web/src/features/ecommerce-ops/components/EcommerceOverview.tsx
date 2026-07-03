@@ -185,7 +185,7 @@ export function EcommerceOverview({
         </dl>
       </div>
 
-      {/* Sales rankings — top-5 product/seller charts (TASK-PC-FE-170). */}
+      {/* Sales rankings — top-5 product/seller charts (TASK-PC-FE-172). */}
       <div className="mb-8">
         <h3 className="mb-3 text-sm font-semibold text-foreground">판매 순위</h3>
         <div className="grid gap-6 md:grid-cols-2">

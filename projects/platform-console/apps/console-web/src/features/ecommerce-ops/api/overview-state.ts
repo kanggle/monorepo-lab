@@ -70,7 +70,7 @@ export interface OrderStatusCount {
 }
 
 /**
- * The four top-5 rankings surfaced by the 판매 순위 charts (TASK-PC-FE-170).
+ * The four top-5 rankings surfaced by the 판매 순위 charts (TASK-PC-FE-172).
  * Product rankings carry the product name as `label`; seller rankings have the
  * raw `sellerId` label OVERLAID with the resolved `displayName` (falling back to
  * the id when the name leg degraded — never blank).

@@ -2600,7 +2600,7 @@ scope, no § 3 row — attestation count stays **16**).
   tenant chokepoint as each area's list read; the console degrades a non-200
   summary cell to "점검 필요"/"권한 없음" (never blanks the section).
 
-  **Operator-overview ranking insights (#21) — TASK-BE-469 / TASK-PC-FE-170**:
+  **Operator-overview ranking insights (#21) — TASK-BE-469 / TASK-PC-FE-172**:
   a single `GET /admin/orders/insights` read on `order-service` returns four
   **top-5 rankings** derived from the order line-items, consumed by the 운영 개요
   as horizontal bar charts (상품별 주문횟수 / 상품별 매출 / 셀러별 주문횟수 /

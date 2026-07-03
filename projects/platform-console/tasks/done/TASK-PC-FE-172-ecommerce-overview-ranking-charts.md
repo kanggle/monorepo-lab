@@ -1,4 +1,4 @@
-# TASK-PC-FE-170 — E-Commerce 개요: remove 도메인 상태 block + add 4 ranking charts (products/sellers × order-count/revenue)
+# TASK-PC-FE-172 — E-Commerce 개요: remove 도메인 상태 block + add 4 ranking charts (products/sellers × order-count/revenue)
 
 **Status:** done
 

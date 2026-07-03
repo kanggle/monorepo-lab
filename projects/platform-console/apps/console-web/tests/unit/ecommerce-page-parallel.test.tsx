@@ -5,7 +5,7 @@ import { ApiError } from '@/shared/api/errors';
 /**
  * TASK-PC-FE-118 originally parallelised the `/ecommerce` SSR fetch by firing
  * the public domain-health fan-out up-front, concurrently with the eligibility
- * pre-flight. TASK-PC-FE-170 REMOVED the domain-health leg from this page (the
+ * pre-flight. TASK-PC-FE-172 REMOVED the domain-health leg from this page (the
  * per-area service-status dots on each count card supersede the old
  * `DomainHealthCard`), so there is no longer a second up-front leg to race.
  *
@@ -61,7 +61,7 @@ beforeEach(() => {
   redirect.mockClear();
 });
 
-describe('EcommercePage — SSR gating (TASK-PC-FE-118 / TASK-PC-FE-170)', () => {
+describe('EcommercePage — SSR gating (TASK-PC-FE-118 / TASK-PC-FE-172)', () => {
   it('fires the catalog eligibility pre-flight on entry', () => {
     getCatalog.mockReturnValue(new Promise(() => {}));
 

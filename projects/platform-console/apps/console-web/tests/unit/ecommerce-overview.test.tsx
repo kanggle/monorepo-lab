@@ -175,7 +175,7 @@ describe('EcommerceOverview (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
     expect(screen.getByTestId('ecommerce-recent-orders')).toHaveTextContent('점검 필요');
   });
 
-  // ── TASK-PC-FE-170 — the four ranking charts ─────────────────────────────
+  // ── TASK-PC-FE-172 — the four ranking charts ─────────────────────────────
 
   it('renders the four ranking charts with titles, rows, and formatted values', () => {
     render(<EcommerceOverview state={baseState()} />);
