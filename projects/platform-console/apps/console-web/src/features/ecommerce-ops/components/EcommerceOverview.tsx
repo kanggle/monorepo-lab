@@ -9,6 +9,7 @@ import type {
 } from '../api/overview-state';
 import { sellerStatusTone } from '../api/seller-types';
 import { orderStatusTone, type OrderStatus } from '../api/order-types';
+import { RankingBarChart } from './RankingBarChart';
 
 /**
  * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156;
@@ -182,6 +183,41 @@ export function EcommerceOverview({
             </div>
           ))}
         </dl>
+      </div>
+
+      {/* Sales rankings — top-5 product/seller charts (TASK-PC-FE-170). */}
+      <div className="mb-8">
+        <h3 className="mb-3 text-sm font-semibold text-foreground">판매 순위</h3>
+        <div className="grid gap-6 md:grid-cols-2">
+          <RankingBarChart
+            title="상품별 주문횟수"
+            entries={state.insights?.topProductsByOrderCount ?? []}
+            status={state.insightsStatus}
+            format="count"
+            testid="ecommerce-rank-products-orders"
+          />
+          <RankingBarChart
+            title="상품별 매출"
+            entries={state.insights?.topProductsByRevenue ?? []}
+            status={state.insightsStatus}
+            format="currency"
+            testid="ecommerce-rank-products-revenue"
+          />
+          <RankingBarChart
+            title="셀러별 주문횟수"
+            entries={state.insights?.topSellersByOrderCount ?? []}
+            status={state.insightsStatus}
+            format="count"
+            testid="ecommerce-rank-sellers-orders"
+          />
+          <RankingBarChart
+            title="셀러별 매출"
+            entries={state.insights?.topSellersByRevenue ?? []}
+            status={state.insightsStatus}
+            format="currency"
+            testid="ecommerce-rank-sellers-revenue"
+          />
+        </div>
       </div>
 
       {/* Recent activity — orders + sellers. */}

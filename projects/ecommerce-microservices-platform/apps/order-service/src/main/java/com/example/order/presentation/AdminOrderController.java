@@ -3,6 +3,7 @@ package com.example.order.presentation;
 import com.example.order.application.dto.AdminOrderDetail;
 import com.example.order.application.dto.AdminOrderStatusChangeResult;
 import com.example.order.application.dto.AdminOrderSummary;
+import com.example.order.application.dto.OrderInsights;
 import com.example.order.application.service.AdminOrderStatusService;
 import com.example.order.application.service.OrderQueryService;
 import com.example.common.page.PageQuery;
@@ -47,6 +48,11 @@ public class AdminOrderController {
     @GetMapping("/summary")
     public ResponseEntity<PeriodSummary> getOrderSummary() {
         return ResponseEntity.ok(orderQueryService.getPeriodSummary());
+    }
+
+    @GetMapping("/insights")
+    public ResponseEntity<OrderInsights> getInsights() {
+        return ResponseEntity.ok(orderQueryService.getInsights());
     }
 
     @GetMapping

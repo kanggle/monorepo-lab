@@ -22,6 +22,7 @@ vi.mock('next/navigation', () => ({
 const m = vi.hoisted(() => ({
   getProductsSummary: vi.fn(),
   getOrdersSummary: vi.fn(),
+  getOrderInsights: vi.fn(),
   getUsersSummary: vi.fn(),
   getPromotionsSummary: vi.fn(),
   getShippingsSummary: vi.fn(),
@@ -33,6 +34,7 @@ const m = vi.hoisted(() => ({
 vi.mock('@/features/ecommerce-ops/api/products-api', () => ({ getProductsSummary: m.getProductsSummary }));
 vi.mock('@/features/ecommerce-ops/api/orders-api', () => ({
   getOrdersSummary: m.getOrdersSummary,
+  getOrderInsights: m.getOrderInsights,
   listOrders: m.listOrders,
 }));
 vi.mock('@/features/ecommerce-ops/api/users-api', () => ({ getUsersSummary: m.getUsersSummary }));
@@ -69,11 +71,20 @@ const orderRow = (orderId: string) => ({
   firstItemName: '상품A',
   createdAt: '2026-07-01T00:00:00Z',
 });
-const sellerRow = (sellerId: string) => ({
+const sellerRow = (sellerId: string, displayName = '셀러A') => ({
   sellerId,
-  displayName: '셀러A',
+  displayName,
   status: 'ACTIVE',
   createdAt: '2026-07-01T00:00:00Z',
+});
+
+/** Insights fixture — seller rankings carry the RAW id as label (the overlay
+ *  in the fan-out replaces it with the resolved displayName when available). */
+const insightsFixture = () => ({
+  topProductsByOrderCount: [{ id: 'p1', label: '상품P', value: 50 }],
+  topProductsByRevenue: [{ id: 'p1', label: '상품P', value: 500000 }],
+  topSellersByOrderCount: [{ id: 's1', label: 's1', value: 40 }],
+  topSellersByRevenue: [{ id: 's1', label: 's1', value: 400000 }],
 });
 
 /** Default happy fan-out: every leg resolves. */
@@ -85,9 +96,16 @@ function seedHappy() {
   m.getSellersSummary.mockResolvedValue(summary(0, 2, 9, 90));
   m.getTemplatesSummary.mockResolvedValue(summary(0, 3, 55, 550));
   m.getOrdersSummary.mockResolvedValue(summary(5, 25, 7, 70));
+  m.getOrderInsights.mockResolvedValue(insightsFixture());
+  // size===5 → the recent-5 sellers cell; size===100 → the top-volume
+  // name-map cell (sellerId → displayName), with s1 named "셀러 원".
   m.listSellers.mockImplementation((p: { size?: number } = {}) =>
     Promise.resolve(
-      p.size === 5 ? list(9, [sellerRow('s1'), sellerRow('s2')]) : list(9),
+      p.size === 5
+        ? list(9, [sellerRow('s1'), sellerRow('s2')])
+        : p.size === 100
+          ? list(2, [sellerRow('s1', '셀러 원'), sellerRow('s2', '셀러 투')])
+          : list(9),
     ),
   );
   m.listOrders.mockImplementation(
@@ -204,5 +222,67 @@ describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
       'REDIRECT:/login',
     );
     expect(redirectMock).toHaveBeenCalledWith('/login');
+  });
+
+  // ── TASK-PC-FE-170 — insights leg + seller-name overlay ──────────────────
+
+  it('insights ok → populated + seller labels overlaid from the name map', async () => {
+    seedHappy();
+    const state = await getEcommerceOverviewState(true);
+
+    expect(state.insightsStatus).toBe('ok');
+    expect(state.insights).not.toBeNull();
+    // Product rankings pass through unchanged.
+    expect(state.insights!.topProductsByOrderCount).toEqual([
+      { id: 'p1', label: '상품P', value: 50 },
+    ]);
+    // Seller rankings: raw id label 's1' overlaid with the resolved displayName.
+    expect(state.insights!.topSellersByOrderCount[0].label).toBe('셀러 원');
+    expect(state.insights!.topSellersByOrderCount[0].value).toBe(40);
+    expect(state.insights!.topSellersByRevenue[0].label).toBe('셀러 원');
+    // A dedicated size=100 seller fetch backs the name map (not the recent-5).
+    expect(m.listSellers).toHaveBeenCalledWith({ page: 0, size: 100 });
+  });
+
+  it('insights 403 → insightsStatus forbidden, insights null (charts unaffected)', async () => {
+    seedHappy();
+    m.getOrderInsights.mockRejectedValue(new ApiError(403, 'ACCESS_DENIED', 'no'));
+
+    const state = await getEcommerceOverviewState(true);
+    expect(state.insightsStatus).toBe('forbidden');
+    expect(state.insights).toBeNull();
+    // The rest of the snapshot still resolves.
+    expect(state.counts.find((c) => c.key === 'products')!.status).toBe('ok');
+  });
+
+  it('insights 503 → insightsStatus degraded, insights null', async () => {
+    seedHappy();
+    m.getOrderInsights.mockRejectedValue(
+      new EcommerceUnavailableError('downstream', 'ECOMMERCE_UNAVAILABLE', 'down'),
+    );
+
+    const state = await getEcommerceOverviewState(true);
+    expect(state.insightsStatus).toBe('degraded');
+    expect(state.insights).toBeNull();
+  });
+
+  it('seller-name leg degraded → seller labels fall back to the raw id (never blank)', async () => {
+    seedHappy();
+    // The size=100 name-map leg fails; the recent-5 (size=5) leg still resolves.
+    m.listSellers.mockImplementation((p: { size?: number } = {}) => {
+      if (p.size === 100)
+        return Promise.reject(
+          new EcommerceUnavailableError('downstream', 'ECOMMERCE_UNAVAILABLE', 'down'),
+        );
+      return Promise.resolve(list(9, [sellerRow('s1'), sellerRow('s2')]));
+    });
+
+    const state = await getEcommerceOverviewState(true);
+    expect(state.insightsStatus).toBe('ok');
+    // No name map → the raw sellerId stays the label (never blank).
+    expect(state.insights!.topSellersByOrderCount[0].label).toBe('s1');
+    expect(state.insights!.topSellersByRevenue[0].label).toBe('s1');
+    // The recent-sellers panel is unaffected by the name-map degrade.
+    expect(state.recentSellersStatus).toBe('ok');
   });
 });

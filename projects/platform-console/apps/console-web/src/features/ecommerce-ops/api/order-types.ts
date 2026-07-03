@@ -216,6 +216,29 @@ export const OrderAreaSummarySchema = z
 export type OrderAreaSummary = z.infer<typeof OrderAreaSummarySchema>;
 
 // ===========================================================================
+// INSIGHTS (TASK-PC-FE-170 — top-5 product/seller rankings)
+// ===========================================================================
+
+/** One ranked entry in an insights ranking — `{ id, label, value }`.
+ *  `value` is the metric (order count or revenue), non-negative. `.passthrough()`. */
+export const RankedEntrySchema = z
+  .object({ id: z.string(), label: z.string(), value: z.number().nonnegative() })
+  .passthrough();
+export type RankedEntry = z.infer<typeof RankedEntrySchema>;
+
+/** GET /admin/orders/insights — top-5 product/seller rankings (TASK-PC-FE-170).
+ *  Each ranking is a `RankedEntry[]`; `.passthrough()` keeps the read tolerant. */
+export const OrderInsightsSchema = z
+  .object({
+    topProductsByOrderCount: z.array(RankedEntrySchema),
+    topProductsByRevenue: z.array(RankedEntrySchema),
+    topSellersByOrderCount: z.array(RankedEntrySchema),
+    topSellersByRevenue: z.array(RankedEntrySchema),
+  })
+  .passthrough();
+export type OrderInsights = z.infer<typeof OrderInsightsSchema>;
+
+// ===========================================================================
 // List query params + pagination defaults
 // ===========================================================================
 

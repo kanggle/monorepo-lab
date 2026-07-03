@@ -3,27 +3,24 @@ import { render } from '@testing-library/react';
 import { ApiError } from '@/shared/api/errors';
 
 /**
- * TASK-PC-FE-118 — `/ecommerce` SSR fetch is parallelised: the public
- * domain-health fan-out is fired up-front, concurrently with the eligibility
- * pre-flight (`getCatalog`), instead of sequentially in the eligible branch.
+ * TASK-PC-FE-118 originally parallelised the `/ecommerce` SSR fetch by firing
+ * the public domain-health fan-out up-front, concurrently with the eligibility
+ * pre-flight. TASK-PC-FE-170 REMOVED the domain-health leg from this page (the
+ * per-area service-status dots on each count card supersede the old
+ * `DomainHealthCard`), so there is no longer a second up-front leg to race.
  *
- * Same concurrency proof as TASK-PC-FE-117: the async page body runs
- * synchronously to its first `await`, by which point BOTH `getDomainHealthState`
- * and `getCatalog` must have been invoked. The old waterfall would only call
- * `getDomainHealthState` after the catalog resolved.
+ * This suite now pins the surviving SSR contract: the eligibility pre-flight
+ * (`getCatalog`) fires, and only on the eligible branch is the operator
+ * overview fan-out (`getEcommerceOverviewState`) invoked — the gated branches
+ * (not-eligible / registry-degraded / 401) render unchanged and never call it.
  */
 
 const getCatalog = vi.fn();
-const getDomainHealthState = vi.fn();
 const redirect = vi.fn((path: string) => {
   throw new Error(`NEXT_REDIRECT:${path}`);
 });
 
 vi.mock('@/features/catalog', () => ({ getCatalog: () => getCatalog() }));
-vi.mock('@/features/domain-health', () => ({
-  getDomainHealthState: () => getDomainHealthState(),
-  DomainHealthCard: () => <div data-testid="ecommerce-health-card" />,
-}));
 vi.mock('next/navigation', () => ({ redirect: (p: string) => redirect(p) }));
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
@@ -31,8 +28,8 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-// Overview snapshot is unit-tested elsewhere; stub it so this concurrency test
-// stays focused on the health/eligibility parallel-fetch proof.
+// Overview snapshot is unit-tested elsewhere; stub it so this suite stays
+// focused on the page's eligibility gating.
 const getEcommerceOverviewState = vi.fn().mockResolvedValue({
   notEligible: false,
   counts: [],
@@ -41,6 +38,8 @@ const getEcommerceOverviewState = vi.fn().mockResolvedValue({
   recentOrdersStatus: 'ok',
   recentSellers: null,
   recentSellersStatus: 'ok',
+  insights: null,
+  insightsStatus: 'ok',
 });
 vi.mock('@/features/ecommerce-ops', () => ({
   getEcommerceOverviewState: () => getEcommerceOverviewState(),
@@ -55,67 +54,56 @@ const ELIGIBLE_CATALOG = {
     { productKey: 'ecommerce', available: true, tenants: ['shop-a'] },
   ],
 };
-const HEALTH_WITH_ECOMMERCE = {
-  health: { cards: [{ domain: 'ecommerce', status: 'ok' }] },
-  noTenant: false,
-  unauthorized: false,
-  bffUnavailable: false,
-};
 
 beforeEach(() => {
   getCatalog.mockReset();
-  getDomainHealthState.mockReset();
+  getEcommerceOverviewState.mockClear();
   redirect.mockClear();
 });
 
-describe('EcommercePage — parallel SSR fetch (TASK-PC-FE-118)', () => {
-  it('fires domain-health concurrently with the catalog eligibility pre-flight (no waterfall)', () => {
+describe('EcommercePage — SSR gating (TASK-PC-FE-118 / TASK-PC-FE-170)', () => {
+  it('fires the catalog eligibility pre-flight on entry', () => {
     getCatalog.mockReturnValue(new Promise(() => {}));
-    getDomainHealthState.mockReturnValue(new Promise(() => {}));
 
     void EcommercePage();
 
     expect(getCatalog).toHaveBeenCalledTimes(1);
-    // The waterfall regression would leave this at 0 until catalog resolves.
-    expect(getDomainHealthState).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the ecommerce health card on the eligible path', async () => {
+  it('renders the overview on the eligible path (no domain-health leg)', async () => {
     getCatalog.mockResolvedValue(ELIGIBLE_CATALOG);
-    getDomainHealthState.mockResolvedValue(HEALTH_WITH_ECOMMERCE);
 
     const ui = await EcommercePage();
     const { getByTestId } = render(ui);
     expect(getByTestId('ecommerce-section')).toBeInTheDocument();
-    expect(getByTestId('ecommerce-health-card')).toBeInTheDocument();
+    expect(getByTestId('ecommerce-overview')).toBeInTheDocument();
+    expect(getEcommerceOverviewState).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the not-eligible gate unchanged; the speculative health promise is ignored', async () => {
+  it('renders the not-eligible gate unchanged; the overview fan-out is not fired', async () => {
     getCatalog.mockResolvedValue({
       degraded: false,
       products: [{ productKey: 'ecommerce', available: false, tenants: [] }],
     });
-    getDomainHealthState.mockResolvedValue(HEALTH_WITH_ECOMMERCE);
 
     const ui = await EcommercePage();
     const { getByTestId, queryByTestId } = render(ui);
     expect(getByTestId('ecommerce-not-eligible')).toBeInTheDocument();
-    expect(queryByTestId('ecommerce-health-card')).toBeNull();
+    expect(queryByTestId('ecommerce-overview')).toBeNull();
+    expect(getEcommerceOverviewState).not.toHaveBeenCalled();
   });
 
   it('renders the registry-degraded gate unchanged', async () => {
     getCatalog.mockResolvedValue({ degraded: true, products: [] });
-    getDomainHealthState.mockResolvedValue(HEALTH_WITH_ECOMMERCE);
 
     const ui = await EcommercePage();
     const { getByTestId, queryByTestId } = render(ui);
     expect(getByTestId('ecommerce-degraded')).toBeInTheDocument();
-    expect(queryByTestId('ecommerce-health-card')).toBeNull();
+    expect(queryByTestId('ecommerce-overview')).toBeNull();
   });
 
-  it('redirects to /login on a catalog 401; the un-awaited health promise raises no unhandled rejection', async () => {
+  it('redirects to /login on a catalog 401', async () => {
     getCatalog.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'nope'));
-    getDomainHealthState.mockReturnValue(Promise.reject(new Error('ignored')));
 
     await expect(EcommercePage()).rejects.toThrow('NEXT_REDIRECT:/login');
     expect(redirect).toHaveBeenCalledWith('/login');

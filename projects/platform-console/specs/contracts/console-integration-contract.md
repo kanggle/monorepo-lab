@@ -2574,6 +2574,7 @@ scope, no § 3 row — attestation count stays **16**).
   | 18 | products period summary | `GET /admin/products/summary` | read |
   | 19 | sellers period summary | `GET /admin/sellers/summary` | read |
   | 20 | orders period summary | `GET /admin/orders/summary` | read |
+  | 21 | order insights (rankings) | `GET /admin/orders/insights` | read |
 
   **Operator-overview period summaries (#18–20 here + the per-area equivalents
   in §§ 2.4.10.2–.6) — TASK-BE-468 / TASK-PC-FE-164**: each operator area exposes
@@ -2598,6 +2599,34 @@ scope, no § 3 row — attestation count stays **16**).
   `/notifications/templates/summary` (notification-service). Same admission +
   tenant chokepoint as each area's list read; the console degrades a non-200
   summary cell to "점검 필요"/"권한 없음" (never blanks the section).
+
+  **Operator-overview ranking insights (#21) — TASK-BE-469 / TASK-PC-FE-170**:
+  a single `GET /admin/orders/insights` read on `order-service` returns four
+  **top-5 rankings** derived from the order line-items, consumed by the 운영 개요
+  as horizontal bar charts (상품별 주문횟수 / 상품별 매출 / 셀러별 주문횟수 /
+  셀러별 매출). Response shape (tenant-scoped):
+
+  ```json
+  {
+    "topProductsByOrderCount": [ { "id": "prod-1", "label": "베이직 티셔츠", "value": 42 } ],
+    "topProductsByRevenue":    [ { "id": "prod-1", "label": "베이직 티셔츠", "value": 1284000 } ],
+    "topSellersByOrderCount":  [ { "id": "seller-1", "label": "seller-1", "value": 30 } ],
+    "topSellersByRevenue":     [ { "id": "seller-1", "label": "seller-1", "value": 980000 } ]
+  }
+  ```
+
+  Each array holds ≤ 5 entries sorted by `value` DESC (ties by `id` ASC). `value`
+  is a non-negative `long`: order-count = `COUNT(DISTINCT order)`, revenue =
+  `SUM(unit_price × quantity)` over that product's / seller's lines. **CANCELLED
+  orders are excluded** from both metrics. Product `label` = the line's
+  denormalized `product_name`; seller `label` = the raw `seller_id` (order-service
+  holds no seller display name — the console overlays the product-service seller
+  `displayName` via the seller list, falling back to this id). Same admission +
+  `WHERE tenant_id` chokepoint as the sibling `/admin/orders/**` reads; the console
+  degrades a non-200 insights leg to a per-chart "데이터를 불러올 수 없습니다" /
+  "권한 없음" placeholder (never blanks the section). All four rankings share one
+  source (`order_items`) so they are one endpoint on the order-line owner — no
+  product-service join (name is denormalized) and revenue lives only on the line.
 
   **Out of this binding (deferred, not silently dropped)**: seller admin
   (`AdminSellerController POST /admin/sellers`) and search reindex
