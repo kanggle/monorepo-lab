@@ -2,7 +2,7 @@
 
 > **Renumbered from PC-FE-176** (concurrent-session task-id collision — two other PC-FE-176 tasks landed in `origin/main` while this was in flight: brand-link sidebar reset #2176, operator-create password optional #2175). Content unchanged.
 
-**Status:** ready
+**Status:** review
 **Area:** platform-console / console-web · **Route:** `/wms` (개요) · **Nav:** 변경 없음
 **Follows:** PC-FE-166/170/174/175 (WMS 개요 스냅샷 시리즈). 개요 정보구조 폴리시.
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (기존 fan-out/타일 패턴 재사용 프런트 소량 변경, 신규 아키텍처 결정 없음)
