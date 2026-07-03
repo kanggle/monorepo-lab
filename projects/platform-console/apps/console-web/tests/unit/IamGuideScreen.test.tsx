@@ -5,6 +5,7 @@ import {
   SEED_ROLES,
   SCREEN_ACCESS,
   DOMAIN_ROLE_MAP,
+  OPERATOR_ONBOARDING_AXES,
   PERMISSION_KEYS,
 } from '@/features/iam-guide/data';
 import { runAxe } from '../a11y/axe-helper';
@@ -82,6 +83,24 @@ describe('IamGuideScreen', () => {
     for (const d of DOMAIN_ROLE_MAP) {
       expect(within(domainTable).getByText(d.domain)).toBeInTheDocument();
     }
+  });
+
+  it('renders the operator onboarding axes (home tenant / assignment / org_scope)', () => {
+    render(<IamGuideScreen />);
+    for (const axis of OPERATOR_ONBOARDING_AXES) {
+      const card = screen.getByTestId(
+        `iam-guide-onboarding-axis-${axis.term.replace(/\s+/g, '-')}`,
+      );
+      expect(card).toBeInTheDocument();
+      expect(within(card).getByText(axis.term)).toBeInTheDocument();
+      expect(within(card).getByText(axis.koName)).toBeInTheDocument();
+    }
+    // the three canonical axes are present, in order
+    expect(OPERATOR_ONBOARDING_AXES.map((a) => a.term)).toEqual([
+      'home tenant',
+      'tenant assignment',
+      'org_scope',
+    ]);
   });
 
   it('lists every permission key in the appendix', () => {

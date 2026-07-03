@@ -88,7 +88,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-169-iam-guide-operator-onboarding-axes.md` — IAM 개요(`/iam`)에 **운영자 온보딩 3축**(`home tenant` 원 소속 / `tenant assignment` 편입·해제 / `org_scope` 부서 subtree tri-state) 섹션 추가. 위임 체인과 도메인 롤 파생표 사이에 "부여 → 도달 범위 → 도메인 롤" 흐름을 채운다. `home tenant` 는 기존 가이드 미문서 항목이었고, 세 축 모두 이커머스 assume-tenant 운영(입점사/협력업체 온보딩)에 그대로 적용됨을 이커머스 예로 명시. data.ts `OPERATOR_ONBOARDING_AXES` + 화면 카드 그리드 + 데이터 주도 테스트. Depends on PC-FE-163/157/050.
 
 ## in-progress
 
