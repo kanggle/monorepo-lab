@@ -1,6 +1,6 @@
 # TASK-PC-FE-175 — WMS 개요의 택배/출고 조회 테이블을 출고(/wms/outbound) 페이지로 이동
 
-**Status:** ready
+**Status:** review
 **Area:** platform-console / console-web · **Route:** `/wms/outbound` (기존) · **Nav:** 변경 없음 (WMS ▸ 개요 · 재고 · 출고)
 **Follows:** TASK-PC-FE-173 (재고 조회 테이블을 개요 → 전용 페이지로 분리) — 같은 원칙을, 이번엔 **기존 출고 페이지로 이동**.
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (PC-FE-173 재고 분리의 대칭 리팩터, 신규 아키텍처 결정 없음)
