@@ -5,10 +5,12 @@ import type { WmsOverviewState } from '@/features/wms-ops';
 
 /**
  * TASK-PC-FE-166 — `WmsOverview` presentation. Per-area count tiles for the
- * operational-scale areas (재고/배송) are read-only stat tiles (NOT nav links —
- * wms is a single-route ops screen, PC-FE-168 deviation), an alert-ack
- * distribution (미확인/확인 — the sole representation of alerts, PC-FE-170),
- * and a recent-shipments glance. A non-`ok` cell renders a compact placeholder
+ * operational-scale areas (재고 — total + 저재고 sub-count PC-FE-177 / 배송 —
+ * 오늘/주간/월간/전체) are read-only stat tiles (NOT nav links — wms is a
+ * single-route ops screen, PC-FE-168 deviation) and an alert-ack distribution
+ * (미확인/확인 — the sole representation of alerts, PC-FE-170). The 최근 출고
+ * glance moved to the `WmsRecentShipments` slot (PC-FE-177; see
+ * `WmsRecentShipments.test.tsx`). A non-`ok` cell renders a compact placeholder
  * instead of a number (never blanks).
  */
 
@@ -17,7 +19,14 @@ const baseState = (
 ): WmsOverviewState => ({
   notEligible: false,
   counts: [
-    { key: 'inventory', label: '재고', count: 42, status: 'ok', period: null },
+    {
+      key: 'inventory',
+      label: '재고',
+      count: 42,
+      status: 'ok',
+      period: null,
+      lowStock: 4,
+    },
     {
       key: 'shipments',
       label: '배송',
@@ -71,9 +80,32 @@ describe('WmsOverview (TASK-PC-FE-166)', () => {
     expect(screen.getByTestId('wms-shipments-count-week')).toHaveTextContent('5');
     expect(screen.getByTestId('wms-shipments-count-month')).toHaveTextContent('6');
     expect(screen.getByTestId('wms-shipments-count')).toHaveTextContent('7');
-    // 재고 level tile: single total, no period buckets.
+    // 재고 level tile: single total + 저재고 sub-count, no period buckets.
     expect(screen.getByTestId('wms-inventory-count')).toHaveTextContent('42');
+    expect(screen.getByTestId('wms-inventory-lowstock')).toHaveTextContent('4');
     expect(screen.queryByTestId('wms-inventory-count-today')).toBeNull();
+  });
+
+  it('재고 저재고 sub-count renders "—" when the sub-read degraded (lowStock null)', () => {
+    render(
+      <WmsOverview
+        state={baseState({
+          counts: [
+            {
+              key: 'inventory',
+              label: '재고',
+              count: 42,
+              status: 'ok',
+              period: null,
+              lowStock: null,
+            },
+          ],
+        })}
+      />,
+    );
+    // Tile stays ok on its total; only the 저재고 sub-count shows "—".
+    expect(screen.getByTestId('wms-inventory-count')).toHaveTextContent('42');
+    expect(screen.getByTestId('wms-inventory-lowstock')).toHaveTextContent('—');
   });
 
   it('a null 배송 period bucket renders "—" while siblings + total render', () => {
@@ -136,7 +168,7 @@ describe('WmsOverview (TASK-PC-FE-166)', () => {
     ).toHaveAttribute('data-status', 'forbidden');
   });
 
-  it('renders the alert-ack distribution and recent shipments', () => {
+  it('renders the alert-ack distribution', () => {
     render(<WmsOverview state={baseState()} />);
     expect(
       screen.getByTestId('wms-alert-status-unacknowledged'),
@@ -144,7 +176,9 @@ describe('WmsOverview (TASK-PC-FE-166)', () => {
     expect(
       screen.getByTestId('wms-alert-status-acknowledged'),
     ).toHaveTextContent('9');
-    expect(screen.getByTestId('wms-recent-shipments')).toHaveTextContent('SHP-1');
+    // 최근 출고 is NOT rendered by WmsOverview anymore (moved to the
+    // WmsRecentShipments slot, PC-FE-177).
+    expect(screen.queryByTestId('wms-recent-shipments')).toBeNull();
   });
 
   it('a degraded alert-ack bucket renders "—", not a number', () => {
@@ -165,19 +199,5 @@ describe('WmsOverview (TASK-PC-FE-166)', () => {
     expect(
       screen.getByTestId('wms-alert-status-unacknowledged'),
     ).toHaveTextContent('—');
-  });
-
-  it('a degraded recent-shipments panel shows a placeholder, not rows', () => {
-    render(
-      <WmsOverview
-        state={baseState({
-          recentShipments: null,
-          recentShipmentsStatus: 'degraded',
-        })}
-      />,
-    );
-    expect(screen.getByTestId('wms-recent-shipments')).toHaveTextContent(
-      '점검 필요',
-    );
   });
 });

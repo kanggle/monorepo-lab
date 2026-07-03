@@ -14,11 +14,13 @@ import type {
  * a slot into the client `WmsOpsScreen`. STRICTLY READ-ONLY.
  *
  * Renders the `getWmsOverviewState` fan-out result: per-area count tiles for
- * the operational-scale areas (재고/배송), an alert-acknowledgement distribution
- * (미확인/확인) — the sole representation of alerts, which are an attention
- * signal rather than a scale area (PC-FE-170) — and a recent-shipments glance.
- * A non-`ok` cell renders a compact "점검 필요" / "권한 없음" placeholder instead
- * of a number (never blanks).
+ * the operational-scale areas (재고 — total + 저재고 attention sub-count,
+ * PC-FE-177 / 배송 — 오늘/주간/월간/전체) and an alert-acknowledgement
+ * distribution (미확인/확인) — the sole representation of alerts, an attention
+ * signal rather than a scale area (PC-FE-170). The 최근 출고 glance is a
+ * SEPARATE slot (`WmsRecentShipments`, PC-FE-177) rendered AFTER the alerts
+ * table so the page reads 규모 → 주의 → 활동. A non-`ok` cell renders a compact
+ * "점검 필요" / "권한 없음" placeholder instead of a number (never blanks).
  *
  * PER-DOMAIN DEVIATION vs ecommerce (PC-FE-168): the count tiles are NOT nav
  * links — unlike ecommerce's § 2.4.10 sub-route cards, `/wms` is a single-route
@@ -130,13 +132,34 @@ function CountTile({ area }: { area: WmsAreaCount }) {
           </span>
         </>
       ) : (
-        /* LEVEL area (재고) — single-total snapshot (no time dimension). */
-        <span
-          className="text-2xl font-semibold tabular-nums text-foreground"
-          data-testid={`wms-${area.key}-count`}
-        >
-          {area.count!.toLocaleString()}
-        </span>
+        /* LEVEL area (재고) — single-total snapshot (no time dimension) + an
+           optional 저재고 attention sub-count (PC-FE-177). */
+        <>
+          <span
+            className="text-2xl font-semibold tabular-nums text-foreground"
+            data-testid={`wms-${area.key}-count`}
+          >
+            {area.count!.toLocaleString()}
+          </span>
+          {area.lowStock !== undefined && (
+            <span
+              className={cn(
+                'text-xs',
+                area.lowStock !== null && area.lowStock > 0
+                  ? 'font-medium text-amber-600 dark:text-amber-500'
+                  : 'text-muted-foreground',
+              )}
+            >
+              저재고{' '}
+              <span
+                className="tabular-nums"
+                data-testid={`wms-${area.key}-lowstock`}
+              >
+                {area.lowStock !== null ? area.lowStock.toLocaleString() : '—'}
+              </span>
+            </span>
+          )}
+        </>
       )}
     </div>
   );
@@ -184,13 +207,29 @@ export function WmsOverview({ state }: { state: WmsOverviewState }) {
           ))}
         </dl>
       </div>
+    </section>
+  );
+}
 
-      {/* Recent activity — shipments. */}
+/**
+ * 최근 출고 (recent-shipments) glance — a passive activity glance rendered as a
+ * SEPARATE slot (PC-FE-177) so the 개요 reads 규모(counts) → 주의(알림 분포 +
+ * 알림 테이블) → 활동(최근 출고): the page passes this as `WmsOpsScreen`'s
+ * `recentActivity` slot, rendered AFTER the alerts table, so the alert
+ * distribution + table are contiguous and this passive glance sits last.
+ * Server component (no `'use client'`); fed by the same `getWmsOverviewState`.
+ */
+export function WmsRecentShipments({ state }: { state: WmsOverviewState }) {
+  if (state.notEligible) {
+    return null;
+  }
+  return (
+    <div className="mt-8">
       <RecentShipments
         rows={state.recentShipments}
         status={state.recentShipmentsStatus}
       />
-    </section>
+    </div>
   );
 }
 

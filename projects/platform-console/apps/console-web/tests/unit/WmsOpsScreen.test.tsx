@@ -77,6 +77,19 @@ describe('WmsOpsScreen — render & alerts table', () => {
     expect(screen.getByTestId('wms-alerts-table')).toBeInTheDocument();
   });
 
+  it('renders the recentActivity slot AFTER the alerts table (규모→주의→활동, PC-FE-177)', () => {
+    renderScreen({
+      recentActivity: <div data-testid="recent-activity-slot">recent</div>,
+    });
+    const alertsTable = screen.getByTestId('wms-alerts-table');
+    const recent = screen.getByTestId('recent-activity-slot');
+    // The passive activity glance follows the (attention) alerts table.
+    expect(
+      alertsTable.compareDocumentPosition(recent) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('shows the read-model-lag hint banner when lagSeconds is present', () => {
     renderScreen({ lagSeconds: 8 });
     expect(screen.getByTestId('wms-lag-hint')).toHaveTextContent(/8초/);

@@ -39,9 +39,13 @@ import { alertLabel } from './wms-ops-helpers';
  * ── SHIPMENTS MOVE (TASK-PC-FE-175) ── the 택배/출고 query table (filters +
  * pagination — unfit for a glance-overview) moved OFF this 개요 screen onto
  * the existing `/wms/outbound` 출고 page (`WmsShipmentsScreen`, below
- * `OutboundOpsScreen`). This 개요 screen keeps only the count-tile shipments
- * snapshot + 최근 출고 glance (`WmsOverview`, passed in via `overview`) and the
- * alert-acknowledge surface.
+ * `OutboundOpsScreen`). This 개요 screen keeps the overview snapshot band
+ * (`overview` slot) + the alert-acknowledge surface.
+ *
+ * ── ORDER (TASK-PC-FE-177) ── the page reads 규모 → 주의 → 활동: the overview
+ * band (counts + 알림 분포) → the alerts table → the 최근 출고 glance
+ * (`recentActivity` slot, rendered LAST so the alert distribution + table are
+ * contiguous and the passive activity glance sits at the bottom).
  */
 
 export interface WmsOpsScreenProps {
@@ -53,9 +57,20 @@ export interface WmsOpsScreenProps {
    *  passes a `<WmsOverview>` node; a server component slotted into this
    *  client screen, the RSC-idiomatic way). Absent ⇒ no snapshot band. */
   overview?: React.ReactNode;
+  /** Optional 최근 출고 (recent-activity) glance slot rendered AFTER the alerts
+   *  table (TASK-PC-FE-177 — the `<WmsRecentShipments>` server node) so the 개요
+   *  reads 규모(counts) → 주의(알림 분포 + 테이블) → 활동(최근 출고): the alert
+   *  distribution (in `overview`) sits directly above the alerts table, and
+   *  this passive glance last. Absent ⇒ no recent-activity glance. */
+  recentActivity?: React.ReactNode;
 }
 
-export function WmsOpsScreen({ alerts, lagSeconds, overview }: WmsOpsScreenProps) {
+export function WmsOpsScreen({
+  alerts,
+  lagSeconds,
+  overview,
+  recentActivity,
+}: WmsOpsScreenProps) {
   // The alerts list is not paginated in this slice's UI. It is seeded page-0;
   // the only re-fetch is the post-ack invalidation (the acknowledged row then
   // reflects state).
@@ -137,6 +152,10 @@ export function WmsOpsScreen({ alerts, lagSeconds, overview }: WmsOpsScreenProps
       )}
 
       <WmsAlertsTable rows={alertsData.content} onAck={openAck} />
+
+      {/* 활동(최근 출고) glance — LAST, after the attention (alert) content
+          (TASK-PC-FE-177). */}
+      {recentActivity}
 
       <AcknowledgeAlertDialog
         open={ackTarget !== null}
