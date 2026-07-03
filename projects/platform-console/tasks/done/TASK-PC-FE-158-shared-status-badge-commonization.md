@@ -1,6 +1,6 @@
 # TASK-PC-FE-158 — extract a shared **`StatusBadge`** and commonize status pills
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Paths:** `shared/ui/StatusBadge.tsx` (new) + `features/ecommerce-ops` (users/sellers) + `features/wms-outbound-ops`
 **Parent:** follows TASK-PC-FE-057 (wms outbound) + the ecommerce user/seller surfaces (PC-FE-084/090/154). Housekeeping/consistency task surfaced while badging the wms outbound status.
 **Analysis model:** Opus 4.8 · **Impl model recommendation:** Sonnet (mechanical UI extraction + migration; no domain/resilience logic).
