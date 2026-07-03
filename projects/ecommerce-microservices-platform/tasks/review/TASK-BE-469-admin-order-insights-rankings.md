@@ -1,6 +1,6 @@
 # TASK-BE-469 — Admin order-insights ranking endpoint (top products / sellers by order-count & revenue)
 
-**Status:** ready
+**Status:** review
 
 **Type:** TASK-BE
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (single additive read endpoint; the only non-mechanical part is the two group-by aggregation queries + top-N sort)
