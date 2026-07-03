@@ -78,6 +78,23 @@ describe('PushOptIn', () => {
     expect(button.style.color).toBe('var(--color-on-primary)');
   });
 
+  it('제목/설명 문구 없이 버튼만 표시한다 [FE-087]', () => {
+    mockHook.mockReturnValue(stub({ subscribed: false }));
+    render(<PushOptIn />);
+    expect(screen.getByTestId('push-optin-button')).toBeInTheDocument();
+    // The descriptive note is removed — only the button remains.
+    expect(
+      screen.queryByText('허용하면 주문·배송 알림을 이 브라우저에서 실시간으로 받습니다.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('구독 상태에서도 안내 문구 없이 해지 버튼만 표시한다 [FE-087]', () => {
+    mockHook.mockReturnValue(stub({ subscribed: true, permission: 'granted' }));
+    render(<PushOptIn />);
+    expect(screen.getByTestId('push-optin-button')).toHaveTextContent('이 브라우저 구독 해지');
+    expect(screen.queryByText('이 브라우저에서 푸시 알림을 받고 있습니다.')).not.toBeInTheDocument();
+  });
+
   it('에러가 있으면 에러 메시지를 표시한다', () => {
     mockHook.mockReturnValue(stub({ error: '푸시 알림 구독에 실패했습니다.' }));
     render(<PushOptIn />);
