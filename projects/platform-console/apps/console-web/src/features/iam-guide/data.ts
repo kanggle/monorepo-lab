@@ -147,7 +147,23 @@ export interface ScreenAccess {
   cells: Record<string, { level: AccessLevel; note?: string }>;
 }
 
+// 화면 순서는 사이드바 IAM nav(ConsoleSidebarNav.tsx)의 setup-first 순서와
+// 일치시킨다: 운영자 관리 → 계정 운영 → 감사·보안. (인덱스 단언 테스트
+// IamGuideScreen.test.tsx '스팟 체크'도 이 순서를 전제한다.)
 export const SCREEN_ACCESS: ScreenAccess[] = [
+  {
+    screen: '운영자 관리',
+    href: '/operators',
+    gate: 'operator.manage',
+    cells: {
+      SUPER_ADMIN: { level: 'full' },
+      SUPPORT_READONLY: { level: 'none' },
+      SUPPORT_LOCK: { level: 'none' },
+      SECURITY_ANALYST: { level: 'none' },
+      TENANT_ADMIN: { level: 'full', note: '자기 테넌트 한정' },
+      TENANT_BILLING_ADMIN: { level: 'none' },
+    },
+  },
   {
     screen: '계정 운영',
     href: '/accounts',
@@ -159,19 +175,6 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       SUPPORT_LOCK: { level: 'none' },
       SECURITY_ANALYST: { level: 'none' },
       TENANT_ADMIN: { level: 'none' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-    },
-  },
-  {
-    screen: '운영자 관리',
-    href: '/operators',
-    gate: 'operator.manage',
-    cells: {
-      SUPER_ADMIN: { level: 'full' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'full', note: '자기 테넌트 한정' },
       TENANT_BILLING_ADMIN: { level: 'none' },
     },
   },
