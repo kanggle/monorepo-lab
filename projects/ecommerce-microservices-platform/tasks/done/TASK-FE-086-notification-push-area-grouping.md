@@ -1,6 +1,7 @@
 # TASK-FE-086 — 알림 설정: 푸시 채널 영역 안에 옵트인/기기목록 그룹화 + 버튼 글자색 정합
 
-- **Status**: review
+- **Status**: done
+- **DONE (2026-07-03, 3-dim verified — PR #2137 `10afe5a75`)**: state=MERGED + origin/main tip=`10afe5a75` 일치 + pre-merge failing=0(Frontend lint&build+unit[push-area 게이팅·버튼 색상]+E2E GREEN). 푸시 옵트인+기기목록을 푸시 채널 아래 그룹화(pushEnabled 게이팅) + 버튼 글자색 `--color-on-primary` 정합.
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
