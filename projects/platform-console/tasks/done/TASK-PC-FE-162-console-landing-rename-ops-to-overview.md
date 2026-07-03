@@ -1,6 +1,6 @@
 # TASK-PC-FE-162 — cross-domain console landing rename **"운영 → 개요"** (capstone)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Scope:** overview-capable domain landings + their nav leaves
 **Type:** cross-cutting consistency sweep — **capstone**, runs LAST.
 **Implemented:** branch `task/pc-fe-162-overview-rename` (bundled with the PC-FE-160 finance park). `pnpm lint` + `tsc --noEmit` + `vitest` green.
