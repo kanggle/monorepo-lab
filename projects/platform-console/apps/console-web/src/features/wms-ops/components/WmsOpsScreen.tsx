@@ -1,120 +1,64 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
-import {
-  useWmsAlerts,
-  useWmsShipments,
-  useAcknowledgeAlert,
-} from '../hooks/use-wms-ops';
-import {
-  WMS_DEFAULT_PAGE_SIZE,
-  type AlertPage,
-  type AlertRow,
-  type ShipmentPage,
-  type ShipmentQueryParams,
-} from '../api/types';
+import { useWmsAlerts, useAcknowledgeAlert } from '../hooks/use-wms-ops';
+import { WMS_DEFAULT_PAGE_SIZE, type AlertPage, type AlertRow } from '../api/types';
 import { AcknowledgeAlertDialog } from './AcknowledgeAlertDialog';
-import { WmsShipmentsTable } from './WmsShipmentsTable';
 import { WmsAlertsTable } from './WmsAlertsTable';
-import {
-  type ShipFilterState,
-  EMPTY_SHIP_FILTERS,
-  alertLabel,
-} from './wms-ops-helpers';
+import { alertLabel } from './wms-ops-helpers';
 
 /**
  * wms operations section (TASK-PC-FE-007 — ADR-MONO-013 Phase 4 slice 1).
  * The first NON-IAM federated domain screen.
  *
- * Server-rendered initial shipments + alerts pages are passed in; client
- * re-query handles filter / pagination changes. The read-model is
- * eventually consistent — `lagSeconds` (when the producer surfaced
- * `X-Read-Model-Lag-Seconds`) is shown as a NON-blocking hint banner; the
- * section still renders (eventual-consistency honesty, § 2.4.5). There is
- * NO auto-refetch loop polling around the lag.
+ * Server-rendered initial alerts page is passed in; client re-query handles
+ * the post-ack invalidation. The read-model is eventually consistent —
+ * `lagSeconds` (when the producer surfaced `X-Read-Model-Lag-Seconds`) is
+ * shown as a NON-blocking hint banner; the section still renders
+ * (eventual-consistency honesty, § 2.4.5). There is NO auto-refetch loop
+ * polling around the lag.
  *
  * The single mutation is the confirm-gated alert acknowledge — REASON-FREE
  * (wms does not define `X-Operator-Reason`; the confirm dialog is the
- * security gate). The adjustments audit and every other read carry NO
- * mutation affordance (append-only / read-only).
+ * security gate). Every other read carries NO mutation affordance (read-only).
  *
  * Resilience (§ 2.5): 401 is handled by the server route (whole-session
  * re-login — not surfaced here as a per-section state); 403/404/422/409 →
  * inline actionable; 503/timeout → this section degrades only (the console
  * shell + IAM sections stay intact).
  *
- * ── MODULE SPLIT (TASK-PC-FE-103) ── this container owns ALL state, the
- * mutation, and the lag banner; the read regions (shipments, alerts) are
- * rendered by the prop-driven `WmsShipmentsTable` / `WmsAlertsTable`
- * presentational children, and the filter shapes + alert label formatter
- * live in `wms-ops-helpers.ts`.
+ * ── MODULE SPLIT (TASK-PC-FE-103) ── this container owns the alerts state,
+ * the mutation, and the lag banner; the alerts read region is rendered by the
+ * prop-driven `WmsAlertsTable` presentational child, and the alert label
+ * formatter lives in `wms-ops-helpers.ts`.
  *
- * ── INVENTORY SPLIT (TASK-PC-FE-173) ── the inventory query table (filters
- * + pagination — unfit for a glance-overview, PC-FE-170 same principle) has
- * moved OFF this screen to the dedicated `/wms/inventory` route
- * (`WmsInventoryScreen` + `WmsInventoryTable`). This screen keeps only the
- * count-tile inventory snapshot (`WmsOverview`, passed in via `overview`).
+ * ── INVENTORY SPLIT (TASK-PC-FE-173) ── the inventory query table moved OFF
+ * this screen to the dedicated `/wms/inventory` route.
+ *
+ * ── SHIPMENTS MOVE (TASK-PC-FE-175) ── the 택배/출고 query table (filters +
+ * pagination — unfit for a glance-overview) moved OFF this 개요 screen onto
+ * the existing `/wms/outbound` 출고 page (`WmsShipmentsScreen`, below
+ * `OutboundOpsScreen`). This 개요 screen keeps only the count-tile shipments
+ * snapshot + 최근 출고 glance (`WmsOverview`, passed in via `overview`) and the
+ * alert-acknowledge surface.
  */
 
 export interface WmsOpsScreenProps {
   alerts: AlertPage;
-  shipments: ShipmentPage;
   /** NON-blocking eventual-consistency hint (seconds), or null. */
   lagSeconds: number | null;
-  /** Optional operator overview-snapshot slot rendered above the tables
+  /** Optional operator overview-snapshot slot rendered above the alerts
    *  (TASK-PC-FE-166 — the server page computes `getWmsOverviewState` and
    *  passes a `<WmsOverview>` node; a server component slotted into this
    *  client screen, the RSC-idiomatic way). Absent ⇒ no snapshot band. */
   overview?: React.ReactNode;
 }
 
-export function WmsOpsScreen({
-  alerts,
-  shipments,
-  lagSeconds,
-  overview,
-}: WmsOpsScreenProps) {
-  const shipWhFid = useId();
-  const shipCarrierFid = useId();
-
-  // ── Shipments (택배/출고 read — carrier code / tracking no) ─────────────
-  const [shipFilters, setShipFilters] =
-    useState<ShipFilterState>(EMPTY_SHIP_FILTERS);
-  const [shipQuery, setShipQuery] = useState<ShipmentQueryParams>({
-    page: 0,
-    size: shipments.page.size || WMS_DEFAULT_PAGE_SIZE,
-  });
-
-  const shipSeeded =
-    (shipQuery.page ?? 0) === 0 &&
-    !shipQuery.warehouseId &&
-    !shipQuery.carrierCode;
-
-  const ship = useWmsShipments(shipQuery, shipSeeded ? shipments : undefined);
-  const shipData = ship.data ?? shipments;
-
-  const shipApiError =
-    ship.error instanceof ApiError ? (ship.error as ApiError) : null;
-  const shipForbidden = shipApiError?.status === 403;
-  const shipDegraded =
-    ship.isError &&
-    (!shipApiError || shipApiError.status >= 500) &&
-    !shipForbidden;
-
-  function submitShipFilters(e: React.FormEvent) {
-    e.preventDefault();
-    setShipQuery({
-      warehouseId: shipFilters.warehouseId.trim() || undefined,
-      carrierCode: shipFilters.carrierCode.trim() || undefined,
-      page: 0,
-      size: shipments.page.size || WMS_DEFAULT_PAGE_SIZE,
-    });
-  }
-
-  // The alerts list is not paginated in this slice's UI (only inventory
-  // is). It is seeded page-0; the only re-fetch is the post-ack
-  // invalidation (the acknowledged row then reflects state).
+export function WmsOpsScreen({ alerts, lagSeconds, overview }: WmsOpsScreenProps) {
+  // The alerts list is not paginated in this slice's UI. It is seeded page-0;
+  // the only re-fetch is the post-ack invalidation (the acknowledged row then
+  // reflects state).
   const alertsQuery = useMemo(
     () => ({ page: 0, size: alerts.page.size || WMS_DEFAULT_PAGE_SIZE }),
     [alerts.page.size],
@@ -176,9 +120,7 @@ export function WmsOpsScreen({
       <h1 id="wms-heading" className="mb-2 text-2xl font-semibold">
         WMS 개요
       </h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        배송 · 알림 (읽기 + 알림 확인).
-      </p>
+      <p className="mb-6 text-sm text-muted-foreground">알림 (읽기 + 확인).</p>
 
       {/* Operator overview snapshot band (TASK-PC-FE-166) — per-area counts,
           alert-ack distribution, recent shipments; server-rendered slot. */}
@@ -193,24 +135,6 @@ export function WmsOpsScreen({
           {lagBanner}
         </div>
       )}
-
-      <WmsShipmentsTable
-        shipWhFid={shipWhFid}
-        shipCarrierFid={shipCarrierFid}
-        filters={shipFilters}
-        onFiltersChange={setShipFilters}
-        onSubmit={submitShipFilters}
-        forbidden={shipForbidden}
-        degraded={shipDegraded}
-        data={shipData}
-        query={shipQuery}
-        onPrevPage={() =>
-          setShipQuery((q) => ({ ...q, page: Math.max(0, (q.page ?? 0) - 1) }))
-        }
-        onNextPage={() =>
-          setShipQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-        }
-      />
 
       <WmsAlertsTable rows={alertsData.content} onAck={openAck} />
 

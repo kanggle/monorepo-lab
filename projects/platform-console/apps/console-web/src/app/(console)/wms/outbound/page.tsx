@@ -6,6 +6,11 @@ import {
   getOutboundSectionState,
   OutboundOpsScreen,
 } from '@/features/wms-outbound-ops';
+import {
+  getWmsShipmentsState,
+  WmsShipmentsScreen,
+} from '@/features/wms-ops';
+import type { WmsShipmentsSectionState } from '@/features/wms-ops';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +30,15 @@ export const dynamic = 'force-dynamic';
  * from the data-driven registry (`productKey=wms`) and passes it into
  * `getOutboundSectionState()`. Waterfall mirrors `wms/page.tsx`:
  * registryDegraded → notEligible → forbidden → degraded → happy.
+ *
+ * TASK-PC-FE-175 — the 택배/출고 read table (confirmed shipments: carrier /
+ * tracking / shipped-at) moved here off the `/wms` 개요. It renders as a
+ * SECTION below the outbound-order operations — the read-side companion to
+ * the write-side operations. The page waterfall gates on OUTBOUND (the
+ * primary content); the shipments section carries its OWN resilience
+ * (`getWmsShipmentsState` — a 403/503 on shipments degrades only that
+ * section, the outbound operations stay intact). Both share the same wms
+ * eligibility, so the shipments fan-out is skipped when not eligible.
  */
 export default async function WmsOutboundPage() {
   let eligible = false;
@@ -61,7 +75,15 @@ export default async function WmsOutboundPage() {
     );
   }
 
-  const state = await getOutboundSectionState(eligible);
+  // Outbound-order operations (primary content, gates the page) fetched in
+  // parallel with the 택배/출고 shipments read (secondary section, own
+  // resilience). Both share wms eligibility + the domain-facing IAM OIDC
+  // token; each performs a whole-session `redirect('/login')` internally on a
+  // 401 (no partial authed state).
+  const [state, shipmentsState] = await Promise.all([
+    getOutboundSectionState(eligible),
+    getWmsShipmentsState(eligible),
+  ]);
 
   if (state.notEligible) {
     return (
@@ -136,5 +158,60 @@ export default async function WmsOutboundPage() {
     );
   }
 
-  return <OutboundOpsScreen orders={state.orders} />;
+  return (
+    <>
+      <OutboundOpsScreen orders={state.orders} />
+      <WmsShipmentsSection state={shipmentsState} />
+    </>
+  );
+}
+
+/**
+ * The 택배/출고 read section (TASK-PC-FE-175) rendered below the outbound-order
+ * operations. Server-side resilience gate mirroring the inventory page's
+ * page-level waterfall, but SCOPED to this section only — a shipments 403/503
+ * degrades just this block, never the outbound operations above it. On happy,
+ * the seed hydrates the client `WmsShipmentsScreen` (filters + pagination).
+ */
+function WmsShipmentsSection({ state }: { state: WmsShipmentsSectionState }) {
+  if (state.notEligible) {
+    // Not wms-eligible: the outbound waterfall already surfaced the block —
+    // render nothing extra here (no duplicate "no access" notice).
+    return null;
+  }
+  if (state.forbidden) {
+    return (
+      <section aria-label="택배 / 출고 조회" className="mt-10">
+        <h2 className="mb-3 text-lg font-medium text-foreground">택배 / 출고</h2>
+        <div
+          role="status"
+          data-testid="wms-ship-forbidden"
+          className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+        >
+          이 화면을 조회할 권한이 없습니다. (운영자 역할 확인이 필요합니다.)
+        </div>
+      </section>
+    );
+  }
+  if (state.degraded || !state.shipments) {
+    return (
+      <section aria-label="택배 / 출고 조회" className="mt-10">
+        <h2 className="mb-3 text-lg font-medium text-foreground">택배 / 출고</h2>
+        <div
+          role="status"
+          data-testid="wms-ship-degraded"
+          className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+        >
+          wms 출고/택배 정보를 일시적으로 불러올 수 없습니다. 콘솔의 다른
+          기능은 계속 사용할 수 있습니다.
+        </div>
+      </section>
+    );
+  }
+  return (
+    <WmsShipmentsScreen
+      shipments={state.shipments}
+      lagSeconds={state.lagSeconds}
+    />
+  );
 }

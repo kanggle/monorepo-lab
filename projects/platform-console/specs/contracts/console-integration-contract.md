@@ -228,6 +228,17 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   consumes op #2 (`getInventoryByKey`, composite key location+sku+lot — no
   single `[id]` route fits). Consumed read-only; no producer contract change.
 
+  **Console-side routing note (TASK-PC-FE-175, non-normative — no producer
+  change)**: operation #5 (shipments, `GET /dashboard/shipments`) — the
+  택배/출고 read table (carrier code / tracking no / shipped-at, filters +
+  pagination) — is served on the console's existing `/wms/outbound` 출고
+  surface, as a read-side section below the outbound-order operations, rather
+  than on the `/wms` 개요 (same glance-overview principle as PC-FE-173: a
+  filtered/paginated query table is unfit for the landing). The 개요 keeps only
+  the shipments **count tile** (오늘/주간/월간/전체, § 2.4.5.2 + PC-FE-174) and
+  the **recent-shipments glance**. Consumed read-only; no producer contract
+  change.
+
 - **Per-domain credential selection (the key correctness element — normative)**:
   **each § 2.4.x binding declares which credential it uses, and an
   implementer MUST NOT blanket-apply one domain's auth model to another.**
@@ -508,7 +519,8 @@ the **§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
 #### 2.4.5.2 wms operator **overview snapshot** — `/wms` landing (TASK-PC-FE-166 — first bff-domain reference of the domain-landing overview series)
 
 The `/wms` section landing is elevated with an **operator overview snapshot**
-band above the existing ops tables (inventory/shipments/alerts): per-area
+band above the alerts table (the inventory query table moved to `/wms/inventory`
+per PC-FE-173, and the 택배/출고 table to `/wms/outbound` per PC-FE-175): per-area
 counts, an alert-acknowledgement distribution, and a recent-shipments glance.
 This is the **first bff-domain reference implementation** of the console
 domain-landing overview series (the analogue of the ecommerce § 2.4.10.6

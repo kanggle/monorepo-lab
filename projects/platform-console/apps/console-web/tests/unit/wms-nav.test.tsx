@@ -5,7 +5,7 @@ import type { RegistryProduct } from '@/shared/api/registry-types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { WmsOpsScreen } from '@/features/wms-ops';
-import type { AlertPage, ShipmentPage } from '@/features/wms-ops';
+import type { AlertPage } from '@/features/wms-ops';
 
 /**
  * Regression (TASK-PC-FE-007 AC): the `/wms` surface is an in-console NAV
@@ -36,10 +36,6 @@ const ALERTS: AlertPage = {
   content: [],
   page: { number: 0, size: 20, totalElements: 0, totalPages: 0 },
 };
-const SHIPMENTS: ShipmentPage = {
-  content: [],
-  page: { number: 0, size: 20, totalElements: 0, totalPages: 0 },
-};
 
 function wrapper() {
   const qc = new QueryClient({
@@ -61,18 +57,14 @@ describe('wms nav — additive, does not disturb the catalog routing (FE-001/FE-
 
   it('the wms section mounts as an in-console destination (read + ack only)', () => {
     render(
-      <WmsOpsScreen
-        alerts={ALERTS}
-        shipments={SHIPMENTS}
-        lagSeconds={null}
-      />,
+      <WmsOpsScreen alerts={ALERTS} lagSeconds={null} />,
       { wrapper: wrapper() },
     );
     expect(
       screen.getByRole('heading', { name: 'WMS 개요' }),
     ).toBeInTheDocument();
-    // The empty seeded pages render their empty states (no crash).
-    expect(screen.getByTestId('wms-ship-empty')).toBeInTheDocument();
+    // The empty seeded alerts page renders its empty state (no crash). The
+    // 택배/출고 table moved to /wms/outbound (TASK-PC-FE-175).
     expect(screen.getByTestId('wms-alerts-empty')).toBeInTheDocument();
   });
 });
