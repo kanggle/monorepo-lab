@@ -4,7 +4,7 @@
 **Area:** platform-console / console-web · **Route:** `app/(console)/wms/page.tsx` (개요 밴드)
 **Follows:** TASK-PC-FE-166 (wms 개요 스냅샷 최초 구현) — 그 구현의 개요-적합성 정리.
 **Analysis model:** Opus 4.8 · **Impl model 권장:** Sonnet (프런트 표현 정리 + 테스트 조정, 도메인 판단 없음).
-**Implemented:** branch `task/pc-fe-170-wms-overview-drop-alerts-count-tile`. `pnpm lint` + `tsc --noEmit` + `vitest`(wms 79/79) green.
+**Implemented:** branch `task/pc-fe-170-wms-overview-drop-alerts-tile`. `pnpm lint` + `tsc --noEmit` + `vitest`(wms 79/79) green.
 
 ## Goal
 
