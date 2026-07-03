@@ -105,6 +105,15 @@ export function NotificationSettings() {
             onChange={(v) => handleToggle('pushEnabled', v)}
           />
 
+          {/* Push channel area: when push is enabled, this browser's opt-in and the
+              registered-device list are grouped here, directly under the 푸시 toggle. */}
+          {pushEnabled && (
+            <div data-testid="push-area">
+              <PushOptIn />
+              <PushDeviceList />
+            </div>
+          )}
+
           {saveSuccess && (
             <p
               data-testid="save-success"
@@ -132,9 +141,6 @@ export function NotificationSettings() {
           )}
         </div>
       )}
-
-      <PushOptIn />
-      <PushDeviceList />
     </div>
   );
 }

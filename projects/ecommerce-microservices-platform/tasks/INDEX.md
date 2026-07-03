@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-086 | **REVIEW (PR 대기)**. 알림 설정 UI — 푸시 채널 활성화 시 "이 브라우저에서 푸시 받기"+"푸시 수신 기기"를 푸시 토글 아래 한 영역으로 그룹화(`pushEnabled` 게이팅), 옵트인 버튼 글자색을 좌측 사이드바 선택 메뉴 색(`--color-on-primary`)과 정합. 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, ui |
 
 ## done
 

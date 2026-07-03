@@ -70,6 +70,14 @@ describe('PushOptIn', () => {
     expect(screen.getByTestId('push-optin-button')).toBeDisabled();
   });
 
+  it('"이 브라우저에서 푸시 받기" 버튼 글자색이 좌측 메뉴 선택 색(--color-on-primary)과 동일하다 [FE-086]', () => {
+    mockHook.mockReturnValue(stub({ subscribed: false }));
+    render(<PushOptIn />);
+    const button = screen.getByTestId('push-optin-button');
+    expect(button).toHaveTextContent('이 브라우저에서 푸시 받기');
+    expect(button.style.color).toBe('var(--color-on-primary)');
+  });
+
   it('에러가 있으면 에러 메시지를 표시한다', () => {
     mockHook.mockReturnValue(stub({ error: '푸시 알림 구독에 실패했습니다.' }));
     render(<PushOptIn />);

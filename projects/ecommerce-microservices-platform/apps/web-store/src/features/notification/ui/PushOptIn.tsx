@@ -27,7 +27,7 @@ export function PushOptIn() {
   return (
     <section
       data-testid="push-optin"
-      style={{ marginTop: 'var(--space-6)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border-light)' }}
+      style={{ marginTop: 'var(--space-4)' }}
     >
       <p style={{ margin: 0, fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
         이 브라우저에서 푸시 받기
@@ -59,7 +59,9 @@ export function PushOptIn() {
               border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius-md)',
               backgroundColor: subscribed ? 'var(--color-surface)' : 'var(--color-primary)',
-              color: subscribed ? 'var(--color-text-primary)' : 'var(--color-white)',
+              // "이 브라우저에서 푸시 받기" text color matches the selected sidebar menu
+              // item (my/layout.tsx active color = var(--color-on-primary)).
+              color: subscribed ? 'var(--color-text-primary)' : 'var(--color-on-primary)',
             }}
           >
             {isBusy ? '처리 중…' : subscribed ? '이 브라우저 구독 해지' : '이 브라우저에서 푸시 받기'}
