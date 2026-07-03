@@ -194,7 +194,7 @@ export function OperatorsScreen({
           create.error.message,
         )
       : create.error
-        ? '운영자 생성에 실패했습니다.'
+        ? '운영자 계정 생성에 실패했습니다.'
         : null;
 
   const setProfileError =
@@ -380,7 +380,7 @@ export function OperatorsScreen({
         운영자 관리
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        운영자 생성·역할 변경·상태 변경·내 비밀번호 변경. 모든 변경 작업은
+        운영자 계정 생성·역할 변경·상태 변경·내 비밀번호 변경. 모든 변경 작업은
         사유와 확인이 필요하며 감사 기록에 남습니다. (SUPER_ADMIN /
         operator.manage 권한 필요)
       </p>
