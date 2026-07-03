@@ -63,15 +63,15 @@ export function WmsInventoryTable({
 
   return (
     <>
-      {/* ── Inventory snapshot ─────────────────────────────────────────── */}
+      {/* ── Inventory ──────────────────────────────────────────────────── */}
       <h2 className="mb-3 text-lg font-medium text-foreground">
-        재고 스냅샷
+        재고 현황
       </h2>
       <form
         onSubmit={onSubmit}
         className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
         role="search"
-        aria-label="재고 스냅샷 필터"
+        aria-label="재고 현황 필터"
       >
         <div>
           <label
@@ -213,7 +213,7 @@ export function WmsInventoryTable({
           className="mb-8 text-sm text-muted-foreground"
           data-testid="wms-inv-empty"
         >
-          표시할 재고 스냅샷이 없습니다.
+          표시할 재고가 없습니다.
         </p>
       ) : (
         <>
@@ -221,7 +221,7 @@ export function WmsInventoryTable({
             className="mb-3 data-table"
             data-testid="wms-inv-table"
           >
-            <caption className="sr-only">재고 스냅샷</caption>
+            <caption className="sr-only">재고 현황</caption>
             <thead>
               <tr className="border-b border-border text-left">
                 <th scope="col" className="p-2">
