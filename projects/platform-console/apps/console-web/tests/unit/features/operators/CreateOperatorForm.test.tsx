@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { CreateOperatorForm } from '@/features/operators/components/CreateOperatorForm';
-import { KNOWN_OPERATOR_ROLES } from '@/features/operators/api/types';
+import {
+  KNOWN_OPERATOR_ROLES,
+  type CreateOperatorInput,
+} from '@/features/operators/api/types';
 
 /**
  * `CreateOperatorForm` — role-checkbox grantable-roles pre-filter
@@ -96,5 +99,70 @@ describe('CreateOperatorForm — grantable-roles pre-filter', () => {
       ).not.toBeInTheDocument();
     }
     expect(screen.getByTestId('create-operator-form')).toBeInTheDocument();
+  });
+});
+
+describe('CreateOperatorForm — optional break-glass password (ADR-MONO-035 O2)', () => {
+  function fillRequired() {
+    fireEvent.change(screen.getByTestId('create-operator-email'), {
+      target: { value: 'foo@example.com' },
+    });
+    fireEvent.change(screen.getByTestId('create-operator-displayName'), {
+      target: { value: 'Foo' },
+    });
+    fireEvent.change(screen.getByTestId('create-operator-tenant'), {
+      target: { value: 'wms' },
+    });
+    fireEvent.click(screen.getByTestId('create-operator-role-SUPPORT_LOCK'));
+  }
+
+  it('submit is enabled with NO password; the draft omits password (OIDC-only)', () => {
+    const drafts: CreateOperatorInput[] = [];
+    render(
+      <CreateOperatorForm
+        tenantOptions={['wms']}
+        isPlatformOperator={false}
+        onSubmitDraft={(d) => drafts.push(d)}
+        grantableRoles={['SUPPORT_LOCK']}
+      />,
+    );
+    fillRequired();
+
+    const submit = screen.getByTestId('create-operator-submit');
+    expect(submit).not.toBeDisabled();
+
+    fireEvent.click(submit);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).not.toHaveProperty('password');
+  });
+
+  it('a NON-blank password must still satisfy the policy (submit blocked on a weak one)', () => {
+    const drafts: CreateOperatorInput[] = [];
+    render(
+      <CreateOperatorForm
+        tenantOptions={['wms']}
+        isPlatformOperator={false}
+        onSubmitDraft={(d) => drafts.push(d)}
+        grantableRoles={['SUPPORT_LOCK']}
+      />,
+    );
+    fillRequired();
+    fireEvent.change(screen.getByTestId('create-operator-password'), {
+      target: { value: 'short' }, // < 10 chars, no digit/special → policy fail
+    });
+
+    expect(screen.getByTestId('create-operator-submit')).toBeDisabled();
+    expect(
+      screen.getByTestId('create-operator-password-error'),
+    ).toBeInTheDocument();
+
+    // A policy-valid break-glass password re-enables submit and is carried.
+    fireEvent.change(screen.getByTestId('create-operator-password'), {
+      target: { value: 'Str0ng!pass9' },
+    });
+    expect(screen.getByTestId('create-operator-submit')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('create-operator-submit'));
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].password).toBe('Str0ng!pass9');
   });
 });

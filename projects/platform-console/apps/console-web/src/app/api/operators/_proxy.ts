@@ -20,11 +20,21 @@ import { logger, newRequestId } from '@/shared/lib/logger';
  * routes call the matching api fn and never re-derive the header set.
  */
 
-/** create: reason + idempotencyKey + the operator draft (password incl.). */
+/**
+ * create: reason + idempotencyKey + the operator draft. `password` is OPTIONAL
+ * (ADR-MONO-035 O2 / TASK-BE-377) — omitted ⇒ an OIDC-only operator. When
+ * present it must satisfy the producer policy (≥10 chars, ≥1 letter + ≥1 digit
+ * + ≥1 special) so a blank/invalid break-glass password fails fast at the
+ * boundary rather than as a producer 400 (the producer stays final authority).
+ */
 export const CreateBodySchema = z.object({
   email: z.string().min(1),
   displayName: z.string().min(1),
-  password: z.string().min(1),
+  password: z
+    .string()
+    .min(10)
+    .regex(/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/)
+    .optional(),
   roles: z.array(z.string()),
   tenantId: z.string().min(1),
   reason: z.string(),
