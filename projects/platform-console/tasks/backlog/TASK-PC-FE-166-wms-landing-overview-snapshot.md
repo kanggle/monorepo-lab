@@ -37,8 +37,9 @@ glance, matching the ecommerce landing (PC-FE-156). This is one of the 4 per-dom
 
 ## Dependencies
 
+- **Blocked by:** TASK-PC-FE-168 (shared read-leg decision) — promote to `ready` only after 168 lands; this is the **first bff-domain reference impl**.
 - **Blocks:** TASK-PC-FE-162 (cross-domain rename capstone — needs all 4 domain landings to be real overviews first).
-- **Reference:** TASK-PC-FE-156 (ecommerce, DONE) — reference implementation.
+- **Reference:** TASK-PC-FE-156 (ecommerce, DONE) — reference implementation (direct-model).
 
 ## Promotion note
 
