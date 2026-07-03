@@ -1,9 +1,10 @@
 # TASK-PC-FE-179 — 운영자 계정 생성 폼: **가입 안 된 이메일 = "허수 운영자" 프리플라이트 경고**
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Scope:** 운영자 관리(/operators) 생성 폼 이메일 프리플라이트 lookup
 **Type:** UX 안전장치 (non-blocking 소프트 경고 — 동작/계약 무변화, FE-only)
-**Analysis model:** Opus 4.8 · **Impl 권장:** Opus (프리플라이트 lookup + fail-soft 상태기계 + 테스트)
+**Implemented:** branch `pc-fe-179-operator-create-dangling-account-warning` → **#2187 merged** (squash `df1b98fe5`). `tsc --noEmit` + `next lint` + `vitest` (11/11, 기존 6 + 신규 5) green; CI 전 체크 pass(0 failing).
+**Analysis model:** Opus 4.8 · **Impl model:** Opus.
 
 ## Goal
 
@@ -52,16 +53,16 @@ inline 경고로 알린다. **차단하지 않는다**(ADR-MONO-035 O6 fail-soft
 
 ## Acceptance Criteria
 
-- [ ] **AC-1** 이메일 형식 OK + 테넌트 선택(≠`*`)이면 debounce 후 `GET /api/accounts?email=&tenantId=&size=1`가
+- [x] **AC-1** 이메일 형식 OK + 테넌트 선택(≠`*`)이면 debounce 후 `GET /api/accounts?email=&tenantId=&size=1`가
   **선택한 테넌트**로 1회 조회된다(연타 시 이전 요청 취소/무시, 최신만 반영).
-- [ ] **AC-2** 조회결과 계정 없음 **AND** break-glass 비밀번호 공란 → `data-testid="create-operator-account-warning"`
+- [x] **AC-2** 조회결과 계정 없음 **AND** break-glass 비밀번호 공란 → `data-testid="create-operator-account-warning"`
   경고가 뜬다("이 이메일은 <테넌트>에 가입된 계정이 아닙니다 … 허수 운영자 … 먼저 회원가입 또는 비상 비밀번호 입력").
-- [ ] **AC-3** 계정 없음 **AND** 비밀번호 입력됨 → 완화 문구(비상 로컬 로그인 가능)로 바뀌고 위험 경고는 사라진다.
-- [ ] **AC-4** 계정 있음 → `data-testid="create-operator-account-ok"` 확인 문구("가입된 계정 — OIDC 로그인 가능").
-- [ ] **AC-5** lookup이 401/403/503/timeout/parse 실패(=`null`) 또는 `tenant='*'` → **경고/확인 문구 모두
+- [x] **AC-3** 계정 없음 **AND** 비밀번호 입력됨 → 완화 문구(비상 로컬 로그인 가능)로 바뀌고 위험 경고는 사라진다.
+- [x] **AC-4** 계정 있음 → `data-testid="create-operator-account-ok"` 확인 문구("가입된 계정 — OIDC 로그인 가능").
+- [x] **AC-5** lookup이 401/403/503/timeout/parse 실패(=`null`) 또는 `tenant='*'` → **경고/확인 문구 모두
   미표시**, 제출 정상 가능(fail-soft, 회귀 없음).
-- [ ] **AC-6** `canSubmit`은 `acctState`에 무관 — 경고가 떠도 제출 버튼 활성(non-blocking) 확인.
-- [ ] **AC-7** `pnpm lint` + `pnpm exec tsc --noEmit` + `pnpm exec vitest run` green(기존 6 케이스 불변 + 신규 추가).
+- [x] **AC-6** `canSubmit`은 `acctState`에 무관 — 경고가 떠도 제출 버튼 활성(non-blocking) 확인.
+- [x] **AC-7** `pnpm lint` + `pnpm exec tsc --noEmit` + `pnpm exec vitest run` green(기존 6 케이스 불변 + 신규 추가).
 
 ## Related Specs
 
