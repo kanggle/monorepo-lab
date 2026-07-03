@@ -70,7 +70,9 @@ function seedHappy() {
     (p: { acknowledged?: boolean } = {}) => {
       if (p.acknowledged === false) return Promise.resolve(wmsResult(3));
       if (p.acknowledged === true) return Promise.resolve(wmsResult(9));
-      return Promise.resolve(wmsResult(12)); // total
+      // A no-filter total-alerts read must NOT be issued (PC-FE-170); this
+      // branch exists only to surface a regression if one ever is.
+      return Promise.resolve(wmsResult(12));
     },
   );
 }
@@ -95,13 +97,22 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
 
     expect(state.notEligible).toBe(false);
     const byKey = Object.fromEntries(state.counts.map((c) => [c.key, c]));
+    // Count tiles = operational-scale areas only (재고/배송); alerts is NOT a
+    // count tile (PC-FE-170).
     expect(byKey.inventory.count).toBe(42);
     expect(byKey.inventory.status).toBe('ok');
     expect(byKey.shipments.count).toBe(7);
-    expect(byKey.alerts.count).toBe(12);
+    expect(byKey.alerts).toBeUndefined();
 
     // Counts derive from a page=0,size=1 read (totalElements only).
     expect(m.listInventory).toHaveBeenCalledWith({ page: 0, size: 1 });
+
+    // No no-filter total-alerts fan-out leg — alerts are surfaced only by the
+    // ack distribution, whose two legs both carry an `acknowledged` filter.
+    expect(m.listAlerts).toHaveBeenCalledTimes(2);
+    for (const call of m.listAlerts.mock.calls) {
+      expect(call[0]).toHaveProperty('acknowledged');
+    }
 
     // Alert-ack distribution.
     const unacked = state.alertStatus.find((b) => b.key === 'unacknowledged');
@@ -134,9 +145,11 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
     const inv = state.counts.find((c) => c.key === 'inventory')!;
     expect(inv.count).toBeNull();
     expect(inv.status).toBe('degraded');
-    // Siblings stay ok.
+    // Sibling stays ok; the alert-ack distribution is also unaffected.
     expect(state.counts.find((c) => c.key === 'shipments')!.status).toBe('ok');
-    expect(state.counts.find((c) => c.key === 'alerts')!.status).toBe('ok');
+    expect(
+      state.alertStatus.find((b) => b.key === 'unacknowledged')!.cellStatus,
+    ).toBe('ok');
   });
 
   it('per-cell forbidden: a 403 leg → that count null/forbidden', async () => {
