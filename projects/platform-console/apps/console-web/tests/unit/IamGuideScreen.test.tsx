@@ -60,12 +60,13 @@ describe('IamGuideScreen', () => {
   });
 
   it('encodes the canonical rbac.md matrix (spot checks)', () => {
-    // 계정 운영 = account.read → SUPPORT_LOCK cannot open (lock w/o read).
-    expect(SCREEN_ACCESS[0].cells.SUPPORT_LOCK.level).toBe('none');
+    // setup-first order (matches sidebar IAM nav): 운영자 관리 → 계정 운영 → 감사·보안.
     // 운영자 관리 = operator.manage → SUPER_ADMIN + TENANT_ADMIN only.
-    expect(SCREEN_ACCESS[1].cells.SUPER_ADMIN.level).toBe('full');
-    expect(SCREEN_ACCESS[1].cells.TENANT_ADMIN.level).toBe('full');
-    expect(SCREEN_ACCESS[1].cells.SUPPORT_READONLY.level).toBe('none');
+    expect(SCREEN_ACCESS[0].cells.SUPER_ADMIN.level).toBe('full');
+    expect(SCREEN_ACCESS[0].cells.TENANT_ADMIN.level).toBe('full');
+    expect(SCREEN_ACCESS[0].cells.SUPPORT_READONLY.level).toBe('none');
+    // 계정 운영 = account.read → SUPPORT_LOCK cannot open (lock w/o read).
+    expect(SCREEN_ACCESS[1].cells.SUPPORT_LOCK.level).toBe('none');
     // 감사·보안 → SUPPORT_LOCK is 기본만(partial), others with security.event.read full.
     expect(SCREEN_ACCESS[2].cells.SUPPORT_LOCK.level).toBe('partial');
     expect(SCREEN_ACCESS[2].cells.SECURITY_ANALYST.level).toBe('full');

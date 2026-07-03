@@ -68,12 +68,15 @@ const GROUPS: NavGroup[] = [
           // 개요(/iam — TASK-PC-FE-163) is the first child: a static guide to
           // the RBAC roles + per-screen access matrix + delegation chain, so an
           // operator can orient before operating. Then the two management
-          // (write) surfaces — 계정 운영 (/accounts, the catalog IAM tile
-          // target) + 운영자 관리 — then 감사·보안 (read-only oversight) last,
-          // mirroring an orient-then-operate-then-review flow.
+          // (write) surfaces in **setup-first** order — 운영자 관리 (provision
+          // the operators + grant the roles that gate every other IAM surface)
+          // BEFORE 계정 운영 (/accounts, the catalog IAM tile target; the
+          // day-to-day end-user account CS work those operators then perform) —
+          // then 감사·보안 (read-only oversight) last: orient → configure →
+          // operate → review. (Catalog iam.baseRoute stays /accounts, FE-002.)
           { href: '/iam', label: '개요', testid: 'nav-iam-guide' },
-          { href: '/accounts', label: '계정 운영', testid: 'nav-accounts' },
           { href: '/operators', label: '운영자 관리', testid: 'nav-operators' },
+          { href: '/accounts', label: '계정 운영', testid: 'nav-accounts' },
           { href: '/audit', label: '감사 · 보안', testid: 'nav-audit' },
         ],
       },
