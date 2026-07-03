@@ -1,9 +1,9 @@
 # TASK-PC-FE-171 — 운영자 생성 액션 라벨 **"운영자 생성 → 운영자 계정 생성"**
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Scope:** 운영자 관리(/operators) 생성 액션 라벨 + IAM 가이드 네비 참조
 **Type:** UI 라벨 일관성 정합 (naming — 순수 label, 도메인/동작 변화 없음)
-**Implemented:** branch `task/pc-fe-171-operator-account-label`. `pnpm lint` + `tsc --noEmit` + `vitest` green.
+**Implemented:** branch `task/pc-fe-171-operator-account-label` → **#2161 merged** (squash `e1b748729`). `next lint` + `tsc --noEmit` + `vitest` (80/80) green; CI 22 checks pass.
 **Analysis model:** Opus 4.8 · **Impl model:** Opus.
 
 ## Goal
