@@ -109,7 +109,7 @@ public class AccountServiceClient {
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
     public AccountDetailResponse getDetail(String accountId) {
-        return callGet("/internal/accounts/" + accountId, null, AccountDetailResponse.class);
+        return callGet("/internal/accounts/" + accountId, null, null, AccountDetailResponse.class);
     }
 
     /**
@@ -182,20 +182,26 @@ public class AccountServiceClient {
         }
     }
 
+    /**
+     * TASK-BE-467 — {@code tenantId} is the actor's resolved active tenant, stamped
+     * as {@code X-Tenant-Id} so account-service confines the target (cross-tenant →
+     * 404 ACCOUNT_NOT_FOUND). {@code "*"} / null → account-service FAN default (net-zero).
+     */
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
     public LockResponse lock(String accountId,
                              String operatorId,
                              String reason,
                              String ticketId,
-                             String idempotencyKey) {
+                             String idempotencyKey,
+                             String tenantId) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("reason", "ADMIN_LOCK");
         body.put("operatorId", operatorId);
         if (ticketId != null) body.put("ticketId", ticketId);
 
         return callPost("/internal/accounts/" + accountId + "/lock",
-                body, operatorId, idempotencyKey, LockResponse.class);
+                body, operatorId, tenantId, idempotencyKey, LockResponse.class);
     }
 
     @Retry(name = "accountService")
@@ -204,34 +210,36 @@ public class AccountServiceClient {
                                String operatorId,
                                String reason,
                                String ticketId,
-                               String idempotencyKey) {
+                               String idempotencyKey,
+                               String tenantId) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("reason", "ADMIN_UNLOCK");
         body.put("operatorId", operatorId);
         if (ticketId != null) body.put("ticketId", ticketId);
 
         return callPost("/internal/accounts/" + accountId + "/unlock",
-                body, operatorId, idempotencyKey, LockResponse.class);
+                body, operatorId, tenantId, idempotencyKey, LockResponse.class);
     }
 
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
     public GdprDeleteResponse gdprDelete(String accountId,
                                           String operatorId,
-                                          String idempotencyKey) {
+                                          String idempotencyKey,
+                                          String tenantId) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("reason", "REGULATED_DELETION");
         body.put("operatorId", operatorId);
 
         return callPost("/internal/accounts/" + accountId + "/gdpr-delete",
-                body, operatorId, idempotencyKey, GdprDeleteResponse.class);
+                body, operatorId, tenantId, idempotencyKey, GdprDeleteResponse.class);
     }
 
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
-    public DataExportResponse export(String accountId, String operatorId) {
+    public DataExportResponse export(String accountId, String operatorId, String tenantId) {
         return callGet("/internal/accounts/" + accountId + "/export",
-                operatorId, DataExportResponse.class);
+                operatorId, tenantId, DataExportResponse.class);
     }
 
     /**
@@ -270,11 +278,14 @@ public class AccountServiceClient {
         }
     }
 
-    private <T> T callGet(String path, String operatorId, Class<T> responseType) {
+    private <T> T callGet(String path, String operatorId, String tenantId, Class<T> responseType) {
         return execute(path, () -> restClient.get()
                 .uri(path)
                 .headers(h -> {
                     if (operatorId != null) h.add("X-Operator-ID", operatorId);
+                    // TASK-BE-467: stamp the actor's active tenant so account-service
+                    // confines the mutation target (cross-tenant → 404).
+                    if (tenantId != null) h.add("X-Tenant-Id", tenantId);
                     // TASK-BE-318b: authenticate via GAP client_credentials Bearer JWT
                     // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
                     h.setBearerAuth(tokenProvider.currentBearer());
@@ -304,12 +315,15 @@ public class AccountServiceClient {
     }
 
     private <T> T callPost(String path, Map<String, Object> body,
-                           String operatorId, String idempotencyKey, Class<T> responseType) {
+                           String operatorId, String tenantId, String idempotencyKey, Class<T> responseType) {
         return execute(path, () -> restClient.post()
                 .uri(path)
                 .headers(h -> {
                     h.add("Idempotency-Key", idempotencyKey);
                     if (operatorId != null) h.add("X-Operator-ID", operatorId);
+                    // TASK-BE-467: stamp the actor's active tenant so account-service
+                    // confines the mutation target (cross-tenant → 404).
+                    if (tenantId != null) h.add("X-Tenant-Id", tenantId);
                     // TASK-BE-318b: GAP client_credentials Bearer JWT (replaces X-Internal-Token).
                     h.setBearerAuth(tokenProvider.currentBearer());
                     h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);

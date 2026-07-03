@@ -65,7 +65,7 @@ class InternalControllerTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/lock returns 200")
     void lockAccount_validRequest_returns200() throws Exception {
-        given(accountStatusUseCase.changeStatus(any()))
+        given(accountStatusUseCase.changeStatus(any(), any()))
                 .willReturn(new StatusChangeResult("acc-123", "ACTIVE", "LOCKED", Instant.now()));
 
         mockMvc.perform(post("/internal/accounts/acc-123/lock")
@@ -84,7 +84,7 @@ class InternalControllerTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/lock DELETED account returns 409")
     void lockAccount_deletedAccount_returns409() throws Exception {
-        given(accountStatusUseCase.changeStatus(any()))
+        given(accountStatusUseCase.changeStatus(any(), any()))
                 .willThrow(new StateTransitionException(AccountStatus.DELETED, AccountStatus.LOCKED,
                         StatusChangeReason.ADMIN_LOCK));
 
@@ -103,7 +103,7 @@ class InternalControllerTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/unlock returns 200")
     void unlockAccount_validRequest_returns200() throws Exception {
-        given(accountStatusUseCase.changeStatus(any()))
+        given(accountStatusUseCase.changeStatus(any(), any()))
                 .willReturn(new StatusChangeResult("acc-123", "LOCKED", "ACTIVE", Instant.now()));
 
         mockMvc.perform(post("/internal/accounts/acc-123/unlock")
@@ -124,7 +124,7 @@ class InternalControllerTest {
     void deleteAccount_validRequest_returns202() throws Exception {
         Instant gracePeriodEndsAt = Instant.now().plusSeconds(30 * 24 * 3600L);
         given(accountStatusUseCase.deleteAccount(eq("acc-123"), eq(StatusChangeReason.ADMIN_DELETE),
-                eq("operator"), eq("op-1")))
+                eq("operator"), eq("op-1"), any()))
                 .willReturn(new DeleteAccountResult("acc-123", "ACTIVE", "DELETED", gracePeriodEndsAt));
 
         mockMvc.perform(post("/internal/accounts/acc-123/delete")
@@ -146,7 +146,7 @@ class InternalControllerTest {
     @DisplayName("POST /internal/accounts/{id}/delete already DELETED returns 409")
     void deleteAccount_alreadyDeleted_returns409() throws Exception {
         given(accountStatusUseCase.deleteAccount(eq("acc-123"), eq(StatusChangeReason.ADMIN_DELETE),
-                eq("operator"), eq("op-1")))
+                eq("operator"), eq("op-1"), any()))
                 .willThrow(new StateTransitionException(AccountStatus.DELETED, AccountStatus.DELETED,
                         StatusChangeReason.ADMIN_DELETE));
 
@@ -166,7 +166,7 @@ class InternalControllerTest {
     @DisplayName("POST /internal/accounts/{id}/delete not found returns 404")
     void deleteAccount_notFound_returns404() throws Exception {
         given(accountStatusUseCase.deleteAccount(eq("acc-999"), eq(StatusChangeReason.ADMIN_DELETE),
-                eq("operator"), eq("op-1")))
+                eq("operator"), eq("op-1"), any()))
                 .willThrow(new AccountNotFoundException("acc-999"));
 
         mockMvc.perform(post("/internal/accounts/acc-999/delete")

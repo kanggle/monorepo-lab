@@ -51,12 +51,12 @@ class AccountAdminUseCaseTest {
     @Test
     void lock_success_records_in_progress_then_success_completion() {
         when(auditor.newAuditId()).thenReturn("audit-1");
-        when(accountServiceClient.lock(anyString(), anyString(), anyString(), any(), anyString()))
+        when(accountServiceClient.lock(anyString(), anyString(), anyString(), any(), anyString(), anyString()))
                 .thenReturn(new AccountServiceClient.LockResponse(
                         "acc-1", "ACTIVE", "LOCKED", Instant.now(), null));
 
         LockAccountResult r = useCase.lock(new LockAccountCommand(
-                "acc-1", "fraud", "T-1", "idemp-1", operator()));
+                "acc-1", "fraud", "T-1", "idemp-1", operator(), "fan-platform"));
 
         assertThat(r.auditId()).isEqualTo("audit-1");
         assertThat(r.currentStatus()).isEqualTo("LOCKED");
@@ -64,7 +64,7 @@ class AccountAdminUseCaseTest {
         // Critical: recordStart must run BEFORE downstream call, then recordCompletion after.
         InOrder order = inOrder(auditor, accountServiceClient);
         order.verify(auditor).recordStart(any());
-        order.verify(accountServiceClient).lock(anyString(), anyString(), anyString(), any(), anyString());
+        order.verify(accountServiceClient).lock(anyString(), anyString(), anyString(), any(), anyString(), anyString());
         order.verify(auditor).recordCompletion(any());
     }
 
@@ -72,10 +72,10 @@ class AccountAdminUseCaseTest {
     void lock_downstream_failure_records_failure_completion_and_throws() {
         when(auditor.newAuditId()).thenReturn("audit-2");
         doThrow(new DownstreamFailureException("boom"))
-                .when(accountServiceClient).lock(anyString(), anyString(), anyString(), any(), anyString());
+                .when(accountServiceClient).lock(anyString(), anyString(), anyString(), any(), anyString(), anyString());
 
         assertThatThrownBy(() -> useCase.lock(new LockAccountCommand(
-                "acc-1", "fraud", null, "idemp-2", operator())))
+                "acc-1", "fraud", null, "idemp-2", operator(), "fan-platform")))
                 .isInstanceOf(DownstreamFailureException.class);
 
         verify(auditor, times(1)).recordStart(any());
@@ -85,7 +85,7 @@ class AccountAdminUseCaseTest {
     @Test
     void lock_missing_reason_throws_reason_required_before_any_audit() {
         assertThatThrownBy(() -> useCase.lock(new LockAccountCommand(
-                "acc-1", "", null, "idemp-3", operator())))
+                "acc-1", "", null, "idemp-3", operator(), "fan-platform")))
                 .isInstanceOf(ReasonRequiredException.class);
 
         verify(auditor, never()).recordStart(any());
@@ -102,11 +102,11 @@ class AccountAdminUseCaseTest {
         CallNotPermittedException cbEx = CallNotPermittedException.createCallNotPermittedException(
                 CircuitBreaker.of("accountService", CircuitBreakerConfig.ofDefaults()));
         doThrow(cbEx).when(accountServiceClient)
-                .lock(anyString(), anyString(), anyString(), any(), anyString());
+                .lock(anyString(), anyString(), anyString(), any(), anyString(), anyString());
 
         assertThatExceptionOfType(CallNotPermittedException.class)
                 .isThrownBy(() -> useCase.lock(new LockAccountCommand(
-                        "acc-1", "fraud", null, "idemp-cb-1", operator())));
+                        "acc-1", "fraud", null, "idemp-cb-1", operator(), "fan-platform")));
 
         var captor = forClass(AdminActionAuditor.CompletionRecord.class);
         verify(auditor, times(1)).recordStart(any());
@@ -121,11 +121,11 @@ class AccountAdminUseCaseTest {
         CallNotPermittedException cbEx = CallNotPermittedException.createCallNotPermittedException(
                 CircuitBreaker.of("accountService", CircuitBreakerConfig.ofDefaults()));
         doThrow(cbEx).when(accountServiceClient)
-                .unlock(anyString(), anyString(), anyString(), any(), anyString());
+                .unlock(anyString(), anyString(), anyString(), any(), anyString(), anyString());
 
         assertThatExceptionOfType(CallNotPermittedException.class)
                 .isThrownBy(() -> useCase.unlock(new UnlockAccountCommand(
-                        "acc-1", "restore", null, "idemp-cb-2", operator())));
+                        "acc-1", "restore", null, "idemp-cb-2", operator(), "fan-platform")));
 
         var captor = forClass(AdminActionAuditor.CompletionRecord.class);
         verify(auditor, times(1)).recordCompletion(captor.capture());
@@ -140,10 +140,10 @@ class AccountAdminUseCaseTest {
                 .when(auditor).recordStart(any());
 
         assertThatThrownBy(() -> useCase.lock(new LockAccountCommand(
-                "acc-1", "fraud", null, "idemp-5", operator())))
+                "acc-1", "fraud", null, "idemp-5", operator(), "fan-platform")))
                 .isInstanceOf(AuditFailureException.class);
 
         // A10 fail-closed: downstream must NOT be called when audit INSERT fails.
-        verify(accountServiceClient, never()).lock(anyString(), anyString(), anyString(), any(), anyString());
+        verify(accountServiceClient, never()).lock(anyString(), anyString(), anyString(), any(), anyString(), anyString());
     }
 }

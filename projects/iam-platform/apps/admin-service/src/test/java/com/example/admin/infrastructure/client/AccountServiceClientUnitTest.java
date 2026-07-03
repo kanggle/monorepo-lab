@@ -115,7 +115,7 @@ class AccountServiceClientUnitTest {
                                 "\"unlockedAt\":null}")));
 
         AccountServiceClient.LockResponse resp =
-                client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1");
+                client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1", "fan-platform");
 
         assertThat(resp.currentStatus()).isEqualTo("LOCKED");
         assertThat(resp.accountId()).isEqualTo("acc-1");
@@ -131,10 +131,11 @@ class AccountServiceClientUnitTest {
                         .withBody("{\"accountId\":\"acc-1\",\"previousStatus\":\"ACTIVE\"," +
                                 "\"currentStatus\":\"LOCKED\",\"lockedAt\":\"2026-01-01T00:00:00Z\"}")));
 
-        client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1");
+        client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1", "fan-platform");
 
         wireMock.verify(postRequestedFor(urlPathMatching("/internal/accounts/.*/lock"))
                 .withHeader("Authorization", equalTo("Bearer test-jwt"))
+                .withHeader("X-Tenant-Id", equalTo("fan-platform"))
                 .withoutHeader("X-Internal-Token"));
     }
 
@@ -146,7 +147,7 @@ class AccountServiceClientUnitTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"code\":\"ACCOUNT_ALREADY_LOCKED\"}")));
 
-        assertThatThrownBy(() -> client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1"))
+        assertThatThrownBy(() -> client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1", "fan-platform"))
                 .isInstanceOf(NonRetryableDownstreamException.class);
     }
 
@@ -156,7 +157,7 @@ class AccountServiceClientUnitTest {
         wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
                 .willReturn(aResponse().withStatus(500)));
 
-        assertThatThrownBy(() -> client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1"))
+        assertThatThrownBy(() -> client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1", "fan-platform"))
                 .isInstanceOf(DownstreamFailureException.class)
                 .isNotInstanceOf(NonRetryableDownstreamException.class);
     }
@@ -167,7 +168,7 @@ class AccountServiceClientUnitTest {
         wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
-        assertThatThrownBy(() -> client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1"))
+        assertThatThrownBy(() -> client.lock("acc-1", "op-1", "ADMIN_LOCK", null, "idemp-1", "fan-platform"))
                 .isInstanceOf(DownstreamFailureException.class);
     }
 }

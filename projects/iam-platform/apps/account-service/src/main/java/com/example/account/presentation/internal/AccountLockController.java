@@ -6,6 +6,7 @@ import com.example.account.application.result.StatusChangeResult;
 import com.example.account.application.service.AccountStatusUseCase;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.status.StatusChangeReason;
+import com.example.account.domain.tenant.TenantId;
 import com.example.account.presentation.dto.request.InternalDeleteAccountRequest;
 import com.example.account.presentation.dto.request.LockAccountRequest;
 import com.example.account.presentation.dto.request.UnlockAccountRequest;
@@ -33,6 +34,7 @@ public class AccountLockController {
     @PostMapping("/{accountId}/lock")
     public ResponseEntity<StatusChangeResponse> lockAccount(
             @PathVariable String accountId,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @Valid @RequestBody LockAccountRequest request) {
         StatusChangeReason reason = StatusChangeReason.valueOf(request.reason());
         String actorType = resolveActorType(reason);
@@ -53,13 +55,15 @@ public class AccountLockController {
                 details.isEmpty() ? null : toJson(details)
         );
 
-        StatusChangeResult result = accountStatusUseCase.changeStatus(command);
+        StatusChangeResult result = accountStatusUseCase.changeStatus(
+                command, TenantId.fromHeaderOrDefault(tenantId));
         return ResponseEntity.ok(StatusChangeResponse.from(result));
     }
 
     @PostMapping("/{accountId}/unlock")
     public ResponseEntity<StatusChangeResponse> unlockAccount(
             @PathVariable String accountId,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @Valid @RequestBody UnlockAccountRequest request) {
         StatusChangeReason reason = StatusChangeReason.valueOf(request.reason());
 
@@ -75,13 +79,15 @@ public class AccountLockController {
                 details.isEmpty() ? null : toJson(details)
         );
 
-        StatusChangeResult result = accountStatusUseCase.changeStatus(command);
+        StatusChangeResult result = accountStatusUseCase.changeStatus(
+                command, TenantId.fromHeaderOrDefault(tenantId));
         return ResponseEntity.ok(StatusChangeResponse.from(result));
     }
 
     @PostMapping("/{accountId}/delete")
     public ResponseEntity<DeleteAccountResponse> deleteAccount(
             @PathVariable String accountId,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @Valid @RequestBody InternalDeleteAccountRequest request) {
         StatusChangeReason reason = StatusChangeReason.valueOf(request.reason());
 
@@ -89,7 +95,8 @@ public class AccountLockController {
                 accountId,
                 reason,
                 "operator",
-                request.operatorId()
+                request.operatorId(),
+                TenantId.fromHeaderOrDefault(tenantId)
         );
 
         return ResponseEntity.status(HttpStatus.ACCEPTED)

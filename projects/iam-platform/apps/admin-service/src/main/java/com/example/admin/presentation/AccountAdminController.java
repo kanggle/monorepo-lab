@@ -118,13 +118,20 @@ public class AccountAdminController {
     public ResponseEntity<LockAccountResponse> lock(
             @PathVariable String accountId,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody(required = false) LockAccountRequest body) {
 
         String reason = resolveReason(headerReason, body == null ? null : body.reason());
         String ticketId = body == null ? null : body.ticketId();
+        // TASK-BE-467: resolve + effective-scope-gate the actor's active tenant
+        // (shared read gate). Out-of-scope tenant → 403 TENANT_SCOPE_DENIED (best-effort
+        // DENIED row); omitted → operator's own tenant. Stamped downstream as X-Tenant-Id.
+        OperatorContext op = OperatorContextHolder.require();
+        String resolvedTenant = queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.ACCOUNT_LOCK, Permission.ACCOUNT_LOCK).tenantId();
         LockAccountResult r = useCase.lock(new LockAccountCommand(
-                accountId, reason, ticketId, idempotencyKey, OperatorContextHolder.require()));
+                accountId, reason, ticketId, idempotencyKey, op, resolvedTenant));
         return ResponseEntity.ok(new LockAccountResponse(
                 r.accountId(), r.previousStatus(), r.currentStatus(),
                 r.operatorId(), r.lockedAt(), r.auditId()));
@@ -135,13 +142,17 @@ public class AccountAdminController {
     public ResponseEntity<UnlockAccountResponse> unlock(
             @PathVariable String accountId,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody(required = false) UnlockAccountRequest body) {
 
         String reason = resolveReason(headerReason, body == null ? null : body.reason());
         String ticketId = body == null ? null : body.ticketId();
+        OperatorContext op = OperatorContextHolder.require();
+        String resolvedTenant = queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.ACCOUNT_UNLOCK, Permission.ACCOUNT_UNLOCK).tenantId();
         UnlockAccountResult r = useCase.unlock(new UnlockAccountCommand(
-                accountId, reason, ticketId, idempotencyKey, OperatorContextHolder.require()));
+                accountId, reason, ticketId, idempotencyKey, op, resolvedTenant));
         return ResponseEntity.ok(new UnlockAccountResponse(
                 r.accountId(), r.previousStatus(), r.currentStatus(),
                 r.operatorId(), r.unlockedAt(), r.auditId()));
@@ -151,6 +162,7 @@ public class AccountAdminController {
     @RequiresPermission(Permission.ACCOUNT_LOCK)
     public ResponseEntity<BulkLockResponse> bulkLock(
             @RequestHeader("X-Operator-Reason") String headerReason,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestHeader("Idempotency-Key")
             @Size(max = 64, message = "Idempotency-Key must be ≤64 characters") String idempotencyKey,
             @Valid @RequestBody BulkLockRequest body) {
@@ -163,12 +175,18 @@ public class AccountAdminController {
             throw new ReasonRequiredException();
         }
 
+        // TASK-BE-467: resolve the actor's active tenant once for the batch; every
+        // per-row lock inherits it (cross-tenant row → that row's ACCOUNT_NOT_FOUND).
+        OperatorContext op = OperatorContextHolder.require();
+        String resolvedTenant = queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.ACCOUNT_LOCK, Permission.ACCOUNT_LOCK).tenantId();
         BulkLockAccountResult r = bulkLockUseCase.execute(new BulkLockAccountCommand(
                 body.accountIds(),
                 body.reason(),
                 body.ticketId(),
                 idempotencyKey,
-                OperatorContextHolder.require()));
+                op,
+                resolvedTenant));
 
         List<BulkLockResponse.ResultItem> items = new ArrayList<>(r.results().size());
         for (var it : r.results()) {

@@ -48,11 +48,11 @@ class SessionAdminUseCaseTest {
         CallNotPermittedException cbEx = CallNotPermittedException.createCallNotPermittedException(
                 CircuitBreaker.of("authService", CircuitBreakerConfig.ofDefaults()));
         doThrow(cbEx).when(authServiceClient)
-                .forceLogout(anyString(), anyString(), anyString(), any());
+                .forceLogout(anyString(), anyString(), anyString(), any(), any());
 
         assertThatExceptionOfType(CallNotPermittedException.class)
                 .isThrownBy(() -> useCase.revoke(new RevokeSessionCommand(
-                        "acc-1", "suspicious activity", "idemp-cb-s", operator())));
+                        "acc-1", "suspicious activity", "idemp-cb-s", operator(), "fan-platform")));
 
         ArgumentCaptor<AdminActionAuditor.CompletionRecord> captor =
                 ArgumentCaptor.forClass(AdminActionAuditor.CompletionRecord.class);

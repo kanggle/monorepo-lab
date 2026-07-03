@@ -38,7 +38,8 @@ public class AccountAdminUseCase {
                         cmd.operator().operatorId(),
                         cmd.reason(),
                         cmd.ticketId(),
-                        ik));
+                        ik,
+                        cmd.tenantId()));
         return new LockAccountResult(
                 outcome.downstream.accountId(),
                 outcome.downstream.previousStatus(),
@@ -59,7 +60,8 @@ public class AccountAdminUseCase {
                         cmd.operator().operatorId(),
                         cmd.reason(),
                         cmd.ticketId(),
-                        ik));
+                        ik,
+                        cmd.tenantId()));
         return new UnlockAccountResult(
                 outcome.downstream.accountId(),
                 outcome.downstream.previousStatus(),

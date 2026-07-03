@@ -56,10 +56,23 @@ public class AccountStatusUseCase {
         );
     }
 
+    /**
+     * NET-ZERO overload — header-less / batch callers (e.g. the dormant scheduler)
+     * stay pinned to {@link TenantId#FAN_PLATFORM}, byte-identical to today.
+     */
     @Transactional
     public StatusChangeResult changeStatus(ChangeStatusCommand command) {
-        // TASK-BE-228: tenant context is fixed to FAN_PLATFORM until TASK-BE-229
-        Account account = accountRepository.findById(TenantId.FAN_PLATFORM, command.accountId())
+        return changeStatus(command, TenantId.FAN_PLATFORM);
+    }
+
+    /**
+     * TASK-BE-467 — tenant-aware lock/unlock/status-change. The admin mutation path
+     * threads the actor's active tenant here; a cross-tenant target resolves through
+     * the tenant-scoped {@code findById} to a 404 (enumeration-safe confinement).
+     */
+    @Transactional
+    public StatusChangeResult changeStatus(ChangeStatusCommand command, TenantId tenantId) {
+        Account account = accountRepository.findById(tenantId, command.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
 
         AccountStatus previousStatus = account.getStatus();
@@ -106,11 +119,24 @@ public class AccountStatusUseCase {
                 command.reason().name(), command.actorType(), command.actorId(), now);
     }
 
+    /**
+     * NET-ZERO overload — consumer self-deletion (public status controller) stays
+     * pinned to {@link TenantId#FAN_PLATFORM}, byte-identical to today.
+     */
     @Transactional
     public DeleteAccountResult deleteAccount(String accountId, StatusChangeReason reason,
                                               String actorType, String actorId) {
-        // TASK-BE-228: tenant context is fixed to FAN_PLATFORM until TASK-BE-229
-        Account account = accountRepository.findById(TenantId.FAN_PLATFORM, accountId)
+        return deleteAccount(accountId, reason, actorType, actorId, TenantId.FAN_PLATFORM);
+    }
+
+    /**
+     * TASK-BE-467 — tenant-aware operator delete. Cross-tenant target → 404 via the
+     * tenant-scoped {@code findById} (enumeration-safe confinement).
+     */
+    @Transactional
+    public DeleteAccountResult deleteAccount(String accountId, StatusChangeReason reason,
+                                              String actorType, String actorId, TenantId tenantId) {
+        Account account = accountRepository.findById(tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         AccountStatus previousStatus = account.getStatus();
