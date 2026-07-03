@@ -1,6 +1,6 @@
 # TASK-MONO-322 — Deduplicate the ecommerce period-summary slices (shared KST bounds + shared PeriodSummary record; product-service consistency)
 
-**Status:** review
+**Status:** done
 
 **Type:** TASK-MONO
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Sonnet 4.6 (mechanical dedup replicated per service; behavior-preserving)
