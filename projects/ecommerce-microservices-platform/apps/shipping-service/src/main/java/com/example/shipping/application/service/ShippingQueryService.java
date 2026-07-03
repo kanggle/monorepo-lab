@@ -1,7 +1,8 @@
 package com.example.shipping.application.service;
 
 import com.example.web.exception.AccessDeniedException;
-import com.example.shipping.application.result.ShippingPeriodCountResult;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.shipping.application.result.ShippingResult;
 import com.example.shipping.application.result.ShippingSummary;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
@@ -13,10 +14,6 @@ import com.example.shipping.domain.repository.ShippingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.DayOfWeek;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -55,21 +52,17 @@ public class ShippingQueryService {
         );
     }
 
-    public ShippingPeriodCountResult getSummary(String userRole) {
+    public PeriodSummary getPeriodSummary(String userRole) {
         validateAdminRole(userRole);
 
-        ZoneId kst = ZoneId.of("Asia/Seoul");
-        ZonedDateTime now = ZonedDateTime.now(kst);
-        ZonedDateTime todayStart = now.toLocalDate().atStartOfDay(kst);
-        ZonedDateTime weekStart = now.toLocalDate().with(DayOfWeek.MONDAY).atStartOfDay(kst);
-        ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(kst);
+        KstPeriodBounds b = KstPeriodBounds.now();
 
-        long total = shippingRepository.countAll();
-        long today = shippingRepository.countCreatedBetween(todayStart.toInstant(), now.toInstant());
-        long week = shippingRepository.countCreatedBetween(weekStart.toInstant(), now.toInstant());
-        long month = shippingRepository.countCreatedBetween(monthStart.toInstant(), now.toInstant());
+        long total = shippingRepository.countAllForTenant();
+        long today = shippingRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week = shippingRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = shippingRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
 
-        return new ShippingPeriodCountResult(today, week, month, total);
+        return new PeriodSummary(today, week, month, total);
     }
 
     private void validateAdminRole(String userRole) {

@@ -1,7 +1,7 @@
 package com.example.shipping.application.service;
 
 import com.example.web.exception.AccessDeniedException;
-import com.example.shipping.application.result.ShippingPeriodCountResult;
+import com.example.common.summary.PeriodSummary;
 import com.example.shipping.domain.repository.ShippingRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,7 @@ import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-@DisplayName("ShippingQueryService.getSummary 단위 테스트")
+@DisplayName("ShippingQueryService.getPeriodSummary 단위 테스트")
 class ShippingQueryServiceSummaryTest {
 
     @InjectMocks
@@ -32,11 +32,11 @@ class ShippingQueryServiceSummaryTest {
 
     @Test
     @DisplayName("배송 없을 때 모든 카운트가 0")
-    void getSummary_empty_returnsAllZeros() {
-        given(shippingRepository.countAll()).willReturn(0L);
+    void getPeriodSummary_empty_returnsAllZeros() {
+        given(shippingRepository.countAllForTenant()).willReturn(0L);
         given(shippingRepository.countCreatedBetween(any(Instant.class), any(Instant.class))).willReturn(0L);
 
-        ShippingPeriodCountResult result = shippingQueryService.getSummary("ADMIN");
+        PeriodSummary result = shippingQueryService.getPeriodSummary("ADMIN");
 
         assertThat(result.today()).isZero();
         assertThat(result.week()).isZero();
@@ -46,14 +46,14 @@ class ShippingQueryServiceSummaryTest {
 
     @Test
     @DisplayName("오늘 생성된 배송 1건이 today에 반영됨")
-    void getSummary_oneTodayRow_countedInToday() {
+    void getPeriodSummary_oneTodayRow_countedInToday() {
         // total = 1, today = 1 (any between call for today window), week/month vary
-        given(shippingRepository.countAll()).willReturn(1L);
+        given(shippingRepository.countAllForTenant()).willReturn(1L);
         // First call = today window, second = week window, third = month window
         given(shippingRepository.countCreatedBetween(any(Instant.class), any(Instant.class)))
                 .willReturn(1L, 1L, 1L);
 
-        ShippingPeriodCountResult result = shippingQueryService.getSummary("ADMIN");
+        PeriodSummary result = shippingQueryService.getPeriodSummary("ADMIN");
 
         assertThat(result.total()).isEqualTo(1L);
         assertThat(result.today()).isEqualTo(1L);
@@ -63,8 +63,8 @@ class ShippingQueryServiceSummaryTest {
 
     @Test
     @DisplayName("비관리자 역할로 summary 조회 시 AccessDeniedException")
-    void getSummary_nonAdminRole_throwsAccessDeniedException() {
-        assertThatThrownBy(() -> shippingQueryService.getSummary("USER"))
+    void getPeriodSummary_nonAdminRole_throwsAccessDeniedException() {
+        assertThatThrownBy(() -> shippingQueryService.getPeriodSummary("USER"))
                 .isInstanceOf(AccessDeniedException.class);
     }
 }

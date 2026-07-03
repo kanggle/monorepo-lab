@@ -1,6 +1,6 @@
 package com.example.promotion.application;
 
-import com.example.promotion.application.result.PromotionCountSummary;
+import com.example.common.summary.PeriodSummary;
 import com.example.promotion.application.service.PromotionQueryService;
 import com.example.promotion.domain.promotion.PromotionRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -20,13 +20,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 /**
- * Unit tests for {@link PromotionQueryService#getPromotionSummary}.
+ * Unit tests for {@link PromotionQueryService#getPeriodSummary}.
  * Uses a fixed Clock so KST boundary computation is deterministic.
  * No Testcontainers — light service-layer test (TASK-BE-468).
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-@DisplayName("PromotionQueryService#getPromotionSummary 단위 테스트")
+@DisplayName("PromotionQueryService#getPeriodSummary 단위 테스트")
 class PromotionQueryServiceSummaryTest {
 
     @Mock
@@ -46,13 +46,13 @@ class PromotionQueryServiceSummaryTest {
 
     @Test
     @DisplayName("프로모션이 없으면 모든 카운트가 0이다")
-    void getPromotionSummary_empty_returnsAllZeros() {
+    void getPeriodSummary_empty_returnsAllZeros() {
         PromotionQueryService service = new PromotionQueryService(promotionRepository, clock);
 
-        given(promotionRepository.countAll()).willReturn(0L);
-        given(promotionRepository.countByCreatedAtBetween(any(), any())).willReturn(0L);
+        given(promotionRepository.countAllForTenant()).willReturn(0L);
+        given(promotionRepository.countCreatedBetween(any(), any())).willReturn(0L);
 
-        PromotionCountSummary result = service.getPromotionSummary("ADMIN");
+        PeriodSummary result = service.getPeriodSummary("ADMIN");
 
         assertThat(result.total()).isZero();
         assertThat(result.today()).isZero();
@@ -62,21 +62,21 @@ class PromotionQueryServiceSummaryTest {
 
     @Test
     @DisplayName("오늘 생성된 프로모션이 today 카운트에만 반영된다")
-    void getPromotionSummary_todayRow_countedInTodayWeekMonth() {
+    void getPeriodSummary_todayRow_countedInTodayWeekMonth() {
         PromotionQueryService service = new PromotionQueryService(promotionRepository, clock);
 
         // total = 5, today boundary counts = 2, week = 4, month = 4
-        given(promotionRepository.countAll()).willReturn(5L);
+        given(promotionRepository.countAllForTenant()).willReturn(5L);
         // today and month windows both encompass a today-created row
         // Stub: both today and week/month calls return distinct values via argument-based ordering
-        // The service calls countByCreatedAtBetween 3 times (today, week, month).
+        // The service calls countCreatedBetween 3 times (today, week, month).
         // Use thenReturn chaining on the mock so each call returns a different value.
-        given(promotionRepository.countByCreatedAtBetween(any(), any()))
+        given(promotionRepository.countCreatedBetween(any(), any()))
                 .willReturn(2L)   // today call (todayStart, now)
                 .willReturn(4L)   // week call  (weekStart, now)
                 .willReturn(4L);  // month call (monthStart, now)
 
-        PromotionCountSummary result = service.getPromotionSummary("ADMIN");
+        PeriodSummary result = service.getPeriodSummary("ADMIN");
 
         assertThat(result.total()).isEqualTo(5L);
         assertThat(result.today()).isEqualTo(2L);

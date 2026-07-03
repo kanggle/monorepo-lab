@@ -1,6 +1,6 @@
 package com.example.order.application.service;
 
-import com.example.order.application.dto.AdminOrderSummaryStats;
+import com.example.common.summary.PeriodSummary;
 import com.example.order.domain.repository.OrderRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,13 +18,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 /**
- * Unit test for {@link OrderQueryService#getOrderSummary()} (TASK-BE-468).
+ * Unit test for {@link OrderQueryService#getPeriodSummary()} (TASK-BE-468,
+ * TASK-MONO-322).
  *
  * <p>Uses a mocked {@link OrderRepository} to verify that:
  * <ul>
  *   <li>An empty tenant (all counts return 0) yields an all-zero summary.</li>
  *   <li>The count values returned by the repository are faithfully assembled
- *       into the {@link AdminOrderSummaryStats} record.</li>
+ *       into the {@link PeriodSummary} record.</li>
  * </ul>
  *
  * <p>KST boundary computation is tested indirectly: the test stubs
@@ -37,7 +38,7 @@ import static org.mockito.BDDMockito.given;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-@DisplayName("OrderQueryService.getOrderSummary() 단위 테스트")
+@DisplayName("OrderQueryService.getPeriodSummary() 단위 테스트")
 class OrderQueryServiceSummaryTest {
 
     @InjectMocks
@@ -48,40 +49,40 @@ class OrderQueryServiceSummaryTest {
 
     @Test
     @DisplayName("테넌트에 주문이 없으면 모든 카운트가 0이다")
-    void getOrderSummary_emptyTenant_returnsAllZeros() {
+    void getPeriodSummary_emptyTenant_returnsAllZeros() {
         given(orderRepository.countAllForTenant()).willReturn(0L);
         given(orderRepository.countCreatedBetween(any(Instant.class), any(Instant.class))).willReturn(0L);
 
-        AdminOrderSummaryStats stats = orderQueryService.getOrderSummary();
+        PeriodSummary summary = orderQueryService.getPeriodSummary();
 
-        assertThat(stats.total()).isZero();
-        assertThat(stats.today()).isZero();
-        assertThat(stats.week()).isZero();
-        assertThat(stats.month()).isZero();
+        assertThat(summary.total()).isZero();
+        assertThat(summary.today()).isZero();
+        assertThat(summary.week()).isZero();
+        assertThat(summary.month()).isZero();
     }
 
     @Test
     @DisplayName("방금 생성된 주문은 today, week, month, total 모두에 포함된다")
-    void getOrderSummary_orderCreatedNow_countedInAllPeriods() {
+    void getPeriodSummary_orderCreatedNow_countedInAllPeriods() {
         // A row created "now" (within the current KST day/week/month) is counted in
         // every period bucket. We stub all three period queries to return 1 and the
         // total to return 1 — the service must assemble them without mixing up fields.
         given(orderRepository.countAllForTenant()).willReturn(1L);
         given(orderRepository.countCreatedBetween(any(Instant.class), any(Instant.class))).willReturn(1L);
 
-        AdminOrderSummaryStats stats = orderQueryService.getOrderSummary();
+        PeriodSummary summary = orderQueryService.getPeriodSummary();
 
-        assertThat(stats.total()).isEqualTo(1L);
-        assertThat(stats.today()).isEqualTo(1L);
-        assertThat(stats.week()).isEqualTo(1L);
-        assertThat(stats.month()).isEqualTo(1L);
+        assertThat(summary.total()).isEqualTo(1L);
+        assertThat(summary.today()).isEqualTo(1L);
+        assertThat(summary.week()).isEqualTo(1L);
+        assertThat(summary.month()).isEqualTo(1L);
     }
 
     @Test
     @DisplayName("각 기간 카운트 값이 DTO 필드에 올바른 순서로 매핑된다")
-    void getOrderSummary_distinctCounts_mappedToCorrectFields() {
+    void getPeriodSummary_distinctCounts_mappedToCorrectFields() {
         // Stub countCreatedBetween to return different values for each call so we can
-        // verify that the assembly in getOrderSummary() preserves field identity.
+        // verify that the assembly in getPeriodSummary() preserves field identity.
         // Call order in the service: today → week → month (todayStart < weekStart < monthStart
         // only when today is not Monday of the 1st, but the stub sequence is deterministic).
         given(orderRepository.countAllForTenant()).willReturn(100L);
@@ -90,11 +91,11 @@ class OrderQueryServiceSummaryTest {
                 .willReturn(15L)  // week  (second call)
                 .willReturn(42L); // month (third call)
 
-        AdminOrderSummaryStats stats = orderQueryService.getOrderSummary();
+        PeriodSummary summary = orderQueryService.getPeriodSummary();
 
-        assertThat(stats.total()).isEqualTo(100L);
-        assertThat(stats.today()).isEqualTo(3L);
-        assertThat(stats.week()).isEqualTo(15L);
-        assertThat(stats.month()).isEqualTo(42L);
+        assertThat(summary.total()).isEqualTo(100L);
+        assertThat(summary.today()).isEqualTo(3L);
+        assertThat(summary.week()).isEqualTo(15L);
+        assertThat(summary.month()).isEqualTo(42L);
     }
 }

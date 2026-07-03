@@ -1,5 +1,7 @@
 package com.example.product.application.service;
 
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.product.application.dto.SellerListResult;
 import com.example.product.application.dto.SellerSummary;
 import com.example.product.application.port.SellerQueryPort;
@@ -34,5 +36,25 @@ public class SellerQueryService {
         Seller seller = sellerRepository.findById(sellerId)
                 .orElseThrow(() -> new SellerNotFoundException(sellerId));
         return SellerSummary.from(seller);
+    }
+
+    /**
+     * Returns tenant-scoped KST calendar-period-to-date seller counts for the
+     * admin summary dashboard (TASK-BE-468, TASK-MONO-322).
+     *
+     * <p>Boundaries are computed in Asia/Seoul (KST) so that "today", "this week",
+     * and "this month" align with the Korean business calendar rather than UTC.
+     * All three period starts are inclusive; {@code now} is the exclusive upper bound.
+     */
+    @Transactional(readOnly = true)
+    public PeriodSummary getPeriodSummary() {
+        KstPeriodBounds b = KstPeriodBounds.now();
+
+        long total = sellerRepository.countAllForTenant();
+        long today = sellerRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week  = sellerRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = sellerRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
+
+        return new PeriodSummary(today, week, month, total);
     }
 }

@@ -33,7 +33,7 @@ public interface ShippingJpaRepository extends JpaRepository<ShippingJpaEntity, 
     /** Tenant-scoped admin list filtered by status — backs {@code findByStatus}. */
     Page<ShippingJpaEntity> findByTenantIdAndStatus(String tenantId, ShippingStatus status, Pageable pageable);
 
-    /** Tenant-scoped total count — backs {@code countAll}. */
+    /** Tenant-scoped total count — backs {@code countAllForTenant}. */
     long countByTenantId(String tenantId);
 
     /** Tenant-scoped count within a createdAt window — backs period-count queries. */

@@ -99,12 +99,12 @@ public class PromotionRepositoryImpl implements PromotionRepository {
     }
 
     @Override
-    public long countAll() {
+    public long countAllForTenant() {
         return jpaRepository.countByTenantId(TenantContext.currentTenant());
     }
 
     @Override
-    public long countByCreatedAtBetween(Instant from, Instant to) {
+    public long countCreatedBetween(Instant from, Instant to) {
         return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
     }
 

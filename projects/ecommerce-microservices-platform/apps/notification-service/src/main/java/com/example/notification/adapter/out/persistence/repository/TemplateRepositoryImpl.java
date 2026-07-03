@@ -64,7 +64,7 @@ public class TemplateRepositoryImpl implements TemplateRepository {
     }
 
     @Override
-    public long countAll() {
+    public long countAllForTenant() {
         return jpaRepository.countByTenantId(TenantContext.currentTenant());
     }
 

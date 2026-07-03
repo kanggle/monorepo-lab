@@ -4,6 +4,9 @@ plugins {
 }
 
 dependencies {
+    // Shared common (KstPeriodBounds + PeriodSummary — TASK-MONO-322)
+    implementation project(':libs:java-common')
+
     // Shared Web
     implementation project(':libs:java-web')
 

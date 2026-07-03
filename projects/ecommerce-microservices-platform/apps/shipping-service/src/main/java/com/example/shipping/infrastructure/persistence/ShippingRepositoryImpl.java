@@ -97,7 +97,7 @@ public class ShippingRepositoryImpl implements ShippingRepository {
     }
 
     @Override
-    public long countAll() {
+    public long countAllForTenant() {
         // Tenant-SCOPED (current request tenant).
         return jpaRepository.countByTenantId(TenantContext.currentTenant());
     }

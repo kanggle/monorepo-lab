@@ -71,12 +71,12 @@ class UserProfileRepositoryImpl implements UserProfileRepository {
     }
 
     @Override
-    public long countForTenant() {
+    public long countAllForTenant() {
         return jpaRepository.countByTenantId(TenantContext.currentTenant());
     }
 
     @Override
-    public long countForTenantCreatedBetween(Instant from, Instant to) {
+    public long countCreatedBetween(Instant from, Instant to) {
         return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
     }
 

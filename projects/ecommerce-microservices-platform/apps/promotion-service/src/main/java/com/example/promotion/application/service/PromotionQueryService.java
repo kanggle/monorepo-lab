@@ -1,10 +1,11 @@
 package com.example.promotion.application.service;
 
 import com.example.web.exception.AccessDeniedException;
-import com.example.promotion.application.result.PromotionCountSummary;
 import com.example.promotion.application.result.PromotionDetail;
 import com.example.promotion.application.result.PromotionSummary;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.promotion.domain.promotion.Promotion;
 import com.example.promotion.domain.promotion.PromotionNotFoundException;
 import com.example.promotion.domain.promotion.PromotionRepository;
@@ -14,9 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.DayOfWeek;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -53,21 +51,17 @@ public class PromotionQueryService {
         );
     }
 
-    public PromotionCountSummary getPromotionSummary(String userRole) {
+    public PeriodSummary getPeriodSummary(String userRole) {
         validateAdminRole(userRole);
 
-        ZoneId kst = ZoneId.of("Asia/Seoul");
-        ZonedDateTime now = ZonedDateTime.now(clock).withZoneSameInstant(kst);
-        ZonedDateTime todayStart = now.toLocalDate().atStartOfDay(kst);
-        ZonedDateTime weekStart  = now.toLocalDate().with(DayOfWeek.MONDAY).atStartOfDay(kst);
-        ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(kst);
+        KstPeriodBounds b = KstPeriodBounds.from(clock);
 
-        long total = promotionRepository.countAll();
-        long today = promotionRepository.countByCreatedAtBetween(todayStart.toInstant(), now.toInstant());
-        long week  = promotionRepository.countByCreatedAtBetween(weekStart.toInstant(), now.toInstant());
-        long month = promotionRepository.countByCreatedAtBetween(monthStart.toInstant(), now.toInstant());
+        long total = promotionRepository.countAllForTenant();
+        long today = promotionRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week  = promotionRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = promotionRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
 
-        return new PromotionCountSummary(today, week, month, total);
+        return new PeriodSummary(today, week, month, total);
     }
 
     private void validateAdminRole(String userRole) {

@@ -4,9 +4,10 @@ import com.example.notification.application.command.CreateTemplateCommand;
 import com.example.notification.application.command.UpdateTemplateCommand;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.notification.application.port.in.ManageTemplateUseCase;
 import com.example.notification.application.port.out.TemplateRepository;
-import com.example.notification.application.result.TemplateSummaryResult;
 import com.example.notification.application.result.TemplateResult;
 import com.example.notification.domain.exception.TemplateAlreadyExistsException;
 import com.example.notification.domain.exception.TemplateNotFoundException;
@@ -14,10 +15,6 @@ import com.example.notification.domain.model.NotificationTemplate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.DayOfWeek;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -31,22 +28,15 @@ public class TemplateService implements ManageTemplateUseCase {
     }
 
     @Override
-    public TemplateSummaryResult getTemplateSummary() {
-        ZoneId kst = ZoneId.of("Asia/Seoul");
-        ZonedDateTime now = ZonedDateTime.now(kst);
-        ZonedDateTime todayStart = now.toLocalDate().atStartOfDay(kst);
-        ZonedDateTime weekStart = now.toLocalDate().with(DayOfWeek.MONDAY).atStartOfDay(kst);
-        ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(kst);
+    public PeriodSummary getPeriodSummary() {
+        KstPeriodBounds b = KstPeriodBounds.now();
 
-        long total = templateRepository.countAll();
-        long today = templateRepository.countCreatedBetween(
-                todayStart.toLocalDateTime(), now.toLocalDateTime());
-        long week = templateRepository.countCreatedBetween(
-                weekStart.toLocalDateTime(), now.toLocalDateTime());
-        long month = templateRepository.countCreatedBetween(
-                monthStart.toLocalDateTime(), now.toLocalDateTime());
+        long total = templateRepository.countAllForTenant();
+        long today = templateRepository.countCreatedBetween(b.todayStartLocal(), b.nowLocal());
+        long week = templateRepository.countCreatedBetween(b.weekStartLocal(), b.nowLocal());
+        long month = templateRepository.countCreatedBetween(b.monthStartLocal(), b.nowLocal());
 
-        return new TemplateSummaryResult(today, week, month, total);
+        return new PeriodSummary(today, week, month, total);
     }
 
     @Override

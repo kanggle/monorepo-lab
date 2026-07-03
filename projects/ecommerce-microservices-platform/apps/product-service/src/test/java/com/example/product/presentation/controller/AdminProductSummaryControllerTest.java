@@ -1,11 +1,10 @@
 package com.example.product.presentation.controller;
 
+import com.example.common.summary.PeriodSummary;
 import com.example.product.TestProductServiceApplication;
-import com.example.product.application.dto.ProductPeriodSummary;
 import com.example.product.application.service.AdjustStockService;
 import com.example.product.application.service.DeleteProductService;
 import com.example.product.application.service.ProductImageService;
-import com.example.product.application.service.ProductSummaryService;
 import com.example.product.application.service.QueryProductService;
 import com.example.product.application.service.RegisterProductService;
 import com.example.product.application.service.UpdateProductService;
@@ -35,9 +34,6 @@ class AdminProductSummaryControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockitoBean
-    private ProductSummaryService productSummaryService;
-
     // Required by the WebMvcTest context (sibling beans in the controller)
     @MockitoBean
     private QueryProductService queryProductService;
@@ -66,8 +62,8 @@ class AdminProductSummaryControllerTest {
     @Test
     @DisplayName("GET /api/admin/products/summary - 상품 없을 때 모든 필드 0")
     void summary_empty_allZeros() throws Exception {
-        given(productSummaryService.getSummary())
-                .willReturn(new ProductPeriodSummary(0L, 0L, 0L, 0L));
+        given(queryProductService.getPeriodSummary())
+                .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
         mockMvc.perform(get("/api/admin/products/summary"))
                 .andExpect(status().isOk())
@@ -80,8 +76,8 @@ class AdminProductSummaryControllerTest {
     @Test
     @DisplayName("GET /api/admin/products/summary - 오늘 등록 상품 있을 때 today/week/month/total 모두 반영")
     void summary_todayProduct_allPeriodsReflected() throws Exception {
-        given(productSummaryService.getSummary())
-                .willReturn(new ProductPeriodSummary(1L, 1L, 1L, 5L));
+        given(queryProductService.getPeriodSummary())
+                .willReturn(new PeriodSummary(1L, 1L, 1L, 5L));
 
         mockMvc.perform(get("/api/admin/products/summary"))
                 .andExpect(status().isOk())
@@ -94,8 +90,8 @@ class AdminProductSummaryControllerTest {
     @Test
     @DisplayName("GET /api/admin/products/summary - 역할 헤더 없이도 200 (auth는 게이트웨이 위임)")
     void summary_noRoleHeader_returns200() throws Exception {
-        given(productSummaryService.getSummary())
-                .willReturn(new ProductPeriodSummary(0L, 0L, 0L, 0L));
+        given(queryProductService.getPeriodSummary())
+                .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
         // No X-User-Role header — AdminProductController does not locally validate role
         mockMvc.perform(get("/api/admin/products/summary"))

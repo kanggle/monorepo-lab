@@ -3,13 +3,14 @@ package com.example.user.application.service;
 import com.example.user.application.command.UpdateProfileCommand;
 import com.example.user.application.event.UserProfileUpdatedSpringEvent;
 import com.example.user.application.event.UserWithdrawnSpringEvent;
-import com.example.user.application.result.UserCountSummaryResult;
 import com.example.user.application.result.UserListPageResult;
 import com.example.user.application.result.UserProfileResult;
 import com.example.user.application.result.UserProfileSummaryResult;
 import com.example.user.domain.exception.UserProfileNotFoundException;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.user.domain.model.ProfileStatus;
 import com.example.user.domain.model.UserProfile;
 import com.example.user.domain.repository.UserProfileRepository;
@@ -20,9 +21,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -111,19 +109,15 @@ public class UserProfileService {
         return new UserListPageResult(content, profiles.totalElements(), profiles.totalPages(), profiles.page(), profiles.size());
     }
 
-    public UserCountSummaryResult getCountSummary() {
-        ZoneId kst = ZoneId.of("Asia/Seoul");
-        ZonedDateTime now = ZonedDateTime.now(kst);
-        ZonedDateTime todayStart = now.toLocalDate().atStartOfDay(kst);
-        ZonedDateTime weekStart  = now.toLocalDate().with(DayOfWeek.MONDAY).atStartOfDay(kst);
-        ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(kst);
+    public PeriodSummary getPeriodSummary() {
+        KstPeriodBounds b = KstPeriodBounds.now();
 
-        long total = userProfileRepository.countForTenant();
-        long today = userProfileRepository.countForTenantCreatedBetween(todayStart.toInstant(), now.toInstant());
-        long week  = userProfileRepository.countForTenantCreatedBetween(weekStart.toInstant(), now.toInstant());
-        long month = userProfileRepository.countForTenantCreatedBetween(monthStart.toInstant(), now.toInstant());
+        long total = userProfileRepository.countAllForTenant();
+        long today = userProfileRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week  = userProfileRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = userProfileRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
 
-        return new UserCountSummaryResult(today, week, month, total);
+        return new PeriodSummary(today, week, month, total);
     }
 
     /**

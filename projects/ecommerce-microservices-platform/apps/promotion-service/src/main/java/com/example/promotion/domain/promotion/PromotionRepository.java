@@ -22,8 +22,8 @@ public interface PromotionRepository {
     PageResult<Promotion> findAllByStatus(PromotionStatus status, int page, int size, java.time.Clock clock);
 
     /** Total promotion count for the current tenant. */
-    long countAll();
+    long countAllForTenant();
 
     /** Count promotions created within [from, to) for the current tenant. */
-    long countByCreatedAtBetween(Instant from, Instant to);
+    long countCreatedBetween(Instant from, Instant to);
 }

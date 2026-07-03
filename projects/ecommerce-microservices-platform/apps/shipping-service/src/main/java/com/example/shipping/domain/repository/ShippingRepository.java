@@ -56,7 +56,7 @@ public interface ShippingRepository {
      * Tenant-SCOPED total count of all shipments for the current request tenant.
      * Resolves tenant via {@code TenantContext.currentTenant()} inside the impl.
      */
-    long countAll();
+    long countAllForTenant();
 
     /**
      * Tenant-SCOPED count of shipments created within [{@code from}, {@code to}).

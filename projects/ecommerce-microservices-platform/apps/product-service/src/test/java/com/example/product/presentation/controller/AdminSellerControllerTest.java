@@ -5,7 +5,6 @@ import com.example.product.application.dto.SellerListResult;
 import com.example.product.application.dto.SellerSummary;
 import com.example.product.application.service.RegisterSellerService;
 import com.example.product.application.service.SellerQueryService;
-import com.example.product.application.service.SellerSummaryService;
 import com.example.product.domain.exception.SellerNotFoundException;
 import com.example.product.domain.model.SellerStatus;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
@@ -41,9 +40,6 @@ class AdminSellerControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @MockitoBean
-    private SellerSummaryService sellerSummaryService;
 
     @MockitoBean
     private SellerQueryService sellerQueryService;

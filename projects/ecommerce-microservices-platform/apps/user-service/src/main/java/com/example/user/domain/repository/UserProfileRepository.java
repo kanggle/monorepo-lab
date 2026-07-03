@@ -25,7 +25,7 @@ public interface UserProfileRepository {
 
     PageResult<UserProfile> findAll(PageQuery pageQuery);
 
-    long countForTenant();
+    long countAllForTenant();
 
-    long countForTenantCreatedBetween(Instant from, Instant to);
+    long countCreatedBetween(Instant from, Instant to);
 }
