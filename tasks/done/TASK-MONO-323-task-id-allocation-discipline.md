@@ -1,9 +1,9 @@
 # TASK-MONO-323 — task ID 발급 동시성 규율 명문화 (tasks/INDEX.md)
 
-**Status:** review
+**Status:** done
 **Area:** monorepo root — `tasks/INDEX.md` (shared lifecycle doc)
 **Type:** process-doc (규율 명문화; 코드/동작 무변경)
-**Implemented:** branch `task/mono-323-task-id-allocation-discipline`. verification = doc(재독 + 링크 정합); 코드 없음.
+**Implemented:** branch `task/mono-323-task-id-allocation-discipline` → **#2183 merged** (squash `5f45c58f3`). verification = doc(재독 + 링크 정합); 코드 없음.
 **Analysis model:** Opus 4.8 · **Impl model:** Opus.
 
 ## Goal
