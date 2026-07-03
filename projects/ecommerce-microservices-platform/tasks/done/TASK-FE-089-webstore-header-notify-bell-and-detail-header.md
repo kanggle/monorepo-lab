@@ -1,6 +1,7 @@
 # TASK-FE-089 — web-store 헤더 알림 버튼 + 콘솔식 DetailHeader 통일 + 주문내역 스켈레톤 갱신
 
-- **Status**: ready
+- **Status**: done
+- **DONE (2026-07-03, 3-dim verified — PR #2150 `b66ea0728`)**: state=MERGED + origin/main tip=`b66ea0728` 일치 + pre-merge failing=0 (전 CI SUCCESS: Frontend unit vitest[Node20]·lint&build·E2E smoke·Build&Test + 전 Testcontainers Integration GREEN). 헤더 알림 벨 + 콘솔식 `DetailHeader`(알림 설정·주문 상세) + 주문내역 2줄 카드 스켈레톤. 라이브(localhost:3001) 벨·알림설정 헤더·주문 스켈레톤 육안 확인. 순수 프레젠테이션.
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
