@@ -77,10 +77,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **Console domain-landing overview series** (naming follows capability: per-domain overview first, cross-domain rename last). Reference impl = `TASK-PC-FE-156` (ecommerce overview snapshot, DONE). Each domain task's data-source/read-leg + metric set + spec/AC must be finalized before `backlog → ready`.
 
-- `TASK-PC-FE-166-wms-landing-overview-snapshot.md` — elevate `/wms` landing to an operator overview snapshot (counts + status distribution + recent). Open: console-bff read-leg vs reuse. **Blocks PC-FE-162.** (renumbered from 158 — ID collision with shared-status-badge series.)
-- `TASK-PC-FE-167-scm-landing-overview-snapshot.md` — elevate `/scm` landing (procurement/inventory/replenishment counts). **Blocks PC-FE-162.** (renumbered from 159.)
-- `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — elevate `/finance` landing (account/transaction counts; NO synthetic ₩ aggregation). **Blocks PC-FE-162.**
-- `TASK-PC-FE-161-erp-landing-overview-snapshot.md` — elevate `/erp` landing (masterdata counts + recent). Thinnest surface. **Blocks PC-FE-162.**
+**Execution order** (do NOT jump ahead): ① **PC-FE-168** shared read-leg decision → ② **PC-FE-166** (wms) first bff-domain reference impl → ③ **PC-FE-167 / 160 / 161** (scm / finance / erp) follow the wms template → ④ **PC-FE-162** cross-domain "운영 → 개요" rename capstone (after all 4 done). ecommerce PC-FE-156 (direct-model) is already DONE and is the reference for the shape.
+
+- `TASK-PC-FE-168-domain-overview-readleg-decision.md` — **lead / gating design task**: decide the shared read-leg approach for all 4 bff-domains (wms/scm/finance/erp) ONCE before any impl (direct fan-out vs reuse existing console read vs new bff overview leg; ADR-MONO-017 D3.B fixed). Docs/spec only. **Blocks PC-FE-166/167/160/161.**
+- `TASK-PC-FE-166-wms-landing-overview-snapshot.md` — elevate `/wms` landing to an operator overview snapshot (counts + status distribution + recent). **First bff-domain reference impl.** **Blocked by PC-FE-168; Blocks PC-FE-162.** (renumbered from 158 — ID collision with shared-status-badge series.)
+- `TASK-PC-FE-167-scm-landing-overview-snapshot.md` — elevate `/scm` landing (procurement/inventory/replenishment counts). **Blocked by PC-FE-168; Blocks PC-FE-162.** (renumbered from 159.)
+- `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — elevate `/finance` landing (account/transaction counts; NO synthetic ₩ aggregation). **Blocked by PC-FE-168; Blocks PC-FE-162.**
+- `TASK-PC-FE-161-erp-landing-overview-snapshot.md` — elevate `/erp` landing (masterdata counts + recent). Thinnest surface. **Blocked by PC-FE-168; Blocks PC-FE-162.**
 - `TASK-PC-FE-162-console-landing-rename-ops-to-overview.md` — **capstone (runs LAST)**: atomic cross-domain rename of all 5 landing headings `<도메인> 운영 → <도메인> 개요` (+ optional nav-leaf). **Blocked by PC-FE-166/167/160/161** (ecommerce PC-FE-156 already DONE); do NOT promote until those 4 are `done`.
 
 ## ready

@@ -35,6 +35,7 @@ per-domain overview tasks that must land **before** the cross-domain "운영 →
 
 ## Dependencies
 
+- **Blocked by:** TASK-PC-FE-168 (shared read-leg decision) — promote to `ready` only after 168 lands; follows the PC-FE-166 (wms) reference impl.
 - **Blocks:** TASK-PC-FE-162 (cross-domain rename capstone).
 - **Reference:** TASK-PC-FE-156 (ecommerce, DONE).
 
