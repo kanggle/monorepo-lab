@@ -103,6 +103,9 @@ export function NotificationSettings() {
             checked={pushEnabled}
             disabled={updatePreferences.isPending}
             onChange={(v) => handleToggle('pushEnabled', v)}
+            // When the push area opens below, drop the toggle's bottom divider so the
+            // opt-in button sits inside the area with no line directly above it.
+            divider={!pushEnabled}
           />
 
           {/* Push channel area: when push is enabled, this browser's opt-in and the

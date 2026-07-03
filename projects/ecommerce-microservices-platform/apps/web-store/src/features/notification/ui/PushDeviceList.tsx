@@ -38,7 +38,7 @@ export function PushDeviceList() {
   return (
     <section
       data-testid="push-device-list"
-      style={{ marginTop: 'var(--space-6)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border-light)' }}
+      style={{ marginTop: 'var(--space-4)' }}
     >
       {heading}
 
