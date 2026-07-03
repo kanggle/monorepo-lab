@@ -85,7 +85,7 @@ class AccountServiceClientResilienceTest {
 
     private AccountServiceClient.LockResponse callLockWithResilience(String accountId, String idempotencyKey) {
         Supplier<AccountServiceClient.LockResponse> base =
-                () -> client.lock(accountId, "op-1", "fraud", null, idempotencyKey);
+                () -> client.lock(accountId, "op-1", "fraud", null, idempotencyKey, "fan-platform");
         Supplier<AccountServiceClient.LockResponse> cbWrapped =
                 CircuitBreaker.decorateSupplier(circuitBreaker, base);
         Supplier<AccountServiceClient.LockResponse> retryWrapped =

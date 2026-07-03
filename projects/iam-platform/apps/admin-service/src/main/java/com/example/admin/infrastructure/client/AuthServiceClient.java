@@ -52,12 +52,20 @@ public class AuthServiceClient {
         this.internalToken = internalToken;
     }
 
+    /**
+     * TASK-BE-467 — {@code tenantId} is the actor's resolved active tenant, stamped
+     * as {@code X-Tenant-Id} for defense-in-depth tenant propagation. The actual
+     * refresh_tokens tenant_id confinement at auth-service is the acknowledged
+     * separate enforcement point (out of this task's scope); the header is a
+     * forward-compatible, net-zero addition today ({@code "*"} = SUPER_ADMIN scope).
+     */
     @Retry(name = "authService")
     @CircuitBreaker(name = "authService")
     public ForceLogoutResponse forceLogout(String accountId,
                                            String operatorId,
                                            String reason,
-                                           String idempotencyKey) {
+                                           String idempotencyKey,
+                                           String tenantId) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("reason", reason);
         body.put("operatorId", operatorId);
@@ -68,6 +76,7 @@ public class AuthServiceClient {
                     .headers(h -> {
                         h.add("Idempotency-Key", idempotencyKey);
                         h.add("X-Operator-ID", operatorId);
+                        if (tenantId != null) h.add("X-Tenant-Id", tenantId);
                         if (internalToken != null && !internalToken.isBlank()) {
                             h.add("X-Internal-Token", internalToken);
                         }

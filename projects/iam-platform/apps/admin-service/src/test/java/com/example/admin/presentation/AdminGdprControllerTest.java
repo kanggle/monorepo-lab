@@ -6,6 +6,7 @@ import com.example.admin.application.GdprAdminUseCase;
 import com.example.admin.application.GdprDeleteCommand;
 import com.example.admin.application.GdprDeleteResult;
 import com.example.admin.application.OperatorContext;
+import com.example.admin.application.QueryTenantScopeGate;
 import com.example.admin.application.exception.AuditFailureException;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.domain.rbac.PermissionEvaluator;
@@ -80,10 +81,15 @@ class AdminGdprControllerTest {
     @MockitoBean
     AdminActionAuditor auditor;
 
+    @MockitoBean
+    QueryTenantScopeGate queryTenantScopeGate;
+
     @BeforeEach
     void grantAll() {
         when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
         when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(true);
+        when(queryTenantScopeGate.resolve(any(), any(), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("fan-platform", true));
     }
 
     private String bearer() {
@@ -212,7 +218,7 @@ class AdminGdprControllerTest {
         Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
         DataExportResult.ProfileData profile = new DataExportResult.ProfileData(
                 "Jane", "+82-10-0000-0000", "1990-01-15", "ko-KR", "Asia/Seoul");
-        when(useCase.dataExport(anyString(), any(OperatorContext.class), anyString()))
+        when(useCase.dataExport(anyString(), any(OperatorContext.class), anyString(), anyString()))
                 .thenReturn(new DataExportResult(
                         "acc-1", "user@example.com", "ACTIVE", createdAt, profile, exportedAt));
 
@@ -237,7 +243,7 @@ class AdminGdprControllerTest {
     void export_without_profile_returns_200_with_null_profile() throws Exception {
         Instant exportedAt = Instant.parse("2026-04-25T10:00:00Z");
         Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
-        when(useCase.dataExport(anyString(), any(OperatorContext.class), anyString()))
+        when(useCase.dataExport(anyString(), any(OperatorContext.class), anyString(), anyString()))
                 .thenReturn(new DataExportResult(
                         "acc-1", "user@example.com", "ACTIVE", createdAt, null, exportedAt));
 

@@ -1,5 +1,8 @@
 package com.example.admin.presentation;
 
+import com.example.admin.application.ActionCode;
+import com.example.admin.application.OperatorContext;
+import com.example.admin.application.QueryTenantScopeGate;
 import com.example.admin.application.RevokeSessionCommand;
 import com.example.admin.application.RevokeSessionResult;
 import com.example.admin.application.SessionAdminUseCase;
@@ -24,12 +27,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class SessionAdminController {
 
     private final SessionAdminUseCase useCase;
+    private final QueryTenantScopeGate queryTenantScopeGate;
 
     @PostMapping("/{accountId}/revoke")
     @RequiresPermission(Permission.ACCOUNT_FORCE_LOGOUT)
     public ResponseEntity<RevokeSessionResponse> revoke(
             @PathVariable String accountId,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody(required = false) RevokeSessionRequest body) {
 
@@ -38,8 +43,15 @@ public class SessionAdminController {
                 : (body != null && body.reason() != null && !body.reason().isBlank() ? body.reason() : null);
         if (reason == null) throw new ReasonRequiredException();
 
+        // TASK-BE-467: resolve + effective-scope-gate the actor's active tenant;
+        // propagated as X-Tenant-Id to auth-service (defense-in-depth; refresh_tokens
+        // tenant_id confinement at auth-service is the acknowledged separate point).
+        OperatorContext op = OperatorContextHolder.require();
+        String resolvedTenant = queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.SESSION_REVOKE, Permission.ACCOUNT_FORCE_LOGOUT).tenantId();
+
         RevokeSessionResult r = useCase.revoke(new RevokeSessionCommand(
-                accountId, reason, idempotencyKey, OperatorContextHolder.require()));
+                accountId, reason, idempotencyKey, op, resolvedTenant));
         return ResponseEntity.ok(new RevokeSessionResponse(
                 r.accountId(), r.revokedSessionCount(), r.operatorId(), r.revokedAt(), r.auditId()));
     }

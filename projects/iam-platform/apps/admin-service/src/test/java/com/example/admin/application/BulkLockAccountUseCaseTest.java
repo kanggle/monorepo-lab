@@ -64,7 +64,7 @@ class BulkLockAccountUseCaseTest {
         List<String> ids = IntStream.range(0, 101).mapToObj(i -> "acc-" + i).collect(Collectors.toList());
 
         assertThatThrownBy(() -> useCase.execute(new BulkLockAccountCommand(
-                ids, "fraud-wave", null, "idemp-1", operator())))
+                ids, "fraud-wave", null, "idemp-1", operator(), "fan-platform")))
                 .isInstanceOf(BatchSizeExceededException.class);
 
         verify(accountAdminUseCase, never()).lock(any());
@@ -81,7 +81,7 @@ class BulkLockAccountUseCaseTest {
         });
 
         BulkLockAccountResult r = useCase.execute(new BulkLockAccountCommand(
-                ids, "fraud-wave", null, "idemp-100", operator()));
+                ids, "fraud-wave", null, "idemp-100", operator(), "fan-platform"));
 
         assertThat(r.results()).hasSize(100);
         verify(accountAdminUseCase, times(100)).lock(any());
@@ -90,7 +90,7 @@ class BulkLockAccountUseCaseTest {
     @Test
     void reason_shorter_than_8_throws_reason_required() {
         assertThatThrownBy(() -> useCase.execute(new BulkLockAccountCommand(
-                List.of("acc-1"), "short", null, "idemp", operator())))
+                List.of("acc-1"), "short", null, "idemp", operator(), "fan-platform")))
                 .isInstanceOf(ReasonRequiredException.class);
     }
 
@@ -103,7 +103,7 @@ class BulkLockAccountUseCaseTest {
 
         BulkLockAccountResult r = useCase.execute(new BulkLockAccountCommand(
                 List.of("acc-1", "acc-2", "acc-1", "acc-3", "acc-2"),
-                "fraud-wave-dedup", null, "idemp-dedup", operator()));
+                "fraud-wave-dedup", null, "idemp-dedup", operator(), "fan-platform"));
 
         assertThat(r.results()).extracting(BulkLockAccountResult.Item::accountId)
                 .containsExactly("acc-1", "acc-2", "acc-3");
@@ -130,7 +130,7 @@ class BulkLockAccountUseCaseTest {
 
         BulkLockAccountResult r = useCase.execute(new BulkLockAccountCommand(
                 List.of("acc-ok", "acc-404", "acc-409", "acc-500"),
-                "partial-failure-test", null, "idemp-partial", operator()));
+                "partial-failure-test", null, "idemp-partial", operator(), "fan-platform"));
 
         assertThat(r.results()).extracting(BulkLockAccountResult.Item::outcome)
                 .containsExactly("LOCKED", "NOT_FOUND", "ALREADY_LOCKED", "FAILURE");
@@ -156,7 +156,7 @@ class BulkLockAccountUseCaseTest {
 
         BulkLockAccountResult r = useCase.execute(new BulkLockAccountCommand(
                 List.of("acc-404-blank", "acc-400-blank"),
-                "http-status-fallback-reason", null, "idemp-fallback", operator()));
+                "http-status-fallback-reason", null, "idemp-fallback", operator(), "fan-platform"));
 
         assertThat(r.results().get(0).outcome()).isEqualTo("NOT_FOUND");
         assertThat(r.results().get(1).outcome()).isEqualTo("ALREADY_LOCKED");
@@ -179,7 +179,7 @@ class BulkLockAccountUseCaseTest {
                 .thenReturn(Optional.of(existing));
 
         BulkLockAccountResult replayed = useCase.execute(new BulkLockAccountCommand(
-                List.of("acc-a"), "replay-test-reason", null, "idemp-replay", operator()));
+                List.of("acc-a"), "replay-test-reason", null, "idemp-replay", operator(), "fan-platform"));
 
         assertThat(replayed.replayed()).isTrue();
         assertThat(replayed.results()).hasSize(1);
@@ -196,7 +196,7 @@ class BulkLockAccountUseCaseTest {
         when(idempotencyPort.find(anyLong(), anyString())).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> useCase.execute(new BulkLockAccountCommand(
-                List.of("acc-z"), "divergent-payload", null, "idemp-conflict", operator())))
+                List.of("acc-z"), "divergent-payload", null, "idemp-conflict", operator(), "fan-platform")))
                 .isInstanceOf(IdempotencyKeyConflictException.class);
 
         verify(accountAdminUseCase, never()).lock(any());
@@ -227,7 +227,7 @@ class BulkLockAccountUseCaseTest {
                 .when(idempotencyPort).save(anyLong(), anyString(), anyString(), anyString(), any());
 
         BulkLockAccountResult r = useCase.execute(new BulkLockAccountCommand(
-                ids, "race-reason-ok", null, "idemp-race", operator()));
+                ids, "race-reason-ok", null, "idemp-race", operator(), "fan-platform"));
 
         // Winner's response body is replayed.
         assertThat(r.replayed()).isTrue();
@@ -255,7 +255,7 @@ class BulkLockAccountUseCaseTest {
                 .when(idempotencyPort).save(anyLong(), anyString(), anyString(), anyString(), any());
 
         assertThatThrownBy(() -> useCase.execute(new BulkLockAccountCommand(
-                ids, "race-divergent-reason", null, "idemp-race-bad", operator())))
+                ids, "race-divergent-reason", null, "idemp-race-bad", operator(), "fan-platform")))
                 .isInstanceOf(IdempotencyKeyConflictException.class);
     }
 }

@@ -34,10 +34,22 @@ public class GdprDeleteUseCase {
     private final AccountStatusMachine statusMachine;
     private final AccountEventPublisher eventPublisher;
 
+    /**
+     * NET-ZERO overload — header-less callers stay pinned to
+     * {@link TenantId#FAN_PLATFORM}, byte-identical to today.
+     */
     @Transactional
     public GdprDeleteResult execute(String accountId, String operatorId) {
-        // TASK-BE-228: tenant context is fixed to FAN_PLATFORM until TASK-BE-229
-        Account account = accountRepository.findById(TenantId.FAN_PLATFORM, accountId)
+        return execute(accountId, operatorId, TenantId.FAN_PLATFORM);
+    }
+
+    /**
+     * TASK-BE-467 — tenant-aware GDPR erasure. Cross-tenant target → 404 via the
+     * tenant-scoped {@code findById} (enumeration-safe confinement).
+     */
+    @Transactional
+    public GdprDeleteResult execute(String accountId, String operatorId, TenantId tenantId) {
+        Account account = accountRepository.findById(tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         AccountStatus previousStatus = account.getStatus();

@@ -32,6 +32,25 @@ public record TenantId(String value) {
         }
     }
 
+    /**
+     * TASK-BE-467 — resolve an inbound {@code X-Tenant-Id} header into a concrete
+     * tenant for the admin account-mutation write-path.
+     *
+     * <p><b>NET-ZERO default:</b> an absent, blank, or platform-scope wildcard
+     * ({@code "*"}) header pins to {@link #FAN_PLATFORM} — byte-identical to the
+     * pre-BE-467 hard-pin, so the only current holder (SUPER_ADMIN {@code '*'}) and
+     * any header-less caller keep today's behavior. A concrete tenant slug is
+     * honored, so a cross-tenant target resolves through the tenant-scoped
+     * {@code findById} to an enumeration-safe {@code 404} (confinement for free —
+     * never a 403 that would confirm the account exists in another tenant).
+     */
+    public static TenantId fromHeaderOrDefault(String headerValue) {
+        if (headerValue == null || headerValue.isBlank() || "*".equals(headerValue)) {
+            return FAN_PLATFORM;
+        }
+        return new TenantId(headerValue);
+    }
+
     @Override
     public String toString() {
         return value;

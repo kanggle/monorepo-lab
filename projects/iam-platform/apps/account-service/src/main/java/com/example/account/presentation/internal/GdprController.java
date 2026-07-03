@@ -4,6 +4,7 @@ import com.example.account.application.result.DataExportResult;
 import com.example.account.application.result.GdprDeleteResult;
 import com.example.account.application.service.DataExportUseCase;
 import com.example.account.application.service.GdprDeleteUseCase;
+import com.example.account.domain.tenant.TenantId;
 import com.example.account.presentation.dto.request.GdprDeleteRequest;
 import com.example.account.presentation.dto.response.DataExportResponse;
 import com.example.account.presentation.dto.response.GdprDeleteResponse;
@@ -23,17 +24,21 @@ public class GdprController {
     @PostMapping("/{accountId}/gdpr-delete")
     public ResponseEntity<GdprDeleteResponse> gdprDelete(
             @PathVariable String accountId,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @Valid @RequestBody GdprDeleteRequest request) {
 
-        GdprDeleteResult result = gdprDeleteUseCase.execute(accountId, request.operatorId());
+        GdprDeleteResult result = gdprDeleteUseCase.execute(
+                accountId, request.operatorId(), TenantId.fromHeaderOrDefault(tenantId));
         return ResponseEntity.ok(GdprDeleteResponse.from(result));
     }
 
     @GetMapping("/{accountId}/export")
     public ResponseEntity<DataExportResponse> export(
-            @PathVariable String accountId) {
+            @PathVariable String accountId,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId) {
 
-        DataExportResult result = dataExportUseCase.execute(accountId);
+        DataExportResult result = dataExportUseCase.execute(
+                accountId, TenantId.fromHeaderOrDefault(tenantId));
         return ResponseEntity.ok(DataExportResponse.from(result));
     }
 }

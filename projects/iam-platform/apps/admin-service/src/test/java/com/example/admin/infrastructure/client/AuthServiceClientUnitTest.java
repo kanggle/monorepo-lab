@@ -49,7 +49,7 @@ class AuthServiceClientUnitTest {
                         .withBody("{\"accountId\":\"acc-1\",\"revokedTokenCount\":3,\"revokedAt\":null}")));
 
         AuthServiceClient.ForceLogoutResponse response =
-                client.forceLogout("acc-1", "op-1", "ADMIN_LOCK", "idemp-key-1");
+                client.forceLogout("acc-1", "op-1", "ADMIN_LOCK", "idemp-key-1", "fan-platform");
 
         assertThat(response.accountId()).isEqualTo("acc-1");
         assertThat(response.revokedTokenCount()).isEqualTo(3);
@@ -61,7 +61,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlPathMatching("/internal/auth/accounts/.*/force-logout"))
                 .willReturn(aResponse().withStatus(422)));
 
-        assertThatThrownBy(() -> client.forceLogout("acc-1", "op-1", "reason", "idemp-1"))
+        assertThatThrownBy(() -> client.forceLogout("acc-1", "op-1", "reason", "idemp-1", "fan-platform"))
                 .isInstanceOf(NonRetryableDownstreamException.class);
     }
 
@@ -71,7 +71,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlPathMatching("/internal/auth/accounts/.*/force-logout"))
                 .willReturn(aResponse().withStatus(500)));
 
-        assertThatThrownBy(() -> client.forceLogout("acc-1", "op-1", "reason", "idemp-1"))
+        assertThatThrownBy(() -> client.forceLogout("acc-1", "op-1", "reason", "idemp-1", "fan-platform"))
                 .isInstanceOf(DownstreamFailureException.class)
                 .isNotInstanceOf(NonRetryableDownstreamException.class);
     }
@@ -82,7 +82,7 @@ class AuthServiceClientUnitTest {
         wireMockServer.stubFor(post(urlPathMatching("/internal/auth/accounts/.*/force-logout"))
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
-        assertThatThrownBy(() -> client.forceLogout("acc-1", "op-1", "reason", "idemp-1"))
+        assertThatThrownBy(() -> client.forceLogout("acc-1", "op-1", "reason", "idemp-1", "fan-platform"))
                 .isInstanceOf(DownstreamFailureException.class);
     }
 

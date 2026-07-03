@@ -1,6 +1,7 @@
 package com.example.admin.presentation;
 
 import com.example.admin.application.AdminActionAuditor;
+import com.example.admin.application.QueryTenantScopeGate;
 import com.example.admin.application.RevokeSessionResult;
 import com.example.admin.application.SessionAdminUseCase;
 import com.example.admin.domain.rbac.PermissionEvaluator;
@@ -67,10 +68,16 @@ class SessionAdminControllerTest {
     @MockitoBean
     AdminActionAuditor auditor;
 
+    @MockitoBean
+    QueryTenantScopeGate queryTenantScopeGate;
+
     @BeforeEach
     void grantAll() {
         when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
         when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(true);
+        // TASK-BE-467: revoke resolves the actor's active tenant via the read gate.
+        when(queryTenantScopeGate.resolve(any(), any(), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("fan-platform", true));
     }
 
     private String bearer() {

@@ -1,9 +1,45 @@
 # TASK-BE-467 — Multi-tenant admin account-mutation propagation + confinement (was: GAP-ACCOUNT-01)
 
-- **Status**: ready
+- **Status**: review
 - **Domain**: iam (admin-service + account-service)
 - **Type**: correctness + latent-confinement (backend) — **downgraded from "security-critical vuln"**
 - **분석=Opus 4.8 / 구현 권장=Opus 4.8**
+
+## Implementation Notes (2026-07-03)
+
+2-layer confinement delivered exactly per the Design:
+
+- **Layer 2 (account-service, the actual confinement)** — `TenantId.fromHeaderOrDefault(header)`
+  (absent/blank/`'*'` → `FAN_PLATFORM` = net-zero; concrete slug honored). Admin-reachable
+  mutation use-cases gained a tenant-aware overload replacing the `TenantId.FAN_PLATFORM`
+  literal in `findById`: `AccountStatusUseCase` (changeStatus lock/unlock + deleteAccount),
+  `GdprDeleteUseCase`, `DataExportUseCase`. The no-arg overloads delegate to FAN so the
+  dormant scheduler + consumer self-delete + all existing unit tests stay byte-identical.
+  Internal controllers (`AccountLockController`, `GdprController`) read `X-Tenant-Id`. The
+  consumer-facing FAN-pinned use-cases (signup/verify-email/profile/last-login) were NOT
+  touched (genuine BE-229 Phase-3 debt). No new cross-tenant finder.
+- **Layer 1 (admin-service, actor scope)** — lock/unlock/bulk-lock/gdpr-delete/export
+  controllers resolve the active tenant via the existing `QueryTenantScopeGate` (shared with
+  the read path; out-of-scope → `403 TENANT_SCOPE_DENIED` + best-effort DENIED row) and stamp
+  it as `X-Tenant-Id` through the command → use-case → `AccountServiceClient`
+  (`callGet`/`callPost` gained a `tenantId` header). bulk-lock threads the batch tenant into
+  every per-row `LockAccountCommand` (cross-tenant row → that row's `ACCOUNT_NOT_FOUND`, batch
+  still 200).
+- **session-revoke** — admin-side threading + `X-Tenant-Id` propagation to
+  `AuthServiceClient.forceLogout` IS delivered (SessionAdminController scope), but the
+  **actual** refresh_tokens `tenant_id` confinement lives in auth-service and is explicitly
+  out of this task's file scope (auth-service not listed) — carried as the acknowledged
+  **separate enforcement point** / follow-up. So revoke's cross-tenant 404 is NOT yet
+  guaranteed; documented in admin-api.md.
+
+**Tests**: all admin-service + account-service unit tests green locally (net-zero, AC-2).
+AC-5 Testcontainers IT added — `AccountMutationTenantConfinementIntegrationTest` (same-tenant
+lock 200; cross-tenant lock/gdpr/export → 404 + un-mutated; no-header/`'*'` → FAN net-zero;
+seeds a `wms` non-FAN account). **CI Linux is the authority** — locally every
+`@Tag("integration")` class is Docker-condition-skipped (`DockerAvailableCondition`), so the IT
+was verified for compilation + structural parity with the proven
+`TenantProvisioningIntegrationTest`, not run. Contracts updated: `admin-to-account.md` +
+`admin-api.md`.
 
 ## ✅ UNBLOCKED (2026-07-03) — now a bounded, actionable residual
 

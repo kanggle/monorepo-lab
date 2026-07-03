@@ -59,12 +59,12 @@ class GdprAdminUseCaseTest {
         void gdprDelete_success_records_start_then_success_completion_and_returns_result() {
             when(auditor.newAuditId()).thenReturn("audit-1");
             Instant maskedAt = Instant.parse("2026-04-25T10:00:00Z");
-            when(accountServiceClient.gdprDelete(anyString(), anyString(), anyString()))
+            when(accountServiceClient.gdprDelete(anyString(), anyString(), anyString(), anyString()))
                     .thenReturn(new AccountServiceClient.GdprDeleteResponse(
                             "acc-1", "DELETED", "hash-abc", maskedAt));
 
             GdprDeleteResult r = useCase.gdprDelete(new GdprDeleteCommand(
-                    "acc-1", "user requested deletion", "T-1", "idemp-1", operator()));
+                    "acc-1", "user requested deletion", "T-1", "idemp-1", operator(), "fan-platform"));
 
             assertThat(r.accountId()).isEqualTo("acc-1");
             assertThat(r.status()).isEqualTo("DELETED");
@@ -74,7 +74,7 @@ class GdprAdminUseCaseTest {
             // Critical: recordStart must run BEFORE downstream call, then recordCompletion(SUCCESS).
             InOrder order = inOrder(auditor, accountServiceClient);
             order.verify(auditor).recordStart(any());
-            order.verify(accountServiceClient).gdprDelete(anyString(), anyString(), anyString());
+            order.verify(accountServiceClient).gdprDelete(anyString(), anyString(), anyString(), anyString());
             ArgumentCaptor<AdminActionAuditor.CompletionRecord> captor =
                     ArgumentCaptor.forClass(AdminActionAuditor.CompletionRecord.class);
             order.verify(auditor).recordCompletion(captor.capture());
@@ -87,12 +87,12 @@ class GdprAdminUseCaseTest {
         @DisplayName("downstream maskedAt 이 null 이면 useCase 가 completedAt 을 사용한다")
         void gdprDelete_downstream_maskedAt_null_uses_completedAt() {
             when(auditor.newAuditId()).thenReturn("audit-mask-null");
-            when(accountServiceClient.gdprDelete(anyString(), anyString(), anyString()))
+            when(accountServiceClient.gdprDelete(anyString(), anyString(), anyString(), anyString()))
                     .thenReturn(new AccountServiceClient.GdprDeleteResponse(
                             "acc-1", "DELETED", "hash-abc", null));
 
             GdprDeleteResult r = useCase.gdprDelete(new GdprDeleteCommand(
-                    "acc-1", "user requested deletion", null, "idemp-mask-null", operator()));
+                    "acc-1", "user requested deletion", null, "idemp-mask-null", operator(), "fan-platform"));
 
             assertThat(r.maskedAt()).isNotNull();
         }
@@ -101,11 +101,11 @@ class GdprAdminUseCaseTest {
         @DisplayName("reason 이 null 이면 ReasonRequiredException 을 던지고 downstream 을 호출하지 않는다")
         void gdprDelete_missing_reason_throws_reason_required_before_any_audit() {
             assertThatThrownBy(() -> useCase.gdprDelete(new GdprDeleteCommand(
-                    "acc-1", null, null, "idemp-2", operator())))
+                    "acc-1", null, null, "idemp-2", operator(), "fan-platform")))
                     .isInstanceOf(ReasonRequiredException.class);
 
             verify(accountServiceClient, never())
-                    .gdprDelete(anyString(), anyString(), anyString());
+                    .gdprDelete(anyString(), anyString(), anyString(), anyString());
             verify(auditor, never()).recordStart(any());
             verify(auditor, never()).recordCompletion(any());
         }
@@ -114,11 +114,11 @@ class GdprAdminUseCaseTest {
         @DisplayName("reason 이 공백 문자열이면 ReasonRequiredException 을 던진다")
         void gdprDelete_blank_reason_throws_reason_required() {
             assertThatThrownBy(() -> useCase.gdprDelete(new GdprDeleteCommand(
-                    "acc-1", "   ", null, "idemp-blank", operator())))
+                    "acc-1", "   ", null, "idemp-blank", operator(), "fan-platform")))
                     .isInstanceOf(ReasonRequiredException.class);
 
             verify(accountServiceClient, never())
-                    .gdprDelete(anyString(), anyString(), anyString());
+                    .gdprDelete(anyString(), anyString(), anyString(), anyString());
         }
 
         @Test
@@ -126,10 +126,10 @@ class GdprAdminUseCaseTest {
         void gdprDelete_downstream_failure_records_failure_completion_and_rethrows() {
             when(auditor.newAuditId()).thenReturn("audit-3");
             doThrow(new DownstreamFailureException("account-service unavailable"))
-                    .when(accountServiceClient).gdprDelete(anyString(), anyString(), anyString());
+                    .when(accountServiceClient).gdprDelete(anyString(), anyString(), anyString(), anyString());
 
             assertThatThrownBy(() -> useCase.gdprDelete(new GdprDeleteCommand(
-                    "acc-1", "user requested deletion", null, "idemp-3", operator())))
+                    "acc-1", "user requested deletion", null, "idemp-3", operator(), "fan-platform")))
                     .isInstanceOf(DownstreamFailureException.class);
 
             ArgumentCaptor<AdminActionAuditor.CompletionRecord> captor =
@@ -147,11 +147,11 @@ class GdprAdminUseCaseTest {
             CallNotPermittedException cbEx = CallNotPermittedException.createCallNotPermittedException(
                     CircuitBreaker.of("accountService", CircuitBreakerConfig.ofDefaults()));
             doThrow(cbEx).when(accountServiceClient)
-                    .gdprDelete(anyString(), anyString(), anyString());
+                    .gdprDelete(anyString(), anyString(), anyString(), anyString());
 
             assertThatExceptionOfType(CallNotPermittedException.class)
                     .isThrownBy(() -> useCase.gdprDelete(new GdprDeleteCommand(
-                            "acc-1", "user requested deletion", null, "idemp-cb", operator())));
+                            "acc-1", "user requested deletion", null, "idemp-cb", operator(), "fan-platform")));
 
             ArgumentCaptor<AdminActionAuditor.CompletionRecord> captor =
                     ArgumentCaptor.forClass(AdminActionAuditor.CompletionRecord.class);
@@ -175,11 +175,11 @@ class GdprAdminUseCaseTest {
             AccountServiceClient.DataExportProfile profile =
                     new AccountServiceClient.DataExportProfile(
                             "Jane", "+82-10-0000-0000", "1990-01-15", "ko-KR", "Asia/Seoul");
-            when(accountServiceClient.export(anyString(), anyString()))
+            when(accountServiceClient.export(anyString(), anyString(), anyString()))
                     .thenReturn(new AccountServiceClient.DataExportResponse(
                             "acc-1", "user@example.com", "ACTIVE", createdAt, profile, exportedAt));
 
-            DataExportResult r = useCase.dataExport("acc-1", operator(), "subject access request");
+            DataExportResult r = useCase.dataExport("acc-1", operator(), "subject access request", "fan-platform");
 
             assertThat(r.accountId()).isEqualTo("acc-1");
             assertThat(r.email()).isEqualTo("user@example.com");
@@ -207,11 +207,11 @@ class GdprAdminUseCaseTest {
             when(auditor.newAuditId()).thenReturn("audit-export-null-profile");
             Instant exportedAt = Instant.parse("2026-04-25T10:00:00Z");
             Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
-            when(accountServiceClient.export(anyString(), anyString()))
+            when(accountServiceClient.export(anyString(), anyString(), anyString()))
                     .thenReturn(new AccountServiceClient.DataExportResponse(
                             "acc-1", "user@example.com", "ACTIVE", createdAt, null, exportedAt));
 
-            DataExportResult r = useCase.dataExport("acc-1", operator(), "subject access request");
+            DataExportResult r = useCase.dataExport("acc-1", operator(), "subject access request", "fan-platform");
 
             assertThat(r.profile()).isNull();
         }
@@ -219,20 +219,20 @@ class GdprAdminUseCaseTest {
         @Test
         @DisplayName("reason 이 null 이면 ReasonRequiredException 을 던지고 downstream 을 호출하지 않는다")
         void dataExport_missing_reason_throws_reason_required() {
-            assertThatThrownBy(() -> useCase.dataExport("acc-1", operator(), null))
+            assertThatThrownBy(() -> useCase.dataExport("acc-1", operator(), null, "fan-platform"))
                     .isInstanceOf(ReasonRequiredException.class);
 
-            verify(accountServiceClient, never()).export(anyString(), anyString());
+            verify(accountServiceClient, never()).export(anyString(), anyString(), anyString());
             verify(auditor, never()).record(any());
         }
 
         @Test
         @DisplayName("reason 이 공백 문자열이면 ReasonRequiredException 을 던진다")
         void dataExport_blank_reason_throws_reason_required() {
-            assertThatThrownBy(() -> useCase.dataExport("acc-1", operator(), "   "))
+            assertThatThrownBy(() -> useCase.dataExport("acc-1", operator(), "   ", "fan-platform"))
                     .isInstanceOf(ReasonRequiredException.class);
 
-            verify(accountServiceClient, never()).export(anyString(), anyString());
+            verify(accountServiceClient, never()).export(anyString(), anyString(), anyString());
         }
 
         @Test
@@ -240,9 +240,9 @@ class GdprAdminUseCaseTest {
         void dataExport_downstream_failure_records_failure_meta_audit_and_rethrows() {
             when(auditor.newAuditId()).thenReturn("audit-export-fail");
             doThrow(new DownstreamFailureException("account-service unavailable"))
-                    .when(accountServiceClient).export(anyString(), anyString());
+                    .when(accountServiceClient).export(anyString(), anyString(), anyString());
 
-            assertThatThrownBy(() -> useCase.dataExport("acc-1", operator(), "subject access request"))
+            assertThatThrownBy(() -> useCase.dataExport("acc-1", operator(), "subject access request", "fan-platform"))
                     .isInstanceOf(DownstreamFailureException.class);
 
             ArgumentCaptor<AdminActionAuditor.AuditRecord> captor =
@@ -258,10 +258,10 @@ class GdprAdminUseCaseTest {
             when(auditor.newAuditId()).thenReturn("audit-export-cb");
             CallNotPermittedException cbEx = CallNotPermittedException.createCallNotPermittedException(
                     CircuitBreaker.of("accountService", CircuitBreakerConfig.ofDefaults()));
-            doThrow(cbEx).when(accountServiceClient).export(anyString(), anyString());
+            doThrow(cbEx).when(accountServiceClient).export(anyString(), anyString(), anyString());
 
             assertThatExceptionOfType(CallNotPermittedException.class)
-                    .isThrownBy(() -> useCase.dataExport("acc-1", operator(), "subject access request"));
+                    .isThrownBy(() -> useCase.dataExport("acc-1", operator(), "subject access request", "fan-platform"));
 
             ArgumentCaptor<AdminActionAuditor.AuditRecord> captor =
                     ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);

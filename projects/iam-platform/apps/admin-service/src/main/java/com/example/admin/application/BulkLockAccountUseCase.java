@@ -130,7 +130,8 @@ public class BulkLockAccountUseCase {
         String perRowIdempotency = cmd.idempotencyKey() + ":" + accountId;
         try {
             accountAdminUseCase.lock(new LockAccountCommand(
-                    accountId, cmd.reason(), cmd.ticketId(), perRowIdempotency, cmd.operator()));
+                    accountId, cmd.reason(), cmd.ticketId(), perRowIdempotency, cmd.operator(),
+                    cmd.tenantId()));
             return new BulkLockAccountResult.Item(accountId, OUTCOME_LOCKED, null, null);
         } catch (NonRetryableDownstreamException ex) {
             return classifyNonRetryable(accountId, ex);

@@ -24,10 +24,22 @@ public class DataExportUseCase {
     private final AccountRepository accountRepository;
     private final ProfileRepository profileRepository;
 
+    /**
+     * NET-ZERO overload — header-less callers stay pinned to
+     * {@link TenantId#FAN_PLATFORM}, byte-identical to today.
+     */
     @Transactional(readOnly = true)
     public DataExportResult execute(String accountId) {
-        // TASK-BE-228: tenant context is fixed to FAN_PLATFORM until TASK-BE-229
-        Account account = accountRepository.findById(TenantId.FAN_PLATFORM, accountId)
+        return execute(accountId, TenantId.FAN_PLATFORM);
+    }
+
+    /**
+     * TASK-BE-467 — tenant-aware data export. Cross-tenant target → 404 via the
+     * tenant-scoped {@code findById} (enumeration-safe confinement).
+     */
+    @Transactional(readOnly = true)
+    public DataExportResult execute(String accountId, TenantId tenantId) {
+        Account account = accountRepository.findById(tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         DataExportResult.ProfileData profileData = profileRepository.findByAccountId(accountId)

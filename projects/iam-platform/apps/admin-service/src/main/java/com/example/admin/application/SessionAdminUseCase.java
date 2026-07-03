@@ -33,7 +33,8 @@ public class SessionAdminUseCase {
                     cmd.accountId(),
                     cmd.operator().operatorId(),
                     cmd.reason(),
-                    cmd.idempotencyKey());
+                    cmd.idempotencyKey(),
+                    cmd.tenantId());
         } catch (CallNotPermittedException ex) {
             // Circuit breaker OPEN on auth-service force-logout: record FAILURE
             // completion before re-throw so AdminExceptionHandler maps to 503

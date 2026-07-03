@@ -39,7 +39,8 @@ public class GdprAdminUseCase {
             downstream = accountServiceClient.gdprDelete(
                     cmd.accountId(),
                     cmd.operator().operatorId(),
-                    cmd.idempotencyKey());
+                    cmd.idempotencyKey(),
+                    cmd.tenantId());
         } catch (CallNotPermittedException ex) {
             recordAuditFailure(auditId, ActionCode.GDPR_DELETE, cmd.operator(),
                     cmd.accountId(), cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
@@ -66,7 +67,8 @@ public class GdprAdminUseCase {
                 auditId);
     }
 
-    public DataExportResult dataExport(String accountId, OperatorContext operator, String reason) {
+    public DataExportResult dataExport(String accountId, OperatorContext operator, String reason,
+                                       String tenantId) {
         AuditReasons.require(reason);
 
         String auditId = auditor.newAuditId();
@@ -75,7 +77,7 @@ public class GdprAdminUseCase {
         // Meta-audit: data export access is logged as a single-shot record
         AccountServiceClient.DataExportResponse downstream;
         try {
-            downstream = accountServiceClient.export(accountId, operator.operatorId());
+            downstream = accountServiceClient.export(accountId, operator.operatorId(), tenantId);
         } catch (CallNotPermittedException ex) {
             recordSingleShotAuditFailure(auditId, ActionCode.DATA_EXPORT, operator,
                     accountId, reason, startedAt, "CIRCUIT_OPEN: " + ex.getMessage());
