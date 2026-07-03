@@ -3,16 +3,15 @@ package com.example.order.presentation;
 import com.example.order.application.dto.AdminOrderDetail;
 import com.example.order.application.dto.AdminOrderStatusChangeResult;
 import com.example.order.application.dto.AdminOrderSummary;
-import com.example.order.application.dto.AdminOrderSummaryStats;
 import com.example.order.application.service.AdminOrderStatusService;
 import com.example.order.application.service.OrderQueryService;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
 import com.example.order.presentation.dto.AdminOrderDetailResponse;
 import com.example.order.presentation.dto.AdminOrderListResponse;
 import com.example.order.presentation.dto.AdminOrderStatusChangeRequest;
 import com.example.order.presentation.dto.AdminOrderStatusChangeResponse;
-import com.example.order.presentation.dto.AdminOrderSummaryResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -46,9 +45,8 @@ public class AdminOrderController {
     private final AdminOrderStatusService adminOrderStatusService;
 
     @GetMapping("/summary")
-    public ResponseEntity<AdminOrderSummaryResponse> getOrderSummary() {
-        AdminOrderSummaryStats stats = orderQueryService.getOrderSummary();
-        return ResponseEntity.ok(AdminOrderSummaryResponse.from(stats));
+    public ResponseEntity<PeriodSummary> getOrderSummary() {
+        return ResponseEntity.ok(orderQueryService.getPeriodSummary());
     }
 
     @GetMapping

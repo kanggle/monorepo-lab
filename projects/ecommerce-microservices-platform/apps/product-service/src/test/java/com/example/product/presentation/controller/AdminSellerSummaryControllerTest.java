@@ -1,10 +1,9 @@
 package com.example.product.presentation.controller;
 
+import com.example.common.summary.PeriodSummary;
 import com.example.product.TestProductServiceApplication;
-import com.example.product.application.dto.SellerPeriodSummary;
 import com.example.product.application.service.RegisterSellerService;
 import com.example.product.application.service.SellerQueryService;
-import com.example.product.application.service.SellerSummaryService;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,9 +31,6 @@ class AdminSellerSummaryControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private SellerSummaryService sellerSummaryService;
-
-    @MockitoBean
     private SellerQueryService sellerQueryService;
 
     @MockitoBean
@@ -43,8 +39,8 @@ class AdminSellerSummaryControllerTest {
     @Test
     @DisplayName("GET /api/admin/sellers/summary - ADMIN 헤더로 셀러 없을 때 모든 필드 0")
     void summary_empty_allZeros() throws Exception {
-        given(sellerSummaryService.getSummary())
-                .willReturn(new SellerPeriodSummary(0L, 0L, 0L, 0L));
+        given(sellerQueryService.getPeriodSummary())
+                .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
         mockMvc.perform(get("/api/admin/sellers/summary")
                         .header(ROLE_HEADER, "ADMIN"))
@@ -58,8 +54,8 @@ class AdminSellerSummaryControllerTest {
     @Test
     @DisplayName("GET /api/admin/sellers/summary - 오늘 등록 셀러 있을 때 today/week/month/total 모두 반영")
     void summary_todaySeller_allPeriodsReflected() throws Exception {
-        given(sellerSummaryService.getSummary())
-                .willReturn(new SellerPeriodSummary(1L, 1L, 1L, 3L));
+        given(sellerQueryService.getPeriodSummary())
+                .willReturn(new PeriodSummary(1L, 1L, 1L, 3L));
 
         mockMvc.perform(get("/api/admin/sellers/summary")
                         .header(ROLE_HEADER, "ADMIN"))
@@ -90,8 +86,8 @@ class AdminSellerSummaryControllerTest {
     @Test
     @DisplayName("GET /api/admin/sellers/summary - 멀티롤 헤더에 ADMIN 포함 시 200")
     void summary_multiRoleContainingAdmin_returns200() throws Exception {
-        given(sellerSummaryService.getSummary())
-                .willReturn(new SellerPeriodSummary(0L, 0L, 0L, 0L));
+        given(sellerQueryService.getPeriodSummary())
+                .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
         mockMvc.perform(get("/api/admin/sellers/summary")
                         .header(ROLE_HEADER, "ADMIN,ERP_OPERATOR"))

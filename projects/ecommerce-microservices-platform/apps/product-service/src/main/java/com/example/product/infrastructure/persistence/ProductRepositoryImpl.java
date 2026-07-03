@@ -68,12 +68,12 @@ class ProductRepositoryImpl implements ProductRepository, ProductQueryPort {
     }
 
     @Override
-    public long countByTenant() {
+    public long countAllForTenant() {
         return jpaRepository.countByTenantId(TenantContext.currentTenant());
     }
 
     @Override
-    public long countByTenantCreatedBetween(Instant from, Instant to) {
+    public long countCreatedBetween(Instant from, Instant to) {
         return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
     }
 

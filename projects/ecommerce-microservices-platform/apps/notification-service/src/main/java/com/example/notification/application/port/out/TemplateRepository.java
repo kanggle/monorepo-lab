@@ -32,7 +32,7 @@ public interface TemplateRepository {
     PageResult<NotificationTemplate> findAll(PageQuery pageQuery);
 
     /** Tenant-scoped total count (tenant from {@code TenantContext}). */
-    long countAll();
+    long countAllForTenant();
 
     /**
      * Tenant-scoped count of templates whose {@code createdAt} falls within

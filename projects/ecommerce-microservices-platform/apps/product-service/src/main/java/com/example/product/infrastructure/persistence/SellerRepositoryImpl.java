@@ -83,13 +83,13 @@ class SellerRepositoryImpl implements SellerRepository, SellerQueryPort {
 
     @Override
     @Transactional(readOnly = true)
-    public long countByTenant() {
+    public long countAllForTenant() {
         return jpaRepository.countByTenantId(TenantContext.currentTenant());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public long countByTenantCreatedBetween(Instant from, Instant to) {
+    public long countCreatedBetween(Instant from, Instant to) {
         return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
     }
 

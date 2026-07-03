@@ -1,10 +1,10 @@
 package com.example.product.presentation.controller;
 
+import com.example.common.summary.PeriodSummary;
 import com.example.product.application.dto.AdjustStockResult;
 import com.example.product.application.dto.ProductListResult;
 import com.example.product.application.service.AdjustStockService;
 import com.example.product.application.service.DeleteProductService;
-import com.example.product.application.service.ProductSummaryService;
 import com.example.product.application.service.QueryProductService;
 import com.example.product.application.service.RegisterProductService;
 import com.example.product.application.service.UpdateProductService;
@@ -14,7 +14,6 @@ import com.example.product.presentation.dto.AddVariantRequest;
 import com.example.product.presentation.dto.AdjustStockRequest;
 import com.example.product.presentation.dto.AdjustStockResponse;
 import com.example.product.presentation.dto.ProductListResponse;
-import com.example.product.presentation.dto.ProductSummaryResponse;
 import com.example.product.presentation.dto.RegisterProductRequest;
 import com.example.product.presentation.dto.RegisterProductResponse;
 import com.example.product.presentation.dto.UpdateProductRequest;
@@ -50,7 +49,6 @@ public class AdminProductController {
     private final AdjustStockService adjustStockService;
     private final VariantManagementService variantManagementService;
     private final QueryProductService queryProductService;
-    private final ProductSummaryService productSummaryService;
 
     /**
      * Operator-plane tenant-scoped product list snapshot — the platform-console
@@ -106,14 +104,14 @@ public class AdminProductController {
 
     /**
      * Tenant-scoped KST calendar-period-to-date product counts for the Operator
-     * Overview composition leg (TASK-BE-468). Authorization is identical to
-     * {@link #list}: enforced at the ecommerce gateway ({@code roles ∋ ADMIN} +
-     * {@code tenant_id}); tenant isolation via {@code TenantContext} / repository
-     * {@code WHERE tenant_id} chokepoint.
+     * Overview composition leg (TASK-BE-468, TASK-MONO-322). Authorization is
+     * identical to {@link #list}: enforced at the ecommerce gateway
+     * ({@code roles ∋ ADMIN} + {@code tenant_id}); tenant isolation via
+     * {@code TenantContext} / repository {@code WHERE tenant_id} chokepoint.
      */
     @GetMapping("/summary")
-    public ProductSummaryResponse summary() {
-        return ProductSummaryResponse.from(productSummaryService.getSummary());
+    public ResponseEntity<PeriodSummary> summary() {
+        return ResponseEntity.ok(queryProductService.getPeriodSummary());
     }
 
     /**

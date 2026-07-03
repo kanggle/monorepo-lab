@@ -20,8 +20,8 @@ import com.example.promotion.interfaces.rest.dto.response.CreatePromotionRespons
 import com.example.promotion.interfaces.rest.dto.response.IssueCouponsResponse;
 import com.example.promotion.interfaces.rest.dto.response.PromotionDetailResponse;
 import com.example.promotion.interfaces.rest.dto.response.PromotionListResponse;
-import com.example.promotion.interfaces.rest.dto.response.PromotionSummaryResponse;
 import com.example.promotion.interfaces.rest.dto.response.UpdatePromotionResponse;
+import com.example.common.summary.PeriodSummary;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
@@ -62,12 +62,10 @@ public class PromotionController {
     }
 
     @GetMapping("/summary")
-    public ResponseEntity<PromotionSummaryResponse> getPromotionSummary(
+    public ResponseEntity<PeriodSummary> getPromotionSummary(
             @RequestHeader("X-User-Role") @NotBlank(message = "X-User-Role 헤더는 필수입니다") String role
     ) {
-        return ResponseEntity.ok(
-                PromotionSummaryResponse.from(promotionQueryService.getPromotionSummary(role))
-        );
+        return ResponseEntity.ok(promotionQueryService.getPeriodSummary(role));
     }
 
     @GetMapping

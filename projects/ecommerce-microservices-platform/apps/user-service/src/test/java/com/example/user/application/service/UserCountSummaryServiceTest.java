@@ -1,6 +1,6 @@
 package com.example.user.application.service;
 
-import com.example.user.application.result.UserCountSummaryResult;
+import com.example.common.summary.PeriodSummary;
 import com.example.user.domain.repository.UserProfileRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -18,7 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("UserProfileService.getCountSummary 단위 테스트")
+@DisplayName("UserProfileService.getPeriodSummary 단위 테스트")
 class UserCountSummaryServiceTest {
 
     @Mock
@@ -31,17 +31,17 @@ class UserCountSummaryServiceTest {
     private UserProfileService userProfileService;
 
     @Nested
-    @DisplayName("getCountSummary")
-    class GetCountSummary {
+    @DisplayName("getPeriodSummary")
+    class GetPeriodSummary {
 
         @Test
         @DisplayName("사용자가 없으면 모든 카운트가 0이다")
-        void getCountSummary_noUsers_returnsZeros() {
-            given(userProfileRepository.countForTenant()).willReturn(0L);
-            given(userProfileRepository.countForTenantCreatedBetween(any(Instant.class), any(Instant.class)))
+        void getPeriodSummary_noUsers_returnsZeros() {
+            given(userProfileRepository.countAllForTenant()).willReturn(0L);
+            given(userProfileRepository.countCreatedBetween(any(Instant.class), any(Instant.class)))
                     .willReturn(0L);
 
-            UserCountSummaryResult result = userProfileService.getCountSummary();
+            PeriodSummary result = userProfileService.getPeriodSummary();
 
             assertThat(result.total()).isZero();
             assertThat(result.today()).isZero();
@@ -51,13 +51,13 @@ class UserCountSummaryServiceTest {
 
         @Test
         @DisplayName("total=5이고 오늘 가입한 사용자가 2명이면 today=2로 집계된다")
-        void getCountSummary_todayUsers_countedCorrectly() {
-            given(userProfileRepository.countForTenant()).willReturn(5L);
+        void getPeriodSummary_todayUsers_countedCorrectly() {
+            given(userProfileRepository.countAllForTenant()).willReturn(5L);
             // first call = today, second = week, third = month
-            given(userProfileRepository.countForTenantCreatedBetween(any(Instant.class), any(Instant.class)))
+            given(userProfileRepository.countCreatedBetween(any(Instant.class), any(Instant.class)))
                     .willReturn(2L, 3L, 4L);
 
-            UserCountSummaryResult result = userProfileService.getCountSummary();
+            PeriodSummary result = userProfileService.getPeriodSummary();
 
             assertThat(result.total()).isEqualTo(5L);
             assertThat(result.today()).isEqualTo(2L);

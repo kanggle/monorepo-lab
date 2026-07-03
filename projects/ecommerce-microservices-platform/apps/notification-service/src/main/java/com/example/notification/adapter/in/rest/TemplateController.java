@@ -5,11 +5,11 @@ import com.example.notification.adapter.in.rest.dto.request.UpdateTemplateReques
 import com.example.notification.adapter.in.rest.dto.response.TemplateDetailResponse;
 import com.example.notification.adapter.in.rest.dto.response.TemplateIdResponse;
 import com.example.notification.adapter.in.rest.dto.response.TemplateListResponse;
-import com.example.notification.adapter.in.rest.dto.response.TemplateSummaryResponse;
 import com.example.notification.application.command.CreateTemplateCommand;
 import com.example.notification.application.command.UpdateTemplateCommand;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
 import com.example.notification.application.result.TemplateResult;
 import com.example.notification.application.port.in.ManageTemplateUseCase;
 import com.example.notification.domain.exception.AdminAccessDeniedException;
@@ -32,11 +32,11 @@ public class TemplateController {
     private final ManageTemplateUseCase templateService;
 
     @GetMapping("/summary")
-    public ResponseEntity<TemplateSummaryResponse> getTemplateSummary(
+    public ResponseEntity<PeriodSummary> getTemplateSummary(
             @RequestHeader(value = "X-User-Role", required = false) String userRole
     ) {
         validateAdminRole(userRole);
-        return ResponseEntity.ok(TemplateSummaryResponse.from(templateService.getTemplateSummary()));
+        return ResponseEntity.ok(templateService.getPeriodSummary());
     }
 
     @GetMapping

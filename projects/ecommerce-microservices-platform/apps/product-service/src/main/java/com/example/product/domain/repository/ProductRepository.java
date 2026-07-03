@@ -17,8 +17,8 @@ public interface ProductRepository {
     void softDelete(UUID productId);
 
     /** Total non-deleted products for the current tenant. */
-    long countByTenant();
+    long countAllForTenant();
 
     /** Non-deleted products created in [from, to) for the current tenant. */
-    long countByTenantCreatedBetween(Instant from, Instant to);
+    long countCreatedBetween(Instant from, Instant to);
 }

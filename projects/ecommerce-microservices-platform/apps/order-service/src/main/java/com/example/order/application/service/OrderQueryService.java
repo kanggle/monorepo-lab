@@ -2,7 +2,6 @@ package com.example.order.application.service;
 
 import com.example.order.application.dto.AdminOrderDetail;
 import com.example.order.application.dto.AdminOrderSummary;
-import com.example.order.application.dto.AdminOrderSummaryStats;
 import com.example.order.application.dto.OrderDetail;
 import com.example.order.application.dto.OrderSummary;
 import com.example.order.application.exception.UnauthorizedOrderAccessException;
@@ -11,14 +10,13 @@ import com.example.order.domain.model.Order;
 import com.example.order.domain.model.OrderStatus;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.order.domain.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.function.Function;
 
 @Service
@@ -82,19 +80,15 @@ public class OrderQueryService {
      * within the transaction).
      */
     @Transactional(readOnly = true)
-    public AdminOrderSummaryStats getOrderSummary() {
-        ZoneId kst = ZoneId.of("Asia/Seoul");
-        ZonedDateTime now = ZonedDateTime.now(kst);
-        ZonedDateTime todayStart = now.toLocalDate().atStartOfDay(kst);
-        ZonedDateTime weekStart  = now.toLocalDate().with(DayOfWeek.MONDAY).atStartOfDay(kst);
-        ZonedDateTime monthStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay(kst);
+    public PeriodSummary getPeriodSummary() {
+        KstPeriodBounds b = KstPeriodBounds.now();
 
         long total = orderRepository.countAllForTenant();
-        long today = orderRepository.countCreatedBetween(todayStart.toInstant(), now.toInstant());
-        long week  = orderRepository.countCreatedBetween(weekStart.toInstant(), now.toInstant());
-        long month = orderRepository.countCreatedBetween(monthStart.toInstant(), now.toInstant());
+        long today = orderRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week  = orderRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = orderRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
 
-        return new AdminOrderSummaryStats(today, week, month, total);
+        return new PeriodSummary(today, week, month, total);
     }
 
     private static <T> PageResult<T> mapPageResult(PageResult<Order> source, Function<Order, T> mapper) {

@@ -46,8 +46,8 @@ public interface SellerRepository {
     Seller ensureDefaultSeller();
 
     /** Total sellers for the current tenant. */
-    long countByTenant();
+    long countAllForTenant();
 
     /** Sellers created in [from, to) for the current tenant. */
-    long countByTenantCreatedBetween(Instant from, Instant to);
+    long countCreatedBetween(Instant from, Instant to);
 }
