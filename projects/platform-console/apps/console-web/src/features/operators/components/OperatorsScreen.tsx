@@ -75,6 +75,14 @@ export interface OperatorsScreenProps {
    *  Absent ⇒ the assignment surface is hidden (the page already gates on a
    *  selected tenant, so this is normally set on the render path). */
   activeTenant?: string | null;
+  /** feat/iam-grantable-roles-filter — the seed role names THIS operator may
+   *  grant (server-provided, `GET /api/admin/operators/grantable-roles`).
+   *  Passed straight through to the create-form + edit-roles role
+   *  checkboxes as a UX pre-filter. `null` (absent / fetch failed) ⇒ both
+   *  selectors fall back to offering the FULL `KNOWN_OPERATOR_ROLES` set —
+   *  never an empty list; the producer `403 ROLE_GRANT_FORBIDDEN` remains
+   *  the authoritative no-escalation gate either way. */
+  grantableRoles?: string[] | null;
 }
 
 export function OperatorsScreen({
@@ -83,6 +91,7 @@ export function OperatorsScreen({
   isPlatformOperator = false,
   selfOperatorId = null,
   activeTenant = null,
+  grantableRoles = null,
 }: OperatorsScreenProps) {
   const [statusFilter, setStatusFilter] = useState<'' | OperatorStatus>('');
   const [query, setQuery] = useState<{
@@ -403,6 +412,7 @@ export function OperatorsScreen({
             onSubmitDraft={openCreate}
             serverError={createError}
             pending={create.isPending}
+            grantableRoles={grantableRoles}
           />
 
           {/* TASK-PC-FE-157 — assign an existing operator to the active
@@ -450,6 +460,7 @@ export function OperatorsScreen({
               ? { initialRoles: pending.operator?.roles ?? [] }
               : undefined
           }
+          grantableRoles={grantableRoles}
           pending={activeMutation?.isPending ?? false}
           errorMessage={dialogError}
           onConfirm={onConfirm}

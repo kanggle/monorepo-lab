@@ -17,6 +17,7 @@ import org.mockito.quality.Strictness;
 import java.util.List;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -117,5 +118,68 @@ class RoleGrantGuardTest {
         assertThatCode(() -> guard.requireGrantable(actor, List.of(), ActionCode.OPERATOR_CREATE))
                 .doesNotThrowAnyException();
         verify(auditor, never()).recordRoleGrantForbidden(any(), any(), anyString());
+    }
+
+    // ── grantableRoleNames (ADR-024 D3 read mirror, TASK-BE-388) ────────────────
+
+    @Test
+    @DisplayName("grantableRoleNames: platform-scope actor ('*') → every input role, no audit")
+    void grantableRoleNames_platformScope_returnsAll() {
+        when(grantScopeEvaluator.effectiveAdminScope("actor-uuid", Permission.OPERATOR_MANAGE))
+                .thenReturn(Set.of("*"));
+
+        List<String> result = guard.grantableRoleNames(actor, List.of(
+                role(1L, "SUPER_ADMIN"), role(2L, "TENANT_ADMIN"), role(3L, "SUPPORT_LOCK")));
+
+        assertThat(result).containsExactly("SUPER_ADMIN", "TENANT_ADMIN", "SUPPORT_LOCK");
+        verify(auditor, never()).recordRoleGrantForbidden(any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("grantableRoleNames: non-platform actor → excludes SUPER_ADMIN + roles exceeding own (≤-own)")
+    void grantableRoleNames_nonPlatform_filtersToSubset() {
+        when(grantScopeEvaluator.effectiveAdminScope("actor-uuid", Permission.OPERATOR_MANAGE))
+                .thenReturn(Set.of("acme"));
+        // TENANT_ADMIN (id 20) permissions ⊆ own → grantable.
+        when(rolePermissions.findPermissionKeysByRoleIds(List.of(20L)))
+                .thenReturn(List.of("operator.manage", "tenant.admin.delegate"));
+        when(permissionEvaluator.hasAllPermissions(
+                "actor-uuid", List.of("operator.manage", "tenant.admin.delegate")))
+                .thenReturn(true);
+        // TENANT_BILLING_ADMIN (id 21) carries a permission the actor lacks → excluded.
+        when(rolePermissions.findPermissionKeysByRoleIds(List.of(21L)))
+                .thenReturn(List.of("subscription.manage"));
+        when(permissionEvaluator.hasAllPermissions("actor-uuid", List.of("subscription.manage")))
+                .thenReturn(false);
+
+        List<String> result = guard.grantableRoleNames(actor, List.of(
+                role(1L, "SUPER_ADMIN"),          // (a) platform/privileged → excluded
+                role(20L, "TENANT_ADMIN"),        // ≤-own → included
+                role(21L, "TENANT_BILLING_ADMIN") // exceeds own → excluded
+        ));
+
+        assertThat(result).containsExactly("TENANT_ADMIN");
+        verify(auditor, never()).recordRoleGrantForbidden(any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("grantableRoleNames: non-platform actor → empty-permission role is grantable")
+    void grantableRoleNames_emptyPermissionRole_isGrantable() {
+        when(grantScopeEvaluator.effectiveAdminScope("actor-uuid", Permission.OPERATOR_MANAGE))
+                .thenReturn(Set.of("acme"));
+        when(rolePermissions.findPermissionKeysByRoleIds(List.of(30L)))
+                .thenReturn(List.of());
+
+        List<String> result = guard.grantableRoleNames(actor, List.of(role(30L, "EMPTY_ROLE")));
+
+        assertThat(result).containsExactly("EMPTY_ROLE");
+        verify(auditor, never()).recordRoleGrantForbidden(any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("grantableRoleNames: null/empty role set → empty list")
+    void grantableRoleNames_emptyInput_returnsEmpty() {
+        assertThat(guard.grantableRoleNames(actor, List.of())).isEmpty();
+        assertThat(guard.grantableRoleNames(actor, null)).isEmpty();
     }
 }

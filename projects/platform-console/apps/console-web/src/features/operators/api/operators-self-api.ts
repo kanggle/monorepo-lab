@@ -4,6 +4,7 @@ import {
   type UpdateProfileInput,
 } from './types';
 import { callGapOperators, OPERATORS_PREFIX } from './operators-client';
+import { getGrantableRoles } from './operators-crud-api';
 
 /**
  * operators api — self-service surface (TASK-PC-FE-110 split). The `/me/*`
@@ -93,6 +94,27 @@ export async function getSelfOperatorIdOrNull(): Promise<string | null> {
     // gate inactive; the next mutation surfaces the real error (e.g. list
     // call's 401 → redirect-to-login). The producer 400 on self-via-admin
     // remains the authoritative fail-safe — never a security regression.
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 9. getGrantableRolesOrNull — GET /api/admin/operators/grantable-roles
+//    (feat/iam-grantable-roles-filter). SSR-page fail-graceful wrapper
+//    around `getGrantableRoles` (operators-crud-api.ts) — mirrors the
+//    `getSelfOperatorIdOrNull` posture above. Every failure mode (401/403/
+//    503/timeout/network/schema-parse/unexpected) collapses to `null`; the
+//    page then passes `null` through to `OperatorsScreen`, whose create /
+//    edit-roles selectors fall back to rendering the FULL
+//    `KNOWN_OPERATOR_ROLES` set (never an empty list — the producer's
+//    `403 ROLE_GRANT_FORBIDDEN` stays the authoritative no-escalation gate
+//    regardless of what this pre-filter shows).
+// ---------------------------------------------------------------------------
+
+export async function getGrantableRolesOrNull(): Promise<string[] | null> {
+  try {
+    return await getGrantableRoles();
+  } catch {
     return null;
   }
 }

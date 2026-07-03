@@ -10,6 +10,9 @@ import com.example.admin.application.PatchOperatorRoleUseCase;
 import com.example.admin.application.PatchOperatorRoleUseCase.PatchRolesResult;
 import com.example.admin.application.PatchOperatorStatusUseCase;
 import com.example.admin.application.PatchOperatorStatusUseCase.PatchStatusResult;
+import com.example.admin.application.OperatorContext;
+import com.example.admin.application.RoleGrantGuard;
+import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.LinkOperatorIdentityUseCase;
 import com.example.admin.application.LinkOperatorIdentityUseCase.LinkResult;
 import com.example.admin.application.UnlinkOperatorIdentityUseCase;
@@ -25,6 +28,7 @@ import com.example.admin.presentation.dto.ChangeMyPasswordRequest;
 import com.example.admin.presentation.dto.UpdateOperatorProfileRequest;
 import com.example.admin.presentation.dto.CreateOperatorRequest;
 import com.example.admin.presentation.dto.CreateOperatorResponse;
+import com.example.admin.presentation.dto.GrantableRolesResponse;
 import com.example.admin.presentation.dto.LinkOperatorIdentityRequest;
 import com.example.admin.presentation.dto.LinkOperatorIdentityResponse;
 import com.example.admin.presentation.dto.UnlinkOperatorIdentityResponse;
@@ -69,6 +73,8 @@ public class OperatorAdminController {
     private final UpdateOperatorProfileUseCase updateOperatorProfileUseCase;
     private final LinkOperatorIdentityUseCase linkOperatorIdentityUseCase;
     private final UnlinkOperatorIdentityUseCase unlinkOperatorIdentityUseCase;
+    private final AdminOperatorPort adminOperatorPort;
+    private final RoleGrantGuard roleGrantGuard;
 
     @GetMapping("/me")
     public ResponseEntity<OperatorSummaryResponse> currentOperator() {
@@ -104,6 +110,30 @@ public class OperatorAdminController {
                 result.page(),
                 result.size(),
                 result.totalPages()));
+    }
+
+    /**
+     * TASK-BE-388 (ADR-MONO-024 D3 read mirror) — the seed-role names the calling
+     * operator may grant, as a read hint for the operator create / role-edit forms
+     * (so a non-grantable role is never surfaced). Static path — declared before
+     * the {@code /operators/{operatorId}/...} mappings; no path-variable collision
+     * (those are POST/PATCH/DELETE with deeper segments, none is a bare
+     * {@code GET /operators/{operatorId}}).
+     *
+     * <p>Same authoritative predicate as {@link RoleGrantGuard#requireGrantable}
+     * (the write gate): platform-scope caller (admin-scope contains {@code '*'}) →
+     * every seed role; non-platform caller → SUPER_ADMIN excluded + each role whose
+     * permission set ⊆ the caller's own (≤-own). Final enforcement is still the
+     * producer 403 {@code ROLE_GRANT_FORBIDDEN} on {@code POST /operators} /
+     * {@code PATCH .../roles}; this is purely a read hint (no audit, no mutation).
+     */
+    @GetMapping("/operators/grantable-roles")
+    @RequiresPermission(Permission.OPERATOR_MANAGE)
+    public ResponseEntity<GrantableRolesResponse> grantableRoles() {
+        OperatorContext actor = OperatorContextHolder.require();
+        List<AdminOperatorPort.RoleView> allRoles = adminOperatorPort.findAllRoles();
+        List<String> grantable = roleGrantGuard.grantableRoleNames(actor, allRoles);
+        return ResponseEntity.ok(new GrantableRolesResponse(grantable));
     }
 
     @PostMapping("/operators")

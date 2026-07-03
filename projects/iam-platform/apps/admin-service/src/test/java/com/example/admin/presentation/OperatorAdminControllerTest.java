@@ -92,6 +92,10 @@ class OperatorAdminControllerTest {
     // wired into OperatorAdminController — mocked so the WebMvc slice context loads.
     @MockitoBean com.example.admin.application.LinkOperatorIdentityUseCase linkOperatorIdentityUseCase;
     @MockitoBean com.example.admin.application.UnlinkOperatorIdentityUseCase unlinkOperatorIdentityUseCase;
+    // TASK-BE-388 (ADR-MONO-024 D3 read mirror): grantable-roles read hint collaborators
+    // wired into OperatorAdminController — mocked so the WebMvc slice context loads.
+    @MockitoBean com.example.admin.application.port.AdminOperatorPort adminOperatorPort;
+    @MockitoBean com.example.admin.application.RoleGrantGuard roleGrantGuard;
 
     @MockitoBean
     PermissionEvaluator permissionEvaluator;
@@ -144,6 +148,30 @@ class OperatorAdminControllerTest {
         mockMvc.perform(get("/api/admin/me").header("Authorization", bearer()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+    }
+
+    // -------------------------------- GET /operators/grantable-roles (BE-388)
+
+    @Test
+    void grantable_roles_returns_guard_projection() throws Exception {
+        when(adminOperatorPort.findAllRoles()).thenReturn(List.of(
+                new com.example.admin.application.port.AdminOperatorPort.RoleView(1L, "SUPER_ADMIN", "", false),
+                new com.example.admin.application.port.AdminOperatorPort.RoleView(2L, "TENANT_ADMIN", "", false)));
+        when(roleGrantGuard.grantableRoleNames(any(), any())).thenReturn(List.of("TENANT_ADMIN"));
+
+        mockMvc.perform(get("/api/admin/operators/grantable-roles").header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles[0]").value("TENANT_ADMIN"))
+                .andExpect(jsonPath("$.roles.length()").value(1));
+    }
+
+    @Test
+    void grantable_roles_without_permission_returns_403() throws Exception {
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(false);
+
+        mockMvc.perform(get("/api/admin/operators/grantable-roles").header("Authorization", bearer()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     // ----------------------------------------------- GET /operators

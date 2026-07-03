@@ -161,6 +161,15 @@ public interface AdminOperatorPort {
     List<RoleView> findRolesForOperator(long operatorInternalId);
 
     /**
+     * TASK-BE-388 (ADR-MONO-024 D3 read mirror) — every {@code admin_roles} row,
+     * ordered by {@code id} ASC (stable seed order). Backs the
+     * {@code GET /api/admin/operators/grantable-roles} read hint, where the caller
+     * filters the full set through {@link com.example.admin.application.RoleGrantGuard#grantableRoleNames}.
+     * Read-only.
+     */
+    List<RoleView> findAllRoles();
+
+    /**
      * Returns {@code true} if any role currently bound to {@code operatorInternalId}
      * has {@code require_2fa = true}. Equivalent to the legacy
      * {@code AdminLoginService.roleSetRequires2fa} helper.

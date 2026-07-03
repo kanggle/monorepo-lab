@@ -24,17 +24,28 @@ import { z } from 'zod';
 
 // --- roles ----------------------------------------------------------------
 
-/** The producer's documented operator roles. The selectors offer these;
- *  the list tolerates any string (forward-compatible).
+/** The producer's documented operator roles. The selectors offer these
+ *  (pre-filtered by the caller's server-provided grantable set — see
+ *  `GrantableRolesResponseSchema` below); the list tolerates any string
+ *  (forward-compatible).
  *
  *  TASK-PC-FE-157 — the two tenant-scoped delegation roles
  *  (`TENANT_ADMIN` / `TENANT_BILLING_ADMIN`, iam rbac.md Seed Roles /
  *  ADR-MONO-024) are now offered so a SUPER_ADMIN can appoint a tenant
  *  admin through the UI (the missing first step of the delegation chain).
- *  No-escalation stays PRODUCER-enforced (`403 ROLE_GRANT_FORBIDDEN` when
- *  the actor lacks the granted role's permissions — e.g. a TENANT_ADMIN,
- *  lacking `subscription.manage`, cannot grant `TENANT_BILLING_ADMIN`);
- *  offering the checkbox never bypasses that — the failure maps inline. */
+ *
+ *  Grantable-roles pre-filter (`GET /api/admin/operators/grantable-roles`):
+ *  the create / edit-roles selectors now render only the subset of
+ *  `KNOWN_OPERATOR_ROLES` the CALLING operator may grant (platform-scope
+ *  ⇒ all; non-platform ⇒ `SUPER_ADMIN` excluded + ≤ own subset) — this is
+ *  a UX pre-filter ONLY. No-escalation stays PRODUCER-enforced
+ *  (`403 ROLE_GRANT_FORBIDDEN` when the actor lacks the granted role's
+ *  permissions — e.g. a TENANT_ADMIN, lacking `subscription.manage`,
+ *  cannot grant `TENANT_BILLING_ADMIN`); the pre-filter never bypasses
+ *  that authority — a bug in the filter, a stale grantable-roles fetch, or
+ *  the fetch simply failing (fallback shows every `KNOWN_OPERATOR_ROLES`
+ *  checkbox — never an empty list) all still resolve to the SAME producer
+ *  403 on submit. */
 export const KNOWN_OPERATOR_ROLES = [
   'SUPER_ADMIN',
   'TENANT_ADMIN',
@@ -50,6 +61,25 @@ export type KnownOperatorRole = (typeof KNOWN_OPERATOR_ROLES)[number];
  *  wide grant; the TENANT_* roles are tenant-confined so they keep the
  *  standard (still reason+confirm-gated) copy. */
 export const ELEVATED_ROLE: KnownOperatorRole = 'SUPER_ADMIN';
+
+// --- grantable-roles (GET /api/admin/operators/grantable-roles) -----------
+
+/**
+ * `GET /api/admin/operators/grantable-roles` response envelope — the seed
+ * role names the CALLING operator (JWT + `operator.manage`) may grant.
+ * Platform-scope (`SUPER_ADMIN`) → the full seed-role set; non-platform →
+ * `SUPER_ADMIN` excluded + a ≤-own subset (final no-escalation enforcement
+ * stays producer-side: `403 ROLE_GRANT_FORBIDDEN`). `roles` is `z.string()`
+ * members (not the `KnownOperatorRole` enum) — a forward/unknown role name
+ * from the producer must never crash the parse; the create/edit-roles
+ * selectors intersect this against `KNOWN_OPERATOR_ROLES` when filtering.
+ */
+export const GrantableRolesResponseSchema = z.object({
+  roles: z.array(z.string()),
+});
+export type GrantableRolesResponse = z.infer<
+  typeof GrantableRolesResponseSchema
+>;
 
 // --- operator status ------------------------------------------------------
 
