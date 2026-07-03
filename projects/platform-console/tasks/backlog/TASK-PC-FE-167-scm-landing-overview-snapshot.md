@@ -1,6 +1,7 @@
-# TASK-PC-FE-159 — scm landing **operator overview snapshot**
+# TASK-PC-FE-167 — scm landing **operator overview snapshot**
 
 **Status:** backlog
+**Renumbered:** from PC-FE-159 (concurrent-session ID collision with the shared-status-badge series; the implemented status-badge task kept 159).
 **Area:** platform-console / console-web · **Route:** `app/(console)/scm/page.tsx`
 **Reference impl (template):** TASK-PC-FE-156 (ecommerce overview snapshot) — mirror the pattern, adapt the data source.
 
