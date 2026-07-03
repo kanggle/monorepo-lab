@@ -77,11 +77,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **Console domain-landing overview series** (naming follows capability: per-domain overview first, cross-domain rename last). Reference impl = `TASK-PC-FE-156` (ecommerce overview snapshot, DONE). Each domain task's data-source/read-leg + metric set + spec/AC must be finalized before `backlog → ready`.
 
-**Execution order** (do NOT jump ahead): ① **PC-FE-168** shared read-leg decision ✅ **RESOLVED → review** → ② **PC-FE-166** (wms) first bff-domain reference impl ✅ **DONE → review** → ③ **PC-FE-167 / 160 / 161** (scm / finance / erp) follow the wms template (read-leg RESOLVED via 168; metric-set still to finalize before ready) → ④ **PC-FE-162** cross-domain "운영 → 개요" rename capstone (after all 4 done). ecommerce PC-FE-156 (direct-model) is already DONE and is the reference for the shape.
+**Execution order**: ① **PC-FE-168** shared read-leg decision ✅ **DONE** (#2148) → ② **PC-FE-166** (wms) first bff-domain reference impl ✅ **DONE** (#2148) → ③ **PC-FE-167 (scm) / 161 (erp)** ✅ **IMPLEMENTED → review** · **PC-FE-160 (finance)** ⚠️ degenerate/parked → ④ **PC-FE-162** cross-domain "운영 → 개요" rename capstone (after the domains are done). ecommerce PC-FE-156 (direct-model) is already DONE and is the reference for the shape.
 
-- `TASK-PC-FE-167-scm-landing-overview-snapshot.md` — elevate `/scm` landing (procurement/inventory/replenishment counts). **Read-leg RESOLVED (168 = console-web DIRECT); Blocks PC-FE-162.** Metric-set + AC to finalize before ready. (renumbered from 159.)
 - `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — `/finance` landing. **⚠️ DEGENERATE (168 finding):** finance v1 has no list/search GET → no count overview possible, no synthetic ₩ aggregation. Needs a scope re-judgment (park, or a minimal non-count band). **Blocks PC-FE-162** (treat as N/A if parked).
-- `TASK-PC-FE-161-erp-landing-overview-snapshot.md` — elevate `/erp` masters landing (masterdata counts + recent). Thinnest surface. **Read-leg RESOLVED (168 = console-web DIRECT); Blocks PC-FE-162.**
 - `TASK-PC-FE-162-console-landing-rename-ops-to-overview.md` — **capstone (runs LAST)**: atomic cross-domain rename of all 5 landing headings `<도메인> 운영 → <도메인> 개요` (+ optional nav-leaf). **Blocked by PC-FE-166/167/160/161** (ecommerce PC-FE-156 already DONE); do NOT promote until those 4 are `done`.
 
 ## ready
@@ -94,7 +92,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-167-scm-landing-overview-snapshot.md` — **IMPLEMENTED**. `/scm` operator overview snapshot (발주/재고 스냅샷 `totalElements` counts + PO-status distribution + 최근 발주), console-web DIRECT fan-out; new `getScmOverviewState` + `ScmOverview` (non-link stat tiles), slotted above `ScmOpsScreen`. **S5 warning surfaced** for the inventory count (§ 2.4.6). Per-cell degrade + 401→whole-session redirect. `pnpm lint`/`tsc`/`vitest` green (11 new tests). Bundled with PC-FE-161.
+- `TASK-PC-FE-161-erp-landing-overview-snapshot.md` — **IMPLEMENTED**. `/erp` masters overview snapshot (5 masterdata `meta.totalElements` counts, `?asOf=` E3 threaded), console-web DIRECT fan-out; new `getErpMastersOverviewState` + `ErpMastersOverview` (non-link stat tiles — thinnest of the 4, counts-only), slotted above `ErpMastersScreen`. Per-cell degrade + 401→whole-session redirect. `pnpm lint`/`tsc`/`vitest` green (10 new tests). Bundled with PC-FE-167.
 
 ## done
 

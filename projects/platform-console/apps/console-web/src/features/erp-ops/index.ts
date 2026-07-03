@@ -35,6 +35,13 @@
 // `ErpOpsScreen`): 마스터 / 통합 조회 / 결재함 / 위임.
 export { ErpMastersScreen } from './components/ErpMastersScreen';
 export type { ErpMastersScreenProps } from './components/ErpMastersScreen';
+// TASK-PC-FE-161 — erp masters operator overview snapshot.
+export { ErpMastersOverview } from './components/ErpMastersOverview';
+export { getErpMastersOverviewState } from './api/overview-state';
+export type {
+  ErpMastersOverviewState,
+  ErpAreaCount,
+} from './api/overview-state';
 export { ErpOrgViewScreen } from './components/ErpOrgViewScreen';
 export type { ErpOrgViewScreenProps } from './components/ErpOrgViewScreen';
 export { ErpApprovalScreen } from './components/ErpApprovalScreen';

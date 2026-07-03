@@ -2,7 +2,12 @@ import Link from 'next/link';
 import { getCatalog } from '@/features/catalog';
 import { ApiError } from '@/shared/api/errors';
 import { redirect } from 'next/navigation';
-import { getScmSectionState, ScmOpsScreen } from '@/features/scm-ops';
+import {
+  getScmSectionState,
+  getScmOverviewState,
+  ScmOpsScreen,
+  ScmOverview,
+} from '@/features/scm-ops';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,7 +72,15 @@ export default async function ScmPage() {
     );
   }
 
-  const state = await getScmSectionState(eligible);
+  // Fire the operator overview-snapshot fan-out (TASK-PC-FE-167) concurrently
+  // with the section-state fan-out. Both are console-web DIRECT reads over the
+  // scm gateway (PC-FE-168 read-leg decision); both redirect('/login') on a 401
+  // internally. The overview does per-cell degrade; the section state gates the
+  // tables below.
+  const [overviewState, state] = await Promise.all([
+    getScmOverviewState(eligible),
+    getScmSectionState(eligible),
+  ]);
 
   if (state.notEligible) {
     return (
@@ -162,6 +175,7 @@ export default async function ScmPage() {
       poList={state.poList}
       snapshot={state.snapshot}
       staleness={state.staleness}
+      overview={<ScmOverview state={overviewState} />}
     />
   );
 }

@@ -924,6 +924,37 @@ section degrades; AbortController hard timeout; tokens/PII never logged); and th
 > rule holds for a non-IAM **upsert** surface (the gate is server-side
 > `tenant_id`, NOT a stronger credential).
 
+#### 2.4.6.3 scm operator **overview snapshot** — `/scm` landing (TASK-PC-FE-167 — bff-domain overview, follows the wms § 2.4.5.2 reference)
+
+The `/scm` landing gains an **operator overview snapshot** band above the ops
+tables: per-area counts (발주 / 재고 스냅샷), a PO-status distribution, and a
+recent-PO glance. Follows the PC-FE-168 shared read-leg decision
+(`console-web/architecture.md § 도메인 랜딩 운영 개요 스냅샷`) and the wms
+§ 2.4.5.2 reference.
+
+- **Read model (console-web DIRECT fan-out).** Reuses the existing § 2.4.6
+  `listPurchaseOrders` / `getSnapshot` reads server-side (`getDomainFacingToken()`);
+  **no console-bff leg.** Counts = `totalElements` with `?page=0&size=1`: 발주
+  (`GET /api/v1/procurement/po`), 재고 스냅샷
+  (`GET /api/v1/inventory-visibility/snapshot`).
+- **PO-status distribution.** `GET /api/v1/procurement/po?status=<S>&page=0&size=1`.`totalElements`
+  for each known PO status.
+- **Recent activity.** `GET /api/v1/procurement/po?page=0&size=5`.`content`.
+- **S5 (§ 2.4.6, NORMATIVE).** The 재고 스냅샷 count comes from inventory-visibility,
+  which carries the REQUIRED `meta.warning`; the snapshot surfaces it PROMINENTLY
+  via `<S5Warning>` whenever the count is shown (never stripped). The PO surface
+  has no such warning.
+- **No aggregation endpoint (ADR-MONO-017 D3.B).** Counts from `totalElements`;
+  no producer `/summary`, no producer retrofit.
+- **Deviation vs ecommerce (§ 2.4.10.6).** Count tiles are **read-only stat
+  tiles, NOT nav links** (`/scm` is a single-route ops screen).
+- **Resilience (§ 2.5).** Per-cell degrade cell-local; a `401` in ANY leg →
+  whole-session `redirect('/login')`. Read-only; no auto-refetch. `429` is
+  already bounded by the § 2.4.6 client backoff (the overview does not re-storm).
+
+> **Not a § 3 parity row**: consumes only already-listed § 2.4.6 endpoints in a
+> new read composition; adds no § 3 row and changes none.
+
 #### 2.4.7 finance operations surface (TASK-PC-FE-009 — cross-reference, not a redefinition)
 
 The **third non-IAM** per-domain binding of § 2.4 (ADR-MONO-013 Phase 5 —
@@ -1861,6 +1892,31 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
 > Phase 6 = COMPLETE; Phase 7 (`console-bff` + cross-domain
 > dashboards) gate is **ungated to 5/5 domains live**
 > (IAM + wms + scm + finance + erp).
+
+#### 2.4.8.1 erp masters operator **overview snapshot** — `/erp` masters landing (TASK-PC-FE-161 — bff-domain overview, follows the wms § 2.4.5.2 reference)
+
+The `/erp` **masters** landing gains an **operator overview snapshot** band
+above the master lists: 5 masterdata counts. The THINNEST of the 4 bff-domain
+overviews — masterdata counts only (no status distribution, no recent feed:
+erp masters are effective-dated masterdata, not an activity stream). Follows the
+PC-FE-168 shared read-leg decision + the wms § 2.4.5.2 reference.
+
+- **Read model (console-web DIRECT fan-out).** Reuses the existing § 2.4.8
+  master `list*` reads server-side (`getDomainFacingToken()`); **no console-bff
+  leg.** Each count = `meta.totalElements` with `?page=0&size=1`:
+  부서 / 직원 / 직급 / 원가센터 / 거래처 (`GET /api/erp/masterdata/<master>`).
+- **E3 (§ 2.4.8).** An optional `?asOf=` threads through every count leg
+  verbatim (state-at-that-instant, matching the masters section state). `active`
+  is omitted so retired masters are counted too (E2 honesty — the true total).
+- **No aggregation endpoint (ADR-MONO-017 D3.B).** Counts from `totalElements`;
+  no producer `/summary`, no producer retrofit.
+- **Deviation vs ecommerce (§ 2.4.10.6).** Count tiles are **read-only stat
+  tiles, NOT nav links** (`/erp` is a single-route masters screen).
+- **Resilience (§ 2.5).** Per-cell degrade cell-local; a `401` in ANY leg →
+  whole-session `redirect('/login')`. Read-only; no auto-refetch.
+
+> **Not a § 3 parity row**: consumes only already-listed § 2.4.8 endpoints in a
+> new read composition; adds no § 3 row and changes none.
 
 #### 2.4.9 `console-bff` server-side composition surface (TASK-PC-BE-001 — first BFF surface owner, **not** a cross-reference)
 

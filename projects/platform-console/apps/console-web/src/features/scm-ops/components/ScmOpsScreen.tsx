@@ -61,12 +61,17 @@ export interface ScmOpsScreenProps {
   poList: PoPage;
   snapshot: SnapshotResponse;
   staleness: StalenessResponse;
+  /** Optional operator overview-snapshot slot rendered above the tables
+   *  (TASK-PC-FE-167 — the server page computes `getScmOverviewState` and
+   *  passes a `<ScmOverview>` node). Absent ⇒ no snapshot band. */
+  overview?: React.ReactNode;
 }
 
 export function ScmOpsScreen({
   poList,
   snapshot,
   staleness,
+  overview,
 }: ScmOpsScreenProps) {
   const statusFid = useId();
   const supplierFid = useId();
@@ -126,6 +131,9 @@ export function ScmOpsScreen({
         조달(발주) 조회 · 재고 가시성 (읽기 전용). scm 운영 표면을 콘솔
         안에서 조회합니다. 발주 쓰기 작업은 콘솔 범위가 아닙니다.
       </p>
+
+      {/* Operator overview snapshot band (TASK-PC-FE-167) — server-rendered slot. */}
+      {overview}
 
       <ScmPoTable
         statusFid={statusFid}
