@@ -1,6 +1,6 @@
 # TASK-PC-FE-161 — erp landing **operator overview snapshot**
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Route:** `app/(console)/erp/page.tsx` (masters route)
 **Reference impl (template):** TASK-PC-FE-166 (wms overview snapshot) / TASK-PC-FE-156 (ecommerce, direct-model).
 **Implemented:** branch `task/pc-fe-167-161-scm-erp-overview` (bundled with PC-FE-167 scm). `pnpm lint` + `tsc --noEmit` + `vitest` green.
