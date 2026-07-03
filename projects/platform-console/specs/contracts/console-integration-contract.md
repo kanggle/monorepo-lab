@@ -494,6 +494,52 @@ the **§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
 > additive federated **domain** scope, not a IAM `admin-web` parity capability;
 > it adds no § 3 row and changes none.
 
+#### 2.4.5.2 wms operator **overview snapshot** — `/wms` landing (TASK-PC-FE-166 — first bff-domain reference of the domain-landing overview series)
+
+The `/wms` section landing is elevated with an **operator overview snapshot**
+band above the existing ops tables (inventory/shipments/alerts): per-area
+counts, an alert-acknowledgement distribution, and a recent-shipments glance.
+This is the **first bff-domain reference implementation** of the console
+domain-landing overview series (the analogue of the ecommerce § 2.4.10.6
+snapshot for the wms/scm/finance/erp read-leg domains); the shared read-leg
+decision is recorded in [`console-web/architecture.md` § 도메인 랜딩 운영 개요
+스냅샷](../services/console-web/architecture.md) (TASK-PC-FE-168).
+
+- **Read model (console-web DIRECT fan-out).** Like ecommerce § 2.4.10.6 — and
+  contrary to the "bff read-leg" framing — the wms section already reaches its
+  producer server-side via `getDomainFacingToken()` (§ 2.4.5 direct client),
+  so this snapshot is a **domain-internal** console-web fan-out reusing the
+  feature's own `list*` reads. **No console-bff leg** (the BFF § 2.4.9.1/.2 is
+  the console-HOME cross-domain surface, not a single-domain landing).
+- **Counts.** Each area count = the existing § 2.4.5 read's `totalElements`
+  with `?page=0&size=1`: inventory (§ 1.1 `/dashboard/inventory`), shipments
+  (§ 1.3 `/dashboard/shipments`), alerts (§ 1.6 `/dashboard/alerts`).
+- **Alert-acknowledgement distribution.** `GET /dashboard/alerts?acknowledged=false&page=0&size=1`.`totalElements`
+  (미확인) + `acknowledged=true` (확인) — the operator's key wms signal.
+- **Recent activity.** `GET /dashboard/shipments?page=0&size=5`.`content`.
+- **No aggregation endpoint (ADR-MONO-017 D3.B).** Counts derive from
+  `totalElements`; there is deliberately **no** producer `/summary` and **no
+  producer retrofit** (the wms bff-domain does NOT get the § 2.4.10.2–.6
+  ecommerce `/summary` treatment — that is a producer retrofit D3.B forbids for
+  a non-absorbed federation). Re-introducing an aggregation endpoint here is a
+  contract defect.
+- **Per-domain deviation vs ecommerce (§ 2.4.10.6).** The count tiles are
+  **read-only stat tiles, NOT nav links**: `/wms` is a single-route ops screen
+  (no per-area drill-in sub-routes like `/ecommerce/products`), so the tiles
+  summarize the tables rendered directly below rather than acting as
+  quick-launch links.
+- **Per-area brief status.** Derived from each fan-out cell's outcome
+  (`ok` / `403 → 권한 없음` / `503|timeout|other → 점검 필요`) — reachability is
+  the honest, zero-backend signal (same rule as § 2.4.10.6).
+- **Resilience (§ 2.5).** Per-cell degrade is cell-local (one area's failure
+  never blanks the snapshot); a `401` in ANY leg triggers a whole-session
+  `redirect('/login')` (no partial authed state — mirrors `getWmsSectionState`).
+  Read-only; no auto-refetch. `WmsUnavailableError` (503/timeout/network)
+  degrades the cell, never a re-login.
+
+> **Not a § 3 parity row**: consumes only already-listed § 2.4.5 endpoints in a
+> new read composition; adds no § 3 row and changes none.
+
 #### 2.4.6 scm operations surface (TASK-PC-FE-008 — cross-reference, not a redefinition)
 
 The **second non-IAM** per-domain binding of § 2.4 (ADR-MONO-013 Phase 4

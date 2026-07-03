@@ -77,13 +77,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **Console domain-landing overview series** (naming follows capability: per-domain overview first, cross-domain rename last). Reference impl = `TASK-PC-FE-156` (ecommerce overview snapshot, DONE). Each domain task's data-source/read-leg + metric set + spec/AC must be finalized before `backlog → ready`.
 
-**Execution order** (do NOT jump ahead): ① **PC-FE-168** shared read-leg decision → ② **PC-FE-166** (wms) first bff-domain reference impl → ③ **PC-FE-167 / 160 / 161** (scm / finance / erp) follow the wms template → ④ **PC-FE-162** cross-domain "운영 → 개요" rename capstone (after all 4 done). ecommerce PC-FE-156 (direct-model) is already DONE and is the reference for the shape.
+**Execution order** (do NOT jump ahead): ① **PC-FE-168** shared read-leg decision ✅ **RESOLVED → review** → ② **PC-FE-166** (wms) first bff-domain reference impl ✅ **DONE → review** → ③ **PC-FE-167 / 160 / 161** (scm / finance / erp) follow the wms template (read-leg RESOLVED via 168; metric-set still to finalize before ready) → ④ **PC-FE-162** cross-domain "운영 → 개요" rename capstone (after all 4 done). ecommerce PC-FE-156 (direct-model) is already DONE and is the reference for the shape.
 
-- `TASK-PC-FE-168-domain-overview-readleg-decision.md` — **lead / gating design task**: decide the shared read-leg approach for all 4 bff-domains (wms/scm/finance/erp) ONCE before any impl (direct fan-out vs reuse existing console read vs new bff overview leg; ADR-MONO-017 D3.B fixed). Docs/spec only. **Blocks PC-FE-166/167/160/161.**
-- `TASK-PC-FE-166-wms-landing-overview-snapshot.md` — elevate `/wms` landing to an operator overview snapshot (counts + status distribution + recent). **First bff-domain reference impl.** **Blocked by PC-FE-168; Blocks PC-FE-162.** (renumbered from 158 — ID collision with shared-status-badge series.)
-- `TASK-PC-FE-167-scm-landing-overview-snapshot.md` — elevate `/scm` landing (procurement/inventory/replenishment counts). **Blocked by PC-FE-168; Blocks PC-FE-162.** (renumbered from 159.)
-- `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — elevate `/finance` landing (account/transaction counts; NO synthetic ₩ aggregation). **Blocked by PC-FE-168; Blocks PC-FE-162.**
-- `TASK-PC-FE-161-erp-landing-overview-snapshot.md` — elevate `/erp` landing (masterdata counts + recent). Thinnest surface. **Blocked by PC-FE-168; Blocks PC-FE-162.**
+- `TASK-PC-FE-167-scm-landing-overview-snapshot.md` — elevate `/scm` landing (procurement/inventory/replenishment counts). **Read-leg RESOLVED (168 = console-web DIRECT); Blocks PC-FE-162.** Metric-set + AC to finalize before ready. (renumbered from 159.)
+- `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — `/finance` landing. **⚠️ DEGENERATE (168 finding):** finance v1 has no list/search GET → no count overview possible, no synthetic ₩ aggregation. Needs a scope re-judgment (park, or a minimal non-count band). **Blocks PC-FE-162** (treat as N/A if parked).
+- `TASK-PC-FE-161-erp-landing-overview-snapshot.md` — elevate `/erp` masters landing (masterdata counts + recent). Thinnest surface. **Read-leg RESOLVED (168 = console-web DIRECT); Blocks PC-FE-162.**
 - `TASK-PC-FE-162-console-landing-rename-ops-to-overview.md` — **capstone (runs LAST)**: atomic cross-domain rename of all 5 landing headings `<도메인> 운영 → <도메인> 개요` (+ optional nav-leaf). **Blocked by PC-FE-166/167/160/161** (ecommerce PC-FE-156 already DONE); do NOT promote until those 4 are `done`.
 
 ## ready
@@ -96,7 +94,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-168-domain-overview-readleg-decision.md` — **RESOLVED**. Shared read-leg decision for the 4 bff-domain overview snapshots = **console-web DIRECT fan-out reusing existing `list*` `totalElements`** (no console-bff leg, no producer `/summary`; ADR-MONO-017 D3.B). Key finding: all 4 domains already call producers DIRECTLY (the "console-bff read-leg" premise was wrong); finance is the degenerate exception (no list GET). Recorded in `console-web/architecture.md § 도메인 랜딩 운영 개요 스냅샷` + `console-integration-contract.md § 2.4.5.2`. Bundled with PC-FE-166.
+- `TASK-PC-FE-166-wms-landing-overview-snapshot.md` — **IMPLEMENTED**. `/wms` operator overview snapshot (재고/배송/알림 `totalElements` counts + 미확인/확인 alert-ack distribution + 최근 출고), console-web DIRECT fan-out; new `getWmsOverviewState` + `WmsOverview` (non-link stat tiles — single-route ops screen deviation), slotted above `WmsOpsScreen`. Per-cell degrade + 401→whole-session redirect. `pnpm lint`/`tsc`/`vitest` green (14 new tests). First bff-domain reference impl.
 
 ## done
 

@@ -1,8 +1,23 @@
 # TASK-PC-FE-168 — console domain-overview **shared read-leg decision** (gating design task)
 
-**Status:** backlog
+**Status:** review
 **Area:** platform-console / console-web · **Type:** design decision (spec/architecture note — no feature code)
 **Lead task of** the console domain-landing overview series (gates PC-FE-166/167/160/161; capstone PC-FE-162).
+**Decision landed:** branch `task/pc-fe-166-wms-overview` (bundled with the PC-FE-166 wms reference impl).
+
+## DECISION (recorded)
+
+**console-web DIRECT fan-out reusing each domain's existing section `list*` reads' `totalElements` (Option 1)** — for
+ALL 4 bff-domains (wms/scm/finance/erp). Recorded in:
+- `specs/services/console-web/architecture.md § 도메인 랜딩 운영 개요 스냅샷` (the ADR-lite decision + per-domain deviations);
+- `specs/contracts/console-integration-contract.md § 2.4.5.2` (the wms reference binding).
+
+**Key finding that reframes the series:** the "the other four are console-bff READ-leg domains" premise was WRONG.
+All 4 already reach their producer **DIRECTLY** from console-web via `getDomainFacingToken()` (§§ 2.4.5–2.4.8) —
+identical to ecommerce (§ 2.4.10). The console-bff (§ 2.4.9.1/.2) is only the console-HOME cross-domain dashboards.
+So Option 1 (DIRECT, no bff leg, no producer `/summary` per ADR-MONO-017 D3.B) is the uniform answer. The open
+decisions in PC-FE-166/167/160/161 are filled accordingly; **finance (160) is the degenerate exception** — finance
+v1 has no list/search GET, so a count overview does not exist and 160 needs a scope re-judgment (documented in 160).
 
 ## Goal
 
