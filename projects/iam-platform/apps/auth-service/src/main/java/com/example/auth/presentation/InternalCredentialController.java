@@ -21,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -67,11 +68,18 @@ public class InternalCredentialController {
         return ResponseEntity.status(status).body(CreateCredentialResponse.from(result));
     }
 
+    /**
+     * TASK-BE-468 — the optional {@code X-Tenant-Id} header (stamped by admin-service
+     * from the operator's active tenant, TASK-BE-467) confines the revoke to that
+     * tenant: a concrete tenant that does not own the account → no-op (0 revoked).
+     * Absent / {@code '*'} → net-zero (revoke across the account's tenant).
+     */
     @PostMapping("/accounts/{accountId}/force-logout")
     public ResponseEntity<ForceLogoutResponse> forceLogout(
             @PathVariable String accountId,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestBody(required = false) ForceLogoutRequest body) {
-        ForceLogoutUseCase.Result result = forceLogoutUseCase.execute(accountId);
+        ForceLogoutUseCase.Result result = forceLogoutUseCase.execute(accountId, tenantId);
         return ResponseEntity.ok(ForceLogoutResponse.from(result));
     }
 
