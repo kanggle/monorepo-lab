@@ -1,6 +1,6 @@
 # TASK-PC-FE-169 — IAM 개요: 운영자 온보딩 3축(home tenant / tenant assignment / org_scope)
 
-- **Status**: ready
+- **Status**: done
 - **Type**: TASK-PC-FE (console-web)
 - **Depends on**: TASK-PC-FE-163 (IAM 개요 가이드 화면), TASK-PC-FE-157 (테넌트 배정 UI), TASK-PC-FE-050 (org-scope UI)
 
