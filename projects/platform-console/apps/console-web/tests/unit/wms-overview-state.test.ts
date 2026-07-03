@@ -67,7 +67,11 @@ const bounds = kstPeriodBounds();
 /** Default happy fan-out: every leg resolves. 배송 period reads (keyed by
  *  `shippedAtFrom`) return distinct counts; the total read (no window) is 7. */
 function seedHappy() {
-  m.listInventory.mockResolvedValue(wmsResult(42));
+  // Two inventory reads (PC-FE-177): the total (no filter) and the 저재고
+  // sub-count (lowStockOnly=true). Keyed on the filter → distinct values.
+  m.listInventory.mockImplementation((p: { lowStockOnly?: boolean } = {}) =>
+    Promise.resolve(wmsResult(p.lowStockOnly ? 4 : 42)),
+  );
   m.listShipments.mockImplementation(
     (p: { size?: number; shippedAtFrom?: string } = {}) => {
       if (p.size === 5) {
@@ -125,11 +129,19 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
 
     // 재고 is a point-in-time LEVEL → no period breakdown (PC-FE-174).
     expect(byKey.inventory.period).toBeNull();
+    // 재고 carries a 저재고 attention sub-count (PC-FE-177).
+    expect(byKey.inventory.lowStock).toBe(4);
     // 배송 is a FLOW → 오늘/주간/월간 period-to-date + 전체 total.
     expect(byKey.shipments.period).toEqual({ today: 2, week: 5, month: 6 });
 
-    // Counts derive from a page=0,size=1 read (totalElements only).
+    // Counts derive from a page=0,size=1 read (totalElements only) — one for the
+    // 재고 total, one for the 저재고 (lowStockOnly) sub-count.
     expect(m.listInventory).toHaveBeenCalledWith({ page: 0, size: 1 });
+    expect(m.listInventory).toHaveBeenCalledWith({
+      lowStockOnly: true,
+      page: 0,
+      size: 1,
+    });
     // The three 배송 windowed reads carry the today/week/month `shippedAtFrom`
     // bounds + a `shippedAtTo` upper bound (a live `now`, so only its presence
     // is asserted — the day/week/month starts are stable and exact).
@@ -249,6 +261,21 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
     expect(ship.status).toBe('ok');
     expect(ship.count).toBe(7);
     expect(ship.period).toEqual({ today: null, week: 5, month: 6 });
+  });
+
+  it('a degraded 저재고 sub-read → 재고 tile stays ok on its total, lowStock null (PC-FE-177)', async () => {
+    seedHappy();
+    // The 저재고 (lowStockOnly) read 503s; the total inventory read resolves.
+    m.listInventory.mockImplementation((p: { lowStockOnly?: boolean } = {}) =>
+      p.lowStockOnly
+        ? Promise.reject(new WmsUnavailableError('timeout', 'TIMEOUT', 'slow'))
+        : Promise.resolve(wmsResult(42)),
+    );
+    const state = await getWmsOverviewState(true);
+    const inv = state.counts.find((c) => c.key === 'inventory')!;
+    expect(inv.status).toBe('ok');
+    expect(inv.count).toBe(42);
+    expect(inv.lowStock).toBeNull();
   });
 
   it('401 in any leg → whole-session redirect(/login) (not a per-cell degrade)', async () => {

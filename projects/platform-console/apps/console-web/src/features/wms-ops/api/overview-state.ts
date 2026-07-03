@@ -59,6 +59,12 @@ export interface WmsAreaCount {
    *  point-in-time LEVEL area (재고) which has no time dimension — that tile
    *  renders its single total only. */
   period?: WmsAreaPeriod | null;
+  /** Low-stock sub-count for the 재고 LEVEL area (PC-FE-177) — the number of
+   *  SKU-locations below their reorder point (`lowStockOnly=true`), a
+   *  replenishment attention signal. `undefined` for non-inventory tiles;
+   *  `null` when the low-stock sub-read did not resolve (the tile stays `ok`
+   *  on its total read — same pattern as a 배송 period sub-read). */
+  lowStock?: number | null;
 }
 
 /** One alert-acknowledgement distribution bucket. */
@@ -135,6 +141,7 @@ export async function getWmsOverviewState(
   try {
     const [
       invCell,
+      lowStockCell,
       shipCell,
       shipTodayCell,
       shipWeekCell,
@@ -144,6 +151,10 @@ export async function getWmsOverviewState(
       recentCell,
     ] = await Promise.all([
       cell(listInventory({ page: 0, size: 1 })),
+      // 저재고 (low-stock) attention sub-count for the 재고 tile (PC-FE-177) —
+      // SKU-locations below their reorder point. Own cell: a degrade nulls the
+      // sub-count only, the 재고 tile stays ok on its total read.
+      cell(listInventory({ lowStockOnly: true, page: 0, size: 1 })),
       cell(listShipments({ page: 0, size: 1 })),
       cell(
         listShipments({
@@ -186,7 +197,7 @@ export async function getWmsOverviewState(
     // (PC-FE-174); the tile status follows the TOTAL read, so a degraded period
     // sub-read only nulls that one bucket (rendered "—").
     const counts: WmsAreaCount[] = [
-      areaCount('inventory', '재고', invCell),
+      areaCount('inventory', '재고', invCell, lowStockCell),
       shipmentAreaCount(
         'shipments',
         '배송',
@@ -239,13 +250,25 @@ function totalElements(c: PageCountCell): number | null {
     : null;
 }
 
-/** Map a page-count cell to a point-in-time LEVEL area tile (no period, e.g. 재고). */
-function areaCount(key: string, label: string, c: PageCountCell): WmsAreaCount {
+/**
+ * Map a page-count cell to a point-in-time LEVEL area tile (no period, e.g. 재고).
+ * An optional `lowStockCell` supplies the 저재고 attention sub-count (PC-FE-177):
+ * its `totalElements`, or `null` when that sub-read did not resolve — the tile's
+ * own status still follows the primary `c` read.
+ */
+function areaCount(
+  key: string,
+  label: string,
+  c: PageCountCell,
+  lowStockCell?: PageCountCell,
+): WmsAreaCount {
   const count = totalElements(c);
+  const lowStock =
+    lowStockCell !== undefined ? totalElements(lowStockCell) : undefined;
   if (c.status === 'ok' && count !== null) {
-    return { key, label, count, status: 'ok', period: null };
+    return { key, label, count, status: 'ok', period: null, lowStock };
   }
-  return { key, label, count: null, status: c.status, period: null };
+  return { key, label, count: null, status: c.status, period: null, lowStock };
 }
 
 /**
