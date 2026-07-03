@@ -10,6 +10,8 @@ import com.example.order.domain.model.Order;
 import com.example.order.domain.model.OrderStatus;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.order.domain.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -64,6 +66,29 @@ public class OrderQueryService {
     @Transactional(readOnly = true)
     public boolean hasUserPurchasedProduct(String userId, String productId) {
         return orderRepository.existsByUserIdAndProductIdAndStatus(userId, productId, OrderStatus.DELIVERED);
+    }
+
+    /**
+     * Returns tenant-scoped KST calendar-period-to-date order counts for the
+     * admin summary dashboard (TASK-BE-468).
+     *
+     * <p>Boundaries are computed in Asia/Seoul (KST) so that "today", "this week",
+     * and "this month" align with the Korean business calendar rather than UTC.
+     * All three period starts are inclusive; {@code now} is the exclusive upper bound
+     * (orders placed in the future cannot exist, so open-ended upper bound would give
+     * the same result, but using {@code now.toInstant()} keeps the query deterministic
+     * within the transaction).
+     */
+    @Transactional(readOnly = true)
+    public PeriodSummary getPeriodSummary() {
+        KstPeriodBounds b = KstPeriodBounds.now();
+
+        long total = orderRepository.countAllForTenant();
+        long today = orderRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week  = orderRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = orderRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
+
+        return new PeriodSummary(today, week, month, total);
     }
 
     private static <T> PageResult<T> mapPageResult(PageResult<Order> source, Function<Order, T> mapper) {

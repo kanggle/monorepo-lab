@@ -1,5 +1,6 @@
 package com.example.product.presentation.controller;
 
+import com.example.common.summary.PeriodSummary;
 import com.example.product.application.dto.AdjustStockResult;
 import com.example.product.application.dto.ProductListResult;
 import com.example.product.application.service.AdjustStockService;
@@ -99,6 +100,18 @@ public class AdminProductController {
         int cappedSize = Math.min(size, MAX_PAGE_SIZE);
         ProductListResult result = queryProductService.findAll(categoryId, status, name, page, cappedSize);
         return ProductListResponse.from(result);
+    }
+
+    /**
+     * Tenant-scoped KST calendar-period-to-date product counts for the Operator
+     * Overview composition leg (TASK-BE-468, TASK-MONO-322). Authorization is
+     * identical to {@link #list}: enforced at the ecommerce gateway
+     * ({@code roles ∋ ADMIN} + {@code tenant_id}); tenant isolation via
+     * {@code TenantContext} / repository {@code WHERE tenant_id} chokepoint.
+     */
+    @GetMapping("/summary")
+    public ResponseEntity<PeriodSummary> summary() {
+        return ResponseEntity.ok(queryProductService.getPeriodSummary());
     }
 
     /**

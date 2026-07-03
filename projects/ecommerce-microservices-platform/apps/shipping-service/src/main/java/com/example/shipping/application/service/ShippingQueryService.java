@@ -1,6 +1,8 @@
 package com.example.shipping.application.service;
 
 import com.example.web.exception.AccessDeniedException;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.shipping.application.result.ShippingResult;
 import com.example.shipping.application.result.ShippingSummary;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
@@ -48,6 +50,19 @@ public class ShippingQueryService {
                 pageResult.totalElements(),
                 pageResult.totalPages()
         );
+    }
+
+    public PeriodSummary getPeriodSummary(String userRole) {
+        validateAdminRole(userRole);
+
+        KstPeriodBounds b = KstPeriodBounds.now();
+
+        long total = shippingRepository.countAllForTenant();
+        long today = shippingRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week = shippingRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = shippingRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
+
+        return new PeriodSummary(today, week, month, total);
     }
 
     private void validateAdminRole(String userRole) {

@@ -11,6 +11,8 @@ import {
   type OrderDetail,
   OrderStatusChangeResponseSchema,
   type OrderStatusChangeResponse,
+  OrderAreaSummarySchema,
+  type OrderAreaSummary,
   type OrderListParams,
   type OrderStatusChangeBody,
   ORDER_DEFAULT_PAGE_SIZE,
@@ -86,6 +88,21 @@ const clampSize = (size?: number): number =>
 // ===========================================================================
 // READS
 // ===========================================================================
+
+/** GET /admin/orders/summary — period-based counts (TASK-PC-FE-164).
+ *  Returns { today, week, month, total } for the tenant. */
+export function getOrdersSummary(): Promise<OrderAreaSummary> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'GET',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: '/orders/summary',
+    },
+    (j) => OrderAreaSummarySchema.parse(j),
+    ORDER_LABEL,
+  );
+}
 
 /** #15 — GET /admin/orders?status&page&size (paginated order summaries). */
 export function listOrders(params: OrderListParams = {}): Promise<OrderList> {

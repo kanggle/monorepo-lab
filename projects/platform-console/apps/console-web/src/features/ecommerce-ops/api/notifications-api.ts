@@ -11,6 +11,8 @@ import {
   type NotificationTemplateDetail,
   NotificationMutationResponseSchema,
   type NotificationMutationResponse,
+  NotificationAreaSummarySchema,
+  type NotificationAreaSummary,
   type NotificationTemplateListParams,
   type CreateTemplateBody,
   type UpdateTemplateBody,
@@ -64,6 +66,21 @@ const clampSize = (size?: number): number =>
 // ===========================================================================
 // READS
 // ===========================================================================
+
+/** GET /api/notifications/templates/summary — period-based counts (TASK-PC-FE-164).
+ *  Returns { today, week, month, total } for the tenant. */
+export function getTemplatesSummary(): Promise<NotificationAreaSummary> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'GET',
+      base: env.ECOMMERCE_PUBLIC_BASE_URL,
+      path: '/notifications/templates/summary',
+    },
+    (j) => NotificationAreaSummarySchema.parse(j),
+    NOTIFICATION_LABEL,
+  );
+}
 
 /** GET /api/notifications/templates?page=&size= (paginated summary list). */
 export function listTemplates(

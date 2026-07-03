@@ -132,6 +132,22 @@ export const UpdateTemplateBodySchema = z.object({
 export type UpdateTemplateBody = z.infer<typeof UpdateTemplateBodySchema>;
 
 // ===========================================================================
+// SUMMARY (TASK-PC-FE-164 — period-based counts)
+// ===========================================================================
+
+/** GET /api/notifications/templates/summary — period-based count.
+ *  Response: { today, week, month, total } all non-negative integers. */
+export const NotificationAreaSummarySchema = z
+  .object({
+    today: z.number().int().nonnegative(),
+    week: z.number().int().nonnegative(),
+    month: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type NotificationAreaSummary = z.infer<typeof NotificationAreaSummarySchema>;
+
+// ===========================================================================
 // list query params + pagination defaults
 // ===========================================================================
 

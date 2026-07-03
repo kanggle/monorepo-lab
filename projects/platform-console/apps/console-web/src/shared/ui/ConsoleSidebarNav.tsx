@@ -65,9 +65,13 @@ const GROUPS: NavGroup[] = [
         label: 'IAM',
         testid: 'nav-iam',
         children: [
-          // Order: the two management (write) surfaces first — 계정 운영
-          // (/accounts, the catalog IAM tile target) + 운영자 관리 — then 감사·보안
-          // (read-only oversight) last, mirroring an operate-then-review flow.
+          // 개요(/iam — TASK-PC-FE-163) is the first child: a static guide to
+          // the RBAC roles + per-screen access matrix + delegation chain, so an
+          // operator can orient before operating. Then the two management
+          // (write) surfaces — 계정 운영 (/accounts, the catalog IAM tile
+          // target) + 운영자 관리 — then 감사·보안 (read-only oversight) last,
+          // mirroring an orient-then-operate-then-review flow.
+          { href: '/iam', label: '개요', testid: 'nav-iam-guide' },
           { href: '/accounts', label: '계정 운영', testid: 'nav-accounts' },
           { href: '/operators', label: '운영자 관리', testid: 'nav-operators' },
           { href: '/audit', label: '감사 · 보안', testid: 'nav-audit' },

@@ -9,6 +9,8 @@ import com.example.user.application.result.UserProfileSummaryResult;
 import com.example.user.domain.exception.UserProfileNotFoundException;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.user.domain.model.ProfileStatus;
 import com.example.user.domain.model.UserProfile;
 import com.example.user.domain.repository.UserProfileRepository;
@@ -105,6 +107,17 @@ public class UserProfileService {
                 .map(UserProfileSummaryResult::from)
                 .toList();
         return new UserListPageResult(content, profiles.totalElements(), profiles.totalPages(), profiles.page(), profiles.size());
+    }
+
+    public PeriodSummary getPeriodSummary() {
+        KstPeriodBounds b = KstPeriodBounds.now();
+
+        long total = userProfileRepository.countAllForTenant();
+        long today = userProfileRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week  = userProfileRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = userProfileRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
+
+        return new PeriodSummary(today, week, month, total);
     }
 
     /**

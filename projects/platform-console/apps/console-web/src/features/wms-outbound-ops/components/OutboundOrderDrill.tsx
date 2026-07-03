@@ -2,6 +2,7 @@
 
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { CloseButton } from '@/shared/ui/CloseButton';
 import { messageForCode } from '@/shared/api/errors';
 import { cancelNeedsAdmin } from '../api/types';
 import type { OutboundOrderDetail, OutboundSaga } from '../api/types';
@@ -75,14 +76,7 @@ export function OutboundOrderDrill({
         >
           주문 상세
         </h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClose}
-          data-testid="outbound-drill-close"
-        >
-          닫기
-        </Button>
+        <CloseButton onClick={onClose} data-testid="outbound-drill-close" />
       </div>
 
       {loading ? (

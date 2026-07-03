@@ -98,6 +98,16 @@ public class PromotionRepositoryImpl implements PromotionRepository {
         return toPageResult(result, page, size);
     }
 
+    @Override
+    public long countAllForTenant() {
+        return jpaRepository.countByTenantId(TenantContext.currentTenant());
+    }
+
+    @Override
+    public long countCreatedBetween(Instant from, Instant to) {
+        return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
+    }
+
     private PageResult<Promotion> toPageResult(Page<PromotionJpaEntity> result, int page, int size) {
         return new PageResult<>(
                 result.getContent().stream().map(PromotionJpaEntity::toDomain).toList(),

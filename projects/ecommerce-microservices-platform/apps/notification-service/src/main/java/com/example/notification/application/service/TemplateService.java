@@ -4,6 +4,8 @@ import com.example.notification.application.command.CreateTemplateCommand;
 import com.example.notification.application.command.UpdateTemplateCommand;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.notification.application.port.in.ManageTemplateUseCase;
 import com.example.notification.application.port.out.TemplateRepository;
 import com.example.notification.application.result.TemplateResult;
@@ -23,6 +25,18 @@ public class TemplateService implements ManageTemplateUseCase {
 
     public PageResult<NotificationTemplate> getTemplates(PageQuery pageQuery) {
         return templateRepository.findAll(pageQuery);
+    }
+
+    @Override
+    public PeriodSummary getPeriodSummary() {
+        KstPeriodBounds b = KstPeriodBounds.now();
+
+        long total = templateRepository.countAllForTenant();
+        long today = templateRepository.countCreatedBetween(b.todayStartLocal(), b.nowLocal());
+        long week = templateRepository.countCreatedBetween(b.weekStartLocal(), b.nowLocal());
+        long month = templateRepository.countCreatedBetween(b.monthStartLocal(), b.nowLocal());
+
+        return new PeriodSummary(today, week, month, total);
     }
 
     @Override

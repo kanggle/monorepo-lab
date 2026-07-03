@@ -15,6 +15,8 @@ import {
   type RegisterProductResponse,
   AdjustStockResponseSchema,
   type AdjustStockResponse,
+  ProductAreaSummarySchema,
+  type ProductAreaSummary,
   type ProductListParams,
   type RegisterProductBody,
   type UpdateProductBody,
@@ -119,6 +121,21 @@ export function listProducts(
       path: `/products?${qs.toString()}`,
     },
     (j) => ProductListSchema.parse(j),
+    PRODUCT_LABEL,
+  );
+}
+
+/** GET /admin/products/summary — period-based counts (TASK-PC-FE-164).
+ *  Returns { today, week, month, total } for the tenant. */
+export function getProductsSummary(): Promise<ProductAreaSummary> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'GET',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: '/products/summary',
+    },
+    (j) => ProductAreaSummarySchema.parse(j),
     PRODUCT_LABEL,
   );
 }

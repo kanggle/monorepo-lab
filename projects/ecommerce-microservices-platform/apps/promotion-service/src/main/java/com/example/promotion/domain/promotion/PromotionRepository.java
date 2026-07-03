@@ -1,6 +1,7 @@
 package com.example.promotion.domain.promotion;
 
 import com.example.common.page.PageResult;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,4 +20,10 @@ public interface PromotionRepository {
     PageResult<Promotion> findAll(int page, int size);
 
     PageResult<Promotion> findAllByStatus(PromotionStatus status, int page, int size, java.time.Clock clock);
+
+    /** Total promotion count for the current tenant. */
+    long countAllForTenant();
+
+    /** Count promotions created within [from, to) for the current tenant. */
+    long countCreatedBetween(Instant from, Instant to);
 }

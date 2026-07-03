@@ -33,4 +33,10 @@ public interface PromotionJpaRepository extends JpaRepository<PromotionJpaEntity
 
     @Query("SELECT p FROM PromotionJpaEntity p WHERE p.tenantId = :tenantId AND p.endDate < :now")
     Page<PromotionJpaEntity> findEnded(String tenantId, Instant now, Pageable pageable);
+
+    // ---- Tenant-scoped count queries (TASK-BE-468 summary card) -----------------
+
+    long countByTenantId(String tenantId);
+
+    long countByTenantIdAndCreatedAtBetween(String tenantId, Instant from, Instant to);
 }

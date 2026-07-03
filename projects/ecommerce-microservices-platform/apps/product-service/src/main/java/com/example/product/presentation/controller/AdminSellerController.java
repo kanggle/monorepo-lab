@@ -1,5 +1,6 @@
 package com.example.product.presentation.controller;
 
+import com.example.common.summary.PeriodSummary;
 import com.example.product.application.dto.SellerListResult;
 import com.example.product.application.dto.SellerSummary;
 import com.example.product.application.service.RegisterSellerService;
@@ -46,6 +47,19 @@ public class AdminSellerController {
 
     private final RegisterSellerService registerSellerService;
     private final SellerQueryService sellerQueryService;
+
+    /**
+     * Tenant-scoped KST calendar-period-to-date seller counts for the Operator
+     * Overview composition leg (TASK-BE-468, TASK-MONO-322). Authorization mirrors
+     * {@link #list}: {@code X-User-Role} must contain {@code ADMIN}; tenant
+     * isolation is the repository {@code WHERE tenant_id} chokepoint (M6).
+     */
+    @GetMapping("/summary")
+    public ResponseEntity<PeriodSummary> summary(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole) {
+        validateAdminRole(userRole);
+        return ResponseEntity.ok(sellerQueryService.getPeriodSummary());
+    }
 
     /**
      * Tenant-scoped paged list of sellers (ADR-MONO-030 Step 4 facet f). Tenant

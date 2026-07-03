@@ -1,5 +1,6 @@
 package com.example.shipping.interfaces.rest.controller;
 
+import com.example.common.summary.PeriodSummary;
 import com.example.shipping.application.command.UpdateShippingStatusCommand;
 import com.example.shipping.application.result.ShippingResult;
 import com.example.shipping.application.result.ShippingSummary;
@@ -33,6 +34,14 @@ public class ShippingController {
     private final ShippingCommandService shippingCommandService;
     private final ShippingQueryService shippingQueryService;
     private final RefreshTrackingService refreshTrackingService;
+
+    @GetMapping("/summary")
+    public ResponseEntity<PeriodSummary> getSummary(
+            @RequestHeader("X-User-Role") @NotBlank(message = "X-User-Role header is required") String userRole
+    ) {
+        PeriodSummary result = shippingQueryService.getPeriodSummary(userRole);
+        return ResponseEntity.ok(result);
+    }
 
     @GetMapping("/orders/{orderId}")
     public ResponseEntity<ShippingResponse> getShippingByOrderId(

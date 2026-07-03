@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -67,6 +68,16 @@ class UserProfileRepositoryImpl implements UserProfileRepository {
         Pageable pageable = toPageable(pageQuery);
         Page<UserProfileJpaEntity> page = jpaRepository.findByTenantId(TenantContext.currentTenant(), pageable);
         return toPageResult(page, pageQuery);
+    }
+
+    @Override
+    public long countAllForTenant() {
+        return jpaRepository.countByTenantId(TenantContext.currentTenant());
+    }
+
+    @Override
+    public long countCreatedBetween(Instant from, Instant to) {
+        return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
     }
 
     private Pageable toPageable(PageQuery pageQuery) {

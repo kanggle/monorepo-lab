@@ -4,6 +4,8 @@ import com.example.web.exception.AccessDeniedException;
 import com.example.promotion.application.result.PromotionDetail;
 import com.example.promotion.application.result.PromotionSummary;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.promotion.domain.promotion.Promotion;
 import com.example.promotion.domain.promotion.PromotionNotFoundException;
 import com.example.promotion.domain.promotion.PromotionRepository;
@@ -47,6 +49,19 @@ public class PromotionQueryService {
                 result.totalElements(),
                 result.totalPages()
         );
+    }
+
+    public PeriodSummary getPeriodSummary(String userRole) {
+        validateAdminRole(userRole);
+
+        KstPeriodBounds b = KstPeriodBounds.from(clock);
+
+        long total = promotionRepository.countAllForTenant();
+        long today = promotionRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week  = promotionRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = promotionRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
+
+        return new PeriodSummary(today, week, month, total);
     }
 
     private void validateAdminRole(String userRole) {

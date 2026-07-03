@@ -13,6 +13,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Optional;
 
 @Repository
@@ -78,6 +79,18 @@ class SellerRepositoryImpl implements SellerRepository, SellerQueryPort {
                 result.getNumber(),
                 result.getSize(),
                 result.getTotalElements());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countAllForTenant() {
+        return jpaRepository.countByTenantId(TenantContext.currentTenant());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countCreatedBetween(Instant from, Instant to) {
+        return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
     }
 
     @Override

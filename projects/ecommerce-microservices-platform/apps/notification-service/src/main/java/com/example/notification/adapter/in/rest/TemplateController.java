@@ -9,6 +9,7 @@ import com.example.notification.application.command.CreateTemplateCommand;
 import com.example.notification.application.command.UpdateTemplateCommand;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
 import com.example.notification.application.result.TemplateResult;
 import com.example.notification.application.port.in.ManageTemplateUseCase;
 import com.example.notification.domain.exception.AdminAccessDeniedException;
@@ -29,6 +30,14 @@ public class TemplateController {
     private static final String ADMIN_ROLE = "ADMIN";
 
     private final ManageTemplateUseCase templateService;
+
+    @GetMapping("/summary")
+    public ResponseEntity<PeriodSummary> getTemplateSummary(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole
+    ) {
+        validateAdminRole(userRole);
+        return ResponseEntity.ok(templateService.getPeriodSummary());
+    }
 
     @GetMapping
     public ResponseEntity<TemplateListResponse> getTemplates(

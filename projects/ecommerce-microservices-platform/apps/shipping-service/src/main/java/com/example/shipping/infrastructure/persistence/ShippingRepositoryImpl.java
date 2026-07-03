@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -93,6 +94,18 @@ public class ShippingRepositoryImpl implements ShippingRepository {
         Page<ShippingJpaEntity> page =
                 jpaRepository.findByTenantIdAndStatus(TenantContext.currentTenant(), status, pageable);
         return toPageResult(page);
+    }
+
+    @Override
+    public long countAllForTenant() {
+        // Tenant-SCOPED (current request tenant).
+        return jpaRepository.countByTenantId(TenantContext.currentTenant());
+    }
+
+    @Override
+    public long countCreatedBetween(Instant from, Instant to) {
+        // Tenant-SCOPED (current request tenant).
+        return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
     }
 
     private static final Set<ShippingStatus> IN_FLIGHT =

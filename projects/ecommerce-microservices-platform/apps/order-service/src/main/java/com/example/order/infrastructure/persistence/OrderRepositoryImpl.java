@@ -225,6 +225,16 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    public long countAllForTenant() {
+        return jpaRepository.countByTenantId(TenantContext.currentTenant());
+    }
+
+    @Override
+    public long countCreatedBetween(Instant from, Instant to) {
+        return jpaRepository.countByTenantIdAndCreatedAtBetween(TenantContext.currentTenant(), from, to);
+    }
+
+    @Override
     public boolean existsByUserIdAndProductIdAndStatus(String userId, String productId, OrderStatus status) {
         return jpaRepository.existsByUserIdAndProductIdAndStatusAndTenantId(
                 TenantContext.currentTenant(), userId, productId, status);

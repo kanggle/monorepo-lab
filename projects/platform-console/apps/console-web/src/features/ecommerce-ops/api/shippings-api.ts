@@ -7,6 +7,8 @@ import {
 import {
   ShippingListSchema,
   type ShippingList,
+  ShippingAreaSummarySchema,
+  type ShippingAreaSummary,
   type ShippingListParams,
   type UpdateShippingStatusBody,
   UpdateShippingStatusResponseSchema,
@@ -75,6 +77,21 @@ const clampSize = (size?: number): number =>
 // ===========================================================================
 // READS
 // ===========================================================================
+
+/** GET /api/shippings/summary — period-based counts (TASK-PC-FE-164).
+ *  Returns { today, week, month, total } for the tenant. */
+export function getShippingsSummary(): Promise<ShippingAreaSummary> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'GET',
+      base: env.ECOMMERCE_PUBLIC_BASE_URL,
+      path: '/shippings/summary',
+    },
+    (j) => ShippingAreaSummarySchema.parse(j),
+    SHIPPING_LABEL,
+  );
+}
 
 /**
  * GET /api/shippings?page=&size=&status= (paginated list, optional status filter).

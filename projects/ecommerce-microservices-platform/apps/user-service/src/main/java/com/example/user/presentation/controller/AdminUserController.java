@@ -1,5 +1,6 @@
 package com.example.user.presentation.controller;
 
+import com.example.common.summary.PeriodSummary;
 import com.example.user.application.service.UserProfileService;
 import com.example.web.exception.AccessDeniedException;
 import com.example.user.domain.model.ProfileStatus;
@@ -19,6 +20,14 @@ public class AdminUserController {
     private static final String ROLE_ADMIN = "ADMIN";
 
     private final UserProfileService userProfileService;
+
+    @GetMapping("/summary")
+    public ResponseEntity<PeriodSummary> getUserCountSummary(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole) {
+        validateAdminRole(userRole);
+        var result = userProfileService.getPeriodSummary();
+        return ResponseEntity.ok(result);
+    }
 
     @GetMapping
     public ResponseEntity<AdminUserListResponse> listUsers(

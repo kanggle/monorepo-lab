@@ -7,6 +7,7 @@ import com.example.order.application.service.AdminOrderStatusService;
 import com.example.order.application.service.OrderQueryService;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
+import com.example.common.summary.PeriodSummary;
 import com.example.order.presentation.dto.AdminOrderDetailResponse;
 import com.example.order.presentation.dto.AdminOrderListResponse;
 import com.example.order.presentation.dto.AdminOrderStatusChangeRequest;
@@ -42,6 +43,11 @@ public class AdminOrderController {
 
     private final OrderQueryService orderQueryService;
     private final AdminOrderStatusService adminOrderStatusService;
+
+    @GetMapping("/summary")
+    public ResponseEntity<PeriodSummary> getOrderSummary() {
+        return ResponseEntity.ok(orderQueryService.getPeriodSummary());
+    }
 
     @GetMapping
     public ResponseEntity<AdminOrderListResponse> getOrders(

@@ -18,6 +18,15 @@ vi.mock('next/link', () => ({
 
 vi.mock('@/features/notification/api/notification-api');
 
+// PushDeviceList owns an independent device-list query (with its own
+// ErrorMessage) that is exercised by its own suite. Stub it here so these
+// NotificationSettings unit tests stay deterministic — otherwise its async
+// error state races with the settings error and yields two "error-message"
+// nodes.
+vi.mock('@/features/notification/ui/PushDeviceList', () => ({
+  PushDeviceList: () => null,
+}));
+
 vi.mock('@repo/ui', () => ({
   ErrorMessage: ({ message, onRetry }: { message: string; onRetry: () => void }) => (
     <div data-testid="error-message">

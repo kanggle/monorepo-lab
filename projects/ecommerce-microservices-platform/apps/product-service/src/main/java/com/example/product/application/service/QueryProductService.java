@@ -1,5 +1,7 @@
 package com.example.product.application.service;
 
+import com.example.common.summary.PeriodSummary;
+import com.example.common.time.KstPeriodBounds;
 import com.example.product.application.dto.ProductDetail;
 import com.example.product.application.dto.ProductListResult;
 import com.example.product.application.port.ProductQueryPort;
@@ -48,5 +50,25 @@ public class QueryProductService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         return ProductDetail.from(product);
+    }
+
+    /**
+     * Returns tenant-scoped KST calendar-period-to-date product counts for the
+     * admin summary dashboard (TASK-BE-468, TASK-MONO-322).
+     *
+     * <p>Boundaries are computed in Asia/Seoul (KST) so that "today", "this week",
+     * and "this month" align with the Korean business calendar rather than UTC.
+     * All three period starts are inclusive; {@code now} is the exclusive upper bound.
+     */
+    @Transactional(readOnly = true)
+    public PeriodSummary getPeriodSummary() {
+        KstPeriodBounds b = KstPeriodBounds.now();
+
+        long total = productRepository.countAllForTenant();
+        long today = productRepository.countCreatedBetween(b.todayStartInstant(), b.nowInstant());
+        long week  = productRepository.countCreatedBetween(b.weekStartInstant(), b.nowInstant());
+        long month = productRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
+
+        return new PeriodSummary(today, week, month, total);
     }
 }

@@ -2,6 +2,7 @@ package com.example.notification.adapter.in.rest;
 
 import com.example.notification.adapter.in.rest.dto.request.DeletePushSubscriptionRequest;
 import com.example.notification.adapter.in.rest.dto.request.RegisterPushSubscriptionRequest;
+import com.example.notification.adapter.in.rest.dto.response.PushSubscriptionListResponse;
 import com.example.notification.adapter.in.rest.dto.response.SubscriptionIdResponse;
 import com.example.notification.adapter.in.rest.dto.response.VapidPublicKeyResponse;
 import com.example.notification.application.command.RegisterPushSubscriptionCommand;
@@ -32,14 +33,24 @@ public class PushSubscriptionController {
     @PostMapping("/me/push-subscriptions")
     public ResponseEntity<SubscriptionIdResponse> register(
             @RequestHeader("X-User-Id") @NotBlank String userId,
+            @RequestHeader(value = "User-Agent", required = false) String userAgent,
             @Valid @RequestBody RegisterPushSubscriptionRequest request
     ) {
         RegisterSubscriptionResult result = pushSubscriptionService.register(new RegisterPushSubscriptionCommand(
                 userId, request.endpoint(), request.expirationTime(),
-                request.keys().p256dh(), request.keys().auth()));
+                request.keys().p256dh(), request.keys().auth(), userAgent));
         // New subscription → 201, existing endpoint refreshed → 200 (per notification-api.md).
         return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(SubscriptionIdResponse.from(result));
+    }
+
+    /** The caller's push subscriptions (one per browser/device), newest first — for the device list UI. */
+    @GetMapping("/me/push-subscriptions")
+    public ResponseEntity<PushSubscriptionListResponse> list(
+            @RequestHeader("X-User-Id") @NotBlank String userId
+    ) {
+        return ResponseEntity.ok(
+                PushSubscriptionListResponse.from(pushSubscriptionService.listByUser(userId)));
     }
 
     @DeleteMapping("/me/push-subscriptions")

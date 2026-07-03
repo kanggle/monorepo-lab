@@ -166,6 +166,10 @@ may hold multiple subscriptions (one per browser/device).
 }
 ```
 
+The request's `User-Agent` header (when present) is captured and stored with the
+subscription so the user can recognize each registered device in the device list
+(see `GET` below). It is informational only and may be absent (stored as null).
+
 **Response 201** (new subscription) / **200** (existing endpoint refreshed)
 ```json
 {
@@ -177,6 +181,37 @@ may hold multiple subscriptions (one per browser/device).
 | Status | Code | Reason |
 |---|---|---|
 | 400 | VALIDATION_ERROR | Missing/invalid `endpoint` or `keys` |
+| 401 | UNAUTHORIZED | Missing or invalid access token |
+
+---
+
+### GET /api/notifications/me/push-subscriptions
+List the authenticated user's registered Web Push subscriptions (the devices/
+browsers that receive push). Used by the notification settings screen to show the
+device list and offer per-device opt-out. Ordered by `createdAt` descending.
+
+The encryption keys (`p256dh`/`auth`) are **never** returned — only fields the
+client needs to display and identify a device. The `endpoint` is returned so the
+current browser can mark its own subscription (match against
+`pushManager.getSubscription().endpoint`).
+
+**Response 200**
+```json
+{
+  "subscriptions": [
+    {
+      "id": "string (UUID)",
+      "endpoint": "string (push service URL)",
+      "userAgent": "string | null (User-Agent captured at registration)",
+      "createdAt": "string (ISO-8601)"
+    }
+  ]
+}
+```
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 
 ---

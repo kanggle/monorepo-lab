@@ -11,6 +11,8 @@ import {
   type SellerDetail,
   RegisterSellerResponseSchema,
   type RegisterSellerResponse,
+  SellerAreaSummarySchema,
+  type SellerAreaSummary,
   type RegisterSellerBody,
   type SellerListParams,
   SELLER_DEFAULT_PAGE_SIZE,
@@ -61,6 +63,21 @@ const clampSize = (size?: number): number =>
 // ===========================================================================
 // READS
 // ===========================================================================
+
+/** GET /admin/sellers/summary — period-based counts (TASK-PC-FE-164).
+ *  Returns { today, week, month, total } for the tenant. */
+export function getSellersSummary(): Promise<SellerAreaSummary> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'GET',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: '/sellers/summary',
+    },
+    (j) => SellerAreaSummarySchema.parse(j),
+    SELLER_LABEL,
+  );
+}
 
 /** GET /api/admin/sellers?page=&size= (paginated seller summaries). */
 export function listSellers(params: SellerListParams = {}): Promise<SellerList> {
