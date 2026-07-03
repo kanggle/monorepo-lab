@@ -30,6 +30,40 @@ Sequence numbers are global within the `MONO` namespace, starting at `001`.
 
 ---
 
+# Task ID Allocation (concurrency-safe)
+
+Task IDs are sequential within each namespace (`MONO`, and each project's own
+`PC-FE` / `BE` / … space). Under **concurrent sessions** (multiple agents or
+humans opening tasks at once) a naive "highest + 1" pick collides: two pickers
+scan the same tree at the same time, both see the same max, and both claim the
+same number — the check cannot see a claim that has not been pushed yet
+(time-of-check ≠ time-of-use). This is an optimistic scheme with no atomic
+allocator, so collisions are **possible but not fatal**. Follow this discipline
+to make them rare and cheap:
+
+1. **Verify before claiming** — scan `done/ + ready/ + review/` **and**
+   `git worktree list` + `git ls-remote --heads origin` + `git log --all` for the
+   candidate number. This catches every ALREADY-VISIBLE (pushed) in-flight claim.
+2. **Reserve-first, push immediately** — the moment you pick a number, create the
+   task file (a stub is fine) on your branch and **push the branch before doing
+   substantial work**. This shrinks the invisible window so other sessions see
+   your claim as fast as possible.
+3. **Buffer a hot frontier** — if `git log --all` shows several in-flight branches
+   near the top of the namespace (a fast concurrent series), do NOT take `max + 1`;
+   skip ahead (`max + N`) or take a per-session band so two sessions do not both
+   land on the same "next".
+4. **First-merged-wins → the other renumbers** — if a collision still lands (two
+   branches, same ID), the branch **already merged to `main`** holds the number;
+   the not-yet-merged one **renumbers before merge** (rename the task file + branch
+   + references). This is a rename chore, not lost work — see the MONO-170→172
+   precedent.
+
+> A future hard fix (a reservation registry, or non-sequential timestamp/random
+> IDs) would remove collisions entirely, at the cost of the readable sequential
+> convention — deferred unless the collision rate justifies it.
+
+---
+
 # Move Rules
 
 ## (writing a new task) → ready
