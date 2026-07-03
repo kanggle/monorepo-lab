@@ -103,6 +103,43 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     );
   });
 
+  it('navigating from a drilled child route to a non-parent route (개요) collapses the drill back to the top-level list (TASK-PC-FE-176)', () => {
+    // Drilled into WMS via a deep child route.
+    mockPath = '/wms/outbound';
+    const { rerender } = render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-wms-outbound')).toBeInTheDocument();
+    expect(screen.queryByTestId('nav-dashboards')).toBeNull(); // top-level hidden while drilled
+
+    // Click "Platform Console" → navigate to /dashboards/overview, a route not
+    // under any drill parent. The sidebar must return to the top-level menu.
+    mockPath = '/dashboards/overview';
+    rerender(<ConsoleSidebarNav />);
+
+    // Drill submenus gone; WMS is a collapsed toggle button again; 개요 is
+    // visible AND active (the current route).
+    expect(screen.queryByTestId('nav-wms-outbound')).toBeNull();
+    expect(screen.getByTestId('nav-wms').tagName).toBe('BUTTON');
+    const overview = screen.getByTestId('nav-dashboards');
+    expect(overview).toBeInTheDocument();
+    expect(overview).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('navigating between two different parents re-syncs the drill to the new parent (TASK-PC-FE-176 — no stale drill)', () => {
+    mockPath = '/wms/outbound';
+    const { rerender } = render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-wms-outbound')).toBeInTheDocument();
+
+    // Navigate into a DIFFERENT parent's route (ERP). The WMS drill must be
+    // replaced by the ERP drill, not left stale.
+    mockPath = '/erp/orgview';
+    rerender(<ConsoleSidebarNav />);
+    expect(screen.queryByTestId('nav-wms-outbound')).toBeNull();
+    expect(screen.getByTestId('nav-erp-orgview')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
   // After TASK-PC-FE-076 (ERP → drill parent), TASK-PC-FE-077 (SCM → drill
   // parent), and TASK-PC-FE-078 (Finance → drill parent), every 도메인 운영
   // item is a drill parent — no leaf domain links remain to assert.

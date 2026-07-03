@@ -298,16 +298,21 @@ function ChevronLeft() {
 export function ConsoleSidebarNav() {
   const pathname = usePathname() ?? '';
   // Drill state. Initialised from the route so a deep-link into a child route
-  // opens its parent; re-synced when navigation enters a different parent's
-  // route. A manual collapse (clicking the pinned parent) sets null and is
-  // preserved until the next navigation into a parent route.
+  // opens its parent; re-synced on every navigation to the current route's
+  // parent — or collapsed to the top-level list when the new route is NOT under
+  // any parent (TASK-PC-FE-176). This is what makes the "Platform Console" brand
+  // link (→ /dashboards/overview, a non-parent route) return the sidebar to the
+  // top-level menu instead of stranding it in a stale WMS/ERP/… drill.
+  //
+  // A manual collapse or peek (clicking the pinned parent / a parent toggle)
+  // sets state WITHOUT a route change, so this effect does not fire and the
+  // manual state is preserved until the next actual navigation.
   const [openKey, setOpenKey] = useState<string | null>(() =>
     parentKeyForPath(pathname),
   );
 
   useEffect(() => {
-    const key = parentKeyForPath(pathname);
-    if (key) setOpenKey(key);
+    setOpenKey(parentKeyForPath(pathname));
   }, [pathname]);
 
   const openParent =
