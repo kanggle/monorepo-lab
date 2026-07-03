@@ -231,6 +231,12 @@ export interface AlertQueryParams {
 export interface ShipmentQueryParams {
   warehouseId?: string;
   carrierCode?: string;
+  /** ISO instant lower bound on `shippedAt` (inclusive) — the wms
+   *  `admin-service-api.md` § 1.3 `shippedAtFrom` window. Used by the overview
+   *  배송 period-to-date metrics (PC-FE-174). */
+  shippedAtFrom?: string;
+  /** ISO instant upper bound on `shippedAt` — `shippedAtTo` (§ 1.3). */
+  shippedAtTo?: string;
   page?: number;
   size?: number;
 }

@@ -17,8 +17,14 @@ const baseState = (
 ): WmsOverviewState => ({
   notEligible: false,
   counts: [
-    { key: 'inventory', label: '재고', count: 42, status: 'ok' },
-    { key: 'shipments', label: '배송', count: 7, status: 'ok' },
+    { key: 'inventory', label: '재고', count: 42, status: 'ok', period: null },
+    {
+      key: 'shipments',
+      label: '배송',
+      count: 7,
+      status: 'ok',
+      period: { today: 2, week: 5, month: 6 },
+    },
   ],
   alertStatus: [
     { key: 'unacknowledged', label: '미확인', count: 3, cellStatus: 'ok' },
@@ -56,6 +62,39 @@ describe('WmsOverview (TASK-PC-FE-166)', () => {
     expect(screen.queryByTestId('wms-alerts-count-degraded')).toBeNull();
     // Stat tiles, NOT nav links (no anchor / href).
     expect(screen.getByTestId('wms-overview').querySelector('a')).toBeNull();
+  });
+
+  it('배송 (FLOW) renders 오늘/주간/월간 period buckets + 전체 total; 재고 (LEVEL) stays a single total', () => {
+    render(<WmsOverview state={baseState()} />);
+    // 배송 flow tile: period buckets + 전체 secondary (back-compat testid).
+    expect(screen.getByTestId('wms-shipments-count-today')).toHaveTextContent('2');
+    expect(screen.getByTestId('wms-shipments-count-week')).toHaveTextContent('5');
+    expect(screen.getByTestId('wms-shipments-count-month')).toHaveTextContent('6');
+    expect(screen.getByTestId('wms-shipments-count')).toHaveTextContent('7');
+    // 재고 level tile: single total, no period buckets.
+    expect(screen.getByTestId('wms-inventory-count')).toHaveTextContent('42');
+    expect(screen.queryByTestId('wms-inventory-count-today')).toBeNull();
+  });
+
+  it('a null 배송 period bucket renders "—" while siblings + total render', () => {
+    render(
+      <WmsOverview
+        state={baseState({
+          counts: [
+            {
+              key: 'shipments',
+              label: '배송',
+              count: 7,
+              status: 'ok',
+              period: { today: null, week: 5, month: 6 },
+            },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByTestId('wms-shipments-count-today')).toHaveTextContent('—');
+    expect(screen.getByTestId('wms-shipments-count-week')).toHaveTextContent('5');
+    expect(screen.getByTestId('wms-shipments-count')).toHaveTextContent('7');
   });
 
   it('zero count renders as "0", not degraded', () => {

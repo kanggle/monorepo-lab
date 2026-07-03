@@ -47,6 +47,29 @@ const SERVICE_STATUS_LABEL: Record<CellStatus, string> = {
   forbidden: '권한 없음',
 };
 
+/** One 오늘/주간/월간 period bucket (renders "—" for an unresolved sub-read). */
+function PeriodBucket({
+  label,
+  value,
+  testid,
+}: {
+  label: string;
+  value: number | null;
+  testid: string;
+}) {
+  return (
+    <div className="flex flex-col items-center">
+      <dt className="text-[0.65rem] text-muted-foreground">{label}</dt>
+      <dd
+        className="text-lg font-semibold tabular-nums text-foreground"
+        data-testid={testid}
+      >
+        {value !== null ? value.toLocaleString() : '—'}
+      </dd>
+    </div>
+  );
+}
+
 function CountTile({ area }: { area: WmsAreaCount }) {
   const ok = area.status === 'ok' && area.count !== null;
   return (
@@ -68,19 +91,51 @@ function CountTile({ area }: { area: WmsAreaCount }) {
           서비스 상태: {SERVICE_STATUS_LABEL[area.status]}
         </span>
       </span>
-      {ok ? (
-        <span
-          className="text-2xl font-semibold tabular-nums text-foreground"
-          data-testid={`wms-${area.key}-count`}
-        >
-          {area.count!.toLocaleString()}
-        </span>
-      ) : (
+      {!ok ? (
         <span
           className="text-sm font-medium text-muted-foreground"
           data-testid={`wms-${area.key}-count-degraded`}
         >
           {cellPlaceholder(area.status)}
+        </span>
+      ) : area.period ? (
+        <>
+          {/* FLOW area (배송) — 오늘/주간/월간 period-to-date (primary). */}
+          <dl className="flex gap-3">
+            <PeriodBucket
+              label="오늘"
+              value={area.period.today}
+              testid={`wms-${area.key}-count-today`}
+            />
+            <PeriodBucket
+              label="주간"
+              value={area.period.week}
+              testid={`wms-${area.key}-count-week`}
+            />
+            <PeriodBucket
+              label="월간"
+              value={area.period.month}
+              testid={`wms-${area.key}-count-month`}
+            />
+          </dl>
+          {/* 전체 total (secondary — back-compat testid `wms-<key>-count`). */}
+          <span className="text-xs text-muted-foreground">
+            전체{' '}
+            <span
+              className="font-medium tabular-nums text-foreground"
+              data-testid={`wms-${area.key}-count`}
+            >
+              {area.count!.toLocaleString()}
+            </span>
+          </span>
+        </>
+      ) : (
+        /* LEVEL area (재고) — single-total snapshot (no time dimension). */
+        <span
+          className="text-2xl font-semibold tabular-nums text-foreground"
+          data-testid={`wms-${area.key}-count`}
+        >
+          {area.count!.toLocaleString()}
         </span>
       )}
     </div>

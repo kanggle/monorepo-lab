@@ -21,6 +21,8 @@ export function listShipments(
   const qs = new URLSearchParams();
   if (params.warehouseId) qs.set('warehouseId', params.warehouseId);
   if (params.carrierCode) qs.set('carrierCode', params.carrierCode);
+  if (params.shippedAtFrom) qs.set('shippedAtFrom', params.shippedAtFrom);
+  if (params.shippedAtTo) qs.set('shippedAtTo', params.shippedAtTo);
   pageParams(qs, params.page, params.size);
   return callWmsAdmin(
     { method: 'GET', path: `/dashboard/shipments?${qs.toString()}` },
