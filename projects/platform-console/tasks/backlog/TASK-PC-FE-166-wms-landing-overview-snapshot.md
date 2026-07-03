@@ -1,6 +1,7 @@
-# TASK-PC-FE-158 — wms landing **operator overview snapshot**
+# TASK-PC-FE-166 — wms landing **operator overview snapshot**
 
 **Status:** backlog
+**Renumbered:** from PC-FE-158 (concurrent-session ID collision with the shared-status-badge series; the implemented status-badge task kept 158).
 **Area:** platform-console / console-web · **Route:** `app/(console)/wms/page.tsx`
 **Reference impl (template):** TASK-PC-FE-156 (ecommerce overview snapshot) — mirror the pattern, adapt the data source.
 

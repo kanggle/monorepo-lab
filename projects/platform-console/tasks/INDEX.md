@@ -77,11 +77,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **Console domain-landing overview series** (naming follows capability: per-domain overview first, cross-domain rename last). Reference impl = `TASK-PC-FE-156` (ecommerce overview snapshot, DONE). Each domain task's data-source/read-leg + metric set + spec/AC must be finalized before `backlog → ready`.
 
-- `TASK-PC-FE-158-wms-landing-overview-snapshot.md` — elevate `/wms` landing to an operator overview snapshot (counts + status distribution + recent). Open: console-bff read-leg vs reuse. **Blocks PC-FE-162.**
-- `TASK-PC-FE-159-scm-landing-overview-snapshot.md` — elevate `/scm` landing (procurement/inventory/replenishment counts). **Blocks PC-FE-162.**
+- `TASK-PC-FE-166-wms-landing-overview-snapshot.md` — elevate `/wms` landing to an operator overview snapshot (counts + status distribution + recent). Open: console-bff read-leg vs reuse. **Blocks PC-FE-162.** (renumbered from 158 — ID collision with shared-status-badge series.)
+- `TASK-PC-FE-167-scm-landing-overview-snapshot.md` — elevate `/scm` landing (procurement/inventory/replenishment counts). **Blocks PC-FE-162.** (renumbered from 159.)
 - `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — elevate `/finance` landing (account/transaction counts; NO synthetic ₩ aggregation). **Blocks PC-FE-162.**
 - `TASK-PC-FE-161-erp-landing-overview-snapshot.md` — elevate `/erp` landing (masterdata counts + recent). Thinnest surface. **Blocks PC-FE-162.**
-- `TASK-PC-FE-162-console-landing-rename-ops-to-overview.md` — **capstone (runs LAST)**: atomic cross-domain rename of all 5 landing headings `<도메인> 운영 → <도메인> 개요` (+ optional nav-leaf). **Blocked by PC-FE-158/159/160/161** (ecommerce PC-FE-156 already DONE); do NOT promote until those 4 are `done`.
+- `TASK-PC-FE-162-console-landing-rename-ops-to-overview.md` — **capstone (runs LAST)**: atomic cross-domain rename of all 5 landing headings `<도메인> 운영 → <도메인> 개요` (+ optional nav-leaf). **Blocked by PC-FE-166/167/160/161** (ecommerce PC-FE-156 already DONE); do NOT promote until those 4 are `done`.
 
 ## ready
 

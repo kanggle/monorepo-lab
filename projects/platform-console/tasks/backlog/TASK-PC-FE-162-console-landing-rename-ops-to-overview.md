@@ -16,7 +16,7 @@ content (lying label), and (b) renaming one domain alone = cross-domain inconsis
 
 - Naming must follow capability. Today only ecommerce (PC-FE-156) has real overview content; the others are
   health + links. `운영` is currently the honest, consistent label for all 5.
-- So: bring wms/scm/finance/erp landings up to overview parity (PC-FE-158/159/160/161) FIRST, then this single
+- So: bring wms/scm/finance/erp landings up to overview parity (PC-FE-166/167/160/161) FIRST, then this single
   rename makes every landing genuinely an overview with a consistent title.
 
 ## Scope (to be finalized)
@@ -37,9 +37,9 @@ content (lying label), and (b) renaming one domain alone = cross-domain inconsis
 
 ## Dependencies
 
-- **Blocked by (ALL must be done first):** TASK-PC-FE-158 (wms), -159 (scm), -160 (finance), -161 (erp) overview
+- **Blocked by (ALL must be done first):** TASK-PC-FE-166 (wms), -167 (scm), -160 (finance), -161 (erp) overview
   snapshots. ecommerce (TASK-PC-FE-156) already DONE.
-- Do NOT promote this to `ready` until 158–161 are `done` (else it renames still-bare landings to a false "개요").
+- Do NOT promote this to `ready` until 166/167/160/161 are `done` (else it renames still-bare landings to a false "개요").
 
 ## Promotion note
 
