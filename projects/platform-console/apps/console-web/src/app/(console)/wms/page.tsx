@@ -37,6 +37,11 @@ export const dynamic = 'force-dynamic';
  * TASK-PC-FE-173 — the inventory query table (filters + pagination) moved
  * OFF this 개요 screen to the dedicated `/wms/inventory` route; this page
  * keeps only the count-tile inventory snapshot (`WmsOverview`, below).
+ *
+ * TASK-PC-FE-175 — the 택배/출고 query table likewise moved OFF this 개요
+ * onto the existing `/wms/outbound` 출고 page; this page keeps only the
+ * shipments count tile + 최근 출고 glance (`WmsOverview`) and the alerts
+ * table. `getWmsSectionState` now seeds only alerts.
  */
 export default async function WmsPage() {
   // Eligibility pre-flight from the data-driven registry (§ 2.2). A
@@ -132,7 +137,7 @@ export default async function WmsPage() {
     );
   }
 
-  if (state.degraded || !state.alerts || !state.shipments) {
+  if (state.degraded || !state.alerts) {
     return (
       <section aria-labelledby="wms-heading">
         <h1 id="wms-heading" className="mb-6 text-2xl font-semibold">
@@ -153,7 +158,6 @@ export default async function WmsPage() {
   return (
     <WmsOpsScreen
       alerts={state.alerts}
-      shipments={state.shipments}
       lagSeconds={state.lagSeconds}
       overview={<WmsOverview state={overviewState} />}
     />

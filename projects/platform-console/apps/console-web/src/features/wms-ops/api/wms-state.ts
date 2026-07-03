@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { ApiError, WmsUnavailableError } from '@/shared/api/errors';
-import { listAlerts, listShipments } from './wms-api';
-import type { AlertPage, ShipmentPage } from './types';
+import { listAlerts } from './wms-api';
+import type { AlertPage } from './types';
 
 /**
  * Server-side wms operations section state for the `(console)/wms` route
@@ -40,12 +40,15 @@ import type { AlertPage, ShipmentPage } from './types';
  * state.ts`); this section no longer fetches/exposes `inventory` (the
  * 개요's inventory count tile is a SEPARATE fan-out, `overview-state.ts` —
  * unaffected).
+ *
+ * TASK-PC-FE-175 — the 택배/출고 query table moved OFF this 개요 onto the
+ * existing `/wms/outbound` 출고 page (`getWmsShipmentsState`, `shipments-
+ * state.ts`); this section no longer fetches/exposes `shipments` either. The
+ * 개요's shipments count tile + 최근 출고 glance are a SEPARATE fan-out
+ * (`overview-state.ts`) — unaffected. This section now seeds only alerts.
  */
 export interface WmsSectionState {
   alerts: AlertPage | null;
-  /** Shipment read-model rows (carrier code / tracking no), seeded page-0.
-   *  Projected from `outbound.shipping.confirmed` (admin-service § 9). */
-  shipments: ShipmentPage | null;
   /** True when the operator is not wms-eligible (no wms product/tenant in
    *  their registry) — actionable block, no wms call fabricated. */
   notEligible: boolean;
@@ -53,14 +56,13 @@ export interface WmsSectionState {
   forbidden: boolean;
   /** True on 503 / timeout / network — wms section degrades only. */
   degraded: boolean;
-  /** Max observed read-model lag (seconds) across the seeded reads, when
-   *  the producer surfaced it; null when not lagging / absent. */
+  /** Read-model lag (seconds) from the seeded alerts read, when the producer
+   *  surfaced it; null when not lagging / absent. */
   lagSeconds: number | null;
 }
 
 const EMPTY: WmsSectionState = {
   alerts: null,
-  shipments: null,
   notEligible: false,
   forbidden: false,
   degraded: false,
@@ -80,17 +82,10 @@ export async function getWmsSectionState(
   }
 
   try {
-    const [alerts, shipments] = await Promise.all([
-      listAlerts({ page: 0, size: 20 }),
-      listShipments({ page: 0, size: 20 }),
-    ]);
-    const lagSeconds = Math.max(
-      alerts.lagSeconds ?? 0,
-      shipments.lagSeconds ?? 0,
-    );
+    const alerts = await listAlerts({ page: 0, size: 20 });
+    const lagSeconds = alerts.lagSeconds ?? 0;
     return {
       alerts: alerts.data,
-      shipments: shipments.data,
       notEligible: false,
       forbidden: false,
       degraded: false,
