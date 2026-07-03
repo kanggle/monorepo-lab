@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import {
   isRetired,
   KNOWN_MASTER_STATUSES,
   KNOWN_PARTNER_TYPES,
   labelForUnknownEnum,
+  masterStatusTone,
   type CreateBusinessPartnerInput,
   type UpdateBusinessPartnerInput,
   type BusinessPartnerListResponse,
@@ -132,12 +134,12 @@ export function BusinessPartnerList({
                       </span>
                     </td>
                     <td className="p-2">
-                      <span
+                      <StatusBadge
+                        tone={masterStatusTone(p.status)}
                         data-testid={`erp-businesspartner-status-${i}`}
-                        className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
                       >
                         {labelForUnknownEnum(p.status, KNOWN_MASTER_STATUSES)}
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td className="p-2">
                       <EffectivePeriodBadge period={p.effectivePeriod} />

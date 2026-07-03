@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { formatPromotionDay } from './promotion-format';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
@@ -13,6 +14,7 @@ import {
 import {
   PROMOTION_DEFAULT_PAGE_SIZE,
   PROMOTION_STATUS_VALUES,
+  promotionStatusTone,
   type PromotionList,
   type PromotionListParams,
 } from '../api/types';
@@ -241,7 +243,9 @@ export function PromotionsScreen({ promotions }: PromotionsScreenProps) {
                     className="p-2"
                     data-testid={`promotion-row-status-${i}`}
                   >
-                    {p.status}
+                    <StatusBadge tone={promotionStatusTone(p.status)}>
+                      {p.status}
+                    </StatusBadge>
                   </td>
                   <td className="p-2">
                     <div className="flex gap-2">

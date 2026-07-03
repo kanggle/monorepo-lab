@@ -2,10 +2,12 @@
 
 import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import {
   formatMoney,
   KNOWN_TXN_STATUSES,
   KNOWN_TXN_TYPES,
+  txnStatusTone,
   type Transaction,
   type TransactionsQueryParams,
   type TransactionsResponse,
@@ -44,18 +46,6 @@ interface FilterState {
   status: string;
 }
 const EMPTY_FILTERS: FilterState = { type: '', status: '' };
-
-function txnStatusVariant(status: string): 'normal' | 'warn' | 'danger' {
-  if (status === 'FAILED' || status === 'REVERSED') return 'danger';
-  if (status === 'PENDING') return 'warn';
-  return 'normal';
-}
-const STATUS_CLASS: Record<'normal' | 'warn' | 'danger', string> = {
-  normal: 'rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground',
-  warn: 'rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-100',
-  danger:
-    'rounded bg-destructive/15 px-1.5 py-0.5 text-xs text-destructive',
-};
 
 function labelForUnknown<T extends string>(
   value: string,
@@ -208,7 +198,6 @@ export function TransactionsTable({
             </thead>
             <tbody>
               {rows.map((t, i) => {
-                const statusVariant = txnStatusVariant(t.status);
                 return (
                   <tr
                     key={t.transactionId}
@@ -223,12 +212,12 @@ export function TransactionsTable({
                       {labelForUnknown(t.type, KNOWN_TXN_TYPES)}
                     </td>
                     <td className="p-2">
-                      <span
-                        className={STATUS_CLASS[statusVariant]}
+                      <StatusBadge
+                        tone={txnStatusTone(t.status)}
                         data-testid={`finance-txn-status-${i}`}
                       >
                         {labelForUnknown(t.status, KNOWN_TXN_STATUSES)}
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td
                       className="p-2"

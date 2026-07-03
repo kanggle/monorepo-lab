@@ -2,9 +2,11 @@
 
 import type { FormEvent } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { messageForCode } from '@/shared/api/errors';
 import {
   STATUS_FILTER_OPTIONS,
+  outboundStatusTone,
 } from './outbound-ops-helpers';
 import type { OutboundOrderPage, OutboundListParams } from '../api/types';
 
@@ -139,7 +141,9 @@ export function OutboundOrdersTable({
                 >
                   <td className="p-2">{o.orderNo ?? o.orderId}</td>
                   <td className="p-2" data-testid={`outbound-row-status-${i}`}>
-                    {o.status ?? '—'}
+                    <StatusBadge tone={outboundStatusTone(o.status)}>
+                      {o.status ?? '—'}
+                    </StatusBadge>
                   </td>
                   <td className="p-2">{o.sagaState ?? '—'}</td>
                   <td className="p-2">{o.lineCount ?? '—'}</td>

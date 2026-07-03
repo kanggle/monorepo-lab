@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the ecommerce `product-service` operator surface —
@@ -37,6 +38,22 @@ import { z } from 'zod';
  *  as a plain string so a future status renders rather than throwing. */
 export const PRODUCT_STATUS_VALUES = ['ON_SALE', 'SOLD_OUT', 'HIDDEN'] as const;
 export type ProductStatus = (typeof PRODUCT_STATUS_VALUES)[number];
+
+/**
+ * Product status → shared semantic {@link StatusTone} (rendered via the shared
+ * `<StatusBadge>` — TASK-PC-FE-158/159). ON_SALE is live (success); SOLD_OUT
+ * needs attention (warning); HIDDEN is inactive (neutral). An unknown/future
+ * status → `neutral` (TOLERANCE).
+ */
+const PRODUCT_STATUS_TONE: Record<ProductStatus, StatusTone> = {
+  ON_SALE: 'success',
+  SOLD_OUT: 'warning',
+  HIDDEN: 'neutral',
+};
+
+export function productStatusTone(status: string): StatusTone {
+  return PRODUCT_STATUS_TONE[status as ProductStatus] ?? 'neutral';
+}
 
 /** 1. list — ProductListResponse.ProductSummaryItem row. */
 export const ProductSummarySchema = z
@@ -218,6 +235,22 @@ export interface ProductListParams {
  *  a future status renders rather than throwing. */
 export const PROMOTION_STATUS_VALUES = ['ACTIVE', 'SCHEDULED', 'ENDED'] as const;
 export type PromotionStatus = (typeof PROMOTION_STATUS_VALUES)[number];
+
+/**
+ * Promotion status → shared semantic {@link StatusTone} (rendered via the shared
+ * `<StatusBadge>` — TASK-PC-FE-158/159). ACTIVE is live (success); SCHEDULED is
+ * upcoming (progress); ENDED is finished (neutral). An unknown/future status →
+ * `neutral` (TOLERANCE).
+ */
+const PROMOTION_STATUS_TONE: Record<PromotionStatus, StatusTone> = {
+  ACTIVE: 'success',
+  SCHEDULED: 'progress',
+  ENDED: 'neutral',
+};
+
+export function promotionStatusTone(status: string): StatusTone {
+  return PROMOTION_STATUS_TONE[status as PromotionStatus] ?? 'neutral';
+}
 
 /** discountType producer enum values. */
 export const DISCOUNT_TYPE_VALUES = ['FIXED', 'PERCENTAGE'] as const;

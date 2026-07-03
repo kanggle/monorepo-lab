@@ -11,6 +11,7 @@ import {
   allowedTransitionsFor,
   transitionRequiresReason,
 } from '../api/approval-types';
+import { statusToneClass, type StatusTone } from '@/shared/ui/StatusBadge';
 import {
   useApprovalRequest,
   useSubmitApproval,
@@ -178,12 +179,14 @@ export function ApprovalDetail({
                   const isCurrent =
                     data.currentStage !== undefined &&
                     stage.stageIndex === data.currentStage;
-                  const stageBadgeTone =
+                  // APPROVED stage = success; the actively-routing (current)
+                  // stage = progress; a not-yet-reached stage = neutral.
+                  const stageTone: StatusTone =
                     stage.status === 'APPROVED'
-                      ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-100'
+                      ? 'success'
                       : isCurrent
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-100'
-                        : 'bg-muted text-muted-foreground';
+                        ? 'progress'
+                        : 'neutral';
                   return (
                     <li
                       key={stage.stageIndex}
@@ -203,9 +206,7 @@ export function ApprovalDetail({
                         {stage.stageIndex + 1}단계
                       </span>
                       <span className="flex-1">{stage.approverId}</span>
-                      <span
-                        className={`inline-block rounded px-1.5 py-0.5 text-xs ${stageBadgeTone}`}
-                      >
+                      <span className={statusToneClass(stageTone)}>
                         {stage.status === 'APPROVED'
                           ? '승인됨'
                           : stage.status === 'PENDING'

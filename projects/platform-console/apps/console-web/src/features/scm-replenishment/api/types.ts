@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the scm `demand-planning-service` replenishment
@@ -114,6 +115,24 @@ export const KNOWN_SUGGESTION_STATUSES = [
   'MATERIALIZED',
   'DISMISSED',
 ] as const;
+
+/**
+ * Suggestion status → shared semantic {@link StatusTone} (rendered via the
+ * shared `<StatusBadge>` — TASK-PC-FE-159). SUGGESTED awaits an operator
+ * decision (warning); APPROVED is accepted and in-flight to a PO (progress);
+ * MATERIALIZED is the happy terminal (success); DISMISSED is the discarded
+ * terminal (neutral). An unknown/future status → `neutral` (tolerant).
+ */
+const SUGGESTION_STATUS_TONE: Record<string, StatusTone> = {
+  SUGGESTED: 'warning',
+  APPROVED: 'progress',
+  MATERIALIZED: 'success',
+  DISMISSED: 'neutral',
+};
+
+export function suggestionStatusTone(status: string | undefined): StatusTone {
+  return status ? (SUGGESTION_STATUS_TONE[status] ?? 'neutral') : 'neutral';
+}
 
 export interface SuggestionQueryParams {
   status?: string;

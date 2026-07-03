@@ -23,20 +23,17 @@ describe('SELLER_STATUS_VALUES', () => {
 });
 
 describe('sellerStatusTone', () => {
-  it('maps each known status to a distinct label + className', () => {
-    for (const s of SELLER_STATUS_VALUES) {
-      const t = sellerStatusTone(s);
-      expect(t.label).toBe(s);
-      expect(t.className).toMatch(/\S/);
-    }
-    // ACTIVE stays green (byte-preserved from the v1 badge).
-    expect(sellerStatusTone('ACTIVE').className).toContain('green');
+  it('maps each known status to its semantic StatusBadge tone (TASK-PC-FE-158)', () => {
+    // ACTIVE stays "success" = green in the shared palette (byte-preserved
+    // from the v1 badge); the rest follow the lifecycle semantics.
+    expect(sellerStatusTone('ACTIVE')).toBe('success');
+    expect(sellerStatusTone('PENDING_PROVISIONING')).toBe('warning');
+    expect(sellerStatusTone('SUSPENDED')).toBe('neutral');
+    expect(sellerStatusTone('CLOSED')).toBe('danger');
   });
 
-  it('renders an unknown/future status with a neutral tone and the raw label (no crash)', () => {
-    const t = sellerStatusTone('FUTURE_STATE');
-    expect(t.label).toBe('FUTURE_STATE');
-    expect(t.className).toContain('muted');
+  it('maps an unknown/future status to the neutral tone (no crash)', () => {
+    expect(sellerStatusTone('FUTURE_STATE')).toBe('neutral');
   });
 });
 

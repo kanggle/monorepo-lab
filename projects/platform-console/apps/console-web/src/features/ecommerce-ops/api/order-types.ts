@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the ecommerce `order-service` operator surface —
@@ -42,6 +43,27 @@ export const ORDER_STATUS_VALUES = [
   'STUCK_RECOVERY_FAILED',
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUS_VALUES)[number];
+
+/**
+ * Order status → shared semantic {@link StatusTone} (rendered via the shared
+ * `<StatusBadge>` — TASK-PC-FE-158/159). PENDING awaits operator action
+ * (warning); CONFIRMED/SHIPPED are mid-lifecycle (progress); DELIVERED is the
+ * happy terminal (success); CANCELLED and the stuck-recovery failure are
+ * terminal-bad (danger). An unknown/future status → `neutral` (TOLERANCE — the
+ * producer may add a status the console has not shipped yet).
+ */
+const ORDER_STATUS_TONE: Record<OrderStatus, StatusTone> = {
+  PENDING: 'warning',
+  CONFIRMED: 'progress',
+  SHIPPED: 'progress',
+  DELIVERED: 'success',
+  CANCELLED: 'danger',
+  STUCK_RECOVERY_FAILED: 'danger',
+};
+
+export function orderStatusTone(status: string): StatusTone {
+  return ORDER_STATUS_TONE[status as OrderStatus] ?? 'neutral';
+}
 
 /**
  * Allowed operator-triggered transitions from a given status. SHIPPED/DELIVERED

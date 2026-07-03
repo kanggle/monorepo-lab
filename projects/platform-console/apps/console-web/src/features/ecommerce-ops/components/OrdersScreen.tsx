@@ -3,12 +3,14 @@
 import { useId, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useOrders } from '../hooks/use-ecommerce-orders';
 import { formatDateTime } from '@/shared/lib/datetime';
 import {
   ORDER_DEFAULT_PAGE_SIZE,
   ORDER_STATUS_VALUES,
+  orderStatusTone,
   type OrderList,
   type OrderListParams,
 } from '../api/order-types';
@@ -183,7 +185,9 @@ export function OrdersScreen({ orders }: OrdersScreenProps) {
                     className="p-2"
                     data-testid={`order-row-status-${i}`}
                   >
-                    {o.status}
+                    <StatusBadge tone={orderStatusTone(o.status)}>
+                      {o.status}
+                    </StatusBadge>
                   </td>
                   <td className="p-2">
                     {o.totalPrice.toLocaleString('ko-KR')}원

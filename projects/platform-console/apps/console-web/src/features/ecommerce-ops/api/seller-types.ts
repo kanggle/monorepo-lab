@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the ecommerce `product-service` seller operator
@@ -42,34 +43,22 @@ export const SELLER_STATUS_VALUES = [
 ] as const;
 export type SellerStatus = (typeof SELLER_STATUS_VALUES)[number];
 
-/** Badge tone (label + Tailwind classes) for a seller status. */
-export interface SellerStatusTone {
-  label: string;
-  className: string;
-}
-
-const SELLER_STATUS_TONES: Record<SellerStatus, SellerStatusTone> = {
-  ACTIVE: { label: 'ACTIVE', className: 'bg-green-100 text-green-800' },
-  PENDING_PROVISIONING: {
-    label: 'PENDING_PROVISIONING',
-    className: 'bg-amber-100 text-amber-800',
-  },
-  SUSPENDED: { label: 'SUSPENDED', className: 'bg-gray-200 text-gray-700' },
-  CLOSED: { label: 'CLOSED', className: 'bg-red-100 text-red-800' },
+const SELLER_STATUS_TONE: Record<SellerStatus, StatusTone> = {
+  ACTIVE: 'success',
+  PENDING_PROVISIONING: 'warning',
+  SUSPENDED: 'neutral',
+  CLOSED: 'danger',
 };
 
 /**
- * Maps a (possibly unknown) status string to a badge tone. A value outside the
- * known lifecycle renders with a neutral tone using the raw string as its label
- * — the console never crashes on a future producer status (TOLERANCE invariant).
+ * Maps a (possibly unknown) seller status to a shared semantic
+ * {@link StatusTone} (rendered via the shared `<StatusBadge>` — TASK-PC-FE-158).
+ * A value outside the known lifecycle → `neutral`, so the console never crashes
+ * on a future producer status (TOLERANCE invariant). The raw status string
+ * stays the badge label at the call site.
  */
-export function sellerStatusTone(status: string): SellerStatusTone {
-  return (
-    SELLER_STATUS_TONES[status as SellerStatus] ?? {
-      label: status,
-      className: 'bg-muted text-muted-foreground',
-    }
-  );
+export function sellerStatusTone(status: string): StatusTone {
+  return SELLER_STATUS_TONE[status as SellerStatus] ?? 'neutral';
 }
 
 /** The lifecycle actions valid from a given status (drives the detail UI). */

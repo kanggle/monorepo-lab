@@ -1,4 +1,8 @@
-import { isTerminalApprovalStatus } from '../api/approval-types';
+import {
+  approvalStatusTone,
+  isTerminalApprovalStatus,
+} from '../api/approval-types';
+import { statusToneClass } from '@/shared/ui/StatusBadge';
 
 /**
  * Shared presentational primitives for the approval surface
@@ -27,22 +31,14 @@ export function statusLabel(status: string): string {
 
 export function StatusBadge({ status }: { status: string }) {
   const terminal = isTerminalApprovalStatus(status);
-  const tone =
-    status === 'APPROVED'
-      ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-100'
-      : status === 'REJECTED' || status === 'WITHDRAWN'
-        ? 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-100'
-        : status === 'SUBMITTED'
-          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-100'
-          : status === 'IN_REVIEW'
-            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-100'
-            : 'bg-muted text-muted-foreground';
+  // Palette centralised in shared/ui/StatusBadge (statusToneClass); this badge
+  // keeps its own <span> only for the data-status / data-terminal attributes.
   return (
     <span
       data-testid="approval-status-badge"
       data-status={status}
       data-terminal={terminal ? 'true' : 'false'}
-      className={`inline-block rounded px-1.5 py-0.5 text-xs ${tone}`}
+      className={statusToneClass(approvalStatusTone(status))}
     >
       {statusLabel(status)}
     </span>

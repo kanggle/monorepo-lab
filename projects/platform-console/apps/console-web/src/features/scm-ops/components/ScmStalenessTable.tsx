@@ -2,6 +2,8 @@
 
 import type { StalenessResponse } from '../api/types';
 import { S5Warning } from './S5Warning';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { stalenessTone } from './scm-ops-helpers';
 
 /**
  * Inventory-visibility node staleness panel of the scm ops screen
@@ -55,7 +57,6 @@ export function ScmStalenessTable({ warning, rows }: ScmStalenessTableProps) {
           <tbody>
             {rows.map((s, i) => {
               const status = s.stalenessStatus ?? 'UNKNOWN';
-              const bad = status === 'STALE' || status === 'UNREACHABLE';
               return (
                 <tr
                   key={`${s.nodeId}-${i}`}
@@ -66,16 +67,12 @@ export function ScmStalenessTable({ warning, rows }: ScmStalenessTableProps) {
                   <td className="p-2">
                     {/* Honest: a STALE / UNREACHABLE node is shown as
                         such, never hidden (§ 2.4.6 freshness honesty). */}
-                    <span
+                    <StatusBadge
+                      tone={stalenessTone(status)}
                       data-testid={`scm-staleness-status-${i}`}
-                      className={
-                        bad
-                          ? 'rounded bg-destructive/15 px-1.5 py-0.5 text-xs text-destructive'
-                          : 'rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground'
-                      }
                     >
                       {status}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className="p-2">{s.lastEventAt ?? '—'}</td>
                   <td className="p-2">{s.lastCheckedAt ?? '—'}</td>

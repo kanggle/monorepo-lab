@@ -2,9 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { useOrder } from '../hooks/use-ecommerce-orders';
-import type { OrderDetail as OrderDetailType } from '../api/order-types';
+import {
+  orderStatusTone,
+  type OrderDetail as OrderDetailType,
+} from '../api/order-types';
 import { OrderStatusDialog } from './OrderStatusDialog';
 import { DetailHeader } from './DetailHeader';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { formatDateTime } from '@/shared/lib/datetime';
 
 /**
@@ -57,7 +61,11 @@ export function OrderDetail({ order }: OrderDetailProps) {
         </div>
         <div>
           <dt className="text-muted-foreground">상태</dt>
-          <dd data-testid="order-detail-status">{data.status}</dd>
+          <dd data-testid="order-detail-status">
+            <StatusBadge tone={orderStatusTone(data.status)}>
+              {data.status}
+            </StatusBadge>
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">사용자 ID</dt>
