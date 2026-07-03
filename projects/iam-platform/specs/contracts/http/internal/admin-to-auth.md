@@ -21,6 +21,7 @@ admin-service가 운영자 명령으로 auth-service에 강제 로그아웃 / re
 **Headers**:
 - `Idempotency-Key: {admin_action_request_id}` (필수)
 - `X-Operator-ID: {operator_id}` (감사 추적용)
+- `X-Tenant-Id: {active_tenant}` (선택, TASK-BE-468) — 행위자의 활성 테넌트. admin-service 가 `QueryTenantScopeGate` 로 해소해 스탬프한다(TASK-BE-467). 아래 [Tenant Confinement](#tenant-confinement--x-tenant-id-task-be-468) 참조.
 
 **Request**:
 ```json
@@ -29,6 +30,16 @@ admin-service가 운영자 명령으로 auth-service에 강제 로그아웃 / re
   "operatorId": "string"
 }
 ```
+
+### Tenant Confinement — `X-Tenant-Id` (TASK-BE-468)
+
+force-logout 은 `X-Tenant-Id` 로 대상 계정을 **행위자의 활성 테넌트**에 가둔다. 한 계정은 정확히 한 테넌트에 속하므로(그 계정의 refresh_tokens·`credentials` row 는 모두 그 테넌트) confinement 는 credential 의 tenant 게이트로 이루어진다.
+
+- **헤더 부재 OR `'*'` (SUPER_ADMIN 플랫폼 스코프)**: **NET-ZERO** — 계정의 테넌트 전체 revoke(오늘의 동작). BE-468 이전과 byte-identical.
+- **구체 테넌트 T 인데 계정 소유 아님** (credential 의 tenant ≠ T, 또는 credential 부재): **no-op** — `revokedTokenCount=0`, **DB revoke·Redis 무효화 모두 미수행**. 타 테넌트 세션을 건드리지 않으며(enumeration-safe), 200 count=0 로 존재를 노출하지 않는다. (404 를 쓰지 않는 이유: revoke 는 멱등·count 반환 연산이고, 404 는 admin-service `SessionAdminUseCase` 가 downstream 실패로 오인해 503 으로 매핑하기 때문.)
+- **구체 테넌트 T 가 계정 소유**: 정상 revoke + Redis 경로(계정 토큰이 모두 T 이므로 net-zero 와 동일).
+
+admin-service 는 out-of-scope 테넌트 요청을 auth 도달 전에 `403 TENANT_SCOPE_DENIED` 로 이미 차단한다(TASK-BE-467).
 
 **Response 200**:
 ```json

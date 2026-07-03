@@ -80,7 +80,7 @@ base path: `/api/admin`
 - 생략 → 운영자 자신의 테넌트. 일반(비-플랫폼) 운영자가 effective scope 밖의 테넌트를 지정하면 → **`403 TENANT_SCOPE_DENIED`** (best-effort DENIED `admin_actions` row, BE-262 미러링).
 - 해소된 테넌트는 `X-Tenant-Id` 로 account-service 에 스탬프된다. 대상 계정이 **다른 테넌트**면 tenant-scoped 조회가 → **`404 ACCOUNT_NOT_FOUND`** (enumeration-safe: 타 테넌트 존재를 확인해 주지 않는다).
 - **NET-ZERO**: SUPER_ADMIN(`tenant_id='*'`) 이 활성 테넌트 없이(헤더 부재/`'*'`) 호출하면 account-service 는 `fan-platform` 기본값으로 폴백 — BE-467 이전과 byte-identical.
-- **session-revoke** 는 admin-service 가 활성 테넌트를 동일하게 해소·스탬프하지만(defense-in-depth 전파), refresh_tokens 의 `tenant_id` 실제 confinement 는 auth-service 의 **별도 enforcement point** (본 task 범위 밖의 follow-up)이다.
+- **session-revoke** 는 admin-service 가 활성 테넌트를 동일하게 해소·스탬프하며(TASK-BE-467), auth-service 가 이를 **실제로 enforce** 한다(**TASK-BE-468**): 구체 테넌트가 계정을 소유하지 않으면 force-logout 은 **no-op**(`revokedTokenCount=0`, DB revoke·Redis 무효화 미수행 — enumeration-safe). 부재/`'*'` → net-zero. 상세: [admin-to-auth.md](internal/admin-to-auth.md#tenant-confinement--x-tenant-id-task-be-468).
 
 ---
 
@@ -342,7 +342,7 @@ base path: `/api/admin`
 | 503 | `DOWNSTREAM_ERROR` | auth-service 호출 실패 (5xx/timeout) |
 | 503 | `CIRCUIT_OPEN` | auth-service circuit breaker OPEN (호출 자체 거부) |
 
-**Tenant note (TASK-BE-467)**: admin-service 는 활성 테넌트를 해소해 `X-Tenant-Id` 로 auth-service force-logout 호출에 전파한다(defense-in-depth). 단, refresh_tokens 의 `tenant_id` 로 revoke 대상을 실제로 가두는 confinement 는 auth-service 의 **별도 enforcement point** (본 task 범위 밖 follow-up)이므로, 현재 cross-tenant revoke 의 404 는 보장되지 않는다.
+**Tenant note (TASK-BE-467 propagation + TASK-BE-468 enforcement)**: admin-service 는 활성 테넌트를 해소해 `X-Tenant-Id` 로 auth-service force-logout 호출에 전파하고(BE-467), auth-service 가 이를 enforce 한다(BE-468). 구체 테넌트가 대상 계정을 소유하지 않으면 **no-op** — `revokedSessionCount=0`, DB revoke·Redis 무효화 미수행(enumeration-safe; 404 대신 200 count=0 — revoke 는 멱등·count 반환 연산). 부재/`'*'`(SUPER_ADMIN) → net-zero(계정 테넌트 전체 revoke). 상세: [admin-to-auth.md](internal/admin-to-auth.md#tenant-confinement--x-tenant-id-task-be-468).
 
 **Side Effects**: auth-service에 내부 HTTP force-logout 명령 + admin_actions 기록. `503 DOWNSTREAM_ERROR`/`503 CIRCUIT_OPEN` 시에도 `admin_actions`에 `outcome=FAILURE` 행이 기록된다 (A10 fail-closed).
 
