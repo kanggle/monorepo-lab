@@ -87,13 +87,17 @@ public class WebLoginSecurityConfig {
                 .securityMatcher(new OrRequestMatcher(
                         new AntPathRequestMatcher("/login", "GET"),
                         new AntPathRequestMatcher("/login", "POST"),
-                        // TASK-BE-470: the browser self-service signup page. GET-only —
-                        // it renders the form; the form's client-side fetch POSTs
-                        // cross-service to account-service's /api/accounts/signup (routed
-                        // by the gateway), which is NOT matched by this chain. Claiming it
-                        // here (with anyRequest().permitAll() below) makes /signup public,
-                        // exactly like /login itself.
+                        // TASK-BE-470 / fix-001: the browser self-service signup page.
+                        // GET renders the form; POST is the server-side proxy that calls
+                        // account-service /api/accounts/signup (SignupPageController) — the
+                        // form CANNOT fetch that endpoint client-side because the SAS pages
+                        // and /api/accounts are different origins (the gateway does not proxy
+                        // /login|/signup, and account-service sets no CORS). Both verbs are
+                        // claimed here (with anyRequest().permitAll() below) so /signup is
+                        // public, exactly like /login. CSRF stays enabled — signup.html
+                        // injects the _csrf token like login.html.
                         new AntPathRequestMatcher("/signup", "GET"),
+                        new AntPathRequestMatcher("/signup", "POST"),
                         // TASK-BE-396 (ADR-006): the social-login browser bridge
                         // (start + callback) lives on this chain so its session
                         // (JSESSIONID SecurityContext) is established under the same

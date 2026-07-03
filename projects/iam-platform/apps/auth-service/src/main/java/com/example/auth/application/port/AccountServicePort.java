@@ -14,6 +14,26 @@ import java.util.Optional;
 public interface AccountServicePort {
 
     /**
+     * TASK-BE-470-fix-001: creates a new account via the public
+     * {@code POST /api/accounts/signup} endpoint on behalf of the browser signup
+     * page (server-side proxy). Unlike the SAS browser pages, {@code /api/accounts}
+     * is not served on the auth-service origin, so a client-side {@code fetch} from
+     * {@code /signup} cannot reach it; auth-service proxies the call here so the whole
+     * flow stays same-origin (like the {@code /login} form).
+     *
+     * <p>This targets the <b>public</b> signup endpoint (no bearer token), distinct
+     * from the {@code /internal/**} calls the other port methods make.
+     *
+     * @param email       the new account email
+     * @param password    the raw password (account-service + auth-service PasswordPolicy validate)
+     * @param displayName the optional display name (nullable/blank → omitted)
+     * @throws com.example.auth.application.exception.SignupEmailConflictException on 409 (email taken)
+     * @throws com.example.auth.application.exception.SignupInvalidException on 400/422 (validation)
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException on 5xx / timeout / IO
+     */
+    void signup(String email, String password, String displayName);
+
+    /**
      * Looks up an account's current status by id.
      *
      * <p>TASK-BE-063: replaces the previous email-based credential lookup. The
