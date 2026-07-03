@@ -3,6 +3,7 @@ import {
   DELEGATION_CHAIN,
   DELEGATION_GUARDS,
   DOMAIN_ROLE_MAP,
+  OPERATOR_ONBOARDING_AXES,
   PERMISSION_KEYS,
   SCREEN_ACCESS,
   SEED_ROLES,
@@ -195,6 +196,47 @@ export function IamGuideScreen() {
           <Card key={g.name} className="bg-muted/40">
             <p className="mb-1 text-sm font-medium text-foreground">{g.name}</p>
             <p className="text-sm text-muted-foreground">{g.desc}</p>
+          </Card>
+        ))}
+      </div>
+
+      {/* 3.5 운영자 온보딩 3축 (운영 도달 범위) */}
+      <h2 className="mb-2 text-lg font-semibold">
+        운영자 온보딩 3축 (운영 도달 범위)
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        위임으로 역할을 받은 뒤, 운영자가 <strong>어디를 · 얼마나</strong> 운영할
+        수 있는지는 아래 3개의 직교 축으로 정해집니다. assume-tenant 로 도메인
+        롤을 받는 운영(E-Commerce·WMS·SCM…)에 그대로 적용되며, 이커머스
+        입점사/협력업체 운영자 온보딩이 이 세 축으로 표현됩니다.
+      </p>
+      <div className="mb-10 grid gap-4 md:grid-cols-3">
+        {OPERATOR_ONBOARDING_AXES.map((axis) => (
+          <Card
+            key={axis.term}
+            data-testid={`iam-guide-onboarding-axis-${axis.term.replace(
+              /\s+/g,
+              '-',
+            )}`}
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="rounded bg-muted px-2 py-0.5 text-sm font-semibold text-foreground">
+                {axis.term}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {axis.koName}
+              </span>
+            </div>
+            <p className="mb-2 font-mono text-[11px] text-muted-foreground">
+              {axis.api}
+            </p>
+            <p className="mb-3 text-sm text-muted-foreground">{axis.desc}</p>
+            <p className="text-sm text-foreground">
+              <span className="mr-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                이커머스
+              </span>
+              {axis.ecommerceNote}
+            </p>
           </Card>
         ))}
       </div>
