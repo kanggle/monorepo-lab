@@ -73,6 +73,10 @@ class BulkLockControllerTest {
     void grantAll() {
         when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
         when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(true);
+        // TASK-BE-467: allowed-path reaches the controller body, which now consults
+        // the shared read-tenant gate before invoking the use case.
+        when(queryTenantScopeGate.resolve(any(), any(), any(), any()))
+                .thenReturn(new com.example.admin.application.QueryTenantScopeGate.Resolved("fan-platform", true));
     }
 
     private String bearer() { return "Bearer " + jwt.operatorToken("op-1"); }

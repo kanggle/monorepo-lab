@@ -95,6 +95,10 @@ class AdminSourceIpConditionEnforcementTest {
         when(permissionEvaluator.hasPermission(operatorId, Permission.ACCOUNT_LOCK)).thenReturn(true);
         when(useCase.lock(any())).thenReturn(new LockAccountResult(
                 "acc-1", "ACTIVE", "LOCKED", operatorId, Instant.now(), "audit-ok"));
+        // TASK-BE-467: allowed-path reaches the controller body, which now consults
+        // the shared read-tenant gate before invoking the use case.
+        when(queryTenantScopeGate.resolve(any(), any(), any(), any()))
+                .thenReturn(new com.example.admin.application.QueryTenantScopeGate.Resolved("fan-platform", true));
     }
 
     @Test

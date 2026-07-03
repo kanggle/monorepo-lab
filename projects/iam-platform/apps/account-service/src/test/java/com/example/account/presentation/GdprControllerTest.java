@@ -5,6 +5,7 @@ import com.example.account.application.result.DataExportResult;
 import com.example.account.application.result.GdprDeleteResult;
 import com.example.account.application.service.DataExportUseCase;
 import com.example.account.application.service.GdprDeleteUseCase;
+import com.example.account.domain.tenant.TenantId;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.status.StateTransitionException;
 import com.example.account.domain.status.StatusChangeReason;
@@ -24,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.time.LocalDate;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -61,7 +63,7 @@ class GdprControllerTest {
     @DisplayName("POST /internal/accounts/{id}/gdpr-delete — 정상 처리 시 200 과 GdprDeleteResponse 반환")
     void gdprDelete_validRequest_returns200WithMaskedPayload() throws Exception {
         Instant maskedAt = Instant.parse("2026-04-18T10:00:00Z");
-        given(gdprDeleteUseCase.execute(eq(ACCOUNT_ID), eq("op-1")))
+        given(gdprDeleteUseCase.execute(eq(ACCOUNT_ID), eq("op-1"), any(TenantId.class)))
                 .willReturn(new GdprDeleteResult(ACCOUNT_ID, "DELETED", EMAIL_HASH, maskedAt));
 
         mockMvc.perform(post("/internal/accounts/{id}/gdpr-delete", ACCOUNT_ID)
@@ -77,7 +79,7 @@ class GdprControllerTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/gdpr-delete — 이미 DELETED 상태이면 409 STATE_TRANSITION_INVALID")
     void gdprDelete_alreadyDeleted_returns409StateTransitionInvalid() throws Exception {
-        given(gdprDeleteUseCase.execute(eq(ACCOUNT_ID), eq("op-1")))
+        given(gdprDeleteUseCase.execute(eq(ACCOUNT_ID), eq("op-1"), any(TenantId.class)))
                 .willThrow(new StateTransitionException(
                         AccountStatus.DELETED, AccountStatus.DELETED,
                         StatusChangeReason.REGULATED_DELETION));
@@ -92,7 +94,7 @@ class GdprControllerTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/gdpr-delete — 계정 미존재 시 404 ACCOUNT_NOT_FOUND")
     void gdprDelete_accountNotFound_returns404() throws Exception {
-        given(gdprDeleteUseCase.execute(eq("acc-999"), eq("op-1")))
+        given(gdprDeleteUseCase.execute(eq("acc-999"), eq("op-1"), any(TenantId.class)))
                 .willThrow(new AccountNotFoundException("acc-999"));
 
         mockMvc.perform(post("/internal/accounts/{id}/gdpr-delete", "acc-999")
@@ -117,7 +119,7 @@ class GdprControllerTest {
                 profile,
                 Instant.parse("2026-04-18T10:00:00Z"));
 
-        given(dataExportUseCase.execute(eq(ACCOUNT_ID))).willReturn(result);
+        given(dataExportUseCase.execute(eq(ACCOUNT_ID), any(TenantId.class))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts/{id}/export", ACCOUNT_ID))
                 .andExpect(status().isOk())
@@ -136,7 +138,7 @@ class GdprControllerTest {
     @Test
     @DisplayName("GET /internal/accounts/{id}/export — 계정 미존재 시 404 ACCOUNT_NOT_FOUND")
     void export_accountNotFound_returns404() throws Exception {
-        given(dataExportUseCase.execute(eq("acc-999")))
+        given(dataExportUseCase.execute(eq("acc-999"), any(TenantId.class)))
                 .willThrow(new AccountNotFoundException("acc-999"));
 
         mockMvc.perform(get("/internal/accounts/{id}/export", "acc-999"))
