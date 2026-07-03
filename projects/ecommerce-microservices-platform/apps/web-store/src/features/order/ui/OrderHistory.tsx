@@ -23,17 +23,20 @@ export function OrderHistory() {
       <h1 className="page-title">주문 내역</h1>
 
       {isLoading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div>
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} style={{ padding: 'var(--space-4)', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-                <Skeleton width="40%" height="14px" />
-                <Skeleton width="60px" height="14px" />
+            <div
+              key={i}
+              className="card"
+              style={{ padding: 'var(--space-4) var(--space-5)', marginBottom: 'var(--space-3)' }}
+            >
+              {/* Line 1: date (left) + status badge (right) — mirrors OrderCard. */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-1)' }}>
+                <Skeleton width="96px" height="12px" />
+                <Skeleton width="64px" height="22px" borderRadius="var(--radius-full)" />
               </div>
-              <Skeleton width="70%" height="14px" />
-              <div style={{ marginTop: 'var(--space-2)' }}>
-                <Skeleton width="30%" height="16px" />
-              </div>
+              {/* Line 2: product name · total price single line. */}
+              <Skeleton width="70%" height="16px" />
             </div>
           ))}
         </div>

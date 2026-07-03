@@ -3,7 +3,7 @@
 import { OrderStatusBadge } from '@/entities/order';
 import { ErrorMessage } from '@repo/ui';
 import { Skeleton } from '@/shared/ui/Skeleton';
-import { BackLink } from '@/shared/ui';
+import { DetailHeader } from '@/shared/ui';
 import { useOrderDetail, CANCELLABLE_STATUSES } from '../model/use-order-detail';
 import { OrderItemsSection } from './OrderItemsSection';
 import { OrderShippingInfo } from './OrderShippingInfo';
@@ -18,10 +18,12 @@ interface Props {
 function OrderDetailSkeleton() {
   return (
     <div>
-      <Skeleton width="80px" height="14px" borderRadius="var(--radius-sm)" />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-8)' }}>
         <Skeleton width="120px" height="28px" />
-        <Skeleton width="72px" height="24px" borderRadius="var(--radius-full)" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <Skeleton width="72px" height="24px" borderRadius="var(--radius-full)" />
+          <Skeleton width="64px" height="30px" borderRadius="var(--radius-md)" />
+        </div>
       </div>
 
       <section style={{ marginBottom: 'var(--space-8)' }}>
@@ -81,11 +83,12 @@ export function OrderDetailView({ orderId }: Props) {
 
       {order && (
         <div>
-          <BackLink href="/my/orders">주문내역</BackLink>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-8)' }}>
-            <h1 className="page-title" style={{ margin: 0 }}>주문 상세</h1>
-            <OrderStatusBadge status={order.status} />
-          </div>
+          <DetailHeader
+            title="주문 상세"
+            backHref="/my/orders"
+            backLabel="주문내역"
+            actions={<OrderStatusBadge status={order.status} />}
+          />
 
           <OrderItemsSection items={order.items} totalPrice={order.totalPrice} />
 

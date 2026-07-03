@@ -82,6 +82,25 @@ describe('Header', () => {
     expect(screen.queryByLabelText('장바구니')).not.toBeInTheDocument();
   });
 
+  it('인증 상태에서 알림 링크를 표시한다', () => {
+    mockUseAuth.mockReturnValue({
+      user: { name: '홍길동' },
+      isAuthenticated: true,
+      isLoading: false,
+      logout: mockLogout,
+    });
+
+    render(<Header />);
+
+    expect(screen.getByLabelText('알림')).toHaveAttribute('href', '/my/notifications');
+  });
+
+  it('비로그인 상태에서 알림 링크를 숨긴다', () => {
+    render(<Header />);
+
+    expect(screen.queryByLabelText('알림')).not.toBeInTheDocument();
+  });
+
   it('인증 로딩 중에는 장바구니 링크를 숨긴다', () => {
     mockUseAuth.mockReturnValue({
       user: null,
