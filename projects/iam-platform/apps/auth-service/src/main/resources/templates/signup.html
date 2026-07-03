@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Create your Global Account</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; display: flex; min-height: 100vh; align-items: center; justify-content: center;
+            background: #f4f5f7;
+        }
+        .card {
+            background: #fff; width: 360px; max-width: calc(100vw - 32px);
+            padding: 32px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08);
+        }
+        h1 { font-size: 20px; margin: 0 0 24px; text-align: center; }
+        label { display: block; font-size: 13px; margin: 12px 0 4px; color: #333; }
+        input[type=email], input[type=password], input[type=text] {
+            width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 14px;
+            border: 1px solid #ccc; border-radius: 8px;
+        }
+        .hint { font-size: 12px; color: #888; margin: 4px 0 0; }
+        button.primary {
+            width: 100%; margin-top: 20px; padding: 11px; font-size: 14px; font-weight: 600;
+            color: #fff; background: #2563eb; border: none; border-radius: 8px; cursor: pointer;
+        }
+        button.primary:disabled { opacity: .6; cursor: default; }
+        .error {
+            background: #fde8e8; color: #9b1c1c; border: 1px solid #f8b4b4;
+            padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
+        }
+        .footer { margin-top: 20px; font-size: 13px; text-align: center; color: #555; }
+        .footer a { color: #2563eb; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>Create your Global Account</h1>
+
+    <div class="error" id="signup-error" role="alert" style="display:none"></div>
+
+    <form id="signup-form" novalidate>
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" autocomplete="email" required autofocus/>
+
+        <label for="displayName">Display name <span style="color:#aaa">(optional)</span></label>
+        <input type="text" id="displayName" name="displayName" autocomplete="name" maxlength="100"/>
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="new-password" required/>
+        <p class="hint">8자 이상, 대문자·소문자·숫자·특수문자 중 3종 이상.</p>
+
+        <label for="confirmPassword">Confirm password</label>
+        <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password" required/>
+
+        <button type="submit" class="primary" id="submit-btn">회원가입</button>
+    </form>
+
+    <div class="footer">
+        이미 계정이 있으신가요? <a href="/login">로그인</a>
+    </div>
+</div>
+
+<script th:inline="none">
+    (function () {
+        var form = document.getElementById('signup-form');
+        var errorBox = document.getElementById('signup-error');
+        var submitBtn = document.getElementById('submit-btn');
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.display = 'block';
+        }
+        function clearError() {
+            errorBox.textContent = '';
+            errorBox.style.display = 'none';
+        }
+
+        // Map the account-service error contract (account-api.md) to Korean copy.
+        // Unknown / unmapped responses fall through to a generic message — never silent.
+        function messageForResponse(status, code) {
+            if (status === 409 || code === 'ACCOUNT_ALREADY_EXISTS') {
+                return '이미 가입된 이메일입니다. 로그인해 주세요.';
+            }
+            if (status === 400 || status === 422 || code === 'VALIDATION_ERROR') {
+                return '입력값을 확인해 주세요. 패스워드는 8자 이상, 대문자·소문자·숫자·특수문자 중 3종 이상이어야 합니다.';
+            }
+            if (status === 429 || code === 'RATE_LIMITED') {
+                return '요청이 많습니다. 잠시 후 다시 시도해 주세요.';
+            }
+            if (status === 503 || code === 'AUTH_SERVICE_UNAVAILABLE') {
+                return '인증 서비스가 일시적으로 불가합니다. 잠시 후 다시 시도해 주세요.';
+            }
+            return '회원가입 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+        }
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            clearError();
+
+            var email = document.getElementById('email').value.trim();
+            var displayName = document.getElementById('displayName').value.trim();
+            var password = document.getElementById('password').value;
+            var confirmPassword = document.getElementById('confirmPassword').value;
+
+            // AC-4: client-side pre-validation — no server round-trip on obvious mistakes.
+            if (password.length < 8) {
+                showError('패스워드는 8자 이상이어야 합니다.');
+                return;
+            }
+            if (password !== confirmPassword) {
+                showError('패스워드가 일치하지 않습니다.');
+                return;
+            }
+
+            var body = { email: email, password: password };
+            if (displayName) {
+                body.displayName = displayName;
+            }
+
+            submitBtn.disabled = true;
+
+            fetch('/api/accounts/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            }).then(function (res) {
+                if (res.status === 201) {
+                    // AC-2: success → land on the login page with the success banner.
+                    window.location.assign('/login?registered');
+                    return;
+                }
+                // Try to read the contract error code; tolerate an empty/non-JSON body.
+                res.json().then(function (data) {
+                    showError(messageForResponse(res.status, data && data.code));
+                }).catch(function () {
+                    showError(messageForResponse(res.status, null));
+                }).finally(function () {
+                    submitBtn.disabled = false;
+                });
+            }).catch(function () {
+                // Network / routing failure — never silent (AC-3 failure scenario).
+                showError('잠시 후 다시 시도해 주세요. 서버에 연결할 수 없습니다.');
+                submitBtn.disabled = false;
+            });
+        });
+    })();
+</script>
+</body>
+</html>

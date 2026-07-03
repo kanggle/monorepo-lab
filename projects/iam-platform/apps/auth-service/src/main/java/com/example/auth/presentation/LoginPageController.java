@@ -40,10 +40,13 @@ public class LoginPageController {
     public String loginPage(
             @RequestParam(name = "error", required = false) String error,
             @RequestParam(name = "logout", required = false) String logout,
+            @RequestParam(name = "registered", required = false) String registered,
             Model model) {
         model.addAttribute("providers", PROVIDERS);
         model.addAttribute("error", error);
         model.addAttribute("loggedOut", logout != null);
+        // TASK-BE-470: the signup page redirects here with ?registered on success.
+        model.addAttribute("registered", registered != null);
         // The password form posts to the form-login filter's default URL.
         model.addAttribute("passwordFormAction", "/login");
         return "login";
