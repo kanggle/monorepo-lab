@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   isPushSupported,
   registerServiceWorker,
@@ -11,6 +12,7 @@ import {
   registerPushSubscription,
   deletePushSubscription,
 } from '../api/push-subscription-api';
+import { notificationKeys } from './query-keys';
 
 export type PushPermission = 'default' | 'granted' | 'denied' | 'unsupported';
 
@@ -31,6 +33,7 @@ export interface UsePushSubscriptionResult {
  * API access is feature-guarded, so it degrades to an "unsupported" state safely.
  */
 export function usePushSubscription(): UsePushSubscriptionResult {
+  const queryClient = useQueryClient();
   const [supported, setSupported] = useState(false);
   const [permission, setPermission] = useState<PushPermission>('unsupported');
   const [subscribed, setSubscribed] = useState(false);
@@ -81,12 +84,14 @@ export function usePushSubscription(): UsePushSubscriptionResult {
         },
       });
       setSubscribed(true);
+      // Reflect the newly-registered device in the "push devices" list (TASK-FE-085-fix-001).
+      queryClient.invalidateQueries({ queryKey: notificationKeys.pushDevices() });
     } catch {
       setError('푸시 알림 구독에 실패했습니다.');
     } finally {
       setIsBusy(false);
     }
-  }, []);
+  }, [queryClient]);
 
   const unsubscribe = useCallback(async () => {
     setError(null);
@@ -100,12 +105,14 @@ export function usePushSubscription(): UsePushSubscriptionResult {
         await subscription.unsubscribe();
       }
       setSubscribed(false);
+      // Drop the removed device from the "push devices" list (TASK-FE-085-fix-001).
+      queryClient.invalidateQueries({ queryKey: notificationKeys.pushDevices() });
     } catch {
       setError('푸시 알림 구독 해지에 실패했습니다.');
     } finally {
       setIsBusy(false);
     }
-  }, []);
+  }, [queryClient]);
 
   return { supported, permission, subscribed, isBusy, error, subscribe, unsubscribe };
 }

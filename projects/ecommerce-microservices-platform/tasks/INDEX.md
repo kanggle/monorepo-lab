@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-085-fix-001 | **REVIEW (PR 대기)**. FE-085 후속 — PushOptIn 구독/해지 시 "푸시 수신 기기" 목록이 즉시 갱신 안 되던 버그(서로 다른 React Query 캐시, 목록 미invalidate). `usePushSubscription` 이 구독/해지 성공 시 `pushDevices` 쿼리 invalidate. 라이브 fed-e2e 발견(백엔드 정상, 프런트 캐시 갭). 분석=Opus 4.8 / 구현=Opus 직접. | web-store | code, bug, test |
 
 ## done
 
