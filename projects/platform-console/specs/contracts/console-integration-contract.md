@@ -217,6 +217,17 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   Assignment / Settings, `WMS_ADMIN`+ heavy writes) is **explicitly out of v1
   console scope** — deferred to a later slice, not silently dropped.
 
+  **Console-side routing note (TASK-PC-FE-173, non-normative — no producer
+  change)**: operations #1 (inventory snapshot) and #2 (inventory by-key) are
+  served on the console's dedicated `/wms/inventory` surface (split off the
+  `/wms` 개요's query table — a glance-overview is unfit for a filtered/
+  paginated table, same principle as PC-FE-170). That surface also exposes
+  filters (`locationId`, `lotId`, `minOnHand`) and columns (`damagedQty`,
+  `lastAdjustedAt`) already defined by op #1's request/response shape but
+  previously unexposed in the console UI, and a row-level "상세" panel that
+  consumes op #2 (`getInventoryByKey`, composite key location+sku+lot — no
+  single `[id]` route fits). Consumed read-only; no producer contract change.
+
 - **Per-domain credential selection (the key correctness element — normative)**:
   **each § 2.4.x binding declares which credential it uses, and an
   implementer MUST NOT blanket-apply one domain's auth model to another.**

@@ -48,6 +48,7 @@ vi.mock('@/shared/config/env', () => ({
 }));
 
 import { GET as inventoryGET } from '@/app/api/wms/inventory/route';
+import { GET as inventoryByKeyGET } from '@/app/api/wms/inventory/by-key/route';
 import { GET as shipmentsGET } from '@/app/api/wms/shipments/route';
 import { GET as alertsGET } from '@/app/api/wms/alerts/route';
 import { POST as ackPOST } from '@/app/api/wms/alerts/[alertId]/acknowledge/route';
@@ -144,6 +145,87 @@ describe('GET /api/wms/inventory proxy', () => {
     );
     const res = await inventoryGET(
       new Request('http://console.local/api/wms/inventory'),
+    );
+    expect(res.status).toBe(503);
+  });
+});
+
+describe('GET /api/wms/inventory/by-key proxy (TASK-PC-FE-173)', () => {
+  const ITEM = { locationId: 'loc-1', skuId: 'sku-1', warehouseId: 'wh-1' };
+
+  it('attaches the IAM OIDC access token (NOT the operator token), forwards the composite key', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(ITEM));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await inventoryByKeyGET(
+      new Request(
+        'http://console.local/api/wms/inventory/by-key?locationId=loc-1&skuId=sku-1&lotId=lot-1',
+      ),
+    );
+    expect(res.status).toBe(200);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['X-Tenant-Id']).toBeUndefined();
+    expect(h['Idempotency-Key']).toBeUndefined();
+    expect(h['X-Operator-Reason']).toBeUndefined();
+    const upstream = new URL(String(url));
+    expect(upstream.pathname).toContain('/dashboard/inventory/by-key');
+    expect(upstream.searchParams.get('locationId')).toBe('loc-1');
+    expect(upstream.searchParams.get('skuId')).toBe('sku-1');
+    expect(upstream.searchParams.get('lotId')).toBe('lot-1');
+  });
+
+  it('a missing locationId/skuId → 422 (no upstream call)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await inventoryByKeyGET(
+      new Request('http://console.local/api/wms/inventory/by-key?locationId=loc-1'),
+    );
+    expect(res.status).toBe(422);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('a 404 (zero stock at the key) → 404 passthrough (distinguished from a degrade)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(wmsError('NOT_FOUND', 404)),
+    );
+    const res = await inventoryByKeyGET(
+      new Request(
+        'http://console.local/api/wms/inventory/by-key?locationId=loc-1&skuId=sku-1',
+      ),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('401 from wms → 401 (whole-session re-login signal)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(wmsError('UNAUTHORIZED', 401)));
+    const res = await inventoryByKeyGET(
+      new Request(
+        'http://console.local/api/wms/inventory/by-key?locationId=loc-1&skuId=sku-1',
+      ),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('503 from wms → 503 (wms section degrades only)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(wmsError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await inventoryByKeyGET(
+      new Request(
+        'http://console.local/api/wms/inventory/by-key?locationId=loc-1&skuId=sku-1',
+      ),
     );
     expect(res.status).toBe(503);
   });

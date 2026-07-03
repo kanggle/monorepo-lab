@@ -12,6 +12,8 @@ import {
   InventoryPageSchema,
   type InventoryPage,
   type InventoryQueryParams,
+  InventoryRowSchema,
+  type InventoryRow,
   AlertPageSchema,
   type AlertPage,
   type AlertQueryParams,
@@ -115,6 +117,53 @@ export function useWmsInventory(
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
     ...READ_QUERY_REFETCH,
+  });
+}
+
+// --- inventory by-key detail read (TASK-PC-FE-173) -----------------------
+
+/** Composite key — location+sku+lot (no single `[id]`, § the by-key route). */
+export interface InventoryByKey {
+  locationId: string;
+  skuId: string;
+  lotId?: string;
+}
+
+export function inventoryByKeyKey(key: InventoryByKey | null) {
+  return [
+    WMS_KEY,
+    'inventory-by-key',
+    key?.locationId ?? null,
+    key?.skuId ?? null,
+    key?.lotId ?? null,
+  ] as const;
+}
+
+async function fetchInventoryByKey(key: InventoryByKey): Promise<InventoryRow> {
+  const qs = new URLSearchParams();
+  qs.set('locationId', key.locationId);
+  qs.set('skuId', key.skuId);
+  if (key.lotId) qs.set('lotId', key.lotId);
+  const raw = await apiClient.get<unknown>(
+    `/api/wms/inventory/by-key?${qs.toString()}`,
+  );
+  return InventoryRowSchema.parse(raw);
+}
+
+/**
+ * TASK-PC-FE-173 — the `/wms/inventory` row "상세" panel. `enabled`-gated on
+ * a selected composite key (`null` ⇒ no fetch). A `404` (zero stock at that
+ * key) surfaces as an `ApiError(404, …)` on `.error` — the screen
+ * distinguishes it from a degrade and renders "재고 없음" (no retry storm —
+ * `retry: false` inherited from the app's QueryClient defaults; this hook
+ * adds none of its own).
+ */
+export function useWmsInventoryByKey(key: InventoryByKey | null) {
+  return useQuery({
+    queryKey: inventoryByKeyKey(key),
+    queryFn: () => fetchInventoryByKey(key as InventoryByKey),
+    enabled: key !== null,
+    retry: false,
   });
 }
 

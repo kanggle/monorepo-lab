@@ -91,6 +91,11 @@ const GROUPS: NavGroup[] = [
         testid: 'nav-wms',
         children: [
           { href: '/wms', label: '개요', testid: 'nav-wms-ops' },
+          {
+            href: '/wms/inventory',
+            label: '재고',
+            testid: 'nav-wms-inventory',
+          },
           { href: '/wms/outbound', label: '출고', testid: 'nav-wms-outbound' },
         ],
       },

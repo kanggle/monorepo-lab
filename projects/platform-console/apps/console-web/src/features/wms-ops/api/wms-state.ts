@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { ApiError, WmsUnavailableError } from '@/shared/api/errors';
-import { listInventory, listAlerts, listShipments } from './wms-api';
-import type { InventoryPage, AlertPage, ShipmentPage } from './types';
+import { listAlerts, listShipments } from './wms-api';
+import type { AlertPage, ShipmentPage } from './types';
 
 /**
  * Server-side wms operations section state for the `(console)/wms` route
@@ -31,12 +31,17 @@ import type { InventoryPage, AlertPage, ShipmentPage } from './types';
  *     a degraded notice; the console shell + the IAM sections stay intact.
  *   - any other producer error → degrade rather than crash.
  *
- * Read-model lag (§ 2.4.5): the inventory/alerts lag hint (if the producer
- * set `X-Read-Model-Lag-Seconds`) is surfaced as a NON-blocking banner —
- * the section still renders (eventual-consistency honesty).
+ * Read-model lag (§ 2.4.5): the alerts/shipments lag hint (if the producer
+ * set `X-Read-Model-Lag-Seconds`) is surfaced as a NON-blocking banner — the
+ * section still renders (eventual-consistency honesty).
+ *
+ * TASK-PC-FE-173 — the inventory query table moved OFF this screen to the
+ * dedicated `/wms/inventory` route (`getWmsInventoryState`, `inventory-
+ * state.ts`); this section no longer fetches/exposes `inventory` (the
+ * 개요's inventory count tile is a SEPARATE fan-out, `overview-state.ts` —
+ * unaffected).
  */
 export interface WmsSectionState {
-  inventory: InventoryPage | null;
   alerts: AlertPage | null;
   /** Shipment read-model rows (carrier code / tracking no), seeded page-0.
    *  Projected from `outbound.shipping.confirmed` (admin-service § 9). */
@@ -54,7 +59,6 @@ export interface WmsSectionState {
 }
 
 const EMPTY: WmsSectionState = {
-  inventory: null,
   alerts: null,
   shipments: null,
   notEligible: false,
@@ -76,18 +80,15 @@ export async function getWmsSectionState(
   }
 
   try {
-    const [inv, alerts, shipments] = await Promise.all([
-      listInventory({ page: 0, size: 20 }),
+    const [alerts, shipments] = await Promise.all([
       listAlerts({ page: 0, size: 20 }),
       listShipments({ page: 0, size: 20 }),
     ]);
     const lagSeconds = Math.max(
-      inv.lagSeconds ?? 0,
       alerts.lagSeconds ?? 0,
       shipments.lagSeconds ?? 0,
     );
     return {
-      inventory: inv.data,
       alerts: alerts.data,
       shipments: shipments.data,
       notEligible: false,

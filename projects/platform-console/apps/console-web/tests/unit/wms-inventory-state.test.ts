@@ -1,23 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * `features/wms-ops/api/wms-state.ts` — the server-side section state
- * (TASK-PC-FE-007 / § 2.4.5):
+ * `features/wms-ops/api/inventory-state.ts` — the server-side inventory
+ * section state for the dedicated `/wms/inventory` route (TASK-PC-FE-173,
+ * mirrors `wms-state.test.ts`):
  *   - not wms-eligible → `notEligible` block, NO wms call fabricated
  *     (no cross-tenant call; the console never sends a tenant — wms
  *     resolves it from the JWT claim);
- *   - eligible → seeds alerts + shipments (IAM OIDC token, server-side);
+ *   - eligible → seeds inventory (IAM OIDC token, server-side);
  *   - 403 → `forbidden` (inline, no crash);
- *   - 503/timeout → `degraded` (wms section only — shell intact);
+ *   - 503/timeout → `degraded` (this section only — shell intact);
  *   - the read-model-lag hint is surfaced when present.
  *
- * TASK-PC-FE-173 — the inventory query table (and this state's `inventory`
- * fan-out) moved to the dedicated `/wms/inventory` route; see
- * `wms-inventory-state.test.ts` for `getWmsInventoryState`.
- *
- * 401 → whole-session re-login is exercised by the api/proxy tests (it
- * triggers `next/navigation` redirect; pinned there to keep this unit
- * focused on the state shape).
+ * 401 → whole-session re-login is exercised here (mirrors `wms-state.test.ts`
+ * — no separate proxy-test split for this single-read state).
  */
 
 const cookieJar = new Map<string, string>();
@@ -58,7 +54,7 @@ vi.mock('@/shared/config/env', () => ({
   getServerEnv: () => ENV,
 }));
 
-import { getWmsSectionState } from '@/features/wms-ops/api/wms-state';
+import { getWmsInventoryState } from '@/features/wms-ops/api/inventory-state';
 import { ACCESS_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(
@@ -78,7 +74,7 @@ function wmsError(code: string, status: number) {
   );
 }
 
-const ALERTS = {
+const INV = {
   content: [],
   page: { number: 0, size: 20, totalElements: 0, totalPages: 0 },
 };
@@ -88,34 +84,30 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('getWmsSectionState — eligibility gate (§ 2.4.5)', () => {
+describe('getWmsInventoryState — eligibility gate (§ 2.4.5, TASK-PC-FE-173)', () => {
   it('not eligible → notEligible block, NO wms call fabricated', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const state = await getWmsSectionState(false);
+    const state = await getWmsInventoryState(false);
     expect(state.notEligible).toBe(true);
-    expect(state.alerts).toBeNull();
-    expect(state.shipments).toBeNull();
+    expect(state.inventory).toBeNull();
     // No cross-tenant call ever fabricated.
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('eligible → seeds alerts + shipments (IAM OIDC token, server-side)', async () => {
+  it('eligible → seeds inventory (IAM OIDC token, server-side)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn((_u: string, _init?: RequestInit) =>
-      Promise.resolve(jsonResponse(ALERTS)),
+      Promise.resolve(jsonResponse(INV)),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const state = await getWmsSectionState(true);
+    const state = await getWmsInventoryState(true);
     expect(state.notEligible).toBe(false);
     expect(state.degraded).toBe(false);
-    expect(state.alerts).not.toBeNull();
-    // TASK-PC-FE-079: shipments is part of the seeded fan-out.
-    expect(state.shipments).not.toBeNull();
-    // Both seeded reads carry the IAM OIDC access token.
+    expect(state.inventory).not.toBeNull();
     const h = (fetchMock.mock.calls[0][1] as RequestInit)
       .headers as Record<string, string>;
     expect(h.Authorization).toBe('Bearer GAP-ACCESS');
@@ -127,11 +119,11 @@ describe('getWmsSectionState — eligibility gate (§ 2.4.5)', () => {
       'fetch',
       vi.fn(() =>
         Promise.resolve(
-          jsonResponse(ALERTS, 200, { 'X-Read-Model-Lag-Seconds': '9' }),
+          jsonResponse(INV, 200, { 'X-Read-Model-Lag-Seconds': '9' }),
         ),
       ),
     );
-    const state = await getWmsSectionState(true);
+    const state = await getWmsInventoryState(true);
     expect(state.lagSeconds).toBe(9);
   });
 
@@ -141,18 +133,18 @@ describe('getWmsSectionState — eligibility gate (§ 2.4.5)', () => {
       'fetch',
       vi.fn(() => Promise.resolve(wmsError('FORBIDDEN', 403))),
     );
-    const state = await getWmsSectionState(true);
+    const state = await getWmsInventoryState(true);
     expect(state.forbidden).toBe(true);
     expect(state.degraded).toBe(false);
   });
 
-  it('503 → degraded (wms section only — shell intact)', async () => {
+  it('503 → degraded (this section only — shell intact)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.resolve(wmsError('SERVICE_UNAVAILABLE', 503))),
     );
-    const state = await getWmsSectionState(true);
+    const state = await getWmsInventoryState(true);
     expect(state.degraded).toBe(true);
     expect(state.notEligible).toBe(false);
   });
@@ -163,7 +155,7 @@ describe('getWmsSectionState — eligibility gate (§ 2.4.5)', () => {
       'fetch',
       vi.fn(() => Promise.resolve(wmsError('UNAUTHORIZED', 401))),
     );
-    const err = await getWmsSectionState(true).catch((e) => e);
+    const err = await getWmsInventoryState(true).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).toBe('REDIRECT:/login');
   });

@@ -4,15 +4,16 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ComponentProps, ReactNode } from 'react';
 import { WmsOpsScreen } from '@/features/wms-ops';
-import type { InventoryPage, AlertPage, ShipmentPage } from '@/features/wms-ops';
+import type { AlertPage, ShipmentPage } from '@/features/wms-ops';
 import { runAxe } from '../a11y/axe-helper';
 
 /**
  * `features/wms-ops` component behaviour:
- *   - inventory snapshot table + filters + pagination (re-query via proxy)
  *   - shipments / 택배 read table + filters + pagination (TASK-PC-FE-079 —
  *     carrier code / tracking no, READ-only, no mutation affordance)
- *   - adjustments/inventory/shipments are READ-only (no edit affordance)
+ *   - (the inventory snapshot table moved OFF this screen to the dedicated
+ *     `/wms/inventory` route — TASK-PC-FE-173; see `WmsInventoryScreen.test.tsx`)
+ *   - adjustments/shipments are READ-only (no edit affordance)
  *   - alert acknowledge is CONFIRM-GATED (no one-click ack) + reason-free
  *     (no reason capture — wms surface has no X-Operator-Reason)
  *   - the Idempotency-Key is generated per a confirmed action
@@ -32,27 +33,6 @@ function wrapper() {
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
 }
-
-const INVENTORY: InventoryPage = {
-  content: [
-    {
-      locationId: 'loc-1',
-      skuId: 'sku-1',
-      lotId: null,
-      warehouseId: 'wh-1',
-      locationCode: 'WH01-A-01',
-      skuCode: 'SKU-1',
-      availableQty: 80,
-      reservedQty: 20,
-      onHandQty: 100,
-      lowStockFlag: true,
-      lastEventAt: '2026-05-09T10:00:00Z',
-      version: 5,
-    },
-  ],
-  page: { number: 0, size: 20, totalElements: 40, totalPages: 2 },
-  sort: 'lastEventAt,desc',
-};
 
 const ALERTS: AlertPage = {
   content: [
@@ -91,7 +71,6 @@ const SHIPMENTS: ShipmentPage = {
 function renderScreen(props: Partial<ComponentProps<typeof WmsOpsScreen>> = {}) {
   return render(
     <WmsOpsScreen
-      inventory={INVENTORY}
       alerts={ALERTS}
       shipments={SHIPMENTS}
       lagSeconds={null}
@@ -113,17 +92,11 @@ beforeEach(() => {
 });
 
 describe('WmsOpsScreen — render & read tables', () => {
-  it('renders the inventory snapshot + alerts from the server-provided pages', () => {
+  it('renders the alerts table from the server-provided page', () => {
     renderScreen();
     expect(
       screen.getByRole('heading', { name: 'WMS 개요' }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId('wms-inv-table')).toBeInTheDocument();
-    const row = within(screen.getByTestId('wms-inv-row-0'));
-    expect(row.getByTestId('wms-inv-low-0')).toBeInTheDocument(); // low-stock
-    expect(screen.getByTestId('wms-inv-pageinfo')).toHaveTextContent(
-      '1 / 2 페이지',
-    );
     expect(screen.getByTestId('wms-alerts-table')).toBeInTheDocument();
   });
 
@@ -192,7 +165,7 @@ describe('WmsOpsScreen — render & read tables', () => {
     renderScreen({ lagSeconds: 8 });
     expect(screen.getByTestId('wms-lag-hint')).toHaveTextContent(/8초/);
     // The section still renders (eventual-consistency honesty, not an error).
-    expect(screen.getByTestId('wms-inv-table')).toBeInTheDocument();
+    expect(screen.getByTestId('wms-ship-table')).toBeInTheDocument();
   });
 
   it('does NOT show the lag hint when lagSeconds is null', () => {
@@ -200,59 +173,10 @@ describe('WmsOpsScreen — render & read tables', () => {
     expect(screen.queryByTestId('wms-lag-hint')).not.toBeInTheDocument();
   });
 
-  it('the adjustments/inventory/shipments surface is read-only (no edit affordance on read rows)', () => {
+  it('the adjustments/shipments surface is read-only (no edit affordance on read rows)', () => {
     renderScreen();
-    const invRow = within(screen.getByTestId('wms-inv-row-0'));
-    expect(invRow.queryByRole('button')).not.toBeInTheDocument();
     const shipRow = within(screen.getByTestId('wms-ship-row-0'));
     expect(shipRow.queryByRole('button')).not.toBeInTheDocument();
-  });
-});
-
-describe('WmsOpsScreen — inventory filter & pagination', () => {
-  it('submits inventory filters and re-queries the proxy with serialised params', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ ...INVENTORY, content: [] }));
-    vi.stubGlobal('fetch', fetchMock);
-    const user = userEvent.setup();
-    renderScreen();
-
-    await user.type(
-      screen.getByTestId('wms-inv-filter-warehouse'),
-      'wh-42',
-    );
-    await user.click(screen.getByTestId('wms-inv-filter-lowstock'));
-    await user.click(screen.getByTestId('wms-inv-filter-submit'));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const url = new URL(
-      String(fetchMock.mock.calls[0][0]),
-      'http://console.local',
-    );
-    expect(url.pathname).toContain('/api/wms/inventory');
-    expect(url.searchParams.get('warehouseId')).toBe('wh-42');
-    expect(url.searchParams.get('lowStockOnly')).toBe('true');
-  });
-
-  it('paginates inventory to the next page (re-query via the proxy)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        ...INVENTORY,
-        page: { ...INVENTORY.page, number: 1 },
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-    const user = userEvent.setup();
-    renderScreen();
-
-    await user.click(screen.getByTestId('wms-inv-next'));
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('page=1'),
-        expect.anything(),
-      ),
-    );
   });
 });
 
@@ -320,8 +244,7 @@ describe('WmsOpsScreen — shipments / 택배 filter & pagination', () => {
     await waitFor(() =>
       expect(screen.getByTestId('wms-ship-degraded')).toBeInTheDocument(),
     );
-    // The inventory + alerts tables still render — only shipments degraded.
-    expect(screen.getByTestId('wms-inv-table')).toBeInTheDocument();
+    // The alerts table still renders — only shipments degraded.
     expect(screen.getByTestId('wms-alerts-table')).toBeInTheDocument();
   });
 
@@ -488,31 +411,6 @@ describe('WmsOpsScreen — alert acknowledge (confirm-gated, reason-free)', () =
 });
 
 describe('WmsOpsScreen — per-section degrade & a11y', () => {
-  it('a 503 on the inventory re-query degrades only the inventory block (shell stays)', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ code: 'SERVICE_UNAVAILABLE', message: 'x' }),
-          { status: 503, headers: { 'Content-Type': 'application/json' } },
-        ),
-      ),
-    );
-    const user = userEvent.setup();
-    renderScreen();
-
-    await user.click(screen.getByTestId('wms-inv-next'));
-    await waitFor(() =>
-      expect(screen.getByTestId('wms-inv-degraded')).toBeInTheDocument(),
-    );
-    // The wms heading + alerts table still render — only the inventory
-    // block degraded (not a blank crash).
-    expect(
-      screen.getByRole('heading', { name: 'WMS 개요' }),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId('wms-alerts-table')).toBeInTheDocument();
-  });
-
   it('the screen is axe-clean and keyboard-operable (WCAG AA)', async () => {
     const { container } = renderScreen({ lagSeconds: 6 });
     const violations = await runAxe(container);

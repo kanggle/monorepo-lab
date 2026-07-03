@@ -33,6 +33,10 @@ export const dynamic = 'force-dynamic';
  * `getWmsSectionState()`. Resilience (§ 2.5): 401 → whole-session
  * re-login; 403 → inline "not available to your role"; 503/timeout → only
  * this section degrades (the `(console)` shell stays).
+ *
+ * TASK-PC-FE-173 — the inventory query table (filters + pagination) moved
+ * OFF this 개요 screen to the dedicated `/wms/inventory` route; this page
+ * keeps only the count-tile inventory snapshot (`WmsOverview`, below).
  */
 export default async function WmsPage() {
   // Eligibility pre-flight from the data-driven registry (§ 2.2). A
@@ -128,7 +132,7 @@ export default async function WmsPage() {
     );
   }
 
-  if (state.degraded || !state.inventory || !state.alerts || !state.shipments) {
+  if (state.degraded || !state.alerts || !state.shipments) {
     return (
       <section aria-labelledby="wms-heading">
         <h1 id="wms-heading" className="mb-6 text-2xl font-semibold">
@@ -148,7 +152,6 @@ export default async function WmsPage() {
 
   return (
     <WmsOpsScreen
-      inventory={state.inventory}
       alerts={state.alerts}
       shipments={state.shipments}
       lagSeconds={state.lagSeconds}
