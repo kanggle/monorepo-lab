@@ -1,6 +1,6 @@
 # TASK-BE-468 — Session-revoke (force-logout) tenant confinement (auth-service)
 
-- **Status**: review
+- **Status**: done
 - **Domain**: iam (auth-service)
 - **Type**: correctness + confinement (backend) — follow-up to TASK-BE-467
 - **분석=Opus 4.8 / 구현 권장=Opus 4.8**
