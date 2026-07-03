@@ -87,6 +87,13 @@ public class WebLoginSecurityConfig {
                 .securityMatcher(new OrRequestMatcher(
                         new AntPathRequestMatcher("/login", "GET"),
                         new AntPathRequestMatcher("/login", "POST"),
+                        // TASK-BE-470: the browser self-service signup page. GET-only —
+                        // it renders the form; the form's client-side fetch POSTs
+                        // cross-service to account-service's /api/accounts/signup (routed
+                        // by the gateway), which is NOT matched by this chain. Claiming it
+                        // here (with anyRequest().permitAll() below) makes /signup public,
+                        // exactly like /login itself.
+                        new AntPathRequestMatcher("/signup", "GET"),
                         // TASK-BE-396 (ADR-006): the social-login browser bridge
                         // (start + callback) lives on this chain so its session
                         // (JSESSIONID SecurityContext) is established under the same

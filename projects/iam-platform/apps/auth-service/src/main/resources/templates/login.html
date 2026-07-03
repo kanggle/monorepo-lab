@@ -49,6 +49,7 @@
     <h1>Sign in to your Global Account</h1>
 
     <div class="notice" th:if="${loggedOut}">You have been signed out.</div>
+    <div class="notice" th:if="${registered}">가입이 완료되었습니다. 로그인해 주세요.</div>
 
     <div class="error" th:if="${error != null}" th:switch="${error}">
         <span th:case="'email_required'">Your social provider did not share an email address. Please grant email access and try again.</span>
@@ -76,6 +77,11 @@
        th:each="provider : ${providers}"
        th:href="@{'/login/oauth/' + ${provider.slug()}}"
        th:text="${provider.name()}">PROVIDER</a>
+
+    <!-- TASK-BE-470: entry point to the self-service signup page (was a dead-end before). -->
+    <p style="margin-top:24px;font-size:13px;text-align:center;color:#555;">
+        계정이 없으신가요? <a th:href="@{/signup}" style="color:#2563eb;text-decoration:none;">회원가입</a>
+    </p>
 </div>
 </body>
 </html>
