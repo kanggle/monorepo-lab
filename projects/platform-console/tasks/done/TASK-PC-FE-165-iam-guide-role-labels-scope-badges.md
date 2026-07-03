@@ -1,6 +1,6 @@
 # TASK-PC-FE-165 — IAM 개요 역할 카드: 한글 역할명 + 플랫폼 스코프 배지
 
-- **Status**: review
+- **Status**: done
 - **Type**: TASK-PC-FE (console-web)
 - **Depends on**: TASK-PC-FE-163 (IAM 개요 가이드 화면)
 
