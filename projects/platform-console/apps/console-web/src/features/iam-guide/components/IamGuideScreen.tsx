@@ -84,16 +84,17 @@ export function IamGuideScreen() {
               >
                 {role.name}
               </span>
-              {role.tenantScoped && (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                  테넌트 스코프
-                </span>
-              )}
-              {role.elevated && (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                  플랫폼 스코프(*)
-                </span>
-              )}
+              <span className="text-sm text-muted-foreground">
+                {role.koName}
+              </span>
+              <span
+                className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                data-testid={`iam-guide-scope-${role.name}`}
+              >
+                {role.scope === 'platform'
+                  ? `플랫폼 스코프${role.elevated ? '(*)' : ''}`
+                  : '테넌트 스코프'}
+              </span>
             </div>
             <p className="mb-3 text-sm text-muted-foreground">{role.intent}</p>
             <div className="flex flex-wrap gap-1">
