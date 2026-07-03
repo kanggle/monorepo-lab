@@ -1,5 +1,6 @@
 export { AddressSearch } from './AddressSearch';
 export { BackLink } from './BackLink';
+export { DetailHeader } from './DetailHeader';
 export { PhoneFieldError } from './PhoneFieldError';
 export { PriceDisplay } from './PriceDisplay';
 export { NarrowContainer } from './NarrowContainer';

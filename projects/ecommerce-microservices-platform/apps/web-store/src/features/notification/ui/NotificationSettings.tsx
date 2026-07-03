@@ -9,7 +9,7 @@ import { useUpdatePreferences } from '../model/use-update-preferences';
 import { SettingToggle } from './SettingToggle';
 import { PushOptIn } from './PushOptIn';
 import { PushDeviceList } from './PushDeviceList';
-import { BackLink } from '@/shared/ui';
+import { DetailHeader } from '@/shared/ui';
 
 type PreferenceField = 'emailEnabled' | 'smsEnabled' | 'pushEnabled';
 
@@ -74,9 +74,7 @@ export function NotificationSettings() {
 
   return (
     <div>
-      <BackLink href="/my/notifications">알림 목록</BackLink>
-
-      <h1 className="page-title">알림 설정</h1>
+      <DetailHeader title="알림 설정" backHref="/my/notifications" backLabel="알림 목록" />
 
       {isLoading && <NotificationSettingsSkeleton />}
       {error && <ErrorMessage message={error} onRetry={() => refetch()} />}
