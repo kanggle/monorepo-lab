@@ -1,6 +1,6 @@
 # TASK-FE-088 — 알림 설정 푸시 영역: 버튼 실선 제거 + 기기 해지 ↔ 옵트인 버튼 동기화
 
-- **Status**: review
+- **Status**: done
 - **Type**: frontend / bugfix (web-store)
 - **Domain**: ecommerce
 - **Depends on**: TASK-FE-085 (device list), TASK-FE-086 (push area grouping), TASK-FE-087 (button-only opt-in)
