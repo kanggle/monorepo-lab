@@ -1,6 +1,7 @@
 # TASK-FE-085-fix-001 — 구독/해지 후 "푸시 수신 기기" 목록이 즉시 갱신되지 않는 버그
 
-- **Status**: review
+- **Status**: done
+- **DONE (2026-07-03, 3-dim verified — PR #2133 `26422a408`)**: state=MERGED + origin/main tip=`26422a408` 일치 + pre-merge failing=0(Frontend unit tests[Node20, 수정된 use-push-subscription QueryClient wrapper] GREEN + lint&build + E2E). 구독/해지 성공 시 `pushDevices` 쿼리 invalidate → 기기 목록 즉시 갱신(새로고침 불필요).
 - **Project**: ecommerce-microservices-platform
 - **Service**: web-store
 - **Analysis model**: Opus 4.8 / **Implementation model**: Opus 4.8 (직접)
