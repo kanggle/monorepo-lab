@@ -512,10 +512,16 @@ decision is recorded in [`console-web/architecture.md` § 도메인 랜딩 운�
   feature's own `list*` reads. **No console-bff leg** (the BFF § 2.4.9.1/.2 is
   the console-HOME cross-domain surface, not a single-domain landing).
 - **Counts.** Each area count = the existing § 2.4.5 read's `totalElements`
-  with `?page=0&size=1`: inventory (§ 1.1 `/dashboard/inventory`), shipments
-  (§ 1.3 `/dashboard/shipments`), alerts (§ 1.6 `/dashboard/alerts`).
+  with `?page=0&size=1`, for the **operational-scale areas only**: inventory
+  (§ 1.1 `/dashboard/inventory`) and shipments (§ 1.3 `/dashboard/shipments`).
+  Alerts are **not** a count tile — a total-alerts count is a derived
+  attention-signal, not an operational-scale total, and merely duplicates the
+  (미확인 + 확인) sum of the distribution below; alerts are represented solely by
+  the alert-acknowledgement distribution, and **no no-filter total-alerts read
+  is issued** (TASK-PC-FE-170).
 - **Alert-acknowledgement distribution.** `GET /dashboard/alerts?acknowledged=false&page=0&size=1`.`totalElements`
-  (미확인) + `acknowledged=true` (확인) — the operator's key wms signal.
+  (미확인) + `acknowledged=true` (확인) — the operator's key wms signal, and the
+  sole overview representation of alerts.
 - **Recent activity.** `GET /dashboard/shipments?page=0&size=5`.`content`.
 - **No aggregation endpoint (ADR-MONO-017 D3.B).** Counts derive from
   `totalElements`; there is deliberately **no** producer `/summary` and **no

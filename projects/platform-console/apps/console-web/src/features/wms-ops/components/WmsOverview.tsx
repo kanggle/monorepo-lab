@@ -13,10 +13,12 @@ import type {
  * `'use client'`, no server-only imports) — rendered server-side and passed as
  * a slot into the client `WmsOpsScreen`. STRICTLY READ-ONLY.
  *
- * Renders the `getWmsOverviewState` fan-out result: per-area count tiles
- * (재고/배송/알림), an alert-acknowledgement distribution (미확인/확인), and a
- * recent-shipments glance. A non-`ok` cell renders a compact "점검 필요" /
- * "권한 없음" placeholder instead of a number (never blanks).
+ * Renders the `getWmsOverviewState` fan-out result: per-area count tiles for
+ * the operational-scale areas (재고/배송), an alert-acknowledgement distribution
+ * (미확인/확인) — the sole representation of alerts, which are an attention
+ * signal rather than a scale area (PC-FE-170) — and a recent-shipments glance.
+ * A non-`ok` cell renders a compact "점검 필요" / "권한 없음" placeholder instead
+ * of a number (never blanks).
  *
  * PER-DOMAIN DEVIATION vs ecommerce (PC-FE-168): the count tiles are NOT nav
  * links — unlike ecommerce's § 2.4.10 sub-route cards, `/wms` is a single-route

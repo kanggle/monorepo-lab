@@ -114,20 +114,24 @@ export async function getWmsOverviewState(
   }
 
   try {
-    const [invCell, shipCell, alertCell, unackedCell, ackedCell, recentCell] =
+    const [invCell, shipCell, unackedCell, ackedCell, recentCell] =
       await Promise.all([
         cell(listInventory({ page: 0, size: 1 })),
         cell(listShipments({ page: 0, size: 1 })),
-        cell(listAlerts({ page: 0, size: 1 })),
         cell(listAlerts({ acknowledged: false, page: 0, size: 1 })),
         cell(listAlerts({ acknowledged: true, page: 0, size: 1 })),
         cell(listShipments({ page: 0, size: RECENT_SIZE })),
       ]);
 
+    // Count tiles cover the WMS operational-scale areas only — 재고 and 배송
+    // (business objects whose totals read as a scale snapshot). Alerts are a
+    // derived attention-signal stream, NOT a scale area, and a total-alerts
+    // count merely duplicates the (미확인 + 확인) sum in the alert-status
+    // distribution below (PC-FE-170); so alerts are represented solely by that
+    // distribution and no total-alerts fan-out leg is issued.
     const counts: WmsAreaCount[] = [
       areaCount('inventory', '재고', invCell),
       areaCount('shipments', '배송', shipCell),
-      areaCount('alerts', '알림', alertCell),
     ];
 
     const alertStatus: WmsAlertStatusCount[] = [

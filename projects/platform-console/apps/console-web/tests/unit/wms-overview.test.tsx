@@ -4,11 +4,12 @@ import { WmsOverview } from '@/features/wms-ops';
 import type { WmsOverviewState } from '@/features/wms-ops';
 
 /**
- * TASK-PC-FE-166 — `WmsOverview` presentation. Per-area count tiles
- * (재고/배송/알림) are read-only stat tiles (NOT nav links — wms is a
- * single-route ops screen, PC-FE-168 deviation), an alert-ack distribution
- * (미확인/확인), and a recent-shipments glance. A non-`ok` cell renders a
- * compact placeholder instead of a number (never blanks).
+ * TASK-PC-FE-166 — `WmsOverview` presentation. Per-area count tiles for the
+ * operational-scale areas (재고/배송) are read-only stat tiles (NOT nav links —
+ * wms is a single-route ops screen, PC-FE-168 deviation), an alert-ack
+ * distribution (미확인/확인 — the sole representation of alerts, PC-FE-170),
+ * and a recent-shipments glance. A non-`ok` cell renders a compact placeholder
+ * instead of a number (never blanks).
  */
 
 const baseState = (
@@ -18,7 +19,6 @@ const baseState = (
   counts: [
     { key: 'inventory', label: '재고', count: 42, status: 'ok' },
     { key: 'shipments', label: '배송', count: 7, status: 'ok' },
-    { key: 'alerts', label: '알림', count: 12, status: 'ok' },
   ],
   alertStatus: [
     { key: 'unacknowledged', label: '미확인', count: 3, cellStatus: 'ok' },
@@ -46,11 +46,14 @@ describe('WmsOverview (TASK-PC-FE-166)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders per-area count tiles (not links) with their totals', () => {
+  it('renders operational-scale count tiles (not links) with their totals', () => {
     render(<WmsOverview state={baseState()} />);
     expect(screen.getByTestId('wms-inventory-count')).toHaveTextContent('42');
     expect(screen.getByTestId('wms-shipments-count')).toHaveTextContent('7');
-    expect(screen.getByTestId('wms-alerts-count')).toHaveTextContent('12');
+    // Alerts are NOT a count tile — represented solely by the 알림 상태
+    // distribution (PC-FE-170).
+    expect(screen.queryByTestId('wms-alerts-count')).toBeNull();
+    expect(screen.queryByTestId('wms-alerts-count-degraded')).toBeNull();
     // Stat tiles, NOT nav links (no anchor / href).
     expect(screen.getByTestId('wms-overview').querySelector('a')).toBeNull();
   });
