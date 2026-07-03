@@ -1,6 +1,6 @@
 # TASK-PC-FE-168 — console domain-overview **shared read-leg decision** (gating design task)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Type:** design decision (spec/architecture note — no feature code)
 **Lead task of** the console domain-landing overview series (gates PC-FE-166/167/160/161; capstone PC-FE-162).
 **Decision landed:** branch `task/pc-fe-166-wms-overview` (bundled with the PC-FE-166 wms reference impl).
