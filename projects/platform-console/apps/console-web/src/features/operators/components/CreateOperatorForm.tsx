@@ -22,6 +22,11 @@ import {
  * current operator is platform-scope (`isPlatformOperator`). A non-platform
  * operator never sees `*` — the UI must not present an escalation it cannot
  * perform (task Edge Case; the producer would 403 TENANT_SCOPE_DENIED).
+ *
+ * feat/iam-grantable-roles-filter — the role checkboxes are pre-filtered to
+ * `grantableRoles` (server-provided, `GET .../operators/grantable-roles`) —
+ * see `grantableRoles` prop doc. UX pre-filter ONLY; the producer's
+ * `403 ROLE_GRANT_FORBIDDEN` remains the final no-escalation authority.
  */
 
 export interface CreateOperatorFormProps {
@@ -37,6 +42,13 @@ export interface CreateOperatorFormProps {
   /** Inline server error from the last create attempt (no crash). */
   serverError?: string | null;
   pending?: boolean;
+  /** feat/iam-grantable-roles-filter — the seed role names the CALLING
+   *  operator may grant. Role checkboxes render only the intersection of
+   *  `KNOWN_OPERATOR_ROLES` and this set. `null` / `undefined` (absent —
+   *  e.g. the server-side fetch failed) ⇒ fall back to rendering EVERY
+   *  `KNOWN_OPERATOR_ROLES` checkbox (never an empty list — the producer
+   *  403 is still the final authority). */
+  grantableRoles?: string[] | null;
 }
 
 export function CreateOperatorForm({
@@ -45,6 +57,7 @@ export function CreateOperatorForm({
   onSubmitDraft,
   serverError,
   pending = false,
+  grantableRoles = null,
 }: CreateOperatorFormProps) {
   const emailId = useId();
   const nameId = useId();
@@ -71,6 +84,20 @@ export function CreateOperatorForm({
   const canSubmit = emailOk && nameOk && tenantOk && pwOk && !pending;
 
   const grantsElevated = roles.includes(ELEVATED_ROLE);
+
+  // feat/iam-grantable-roles-filter — render only the KNOWN_OPERATOR_ROLES
+  // that are also in the server-provided grantable set. `null` (fetch
+  // failed / not provided) ⇒ render the full known-roles list (fallback —
+  // never an empty checkbox group).
+  const renderableRoles = useMemo(
+    () =>
+      grantableRoles === null
+        ? KNOWN_OPERATOR_ROLES
+        : KNOWN_OPERATOR_ROLES.filter((role) =>
+            grantableRoles.includes(role),
+          ),
+    [grantableRoles],
+  );
 
   function toggleRole(role: string) {
     setRoles((prev) =>
@@ -237,7 +264,7 @@ export function CreateOperatorForm({
           role="group"
           aria-labelledby={rolesId}
         >
-          {KNOWN_OPERATOR_ROLES.map((role) => {
+          {renderableRoles.map((role) => {
             const checked = roles.includes(role);
             const elevated = role === ELEVATED_ROLE;
             return (

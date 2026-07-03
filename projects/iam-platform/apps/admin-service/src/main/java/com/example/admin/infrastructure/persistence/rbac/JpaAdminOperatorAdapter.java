@@ -205,6 +205,14 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
     }
 
     @Override
+    public List<RoleView> findAllRoles() {
+        List<AdminRoleJpaEntity> roles = roleRepository.findAll(Sort.by(Sort.Direction.ASC, "id"));
+        List<RoleView> out = new ArrayList<>(roles.size());
+        for (AdminRoleJpaEntity r : roles) out.add(toView(r));
+        return out;
+    }
+
+    @Override
     public boolean anyRoleRequires2fa(long operatorInternalId) {
         List<AdminOperatorRoleJpaEntity> bindings = operatorRoleRepository.findByOperatorId(operatorInternalId);
         if (bindings.isEmpty()) return false;

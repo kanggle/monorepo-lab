@@ -27,6 +27,7 @@ import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -227,6 +228,50 @@ class TenantAdminDelegationIntegrationTest extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"roles\": [\"SUPER_ADMIN\"]}"))
                 .andExpect(status().isOk());
+    }
+
+    // ── Part C: grantable-roles read mirror (ADR-024 D3, TASK-BE-388) ───────────
+
+    @Test
+    @DisplayName("grantable-roles: SUPER_ADMIN ('*') → full seed role set (incl SUPER_ADMIN)")
+    void grantableRoles_superAdmin_returnsAllSeedRoles() throws Exception {
+        mockMvc.perform(get("/api/admin/operators/grantable-roles")
+                        .header("Authorization", bearer(SUPER_ADMIN_UUID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles").value(org.hamcrest.Matchers.hasItems(
+                        "SUPER_ADMIN", "TENANT_ADMIN", "TENANT_BILLING_ADMIN",
+                        "SUPPORT_READONLY", "SUPPORT_LOCK", "SECURITY_ANALYST")));
+    }
+
+    @Test
+    @DisplayName("grantable-roles: TENANT_ADMIN → restricted (TENANT_ADMIN in; SUPER_ADMIN + exceeds-own out)")
+    void grantableRoles_tenantAdmin_returnsRestrictedSet() throws Exception {
+        mockMvc.perform(get("/api/admin/operators/grantable-roles")
+                        .header("Authorization", bearer(TENANT_X_ADMIN_UUID)))
+                .andExpect(status().isOk())
+                // ≤-own (holds operator.manage + tenant.admin.delegate) → in-tenant sub-delegation.
+                .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.hasItem("TENANT_ADMIN")))
+                // platform/privileged role → never.
+                .andExpect(jsonPath("$.roles",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("SUPER_ADMIN"))))
+                // carries subscription.manage the actor lacks → excluded (plane separation).
+                .andExpect(jsonPath("$.roles",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("TENANT_BILLING_ADMIN"))))
+                // carries audit.read/security.event.read the actor lacks → excluded.
+                .andExpect(jsonPath("$.roles",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("SUPPORT_READONLY"))));
+    }
+
+    @Test
+    @DisplayName("grantable-roles: operator without operator.manage → 403 PERMISSION_DENIED")
+    void grantableRoles_withoutPermission_forbidden() throws Exception {
+        String noPerm = uuid("17");
+        seedOperator(noPerm, "tenant-x", "grantable-noperm-b7@example.com", "SUPPORT_READONLY");
+
+        mockMvc.perform(get("/api/admin/operators/grantable-roles")
+                        .header("Authorization", bearer(noPerm)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     // ── helpers ────────────────────────────────────────────────────────────────

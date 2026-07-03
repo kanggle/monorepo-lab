@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { getOperatorsListState, OperatorsScreen } from '@/features/operators';
-import { getSelfOperatorIdOrNull } from '@/features/operators/api/operators-api';
+import {
+  getSelfOperatorIdOrNull,
+  getGrantableRolesOrNull,
+} from '@/features/operators/api/operators-api';
 import { getCatalog } from '@/features/catalog';
 import { selectableTenants } from '@/features/tenant';
 import { getActiveTenant } from '@/shared/lib/session';
@@ -126,6 +129,13 @@ export default async function OperatorsPage() {
   // independent self result down with it.
   const catalogPromise = getCatalog();
   const selfPromise = getSelfOperatorIdOrNull();
+  // feat/iam-grantable-roles-filter — the create / edit-roles role
+  // checkboxes are pre-filtered to what THIS operator may grant. Fired
+  // concurrently with catalog/self (same waterfall-avoidance posture,
+  // TASK-PC-FE-118); already fail-graceful (`getGrantableRolesOrNull`
+  // never throws) so no separate try/catch is needed here — a failure
+  // resolves to `null`, and the screen falls back to the full role set.
+  const grantableRolesPromise = getGrantableRolesOrNull();
 
   let tenantOptions: string[] = [];
   let isPlatformOperator = false;
@@ -150,6 +160,11 @@ export default async function OperatorsPage() {
   // catalog fetch above) and awaited here. (TASK-PC-FE-118)
   const selfOperatorId = await selfPromise;
 
+  // feat/iam-grantable-roles-filter — `null` on any failure (fail-graceful
+  // wrapper) ⇒ OperatorsScreen falls back to the full KNOWN_OPERATOR_ROLES
+  // set (never an empty checkbox list; the producer 403 stays authoritative).
+  const grantableRoles = await grantableRolesPromise;
+
   // TASK-PC-FE-157 — the active tenant slug drives the tenant-assignment
   // surface (배정 / 배정 해제 target it). Past the `state.noTenant` gate above
   // an active tenant is selected; read it for the client component. Any
@@ -164,6 +179,7 @@ export default async function OperatorsPage() {
       isPlatformOperator={isPlatformOperator}
       selfOperatorId={selfOperatorId}
       activeTenant={activeTenant}
+      grantableRoles={grantableRoles}
     />
   );
 }

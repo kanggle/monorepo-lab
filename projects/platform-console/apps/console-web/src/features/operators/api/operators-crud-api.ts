@@ -12,15 +12,36 @@ import {
   ChangeStatusResultSchema,
   type ChangeStatusResult,
   type OperatorStatus,
+  GrantableRolesResponseSchema,
 } from './types';
 import { callGapOperators, OPERATORS_PREFIX } from './operators-client';
 
 /**
  * operators api — admin operator management (TASK-PC-FE-110 split). The
  * privilege-sensitive surface: list + create + edit-roles + change-status +
- * admin-set-profile. Re-exported verbatim through the `operators-api` barrel.
- * 0 behavior change.
+ * admin-set-profile + grantable-roles. Re-exported verbatim through the
+ * `operators-api` barrel. 0 behavior change.
  */
+
+// ---------------------------------------------------------------------------
+// 0. grantable-roles — GET /api/admin/operators/grantable-roles
+//    (feat/iam-grantable-roles-filter). READ; requires `operator.manage`.
+//    Returns the seed role names the CALLING operator may grant — drives the
+//    create / edit-roles role-checkbox pre-filter (types.ts § KNOWN_OPERATOR_
+//    ROLES doc). No mutation headers. Throws `ApiError` /
+//    `OperatorsUnavailableError` like every other fn here — the BFF proxy
+//    route (`app/api/operators/grantable-roles/route.ts`) maps those via the
+//    shared `mapError`. The SSR-page fail-graceful wrapper
+//    (`getGrantableRolesOrNull`, `operators-self-api.ts`) catches on top of
+//    this.
+// ---------------------------------------------------------------------------
+
+export async function getGrantableRoles(): Promise<string[]> {
+  return callGapOperators(
+    { method: 'GET', path: `${OPERATORS_PREFIX}/grantable-roles` },
+    (json) => GrantableRolesResponseSchema.parse(json).roles,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // 1. list — GET /api/admin/operators (status filter + pagination; READ)

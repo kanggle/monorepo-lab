@@ -40,6 +40,17 @@ export interface OperatorConfirmDialogProps {
   errorMessage?: string | null;
   /** When set, render the role multi-select (edit-roles); seed selection. */
   roleEditor?: { initialRoles: string[] };
+  /** feat/iam-grantable-roles-filter — the seed role names the CALLING
+   *  operator may grant. The edit-roles checkboxes render the intersection
+   *  of `KNOWN_OPERATOR_ROLES` and this set, UNIONED with the operator's
+   *  `roleEditor.initialRoles` (a role the operator already holds stays
+   *  visible even when it falls outside the caller's grantable set — e.g. a
+   *  non-platform admin editing a `SUPER_ADMIN` row — so the display never
+   *  silently drops an already-granted role; it can still be seen/removed).
+   *  `null` / `undefined` ⇒ render the full `KNOWN_OPERATOR_ROLES` set
+   *  (fallback — the producer 403 stays the final no-escalation authority
+   *  either way). */
+  grantableRoles?: string[] | null;
   onConfirm: (reason: string, roles?: string[]) => void;
   onCancel: () => void;
 }
@@ -53,6 +64,7 @@ export function OperatorConfirmDialog({
   pending = false,
   errorMessage,
   roleEditor,
+  grantableRoles = null,
   onConfirm,
   onCancel,
 }: OperatorConfirmDialogProps) {
@@ -100,6 +112,22 @@ export function OperatorConfirmDialog({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onCancel]);
+
+  // feat/iam-grantable-roles-filter — render KNOWN_OPERATOR_ROLES ∩
+  // grantableRoles, UNIONED with the operator's initialRoles (an
+  // already-held role stays visible/removable even outside the caller's
+  // grantable set). `null` ⇒ render every KNOWN_OPERATOR_ROLES (fallback).
+  // Plain (non-memoised) derivation — cheap over a ≤6-item constant array,
+  // and this component already returns `null` above for the closed state,
+  // so a `useMemo` here would run conditionally (rules-of-hooks violation).
+  const renderableRoles =
+    grantableRoles === null
+      ? KNOWN_OPERATOR_ROLES
+      : KNOWN_OPERATOR_ROLES.filter(
+          (role) =>
+            grantableRoles.includes(role) ||
+            (roleEditor?.initialRoles ?? []).includes(role),
+        );
 
   if (!open) return null;
 
@@ -158,7 +186,7 @@ export function OperatorConfirmDialog({
               role="group"
               aria-labelledby={rolesId}
             >
-              {KNOWN_OPERATOR_ROLES.map((role) => (
+              {renderableRoles.map((role) => (
                 <label
                   key={role}
                   className="flex items-center gap-2 text-sm text-foreground"
