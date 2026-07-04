@@ -77,7 +77,12 @@ public class OperatorAuthenticationFilter extends OncePerRequestFilter {
                         || "/api/admin/auth/2fa/verify".equals(path)
                         // TASK-BE-040: refresh runs without an access token —
                         // it presents a refresh JWT in the body instead.
-                        || "/api/admin/auth/refresh".equals(path))) {
+                        || "/api/admin/auth/refresh".equals(path)
+                        // TASK-BE-474 / ADR-MONO-044: self-service tenant onboarding runs
+                        // WITHOUT an operator JWT — the caller is an ordinary IAM user; the
+                        // OIDC subject token is in the body and validated by OnboardingController
+                        // (IamOidcSubjectTokenValidator), exactly like /auth/token-exchange.
+                        || "/api/admin/onboarding/organizations".equals(path))) {
             return true;
         }
         if ("GET".equalsIgnoreCase(method) && "/.well-known/admin/jwks.json".equals(path)) {

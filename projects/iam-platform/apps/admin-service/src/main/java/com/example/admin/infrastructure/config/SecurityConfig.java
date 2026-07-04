@@ -186,7 +186,14 @@ public class SecurityConfig {
                                 "/api/admin/auth/2fa/enroll",
                                 "/api/admin/auth/2fa/verify",
                                 // TASK-BE-040: refresh runs without operator JWT.
-                                "/api/admin/auth/refresh").permitAll()
+                                "/api/admin/auth/refresh",
+                                // TASK-BE-474 / ADR-MONO-044: self-service tenant onboarding.
+                                // The caller is an ordinary authenticated IAM user (NOT an
+                                // operator) — the OIDC subject token is in the body and validated
+                                // by OnboardingController (IamOidcSubjectTokenValidator), exactly
+                                // like /auth/token-exchange. OperatorAuthenticationFilter skips it
+                                // and @SelfServiceEndpoint admits it past the deny-by-default guard.
+                                "/api/admin/onboarding/organizations").permitAll()
                         .requestMatchers("/api/admin/**").authenticated()
                         .anyRequest().denyAll()
                 )
