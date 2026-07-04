@@ -68,7 +68,7 @@ public class OnboardingController {
         // 3. Orchestrate: create tenant → mint first admin (TENANT_ADMIN + TENANT_BILLING_ADMIN
         //    scoped to the new tenant) → assignment. Fail-closed with compensation (D3).
         SelfServiceOnboardingUseCase.Result result =
-                onboardingUseCase.onboard(request.tenantId(), request.organizationName(), email, displayName);
+                onboardingUseCase.onboard(request.tenantId(), request.organizationName(), accountId, email, displayName);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(OnboardOrganizationResponse.from(result));
     }

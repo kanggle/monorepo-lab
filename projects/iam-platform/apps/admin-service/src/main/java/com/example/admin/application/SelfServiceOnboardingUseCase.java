@@ -42,10 +42,12 @@ public class SelfServiceOnboardingUseCase {
     /**
      * @param tenantId         the requested tenant slug (validated {@code ^[a-z][a-z0-9-]{1,31}$} at the DTO)
      * @param organizationName the tenant display name
+     * @param callerAccountId  the caller's OIDC subject (account_id) — set as the operator's
+     *                         {@code oidc_subject} so they can token-exchange into the console (fix-001)
      * @param callerEmail      the authenticated caller's email (from the authoritative account, not user input)
      * @param callerDisplayName the operator display name (never blank — controller defaults to email)
      */
-    public Result onboard(String tenantId, String organizationName,
+    public Result onboard(String tenantId, String organizationName, String callerAccountId,
                           String callerEmail, String callerDisplayName) {
         // D1 step 1: create the tenant (cross-service). A duplicate slug surfaces as
         // TenantAlreadyExistsException (409) from the port — no compensation needed
@@ -56,7 +58,7 @@ public class SelfServiceOnboardingUseCase {
         // orphan tenant (D3 fail-closed) and rethrow the original cause.
         try {
             FirstAdminProvisioner.Result minted =
-                    firstAdminProvisioner.provision(tenantId, callerEmail, callerDisplayName);
+                    firstAdminProvisioner.provision(tenantId, callerAccountId, callerEmail, callerDisplayName);
             return new Result(tenantId, minted.operatorId(), FirstAdminProvisioner.FIRST_ADMIN_ROLES);
         } catch (RuntimeException provisioningFailure) {
             compensateOrphanTenant(tenantId, provisioningFailure);

@@ -58,7 +58,11 @@ class FirstAdminProvisionerTest {
         when(operatorPort.resolveRolesByName(FirstAdminProvisioner.FIRST_ADMIN_ROLES)).thenReturn(stubRoles());
         when(accountServiceClient.resolveOrCreateIdentity(eq(NEW_TENANT), any(), eq(true))).thenReturn("identity-1");
 
-        provisioner.provision(NEW_TENANT, "Owner@Acme.com", "Owner");
+        provisioner.provision(NEW_TENANT, "acc-owner-1", "Owner@Acme.com", "Owner");
+
+        // fix-001: the operator's oidc_subject is set to the caller's account_id so they can
+        // token-exchange into the console as this operator.
+        verify(operatorPort).updateOidcSubject(eq(42L), eq("acc-owner-1"), any());
 
         // operator home tenant = new tenant, email normalized, OIDC-only (null password)
         ArgumentCaptor<AdminOperatorPort.NewOperator> op = ArgumentCaptor.forClass(AdminOperatorPort.NewOperator.class);
@@ -96,7 +100,7 @@ class FirstAdminProvisionerTest {
         when(operatorPort.resolveRolesByName(any())).thenReturn(stubRoles());
         when(accountServiceClient.resolveOrCreateIdentity(eq(NEW_TENANT), any(), eq(true))).thenReturn(null);
 
-        provisioner.provision(NEW_TENANT, "owner@acme.com", "Owner");
+        provisioner.provision(NEW_TENANT, "acc-owner-1", "owner@acme.com", "Owner");
 
         verify(accountServiceClient).resolveOrCreateIdentity(eq(NEW_TENANT), eq("owner@acme.com"), eq(true));
         // null identity → operator born unlinked (no linkIdentity), but assignment still created

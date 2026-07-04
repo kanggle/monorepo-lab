@@ -29,14 +29,14 @@ class SelfServiceOnboardingUseCaseTest {
     @Test
     @DisplayName("D1: creates the tenant (B2B) then mints the first admin; no compensation on success")
     void happyPath() {
-        when(provisioner.provision(eq(TENANT), any(), any()))
+        when(provisioner.provision(eq(TENANT), any(), any(), any()))
                 .thenReturn(new FirstAdminProvisioner.Result("op-uuid", 42L));
 
         SelfServiceOnboardingUseCase.Result result =
-                useCase.onboard(TENANT, "Acme Corp", "owner@acme.com", "Owner");
+                useCase.onboard(TENANT, "Acme Corp", "acc-1", "owner@acme.com", "Owner");
 
         verify(tenantPort).create(eq(TENANT), eq("Acme Corp"), eq("B2B_ENTERPRISE"));
-        verify(provisioner).provision(eq(TENANT), eq("owner@acme.com"), eq("Owner"));
+        verify(provisioner).provision(eq(TENANT), eq("acc-1"), eq("owner@acme.com"), eq("Owner"));
         // no compensation
         verify(tenantPort, never()).update(any(), any(), any());
         assertThat(result.tenantId()).isEqualTo(TENANT);
@@ -48,9 +48,9 @@ class SelfServiceOnboardingUseCaseTest {
     @DisplayName("D3: first-admin provisioning failure compensates the orphan tenant (SUSPEND) and rethrows")
     void compensatesOnProvisioningFailure() {
         RuntimeException boom = new IllegalStateException("mint failed");
-        when(provisioner.provision(eq(TENANT), any(), any())).thenThrow(boom);
+        when(provisioner.provision(eq(TENANT), any(), any(), any())).thenThrow(boom);
 
-        assertThatThrownBy(() -> useCase.onboard(TENANT, "Acme Corp", "owner@acme.com", "Owner"))
+        assertThatThrownBy(() -> useCase.onboard(TENANT, "Acme Corp", "acc-1", "owner@acme.com", "Owner"))
                 .isSameAs(boom);
 
         // tenant was created, then compensated by SUSPEND — no orphan ACTIVE tenant
@@ -62,11 +62,11 @@ class SelfServiceOnboardingUseCaseTest {
     @DisplayName("D3: a compensation failure does not mask the original provisioning error")
     void compensationFailureDoesNotMaskOriginal() {
         RuntimeException boom = new IllegalStateException("mint failed");
-        when(provisioner.provision(eq(TENANT), any(), any())).thenThrow(boom);
+        when(provisioner.provision(eq(TENANT), any(), any(), any())).thenThrow(boom);
         when(tenantPort.update(eq(TENANT), isNull(), eq("SUSPENDED")))
                 .thenThrow(new RuntimeException("account-service down"));
 
-        assertThatThrownBy(() -> useCase.onboard(TENANT, "Acme Corp", "owner@acme.com", "Owner"))
+        assertThatThrownBy(() -> useCase.onboard(TENANT, "Acme Corp", "acc-1", "owner@acme.com", "Owner"))
                 .isSameAs(boom);
     }
 }

@@ -249,6 +249,23 @@ class SelfServiceOnboardingIntegrationTest extends AbstractIntegrationTest {
                 String.class, operatorInternalId);
         assertThat(assignmentTenant).isEqualTo(NEW_TENANT);
 
+        // fix-001: the operator's oidc_subject = the caller's account_id (the OIDC sub) —
+        // what makes the owner reachable via token-exchange (the gap live verification caught).
+        String oidcSubject = jdbcTemplate.queryForObject(
+                "SELECT oidc_subject FROM admin_operators WHERE id = ?", String.class, operatorInternalId);
+        assertThat(oidcSubject).isEqualTo(OWNER_ACCOUNT_ID);
+
+        // fix-001 END-TO-END: the owner can now token-exchange their SAME user OIDC token into an
+        // operator token for the new tenant — i.e. actually log into the console as this operator.
+        String exchangeBody = "{\"grant_type\":\"urn:ietf:params:oauth:grant-type:token-exchange\","
+                + "\"subject_token\":\"" + token + "\","
+                + "\"subject_token_type\":\"urn:ietf:params:oauth:token-type:access_token\"}";
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType("application/json")
+                        .content(exchangeBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tokenType").value("admin"));
+
         // D6: the tenant is born entitlement-empty — no domain subscriptions were created here
         // (the grant is a capability to subscribe, not a subscription). Nothing to assert in
         // admin-service DB (subscriptions live in account-service); the absence of any

@@ -56,13 +56,16 @@ public class FirstAdminProvisioner {
     private final AccountServiceClient accountServiceClient;
 
     /**
-     * @param newTenantId    the just-created tenant — the SOLE tenant_id every write below targets (D2)
-     * @param email          the caller's email (from the authoritative account, not user input)
-     * @param displayName    the operator display name (caller's account display name; never blank)
+     * @param newTenantId     the just-created tenant — the SOLE tenant_id every write below targets (D2)
+     * @param callerAccountId the caller's OIDC subject (auth-service account_id) — set as the operator's
+     *                        {@code oidc_subject} so the owner can immediately token-exchange into the
+     *                        console as this operator (fix-001: without it the operator is unreachable)
+     * @param email           the caller's email (from the authoritative account, not user input)
+     * @param displayName     the operator display name (caller's account display name; never blank)
      * @return the minted operator's external UUID + internal id
      */
     @Transactional
-    public Result provision(String newTenantId, String email, String displayName) {
+    public Result provision(String newTenantId, String callerAccountId, String email, String displayName) {
         String normalizedEmail = email == null ? null : email.trim().toLowerCase();
         Instant now = Instant.now();
 
@@ -80,6 +83,16 @@ public class FirstAdminProvisioner {
                 new AdminOperatorPort.NewOperator(
                         operatorUuid, newTenantId, normalizedEmail, null,
                         displayName, STATUS_ACTIVE, now));
+
+        // fix-001: bind the operator's oidc_subject = the caller's account_id (the OIDC `sub`).
+        // This is what lets the owner IMMEDIATELY token-exchange (POST /api/admin/auth/token-exchange)
+        // their unified IAM token into an operator token for the new tenant — i.e. actually log into
+        // the console as this operator. Without it the operator exists but is unreachable via OIDC
+        // (findByOidcSubject returns empty → 401), the gap live verification caught. oidc_subject is
+        // platform-global UNIQUE (V0027); for a first-time onboarder it is free.
+        if (callerAccountId != null && !callerAccountId.isBlank()) {
+            operatorPort.updateOidcSubject(created.internalId(), callerAccountId, now);
+        }
 
         // D2 CONFINEMENT: role bindings are stamped with newTenantId — never the actor's
         // (there is none), never '*', never a role-supplied value. granted_by = null (system
