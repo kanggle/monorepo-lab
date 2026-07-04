@@ -151,7 +151,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-327-adr-045-cross-org-partner-delegation-proposed.md` — **PROPOSED ADR drafted → review (PR open, awaiting user ACCEPT-gate)**. `docs/adr/ADR-MONO-045` PROPOSED — **cross-org partner delegation**: the fourth "one person, many hats" facet. Verified 2026-07-04 that hats ①소비자+운영자(ADR-032/036) ②자기 회사 owner(ADR-044) ③소속사 operator(ADR-020/024) are realized+confined, but ④ **협력사 조직이 다른 회사 테넌트를 운영**하는 tenant↔tenant primitive는 부재(개별 grant workaround만 → A가 B 인사 추적·수동 회수, cascade 없음). D1–D8: first-class `tenant_partnership` aggregate · two-sided consent(host invites bounded scope, partner accepts) · `delegated_scope` attenuation cap(never host-admin/SUPER_ADMIN, ≤-own across org) · partner-side self-governance(B manages own operators → auto offboarding) · request-time confinement reused(envelope not bypass, M1 single-tenant token) · relationship-scoped cascade revocation · born-unified identity facet · admin-service vertical slice. Invariant: **no transitive re-delegation**(confused-deputy default deny). Amends ADR-024 §D4-B + ADR-020 §D6 additively. **Doc-only, self-ACCEPT prohibited** — ACCEPTED = separate user-gated task. 분석=Opus 4.8. [[project_platform_console_adr_013]]
 
 ## done
 
