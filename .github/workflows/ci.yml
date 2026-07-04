@@ -780,14 +780,15 @@ jobs:
 
   integration-tests:
     name: Integration (master-service + notification-service + outbound-service, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 20
     # Integration suite boots Postgres + Kafka + Redis via Testcontainers.
     # Mirrors the e2e job's gating: runs only on the monorepo-lab dev
     # environment, skipped in the portfolio extraction (kanggle/wms-platform)
     # whose badge reflects the Docker-free `check` signal. TASK-BE-017.
     # Activate for wms changes or cross-project (libs/workflows).
+    # TASK-BE-043/045: notification-service + admin-service share this lane.
+    # TASK-BE-342: outbound-service joins — cross-project FulfillmentRequestedConsumerIT
+    # (ADR-MONO-022 Kafka→order) is Docker-gated here, not unit-only.
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
@@ -796,57 +797,28 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.wms == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run wms integration suites
-        # TASK-BE-043: notification-service joins the wms integration job.
-        # TASK-BE-045: admin-service joins. All boot Postgres (+ Kafka where
-        # applicable) via Testcontainers; sharing the job avoids extra runners.
-        # TASK-BE-342: outbound-service joins (suite repaired 19/19 + two REAL
-        # production bugs fixed found via these ITs: TmsClientAdapter retry
-        # fallbackMethod on @CircuitBreaker→@Retry, and BodyHashUtil hashing a
-        # jackson-module-scala Map as a content-independent bean — plus the
-        # FULFILLMENT_ECOMMERCE source column widened from VARCHAR(20)). Now the
-        # cross-project FulfillmentRequestedConsumerIT (ADR-MONO-022 Kafka→order)
-        # is Docker-gated, not unit-only.
-        run: >-
-          ./gradlew
-          :projects:wms-platform:apps:master-service:integrationTest
-          :projects:wms-platform:apps:notification-service:integrationTest
-          :projects:wms-platform:apps:admin-service:integrationTest
-          :projects:wms-platform:apps:outbound-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-test-reports
-          path: |
-            projects/wms-platform/apps/master-service/build/reports/tests/integrationTest/
-            projects/wms-platform/apps/master-service/build/test-results/integrationTest/
-            projects/wms-platform/apps/notification-service/build/reports/tests/integrationTest/
-            projects/wms-platform/apps/notification-service/build/test-results/integrationTest/
-            projects/wms-platform/apps/admin-service/build/reports/tests/integrationTest/
-            projects/wms-platform/apps/admin-service/build/test-results/integrationTest/
-            projects/wms-platform/apps/outbound-service/build/reports/tests/integrationTest/
-            projects/wms-platform/apps/outbound-service/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      timeout-minutes: 20
+      gradle-tasks: >-
+        :projects:wms-platform:apps:master-service:integrationTest
+        :projects:wms-platform:apps:notification-service:integrationTest
+        :projects:wms-platform:apps:admin-service:integrationTest
+        :projects:wms-platform:apps:outbound-service:integrationTest
+      artifact-name: integration-test-reports
+      report-paths: |
+        projects/wms-platform/apps/master-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/master-service/build/test-results/integrationTest/
+        projects/wms-platform/apps/notification-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/notification-service/build/test-results/integrationTest/
+        projects/wms-platform/apps/admin-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/admin-service/build/test-results/integrationTest/
+        projects/wms-platform/apps/outbound-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/outbound-service/build/test-results/integrationTest/
 
   iam-integration-tests:
     name: Integration (iam, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # IAM integration suite boots MySQL + Kafka + (per-service Redis/WireMock)
     # via Testcontainers. Scoped to monorepo-lab; the standalone repo
     # extraction relies on its own Docker-free `check` signal.
@@ -859,44 +831,24 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.iam == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run IAM integration suites
-        run: >-
-          ./gradlew
-          :projects:iam-platform:apps:auth-service:integrationTest
-          :projects:iam-platform:apps:account-service:integrationTest
-          :projects:iam-platform:apps:admin-service:integrationTest
-          :projects:iam-platform:apps:community-service:integrationTest
-          :projects:iam-platform:apps:gateway-service:integrationTest
-          :projects:iam-platform:apps:membership-service:integrationTest
-          :projects:iam-platform:apps:security-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload IAM integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: iam-integration-test-reports
-          path: |
-            projects/iam-platform/apps/*/build/reports/tests/integrationTest/
-            projects/iam-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:iam-platform:apps:auth-service:integrationTest
+        :projects:iam-platform:apps:account-service:integrationTest
+        :projects:iam-platform:apps:admin-service:integrationTest
+        :projects:iam-platform:apps:community-service:integrationTest
+        :projects:iam-platform:apps:gateway-service:integrationTest
+        :projects:iam-platform:apps:membership-service:integrationTest
+        :projects:iam-platform:apps:security-service:integrationTest
+      artifact-name: iam-integration-test-reports
+      report-paths: |
+        projects/iam-platform/apps/*/build/reports/tests/integrationTest/
+        projects/iam-platform/apps/*/build/test-results/integrationTest/
 
   fan-integration-tests:
     name: Integration (fan-platform, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # fan-platform integration suite boots Postgres + Kafka (libs/java-messaging
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction relies
@@ -910,6 +862,7 @@ jobs:
     # on Docker-less dev hosts (memory §19/§20). Activating them surfaced + fixed:
     # §19a (containers @BeforeAll → static block), §19c (outbox repo deleteAll →
     # JdbcTemplate TRUNCATE), and an artist application-test.yml YAML scalar quote.
+    # TASK-FAN-BE-013: notification-service joins (event-consumer + inbox ITs).
     # Activate for fan changes or cross-project (libs/workflows).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
@@ -919,38 +872,17 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.fan == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run fan-platform integration suites
-        # TASK-FAN-BE-013: notification-service joins — event-consumer (membership
-        # lifecycle topics) + inbox ITs (Postgres + Kafka Testcontainers, WireMock
-        # JWKS). Its disabledWithoutDocker ITs run for the first time on CI here.
-        run: >-
-          ./gradlew
-          :projects:fan-platform:apps:community-service:integrationTest
-          :projects:fan-platform:apps:artist-service:integrationTest
-          :projects:fan-platform:apps:membership-service:integrationTest
-          :projects:fan-platform:apps:notification-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload fan integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fan-integration-test-reports
-          path: |
-            projects/fan-platform/apps/*/build/reports/tests/integrationTest/
-            projects/fan-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:fan-platform:apps:community-service:integrationTest
+        :projects:fan-platform:apps:artist-service:integrationTest
+        :projects:fan-platform:apps:membership-service:integrationTest
+        :projects:fan-platform:apps:notification-service:integrationTest
+      artifact-name: fan-integration-test-reports
+      report-paths: |
+        projects/fan-platform/apps/*/build/reports/tests/integrationTest/
+        projects/fan-platform/apps/*/build/test-results/integrationTest/
 
   iam-platform-e2e-smoke:
     name: E2E smoke (iam docker-compose)
@@ -1035,9 +967,7 @@ jobs:
 
   scm-integration-tests:
     name: Integration (scm-platform, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # SCM integration suite boots MySQL + Postgres + (per-service WireMock)
     # via Testcontainers. Scoped to monorepo-lab; standalone repo extraction
     # relies on its own Docker-free `check` signal.
@@ -1050,40 +980,20 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.scm == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run SCM integration suites
-        run: >-
-          ./gradlew
-          :projects:scm-platform:apps:procurement-service:integrationTest
-          :projects:scm-platform:apps:inventory-visibility-service:integrationTest
-          :projects:scm-platform:apps:demand-planning-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload SCM integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: scm-integration-test-reports
-          path: |
-            projects/scm-platform/apps/*/build/reports/tests/integrationTest/
-            projects/scm-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:scm-platform:apps:procurement-service:integrationTest
+        :projects:scm-platform:apps:inventory-visibility-service:integrationTest
+        :projects:scm-platform:apps:demand-planning-service:integrationTest
+      artifact-name: scm-integration-test-reports
+      report-paths: |
+        projects/scm-platform/apps/*/build/reports/tests/integrationTest/
+        projects/scm-platform/apps/*/build/test-results/integrationTest/
 
   finance-integration-tests:
     name: Integration (finance-platform, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # finance integration suite boots MySQL 8 + Redis + Kafka (libs/java-messaging
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction
@@ -1097,39 +1007,19 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.finance == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run finance integration suites
-        run: >-
-          ./gradlew
-          :projects:finance-platform:apps:account-service:integrationTest
-          :projects:finance-platform:apps:ledger-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload finance integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: finance-integration-test-reports
-          path: |
-            projects/finance-platform/apps/*/build/reports/tests/integrationTest/
-            projects/finance-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:finance-platform:apps:account-service:integrationTest
+        :projects:finance-platform:apps:ledger-service:integrationTest
+      artifact-name: finance-integration-test-reports
+      report-paths: |
+        projects/finance-platform/apps/*/build/reports/tests/integrationTest/
+        projects/finance-platform/apps/*/build/test-results/integrationTest/
 
   erp-integration-tests:
     name: Integration (erp-platform, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # erp integration suite boots MySQL 8 + Kafka (libs/java-messaging
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction
@@ -1143,41 +1033,21 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.erp == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run erp integration suites
-        run: >-
-          ./gradlew
-          :projects:erp-platform:apps:masterdata-service:integrationTest
-          :projects:erp-platform:apps:read-model-service:integrationTest
-          :projects:erp-platform:apps:approval-service:integrationTest
-          :projects:erp-platform:apps:notification-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload erp integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: erp-integration-test-reports
-          path: |
-            projects/erp-platform/apps/*/build/reports/tests/integrationTest/
-            projects/erp-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:erp-platform:apps:masterdata-service:integrationTest
+        :projects:erp-platform:apps:read-model-service:integrationTest
+        :projects:erp-platform:apps:approval-service:integrationTest
+        :projects:erp-platform:apps:notification-service:integrationTest
+      artifact-name: erp-integration-test-reports
+      report-paths: |
+        projects/erp-platform/apps/*/build/reports/tests/integrationTest/
+        projects/erp-platform/apps/*/build/test-results/integrationTest/
 
   platform-console-bff-integration-tests:
     name: Integration (platform-console console-bff, Testcontainers + WireMock JWKS)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # console-bff integration suite boots the full Spring context with WireMock
     # stubbing the IAM JWKS endpoint. No DB/Kafka containers — stateless BFF.
     # Scoped to monorepo-lab; standalone repo extraction relies on its own
@@ -1192,38 +1062,17 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.platform-console == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run platform-console console-bff integration suites
-        run: >-
-          ./gradlew
-          :projects:platform-console:apps:console-bff:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload platform-console integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: platform-console-bff-integration-test-reports
-          path: |
-            projects/platform-console/apps/console-bff/build/reports/tests/integrationTest/
-            projects/platform-console/apps/console-bff/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: ':projects:platform-console:apps:console-bff:integrationTest'
+      artifact-name: platform-console-bff-integration-test-reports
+      report-paths: |
+        projects/platform-console/apps/console-bff/build/reports/tests/integrationTest/
+        projects/platform-console/apps/console-bff/build/test-results/integrationTest/
 
   ecommerce-integration-tests:
     name: Integration (ecommerce, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # ecommerce integration suite boots Postgres (Testcontainers) + embedded Kafka.
     # ecommerce ITs carry @Tag("integration") and are excluded from the Docker-free
     # `check`; a dedicated `:integrationTest` task (TASK-MONO-307) runs them on a
@@ -1247,65 +1096,47 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.ecommerce == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run ecommerce integration suites (all 12 IT-carrying services)
-        run: >-
-          ./gradlew
-          :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:payment-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:product-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:user-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:promotion-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:gateway-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:review-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:shipping-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:batch-worker:integrationTest
-          :projects:ecommerce-microservices-platform:apps:notification-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:search-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:settlement-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload ecommerce integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ecommerce-integration-test-reports
-          path: |
-            projects/ecommerce-microservices-platform/apps/order-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/order-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/payment-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/payment-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/product-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/product-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/user-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/user-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/promotion-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/promotion-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/gateway-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/gateway-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/review-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/review-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/shipping-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/shipping-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/batch-worker/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/batch-worker/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/notification-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/notification-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/search-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/search-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/settlement-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/settlement-service/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:payment-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:product-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:user-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:promotion-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:gateway-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:review-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:shipping-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:batch-worker:integrationTest
+        :projects:ecommerce-microservices-platform:apps:notification-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:search-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:settlement-service:integrationTest
+      artifact-name: ecommerce-integration-test-reports
+      report-paths: |
+        projects/ecommerce-microservices-platform/apps/order-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/order-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/payment-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/payment-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/product-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/product-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/user-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/user-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/promotion-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/promotion-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/gateway-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/gateway-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/review-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/review-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/shipping-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/shipping-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/batch-worker/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/batch-worker/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/notification-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/notification-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/search-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/search-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/settlement-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/settlement-service/build/test-results/integrationTest/
 
   frontend-checks:
     name: Frontend lint & build (ecommerce + fan-platform)
