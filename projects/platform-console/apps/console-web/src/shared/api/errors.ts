@@ -570,6 +570,35 @@ export class EcommerceUnavailableError extends Error {
   }
 }
 
+/**
+ * Self-service tenant-onboarding surface degrade signal (ADR-MONO-044 §3.4 /
+ * TASK-PC-FE-182 — `onboarding-api.md`). Sibling of the section
+ * `*UnavailableError`s but for the pre-operator "create organization" call: a
+ * `5xx DOWNSTREAM_ERROR`/`CIRCUIT_OPEN` / timeout / network failure on the
+ * onboarding endpoint could-not-complete → the onboarding form shows a
+ * retryable inline notice (the IAM login session is NOT destroyed — the
+ * visitor may retry). Auth failures (`401 TOKEN_INVALID`) and inline-
+ * recoverable producer errors (`400 VALIDATION_ERROR`,
+ * `409 TENANT_ALREADY_EXISTS` / `OPERATOR_EMAIL_CONFLICT`) are raised as
+ * {@link ApiError} so the form renders an actionable message without crashing.
+ * No `subjectToken` value is ever placed in this error or logged (the § 2.1
+ * invariant — the token is only the onboarding `subjectToken` input).
+ */
+export class OnboardingUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: OnboardingUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'OnboardingUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -586,6 +615,9 @@ const MESSAGES: Record<string, string> = {
     '이전 요청과 다른 내용으로 같은 작업이 재시도되었습니다.',
   VALIDATION_ERROR: '입력값이 올바르지 않습니다.',
   NO_ACTIVE_TENANT: '테넌트를 먼저 선택해주세요.',
+  // --- self-service onboarding (TASK-PC-FE-182 / ADR-MONO-044) --------------
+  TENANT_ALREADY_EXISTS:
+    '이미 사용 중인 조직 ID 입니다. 다른 조직 ID 를 입력하세요.',
   TENANT_SCOPE_DENIED: '해당 테넌트에 대한 조회 권한이 없습니다.',
   AUDIT_RANGE_INVALID: '시작 시각이 종료 시각보다 늦을 수 없습니다.',
   SECURITY_EVENT_READ_REQUIRED:

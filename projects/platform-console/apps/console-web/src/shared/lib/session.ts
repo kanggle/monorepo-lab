@@ -170,3 +170,22 @@ export async function getDomainFacingToken(): Promise<string | null> {
 export async function isAuthenticated(): Promise<boolean> {
   return (await getAccessToken()) !== null && (await getOperatorToken()) !== null;
 }
+
+/**
+ * The **pre-operator** intermediate session: the caller has a valid IAM OIDC
+ * login (access token present) but is NOT yet an operator of any tenant
+ * (operator token absent — the RFC 8693 exchange returned `not_provisioned`).
+ *
+ * This is the ONLY state the self-service onboarding surface (`(onboarding)`
+ * route group) admits (TASK-PC-FE-182 / ADR-MONO-044 §3.4): a logged-in
+ * visitor who owns no workspace yet, on their way to creating one. It is
+ * deliberately distinct from both {@link isAuthenticated} (operator — reaches
+ * `(console)`) and anonymous (no access token — reaches `/login`).
+ *
+ * The access token remains ONLY the `subject_token` input (§ 2.1 invariant,
+ * unchanged): it is the onboarding endpoint's `subjectToken` and, on success,
+ * the operator-token re-exchange input — never an `/api/admin/**` credential.
+ */
+export async function hasPreOperatorSession(): Promise<boolean> {
+  return (await getAccessToken()) !== null && (await getOperatorToken()) === null;
+}

@@ -152,8 +152,7 @@ export async function GET(req: Request) {
 
     // --- Server-side operator-token exchange (§ 2.6 / ADR-MONO-014) -------
     // The IAM access token is NOT an /api/admin/** credential — exchange it
-    // for the operator token. On failure: NO operator cookie + drop the GAP
-    // cookies (no partial authed state; IAM token never an admin credential).
+    // for the operator token.
     try {
       const op = await exchangeForOperatorToken(data.access_token);
       jar.set(OPERATOR_COOKIE, op.accessToken, {
@@ -161,22 +160,44 @@ export async function GET(req: Request) {
         maxAge: op.expiresIn,
       });
     } catch (err) {
-      jar.delete(ACCESS_COOKIE);
-      jar.delete(REFRESH_COOKIE);
+      const notProvisioned =
+        err instanceof OperatorExchangeError && err.reason === 'fail_closed';
+
+      // Whatever the failure: NO operator cookie is set, and any prior
+      // active-tenant selection (+ its coupled assumed token) is dropped so a
+      // failed exchange never leaves a stale tenant pointing at a session with
+      // no operator credential (TASK-PC-FE-036). `isAuthenticated()` requires
+      // BOTH cookies, so neither branch below can reach the `(console)` shell.
       jar.delete(OPERATOR_COOKIE);
-      jar.delete(ID_TOKEN_COOKIE);
-      // No partial authed state: also drop any prior active-tenant selection
-      // (+ its coupled assumed token) so a failed login never leaves a stale
-      // tenant pointing at a now-unauthenticated session (TASK-PC-FE-036).
       jar.delete(TENANT_COOKIE);
       jar.delete(ASSUMED_TOKEN_COOKIE);
-      if (
-        err instanceof OperatorExchangeError &&
-        err.reason === 'fail_closed'
-      ) {
-        logger.warn('operator_exchange_not_provisioned', { requestId });
-        return loginRedirect(env.NEXT_PUBLIC_APP_URL, 'not_provisioned');
+
+      if (notProvisioned) {
+        // fail_closed (exchange 401) = a VALID IAM login that is simply not
+        // an operator of any tenant yet. Instead of bouncing to re-login, send
+        // them to self-service onboarding (ADR-MONO-044 §3.4 — AWS "create
+        // account → root" / GCP "create project → owner" parity). The IAM
+        // access + refresh cookies are KEPT — not as an admin credential (they
+        // never are, § 2.1), but as the onboarding endpoint's `subjectToken`
+        // input + the operator-token re-exchange input once a tenant is
+        // created. The pre-operator state (access present, operator absent) is
+        // the only state the `(onboarding)` route group admits.
+        logger.info('operator_exchange_not_provisioned_to_onboarding', {
+          requestId,
+        });
+        return NextResponse.redirect(
+          new URL('/onboarding', env.NEXT_PUBLIC_APP_URL).toString(),
+        );
       }
+
+      // unavailable (400/5xx/timeout/network) = a real exchange failure, NOT
+      // "no workspace". Fail closed exactly as before: drop the IAM cookies too
+      // (no partial authed state; the IAM token is never left usable) and force
+      // a clean re-login. Onboarding must NOT be offered on a transient outage
+      // (it would mis-read a downed admin-service as "you have no tenant").
+      jar.delete(ACCESS_COOKIE);
+      jar.delete(REFRESH_COOKIE);
+      jar.delete(ID_TOKEN_COOKIE);
       logger.warn('operator_exchange_unavailable_on_callback', { requestId });
       return loginRedirect(
         env.NEXT_PUBLIC_APP_URL,
