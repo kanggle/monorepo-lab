@@ -95,6 +95,9 @@ const GROUPS: NavGroup[] = [
         testid: 'nav-wms',
         children: [
           { href: '/wms', label: '개요', testid: 'nav-wms-ops' },
+          // 가이드(/wms/guide — TASK-PC-FE-183): 재고·출고 개념 정적 참조.
+          // IAM 의 개요→가이드 순서와 동일하게 개요 다음(재고 앞)에 둔다.
+          { href: '/wms/guide', label: '가이드', testid: 'nav-wms-guide' },
           {
             href: '/wms/inventory',
             label: '재고',
