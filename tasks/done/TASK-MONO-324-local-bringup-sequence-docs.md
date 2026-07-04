@@ -8,7 +8,7 @@ Local bring-up sequence — shared master (`TEMPLATE.md`) + per-project `docs/on
 
 # Status
 
-ready
+done
 
 # Task Tags
 
