@@ -27,6 +27,8 @@ const baseState = (
     },
   ],
   recentShipmentsStatus: 'ok',
+  recentAdjustments: null,
+  recentAdjustmentsStatus: 'ok',
   ...over,
 });
 

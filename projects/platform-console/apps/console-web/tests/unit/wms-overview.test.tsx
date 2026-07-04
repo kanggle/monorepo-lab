@@ -28,6 +28,13 @@ const baseState = (
       lowStock: 4,
     },
     {
+      key: 'openOrders',
+      label: '미출고 주문',
+      count: 3,
+      status: 'ok',
+      period: null,
+    },
+    {
       key: 'shipments',
       label: '배송',
       count: 7,
@@ -50,6 +57,17 @@ const baseState = (
     },
   ],
   recentShipmentsStatus: 'ok',
+  recentAdjustments: [
+    {
+      id: 'adj1',
+      skuId: 'sku-1',
+      bucket: 'AVAILABLE',
+      delta: -5,
+      reasonCode: 'ADJUSTMENT_CYCLE_COUNT',
+      occurredAt: '2026-07-02T00:00:00Z',
+    },
+  ],
+  recentAdjustmentsStatus: 'ok',
   ...over,
 });
 
@@ -64,6 +82,9 @@ describe('WmsOverview (TASK-PC-FE-166)', () => {
   it('renders operational-scale count tiles (not links) with their totals', () => {
     render(<WmsOverview state={baseState()} />);
     expect(screen.getByTestId('wms-inventory-count')).toHaveTextContent('42');
+    // 미출고 주문 (open orders) LEVEL tile — single total, no period (PC-FE-186).
+    expect(screen.getByTestId('wms-openOrders-count')).toHaveTextContent('3');
+    expect(screen.queryByTestId('wms-openOrders-count-today')).toBeNull();
     expect(screen.getByTestId('wms-shipments-count')).toHaveTextContent('7');
     // Alerts are NOT a count tile — represented solely by the 알림 상태
     // distribution (PC-FE-170).

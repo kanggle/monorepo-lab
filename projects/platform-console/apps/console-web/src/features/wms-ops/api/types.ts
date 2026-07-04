@@ -143,8 +143,25 @@ export const InspectionSchema = GenericRowSchema;
 export type Inspection = z.infer<typeof InspectionSchema>;
 
 // --- 1.5 adjustments audit (append-only — read only) ---------------------
-
-export const AdjustmentPageSchema = wmsPage(GenericRowSchema);
+// AdjustmentAuditResponse (admin-service § dashboard/adjustments) — projected
+// from `inventory.adjusted`. Typed (vs. generic) so the 개요 "최근 재고 조정"
+// glance (PC-FE-186) can render bucket/delta/reason, but TOLERANT (§ 2.4.5):
+// every field is optional/nullable and unknown/future fields pass through.
+export const AdjustmentRowSchema = z
+  .object({
+    id: z.string().optional(),
+    skuId: z.string().nullable().optional(),
+    locationId: z.string().nullable().optional(),
+    warehouseId: z.string().nullable().optional(),
+    bucket: z.string().nullable().optional(),
+    delta: z.number().nullable().optional(),
+    reasonCode: z.string().nullable().optional(),
+    reasonNote: z.string().nullable().optional(),
+    occurredAt: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type AdjustmentRow = z.infer<typeof AdjustmentRowSchema>;
+export const AdjustmentPageSchema = wmsPage(AdjustmentRowSchema);
 export type AdjustmentPage = z.infer<typeof AdjustmentPageSchema>;
 
 // --- 1.6 alerts -----------------------------------------------------------
