@@ -8,7 +8,7 @@ scm nightly e2e-full 웹훅 2×401 복구 — `AsnReceiveE2ETest` · `SupplierAc
 
 # Status
 
-review
+done
 
 # Owner
 
