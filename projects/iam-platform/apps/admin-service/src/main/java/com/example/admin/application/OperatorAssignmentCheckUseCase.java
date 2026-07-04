@@ -2,12 +2,15 @@ package com.example.admin.application;
 
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
+import com.example.admin.application.port.TenantPartnershipPort;
 import com.example.admin.domain.rbac.AdminOperator;
+import com.example.admin.domain.rbac.ScopeSet;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -55,6 +58,9 @@ public class OperatorAssignmentCheckUseCase {
     // — the SAME resolution the login-time exchange (TokenExchangeService) uses, so
     // the two sub-keyed paths cannot diverge.
     private final OperatorOidcSubjectResolver operatorResolver;
+    // TASK-BE-477 (ADR-MONO-045 D3/D5): the cross-org partnership confinement inputs.
+    private final TenantPartnershipPort partnershipPort;
+    private final HostEntitledScopeResolver hostEntitledScopeResolver;
 
     /**
      * Boolean convenience kept for callers that need only the assignment verdict.
@@ -115,20 +121,73 @@ public class OperatorAssignmentCheckUseCase {
         // 2. Platform-scope sentinel → assigned to any non-blank tenant. No
         // explicit assignment row, so org_scope defaults to null (→ ["*"]).
         if (AdminOperator.PLATFORM_TENANT_ID.equals(operator.tenantId())) {
-            return new Result(true, null);
+            return new Result(true, null, null);
         }
 
         // 3. Dual-read effective scope: assignment rows ∪ {legacy home tenant}.
         Set<String> effectiveScope = tenantScopeResolver.resolveEffectiveTenantScope(
                 operator.internalId(), operator.tenantId());
-        if (!effectiveScope.contains(tenantId)) {
-            return Result.notAssigned();
+        if (effectiveScope.contains(tenantId)) {
+            // 4. Resolve the selected assignment's org_scope data-scope. null ⟺ ["*"]
+            // (unset column OR legacy-home/platform with no explicit row). A normal
+            // assignment carries NO delegatedScope block (partnership-only, additive).
+            List<String> orgScope = assignmentPort.findOrgScope(operator.internalId(), tenantId);
+            return new Result(true, orgScope, null);
         }
 
-        // 4. Resolve the selected assignment's org_scope data-scope. null ⟺ ["*"]
-        // (unset column OR legacy-home/platform with no explicit row).
-        List<String> orgScope = assignmentPort.findOrgScope(operator.internalId(), tenantId);
-        return new Result(true, orgScope);
+        // 5. TASK-BE-477 (ADR-MONO-045 D3/D5) — cross-org partnership branch (additive).
+        // The operator is not normally assigned to `tenantId`; check whether an ACTIVE
+        // partnership makes it reachable AS A HOST where the operator is a participant.
+        // The derived reach is capped to the triple-intersection and returned as the
+        // additive `delegatedScope` block (auth-service step 2b consumes it to cap the
+        // assume-tenant token's entitled domains/roles; admin scope is NEVER widened).
+        DelegatedScope delegated = resolveCrossOrgDelegatedScope(operator, tenantId);
+        if (delegated != null) {
+            return new Result(true, null, delegated);
+        }
+        return Result.notAssigned();
+    }
+
+    /**
+     * TASK-BE-477 / ADR-MONO-045 D3/D5 — the cross-org confinement derivation
+     * (rbac.md "Cross-Org Partner Delegation Confinement"):
+     *
+     * <pre>
+     *   p = findActive(host = tenantId, partner = operator.tenantId)   // ACTIVE only
+     *   if p is null: return null                                       // no reach
+     *   part = participant(p, operator); if part is null: return null   // not a participant
+     *   scope = p.delegated_scope
+     *   if part.participant_scope != null: scope ∩= participant_scope
+     *   scope ∩= hostEntitledScope(host)                                // ≤-own (deferred)
+     *   return scope
+     * </pre>
+     *
+     * @return the derived {@code {domains, roles}}, or {@code null} when the operator
+     *         has no partnership-derived reach to {@code hostTenant} (fail-closed).
+     */
+    private DelegatedScope resolveCrossOrgDelegatedScope(AdminOperatorPort.OperatorView operator,
+                                                         String hostTenant) {
+        TenantPartnershipPort.PartnershipView partnership = partnershipPort
+                .findActivePartnership(hostTenant, operator.tenantId())
+                .orElse(null);
+        if (partnership == null) {
+            return null; // no partnership / PENDING / SUSPENDED / TERMINATED → reach 0
+        }
+        TenantPartnershipPort.ParticipantView participant = partnershipPort
+                .findParticipant(partnership.internalId(), operator.internalId())
+                .orElse(null);
+        if (participant == null) {
+            return null; // this operator is not a participant → reach 0
+        }
+        ScopeSet scope = partnership.delegatedScope();
+        if (participant.participantScope() != null) {
+            scope = scope.intersect(participant.participantScope());
+        }
+        Optional<ScopeSet> hostHolds = hostEntitledScopeResolver.resolve(hostTenant);
+        if (hostHolds.isPresent()) {
+            scope = scope.intersect(hostHolds.get());
+        }
+        return new DelegatedScope(scope.domains(), scope.roles());
     }
 
     /**
@@ -139,9 +198,20 @@ public class OperatorAssignmentCheckUseCase {
      * @param orgScope the selected assignment's department subtree-root ids, or
      *                 {@code null} when unset / not assigned (→ {@code ["*"]})
      */
-    public record Result(boolean assigned, List<String> orgScope) {
+    public record Result(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope) {
         static Result notAssigned() {
-            return new Result(false, null);
+            return new Result(false, null, null);
         }
     }
+
+    /**
+     * TASK-BE-477 / ADR-MONO-045 D3/D5 — the ADDITIVE cross-org confinement block:
+     * the capped {@code {domains, roles}} a partnership-derived host tenant grants the
+     * operator ({@code delegated_scope ∩ participant_scope ∩ host-holds}). Present ONLY
+     * for partnership-derived host reach ({@code null} for normal assignments and all
+     * {@code assigned=false} cases → omitted by {@code @JsonInclude(NON_NULL)}).
+     * auth-service (step 2b) intersects the assume-tenant token's {@code entitled_domains}
+     * with {@code domains} and caps roles to {@code roles}; admin scope is never widened.
+     */
+    public record DelegatedScope(List<String> domains, List<String> roles) {}
 }

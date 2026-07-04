@@ -85,7 +85,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-477-partnership-admin-service-impl.md` — **REVIEW** (2026-07-05, branch `be-477-partnership-impl`, PR pending). ADR-MONO-045 §3.4 **step 2a** = admin-service cross-org 파트너십 구현(aggregate `tenant_partnership`+participant, invite/accept/suspend/reactivate/terminate + participant add/remove, `partnership.manage`, `partnership.*` outbox, **cross-org confinement 분기**를 `OperatorAssignmentCheckUseCase` 에만 추가[`delegated ∩ participant ∩ host-holds`, additive `delegatedScope`]하고 `effectiveAdminScope` **byte-unchanged**[cross-org actor admin 공집합→403], V0039/V0040 net-zero, keystone cross-org-leak IT 7 AC). host-holds `∩` 는 unbounded seam→**step 2b(auth-service token 도메인/역할 cap)** 로 이관. dispatcher crux 재검증 완료. 분석=Opus 4.8 / 구현=backend-engineer(Opus)+dispatcher 재검증.
 
 ## done
 

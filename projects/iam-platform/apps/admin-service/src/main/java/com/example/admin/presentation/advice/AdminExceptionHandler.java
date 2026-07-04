@@ -352,6 +352,64 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("SUBSCRIPTION_TRANSITION_INVALID", e.getMessage()));
     }
 
+    // TASK-BE-477 (ADR-MONO-045) — cross-org partnership management errors
+    // (admin-api.md § Partnership Management error table).
+    @ExceptionHandler(com.example.admin.application.exception.PartnershipScopeDeniedException.class)
+    public ResponseEntity<ErrorResponse> handlePartnershipScopeDenied(
+            com.example.admin.application.exception.PartnershipScopeDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("PARTNERSHIP_SCOPE_DENIED", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.PartnershipScopeInvalidException.class)
+    public ResponseEntity<ErrorResponse> handlePartnershipScopeInvalid(
+            com.example.admin.application.exception.PartnershipScopeInvalidException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("PARTNERSHIP_SCOPE_INVALID", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.ParticipantNotOwnOperatorException.class)
+    public ResponseEntity<ErrorResponse> handleParticipantNotOwnOperator(
+            com.example.admin.application.exception.ParticipantNotOwnOperatorException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("PARTICIPANT_NOT_OWN_OPERATOR", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.ParticipantScopeExceedsDelegationException.class)
+    public ResponseEntity<ErrorResponse> handleParticipantScopeExceeds(
+            com.example.admin.application.exception.ParticipantScopeExceedsDelegationException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("PARTICIPANT_SCOPE_EXCEEDS_DELEGATION", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.PartnershipNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePartnershipNotFound(
+            com.example.admin.application.exception.PartnershipNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("PARTNERSHIP_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.ParticipantNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleParticipantNotFound(
+            com.example.admin.application.exception.ParticipantNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("PARTICIPANT_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.PartnershipAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handlePartnershipAlreadyExists(
+            com.example.admin.application.exception.PartnershipAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("PARTNERSHIP_ALREADY_EXISTS", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.PartnershipTransitionInvalidException.class)
+    public ResponseEntity<ErrorResponse> handlePartnershipTransitionInvalid(
+            com.example.admin.application.exception.PartnershipTransitionInvalidException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("PARTNERSHIP_TRANSITION_INVALID", e.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

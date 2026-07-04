@@ -50,7 +50,7 @@ class OperatorAssignmentCheckControllerTest {
     @DisplayName("assigned=true + org_scope 설정 → 200 {assigned:true, orgScope:[...]}")
     void assignedTrue_withOrgScope() throws Exception {
         given(checkUseCase.check(eq(SUB), eq("acme-corp")))
-                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, java.util.List.of("dept-sales")));
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, java.util.List.of("dept-sales"), null));
 
         mockMvc.perform(get("/internal/operator-assignments/check")
                         .param("oidcSubject", SUB)
@@ -64,7 +64,7 @@ class OperatorAssignmentCheckControllerTest {
     @DisplayName("assigned=true + org_scope 미설정(NULL) → 200 {assigned:true, orgScope:null} (net-zero)")
     void assignedTrue_nullOrgScope() throws Exception {
         given(checkUseCase.check(eq(SUB), eq("acme-corp")))
-                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, null));
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, null, null));
 
         mockMvc.perform(get("/internal/operator-assignments/check")
                         .param("oidcSubject", SUB)
@@ -78,7 +78,7 @@ class OperatorAssignmentCheckControllerTest {
     @DisplayName("assigned=false (미할당/unknown/non-ACTIVE 모두) → 200 {assigned:false, orgScope:null}")
     void assignedFalse() throws Exception {
         given(checkUseCase.check(eq(SUB), eq("globex")))
-                .willReturn(new OperatorAssignmentCheckUseCase.Result(false, null));
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(false, null, null));
 
         mockMvc.perform(get("/internal/operator-assignments/check")
                         .param("oidcSubject", SUB)
