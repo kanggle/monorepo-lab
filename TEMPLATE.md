@@ -499,6 +499,36 @@ Append to `/etc/hosts` (Linux/macOS) or `C:\Windows\System32\drivers\etc\hosts` 
 
 (Or run dnsmasq with `address=/.local/127.0.0.1` for a wildcard.)
 
+### Local bring-up sequence
+
+Bringing up any project's stack locally follows a fixed order. Steps 1–2 are one-time / shared (do them once per machine or per session); steps 3–6 are per project. This ordering is a **repo invariant** — the per-project inventory lives in each project's `docker-compose.yml`, but the *sequence* below is the same for every project.
+
+1. **Register hostnames** (one-time per machine) — `bash scripts/dev-setup.sh` (Linux/macOS) or `.\scripts\dev-setup.ps1` as Administrator (Windows). See [§ One-time developer setup](#one-time-developer-setup) above.
+2. **Start the shared Traefik** (once per session) — `pnpm traefik:up`. This creates the external `traefik-net` network every project compose joins. Skip it and every `*.local` hostname is unroutable.
+3. **Start IAM first if the target is an OIDC consumer** — `pnpm iam:up`. Every consumer gateway validates tokens against `http://iam.local/oauth2/jwks` at startup and **fails fast** when IAM is unreachable, so IAM must be healthy *before* the consumer's gateway boots. `iam-platform` is the identity provider — it has no such dependency and is brought up on its own. See the matrix below for which projects are consumers.
+4. **Copy `.env`** (one-time per project) — `cp .env.example .env` in the project directory and adjust secrets if needed (local `changeme-local` defaults work out of the box).
+5. **Start the project stack** — the project's `up` command (matrix below). Compose `depends_on` sequences backing services → app services → gateway/frontend; a cold first boot can take several minutes while every JVM starts.
+6. **Verify** — `pnpm <project>:ps` for container health, then `curl -i http://<hostname>/actuator/health` (backend) or open the frontend hostname in a browser.
+
+Tear down with the matching `:down` command (named volumes are preserved).
+
+#### Per-project bring-up matrix
+
+| Project | Up / down | Primary hostname(s) | IAM first? |
+|---|---|---|---|
+| iam-platform | `pnpm iam:up` / `iam:down` | `iam.local` | — (identity provider) |
+| ecommerce-microservices-platform | `pnpm ecommerce:up` / `ecommerce:down` | `ecommerce.local`, `web.ecommerce.local` | ✅ |
+| wms-platform | `pnpm wms:up` / `wms:down` | `wms.local` | ✅ |
+| fan-platform | `pnpm fan-platform:up` / `fan-platform:down` | `fan-platform.local` | ✅ |
+| scm-platform | `pnpm scm:up` / `scm:down` | `scm.local` | ✅ |
+| erp-platform | `pnpm erp:up` / `erp:down` | `erp.local` | ✅ |
+| finance-platform | `pnpm finance:up` / `finance:down` | `finance.local`, `ledger.local` | ✅ |
+| platform-console | `pnpm console:up` / `console:down` | `console.local`, `console-bff.local` | ✅ |
+
+Each project's `docs/onboarding/local-dev.md` records that stack's service/resource inventory (or points to its `docker-compose.yml` as the authoritative inventory) plus any project-specific bring-up notes. **The full resource list for a project is always its `docker-compose.yml`** — this matrix is the ordering contract, not the inventory.
+
+> **Resource-constrained hosts**: a project stack cold-starts many JVMs at once. On a memory-limited Docker host, rebuilding and cold-starting many services simultaneously can trigger an out-of-memory cascade; bring services up in small batches and let each batch become healthy before the next. This is a per-host operational concern (developer environment), not a repo invariant — capture host-specific batch sizes in your own environment notes, not here.
+
 ### Adding a new project (greenfield)
 
 1. Pick an unused `*.local` hostname; add the entry to the table above in the bootstrap PR.
@@ -506,6 +536,7 @@ Append to `/etc/hosts` (Linux/macOS) or `C:\Windows\System32\drivers\etc\hosts` 
 3. Backing services use `expose:` only — never `ports:`.
 4. Project's `.env.example` declares `PROJECT_HOSTNAME=<name>.local` for documentation. (No `PORT_PREFIX` needed.)
 5. README documents the hostname.
+6. Add the project to the [§ Per-project bring-up matrix](#per-project-bring-up-matrix) above (up/down command, hostname, IAM-first flag) and add a `docs/onboarding/local-dev.md` following the shape of the existing projects.
 
 ### Database / queue tools (DBeaver, Redis Insight, Kafka UI)
 
