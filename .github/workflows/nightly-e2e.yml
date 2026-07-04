@@ -480,213 +480,83 @@ jobs:
 
   wms-platform-e2e-full:
     name: E2E full (wms gateway-master, Testcontainers)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Mirrors the PR-time e2e-tests smoke job (ci.yml) via the SAME reusable,
+    # with boot-jars-mode: build (nightly has no cross-workflow artifact reuse)
+    # and gradle-target :e2eFullTest. No path-filter `if:` — cron + push-to-main
+    # are unconditional; the repo-guard keeps extracted standalone repos out.
     if: github.repository == 'kanggle/monorepo-lab'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build wms boot jars
-        run: >-
-          ./gradlew
-          :projects:wms-platform:apps:master-service:bootJar
-          :projects:wms-platform:apps:gateway-service:bootJar
-          --no-daemon --stacktrace
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      # ADR-MONO-041 D2: wms service images `FROM monorepo/java-service-base:v1`.
-      # No image registry → build the shared base locally before the docker builds.
-      - name: Build shared java-service-base image (ADR-MONO-041 D2)
-        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
-
-      - name: Build wms service images for full e2e
-        # Docker CLI build (BuildKit) — Docker 28 + Testcontainers
-        # ImageFromDockerfile hang workaround (incident
-        # 2026-05-05-ci-regression.md § Root Cause #2, TASK-MONO-044).
-        run: |
-          docker build -t wms-master-service:e2e \
-            -f projects/wms-platform/apps/master-service/Dockerfile \
-            projects/wms-platform/apps/master-service/
-          docker build -t wms-gateway-service:e2e \
-            -f projects/wms-platform/apps/gateway-service/Dockerfile \
-            projects/wms-platform/apps/gateway-service/
-
-      - name: Run gateway-master e2e full suite
-        run: >-
-          ./gradlew
-          :projects:wms-platform:apps:gateway-service:e2eFullTest
-          -x :projects:wms-platform:apps:master-service:bootJar
-          -x :projects:wms-platform:apps:gateway-service:bootJar
-          -Dwms.e2e.masterImage=wms-master-service:e2e
-          -Dwms.e2e.gatewayImage=wms-gateway-service:e2e
-          --no-daemon --stacktrace
-
-      - name: Upload wms e2e full test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: wms-e2e-full-test-reports-nightly
-          path: |
-            projects/wms-platform/apps/gateway-service/build/reports/tests/e2eFullTest/
-            projects/wms-platform/apps/gateway-service/build/test-results/e2eFullTest/
-          retention-days: 7
+    uses: ./.github/workflows/_platform-e2e.yml
+    with:
+      project-dir: projects/wms-platform
+      boot-jars-mode: build
+      bootjar-tasks: >-
+        :projects:wms-platform:apps:master-service:bootJar
+        :projects:wms-platform:apps:gateway-service:bootJar
+      timeout-minutes: 60
+      gradle-target: ':projects:wms-platform:apps:gateway-service:e2eFullTest'
+      services: >-
+        [
+          {"name":"master-service","image":"wms-master-service:e2e","prop":"wms.e2e.masterImage"},
+          {"name":"gateway-service","image":"wms-gateway-service:e2e","prop":"wms.e2e.gatewayImage"}
+        ]
+      report-artifact: wms-e2e-full-test-reports-nightly
+      report-paths: |
+        projects/wms-platform/apps/gateway-service/build/reports/tests/e2eFullTest/
+        projects/wms-platform/apps/gateway-service/build/test-results/e2eFullTest/
 
   fan-platform-e2e-full:
     name: E2E full (fan-platform v1 live-trio, Testcontainers)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Mirrors ci.yml fan-platform-e2e smoke via the SAME reusable
+    # (boot-jars-mode: build, gradle-target :e2eFullTest).
     if: github.repository == 'kanggle/monorepo-lab'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build fan-platform boot jars
-        run: >-
-          ./gradlew
-          :projects:fan-platform:apps:gateway-service:bootJar
-          :projects:fan-platform:apps:community-service:bootJar
-          :projects:fan-platform:apps:artist-service:bootJar
-          --no-daemon --stacktrace
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      # ADR-MONO-041 D2: fan service images `FROM monorepo/java-service-base:v1`.
-      # No image registry → build the shared base locally before the docker builds.
-      - name: Build shared java-service-base image (ADR-MONO-041 D2)
-        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
-
-      - name: Build fan-platform service images for full e2e
-        run: |
-          docker build -t fan-platform-gateway-service:e2e \
-            -f projects/fan-platform/apps/gateway-service/Dockerfile \
-            projects/fan-platform/apps/gateway-service/
-          docker build -t fan-platform-community-service:e2e \
-            -f projects/fan-platform/apps/community-service/Dockerfile \
-            projects/fan-platform/apps/community-service/
-          docker build -t fan-platform-artist-service:e2e \
-            -f projects/fan-platform/apps/artist-service/Dockerfile \
-            projects/fan-platform/apps/artist-service/
-
-      - name: Run fan-platform live-trio e2e full suite
-        run: >-
-          ./gradlew
-          :projects:fan-platform:tests:e2e:e2eFullTest
-          -x :projects:fan-platform:apps:gateway-service:bootJar
-          -x :projects:fan-platform:apps:community-service:bootJar
-          -x :projects:fan-platform:apps:artist-service:bootJar
-          -Dfan.e2e.gatewayImage=fan-platform-gateway-service:e2e
-          -Dfan.e2e.communityImage=fan-platform-community-service:e2e
-          -Dfan.e2e.artistImage=fan-platform-artist-service:e2e
-          --no-daemon --stacktrace
-
-      - name: Upload fan-platform e2e full test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fan-platform-e2e-full-test-reports-nightly
-          path: |
-            projects/fan-platform/tests/e2e/build/reports/tests/e2eFullTest/
-            projects/fan-platform/tests/e2e/build/test-results/e2eFullTest/
-          retention-days: 7
+    uses: ./.github/workflows/_platform-e2e.yml
+    with:
+      project-dir: projects/fan-platform
+      boot-jars-mode: build
+      bootjar-tasks: >-
+        :projects:fan-platform:apps:gateway-service:bootJar
+        :projects:fan-platform:apps:community-service:bootJar
+        :projects:fan-platform:apps:artist-service:bootJar
+      timeout-minutes: 60
+      gradle-target: ':projects:fan-platform:tests:e2e:e2eFullTest'
+      services: >-
+        [
+          {"name":"gateway-service","image":"fan-platform-gateway-service:e2e","prop":"fan.e2e.gatewayImage"},
+          {"name":"community-service","image":"fan-platform-community-service:e2e","prop":"fan.e2e.communityImage"},
+          {"name":"artist-service","image":"fan-platform-artist-service:e2e","prop":"fan.e2e.artistImage"}
+        ]
+      report-artifact: fan-platform-e2e-full-test-reports-nightly
+      report-paths: |
+        projects/fan-platform/tests/e2e/build/reports/tests/e2eFullTest/
+        projects/fan-platform/tests/e2e/build/test-results/e2eFullTest/
 
   scm-platform-e2e-full:
     name: E2E full (scm-platform v1 cross-service, Testcontainers)
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Mirrors ci.yml scm-platform-e2e smoke via the SAME reusable
+    # (boot-jars-mode: build, gradle-target :e2eFullTest).
     if: github.repository == 'kanggle/monorepo-lab'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build scm-platform boot jars
-        run: >-
-          ./gradlew
-          :projects:scm-platform:apps:gateway-service:bootJar
-          :projects:scm-platform:apps:procurement-service:bootJar
-          :projects:scm-platform:apps:inventory-visibility-service:bootJar
-          :projects:scm-platform:apps:demand-planning-service:bootJar
-          --no-daemon --stacktrace
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      # ADR-MONO-041 D2: scm service images `FROM monorepo/java-service-base:v1`.
-      # No image registry → build the shared base locally before the docker builds.
-      - name: Build shared java-service-base image (ADR-MONO-041 D2)
-        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
-
-      - name: Build scm-platform service images for full e2e
-        run: |
-          docker build -t scm-platform-gateway-service:e2e \
-            -f projects/scm-platform/apps/gateway-service/Dockerfile \
-            projects/scm-platform/apps/gateway-service/
-          docker build -t scm-platform-procurement-service:e2e \
-            -f projects/scm-platform/apps/procurement-service/Dockerfile \
-            projects/scm-platform/apps/procurement-service/
-          docker build -t scm-platform-inventory-visibility-service:e2e \
-            -f projects/scm-platform/apps/inventory-visibility-service/Dockerfile \
-            projects/scm-platform/apps/inventory-visibility-service/
-          docker build -t scm-platform-demand-planning-service:e2e \
-            -f projects/scm-platform/apps/demand-planning-service/Dockerfile \
-            projects/scm-platform/apps/demand-planning-service/
-
-      - name: Run scm-platform cross-service e2e full suite
-        run: >-
-          ./gradlew
-          :projects:scm-platform:tests:e2e:e2eFullTest
-          -x :projects:scm-platform:apps:gateway-service:bootJar
-          -x :projects:scm-platform:apps:procurement-service:bootJar
-          -x :projects:scm-platform:apps:inventory-visibility-service:bootJar
-          -x :projects:scm-platform:apps:demand-planning-service:bootJar
-          -Dscm.e2e.gatewayImage=scm-platform-gateway-service:e2e
-          -Dscm.e2e.procurementImage=scm-platform-procurement-service:e2e
-          -Dscm.e2e.inventoryVisibilityImage=scm-platform-inventory-visibility-service:e2e
-          -Dscm.e2e.demandPlanningImage=scm-platform-demand-planning-service:e2e
-          --no-daemon --stacktrace
-
-      - name: Upload scm-platform e2e full test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: scm-platform-e2e-full-test-reports-nightly
-          path: |
-            projects/scm-platform/tests/e2e/build/reports/tests/e2eFullTest/
-            projects/scm-platform/tests/e2e/build/test-results/e2eFullTest/
-          retention-days: 7
+    uses: ./.github/workflows/_platform-e2e.yml
+    with:
+      project-dir: projects/scm-platform
+      boot-jars-mode: build
+      bootjar-tasks: >-
+        :projects:scm-platform:apps:gateway-service:bootJar
+        :projects:scm-platform:apps:procurement-service:bootJar
+        :projects:scm-platform:apps:inventory-visibility-service:bootJar
+        :projects:scm-platform:apps:demand-planning-service:bootJar
+      timeout-minutes: 60
+      gradle-target: ':projects:scm-platform:tests:e2e:e2eFullTest'
+      services: >-
+        [
+          {"name":"gateway-service","image":"scm-platform-gateway-service:e2e","prop":"scm.e2e.gatewayImage"},
+          {"name":"procurement-service","image":"scm-platform-procurement-service:e2e","prop":"scm.e2e.procurementImage"},
+          {"name":"inventory-visibility-service","image":"scm-platform-inventory-visibility-service:e2e","prop":"scm.e2e.inventoryVisibilityImage"},
+          {"name":"demand-planning-service","image":"scm-platform-demand-planning-service:e2e","prop":"scm.e2e.demandPlanningImage"}
+        ]
+      report-artifact: scm-platform-e2e-full-test-reports-nightly
+      report-paths: |
+        projects/scm-platform/tests/e2e/build/reports/tests/e2eFullTest/
+        projects/scm-platform/tests/e2e/build/test-results/e2eFullTest/
 
   iam-e2e-full:
     name: E2E full (iam docker-compose)
