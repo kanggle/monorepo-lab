@@ -1,6 +1,6 @@
 # TASK-BE-476 — cross-org partnership: specs/contracts (`tenant_partnership` aggregate + invite/accept + `delegated_scope` + cross-org confinement + cascade-revoke)
 
-**Status:** review
+**Status:** done
 **Area:** iam-platform / admin-service · **Scope:** `specs/services/admin-service/*` + `specs/contracts/http/admin-api.md` + `specs/contracts/events/partnership-events.md` (specs/contracts ONLY — no code)
 **Type:** cross-org privilege-origination architecture — Source-of-Truth-first spec authoring (ADR-MONO-045 §3.4 step 1)
 **Implemented:** branch `be-476-partnership-contracts` (pushed, PR pending — PR-on-request). specs/contracts only(코드 0): data-model(`tenant_partnership`+`tenant_partnership_participant`), rbac(`partnership.manage`+Cross-Org Partner Delegation Confinement 3번째 축), admin-api(Partnership Management 클러스터+전이 매트릭스), 신규 partnership-events.md(7 이벤트), 주변 정합(architecture/overview/retention/observability/dependencies). doc-lint: 신규 anchor·cross-ref 전부 resolve 확인.
