@@ -164,8 +164,8 @@ export default async function WmsPage() {
       overview={<WmsOverview state={overviewState} />}
       recentActivity={
         <>
-          <WmsRecentShipments state={overviewState} />
           <WmsRecentAdjustments state={overviewState} />
+          <WmsRecentShipments state={overviewState} />
         </>
       }
     />
