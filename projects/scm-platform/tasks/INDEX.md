@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-SCM-INT-003-e2e-full-webhook-401-fix.md` — nightly `scm-platform-e2e-full` 지속 RED 복구. `AsnReceiveE2ETest`·`SupplierAckWebhookE2ETest` 2×401(expected 200) — 유력 원인=BE-033 웹훅 HMAC 도입 후 `@Tag("full")` 웹훅 e2e가 유효 서명 미전송. 원인 확정 후 테스트-한정 서명 헬퍼로 복구(프로덕션 필터 무변경). Surfaced during TASK-MONO-326 검증(pre-existing, 리팩토링 무관). 분석=Opus 4.8 / 구현 권장=Sonnet~Opus.
 
 ## in-progress
 
