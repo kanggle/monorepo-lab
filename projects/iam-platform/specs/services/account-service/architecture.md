@@ -149,6 +149,7 @@ presentation → application → domain
 - `SignupUseCase`: 이메일 중복 검사 → Account + Profile 생성 → `account.created` 이벤트 (outbox)
 - `ChangeAccountStatusUseCase`: 입력(operator, reason, target status) → `AccountStatusMachine.transition()` → status_history 저장 → `account.status.changed` 이벤트. **같은 트랜잭션 내에서 모두 커밋** (T3·A7)
 - `DeleteAccountUseCase`: 즉시 삭제 금지. 상태를 `DELETED`(pending)로 전이 + 유예 기간 만료 후 `PiiAnonymizer`가 PII 필드 NULL/해시 처리
+- **Admin-reachable 변이의 tenant confinement** (TASK-BE-467): admin-service를 경유하는 변이 use-case(`AccountStatusUseCase` lock/unlock/changeStatus, `GdprDeleteUseCase`, `DataExportUseCase`)는 내부 컨트롤러가 읽은 `X-Tenant-Id`를 tenant-aware 오버로드 `findById(TenantId.of(header), id)`로 스레딩한다. 헤더 부재/`'*'` → `FAN_PLATFORM` 기본값(**net-zero** — 이전 하드핀 리터럴과 byte-identical, no-arg 오버로드가 FAN에 위임하여 dormant 스케줄러·consumer self-delete·기존 단위테스트 무변). tenant-scoped `findById`라 cross-tenant 대상 → 빈 결과 → **`404 ACCOUNT_NOT_FOUND`**(enumeration-safe; 새 cross-tenant finder 미추가). ⚠️ **소비자-facing use-case(signup/verify-email/profile/last-login)는 여전히 `FAN_PLATFORM` 하드핀** — 진짜 TASK-BE-229 Phase-3 debt로 BE-467 범위 밖(admin 변이 경로만 confine). 상세: [specs/services/admin-service/rbac.md](../admin-service/rbac.md) · [admin-to-account.md](../../contracts/http/internal/admin-to-account.md)
 
 ### domain/status/
 - `AccountStatusMachine.transition(current, target, reason)` → 허용되지 않으면 `STATE_TRANSITION_INVALID` 예외
