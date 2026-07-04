@@ -461,4 +461,42 @@ describe('wms-api — tolerant parsing (unknown/future enum never throws)', () =
     const r = await listAlerts();
     expect(r.data.content[0].alertType).toBe('FUTURE_ALERT_TYPE_V2');
   });
+
+  it('an inventory row with NULL locationCode/skuCode parses — master ref not yet projected, must NOT throw → no whole-section degrade (TASK-PC-FE-185)', async () => {
+    // Regression: the admin read model leaves the denormalized master codes
+    // NULL until admin_{location,sku}_ref projects. A `z.string().optional()`
+    // rejects JSON null → InventoryPageSchema.parse throws → the wms 재고
+    // section falsely degrades even though HTTP was 200. The table already
+    // renders `code ?? id`, so null must parse (nullable), like `lotNo`.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          content: [
+            {
+              locationId: 'loc-x',
+              skuId: 'sku-x',
+              lotId: null,
+              warehouseId: 'wh-1',
+              locationCode: null,
+              skuCode: null,
+              lotNo: null,
+              availableQty: 85,
+              reservedQty: 15,
+              onHandQty: 100,
+              lowStockFlag: false,
+              lastEventAt: '2026-07-02T10:00:00Z',
+              version: 4,
+            },
+          ],
+          page: { number: 0, size: 20, totalElements: 1, totalPages: 1 },
+        }),
+      ),
+    );
+    const r = await listInventory();
+    expect(r.data.content[0].locationCode).toBeNull();
+    expect(r.data.content[0].skuCode).toBeNull();
+    // sanity: the numeric buckets still parse alongside the null codes.
+    expect(r.data.content[0].availableQty).toBe(85);
+  });
 });
