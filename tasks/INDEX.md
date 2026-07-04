@@ -143,7 +143,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
-(empty)
+- `TASK-MONO-328-ci-gating-if-hoist.md` — **⏳ DEFERRED 백로그** (신호 관측 전 착수 금지). MONO-326(CI 본문 DRY)의 짝: 게이팅 `if:` OR-블록 ~15복사 → `changes.outputs.run-*` named 플래그로 hoist. **AC-0 verify-then-act**: 착수 트리거(①프로젝트 추가 잦아 `if:` 갱신 누락 발생 ②게이팅 실수로 e2e 누락 회귀) 미관측 시 STOP·보류 유지. 필터 정의 무수정(MONO-074/075 quirk). 페이오프 中·리스크 中(correctness-critical)·통증 신호 無 → 신호 시만. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
 
