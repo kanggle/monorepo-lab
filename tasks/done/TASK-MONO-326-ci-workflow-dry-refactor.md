@@ -8,7 +8,7 @@ CI 워크플로 DRY 리팩토링 — composite action + reusable workflow 로 `c
 
 # Status
 
-review
+done
 
 # Owner
 
