@@ -28,6 +28,7 @@ admin-service 는 `QueryTenantScopeGate` (읽기 경로와 공유) 로 행위자
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
 | `tenantId` | string (**required**, TASK-BE-357) | 조회 대상 테넌트. account-service는 이 값으로만 필터한다 (effective-scope 게이트는 admin-service가 호출 전 수행 — lock/unlock 과 동일한 internal-trust 자세). `*` (SUPER_ADMIN 전용, admin-service에서 게이트됨) → 전 테넌트 목록. 누락/공백 → `400 VALIDATION_ERROR` (암묵적 cross-tenant 스캔 금지, fail-closed). |
+| `status` | enum (optional, TASK-BE-475) | 계정 상태 필터 `ACTIVE`/`LOCKED`/`DORMANT`/`DELETED`. 미지정 → 전체 상태. admin-service가 허용 목록을 이미 검증하므로 정상 흐름에서는 유효값만 도달하나, account-service도 fail-closed 로 파싱한다(허용 외 → `400 VALIDATION_ERROR`). `"*"` 전 테넌트 분기 포함. `email` 단건 조회 시 무시. |
 | `page` | int (default 0) | 페이지 번호 |
 | `size` | int (default 20, max 100) | 페이지 크기 |
 

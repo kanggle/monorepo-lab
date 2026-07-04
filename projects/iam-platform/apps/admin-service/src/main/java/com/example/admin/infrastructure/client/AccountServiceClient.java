@@ -80,15 +80,22 @@ public class AccountServiceClient {
 
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
-    public AccountSearchResponse listAll(String tenantId, int page, int size) {
+    public AccountSearchResponse listAll(String tenantId, int page, int size, String status) {
         try {
             return restClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path("/internal/accounts")
-                            .queryParam("tenantId", tenantId)  // TASK-BE-357: tenant-scoped (was unscoped all-tenant scan)
-                            .queryParam("page", page)
-                            .queryParam("size", size)
-                            .build())
+                    .uri(uriBuilder -> {
+                        uriBuilder
+                                .path("/internal/accounts")
+                                .queryParam("tenantId", tenantId)  // TASK-BE-357: tenant-scoped (was unscoped all-tenant scan)
+                                .queryParam("page", page)
+                                .queryParam("size", size);
+                        // TASK-BE-475: forward the (admin-service-validated) status filter
+                        // ONLY when present — an absent filter must not send `?status=` (back-compat).
+                        if (status != null && !status.isBlank()) {
+                            uriBuilder.queryParam("status", status);
+                        }
+                        return uriBuilder.build();
+                    })
                     .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, resp) -> {

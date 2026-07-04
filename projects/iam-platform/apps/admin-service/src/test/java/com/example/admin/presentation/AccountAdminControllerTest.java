@@ -173,7 +173,7 @@ class AccountAdminControllerTest {
                 "acc-1", "a@example.com", "ACTIVE", Instant.parse("2026-01-01T00:00:00Z")));
         var page = new AccountServiceClient.AccountSearchResponse(items, 1L, 0, 20, 1);
         when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
-        when(accountServiceClient.listAll(anyString(), anyInt(), anyInt())).thenReturn(page);
+        when(accountServiceClient.listAll(anyString(), anyInt(), anyInt(), any())).thenReturn(page);
 
         mockMvc.perform(get("/api/admin/accounts")
                         .header("Authorization", bearer()))
@@ -183,6 +183,33 @@ class AccountAdminControllerTest {
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(20))
                 .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    // ---- TASK-BE-475: status filter ----
+
+    @Test
+    void search_withStatus_forwards_normalized_status_to_listAll() throws Exception {
+        var page = new AccountServiceClient.AccountSearchResponse(List.of(), 3L, 0, 1, 3);
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
+        // lower-case in the request must reach the client normalized to upper-case.
+        when(accountServiceClient.listAll(anyString(), anyInt(), anyInt(), eq("LOCKED"))).thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/accounts?status=locked&page=0&size=1")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3));
+    }
+
+    @Test
+    void search_invalidStatus_returns_400_validation_error() throws Exception {
+        // Bad status is rejected at the admin boundary (IllegalArgumentException →
+        // VALIDATION_ERROR) BEFORE the downstream call — never a 503-masked downstream 400.
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(true);
+
+        mockMvc.perform(get("/api/admin/accounts?status=BOGUS")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @Test

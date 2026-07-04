@@ -3,6 +3,7 @@ package com.example.account.infrastructure.persistence;
 import com.example.account.application.port.AccountQueryPort;
 import com.example.account.application.result.AccountDetailResult;
 import com.example.account.application.result.AccountSearchResult;
+import com.example.account.domain.status.AccountStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -27,12 +28,14 @@ public class AccountQueryPortImpl implements AccountQueryPort {
     private final ProfileJpaRepository profileJpaRepository;
 
     @Override
-    public AccountSearchResult findAll(String tenantId, int page, int size) {
+    public AccountSearchResult findAll(String tenantId, AccountStatus status, int page, int size) {
         // TASK-BE-357: tenant-scoped (was an unscoped all-tenant scan → cross-tenant leak).
+        // TASK-BE-475: optional status filter (null → all statuses) — both the tenant-scoped
+        // path (repo hook already existed, was hard-wired null) and the "*" all-tenant path.
         Pageable pageable = PageRequest.of(page, size);
         Page<AccountJpaEntity> jpaPage = PLATFORM_TENANT_ID.equals(tenantId)
-                ? accountJpaRepository.findAllAccounts(pageable)
-                : accountJpaRepository.findByTenantIdWithStatusFilter(tenantId, null, pageable);
+                ? accountJpaRepository.findAllAccountsWithStatusFilter(status, pageable)
+                : accountJpaRepository.findByTenantIdWithStatusFilter(tenantId, status, pageable);
         List<AccountSearchResult.Item> items = jpaPage.getContent().stream()
                 .map(AccountQueryPortImpl::toItem)
                 .toList();

@@ -98,6 +98,7 @@ base path: `/api/admin`
 |---|---|---|
 | `email` | string (optional) | 이메일로 단건 검색. 없으면 전체 목록 반환 |
 | `tenantId` | string (optional) | **TASK-BE-357** — 검색/목록 대상 테넌트. 생략 시 운영자의 활성/자기 테넌트. `*`는 SUPER_ADMIN 전용 (전 테넌트). 일반 운영자가 effective scope(home ∪ 배정, TASK-BE-326) 밖의 값을 지정하면 `403 TENANT_SCOPE_DENIED`. (`GET /api/admin/audit` 의 `tenantId` 와 동일 시맨틱.) |
+| `status` | enum (optional) | **TASK-BE-475** — 계정 상태 필터. `ACTIVE` \| `LOCKED` \| `DORMANT` \| `DELETED` (대소문자 무관). **전체 목록 분기에만 적용** (`email` 단건 검색 시 무시 — 단건은 상태로 필터하지 않는다). 미지정/공백 → 전체 상태 반환(back-compat). 허용 목록 외 값 → `400 VALIDATION_ERROR`. 소비 예: `?status=LOCKED&page=0&size=1` 의 `totalElements` 로 잠금 계정 수 집계(platform-console IAM 개요, TASK-PC-FE-181). |
 | `page` | int (default 0) | 전체 목록 조회 시 페이지 번호 |
 | `size` | int (default 20, max 100) | 전체 목록 조회 시 페이지 크기 |
 
@@ -107,6 +108,7 @@ base path: `/api/admin`
 - `email` 파라미터 없음 + `account.read` 권한 보유 → 해석된 테넌트의 계정 목록 페이지네이션 반환.
 - `email` 파라미터 없음 + `account.read` 권한 미보유 → **403 `PERMISSION_DENIED`** (DENIED `admin_actions` 1행 기록). TASK-MONO-202 — 이전엔 빈 목록 200을 반환했으나, 이는 "권한 없음"과 "계정 0건"을 같은 응답으로 합쳐 소비자(콘솔)가 둘을 구분할 수 없게 만들었다. 이제 무권한은 403, 빈 목록 200은 **권한 보유 + 계정 0건**만 의미한다.
 - `size` > 100 → 400 `VALIDATION_ERROR`.
+- **TASK-BE-475** — `status` 지정 시 전체 목록 분기에서 해당 상태로만 필터한다 (`(:status IS NULL OR a.status = :status)`, `"*"` 전 테넌트 분기 포함). 허용 목록(`ACTIVE`/`LOCKED`/`DORMANT`/`DELETED`, 대소문자 무관) 외 값은 admin-service 경계에서 즉시 `400 VALIDATION_ERROR` (다운스트림 호출 전 — `AccountServiceClient` 가 downstream 400 을 503 으로 마스킹하는 것을 방지). 공백 `status=` 은 미지정으로 취급.
 
 **Response 200** (email 없음, account.read 보유):
 ```json
@@ -144,7 +146,7 @@ base path: `/api/admin`
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | email 없음 + `account.read` 권한 미보유 (전체 목록 조회). email 단건 검색은 무권한 허용 |
 | 403 | `TENANT_SCOPE_DENIED` | **TASK-BE-357** — 일반 운영자가 effective scope(home ∪ 배정) 밖의 `tenantId` 를 지정한 경우 (email/목록 양 분기 공통) |
-| 400 | `VALIDATION_ERROR` | size > 100 |
+| 400 | `VALIDATION_ERROR` | size > 100, 또는 `status` 가 허용 목록 외 값 (TASK-BE-475) |
 | 503 | `DOWNSTREAM_ERROR` | account-service 호출 실패 |
 | 503 | `CIRCUIT_OPEN` | account-service circuit breaker OPEN |
 
