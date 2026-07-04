@@ -44,8 +44,8 @@ taxonomy_version: 0.1
 
 | Service | Service Type | 핵심 책임 |
 |---|---|---|
-| `console-web` | frontend-app | 단일 콘솔 UI. GAP OIDC Auth Code+PKCE 로그인, data-driven 서비스 카탈로그, 테넌트 스위처, 도메인 운영 화면(gateway/admin API 호출 렌더). Phase 1 = 부트 가능 skeleton, Phase 2 = GAP 운영자 parity. Phase 4~6 = 4개 non-GAP 도메인(wms/scm/finance/erp) 운영 화면 federation 완료. |
-| `console-bff` | rest-api | 교차 도메인 집약 BFF (Backend-for-Frontend). 5 도메인(GAP + wms + scm + finance + erp)의 기존 read API 를 서버사이드 fan-out 으로 합성해 단일 화면 대시보드 ("Operator Overview" / "Domain Health") 를 제공한다. [ADR-MONO-017](../../docs/adr/ADR-MONO-017-platform-console-bff-architecture.md) (ACCEPTED 2026-05-20) D1-D8 — REST orchestrator, server-side fan-out only, 기존 read 재사용 (zero retrofit), 도메인별 credential 규약 (HARD INVARIANT — `console-integration-contract.md` § 2.4.5/6/7/8 verbatim), per-domain CB + 부분 degrade, `tenant_id` pass-through, per-domain attribution observability. v1 LIVE = `/actuator/health` (PC-BE-001) + Operator Overview MVP (PC-FE-011) + Domain Health (PC-BE-002) + finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration). |
+| `console-web` | frontend-app | 단일 콘솔 UI. GAP OIDC Auth Code+PKCE 로그인, data-driven 서비스 카탈로그, 테넌트 스위처, 도메인 운영 화면(gateway/admin API 호출 렌더). Phase 1 = 부트 가능 skeleton, Phase 2 = GAP 운영자 parity. Phase 4~6 = 4개 non-GAP 도메인(wms/scm/finance/erp) 운영 화면 federation 완료. 이후 `ecommerce` 편입([ADR-MONO-030](../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md)/[ADR-MONO-031](../../docs/adr/ADR-MONO-031-ecommerce-operator-ui-console-consolidation.md) — TASK-MONO-240/241 카탈로그 타일 + `/ecommerce/**` 7개 운영 화면 `features/ecommerce-ops`, PC-FE-081~090)으로 non-GAP 5개 도메인으로 확장. |
+| `console-bff` | rest-api | 교차 도메인 집약 BFF (Backend-for-Frontend). 6 도메인(GAP + wms + scm + finance + erp + ecommerce — `ecommerce` domain-health leg는 ADR-MONO-030/031 편입 시 추가)의 기존 read API 를 서버사이드 fan-out 으로 합성해 단일 화면 대시보드 ("Operator Overview" / "Domain Health") 를 제공한다. [ADR-MONO-017](../../docs/adr/ADR-MONO-017-platform-console-bff-architecture.md) (ACCEPTED 2026-05-20) D1-D8 — REST orchestrator, server-side fan-out only, 기존 read 재사용 (zero retrofit), 도메인별 credential 규약 (HARD INVARIANT — `console-integration-contract.md` § 2.4.5/6/7/8 verbatim), per-domain CB + 부분 degrade, `tenant_id` pass-through, per-domain attribution observability. v1 LIVE = `/actuator/health` (PC-BE-001) + Operator Overview MVP (PC-FE-011) + Domain Health (PC-BE-002) + finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration). |
 
 상세 아키텍처는 각 service의 `specs/services/<service>/architecture.md`에서 선언.
 
@@ -70,7 +70,7 @@ GAP 측 선행 작업 (spec-first, [TASK-BE-296](../iam-platform/tasks/ready/TAS
 - **internal-system** (trait) — 운영자-facing이나 hard constraint가 multi-tenant/integration-heavy/audit-heavy로 완전 포착. 별 rule layer 없음 → 미선언 (rules/README on-demand).
 - **transactional** (trait) — 콘솔은 도메인 트랜잭션을 소유하지 않는다. 쓰기 작업(운영 명령)은 각 도메인 API에 위임하며 콘솔은 멱등 호출 + 결과 표시만. 강한 일관성·saga는 도메인 측 책임.
 - **regulated** / **content-heavy** / **read-heavy** / **real-time** / **batch-heavy** / **data-intensive** — 콘솔 자체에 해당 도메인 자산/제약 없음. PII·감사 보존은 GAP/도메인 측.
-- **ecommerce / fan-platform 통합** — ADR-MONO-013 § D6 v1 범위는 엔터프라이즈 스위트(gap/wms/scm + erp/finance). B2C 축은 범위 밖(향후 카탈로그 확장 시 재검토).
+- **fan-platform 통합** — ADR-MONO-013 § D6 v1 범위는 엔터프라이즈 스위트(gap/wms/scm + erp/finance)로 부트스트랩되었다. fan-platform(B2C) 축은 여전히 범위 밖(향후 카탈로그 확장 시 재검토). *(참고: 원래 함께 제외했던 `ecommerce`는 이후 편입되었다 — 아래 § Service Map 및 [ADR-MONO-030](../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md)/[ADR-MONO-031](../../docs/adr/ADR-MONO-031-ecommerce-operator-ui-console-consolidation.md) 참조.)
 
 이 경계가 바뀌면 본 PROJECT.md의 traits를 수정하고 [rules/traits/](../../rules/traits/)의 해당 파일을 로딩 범위에 포함시킬 것.
 
