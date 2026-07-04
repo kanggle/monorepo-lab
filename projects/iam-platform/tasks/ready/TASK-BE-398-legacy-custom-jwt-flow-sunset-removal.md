@@ -47,6 +47,28 @@ ADR-001 D2-b(2026-05-01 deprecated, removal ≥2026-08-01) + ADR-006(BE-396 이 
 
 ---
 
+# AC-0 사전점검 결과 (2026-07-04, static grep — verify-then-act 준비)
+
+착수 전 필수인 AC-0 의 **(a) 코드 레벨 grep + (c) 소비자 이전** 을 미리 조사한 결과. **(b) 라이브 게이트웨이 트래픽=0 은 구동 스택 access-log 가 필요하므로 08-01 구현 시점에 재확인** 한다. 아래는 정적 스냅샷이며, 착수 시 동일 grep 을 **재확인**할 것(그사이 신규 소비자 유입 가능).
+
+**결론: iam-platform 레거시 `POST /api/auth/login` + `/api/auth/oauth/**` 의 live 외부 소비자 = 0 (정적).** repo-wide `api/auth/(login|oauth|refresh|logout)` 히트를 전수 분류:
+
+- **iam auth-service 자체 컨트롤러/테스트** (`LoginController(Test)`·`OAuthController(Test)`·`RefreshController(Test)`·`LogoutControllerTest`) → 제거 대상 자신, 소비자 아님.
+- **iam gateway-service 라우트 설정 + `RouteConfigTest`** → 레거시 public route 정의. 제거 시 SecurityConfig/route 와 함께 정리(In Scope). 외부 소비자 아님.
+- **`TenantProvisioningE2ETest`** → 이미 `@Disabled`("2026-08-01 LoginController 와 함께 삭제 예정" 명시, `@Tag("full")`). live 아님 → 제거 스코프에 포함(테스트도 함께 삭제).
+- **`ecommerce-microservices-platform/*`** (자체 auth-service·api-client·load-test·gateway) → **별개 프로젝트의 독립 auth 스택**. 경로 문자열만 동일할 뿐 iam-platform 엔드포인트 아님 → **BE-398 무관**.
+- **console-web `/api/auth/{login,refresh,logout}`** → console-web **자체 Next.js 라우트**(→ OIDC `/oauth2/*` 리다이렉트/rotation·RP-initiated logout, PC-FE-033/120). iam 레거시 호출 아님 → **이미 OIDC 이전 완료**.
+- **fan-platform** → `api/auth/(login|oauth|refresh|logout)` 참조 **0건** (완전 OIDC 이전, ADR-001 D2-b 의 마이그레이션 대상이었음).
+- **admin-web** → `projects/iam-platform/apps/admin-web/**` 파일 **0개**(은퇴 완료, platform-console 흡수). 소비자 아님.
+
+**후속 정리 필요(제거의 블로커는 아님):**
+- **community-service** 는 레거시 `POST /api/auth/login` 발급 토큰(`iss=iam`)을 SAS 토큰과 **병행 수용**(`OAuth2ResourceServerConfig`·`AllowedIssuersValidator`·`application.yml` "drop after deprecation" 주석). 엔드포인트를 **호출하지는 않으므로** 제거 자체를 막지 않음(제거 후 신규 iam 토큰 발급 중단 → 기존 토큰 만료와 함께 자연 소멸). 단 `iss=iam` 수용 분기는 제거 후 **dead code** → 동반/후속 정리 권장.
+- **refresh/logout**: `architecture.md` 는 `/api/auth/refresh`·`/api/auth/logout` 을 "유지(status 미정)"로 표기. iam 외부 소비자는 정적 grep 상 **0**(console-web·ecommerce 는 각자 자체 라우트/서비스). AC 의 "잔존 시 별도 후속 분리" 조건대로, **login+oauth 제거를 코어로 하고 refresh/logout 제거는 08-01 재확인 후 별도 판단** 권장.
+
+**08-01 착수 시 남은 verify:** (b) 데모 스택 gateway access-log 로 레거시 4경로 트래픽 0 확인 + 위 정적 grep 재실행(신규 소비자 유입 없음 재확인). 통과 시에만 제거 착수.
+
+---
+
 # Scope
 
 ## In Scope (제거)
