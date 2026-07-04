@@ -280,7 +280,7 @@ function RecentShipments({
  * `WmsRecentShipments` (PC-FE-186). A SEPARATE slot server component fed by the
  * same `getWmsOverviewState` fan-out; the `/wms` page renders it alongside
  * 최근 출고 in the `recentActivity` slot (활동 group), so the page reads
- * 규모(counts) → 주의(알림) → 활동(최근 출고 + 최근 재고 조정). STRICTLY READ-ONLY.
+ * 규모(counts) → 주의(알림) → 활동(최근 재고 조정 + 최근 출고). STRICTLY READ-ONLY.
  */
 export function WmsRecentAdjustments({ state }: { state: WmsOverviewState }) {
   if (state.notEligible) {
