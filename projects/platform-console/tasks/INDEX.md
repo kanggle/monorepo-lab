@@ -91,7 +91,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-183-domain-subscription-self-enablement-ui.md` — **IMPLEMENTED → review (PR open)**. 도메인 구독 self-enablement UI — the entitlement-plane surface that makes self-service onboarding (PC-FE-182) usable. A freshly-onboarded tenant is born with ZERO subscriptions (ADR-044 D6); the owner holds `TENANT_BILLING_ADMIN` but the console had no UI to turn any domain on. Adds `/subscriptions` over the existing BE-343 API (no backend change). GET/list 부재 → 상태는 카탈로그 파생(ACTIVE ⟺ registry `tenants ∋ activeTenant`; SUSPENDED/CANCELLED는 카탈로그에서 빠짐, ADR-023) + subscribe 409 → 재개 리커버리. New: `features/subscriptions` (domains/derive/hardened client mirroring operators-client + createSubscription/changeSubscriptionStatus with server-resolved tenant) + `/api/subscriptions` POST/PATCH proxies + `(console)/subscriptions` page + SubscriptionsScreen + reason-capture dialog + '조직 설정' sidebar group (ADR-023 plane separation). 28 new tests; tsc/lint/vitest green. 분석·구현=Opus 4.8. [[project_platform_console_adr_013]]
 
 ## done
 
