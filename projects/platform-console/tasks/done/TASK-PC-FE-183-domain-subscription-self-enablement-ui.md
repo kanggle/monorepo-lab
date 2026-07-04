@@ -1,6 +1,6 @@
 # TASK-PC-FE-183 — 도메인 구독 self-enablement UI (조직 owner가 자기 테넌트 도메인을 켠다)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Scope:** `(console)/subscriptions` 화면 + 구독 프록시 + operator-gated 변이 클라이언트 + 사이드바
 **Type:** entitlement-plane operator-gated CRUD UI 슬라이스 (보안-민감 아님 — 표준 operator-token 경로)
 **Implemented:** branch `pc-fe-183-domain-subscription-ui` → **PR (open)**. `tsc --noEmit` + `next lint` + 신규 `vitest` 28건 green(client 9 / proxy 9 / derive 5 / screen 5); nav 테스트 회귀 0.
