@@ -1,6 +1,6 @@
 # TASK-PC-FE-183 — WMS 가이드 메뉴 신설 (재고 · 출고 정적 참조 화면)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Route:** `/wms/guide` (신규) · **Nav:** WMS drill 자식에 `가이드` 추가 (`nav-wms-guide`)
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (도메인 상태머신·재고 시맨틱 정확도 요구 — 콘텐츠 집약)
 
