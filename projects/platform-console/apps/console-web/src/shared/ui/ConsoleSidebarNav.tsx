@@ -87,6 +87,16 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
+    // Entitlement plane (ADR-MONO-023) — kept as its own group, distinct from
+    // the IAM identity plane above: a tenant owner (TENANT_BILLING_ADMIN)
+    // self-enables domains for their tenant (TASK-PC-FE-183, the piece that
+    // makes self-service onboarding PC-FE-182 usable).
+    label: '조직 설정',
+    items: [
+      { href: '/subscriptions', label: '도메인 구독', testid: 'nav-subscriptions' },
+    ],
+  },
+  {
     label: '도메인 운영',
     items: [
       {

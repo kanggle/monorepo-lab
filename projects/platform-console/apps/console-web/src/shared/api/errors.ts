@@ -599,6 +599,37 @@ export class OnboardingUnavailableError extends Error {
   }
 }
 
+/**
+ * IAM tenant domain-subscription surface degrade signal (TASK-PC-FE-183 /
+ * ADR-MONO-023 / admin-api.md § Subscription Management). Sibling of the
+ * section `*UnavailableError`s for the entitlement-plane subscribe/status
+ * mutations: a `503 DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` / timeout on the
+ * subscription call (admin-service → account-service delegate) degrades ONLY
+ * the subscription surface (the console shell stays intact). Auth failures
+ * (`401 TOKEN_INVALID`) are raised as {@link ApiError} so the caller forces a
+ * clean re-login. Inline-recoverable producer errors (`403 PERMISSION_DENIED`
+ * — lacks `subscription.manage`, `400 REASON_REQUIRED`, `404 TENANT_NOT_FOUND`
+ * / `SUBSCRIPTION_NOT_FOUND`, `409 SUBSCRIPTION_ALREADY_EXISTS` /
+ * `SUBSCRIPTION_TRANSITION_INVALID`) are raised as {@link ApiError} so the UI
+ * renders an inline actionable message (the `409 ALREADY_EXISTS` path drives
+ * the resume affordance — a suspended/cancelled row exists). No token / tenant
+ * PII is ever placed in this error.
+ */
+export class SubscriptionsUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: SubscriptionsUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'SubscriptionsUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -618,6 +649,15 @@ const MESSAGES: Record<string, string> = {
   // --- self-service onboarding (TASK-PC-FE-182 / ADR-MONO-044) --------------
   TENANT_ALREADY_EXISTS:
     '이미 사용 중인 조직 ID 입니다. 다른 조직 ID 를 입력하세요.',
+  // --- domain subscriptions (TASK-PC-FE-183 / ADR-MONO-023) ----------------
+  SUBSCRIPTION_MANAGE_REQUIRED:
+    '도메인 구독 관리는 subscription.manage 권한이 필요합니다 (조직 관리자 TENANT_BILLING_ADMIN).',
+  SUBSCRIPTION_ALREADY_EXISTS:
+    '이미 구독 이력이 있는 도메인입니다 (중지·해지됨). "재개"로 다시 활성화하세요.',
+  SUBSCRIPTION_TRANSITION_INVALID:
+    '현재 구독 상태에서는 이 전이를 수행할 수 없습니다. 목록을 새로고침한 뒤 확인하세요.',
+  SUBSCRIPTION_NOT_FOUND: '대상 구독을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  TENANT_NOT_FOUND: '대상 테넌트를 찾을 수 없습니다.',
   TENANT_SCOPE_DENIED: '해당 테넌트에 대한 조회 권한이 없습니다.',
   AUDIT_RANGE_INVALID: '시작 시각이 종료 시각보다 늦을 수 없습니다.',
   SECURITY_EVENT_READ_REQUIRED:
