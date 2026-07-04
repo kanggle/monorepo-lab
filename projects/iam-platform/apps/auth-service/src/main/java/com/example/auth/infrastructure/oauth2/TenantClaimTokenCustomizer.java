@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.OperatorAssignmentPort.DelegatedScope;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -338,10 +339,12 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         String selectedTenantId = null;
         String selectedTenantType = null;
         java.util.List<String> orgScope = null;
+        DelegatedScope delegatedScope = null;
         if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
             selectedTenantId = grant.getSelectedTenantId();
             selectedTenantType = grant.getSelectedTenantType();
             orgScope = grant.getOrgScope();
+            delegatedScope = grant.getDelegatedScope();
         }
 
         if (selectedTenantId == null || selectedTenantId.isBlank()
@@ -377,6 +380,23 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         log.debug("TenantClaimTokenCustomizer: assume-tenant — injected org_scope={} "
                 + "(membership-derived; null/empty → [*] net-zero)", effectiveOrgScope);
 
+        // TASK-BE-478 (ADR-MONO-045 §3.4 step 2b): CROSS-ORG partnership cap. When the
+        // assignment is partnership-derived host reach (delegatedScope non-null), the
+        // actor is a partner-tenant participant, NOT a normal operator of the host
+        // tenant. Confine the token's domain-operating surface to the delegated slice —
+        // entitled_domains = host-ACTIVE ∩ delegatedScope.domains, roles =
+        // delegatedScope.roles VERBATIM (admin-service already computed
+        // delegated ∩ participant ∩ host-holds; re-deriving would WIDEN past the slice).
+        // Admin scope is structurally untouched: auth-service emits no admin-scope claim,
+        // the cross-org actor holds no admin_operator_roles in the host (→ empty
+        // effectiveAdminScope → /api/admin/** 403), and delegatedScope.roles is
+        // admin-role-free by the invite-time cap (ScopeSet.containsAdminRole → 422).
+        if (delegatedScope != null) {
+            applyCrossOrgCap(context, fetchEntitledDomains(selectedTenantId), delegatedScope);
+            return;
+        }
+
+        // NORMAL operator path (BE-338/376) — byte-unchanged.
         // D3: SELECTED tenant's ACTIVE subscriptions ONLY (no union). Reused verbatim.
         // The fetch ALSO drives the operator `roles` derivation below (one call:
         // entitled_domains + roles ride the same account-service result).
@@ -424,12 +444,30 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * account-service availability, so the exception is swallowed (logged at WARN).
      */
     private java.util.List<String> populateEntitledDomains(JwtEncodingContext context, String tenantId) {
+        java.util.List<String> entitled = fetchEntitledDomains(tenantId);
+        if (!entitled.isEmpty()) {
+            context.getClaims().claim(CLAIM_ENTITLED_DOMAINS, entitled);
+            log.debug("TenantClaimTokenCustomizer: injected entitled_domains={} for tenant_id={}",
+                    entitled, tenantId);
+        }
+        // TASK-BE-376: return the fetched list so the assume-tenant branch can derive
+        // the operator `roles` from the SAME fetch (entitled_domains + roles ride one
+        // call). Empty on failure/empty (the authorization_code callers ignore it).
+        return entitled;
+    }
+
+    /**
+     * TASK-BE-478 (ADR-MONO-045 §3.4 step 2b): fetch-only variant of
+     * {@link #populateEntitledDomains} — resolves the tenant's ACTIVE entitled domains
+     * WITHOUT setting the claim (the cross-org cap must intersect BEFORE the claim is
+     * placed). Same <b>fail-soft</b> contract (ADR-MONO-019 keystone): any failure
+     * (account-service down / circuit-open / timeout / exception) OR an empty result →
+     * an empty list, swallowed and logged at WARN. Never null.
+     */
+    private java.util.List<String> fetchEntitledDomains(String tenantId) {
         try {
             java.util.List<String> entitled = accountServicePort.listEntitledDomains(tenantId);
             if (entitled != null && !entitled.isEmpty()) {
-                context.getClaims().claim(CLAIM_ENTITLED_DOMAINS, entitled);
-                log.debug("TenantClaimTokenCustomizer: injected entitled_domains={} for tenant_id={}",
-                        entitled, tenantId);
                 return entitled;
             }
         } catch (RuntimeException e) {
@@ -440,10 +478,72 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                             + "omitting claim (fail-soft): {}",
                     tenantId, e.toString());
         }
-        // TASK-BE-376: return the fetched list so the assume-tenant branch can derive
-        // the operator `roles` from the SAME fetch (entitled_domains + roles ride one
-        // call). Empty on failure/empty (the authorization_code callers ignore it).
         return java.util.List.of();
+    }
+
+    /**
+     * TASK-BE-478 (ADR-MONO-045 §3.4 step 2b): applies the cross-org partnership cap to
+     * the assume-tenant token. Reached ONLY when the assignment is partnership-derived
+     * host reach (the {@code delegatedScope} block is present).
+     *
+     * <ul>
+     *   <li><b>entitled_domains</b> = {@code hostEntitled ∩ delegatedScope.domains}
+     *       (order preserved from the host's ACTIVE list). An empty intersection → the
+     *       claim is omitted → the domain gateway 403s (least-privilege): the host does
+     *       not subscribe to any delegated domain, so the partner may operate none.</li>
+     *   <li><b>roles</b> = {@code delegatedScope.roles} VERBATIM. admin-service already
+     *       computed {@code delegated ∩ participant ∩ host-holds}; the auth-service must
+     *       NOT re-derive from entitled domains ({@link OperatorRoleDerivation} would
+     *       WIDEN past the delegated slice). An empty role list → the claim is omitted.
+     *       Structurally admin-role-free (invite-time {@code ScopeSet.containsAdminRole}
+     *       → 422), so no admin authority can ride here.</li>
+     * </ul>
+     *
+     * <p>The {@code tenant_id}/{@code tenant_type}/{@code org_scope} claims injected by
+     * the caller before this point are untouched (partnership does not confine by
+     * department — {@code org_scope} stays {@code ["*"]} within the delegated domains).
+     * Admin scope is never expressed on the token, so it cannot be widened.
+     */
+    private void applyCrossOrgCap(JwtEncodingContext context,
+                                  java.util.List<String> hostEntitled,
+                                  DelegatedScope delegatedScope) {
+        java.util.List<String> cappedDomains =
+                intersectPreserveOrder(hostEntitled, delegatedScope.domains());
+        if (!cappedDomains.isEmpty()) {
+            context.getClaims().claim(CLAIM_ENTITLED_DOMAINS, cappedDomains);
+        }
+
+        java.util.List<String> cappedRoles = delegatedScope.roles();
+        if (cappedRoles != null && !cappedRoles.isEmpty()) {
+            // SecurityJackson2Modules allowlist (BE-376): wrap in a mutable ArrayList —
+            // an ImmutableCollections list breaks the JdbcOAuth2AuthorizationService
+            // read-back (userinfo/refresh/revoke).
+            context.getClaims().claim(CLAIM_ROLES, new java.util.ArrayList<>(cappedRoles));
+        }
+
+        log.debug("TenantClaimTokenCustomizer: assume-tenant CROSS-ORG cap (ADR-045 step 2b) — "
+                        + "entitled_domains={} (host ∩ delegated), roles={} (delegated verbatim)",
+                cappedDomains, cappedRoles);
+    }
+
+    /**
+     * Element-wise intersection preserving {@code base}'s order — retains each element
+     * of {@code base} that also appears in {@code filter}. Null/empty inputs → empty
+     * list (never null).
+     */
+    private static java.util.List<String> intersectPreserveOrder(java.util.List<String> base,
+                                                                 java.util.List<String> filter) {
+        if (base == null || base.isEmpty() || filter == null || filter.isEmpty()) {
+            return java.util.List.of();
+        }
+        java.util.Set<String> allowed = new java.util.LinkedHashSet<>(filter);
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String x : base) {
+            if (allowed.contains(x)) {
+                out.add(x);
+            }
+        }
+        return out;
     }
 
     /**

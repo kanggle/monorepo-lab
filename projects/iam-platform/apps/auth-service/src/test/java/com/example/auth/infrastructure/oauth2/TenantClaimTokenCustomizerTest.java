@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.OperatorAssignmentPort;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -1020,6 +1021,134 @@ class TenantClaimTokenCustomizerTest {
         assertThat((String) built.getClaim("tenant_id")).isEqualTo("acme-corp");
         assertThat(built.getClaims()).doesNotContainKey("account_type");
         assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("*");
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-478 (ADR-MONO-045 §3.4 step 2b) — cross-org partnership cap: when the
+    // assignment is partnership-derived host reach (delegatedScope present), the
+    // token's entitled_domains is capped to host ∩ delegated.domains and roles is the
+    // delegated roles VERBATIM (never re-derived). Admin scope is never expressed.
+    // -----------------------------------------------------------------------
+
+    private AssumeTenantAuthenticationToken assumeGrantCrossOrg(
+            String tenantId, String tenantType, List<String> orgScope,
+            OperatorAssignmentPort.DelegatedScope delegatedScope) {
+        return new AssumeTenantAuthenticationToken(
+                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
+                tenantId, tenantType, orgScope, delegatedScope);
+    }
+
+    @Test
+    @DisplayName("BE-478 cross-org: host entitled [wms,ecommerce,scm] ∩ delegated [wms] → entitled_domains=[wms]; roles=delegated VERBATIM (not derived)")
+    void assumeTenant_crossOrg_capsEntitledAndUsesDelegatedRolesVerbatim() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        // delegated.roles is a STRICT SUBSET of what OperatorRoleDerivation("wms")
+        // would produce (WMS_OPERATOR + the granular set). Asserting exactly this set
+        // proves the customizer uses the delegated roles verbatim, NOT the derivation.
+        OperatorAssignmentPort.DelegatedScope delegated =
+                new OperatorAssignmentPort.DelegatedScope(
+                        List.of("wms"), List.of("OUTBOUND_WRITE", "OUTBOUND_READ"));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrantCrossOrg("host-corp", "B2B_ENTERPRISE", null, delegated));
+        // host A's ACTIVE entitled domains — a SUPERSET of the delegated slice.
+        when(accountServicePort.listEntitledDomains("host-corp"))
+                .thenReturn(List.of("wms", "ecommerce", "scm"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        // entitled_domains capped to host ∩ delegated.domains (host-order preserved).
+        assertThat(built.<List<String>>getClaim("entitled_domains")).containsExactly("wms");
+        // roles = delegated.roles verbatim (NOT the derived WMS_OPERATOR_ROLES set).
+        assertThat(built.<List<String>>getClaim("roles"))
+                .containsExactly("OUTBOUND_WRITE", "OUTBOUND_READ");
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("host-corp");
+        assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2B_ENTERPRISE");
+        // partnership does not confine by department → org_scope net-zero [*].
+        assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("*");
+    }
+
+    @Test
+    @DisplayName("BE-478 cross-org: host does NOT subscribe any delegated domain → entitled_domains omitted (least-privilege); roles still verbatim")
+    void assumeTenant_crossOrg_emptyIntersection_omitsEntitledDomains() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        OperatorAssignmentPort.DelegatedScope delegated =
+                new OperatorAssignmentPort.DelegatedScope(
+                        List.of("wms"), List.of("OUTBOUND_WRITE"));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrantCrossOrg("host-corp", "B2B_ENTERPRISE", null, delegated));
+        // host is entitled only to ecommerce → intersection with [wms] is empty.
+        when(accountServicePort.listEntitledDomains("host-corp")).thenReturn(List.of("ecommerce"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.getClaims()).doesNotContainKey("entitled_domains");
+        // roles are still emitted verbatim (the gateway 403s anyway — no entitled domain).
+        assertThat(built.<List<String>>getClaim("roles")).containsExactly("OUTBOUND_WRITE");
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("host-corp");
+    }
+
+    @Test
+    @DisplayName("BE-478 cross-org: delegated roles empty → roles claim omitted (capped to nothing)")
+    void assumeTenant_crossOrg_emptyRoles_omitsRolesClaim() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        OperatorAssignmentPort.DelegatedScope delegated =
+                new OperatorAssignmentPort.DelegatedScope(List.of("wms"), List.of());
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrantCrossOrg("host-corp", "B2B_ENTERPRISE", null, delegated));
+        when(accountServicePort.listEntitledDomains("host-corp")).thenReturn(List.of("wms"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.<List<String>>getClaim("entitled_domains")).containsExactly("wms");
+        // no delegated role → roles omitted → the gateway 403s (least-privilege).
+        assertThat(built.getClaims()).doesNotContainKey("roles");
+    }
+
+    @Test
+    @DisplayName("BE-478 cross-org (AC-5): the roles claim carries only domain-operating roles — never an admin role; no admin-scope claim exists")
+    void assumeTenant_crossOrg_neverEmitsAdminRoleOrAdminScope() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+
+        // The admin-service strips admin roles at invite time (ScopeSet.containsAdminRole
+        // → 422); the delegated roles reaching auth-service are domain-operating only.
+        OperatorAssignmentPort.DelegatedScope delegated =
+                new OperatorAssignmentPort.DelegatedScope(
+                        List.of("wms"), List.of("WMS_OPERATOR", "OUTBOUND_WRITE"));
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrantCrossOrg("host-corp", "B2B_ENTERPRISE", null, delegated));
+        when(accountServicePort.listEntitledDomains("host-corp")).thenReturn(List.of("wms"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claimsBuilder.build();
+        assertThat(built.<List<String>>getClaim("roles"))
+                .doesNotContain("SUPER_ADMIN", "TENANT_ADMIN", "TENANT_BILLING_ADMIN");
+        // auth-service never expresses admin scope on any token (the crux invariant:
+        // partnership widens domain-operating reach, never admin scope).
+        assertThat(built.getClaims()).doesNotContainKey("admin_scope");
+        assertThat(built.getClaims()).doesNotContainKey("effective_admin_scope");
     }
 
     // -----------------------------------------------------------------------

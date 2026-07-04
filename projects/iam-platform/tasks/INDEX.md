@@ -85,7 +85,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-478-partnership-assume-tenant-token-cap.md` — **REVIEW (impl 완료, 로컬 검증 green — 브랜치 `be-478-partnership-token-cap`)**. ADR-MONO-045 §3.4 **step 2b** = auth-service 가 admin-service(BE-477)의 additive `delegatedScope {domains,roles}` 를 소비해 **cross-org participant 의 assume-tenant 토큰을 delegated slice 로 confine**. 5파일: `OperatorAssignmentPort.AssignmentResult` 에 nullable `DelegatedScope`(+2-arg back-compat) → `AdminAssignmentClient.doCheck` 가 `delegatedScope` 파싱(부재/null/non-object→null net-zero) → `AssumeTenantAuthenticationToken` 7-arg 로 grant 운반 → provider 스레딩 → **`TenantClaimTokenCustomizer.customizeForAssumeTenant` cross-org 분기**: `delegatedScope!=null` 이면 `entitled_domains = host-ACTIVE ∩ delegated.domains`, `roles = delegated.roles VERBATIM`(재-derive 금지 — derivation 은 slice 초과 확대), `null` 이면 BE-338/376 경로 byte-unchanged(`populateEntitledDomains`→`fetchEntitledDomains` fetch-only 추출로 정상경로 보존). **Load-bearing 불변식**: auth-service 는 admin scope 클레임 미방출 → 구조적 불변(cross-org actor host `admin_operator_roles` 부재→`effectiveAdminScope` 공집합→`/api/admin/**` 403); `delegated.roles` 는 invite-time `containsAdminRole()`→422 로 admin-role-free. 테스트: customizer cap 4(교집합·verbatim·빈교집합 omit·admin-role 부재 AC-5) + client 파싱 4(present/absent/null/missing-arrays) + federation IT cross-org 1(AssumeTenantExchangeIntegrationTest — **기존 IT 클래스에 메서드만 추가=새 @SpringBootTest context 0→BE-477 §34 Hikari 리스크 무관**). **로컬**: auth-service 전체 Docker-free `:test` GREEN(회귀 0), IT 컴파일 green(Testcontainers 레인=CI 권위). 다음 = **머지**(iam Integration green 확인 후) → step 3(얇은 partner-console UI). 분석/구현=Opus 4.8. [[feedback_spring_boot_diagnostic_patterns]]
 
 ## done
 
