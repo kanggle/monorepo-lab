@@ -1,6 +1,6 @@
 # TASK-BE-475 — add a `status` filter to the accounts search/list endpoint
 
-- **Status**: review
+- **Status**: done
 - **Type**: TASK-BE (iam-platform — admin-service + account-service)
 - **Depends on**: TASK-BE-357 (tenant-scoped account search/list — this threads a new param through the same chain), TASK-BE-231 (the repository `findByTenantIdWithStatusFilter` hook this un-parks)
 - **Consumer follow-up**: TASK-PC-FE-181 (platform-console IAM overview adopts `status=LOCKED` to show a 잠금 현황 count — the demand behind this producer change)
