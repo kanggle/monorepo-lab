@@ -105,6 +105,14 @@ const ServerEnvSchema = z.object({
    *  per-endpoint headers/error owned by IAM `admin-api.md` (authoritative,
    *  consumed only). */
   OPERATORS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** Outbound timeout (ms) for IAM tenant domain-subscription calls
+   *  (TASK-PC-FE-183 / integration-heavy I1 — same convention as
+   *  OPERATORS_TIMEOUT_MS). The subscribe POST + status PATCH hang off
+   *  `${IAM_ADMIN_API_BASE}/api/admin/subscriptions...` — admin-service gates
+   *  `subscription.manage` + delegates to account-service (BE-343 /
+   *  ADR-MONO-023); request/response/error owned by IAM `admin-api.md`
+   *  (authoritative, consumed only). */
+  SUBSCRIPTIONS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** wms `admin-service` base for the operations surface (TASK-PC-FE-007 /
    *  § 2.4.5). The dashboard read-model + alert-ack endpoints hang off
    *  `${WMS_ADMIN_BASE_URL}/dashboard/...` (+ `/operations/...`) —
@@ -264,6 +272,7 @@ export function getServerEnv(): ServerEnv {
     ACCOUNTS_TIMEOUT_MS: process.env.ACCOUNTS_TIMEOUT_MS,
     AUDIT_TIMEOUT_MS: process.env.AUDIT_TIMEOUT_MS,
     OPERATORS_TIMEOUT_MS: process.env.OPERATORS_TIMEOUT_MS,
+    SUBSCRIPTIONS_TIMEOUT_MS: process.env.SUBSCRIPTIONS_TIMEOUT_MS,
     WMS_ADMIN_BASE_URL: process.env.WMS_ADMIN_BASE_URL,
     WMS_TIMEOUT_MS: process.env.WMS_TIMEOUT_MS,
     WMS_OUTBOUND_BASE_URL: process.env.WMS_OUTBOUND_BASE_URL,
