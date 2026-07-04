@@ -1,6 +1,6 @@
 # TASK-BE-473 — Enforce password complexity (8자 + 3종) at signup, per spec
 
-- **Status**: ready
+- **Status**: review
 - **Project**: iam-platform
 - **Service**: account-service (signup boundary) — follow-up to TASK-BE-472
 - **Type**: bug fix (spec-vs-code gap: under-enforcement)

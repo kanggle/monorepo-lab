@@ -1,6 +1,6 @@
 # TASK-BE-472 — Signup error message misattributes an invalid-email 400 to the password
 
-- **Status**: ready
+- **Status**: review
 - **Project**: iam-platform
 - **Service**: auth-service (SAS browser signup surface)
 - **Type**: bug fix
