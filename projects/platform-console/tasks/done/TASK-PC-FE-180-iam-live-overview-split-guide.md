@@ -1,6 +1,6 @@
 # TASK-PC-FE-180 — split IAM 개요 into a live **overview snapshot** + a dedicated **가이드**
 
-- **Status**: review
+- **Status**: done
 - **Type**: TASK-PC-FE (console-web)
 - **Depends on**: TASK-PC-FE-163 (the current static IAM guide at `/iam` — this task relocates it), TASK-PC-FE-156 (ecommerce overview-snapshot pattern this mirrors)
 - **Analysis model**: Opus 4.8 · **Impl model recommendation**: Sonnet (verified overview-snapshot pattern replication + IAM-specific edges)
