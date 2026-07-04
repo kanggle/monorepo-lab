@@ -1,6 +1,6 @@
 # TASK-PC-FE-181 — IAM overview 계정 카드에 잠금 현황(LOCKED) 카운트 추가
 
-- **Status**: review
+- **Status**: done
 - **Type**: TASK-PC-FE (console-web)
 - **Depends on**: **TASK-BE-475** (producer `status` filter on `GET /api/admin/accounts` — MUST merge + deploy before this) · TASK-PC-FE-180 (the live IAM overview this extends)
 - **Analysis model**: Opus 4.8 · **Impl model recommendation**: Sonnet (mirrors the existing operators ACTIVE/SUSPENDED split-leg pattern)
