@@ -38,6 +38,21 @@ public final class Permission {
      * via this key). The grant-menu admission rule lands in step 2b.
      */
     public static final String TENANT_ADMIN_DELEGATE = "tenant.admin.delegate";
+    /**
+     * TASK-BE-477 (ADR-MONO-045 D2/D4): cross-org partnership management authority.
+     * Held by the {@code TENANT_ADMIN} role only — a tenant-admin carrying this
+     * permission may (a) as host, invite/terminate a partner; (b) as partner, accept;
+     * (c) as partner, assign/remove its own operators as participants — all confined
+     * by the D2 {@code TenantScopeGuard} to partnerships where the acting-side tenant
+     * is a party. NOT held by SUPER_ADMIN (a partnership is a relationship between two
+     * real customer tenants; the platform is not a party — the D2-C broker gate is
+     * deferred, mirroring {@code tenant.admin.delegate} ❌ on SUPER_ADMIN). This key
+     * gates only the partnership MANAGEMENT surface; the cross-org DERIVED
+     * domain-operating authority a partner operator gains in the host is capped by a
+     * separate axis ({@code delegated_scope ∩ participant ∩ host-holds}) and never
+     * widens admin scope.
+     */
+    public static final String PARTNERSHIP_MANAGE = "partnership.manage";
 
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";

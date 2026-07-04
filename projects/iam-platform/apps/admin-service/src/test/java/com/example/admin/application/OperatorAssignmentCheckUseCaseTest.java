@@ -2,6 +2,7 @@ package com.example.admin.application;
 
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
+import com.example.admin.application.port.TenantPartnershipPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,12 @@ class OperatorAssignmentCheckUseCaseTest {
     @Mock
     private OperatorTenantAssignmentPort assignmentPort;
 
+    // TASK-BE-477 (ADR-MONO-045): the cross-org partnership branch is exercised only
+    // when the normal effective scope misses; findActivePartnership returns null
+    // (mock default) so these BE-327/338 tests keep their byte-identical verdicts.
+    @Mock
+    private TenantPartnershipPort partnershipPort;
+
     private OperatorAssignmentCheckUseCase useCase;
 
     @BeforeEach
@@ -57,7 +64,8 @@ class OperatorAssignmentCheckUseCaseTest {
         // mock operatorPort) so the dual-key fallback is tested end-to-end through
         // the SAME component the login-time exchange uses — not a stubbed-away mock.
         OperatorOidcSubjectResolver resolver = new OperatorOidcSubjectResolver(operatorPort);
-        useCase = new OperatorAssignmentCheckUseCase(tenantScopeResolver, assignmentPort, resolver);
+        useCase = new OperatorAssignmentCheckUseCase(tenantScopeResolver, assignmentPort, resolver,
+                partnershipPort, new UnboundedHostEntitledScopeResolver());
     }
 
     private AdminOperatorPort.OperatorView operator(String tenantId, String status, long internalId) {

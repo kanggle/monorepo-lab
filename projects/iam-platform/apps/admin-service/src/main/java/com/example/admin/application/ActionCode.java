@@ -69,5 +69,15 @@ public enum ActionCode {
     // identity resolve); UNLINK clears it (reversibility). Idempotent re-link to the
     // same identity is a no-op SUCCESS and still audited.
     OPERATOR_IDENTITY_LINK,
-    OPERATOR_IDENTITY_UNLINK
+    OPERATOR_IDENTITY_UNLINK,
+    // TASK-BE-477 (ADR-MONO-045 D2/D4): cross-org partnership lifecycle + participant
+    // management. target_type=PARTNERSHIP, target_id=<partnershipId> (participant_*
+    // rows carry target_id=<operatorId>), permission_used=partnership.manage.
+    PARTNERSHIP_INVITE,
+    PARTNERSHIP_ACCEPT,
+    PARTNERSHIP_SUSPEND,
+    PARTNERSHIP_REACTIVATE,
+    PARTNERSHIP_TERMINATE,
+    PARTNERSHIP_PARTICIPANT_ADD,
+    PARTNERSHIP_PARTICIPANT_REMOVE
 }

@@ -72,6 +72,17 @@ public class AdminActionPermissionRegistry {
         // TASK-BE-373 (ADR-MONO-034 U3) — operator↔identity link/unlink
         map.put(ActionCode.OPERATOR_IDENTITY_LINK, "OPERATOR");
         map.put(ActionCode.OPERATOR_IDENTITY_UNLINK, "OPERATOR");
+        // TASK-BE-477 (ADR-MONO-045) — cross-org partnership lifecycle + participants.
+        // The relationship itself targets PARTNERSHIP; participant mutations still
+        // record target_type=PARTNERSHIP (the relationship is the audit subject) with
+        // target_id=<operatorId> supplied by the use-case.
+        map.put(ActionCode.PARTNERSHIP_INVITE, "PARTNERSHIP");
+        map.put(ActionCode.PARTNERSHIP_ACCEPT, "PARTNERSHIP");
+        map.put(ActionCode.PARTNERSHIP_SUSPEND, "PARTNERSHIP");
+        map.put(ActionCode.PARTNERSHIP_REACTIVATE, "PARTNERSHIP");
+        map.put(ActionCode.PARTNERSHIP_TERMINATE, "PARTNERSHIP");
+        map.put(ActionCode.PARTNERSHIP_PARTICIPANT_ADD, "PARTNERSHIP");
+        map.put(ActionCode.PARTNERSHIP_PARTICIPANT_REMOVE, "PARTNERSHIP");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -135,6 +146,12 @@ public class AdminActionPermissionRegistry {
             case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE -> Permission.TENANT_MANAGE;
             // TASK-BE-343 (ADR-MONO-023 D3) — subscription lifecycle management
             case SUBSCRIPTION_SUBSCRIBE, SUBSCRIPTION_CHANGE_STATUS -> Permission.SUBSCRIPTION_MANAGE;
+            // TASK-BE-477 (ADR-MONO-045 D2/D4) — all cross-org partnership mutations
+            // gate on the same permission key.
+            case PARTNERSHIP_INVITE, PARTNERSHIP_ACCEPT, PARTNERSHIP_SUSPEND,
+                 PARTNERSHIP_REACTIVATE, PARTNERSHIP_TERMINATE,
+                 PARTNERSHIP_PARTICIPANT_ADD, PARTNERSHIP_PARTICIPANT_REMOVE
+                    -> Permission.PARTNERSHIP_MANAGE;
             // TASK-BE-306 — self-serve operator profile mutation (no grantable permission;
             // synthetic <self_action> sentinel for symmetry with reason="<self_profile_update>").
             case OPERATOR_PROFILE_UPDATE -> AdminActionAuditor.PERMISSION_SELF_ACTION;

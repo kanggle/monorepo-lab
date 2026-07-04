@@ -87,6 +87,20 @@ class AdminOutboxPublisherTest {
     }
 
     @Test
+    @DisplayName("topicFor ALSO covers the PartnershipEventPublisher event types (partnership.*)")
+    void topicFor_partnershipEvents() {
+        assertThat(AdminOutboxPublisher.topicFor("partnership.invited")).isEqualTo("partnership.invited");
+        assertThat(AdminOutboxPublisher.topicFor("partnership.accepted")).isEqualTo("partnership.accepted");
+        assertThat(AdminOutboxPublisher.topicFor("partnership.suspended")).isEqualTo("partnership.suspended");
+        assertThat(AdminOutboxPublisher.topicFor("partnership.reactivated")).isEqualTo("partnership.reactivated");
+        assertThat(AdminOutboxPublisher.topicFor("partnership.terminated")).isEqualTo("partnership.terminated");
+        assertThat(AdminOutboxPublisher.topicFor("partnership.participant_added"))
+                .isEqualTo("partnership.participant_added");
+        assertThat(AdminOutboxPublisher.topicFor("partnership.participant_removed"))
+                .isEqualTo("partnership.participant_removed");
+    }
+
+    @Test
     @DisplayName("topicFor rejects an unknown event type")
     void topicFor_unknown_throws() {
         assertThatThrownBy(() -> AdminOutboxPublisher.topicFor("unknown.event"))

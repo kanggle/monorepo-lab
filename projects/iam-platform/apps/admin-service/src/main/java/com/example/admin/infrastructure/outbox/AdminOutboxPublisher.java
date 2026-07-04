@@ -45,6 +45,14 @@ public class AdminOutboxPublisher extends AbstractOutboxPublisher<AdminOutboxJpa
     static final String TOPIC_TENANT_SUSPENDED = "tenant.suspended";
     static final String TOPIC_TENANT_REACTIVATED = "tenant.reactivated";
     static final String TOPIC_TENANT_UPDATED = "tenant.updated";
+    // TASK-BE-477 (ADR-MONO-045) — cross-org partnership lifecycle (bare iam topics).
+    static final String TOPIC_PARTNERSHIP_INVITED = "partnership.invited";
+    static final String TOPIC_PARTNERSHIP_ACCEPTED = "partnership.accepted";
+    static final String TOPIC_PARTNERSHIP_SUSPENDED = "partnership.suspended";
+    static final String TOPIC_PARTNERSHIP_REACTIVATED = "partnership.reactivated";
+    static final String TOPIC_PARTNERSHIP_TERMINATED = "partnership.terminated";
+    static final String TOPIC_PARTNERSHIP_PARTICIPANT_ADDED = "partnership.participant_added";
+    static final String TOPIC_PARTNERSHIP_PARTICIPANT_REMOVED = "partnership.participant_removed";
 
     public AdminOutboxPublisher(AdminOutboxJpaRepository repository,
                                 KafkaTemplate<String, String> kafkaTemplate,
@@ -98,6 +106,16 @@ public class AdminOutboxPublisher extends AbstractOutboxPublisher<AdminOutboxJpa
             case "tenant.suspended" -> TOPIC_TENANT_SUSPENDED;
             case "tenant.reactivated" -> TOPIC_TENANT_REACTIVATED;
             case "tenant.updated" -> TOPIC_TENANT_UPDATED;
+            // TASK-BE-477 (ADR-MONO-045) — the 7 partnership.* lifecycle types. An
+            // unmapped type would throw at publish (invisible to Docker-free :check),
+            // so all 7 MUST be present (caught by the cross-org-leak IT / relay test).
+            case "partnership.invited" -> TOPIC_PARTNERSHIP_INVITED;
+            case "partnership.accepted" -> TOPIC_PARTNERSHIP_ACCEPTED;
+            case "partnership.suspended" -> TOPIC_PARTNERSHIP_SUSPENDED;
+            case "partnership.reactivated" -> TOPIC_PARTNERSHIP_REACTIVATED;
+            case "partnership.terminated" -> TOPIC_PARTNERSHIP_TERMINATED;
+            case "partnership.participant_added" -> TOPIC_PARTNERSHIP_PARTICIPANT_ADDED;
+            case "partnership.participant_removed" -> TOPIC_PARTNERSHIP_PARTICIPANT_REMOVED;
             default -> throw new IllegalArgumentException("Unknown admin event type: " + eventType);
         };
     }

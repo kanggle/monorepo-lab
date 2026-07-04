@@ -1,6 +1,7 @@
 package com.example.admin.presentation.internal;
 
 import com.example.admin.application.OperatorAssignmentCheckUseCase;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -67,14 +68,34 @@ public class OperatorAssignmentCheckController {
             @RequestParam String tenantId) {
         OperatorAssignmentCheckUseCase.Result result =
                 checkUseCase.check(oidcSubject, tenantId);
-        return ResponseEntity.ok(new AssignmentCheckResponse(result.assigned(), result.orgScope()));
+        return ResponseEntity.ok(new AssignmentCheckResponse(
+                result.assigned(), result.orgScope(), DelegatedScopeDto.from(result.delegatedScope())));
     }
 
     /**
-     * {@code {"assigned": true|false, "orgScope": [...]|null}} — TASK-BE-327
-     * assignment-check response, extended ADDITIVELY by TASK-BE-338 with the
-     * selected assignment's {@code orgScope} ({@code null} ⟺ {@code ["*"]}
-     * net-zero).
+     * {@code {"assigned": true|false, "orgScope": [...]|null, "delegatedScope":
+     * {domains,roles}|absent}} — TASK-BE-327 assignment-check response, extended
+     * ADDITIVELY by TASK-BE-338 ({@code orgScope}) and TASK-BE-477
+     * ({@code delegatedScope}, ADR-MONO-045 D3/D5). Both additive fields are
+     * {@code @JsonInclude(NON_NULL)} so they are OMITTED when null (not rendered as
+     * {@code null}): {@code orgScope} absent ⟺ {@code ["*"]} net-zero;
+     * {@code delegatedScope} absent ⟺ the assignment is NOT partnership-derived (the
+     * existing {@code {assigned, orgScope}} shape is byte-unchanged for normal
+     * assignments). auth-service (step 2b) consumes {@code delegatedScope} to cap the
+     * assume-tenant token's entitled domains/roles for cross-org host reach.
      */
-    public record AssignmentCheckResponse(boolean assigned, List<String> orgScope) {}
+    public record AssignmentCheckResponse(
+            boolean assigned,
+            List<String> orgScope,
+            // Field-level NON_NULL so the delegatedScope block is OMITTED for
+            // non-partnership assignments — WITHOUT altering the existing orgScope
+            // serialization (which relies on the profile-level inclusion config).
+            @JsonInclude(JsonInclude.Include.NON_NULL) DelegatedScopeDto delegatedScope) {}
+
+    /** The additive cross-org {@code {domains, roles}} confinement block. */
+    public record DelegatedScopeDto(List<String> domains, List<String> roles) {
+        static DelegatedScopeDto from(OperatorAssignmentCheckUseCase.DelegatedScope d) {
+            return d == null ? null : new DelegatedScopeDto(d.domains(), d.roles());
+        }
+    }
 }
