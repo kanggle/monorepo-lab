@@ -2,6 +2,23 @@ spring:
   application:
     name: admin-service
 
+  # TASK-BE-477: cap the per-context connection pool for the integration-test suite.
+  # Each cached @SpringBootTest context owns its own Hikari pool; with the Hikari
+  # default (maximum-pool-size=10, minimum-idle=max) the ~15 admin-service ITs
+  # eagerly hold ~150 idle connections — right at MySQL 8.0's default
+  # max_connections (151). Adding one more full-boot IT context (the partnership
+  # cross-org-leak IT) tipped the suite into intermittent "Too many connections"
+  # context-load failures (observed on CI Linux, PR #2228). minimum-idle=1 lets
+  # idle cached contexts release connections; maximum-pool-size=5 is ample for a
+  # single-threaded MockMvc IT + the outbox relay + a REQUIRES_NEW audit write.
+  # The datasource url/credentials are injected by AbstractIntegrationTest's
+  # @DynamicPropertySource (Testcontainers); only the pool sizing is set here.
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 10000
+
   jpa:
     hibernate:
       ddl-auto: validate

@@ -109,14 +109,17 @@ class TenantAdminRoleSeedIntegrationTest extends AbstractIntegrationTest {
     JdbcTemplate jdbcTemplate;
 
     @Test
-    @DisplayName("seed: TENANT_ADMIN → {operator.manage, tenant.admin.delegate}; TENANT_BILLING_ADMIN → {subscription.manage}")
+    @DisplayName("seed: TENANT_ADMIN → {operator.manage, tenant.admin.delegate, partnership.manage}; TENANT_BILLING_ADMIN → {subscription.manage}")
     void rolesSeededWithExactPermissions() {
         List<String> tenantAdminPerms = jdbcTemplate.queryForList("""
                 SELECT p.permission_key FROM admin_role_permissions p
                 JOIN admin_roles r ON r.id = p.role_id
                 WHERE r.name = 'TENANT_ADMIN' ORDER BY p.permission_key
                 """, String.class);
-        assertThat(tenantAdminPerms).containsExactlyInAnyOrder("operator.manage", "tenant.admin.delegate");
+        // partnership.manage added by TASK-BE-477 / ADR-MONO-045 V0040 (cross-org
+        // partnership management surface — TENANT_ADMIN-only, like tenant.admin.delegate).
+        assertThat(tenantAdminPerms)
+                .containsExactlyInAnyOrder("operator.manage", "tenant.admin.delegate", "partnership.manage");
 
         List<String> billingPerms = jdbcTemplate.queryForList("""
                 SELECT p.permission_key FROM admin_role_permissions p
