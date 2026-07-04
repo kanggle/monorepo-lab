@@ -143,7 +143,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
-(empty)
+- `TASK-MONO-324-local-bringup-sequence-docs.md` — **READY**. Give "bring up a domain-service stack locally so all its resources are operable" a written home. WI-1: add `### Local bring-up sequence` to `TEMPLATE.md § Local Network Convention` (master) — 6-step order (hosts → `traefik:up` → `iam:up` [consumers] → `<project>:up` → verify) + 8-row per-project matrix (up/down · hostname · IAM-first) + greenfield step. WI-2: create/fill `docs/onboarding/local-dev.md` for all 8 projects (thin, links to master, `docker-compose.yml` stays inventory SoT). Surfaces the buried invariant "consumer gateway fails fast unless `iam.local` is up first". Monorepo-level (shared `TEMPLATE.md` + cross-project docs, atomic PR). Docs-only. 분석=Opus 4.8 / 구현 권장=Sonnet (단순 docs).
 
 ## in-progress
 
