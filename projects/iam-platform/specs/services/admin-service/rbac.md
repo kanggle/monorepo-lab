@@ -242,6 +242,19 @@ function requireTenantInScope(actor, permission, targetTenantId, actionCode):
 
 대상 표면: `POST /api/admin/operators`, `PATCH .../operators/{id}/roles`, `PATCH .../operators/{id}/status`, `PUT .../operators/{id}/assignments/{tenantId}/org-scope`, `POST .../operators/{id}/assignments/{tenantId}` (assign, step 2b), `DELETE .../operators/{id}/assignments/{tenantId}` (unassign, step 2b), `POST /api/admin/subscriptions`, `PATCH /api/admin/subscriptions/{tenantId}/{domainKey}/status`.
 
+### Account-Data Mutation Confinement (TASK-BE-467)
+
+위 D2 `TenantScopeGuard` 가 **administration 표면**(operator/assignment/subscription 관리)을 confine 하는 것과 **별개의 축**으로, **account 데이터 표면의 변이**(`POST /api/admin/accounts/{id}/{lock\|unlock}`, `bulk-lock`, gdpr-delete, export)는 **읽기 경로와 동일한 게이트**로 confine 된다. 읽기(`GET /api/admin/accounts`)가 이미 `QueryTenantScopeGate`(TASK-BE-357)로 활성 테넌트에 confine 되므로, 변이도 같은 게이트로 parity 를 맞춘다(TASK-BE-467 — 이전에는 account-service 가 `TenantId.FAN_PLATFORM` 리터럴에 하드핀되어 비-FAN 계정은 목록엔 보이나 변이는 실패했다).
+
+- **게이트 = `QueryTenantScopeGate`** (D2 `TenantScopeGuard` 가 **아님**): 각 변이 컨트롤러가 `X-Tenant-Id`(활성 테넌트)를 읽어 `queryTenantScopeGate.resolve(op, header, <ActionCode>, <Permission>)` 로 해소·검증한다. 생략 → 운영자 자신의 테넌트. out-of-scope → **403 `TENANT_SCOPE_DENIED`** + best-effort DENIED row (목록 읽기와 동일).
+- 해소된 테넌트는 `X-Tenant-Id` 로 account-service 에 스탬프된다(admin `AccountServiceClient` 의 mutation 호출이 `tenantId` 헤더 운반). account-service 의 admin-reachable 변이 use-case(`AccountStatusUseCase`/`GdprDeleteUseCase`/`DataExportUseCase`)는 `findById(TenantId.of(header), id)` 로 조회한다.
+- **cross-tenant 대상 → `404 ACCOUNT_NOT_FOUND`** (enumeration-safe): tenant-scoped `findById` 가 빈 결과 → 기존 not-found 경로. 타 테넌트 존재를 확인해 주는 403 이 아니다. 새 cross-tenant finder 를 추가하지 않는다(격리 우회 금지).
+- **NET-ZERO**: SUPER_ADMIN(`'*'`)/헤더 부재 → account-service 는 `fan-platform` 기본값 폴백 = BE-467 이전과 byte-identical. `X-Tenant-Id` 를 실제로 지정하는 현재 유일 경로는 assume-tenant 스위치뿐이라 기존 동작 무변.
+- **bulk-lock**: 배치 진입 시 1회 해소된 테넌트를 모든 per-row `LockAccountCommand` 이 상속 — cross-tenant row 는 해당 row 만 `ACCOUNT_NOT_FOUND` outcome, 배치는 200 유지.
+- **session-revoke** 는 admin-service 가 동일하게 해소·스탬프하나(BE-467 propagation), **실제 enforce 는 auth-service** 가 수행한다(TASK-BE-468) — credential-tenant 게이트로 cross-tenant force-logout 을 **no-op**(`200 count=0`, DB revoke·Redis 무효화 미수행) 처리. 상세: [auth-service/architecture.md](../auth-service/architecture.md) · [admin-api.md](../../contracts/http/admin-api.md#tenant-confinement--x-tenant-id-task-be-467).
+
+> **두 confinement 축 구분.** D2 `TenantScopeGuard` = *operator-administration* 표면(대상 = 관리 대상 operator/assignment/subscription 의 테넌트, 위반 → **403**). BE-467 `QueryTenantScopeGate` = *account-data* 표면(대상 = 계정의 `tenant_id`, 위반 → **404**, 읽기 경로와 동형). 전자는 "누가 어느 테넌트를 관리할 수 있나", 후자는 "이 계정이 활성 테넌트에 속하나".
+
 ### Grant-Menu No-Escalation (ADR-MONO-024 D3, step 2b)
 
 역할을 *부여*하는 표면(`POST /api/admin/operators`, `PATCH .../operators/{id}/roles`)은 target-tenant confinement 에 더해 **grant-menu no-escalation** 규칙을 거친다 ([ADR-MONO-024](../../../../../docs/adr/ADR-MONO-024-tenant-admin-delegation.md) D3, 단일 결정 지점 `RoleGrantGuard`):
