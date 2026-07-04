@@ -189,6 +189,14 @@ const GROUPS: NavGroup[] = [
         testid: 'nav-ecommerce',
         children: [
           { href: '/ecommerce', label: '개요', testid: 'nav-ecommerce-ops' },
+          // 가이드(/ecommerce/guide — TASK-PC-FE-184): 도메인 서비스·주문·배송·
+          // 상품·프로모션·셀러·사용자·알림 정적 참조. IAM·WMS 의 개요→가이드
+          // 순서와 동일하게 개요 다음(상품 앞)에 둔다.
+          {
+            href: '/ecommerce/guide',
+            label: '가이드',
+            testid: 'nav-ecommerce-guide',
+          },
           {
             href: '/ecommerce/products',
             label: '상품',
