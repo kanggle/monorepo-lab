@@ -1,6 +1,6 @@
 # TASK-PC-FE-185 — WMS 재고 스키마: locationCode/skuCode nullable 허용 (degrade 회귀 수정)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **File:** `features/wms-ops/api/types.ts` (`InventoryRowSchema`)
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (Zod 2필드 `.nullable()` + 회귀 테스트, 단순)
 
