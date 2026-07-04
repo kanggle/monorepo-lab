@@ -8,7 +8,7 @@ ADR-MONO-045 §3.4 step 2b — auth-service assume-tenant 토큰에 파트너십
 
 # Status
 
-review
+done
 
 # Owner
 
