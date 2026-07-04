@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.regex.Pattern;
+
 /**
  * TASK-BE-470 / TASK-BE-470-fix-001 — the browser self-service signup surface.
  *
@@ -43,6 +45,17 @@ public class SignupPageController {
 
     private final AccountServicePort accountServicePort;
 
+    /**
+     * TASK-BE-472: mirror account-service's {@code Email} value-object regex
+     * ({@code account.domain.account.Email}) so a malformed email is caught here with a
+     * precise message instead of being proxied and coming back as an opaque 400 that the
+     * {@link SignupInvalidException} branch would otherwise misreport as a password problem.
+     * Kept byte-identical to the backend pattern (ASCII, TLD required) so this pre-check never
+     * rejects an address account-service would accept.
+     */
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+
     @GetMapping("/signup")
     public String signupPage() {
         return "signup";
@@ -68,6 +81,13 @@ public class SignupPageController {
             model.addAttribute("error", "이메일과 패스워드를 입력해 주세요.");
             return "signup";
         }
+        // TASK-BE-472: reject a malformed email here so the user gets an email-specific message.
+        // account-service would 400 on the same address, but that 400 is mapped to
+        // SignupInvalidException below and would otherwise be misreported as a password problem.
+        if (!EMAIL_PATTERN.matcher(normalizedEmail).matches()) {
+            model.addAttribute("error", "이메일 형식이 올바르지 않습니다.");
+            return "signup";
+        }
         if (password.length() < 8) {
             model.addAttribute("error", "패스워드는 8자 이상이어야 합니다.");
             return "signup";
@@ -85,8 +105,12 @@ public class SignupPageController {
             model.addAttribute("error", "이미 가입된 이메일입니다. 로그인해 주세요.");
             return "signup";
         } catch (SignupInvalidException e) {
+            // TASK-BE-472: a 400/422 from account-service can be an email- OR password-format
+            // problem, so name both — do not blame the password alone (the email pre-check above
+            // already caught the common malformed-email case with a precise message).
             model.addAttribute("error",
-                    "입력값을 확인해 주세요. 패스워드는 8자 이상, 대문자·소문자·숫자·특수문자 중 3종 이상이어야 합니다.");
+                    "입력값을 확인해 주세요. 이메일 형식이 올바른지, 그리고 패스워드가 8자 이상이며 "
+                            + "대문자·소문자·숫자·특수문자 중 3종 이상인지 확인해 주세요.");
             return "signup";
         } catch (AccountServiceUnavailableException e) {
             model.addAttribute("error", "잠시 후 다시 시도해 주세요. 인증 서비스가 일시적으로 불가합니다.");

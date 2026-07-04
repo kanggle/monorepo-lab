@@ -6,6 +6,7 @@ import com.example.account.application.exception.AccountAlreadyExistsException;
 import com.example.account.application.port.AuthServicePort;
 import com.example.account.application.result.SignupResult;
 import com.example.account.domain.account.Account;
+import com.example.account.domain.account.PasswordPolicy;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.ProfileRepository;
@@ -37,6 +38,14 @@ public class SignupUseCase {
         if (accountRepository.existsByEmail(tenantId, command.email().trim().toLowerCase())) {
             throw new AccountAlreadyExistsException(command.email());
         }
+
+        // TASK-BE-473 (specs/features/signup.md §User Flow step 5): validate password complexity
+        // at the signup boundary — before the account row is created (step 6) and before any
+        // auth-service round trip. A weak password fails here as 422 VALIDATION_ERROR
+        // (account-api.md) instead of being silently accepted. @Size(min=8) on SignupRequest is
+        // the fast first gate; this adds the 3-of-4-character-class + max-length + email-
+        // containment rules, mirroring auth-service's PasswordPolicy.
+        PasswordPolicy.validate(command.password(), command.email());
 
         try {
             // Create account (Email value object validates and normalizes)

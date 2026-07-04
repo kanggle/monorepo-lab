@@ -1,6 +1,7 @@
 package com.example.auth.presentation;
 
 import com.example.auth.application.exception.SignupEmailConflictException;
+import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.port.AccountServicePort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -9,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.view.InternalResourceViewResolver;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -87,6 +89,39 @@ class SignupPageControllerTest {
                 .andExpect(model().attributeExists("error"));
 
         verify(accountServicePort, never()).signup(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-472: malformed email (valid password) re-renders with an email-specific "
+            + "error and never calls account-service")
+    void signupMalformedEmailReRendersWithEmailError() throws Exception {
+        // A valid password must NOT be blamed when the real fault is the email format.
+        mockMvc.perform(post("/signup")
+                        .param("email", "test@test") // no TLD — rejected by account-service Email regex
+                        .param("password", "test1234!")
+                        .param("confirmPassword", "test1234!"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("signup"))
+                .andExpect(model().attribute("error", containsString("이메일 형식")));
+
+        verify(accountServicePort, never()).signup(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-472: SignupInvalidException from the proxy re-renders a message naming "
+            + "both email and password")
+    void signupInvalidExceptionMessageNamesEmailAndPassword() throws Exception {
+        doThrow(new SignupInvalidException("validation failed"))
+                .when(accountServicePort).signup(any(), any(), any());
+
+        mockMvc.perform(post("/signup")
+                        .param("email", "ok@example.com")
+                        .param("password", "test1234!")
+                        .param("confirmPassword", "test1234!"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("signup"))
+                .andExpect(model().attribute("error", containsString("이메일 형식")))
+                .andExpect(model().attribute("error", containsString("패스워드")));
     }
 
     @Test
