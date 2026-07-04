@@ -135,6 +135,69 @@ class AdminAssignmentClientUnitTest {
         assertThat(result.orgScope()).isNotNull().isEmpty();
     }
 
+    // ── TASK-BE-478 (ADR-MONO-045 step 2b): delegatedScope parsing ──────────────
+
+    @Test
+    @DisplayName("BE-478: delegatedScope 오브젝트 파싱 → domains/roles")
+    void parsesDelegatedScope_populated() {
+        wireMockServer.stubFor(get(urlPathEqualTo(CHECK_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"assigned\":true,\"delegatedScope\":"
+                                + "{\"domains\":[\"wms\"],\"roles\":[\"OUTBOUND_WRITE\",\"OUTBOUND_READ\"]}}")));
+
+        var result = client.resolveAssignment(SUBJECT, TENANT);
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.delegatedScope()).isNotNull();
+        assertThat(result.delegatedScope().domains()).containsExactly("wms");
+        assertThat(result.delegatedScope().roles()).containsExactly("OUTBOUND_WRITE", "OUTBOUND_READ");
+        // a partnership-derived reach carries no per-assignment org_scope.
+        assertThat(result.orgScope()).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-478 net-zero: delegatedScope 부재(정상 assignment/구버전 admin) → null")
+    void parsesDelegatedScope_absent() {
+        stubAssigned(true); // body = {"assigned":true} — no delegatedScope field
+        var result = client.resolveAssignment(SUBJECT, TENANT);
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.delegatedScope()).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-478 graceful: delegatedScope=null → null")
+    void parsesDelegatedScope_null() {
+        wireMockServer.stubFor(get(urlPathEqualTo(CHECK_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"assigned\":true,\"delegatedScope\":null}")));
+
+        var result = client.resolveAssignment(SUBJECT, TENANT);
+
+        assertThat(result.assigned()).isTrue();
+        assertThat(result.delegatedScope()).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-478 defensive: delegatedScope 에 domains/roles 누락 → 빈 리스트(null 아님)")
+    void parsesDelegatedScope_missingArrays() {
+        wireMockServer.stubFor(get(urlPathEqualTo(CHECK_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"assigned\":true,\"delegatedScope\":{}}")));
+
+        var result = client.resolveAssignment(SUBJECT, TENANT);
+
+        assertThat(result.delegatedScope()).isNotNull();
+        assertThat(result.delegatedScope().domains()).isEmpty();
+        assertThat(result.delegatedScope().roles()).isEmpty();
+    }
+
     @Test
     @DisplayName("Authorization: Bearer JWT 첨부 + query 파라미터 전달")
     void attachesBearerAndParams() {

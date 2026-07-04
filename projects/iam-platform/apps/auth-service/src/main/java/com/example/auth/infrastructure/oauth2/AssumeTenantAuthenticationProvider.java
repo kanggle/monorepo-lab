@@ -129,6 +129,7 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // (subtree-root ids; null ⟺ ["*"] net-zero) which rides onto the resolved
         // grant for the customizer to inject.
         java.util.List<String> orgScope;
+        OperatorAssignmentPort.DelegatedScope delegatedScope;
         try {
             // TASK-MONO-299 (ADR-MONO-040 Phase 3 part B): account_id-only — the
             // validated `sub` IS the account UUID and admin_operators.oidc_subject is
@@ -136,6 +137,12 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
             OperatorAssignmentPort.AssignmentResult assignment =
                     operatorAssignmentPort.resolveAssignment(oidcSubject, selectedTenantId);
             orgScope = assignment.orgScope();
+            // TASK-BE-478 (ADR-MONO-045 §3.4 step 2b): the additive cross-org
+            // partnership cap (non-null ONLY for partnership-derived host reach) rides
+            // onto the resolved grant so the customizer confines the token's
+            // entitled_domains/roles to the delegated slice. null for a normal
+            // assignment → the BE-338/376 path stays byte-unchanged.
+            delegatedScope = assignment.delegatedScope();
         } catch (AssumeTenantDeniedException e) {
             log.debug("assume-tenant: assignment gate denied (fail-closed): {}", e.getMessage());
             throw invalidGrant("operator is not assigned to the selected tenant");
@@ -156,9 +163,12 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // (OperatorRoleDerivation), reusing the existing entitled_domains fetch (no
         // extra account-service call). org_scope (BE-338) plumbing is unchanged.
         // TASK-MONO-263 (ADR-032 D5 step 4): account_type is no longer carried.
+        // TASK-BE-478 (ADR-MONO-045 §3.4 step 2b): also carry the resolved cross-org
+        // delegatedScope cap (null for a normal assignment) so the customizer's
+        // assume-tenant branch confines entitled_domains/roles to the delegated slice.
         AssumeTenantAuthenticationToken resolvedGrant = new AssumeTenantAuthenticationToken(
                 clientPrincipal, exchange.getSubjectToken(), exchange.getSubjectTokenType(),
-                selectedTenantId, CUSTOMER_TENANT_TYPE, orgScope);
+                selectedTenantId, CUSTOMER_TENANT_TYPE, orgScope, delegatedScope);
 
         // TASK-BE-336: propagate the client's REGISTERED scopes into the
         // domain-facing token's `scope` claim (was Set.of() — empty). This is

@@ -55,13 +55,52 @@ public interface OperatorAssignmentPort {
     /**
      * TASK-BE-338 — the confirmed assignment + its per-assignment data-scope.
      *
-     * @param assigned always {@code true} when returned (a non-assignment is a
-     *                 thrown {@link com.example.auth.application.exception.AssumeTenantDeniedException},
-     *                 never a {@code false} result)
-     * @param orgScope the selected assignment's {@code org_scope} (department
-     *                 subtree-root ids), or {@code null} when unset / absent —
-     *                 the customizer maps {@code null}/empty/absent → {@code ["*"]}
-     *                 (net-zero). An explicit non-empty list is carried verbatim.
+     * <p>TASK-BE-478 (ADR-MONO-045 §3.4 step 2b) — additionally carries the
+     * additive {@link DelegatedScope} cross-org confinement block when (and ONLY
+     * when) the assignment is <b>partnership-derived host reach</b>. {@code null}
+     * for every normal assignment (byte-identical to the BE-338 two-field shape).
+     *
+     * @param assigned       always {@code true} when returned (a non-assignment is a
+     *                       thrown {@link com.example.auth.application.exception.AssumeTenantDeniedException},
+     *                       never a {@code false} result)
+     * @param orgScope       the selected assignment's {@code org_scope} (department
+     *                       subtree-root ids), or {@code null} when unset / absent —
+     *                       the customizer maps {@code null}/empty/absent → {@code ["*"]}
+     *                       (net-zero). An explicit non-empty list is carried verbatim.
+     * @param delegatedScope the cross-org partnership cap ({@code delegated ∩
+     *                       participant ∩ host-holds}, computed by admin-service), or
+     *                       {@code null} for a normal (non-partnership) assignment. When
+     *                       non-null the customizer caps the token's
+     *                       {@code entitled_domains} to {@code host ∩ domains} and sets
+     *                       {@code roles} to the delegated {@code roles} verbatim (never
+     *                       re-deriving from the entitled domains).
      */
-    record AssignmentResult(boolean assigned, List<String> orgScope) {}
+    record AssignmentResult(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope) {
+
+        /**
+         * Back-compat convenience for a normal (non-partnership) assignment — a
+         * two-field result with no cross-org cap.
+         */
+        public AssignmentResult(boolean assigned, List<String> orgScope) {
+            this(assigned, orgScope, null);
+        }
+    }
+
+    /**
+     * TASK-BE-478 (ADR-MONO-045 §3.4 step 2b) — the additive cross-org confinement
+     * block from the admin-service assignment-check ({@code delegatedScope} JSON): the
+     * capped {@code {domains, roles}} a partnership-derived host tenant grants the
+     * operator ({@code delegated_scope ∩ participant_scope ∩ host-holds}, computed by
+     * admin-service). Present ONLY for partnership-derived host reach. The auth-service
+     * customizer intersects the assume-tenant token's {@code entitled_domains} with
+     * {@code domains} and sets {@code roles} to {@code roles} verbatim — admin scope is
+     * never widened (the cross-org actor holds no {@code admin_operator_roles} in the
+     * host, and {@code roles} is admin-role-free by the invite-time cap).
+     *
+     * @param domains the delegated (capped) domain keys; may be empty (→ the token
+     *                carries no entitled domain → the domain gateway 403s)
+     * @param roles   the delegated (capped) operator-role names; admin-role-free by
+     *                construction (invite-time {@code ScopeSet.containsAdminRole} → 422)
+     */
+    record DelegatedScope(List<String> domains, List<String> roles) {}
 }

@@ -243,6 +243,43 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("BE-478 cross-org: partnership-derived reach → assumed token entitled_domains=host∩delegated, roles=delegated VERBATIM (AC-7)")
+    void crossOrgPartnershipCap_capsEntitledAndUsesDelegatedRolesVerbatim() throws Exception {
+        // The operator is a participant of a PARTNER tenant assuming the HOST tenant
+        // (acme-corp). admin-service returned the additive delegatedScope cap
+        // (delegated ∩ participant ∩ host-holds) instead of a normal orgScope.
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(
+                        true, null,
+                        new OperatorAssignmentPort.DelegatedScope(
+                                java.util.List.of("wms"),
+                                java.util.List.of("OUTBOUND_WRITE", "OUTBOUND_READ"))));
+        // host A is entitled to wms + ecommerce → intersection with delegated [wms] = [wms].
+        stubEntitledDomains("wms", "ecommerce");
+
+        String base = mintBaseToken("assume-partner-op-001");
+        MvcResult result = assumeTenant(base, SELECTED_TENANT);
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode assumed = decodeJwtPayload(
+                objectMapper.readTree(result.getResponse().getContentAsString())
+                        .get("access_token").asText());
+
+        assertThat(assumed.get("tenant_id").asText()).isEqualTo(SELECTED_TENANT);
+        // entitled_domains capped to host ∩ delegated (ecommerce dropped — not delegated).
+        assertThat(assumed.get("entitled_domains").toString())
+                .contains("wms").doesNotContain("ecommerce");
+        // roles = delegated VERBATIM — a strict subset of what OperatorRoleDerivation("wms")
+        // would emit (WMS_OPERATOR + the full granular set), proving no re-derivation.
+        assertThat(assumed.get("roles").toString())
+                .contains("OUTBOUND_WRITE").contains("OUTBOUND_READ")
+                .doesNotContain("WMS_OPERATOR").doesNotContain("INVENTORY_WRITE");
+        // the crux invariant: no admin role rides on the cross-org token.
+        assertThat(assumed.get("roles").toString())
+                .doesNotContain("SUPER_ADMIN").doesNotContain("TENANT_ADMIN");
+    }
+
+    @Test
     @DisplayName("denied: assignment-denied → no token, invalid_grant (AC-2)")
     void deniedPath() throws Exception {
         when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))

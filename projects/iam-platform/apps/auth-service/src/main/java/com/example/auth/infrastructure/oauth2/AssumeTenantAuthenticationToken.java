@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.application.port.OperatorAssignmentPort.DelegatedScope;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
@@ -26,6 +27,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
     private final String selectedTenantId;
     private final String selectedTenantType;
     private final List<String> orgScope;
+    private final DelegatedScope delegatedScope;
 
     /**
      * Converter-side constructor — the selected tenant_type is not yet known at
@@ -68,6 +70,25 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
                                            String selectedTenantId,
                                            String selectedTenantType,
                                            List<String> orgScope) {
+        this(clientPrincipal, subjectToken, subjectTokenType, selectedTenantId,
+                selectedTenantType, orgScope, null);
+    }
+
+    /**
+     * Provider-side constructor (TASK-BE-478, ADR-MONO-045 §3.4 step 2b) —
+     * additionally carries the resolved cross-org {@code delegatedScope} cap
+     * ({@code delegated ∩ participant ∩ host-holds}) when the assume is
+     * partnership-derived host reach. Rides the same {@code getAuthorizationGrant()}
+     * copy path as {@code orgScope}. {@code null} for a normal (non-partnership)
+     * assignment — the customizer then keeps the BE-338/376 path byte-unchanged.
+     */
+    public AssumeTenantAuthenticationToken(Authentication clientPrincipal,
+                                           String subjectToken,
+                                           String subjectTokenType,
+                                           String selectedTenantId,
+                                           String selectedTenantType,
+                                           List<String> orgScope,
+                                           DelegatedScope delegatedScope) {
         super(Collections.emptyList());
         this.clientPrincipal = clientPrincipal;
         this.subjectToken = subjectToken;
@@ -75,6 +96,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
         this.selectedTenantId = selectedTenantId;
         this.selectedTenantType = selectedTenantType;
         this.orgScope = orgScope;
+        this.delegatedScope = delegatedScope;
         setAuthenticated(false);
     }
 
@@ -118,5 +140,18 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
      */
     public List<String> getOrgScope() {
         return orgScope;
+    }
+
+    /**
+     * TASK-BE-478 (ADR-MONO-045 §3.4 step 2b) — the resolved cross-org
+     * {@code delegatedScope} cap ({@code delegated ∩ participant ∩ host-holds}),
+     * carried from the admin-service assignment-check result so the customizer's
+     * assume-tenant branch confines the token's {@code entitled_domains}/{@code roles}
+     * to the delegated slice. {@code null} for a normal (non-partnership) assignment —
+     * the BE-338/376 path stays byte-unchanged. Null on the converter-side token
+     * (resolved by the provider).
+     */
+    public DelegatedScope getDelegatedScope() {
+        return delegatedScope;
     }
 }

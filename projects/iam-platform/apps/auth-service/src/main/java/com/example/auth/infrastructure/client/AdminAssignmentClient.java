@@ -166,7 +166,14 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
         // null (the customizer defaults null → ["*"], net-zero). An older admin
         // that omits the field is handled gracefully (null). Non-string elements
         // are skipped (defensive; admin sends a string array).
-        return new AssignmentResult(isAssigned, parseOrgScope(body.get("orgScope")));
+        // TASK-BE-478 (ADR-MONO-045 step 2b): parse the additive delegatedScope
+        // object (partnership-derived host reach only). Absent/null/non-object →
+        // null (net-zero — a normal assignment or an older admin). The customizer's
+        // assume-tenant branch caps the token when this is non-null.
+        return new AssignmentResult(
+                isAssigned,
+                parseOrgScope(body.get("orgScope")),
+                parseDelegatedScope(body.get("delegatedScope")));
     }
 
     private static List<String> parseOrgScope(Object raw) {
@@ -183,5 +190,43 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
         // A present (possibly empty) array is carried verbatim — [] = explicit
         // zero-scope (distinct from null/unset).
         return orgScope;
+    }
+
+    /**
+     * TASK-BE-478 (ADR-MONO-045 §3.4 step 2b) — parses the additive
+     * {@code delegatedScope} object ({@code {"domains":[...],"roles":[...]}}) from the
+     * assignment-check body. Absent / null / non-object → {@code null} (net-zero — a
+     * normal, non-partnership assignment, or an older admin that omits the field). A
+     * present object yields a {@link DelegatedScope} with normalised string lists
+     * (missing / non-list domains|roles → empty list, never null). Only reached on an
+     * {@code assigned=true} body (the fail-closed gate rejects everything else first),
+     * so this never widens the fail-closed contract.
+     */
+    private static DelegatedScope parseDelegatedScope(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            // absent / null / non-object → not a partnership-derived reach → null.
+            return null;
+        }
+        List<String> domains = parseStringList(map.get("domains"));
+        List<String> roles = parseStringList(map.get("roles"));
+        return new DelegatedScope(domains, roles);
+    }
+
+    /**
+     * Coerces a JSON value to a list of strings — non-list / null → an empty list
+     * (never null), null elements skipped. Used for the {@code delegatedScope}
+     * {@code domains}/{@code roles} arrays.
+     */
+    private static List<String> parseStringList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>(list.size());
+        for (Object element : list) {
+            if (element != null) {
+                out.add(String.valueOf(element));
+            }
+        }
+        return out;
     }
 }
