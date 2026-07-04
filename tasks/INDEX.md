@@ -143,6 +143,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
+- `TASK-MONO-330-extend-composites-nightly-fed.md` — **⏳ DEFERRED 백로그** (버전 bump / nightly 손댈 때 착수). MONO-326/329 composite(java-gradle + node-pnpm)를 nightly-e2e.yml / federation-hardening-e2e.yml의 잔존 셋업 블록으로 확장 → **버전 단일화 완성**(지금 ci.yml만 단일 소스라 nightly/fed가 옛 버전에 멈추는 드리프트 함정). **AC-0**: 트리거(①JDK/Node/pnpm bump 발생 ②nightly/fed 손대는 작업) 미관측 시 STOP. 검증 nightly-gated(PR 미실행). 782 no-cache 변이 처리 결정 포함. 분석=Opus 4.8 / 구현 권장=Sonnet.
 - `TASK-MONO-328-ci-gating-if-hoist.md` — **⏳ DEFERRED 백로그** (신호 관측 전 착수 금지). MONO-326(CI 본문 DRY)의 짝: 게이팅 `if:` OR-블록 ~15복사 → `changes.outputs.run-*` named 플래그로 hoist. **AC-0 verify-then-act**: 착수 트리거(①프로젝트 추가 잦아 `if:` 갱신 누락 발생 ②게이팅 실수로 e2e 누락 회귀) 미관측 시 STOP·보류 유지. 필터 정의 무수정(MONO-074/075 quirk). 페이오프 中·리스크 中(correctness-critical)·통증 신호 無 → 신호 시만. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
