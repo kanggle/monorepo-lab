@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-SCM-INT-003-e2e-full-webhook-401-fix.md` — nightly `scm-platform-e2e-full` 지속 RED 복구. `AsnReceiveE2ETest`·`SupplierAckWebhookE2ETest` 2×401(expected 200) — 유력 원인=BE-033 웹훅 HMAC 도입 후 `@Tag("full")` 웹훅 e2e가 유효 서명 미전송. 원인 확정 후 테스트-한정 서명 헬퍼로 복구(프로덕션 필터 무변경). Surfaced during TASK-MONO-326 검증(pre-existing, 리팩토링 무관). 분석=Opus 4.8 / 구현 권장=Sonnet~Opus.
+(empty)
 
 ## in-progress
 
@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-SCM-INT-003-e2e-full-webhook-401-fix.md` — **IN REVIEW (impl 2026-07-05, branch `task/scm-int-003-e2e-webhook-401`)**. nightly `scm-platform-e2e-full` 2×401 복구. 원인 확정(정적)=`E2ETestFixtures.webhookJson()` 이 v1 평문 `X-Supplier-Signature` 하나만 부착 → BE-033 `WebhookSignatureFilter`(HMAC-SHA256 + `X-Supplier-Timestamp`)가 401 `WEBHOOK_SIGNATURE_INVALID` 거부. 수정=테스트-한정 `webhookSignedPost` 헬퍼(`HMAC-SHA256(secret, timestamp + "." + rawBody)` hex, `ofByteArray` 로 서명 바이트 정합, 프로덕션 `WebhookSignatureVerifier` 미러), `AsnReceiveE2ETest`(ack+asn)·`SupplierAckWebhookE2ETest`(ack) 전환, stale javadoc 정정. **프로덕션 필터 무변경**(AC 준수). 검증=`:tests:e2e:compileTestJava` GREEN(로컬 Docker-free); e2e-full 실행 권위=CI Linux 레인(머지 트리거 nightly). 분석=Opus 4.8 / 구현=Opus(직접).
 
 ## done
 

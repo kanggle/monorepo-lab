@@ -9,7 +9,7 @@ import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.sendString
 import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueIdempotencyKey;
 import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueSku;
 import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueSupplierAckRef;
-import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.webhookJson;
+import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.webhookSignedPost;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -35,9 +35,10 @@ import org.junit.jupiter.api.Test;
  * dispatches an asynchronous webhook
  * ({@code POST /api/procurement/webhooks/supplier-ack}) to acknowledge
  * receipt. This webhook lands directly on procurement-service (the gateway
- * does not front {@code /api/procurement/webhooks/**} — the path is auth-
- * gated by a shared secret per {@code rules/traits/integration-heavy.md} I6
- * v1 simplification, with HMAC + timestamp + nonce coming in v2).
+ * does not front {@code /api/procurement/webhooks/**}). Per {@code TASK-SCM-BE-033}
+ * the endpoint is guarded by HMAC-SHA256 over {@code timestamp + "." + rawBody}
+ * plus timestamp-freshness and replay-nonce checks — the request is signed via
+ * {@code E2ETestFixtures.webhookSignedPost}.
  *
  * <p>Verifies:
  * <ul>
@@ -118,10 +119,9 @@ class SupplierAckWebhookE2ETest extends ScmPlatformE2ETestBase {
                     }
                     """.formatted(poId, supplierAckRef);
 
-            HttpResponse<String> ackResp = sendString(http, webhookJson(
-                    procurementBaseUri().resolve(pathSupplierAckWebhook()), SUPPLIER_WEBHOOK_SECRET)
-                    .POST(HttpRequest.BodyPublishers.ofString(webhookBody))
-                    .build());
+            HttpResponse<String> ackResp = sendString(http, webhookSignedPost(
+                    procurementBaseUri().resolve(pathSupplierAckWebhook()),
+                    SUPPLIER_WEBHOOK_SECRET, webhookBody));
 
             assertThat(ackResp.statusCode())
                     .as("supplier ack webhook returns 200 with valid signature")
