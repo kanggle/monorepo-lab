@@ -263,14 +263,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -429,14 +423,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build boot jars
         run: >-
@@ -476,14 +464,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build ecommerce boot jars
         # auth-service excluded by TASK-BE-132 — decommissioned, not in settings.gradle.
@@ -546,14 +528,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build fan-platform boot jars
         run: >-
@@ -596,14 +572,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build scm-platform boot jars
         run: >-
@@ -810,14 +780,15 @@ jobs:
 
   integration-tests:
     name: Integration (master-service + notification-service + outbound-service, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 20
     # Integration suite boots Postgres + Kafka + Redis via Testcontainers.
     # Mirrors the e2e job's gating: runs only on the monorepo-lab dev
     # environment, skipped in the portfolio extraction (kanggle/wms-platform)
     # whose badge reflects the Docker-free `check` signal. TASK-BE-017.
     # Activate for wms changes or cross-project (libs/workflows).
+    # TASK-BE-043/045: notification-service + admin-service share this lane.
+    # TASK-BE-342: outbound-service joins — cross-project FulfillmentRequestedConsumerIT
+    # (ADR-MONO-022 Kafka→order) is Docker-gated here, not unit-only.
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
@@ -826,63 +797,28 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.wms == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run wms integration suites
-        # TASK-BE-043: notification-service joins the wms integration job.
-        # TASK-BE-045: admin-service joins. All boot Postgres (+ Kafka where
-        # applicable) via Testcontainers; sharing the job avoids extra runners.
-        # TASK-BE-342: outbound-service joins (suite repaired 19/19 + two REAL
-        # production bugs fixed found via these ITs: TmsClientAdapter retry
-        # fallbackMethod on @CircuitBreaker→@Retry, and BodyHashUtil hashing a
-        # jackson-module-scala Map as a content-independent bean — plus the
-        # FULFILLMENT_ECOMMERCE source column widened from VARCHAR(20)). Now the
-        # cross-project FulfillmentRequestedConsumerIT (ADR-MONO-022 Kafka→order)
-        # is Docker-gated, not unit-only.
-        run: >-
-          ./gradlew
-          :projects:wms-platform:apps:master-service:integrationTest
-          :projects:wms-platform:apps:notification-service:integrationTest
-          :projects:wms-platform:apps:admin-service:integrationTest
-          :projects:wms-platform:apps:outbound-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-test-reports
-          path: |
-            projects/wms-platform/apps/master-service/build/reports/tests/integrationTest/
-            projects/wms-platform/apps/master-service/build/test-results/integrationTest/
-            projects/wms-platform/apps/notification-service/build/reports/tests/integrationTest/
-            projects/wms-platform/apps/notification-service/build/test-results/integrationTest/
-            projects/wms-platform/apps/admin-service/build/reports/tests/integrationTest/
-            projects/wms-platform/apps/admin-service/build/test-results/integrationTest/
-            projects/wms-platform/apps/outbound-service/build/reports/tests/integrationTest/
-            projects/wms-platform/apps/outbound-service/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      timeout-minutes: 20
+      gradle-tasks: >-
+        :projects:wms-platform:apps:master-service:integrationTest
+        :projects:wms-platform:apps:notification-service:integrationTest
+        :projects:wms-platform:apps:admin-service:integrationTest
+        :projects:wms-platform:apps:outbound-service:integrationTest
+      artifact-name: integration-test-reports
+      report-paths: |
+        projects/wms-platform/apps/master-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/master-service/build/test-results/integrationTest/
+        projects/wms-platform/apps/notification-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/notification-service/build/test-results/integrationTest/
+        projects/wms-platform/apps/admin-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/admin-service/build/test-results/integrationTest/
+        projects/wms-platform/apps/outbound-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/outbound-service/build/test-results/integrationTest/
 
   iam-integration-tests:
     name: Integration (iam, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # IAM integration suite boots MySQL + Kafka + (per-service Redis/WireMock)
     # via Testcontainers. Scoped to monorepo-lab; the standalone repo
     # extraction relies on its own Docker-free `check` signal.
@@ -895,50 +831,24 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.iam == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run IAM integration suites
-        run: >-
-          ./gradlew
-          :projects:iam-platform:apps:auth-service:integrationTest
-          :projects:iam-platform:apps:account-service:integrationTest
-          :projects:iam-platform:apps:admin-service:integrationTest
-          :projects:iam-platform:apps:community-service:integrationTest
-          :projects:iam-platform:apps:gateway-service:integrationTest
-          :projects:iam-platform:apps:membership-service:integrationTest
-          :projects:iam-platform:apps:security-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload IAM integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: iam-integration-test-reports
-          path: |
-            projects/iam-platform/apps/*/build/reports/tests/integrationTest/
-            projects/iam-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:iam-platform:apps:auth-service:integrationTest
+        :projects:iam-platform:apps:account-service:integrationTest
+        :projects:iam-platform:apps:admin-service:integrationTest
+        :projects:iam-platform:apps:community-service:integrationTest
+        :projects:iam-platform:apps:gateway-service:integrationTest
+        :projects:iam-platform:apps:membership-service:integrationTest
+        :projects:iam-platform:apps:security-service:integrationTest
+      artifact-name: iam-integration-test-reports
+      report-paths: |
+        projects/iam-platform/apps/*/build/reports/tests/integrationTest/
+        projects/iam-platform/apps/*/build/test-results/integrationTest/
 
   fan-integration-tests:
     name: Integration (fan-platform, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # fan-platform integration suite boots Postgres + Kafka (libs/java-messaging
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction relies
@@ -952,6 +862,7 @@ jobs:
     # on Docker-less dev hosts (memory §19/§20). Activating them surfaced + fixed:
     # §19a (containers @BeforeAll → static block), §19c (outbox repo deleteAll →
     # JdbcTemplate TRUNCATE), and an artist application-test.yml YAML scalar quote.
+    # TASK-FAN-BE-013: notification-service joins (event-consumer + inbox ITs).
     # Activate for fan changes or cross-project (libs/workflows).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
@@ -961,44 +872,17 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.fan == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run fan-platform integration suites
-        # TASK-FAN-BE-013: notification-service joins — event-consumer (membership
-        # lifecycle topics) + inbox ITs (Postgres + Kafka Testcontainers, WireMock
-        # JWKS). Its disabledWithoutDocker ITs run for the first time on CI here.
-        run: >-
-          ./gradlew
-          :projects:fan-platform:apps:community-service:integrationTest
-          :projects:fan-platform:apps:artist-service:integrationTest
-          :projects:fan-platform:apps:membership-service:integrationTest
-          :projects:fan-platform:apps:notification-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload fan integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fan-integration-test-reports
-          path: |
-            projects/fan-platform/apps/*/build/reports/tests/integrationTest/
-            projects/fan-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:fan-platform:apps:community-service:integrationTest
+        :projects:fan-platform:apps:artist-service:integrationTest
+        :projects:fan-platform:apps:membership-service:integrationTest
+        :projects:fan-platform:apps:notification-service:integrationTest
+      artifact-name: fan-integration-test-reports
+      report-paths: |
+        projects/fan-platform/apps/*/build/reports/tests/integrationTest/
+        projects/fan-platform/apps/*/build/test-results/integrationTest/
 
   iam-platform-e2e-smoke:
     name: E2E smoke (iam docker-compose)
@@ -1034,14 +918,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build iam boot jars
         # 5 services = docker-compose.e2e.yml `build:` directive service set
@@ -1089,9 +967,7 @@ jobs:
 
   scm-integration-tests:
     name: Integration (scm-platform, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # SCM integration suite boots MySQL + Postgres + (per-service WireMock)
     # via Testcontainers. Scoped to monorepo-lab; standalone repo extraction
     # relies on its own Docker-free `check` signal.
@@ -1104,46 +980,20 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.scm == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run SCM integration suites
-        run: >-
-          ./gradlew
-          :projects:scm-platform:apps:procurement-service:integrationTest
-          :projects:scm-platform:apps:inventory-visibility-service:integrationTest
-          :projects:scm-platform:apps:demand-planning-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload SCM integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: scm-integration-test-reports
-          path: |
-            projects/scm-platform/apps/*/build/reports/tests/integrationTest/
-            projects/scm-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:scm-platform:apps:procurement-service:integrationTest
+        :projects:scm-platform:apps:inventory-visibility-service:integrationTest
+        :projects:scm-platform:apps:demand-planning-service:integrationTest
+      artifact-name: scm-integration-test-reports
+      report-paths: |
+        projects/scm-platform/apps/*/build/reports/tests/integrationTest/
+        projects/scm-platform/apps/*/build/test-results/integrationTest/
 
   finance-integration-tests:
     name: Integration (finance-platform, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # finance integration suite boots MySQL 8 + Redis + Kafka (libs/java-messaging
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction
@@ -1157,45 +1007,19 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.finance == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run finance integration suites
-        run: >-
-          ./gradlew
-          :projects:finance-platform:apps:account-service:integrationTest
-          :projects:finance-platform:apps:ledger-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload finance integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: finance-integration-test-reports
-          path: |
-            projects/finance-platform/apps/*/build/reports/tests/integrationTest/
-            projects/finance-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:finance-platform:apps:account-service:integrationTest
+        :projects:finance-platform:apps:ledger-service:integrationTest
+      artifact-name: finance-integration-test-reports
+      report-paths: |
+        projects/finance-platform/apps/*/build/reports/tests/integrationTest/
+        projects/finance-platform/apps/*/build/test-results/integrationTest/
 
   erp-integration-tests:
     name: Integration (erp-platform, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # erp integration suite boots MySQL 8 + Kafka (libs/java-messaging
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction
@@ -1209,47 +1033,21 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.erp == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run erp integration suites
-        run: >-
-          ./gradlew
-          :projects:erp-platform:apps:masterdata-service:integrationTest
-          :projects:erp-platform:apps:read-model-service:integrationTest
-          :projects:erp-platform:apps:approval-service:integrationTest
-          :projects:erp-platform:apps:notification-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload erp integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: erp-integration-test-reports
-          path: |
-            projects/erp-platform/apps/*/build/reports/tests/integrationTest/
-            projects/erp-platform/apps/*/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:erp-platform:apps:masterdata-service:integrationTest
+        :projects:erp-platform:apps:read-model-service:integrationTest
+        :projects:erp-platform:apps:approval-service:integrationTest
+        :projects:erp-platform:apps:notification-service:integrationTest
+      artifact-name: erp-integration-test-reports
+      report-paths: |
+        projects/erp-platform/apps/*/build/reports/tests/integrationTest/
+        projects/erp-platform/apps/*/build/test-results/integrationTest/
 
   platform-console-bff-integration-tests:
     name: Integration (platform-console console-bff, Testcontainers + WireMock JWKS)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # console-bff integration suite boots the full Spring context with WireMock
     # stubbing the IAM JWKS endpoint. No DB/Kafka containers — stateless BFF.
     # Scoped to monorepo-lab; standalone repo extraction relies on its own
@@ -1264,44 +1062,17 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.platform-console == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run platform-console console-bff integration suites
-        run: >-
-          ./gradlew
-          :projects:platform-console:apps:console-bff:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload platform-console integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: platform-console-bff-integration-test-reports
-          path: |
-            projects/platform-console/apps/console-bff/build/reports/tests/integrationTest/
-            projects/platform-console/apps/console-bff/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: ':projects:platform-console:apps:console-bff:integrationTest'
+      artifact-name: platform-console-bff-integration-test-reports
+      report-paths: |
+        projects/platform-console/apps/console-bff/build/reports/tests/integrationTest/
+        projects/platform-console/apps/console-bff/build/test-results/integrationTest/
 
   ecommerce-integration-tests:
     name: Integration (ecommerce, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test]
-    timeout-minutes: 30
     # ecommerce integration suite boots Postgres (Testcontainers) + embedded Kafka.
     # ecommerce ITs carry @Tag("integration") and are excluded from the Docker-free
     # `check`; a dedicated `:integrationTest` task (TASK-MONO-307) runs them on a
@@ -1325,71 +1096,47 @@ jobs:
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.ecommerce == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      - name: Run ecommerce integration suites (all 12 IT-carrying services)
-        run: >-
-          ./gradlew
-          :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:payment-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:product-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:user-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:promotion-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:gateway-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:review-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:shipping-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:batch-worker:integrationTest
-          :projects:ecommerce-microservices-platform:apps:notification-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:search-service:integrationTest
-          :projects:ecommerce-microservices-platform:apps:settlement-service:integrationTest
-          --no-daemon --stacktrace
-
-      - name: Upload ecommerce integration test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ecommerce-integration-test-reports
-          path: |
-            projects/ecommerce-microservices-platform/apps/order-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/order-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/payment-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/payment-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/product-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/product-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/user-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/user-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/promotion-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/promotion-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/gateway-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/gateway-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/review-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/review-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/shipping-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/shipping-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/batch-worker/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/batch-worker/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/notification-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/notification-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/search-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/search-service/build/test-results/integrationTest/
-            projects/ecommerce-microservices-platform/apps/settlement-service/build/reports/tests/integrationTest/
-            projects/ecommerce-microservices-platform/apps/settlement-service/build/test-results/integrationTest/
-          retention-days: 7
+    uses: ./.github/workflows/_integration.yml
+    with:
+      gradle-tasks: >-
+        :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:payment-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:product-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:user-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:promotion-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:gateway-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:review-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:shipping-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:batch-worker:integrationTest
+        :projects:ecommerce-microservices-platform:apps:notification-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:search-service:integrationTest
+        :projects:ecommerce-microservices-platform:apps:settlement-service:integrationTest
+      artifact-name: ecommerce-integration-test-reports
+      report-paths: |
+        projects/ecommerce-microservices-platform/apps/order-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/order-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/payment-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/payment-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/product-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/product-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/user-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/user-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/promotion-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/promotion-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/gateway-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/gateway-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/review-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/review-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/shipping-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/shipping-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/batch-worker/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/batch-worker/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/notification-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/notification-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/search-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/search-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/settlement-service/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/settlement-service/build/test-results/integrationTest/
 
   frontend-checks:
     name: Frontend lint & build (ecommerce + fan-platform)
@@ -1455,10 +1202,11 @@ jobs:
 
   e2e-tests:
     name: E2E (gateway-master live-pair smoke, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test, boot-jars]
-    timeout-minutes: 20
     # Scoped to the monorepo-lab dev environment (see integration-tests comment).
+    # PR-time runs the @Tag("smoke") subset only via :e2eSmokeTest (ADR-MONO-010
+    # D3); the @Tag("full") suite runs nightly via wms-platform-e2e-full using the
+    # SAME reusable with gradle-target :e2eFullTest.
     # Activate for wms changes, cross-project (libs/workflows), or any project's
     # contract change (cross-service consumer gate, MONO-074).
     if: >-
@@ -1470,105 +1218,31 @@ jobs:
         needs.changes.outputs.wms == 'true' ||
         needs.changes.outputs.contracts == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Download boot jars
-        uses: actions/download-artifact@v4
-        with:
-          name: wms-boot-jars
-          path: artifact-staging
-
-      - name: Restore boot jar paths
-        # actions/upload-artifact@v4 strips the longest common prefix when
-        # multiple paths are uploaded, so the wms-boot-jars artifact contains
-        # `master-service/build/libs/master-service.jar` and
-        # `gateway-service/build/libs/gateway-service.jar` (with the
-        # `projects/wms-platform/apps/` prefix removed). The e2e harness's
-        # locateFile() in E2EBase.java expects the original
-        # `apps/<service>/build/libs/<service>.jar` layout when resolving
-        # paths from gateway-service's project directory, so move the
-        # jars back to their canonical locations before invoking Gradle.
-        run: |
-          mkdir -p projects/wms-platform/apps/master-service/build/libs/
-          mkdir -p projects/wms-platform/apps/gateway-service/build/libs/
-          mv artifact-staging/master-service/build/libs/master-service.jar \
-             projects/wms-platform/apps/master-service/build/libs/master-service.jar
-          mv artifact-staging/gateway-service/build/libs/gateway-service.jar \
-             projects/wms-platform/apps/gateway-service/build/libs/gateway-service.jar
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      # ADR-MONO-041 D2: wms service images `FROM monorepo/java-service-base:v1`.
-      # No image registry → build the shared base locally before the docker builds.
-      - name: Build shared java-service-base image (ADR-MONO-041 D2)
-        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
-
-      - name: Build service images for e2e
-        # Use the Docker CLI (BuildKit) instead of Testcontainers' ImageFromDockerfile
-        # (Docker Java client REST API). On Docker 28 the REST /build endpoint routes
-        # through BuildKit's gRPC session mechanism and hangs indefinitely with the
-        # Docker Java client bundled in Testcontainers 1.21.3 — 58-min and 60-min
-        # diagnostic runs confirmed zero progress after the image-check log line.
-        # Pre-building here and passing the image names via -Dwms.e2e.* lets
-        # E2EBase.java skip ImageFromDockerfile and use GenericContainer directly.
-        run: |
-          docker build -t wms-master-service:e2e \
-            -f projects/wms-platform/apps/master-service/Dockerfile \
-            projects/wms-platform/apps/master-service/
-          docker build -t wms-gateway-service:e2e \
-            -f projects/wms-platform/apps/gateway-service/Dockerfile \
-            projects/wms-platform/apps/gateway-service/
-
-      - name: Run gateway-master e2e smoke suite
-        # ADR-MONO-010 D3 — PR-time runs the @Tag("smoke") subset only via
-        # `:e2eSmokeTest`. Full suite (@Tag("full")) runs nightly + push to
-        # main via a separate `e2eFullTest` job (Phase 3 ADR, not yet wired).
-        # `:e2eTest` (legacy umbrella) still runs both — preserved for local
-        # dev convenience.
-        run: >-
-          ./gradlew
-          :projects:wms-platform:apps:gateway-service:e2eSmokeTest
-          -x :projects:wms-platform:apps:master-service:bootJar
-          -x :projects:wms-platform:apps:gateway-service:bootJar
-          -Dwms.e2e.masterImage=wms-master-service:e2e
-          -Dwms.e2e.gatewayImage=wms-gateway-service:e2e
-          --no-daemon --stacktrace
-
-      - name: Upload e2e test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-test-reports
-          path: |
-            projects/wms-platform/apps/gateway-service/build/reports/tests/e2eSmokeTest/
-            projects/wms-platform/apps/gateway-service/build/test-results/e2eSmokeTest/
-          retention-days: 7
+    uses: ./.github/workflows/_platform-e2e.yml
+    with:
+      project-dir: projects/wms-platform
+      boot-jars-artifact: wms-boot-jars
+      timeout-minutes: 20
+      gradle-target: ':projects:wms-platform:apps:gateway-service:e2eSmokeTest'
+      services: >-
+        [
+          {"name":"master-service","image":"wms-master-service:e2e","prop":"wms.e2e.masterImage"},
+          {"name":"gateway-service","image":"wms-gateway-service:e2e","prop":"wms.e2e.gatewayImage"}
+        ]
+      report-artifact: e2e-test-reports
+      report-paths: |
+        projects/wms-platform/apps/gateway-service/build/reports/tests/e2eSmokeTest/
+        projects/wms-platform/apps/gateway-service/build/test-results/e2eSmokeTest/
 
   fan-platform-e2e:
     name: E2E (fan-platform v1 live-trio smoke, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test, fan-platform-boot-jars]
-    timeout-minutes: 10
     # Live-trio e2e suite (TASK-FAN-INT-001): boots gateway-service +
-    # community-service + artist-service plus Postgres + Redis + Kafka
-    # via Testcontainers and a host-side WireMock JWKS stand-in. Mirrors
-    # the wms `e2e-tests` job's pattern: pre-build images via the Docker
-    # CLI to dodge the Docker 28 BuildKit gRPC hang in
-    # `ImageFromDockerfile`, then pass the image names via -Dfan.e2e.*
-    # so FanPlatformE2ETestBase uses GenericContainer directly.
+    # community-service + artist-service plus Postgres + Redis + Kafka via
+    # Testcontainers and a host-side WireMock JWKS stand-in. Pre-built images
+    # (Docker CLI) + -Dfan.e2e.* let FanPlatformE2ETestBase use GenericContainer
+    # directly, dodging the Docker 28 ImageFromDockerfile hang. The @Tag("full")
+    # suite runs nightly via fan-platform-e2e-full (SAME reusable, :e2eFullTest).
     # Activate for fan-platform changes, cross-project (libs/workflows), or any
     # project's contract change (cross-service consumer gate, MONO-074).
     if: >-
@@ -1580,108 +1254,34 @@ jobs:
         needs.changes.outputs.fan == 'true' ||
         needs.changes.outputs.contracts == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Download fan-platform boot jars
-        uses: actions/download-artifact@v4
-        with:
-          name: fan-platform-boot-jars
-          path: artifact-staging-fan
-
-      - name: Restore fan-platform boot jar paths
-        # actions/upload-artifact@v4 strips the longest common prefix when
-        # multiple paths are uploaded. The fan-platform-boot-jars artifact
-        # therefore contains `<service>/build/libs/<service>.jar` (with
-        # `projects/fan-platform/apps/` stripped). Move them back to their
-        # canonical locations so the gateway/community/artist Dockerfiles
-        # COPY the right path during the docker build below, AND so
-        # FanPlatformE2ETestBase's locateOptionalJar fallback can resolve
-        # them when the dev-path system properties are unset.
-        run: |
-          mkdir -p projects/fan-platform/apps/gateway-service/build/libs/
-          mkdir -p projects/fan-platform/apps/community-service/build/libs/
-          mkdir -p projects/fan-platform/apps/artist-service/build/libs/
-          mv artifact-staging-fan/gateway-service/build/libs/gateway-service.jar \
-             projects/fan-platform/apps/gateway-service/build/libs/gateway-service.jar
-          mv artifact-staging-fan/community-service/build/libs/community-service.jar \
-             projects/fan-platform/apps/community-service/build/libs/community-service.jar
-          mv artifact-staging-fan/artist-service/build/libs/artist-service.jar \
-             projects/fan-platform/apps/artist-service/build/libs/artist-service.jar
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      # ADR-MONO-041 D2: fan service images `FROM monorepo/java-service-base:v1`.
-      # No image registry → build the shared base locally before the docker builds.
-      - name: Build shared java-service-base image (ADR-MONO-041 D2)
-        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
-
-      - name: Build fan-platform service images for e2e
-        # Docker CLI build (BuildKit) — see wms `e2e-tests` job for the
-        # rationale (Docker 28 + Testcontainers ImageFromDockerfile hang).
-        run: |
-          docker build -t fan-platform-gateway-service:e2e \
-            -f projects/fan-platform/apps/gateway-service/Dockerfile \
-            projects/fan-platform/apps/gateway-service/
-          docker build -t fan-platform-community-service:e2e \
-            -f projects/fan-platform/apps/community-service/Dockerfile \
-            projects/fan-platform/apps/community-service/
-          docker build -t fan-platform-artist-service:e2e \
-            -f projects/fan-platform/apps/artist-service/Dockerfile \
-            projects/fan-platform/apps/artist-service/
-
-      - name: Run fan-platform live-trio e2e smoke suite
-        # ADR-MONO-010 D3 — PR-time runs the @Tag("smoke") subset only via
-        # `:e2eSmokeTest`. Full suite (@Tag("full")) runs nightly + push to
-        # main via a separate `e2eFullTest` job (Phase 3 ADR, not yet wired).
-        # `:e2eTest` (legacy umbrella) still runs both — preserved for local
-        # dev convenience.
-        run: >-
-          ./gradlew
-          :projects:fan-platform:tests:e2e:e2eSmokeTest
-          -x :projects:fan-platform:apps:gateway-service:bootJar
-          -x :projects:fan-platform:apps:community-service:bootJar
-          -x :projects:fan-platform:apps:artist-service:bootJar
-          -Dfan.e2e.gatewayImage=fan-platform-gateway-service:e2e
-          -Dfan.e2e.communityImage=fan-platform-community-service:e2e
-          -Dfan.e2e.artistImage=fan-platform-artist-service:e2e
-          --no-daemon --stacktrace
-
-      - name: Upload fan-platform e2e test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fan-platform-e2e-test-reports
-          path: |
-            projects/fan-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
-            projects/fan-platform/tests/e2e/build/test-results/e2eSmokeTest/
-          retention-days: 7
+    uses: ./.github/workflows/_platform-e2e.yml
+    with:
+      project-dir: projects/fan-platform
+      boot-jars-artifact: fan-platform-boot-jars
+      download-path: artifact-staging-fan
+      timeout-minutes: 10
+      gradle-target: ':projects:fan-platform:tests:e2e:e2eSmokeTest'
+      services: >-
+        [
+          {"name":"gateway-service","image":"fan-platform-gateway-service:e2e","prop":"fan.e2e.gatewayImage"},
+          {"name":"community-service","image":"fan-platform-community-service:e2e","prop":"fan.e2e.communityImage"},
+          {"name":"artist-service","image":"fan-platform-artist-service:e2e","prop":"fan.e2e.artistImage"}
+        ]
+      report-artifact: fan-platform-e2e-test-reports
+      report-paths: |
+        projects/fan-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
+        projects/fan-platform/tests/e2e/build/test-results/e2eSmokeTest/
 
   scm-platform-e2e:
     name: E2E (scm-platform v1 cross-service smoke, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test, scm-platform-boot-jars]
-    timeout-minutes: 12
     # Cross-service e2e suite (TASK-SCM-INT-001): boots gateway-service +
-    # procurement-service + inventory-visibility-service plus Postgres +
-    # Redis + Kafka via Testcontainers, a host-side WireMock JWKS stand-in,
-    # and a host-side supplier MockWebServer. Mirrors the fan-platform-e2e
-    # job's pattern: pre-build images via the Docker CLI to dodge the
-    # Docker 28 BuildKit gRPC hang in `ImageFromDockerfile`, then pass the
-    # image names via -Dscm.e2e.* so ScmPlatformE2ETestBase uses
-    # GenericContainer directly.
+    # procurement-service + inventory-visibility-service + demand-planning-service
+    # plus Postgres + Redis + Kafka via Testcontainers, a host-side WireMock JWKS
+    # stand-in, and a host-side supplier MockWebServer. Pre-built images (Docker
+    # CLI) + -Dscm.e2e.* let ScmPlatformE2ETestBase use GenericContainer directly,
+    # dodging the Docker 28 ImageFromDockerfile hang. The @Tag("full") suite runs
+    # nightly via scm-platform-e2e-full (SAME reusable, :e2eFullTest).
     # Activate for scm-platform changes, cross-project (libs/workflows), or any
     # project's contract change (cross-service consumer gate, MONO-074).
     if: >-
@@ -1693,102 +1293,24 @@ jobs:
         needs.changes.outputs.scm == 'true' ||
         needs.changes.outputs.contracts == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Download scm-platform boot jars
-        uses: actions/download-artifact@v4
-        with:
-          name: scm-platform-boot-jars
-          path: artifact-staging-scm
-
-      - name: Restore scm-platform boot jar paths
-        # actions/upload-artifact@v4 strips the longest common prefix when
-        # multiple paths are uploaded. The scm-platform-boot-jars artifact
-        # therefore contains `<service>/build/libs/<service>.jar` (with
-        # `projects/scm-platform/apps/` stripped). Move them back to their
-        # canonical locations so the gateway/procurement/inventory-visibility
-        # Dockerfiles COPY the right path during the docker build below, AND
-        # so ScmPlatformE2ETestBase's locateOptionalJar fallback can resolve
-        # them when the dev-path system properties are unset.
-        run: |
-          mkdir -p projects/scm-platform/apps/gateway-service/build/libs/
-          mkdir -p projects/scm-platform/apps/procurement-service/build/libs/
-          mkdir -p projects/scm-platform/apps/inventory-visibility-service/build/libs/
-          mkdir -p projects/scm-platform/apps/demand-planning-service/build/libs/
-          mv artifact-staging-scm/gateway-service/build/libs/gateway-service.jar \
-             projects/scm-platform/apps/gateway-service/build/libs/gateway-service.jar
-          mv artifact-staging-scm/procurement-service/build/libs/procurement-service.jar \
-             projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
-          mv artifact-staging-scm/inventory-visibility-service/build/libs/inventory-visibility-service.jar \
-             projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
-          mv artifact-staging-scm/demand-planning-service/build/libs/demand-planning-service.jar \
-             projects/scm-platform/apps/demand-planning-service/build/libs/demand-planning-service.jar
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      # ADR-MONO-041 D2: scm service images `FROM monorepo/java-service-base:v1`.
-      # No image registry → build the shared base locally before the docker builds.
-      - name: Build shared java-service-base image (ADR-MONO-041 D2)
-        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
-
-      - name: Build scm-platform service images for e2e
-        # Docker CLI build (BuildKit) — see wms `e2e-tests` job for the
-        # rationale (Docker 28 + Testcontainers ImageFromDockerfile hang).
-        run: |
-          docker build -t scm-platform-gateway-service:e2e \
-            -f projects/scm-platform/apps/gateway-service/Dockerfile \
-            projects/scm-platform/apps/gateway-service/
-          docker build -t scm-platform-procurement-service:e2e \
-            -f projects/scm-platform/apps/procurement-service/Dockerfile \
-            projects/scm-platform/apps/procurement-service/
-          docker build -t scm-platform-inventory-visibility-service:e2e \
-            -f projects/scm-platform/apps/inventory-visibility-service/Dockerfile \
-            projects/scm-platform/apps/inventory-visibility-service/
-          docker build -t scm-platform-demand-planning-service:e2e \
-            -f projects/scm-platform/apps/demand-planning-service/Dockerfile \
-            projects/scm-platform/apps/demand-planning-service/
-
-      - name: Run scm-platform cross-service e2e smoke suite
-        # ADR-MONO-010 D3 — PR-time runs the @Tag("smoke") subset only via
-        # `:e2eSmokeTest`. Full suite (@Tag("full")) runs nightly + push to
-        # main via a separate `e2eFullTest` job (Phase 3 ADR, not yet wired).
-        # `:e2eTest` (legacy umbrella) still runs both — preserved for local
-        # dev convenience.
-        run: >-
-          ./gradlew
-          :projects:scm-platform:tests:e2e:e2eSmokeTest
-          -x :projects:scm-platform:apps:gateway-service:bootJar
-          -x :projects:scm-platform:apps:procurement-service:bootJar
-          -x :projects:scm-platform:apps:inventory-visibility-service:bootJar
-          -x :projects:scm-platform:apps:demand-planning-service:bootJar
-          -Dscm.e2e.gatewayImage=scm-platform-gateway-service:e2e
-          -Dscm.e2e.procurementImage=scm-platform-procurement-service:e2e
-          -Dscm.e2e.inventoryVisibilityImage=scm-platform-inventory-visibility-service:e2e
-          -Dscm.e2e.demandPlanningImage=scm-platform-demand-planning-service:e2e
-          --no-daemon --stacktrace
-
-      - name: Upload scm-platform e2e test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: scm-platform-e2e-test-reports
-          path: |
-            projects/scm-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
-            projects/scm-platform/tests/e2e/build/test-results/e2eSmokeTest/
-          retention-days: 7
+    uses: ./.github/workflows/_platform-e2e.yml
+    with:
+      project-dir: projects/scm-platform
+      boot-jars-artifact: scm-platform-boot-jars
+      download-path: artifact-staging-scm
+      timeout-minutes: 12
+      gradle-target: ':projects:scm-platform:tests:e2e:e2eSmokeTest'
+      services: >-
+        [
+          {"name":"gateway-service","image":"scm-platform-gateway-service:e2e","prop":"scm.e2e.gatewayImage"},
+          {"name":"procurement-service","image":"scm-platform-procurement-service:e2e","prop":"scm.e2e.procurementImage"},
+          {"name":"inventory-visibility-service","image":"scm-platform-inventory-visibility-service:e2e","prop":"scm.e2e.inventoryVisibilityImage"},
+          {"name":"demand-planning-service","image":"scm-platform-demand-planning-service:e2e","prop":"scm.e2e.demandPlanningImage"}
+        ]
+      report-artifact: scm-platform-e2e-test-reports
+      report-paths: |
+        projects/scm-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
+        projects/scm-platform/tests/e2e/build/test-results/e2eSmokeTest/
 
   # ---------------------------------------------------------------------------
   # OpenAI Harness gap #3 Phase 3 (TASK-MONO-067) — observability stack

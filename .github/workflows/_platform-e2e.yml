@@ -1,0 +1,149 @@
+name: _platform-e2e (reusable)
+
+# Reusable live-container e2e lane for wms / fan / scm platforms
+# (TASK-MONO-326 Phase 3). Collapses the near-identical e2e jobs that appear
+# both in ci.yml (@Tag("smoke") via :e2eSmokeTest) and nightly-e2e.yml
+# (@Tag("full") via :e2eFullTest) — same shape, differing only in the gradle
+# target, the per-service image set, the report paths, and how the boot jars
+# arrive:
+#   - boot-jars-mode: download  (ci.yml smoke) — a prior boot-jars job uploaded
+#       an artifact; download it and `mv` each jar back to its canonical
+#       apps/<svc>/build/libs path (upload-artifact@v4 strips the common prefix).
+#   - boot-jars-mode: build     (nightly full) — no cross-workflow artifact reuse;
+#       build the boot jars in-job via `bootjar-tasks` so they land at the
+#       canonical path directly (no restore needed).
+#
+# The job then, per service in the `services` JSON, `docker build`s the :e2e
+# image and assembles the Gradle `-x …:bootJar` excludes + `-D<prop>=<image>`
+# args, then runs `./gradlew <gradle-target> …`. Pre-building images via the
+# Docker CLI (not Testcontainers ImageFromDockerfile) dodges the Docker 28 +
+# Testcontainers 1.21.3 BuildKit gRPC hang. jq is preinstalled on ubuntu-latest.
+#
+# Caller keeps its own name / needs / if gating; check surfaces as
+# `<caller name> / e2e`. main is unprotected (verified 2026-07-04) so the
+# rename breaks no required status check.
+
+on:
+  workflow_call:
+    inputs:
+      project-dir:
+        description: 'Project root, e.g. projects/wms-platform.'
+        required: true
+        type: string
+      boot-jars-mode:
+        description: 'How boot jars arrive: download (artifact from a prior job) or build (in-job via bootjar-tasks).'
+        required: false
+        type: string
+        default: download
+      boot-jars-artifact:
+        description: 'Name of the boot-jars artifact to download (boot-jars-mode=download only).'
+        required: false
+        type: string
+        default: ''
+      download-path:
+        description: 'Directory the artifact is downloaded into (upload-artifact@v4 strips the common prefix, so it holds <svc>/build/libs/<svc>.jar).'
+        required: false
+        type: string
+        default: artifact-staging
+      bootjar-tasks:
+        description: 'Space-separated Gradle :bootJar task paths (boot-jars-mode=build only).'
+        required: false
+        type: string
+        default: ''
+      services:
+        description: 'JSON array of {name,image,prop}: service dir under apps/, the :e2e image tag to build, and the <proj>.e2e.*Image sysprop key.'
+        required: true
+        type: string
+      gradle-target:
+        description: 'Fully-qualified Gradle e2e task, e.g. :projects:wms-platform:apps:gateway-service:e2eSmokeTest.'
+        required: true
+        type: string
+      report-artifact:
+        description: 'Name of the test-report artifact uploaded on failure.'
+        required: true
+        type: string
+      report-paths:
+        description: 'Newline-separated upload-artifact path globs.'
+        required: true
+        type: string
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 20
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
+
+      - name: Download boot jars
+        if: inputs.boot-jars-mode == 'download'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.boot-jars-artifact }}
+          path: ${{ inputs.download-path }}
+
+      - name: Build boot jars in-job
+        if: inputs.boot-jars-mode == 'build'
+        run: >-
+          ./gradlew
+          ${{ inputs.bootjar-tasks }}
+          --no-daemon --stacktrace
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Build service images, run e2e suite
+        # ADR-MONO-041 D2: service images `FROM monorepo/java-service-base:v1`;
+        # no registry, so build the shared base locally first. Then, per service
+        # in the `services` JSON: (download mode) move the downloaded jar back to
+        # its canonical apps/<svc>/build/libs path — upload-artifact stripped the
+        # prefix; (build mode) the jar is already there. Build its :e2e image and
+        # accumulate the Gradle `-x …:bootJar` excludes + `-D<prop>=<image>` args
+        # so E2EBase/…E2ETestBase use GenericContainer directly instead of
+        # ImageFromDockerfile.
+        env:
+          SERVICES: ${{ inputs.services }}
+          PROJECT_DIR: ${{ inputs.project-dir }}
+          DOWNLOAD_PATH: ${{ inputs.download-path }}
+          GRADLE_TARGET: ${{ inputs.gradle-target }}
+          BOOT_MODE: ${{ inputs.boot-jars-mode }}
+        run: |
+          set -euo pipefail
+          docker build -t monorepo/java-service-base:v1 docker/java-service-base
+          GRADLE_PATH=":$(echo "$PROJECT_DIR" | tr '/' ':')"
+          XARGS=""
+          DARGS=""
+          while read -r svc; do
+            [ -z "$svc" ] && continue
+            name=$(jq -r '.name' <<<"$svc")
+            image=$(jq -r '.image' <<<"$svc")
+            prop=$(jq -r '.prop' <<<"$svc")
+            if [ "$BOOT_MODE" = "download" ]; then
+              mkdir -p "$PROJECT_DIR/apps/$name/build/libs/"
+              mv "$DOWNLOAD_PATH/$name/build/libs/$name.jar" \
+                 "$PROJECT_DIR/apps/$name/build/libs/$name.jar"
+            fi
+            docker build -t "$image" \
+              -f "$PROJECT_DIR/apps/$name/Dockerfile" \
+              "$PROJECT_DIR/apps/$name/"
+            XARGS="$XARGS -x ${GRADLE_PATH}:apps:${name}:bootJar"
+            DARGS="$DARGS -D${prop}=${image}"
+          done < <(jq -c '.[]' <<<"$SERVICES")
+          echo "[e2e] gradle: $GRADLE_TARGET$XARGS $DARGS"
+          ./gradlew "$GRADLE_TARGET" $XARGS $DARGS --no-daemon --stacktrace
+
+      - name: Upload e2e test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.report-artifact }}
+          path: ${{ inputs.report-paths }}
+          retention-days: 7

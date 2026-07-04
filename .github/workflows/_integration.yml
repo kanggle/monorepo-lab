@@ -1,0 +1,65 @@
+name: _integration (reusable)
+
+# Reusable integration-test lane for monorepo-lab (TASK-MONO-326 Phase 2).
+#
+# Collapses the 8 structurally-identical `*-integration-tests` jobs in ci.yml
+# (checkout -> setup-java-gradle -> docker info -> ./gradlew <tasks>:integrationTest
+# -> upload reports on failure) into a single definition. Each caller keeps its
+# own `name:`, `needs:`, and `if:` gating so path-filter activation semantics and
+# the `github.repository == 'kanggle/monorepo-lab'` portfolio-extraction guard
+# stay in the caller and remain visible in the diff.
+#
+# NOTE on check names: a reusable-workflow job surfaces as
+# `<caller job name> / <reusable job name>` in the checks list — e.g.
+# `Integration (iam, Testcontainers) / integration`. main is not branch-protected
+# and no rulesets exist (verified 2026-07-04), so this rename breaks no required
+# status check; the merge-verification discipline reads statusCheckRollup by state.
+
+on:
+  workflow_call:
+    inputs:
+      gradle-tasks:
+        description: 'Space-separated Gradle :integrationTest task paths (no ./gradlew prefix, no --no-daemon flags).'
+        required: true
+        type: string
+      artifact-name:
+        description: 'Name of the test-report artifact uploaded on failure.'
+        required: true
+        type: string
+      report-paths:
+        description: 'Newline-separated upload-artifact path globs.'
+        required: true
+        type: string
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 30
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
+
+      - name: Verify Docker (Testcontainers prerequisite)
+        run: docker info
+
+      - name: Run integration suites
+        run: >-
+          ./gradlew
+          ${{ inputs.gradle-tasks }}
+          --no-daemon --stacktrace
+
+      - name: Upload integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.report-paths }}
+          retention-days: 7
