@@ -4,8 +4,13 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Common request builders and fixture data generators for the scm-platform
@@ -140,12 +145,59 @@ public final class E2ETestFixtures {
                 .header("X-Forwarded-For", "10.0.0." + (1 + (int) (Math.random() * 250)));
     }
 
-    public static HttpRequest.Builder webhookJson(URI uri, String supplierSecret) {
+    /**
+     * Builds a fully-signed supplier-webhook {@code POST} request per
+     * {@code TASK-SCM-BE-033} (HMAC-SHA256 + timestamp freshness + replay nonce).
+     *
+     * <p>The signature is the lowercase-hex HMAC-SHA256 of
+     * {@code timestamp + "." + rawBody}, keyed with the shared secret;
+     * {@code X-Supplier-Timestamp} carries the epoch-seconds signing time and
+     * {@code X-Supplier-Signature} the digest — exactly what
+     * {@code WebhookSignatureVerifier} recomputes. The signature doubles as the
+     * replay nonce, so every distinct body (callers already generate a unique
+     * poId / supplierAckRef / supplierAsnRef per scenario) yields a distinct
+     * signature and never trips {@code WEBHOOK_REPLAY_DETECTED}.
+     *
+     * <p>Signs over the exact UTF-8 bytes that are sent as the body (via
+     * {@link java.net.http.HttpRequest.BodyPublishers#ofByteArray(byte[])}), so
+     * the server-side HMAC is byte-identical — no re-serialization drift.
+     */
+    public static HttpRequest webhookSignedPost(URI uri, String supplierSecret, String rawBody) {
+        byte[] bodyBytes = rawBody.getBytes(StandardCharsets.UTF_8);
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        String signature = hmacSha256Hex(supplierSecret, timestamp, bodyBytes);
         return HttpRequest.newBuilder(uri)
                 .timeout(HTTP_TIMEOUT)
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
-                .header("X-Supplier-Signature", supplierSecret);
+                .header("X-Supplier-Timestamp", timestamp)
+                .header("X-Supplier-Signature", signature)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(bodyBytes))
+                .build();
+    }
+
+    /**
+     * Lowercase-hex HMAC-SHA256 of {@code timestamp + "." + body} — mirrors
+     * {@code WebhookSignatureVerifier#computeHmac} byte-for-byte.
+     */
+    private static String hmacSha256Hex(String secret, String timestamp, byte[] body) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            mac.update(timestamp.getBytes(StandardCharsets.UTF_8));
+            mac.update((byte) '.');
+            mac.update(body);
+            byte[] digest = mac.doFinal();
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16));
+                sb.append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (GeneralSecurityException e) {
+            // HmacSHA256 is JCA-mandated — unreachable in practice.
+            throw new IllegalStateException("HmacSHA256 unavailable", e);
+        }
     }
 
     public static HttpResponse<String> sendString(HttpClient http, HttpRequest request) throws Exception {

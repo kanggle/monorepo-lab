@@ -12,7 +12,7 @@ import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueIdem
 import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueSku;
 import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueSupplierAckRef;
 import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.uniqueSupplierAsnRef;
-import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.webhookJson;
+import static com.example.scmplatform.e2e.testsupport.E2ETestFixtures.webhookSignedPost;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -114,10 +114,9 @@ class AsnReceiveE2ETest extends ScmPlatformE2ETestBase {
             String supplierAckRef = uniqueSupplierAckRef("ACK-ASN");
             String ackBody = objectMapper.writeValueAsString(Map.of(
                     "tenantId", "scm", "poId", poId, "supplierAckRef", supplierAckRef));
-            HttpResponse<String> ackResp = sendString(http, webhookJson(
-                    procurementBaseUri().resolve(pathSupplierAckWebhook()), SUPPLIER_WEBHOOK_SECRET)
-                    .POST(HttpRequest.BodyPublishers.ofString(ackBody))
-                    .build());
+            HttpResponse<String> ackResp = sendString(http, webhookSignedPost(
+                    procurementBaseUri().resolve(pathSupplierAckWebhook()),
+                    SUPPLIER_WEBHOOK_SECRET, ackBody));
             assertThat(ackResp.statusCode()).isEqualTo(200);
 
             // ----- CONFIRM (operator) -------------------------------------
@@ -146,10 +145,9 @@ class AsnReceiveE2ETest extends ScmPlatformE2ETestBase {
                             Instant.now().plusSeconds(3600).toString(),
                             poLineId, orderedQty);
 
-            HttpResponse<String> asnResp = sendString(http, webhookJson(
-                    procurementBaseUri().resolve(pathAsnWebhook()), SUPPLIER_WEBHOOK_SECRET)
-                    .POST(HttpRequest.BodyPublishers.ofString(asnBody))
-                    .build());
+            HttpResponse<String> asnResp = sendString(http, webhookSignedPost(
+                    procurementBaseUri().resolve(pathAsnWebhook()),
+                    SUPPLIER_WEBHOOK_SECRET, asnBody));
             assertThat(asnResp.statusCode())
                     .as("ASN webhook returns 200 with full ordered quantity")
                     .isEqualTo(200);

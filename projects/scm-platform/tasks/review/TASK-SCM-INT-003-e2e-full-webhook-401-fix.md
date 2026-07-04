@@ -8,7 +8,7 @@ scm nightly e2e-full 웹훅 2×401 복구 — `AsnReceiveE2ETest` · `SupplierAc
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -156,3 +156,17 @@ Follow: `projects/scm-platform/specs/services/procurement-service/architecture.m
 Surfaced 2026-07-04 — TASK-MONO-326(CI 워크플로 DRY 리팩토링) 검증 중, 머지가 트리거한 nightly에서 `scm-platform-e2e-full`의 2×401(pre-existing, 직전 nightly 3연속 RED로 확인) 발견. 사용자 결정(2026-07-04): 별도 백로그 fix task로 등록(리팩토링과 분리). 유력 원인 = TASK-SCM-BE-033 웹훅 HMAC 도입 후 @Tag("full") 웹훅 e2e 미갱신.
 
 분석=Opus 4.8 / 구현 권장=Sonnet 또는 Opus (원인 확정=진단 우선; 수정은 테스트-한정 서명 헬퍼 → 중간 복잡도. 가설 확정 후 backend-engineer 위임 가능).
+
+---
+
+# Implementation Result (2026-07-05)
+
+**원인 확정 (가설 CONFIRMED, 정적 진단)**: `E2ETestFixtures.webhookJson()` 이 웹훅에 **v1 평문 헤더 `X-Supplier-Signature: scm-supplier-webhook-secret`** 하나만 부착했다. BE-033 `WebhookSignatureFilter`/`WebhookSignatureVerifier` 는 `X-Supplier-Timestamp`(epoch초) + `X-Supplier-Signature`(= `HMAC-SHA256(secret, timestamp + "." + rawBody)` lowercase-hex)를 요구 → 평문 시크릿은 hex 디코드/HMAC 비교 실패로 **401 `WEBHOOK_SIGNATURE_INVALID`**. 두 `@Tag("full")` 테스트(`AsnReceiveE2ETest` ack+asn 2콜, `SupplierAckWebhookE2ETest` ack 1콜)가 모두 이 헬퍼를 사용 → 정확히 2×401. 5/7 통과분은 게이트웨이 경유 OIDC 인증 경로(JWKS 정상 방증).
+
+**수정 (테스트-한정, 프로덕션 무변경)**:
+- `E2ETestFixtures`: `webhookJson()`(v1 평문) 제거 → `webhookSignedPost(uri, secret, rawBody)` 추가. `timestamp = Instant.now().getEpochSecond()`, `X-Supplier-Timestamp` + `X-Supplier-Signature`(hex HMAC) 부착, 서명한 **정확한 UTF-8 바이트**를 `BodyPublishers.ofByteArray`로 전송(재직렬화 drift 차단). `hmacSha256Hex` 는 프로덕션 `WebhookSignatureVerifier#computeHmac` + IT `ProcurementWebhookReplayIntegrationTest#hmacHex` 를 바이트 단위 미러.
+- `AsnReceiveE2ETest`(ack+asn 2콜) · `SupplierAckWebhookE2ETest`(ack 1콜): `webhookJson().POST().build()` → `webhookSignedPost(...)` 로 전환. 서명 로직 단일화(smoke 웹훅 테스트 없음 — 유일 호출부).
+- `SupplierAckWebhookE2ETest` javadoc 의 stale "HMAC ... coming in v2" → BE-033 반영으로 정정.
+- replay nonce = 서명 hex. 각 콜 body 유니크(poId/supplierAckRef/supplierAsnRef) → 서명 상이 → `WEBHOOK_REPLAY_DETECTED` 미발생. e2e 시크릿=default `scm-supplier-webhook-secret`(base 미override 확인).
+
+**검증**: `:projects:scm-platform:tests:e2e:compileTestJava` BUILD SUCCESSFUL(로컬, Docker-free). e2e-full 실 실행은 로컬 Windows npipe 비권위 + 호스트 데모 스택 가동 중이라 회피 → **CI Linux `scm-platform-e2e-full` 레인이 판정 권위**(머지 트리거 nightly). 프로덕션 서명 로직·필터 무변경(AC 준수).
