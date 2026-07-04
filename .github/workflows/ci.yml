@@ -263,14 +263,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -429,14 +423,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build boot jars
         run: >-
@@ -476,14 +464,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build ecommerce boot jars
         # auth-service excluded by TASK-BE-132 — decommissioned, not in settings.gradle.
@@ -546,14 +528,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build fan-platform boot jars
         run: >-
@@ -596,14 +572,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build scm-platform boot jars
         run: >-
@@ -831,14 +801,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -900,14 +864,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -966,14 +924,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -1034,14 +986,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build iam boot jars
         # 5 services = docker-compose.e2e.yml `build:` directive service set
@@ -1109,14 +1055,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -1162,14 +1102,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -1214,14 +1148,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -1269,14 +1197,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -1330,14 +1252,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Verify Docker (Testcontainers prerequisite)
         run: docker info
@@ -1475,14 +1391,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Download boot jars
         uses: actions/download-artifact@v4
@@ -1585,14 +1495,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Download fan-platform boot jars
         uses: actions/download-artifact@v4
@@ -1698,14 +1602,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Download scm-platform boot jars
         uses: actions/download-artifact@v4

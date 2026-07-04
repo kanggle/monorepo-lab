@@ -1,0 +1,23 @@
+name: 'Set up JDK 21 + Gradle'
+description: >-
+  Shared JVM toolchain setup for monorepo-lab CI jobs: Temurin JDK 21 +
+  gradle/actions/setup-gradle. Collapses the identical two-step block that
+  was repeated across every JVM job in ci.yml / nightly-e2e.yml /
+  federation-hardening-e2e.yml (TASK-MONO-326 Phase 1).
+
+  NOTE: this is a LOCAL composite action (`uses: ./.github/actions/...`),
+  so the calling job MUST run `actions/checkout` BEFORE invoking it — the
+  action file only exists on disk once the repo is checked out. Checkout is
+  therefore intentionally NOT part of this composite.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK 21 (Temurin)
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v4
