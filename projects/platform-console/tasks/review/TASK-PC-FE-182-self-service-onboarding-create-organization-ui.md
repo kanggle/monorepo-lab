@@ -1,8 +1,9 @@
 # TASK-PC-FE-182 — 셀프서비스 온보딩 "조직 만들기" UI (로그인했지만 운영자 아님 → 새 테넌트 생성 → 그 관리자로 콘솔 입장)
 
-**Status:** ready
+**Status:** review
 **Area:** platform-console / console-web · **Scope:** OIDC 콜백 fail-closed 분기 + `(onboarding)` 라우트 그룹 + 온보딩 프록시 + 재-교환
 **Type:** 보안-민감 (fail-closed 콜백 완화 — "not_provisioned"을 재-로그인 대신 온보딩으로) + 신규 UI 슬라이스
+**Implemented:** branch `pc-fe-182-onboarding-ui` → **PR #2206** (open). `tsc --noEmit` + `next lint` + 신규/영향 `vitest` 35/35 green(로컬 OperatorsScreen 1건은 clean main 재현 = 기존 로컬 flake, CI Linux 권위).
 **Depends on:** TASK-BE-474 / TASK-BE-474-fix-001 (백엔드 `POST /api/admin/onboarding/organizations` — CI+라이브 검증 완료, `oidc_subject` 설정으로 온보딩 후 token-exchange 200 증명), [ADR-MONO-044](../../../../docs/adr/ADR-MONO-044-self-service-tenant-onboarding.md) §3.4 step 3
 **Analysis model:** Opus 4.8 · **Impl model:** Opus (보안-민감 콜백 완화)
 

@@ -91,7 +91,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-182-self-service-onboarding-create-organization-ui.md` — **IMPLEMENTED → review (PR #2206)**. ADR-MONO-044 §3.4 step 3 — 셀프서비스 온보딩 "조직 만들기" UI over the CI+live-proven BE-474 endpoint. A logged-in non-operator creates a new tenant and enters the console as its first `TENANT_ADMIN` + `TENANT_BILLING_ADMIN` (no `SUPER_ADMIN` in the loop). **Security-sensitive**: the OIDC callback's `not_provisioned` branch routes to `/onboarding` (access+refresh KEPT as the onboarding subject_token) instead of re-login; `operator_exchange_unavailable` still full-wipes (unchanged). `isAuthenticated()` unchanged → pre-operator reaches only the new `(onboarding)` group. New: onboarding-client (subjectToken never logged) + `/api/onboarding/organizations` proxy (create → re-exchange operator token + set cookies, fail-soft `ready:false`) + `(onboarding)` route group + `CreateOrganizationForm`. 35 new/updated tests; tsc/lint/vitest green. 분석·구현=Opus 4.8. [[project_platform_console_adr_013]]
 
 ## done
 
