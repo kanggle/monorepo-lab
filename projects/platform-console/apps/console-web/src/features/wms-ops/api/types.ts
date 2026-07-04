@@ -51,8 +51,14 @@ export const InventoryRowSchema = z
     skuId: z.string(),
     lotId: z.string().nullable().optional(),
     warehouseId: z.string(),
-    locationCode: z.string().optional(),
-    skuCode: z.string().optional(),
+    // Nullable: the admin read model leaves the denormalized master codes
+    // NULL when the corresponding master ref (admin_{location,sku}_ref) has not
+    // projected yet — e.g. a freshly received/reserved SKU before its master
+    // event lands. The table already falls back to the id (`code ?? id`), so
+    // null must PARSE (not throw → whole-section degrade). Mirrors `lotNo`
+    // and every shipment field. (TASK-PC-FE-185)
+    locationCode: z.string().nullable().optional(),
+    skuCode: z.string().nullable().optional(),
     lotNo: z.string().nullable().optional(),
     availableQty: z.number().optional(),
     reservedQty: z.number().optional(),
