@@ -50,10 +50,12 @@ export interface OperatorsSummary {
   status: CellStatus;
 }
 
-/** Accounts card — active-tenant-scoped total (no lock/suspended breakdown:
- *  the accounts search endpoint has no status filter). */
+/** Accounts card — active-tenant-scoped total + LOCKED count (TASK-PC-FE-181,
+ *  via the TASK-BE-475 `status` filter). `status` is the total leg's outcome (the
+ *  card gate); `locked` is a null-tolerant sub-leg (its own degrade/forbidden). */
 export interface AccountsSummary {
   total: number | null;
+  locked: number | null;
   status: CellStatus;
 }
 
@@ -74,7 +76,7 @@ export interface IamOverviewState {
 
 const EMPTY: Omit<IamOverviewState, 'noActiveTenant'> = {
   operators: { total: null, active: null, suspended: null, status: 'degraded' },
-  accounts: { total: null, status: 'degraded' },
+  accounts: { total: null, locked: null, status: 'degraded' },
   audit: { total: null, recent: null, status: 'degraded' },
 };
 
@@ -121,12 +123,16 @@ export async function getIamOverviewState(): Promise<IamOverviewState> {
       operatorsActiveCell,
       operatorsSuspendedCell,
       accountsCell,
+      accountsLockedCell,
       auditCell,
     ] = await Promise.all([
       cell(listOperators({ page: 0, size: 1 })),
       cell(listOperators({ status: 'ACTIVE', page: 0, size: 1 })),
       cell(listOperators({ status: 'SUSPENDED', page: 0, size: 1 })),
       cell(searchAccounts({ page: 0, size: 1 })),
+      // TASK-PC-FE-181: LOCKED count via the TASK-BE-475 status filter (own sub-leg
+      // so a degrade here never blanks the total).
+      cell(searchAccounts({ status: 'LOCKED', page: 0, size: 1 })),
       cell(queryAudit({ page: 0, size: RECENT_SIZE })),
     ]);
 
@@ -139,6 +145,7 @@ export async function getIamOverviewState(): Promise<IamOverviewState> {
 
     const accounts: AccountsSummary = {
       total: accountsCell.value?.totalElements ?? null,
+      locked: accountsLockedCell.value?.totalElements ?? null,
       status: accountsCell.status,
     };
 

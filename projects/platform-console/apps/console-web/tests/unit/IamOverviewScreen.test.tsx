@@ -24,7 +24,7 @@ function state(overrides: Partial<IamOverviewState> = {}): IamOverviewState {
   return {
     noActiveTenant: false,
     operators: { total: 10, active: 8, suspended: 2, status: 'ok' },
-    accounts: { total: 123, status: 'ok' },
+    accounts: { total: 123, locked: 4, status: 'ok' },
     audit: {
       total: 57,
       recent: [adminRow('a1', 'ACCOUNT_LOCK'), adminRow('a2', 'ROLE_GRANT')],
@@ -54,6 +54,10 @@ describe('IamOverviewScreen (TASK-PC-FE-180)', () => {
     expect(acc).toHaveAttribute('href', '/accounts');
     expect(within(acc).getByTestId('iam-overview-accounts-total')).toHaveTextContent(
       '123',
+    );
+    // TASK-PC-FE-181: the LOCKED sub-count (via the BE-475 status filter).
+    expect(within(acc).getByTestId('iam-overview-accounts-locked')).toHaveTextContent(
+      '4',
     );
   });
 
@@ -88,7 +92,7 @@ describe('IamOverviewScreen (TASK-PC-FE-180)', () => {
   it('degraded accounts cell → 점검 필요 placeholder', () => {
     render(
       <IamOverviewScreen
-        state={state({ accounts: { total: null, status: 'degraded' } })}
+        state={state({ accounts: { total: null, locked: null, status: 'degraded' } })}
       />,
     );
     expect(
