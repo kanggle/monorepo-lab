@@ -1,0 +1,31 @@
+name: 'Set up Node 20 + pnpm'
+description: >-
+  Shared Node/pnpm toolchain setup for monorepo-lab frontend CI jobs: pnpm
+  9.15.0 + Node 20 with the pnpm cache. Collapses the identical
+  pnpm/action-setup@v4 + actions/setup-node@v4 block that was repeated across
+  the frontend jobs (TASK-MONO-329), single-sourcing the Node/pnpm versions.
+
+  NOTE: this is a LOCAL composite action (`uses: ./.github/actions/...`), so the
+  calling job MUST run `actions/checkout` BEFORE invoking it — the action file
+  only exists on disk once the repo is checked out. Checkout is therefore
+  intentionally NOT part of this composite.
+
+inputs:
+  cache-dependency-path:
+    description: 'Newline-separated pnpm-lock.yaml path(s) for the setup-node pnpm cache.'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: '9.15.0'
+
+    - name: Set up Node 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'pnpm'
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
