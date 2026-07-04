@@ -10,8 +10,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.absent;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
@@ -72,6 +74,35 @@ class AccountServiceClientUnitTest {
         assertThatThrownBy(() -> client.search("fan-platform", "foo@example.com"))
                 .isInstanceOf(DownstreamFailureException.class)
                 .isNotInstanceOf(NonRetryableDownstreamException.class);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-475: listAll(status=null) — 요청에 ?status 파라미터를 붙이지 않는다 (back-compat)")
+    void listAll_nullStatus_omitsStatusQueryParam() {
+        wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"content\":[],\"totalElements\":0,\"page\":0,\"size\":20,\"totalPages\":0}")));
+
+        client.listAll("fan-platform", 0, 20, null);
+
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/accounts"))
+                .withQueryParam("tenantId", equalTo("fan-platform"))
+                .withQueryParam("status", absent()));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-475: listAll(status=LOCKED) — 요청에 ?status=LOCKED 를 붙인다")
+    void listAll_withStatus_addsStatusQueryParam() {
+        wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"content\":[],\"totalElements\":0,\"page\":0,\"size\":1,\"totalPages\":0}")));
+
+        client.listAll("ecommerce", 0, 1, "LOCKED");
+
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/accounts"))
+                .withQueryParam("status", equalTo("LOCKED")));
     }
 
     @Test

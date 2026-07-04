@@ -67,6 +67,18 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
     Page<AccountJpaEntity> findAllAccounts(Pageable pageable);
 
     /**
+     * TASK-BE-475: all-tenant (platform-scope {@code "*"}) paginated listing with an
+     * optional status filter — the status-aware counterpart of {@link #findAllAccounts(Pageable)}.
+     * {@code null} status → all accounts (equivalent to {@code findAllAccounts}). Reached only by
+     * a SUPER_ADMIN whose effective-scope gate admin-service has already enforced (mirrors the
+     * tenant-scoped {@link #findByTenantIdWithStatusFilter} status hook).
+     */
+    @Query("SELECT a FROM AccountJpaEntity a WHERE (:status IS NULL OR a.status = :status)")
+    Page<AccountJpaEntity> findAllAccountsWithStatusFilter(
+            @Param("status") com.example.account.domain.status.AccountStatus status,
+            Pageable pageable);
+
+    /**
      * TASK-BE-386 (ADR-MONO-036 P4, M4): cross-tenant read of the resolved
      * {@code account_id → identity_id} bindings, used to drive the auth_db credential
      * identity backfill. Platform-level (NOT tenant-scoped) — a bulk reconciliation

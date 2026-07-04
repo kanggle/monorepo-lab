@@ -95,6 +95,17 @@ class AccountJpaRepositoryTest {
         );
     }
 
+    // TASK-BE-475: insert with an explicit lifecycle status for the status-filter tests.
+    private void insertAccountWithStatus(String tenantId, String id, String email, String status) {
+        jdbc.update(
+                "INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, version) " +
+                "VALUES (?, ?, ?, ?, ?, ?, 0)",
+                id, tenantId, email, status,
+                Timestamp.from(Instant.now()),
+                Timestamp.from(Instant.now())
+        );
+    }
+
     // ── findByTenantIdAndEmail / existsByTenantIdAndEmail ────────────────────
 
     @Test
@@ -294,6 +305,48 @@ class AccountJpaRepositoryTest {
         assertThat(fanPage.getContent()).extracting(AccountJpaEntity::getId)
                 .contains(fanId).doesNotContain(wmsId);
         assertThat(fanPage.getContent()).allMatch(e -> TENANT_FAN.equals(e.getTenantId()));
+    }
+
+    // ── TASK-BE-475: status-filtered list ────────────────────────────────────
+
+    @Test
+    @DisplayName("TASK-BE-475: findByTenantIdWithStatusFilter(tenantId, LOCKED) — 해당 테넌트의 LOCKED 계정만 (AC-1)")
+    void findByTenantIdWithStatusFilter_lockedStatus_returnsOnlyLocked() {
+        String activeId = UUID.randomUUID().toString();
+        String lockedId = UUID.randomUUID().toString();
+        insertAccountWithStatus(TENANT_FAN, activeId, "active@example.com", "ACTIVE");
+        insertAccountWithStatus(TENANT_FAN, lockedId, "locked@example.com", "LOCKED");
+
+        Page<AccountJpaEntity> lockedPage = accountRepo.findByTenantIdWithStatusFilter(
+                TENANT_FAN, AccountStatus.LOCKED, PageRequest.of(0, 20));
+
+        assertThat(lockedPage.getContent()).extracting(AccountJpaEntity::getId)
+                .containsExactly(lockedId);
+        assertThat(lockedPage.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-475: findAllAccountsWithStatusFilter — '*' 전 테넌트 status 필터 (AC-4), null=전체")
+    void findAllAccountsWithStatusFilter_starScope_filtersAcrossTenants() {
+        insertWmsTenant();
+        String fanLocked = UUID.randomUUID().toString();
+        String wmsLocked = UUID.randomUUID().toString();
+        String fanActive = UUID.randomUUID().toString();
+        insertAccountWithStatus(TENANT_FAN, fanLocked, "fl@example.com", "LOCKED");
+        insertAccountWithStatus(TENANT_WMS, wmsLocked, "wl@example.com", "LOCKED");
+        insertAccountWithStatus(TENANT_FAN, fanActive, "fa@example.com", "ACTIVE");
+
+        Page<AccountJpaEntity> locked = accountRepo.findAllAccountsWithStatusFilter(
+                AccountStatus.LOCKED, PageRequest.of(0, 20));
+        // "*" all-tenant LOCKED spans tenants but excludes ACTIVE.
+        assertThat(locked.getContent()).extracting(AccountJpaEntity::getId)
+                .containsExactlyInAnyOrder(fanLocked, wmsLocked);
+
+        Page<AccountJpaEntity> all = accountRepo.findAllAccountsWithStatusFilter(
+                null, PageRequest.of(0, 20));
+        // null status → all statuses across all tenants (equivalent to findAllAccounts).
+        assertThat(all.getContent()).extracting(AccountJpaEntity::getId)
+                .contains(fanLocked, wmsLocked, fanActive);
     }
 
     // ── findActiveDormantCandidates ─────────────────────────────────────────

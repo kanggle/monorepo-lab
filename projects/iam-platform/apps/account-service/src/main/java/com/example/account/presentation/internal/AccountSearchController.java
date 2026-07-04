@@ -24,10 +24,13 @@ public class AccountSearchController {
             // TASK-BE-357: required (no default). Blank/absent → 400 VALIDATION_ERROR in the
             // service (fail-closed). admin-service has already resolved + effective-scope-gated it.
             @RequestParam(required = false) String tenantId,
+            // TASK-BE-475: optional account-status filter (list branch only). Parsed
+            // fail-closed in the service; admin-service already validated the allow-set.
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        var result = accountSearchQueryService.search(tenantId, email, page, size);
+        var result = accountSearchQueryService.search(tenantId, email, status, page, size);
         var items = result.content().stream()
                 .map(item -> new AccountSearchResponse.Item(
                         item.id(), item.email(), item.status(), item.createdAt()))

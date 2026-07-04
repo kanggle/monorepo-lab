@@ -3,6 +3,7 @@ package com.example.account.application.service;
 import com.example.account.application.port.AccountQueryPort;
 import com.example.account.application.result.AccountDetailResult;
 import com.example.account.application.result.AccountSearchResult;
+import com.example.account.domain.status.AccountStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +26,7 @@ public class AccountSearchQueryService {
      * rather than degrading to an implicit cross-tenant scan.
      */
     @Transactional(readOnly = true)
-    public AccountSearchResult search(String tenantId, String email, int page, int size) {
+    public AccountSearchResult search(String tenantId, String email, String status, int page, int size) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId is required");
         }
@@ -34,11 +35,27 @@ public class AccountSearchQueryService {
         }
 
         if (email == null || email.isBlank()) {
-            return accountQueryPort.findAll(tenantId, page, size);
+            // TASK-BE-475: optional status filter (list branch only). Fail-closed parse —
+            // a bad value → 400 VALIDATION_ERROR (defense in depth; admin-service already
+            // validated the allow-set before forwarding). null/blank → no filter.
+            AccountStatus statusFilter = parseStatus(status);
+            return accountQueryPort.findAll(tenantId, statusFilter, page, size);
         }
 
         List<AccountSearchResult.Item> items = accountQueryPort.findByEmail(tenantId, email.trim());
         return new AccountSearchResult(items, items.size(), 0, size, items.isEmpty() ? 0 : 1);
+    }
+
+    /** TASK-BE-475: null/blank → no filter; a non-enum value → IllegalArgumentException (400). */
+    private static AccountStatus parseStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return AccountStatus.valueOf(status.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid account status filter: " + status);
+        }
     }
 
     @Transactional(readOnly = true)

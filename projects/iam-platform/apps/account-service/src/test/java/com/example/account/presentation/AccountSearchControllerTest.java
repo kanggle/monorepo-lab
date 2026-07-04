@@ -45,7 +45,7 @@ class AccountSearchControllerTest {
         var item = new AccountSearchResult.Item("acc-1", "a@example.com", "ACTIVE",
                 Instant.parse("2026-01-01T00:00:00Z"));
         var result = new AccountSearchResult(List.of(item), 1, 0, 20, 1);
-        given(accountSearchQueryService.search(eq("fan-platform"), isNull(), eq(0), eq(20))).willReturn(result);
+        given(accountSearchQueryService.search(eq("fan-platform"), isNull(), isNull(), eq(0), eq(20))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform"))
                 .andExpect(status().isOk())
@@ -63,7 +63,7 @@ class AccountSearchControllerTest {
         var item = new AccountSearchResult.Item("acc-2", "b@example.com", "ACTIVE",
                 Instant.parse("2026-01-01T00:00:00Z"));
         var result = new AccountSearchResult(List.of(item), 6, 1, 5, 2);
-        given(accountSearchQueryService.search(eq("fan-platform"), isNull(), eq(1), eq(5))).willReturn(result);
+        given(accountSearchQueryService.search(eq("fan-platform"), isNull(), isNull(), eq(1), eq(5))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform&page=1&size=5"))
                 .andExpect(status().isOk())
@@ -75,11 +75,23 @@ class AccountSearchControllerTest {
     @Test
     @DisplayName("GET /internal/accounts?size=101 returns 400")
     void search_sizeOverMax_returns400() throws Exception {
-        given(accountSearchQueryService.search(any(), any(), eq(0), eq(101)))
+        given(accountSearchQueryService.search(any(), any(), any(), eq(0), eq(101)))
                 .willThrow(new IllegalArgumentException("size must be ≤ 100"));
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform&size=101"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-475: GET /internal/accounts?status=LOCKED forwards the status to the service")
+    void search_withStatus_forwardsStatus() throws Exception {
+        var result = new AccountSearchResult(List.of(), 3, 0, 1, 3);
+        given(accountSearchQueryService.search(eq("ecommerce"), isNull(), eq("LOCKED"), eq(0), eq(1)))
+                .willReturn(result);
+
+        mockMvc.perform(get("/internal/accounts?tenantId=ecommerce&status=LOCKED&page=0&size=1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3));
     }
 
     @Test
@@ -88,7 +100,7 @@ class AccountSearchControllerTest {
         var item = new AccountSearchResult.Item("acc-1", "a@example.com", "ACTIVE",
                 Instant.parse("2026-01-01T00:00:00Z"));
         var result = new AccountSearchResult(List.of(item), 1, 0, 20, 1);
-        given(accountSearchQueryService.search(eq("fan-platform"), eq("a@example.com"), eq(0), eq(20))).willReturn(result);
+        given(accountSearchQueryService.search(eq("fan-platform"), eq("a@example.com"), isNull(), eq(0), eq(20))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform&email=a@example.com"))
                 .andExpect(status().isOk())
@@ -100,7 +112,7 @@ class AccountSearchControllerTest {
     @DisplayName("GET /internal/accounts?email=unknown returns empty content")
     void search_withUnknownEmail_returnsEmpty() throws Exception {
         var result = new AccountSearchResult(List.of(), 0, 0, 20, 0);
-        given(accountSearchQueryService.search(eq("fan-platform"), eq("unknown@example.com"), eq(0), eq(20))).willReturn(result);
+        given(accountSearchQueryService.search(eq("fan-platform"), eq("unknown@example.com"), isNull(), eq(0), eq(20))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform&email=unknown@example.com"))
                 .andExpect(status().isOk())

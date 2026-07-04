@@ -59,10 +59,22 @@ public class AccountAdminController {
     private final AdminActionAuditor auditor;
     private final QueryTenantScopeGate queryTenantScopeGate;
 
+    /**
+     * TASK-BE-475: the allowed account-status filter values (the public contract's
+     * enum — admin-api.md § GET /api/admin/accounts). Validated at this boundary so a
+     * bad value is a clean 400 VALIDATION_ERROR here rather than a downstream 400 that
+     * {@link AccountServiceClient} would mask into 503 DOWNSTREAM_ERROR. admin-service
+     * owns no AccountStatus enum (that is account-service's domain), so the check is a
+     * string allow-set — account-service fail-closed-parses again (defense in depth).
+     */
+    private static final java.util.Set<String> ACCOUNT_STATUS_VALUES =
+            java.util.Set.of("ACTIVE", "LOCKED", "DORMANT", "DELETED");
+
     @GetMapping
     public ResponseEntity<AccountServiceClient.AccountSearchResponse> search(
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String tenantId,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
             HttpServletRequest request) {
@@ -99,7 +111,19 @@ public class AccountAdminController {
                     "Operator lacks required permission: " + Permission.ACCOUNT_READ);
         }
 
-        return ResponseEntity.ok(accountServiceClient.listAll(resolvedTenant, page, size));
+        // TASK-BE-475: optional status filter (list branch only). Normalize + validate
+        // at this boundary → bad value is 400 VALIDATION_ERROR here (IllegalArgumentException
+        // → AdminExceptionHandler), never a downstream 400 masked as 503. Blank ⇒ unset.
+        String normalizedStatus = null;
+        if (status != null && !status.isBlank()) {
+            normalizedStatus = status.trim().toUpperCase(java.util.Locale.ROOT);
+            if (!ACCOUNT_STATUS_VALUES.contains(normalizedStatus)) {
+                throw new IllegalArgumentException(
+                        "status must be one of " + ACCOUNT_STATUS_VALUES + " (was: " + status + ")");
+            }
+        }
+
+        return ResponseEntity.ok(accountServiceClient.listAll(resolvedTenant, page, size, normalizedStatus));
     }
 
     @GetMapping("/{accountId}")

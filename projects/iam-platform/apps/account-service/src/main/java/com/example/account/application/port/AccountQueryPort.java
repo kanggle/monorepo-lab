@@ -2,6 +2,7 @@ package com.example.account.application.port;
 
 import com.example.account.application.result.AccountDetailResult;
 import com.example.account.application.result.AccountSearchResult;
+import com.example.account.domain.status.AccountStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,10 +24,11 @@ public interface AccountQueryPort {
      * Tenant-scoped paginated account listing.
      *
      * @param tenantId concrete tenant; {@code "*"} → all tenants (platform scope)
+     * @param status   TASK-BE-475: optional lifecycle-status filter; {@code null} → all statuses
      * @param page     zero-based page number
      * @param size     page size
      */
-    AccountSearchResult findAll(String tenantId, int page, int size);
+    AccountSearchResult findAll(String tenantId, AccountStatus status, int page, int size);
 
     /**
      * Exact email lookup within a tenant (the {@code (tenant_id, email)} unique
