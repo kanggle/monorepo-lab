@@ -59,7 +59,7 @@ export function IamGuideScreen() {
   return (
     <section aria-labelledby="iam-guide-heading" data-testid="iam-guide">
       <h1 id="iam-guide-heading" className="mb-2 text-2xl font-semibold">
-        IAM 개요
+        IAM 가이드
       </h1>
       <p className="mb-8 max-w-3xl text-sm text-muted-foreground">
         IAM 콘솔은 플랫폼 운영자의 <strong>역할 기반 접근제어(RBAC)</strong>로{' '}

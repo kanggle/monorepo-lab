@@ -27,12 +27,22 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     expect(screen.queryByTestId('nav-operators')).toBeNull();
   });
 
-  it('clicking IAM drills in: reveals 계정 운영 + 감사·보안 + 운영자 관리 and pins IAM at the top', () => {
+  it('clicking IAM drills in: reveals 개요 + 가이드 + 계정 운영 + 감사·보안 + 운영자 관리 and pins IAM at the top', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-iam'));
 
+    // 개요 (TASK-PC-FE-180) — the LIVE overview snapshot, first child.
+    expect(screen.getByTestId('nav-iam-overview')).toHaveAttribute(
+      'href',
+      '/iam',
+    );
+    // 가이드 (TASK-PC-FE-180) — the relocated static RBAC guide, second child.
+    expect(screen.getByTestId('nav-iam-guide')).toHaveAttribute(
+      'href',
+      '/iam/guide',
+    );
     // 계정 운영 (TASK-PC-FE-062) — the catalog IAM tile's target, now also a
-    // sidebar IAM child; first in the drill.
+    // sidebar IAM child.
     expect(screen.getByTestId('nav-accounts')).toHaveAttribute(
       'href',
       '/accounts',
@@ -94,6 +104,32 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     );
     expect(screen.getByTestId('nav-audit')).not.toHaveAttribute('aria-current');
     expect(screen.getByTestId('nav-operators')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('a deep link to /iam auto-opens the IAM drill with 개요 active, 가이드 inactive (TASK-PC-FE-180)', () => {
+    mockPath = '/iam';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-iam-overview')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    // `/iam/guide` startsWith `/iam/` but the longest-match rule keeps 개요
+    // active at the exact `/iam` route (가이드 is NOT lit up).
+    expect(screen.getByTestId('nav-iam-guide')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('a deep link to /iam/guide auto-opens the IAM drill with 가이드 active, 개요 inactive (longest-match wins, TASK-PC-FE-180)', () => {
+    mockPath = '/iam/guide';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-iam-guide')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-iam-overview')).not.toHaveAttribute(
       'aria-current',
     );
   });

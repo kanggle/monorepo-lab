@@ -1,11 +1,24 @@
-import { IamGuideScreen } from '@/features/iam-guide';
+import { getIamOverviewState, IamOverviewScreen } from '@/features/iam-overview';
+
+export const dynamic = 'force-dynamic';
 
 /**
- * IAM 개요(가이드) 라우트 (TASK-PC-FE-163). IAM drill 의 첫 진입점 — role
- * 카탈로그 + 화면 접근 매트릭스 + 위임 체인 + 도메인 롤 설명. 정적 화면이라
- * 데이터 페치·권한 게이트가 없다(가이드는 콘솔 진입자 누구나 열람 가능). 다른
- * IAM 화면(계정 운영/운영자 관리/감사)과 달리 `force-dynamic` 이 불필요하다.
+ * IAM 개요 라우트 (TASK-PC-FE-180). The IAM drill's first entry point — now a
+ * **live operator overview snapshot** (운영자·계정·감사 현황) instead of the
+ * former static guide (relocated to `/iam/guide`). A server-side DIRECT fan-out
+ * over the existing IAM admin-service list endpoints (operators/accounts/audit),
+ * per-cell degrade/forbidden with a whole-session re-login on any leg's 401
+ * (handled inside `getIamOverviewState`). `force-dynamic` — the snapshot is a
+ * live per-request read (contrast the static `/iam/guide`).
  */
-export default function IamGuidePage() {
-  return <IamGuideScreen />;
+export default async function IamOverviewPage() {
+  const state = await getIamOverviewState();
+  return (
+    <section aria-labelledby="iam-overview-heading">
+      <h1 id="iam-overview-heading" className="mb-6 text-2xl font-semibold">
+        IAM 개요
+      </h1>
+      <IamOverviewScreen state={state} />
+    </section>
+  );
 }
