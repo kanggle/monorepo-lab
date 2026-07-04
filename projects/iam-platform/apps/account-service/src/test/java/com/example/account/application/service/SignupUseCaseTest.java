@@ -6,6 +6,7 @@ import com.example.account.application.exception.AccountAlreadyExistsException;
 import com.example.account.application.port.AuthServicePort;
 import com.example.account.application.result.SignupResult;
 import com.example.account.domain.account.Account;
+import com.example.account.domain.account.PasswordPolicyViolationException;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.ProfileRepository;
@@ -123,6 +124,22 @@ class SignupUseCaseTest {
 
         // unit test cannot observe the DB rollback — it verifies the event side-effect is
         // suppressed, which is the observable contract from outside the transaction.
+        verify(eventPublisher, never()).publishAccountCreated(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-473: 복잡도 미달 패스워드는 boundary 에서 차단 — 계정 저장/auth-service 호출/이벤트 없음")
+    void execute_weakPassword_shortCircuitsBeforeAccountCreate() {
+        given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
+        // "lowercaseonly" — 1 of 4 character classes, fails the ≥3 complexity rule.
+        SignupCommand weak = new SignupCommand(
+                "new@example.com", "lowercaseonly", "Jane", "en-US", "UTC");
+
+        assertThatThrownBy(() -> signupUseCase.execute(weak))
+                .isInstanceOf(PasswordPolicyViolationException.class);
+
+        verify(accountRepository, never()).save(any(Account.class));
+        verify(authServicePort, never()).createCredential(any(), any(), any(), any(), any());
         verify(eventPublisher, never()).publishAccountCreated(any(), any(), any());
     }
 

@@ -13,6 +13,7 @@ import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.exception.TenantScopeDeniedException;
 import com.example.account.application.exception.TenantSuspendedException;
 import com.example.account.application.port.AuthServicePort;
+import com.example.account.domain.account.PasswordPolicyViolationException;
 import com.example.account.domain.status.StateTransitionException;
 import com.example.account.domain.tenant.IllegalSubscriptionTransitionException;
 import com.example.web.dto.ErrorResponse;
@@ -39,6 +40,17 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("ACCOUNT_NOT_FOUND", "Account not found"));
+    }
+
+    /**
+     * TASK-BE-473: signup password fails the complexity policy → 422 VALIDATION_ERROR per
+     * {@code specs/contracts/http/account-api.md} ({@code POST /api/accounts/signup} — "패스워드
+     * 복잡도 미달"). The message is the policy rule text (never the plaintext password, R4).
+     */
+    @ExceptionHandler(PasswordPolicyViolationException.class)
+    public ResponseEntity<ErrorResponse> handlePasswordPolicyViolation(PasswordPolicyViolationException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("VALIDATION_ERROR", e.getMessage()));
     }
 
     @ExceptionHandler(StateTransitionException.class)

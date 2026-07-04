@@ -27,10 +27,10 @@ So a user who typed a valid password (e.g. `test1234!` — accepted end-to-end, 
   2. Make the `SignupInvalidException` catch-all message **honest** — a residual 400/422 can be an
      email *or* password problem; the message must name both rather than blaming the password only.
 - Update `SignupPageControllerTest`.
-- **Out of scope**: wiring `PasswordPolicy` (8자 + 3종) into the signup write path. The spec
-  (`specs/features/signup.md` §5, Business Rules) requires it but `CreateCredentialUseCase` never
-  calls it, so weak passwords are silently *accepted* at signup. Separate under-enforcement gap →
-  follow-up task.
+- **Out of scope (→ TASK-BE-473)**: wiring `PasswordPolicy` (8자 + 3종) into the signup write path.
+  The spec (`specs/features/signup.md` §5, Business Rules) requires it but `CreateCredentialUseCase`
+  never called it, so weak passwords were silently *accepted* at signup. Handled by the sibling
+  follow-up TASK-BE-473 (account-service boundary enforcement → 422 VALIDATION_ERROR).
 
 ## Acceptance Criteria
 

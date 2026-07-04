@@ -4,6 +4,7 @@ import com.example.account.application.exception.AccountAlreadyExistsException;
 import com.example.account.application.port.AuthServicePort;
 import com.example.account.application.result.SignupResult;
 import com.example.account.application.service.SignupUseCase;
+import com.example.account.domain.account.PasswordPolicyViolationException;
 import com.example.account.infrastructure.config.SecurityConfig;
 import com.example.account.presentation.advice.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
@@ -80,6 +81,27 @@ class SignupControllerTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    // TASK-BE-473: 패스워드 복잡도 미달(길이는 통과, 3종 미만)은 use case 가
+    // PasswordPolicyViolationException 을 던지고 GlobalExceptionHandler 가 422 VALIDATION_ERROR 로 매핑.
+    @Test
+    @DisplayName("패스워드 복잡도 미달 시 422 VALIDATION_ERROR 반환")
+    void signup_weakPassword_returns422() throws Exception {
+        given(signupUseCase.execute(any())).willThrow(
+                new PasswordPolicyViolationException(
+                        "Password must contain at least 3 of: uppercase, lowercase, digit, special character"));
+
+        mockMvc.perform(post("/api/accounts/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "test@example.com",
+                                  "password": "lowercaseonly"
+                                }
+                                """))
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
