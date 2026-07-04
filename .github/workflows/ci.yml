@@ -1202,10 +1202,11 @@ jobs:
 
   e2e-tests:
     name: E2E (gateway-master live-pair smoke, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test, boot-jars]
-    timeout-minutes: 20
     # Scoped to the monorepo-lab dev environment (see integration-tests comment).
+    # PR-time runs the @Tag("smoke") subset only via :e2eSmokeTest (ADR-MONO-010
+    # D3); the @Tag("full") suite runs nightly via wms-platform-e2e-full using the
+    # SAME reusable with gradle-target :e2eFullTest.
     # Activate for wms changes, cross-project (libs/workflows), or any project's
     # contract change (cross-service consumer gate, MONO-074).
     if: >-
@@ -1217,99 +1218,31 @@ jobs:
         needs.changes.outputs.wms == 'true' ||
         needs.changes.outputs.contracts == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Download boot jars
-        uses: actions/download-artifact@v4
-        with:
-          name: wms-boot-jars
-          path: artifact-staging
-
-      - name: Restore boot jar paths
-        # actions/upload-artifact@v4 strips the longest common prefix when
-        # multiple paths are uploaded, so the wms-boot-jars artifact contains
-        # `master-service/build/libs/master-service.jar` and
-        # `gateway-service/build/libs/gateway-service.jar` (with the
-        # `projects/wms-platform/apps/` prefix removed). The e2e harness's
-        # locateFile() in E2EBase.java expects the original
-        # `apps/<service>/build/libs/<service>.jar` layout when resolving
-        # paths from gateway-service's project directory, so move the
-        # jars back to their canonical locations before invoking Gradle.
-        run: |
-          mkdir -p projects/wms-platform/apps/master-service/build/libs/
-          mkdir -p projects/wms-platform/apps/gateway-service/build/libs/
-          mv artifact-staging/master-service/build/libs/master-service.jar \
-             projects/wms-platform/apps/master-service/build/libs/master-service.jar
-          mv artifact-staging/gateway-service/build/libs/gateway-service.jar \
-             projects/wms-platform/apps/gateway-service/build/libs/gateway-service.jar
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      # ADR-MONO-041 D2: wms service images `FROM monorepo/java-service-base:v1`.
-      # No image registry → build the shared base locally before the docker builds.
-      - name: Build shared java-service-base image (ADR-MONO-041 D2)
-        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
-
-      - name: Build service images for e2e
-        # Use the Docker CLI (BuildKit) instead of Testcontainers' ImageFromDockerfile
-        # (Docker Java client REST API). On Docker 28 the REST /build endpoint routes
-        # through BuildKit's gRPC session mechanism and hangs indefinitely with the
-        # Docker Java client bundled in Testcontainers 1.21.3 — 58-min and 60-min
-        # diagnostic runs confirmed zero progress after the image-check log line.
-        # Pre-building here and passing the image names via -Dwms.e2e.* lets
-        # E2EBase.java skip ImageFromDockerfile and use GenericContainer directly.
-        run: |
-          docker build -t wms-master-service:e2e \
-            -f projects/wms-platform/apps/master-service/Dockerfile \
-            projects/wms-platform/apps/master-service/
-          docker build -t wms-gateway-service:e2e \
-            -f projects/wms-platform/apps/gateway-service/Dockerfile \
-            projects/wms-platform/apps/gateway-service/
-
-      - name: Run gateway-master e2e smoke suite
-        # ADR-MONO-010 D3 — PR-time runs the @Tag("smoke") subset only via
-        # `:e2eSmokeTest`. Full suite (@Tag("full")) runs nightly + push to
-        # main via a separate `e2eFullTest` job (Phase 3 ADR, not yet wired).
-        # `:e2eTest` (legacy umbrella) still runs both — preserved for local
-        # dev convenience.
-        run: >-
-          ./gradlew
-          :projects:wms-platform:apps:gateway-service:e2eSmokeTest
-          -x :projects:wms-platform:apps:master-service:bootJar
-          -x :projects:wms-platform:apps:gateway-service:bootJar
-          -Dwms.e2e.masterImage=wms-master-service:e2e
-          -Dwms.e2e.gatewayImage=wms-gateway-service:e2e
-          --no-daemon --stacktrace
-
-      - name: Upload e2e test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-test-reports
-          path: |
-            projects/wms-platform/apps/gateway-service/build/reports/tests/e2eSmokeTest/
-            projects/wms-platform/apps/gateway-service/build/test-results/e2eSmokeTest/
-          retention-days: 7
+    uses: ./.github/workflows/_platform-e2e.yml
+    with:
+      project-dir: projects/wms-platform
+      boot-jars-artifact: wms-boot-jars
+      timeout-minutes: 20
+      gradle-target: ':projects:wms-platform:apps:gateway-service:e2eSmokeTest'
+      services: >-
+        [
+          {"name":"master-service","image":"wms-master-service:e2e","prop":"wms.e2e.masterImage"},
+          {"name":"gateway-service","image":"wms-gateway-service:e2e","prop":"wms.e2e.gatewayImage"}
+        ]
+      report-artifact: e2e-test-reports
+      report-paths: |
+        projects/wms-platform/apps/gateway-service/build/reports/tests/e2eSmokeTest/
+        projects/wms-platform/apps/gateway-service/build/test-results/e2eSmokeTest/
 
   fan-platform-e2e:
     name: E2E (fan-platform v1 live-trio smoke, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test, fan-platform-boot-jars]
-    timeout-minutes: 10
     # Live-trio e2e suite (TASK-FAN-INT-001): boots gateway-service +
-    # community-service + artist-service plus Postgres + Redis + Kafka
-    # via Testcontainers and a host-side WireMock JWKS stand-in. Mirrors
-    # the wms `e2e-tests` job's pattern: pre-build images via the Docker
-    # CLI to dodge the Docker 28 BuildKit gRPC hang in
-    # `ImageFromDockerfile`, then pass the image names via -Dfan.e2e.*
-    # so FanPlatformE2ETestBase uses GenericContainer directly.
+    # community-service + artist-service plus Postgres + Redis + Kafka via
+    # Testcontainers and a host-side WireMock JWKS stand-in. Pre-built images
+    # (Docker CLI) + -Dfan.e2e.* let FanPlatformE2ETestBase use GenericContainer
+    # directly, dodging the Docker 28 ImageFromDockerfile hang. The @Tag("full")
+    # suite runs nightly via fan-platform-e2e-full (SAME reusable, :e2eFullTest).
     # Activate for fan-platform changes, cross-project (libs/workflows), or any
     # project's contract change (cross-service consumer gate, MONO-074).
     if: >-
@@ -1321,102 +1254,34 @@ jobs:
         needs.changes.outputs.fan == 'true' ||
         needs.changes.outputs.contracts == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Download fan-platform boot jars
-        uses: actions/download-artifact@v4
-        with:
-          name: fan-platform-boot-jars
-          path: artifact-staging-fan
-
-      - name: Restore fan-platform boot jar paths
-        # actions/upload-artifact@v4 strips the longest common prefix when
-        # multiple paths are uploaded. The fan-platform-boot-jars artifact
-        # therefore contains `<service>/build/libs/<service>.jar` (with
-        # `projects/fan-platform/apps/` stripped). Move them back to their
-        # canonical locations so the gateway/community/artist Dockerfiles
-        # COPY the right path during the docker build below, AND so
-        # FanPlatformE2ETestBase's locateOptionalJar fallback can resolve
-        # them when the dev-path system properties are unset.
-        run: |
-          mkdir -p projects/fan-platform/apps/gateway-service/build/libs/
-          mkdir -p projects/fan-platform/apps/community-service/build/libs/
-          mkdir -p projects/fan-platform/apps/artist-service/build/libs/
-          mv artifact-staging-fan/gateway-service/build/libs/gateway-service.jar \
-             projects/fan-platform/apps/gateway-service/build/libs/gateway-service.jar
-          mv artifact-staging-fan/community-service/build/libs/community-service.jar \
-             projects/fan-platform/apps/community-service/build/libs/community-service.jar
-          mv artifact-staging-fan/artist-service/build/libs/artist-service.jar \
-             projects/fan-platform/apps/artist-service/build/libs/artist-service.jar
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      # ADR-MONO-041 D2: fan service images `FROM monorepo/java-service-base:v1`.
-      # No image registry → build the shared base locally before the docker builds.
-      - name: Build shared java-service-base image (ADR-MONO-041 D2)
-        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
-
-      - name: Build fan-platform service images for e2e
-        # Docker CLI build (BuildKit) — see wms `e2e-tests` job for the
-        # rationale (Docker 28 + Testcontainers ImageFromDockerfile hang).
-        run: |
-          docker build -t fan-platform-gateway-service:e2e \
-            -f projects/fan-platform/apps/gateway-service/Dockerfile \
-            projects/fan-platform/apps/gateway-service/
-          docker build -t fan-platform-community-service:e2e \
-            -f projects/fan-platform/apps/community-service/Dockerfile \
-            projects/fan-platform/apps/community-service/
-          docker build -t fan-platform-artist-service:e2e \
-            -f projects/fan-platform/apps/artist-service/Dockerfile \
-            projects/fan-platform/apps/artist-service/
-
-      - name: Run fan-platform live-trio e2e smoke suite
-        # ADR-MONO-010 D3 — PR-time runs the @Tag("smoke") subset only via
-        # `:e2eSmokeTest`. Full suite (@Tag("full")) runs nightly + push to
-        # main via a separate `e2eFullTest` job (Phase 3 ADR, not yet wired).
-        # `:e2eTest` (legacy umbrella) still runs both — preserved for local
-        # dev convenience.
-        run: >-
-          ./gradlew
-          :projects:fan-platform:tests:e2e:e2eSmokeTest
-          -x :projects:fan-platform:apps:gateway-service:bootJar
-          -x :projects:fan-platform:apps:community-service:bootJar
-          -x :projects:fan-platform:apps:artist-service:bootJar
-          -Dfan.e2e.gatewayImage=fan-platform-gateway-service:e2e
-          -Dfan.e2e.communityImage=fan-platform-community-service:e2e
-          -Dfan.e2e.artistImage=fan-platform-artist-service:e2e
-          --no-daemon --stacktrace
-
-      - name: Upload fan-platform e2e test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fan-platform-e2e-test-reports
-          path: |
-            projects/fan-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
-            projects/fan-platform/tests/e2e/build/test-results/e2eSmokeTest/
-          retention-days: 7
+    uses: ./.github/workflows/_platform-e2e.yml
+    with:
+      project-dir: projects/fan-platform
+      boot-jars-artifact: fan-platform-boot-jars
+      download-path: artifact-staging-fan
+      timeout-minutes: 10
+      gradle-target: ':projects:fan-platform:tests:e2e:e2eSmokeTest'
+      services: >-
+        [
+          {"name":"gateway-service","image":"fan-platform-gateway-service:e2e","prop":"fan.e2e.gatewayImage"},
+          {"name":"community-service","image":"fan-platform-community-service:e2e","prop":"fan.e2e.communityImage"},
+          {"name":"artist-service","image":"fan-platform-artist-service:e2e","prop":"fan.e2e.artistImage"}
+        ]
+      report-artifact: fan-platform-e2e-test-reports
+      report-paths: |
+        projects/fan-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
+        projects/fan-platform/tests/e2e/build/test-results/e2eSmokeTest/
 
   scm-platform-e2e:
     name: E2E (scm-platform v1 cross-service smoke, Testcontainers)
-    runs-on: ubuntu-latest
     needs: [changes, build-and-test, scm-platform-boot-jars]
-    timeout-minutes: 12
     # Cross-service e2e suite (TASK-SCM-INT-001): boots gateway-service +
-    # procurement-service + inventory-visibility-service plus Postgres +
-    # Redis + Kafka via Testcontainers, a host-side WireMock JWKS stand-in,
-    # and a host-side supplier MockWebServer. Mirrors the fan-platform-e2e
-    # job's pattern: pre-build images via the Docker CLI to dodge the
-    # Docker 28 BuildKit gRPC hang in `ImageFromDockerfile`, then pass the
-    # image names via -Dscm.e2e.* so ScmPlatformE2ETestBase uses
-    # GenericContainer directly.
+    # procurement-service + inventory-visibility-service + demand-planning-service
+    # plus Postgres + Redis + Kafka via Testcontainers, a host-side WireMock JWKS
+    # stand-in, and a host-side supplier MockWebServer. Pre-built images (Docker
+    # CLI) + -Dscm.e2e.* let ScmPlatformE2ETestBase use GenericContainer directly,
+    # dodging the Docker 28 ImageFromDockerfile hang. The @Tag("full") suite runs
+    # nightly via scm-platform-e2e-full (SAME reusable, :e2eFullTest).
     # Activate for scm-platform changes, cross-project (libs/workflows), or any
     # project's contract change (cross-service consumer gate, MONO-074).
     if: >-
@@ -1428,96 +1293,24 @@ jobs:
         needs.changes.outputs.scm == 'true' ||
         needs.changes.outputs.contracts == 'true'
       )
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21 + Gradle
-        uses: ./.github/actions/setup-java-gradle
-
-      - name: Download scm-platform boot jars
-        uses: actions/download-artifact@v4
-        with:
-          name: scm-platform-boot-jars
-          path: artifact-staging-scm
-
-      - name: Restore scm-platform boot jar paths
-        # actions/upload-artifact@v4 strips the longest common prefix when
-        # multiple paths are uploaded. The scm-platform-boot-jars artifact
-        # therefore contains `<service>/build/libs/<service>.jar` (with
-        # `projects/scm-platform/apps/` stripped). Move them back to their
-        # canonical locations so the gateway/procurement/inventory-visibility
-        # Dockerfiles COPY the right path during the docker build below, AND
-        # so ScmPlatformE2ETestBase's locateOptionalJar fallback can resolve
-        # them when the dev-path system properties are unset.
-        run: |
-          mkdir -p projects/scm-platform/apps/gateway-service/build/libs/
-          mkdir -p projects/scm-platform/apps/procurement-service/build/libs/
-          mkdir -p projects/scm-platform/apps/inventory-visibility-service/build/libs/
-          mkdir -p projects/scm-platform/apps/demand-planning-service/build/libs/
-          mv artifact-staging-scm/gateway-service/build/libs/gateway-service.jar \
-             projects/scm-platform/apps/gateway-service/build/libs/gateway-service.jar
-          mv artifact-staging-scm/procurement-service/build/libs/procurement-service.jar \
-             projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
-          mv artifact-staging-scm/inventory-visibility-service/build/libs/inventory-visibility-service.jar \
-             projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
-          mv artifact-staging-scm/demand-planning-service/build/libs/demand-planning-service.jar \
-             projects/scm-platform/apps/demand-planning-service/build/libs/demand-planning-service.jar
-
-      - name: Verify Docker (Testcontainers prerequisite)
-        run: docker info
-
-      # ADR-MONO-041 D2: scm service images `FROM monorepo/java-service-base:v1`.
-      # No image registry → build the shared base locally before the docker builds.
-      - name: Build shared java-service-base image (ADR-MONO-041 D2)
-        run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
-
-      - name: Build scm-platform service images for e2e
-        # Docker CLI build (BuildKit) — see wms `e2e-tests` job for the
-        # rationale (Docker 28 + Testcontainers ImageFromDockerfile hang).
-        run: |
-          docker build -t scm-platform-gateway-service:e2e \
-            -f projects/scm-platform/apps/gateway-service/Dockerfile \
-            projects/scm-platform/apps/gateway-service/
-          docker build -t scm-platform-procurement-service:e2e \
-            -f projects/scm-platform/apps/procurement-service/Dockerfile \
-            projects/scm-platform/apps/procurement-service/
-          docker build -t scm-platform-inventory-visibility-service:e2e \
-            -f projects/scm-platform/apps/inventory-visibility-service/Dockerfile \
-            projects/scm-platform/apps/inventory-visibility-service/
-          docker build -t scm-platform-demand-planning-service:e2e \
-            -f projects/scm-platform/apps/demand-planning-service/Dockerfile \
-            projects/scm-platform/apps/demand-planning-service/
-
-      - name: Run scm-platform cross-service e2e smoke suite
-        # ADR-MONO-010 D3 — PR-time runs the @Tag("smoke") subset only via
-        # `:e2eSmokeTest`. Full suite (@Tag("full")) runs nightly + push to
-        # main via a separate `e2eFullTest` job (Phase 3 ADR, not yet wired).
-        # `:e2eTest` (legacy umbrella) still runs both — preserved for local
-        # dev convenience.
-        run: >-
-          ./gradlew
-          :projects:scm-platform:tests:e2e:e2eSmokeTest
-          -x :projects:scm-platform:apps:gateway-service:bootJar
-          -x :projects:scm-platform:apps:procurement-service:bootJar
-          -x :projects:scm-platform:apps:inventory-visibility-service:bootJar
-          -x :projects:scm-platform:apps:demand-planning-service:bootJar
-          -Dscm.e2e.gatewayImage=scm-platform-gateway-service:e2e
-          -Dscm.e2e.procurementImage=scm-platform-procurement-service:e2e
-          -Dscm.e2e.inventoryVisibilityImage=scm-platform-inventory-visibility-service:e2e
-          -Dscm.e2e.demandPlanningImage=scm-platform-demand-planning-service:e2e
-          --no-daemon --stacktrace
-
-      - name: Upload scm-platform e2e test reports on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: scm-platform-e2e-test-reports
-          path: |
-            projects/scm-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
-            projects/scm-platform/tests/e2e/build/test-results/e2eSmokeTest/
-          retention-days: 7
+    uses: ./.github/workflows/_platform-e2e.yml
+    with:
+      project-dir: projects/scm-platform
+      boot-jars-artifact: scm-platform-boot-jars
+      download-path: artifact-staging-scm
+      timeout-minutes: 12
+      gradle-target: ':projects:scm-platform:tests:e2e:e2eSmokeTest'
+      services: >-
+        [
+          {"name":"gateway-service","image":"scm-platform-gateway-service:e2e","prop":"scm.e2e.gatewayImage"},
+          {"name":"procurement-service","image":"scm-platform-procurement-service:e2e","prop":"scm.e2e.procurementImage"},
+          {"name":"inventory-visibility-service","image":"scm-platform-inventory-visibility-service:e2e","prop":"scm.e2e.inventoryVisibilityImage"},
+          {"name":"demand-planning-service","image":"scm-platform-demand-planning-service:e2e","prop":"scm.e2e.demandPlanningImage"}
+        ]
+      report-artifact: scm-platform-e2e-test-reports
+      report-paths: |
+        projects/scm-platform/tests/e2e/build/reports/tests/e2eSmokeTest/
+        projects/scm-platform/tests/e2e/build/test-results/e2eSmokeTest/
 
   # ---------------------------------------------------------------------------
   # OpenAI Harness gap #3 Phase 3 (TASK-MONO-067) — observability stack
