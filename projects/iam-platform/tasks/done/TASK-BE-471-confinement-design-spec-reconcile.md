@@ -1,6 +1,6 @@
 # TASK-BE-471 — Reconcile BE-467/468 tenant-confinement decisions into design specs
 
-- **Status**: review
+- **Status**: done
 - **Domain**: iam (admin-service + auth-service + account-service — specs only)
 - **Type**: spec-documentation reconciliation (no code) — follow-up to TASK-BE-467 / TASK-BE-468
 - **분석=Opus 4.8 / 구현 권장=Opus 4.8 (docs-only)**
