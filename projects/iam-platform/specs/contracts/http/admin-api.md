@@ -1841,6 +1841,157 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 ---
 
+## Partnership Management (ADR-MONO-045)
+
+**cross-org 파트너십**의 operator-facing 관리 표면 — 두 **독립 소유** 테넌트(host A, partner B) 사이의 bounded 위임 관계를 생성·수락·중단·종료하고, partner 가 자기 operator 를 participant 로 배정한다. 모든 엔드포인트는 `partnership.manage` + **D2 `TenantScopeGuard`**(대상 = acting-side 테넌트: invite/host-terminate → host, accept/participant/partner-terminate → partner)로 게이트되며, 두 테넌트 모두 `TENANT_ADMIN` 이 당사자다(D2 two-sided consent). 이 표면은 파트너십 **관계 상태**만 다루고, 그로부터 B-operator 가 A 에서 얻는 **파생 도메인-운영 권한**은 assume-tenant 발급 시 `delegated_scope ∩ participant ∩ host-holds` 로 캡된다([rbac.md](../../services/admin-service/rbac.md#cross-org-partner-delegation-confinement-adr-mono-045-d3d5)) — 파트너십은 admin 권한을 조직 경계 너머로 확장하지 **않는다**.
+
+모든 mutating 엔드포인트는 [admin-events.md](../events/admin-events.md) 의 `admin.action.performed` 와 함께 [partnership-events.md](../events/partnership-events.md) 의 lifecycle 이벤트를 outbox 패턴으로 발행한다. colon-verb 전이는 AIP-136.
+
+### Status 전이 매트릭스
+
+| 현재 상태 | invite (`POST`) | `:accept` | `:suspend` | `:reactivate` | `:terminate` |
+|---|---|---|---|---|---|
+| (none) | → `PENDING` (host 발행) | — | — | — | — |
+| PENDING | 중복 → 409 | → `ACTIVE` (partner 수락) | — | — | → `TERMINATED` (either, invite 철회/거절) |
+| ACTIVE | 중복 → 409 | no-op (409 `PARTNERSHIP_TRANSITION_INVALID`) | → `SUSPENDED` (either) | — | → `TERMINATED` (either) |
+| SUSPENDED | — | — | no-op (200, 이벤트 미발행) | → `ACTIVE` (either) | → `TERMINATED` (either) |
+| TERMINATED | — | — | — | — | 종단(멱등 no-op 200) |
+
+- **PENDING** = invite 발행·partner 미수락 → **파생 접근 0**(assume-tenant reach 없음).
+- **ACTIVE** = 양방 합의 완료 → participant 파생 유효.
+- **SUSPENDED**/**TERMINATED** = cascade-revoke(D6): 다음 요청에서 모든 participant 파생 즉시 0. SUSPENDED 는 가역(reactivate), TERMINATED 는 종단.
+- `:accept` 는 **partner 측**만, invite/`:terminate`(host 사유)는 **host 측**만; `:suspend`/`:reactivate`/`:terminate` 는 **either party**(양측 모두 관계를 중단·종료할 수 있다, D2 상호성).
+
+### POST /api/admin/partnerships
+
+host 테넌트 A 가 partner 테넌트 B 에게 bounded `delegatedScope` 를 위임하는 파트너십을 **invite**(→ `PENDING`). host 측 `TENANT_ADMIN` 만.
+
+**Auth required**: Yes (operator token, `token_type=admin`) · **Required permission**: `partnership.manage`
+**Granted to roles**: `TENANT_ADMIN`(host 테넌트 한정)
+
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: <required>`, `X-Tenant-Id: <host 활성 테넌트>`, `Idempotency-Key: <required>`
+
+**Tenant confinement (D2)**: `host_tenant_id` = `X-Tenant-Id` 이며 actor 는 이에 대해 `partnership.manage` 스코프를 보유해야 한다 — `TENANT_ADMIN @ acme` 는 host=acme 로만 invite 가능.
+
+**Request**:
+```json
+{
+  "partnerTenantId": "globex-corp",
+  "delegatedScope": { "domains": ["wms", "scm"], "roles": ["WMS_OUTBOUND_OPERATOR", "SCM_PLANNER"] }
+}
+```
+
+| 필드 | 타입 | 필수 | 검증 |
+|---|---|---|---|
+| `partnerTenantId` | string | Y | tenantId 정규식; `!= host`(self 금지); `!= '*'`; 존재하는 ACTIVE 테넌트 |
+| `delegatedScope.domains` | string[] | Y | 비어있지 않음; 각 도메인 키가 host 의 보유 도메인 이내(≤-own) |
+| `delegatedScope.roles` | string[] | Y | 각 role 이 **비-admin**(`TENANT_ADMIN`/`TENANT_BILLING_ADMIN`/`SUPER_ADMIN` 금지) + host 자신이 보유(≤-own across org) |
+
+**Response 201**:
+```json
+{
+  "partnershipId": "00000000-0000-7000-8000-00000000p001",
+  "hostTenantId": "acme-corp",
+  "partnerTenantId": "globex-corp",
+  "status": "PENDING",
+  "delegatedScope": { "domains": ["wms", "scm"], "roles": ["WMS_OUTBOUND_OPERATOR", "SCM_PLANNER"] },
+  "invitedAt": "2026-07-04T10:00:00Z"
+}
+```
+
+**Side Effects**: `admin_actions: action_code=PARTNERSHIP_INVITE, permission_used=partnership.manage, target_type=PARTNERSHIP, target_id=<partnershipId>, target_tenant_id=<partnerTenantId>`. Outbox `partnership.invited`.
+
+### POST /api/admin/partnerships/{partnershipId}:accept
+
+partner 테넌트 B 가 invite 를 **수락**(→ `ACTIVE`). partner 측 `TENANT_ADMIN` 만.
+
+**Required permission**: `partnership.manage` · **Granted to roles**: `TENANT_ADMIN`(partner 테넌트 한정)
+**Headers**: `Authorization`, `X-Operator-Reason: <required>`, `X-Tenant-Id: <partner 활성 테넌트>`
+
+**Tenant confinement (D2)**: `X-Tenant-Id` == 파트너십의 `partner_tenant_id` 이며 actor 가 이에 대해 `partnership.manage` 스코프 보유. host 측은 accept 불가(상호성 — 수락은 위임받는 쪽의 권리).
+
+**Response 200**: invite 응답 shape + `status=ACTIVE` + `acceptedAt`.
+
+**Side Effects**: `admin_actions: action_code=PARTNERSHIP_ACCEPT`. Outbox `partnership.accepted`.
+
+### POST /api/admin/partnerships/{partnershipId}:suspend · :reactivate · :terminate
+
+파트너십 lifecycle 전이. **either party**(host 또는 partner 의 `TENANT_ADMIN`)가 호출 가능 — 관계 중단·종료는 상호적이다(D2). cascade-revoke(D6): SUSPENDED/TERMINATED 전이는 그 파트너십에서 파생한 모든 participant 의 host-reach 를 다음 요청에서 0 으로 만든다.
+
+**Required permission**: `partnership.manage` · **Granted to roles**: `TENANT_ADMIN`(host 또는 partner 한정)
+**Headers**: `Authorization`, `X-Operator-Reason: <required>`, `X-Tenant-Id: <host 또는 partner 활성 테넌트>`
+
+**Tenant confinement (D2)**: `X-Tenant-Id` ∈ {`host_tenant_id`, `partner_tenant_id`} 이며 actor 가 이에 대해 `partnership.manage` 스코프 보유(양 당사자 중 하나).
+
+**Response 200**: invite 응답 shape + 전이된 `status` + 해당 시각 필드.
+
+**Side Effects**: `admin_actions: action_code=PARTNERSHIP_SUSPEND|PARTNERSHIP_REACTIVATE|PARTNERSHIP_TERMINATE`. Outbox `partnership.suspended`/`partnership.reactivated`/`partnership.terminated`. `partnership.terminated` 는 **one-shot** cascade 이벤트 1건(operator 당 N 이벤트 아님, D6). 동일-status no-op 전이(예: SUSPENDED→suspend)는 200 + 이벤트 미발행.
+
+### GET /api/admin/partnerships
+
+actor 의 활성 테넌트가 **당사자(host 또는 partner)인** 파트너십 목록. host-side(내가 발행) + partner-side(나에게 위임됨) 양방 뷰.
+
+**Required permission**: `partnership.manage` · **Granted to roles**: `TENANT_ADMIN`
+**Headers**: `Authorization`, `X-Tenant-Id: <활성 테넌트>`
+
+**Query parameters**: `role` (`host`|`partner`|둘 다=미지정), `status` (enum 필터), `page`, `size`(max 100).
+
+**Tenant confinement (D2)**: 결과는 `X-Tenant-Id ∈ {host_tenant_id, partner_tenant_id}` 인 row 로 confine(목록 읽기도 스코프 confine — D2 read parity). 타 테넌트의 파트너십은 노출되지 않는다.
+
+**Response 200**: `{ items: [ { partnershipId, hostTenantId, partnerTenantId, status, delegatedScope, myRole: "host"|"partner", invitedAt, acceptedAt, participantCount }, ... ], page, size, totalElements, totalPages }`.
+
+### POST /api/admin/partnerships/{partnershipId}/participants/{operatorId}
+
+partner 테넌트 B 가 **자기 소유 operator** 를 파트너십 participant 로 배정(D4). ACTIVE 파트너십에서만. partner 측 `TENANT_ADMIN` 만 — host 는 개별 B-사람을 지명하지 않는다(D4-B 거부).
+
+**Required permission**: `partnership.manage` · **Granted to roles**: `TENANT_ADMIN`(partner 테넌트 한정)
+**Headers**: `Authorization`, `X-Operator-Reason: <required>`, `X-Tenant-Id: <partner 활성 테넌트>`
+
+**Tenant confinement (D2)**: `X-Tenant-Id` == `partner_tenant_id`. 추가로 대상 `operatorId` 의 home `tenant_id` == `partner_tenant_id`(B 는 자기 사람만) — 위반 → `422 PARTICIPANT_NOT_OWN_OPERATOR`.
+
+**Request** (optional participant 좁힘):
+```json
+{ "participantScope": { "domains": ["wms"], "roles": ["WMS_OUTBOUND_OPERATOR"] } }
+```
+`participantScope` 생략/`null` ⟺ `delegatedScope` 전체(net-zero 기본). 비-`null` 은 `⊆ delegatedScope` 여야 함(초과 원소 → `422 PARTICIPANT_SCOPE_EXCEEDS_DELEGATION`).
+
+**Response 201**: `{ partnershipId, operatorId, participantScope, assignedAt }` (`participantScope` null 시 omit).
+
+**Side Effects**: `admin_actions: action_code=PARTNERSHIP_PARTICIPANT_ADD, target_id=<operatorId>, target_tenant_id=<partner_tenant_id>`. Outbox `partnership.participant_added`. 배정 즉시 그 operator 의 assume-tenant reach 에 host 가 추가(다음 발급부터).
+
+### DELETE /api/admin/partnerships/{partnershipId}/participants/{operatorId}
+
+participant 해제(B 가 자기 직원 offboard 또는 참여 종료). partner 측 `TENANT_ADMIN` 만. 해제 즉시 그 operator 의 host-reach 파생 소멸(D6 individual offboarding — A-측 조치 불요).
+
+**Required permission**: `partnership.manage` · **Granted to roles**: `TENANT_ADMIN`(partner 테넌트 한정)
+**Headers**: `Authorization`, `X-Operator-Reason: <required>`, `X-Tenant-Id: <partner 활성 테넌트>`
+
+**Response 204** (no content).
+
+**Side Effects**: `admin_actions: action_code=PARTNERSHIP_PARTICIPANT_REMOVE`. Outbox `partnership.participant_removed`.
+
+**Errors** (Partnership Management 공통):
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 403 | `PERMISSION_DENIED` | `partnership.manage` 권한 없음 |
+| 403 | `PARTNERSHIP_SCOPE_DENIED` | actor 의 `X-Tenant-Id` 가 요구되는 acting-side 테넌트(host/partner) 스코프 밖 (D2 confinement) |
+| 400 | `REASON_REQUIRED` | `X-Operator-Reason` 헤더 누락 |
+| 400 | `VALIDATION_ERROR` | `partnerTenantId` 정규식/self/`'*'` 위반, `delegatedScope` 형식 오류 |
+| 422 | `PARTNERSHIP_SCOPE_INVALID` | (invite) `delegatedScope` 가 admin role 포함 또는 host 미보유(≤-own across org 위반) |
+| 422 | `PARTICIPANT_NOT_OWN_OPERATOR` | (participant add) 대상 operator 의 home tenant ≠ `partner_tenant_id` |
+| 422 | `PARTICIPANT_SCOPE_EXCEEDS_DELEGATION` | (participant add) `participantScope ⊄ delegatedScope` |
+| 404 | `PARTNERSHIP_NOT_FOUND` | `partnershipId` 미존재 / actor 당사자 아님(enumeration-safe) |
+| 404 | `OPERATOR_NOT_FOUND` | (participant) `operatorId` 미존재 |
+| 404 | `PARTICIPANT_NOT_FOUND` | (participant delete) 배정 부재 |
+| 409 | `PARTNERSHIP_ALREADY_EXISTS` | (invite) 동일 `(host, partner)` 파트너십이 이미 PENDING/ACTIVE |
+| 409 | `PARTNERSHIP_TRANSITION_INVALID` | 상태머신 가드 위반(예: PENDING 아닌데 accept, TERMINATED 재개) |
+
+> **파생 권한은 이 표면 밖.** 위 엔드포인트는 파트너십 **관계 상태**만 변경한다. B-operator 가 A 를 실제 운영하는 것은 별도 assume-tenant 발급 경로이며, 그 권한은 `delegated_scope ∩ participant ∩ host-holds` 로 캡되고 admin 권한은 절대 포함하지 않는다([rbac.md](../../services/admin-service/rbac.md#cross-org-partner-delegation-confinement-adr-mono-045-d3d5), M1 single-tenant 토큰 보존).
+
+---
+
 ## Common Error Format
 
 ```json

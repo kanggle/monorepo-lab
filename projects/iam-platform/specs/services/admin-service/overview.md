@@ -34,11 +34,12 @@ downstream 호출 시 **반드시 Idempotency-Key 전달** ([rules/traits/transa
 ### MySQL
 - `admin_actions` — **append-only 감사 원장**. 필드: `id`, `action_code` (ACCOUNT_LOCK / ACCOUNT_UNLOCK / SESSION_REVOKE / AUDIT_QUERY 등), `actor` (operator_id / role), `target_type`, `target_id`, `reason`, `ticket_id`, `outcome` (SUCCESS / FAILURE / IN_PROGRESS), `downstream_detail` (JSON), `started_at`, `completed_at`. DB 트리거로 UPDATE/DELETE 차단
 - `outbox_events` — `admin.action.performed` 스테이징
+- `tenant_partnership` + `tenant_partnership_participant` — **cross-org 파트너십** 관계 상태 (TASK-BE-476 / ADR-MONO-045). admin-service 가 예외적으로 소유하는 유일한 관계 aggregate (모든 재사용 프리미티브가 admin-service 에 있으므로, ADR-045 D8). `delegated_scope` envelope + participant 바인딩; assume-tenant 파생의 소스
 
 ### Redis (선택)
 - operator 세션 nonce, rate limit 버킷 (사용 시)
 
-**도메인 상태 없음**. 계정/세션/credential은 모두 downstream이 소유.
+**도메인 상태 최소**. 계정/세션/credential은 모두 downstream이 소유; admin-service 로컬 상태는 RBAC 메타 + 감사 원장 + outbox + (신규) cross-org 파트너십 관계뿐.
 
 ## Change Drivers
 
@@ -63,5 +64,6 @@ downstream 호출 시 **반드시 Idempotency-Key 전달** ([rules/traits/transa
 - Observability: [observability.md](observability.md)
 - HTTP contract (외부, admin 전용): [../../contracts/http/admin-api.md](../../contracts/http/)
 - HTTP contracts (out-going): [../../contracts/http/internal/admin-to-auth.md](../../contracts/http/internal/), [../../contracts/http/internal/admin-to-account.md](../../contracts/http/internal/)
-- Event contract: [../../contracts/events/admin-events.md](../../contracts/events/)
+- Event contract: [../../contracts/events/admin-events.md](../../contracts/events/), [../../contracts/events/tenant-events.md](../../contracts/events/), [../../contracts/events/partnership-events.md](../../contracts/events/) (cross-org 파트너십, TASK-BE-476)
 - Feature specs: [../../features/admin-operations.md](../../features/), [../../features/audit-trail.md](../../features/)
+- ADR: [ADR-MONO-045 cross-org partner delegation](../../../../../docs/adr/ADR-MONO-045-cross-org-partner-delegation.md), [ADR-MONO-024 tenant-admin delegation](../../../../../docs/adr/ADR-MONO-024-tenant-admin-delegation.md)

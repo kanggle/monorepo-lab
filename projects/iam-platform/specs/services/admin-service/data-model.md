@@ -136,6 +136,59 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 **인덱스**:
 - `idx_admin_operator_roles_role` (`role_id`) — 역할별 운영자 역검색
 
+### `tenant_partnership`
+
+**신규 (TASK-BE-476 / ADR-MONO-045 D1, Flyway `V00NN__create_partnership_tables.sql`)** — 두 **독립 소유** 테넌트 사이의 **cross-org 파트너십**을 모델링하는 일급 aggregate. host 테넌트 A 가 partner 테넌트 B 에게 bounded `delegated_scope` 를 위임하며, **grant 의 단위이자 revocation 의 단위**(D6 cascade)이다. B 의 operator 가 A 를 assume-tenant 로 운영하는 권한은 **오직** ACTIVE 파트너십에서 파생된다(D4/D5). admin-service 는 자체 aggregate 를 거의 두지 않는 command gateway 이나(§Design Decision), 파트너십은 admin-service 소유 관계 상태이므로(ADR-045 D8 — 모든 재사용 프리미티브가 admin-service 에 존재) 예외적으로 로컬 aggregate 로 보관한다.
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `id` | BIGINT | PK, AUTO_INCREMENT | internal | 내부 PK. 외부 노출 식별자는 `partnership_id`(아래) |
+| `partnership_id` | VARCHAR(36) | UNIQUE, NOT NULL | internal | UUID v7. HTTP path·이벤트 partitionKey 에 실리는 외부 식별자 |
+| `host_tenant_id` | VARCHAR(32) | NOT NULL | internal | 위임하는 host 테넌트(A). `delegated_scope` 의 authoring 주체. sentinel `'*'` 금지(플랫폼은 파트너십의 host 가 될 수 없음 — 아래 불변식) |
+| `partner_tenant_id` | VARCHAR(32) | NOT NULL | internal | 위임받는 partner 테넌트(B). B 의 `TENANT_ADMIN` 이 accept + participant 관리(D4). sentinel `'*'` 금지 |
+| `status` | VARCHAR(20) | NOT NULL, DEFAULT 'PENDING' | internal | `PENDING` → `ACTIVE` → `SUSPENDED`/`TERMINATED`. PENDING=invite 미수락(파생 0). 상태머신은 [admin-api.md](../../contracts/http/admin-api.md#partnership-management-adr-mono-045) 전이 매트릭스가 canonical |
+| `delegated_scope` | JSON | NOT NULL | internal | host 가 위임하는 bounded `{domains}×{roles}` 집합: `{"domains": ["wms","scm"], "roles": ["WMS_OUTBOUND_OPERATOR", ...]}`. **cap 불변식**(아래): admin role(`TENANT_ADMIN`/`TENANT_BILLING_ADMIN`/`SUPER_ADMIN`) 및 플랫폼-scope 절대 불가; host 자신이 보유(≤-own)한 것 이하. B-operator 가 A 에서 갖는 유효 권한은 `delegated_scope ∩ participant-scope ∩ A-holds`([rbac.md](./rbac.md) Cross-Org Partner Delegation Confinement) |
+| `invited_by` | BIGINT | NULL, FK → `admin_operators.id` | internal | invite 를 발행한 host 측 `TENANT_ADMIN`(D2). seed/시스템 경로는 NULL |
+| `accepted_by` | BIGINT | NULL, FK → `admin_operators.id` | internal | accept 한 partner 측 `TENANT_ADMIN`(D2). PENDING 동안 NULL |
+| `invited_at` | DATETIME(6) | NOT NULL | internal | invite 시각(=row 생성) |
+| `accepted_at` | DATETIME(6) | NULL | internal | ACTIVE 전이 시각. PENDING 동안 NULL |
+| `terminated_at` | DATETIME(6) | NULL | internal | TERMINATED 전이 시각. cascade-revoke 기준시각(D6) |
+| `created_at` | DATETIME(6) | NOT NULL | internal | — |
+| `updated_at` | DATETIME(6) | NOT NULL | internal | — |
+| `version` | INT | NOT NULL, DEFAULT 0 | internal | 낙관적 락 (T5) — 동시 accept/terminate 경합 방지 |
+
+**인덱스**:
+- `uk_tenant_partnership_partnership_id` UNIQUE (`partnership_id`)
+- `uk_tenant_partnership_pair` UNIQUE (`host_tenant_id`, `partner_tenant_id`) — ordered pair 당 관계 1건(중복 invite → `409 PARTNERSHIP_ALREADY_EXISTS`)
+- `idx_tenant_partnership_partner` (`partner_tenant_id`, `status`) — B-side list(내가 참여하는 파트너십) + 상태 필터
+- `idx_tenant_partnership_host` (`host_tenant_id`, `status`) — A-side list(내가 발행한 파트너십)
+
+> **관계 불변식 (TASK-BE-476 / ADR-MONO-045 D1/D3)**:
+> - `host_tenant_id != partner_tenant_id` — self-partnership 금지(같은 테넌트 내 위임은 ADR-024 within-tenant 경로).
+> - `host_tenant_id`·`partner_tenant_id` 모두 `'*'` 금지 — 플랫폼(SUPER_ADMIN sentinel)은 파트너십의 당사자가 될 수 없다. cross-org 파트너십은 **두 실제 고객 테넌트** 사이에서만 성립.
+> - **`delegated_scope` cap** — 어떤 admin role(`TENANT_ADMIN`/`TENANT_BILLING_ADMIN`/`SUPER_ADMIN`)·플랫폼-scope 도 포함 불가; host 가 **자신이 보유**한 domain·role 만 위임 가능(≤-own 을 조직 경계 너머로 확장). invite 시점에 검증(위반 → `422 PARTNERSHIP_SCOPE_INVALID`). 이는 ADR-024 grant-menu no-escalation 을 cross-org 로 확장한 것.
+
+### `tenant_partnership_participant`
+
+**신규 (TASK-BE-476 / ADR-MONO-045 D4, Flyway `V00NN__create_partnership_tables.sql`)** — ACTIVE 파트너십 안에서 **partner 테넌트 B 가 지정한, A 를 운영할 자기 소유 operator** 들의 바인딩. B 의 `TENANT_ADMIN` 이 관리하며(D4 partner-side self-governance), 이 파생이 곧 offboarding 의 단위 — B 가 자기 직원을 suspend/offboard 하면(B 의 일반 operator lifecycle) 해당 파생이 사라져 A-접근이 A-측 조치 없이 소멸한다.
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `partnership_id` | BIGINT | NOT NULL, FK → `tenant_partnership.id` ON DELETE CASCADE | internal | **`tenant_partnership.id` (BIGINT PK) 참조**. 외부 UUID `partnership_id` 컬럼이 아님 |
+| `operator_id` | BIGINT | NOT NULL, FK → `admin_operators.id` ON DELETE CASCADE | internal | 참여 operator(=B 소유). **canonical 불변식(아래): 이 operator 의 home `tenant_id` 는 파트너십의 `partner_tenant_id`(B)와 반드시 일치** — B 는 오직 자기 사람만 배정 가능 |
+| `participant_scope` | JSON | NULL | internal | `delegated_scope` **안에서의** 선택적 추가 좁힘(`{"domains":[...],"roles":[...]}`). `NULL ⟺ delegated_scope 전체`(net-zero 기본). `operator_tenant_assignment.org_scope`(BE-338) 의 형제 개념 — 비-NULL 은 정규화(trim·dedupe·cap) 후 영속 |
+| `assigned_at` | DATETIME(6) | NOT NULL | internal | 배정 시각 |
+| `assigned_by` | BIGINT | NULL, FK → `admin_operators.id` | internal | 배정한 B 측 `TENANT_ADMIN`(D4) |
+
+**Primary Key**: (`partnership_id`, `operator_id`) 복합 PK
+**인덱스**:
+- `idx_partnership_participant_operator` (`operator_id`) — **역검색: 한 operator 가 참여하는 ACTIVE 파트너십 집합**. assume-tenant effective-scope 파생(B-operator 가 A 를 reach 가능한지)의 조회 인덱스([rbac.md](./rbac.md) Cross-Org Partner Delegation Confinement)
+
+> **참여자 불변식 (TASK-BE-476 / ADR-MONO-045 D4/D3)**:
+> - 참여 operator 의 `admin_operators.tenant_id` == 부모 파트너십의 `partner_tenant_id`(B). host(A) 는 개별 B-사람을 지명하지 않는다(D4-B 거부) — A 는 envelope(`delegated_scope`)만 authoring, B 가 자기 사람을 채운다. 위반 → `422 PARTICIPANT_NOT_OWN_OPERATOR`.
+> - `participant_scope ⊆ delegated_scope` — 참여자 좁힘은 host 위임을 넘을 수 없다. `delegated_scope` 밖 원소는 파생되지 않는다(초과분 무시, confinement 이 request-time 교집합으로 강제).
+> - **no transitive re-delegation** — participant 는 자신이 파생한 A-scope 를 다시 제3자에게 위임할 수 없다(confused-deputy default deny, [rbac.md](./rbac.md)). participant 는 B 소유 operator 로 한정되며 그 자체가 재-origination 지점이 될 수 없다.
+
 ### `admin_actions`
 
 감사 원장. **append-only** ([architecture.md](./architecture.md) Forbidden Dependencies, [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3).
@@ -286,6 +339,9 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
   fast-fail 을 일으켰다. 구현 PR 에서 다음 빈 버전 `V0029` 로 기계적
   rename — migration 의 컬럼/내용 shape 은 spec 과 byte-identical, version
   은 sequencing token 에 불과하므로 ADR 불요.
+- **TASK-BE-476 (ADR-MONO-045 D1/D4)** — cross-org 파트너십 aggregate. 두 마이그레이션(구현 = §3.4 step 2, 이 태스크는 specs-only):
+  - `V00NN__create_partnership_tables.sql` — `tenant_partnership` + `tenant_partnership_participant` 신규. **forward-only**(down 금지 — 관계 상태는 감사 가치 보유), `delegated_scope`/`participant_scope` 는 MySQL `JSON` 컬럼. `uk_tenant_partnership_pair` UNIQUE(host, partner) + FK CASCADE(participant → partnership). V0027/V0029 패턴(idempotent `INFORMATION_SCHEMA` 가드, `@var` 금지)을 재사용.
+  - `V00NN+1__seed_partnership_manage_permission.sql` — `partnership.manage` 권한 키 + `TENANT_ADMIN` 매핑 seed([rbac.md](./rbac.md) Seed Matrix). **inert/net-zero** — 어떤 operator 에도 새로 배정하지 않으며, 파트너십이 생성되기 전엔 아무 효력 없음(기존 `TENANT_ADMIN` 보유자가 invite/accept 표면을 얻을 뿐 confinement 이 자기-당사자 파트너십으로 한정).
 
 ---
 
@@ -295,7 +351,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 |---|---|
 | **restricted** | `admin_operators.password_hash`, `admin_operators.totp_secret_encrypted` |
 | **confidential** | `admin_operators.email`, `admin_operators.display_name`, `admin_actions.reason` |
-| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, **oidc_subject** (불투명 OIDC `sub` UUID — 비-PII 링크 키, TASK-BE-298), **finance_default_account_id** (불투명 finance 계정 UUID — 비-PII 외부 식별자, TASK-BE-304), last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼, `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
+| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, **oidc_subject** (불투명 OIDC `sub` UUID — 비-PII 링크 키, TASK-BE-298), **finance_default_account_id** (불투명 finance 계정 UUID — 비-PII 외부 식별자, TASK-BE-304), last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼, **`tenant_partnership`의 모든 컬럼** (TASK-BE-476 — host/partner tenant_id·status·`delegated_scope`(도메인/역할 키 집합, PII·credential 아님)·audit FK·시각. 비-PII 관계 메타데이터), **`tenant_partnership_participant`의 모든 컬럼** (TASK-BE-476 — operator FK·`participant_scope`·배정 메타), `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
 | **internal (special)** | `outbox.payload` — `admin.action.performed` envelope을 직렬화하여 포함. `target.displayHint`처럼 **upstream에서 이미 마스킹된** confidential 원본의 파생값을 포함할 수 있다 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4 — 중앙 masking utility 경유 강제). 원문 PII는 포함되지 않음을 스펙 레벨에서 보장하므로 분류는 `internal`. 단, `reason` 필드(운영자 입력 원문) 전달 시 소비자 측에서 필요에 따라 추가 필터링을 고려한다. |
 | **public** | 없음 |
 

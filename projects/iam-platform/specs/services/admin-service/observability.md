@@ -25,6 +25,10 @@
 |---|---|---|
 | `admin_lock_unlock_ratio` | gauge | 최근 1시간 lock / unlock 비율 (운영 건강 지표) |
 | `admin_active_operators` | gauge | 최근 15분 내 활동한 unique operator 수 |
+| `admin_active_partnerships` | gauge | 현재 ACTIVE cross-org 파트너십 수 (TASK-BE-476 / ADR-MONO-045) |
+| `admin_partnership_cascade_participants` | histogram | 파트너십 종료/중단 시 한 번에 무효화된 participant 수(`participantCountAtTermination`) — cascade 규모 |
+
+> **파트너십 관측 (TASK-BE-476)**: `PARTNERSHIP_INVITE`/`ACCEPT`/`SUSPEND`/`REACTIVATE`/`TERMINATE`/`PARTICIPANT_ADD`/`PARTICIPANT_REMOVE` 전이는 별도 메트릭 없이 기존 `admin_command_total{action_code,outcome}` 으로 계수된다(deny 는 `outcome=denied`, `403 PARTNERSHIP_SCOPE_DENIED` 포함). cross-org confinement 거부 감사 실패는 D2 와 동일한 `admin.audit.cross_tenant_deny_failure` best-effort 카운터를 공유한다([rbac.md](./rbac.md)). 위 두 비즈니스 메트릭만 파트너십 전용.
 
 ---
 

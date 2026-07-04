@@ -22,8 +22,9 @@
 |---|---|---|
 | `admin_actions` | `id`, `action_code`, `actor_id`, `actor_role`, `target_type`, `target_id`, `reason`, `ticket_id`, `outcome`, `downstream_detail` (JSON), `started_at`, `completed_at` | **append-only 감사 원장**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3). `outcome`은 SUCCESS/FAILURE/IN_PROGRESS |
 | `outbox_events` | `admin.action.performed` 이벤트 스테이징 | libs/java-messaging |
+| `tenant_partnership` / `tenant_partnership_participant` | cross-org 파트너십 관계 상태 + participant 바인딩 | **TASK-BE-476 / ADR-MONO-045** — 계약 정의됨(테이블 = [data-model.md](../../services/admin-service/data-model.md)), DDL/마이그레이션 = §3.4 step 2. admin-service 가 소유하는 유일한 관계 aggregate |
 
-**도메인 상태 없음**. 계정/세션/credential은 downstream 소유. admin-service는 자체 감사 원장만 소유.
+**도메인 상태 최소**. 계정/세션/credential은 downstream 소유. admin-service 로컬 상태 = 감사 원장 + RBAC 메타 + (신규) cross-org 파트너십 관계.
 
 ### Redis
 
@@ -39,10 +40,12 @@
 | 토픽 | 이벤트 | 파티션 키 |
 |---|---|---|
 | `admin.action.performed` | 모든 운영자 행위 (lock, unlock, delete, force-logout, audit query) | `target_id` 또는 `actor_id` |
+| `tenant.{created,suspended,reactivated,updated}` | 테넌트 lifecycle | `tenantId` |
+| `partnership.{invited,accepted,suspended,reactivated,terminated,participant_added,participant_removed}` | cross-org 파트너십 lifecycle (**계약 정의됨, 발행 구현 = ADR-MONO-045 §3.4 step 2**) | `partnershipId` |
 
 발행 정책: **모든 명령이 outbox를 경유**. admin command와 이벤트 발행이 **같은 DB 트랜잭션 내에서 커밋** ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A7, fail-closed). 이벤트는 외부 SIEM·모니터링·컴플라이언스 리포팅용.
 
-계약: [../../contracts/events/admin-events.md](../../contracts/events/).
+계약: [../../contracts/events/admin-events.md](../../contracts/events/), [../../contracts/events/tenant-events.md](../../contracts/events/), [../../contracts/events/partnership-events.md](../../contracts/events/).
 
 ### Kafka Consumer
 
