@@ -85,7 +85,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-476-partnership-aggregate-contracts.md` — **REVIEW** (2026-07-04, branch `be-476-partnership-contracts` pushed, PR pending). ADR-MONO-045 §3.4 **step 1** = cross-org 파트너십 specs/contracts (코드 0). `tenant_partnership`+`tenant_partnership_participant` aggregate(D1), `delegated_scope` `{domains}×{roles}` cap(D3, ≤-own across org·admin-role 금지), two-sided invite/accept 계약(D2), Cross-Org Partner Delegation Confinement = rbac.md **3번째 confinement 축**(파생 도메인-운영 권한만 attenuate, admin scope 불변; `delegated_scope ∩ participant ∩ host-holds`; no-transitive-re-delegation; cascade-revoke request-time), `partnership.*` 7 이벤트(one-shot cascade). 다음 = step 2(admin-service 구현: aggregate+evaluator cross-org 분기+cross-org-leak IT). 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## done
 

@@ -19,7 +19,7 @@ and `platform/architecture-decision-rule.md`.
 | Bounded Context | Operator administration (계정 lock/unlock + 강제 로그아웃 + 감사 조회 프록시) |
 | Deployable unit | `apps/admin-service/` |
 | Data store | MySQL (감사 로그만, downstream 도메인 상태 미보유) |
-| Event publication | Kafka via transactional outbox v2 (`admin.action.performed` + `tenant.*` lifecycle) — see § Outbox (v2) |
+| Event publication | Kafka via transactional outbox v2 (`admin.action.performed` + `tenant.*` lifecycle; `partnership.*` 계약 정의됨 — 발행 구현 = ADR-MONO-045 §3.4 step 2) — see § Outbox (v2) |
 | Event consumption | none (single-type rest-api) |
 
 ### Service Type Composition
@@ -319,7 +319,7 @@ account-service `SecurityConfig`/`InternalApiFilter` 를 미러링한다:
   - [specs/contracts/http/internal/admin-to-auth.md](../../contracts/http/internal/) — 강제 로그아웃
   - [specs/contracts/http/internal/admin-to-account.md](../../contracts/http/internal/) — lock/unlock/delete
   - security-service의 query 엔드포인트 사용 (내부)
-- **이벤트 발행**: [specs/contracts/events/admin-events.md](../../contracts/events/) — `admin.action.performed` (항상 발행) + `tenant.{created,suspended,reactivated,updated}` ([tenant-events.md](../../contracts/events/))
+- **이벤트 발행**: [specs/contracts/events/admin-events.md](../../contracts/events/) — `admin.action.performed` (항상 발행) + `tenant.{created,suspended,reactivated,updated}` ([tenant-events.md](../../contracts/events/)) + `partnership.{invited,accepted,suspended,reactivated,terminated,participant_added,participant_removed}` ([partnership-events.md](../../contracts/events/) — 계약 정의됨, 발행 구현 = ADR-MONO-045 §3.4 step 2)
 
 ### Outbox (v2)
 
@@ -330,6 +330,7 @@ account-service `SecurityConfig`/`InternalApiFilter` 를 미러링한다:
 > - **Relay**: `infrastructure.outbox.AdminOutboxPublisher extends AbstractOutboxPublisher<AdminOutboxJpaEntity>` — `@Component`, no `@ConditionalOnProperty` gate, plain `MicrometerOutboxMetrics(registry,"admin")` + `admin.outbox.pending.count` gauge. `topicFor` ported VERBATIM from the v1 `AdminOutboxPollingScheduler.resolveTopic` — covers BOTH publishers' event types (admin.action.performed + tenant.created/suspended/reactivated/updated); iam topics are bare (no `.v1`); reject-unmapped.
 > - **KEEP-auto-config**: the lib `OutboxAutoConfiguration` is NOT excluded; the v1 `outbox` + `processed_events` tables are retained (EntityScanned, required under `ddl-auto=validate`). In-flight v1 rows at cutover are abandoned.
 > - **Migration**: `db/migration/V0038__admin_outbox_v2.sql`.
+> - **ADR-MONO-045 step 2 (TASK-BE-476 계약, 발행 구현 = step 2)**: cross-org 파트너십 lifecycle 이벤트 `partnership.*`([partnership-events.md](../../contracts/events/partnership-events.md), `partitionKey=partnershipId`)가 `topicFor` 매핑에 추가된다 — 별도 self-built 7-field envelope publisher(`tenant.*` 형제, `PartnershipEventPublisher`) 를 통해 같은 `admin_outbox` 테이블로 발행. **spec-only 단계(현재)에선 미발행** — step 2 impl 이 topicFor·publisher 를 추가하기 전까지 net-zero. iam topics 는 bare(no `.v1`); reject-unmapped 유지.
 - **퍼시스턴스**: MySQL — `admin_actions` (append-only 감사 원장), `admin_outbox` (v2), `outbox` + `processed_events` (v1, retained per KEEP-auto-config)
 - **Redis**: 필요 시 operator rate limit, 세션 nonce
 
