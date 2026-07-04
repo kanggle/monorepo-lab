@@ -6,6 +6,7 @@ import type {
   IamOverviewState,
   CellStatus,
   OperatorsSummary,
+  AccountsSummary,
 } from '../api/overview-state';
 
 /**
@@ -139,22 +140,32 @@ function OperatorsCard({ summary }: { summary: OperatorsSummary }) {
   );
 }
 
-function AccountsCard({ status, total }: { status: CellStatus; total: number | null }) {
-  const ok = status === 'ok' && total !== null;
+function AccountsCard({ summary }: { summary: AccountsSummary }) {
+  const ok = summary.status === 'ok' && summary.total !== null;
   return (
     <CardShell
       href="/accounts"
       testid="iam-overview-accounts"
       label="계정"
-      status={status}
+      status={summary.status}
     >
       {ok ? (
         <>
-          <BigCount value={total!} testid="iam-overview-accounts-total" />
-          <span className="text-xs text-muted-foreground">활성 테넌트 계정</span>
+          <BigCount value={summary.total!} testid="iam-overview-accounts-total" />
+          <dl className="flex gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <dt>잠금</dt>
+              <dd
+                className="font-medium tabular-nums text-foreground"
+                data-testid="iam-overview-accounts-locked"
+              >
+                {summary.locked !== null ? summary.locked.toLocaleString() : '—'}
+              </dd>
+            </div>
+          </dl>
         </>
       ) : (
-        <Placeholder status={status} testid="iam-overview-accounts-degraded" />
+        <Placeholder status={summary.status} testid="iam-overview-accounts-degraded" />
       )}
     </CardShell>
   );
@@ -293,10 +304,7 @@ export function IamOverviewScreen({ state }: { state: IamOverviewState }) {
       <div className="mb-8">
         <div className="mb-3 flex flex-wrap gap-3">
           <OperatorsCard summary={state.operators} />
-          <AccountsCard
-            status={state.accounts.status}
-            total={state.accounts.total}
-          />
+          <AccountsCard summary={state.accounts} />
         </div>
         <AuditCard
           status={state.audit.status}

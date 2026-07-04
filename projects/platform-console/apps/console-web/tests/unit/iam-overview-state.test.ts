@@ -65,7 +65,10 @@ function seedHappy() {
     if (p.status === 'SUSPENDED') return Promise.resolve(page(2));
     return Promise.resolve(page(10));
   });
-  m.searchAccounts.mockResolvedValue(page(123));
+  // TASK-PC-FE-181: total (no status) vs LOCKED sub-leg differentiated by param.
+  m.searchAccounts.mockImplementation((p: { status?: string } = {}) =>
+    Promise.resolve(p.status === 'LOCKED' ? page(4) : page(123)),
+  );
   m.queryAudit.mockResolvedValue(page(57, [adminRow('a1'), adminRow('a2')]));
 }
 
@@ -95,6 +98,7 @@ describe('getIamOverviewState (TASK-PC-FE-180)', () => {
 
     expect(state.accounts.status).toBe('ok');
     expect(state.accounts.total).toBe(123);
+    expect(state.accounts.locked).toBe(4);
 
     expect(state.audit.status).toBe('ok');
     expect(state.audit.total).toBe(57);
@@ -149,6 +153,21 @@ describe('getIamOverviewState (TASK-PC-FE-180)', () => {
     expect(state.audit.total).toBeNull();
     expect(state.audit.recent).toBeNull();
     expect(state.operators.status).toBe('ok');
+  });
+
+  it('TASK-PC-FE-181: accounts total ok but LOCKED sub-leg degraded → total shown, locked null', async () => {
+    seedHappy();
+    m.searchAccounts.mockImplementation((p: { status?: string } = {}) => {
+      if (p.status === 'LOCKED')
+        return Promise.reject(
+          new AccountsUnavailableError('downstream', 'DOWNSTREAM_ERROR', 'x'),
+        );
+      return Promise.resolve(page(123));
+    });
+    const state = await getIamOverviewState();
+    expect(state.accounts.status).toBe('ok');
+    expect(state.accounts.total).toBe(123);
+    expect(state.accounts.locked).toBeNull();
   });
 
   it('operators total ok but a split leg degraded → total shown, split null', async () => {

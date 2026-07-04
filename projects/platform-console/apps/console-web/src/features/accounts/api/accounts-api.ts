@@ -264,6 +264,11 @@ export async function searchAccounts(
   } else {
     qs.set('page', String(params.page ?? 0));
     qs.set('size', String(params.size ?? 20));
+    // TASK-BE-475 / TASK-PC-FE-181: optional lifecycle-status filter — list branch
+    // only (the producer ignores it on the email single-lookup). Absent ⇒ all statuses.
+    if (params.status && params.status.trim() !== '') {
+      qs.set('status', params.status.trim());
+    }
   }
   // TASK-BE-357: scope the search/list to the active tenant (mirror of the audit
   // view — `audit-api.ts` TASK-PC-FE-043). The producer scopes by this `tenantId`

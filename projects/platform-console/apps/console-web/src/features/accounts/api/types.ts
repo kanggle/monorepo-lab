@@ -44,6 +44,13 @@ export interface AccountSearchParams {
   page?: number;
   size?: number;
   /**
+   * TASK-BE-475 / TASK-PC-FE-181 — optional lifecycle-status filter
+   * (`ACTIVE`|`LOCKED`|`DORMANT`|`DELETED`). Applies to the LIST branch only
+   * (the producer ignores it on the `email` single-lookup). Drives the IAM
+   * overview's 잠금 현황 count (`{ status: 'LOCKED', size: 1 }.totalElements`).
+   */
+  status?: string;
+  /**
    * TASK-BE-357 — explicit tenant scope (SUPER_ADMIN cross-tenant). When omitted
    * the api layer defaults it to the active tenant (mirror of the audit view),
    * so the 계정 운영 search follows the tenant switcher. The producer gates it
