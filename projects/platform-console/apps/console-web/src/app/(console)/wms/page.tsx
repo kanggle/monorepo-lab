@@ -8,6 +8,7 @@ import {
   WmsOpsScreen,
   WmsOverview,
   WmsRecentShipments,
+  WmsRecentAdjustments,
 } from '@/features/wms-ops';
 
 export const dynamic = 'force-dynamic';
@@ -161,7 +162,12 @@ export default async function WmsPage() {
       alerts={state.alerts}
       lagSeconds={state.lagSeconds}
       overview={<WmsOverview state={overviewState} />}
-      recentActivity={<WmsRecentShipments state={overviewState} />}
+      recentActivity={
+        <>
+          <WmsRecentShipments state={overviewState} />
+          <WmsRecentAdjustments state={overviewState} />
+        </>
+      }
     />
   );
 }

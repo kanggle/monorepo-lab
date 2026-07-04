@@ -20,14 +20,18 @@ vi.mock('next/navigation', () => ({
 
 const m = vi.hoisted(() => ({
   listInventory: vi.fn(),
+  listOrders: vi.fn(),
   listShipments: vi.fn(),
+  listAdjustments: vi.fn(),
   listAlerts: vi.fn(),
 }));
 vi.mock('@/features/wms-ops/api/wms-inventory-api', () => ({
   listInventory: m.listInventory,
+  listOrders: m.listOrders,
 }));
 vi.mock('@/features/wms-ops/api/wms-shipments-api', () => ({
   listShipments: m.listShipments,
+  listAdjustments: m.listAdjustments,
 }));
 vi.mock('@/features/wms-ops/api/wms-alerts-api', () => ({
   listAlerts: m.listAlerts,
@@ -57,6 +61,15 @@ const shipRow = (shipmentId: string) => ({
   carrierCode: 'CJ',
   trackingNo: 'T1',
   shippedAt: '2026-07-01T00:00:00Z',
+});
+
+const adjRow = (id: string) => ({
+  id,
+  skuId: 'sku-1',
+  bucket: 'AVAILABLE',
+  delta: -5,
+  reasonCode: 'ADJUSTMENT_CYCLE_COUNT',
+  occurredAt: '2026-07-02T00:00:00Z',
 });
 
 /** The KST period windows the fan-out passes as `shippedAtFrom` (PC-FE-174).
@@ -98,6 +111,12 @@ function seedHappy() {
       return Promise.resolve(wmsResult(12));
     },
   );
+  // 미출고 주문 (open orders, PC-FE-186) — status=RECEIVED count.
+  m.listOrders.mockResolvedValue(wmsResult(3));
+  // 최근 재고 조정 (recent adjustments, PC-FE-186) — size=5 activity read.
+  m.listAdjustments.mockResolvedValue(
+    wmsResult(2, [adjRow('adj1'), adjRow('adj2')]),
+  );
 }
 
 beforeEach(() => {
@@ -133,6 +152,22 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
     expect(byKey.inventory.lowStock).toBe(4);
     // 배송 is a FLOW → 오늘/주간/월간 period-to-date + 전체 total.
     expect(byKey.shipments.period).toEqual({ today: 2, week: 5, month: 6 });
+
+    // 미출고 주문 (open orders, PC-FE-186) — a LEVEL count tile (no period),
+    // sits between 재고 and 배송.
+    expect(byKey.openOrders.count).toBe(3);
+    expect(byKey.openOrders.status).toBe('ok');
+    expect(byKey.openOrders.period).toBeNull();
+    expect(state.counts.map((c) => c.key)).toEqual([
+      'inventory',
+      'openOrders',
+      'shipments',
+    ]);
+    expect(m.listOrders).toHaveBeenCalledWith({
+      status: 'RECEIVED',
+      page: 0,
+      size: 1,
+    });
 
     // Counts derive from a page=0,size=1 read (totalElements only) — one for the
     // 재고 total, one for the 저재고 (lowStockOnly) sub-count.
@@ -178,6 +213,12 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
     // Recent shipments from the size=5 read.
     expect(state.recentShipments).toHaveLength(2);
     expect(state.recentShipmentsStatus).toBe('ok');
+
+    // Recent adjustments from the size=5 read (PC-FE-186) — the 재고-side
+    // activity companion.
+    expect(state.recentAdjustments).toHaveLength(2);
+    expect(state.recentAdjustmentsStatus).toBe('ok');
+    expect(m.listAdjustments).toHaveBeenCalledWith({ page: 0, size: 5 });
   });
 
   it('zero counts render ok (not degraded)', async () => {

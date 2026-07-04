@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
 import { ApiError } from '@/shared/api/errors';
-import { listInventory } from './wms-inventory-api';
-import { listShipments } from './wms-shipments-api';
+import { listInventory, listOrders } from './wms-inventory-api';
+import { listShipments, listAdjustments } from './wms-shipments-api';
 import { listAlerts } from './wms-alerts-api';
 import { kstPeriodBounds } from './kst-period';
-import type { ShipmentRow } from './types';
+import type { ShipmentRow, AdjustmentRow } from './types';
 
 /**
  * Server-side wms **operator overview snapshot** fan-out for the `/wms`
@@ -82,6 +82,11 @@ export interface WmsOverviewState {
   alertStatus: WmsAlertStatusCount[];
   recentShipments: ShipmentRow[] | null;
   recentShipmentsStatus: CellStatus;
+  /** 최근 재고 조정 (recent inventory adjustments) glance — the 재고-side
+   *  activity companion to `recentShipments` (PC-FE-186). Null when the sub-read
+   *  did not resolve (status carries the reason). */
+  recentAdjustments: AdjustmentRow[] | null;
+  recentAdjustmentsStatus: CellStatus;
 }
 
 const EMPTY: WmsOverviewState = {
@@ -90,6 +95,8 @@ const EMPTY: WmsOverviewState = {
   alertStatus: [],
   recentShipments: null,
   recentShipmentsStatus: 'degraded',
+  recentAdjustments: null,
+  recentAdjustmentsStatus: 'degraded',
 };
 
 /** Recent-activity page size (clamped to [1, max] by the list client). */
@@ -149,6 +156,8 @@ export async function getWmsOverviewState(
       unackedCell,
       ackedCell,
       recentCell,
+      openOrdersCell,
+      recentAdjCell,
     ] = await Promise.all([
       cell(listInventory({ page: 0, size: 1 })),
       // 저재고 (low-stock) attention sub-count for the 재고 tile (PC-FE-177) —
@@ -183,6 +192,15 @@ export async function getWmsOverviewState(
       cell(listAlerts({ acknowledged: false, page: 0, size: 1 })),
       cell(listAlerts({ acknowledged: true, page: 0, size: 1 })),
       cell(listShipments({ page: 0, size: RECENT_SIZE })),
+      // 미출고 주문 (open outbound orders, PC-FE-186) — the read model collapses
+      // order status to RECEIVED/SHIPPED/CANCELLED (picking/packing events are
+      // swallowed), so `status=RECEIVED` counts orders received-but-not-yet-
+      // shipped/cancelled = the open outbound backlog. A LEVEL count (no period),
+      // the pipeline companion to 배송 (completed shipments).
+      cell(listOrders({ status: 'RECEIVED', page: 0, size: 1 })),
+      // 최근 재고 조정 (recent inventory adjustments, PC-FE-186) — the 재고-side
+      // activity glance companion to 최근 출고.
+      cell(listAdjustments({ page: 0, size: RECENT_SIZE })),
     ]);
 
     // Count tiles cover the WMS operational-scale areas only — 재고 and 배송
@@ -198,6 +216,9 @@ export async function getWmsOverviewState(
     // sub-read only nulls that one bucket (rendered "—").
     const counts: WmsAreaCount[] = [
       areaCount('inventory', '재고', invCell, lowStockCell),
+      // 미출고 주문 (open orders) — a LEVEL backlog tile, sits between 재고 and
+      // 배송 so the band reads 재고 → 미출고(pending) → 배송(shipped).
+      areaCount('openOrders', '미출고 주문', openOrdersCell),
       shipmentAreaCount(
         'shipments',
         '배송',
@@ -230,6 +251,9 @@ export async function getWmsOverviewState(
       recentShipments:
         recentCell.value?.data.content.slice(0, RECENT_SIZE) ?? null,
       recentShipmentsStatus: recentCell.status,
+      recentAdjustments:
+        recentAdjCell.value?.data.content.slice(0, RECENT_SIZE) ?? null,
+      recentAdjustmentsStatus: recentAdjCell.status,
     };
   } catch (err) {
     // Only a `401` re-thrown by a cell reaches here → whole-session re-login.
