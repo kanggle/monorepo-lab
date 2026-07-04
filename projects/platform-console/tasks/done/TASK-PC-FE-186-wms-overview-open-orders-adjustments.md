@@ -1,6 +1,6 @@
 # TASK-PC-FE-186 — WMS 개요: 미출고 주문 타일 + 최근 재고 조정 glance
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Route:** `/wms` (개요) · **Nav:** 변경 없음
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (기존 fan-out/타일 패턴 확장 — PC-FE-174/177과 동형)
 
