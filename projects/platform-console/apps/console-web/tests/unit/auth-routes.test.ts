@@ -231,9 +231,12 @@ describe('GET /api/auth/callback (token exchange)', () => {
     expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
   });
 
-  it('exchange 401 → redirect not_provisioned, NO operator cookie, IAM cookies cleared (no IAM token left as an admin credential)', async () => {
+  it('exchange 401 (not_provisioned) → redirect to /onboarding, NO operator cookie, IAM access+refresh KEPT as the onboarding subject_token (TASK-PC-FE-182 / ADR-MONO-044)', async () => {
     cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
     cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/console', opts: {} });
+    // A stale tenant/assumed selection must be cleared even on this branch.
+    cookieJar.set(TENANT_COOKIE, { value: 'stale', opts: {} });
+    cookieJar.set(ASSUMED_TOKEN_COOKIE, { value: 'stale.assumed', opts: {} });
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
@@ -263,14 +266,21 @@ describe('GET /api/auth/callback (token exchange)', () => {
     );
     const res = await callbackGET(req);
     expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toContain(
-      '/login?error=not_provisioned',
-    );
+    // A valid IAM login that is not yet an operator is routed to self-service
+    // onboarding, NOT bounced to re-login.
+    expect(res.headers.get('location')).toBe('http://console.local/onboarding');
+    // No operator credential is minted (the pre-operator state).
     expect(cookieJar.has(OPERATOR_COOKIE)).toBe(false);
-    // The IAM token must NOT be left usable as an /api/admin/** credential.
-    expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
-    expect(cookieDeletes).toContain(ACCESS_COOKIE);
-    expect(cookieDeletes).toContain(REFRESH_COOKIE);
+    // The IAM access+refresh cookies are KEPT — the onboarding endpoint's
+    // subject_token + the post-onboarding re-exchange input (never an admin
+    // credential; isAuthenticated() still requires the operator cookie).
+    expect(cookieJar.get(ACCESS_COOKIE)?.value).toBe('gap.acc');
+    expect(cookieJar.get(REFRESH_COOKIE)?.value).toBe('gap.ref');
+    expect(cookieDeletes).not.toContain(ACCESS_COOKIE);
+    expect(cookieDeletes).not.toContain(REFRESH_COOKIE);
+    // A stale tenant/assumed selection is dropped defensively.
+    expect(cookieDeletes).toContain(TENANT_COOKIE);
+    expect(cookieDeletes).toContain(ASSUMED_TOKEN_COOKIE);
   });
 
   it('exchange unavailable (5xx) → redirect operator_exchange_unavailable, no partial authed state', async () => {

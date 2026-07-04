@@ -12,8 +12,13 @@ const ERROR_MESSAGES: Record<string, string> = {
     '인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.',
   // Gap C (F5): operator-provisioning and transient server-side error codes
   // emitted by callback/route.ts — previously unmapped → silent failure.
+  // NOTE (TASK-PC-FE-182 / ADR-MONO-044): the callback no longer emits
+  // `not_provisioned` — a logged-in non-operator is routed to `/onboarding`
+  // (self-service org creation) instead of here. This entry survives only as
+  // a defensive fallback for a hand-crafted URL; the copy points at the new
+  // self-service path rather than the old "ask an admin".
   not_provisioned:
-    '운영자 권한이 없는 계정입니다. 관리자에게 권한 부여를 요청하세요.',
+    '아직 소속된 조직이 없습니다. 다시 로그인하면 조직 만들기로 안내됩니다.',
   operator_exchange_unavailable:
     '인증 서버 일시 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
 };

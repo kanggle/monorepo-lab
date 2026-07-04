@@ -69,6 +69,21 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for the operator-token exchange call
    *  (integration-heavy I1 — same convention as REGISTRY_TIMEOUT_MS). */
   TOKEN_EXCHANGE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** IAM admin-service self-service tenant-onboarding endpoint (TASK-BE-474 /
+   *  ADR-MONO-044 §3.4 — `onboarding-api.md` authoritative path). The console
+   *  proxies the "create organization" call here with the caller's IAM OIDC
+   *  access token as the `subjectToken` (the ONE admin-service mutation
+   *  callable without an operator token — it is `permitAll` + validates the
+   *  subject token itself). Consumed only; never redefined. */
+  CONSOLE_ONBOARDING_URL: z
+    .string()
+    .url()
+    .default('http://iam.local/api/admin/onboarding/organizations'),
+  /** Outbound timeout (ms) for the onboarding call. Longer than the other
+   *  I1 calls (10s vs 5s) because onboarding is a multi-step provisioning
+   *  saga (tenant create + born-unified identity mint + role grants +
+   *  assignment, ADR-044 D1) — not a single read. */
+  ONBOARDING_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
   /** IAM admin-service base for the accounts operator surface (TASK-PC-FE-002
    *  / TASK-BE-296 operator-auth boundary). The 8 account/session endpoints
    *  hang off `${IAM_ADMIN_API_BASE}/api/admin/...` — request/response/error
@@ -243,6 +258,8 @@ export function getServerEnv(): ServerEnv {
     REGISTRY_TIMEOUT_MS: process.env.REGISTRY_TIMEOUT_MS,
     CONSOLE_TOKEN_EXCHANGE_URL: process.env.CONSOLE_TOKEN_EXCHANGE_URL,
     TOKEN_EXCHANGE_TIMEOUT_MS: process.env.TOKEN_EXCHANGE_TIMEOUT_MS,
+    CONSOLE_ONBOARDING_URL: process.env.CONSOLE_ONBOARDING_URL,
+    ONBOARDING_TIMEOUT_MS: process.env.ONBOARDING_TIMEOUT_MS,
     IAM_ADMIN_API_BASE: process.env.IAM_ADMIN_API_BASE,
     ACCOUNTS_TIMEOUT_MS: process.env.ACCOUNTS_TIMEOUT_MS,
     AUDIT_TIMEOUT_MS: process.env.AUDIT_TIMEOUT_MS,
