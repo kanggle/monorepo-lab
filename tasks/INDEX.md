@@ -143,6 +143,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
+- `TASK-MONO-329-ci-setup-node-pnpm-composite.md` — `setup-node-pnpm` composite(pnpm 9.15.0 + Node 20 + cache) 신설, ci.yml 프런트 3잡(unit/e2e-smoke/checks)의 pnpm+Node 2스텝 → 1스텝. MONO-326 `setup-java-gradle`의 Node 판; Node/pnpm 버전 단일화. nightly/fed(+782 no-cache 변이)는 유예(별도 확장 패스). 잡 이름·게이팅 무변경. 분석=Opus 4.8 / 구현 권장=Sonnet.
 - `TASK-MONO-328-ci-gating-if-hoist.md` — **⏳ DEFERRED 백로그** (신호 관측 전 착수 금지). MONO-326(CI 본문 DRY)의 짝: 게이팅 `if:` OR-블록 ~15복사 → `changes.outputs.run-*` named 플래그로 hoist. **AC-0 verify-then-act**: 착수 트리거(①프로젝트 추가 잦아 `if:` 갱신 누락 발생 ②게이팅 실수로 e2e 누락 회귀) 미관측 시 STOP·보류 유지. 필터 정의 무수정(MONO-074/075 quirk). 페이오프 中·리스크 中(correctness-critical)·통증 신호 無 → 신호 시만. 분석=Opus 4.8 / 구현 권장=Opus.
 
 ## in-progress
