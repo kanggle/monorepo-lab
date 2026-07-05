@@ -85,7 +85,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-479-partnership-host-holds-invite-cap.md` — **REVIEW (impl 완료, 로컬 admin-service `:test` green — 브랜치 `be-479-partnership-host-holds`)**. ADR-MONO-045 후속 = BE-477 이 남긴 **host-holds seam** 종결. **설계 판정(사용자 확정)**: request-time `∩ host-holds` 는 **의도적 unbounded**(ADR-020 §3.1 hot-path cross-service 금지 + step-2b 가 이미 `entitled_domains=host-ACTIVE∩delegated.domains` 로 도메인 클립 → request-time role 재클립 inert), 실 enforcement 는 **invite-time**. invite `validateDelegatedScopeLocalCap`(empty-domains·containsAdminRole·**역할 허용목록** `DelegatableRoleCatalog`=auth `OperatorRoleDerivation` 값집합 미러, admin-tier `WMS_ADMIN`/tenant-admin 3종 제외) + `requireHostSubscribesDomains`(**도메인 ∈ host ACTIVE 구독**, 기존 `TenantDomainSubscriptionPort` host 필터; pairExists 뒤 I/O; account 장애→fail-CLOSED 전파). 순서=local cap→pairExists→domain I/O(중복/무효는 I/O 전 단락). `HostEntitledScopeResolver`/Unbounded/`OperatorAssignmentCheckUseCase` javadoc 확정(deferred→final unbounded), rbac.md confinement 정합(pseudocode+≤-own bullet). 계약 변경 0(admin-api.md 이미 "host 미보유→422" 명세, 실구현만). 테스트: PartnershipManagementUseCaseTest +3(미구독 도메인 422·admin-tier role 422·account-down fail-closed) + 기존 4 갱신(가짜 role→실 delegatable + 구독 stub) + DelegatableRoleCatalogTest(정확 14-role 집합·admin 제외). **로컬**: admin-service 전체 Docker-free `:test` GREEN(회귀 0; cross-org-leak IT=request-time byte-unchanged AC-6, CI Testcontainers 권위). 다음 = **머지**(iam Integration green 확인 후). 분석/구현=Opus 4.8. [[feedback_spring_boot_diagnostic_patterns]]
 
 ## done
 

@@ -158,9 +158,17 @@ public class OperatorAssignmentCheckUseCase {
      *   part = participant(p, operator); if part is null: return null   // not a participant
      *   scope = p.delegated_scope
      *   if part.participant_scope != null: scope ∩= participant_scope
-     *   scope ∩= hostEntitledScope(host)                                // ≤-own (deferred)
-     *   return scope
+     *   scope ∩= hostEntitledScope(host)         // ≤-own; host-holds is UNBOUNDED here
+     *   return scope                             //  (identity — see below)
      * </pre>
+     *
+     * <p><b>host-holds is intentionally unbounded at request time (TASK-BE-479).</b>
+     * The {@code ∩ host-holds} term is the identity ({@link UnboundedHostEntitledScopeResolver}):
+     * a hot-path cross-service fetch is forbidden (ADR-MONO-020 §3.1) and the domain
+     * dimension is already clipped at assume-tenant mint (TASK-BE-478 step 2b). The real
+     * ≤-own enforcement is at invite time ({@code PartnershipManagementUseCase}). The
+     * term is retained so a future local host-holds mirror could bound this path without
+     * changing the algorithm.
      *
      * @return the derived {@code {domains, roles}}, or {@code null} when the operator
      *         has no partnership-derived reach to {@code hostTenant} (fail-closed).
