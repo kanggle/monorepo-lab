@@ -85,7 +85,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-480-adr045-spec-reconcile.md` — **REVIEW (impl 완료, doc-only — 브랜치 `be-480-adr045-spec-reconcile`)**. ADR-045 세션(BE-478/PC-FE-187/BE-479) 구현→스펙 정합(specs win, 순수 doc·코드/계약 0). 3파일: (1) **auth-service architecture.md** assume-tenant 경로에 step 4 = BE-478 cross-org cap(`delegatedScope`→`entitled_domains=host-ACTIVE∩domains`·`roles` verbatim·admin scope 불변, auth-to-admin.md §delegatedScope cross-ref) + step 3 에 roles 파생(BE-376)·org_scope(BE-338) 보강; (2) **admin data-model.md** `delegated_scope` cap 불변식에 BE-479 concrete invite enforcement(도메인∈구독/role∈`DelegatableRoleCatalog`/fail-CLOSED) + request-time unbounded(rbac.md cross-ref); (3) **console-web architecture.md** 라우트·features 레지스트리에 `subscriptions`(PC-FE-183)·`partnerships`(PC-FE-187) 항목 추가('조직 설정' operator-gated, 둘 다 부재했음). 링크 정합 확인(rbac.md 앵커·auth-to-admin.md 실재). cross-project doc(iam-platform+platform-console specs) 1 PR 번들. 다음 = **머지**(markdown fast-lane). 분석/구현=Opus 4.8.
 
 ## done
 
