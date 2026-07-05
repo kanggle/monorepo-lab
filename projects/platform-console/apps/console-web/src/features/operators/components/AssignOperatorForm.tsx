@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 
@@ -57,9 +58,27 @@ export function AssignOperatorForm({
         <h2 className="text-lg font-semibold text-foreground">테넌트 배정</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           기존 운영자를 현재 테넌트{' '}
-          <strong className="text-foreground">{activeTenant}</strong> 에
-          배정합니다 (직원·협력업체 온보딩). 배정 후 &ldquo;조직 스코프&rdquo;로
-          부서 범위를 좁힐 수 있습니다.
+          <strong className="text-foreground">{activeTenant}</strong> 의{' '}
+          <strong className="text-foreground">운영자로 편입</strong>합니다 (같은
+          조직 내 위임 온보딩). 배정 후 &ldquo;조직 스코프&rdquo;로 부서 범위를
+          좁힐 수 있습니다.
+        </p>
+        <p
+          data-testid="assign-operator-partnership-hint"
+          className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          다른 회사(협력사) 조직이{' '}
+          <strong className="text-foreground">자기 테넌트를 운영하면서</strong>{' '}
+          이 테넌트의 일부(도메인·역할 slice)만 맡게 하려면 여기가 아니라{' '}
+          <Link
+            href="/partnerships"
+            data-testid="assign-operator-partnership-link"
+            className="font-medium text-primary underline underline-offset-2"
+          >
+            파트너십
+          </Link>{' '}
+          화면을 쓰세요. 파트너십은 관계 단위로 관리되어, 종료하거나 participant
+          를 해제하면 그 접근이 즉시 회수됩니다(cascade offboarding).
         </p>
       </div>
 
