@@ -1,9 +1,10 @@
 # TASK-PC-FE-203 — 운영자 생성 액션 라벨 **"운영자 계정 생성 → 운영자 등록"**
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Scope:** 운영자 관리(/operators) 생성 액션 라벨 + IAM 가이드 네비 참조
 **Type:** UI 라벨 정합 (naming — 순수 label, 도메인/동작/계약 무변화)
-**Analysis model:** Opus 4.8 · **Impl 권장:** Opus/Sonnet (단순 라벨)
+**Implemented:** branch `pc-fe-203-operator-register-label` → **#2266 merged** (squash `93ad59d08`). 라벨 10곳 + 확인 다이얼로그 본문 동사 1곳. `tsc` + `next lint` + `vitest`(operators 77/77) green; CI 전 required 체크 pass. (선행 main-RED = PC-FE-201 wms 날짜 flake + PC-FE-204 operators unhandled-error 선복구 후 rebase.)
+**Analysis model:** Opus 4.8 · **Impl model:** Opus.
 
 ## Goal
 
@@ -41,12 +42,12 @@
 
 ## Acceptance Criteria
 
-- [ ] **AC-1** 운영자 생성 관련 명사형 UI 라벨(폼 제목/aria/버튼/플랫폼 안내/확인 다이얼로그 제목·버튼/생성 실패
+- [x] **AC-1** 운영자 생성 관련 명사형 UI 라벨(폼 제목/aria/버튼/플랫폼 안내/확인 다이얼로그 제목·버튼/생성 실패
   에러/섹션 액션 목록)이 모두 **"운영자 등록"** 계열로 읽힌다.
-- [ ] **AC-2** IAM 가이드 `desc` + 네비 라벨 참조가 버튼과 일치("운영자 등록").
-- [ ] **AC-3** 확인 다이얼로그 제목("운영자 등록")과 본문 동사("…등록합니다")가 일치 — 제목-본문 불일치 없음.
-- [ ] **AC-4** 동사형 기술 서술·섹션명·"생성일"·테넌트 "생성" 등 무관 문자열은 불변.
-- [ ] **AC-5** testid/role 기반 테스트 불변(라벨 텍스트 단언 0건 사전 확인); `pnpm lint` + `tsc --noEmit` +
+- [x] **AC-2** IAM 가이드 `desc` + 네비 라벨 참조가 버튼과 일치("운영자 등록").
+- [x] **AC-3** 확인 다이얼로그 제목("운영자 등록")과 본문 동사("…등록합니다")가 일치 — 제목-본문 불일치 없음.
+- [x] **AC-4** 동사형 기술 서술·섹션명·"생성일"·테넌트 "생성" 등 무관 문자열은 불변.
+- [x] **AC-5** testid/role 기반 테스트 불변(라벨 텍스트 단언 0건 사전 확인); `pnpm lint` + `tsc --noEmit` +
   `vitest` green.
 
 ## Related Specs / Contracts
