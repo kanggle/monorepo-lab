@@ -8,7 +8,7 @@ operator-auth-token-model.md § 6 에 "② 만드는 법 — self-service 온보
 
 # Status
 
-ready
+done
 
 # Owner
 
