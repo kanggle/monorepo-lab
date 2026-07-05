@@ -1,19 +1,16 @@
 'use client';
 
 import { useId, useState } from 'react';
-import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
-import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useOrders } from '../hooks/use-ecommerce-orders';
-import { formatDateTime } from '@/shared/lib/datetime';
 import {
   ORDER_DEFAULT_PAGE_SIZE,
   ORDER_STATUS_VALUES,
-  orderStatusTone,
   type OrderList,
   type OrderListParams,
 } from '../api/order-types';
+import { OrdersTable } from './OrdersTable';
 
 /**
  * ecommerce order operations list section (TASK-PC-FE-083 — § 2.4.10 #15).
@@ -140,111 +137,17 @@ export function OrdersScreen({ orders }: OrdersScreenProps) {
           표시할 주문이 없습니다.
         </p>
       ) : (
-        <>
-          <table className="mb-3 data-table" data-testid="order-table">
-            <caption className="sr-only">주문 목록</caption>
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th scope="col" className="p-2">
-                  주문 ID
-                </th>
-                <th scope="col" className="p-2">
-                  첫 번째 상품
-                </th>
-                <th scope="col" className="p-2">
-                  상태
-                </th>
-                <th scope="col" className="p-2">
-                  총액
-                </th>
-                <th scope="col" className="p-2">
-                  주문일
-                </th>
-                <th scope="col" className="p-2">
-                  작업
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((o, i) => (
-                <tr
-                  key={o.orderId}
-                  data-testid={`order-row-${i}`}
-                  className="border-b border-border"
-                >
-                  <td className="p-2 text-xs break-all">{o.orderId}</td>
-                  <td className="p-2">
-                    {o.firstItemName}
-                    {o.itemCount > 1 && (
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        외 {o.itemCount - 1}건
-                      </span>
-                    )}
-                  </td>
-                  <td
-                    className="p-2"
-                    data-testid={`order-row-status-${i}`}
-                  >
-                    <StatusBadge tone={orderStatusTone(o.status)}>
-                      {o.status}
-                    </StatusBadge>
-                  </td>
-                  <td className="p-2">
-                    {o.totalPrice.toLocaleString('ko-KR')}원
-                  </td>
-                  <td className="p-2 text-sm text-muted-foreground">
-                    {formatDateTime(o.createdAt)}
-                  </td>
-                  <td className="p-2">
-                    <Link href={`/ecommerce/orders/${o.orderId}`}>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        data-testid={`order-detail-${i}`}
-                      >
-                        상세
-                      </Button>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <nav
-            className="flex items-center justify-between"
-            aria-label="주문 페이지 이동"
-          >
-            <Button
-              variant="secondary"
-              disabled={(query.page ?? 0) <= 0}
-              onClick={() =>
-                setQuery((q) => ({
-                  ...q,
-                  page: Math.max(0, (q.page ?? 0) - 1),
-                }))
-              }
-              data-testid="order-prev"
-            >
-              이전
-            </Button>
-            <span
-              className="text-sm text-muted-foreground"
-              data-testid="order-pageinfo"
-            >
-              {`${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={(data?.page ?? 0) + 1 >= totalPages}
-              onClick={() =>
-                setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-              }
-              data-testid="order-next"
-            >
-              다음
-            </Button>
-          </nav>
-        </>
+        <OrdersTable
+          rows={rows}
+          pagination={{
+            prevDisabled: (query.page ?? 0) <= 0,
+            nextDisabled: (data?.page ?? 0) + 1 >= totalPages,
+            pageInfo: `${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`,
+            onPrev: () =>
+              setQuery((q) => ({ ...q, page: Math.max(0, (q.page ?? 0) - 1) })),
+            onNext: () => setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 })),
+          }}
+        />
       )}
     </section>
   );

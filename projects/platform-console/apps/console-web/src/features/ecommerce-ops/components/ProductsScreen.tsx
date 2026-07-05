@@ -4,7 +4,6 @@ import { useId, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
-import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useProducts,
@@ -13,11 +12,11 @@ import {
 import {
   PRODUCT_DEFAULT_PAGE_SIZE,
   PRODUCT_STATUS_VALUES,
-  productStatusTone,
   type ProductList,
   type ProductListParams,
 } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ProductsTable } from './ProductsTable';
 
 /**
  * ecommerce product operations list section (TASK-PC-FE-081 — § 2.4.10 #1).
@@ -167,78 +166,21 @@ export function ProductsScreen({ products }: ProductsScreenProps) {
           표시할 상품이 없습니다.
         </p>
       ) : (
-        <>
-          <table className="mb-3 data-table" data-testid="product-table">
-            <caption className="sr-only">상품 목록</caption>
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th scope="col" className="p-2">상품명</th>
-                <th scope="col" className="p-2">상태</th>
-                <th scope="col" className="p-2">가격</th>
-                <th scope="col" className="p-2">작업</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p, i) => (
-                <tr key={p.id} data-testid={`product-row-${i}`} className="border-b border-border">
-                  <td className="p-2">{p.name}</td>
-                  <td className="p-2" data-testid={`product-row-status-${i}`}>
-                    <StatusBadge tone={productStatusTone(p.status)}>
-                      {p.status}
-                    </StatusBadge>
-                  </td>
-                  <td className="p-2">{p.price.toLocaleString('ko-KR')}원</td>
-                  <td className="p-2">
-                    <div className="flex gap-2">
-                      <Link href={`/ecommerce/products/${p.id}`}>
-                        <Button variant="secondary" size="sm" data-testid={`product-detail-${i}`}>
-                          상세
-                        </Button>
-                      </Link>
-                      <Link href={`/ecommerce/products/${p.id}/edit`}>
-                        <Button variant="secondary" size="sm" data-testid={`product-edit-${i}`}>
-                          수정
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setDelError(null);
-                          setToDelete({ id: p.id, name: p.name });
-                        }}
-                        data-testid={`product-delete-${i}`}
-                      >
-                        삭제
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <nav className="flex items-center justify-between" aria-label="상품 페이지 이동">
-            <Button
-              variant="secondary"
-              disabled={(query.page ?? 0) <= 0}
-              onClick={() => setQuery((q) => ({ ...q, page: Math.max(0, (q.page ?? 0) - 1) }))}
-              data-testid="product-prev"
-            >
-              이전
-            </Button>
-            <span className="text-sm text-muted-foreground" data-testid="product-pageinfo">
-              {`${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={(data?.page ?? 0) + 1 >= totalPages}
-              onClick={() => setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))}
-              data-testid="product-next"
-            >
-              다음
-            </Button>
-          </nav>
-        </>
+        <ProductsTable
+          rows={rows}
+          onDelete={(product) => {
+            setDelError(null);
+            setToDelete(product);
+          }}
+          pagination={{
+            prevDisabled: (query.page ?? 0) <= 0,
+            nextDisabled: (data?.page ?? 0) + 1 >= totalPages,
+            pageInfo: `${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`,
+            onPrev: () =>
+              setQuery((q) => ({ ...q, page: Math.max(0, (q.page ?? 0) - 1) })),
+            onNext: () => setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 })),
+          }}
+        />
       )}
 
       <ConfirmDialog
