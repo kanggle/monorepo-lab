@@ -1,6 +1,6 @@
 # TASK-PC-FE-192 — WMS 게이트웨이 client fetch scaffold 공통화 (wms-ops · wms-outbound-ops dedup)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving client dedup
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (behavior-preservation 정밀 — 2-client 계약 보존)
 
