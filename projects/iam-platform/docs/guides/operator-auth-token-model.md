@@ -125,6 +125,25 @@ operator token 도 성격상 인가이며, 다만 대상이 도메인 운영이 
 
 > 공통: ① 로그인(인증)은 넷 다 **동일한 계정 하나**. 나머지 세 모자는 그 위에 얹히는 **인가**입니다(operator token = IAM 관리, 2축 assume-tenant = 도메인 운영). "어느 토큰"은 § 4, "인증 vs 인가"는 § 5 를 참고하세요.
 
+### ② 만드는 법 — self-service 온보딩
+
+"회원가입하고 내가 소유한 회사를 운영하려면?" = 모자 ②를 얻는 길입니다. 플랫폼 관리자(SUPER_ADMIN) 개입 없이 스스로 만듭니다 — AWS "회원가입 → 새 계정 → root" / GCP "새 프로젝트 → owner" parity([ADR-MONO-044](../../../../docs/adr/ADR-MONO-044-self-service-tenant-onboarding.md)).
+
+1. **회원가입** (`/signup`) → 통합 IAM 계정 = 모자 ①(소비자). 운영자 아님, 1축 로그인 토큰만. (온보딩 진입은 email 인증된 계정을 요구 — 트러스트 게이트, D4.)
+2. **콘솔 로그인** (OIDC) → 아직 운영자 아님. 소속 워크스페이스가 없으면 콜백이 재로그인이 아니라 **`/onboarding`** 으로 보냅니다.
+3. **조직 생성** (`/onboarding` → `POST /api/admin/onboarding/organizations`, 내 OIDC 토큰이 subject). **한 번의 atomic 트랜잭션**(D1; 실패 시 전체 롤백 → 관리자 없는 orphan 테넌트 방지 D3)이:
+   - 새 테넌트(ACTIVE) 생성
+   - 내 계정에 **운영자 facet** 추가(born-unified, [ADR-MONO-036](../../../../docs/adr/ADR-MONO-036-born-unified-identity-provisioning.md) `resolveOrCreate` — 기존 소비자 계정 그대로, 별도 계정 아님)
+   - **`TENANT_ADMIN` + `TENANT_BILLING_ADMIN`** grant — **방금 만든 테넌트 scope 로만**(D2 confinement: 남의 테넌트·`'*'` 도달 불가)
+   - `operator_tenant_assignment`(그 테넌트를 assume 가능)
+   → 이 순간 모자 ①이 **②로 승격**됩니다.
+4. **콘솔 운영**: operator token 으로 IAM 관리 화면 접근 —
+   - `/subscriptions`(`TENANT_BILLING_ADMIN`): 새 테넌트는 **도메인 구독 0 으로 태어나므로**(D6, entitlement-empty), wms·ecommerce·erp… 를 **직접 켜야** 운영 화면이 열립니다.
+   - `/operators`(`TENANT_ADMIN`): 우리 회사 직원 운영자를 생성·배정 = **모자 ③** 만들어주기(§ 6 표).
+   - 도메인 켠 뒤 **assume-tenant(2축)**로 그 도메인 운영 화면 진입.
+
+핵심: self-grant 는 **자기가 방금 만든 테넌트에만** 갇혀 안전합니다(D2 — SUPER_ADMIN net-zero·타 테넌트 격리 불변). 상세 규약은 [ADR-MONO-044](../../../../docs/adr/ADR-MONO-044-self-service-tenant-onboarding.md)·[onboarding-api.md](../../specs/contracts/http/onboarding-api.md) 가 권위.
+
 ---
 
 ## 7. cross-org 확장 — 모자 ④ 상세 (ADR-MONO-045)
