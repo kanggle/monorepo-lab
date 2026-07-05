@@ -167,6 +167,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > - `host_tenant_id != partner_tenant_id` — self-partnership 금지(같은 테넌트 내 위임은 ADR-024 within-tenant 경로).
 > - `host_tenant_id`·`partner_tenant_id` 모두 `'*'` 금지 — 플랫폼(SUPER_ADMIN sentinel)은 파트너십의 당사자가 될 수 없다. cross-org 파트너십은 **두 실제 고객 테넌트** 사이에서만 성립.
 > - **`delegated_scope` cap** — 어떤 admin role(`TENANT_ADMIN`/`TENANT_BILLING_ADMIN`/`SUPER_ADMIN`)·플랫폼-scope 도 포함 불가; host 가 **자신이 보유**한 domain·role 만 위임 가능(≤-own 을 조직 경계 너머로 확장). invite 시점에 검증(위반 → `422 PARTNERSHIP_SCOPE_INVALID`). 이는 ADR-024 grant-menu no-escalation 을 cross-org 로 확장한 것.
+>   - **concrete enforcement (TASK-BE-479)**: "보유" 는 invite 시점에 두 축으로 구체 검증된다 — (a) 각 **도메인 ∈ host 의 ACTIVE 도메인 구독**(account-service = entitlement authority, `TenantDomainSubscriptionPort` host 필터; command 경로라 cross-service 조회 허용), (b) 각 **role ∈ `DelegatableRoleCatalog`** operator-tier 허용목록(auth-service `OperatorRoleDerivation` 값집합 미러 — admin-tier `WMS_ADMIN` 등 및 tenant-admin 3종 제외). account-service 장애 시 **fail-CLOSED**(위임 미발급). request-time 의 `∩ host-holds` 는 **의도적 unbounded**(ADR-020 §3.1 hot-path cross-service 금지 + BE-478 step 2b 가 mint 시 도메인을 이미 클립) — 상세 [rbac.md § Cross-Org Partner Delegation Confinement](rbac.md#cross-org-partner-delegation-confinement-adr-mono-045-d3d5).
 
 ### `tenant_partnership_participant`
 

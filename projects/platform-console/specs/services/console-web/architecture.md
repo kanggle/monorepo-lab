@@ -94,6 +94,8 @@ apps/console-web/
 │   │   │   ├── accounts/              # ✅ IAM accounts 운영자 parity 라우트 (catalog iam.baseRoute → 여기, TASK-PC-FE-002)
 │   │   │   ├── audit/                 # ✅ IAM audit+security read parity 라우트 (in-console nav, TASK-PC-FE-003)
 │   │   │   ├── operators/             # ✅ IAM operators 관리 parity 라우트 (in-console nav, TASK-PC-FE-004)
+│   │   │   ├── subscriptions/         # ✅ 도메인 구독 self-enablement 라우트 ('조직 설정' sidebar 그룹, ADR-023 entitlement-plane; operator token; TASK-PC-FE-183)
+│   │   │   ├── partnerships/          # ✅ cross-org 파트너십 관리 라우트 ('조직 설정' sidebar 그룹, ADR-045 관계-상태 표면; operator token; TASK-PC-FE-187)
 │   │   │   ├── wms/                   # ✅ wms 운영 섹션 (read + alert-ack; in-console nav, Phase 4 slice 1, TASK-PC-FE-007)
 │   │   │   ├── scm/                   # ✅ scm 운영 섹션 (read-only: procurement PO + inventory-visibility; in-console nav, Phase 4 slice 2, TASK-PC-FE-008)
 │   │   │   │   ├── replenishment/      # ✅ scm 보충 운영 게이트 (demand-planning suggestion 목록 read + approve/dismiss operator action; ADR-MONO-027 D5 human-gate, TASK-PC-FE-077 — 첫 scm operator-mutation surface)
@@ -136,6 +138,15 @@ apps/console-web/
 │   │   │   ├── api/                   #   bounded fan-out — 기존 accounts/audit/operators server client 합성 (신규 IAM client 없음). per-source isolation: 403/503/timeout ⇒ 해당 카드만 degrade, 401 ⇒ 전체 overview 재로그인. 변이 없음(reason/Idempotency-Key/confirm 없음). 1 load = 1 bounded call set (audit meta-audit 존중)
 │   │   │   ├── hooks/                 #   TanStack Query overview read 훅 (단일 bounded query; auto-refetch loop 없음)
 │   │   │   ├── components/            #   summary 카드(accounts / audit-security / operators) — 데이터 OR 자체 degraded/권한 placeholder, /accounts·/audit·/operators 빠른 링크
+│   │   │   └── index.ts              #   feature public API (배럴)
+│   │   ├── subscriptions/              # ✅ 도메인 구독 self-enablement ('조직 설정' 그룹, entitlement-plane; TASK-PC-FE-183 — 온보딩 owner 의 dead-end[구독 0] 해소, BE-343 위 신규 BE 0)
+│   │   │   ├── api/                   #   hardened operators-client 미러(operator token + X-Tenant-Id + percent-encoded X-Operator-Reason·토큰 미로깅) + createSubscription/changeSubscriptionStatus(**서버-측 activeTenant** — 클라 타 테넌트 불가). **list/GET 부재** → 카탈로그 파생(ACTIVE ⟺ registry `tenants ∋ activeTenant`; SUSPENDED/CANCELLED 는 카탈로그서 빠짐, ADR-023) + subscribe 409 → 재개(resume) 리커버리
+│   │   │   ├── lib/derive.ts          #   deriveDomainSubscriptions(products, activeTenant) → 도메인별 ACTIVE/NOT_SUBSCRIBED 파생(SUBSCRIBABLE_DOMAINS, iam 제외)
+│   │   │   ├── components/            #   SubscriptionsScreen(도메인별 구독/일시중지/해지) + reason-capture SubscriptionConfirmDialog(빈 사유 submit 비활성; 409→재개 전환)
+│   │   │   └── index.ts              #   feature public API (배럴)
+│   │   ├── partnerships/               # ✅ cross-org 파트너십 관리 (ADR-MONO-045 §3.4 step 3; TASK-PC-FE-187 — 관계-상태 표면만, 파생 권한은 assume-tenant 캡. 백엔드 BE-476/477/478 위 신규 BE 0)
+│   │   │   ├── api/                   #   hardened operators-client 미러(per-endpoint CallOptions 매트릭스 reason?/idempotencyKey?/expectNoContent?; operator token + X-Tenant-Id[**서버 activeTenant**] + percent-encoded X-Operator-Reason·토큰 미로깅; 401/403/404/409/422/503/timeout taxonomy → PartnershipsUnavailableError) + partnerships-api(colon-verb producer path `${PREFIX}/${id}:accept` 서버-측 조립·invite Idempotency-Key) + getPartnershipsListState SSR 게이트(operators-state 미러)
+│   │   │   ├── components/            #   PartnershipsScreen(host/partner `myRole` 섹션 분리·상태전이 매트릭스 버튼 gating·invite 폼[partnerTenantId+delegatedScope]·participant add/remove·전 변이 reason-capture→router.refresh) + PartnershipConfirmDialog(빈 사유 submit 비활성; terminate 파괴적 스타일)
 │   │   │   └── index.ts              #   feature public API (배럴)
 │   │   ├── wms-ops/                    # ✅ wms 운영 섹션 (Phase 4 slice 1, TASK-PC-FE-007 — 첫 non-IAM 도메인 federation)
 │   │   │   ├── api/                   #   server-side wms admin-service 호출 (§ 1 read-model 12 read + 1 alert-ack mutation). credential = **IAM OIDC access token** (`getAccessToken()`) — operator token (`getOperatorToken()`) **아님** (#569 는 IAM-domain-scoped, wms 게이트웨이는 IAM OIDC token 을 요구). nested wms error envelope `{ error: { code … } }` 파서 (IAM flat shape 아님). AbortController hard timeout. alert-ack ⇒ `Idempotency-Key` only, **no `X-Operator-Reason`** (wms 미정의 — carry-over 는 header-matrix-drift 결함), empty body

@@ -154,9 +154,10 @@ apps/auth-service/src/main/java/com/example/auth/
    - **fail-CLOSED assignment gate**: `OperatorAssignmentPort`(`AdminAssignmentClient`) → admin-service `GET /internal/operator-assignments/check`. 미할당/admin 장애/timeout/circuit-open 모두 `AssumeTenantDeniedException` → `invalid_grant`, 토큰 미발급. **account-service entitled_domains 의 fail-soft 와 정반대 정책 — 절대 섞지 않는다.**
    - 동일한 `JwtGenerator` + `TenantClaimTokenCustomizer`(token-exchange 분기) 로 mint → login 토큰과 **동일 `iss`/kid**. 선택 tenant + tenant_type 은 `AssumeTenantAuthenticationToken`(=authorizationGrant) 으로 운반되어 customizer 가 읽는다 (JwtGenerator 가 임의 context.put() 은 복사하지 않으므로 authorizationGrant 경유).
    - **refresh token 미발급** (단명, selection 마다 재발급 — ADR-020 § 3.1).
-3. `entitled_domains` (D3): **선택된** tenant 의 ACTIVE subscriptions 만 (union 없음), keystone `populateEntitledDomains` 재사용 (fail-soft).
+3. `entitled_domains` (D3): **선택된** tenant 의 ACTIVE subscriptions 만 (union 없음), keystone `populateEntitledDomains` 재사용 (fail-soft). 운영자 도메인 `roles` 는 그 entitled domains 에서 파생(`OperatorRoleDerivation`, BE-376), `org_scope` 는 assignment-check 의 per-assignment 값(BE-338, null → `["*"]`).
+4. **cross-org 파트너십 cap (TASK-BE-478, ADR-MONO-045 step 2b)**: assignment-check(`/internal/operator-assignments/check`)가 **파트너십-파생 host reach** 케이스에서만 additive `delegatedScope {domains, roles}`(admin-service 가 계산한 `delegated_scope ∩ participant ∩ host-holds` cap)를 실어 보낸다. 그때 customizer 의 token-exchange 분기는 토큰을 delegated slice 로 confine 한다: `entitled_domains = host-ACTIVE ∩ delegatedScope.domains`, `roles = delegatedScope.roles` **verbatim**(재-derive 금지 — derivation 은 slice 초과 확대). `delegatedScope` 가 없으면(정상 운영자) step 3 경로 byte-불변. **admin scope 는 어느 경로에서도 토큰에 방출되지 않는다** — cross-org actor 는 host 에 `admin_operator_roles` 가 없어 `effectiveAdminScope` 공집합 → `/api/admin/**` 403. `delegatedScope.roles` 는 invite 시점에 admin-role-free(admin-service `containsAdminRole`/`DelegatableRoleCatalog`).
 
-상세: [specs/contracts/http/auth-api.md](../../contracts/http/auth-api.md) § Assume-Tenant Exchange, [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md).
+상세: [specs/contracts/http/auth-api.md](../../contracts/http/auth-api.md) § Assume-Tenant Exchange, [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) § delegatedScope.
 
 **revocation 동작 흐름 (Phase 2c)**:
 1. `POST /oauth2/revoke` → SAS `OAuth2TokenRevocationEndpointFilter` 수신
