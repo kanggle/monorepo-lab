@@ -94,6 +94,10 @@ const GROUPS: NavGroup[] = [
     label: '조직 설정',
     items: [
       { href: '/subscriptions', label: '도메인 구독', testid: 'nav-subscriptions' },
+      // Cross-org partner delegation (ADR-MONO-045 §3.4 / TASK-PC-FE-187) — a
+      // tenant owner (TENANT_ADMIN, partnership.manage) manages cross-org
+      // partnerships for their tenant, alongside the domain subscriptions.
+      { href: '/partnerships', label: '파트너십', testid: 'nav-partnerships' },
     ],
   },
   {
