@@ -8,9 +8,12 @@ import com.example.admin.application.exception.PartnershipScopeInvalidException;
 import com.example.admin.application.exception.PartnershipTransitionInvalidException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.TenantDomainSubscriptionPort;
 import com.example.admin.application.port.TenantPartnershipPort;
 import com.example.admin.application.port.TenantPartnershipPort.PartnershipView;
+import com.example.admin.application.tenant.TenantDomainSubscriptionSummary;
 import com.example.admin.domain.rbac.AdminOperator;
+import com.example.admin.domain.rbac.DelegatableRoleCatalog;
 import com.example.admin.domain.rbac.PartnershipStatus;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.domain.rbac.ScopeSet;
@@ -21,8 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -62,7 +66,11 @@ public class PartnershipManagementUseCase {
     private final AdminActionAuditor auditor;
     private final PartnershipEventPublisher eventPublisher;
     private final AdminOperatorPort operatorPort;
-    private final HostEntitledScopeResolver hostEntitledScopeResolver;
+    // TASK-BE-479 (ADR-MONO-045 D3): the entitlement authority for the invite-time
+    // domain ≤-own check (each delegated domain ∈ the host's ACTIVE subscriptions).
+    // A cross-service read is permitted here — invite is a COMMAND path, NOT the
+    // assume-tenant hot path that ADR-MONO-020 §3.1 forbids a callback on.
+    private final TenantDomainSubscriptionPort subscriptionPort;
 
     // ── invite ────────────────────────────────────────────────────────────────
 
@@ -80,12 +88,21 @@ public class PartnershipManagementUseCase {
         validatePartnerTenant(hostTenantId, partnerTenantId);
 
         ScopeSet delegated = ScopeSet.of(cmd.domains(), cmd.roles());
-        validateDelegatedScopeCap(hostTenantId, delegated);
+        // Cheap, local caps first (no I/O): non-empty domains, no admin role, and every
+        // role delegatable (operator-tier only). TASK-BE-479 (ADR-045 D3, role dimension).
+        validateDelegatedScopeLocalCap(delegated);
 
         if (partnershipPort.pairExists(hostTenantId, partnerTenantId)) {
             throw new PartnershipAlreadyExistsException(
                     "Partnership already exists for host=" + hostTenantId + " partner=" + partnerTenantId);
         }
+
+        // ≤-own domain check (I/O, TASK-BE-479 ADR-045 D3, domain dimension): each
+        // delegated domain must be in the host's ACTIVE subscriptions. Placed AFTER the
+        // local caps + the duplicate short-circuit so account-service is consulted only
+        // for an otherwise-valid, non-duplicate invite. FAIL-CLOSED: a downstream failure
+        // propagates (no delegation issued when host-holds cannot be verified).
+        requireHostSubscribesDomains(hostTenantId, delegated);
 
         Long actorInternalId = operatorPort.resolveActorInternalId(actorId(actor));
         String partnershipId = UuidV7.randomString();
@@ -296,22 +313,56 @@ public class PartnershipManagementUseCase {
         }
     }
 
-    private void validateDelegatedScopeCap(String host, ScopeSet delegated) {
+    /**
+     * TASK-BE-479 (ADR-MONO-045 D3) — the LOCAL (no-I/O) portion of the invite-time
+     * {@code delegatedScope} cap: non-empty domains, no admin role, and every role
+     * delegatable (operator-tier only). The domain ≤-own check that needs the
+     * entitlement authority is {@link #requireHostSubscribesDomains} (I/O, run later).
+     */
+    private void validateDelegatedScopeLocalCap(ScopeSet delegated) {
         if (delegated.domains().isEmpty()) {
             throw new IllegalArgumentException("delegatedScope.domains must not be empty");
         }
-        // ADR-045 D3 cap: no admin role may cross the org boundary.
+        // ADR-045 D3 cap: no tenant-admin role may cross the org boundary.
         if (delegated.containsAdminRole()) {
             throw new PartnershipScopeInvalidException(
                     "delegatedScope must not contain an admin role (SUPER_ADMIN/TENANT_ADMIN/TENANT_BILLING_ADMIN)");
         }
-        // ≤-own across org — request/invite-time double-defense. The default resolver
-        // is unbounded (defers to this cap); a real host-holds resolver (deferred)
-        // would reject a delegatedScope exceeding the host's holdings.
-        Optional<ScopeSet> hostHolds = hostEntitledScopeResolver.resolve(host);
-        if (hostHolds.isPresent() && !delegated.isSubsetOf(hostHolds.get())) {
+        // Role ≤-own: only operator-tier domain roles are delegatable — admin-tier
+        // domain roles (e.g. WMS_ADMIN) and any unknown role are rejected. This is the
+        // role dimension of "the host may not delegate more than it holds": a tenant
+        // only ever holds the operator-tier roles OperatorRoleDerivation grants for the
+        // domains it is entitled to.
+        String bad = DelegatableRoleCatalog.firstNonDelegatable(delegated.roles());
+        if (bad != null) {
             throw new PartnershipScopeInvalidException(
-                    "delegatedScope exceeds what the host holds (≤-own across the org boundary)");
+                    "delegatedScope role '" + bad + "' is not delegatable across the org boundary "
+                            + "(only operator-tier domain roles may be delegated)");
+        }
+    }
+
+    /**
+     * TASK-BE-479 (ADR-MONO-045 D3) — the domain ≤-own check: every delegated domain
+     * must be in the host's ACTIVE domain subscriptions (the entitlement authority,
+     * account-service). A host cannot delegate a domain it is not itself subscribed to.
+     *
+     * <p><b>FAIL-CLOSED.</b> A downstream failure ({@code DownstreamFailureException})
+     * propagates — an authorization gate must not issue a delegation when the host's
+     * holdings cannot be verified.
+     */
+    private void requireHostSubscribesDomains(String host, ScopeSet delegated) {
+        Set<String> hostDomains = new LinkedHashSet<>();
+        for (TenantDomainSubscriptionSummary s : subscriptionPort.listActiveSubscriptions()) {
+            if (host.equals(s.tenantId())) {
+                hostDomains.add(s.domainKey());
+            }
+        }
+        for (String domain : delegated.domains()) {
+            if (!hostDomains.contains(domain)) {
+                throw new PartnershipScopeInvalidException(
+                        "delegatedScope domain '" + domain + "' is not held by the host "
+                                + "(host is not subscribed to it — ≤-own across the org boundary)");
+            }
         }
     }
 

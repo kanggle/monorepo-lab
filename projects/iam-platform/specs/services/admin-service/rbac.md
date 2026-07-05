@@ -308,12 +308,12 @@ function crossOrgPartnershipScope(operator, hostTenant):
     scope = p.delegated_scope
     if part.participant_scope is not null:
         scope = scope ∩ part.participant_scope        # participant_scope ⊆ delegated_scope
-    scope = scope ∩ hostEntitledScope(hostTenant)     # ≤ host-holds (host 가 실제 가진 domain·role)
+    scope = scope ∩ hostEntitledScope(hostTenant)     # host-holds: request-time 은 IDENTITY(unbounded) — 아래 참고
     return scope    # {domains, roles} — 도메인 토큰의 entitled_domains + role 로 주입, admin 권한 0
 ```
 
 - **single-`tenant_id` 토큰 (M1 보존)**: assume-tenant 는 여전히 선택된 host 하나의 `tenant_id` 토큰을 발급하며, `entitled_domains`/role 이 위 `scope` 로 캡될 뿐이다. cross-org multi-tenant 토큰은 발급하지 않는다(D5-B 거부).
-- **≤-own across org**: `hostEntitledScope` 교집합이 "host 는 자신이 가진 것 이상을 위임할 수 없다"를 request-time 에 재확인한다(invite-time `delegated_scope` cap 검증의 런타임 이중 방어). admin role(`TENANT_ADMIN`/`SUPER_ADMIN` 등)은 `delegated_scope` 에 애초에 들어갈 수 없으므로(data-model 불변식) 파생 대상이 아니다.
+- **≤-own across org — enforcement 는 invite-time (TASK-BE-479)**: "host 는 자신이 가진 것 이상을 위임할 수 없다"는 **invite 시점에 구체적으로 강제**된다: (a) `delegated_scope` 의 각 **도메인 ∈ host 의 ACTIVE 도메인 구독**(account-service = D2 entitlement authority; command 경로라 cross-service 조회 허용) — 미보유 도메인 → `422 PARTNERSHIP_SCOPE_INVALID`; (b) 각 **role ∈ `DelegatableRoleCatalog`**(operator-tier 도메인 role 만 = auth-service `OperatorRoleDerivation` 값집합의 미러; admin-tier `*_ADMIN`·`WMS_ADMIN` 및 tenant-admin 3종 제외) → 위반 시 422. account-service 장애 시 **fail-CLOSED**(위임 미발급). — **request-time 의 `∩ hostEntitledScope` 는 의도적으로 IDENTITY(unbounded)** 다(`UnboundedHostEntitledScopeResolver`): (i) ADR-020 §3.1 이 assume-tenant hot-path 의 cross-service 콜백을 금지하고, (ii) step 2b(BE-478)가 mint 시 `entitled_domains = host-ACTIVE ∩ delegated.domains` 로 도메인을 이미 클립하므로 host 가 도메인을 잃으면 그 도메인 role 은 게이트에서 inert. 삼중교집합 항은 알고리즘 형태 보존 + 미래 로컬 host-holds 미러를 위한 seam 으로 유지. admin role 은 `delegated_scope` 에 애초에 들어갈 수 없다(data-model 불변식 + invite containsAdminRole).
 - **no transitive re-delegation (confused-deputy default deny)**: participant 는 자신이 파생한 A-scope 를 제3 조직 C 에게 재위임할 수 없다. participant 는 B 소유 operator 로 한정되고 스스로 origination 지점이 될 수 없으므로 B→C-into-A 는 구조적으로 표현 불가 — 향후 전이 위임은 별도 결정(ADR-024 within-tenant sub-delegation confinement 의 cross-org 미러).
 - **cascade-revoke (D6, request-time fail-closed)**: 파트너십이 `SUSPENDED`/`TERMINATED` 로 전이하면 `findActive` 가 null → 그 파트너십에서 파생한 **모든** participant 의 reach 가 다음 요청(발급/갱신)에서 즉시 0 이 된다(per-operator sweep 불필요 — 파생이 사라짐, perm-cache TTL ~10초로 bounded). 개별 participant 제거(B 가 자기 직원 offboard) 시에도 그 operator 의 `find(p.id, operator.id)` 가 null → 동일하게 즉시 소멸. 종료 시 **one-shot** `partnership.terminated` 감사 이벤트 1건([partnership-events.md](../../contracts/events/partnership-events.md)) — operator 당 N 이벤트 아님.
 - **half-state**: `PENDING`(invite 미수락) 파트너십은 `findActive` 에서 제외 → 파생 0. B-operator 는 accept(ACTIVE) 전엔 A 를 assume 할 수 없다.

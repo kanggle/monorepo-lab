@@ -5,21 +5,31 @@ import com.example.admin.domain.rbac.ScopeSet;
 import java.util.Optional;
 
 /**
- * TASK-BE-477 / ADR-MONO-045 D3 — resolves the {@code {domains}×{roles}} a HOST
- * tenant actually holds, so the cross-org derivation can re-intersect
- * ({@code delegated_scope ∩ participant_scope ∩ host-holds}) at request time (the
- * runtime double-defense of the invite-time ≤-own cap) and the invite-time cap can
- * reject a {@code delegatedScope} that exceeds what the host holds.
+ * TASK-BE-477 / ADR-MONO-045 D3 — the {@code host-holds} term of the REQUEST-TIME
+ * cross-org derivation ({@code delegated_scope ∩ participant_scope ∩ host-holds} in
+ * {@link OperatorAssignmentCheckUseCase}).
  *
- * <p><b>Deferred seam.</b> admin-service is a command gateway and owns no local,
- * authoritative mirror of a tenant's held domains/roles (domain entitlements live in
- * account-service; the assume-tenant issuance path forbids a hot-path cross-service
- * callback — ADR-020 § 3.1). The default {@link UnboundedHostEntitledScopeResolver}
- * therefore returns {@link Optional#empty()} = "unbounded" (host holds ⊇ delegated),
- * so the request-time {@code ∩ host-holds} defers entirely to the invite-time cap
- * (which IS enforced: no admin role in {@code delegatedScope}). A later task (ADR-045
- * §3.4 step 2b/4, aligned with the ABAC/entitlement-plane deferral) can supply a real
- * host-holds resolver WITHOUT changing the triple-intersection algorithm.
+ * <p><b>Intentionally unbounded at request time (TASK-BE-479 — final decision, no
+ * longer a deferred stub).</b> The default {@link UnboundedHostEntitledScopeResolver}
+ * returns {@link Optional#empty()} = "unbounded" ({@code ∩ host-holds} is the
+ * identity), and this is the CORRECT end state — not a placeholder — for two reasons:
+ * <ol>
+ *   <li><b>ADR-MONO-020 §3.1</b> forbids a cross-service callback on the assume-tenant
+ *       issuance hot path, and the authoritative host holdings live in account-service
+ *       (domain entitlements) — so a real host-holds fetch cannot run here.</li>
+ *   <li><b>Redundant with step 2b (TASK-BE-478).</b> The assume-tenant token mint
+ *       already clips the domain dimension to the host's live entitlements
+ *       ({@code entitled_domains = host-ACTIVE ∩ delegated.domains}); a delegated role
+ *       for a domain the host no longer holds is therefore inert (the domain gateway
+ *       403s it). A request-time role re-clip would add nothing.</li>
+ * </ol>
+ *
+ * <p>The real ≤-own enforcement lives at <b>invite time</b> (a COMMAND path where the
+ * cross-service read IS permitted): {@code PartnershipManagementUseCase} rejects a
+ * {@code delegatedScope} whose domain is not in the host's ACTIVE subscriptions or
+ * whose role is not an operator-tier {@code DelegatableRoleCatalog} role. This seam
+ * remains so a future local host-holds mirror could bound the request path too, WITHOUT
+ * changing the triple-intersection algorithm — but that is not needed for correctness.
  */
 public interface HostEntitledScopeResolver {
 

@@ -6,11 +6,14 @@ import com.example.admin.application.exception.PartnershipAlreadyExistsException
 import com.example.admin.application.exception.PartnershipNotFoundException;
 import com.example.admin.application.exception.PartnershipScopeDeniedException;
 import com.example.admin.application.exception.PartnershipScopeInvalidException;
+import com.example.admin.application.exception.DownstreamFailureException;
 import com.example.admin.application.exception.PartnershipTransitionInvalidException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.TenantDomainSubscriptionPort;
 import com.example.admin.application.port.TenantPartnershipPort;
 import com.example.admin.application.port.TenantPartnershipPort.PartnershipView;
+import com.example.admin.application.tenant.TenantDomainSubscriptionSummary;
 import com.example.admin.domain.rbac.PartnershipStatus;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.domain.rbac.ScopeSet;
@@ -53,10 +56,22 @@ class PartnershipManagementUseCaseTest {
     @Mock AdminActionAuditor auditor;
     @Mock PartnershipEventPublisher eventPublisher;
     @Mock AdminOperatorPort operatorPort;
+    @Mock TenantDomainSubscriptionPort subscriptionPort;
 
     private PartnershipManagementUseCase useCase() {
         return new PartnershipManagementUseCase(partnershipPort, tenantScopeGuard, auditor,
-                eventPublisher, operatorPort, new UnboundedHostEntitledScopeResolver());
+                eventPublisher, operatorPort, subscriptionPort);
+    }
+
+    /** Stub the host's ACTIVE domain subscriptions (TASK-BE-479 invite-time ≤-own). */
+    private void stubHostSubscribes(String... domains) {
+        List<TenantDomainSubscriptionSummary> subs = new java.util.ArrayList<>();
+        for (String d : domains) {
+            subs.add(new TenantDomainSubscriptionSummary(HOST, d));
+        }
+        // include an unrelated tenant's sub to prove the host-filter works.
+        subs.add(new TenantDomainSubscriptionSummary("other-tenant", "finance"));
+        when(subscriptionPort.listActiveSubscriptions()).thenReturn(subs);
     }
 
     private OperatorContext actor() {
@@ -76,9 +91,11 @@ class PartnershipManagementUseCaseTest {
     void invite_happyPath() {
         when(partnershipPort.pairExists(HOST, PARTNER)).thenReturn(false);
         when(partnershipPort.createPending(any())).thenReturn(view(PartnershipStatus.PENDING));
+        stubHostSubscribes("wms", "scm"); // host holds both delegated domains
 
         PartnershipView result = useCase().invite(HOST,
-                new InvitePartnershipCommand(PARTNER, List.of("wms", "scm"), List.of("WMS_OP")),
+                new InvitePartnershipCommand(PARTNER, List.of("wms", "scm"),
+                        List.of("WMS_OPERATOR", "SCM_OPERATOR")),
                 actor(), "collab");
 
         assertThat(result.status()).isEqualTo(PartnershipStatus.PENDING);
@@ -112,10 +129,12 @@ class PartnershipManagementUseCaseTest {
     void invite_duplicate_rejected() {
         when(partnershipPort.pairExists(HOST, PARTNER)).thenReturn(true);
         assertThatThrownBy(() -> useCase().invite(HOST,
-                new InvitePartnershipCommand(PARTNER, List.of("wms"), List.of("WMS_OP")),
+                new InvitePartnershipCommand(PARTNER, List.of("wms"), List.of("WMS_OPERATOR")),
                 actor(), "collab"))
                 .isInstanceOf(PartnershipAlreadyExistsException.class);
         verify(partnershipPort, never()).createPending(any());
+        // the duplicate short-circuits BEFORE the account-service domain check (no I/O).
+        verify(subscriptionPort, never()).listActiveSubscriptions();
     }
 
     @Test
@@ -124,9 +143,49 @@ class PartnershipManagementUseCaseTest {
         doThrow(new TenantScopeDeniedException("out of scope"))
                 .when(tenantScopeGuard).requireTenantInScope(any(), any(), eq(HOST), any());
         assertThatThrownBy(() -> useCase().invite(HOST,
-                new InvitePartnershipCommand(PARTNER, List.of("wms"), List.of("WMS_OP")),
+                new InvitePartnershipCommand(PARTNER, List.of("wms"), List.of("WMS_OPERATOR")),
                 actor(), "collab"))
                 .isInstanceOf(PartnershipScopeDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("BE-479 invite: delegated domain the host is NOT subscribed to → 422 PARTNERSHIP_SCOPE_INVALID")
+    void invite_unheldDomain_rejected() {
+        when(partnershipPort.pairExists(HOST, PARTNER)).thenReturn(false);
+        stubHostSubscribes("wms"); // host holds wms, NOT finance
+        assertThatThrownBy(() -> useCase().invite(HOST,
+                new InvitePartnershipCommand(PARTNER, List.of("wms", "finance"),
+                        List.of("WMS_OPERATOR", "FINANCE_OPERATOR")),
+                actor(), "collab"))
+                .isInstanceOf(PartnershipScopeInvalidException.class)
+                .hasMessageContaining("finance");
+        verify(partnershipPort, never()).createPending(any());
+    }
+
+    @Test
+    @DisplayName("BE-479 invite: admin-tier domain role (WMS_ADMIN) → 422 (not delegatable, no I/O)")
+    void invite_nonDelegatableRole_rejected() {
+        assertThatThrownBy(() -> useCase().invite(HOST,
+                new InvitePartnershipCommand(PARTNER, List.of("wms"), List.of("WMS_ADMIN")),
+                actor(), "collab"))
+                .isInstanceOf(PartnershipScopeInvalidException.class)
+                .hasMessageContaining("WMS_ADMIN");
+        verify(partnershipPort, never()).createPending(any());
+        // role allowlist is local — rejected before any account-service call.
+        verify(subscriptionPort, never()).listActiveSubscriptions();
+    }
+
+    @Test
+    @DisplayName("BE-479 invite: account-service down at the domain check → fail-CLOSED (propagates, no partnership)")
+    void invite_accountDown_failClosed() {
+        when(partnershipPort.pairExists(HOST, PARTNER)).thenReturn(false);
+        when(subscriptionPort.listActiveSubscriptions())
+                .thenThrow(new DownstreamFailureException("account-service unavailable"));
+        assertThatThrownBy(() -> useCase().invite(HOST,
+                new InvitePartnershipCommand(PARTNER, List.of("wms"), List.of("WMS_OPERATOR")),
+                actor(), "collab"))
+                .isInstanceOf(DownstreamFailureException.class);
+        verify(partnershipPort, never()).createPending(any());
     }
 
     // ── accept ─────────────────────────────────────────────────────────────────
