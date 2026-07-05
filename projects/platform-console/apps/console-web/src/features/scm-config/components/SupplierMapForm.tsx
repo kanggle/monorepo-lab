@@ -13,6 +13,7 @@ import {
   COMMON_CURRENCIES,
 } from '../api/types';
 import { ConfigConfirmDialog } from './ConfigConfirmDialog';
+import { SeedNumberField } from './SeedNumberField';
 
 /**
  * SKU→supplier mapping inspect (GET) + upsert (PUT) form for a single SKU
@@ -227,7 +228,7 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
               )}
             </div>
 
-            <NumberField
+            <SeedNumberField
               id={defaultOrderQtyId}
               label="기본 발주 수량 (defaultOrderQty)"
               testid="map-defaultOrderQty"
@@ -237,7 +238,7 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
                 setFields((f) => ({ ...f, defaultOrderQty: v }))
               }
             />
-            <NumberField
+            <SeedNumberField
               id={leadTimeDaysId}
               label="리드타임 (leadTimeDays)"
               testid="map-leadTimeDays"
@@ -332,54 +333,5 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
         onCancel={() => setPendingBody(null)}
       />
     </section>
-  );
-}
-
-interface NumberFieldProps {
-  id: string;
-  label: string;
-  testid: string;
-  value: string;
-  error?: string;
-  onChange: (v: string) => void;
-}
-
-function NumberField({
-  id,
-  label,
-  testid,
-  value,
-  error,
-  onChange,
-}: NumberFieldProps) {
-  const errId = `${id}-err`;
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-foreground">
-        {label}
-      </label>
-      <input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        min={0}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        data-testid={testid}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errId : undefined}
-        className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      />
-      {error && (
-        <p
-          id={errId}
-          role="alert"
-          data-testid={`${testid}-error`}
-          className="mt-1 text-sm text-destructive"
-        >
-          {error}
-        </p>
-      )}
-    </div>
   );
 }
