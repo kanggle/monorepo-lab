@@ -8,7 +8,7 @@ console-web IAM 가이드 화면(`/iam/guide`)에 "하나의 계정, 4개의 모
 
 # Status
 
-ready
+done
 
 # Owner
 
