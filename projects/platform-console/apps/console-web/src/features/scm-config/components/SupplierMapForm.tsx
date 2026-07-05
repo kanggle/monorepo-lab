@@ -14,6 +14,7 @@ import {
 } from '../api/types';
 import { ConfigConfirmDialog } from './ConfigConfirmDialog';
 import { SeedNumberField } from './SeedNumberField';
+import { SeedTextField } from './SeedTextField';
 
 /**
  * SKU→supplier mapping inspect (GET) + upsert (PUT) form for a single SKU
@@ -195,38 +196,14 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
           )}
 
           <form onSubmit={openConfirm} className="mt-4 grid gap-4">
-            <div>
-              <label
-                htmlFor={supplierIdId}
-                className="block text-sm font-medium text-foreground"
-              >
-                공급사 ID (supplierId · free-text/uuid)
-              </label>
-              <input
-                id={supplierIdId}
-                type="text"
-                value={fields.supplierId}
-                onChange={(e) =>
-                  setFields((f) => ({ ...f, supplierId: e.target.value }))
-                }
-                data-testid="map-supplierId"
-                aria-invalid={fieldErrors.supplierId ? true : undefined}
-                aria-describedby={
-                  fieldErrors.supplierId ? `${supplierIdId}-err` : undefined
-                }
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              />
-              {fieldErrors.supplierId && (
-                <p
-                  id={`${supplierIdId}-err`}
-                  role="alert"
-                  data-testid="map-supplierId-error"
-                  className="mt-1 text-sm text-destructive"
-                >
-                  {fieldErrors.supplierId}
-                </p>
-              )}
-            </div>
+            <SeedTextField
+              id={supplierIdId}
+              label="공급사 ID (supplierId · free-text/uuid)"
+              testid="map-supplierId"
+              value={fields.supplierId}
+              error={fieldErrors.supplierId}
+              onChange={(v) => setFields((f) => ({ ...f, supplierId: v }))}
+            />
 
             <SeedNumberField
               id={defaultOrderQtyId}
@@ -247,48 +224,17 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
               onChange={(v) => setFields((f) => ({ ...f, leadTimeDays: v }))}
             />
 
-            <div>
-              <label
-                htmlFor={currencyId}
-                className="block text-sm font-medium text-foreground"
-              >
-                통화 (currency)
-              </label>
-              <input
-                id={currencyId}
-                type="text"
-                list={`${currencyId}-options`}
-                maxLength={3}
-                value={fields.currency}
-                onChange={(e) =>
-                  setFields((f) => ({
-                    ...f,
-                    currency: e.target.value.toUpperCase(),
-                  }))
-                }
-                data-testid="map-currency"
-                aria-invalid={fieldErrors.currency ? true : undefined}
-                aria-describedby={
-                  fieldErrors.currency ? `${currencyId}-err` : undefined
-                }
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm uppercase text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              />
-              <datalist id={`${currencyId}-options`}>
-                {COMMON_CURRENCIES.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-              {fieldErrors.currency && (
-                <p
-                  id={`${currencyId}-err`}
-                  role="alert"
-                  data-testid="map-currency-error"
-                  className="mt-1 text-sm text-destructive"
-                >
-                  {fieldErrors.currency}
-                </p>
-              )}
-            </div>
+            <SeedTextField
+              id={currencyId}
+              label="통화 (currency)"
+              testid="map-currency"
+              value={fields.currency}
+              error={fieldErrors.currency}
+              onChange={(v) => setFields((f) => ({ ...f, currency: v }))}
+              options={COMMON_CURRENCIES}
+              maxLength={3}
+              uppercase
+            />
 
             {submitError && (
               <p
