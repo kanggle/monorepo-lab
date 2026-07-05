@@ -26,6 +26,20 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe('CreateOrganizationForm — what-happens orientation panel (PC-FE-206)', () => {
+  it('renders the what-happens panel (tenant+admin, confinement, zero-subscription, next steps)', () => {
+    render(<CreateOrganizationForm submit={vi.fn()} navigate={vi.fn()} />);
+    const panel = screen.getByTestId('onboarding-what-happens');
+    expect(panel).toBeInTheDocument();
+    // Grants a tenant-scoped admin, confined to the new org, born with zero
+    // domain subscriptions, and points at the next step (구독 켜기).
+    expect(panel).toHaveTextContent('관리자(TENANT_ADMIN · 구독 관리자)');
+    expect(panel).toHaveTextContent('방금 만든 조직에만');
+    expect(panel).toHaveTextContent('도메인 구독 0');
+    expect(panel).toHaveTextContent('다음 단계');
+  });
+});
+
 describe('CreateOrganizationForm — validation gate', () => {
   it('disables submit until both the slug and the name are valid', async () => {
     const user = userEvent.setup();
