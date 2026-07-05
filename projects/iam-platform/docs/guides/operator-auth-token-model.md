@@ -2,7 +2,7 @@
 
 > **이 문서는 human-reference 개념 가이드입니다 — source of truth 가 아닙니다.**
 > 정확한 규약(claim shape, 상태코드, 검증 순서)은 각 스펙이 권위입니다. 이 가이드는
-> "어느 토큰을 왜 쓰나" 의 **멘탈 모델**만 제공하고, 세부는 § 8 의 권위 스펙으로 링크합니다.
+> "어느 토큰을 왜 쓰나" 의 **멘탈 모델**만 제공하고, 세부는 § 9 의 권위 스펙으로 링크합니다.
 > 구현 판단은 항상 스펙을 확인하세요.
 
 콘솔·도메인 서비스를 다루다 보면 반복적으로 부딪히는 질문: **"이 호출엔 어느 토큰을 써야 하지?"**
@@ -103,7 +103,31 @@ operator token 도 성격상 인가이며, 다만 대상이 도메인 운영이 
 
 ---
 
-## 6. cross-org 확장 (ADR-MONO-045)
+## 6. 하나의 계정, 4개의 모자
+
+토큰이 목적별로 갈라지는 이유(§ 1~5)는 결국 **한 사람이 한 로그인으로 여러 관계를 오가기** 때문입니다. 통합 IAM 계정(`account_id`)은 하나지만, 그 계정이 **어떤 관계에 처하느냐**에 따라 얹히는 인가(모자)가 달라집니다 — 인증(로그인)은 항상 하나, 모자는 상황별로 바뀌는 **인가**입니다.
+
+| 모자 | 관계 | 정체성 / 역할 | 저장 | 토큰 |
+|---|---|---|---|---|
+| **① 소비자** | 순수 회원(운영자 아님) | 도메인 롤·운영자 없음 | `account`(IAM)만, `admin_operators` row 없음 | **1축 로그인 토큰**만 |
+| **② 내가 운영하는 회사** | 내가 owner인 테넌트 | `TENANT_ADMIN`·`TENANT_BILLING_ADMIN`(`subscription.manage`) | `admin_operators`(홈) + 테넌트 role grant | 1축 + **operator token** |
+| **③ 내가 다니는 회사** | 그 테넌트의 배정 직원-운영자 | 도메인 롤(assume 시 파생) | `admin_operators` + `operator_tenant_assignment` | 1축 + operator token + **2축 assume-tenant** |
+| **④ 내 회사가 운영하는 다른 회사** | cross-org 파트너십 참여자 | 위임 slice 내 도메인 롤 | partnership `delegated_scope` ∩ `participant_scope` | **2축 assume-tenant**(도메인·역할 cap, **admin 없음**) |
+
+- **① 소비자** — B2C(예: web-store 쇼핑). 콘솔 진입 불가, 교환 없음. 로그인 토큰(1축)만.
+- **② 내가 운영하는 회사** — 내가 소유자/관리자인 테넌트. 조직을 **세팅**한다: 도메인 구독 켜기·운영자 생성·협력사에 slice 위임. IAM 관리(`/api/admin/**`)는 operator token 으로.
+- **③ 내가 다니는 회사** — 내가 직원-운영자로 **배정**된 테넌트. `operator_tenant_assignment` 로 assume 대상이 열리고, assume-tenant(2축) 진입 시 그 테넌트의 구독 도메인에서 도메인 롤(WMS_OPERATOR·ADMIN…)이 파생된다.
+- **④ 내 회사가 운영하는 다른 회사** — 우리 회사(partner 테넌트 B)가 host 테넌트 A 에게서 받은 위임 slice 안에서, 내가 그 참여자(participant). A 를 assume 하되 2축 토큰이 `delegated_scope` 로 cap 되고 admin 권한은 조직 경계를 넘지 못한다(§ 7 상세).
+
+**② ↔ ③ 구분** — 같은 "내 회사"라도 **owner(②, 조직을 세팅)** 냐 **assigned operator(③, 배정 범위를 운영)** 냐로 역할 티어가 다릅니다. ②는 구독·운영자·위임을 만들고, ③은 배정받은 도메인 범위에서 운영합니다.
+
+**③ ↔ ④ 구분** — 둘 다 "테넌트를 assume 해 도메인 운영"이지만, ③은 **내 회사 테넌트**(intra-org, 자연 배정)이고 ④는 **남의 회사 테넌트**(cross-org, 파트너십 위임 slice · scope cap · admin 불가)입니다. 콘솔에서 ③은 운영자 관리의 **테넌트 배정**, ④는 **파트너십** 화면으로 관리됩니다.
+
+> 공통: ① 로그인(인증)은 넷 다 **동일한 계정 하나**. 나머지 세 모자는 그 위에 얹히는 **인가**입니다(operator token = IAM 관리, 2축 assume-tenant = 도메인 운영). "어느 토큰"은 § 4, "인증 vs 인가"는 § 5 를 참고하세요.
+
+---
+
+## 7. cross-org 확장 — 모자 ④ 상세 (ADR-MONO-045)
 
 한 사람이 **협력사/공급사로서 다른 회사 테넌트를 bounded 하게 운영**하는 경우 —
 host 테넌트 A 가 partner 테넌트 B 에게 위임한 `delegated_scope {domains, roles}` slice 안에서만.
@@ -121,7 +145,7 @@ host 테넌트 A 가 partner 테넌트 B 에게 위임한 `delegated_scope {doma
 
 ---
 
-## 7. 자주 헷갈리는 지점
+## 8. 자주 헷갈리는 지점
 
 - **"operator token 이 2축인가?"** — 아니오. 2축은 assume-tenant 토큰(도메인 운영)입니다.
   operator token 은 1축에서 갈라진 **IAM 관리용 옆가지**입니다(§ 1 다이어그램).
@@ -132,7 +156,7 @@ host 테넌트 A 가 partner 테넌트 B 에게 위임한 `delegated_scope {doma
 
 ---
 
-## 8. 권위 스펙 (source of truth)
+## 9. 권위 스펙 (source of truth)
 
 이 가이드는 개념입니다. 정확한 규약은 아래가 권위입니다:
 
