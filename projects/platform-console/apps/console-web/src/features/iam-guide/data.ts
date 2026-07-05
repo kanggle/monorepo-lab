@@ -296,3 +296,61 @@ export const DOMAIN_ROLE_MAP: { domain: string; roles: string }[] = [
   { domain: 'fan / fan-platform', roles: 'FAN_OPERATOR' },
   { domain: 'gap / 미지', roles: '(없음 → 게이트웨이 403)' },
 ];
+
+/**
+ * 하나의 계정, 4개의 모자 (TASK-PC-FE-202) — 하나의 통합 IAM 계정(`account_id`)이
+ * 처한 관계에 따라 쓰는 4가지 인가 유형. 콘솔 진입 전 큰 그림을 잡아주는
+ * orientation 이며, 이 화면의 나머지(역할·배정·도메인 롤)는 ②~④ 모자의 세부다.
+ *
+ * **SoT**: repo 개념 가이드 `iam-platform/docs/guides/operator-auth-token-model.md`
+ * § 6 "하나의 계정, 4개의 모자"(TASK-BE-482) + `admin-service/rbac.md`(role 모델) +
+ * ADR-MONO-045(cross-org 파트너십 cap). 이 배열은 그 개념의 화면-표시용 미러이며,
+ * 토큰 축(1축 로그인 / operator token / 2축 assume-tenant) 자체는 repo 가이드가 권위.
+ *
+ * 축 구분: **② ↔ ③** = owner(조직을 세팅) vs assigned operator(배정 범위를 운영),
+ * **③ ↔ ④** = intra-org 배정(내 회사 테넌트, 자연 배정) vs cross-org 파트너십
+ * (남의 회사 테넌트, scope cap · admin 불가).
+ */
+export interface AccountHat {
+  /** ①~④ 순서 마커. */
+  marker: string;
+  /** 관계 한글명. */
+  relation: string;
+  /** 정체성/역할 한 줄. */
+  role: string;
+  /** 이 모자에 필요한 토큰(인가) 요약. */
+  token: string;
+  /** 콘솔에서 어디로 관리/진입하는지. */
+  consoleNote: string;
+}
+
+export const ACCOUNT_HATS: AccountHat[] = [
+  {
+    marker: '①',
+    relation: '소비자 계정',
+    role: '순수 회원 — 운영자 아님',
+    token: '로그인 토큰(1축)만',
+    consoleNote: 'B2C 쇼핑(web-store). 콘솔 진입 없음.',
+  },
+  {
+    marker: '②',
+    relation: '내가 운영하는 회사',
+    role: '테넌트 소유자/관리자 — TENANT_ADMIN · 구독관리',
+    token: '1축 + operator token (IAM 관리)',
+    consoleNote: '조직 세팅 — 도메인 구독 · 운영자 생성 · 협력사 위임.',
+  },
+  {
+    marker: '③',
+    relation: '내가 다니는 회사',
+    role: '배정된 직원-운영자 — 도메인 롤(assume 시 파생)',
+    token: '+ 2축 assume-tenant (도메인 운영)',
+    consoleNote: '운영자 관리 → 테넌트 배정. assume 후 도메인 화면.',
+  },
+  {
+    marker: '④',
+    relation: '내 회사가 운영하는 다른 회사',
+    role: 'cross-org 파트너십 참여자 — 위임 slice 내 도메인 롤',
+    token: '2축 (도메인·역할 cap · admin 없음)',
+    consoleNote: '파트너십 화면. 위임 slice만 · host 를 administer 불가.',
+  },
+];

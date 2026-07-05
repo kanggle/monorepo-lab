@@ -168,6 +168,17 @@ describe('assign form → cross-org partnership disambiguation (PC-FE-195)', () 
     expect(link).toHaveAttribute('href', '/partnerships');
   });
 
+  // TASK-PC-FE-202 — the hint also links to the IAM guide's "4개의 모자" for the
+  // full account-relationship picture (consumer / owner / employee / cross-org).
+  it('links to the IAM guide (/iam/guide) for the 4-hats overview', () => {
+    render(
+      <OperatorsScreen initial={PAGE} activeTenant="acme-corp" />,
+      { wrapper: wrapper() },
+    );
+    const guideLink = screen.getByTestId('assign-operator-guide-link');
+    expect(guideLink).toHaveAttribute('href', '/iam/guide');
+  });
+
   it('no partnership hint when the assign surface is hidden (no active tenant)', () => {
     render(<OperatorsScreen initial={PAGE} />, { wrapper: wrapper() });
     expect(
