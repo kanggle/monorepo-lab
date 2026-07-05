@@ -8,7 +8,7 @@ operator-auth-token-model.md 가이드에 "하나의 계정, 4개의 모자" 절
 
 # Status
 
-ready
+done
 
 # Owner
 
