@@ -1,6 +1,6 @@
 # TASK-PC-FE-187 — partner-console 표면 (cross-org 파트너십 관리 UI: host invite/list/terminate + partner accept/participant)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · **Scope:** `(console)/partnerships` 화면 + partnership 프록시 라우트 + operator-gated 변이 클라이언트 + 사이드바
 **Type:** admin-plane operator-gated CRUD UI 슬라이스 (백엔드가 confinement 전량 강제 — UI 는 표면만; PC-FE-183 구독 UI + operators 분할 패턴 미러)
 **Depends on:** TASK-BE-476/477/478 (ADR-MONO-045 §3.4 step 1/2a/2b — `POST/GET/:accept/:suspend/:reactivate/:terminate /api/admin/partnerships`, `POST|DELETE .../participants/{operatorId}`, `partnership.manage` 게이트, cross-org confinement + assume-tenant cap — **전부 main 머지 완료**), ADR-MONO-023 (IAM↔entitlement 평면 분리)
