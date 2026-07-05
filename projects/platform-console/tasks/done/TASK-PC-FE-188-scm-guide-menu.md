@@ -1,6 +1,6 @@
 # TASK-PC-FE-188 — SCM 가이드 메뉴 신설 (도메인 서비스 정적 참조 화면)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Route:** `/scm/guide` (신규) · **Nav:** SCM drill 자식에 `가이드` 추가 (`nav-scm-guide`)
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (다-서비스 도메인 상태머신·enum 정확도 요구 — 콘텐츠 집약)
 
