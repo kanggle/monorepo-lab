@@ -8,7 +8,7 @@ ADR-MONO-045 후속 — 파트너십 invite-time ≤-own(host-holds) cap 실구�
 
 # Status
 
-review
+done
 
 # Owner
 
