@@ -630,6 +630,40 @@ export class SubscriptionsUnavailableError extends Error {
   }
 }
 
+/**
+ * IAM cross-org partnership surface degrade signal (TASK-PC-FE-187 /
+ * ADR-MONO-045 §3.4 / admin-api.md § Partnership Management). Sibling of
+ * {@link SubscriptionsUnavailableError} for the entitlement/admin-plane
+ * partnership mutations (invite / accept / suspend / reactivate / terminate /
+ * participant add·remove) + the list read: a `503 DOWNSTREAM_ERROR` /
+ * `CIRCUIT_OPEN` / timeout on a partnership call degrades ONLY the partnership
+ * surface (the console shell stays intact). Auth failures (`401 TOKEN_INVALID`)
+ * are raised as {@link ApiError} so the caller forces a clean re-login. Inline-
+ * recoverable producer errors (`403 PERMISSION_DENIED` — lacks
+ * `partnership.manage` / `403 PARTNERSHIP_SCOPE_DENIED` — actor tenant outside
+ * the acting-side scope, `400 REASON_REQUIRED` / `VALIDATION_ERROR`,
+ * `422 PARTNERSHIP_SCOPE_INVALID` / `PARTICIPANT_NOT_OWN_OPERATOR` /
+ * `PARTICIPANT_SCOPE_EXCEEDS_DELEGATION`, `404 PARTNERSHIP_NOT_FOUND` /
+ * `OPERATOR_NOT_FOUND` / `PARTICIPANT_NOT_FOUND`,
+ * `409 PARTNERSHIP_ALREADY_EXISTS` / `PARTNERSHIP_TRANSITION_INVALID`) are
+ * raised as {@link ApiError} so the UI renders an inline actionable message
+ * without crashing. No token / tenant PII is ever placed in this error.
+ */
+export class PartnershipsUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: PartnershipsUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PartnershipsUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -814,6 +848,26 @@ const MESSAGES: Record<string, string> = {
     '진행 중인 프로모션이 아니어서 쿠폰을 발급할 수 없습니다.',
   COUPON_LIMIT_EXCEEDED:
     '최대 발급 수량을 초과하여 쿠폰을 발급할 수 없습니다. 남은 수량을 확인하세요.',
+  // --- cross-org partnerships (TASK-PC-FE-187 / ADR-MONO-045 §3.4) ----------
+  // (`PERMISSION_DENIED` / `REASON_REQUIRED` / `VALIDATION_ERROR` /
+  // `NO_ACTIVE_TENANT` / `TENANT_NOT_FOUND` / `OPERATOR_NOT_FOUND` are already
+  // mapped above and reused verbatim — the producer codes are identical.)
+  PARTNERSHIP_SCOPE_DENIED:
+    '이 파트너십에 대한 권한이 없습니다. 요구되는 당사자(host 또는 partner) 테넌트 범위 밖입니다.',
+  PARTNERSHIP_SCOPE_INVALID:
+    '위임 범위가 올바르지 않습니다. 관리자 역할(TENANT_ADMIN·TENANT_BILLING_ADMIN·SUPER_ADMIN)은 위임할 수 없으며, 우리 조직이 보유한 도메인·역할만 위임할 수 있습니다.',
+  PARTICIPANT_NOT_OWN_OPERATOR:
+    '대상 운영자가 우리 조직 소속이 아닙니다. 파트너 조직은 자기 소속 운영자만 참여자로 배정할 수 있습니다.',
+  PARTICIPANT_SCOPE_EXCEEDS_DELEGATION:
+    '참여자 범위가 위임받은 범위를 초과합니다. 위임 범위(도메인·역할) 이내로만 좁힐 수 있습니다.',
+  PARTNERSHIP_NOT_FOUND:
+    '대상 파트너십을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  PARTICIPANT_NOT_FOUND:
+    '대상 참여자 배정을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  PARTNERSHIP_ALREADY_EXISTS:
+    '해당 파트너 조직과 이미 진행 중인(대기·활성) 파트너십이 있습니다.',
+  PARTNERSHIP_TRANSITION_INVALID:
+    '현재 파트너십 상태에서는 이 작업을 수행할 수 없습니다. 목록을 새로고침한 뒤 확인하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {
