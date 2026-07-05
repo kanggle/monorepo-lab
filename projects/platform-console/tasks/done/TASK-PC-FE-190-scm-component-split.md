@@ -1,6 +1,6 @@
 # TASK-PC-FE-190 — SCM god-file 컴포넌트 분할 (보충·설정 화면·폼 프레젠테이션 조각화)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving component split
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (렌더 구조 정리 — 동작 불변)
 
