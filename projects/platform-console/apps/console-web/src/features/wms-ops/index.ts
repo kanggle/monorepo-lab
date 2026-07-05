@@ -14,11 +14,9 @@ export { WmsOpsScreen } from './components/WmsOpsScreen';
 export { WmsInventoryScreen } from './components/WmsInventoryScreen';
 export { WmsShipmentsScreen } from './components/WmsShipmentsScreen';
 export { AcknowledgeAlertDialog } from './components/AcknowledgeAlertDialog';
-export {
-  WmsOverview,
-  WmsRecentShipments,
-  WmsRecentAdjustments,
-} from './components/WmsOverview';
+export { WmsOverview } from './components/WmsOverview';
+export { WmsRecentShipments } from './components/WmsRecentShipments';
+export { WmsRecentAdjustments } from './components/WmsRecentAdjustments';
 export { getWmsSectionState } from './api/wms-state';
 export type { WmsSectionState } from './api/wms-state';
 export { getWmsInventoryState } from './api/inventory-state';

@@ -9,6 +9,7 @@ import {
   type ShipmentQueryParams,
 } from '../api/types';
 import { WmsShipmentsTable } from './WmsShipmentsTable';
+import { WmsLagHint } from './WmsLagHint';
 import { type ShipFilterState, EMPTY_SHIP_FILTERS } from './wms-ops-helpers';
 
 /**
@@ -84,15 +85,7 @@ export function WmsShipmentsScreen({
 
   return (
     <section aria-label="택배 / 출고 조회" className="mt-10">
-      {lagBanner && (
-        <div
-          role="status"
-          data-testid="wms-ship-lag-hint"
-          className="mb-6 rounded-md border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200"
-        >
-          {lagBanner}
-        </div>
-      )}
+      <WmsLagHint testid="wms-ship-lag-hint" message={lagBanner} />
 
       <WmsShipmentsTable
         shipWhFid={shipWhFid}

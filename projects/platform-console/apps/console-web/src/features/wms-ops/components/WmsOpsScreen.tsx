@@ -6,6 +6,7 @@ import { useWmsAlerts, useAcknowledgeAlert } from '../hooks/use-wms-ops';
 import { WMS_DEFAULT_PAGE_SIZE, type AlertPage, type AlertRow } from '../api/types';
 import { AcknowledgeAlertDialog } from './AcknowledgeAlertDialog';
 import { WmsAlertsTable } from './WmsAlertsTable';
+import { WmsLagHint } from './WmsLagHint';
 import { alertLabel } from './wms-ops-helpers';
 
 /**
@@ -141,15 +142,7 @@ export function WmsOpsScreen({
           alert-ack distribution, recent shipments; server-rendered slot. */}
       {overview}
 
-      {lagBanner && (
-        <div
-          role="status"
-          data-testid="wms-lag-hint"
-          className="mb-6 rounded-md border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200"
-        >
-          {lagBanner}
-        </div>
-      )}
+      <WmsLagHint testid="wms-lag-hint" message={lagBanner} />
 
       <WmsAlertsTable rows={alertsData.content} onAck={openAck} />
 
