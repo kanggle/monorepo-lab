@@ -1,11 +1,8 @@
-import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { ApiError, ScmReplenishmentUnavailableError } from '@/shared/api/errors';
 import {
-  ApiError,
-  ScmReplenishmentUnavailableError,
-  ScmRateLimitedError,
-} from '@/shared/api/errors';
+  callScmGateway,
+  type ScmGatewayProfile,
+} from '@/shared/api/scm-gateway';
 import {
   ReorderPolicySchema,
   type ReorderPolicy,
@@ -85,225 +82,54 @@ interface CallOptions {
   notFoundIsEmpty?: boolean;
 }
 
-/** The bounded 429 backoff: at most ONE retry honouring `Retry-After` (capped)
- *  — reused from the § 2.4.6 / § 2.4.6.1 scm read surface (the SAME rate-limited
- *  scm gateway). NEVER an unbounded storm. */
-const MAX_RETRY_AFTER_SECONDS = 5;
-
-function parseRetryAfter(res: Response): number {
-  const raw = res.headers.get('Retry-After');
-  const n = raw === null ? NaN : Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return 1; // contract default (1s)
-  return Math.min(MAX_RETRY_AFTER_SECONDS, n);
-}
-
-/**
- * Parses the scm FLAT error envelope (`{ code, message, details?, timestamp }`).
- * Defensive: a missing / nested (wms-shaped) / non-JSON body degrades to a
- * synthetic code rather than throwing. A wms-nested parser would MISS the scm
- * flat `code` — this is the per-domain envelope correctness pinned by tests.
- */
-async function parseScmError(
-  res: Response,
-): Promise<{ code: string; message: string; timestamp?: string }> {
-  let code = `HTTP_${res.status}`;
-  let message = `scm demand-planning seed request failed (${res.status})`;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      if (typeof body.code === 'string') code = body.code;
-      if (typeof body.message === 'string') message = body.message;
-      if (typeof body.timestamp === 'string') timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, timestamp };
-}
-
 /** Sentinel parse return for the 404-as-empty-state path (distinct from a real
  *  parsed row). */
 const NOT_FOUND = Symbol('seed-not-found');
 
 /**
- * Single hardened call site. Resolves the domain-facing IAM OIDC token, applies
- * the timeout, maps the scm FLAT error envelope to the § 2.5 resilience
- * taxonomy, honours a 429 `Retry-After` with ONE bounded backoff, and — when
- * `notFoundIsEmpty` — short-circuits a `404` to the {@link NOT_FOUND} sentinel
- * (a "not configured yet" state, NOT an error).
+ * scm-config profile for the shared {@link callScmGateway} core: the 설정 surface
+ * (per-SKU reorder-policy + sku-supplier-map GET/PUT) degrades via
+ * {@link ScmReplenishmentUnavailableError} (same demand-planning-service section
+ * as 보충) and logs `scm_config_*` events. `notFoundSentinel: NOT_FOUND` drives
+ * the 404-as-empty-state: a seed-lookup GET with `notFoundIsEmpty` resolves a
+ * `404` to {@link NOT_FOUND} instead of throwing.
+ */
+const CONFIG_PROFILE: ScmGatewayProfile = {
+  logPrefix: 'scm_config',
+  requestFailedLabel: 'scm demand-planning seed request failed',
+  makeUnavailable: (reason, code, message) =>
+    new ScmReplenishmentUnavailableError(reason, code, message),
+  isUnavailable: (err) => err instanceof ScmReplenishmentUnavailableError,
+  messages: {
+    degraded: 'scm demand-planning unavailable',
+    timeout: 'scm demand-planning seed call timed out',
+    network: 'scm demand-planning seed call failed',
+  },
+  notFoundSentinel: NOT_FOUND,
+};
+
+/**
+ * Single hardened call site — a thin wrapper over the shared
+ * {@link callScmGateway} core with the {@link CONFIG_PROFILE}. Passes the method
+ * + optional body through (a body ⇒ `Content-Type: application/json`) and, when
+ * `notFoundIsEmpty`, the core short-circuits a `404` to the profile's
+ * {@link NOT_FOUND} sentinel (a "not configured yet" state, NOT an error).
  */
 async function callSeed<T>(
   opts: CallOptions,
   parse: (json: unknown) => T,
 ): Promise<T | typeof NOT_FOUND> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // ── Per-domain credential (§ 2.4.6.2 reusing § 2.4.6): scm requires the IAM
-  //    OIDC ACCESS token directly. NEVER getOperatorToken(). Same credential
-  //    for the GET inspect AND the PUT upsert.
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('scm_config_no_gap_session', { requestId, path: opts.path });
-    // No IAM OIDC session ⇒ whole-session re-login (not a per-section degrade).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-    // NOTE: deliberately NO `X-Tenant-Id` — scm resolves tenant from the JWT
-    // `tenant_id` claim (§ 2.4.6.2 reuse of the § 2.4.6 divergence).
-    // NOTE: NO `Idempotency-Key`, NO `X-Operator-Reason` — demand-planning-api
-    // defines NEITHER for the seed PUT (the body IS the full row; idempotent
-    // upsert). Inventing either is a defect.
-  };
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
-
-  async function doFetch(): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), env.SCM_TIMEOUT_MS);
-    try {
-      return await fetch(`${env.SCM_GATEWAY_BASE_URL}${opts.path}`, {
-        method: opts.method,
-        headers,
-        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-        cache: 'no-store',
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  try {
-    let res = await doFetch();
-
-    // 429 → ONE bounded backoff honouring Retry-After, then surface.
-    if (res.status === 429) {
-      const wait = parseRetryAfter(res);
-      logger.warn('scm_config_rate_limited', {
-        requestId,
-        path: opts.path,
-        retryAfterSeconds: wait,
-      });
-      await new Promise((r) => setTimeout(r, wait * 1000));
-      res = await doFetch();
-      if (res.status === 429) {
-        // A second 429 — DO NOT retry again (no storm).
-        throw new ScmRateLimitedError(
-          parseRetryAfter(res),
-          'scm gateway rate-limited',
-        );
-      }
-    }
-
-    // 404-as-empty-state — ONLY for the seed-lookup GETs. The seed row simply
-    // is not configured yet → a typed not-found, NOT an error toast.
-    if (res.status === 404 && opts.notFoundIsEmpty) {
-      logger.info('scm_config_not_configured', {
-        requestId,
-        path: opts.path,
-      });
-      // Drain the body to avoid a leaked stream; we do not need its content.
-      try {
-        await res.json();
-      } catch {
-        /* ignore */
-      }
-      return NOT_FOUND;
-    }
-
-    if (res.status === 401) {
-      const e = await parseScmError(res);
-      logger.warn('scm_config_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseScmError(res);
-      logger.warn('scm_config_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(403, e.code || 'TENANT_FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseScmError(res);
-      logger.warn('scm_config_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ScmReplenishmentUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'scm demand-planning unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400/422 VALIDATION_ERROR, a non-seed-lookup 404, etc. → inline
-      // actionable (no crash). The caller renders the inline field error.
-      const e = await parseScmError(res);
-      logger.warn('scm_config_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    const json = await res.json();
-    logger.info('scm_config_ok', {
-      requestId,
-      status: res.status,
+  const { raw } = await callScmGateway<T | typeof NOT_FOUND>(
+    {
       path: opts.path,
-    });
-    return parse(json);
-  } catch (err) {
-    if (
-      err instanceof ApiError ||
-      err instanceof ScmReplenishmentUnavailableError ||
-      err instanceof ScmRateLimitedError
-    ) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('scm_config_timeout', {
-        requestId,
-        timeoutMs: env.SCM_TIMEOUT_MS,
-        path: opts.path,
-      });
-      throw new ScmReplenishmentUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'scm demand-planning seed call timed out',
-      );
-    }
-    logger.error('scm_config_error', { requestId, path: opts.path });
-    throw new ScmReplenishmentUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'scm demand-planning seed call failed',
-    );
-  }
+      method: opts.method,
+      body: opts.body,
+      notFoundIsEmpty: opts.notFoundIsEmpty,
+    },
+    parse,
+    CONFIG_PROFILE,
+  );
+  return raw;
 }
 
 function unwrap<T>(value: T | typeof NOT_FOUND, kind: string): T {

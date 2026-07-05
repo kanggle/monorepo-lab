@@ -1,12 +1,9 @@
-import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
 import { clampPageSize } from '@/shared/lib/pagination';
+import { ScmUnavailableError } from '@/shared/api/errors';
 import {
-  ApiError,
-  ScmUnavailableError,
-  ScmRateLimitedError,
-} from '@/shared/api/errors';
+  callScmGateway,
+  type ScmGatewayProfile,
+} from '@/shared/api/scm-gateway';
 import { SCM_DEFAULT_PAGE_SIZE, SCM_MAX_PAGE_SIZE } from './types';
 
 /**
@@ -94,17 +91,25 @@ interface CallOptions {
   path: string;
 }
 
-/** The bounded 429 backoff: at most ONE retry honouring `Retry-After`
- *  (capped) — NEVER an unbounded retry storm into the rate-limited
- *  gateway (§ 2.4.6 / task Edge Case). */
-const MAX_RETRY_AFTER_SECONDS = 5;
-
-function parseRetryAfter(res: Response): number {
-  const raw = res.headers.get('Retry-After');
-  const n = raw === null ? NaN : Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return 1; // contract default (1s)
-  return Math.min(MAX_RETRY_AFTER_SECONDS, n);
-}
+/**
+ * scm-ops profile for the shared {@link callScmGateway} core: the 개요 read
+ * surface (procurement + inventory-visibility) degrades via
+ * {@link ScmUnavailableError} and logs `scm_*` events. Every call is a pure GET
+ * (read-only) — the caller passes no method/body, so the shared core attaches
+ * NO `Content-Type` / mutation headers (pinned by the read-only test).
+ */
+const SCM_PROFILE: ScmGatewayProfile = {
+  logPrefix: 'scm',
+  requestFailedLabel: 'scm request failed',
+  makeUnavailable: (reason, code, message) =>
+    new ScmUnavailableError(reason, code, message),
+  isUnavailable: (err) => err instanceof ScmUnavailableError,
+  messages: {
+    degraded: 'scm gateway unavailable',
+    timeout: 'scm gateway call timed out',
+    network: 'scm gateway call failed',
+  },
+};
 
 export function readCacheHeader(
   res: Response,
@@ -115,206 +120,17 @@ export function readCacheHeader(
 }
 
 /**
- * Parses the scm FLAT error envelope
- * (`{ code, message, details?, timestamp }`). Defensive: a missing /
- * nested (wms-shaped) / non-JSON body degrades to a synthetic code rather
- * than throwing (the producer is the authority for the real code; this
- * never crashes the console on a malformed error body). A wms-nested
- * parser would MISS the scm flat `code` — this is the per-domain envelope
- * correctness pinned by tests.
- */
-async function parseScmError(
-  res: Response,
-): Promise<{ code: string; message: string; timestamp?: string }> {
-  let code = `HTTP_${res.status}`;
-  let message = `scm request failed (${res.status})`;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      if (typeof body.code === 'string') code = body.code;
-      if (typeof body.message === 'string') message = body.message;
-      if (typeof body.timestamp === 'string') timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, timestamp };
-}
-
-/**
- * Single hardened call site. Resolves the IAM OIDC access token, applies
- * the timeout, maps the scm FLAT error envelope to the § 2.5 resilience
- * taxonomy, and honours a 429 `Retry-After` with ONE bounded backoff. The
- * `retried` guard makes the storm impossible (a second 429 is surfaced,
- * not retried again).
+ * Single hardened call site — a thin GET wrapper over the shared
+ * {@link callScmGateway} core with the {@link SCM_PROFILE}. Read-only: no
+ * method/body is passed, so the core sends a GET with no `Content-Type` /
+ * mutation headers. Returns `{ raw, res }` — the caller reads `res` for the
+ * per-SKU `X-Cache` header ({@link readCacheHeader}).
  */
 export async function callScm<T>(
   opts: CallOptions,
   parse: (json: unknown) => T,
 ): Promise<{ raw: T; res: Response }> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // ── Per-domain credential (§ 2.4.6 reusing § 2.4.5): scm requires the
-  //    IAM OIDC ACCESS token directly. NEVER getOperatorToken() — that is
-  //    the GAP-domain (§ 2.6 exchanged) credential; scm would reject it
-  //    (wrong issuer/type). The #569 invariant is GAP-domain-scoped.
-  //    ── ADR-MONO-020 D4 / § 2.7: the DOMAIN-FACING IAM OIDC token — the
-  //    ASSUMED (tenant-scoped) token when the operator has switched, else the
-  //    base access token (net-zero). Still NOT the operator token.
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('scm_no_gap_session', { requestId, path: opts.path });
-    // No IAM OIDC session ⇒ whole-session re-login (not a per-section
-    // degrade — no partial authed state).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-    // NOTE: deliberately NO `X-Tenant-Id` — scm resolves tenant from the
-    // JWT `tenant_id` claim (§ 2.4.6 reuse of the § 2.4.5 divergence).
-    // NOTE: read-only — NO `Idempotency-Key`, NO `X-Operator-Reason`,
-    // NO `Content-Type` (no body).
-  };
-
-  async function doFetch(): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(
-      () => controller.abort(),
-      env.SCM_TIMEOUT_MS,
-    );
-    try {
-      return await fetch(`${env.SCM_GATEWAY_BASE_URL}${opts.path}`, {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  try {
-    let res = await doFetch();
-
-    // 429 → ONE bounded backoff honouring Retry-After, then surface.
-    if (res.status === 429) {
-      const wait = parseRetryAfter(res);
-      logger.warn('scm_rate_limited', {
-        requestId,
-        path: opts.path,
-        retryAfterSeconds: wait,
-      });
-      await new Promise((r) => setTimeout(r, wait * 1000));
-      res = await doFetch();
-      if (res.status === 429) {
-        // A second 429 — DO NOT retry again (no storm). Surface as a
-        // bounded notice; the UI shows an inline "rate-limited" message.
-        throw new ScmRateLimitedError(
-          parseRetryAfter(res),
-          'scm gateway rate-limited',
-        );
-      }
-    }
-
-    if (res.status === 401) {
-      const e = await parseScmError(res);
-      logger.warn('scm_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.path,
-      });
-      // IAM OIDC session expired → whole-session re-login (no partial
-      // authed state — NOT a per-section degrade).
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseScmError(res);
-      logger.warn('scm_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.path,
-      });
-      // Token not scm-scoped / insufficient scope → inline "not available
-      // / not scoped" (no crash, no re-login loop).
-      throw new ApiError(403, e.code || 'TENANT_FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseScmError(res);
-      logger.warn('scm_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.path,
-      });
-      // ONLY the scm section degrades — shell + GAP/wms sections intact.
-      throw new ScmUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'scm gateway unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400/422 VALIDATION_ERROR, 404 PO_NOT_FOUND / NODE_NOT_FOUND,
-      // 409 CONFLICT → inline actionable (no crash).
-      const e = await parseScmError(res);
-      logger.warn('scm_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    const json = await res.json();
-    logger.info('scm_ok', {
-      requestId,
-      status: res.status,
-      path: opts.path,
-    });
-    return { raw: parse(json), res };
-  } catch (err) {
-    if (
-      err instanceof ApiError ||
-      err instanceof ScmUnavailableError ||
-      err instanceof ScmRateLimitedError
-    ) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('scm_timeout', {
-        requestId,
-        timeoutMs: env.SCM_TIMEOUT_MS,
-        path: opts.path,
-      });
-      throw new ScmUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'scm gateway call timed out',
-      );
-    }
-    logger.error('scm_error', { requestId, path: opts.path });
-    throw new ScmUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'scm gateway call failed',
-    );
-  }
+  return callScmGateway({ path: opts.path }, parse, SCM_PROFILE);
 }
 
 // ---------------------------------------------------------------------------

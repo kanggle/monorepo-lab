@@ -1,12 +1,9 @@
-import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
 import { clampPageSize } from '@/shared/lib/pagination';
+import { ScmReplenishmentUnavailableError } from '@/shared/api/errors';
 import {
-  ApiError,
-  ScmReplenishmentUnavailableError,
-  ScmRateLimitedError,
-} from '@/shared/api/errors';
+  callScmGateway,
+  type ScmGatewayProfile,
+} from '@/shared/api/scm-gateway';
 import {
   SuggestionPageSchema,
   type SuggestionPage,
@@ -95,219 +92,43 @@ interface CallOptions {
   body?: unknown;
 }
 
-/** The bounded 429 backoff: at most ONE retry honouring `Retry-After`
- *  (capped) — NEVER an unbounded retry storm into the rate-limited gateway
- *  (§ 2.4.6.1 reusing § 2.4.6 / task Edge Case). */
-const MAX_RETRY_AFTER_SECONDS = 5;
-
-function parseRetryAfter(res: Response): number {
-  const raw = res.headers.get('Retry-After');
-  const n = raw === null ? NaN : Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return 1; // contract default (1s)
-  return Math.min(MAX_RETRY_AFTER_SECONDS, n);
-}
-
 /**
- * Parses the scm FLAT error envelope
- * (`{ code, message, details?, timestamp }`). Defensive: a missing / nested
- * (wms-shaped) / non-JSON body degrades to a synthetic code rather than
- * throwing (the producer is the authority for the real code; this never
- * crashes the console on a malformed error body). A wms-nested parser would
- * MISS the scm flat `code` — this is the per-domain envelope correctness
- * pinned by tests.
+ * scm-replenishment profile for the shared {@link callScmGateway} core: the 보충
+ * surface (demand-planning suggestions read + approve/dismiss) degrades via
+ * {@link ScmReplenishmentUnavailableError} and logs `scm_replenishment_*`
+ * events. Reads AND the two actions share the domain-facing credential; the
+ * OPTIONAL note/reason rides in the body (NO `Idempotency-Key`, NO
+ * `X-Operator-Reason` — the shared core adds neither).
  */
-async function parseScmError(
-  res: Response,
-): Promise<{ code: string; message: string; timestamp?: string }> {
-  let code = `HTTP_${res.status}`;
-  let message = `scm demand-planning request failed (${res.status})`;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      if (typeof body.code === 'string') code = body.code;
-      if (typeof body.message === 'string') message = body.message;
-      if (typeof body.timestamp === 'string') timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, timestamp };
-}
+const REPL_PROFILE: ScmGatewayProfile = {
+  logPrefix: 'scm_replenishment',
+  requestFailedLabel: 'scm demand-planning request failed',
+  makeUnavailable: (reason, code, message) =>
+    new ScmReplenishmentUnavailableError(reason, code, message),
+  isUnavailable: (err) => err instanceof ScmReplenishmentUnavailableError,
+  messages: {
+    degraded: 'scm demand-planning unavailable',
+    timeout: 'scm demand-planning call timed out',
+    network: 'scm demand-planning call failed',
+  },
+};
 
 /**
- * Single hardened call site. Resolves the domain-facing IAM OIDC token,
- * applies the timeout, maps the scm FLAT error envelope to the § 2.5
- * resilience taxonomy, and honours a 429 `Retry-After` with ONE bounded
- * backoff. The `retried` guard makes the storm impossible.
+ * Single hardened call site — a thin wrapper over the shared
+ * {@link callScmGateway} core with the {@link REPL_PROFILE}. Passes the method +
+ * optional body through (a body ⇒ `Content-Type: application/json`); returns the
+ * parsed body (`res` is not needed here).
  */
 async function callDemandPlanning<T>(
   opts: CallOptions,
   parse: (json: unknown) => T,
 ): Promise<T> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // ── Per-domain credential (§ 2.4.6.1 reusing § 2.4.5/§ 2.4.6): scm requires
-  //    the IAM OIDC ACCESS token directly. NEVER getOperatorToken() — that is
-  //    the GAP-domain (§ 2.6 exchanged) credential; scm would reject it. The
-  //    DOMAIN-FACING token (assumed-when-switched, else base — net-zero;
-  //    ADR-MONO-020 D4). Same credential for the reads AND the two actions.
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('scm_replenishment_no_gap_session', {
-      requestId,
-      path: opts.path,
-    });
-    // No IAM OIDC session ⇒ whole-session re-login (not a per-section degrade).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-    // NOTE: deliberately NO `X-Tenant-Id` — scm resolves tenant from the JWT
-    // `tenant_id` claim (§ 2.4.6.1 reuse of the § 2.4.5/§ 2.4.6 divergence).
-    // NOTE: NO `Idempotency-Key`, NO `X-Operator-Reason` — demand-planning-api
-    // defines NEITHER (idempotency is server-side by suggestion state; the
-    // reason rides in the OPTIONAL body). Inventing either is a defect.
-  };
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
-
-  async function doFetch(): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), env.SCM_TIMEOUT_MS);
-    try {
-      return await fetch(`${env.SCM_GATEWAY_BASE_URL}${opts.path}`, {
-        method: opts.method,
-        headers,
-        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-        cache: 'no-store',
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  try {
-    let res = await doFetch();
-
-    // 429 → ONE bounded backoff honouring Retry-After, then surface.
-    if (res.status === 429) {
-      const wait = parseRetryAfter(res);
-      logger.warn('scm_replenishment_rate_limited', {
-        requestId,
-        path: opts.path,
-        retryAfterSeconds: wait,
-      });
-      await new Promise((r) => setTimeout(r, wait * 1000));
-      res = await doFetch();
-      if (res.status === 429) {
-        // A second 429 — DO NOT retry again (no storm).
-        throw new ScmRateLimitedError(
-          parseRetryAfter(res),
-          'scm gateway rate-limited',
-        );
-      }
-    }
-
-    if (res.status === 401) {
-      const e = await parseScmError(res);
-      logger.warn('scm_replenishment_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.path,
-      });
-      // IAM OIDC session expired → whole-session re-login (no partial authed
-      // state — NOT a per-section degrade).
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseScmError(res);
-      logger.warn('scm_replenishment_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.path,
-      });
-      // Token not scm-scoped / insufficient scope → inline "not scoped".
-      throw new ApiError(403, e.code || 'TENANT_FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseScmError(res);
-      logger.warn('scm_replenishment_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.path,
-      });
-      // ONLY the replenishment section degrades — shell + other sections intact.
-      throw new ScmReplenishmentUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'scm demand-planning unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400/422 VALIDATION_ERROR, 422 SKU_SUPPLIER_UNMAPPED /
-      // INVALID_SUGGESTION_STATE, 404 SUGGESTION_NOT_FOUND,
-      // 409 SUGGESTION_ALREADY_MATERIALIZED → inline actionable (no crash).
-      // The caller maps the idempotent paths (re-approve, already-materialized)
-      // to a success / benign notice.
-      const e = await parseScmError(res);
-      logger.warn('scm_replenishment_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    const json = await res.json();
-    logger.info('scm_replenishment_ok', {
-      requestId,
-      status: res.status,
-      path: opts.path,
-    });
-    return parse(json);
-  } catch (err) {
-    if (
-      err instanceof ApiError ||
-      err instanceof ScmReplenishmentUnavailableError ||
-      err instanceof ScmRateLimitedError
-    ) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('scm_replenishment_timeout', {
-        requestId,
-        timeoutMs: env.SCM_TIMEOUT_MS,
-        path: opts.path,
-      });
-      throw new ScmReplenishmentUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'scm demand-planning call timed out',
-      );
-    }
-    logger.error('scm_replenishment_error', { requestId, path: opts.path });
-    throw new ScmReplenishmentUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'scm demand-planning call failed',
-    );
-  }
+  const { raw } = await callScmGateway(
+    { path: opts.path, method: opts.method, body: opts.body },
+    parse,
+    REPL_PROFILE,
+  );
+  return raw;
 }
 
 // ---------------------------------------------------------------------------
