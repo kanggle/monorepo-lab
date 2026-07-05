@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ApiError, WmsUnavailableError } from '@/shared/api/errors';
 
 /**
@@ -39,6 +39,7 @@ vi.mock('@/features/wms-ops/api/wms-alerts-api', () => ({
 
 import { getWmsOverviewState } from '@/features/wms-ops/api/overview-state';
 import { kstPeriodBounds } from '@/features/wms-ops/api/kst-period';
+import type { KstPeriodBounds } from '@/features/wms-ops/api/kst-period';
 
 /** wms `WmsResult<Page>` envelope: { data: { content, page:{totalElements} }, lagSeconds }. */
 const wmsResult = (totalElements: number, content: unknown[] = []) => ({
@@ -76,14 +77,21 @@ const adjRow = (id: string) => ({
  *  `seedHappy`'s shipments mock keys distinct counts by which bound string it
  *  receives (day / week / month start), so the three starts MUST stay distinct.
  *  They are NOT unconditionally distinct: `kstPeriodBounds()` derives them from
- *  the current date, and on a real week boundary (Monday → todayStart ==
+ *  the current date, and on a real KST week boundary (Monday → todayStart ==
  *  weekStart) or the 1st of a month two bounds collide — the later `switch`
- *  `case` then goes unreachable and a windowed read is mis-bucketed (this test
- *  failed every Monday until the clock was pinned below). Freeze a fixed
- *  mid-week, mid-month KST instant so day (07-15) / week (07-13) / month (07-01)
- *  are always distinct. */
-vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-07-15T12:00:00+09:00') });
-const bounds = kstPeriodBounds();
+ *  `case` then goes unreachable and a windowed read is mis-bucketed.
+ *
+ *  PC-FE-207: the clock MUST be pinned to a fixed mid-week (Wednesday),
+ *  mid-month KST instant so day (07-15) / week (07-13) / month (07-01) stay
+ *  distinct. The pin is established in `beforeEach` (NOT at module top level):
+ *  a top-level `vi.useFakeTimers()` runs at collection and is torn down before
+ *  this file's tests execute (setup.ts's global `afterEach` runs
+ *  `vi.restoreAllMocks()`, and under the concurrent full-suite run global
+ *  `Date` is reset by sibling files), so the source's `kstPeriodBounds()` saw
+ *  the REAL clock — failing on every KST Monday. Pinning per-test keeps the
+ *  fake clock live during each `getWmsOverviewState` call. `bounds` is computed
+ *  under the same per-test pin. */
+let bounds: KstPeriodBounds;
 
 /** Default happy fan-out: every leg resolves. 배송 period reads (keyed by
  *  `shippedAtFrom`) return distinct counts; the total read (no window) is 7. */
@@ -129,11 +137,18 @@ function seedHappy() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // PC-FE-207: pin the clock per-test (see the bounds rationale above) so the
+  // source's kstPeriodBounds() runs against a fixed mid-week / mid-month KST
+  // instant during every getWmsOverviewState call — immune to the collection-
+  // time teardown and the concurrent full-suite global-Date reset that made a
+  // module-top-level pin fail on KST Mondays. `bounds` is computed under it.
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-07-15T12:00:00+09:00') });
+  bounds = kstPeriodBounds();
 });
 
-afterAll(() => {
-  // Release the pinned clock (defensive — vitest isolates files, but do not
-  // leak fake `Date` beyond this suite).
+afterEach(() => {
+  // Release the pinned clock after each test — do not leak fake `Date` into
+  // sibling files (mirrors setup.ts's global restore).
   vi.useRealTimers();
 });
 
