@@ -1,6 +1,6 @@
 # TASK-PC-FE-207 — wms-overview-state test fails every KST Monday (module-level clock pin lost under the concurrent suite)
 
-- **Status**: ready
+- **Status**: done
 - **Project**: platform-console
 - **Service**: console-web (`tests/unit/wms-overview-state.test.ts`)
 - **Type**: bug fix (flaky/date-boundary test)
