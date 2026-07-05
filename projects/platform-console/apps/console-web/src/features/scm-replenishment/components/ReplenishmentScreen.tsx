@@ -1,9 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { useId, useState } from 'react';
-import { Button } from '@/shared/ui/Button';
-import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useSuggestions,
@@ -12,16 +9,15 @@ import {
 } from '../hooks/use-scm-replenishment';
 import {
   REPL_DEFAULT_PAGE_SIZE,
-  KNOWN_SUGGESTION_STATUSES,
-  suggestionStatusTone,
-  canApprove,
-  canDismiss,
   type SuggestionPage,
   type Suggestion,
   type SuggestionQueryParams,
   type ApproveResult,
 } from '../api/types';
 import { ReplenishmentActionDialog } from './ReplenishmentActionDialog';
+import { ApprovedDraftBanner } from './ApprovedDraftBanner';
+import { ReplenishmentFilters } from './ReplenishmentFilters';
+import { ReplenishmentTable } from './ReplenishmentTable';
 
 /**
  * scm replenishment-suggestions operator screen (TASK-PC-FE-077 — the human
@@ -83,9 +79,6 @@ const ACTION_COPY: Record<
 };
 
 export function ReplenishmentScreen({ suggestions }: ReplenishmentScreenProps) {
-  const statusFid = useId();
-  const skuFid = useId();
-
   // ── suggestion list (filters + pagination) ──────────────────────────
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [query, setQuery] = useState<SuggestionQueryParams>({
@@ -189,104 +182,17 @@ export function ReplenishmentScreen({ suggestions }: ReplenishmentScreenProps) {
       </p>
 
       {/* ── filters ────────────────────────────────────────────────────── */}
-      <form
+      <ReplenishmentFilters
+        filters={filters}
+        onChange={setFilters}
         onSubmit={submitFilters}
-        className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-        role="search"
-        aria-label="보충 추천 필터"
-      >
-        <div>
-          <label
-            htmlFor={statusFid}
-            className="block text-sm font-medium text-foreground"
-          >
-            상태
-          </label>
-          <select
-            id={statusFid}
-            value={filters.status}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, status: e.target.value }))
-            }
-            data-testid="repl-filter-status"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <option value="">전체</option>
-            {KNOWN_SUGGESTION_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label
-            htmlFor={skuFid}
-            className="block text-sm font-medium text-foreground"
-          >
-            SKU 코드
-          </label>
-          <input
-            id={skuFid}
-            type="text"
-            value={filters.skuCode}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, skuCode: e.target.value }))
-            }
-            data-testid="repl-filter-sku"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          />
-        </div>
-        <div className="flex items-end">
-          <Button type="submit" data-testid="repl-filter-submit">
-            조회
-          </Button>
-        </div>
-      </form>
+      />
 
       {/* ── DRAFT PO success affordance (approve) ───────────────────────── */}
-      {approved && (
-        <div
-          role="status"
-          data-testid="repl-approved-draft"
-          className="mb-6 rounded-md border-2 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-100"
-        >
-          <p className="font-medium">
-            보충 추천이 승인되어 <strong>DRAFT</strong> 발주가 생성되었습니다.
-          </p>
-          <p className="mt-1">
-            PO:{' '}
-            <span data-testid="repl-approved-poid" className="font-mono">
-              {approved.poId ?? '—'}
-            </span>{' '}
-            · 상태:{' '}
-            <span data-testid="repl-approved-postatus" className="font-medium">
-              {approved.poStatus ?? '—'}
-            </span>
-          </p>
-          <p className="mt-2">
-            이 발주는 <strong>DRAFT</strong> 상태입니다 — 제출(SUBMIT)은 이
-            화면이 아니라 <strong>조달(Procurement)</strong> 에서 별도로
-            진행해야 합니다.{' '}
-            <Link
-              href="/scm"
-              data-testid="repl-procurement-link"
-              className="underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              조달(발주) 화면으로 이동
-            </Link>
-          </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setApproved(null)}
-            data-testid="repl-approved-dismiss"
-            className="mt-2"
-          >
-            닫기
-          </Button>
-        </div>
-      )}
+      <ApprovedDraftBanner
+        approved={approved}
+        onDismiss={() => setApproved(null)}
+      />
 
       {/* ── list / states ───────────────────────────────────────────────── */}
       {listForbidden ? (
@@ -319,124 +225,19 @@ export function ReplenishmentScreen({ suggestions }: ReplenishmentScreenProps) {
           표시할 보충 추천이 없습니다.
         </p>
       ) : (
-        <>
-          <table className="mb-3 data-table" data-testid="repl-table">
-            <caption className="sr-only">보충 추천 목록</caption>
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th scope="col" className="p-2">
-                  SKU
-                </th>
-                <th scope="col" className="p-2">
-                  창고
-                </th>
-                <th scope="col" className="p-2">
-                  공급사
-                </th>
-                <th scope="col" className="p-2">
-                  추천 수량
-                </th>
-                <th scope="col" className="p-2">
-                  트리거 가용재고
-                </th>
-                <th scope="col" className="p-2">
-                  상태
-                </th>
-                <th scope="col" className="p-2">
-                  PO
-                </th>
-                <th scope="col" className="p-2">
-                  작업
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((s, i) => {
-                const approveOk = canApprove(s.status);
-                const dismissOk = canDismiss(s.status);
-                return (
-                  <tr
-                    key={s.id}
-                    data-testid={`repl-row-${i}`}
-                    className="border-b border-border"
-                  >
-                    <td className="p-2">{s.skuCode ?? '—'}</td>
-                    <td className="p-2">{s.warehouseId ?? '—'}</td>
-                    <td className="p-2">{s.supplierId ?? '—'}</td>
-                    <td className="p-2">{s.suggestedQty ?? '—'}</td>
-                    <td
-                      className="p-2"
-                      data-testid={`repl-row-trigger-${i}`}
-                    >
-                      {s.triggerAvailableQty ?? '—'}
-                    </td>
-                    <td className="p-2" data-testid={`repl-row-status-${i}`}>
-                      <StatusBadge tone={suggestionStatusTone(s.status)}>
-                        {s.status ?? '—'}
-                      </StatusBadge>
-                    </td>
-                    <td className="p-2">{s.materializedPoId ?? '—'}</td>
-                    <td className="p-2">
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => openAction('approve', s)}
-                          disabled={!approveOk || actionPending}
-                          data-testid={`repl-approve-${i}`}
-                        >
-                          승인
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => openAction('dismiss', s)}
-                          disabled={!dismissOk || actionPending}
-                          data-testid={`repl-dismiss-${i}`}
-                        >
-                          기각
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <nav
-            className="mb-8 flex items-center justify-between"
-            aria-label="보충 추천 페이지 이동"
-          >
-            <Button
-              variant="secondary"
-              disabled={(query.page ?? 0) <= 0}
-              onClick={() =>
-                setQuery((q) => ({
-                  ...q,
-                  page: Math.max(0, (q.page ?? 0) - 1),
-                }))
-              }
-              data-testid="repl-prev"
-            >
-              이전
-            </Button>
-            <span
-              className="text-sm text-muted-foreground"
-              data-testid="repl-pageinfo"
-            >
-              {`${data.page + 1} / ${totalPages} 페이지 · 총 ${data.totalElements}건`}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={data.page + 1 >= totalPages}
-              onClick={() =>
-                setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-              }
-              data-testid="repl-next"
-            >
-              다음
-            </Button>
-          </nav>
-        </>
+        <ReplenishmentTable
+          rows={rows}
+          queryPage={query.page ?? 0}
+          dataPage={data.page}
+          totalPages={totalPages}
+          totalElements={data.totalElements}
+          onPrev={() =>
+            setQuery((q) => ({ ...q, page: Math.max(0, (q.page ?? 0) - 1) }))
+          }
+          onNext={() => setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))}
+          onAction={openAction}
+          actionPending={actionPending}
+        />
       )}
 
       <ReplenishmentActionDialog

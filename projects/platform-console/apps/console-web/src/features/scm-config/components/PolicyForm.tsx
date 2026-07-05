@@ -9,6 +9,7 @@ import {
   type ReorderPolicyInput,
 } from '../api/types';
 import { ConfigConfirmDialog } from './ConfigConfirmDialog';
+import { SeedNumberField } from './SeedNumberField';
 
 /**
  * Reorder-policy inspect (GET) + upsert (PUT) form for a single SKU
@@ -184,7 +185,7 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
           )}
 
           <form onSubmit={openConfirm} className="mt-4 grid gap-4">
-            <NumberField
+            <SeedNumberField
               id={reorderPointId}
               label="재주문점 (reorderPoint)"
               testid="policy-reorderPoint"
@@ -194,7 +195,7 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
                 setFields((f) => ({ ...f, reorderPoint: v }))
               }
             />
-            <NumberField
+            <SeedNumberField
               id={safetyStockId}
               label="안전재고 (safetyStock)"
               testid="policy-safetyStock"
@@ -202,7 +203,7 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
               error={fieldErrors.safetyStock}
               onChange={(v) => setFields((f) => ({ ...f, safetyStock: v }))}
             />
-            <NumberField
+            <SeedNumberField
               id={reorderQtyId}
               label="재주문 수량 (reorderQty)"
               testid="policy-reorderQty"
@@ -250,54 +251,5 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
         onCancel={() => setPendingBody(null)}
       />
     </section>
-  );
-}
-
-interface NumberFieldProps {
-  id: string;
-  label: string;
-  testid: string;
-  value: string;
-  error?: string;
-  onChange: (v: string) => void;
-}
-
-function NumberField({
-  id,
-  label,
-  testid,
-  value,
-  error,
-  onChange,
-}: NumberFieldProps) {
-  const errId = `${id}-err`;
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-foreground">
-        {label}
-      </label>
-      <input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        min={0}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        data-testid={testid}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errId : undefined}
-        className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      />
-      {error && (
-        <p
-          id={errId}
-          role="alert"
-          data-testid={`${testid}-error`}
-          className="mt-1 text-sm text-destructive"
-        >
-          {error}
-        </p>
-      )}
-    </div>
   );
 }
