@@ -1,15 +1,8 @@
-import Link from 'next/link';
-import { cn } from '@/shared/lib/cn';
-import { formatDateTime } from '@/shared/lib/datetime';
-import { StatusBadge } from '@/shared/ui/StatusBadge';
-import type {
-  EcommerceOverviewState,
-  AreaCount,
-  CellStatus,
-} from '../api/overview-state';
-import { sellerStatusTone } from '../api/seller-types';
-import { orderStatusTone, type OrderStatus } from '../api/order-types';
+import type { EcommerceOverviewState } from '../api/overview-state';
 import { RankingBarChart } from './RankingBarChart';
+import { CountCard } from './EcommerceCountCard';
+import { RecentOrders, RecentSellers } from './EcommerceRecentPanels';
+import { ORDER_STATUS_LABELS } from './overview-labels';
 
 /**
  * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156;
@@ -20,122 +13,12 @@ import { RankingBarChart } from './RankingBarChart';
  * quick-launch `Link`, PC-FE-155 back-compat testids), order-status
  * distribution, and recent orders + sellers. A non-`ok` cell renders a compact
  * "점검 필요" / "권한 없음" placeholder instead of a number (never blanks).
+ *
+ * TASK-PC-FE-199: the count-card ({@link CountCard}) and recent-activity panels
+ * ({@link RecentOrders}/{@link RecentSellers}) presentational pieces live in
+ * sibling files; shared labels in `overview-labels`. This container keeps the
+ * section layout orchestration (behavior-preserving split).
  */
-
-/** Korean labels for the order-status distribution buckets (tolerant; an
- * unmapped/future status falls back to the raw value at the call site). */
-const ORDER_STATUS_LABELS: Partial<Record<OrderStatus, string>> = {
-  PENDING: '대기',
-  CONFIRMED: '확정',
-  SHIPPED: '배송중',
-  DELIVERED: '배송완료',
-  CANCELLED: '취소',
-  STUCK_RECOVERY_FAILED: '복구실패',
-};
-
-function cellPlaceholder(status: CellStatus): string {
-  return status === 'forbidden' ? '권한 없음' : '점검 필요';
-}
-
-/**
- * Per-area service-status indicator — mirrors the console-home "도메인 상태 요약"
- * dot vocabulary (DomainHealthSummaryCard). The cell status IS the per-service
- * signal here: `ok` means the area's list endpoint responded (service reachable +
- * authorized), `forbidden` is a 403 (no operator permission), `degraded` is a
- * 503/timeout/network reach failure. No extra fan-out — this reuses the count
- * cell's own resolved status.
- */
-const SERVICE_STATUS_DOT: Record<CellStatus, string> = {
-  ok: 'bg-green-500',
-  degraded: 'bg-red-500',
-  forbidden: 'bg-muted-foreground/40',
-};
-const SERVICE_STATUS_LABEL: Record<CellStatus, string> = {
-  ok: '정상',
-  degraded: '점검 필요',
-  forbidden: '권한 없음',
-};
-
-function CountCard({ area }: { area: AreaCount }) {
-  const ok = area.status === 'ok' && area.count !== null;
-  return (
-    <Link
-      href={area.href}
-      data-testid={area.testid}
-      className="flex min-w-[9rem] flex-1 flex-col gap-2 rounded-md border border-border bg-background px-4 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-    >
-      <span
-        className="flex items-center gap-1.5 text-sm text-muted-foreground"
-        data-testid={`${area.key}-service-status`}
-        data-status={area.status}
-      >
-        <span
-          className={cn(
-            'h-1.5 w-1.5 shrink-0 rounded-full',
-            SERVICE_STATUS_DOT[area.status],
-          )}
-          aria-hidden="true"
-        />
-        {area.label}
-        <span className="sr-only">
-          서비스 상태: {SERVICE_STATUS_LABEL[area.status]}
-        </span>
-      </span>
-      {ok ? (
-        <>
-          {/* Period counts — 오늘 / 주간 / 월간 (primary content). */}
-          <dl className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <dt className="text-[0.65rem] text-muted-foreground">오늘</dt>
-              <dd
-                className="text-lg font-semibold tabular-nums text-foreground"
-                data-testid={`${area.key}-count-today`}
-              >
-                {area.today!.toLocaleString()}
-              </dd>
-            </div>
-            <div className="flex flex-col items-center">
-              <dt className="text-[0.65rem] text-muted-foreground">주간</dt>
-              <dd
-                className="text-lg font-semibold tabular-nums text-foreground"
-                data-testid={`${area.key}-count-week`}
-              >
-                {area.week!.toLocaleString()}
-              </dd>
-            </div>
-            <div className="flex flex-col items-center">
-              <dt className="text-[0.65rem] text-muted-foreground">월간</dt>
-              <dd
-                className="text-lg font-semibold tabular-nums text-foreground"
-                data-testid={`${area.key}-count-month`}
-              >
-                {area.month!.toLocaleString()}
-              </dd>
-            </div>
-          </dl>
-          {/* Total (secondary context — back-compat testid `<key>-count`). */}
-          <span className="text-xs text-muted-foreground">
-            전체{' '}
-            <span
-              className="font-medium tabular-nums text-foreground"
-              data-testid={`${area.key}-count`}
-            >
-              {area.count!.toLocaleString()}
-            </span>
-          </span>
-        </>
-      ) : (
-        <span
-          className="text-sm font-medium text-muted-foreground"
-          data-testid={`${area.key}-count-degraded`}
-        >
-          {cellPlaceholder(area.status)}
-        </span>
-      )}
-    </Link>
-  );
-}
-
 export function EcommerceOverview({
   state,
 }: {
@@ -232,109 +115,5 @@ export function EcommerceOverview({
         />
       </div>
     </section>
-  );
-}
-
-function RecentPanel({
-  title,
-  testid,
-  status,
-  empty,
-  children,
-}: {
-  title: string;
-  testid: string;
-  status: CellStatus;
-  empty: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      data-testid={testid}
-      className="rounded-md border border-border bg-background p-4"
-    >
-      <h3 className="mb-3 text-sm font-semibold text-foreground">{title}</h3>
-      {status !== 'ok' ? (
-        <p className="text-sm text-muted-foreground">{cellPlaceholder(status)}</p>
-      ) : empty ? (
-        <p className="text-sm text-muted-foreground">최근 항목이 없습니다.</p>
-      ) : (
-        <ul className="space-y-2 text-sm">{children}</ul>
-      )}
-    </div>
-  );
-}
-
-function RecentOrders({
-  rows,
-  status,
-}: {
-  rows: EcommerceOverviewState['recentOrders'];
-  status: CellStatus;
-}) {
-  return (
-    <RecentPanel
-      title="최근 주문"
-      testid="ecommerce-recent-orders"
-      status={status}
-      empty={!rows || rows.length === 0}
-    >
-      {rows?.map((o) => (
-        <li
-          key={o.orderId}
-          className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
-        >
-          <span className="min-w-0 flex-1 truncate text-foreground">
-            {o.firstItemName}
-            {o.itemCount > 1 ? ` 외 ${o.itemCount - 1}건` : ''}
-          </span>
-          <StatusBadge tone={orderStatusTone(o.status)} className="shrink-0">
-            {ORDER_STATUS_LABELS[o.status as OrderStatus] ?? o.status}
-          </StatusBadge>
-          <span className="shrink-0 tabular-nums text-foreground">
-            ₩{o.totalPrice.toLocaleString('ko-KR')}
-          </span>
-          <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-            {formatDateTime(o.createdAt)}
-          </span>
-        </li>
-      ))}
-    </RecentPanel>
-  );
-}
-
-function RecentSellers({
-  rows,
-  status,
-}: {
-  rows: EcommerceOverviewState['recentSellers'];
-  status: CellStatus;
-}) {
-  return (
-    <RecentPanel
-      title="최근 셀러"
-      testid="ecommerce-recent-sellers"
-      status={status}
-      empty={!rows || rows.length === 0}
-    >
-      {rows?.map((s) => {
-        return (
-          <li
-            key={s.sellerId}
-            className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
-          >
-            <span className="min-w-0 flex-1 truncate text-foreground">
-              {s.displayName}
-            </span>
-            <StatusBadge tone={sellerStatusTone(s.status)} className="shrink-0">
-              {s.status}
-            </StatusBadge>
-            <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-              {formatDateTime(s.createdAt)}
-            </span>
-          </li>
-        );
-      })}
-    </RecentPanel>
   );
 }

@@ -1,19 +1,16 @@
 'use client';
 
 import { useId, useState } from 'react';
-import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
-import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useUsers } from '../hooks/use-ecommerce-users';
-import { formatDateTime } from '@/shared/lib/datetime';
 import {
   USER_DEFAULT_PAGE_SIZE,
   USER_STATUS_VALUES,
-  userStatusTone,
   type UserList,
   type UserListParams,
 } from '../api/user-types';
+import { UsersTable } from './UsersTable';
 
 /**
  * ecommerce user operations list section (TASK-PC-FE-084 — § 2.4.10 users).
@@ -163,101 +160,17 @@ export function UsersScreen({ users }: UsersScreenProps) {
           표시할 사용자가 없습니다.
         </p>
       ) : (
-        <>
-          <table className="mb-3 data-table" data-testid="user-table">
-            <caption className="sr-only">사용자 목록</caption>
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th scope="col" className="p-2">
-                  이메일
-                </th>
-                <th scope="col" className="p-2">
-                  이름
-                </th>
-                <th scope="col" className="p-2">
-                  닉네임
-                </th>
-                <th scope="col" className="p-2">
-                  상태
-                </th>
-                <th scope="col" className="p-2">
-                  가입일
-                </th>
-                <th scope="col" className="p-2">
-                  작업
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((u, i) => (
-                <tr
-                  key={u.userId}
-                  data-testid={`user-row-${i}`}
-                  className="border-b border-border"
-                >
-                  <td className="p-2 text-xs break-all">{u.email ?? '-'}</td>
-                  <td className="p-2">{u.name ?? '-'}</td>
-                  <td className="p-2 text-muted-foreground">
-                    {u.nickname ?? '-'}
-                  </td>
-                  <td className="p-2" data-testid={`user-row-status-${i}`}>
-                    <StatusBadge tone={userStatusTone(u.status)}>
-                      {u.status}
-                    </StatusBadge>
-                  </td>
-                  <td className="p-2 text-sm text-muted-foreground">
-                    {formatDateTime(u.createdAt)}
-                  </td>
-                  <td className="p-2">
-                    <Link href={`/ecommerce/users/${u.userId}`}>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        data-testid={`user-detail-${i}`}
-                      >
-                        상세
-                      </Button>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <nav
-            className="flex items-center justify-between"
-            aria-label="사용자 페이지 이동"
-          >
-            <Button
-              variant="secondary"
-              disabled={(query.page ?? 0) <= 0}
-              onClick={() =>
-                setQuery((q) => ({
-                  ...q,
-                  page: Math.max(0, (q.page ?? 0) - 1),
-                }))
-              }
-              data-testid="user-prev"
-            >
-              이전
-            </Button>
-            <span
-              className="text-sm text-muted-foreground"
-              data-testid="user-pageinfo"
-            >
-              {`${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={(data?.page ?? 0) + 1 >= totalPages}
-              onClick={() =>
-                setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-              }
-              data-testid="user-next"
-            >
-              다음
-            </Button>
-          </nav>
-        </>
+        <UsersTable
+          rows={rows}
+          pagination={{
+            prevDisabled: (query.page ?? 0) <= 0,
+            nextDisabled: (data?.page ?? 0) + 1 >= totalPages,
+            pageInfo: `${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`,
+            onPrev: () =>
+              setQuery((q) => ({ ...q, page: Math.max(0, (q.page ?? 0) - 1) })),
+            onNext: () => setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 })),
+          }}
+        />
       )}
     </section>
   );
