@@ -1,6 +1,6 @@
 # TASK-PC-FE-197 — WMS 개요·재고·출고 god-file 컴포넌트 분할 (wms-ops)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving god-file split
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (frontend-engineer 디스패치 — testid/markup byte-보존)
 
