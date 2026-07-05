@@ -1,6 +1,6 @@
 # TASK-PC-FE-201 — fix: wms-overview-state 테스트 주/월 경계 clock 미고정 flake (매주 월요일 RED)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Type:** test-fix (main GREEN 복구)
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8
 
