@@ -111,11 +111,11 @@ export function CreateOperatorForm({
     <form
       onSubmit={handleSubmit}
       className="mb-8 grid gap-4 rounded-md border border-border bg-background p-4 sm:grid-cols-2"
-      aria-label="운영자 계정 생성"
+      aria-label="운영자 등록"
       data-testid="create-operator-form"
     >
       <h2 className="sm:col-span-2 text-lg font-semibold text-foreground">
-        운영자 계정 생성
+        운영자 등록
       </h2>
 
       <div>
@@ -232,7 +232,7 @@ export function CreateOperatorForm({
         </select>
         {!isPlatformOperator && (
           <p className="mt-1 text-xs text-muted-foreground">
-            플랫폼 스코프(*) 운영자 계정 생성은 플랫폼 스코프 운영자만 가능합니다.
+            플랫폼 스코프(*) 운영자 등록은 플랫폼 스코프 운영자만 가능합니다.
           </p>
         )}
       </div>
@@ -337,7 +337,7 @@ export function CreateOperatorForm({
           disabled={!canSubmit}
           data-testid="create-operator-submit"
         >
-          {pending ? '처리 중…' : '운영자 계정 생성 (확인 필요)'}
+          {pending ? '처리 중…' : '운영자 등록 (확인 필요)'}
         </Button>
       </div>
     </form>

@@ -55,7 +55,7 @@ export function newIdemKey(): string {
 export function operatorConfirmTitle(pending: PendingAction): string {
   switch (pending.kind) {
     case 'create':
-      return '운영자 계정 생성 (특권 작업)';
+      return '운영자 등록 (특권 작업)';
     case 'edit-roles':
       return '운영자 역할 변경 (특권 작업)';
     case 'assign':
@@ -73,7 +73,7 @@ export function operatorConfirmDescription(pending: PendingAction): ReactNode {
   return pending.kind === 'create' ? (
     <>
       <strong>{pending.draft?.email}</strong> 운영자를{' '}
-      <strong>{pending.draft?.tenantId}</strong> 테넌트에 생성합니다.
+      <strong>{pending.draft?.tenantId}</strong> 테넌트에 등록합니다.
       {pending.draft?.roles.includes(ELEVATED_ROLE) && (
         <>
           {' '}
@@ -120,7 +120,7 @@ export function operatorConfirmDescription(pending: PendingAction): ReactNode {
 export function operatorConfirmLabel(pending: PendingAction): string {
   switch (pending.kind) {
     case 'create':
-      return '운영자 계정 생성';
+      return '운영자 등록';
     case 'edit-roles':
       return '역할 변경';
     case 'assign':

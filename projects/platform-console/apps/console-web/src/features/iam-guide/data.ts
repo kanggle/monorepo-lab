@@ -32,7 +32,7 @@ export const PERMISSION_KEYS: PermissionKey[] = [
   },
   {
     key: 'operator.manage',
-    desc: '운영자 계정 생성·역할 부여·상태 변경·테넌트 배정',
+    desc: '운영자 등록·역할 부여·상태 변경·테넌트 배정',
   },
   {
     key: 'tenant.manage',
@@ -203,7 +203,7 @@ export const DELEGATION_CHAIN: DelegationStep[] = [
   {
     actor: 'SUPER_ADMIN (플랫폼 운영자)',
     action:
-      'a회사용 TENANT_ADMIN 운영자를 생성하고 TENANT_ADMIN role 을 부여(운영자 관리 → 운영자 계정 생성/역할 변경). 플랫폼 스코프라 모든 role·테넌트 무제약.',
+      'a회사용 TENANT_ADMIN 운영자를 생성하고 TENANT_ADMIN role 을 부여(운영자 관리 → 운영자 등록/역할 변경). 플랫폼 스코프라 모든 role·테넌트 무제약.',
   },
   {
     actor: 'a회사 TENANT_ADMIN',
