@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Button } from '@/shared/ui/Button';
+import { OutboundCancelDialogBody } from './OutboundCancelDialogBody';
 
 /**
  * Confirm-gated outbound **cancel** dialog (TASK-PC-FE-085 —
@@ -20,6 +20,11 @@ import { Button } from '@/shared/ui/Button';
  * operator explicitly confirms; keyboard-operable + WCAG AA (focus into the
  * dialog on open, `Escape` cancels, focus trapped, `role="dialog"` +
  * `aria-modal` + labelled/described). axe-clean.
+ *
+ * ── MODULE SPLIT (TASK-PC-FE-198) ── this file keeps ALL orchestration (the
+ * reason state, the open-reset + auto-focus effect, the Escape / focus-trap
+ * keyboard handler, and the 3..500 validation); the dialog's inner content is
+ * rendered by the prop-driven `OutboundCancelDialogBody` presentational child.
  */
 
 const REASON_MIN = 3;
@@ -116,89 +121,24 @@ export function OutboundCancelDialog({
         data-testid="outbound-cancel-dialog"
         className="w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg"
       >
-        <h2 id={titleId} className="text-lg font-semibold text-foreground">
-          출고 주문을 취소할까요?
-        </h2>
-        <p id={descId} className="mt-2 text-sm text-muted-foreground">
-          {orderLabel} 주문을 취소합니다. 예약된 재고가 있으면 해제가
-          요청되며(비동기), 완료되면 주문이 CANCELLED 상태가 됩니다. 사유는
-          필수입니다.
-        </p>
-
-        {needsAdmin && (
-          <p
-            data-testid="outbound-cancel-admin-hint"
-            className="mt-3 rounded-md border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200"
-          >
-            피킹 이후 취소는 관리자(OUTBOUND_ADMIN) 권한이 필요합니다. 권한이
-            없으면 취소가 거부될 수 있습니다.
-          </p>
-        )}
-
-        <div className="mt-4">
-          <label
-            htmlFor={reasonId}
-            className="block text-sm font-medium text-foreground"
-          >
-            취소 사유 <span className="text-destructive">*</span>
-          </label>
-          <textarea
-            id={reasonId}
-            ref={reasonRef}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={3}
-            maxLength={REASON_MAX}
-            aria-describedby={`${reasonId}-help`}
-            data-testid="outbound-cancel-reason"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          />
-          <p
-            id={`${reasonId}-help`}
-            className="mt-1 text-xs text-muted-foreground"
-          >
-            {`${REASON_MIN}~${REASON_MAX}자. 현재 ${trimmed.length}자.`}
-          </p>
-        </div>
-
-        {conflict && (
-          <p
-            role="status"
-            data-testid="outbound-cancel-conflict"
-            className="mt-4 rounded-md border border-amber-300/50 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200"
-          >
-            주문 상태가 변경되었습니다. 최신 상태를 확인했습니다 — 계속하려면
-            다시 시도하세요.
-          </p>
-        )}
-
-        {errorMessage && (
-          <p
-            role="alert"
-            data-testid="outbound-cancel-error"
-            className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage}
-          </p>
-        )}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <Button
-            variant="secondary"
-            onClick={onCancel}
-            disabled={pending}
-            data-testid="outbound-cancel-dismiss"
-          >
-            닫기
-          </Button>
-          <Button
-            onClick={() => onConfirm(trimmed)}
-            disabled={pending || !reasonValid}
-            data-testid="outbound-cancel-confirm"
-          >
-            {pending ? '처리 중…' : '주문 취소'}
-          </Button>
-        </div>
+        <OutboundCancelDialogBody
+          titleId={titleId}
+          descId={descId}
+          reasonId={reasonId}
+          orderLabel={orderLabel}
+          needsAdmin={needsAdmin}
+          reason={reason}
+          onReasonChange={setReason}
+          reasonRef={reasonRef}
+          reasonMax={REASON_MAX}
+          helpText={`${REASON_MIN}~${REASON_MAX}자. 현재 ${trimmed.length}자.`}
+          conflict={conflict}
+          errorMessage={errorMessage}
+          pending={pending}
+          reasonValid={reasonValid}
+          onConfirm={() => onConfirm(trimmed)}
+          onCancel={onCancel}
+        />
       </div>
     </div>
   );
