@@ -4,21 +4,16 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
-import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   usePromotion,
   useDeletePromotion,
 } from '../hooks/use-ecommerce-promotions';
-import {
-  promotionStatusTone,
-  type PromotionDetail as PromotionDetailType,
-} from '../api/types';
+import { type PromotionDetail as PromotionDetailType } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { CouponIssueDialog } from './CouponIssueDialog';
 import { DetailHeader } from './DetailHeader';
-import { formatPromotionDay } from './promotion-format';
-import { formatDateTime } from '@/shared/lib/datetime';
+import { PromotionDetailFields } from './PromotionDetailFields';
 
 /**
  * ecommerce promotion detail section (TASK-PC-FE-086 — ADR-031 Phase 3b).
@@ -27,6 +22,10 @@ import { formatDateTime } from '@/shared/lib/datetime';
  *   - "수정" (only if status !== ENDED) → /[id]/edit
  *   - "삭제" (ConfirmDialog → deletePromotion; 422 PROMOTION_HAS_ISSUED_COUPONS inline)
  *   - "쿠폰 발급" (only if status === ACTIVE) → opens CouponIssueDialog
+ *
+ * TASK-PC-FE-200: the `<dl>` field grid is extracted into
+ * {@link PromotionDetailFields} (presentational); this container keeps the
+ * query, delete confirm-gate, and coupon-issue orchestration.
  */
 export interface PromotionDetailProps {
   promotion: PromotionDetailType;
@@ -104,86 +103,7 @@ export function PromotionDetail({ promotion }: PromotionDetailProps) {
         }
       />
 
-      <dl className="mb-8 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <div className="col-span-2 sm:col-span-4">
-          <dt className="text-muted-foreground">프로모션명</dt>
-          <dd data-testid="promotion-detail-name" className="font-medium">
-            {data.name}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">상태</dt>
-          <dd data-testid="promotion-detail-status">
-            <StatusBadge tone={promotionStatusTone(data.status)}>
-              {data.status}
-            </StatusBadge>
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">할인 유형</dt>
-          <dd data-testid="promotion-detail-discount-type">
-            {data.discountType}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">할인값</dt>
-          <dd data-testid="promotion-detail-discount-value">
-            {data.discountType === 'FIXED'
-              ? `₩${data.discountValue.toLocaleString('ko-KR')}`
-              : `${data.discountValue}%`}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">최대 할인 금액</dt>
-          <dd data-testid="promotion-detail-max-discount">
-            {data.maxDiscountAmount != null
-              ? `₩${data.maxDiscountAmount.toLocaleString('ko-KR')}`
-              : '—'}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">발급 / 한도</dt>
-          <dd data-testid="promotion-detail-issue-count">
-            {data.issuedCount} / {data.maxIssuanceCount}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">시작일</dt>
-          <dd data-testid="promotion-detail-start">
-            {formatPromotionDay(data.startDate)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">종료일</dt>
-          <dd data-testid="promotion-detail-end">
-            {formatPromotionDay(data.endDate)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">프로모션 ID</dt>
-          <dd className="break-all text-xs">{data.promotionId}</dd>
-        </div>
-        {data.description && (
-          <div className="col-span-2 sm:col-span-4">
-            <dt className="text-muted-foreground">설명</dt>
-            <dd data-testid="promotion-detail-description">
-              {data.description}
-            </dd>
-          </div>
-        )}
-        {data.createdAt && (
-          <div>
-            <dt className="text-muted-foreground">생성일</dt>
-            <dd className="text-xs">{formatDateTime(data.createdAt)}</dd>
-          </div>
-        )}
-        {data.updatedAt && (
-          <div>
-            <dt className="text-muted-foreground">수정일</dt>
-            <dd className="text-xs">{formatDateTime(data.updatedAt)}</dd>
-          </div>
-        )}
-      </dl>
+      <PromotionDetailFields data={data} />
 
       <CouponIssueDialog
         open={couponOpen}

@@ -14,6 +14,7 @@ import {
   IMAGE_MAX_BYTES,
   isAllowedImageContentType,
 } from '../api/image-types';
+import { ImageUploadProgress } from './ImageUploadProgress';
 
 /**
  * Presigned image upload control (TASK-PC-FE-082 — § 2.4.10 #11 + #12). The
@@ -207,21 +208,7 @@ export function ImageUploadField({
         </Button>
       </div>
 
-      {phase === 'uploading' && (
-        <div
-          className="mt-2 h-2 w-full overflow-hidden rounded bg-muted"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(progress * 100)}
-          data-testid="image-upload-progress"
-        >
-          <div
-            className="h-full bg-primary transition-[width]"
-            style={{ width: `${Math.round(progress * 100)}%` }}
-          />
-        </div>
-      )}
+      {phase === 'uploading' && <ImageUploadProgress progress={progress} />}
 
       {disabled && (
         <p
