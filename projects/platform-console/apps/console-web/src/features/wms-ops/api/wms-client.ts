@@ -1,8 +1,9 @@
-import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
 import { clampPageSize } from '@/shared/lib/pagination';
-import { ApiError, WmsUnavailableError } from '@/shared/api/errors';
+import { WmsUnavailableError } from '@/shared/api/errors';
+import {
+  callWmsGateway,
+  type WmsGatewayProfile,
+} from '@/shared/api/wms-gateway';
 import { WMS_DEFAULT_PAGE_SIZE, WMS_MAX_PAGE_SIZE } from './types';
 
 /**
@@ -88,197 +89,48 @@ export interface WmsResult<T> {
 }
 
 /**
- * Parses the wms NESTED error envelope
- * (`{ error: { code, message, timestamp } }`). Defensive: a missing /
- * flat / non-JSON body degrades to a synthetic code rather than throwing
- * (the producer is the authority for the real code; this never crashes the
- * console on a malformed error body).
+ * wms-ops profile for the shared {@link callWmsGateway} core: the WMS admin
+ * read-model surface (`WMS_ADMIN_BASE_URL`, `WMS_TIMEOUT_MS`) degrades via
+ * {@link WmsUnavailableError} and logs `wms_*` events. Surfaces the
+ * `X-Read-Model-Lag-Seconds` hint via the shared result's `lagSeconds`.
  */
-async function parseWmsError(
-  res: Response,
-): Promise<{ code: string; message: string; timestamp?: string }> {
-  let code = `HTTP_${res.status}`;
-  let message = `wms request failed (${res.status})`;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      error?: { code?: string; message?: string; timestamp?: string };
-    };
-    if (body && typeof body === 'object' && body.error) {
-      code = body.error.code ?? code;
-      message = body.error.message ?? message;
-      timestamp = body.error.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, timestamp };
-}
-
-function readLagHeader(res: Response): number | null {
-  const raw = res.headers.get('X-Read-Model-Lag-Seconds');
-  if (raw === null) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
+const WMS_ADMIN_PROFILE: WmsGatewayProfile = {
+  logPrefix: 'wms',
+  requestFailedLabel: 'wms request failed',
+  resolveDefaults: (env) => ({
+    baseUrl: env.WMS_ADMIN_BASE_URL,
+    timeoutMs: env.WMS_TIMEOUT_MS,
+  }),
+  makeUnavailable: (reason, code, message) =>
+    new WmsUnavailableError(reason, code, message),
+  isUnavailable: (err) => err instanceof WmsUnavailableError,
+  messages: {
+    degraded: 'wms admin-service unavailable',
+    timeout: 'wms admin-service call timed out',
+    network: 'wms admin-service call failed',
+  },
+};
 
 /**
- * Single hardened call site. Resolves the IAM OIDC access token, applies
- * the timeout, maps the wms error envelope to the § 2.5 resilience
- * taxonomy, and surfaces the read-model-lag hint.
+ * Single hardened call site — a thin wrapper over the shared
+ * {@link callWmsGateway} core with the {@link WMS_ADMIN_PROFILE}. Returns the
+ * `{ data, lagSeconds }` result directly ({@link WmsResult}) — the admin
+ * read-model surfaces the `X-Read-Model-Lag-Seconds` hint.
  */
 export async function callWmsAdmin<T>(
   opts: CallOptions,
   parse: (json: unknown) => T,
 ): Promise<WmsResult<T>> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // ── Per-domain credential selection (§ 2.4.5): wms requires the GAP
-  //    OIDC ACCESS token directly. NEVER getOperatorToken() — that is the
-  //    GAP-domain (§ 2.6 exchanged) credential; wms would reject it
-  //    (wrong issuer/type) and it would misapply the IAM auth model. The
-  //    #569 invariant is GAP-domain-scoped and does NOT apply here.
-  //    ── ADR-MONO-020 D4 / § 2.7: the credential is the DOMAIN-FACING GAP
-  //    OIDC token — the ASSUMED (tenant-scoped) token when the operator has
-  //    switched to a customer, else the base access token (net-zero). Still
-  //    NOT the operator token. The signed `tenant_id`/`entitled_domains`
-  //    follow the active-tenant selection (the A↔B re-scope).
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('wms_no_gap_session', { requestId, path: opts.path });
-    // No IAM OIDC session ⇒ whole-session re-login (not a per-section
-    // degrade — no partial authed state).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    // wms gateway echoes/generates X-Request-Id; X-Actor-Id is set by the
-    // wms gateway from the JWT — the console does NOT forge it.
-    'X-Request-Id': requestId,
-  };
-  // NOTE: deliberately NO `X-Tenant-Id` — wms resolves tenant from the JWT
-  // `tenant_id` claim (§ 2.4.5 tenant-model divergence).
-
-  if (opts.method === 'POST') {
-    if (!opts.idempotencyKey) {
-      throw new ApiError(
-        400,
-        'VALIDATION_ERROR',
-        'An idempotency key is required for this action',
-      );
-    }
-    headers['Idempotency-Key'] = opts.idempotencyKey;
-    // NO `X-Operator-Reason` — wms does not define it on this surface;
-    // carrying GAP's § 2.4.1 reason header over is a drift defect.
-  }
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.WMS_TIMEOUT_MS);
-
-  try {
-    const res = await fetch(`${env.WMS_ADMIN_BASE_URL}${opts.path}`, {
+  return callWmsGateway(
+    {
       method: opts.method,
-      headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (res.status === 401) {
-      const e = await parseWmsError(res);
-      logger.warn('wms_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.path,
-      });
-      // IAM OIDC session expired → whole-session re-login (no partial
-      // authed state — NOT a per-section degrade).
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseWmsError(res);
-      logger.warn('wms_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.path,
-      });
-      // Role-insufficient (e.g. WMS_VIEWER attempting the WMS_OPERATOR+
-      // ack, or non-WMS_ADMIN on projection-status) → inline, no crash,
-      // no re-login loop.
-      throw new ApiError(403, e.code || 'FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseWmsError(res);
-      logger.warn('wms_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.path,
-      });
-      // ONLY the wms section degrades — shell + IAM sections intact.
-      throw new WmsUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'wms admin-service unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400 VALIDATION_ERROR (throughput range), 404 NOT_FOUND,
-      // 422 STATE_TRANSITION_INVALID (alert already acknowledged),
-      // 409 DUPLICATE_REQUEST → inline actionable (no crash).
-      const e = await parseWmsError(res);
-      logger.warn('wms_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.path,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    const lagSeconds = readLagHeader(res);
-    const json = await res.json();
-    logger.info('wms_ok', {
-      requestId,
-      status: res.status,
       path: opts.path,
-      lagSeconds,
-    });
-    return { data: parse(json), lagSeconds };
-  } catch (err) {
-    if (err instanceof ApiError || err instanceof WmsUnavailableError) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('wms_timeout', {
-        requestId,
-        timeoutMs: env.WMS_TIMEOUT_MS,
-        path: opts.path,
-      });
-      throw new WmsUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'wms admin-service call timed out',
-      );
-    }
-    logger.error('wms_error', { requestId, path: opts.path });
-    throw new WmsUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'wms admin-service call failed',
-    );
-  } finally {
-    clearTimeout(timer);
-  }
+      idempotencyKey: opts.idempotencyKey,
+      body: opts.body,
+    },
+    parse,
+    WMS_ADMIN_PROFILE,
+  );
 }
 
 // ---------------------------------------------------------------------------
