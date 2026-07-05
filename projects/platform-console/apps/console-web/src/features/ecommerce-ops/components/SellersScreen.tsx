@@ -3,16 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
-import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { useSellers } from '../hooks/use-ecommerce-sellers';
-import { formatDateTime } from '@/shared/lib/datetime';
 import {
   SELLER_DEFAULT_PAGE_SIZE,
-  sellerStatusTone,
   type SellerList,
   type SellerListParams,
 } from '../api/seller-types';
+import { SellersTable } from './SellersTable';
 
 /**
  * ecommerce seller operations list section (TASK-PC-FE-090 — ADR-MONO-031
@@ -24,6 +22,10 @@ import {
  * status=ACTIVE only (v1). READ display only — no delete/update/deactivate.
  *
  * Resilience (§ 2.5): 403 → inline; 503/timeout → this section degrades only.
+ *
+ * TASK-PC-FE-200: the list table + pagination are extracted into
+ * {@link SellersTable} (presentational); this container keeps ALL state —
+ * pagination query, seed fallback, and list-state branching.
  */
 
 export interface SellersScreenProps {
@@ -109,100 +111,21 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
           표시할 셀러가 없습니다.
         </p>
       ) : (
-        <>
-          <table
-            className="mb-3 data-table"
-            data-testid="seller-table"
-          >
-            <caption className="sr-only">셀러 목록</caption>
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th scope="col" className="p-2">
-                  셀러 ID
-                </th>
-                <th scope="col" className="p-2">
-                  셀러 이름
-                </th>
-                <th scope="col" className="p-2">
-                  상태
-                </th>
-                <th scope="col" className="p-2">
-                  등록일
-                </th>
-                <th scope="col" className="p-2">
-                  작업
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((s, i) => (
-                <tr
-                  key={s.sellerId}
-                  data-testid={`seller-row-${i}`}
-                  className="border-b border-border"
-                >
-                  <td className="p-2 font-mono text-xs">{s.sellerId}</td>
-                  <td className="p-2">{s.displayName}</td>
-                  <td className="p-2" data-testid={`seller-row-status-${i}`}>
-                    <StatusBadge tone={sellerStatusTone(s.status)}>
-                      {s.status}
-                    </StatusBadge>
-                  </td>
-                  <td className="p-2 text-sm text-muted-foreground">
-                    {formatDateTime(s.createdAt)}
-                  </td>
-                  <td className="p-2">
-                    <Link
-                      href={`/ecommerce/sellers/${s.sellerId}`}
-                    >
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        data-testid={`seller-detail-${i}`}
-                      >
-                        상세
-                      </Button>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <nav
-            className="flex items-center justify-between"
-            aria-label="셀러 페이지 이동"
-          >
-            <Button
-              variant="secondary"
-              disabled={(query.page ?? 0) <= 0}
-              onClick={() =>
-                setQuery((q) => ({
-                  ...q,
-                  page: Math.max(0, (q.page ?? 0) - 1),
-                }))
-              }
-              data-testid="seller-prev"
-            >
-              이전
-            </Button>
-            <span
-              className="text-sm text-muted-foreground"
-              data-testid="seller-pageinfo"
-            >
-              {`${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={(data?.page ?? 0) + 1 >= totalPages}
-              onClick={() =>
-                setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))
-              }
-              data-testid="seller-next"
-            >
-              다음
-            </Button>
-          </nav>
-        </>
+        <SellersTable
+          rows={rows}
+          pagination={{
+            prevDisabled: (query.page ?? 0) <= 0,
+            nextDisabled: (data?.page ?? 0) + 1 >= totalPages,
+            pageInfo: `${(data?.page ?? 0) + 1} / ${totalPages} 페이지 · 총 ${data?.totalElements ?? 0}건`,
+            onPrev: () =>
+              setQuery((q) => ({
+                ...q,
+                page: Math.max(0, (q.page ?? 0) - 1),
+              })),
+            onNext: () =>
+              setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 })),
+          }}
+        />
       )}
     </section>
   );
