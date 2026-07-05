@@ -152,3 +152,26 @@ describe('assignment surface hidden without an active tenant', () => {
     expect(screen.queryByTestId('action-unassign-op-1')).toBeNull();
   });
 });
+
+// TASK-PC-FE-195 — the assign form disambiguates intra-org tenant assignment
+// from the cross-org partnership surface (PC-FE-187) and links to it.
+describe('assign form → cross-org partnership disambiguation (PC-FE-195)', () => {
+  it('renders the partnership hint linking to /partnerships', () => {
+    render(
+      <OperatorsScreen initial={PAGE} activeTenant="acme-corp" />,
+      { wrapper: wrapper() },
+    );
+    const hint = screen.getByTestId('assign-operator-partnership-hint');
+    expect(hint).toBeInTheDocument();
+    expect(hint).toHaveTextContent('파트너십');
+    const link = screen.getByTestId('assign-operator-partnership-link');
+    expect(link).toHaveAttribute('href', '/partnerships');
+  });
+
+  it('no partnership hint when the assign surface is hidden (no active tenant)', () => {
+    render(<OperatorsScreen initial={PAGE} />, { wrapper: wrapper() });
+    expect(
+      screen.queryByTestId('assign-operator-partnership-hint'),
+    ).toBeNull();
+  });
+});

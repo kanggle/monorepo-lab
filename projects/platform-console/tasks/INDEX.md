@@ -91,7 +91,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-PC-FE-195-operators-partnership-disambiguation-note.md` — **REVIEW (impl 완료, 로컬 tsc/lint/vitest green — 브랜치 `pc-fe-195-operators-partnership-note`)**. 운영자 관리 화면 반영: PC-FE-187 파트너십 신설로 생긴 **테넌트 배정(intra-org) vs cross-org 파트너십 혼동** 정리. `AssignOperatorForm` 카피를 intra-org("운영자로 편입, 같은 조직 내 위임")로 정확화(기존 "직원·협력업체" conflation 정리) + **disambiguation 노트**(협력사가 자기 테넌트 운영하며 slice 맡으려면 → 파트너십 화면, cascade offboarding 힌트) + `next/link` `/partnerships` 링크(testid `assign-operator-partnership-hint`/`-link`). 순수 FE 카피+링크(신규 BE 0). 테스트 2 추가(노트/링크 렌더·href, 테넌트 미선택 시 부재) — 기존 assignment-ui 6 회귀 0. **로컬**: tsc 0·lint 0·vitest 10/10(assignment-ui 8+nav 2). **(B) 미채택**: 운영자별 cross-org reach 가시화(operator 기준 파트너십 조회 엔드포인트 신설 필요) = 백로그 후보. 다음 = **머지**(console-web vitest/E2E-smoke green). 분석/구현=Opus 4.8. [[project_untickected_backlog_candidates_2026_06_19]]
 
 ## done
 
