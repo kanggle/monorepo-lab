@@ -8,7 +8,7 @@ ADR-MONO-045 세션(BE-478/PC-FE-187/BE-479) 구현→스펙 정합 — auth-ser
 
 # Status
 
-review
+done
 
 # Owner
 
