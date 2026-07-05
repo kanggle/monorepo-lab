@@ -1,9 +1,10 @@
 # TASK-PC-FE-204 — 프런트 유닛 GREEN 복구 (OperatorsScreen account-existence unhandled-error)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Scope:** 유닛 테스트 안정화(테스트-only, 프로덕트 코드 무변화)
 **Type:** CI-RED hotfix (main GREEN 복구)
-**Analysis model:** Opus 4.8 · **Impl 권장:** Opus
+**Implemented:** branch `pc-fe-204-restore-frontend-unit-green` → **#2274 merged** (squash `b0122baf2`). Frontend unit tests GREEN(228 files/2448 tests, exit 0); 전 required 체크 pass. wms 날짜 flake는 PC-FE-201(#2267)이 선처리 → 본 task는 OperatorsScreen 전용.
+**Analysis model:** Opus 4.8 · **Impl model:** Opus.
 
 ## Goal
 
@@ -27,9 +28,9 @@ null(unknown→무경고) 반환. **vi.fn이 아닌 평범한 함수**라 clearM
 
 ## Acceptance Criteria
 
-- [ ] **AC-1** `OperatorsScreen.test.tsx`가 통과하며 **account-existence 유래 unhandled error 0**.
-- [ ] **AC-2** full `vitest run` exit 0 (Errors 0).
-- [ ] **AC-3** 프로덕트 코드 변경 0(테스트 파일 1개만). `tsc --noEmit` + `next lint` green.
+- [x] **AC-1** `OperatorsScreen.test.tsx`가 통과하며 **account-existence 유래 unhandled error 0**.
+- [x] **AC-2** full `vitest run` exit 0 (Errors 0).
+- [x] **AC-3** 프로덕트 코드 변경 0(테스트 파일 1개만). `tsc --noEmit` + `next lint` green.
 
 ## Related Specs / Contracts
 
