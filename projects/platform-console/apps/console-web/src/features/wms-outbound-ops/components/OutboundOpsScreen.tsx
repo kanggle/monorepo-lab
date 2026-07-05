@@ -24,6 +24,7 @@ import {
 } from '../api/types';
 import { OutboundActionDialog } from './OutboundActionDialog';
 import { OutboundCancelDialog } from './OutboundCancelDialog';
+import { OutboundOpsHeader } from './OutboundOpsHeader';
 import { OutboundOrdersTable } from './OutboundOrdersTable';
 import { OutboundOrderDrill } from './OutboundOrderDrill';
 import {
@@ -61,6 +62,11 @@ import {
  * region are rendered by the prop-driven `OutboundOrdersTable` /
  * `OutboundOrderDrill` presentational children, and the pure copy/error-map
  * helpers live in `outbound-ops-helpers.ts`.
+ *
+ * ── SPLIT (TASK-PC-FE-198) ── the heading band moved to the presentational
+ * `OutboundOpsHeader`; the container keeps ALL orchestration (state, the
+ * pick/pack/ship/cancel/retry mutation lifecycles + idempotency-key /
+ * reason-capture handling, and the status/saga gating).
  */
 
 export interface OutboundOpsScreenProps {
@@ -284,15 +290,7 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
 
   return (
     <section aria-labelledby="wms-outbound-heading">
-      <h1
-        id="wms-outbound-heading"
-        className="mb-2 text-2xl font-semibold"
-      >
-        WMS 출고
-      </h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        출고 주문 목록 · 주문 상세(라인 + saga) · 피킹 → 패킹 → 출고 확정.
-      </p>
+      <OutboundOpsHeader />
 
       <OutboundOrdersTable
         statusFid={statusFid}
