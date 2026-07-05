@@ -1,6 +1,6 @@
 # TASK-PC-FE-189 — SCM 게이트웨이 client fetch scaffold 공통화 (개요·보충·설정 dedup)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving client dedup
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (behavior-preservation 정밀 요구 — 3-client 계약 보존)
 
