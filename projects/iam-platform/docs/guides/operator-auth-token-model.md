@@ -1,0 +1,144 @@
+# 운영자 인증/인가 토큰 모델 (Operator Auth Token Model)
+
+> **이 문서는 human-reference 개념 가이드입니다 — source of truth 가 아닙니다.**
+> 정확한 규약(claim shape, 상태코드, 검증 순서)은 각 스펙이 권위입니다. 이 가이드는
+> "어느 토큰을 왜 쓰나" 의 **멘탈 모델**만 제공하고, 세부는 § 8 의 권위 스펙으로 링크합니다.
+> 구현 판단은 항상 스펙을 확인하세요.
+
+콘솔·도메인 서비스를 다루다 보면 반복적으로 부딪히는 질문: **"이 호출엔 어느 토큰을 써야 하지?"**
+헷갈리는 이유는 토큰이 하나가 아니라, **하나의 로그인에서 목적별로 갈라져 나온 여러 개**이기 때문입니다.
+
+---
+
+## 1. 한눈에
+
+```
+                       ┌─────────────────────────────────────────┐
+   회원가입/로그인  →  │  1축 · 로그인 토큰 (base IAM OIDC)        │   "너는 누구냐" = 인증(authn)
+                       │  정체성만 담음 (권한·테넌트 운영정보 없음) │
+                       └───────────────┬─────────────────────────┘
+                                       │  (뿌리 — 여기서 목적별로 교환)
+                    ┌──────────────────┴───────────────────┐
+        (교환/ADR-014)                             (교환/ADR-020, RFC 8693)
+                    ▼                                       ▼
+   ┌──────────────────────────┐          ┌──────────────────────────────────┐
+   │  operator token          │          │  2축 · assume-tenant 토큰          │  "이 테넌트를
+   │  IAM 관리 백엔드 전용      │          │  선택 테넌트 + entitled_domains +  │   이 범위까지
+   │  (/api/admin/**)          │          │  도메인 roles + org_scope          │   운영 가능"
+   └──────────────────────────┘          └──────────────────────────────────┘
+        IAM 관리 인가(authz)                       도메인 운영 인가(authz)
+```
+
+- **1축 = 인증**(authentication): 로그인으로 "누구인지"를 증명.
+- **2축 = 인가**(authorization): 선택한 고객 테넌트를 어느 범위로 운영할지.
+- **operator token**: 1축에서 갈라진 **또 다른 인가** — 대상이 테넌트 운영이 아니라 **IAM 관리 백엔드**.
+
+핵심: **1축이 뿌리, operator token 과 2축(assume-tenant)은 그로부터 교환돼 나온 두 갈래**입니다.
+
+---
+
+## 2. 토큰 3종
+
+| 토큰 | 성격 | 담긴 것 | 대상 | 수명 |
+|---|---|---|---|---|
+| **로그인 토큰** (base IAM OIDC access token) | 인증 | 정체성(`sub`=account_id) | 모든 교환의 입력(subject_token) | IAM 세션 수명 |
+| **operator token** | 인가(IAM 관리) | IAM 관리 권한 | IAM `/api/admin/**` (accounts/audit/operators/dashboards/구독/파트너십) | 단명 |
+| **assume-tenant 토큰** (2축) | 인가(도메인 운영) | 선택 `tenant_id` + `entitled_domains` + 도메인 `roles` + `org_scope` | 도메인 게이트웨이(wms/scm/finance/erp/ecommerce) | **단명, 선택마다 재발급**(refresh 없음) |
+
+> 로그인 토큰은 `tenant_id` 가 IdP 플랫폼(예: `gap`)이고 도메인 권한이 **없습니다**. 그래서 그
+> 자체로는 IAM 관리 백엔드도, 도메인 게이트웨이도 받아주지 않습니다 — 목적용 토큰으로 **교환**해야 합니다.
+
+---
+
+## 3. 교환(token exchange)이란
+
+**교환 = 로그인 증명을 근거로, 목적에 맞는 권한 토큰을 새로 발급받는 것.** 은행 환전·여권→출입증과 같습니다.
+
+```
+여권(로그인 토큰) 만으론 특정 시설 입장 불가
+   → 여권 제시 → 신원·권한 확인 → 출입증(operator / assume-tenant 토큰) 발급
+```
+
+- **왜 바로 안 쓰나**: 로그인 토큰엔 "누구"만 있고 권한·테넌트·도메인 정보가 없습니다. 백엔드는
+  자기가 요구하는 정보가 담긴 토큰만 받습니다.
+- **교환 시 서버가 검증**: operator 존재/ACTIVE 여부, 선택 테넌트에 대한 assignment(D1/D2),
+  도메인 entitlement(D3) 등을 확인하고 발급 → **그래서 안전**.
+- **fail-CLOSED**: assume-tenant 게이트는 admin-service 장애/미할당/timeout 이면 **토큰을 발급하지
+  않습니다**(가용성에 기대 인가하지 않음 — 인가 게이트 원칙). account-service 의 entitled_domains
+  fail-soft 와는 **정반대** 정책이며 절대 섞지 않습니다.
+
+---
+
+## 4. 어느 토큰을 언제 (결정표)
+
+콘솔이 백엔드를 호출할 때 **대상 백엔드가 무엇을 요구하느냐**로 자격이 갈립니다(도메인별 계약).
+
+| 호출 대상 | 자격 | 얻는 법 |
+|---|---|---|
+| **IAM 관리 백엔드** `/api/admin/**`(accounts·audit·operators·dashboards·구독·파트너십) | **operator token** | `getOperatorToken()` (서버측 교환) |
+| **도메인 게이트웨이**(wms·scm·finance·erp·ecommerce) | **IAM OIDC 토큰**(로그인 토큰 직접, 또는 테넌트로 scope 한 assume-tenant 토큰) | `getAccessToken()` / `getDomainFacingToken()` |
+
+**결정적 이유 = 백엔드마다 인증 모델이 다르다**:
+- **IAM 백엔드**는 원본 OIDC 토큰을 **거부** → 교환된 operator token 만 받음(**#569 trust-boundary 불변식**:
+  IAM OIDC 토큰은 IAM `/api/admin/**` 에 **결코** 도달하지 않는다).
+- **도메인 게이트웨이**는 정반대로 IAM OIDC RS256 JWT 를 **요구**(교환 없음, `tenant_id` claim producer-side 강제).
+
+> 충돌이 아니라 **per-domain 바인딩**입니다. 한쪽 규칙을 다른 쪽에 일괄 적용하면 보안 결함입니다.
+> **console-side 자격 선택 규칙의 권위**는 platform-console 소유입니다 →
+> [console-web architecture.md § Per-domain credential selection](../../../platform-console/specs/services/console-web/architecture.md).
+> 이 가이드는 개념만 제공하고 규칙은 복제하지 않습니다.
+
+---
+
+## 5. 인증 vs 인가 한 줄 정리
+
+| 축 | 무엇 | 질문 |
+|---|---|---|
+| **1축 · 로그인 토큰** | **인증**(authn) | "너는 누구냐" |
+| **2축 · assume-tenant 토큰** | **인가**(authz) | "이 **테넌트**를 이 범위까지 운영 가능?" |
+| **operator token** | **인가**(authz) | "이 **IAM 관리** 백엔드를 쓸 수 있나?" |
+
+→ 1축(인증)이 "누구인지"를 세우면, 그걸 근거로 2축·operator(인가)가 "무엇을 할 수 있는지"를 정합니다.
+operator token 도 성격상 인가이며, 다만 대상이 도메인 운영이 아니라 IAM 관리라 2축과 다른 갈래일 뿐입니다.
+
+---
+
+## 6. cross-org 확장 (ADR-MONO-045)
+
+한 사람이 **협력사/공급사로서 다른 회사 테넌트를 bounded 하게 운영**하는 경우 —
+host 테넌트 A 가 partner 테넌트 B 에게 위임한 `delegated_scope {domains, roles}` slice 안에서만.
+
+- B 의 참여 operator 가 A 를 assume 할 때, **2축(assume-tenant) 토큰이 delegated slice 로 cap** 됩니다:
+  `entitled_domains = host-ACTIVE ∩ delegated.domains`, `roles = delegated.roles` (verbatim).
+- **admin scope 는 절대 확장되지 않습니다** — cross-org actor 는 host 에 admin 권한이 없어
+  `/api/admin/**` 에서 403. 파트너십은 **도메인 운영 reach 만 넓히고 admin 권한은 조직 경계를 넘지 않습니다.**
+- ≤-own 강제는 **invite 시점**(협력사에 위임할 때 host 보유 도메인·역할만 허용), request-time cap 은
+  발급 시 위 교집합으로 이뤄집니다.
+
+상세: [ADR-MONO-045](../../../../docs/adr/ADR-MONO-045-cross-org-partner-delegation.md),
+[admin-service rbac.md § Cross-Org Partner Delegation Confinement](../../specs/services/admin-service/rbac.md),
+[auth-to-admin.md § delegatedScope](../../specs/contracts/http/internal/auth-to-admin.md).
+
+---
+
+## 7. 자주 헷갈리는 지점
+
+- **"operator token 이 2축인가?"** — 아니오. 2축은 assume-tenant 토큰(도메인 운영)입니다.
+  operator token 은 1축에서 갈라진 **IAM 관리용 옆가지**입니다(§ 1 다이어그램).
+- **"도메인엔 로그인 토큰? assume-tenant 토큰?"** — 둘 다 IAM OIDC 계열. 단순 조회 도메인은 로그인
+  토큰 직접, 운영/쓰기·테넌트 scope 가 필요한 경우 assume-tenant 토큰. 정확한 매핑은 console-web 스펙(§ 4 링크).
+- **"assume-tenant 토큰에 refresh 는?"** — 없음. 단명이라 테넌트 선택마다 재발급합니다(ADR-020 § 3.1).
+- **"로그인 토큰을 IAM `/api/admin/**` 에 바로 쓰면?"** — 거부(#569). 반드시 operator token 으로 교환.
+
+---
+
+## 8. 권위 스펙 (source of truth)
+
+이 가이드는 개념입니다. 정확한 규약은 아래가 권위입니다:
+
+- **operator token 교환** — [admin-service security.md § IAM OIDC Subject-Token Validation](../../specs/services/admin-service/security.md), [ADR-MONO-014](../../../../docs/adr/ADR-MONO-014-platform-console-operator-auth-token-exchange.md).
+- **assume-tenant 토큰(2축) 발급** — [auth-service architecture.md § Assume-Tenant Exchange](../../specs/services/auth-service/architecture.md), [ADR-MONO-020](../../../../docs/adr/ADR-MONO-020-operator-multitenant-assignment.md).
+- **assignment 게이트 / delegatedScope** — [auth-to-admin.md](../../specs/contracts/http/internal/auth-to-admin.md).
+- **console 자격 선택 규칙** — [console-web architecture.md § Per-domain credential selection](../../../platform-console/specs/services/console-web/architecture.md), console-integration-contract.md § 2.4/§ 2.6.
+- **cross-org 위임 cap** — [ADR-MONO-045](../../../../docs/adr/ADR-MONO-045-cross-org-partner-delegation.md), [rbac.md § Cross-Org Partner Delegation Confinement](../../specs/services/admin-service/rbac.md).
+- **평면 분리(entitlement/IAM)** — [ADR-MONO-023](../../../../docs/adr/ADR-MONO-023-entitlement-iam-plane-separation.md).

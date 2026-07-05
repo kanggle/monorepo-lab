@@ -85,7 +85,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-481-operator-auth-token-model-guide.md` — **REVIEW (impl 완료, doc-only human-guide — 브랜치 `be-481-token-model-guide`)**. 운영자 인증/인가 토큰 모델 개념 가이드 신설(`projects/iam-platform/docs/guides/operator-auth-token-model.md`) — 세션 중 사용자와 정리한 멘탈모델(1축 로그인=authn → 2축 assume-tenant=authz + operator token 옆가지, 교환[여권→출입증], "어느 토큰을 언제" 결정표[IAM=operator token/도메인=OIDC·#569], cross-org cap[BE-478/ADR-045], 자주 헷갈리는 지점, 권위 스펙 링크). **배치 판정(사용자 확정)**: 루트 `docs/guides/`(project-agnostic 강제)가 아닌 IAM `docs/guides/`(토큰 모델=IAM 도메인·서비스명 명시 필요). **SoT 아님** — 개념+링크 전용, console 자격선택 규칙은 platform-console 소유라 링크만(복제 금지). 링크 9/9 실재 확인(auth-arch·admin security·rbac·auth-to-admin·console-web·ADR-014/020/023/045). 코드/스펙/계약 변경 0. 다음 = **머지**(markdown fast-lane). 분석/구현=Opus 4.8.
 
 ## done
 
