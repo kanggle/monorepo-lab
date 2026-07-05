@@ -7,6 +7,7 @@ import {
   DOMAIN_ROLE_MAP,
   OPERATOR_ONBOARDING_AXES,
   PERMISSION_KEYS,
+  ACCOUNT_HATS,
 } from '@/features/iam-guide/data';
 import { runAxe } from '../a11y/axe-helper';
 
@@ -101,6 +102,19 @@ describe('IamGuideScreen', () => {
       'tenant assignment',
       'org_scope',
     ]);
+  });
+
+  it('renders the four account hats (①~④, 하나의 계정 4개의 모자) in order', () => {
+    render(<IamGuideScreen />);
+    const table = screen.getByTestId('iam-guide-hats');
+    expect(table).toBeInTheDocument();
+    // Each hat row carries its relation + token mapping; rows are ordered ①②③④.
+    for (let i = 0; i < ACCOUNT_HATS.length; i++) {
+      const row = screen.getByTestId(`iam-guide-hat-${i}`);
+      expect(row).toHaveTextContent(ACCOUNT_HATS[i].relation);
+      expect(row).toHaveTextContent(ACCOUNT_HATS[i].token);
+    }
+    expect(ACCOUNT_HATS.map((h) => h.marker)).toEqual(['①', '②', '③', '④']);
   });
 
   it('lists every permission key in the appendix', () => {

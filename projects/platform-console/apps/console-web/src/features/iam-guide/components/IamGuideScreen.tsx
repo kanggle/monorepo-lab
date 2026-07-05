@@ -1,5 +1,6 @@
 import { Card } from '@/shared/ui/Card';
 import {
+  ACCOUNT_HATS,
   DELEGATION_CHAIN,
   DELEGATION_GUARDS,
   DOMAIN_ROLE_MAP,
@@ -68,6 +69,69 @@ export function IamGuideScreen() {
         화면의 접근 권한, 그리고 운영 시 역할을 부여하는 위임 흐름입니다. (테넌트
         직원/협력업체가 받는 <strong>도메인 롤</strong>은 이와 다른 축 — 맨 아래
         참조.)
+      </p>
+
+      {/* 0. 계정·테넌트 관계 — 하나의 계정, 4개의 모자 */}
+      <h2 className="mb-2 text-lg font-semibold">
+        계정·테넌트 관계 (하나의 계정, 4개의 모자)
+      </h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        하나의 통합 IAM 계정은 처한 관계에 따라 서로 다른 인가(모자)를 씁니다 —
+        로그인(인증)은 항상 하나, 얹히는 권한만 상황별로 바뀝니다. 이 페이지의
+        나머지(역할·배정·도메인 롤)는 아래 <strong>②~④</strong> 모자의 세부입니다.
+      </p>
+      <div className="mb-4 overflow-x-auto">
+        <table className="data-table" data-testid="iam-guide-hats">
+          <caption className="sr-only">하나의 계정, 4개의 모자</caption>
+          <thead>
+            <tr className="text-left">
+              <th scope="col" className="p-2">
+                관계
+              </th>
+              <th scope="col" className="p-2">
+                정체성 · 역할
+              </th>
+              <th scope="col" className="p-2">
+                토큰(인가)
+              </th>
+              <th scope="col" className="p-2">
+                콘솔
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {ACCOUNT_HATS.map((hat, i) => (
+              <tr key={hat.marker} data-testid={`iam-guide-hat-${i}`}>
+                <th
+                  scope="row"
+                  className="p-2 text-left align-top text-sm font-medium text-foreground"
+                >
+                  <span className="mr-1" aria-hidden="true">
+                    {hat.marker}
+                  </span>
+                  {hat.relation}
+                </th>
+                <td className="p-2 align-top text-sm text-muted-foreground">
+                  {hat.role}
+                </td>
+                <td className="p-2 align-top text-sm text-muted-foreground">
+                  {hat.token}
+                </td>
+                <td className="p-2 align-top text-sm text-muted-foreground">
+                  {hat.consoleNote}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mb-10 max-w-3xl text-xs text-muted-foreground">
+        <strong className="text-foreground">② ↔ ③</strong> 같은
+        &ldquo;내 회사&rdquo;라도 owner(조직을 세팅)냐 배정 직원(배정 범위를
+        운영)이냐로 티어가 다릅니다. <strong className="text-foreground">③ ↔ ④</strong>{' '}
+        둘 다 테넌트를 assume 해 도메인을 운영하지만, ③은 내 회사 테넌트(자연
+        배정)이고 ④는 남의 회사 테넌트(파트너십 위임 slice · scope cap · admin
+        불가)입니다.
       </p>
 
       {/* 1. Role 종류 */}

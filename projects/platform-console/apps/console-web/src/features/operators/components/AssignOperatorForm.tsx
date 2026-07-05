@@ -80,6 +80,18 @@ export function AssignOperatorForm({
           화면을 쓰세요. 파트너십은 관계 단위로 관리되어, 종료하거나 participant
           를 해제하면 그 접근이 즉시 회수됩니다(cascade offboarding).
         </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          계정이 관계에 따라 쓰는 4가지 유형(소비자 · 내가 운영/다니는 회사 ·
+          남의 회사)은{' '}
+          <Link
+            href="/iam/guide"
+            data-testid="assign-operator-guide-link"
+            className="font-medium text-primary underline underline-offset-2"
+          >
+            IAM 가이드
+          </Link>{' '}
+          의 &ldquo;하나의 계정, 4개의 모자&rdquo;에서 볼 수 있습니다.
+        </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
