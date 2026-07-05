@@ -83,7 +83,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+**IAM "scm처럼" 전면 리팩토링 sweep** (2축 = client dedup + god-file 분할; SCM PC-FE-189/190 · WMS PC-FE-192/197/198 · EC PC-FE-199/200 미러). PC-FE-208(dedup)과 PC-FE-209~212(분할)는 파일 disjoint(api vs components)라 독립 병렬 가능. 각 분할 태스크는 behavior-preserving(기존 테스트=계약), frontend-engineer 디스패치 권장.
+
+- `TASK-PC-FE-208-iam-gateway-client-dedup.md` — **[dedup 축]** accounts·audit·operators·partnerships·subscriptions 5개 IAM operator-token client의 복붙 `/api/admin/**` fetch scaffold → shared `iam-gateway.ts` `callAdminGateway<T>(req,parse,profile)` 통합. profile 분기=prefix/base·5종 `*UnavailableError`·401/403 병합vs분리 뉘앙스·log prefix. accounts `exportAccount` 파일 내 2번째 blob scaffold도 흡수. (overview-api·operator-overview-api=fan-out/BFF라 대상 아님). (분석=Opus / 구현 권장=Opus — per-endpoint 헤더 매트릭스 위험)
+- `TASK-PC-FE-209-operators-component-split.md` — **[분할 축]** operators(최대·privilege-sensitive): OperatorsScreen 514·OrgScopeDialog 380·OperatorProfileEditDialog/OperatorConfirmDialog 304·OperatorsTable 275 분할 + 폼(CreateOperatorForm[PC-FE-196 훅 완료]·ChangePasswordForm·MyProfileForm) hook-only 판단. 다이얼로그 focus-trap 보존 주의. (구현 권장=Opus)
+- `TASK-PC-FE-210-accounts-audit-component-split.md` — **[분할 축]** accounts(AccountsScreen 323·ConfirmActionDialog 234)+audit(AuditScreen 341) 분할. (구현 권장=Opus/Sonnet)
+- `TASK-PC-FE-211-partnerships-subscriptions-component-split.md` — **[분할 축]** PartnershipsScreen **600(콘솔 최대)**·SubscriptionsScreen 224 분할. 상태전이 매트릭스 gating 보존이 최대 위험. (구현 권장=Opus)
+- `TASK-PC-FE-212-iam-overview-dashboards-onboarding-component-split.md` — **[분할 축·마지막 배치]** IamOverviewScreen 317·OperatorOverviewScreen 300·DomainCard 353·CreateOrganizationForm(폼 hook-only 판단) 분할. server component 경계 보존. (구현 권장=Opus/Sonnet)
 
 ## in-progress
 
