@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { ApiError, WmsUnavailableError } from '@/shared/api/errors';
 
 /**
@@ -73,8 +73,16 @@ const adjRow = (id: string) => ({
 });
 
 /** The KST period windows the fan-out passes as `shippedAtFrom` (PC-FE-174).
- *  Day/week/month starts are stable within a test run, so keying the shipments
- *  mock on them reliably distinguishes the three windowed reads. */
+ *  `seedHappy`'s shipments mock keys distinct counts by which bound string it
+ *  receives (day / week / month start), so the three starts MUST stay distinct.
+ *  They are NOT unconditionally distinct: `kstPeriodBounds()` derives them from
+ *  the current date, and on a real week boundary (Monday → todayStart ==
+ *  weekStart) or the 1st of a month two bounds collide — the later `switch`
+ *  `case` then goes unreachable and a windowed read is mis-bucketed (this test
+ *  failed every Monday until the clock was pinned below). Freeze a fixed
+ *  mid-week, mid-month KST instant so day (07-15) / week (07-13) / month (07-01)
+ *  are always distinct. */
+vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-07-15T12:00:00+09:00') });
 const bounds = kstPeriodBounds();
 
 /** Default happy fan-out: every leg resolves. 배송 period reads (keyed by
@@ -121,6 +129,12 @@ function seedHappy() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+afterAll(() => {
+  // Release the pinned clock (defensive — vitest isolates files, but do not
+  // leak fake `Date` beyond this suite).
+  vi.useRealTimers();
 });
 
 describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
