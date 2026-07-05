@@ -1,6 +1,6 @@
 # TASK-PC-FE-191 — SCM 설정 폼 공유 텍스트 필드 추출 (SeedTextField)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving field extraction
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (소규모 · 동작 불변)
 
