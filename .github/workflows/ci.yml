@@ -785,7 +785,14 @@ jobs:
       )
     uses: ./.github/workflows/_integration.yml
     with:
-      timeout-minutes: 20
+      # Serialize the four WMS module integrationTest tasks: each spins its own
+      # Postgres + Confluent cp-kafka Testcontainers stack, and org.gradle.parallel=true
+      # otherwise boots all four at once — on the 2-CPU/7GB runner that exhausts
+      # memory/CPU and severs DB connections (SQLTransientConnectionException /
+      # "I/O error sending to the backend"), failing whichever module loses the race
+      # as a cluster. --no-parallel runs one stack at a time (TASK-MONO-331).
+      timeout-minutes: 30
+      gradle-args: --no-parallel
       gradle-tasks: >-
         :projects:wms-platform:apps:master-service:integrationTest
         :projects:wms-platform:apps:notification-service:integrationTest
