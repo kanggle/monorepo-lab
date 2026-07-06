@@ -1,6 +1,6 @@
 # TASK-BE-484 — Signup outer read-timeout budget inversion (auth→account) surfaces a false "인증 서비스가 일시적으로 불가합니다"
 
-- **Status**: ready
+- **Status**: done
 - **Project**: iam-platform
 - **Service**: auth-service (SAS browser signup surface)
 - **Type**: bug fix (config)
