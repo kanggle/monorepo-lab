@@ -131,7 +131,16 @@ auth:
   account-service:
     base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
     connect-timeout-ms: ${ACCOUNT_SERVICE_CONNECT_TIMEOUT:3000}
-    read-timeout-ms: ${ACCOUNT_SERVICE_READ_TIMEOUT:5000}
+    # Outer leg of the browser signup path: SignupPageController POST /signup proxies to
+    # account-service POST /api/accounts/signup, whose @Transactional chain synchronously
+    # calls BACK into auth-service (createCredential → Argon2id). That inner account→auth
+    # leg was raised to 15s in TASK-BE-247 to absorb cold-start / GC pauses, but this OUTER
+    # auth→account timeout was left at 5s — a budget inversion: the outer call abandoned the
+    # request (surfacing a false "인증 서비스가 일시적으로 불가합니다") while the backend went
+    # on to create the account (retry then hit "이미 가입된 이메일"). Aligned to 20s so the
+    # outer budget always exceeds the inner 15s ceiling. Beyond that, an async signup
+    # redesign would be required (same stance as TASK-BE-247).
+    read-timeout-ms: ${ACCOUNT_SERVICE_READ_TIMEOUT:20000}
   # TASK-BE-327 (ADR-MONO-020 D2): assume-tenant exchange assignment gate — auth-service calls
   # admin-service GET /internal/operator-assignments/check at issuance time. FAIL-CLOSED: any failure
   # (not-assigned / admin down / timeout / circuit-open) denies the assumed token.
