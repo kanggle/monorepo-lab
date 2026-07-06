@@ -35,6 +35,16 @@ on:
         required: false
         type: number
         default: 30
+      gradle-args:
+        description: >-
+          Extra flags appended to the ./gradlew invocation. Use --no-parallel to
+          serialize a caller whose modules each spin a heavy Testcontainers stack
+          (Postgres + Kafka): the root gradle.properties sets org.gradle.parallel=true,
+          so a multi-module caller otherwise boots every module's stack at once and
+          can exhaust the runner (transient DB connection loss). Empty by default.
+        required: false
+        type: string
+        default: ''
 
 jobs:
   integration:
@@ -55,6 +65,7 @@ jobs:
           ./gradlew
           ${{ inputs.gradle-tasks }}
           --no-daemon --stacktrace
+          ${{ inputs.gradle-args }}
 
       - name: Upload integration test reports on failure
         if: failure()
