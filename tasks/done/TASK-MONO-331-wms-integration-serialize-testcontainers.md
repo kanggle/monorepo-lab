@@ -1,6 +1,6 @@
 # TASK-MONO-331 — Serialize the WMS integration CI job to stop the resource-contention Testcontainers flake
 
-- **Status**: ready
+- **Status**: done
 - **Level**: monorepo (shared `.github/workflows/`)
 - **Type**: CI reliability fix
 - **Analysis model**: Opus 4.8 / **구현 권장**: Sonnet (two-file CI change)
