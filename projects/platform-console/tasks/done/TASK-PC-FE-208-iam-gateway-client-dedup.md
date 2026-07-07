@@ -1,6 +1,6 @@
 # TASK-PC-FE-208 — IAM 게이트웨이 client fetch scaffold 공통화 (accounts·audit·operators·partnerships·subscriptions dedup)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving client dedup
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (behavior-preservation 정밀 — 5-client 계약 보존, per-endpoint 헤더 매트릭스 위험)
 
