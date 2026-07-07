@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/shared/ui/Button';
-import type { VariantDraft } from './use-product-form';
+import type { VariantDraft } from '../hooks/use-product-form';
 
 interface ProductVariantsFieldsetProps {
   variants: VariantDraft[];

@@ -6,13 +6,13 @@ import {
   useShippings,
   useUpdateShippingStatus,
   useRefreshTracking,
-} from '../hooks/use-ecommerce-shippings';
+} from './use-ecommerce-shippings';
 import {
   SHIPPING_DEFAULT_PAGE_SIZE,
   type ShippingList,
   type ShippingListParams,
 } from '../api/shipping-types';
-import { nextStatusLabel } from './shipping-labels';
+import { nextStatusLabel } from '../components/shipping-labels';
 
 /**
  * State + query + mutations for {@link ShippingsScreen}

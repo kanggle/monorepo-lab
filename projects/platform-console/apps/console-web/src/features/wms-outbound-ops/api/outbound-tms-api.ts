@@ -4,7 +4,7 @@ import {
   TmsRetryResultSchema,
   type TmsRetryResult,
 } from './types';
-import { callOutbound } from './outbound-core-api';
+import { callOutbound } from './outbound-client';
 
 /**
  * TMS domain — wms outbound-service TMS retry operations

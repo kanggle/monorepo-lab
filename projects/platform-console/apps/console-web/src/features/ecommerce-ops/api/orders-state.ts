@@ -1,5 +1,5 @@
 import { mapSectionResilience, mapDetailResilience } from './section-state';
-import { listOrders, getOrder } from './orders-api';
+import { listOrders, getOrder } from './ecommerce-api';
 import type { OrderList, OrderDetail, OrderListParams } from './order-types';
 
 /**

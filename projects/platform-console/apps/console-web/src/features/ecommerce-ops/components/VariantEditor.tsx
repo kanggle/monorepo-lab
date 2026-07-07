@@ -4,7 +4,7 @@ import type { Variant } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { VariantTable } from './VariantTable';
 import { VariantAddRow } from './VariantAddRow';
-import { useVariantEditor } from './use-variant-editor';
+import { useVariantEditor } from '../hooks/use-variant-editor';
 
 /**
  * Inline variant CRUD for a product detail (TASK-PC-FE-081 — § 2.4.10

@@ -4,7 +4,7 @@ import { Button } from '@/shared/ui/Button';
 import { PRODUCT_STATUS_VALUES, type ProductDetail } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProductVariantsFieldset } from './ProductVariantsFieldset';
-import { useProductForm } from './use-product-form';
+import { useProductForm } from '../hooks/use-product-form';
 
 /**
  * Register / update product form (TASK-PC-FE-081 — § 2.4.10 #3/#4). Used by

@@ -6,7 +6,7 @@ import {
   ShipmentSchema,
   type Shipment,
 } from './types';
-import { callOutbound } from './outbound-core-api';
+import { callOutbound } from './outbound-client';
 
 /**
  * FULFILLMENT domain — wms outbound-service picking, packing, and shipping

@@ -58,7 +58,7 @@
  * Implementation is split into domain sub-modules. This file is now a barrel
  * that re-exports the full public surface — all import sites remain unchanged.
  *
- *   outbound-core-api.ts        — CallOptions, callOutbound, clampSize (internal)
+ *   outbound-client.ts          — CallOptions, callOutbound, clampSize (internal)
  *   outbound-order-api.ts       — listOrders, getOrder, getSaga,
  *                                 listPickingRequests, cancelOrder
  *   outbound-fulfillment-api.ts — ConfirmPickLine, confirmPick,

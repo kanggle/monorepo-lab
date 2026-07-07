@@ -8,7 +8,7 @@ import { ApiError } from '@/shared/api/errors';
  * per-feature wms client scaffold). The two wms console feature clients —
  * `wms-ops/api/wms-client.ts` (`callWmsAdmin`, the admin read-model at
  * `WMS_ADMIN_BASE_URL`, surfaces the read-model-lag hint) and
- * `wms-outbound-ops/api/outbound-core-api.ts` (`callOutbound`, the outbound
+ * `wms-outbound-ops/api/outbound-client.ts` (`callOutbound`, the outbound
  * service at `WMS_OUTBOUND_BASE_URL` with per-call baseUrl/timeout overrides) —
  * previously each carried a near-verbatim copy of the SAME hardened call
  * scaffold. This is that scaffold, extracted ONCE; each feature client is now a

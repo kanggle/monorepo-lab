@@ -1,5 +1,5 @@
 import { mapSectionResilience } from './section-state';
-import { listShippings } from './shippings-api';
+import { listShippings } from './ecommerce-api';
 import type { ShippingList, ShippingListParams } from './shipping-types';
 
 /**

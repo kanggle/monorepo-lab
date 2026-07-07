@@ -6,7 +6,7 @@ import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useCreatePromotion,
   useUpdatePromotion,
-} from '../hooks/use-ecommerce-promotions';
+} from './use-ecommerce-promotions';
 import {
   DISCOUNT_TYPE_VALUES,
   type PromotionDetail,

@@ -7,7 +7,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { ShipFormDialog } from './ShipFormDialog';
 import { ShippingsTable } from './ShippingsTable';
 import { STATUS_FILTER_OPTIONS, statusLabel } from './shipping-labels';
-import { useShippingsScreen } from './use-shippings-screen';
+import { useShippingsScreen } from '../hooks/use-shippings-screen';
 
 /**
  * ecommerce shipping operations list section (TASK-PC-FE-088 — § 2.4.10.3).

@@ -1,5 +1,5 @@
 import { mapSectionResilience, mapDetailResilience } from './section-state';
-import { listPromotions, getPromotion } from './promotions-api';
+import { listPromotions, getPromotion } from './ecommerce-api';
 import type { PromotionList, PromotionDetail, PromotionListParams } from './types';
 
 /**

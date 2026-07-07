@@ -1,5 +1,5 @@
 import { mapSectionResilience, mapDetailResilience } from './section-state';
-import { listSellers, getSeller } from './sellers-api';
+import { listSellers, getSeller } from './ecommerce-api';
 import type { SellerList, SellerDetail, SellerListParams } from './seller-types';
 
 /**
