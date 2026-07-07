@@ -36,7 +36,7 @@ When a specific task ID is given:
 5. Read `.claude/skills/INDEX.md` and matched skill files
 6. Read the implementation code in the target service
 7. Run the review checklist defined in `.claude/skills/review-checklist/SKILL.md`
-8. Run tests: `./gradlew :apps:{service}:test` (if applicable)
+8. Run tests: backend `./gradlew :apps:{service}:test`, or frontend `pnpm --filter {service} test` — whichever applies to the target service
 9. If no issues: move task from `tasks/review/` → `tasks/done/`
 10. If issues found: create a fix task in `tasks/ready/` (referencing the original task ID), then move the original task to `tasks/done/`
 
@@ -96,7 +96,7 @@ You are reviewing a completed task in this project. Follow these steps exactly:
 7. Read `.claude/skills/INDEX.md` and matched skill files
 8. Read the implementation code in the target service
 9. Run the Review Checklist defined in `.claude/skills/review-checklist/SKILL.md`
-10. Run tests: ./gradlew :apps:{service}:test (if applicable)
+10. Run tests: backend ./gradlew :apps:{service}:test, or frontend pnpm --filter {service} test — whichever applies to the target service
 11. Based on review results:
     - If **no issues**: move task from `tasks/review/` to `tasks/done/`
     - If **issues found**: create a fix task in `tasks/ready/` referencing the original task ID, then move the original task to `tasks/done/`
