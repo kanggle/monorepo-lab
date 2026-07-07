@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Button } from '@/shared/ui/Button';
 import { ApiError } from '@/shared/api/errors';
 import { messageForCode } from '@/shared/api/errors';
 import {
@@ -13,9 +12,11 @@ import {
   useBulkLockAccounts,
 } from '../hooks/use-accounts';
 import type { AccountPage, AccountSummary, BulkLockItem } from '../api/types';
-import { classifyAccountsEmpty } from '../lib/classify-empty';
 import { ConfirmActionDialog } from './ConfirmActionDialog';
 import { AccountsTable } from './AccountsTable';
+import { AccountsSearchBar } from './AccountsSearchBar';
+import { BulkLockResult } from './BulkLockResult';
+import { AccountsEmptyState } from './AccountsEmptyState';
 import {
   ACTION_META,
   accountActionDescription,
@@ -42,10 +43,13 @@ import {
  * exact confirmed action is retried after a transient error — a brand-new
  * dialog open always yields a new key (no accidental dedupe / double-mutate).
  *
- * Container / presentational (TASK-PC-FE-111): this container owns ALL state +
- * the 5 mutations + gating; the result table + pagination are the prop-driven
- * {@link AccountsTable}; the pending-action model + confirm copy live in
- * `accounts-screen-helpers`.
+ * Container / presentational (TASK-PC-FE-111, TASK-PC-FE-210): this container
+ * owns ALL state + the 5 mutations + gating; the result table + pagination are
+ * the prop-driven {@link AccountsTable}; the search bar
+ * ({@link AccountsSearchBar}), the per-account bulk-lock result panel
+ * ({@link BulkLockResult}) and the empty-state paragraph
+ * ({@link AccountsEmptyState}) are prop-driven presentational siblings; the
+ * pending-action model + confirm copy live in `accounts-screen-helpers`.
  */
 
 export function AccountsScreen({ initial }: { initial: AccountPage }) {
@@ -186,45 +190,13 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
         계정 운영
       </h1>
 
-      <form
+      <AccountsSearchBar
+        emailInput={emailInput}
+        onEmailInputChange={setEmailInput}
         onSubmit={submitSearch}
-        className="mb-6 flex flex-wrap items-end gap-3"
-        role="search"
-        aria-label="계정 검색"
-      >
-        <div>
-          <label
-            htmlFor="account-email-search"
-            className="block text-sm font-medium text-foreground"
-          >
-            이메일로 검색
-          </label>
-          <input
-            id="account-email-search"
-            type="email"
-            value={emailInput}
-            onChange={(e) => setEmailInput(e.target.value)}
-            placeholder="비우면 전체 목록"
-            data-testid="accounts-search-input"
-            className="mt-1 w-72 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          />
-        </div>
-        <Button type="submit" data-testid="accounts-search-submit">
-          검색
-        </Button>
-        {selected.size > 0 && (
-          <Button
-            type="button"
-            data-testid="accounts-bulk-lock-trigger"
-            className="bg-destructive text-destructive-foreground hover:opacity-90"
-            onClick={() =>
-              openAction('bulk-lock', undefined, [...selected])
-            }
-          >
-            선택 {selected.size}건 일괄 잠금
-          </Button>
-        )}
-      </form>
+        selectedCount={selected.size}
+        onBulkLock={() => openAction('bulk-lock', undefined, [...selected])}
+      />
 
       {search.isError && !isForbidden(search.error) && (
         <div
@@ -237,58 +209,14 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
         </div>
       )}
 
-      {bulkResult && (
-        <div
-          data-testid="bulk-result"
-          className="mb-6 rounded-md border border-border bg-background p-4"
-        >
-          <h2 className="mb-2 text-sm font-semibold text-foreground">
-            일괄 잠금 결과 (계정별)
-          </h2>
-          <ul className="space-y-1 text-sm">
-            {bulkResult.map((r) => (
-              <li
-                key={r.accountId}
-                data-testid={`bulk-result-${r.accountId}`}
-                className="flex items-center justify-between"
-              >
-                <span className="font-mono text-xs">{r.accountId}</span>
-                <span
-                  className={
-                    r.outcome === 'LOCKED'
-                      ? 'text-foreground'
-                      : 'text-destructive'
-                  }
-                >
-                  {r.outcome}
-                  {r.error ? ` — ${r.error.code}` : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {bulkResult && <BulkLockResult results={bulkResult} />}
 
       {!page || rows.length === 0 ? (
-        (() => {
-          // Distinguish 검색 결과 없음 vs 조회 권한 없음 as far as the backend
-          // allows (the producer returns empty-200 for no-permission, so the
-          // unfiltered-empty case is an honest union). TASK-PC-FE-063.
-          const empty = classifyAccountsEmpty(
-            search.isError,
-            search.error,
-            !!query.email,
-          );
-          return (
-            <p
-              className="text-sm text-muted-foreground"
-              data-testid="accounts-empty"
-              data-empty-reason={empty.reason}
-            >
-              {empty.message}
-            </p>
-          );
-        })()
+        <AccountsEmptyState
+          isError={search.isError}
+          error={search.error}
+          hasEmailFilter={!!query.email}
+        />
       ) : (
         <AccountsTable
           rows={rows}
