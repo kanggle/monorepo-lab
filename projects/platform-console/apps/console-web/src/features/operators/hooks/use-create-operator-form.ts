@@ -12,11 +12,11 @@ import {
  * Form-state logic for `CreateOperatorForm` (TASK-PC-FE-196 split of
  * `CreateOperatorForm.tsx` — the PC-FE "fat form → custom hook" pattern, cf.
  * PC-FE-112 `useOrgScopeForm` / PC-FE-141 `usePromotionForm`). Owns the six
- * field states, the multi-predicate validation, the dangling-account
- * pre-flight probe (debounced, abortable, fail-soft — TASK-PC-FE-179), the
- * grantable-role pre-filter, and the confirm-gated submit. The component is
- * left a presentational shell that renders from this hook's result. 0 behavior
- * change — `CreateOperatorForm.test.tsx` (component behavior) passes unchanged.
+ * field states, the multi-predicate validation, the account-existence PRE-GATE
+ * probe (debounced, abortable — TASK-MONO-334, which SUPERSEDES the fail-soft
+ * TASK-PC-FE-179 advisory: the probe now blocks submit unless the email owns a
+ * tenant account), the grantable-role pre-filter, and the confirm-gated submit.
+ * The component is left a presentational shell that renders from this result.
  *
  * `useId` field ids stay in the component (view concern — label/aria wiring).
  */
@@ -71,19 +71,23 @@ export function useCreateOperatorForm({
   // the unified IAM credential of this email's account). Only a NON-blank
   // password must satisfy the policy — `pwError` is already null when blank.
   const pwOk = password === '' || pwError === null;
-  const canSubmit = emailOk && nameOk && tenantOk && pwOk && !pending;
 
   const grantsElevated = roles.includes(ELEVATED_ROLE);
 
-  // TASK-PC-FE-179 — dangling-operator pre-flight. Debounce-probe whether the
-  // email is a signed-up account in the SELECTED tenant. This is ADVISORY only:
-  // `canSubmit` above does NOT depend on it (ADR-MONO-035 O6 fail-soft — the
-  // create is never blocked; the producer stays the final authority). The
-  // platform sentinel `*` has no meaningful account search → left idle.
+  // TASK-MONO-334 (ADR-MONO-035 amendment) — account-existence PRE-GATE. Debounce-
+  // probe whether the email is a signed-up account in the SELECTED tenant. Unlike
+  // the SUPERSEDED TASK-PC-FE-179 advisory (which never blocked), this now GATES
+  // submit: an operator may be created ONLY for an email that already owns a tenant
+  // account (that account's unified IAM credential is the operator's primary login;
+  // a break-glass password is only a secondary login and no longer bypasses this).
+  // The platform sentinel `*` has no tenant account to probe and is EXEMPT
+  // (SUPER_ADMIN bootstrap) — mirroring the producer, which also exempts `*`. The
+  // producer's 422 OPERATOR_ACCOUNT_NOT_FOUND stays the final authority.
   const [acctState, setAcctState] = useState<AccountProbeState>('idle');
   const probeTenant = tenant.trim();
   const probeEmail = email.trim();
-  const probeEligible = emailOk && tenantOk && probeTenant !== '*';
+  const isPlatformScope = probeTenant === '*';
+  const probeEligible = emailOk && tenantOk && !isPlatformScope;
 
   useEffect(() => {
     if (!probeEligible) {
@@ -112,11 +116,22 @@ export function useCreateOperatorForm({
     };
   }, [probeEligible, probeEmail, probeTenant, checkAccountExists]);
 
-  // Advisory copy: only a DEFINITIVE "absent" (not unknown/checking) drives a
-  // warning, and its severity depends on whether a break-glass password was
-  // set (a present password ⇒ the operator can still use the local login).
-  const showDangling = acctState === 'absent' && password === '';
-  const showAbsentButPw = acctState === 'absent' && password !== '';
+  // The account gate: '*' is exempt; otherwise the email MUST resolve to an
+  // existing tenant account. 'checking' / 'absent' / 'unavailable' all keep submit
+  // disabled — fail-CLOSED, so the UI never lets an unverified operator through
+  // (the producer would 422 anyway; this pre-gate makes it a clear, blocked state).
+  const accountGateOk = isPlatformScope || acctState === 'exists';
+  const canSubmit =
+    emailOk && nameOk && tenantOk && pwOk && accountGateOk && !pending;
+
+  // Blocking / advisory copy (mutually exclusive, non-'*' only):
+  //  - absent      → BLOCKING error (must sign up first; break-glass no longer bypasses)
+  //  - unavailable → BLOCKING (cannot verify — try again)
+  //  - checking    → transient "checking…" hint
+  //  - exists      → OIDC-ok confirmation (submit enabled)
+  const showBlockingAbsent = acctState === 'absent';
+  const showUnavailable = acctState === 'unavailable';
+  const showChecking = acctState === 'checking';
   const showExistsOk = acctState === 'exists';
 
   // feat/iam-grantable-roles-filter — render only the KNOWN_OPERATOR_ROLES
@@ -172,8 +187,9 @@ export function useCreateOperatorForm({
     canSubmit,
     grantsElevated,
     probeTenant,
-    showDangling,
-    showAbsentButPw,
+    showBlockingAbsent,
+    showUnavailable,
+    showChecking,
     showExistsOk,
     renderableRoles,
     toggleRole,

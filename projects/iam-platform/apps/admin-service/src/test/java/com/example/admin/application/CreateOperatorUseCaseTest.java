@@ -1,5 +1,7 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.DownstreamFailureException;
+import com.example.admin.application.exception.OperatorAccountNotFoundException;
 import com.example.admin.application.exception.OperatorEmailConflictException;
 import com.example.admin.application.exception.RoleNotFoundException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
@@ -61,6 +63,14 @@ class CreateOperatorUseCaseTest {
         // Default: actor is fan-platform (non-platform-scope)
         when(operatorLookupPort.findByOperatorId("actor-uuid"))
                 .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "fan-platform")));
+
+        // TASK-MONO-334: operator-create now requires a pre-existing tenant account.
+        // Default the account-existence probe to "exists" (totalElements=1) so every
+        // happy-path create below proceeds; the absent/downstream cases override it.
+        // (LENIENT strictness → this default is harmless when a test doesn't reach it,
+        // e.g. the platform-scope '*' exemption which never calls search.)
+        when(accountServiceClient.search(anyString(), anyString()))
+                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 1, 0, 1, 1));
     }
 
     private AdminOperatorPort.OperatorView createdView(long id, String tenantId, String email, String displayName) {
@@ -427,5 +437,82 @@ class CreateOperatorUseCaseTest {
                 ArgumentCaptor.forClass(AdminOperatorPort.NewOperator.class);
         verify(operatorPort).createOperator(captor.capture());
         assertThat(captor.getValue().passwordHash()).isEqualTo("bg-hash");
+    }
+
+    // ── TASK-MONO-334 (ADR-MONO-035 amendment): operator-create requires an
+    //    existing tenant account for the email ─────────────────────────────────
+
+    @Test
+    @DisplayName("MONO-334: 대상 테넌트에 가입 계정이 없는 이메일 → OperatorAccountNotFoundException (INSERT/감사 전 차단)")
+    void createOperator_accountAbsentInTenant_throwsAccountNotFound() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "ghost@example.com")).thenReturn(false);
+        // Override the default "exists" probe → definitively absent (totalElements=0).
+        when(accountServiceClient.search("fan-platform", "ghost@example.com"))
+                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 0, 0, 1, 0));
+
+        assertThatThrownBy(() -> useCase.createOperator(
+                "ghost@example.com", "Ghost", "StrongPass1!",
+                List.of(), actor(), "provisioning", "fan-platform", false))
+                .isInstanceOf(OperatorAccountNotFoundException.class);
+
+        // Precondition fails BEFORE role resolution, INSERT, identity link, and audit.
+        verify(operatorPort, never()).resolveRolesByName(anyList());
+        verify(operatorPort, never()).createOperator(any());
+        verify(auditor, never()).record(any());
+    }
+
+    @Test
+    @DisplayName("MONO-334: break-glass 비밀번호가 있어도 가입 계정이 없으면 차단 (계정-없는 운영자 완전 금지)")
+    void createOperator_accountAbsent_evenWithBreakGlassPassword_throws() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "ghost2@example.com")).thenReturn(false);
+        when(accountServiceClient.search("fan-platform", "ghost2@example.com"))
+                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 0, 0, 1, 0));
+
+        assertThatThrownBy(() -> useCase.createOperator(
+                "ghost2@example.com", "Ghost", "StrongPass1!",   // a valid break-glass password
+                List.of(), actor(), "provisioning", "fan-platform", false))
+                .isInstanceOf(OperatorAccountNotFoundException.class);
+
+        verify(passwordHasher, never()).hash(anyString());
+        verify(operatorPort, never()).createOperator(any());
+    }
+
+    @Test
+    @DisplayName("MONO-334: platform-scope '*' 은 계정 존재 검사 면제 (account_db tenant 행 없음)")
+    void createOperator_platformScope_exemptFromAccountExistenceCheck() {
+        when(operatorLookupPort.findByOperatorId("actor-uuid"))
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorSummary(99L, "actor-uuid", "*")));
+        when(operatorPort.existsByTenantIdAndEmail("*", "super@example.com")).thenReturn(false);
+        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
+        when(passwordHasher.hash(anyString())).thenReturn("h");
+        when(operatorPort.createOperator(any(AdminOperatorPort.NewOperator.class)))
+                .thenReturn(createdView(101L, "*", "super@example.com", "Super"));
+        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
+        when(auditor.newAuditId()).thenReturn("audit-sa2");
+
+        CreateOperatorUseCase.CreateOperatorResult result = useCase.createOperator(
+                "super@example.com", "Super", "StrongPass1!",
+                List.of(), actor(), "bootstrap", "*", false);
+
+        assertThat(result.tenantId()).isEqualTo("*");
+        // The account-existence probe is NEVER consulted for the '*' bootstrap path.
+        verify(accountServiceClient, never()).search(anyString(), anyString());
+        verify(operatorPort).createOperator(any());
+    }
+
+    @Test
+    @DisplayName("MONO-334: account-service 장애 → DownstreamFailureException 전파 (fail-closed, 운영자 미생성)")
+    void createOperator_accountServiceDownstreamFailure_failsClosed() {
+        when(operatorPort.existsByTenantIdAndEmail("fan-platform", "down@example.com")).thenReturn(false);
+        when(accountServiceClient.search("fan-platform", "down@example.com"))
+                .thenThrow(new DownstreamFailureException("account-service unavailable", new RuntimeException()));
+
+        assertThatThrownBy(() -> useCase.createOperator(
+                "down@example.com", "Down", "StrongPass1!",
+                List.of(), actor(), "provisioning", "fan-platform", false))
+                .isInstanceOf(DownstreamFailureException.class);
+
+        verify(operatorPort, never()).createOperator(any());
+        verify(auditor, never()).record(any());
     }
 }

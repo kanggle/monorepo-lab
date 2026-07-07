@@ -26,8 +26,8 @@ import { CreateOperatorAccountAdvisory } from './CreateOperatorAccountAdvisory';
  * see `grantableRoles` prop doc. UX pre-filter ONLY; the producer's
  * `403 ROLE_GRANT_FORBIDDEN` remains the final no-escalation authority.
  *
- * TASK-PC-FE-196 — the form state, validation, dangling-account pre-flight
- * probe, grantable-role filter, and confirm-gated submit live in the
+ * TASK-PC-FE-196 — the form state, validation, account-existence pre-gate
+ * probe (TASK-MONO-334), grantable-role filter, and confirm-gated submit live in the
  * `useCreateOperatorForm` hook (operators/hooks/); this component is the
  * presentational shell that renders from the hook's result.
  */
@@ -52,11 +52,13 @@ export interface CreateOperatorFormProps {
    *  `KNOWN_OPERATOR_ROLES` checkbox (never an empty list — the producer
    *  403 is still the final authority). */
   grantableRoles?: string[] | null;
-  /** TASK-PC-FE-179 — pre-flight "does this email have a signed-up account in
-   *  the selected tenant?" probe. Default calls the accounts search BFF; tests
-   *  inject a stub so the leaf never touches the network. Returns `true`
-   *  (exists) / `false` (definitively absent) / `null` (unknown — skip the
-   *  warning; fail-soft). */
+  /** TASK-MONO-334 (supersedes TASK-PC-FE-179) — pre-flight "does this email
+   *  have a signed-up account in the selected tenant?" probe. Default calls the
+   *  accounts search BFF; tests inject a stub so the leaf never touches the
+   *  network. Returns `true` (exists) / `false` (definitively absent) / `null`
+   *  (unknown). This now GATES submit: only `true` enables it (the producer's
+   *  422 OPERATOR_ACCOUNT_NOT_FOUND stays the final authority). `*`
+   *  platform-scope is exempt (no tenant account to probe). */
   checkAccountExists?: (
     email: string,
     tenantId: string,
@@ -95,8 +97,9 @@ export function CreateOperatorForm({
     canSubmit,
     grantsElevated,
     probeTenant,
-    showDangling,
-    showAbsentButPw,
+    showBlockingAbsent,
+    showUnavailable,
+    showChecking,
     showExistsOk,
     renderableRoles,
     toggleRole,
@@ -240,8 +243,9 @@ export function CreateOperatorForm({
 
       <CreateOperatorAccountAdvisory
         probeTenant={probeTenant}
-        showDangling={showDangling}
-        showAbsentButPw={showAbsentButPw}
+        showBlockingAbsent={showBlockingAbsent}
+        showUnavailable={showUnavailable}
+        showChecking={showChecking}
         showExistsOk={showExistsOk}
       />
 

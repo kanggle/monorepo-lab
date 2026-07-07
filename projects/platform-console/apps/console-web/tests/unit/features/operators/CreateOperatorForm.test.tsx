@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-} from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { CreateOperatorForm } from '@/features/operators/components/CreateOperatorForm';
 import {
   KNOWN_OPERATOR_ROLES,
@@ -108,6 +103,11 @@ describe('CreateOperatorForm — grantable-roles pre-filter', () => {
 });
 
 describe('CreateOperatorForm — optional break-glass password (ADR-MONO-035 O2)', () => {
+  // TASK-MONO-334: submit now also requires the account-existence gate. These
+  // tests target the PASSWORD logic, so they inject an "exists" probe and await
+  // the OIDC-ok note before asserting the button state.
+  const EXISTS = () => Promise.resolve(true);
+
   function fillRequired() {
     fireEvent.change(screen.getByTestId('create-operator-email'), {
       target: { value: 'foo@example.com' },
@@ -121,7 +121,7 @@ describe('CreateOperatorForm — optional break-glass password (ADR-MONO-035 O2)
     fireEvent.click(screen.getByTestId('create-operator-role-SUPPORT_LOCK'));
   }
 
-  it('submit is enabled with NO password; the draft omits password (OIDC-only)', () => {
+  it('submit is enabled with NO password once the account exists; draft omits password (OIDC-only)', async () => {
     const drafts: CreateOperatorInput[] = [];
     render(
       <CreateOperatorForm
@@ -129,9 +129,11 @@ describe('CreateOperatorForm — optional break-glass password (ADR-MONO-035 O2)
         isPlatformOperator={false}
         onSubmitDraft={(d) => drafts.push(d)}
         grantableRoles={['SUPPORT_LOCK']}
+        checkAccountExists={EXISTS}
       />,
     );
     fillRequired();
+    await screen.findByTestId('create-operator-account-ok');
 
     const submit = screen.getByTestId('create-operator-submit');
     expect(submit).not.toBeDisabled();
@@ -141,7 +143,7 @@ describe('CreateOperatorForm — optional break-glass password (ADR-MONO-035 O2)
     expect(drafts[0]).not.toHaveProperty('password');
   });
 
-  it('a NON-blank password must still satisfy the policy (submit blocked on a weak one)', () => {
+  it('a NON-blank password must still satisfy the policy (submit blocked on a weak one)', async () => {
     const drafts: CreateOperatorInput[] = [];
     render(
       <CreateOperatorForm
@@ -149,9 +151,11 @@ describe('CreateOperatorForm — optional break-glass password (ADR-MONO-035 O2)
         isPlatformOperator={false}
         onSubmitDraft={(d) => drafts.push(d)}
         grantableRoles={['SUPPORT_LOCK']}
+        checkAccountExists={EXISTS}
       />,
     );
     fillRequired();
+    await screen.findByTestId('create-operator-account-ok');
     fireEvent.change(screen.getByTestId('create-operator-password'), {
       target: { value: 'short' }, // < 10 chars, no digit/special → policy fail
     });
@@ -172,17 +176,23 @@ describe('CreateOperatorForm — optional break-glass password (ADR-MONO-035 O2)
   });
 });
 
-describe('CreateOperatorForm — dangling-account pre-flight (TASK-PC-FE-179)', () => {
-  function fillEmailTenant(email = 'ghost@example.com', tenant = 'wms') {
+describe('CreateOperatorForm — account-existence pre-gate (TASK-MONO-334)', () => {
+  // Fill every OTHER required field so the ONLY thing standing between the form
+  // and a valid submit is the account-existence gate.
+  function fillAllExceptGate(email = 'ghost@example.com', tenant = 'wms') {
     fireEvent.change(screen.getByTestId('create-operator-email'), {
       target: { value: email },
+    });
+    fireEvent.change(screen.getByTestId('create-operator-displayName'), {
+      target: { value: 'Op Name' },
     });
     fireEvent.change(screen.getByTestId('create-operator-tenant'), {
       target: { value: tenant },
     });
+    fireEvent.click(screen.getByTestId('create-operator-role-SUPPORT_LOCK'));
   }
 
-  it('email absent in tenant + NO password ⇒ dangling-operator warning (non-blocking)', async () => {
+  it('email absent in tenant ⇒ BLOCKING error, submit disabled even with all fields valid', async () => {
     const check = vi.fn().mockResolvedValue(false); // definitively absent
     render(
       <CreateOperatorForm
@@ -193,19 +203,15 @@ describe('CreateOperatorForm — dangling-account pre-flight (TASK-PC-FE-179)', 
         checkAccountExists={check}
       />,
     );
-    fillEmailTenant();
+    fillAllExceptGate();
 
-    await screen.findByTestId('create-operator-account-warning');
+    await screen.findByTestId('create-operator-account-error');
     expect(check).toHaveBeenCalledWith('ghost@example.com', 'wms', expect.anything());
-    // Non-blocking: displayName is required for submit, but the warning itself
-    // must never disable the button. Fill name and assert submit is enabled.
-    fireEvent.change(screen.getByTestId('create-operator-displayName'), {
-      target: { value: 'Ghost' },
-    });
-    expect(screen.getByTestId('create-operator-submit')).not.toBeDisabled();
+    // The gate BLOCKS: the button stays disabled although name/tenant/role are set.
+    expect(screen.getByTestId('create-operator-submit')).toBeDisabled();
   });
 
-  it('email absent + break-glass password present ⇒ softened note, no dangling warning', async () => {
+  it('email absent + break-glass password present ⇒ STILL blocked (break-glass no longer bypasses)', async () => {
     const check = vi.fn().mockResolvedValue(false);
     render(
       <CreateOperatorForm
@@ -216,18 +222,19 @@ describe('CreateOperatorForm — dangling-account pre-flight (TASK-PC-FE-179)', 
         checkAccountExists={check}
       />,
     );
-    fillEmailTenant();
+    fillAllExceptGate();
     fireEvent.change(screen.getByTestId('create-operator-password'), {
       target: { value: 'Str0ng!pass9' },
     });
 
-    await screen.findByTestId('create-operator-account-breakglass-note');
+    await screen.findByTestId('create-operator-account-error');
     expect(
-      screen.queryByTestId('create-operator-account-warning'),
+      screen.queryByTestId('create-operator-account-ok'),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId('create-operator-submit')).toBeDisabled();
   });
 
-  it('email exists in tenant ⇒ OIDC-ok note, no warning', async () => {
+  it('email exists in tenant ⇒ OIDC-ok note and submit enabled', async () => {
     const check = vi.fn().mockResolvedValue(true);
     render(
       <CreateOperatorForm
@@ -238,15 +245,16 @@ describe('CreateOperatorForm — dangling-account pre-flight (TASK-PC-FE-179)', 
         checkAccountExists={check}
       />,
     );
-    fillEmailTenant('real@example.com');
+    fillAllExceptGate('real@example.com');
 
     await screen.findByTestId('create-operator-account-ok');
     expect(
-      screen.queryByTestId('create-operator-account-warning'),
+      screen.queryByTestId('create-operator-account-error'),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId('create-operator-submit')).not.toBeDisabled();
   });
 
-  it('lookup unavailable (null) ⇒ no warning / ok / note (fail-soft)', async () => {
+  it('lookup unavailable (null) ⇒ unavailable notice, submit disabled (fail-closed)', async () => {
     const check = vi.fn().mockResolvedValue(null); // unknown
     render(
       <CreateOperatorForm
@@ -257,21 +265,17 @@ describe('CreateOperatorForm — dangling-account pre-flight (TASK-PC-FE-179)', 
         checkAccountExists={check}
       />,
     );
-    fillEmailTenant();
+    fillAllExceptGate();
 
-    await waitFor(() => expect(check).toHaveBeenCalled());
-    expect(
-      screen.queryByTestId('create-operator-account-warning'),
-    ).not.toBeInTheDocument();
+    await screen.findByTestId('create-operator-account-unavailable');
     expect(
       screen.queryByTestId('create-operator-account-ok'),
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByTestId('create-operator-account-breakglass-note'),
-    ).not.toBeInTheDocument();
+    // Fail-closed: cannot confirm the account exists → submit stays disabled.
+    expect(screen.getByTestId('create-operator-submit')).toBeDisabled();
   });
 
-  it('platform-scope tenant (*) ⇒ probe skipped, no lookup call', async () => {
+  it('platform-scope tenant (*) ⇒ probe skipped and submit enabled (exempt from the gate)', async () => {
     const check = vi.fn().mockResolvedValue(false);
     render(
       <CreateOperatorForm
@@ -282,13 +286,15 @@ describe('CreateOperatorForm — dangling-account pre-flight (TASK-PC-FE-179)', 
         checkAccountExists={check}
       />,
     );
-    fillEmailTenant('admin@example.com', '*');
+    fillAllExceptGate('admin@example.com', '*');
 
-    // Give the debounce window a chance to (not) fire, then assert no probe.
+    // Give the debounce window a chance to (not) fire, then assert no probe and
+    // that the '*' bootstrap path is submittable without an account check.
     await new Promise((r) => setTimeout(r, 500));
     expect(check).not.toHaveBeenCalled();
     expect(
-      screen.queryByTestId('create-operator-account-warning'),
+      screen.queryByTestId('create-operator-account-error'),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId('create-operator-submit')).not.toBeDisabled();
   });
 });
