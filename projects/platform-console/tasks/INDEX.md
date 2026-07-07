@@ -83,7 +83,13 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty) — **IAM "scm처럼" 전면 리팩토링 sweep 완료** (dedup PC-FE-208 + 분할 PC-FE-209~212 전부 DONE). SCM(189/190)·WMS(192/197/198)·EC(199/200)에 이어 IAM까지 콘솔 5도메인 god-file/client-dedup 리팩토링 완결.
+**콘솔 3-도메인(WMS/SCM/EC) 컨벤션 정렬 sweep** — IAM sweep(PC-FE-208~212) 완결 후 3 도메인 잔여 일관성 갭 정리. dedup 위치(EC 미승격)·잔여 god-file(>250줄 5종)·네이밍/레이아웃 편차를 SCM/WMS 도착점에 맞춤. 파일 disjoint(213 shared/api + ecommerce/api / 214 wms-outbound components / 215 scm components / 216 ecommerce components / 217 rename·move)라 대체로 병렬 가능; **ecommerce 디렉터리 접촉 순서만 213 → 216 → 217**.
+
+- `TASK-PC-FE-213-ecommerce-gateway-shared-promotion.md` — **[P1·핵심 갭]** 이커머스 call-core `callEcommerce`를 `features/ecommerce-ops/api/ecommerce-client.ts`→`shared/api/ecommerce-gateway.ts`로 승격 + SCM/WMS `*GatewayProfile`(`makeUnavailable`/`isUnavailable`) 패턴 정렬. scm-gateway와 near-identical(getDomainFacingToken·FLAT·no X-Tenant-Id). behavior-preserving, 8 slice 계약 보존. (분석=Opus / 구현 권장=Opus)
+- `TASK-PC-FE-214-wms-outbound-ops-screen-split.md` — **[P2]** `wms-outbound-ops/components/OutboundOpsScreen.tsx`(383줄, 3-도메인 잔여 최대 컴포넌트 god-file) 분할. (분석=Opus / 구현 권장=Opus)
+- `TASK-PC-FE-215-scm-forms-screen-split.md` — **[P2]** SCM god-file 3종 분할(SupplierMapForm 283·ReplenishmentScreen 262·PolicyForm 255). (분석=Opus / 구현 권장=Opus)
+- `TASK-PC-FE-216-ecommerce-promotion-form-split.md` — **[P2]** `ecommerce-ops/components/PromotionForm.tsx`(258줄) 분할. (분석=Opus / 구현 권장=Sonnet)
+- `TASK-PC-FE-217-console-naming-layout-normalization.md` — **[P3]** 네이밍/레이아웃 정규화(EC form-hook `components/`→`hooks/`·`outbound-core-api.ts`→`outbound-client.ts`·EC api barrel 신설·SCM demand-planning 네이밍[판단]). PC-FE-213/216 후 착수. (분석=Opus / 구현 권장=Sonnet)
 
 ## in-progress
 
