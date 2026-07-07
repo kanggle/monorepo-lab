@@ -1,23 +1,17 @@
 'use client';
 
 import { useId, useMemo, useState } from 'react';
-import { ApiError, messageForCode } from '@/shared/api/errors';
-import {
-  useOutboundOrders,
-  useOrderDrill,
-  usePickAction,
-  usePackAction,
-  useShipAction,
-  useCancelOrder,
-  useRetryTms,
-} from '../hooks/use-outbound-ops';
+import { ApiError } from '@/shared/api/errors';
+import { useOutboundOrders, useOrderDrill } from '../hooks/use-outbound-ops';
+import { useOutboundActionDialog } from '../hooks/use-outbound-action-dialog';
+import { useOutboundCancelDialog } from '../hooks/use-outbound-cancel-dialog';
+import { useOutboundRetryDialog } from '../hooks/use-outbound-retry-dialog';
 import {
   OUTBOUND_DEFAULT_PAGE_SIZE,
   canPick,
   canPack,
   canShip,
   canCancel,
-  cancelNeedsAdmin,
   canRetryTms,
   type OutboundOrderPage,
   type OutboundListParams,
@@ -27,12 +21,7 @@ import { OutboundCancelDialog } from './OutboundCancelDialog';
 import { OutboundOpsHeader } from './OutboundOpsHeader';
 import { OutboundOrdersTable } from './OutboundOrdersTable';
 import { OutboundOrderDrill } from './OutboundOrderDrill';
-import {
-  type ActionKind,
-  ACTION_COPY,
-  cancelErrorMessage,
-  retryTmsErrorMessage,
-} from './outbound-ops-helpers';
+import { ACTION_COPY } from './outbound-ops-helpers';
 
 /**
  * wms outbound operations section (TASK-PC-FE-057 — ADR-MONO-022 § D7 operator
@@ -57,16 +46,20 @@ import {
  * re-login); 403/404/422/409 → inline actionable; 503/timeout → this section
  * degrades only (the console shell stays intact).
  *
- * ── MODULE SPLIT (TASK-PC-FE-101) ── this container owns ALL state, mutations,
- * and the status/saga gating; the orders-table region and the order-drill
- * region are rendered by the prop-driven `OutboundOrdersTable` /
- * `OutboundOrderDrill` presentational children, and the pure copy/error-map
- * helpers live in `outbound-ops-helpers.ts`.
+ * ── MODULE SPLIT (TASK-PC-FE-101) ── this container owns ALL state and the
+ * status/saga gating; the orders-table region and the order-drill region are
+ * rendered by the prop-driven `OutboundOrdersTable` / `OutboundOrderDrill`
+ * presentational children, and the pure copy/error-map helpers live in
+ * `outbound-ops-helpers.ts`.
  *
  * ── SPLIT (TASK-PC-FE-198) ── the heading band moved to the presentational
- * `OutboundOpsHeader`; the container keeps ALL orchestration (state, the
- * pick/pack/ship/cancel/retry mutation lifecycles + idempotency-key /
- * reason-capture handling, and the status/saga gating).
+ * `OutboundOpsHeader`.
+ *
+ * ── SPLIT (TASK-PC-FE-214) ── the three mutation-dialog lifecycles (pick/pack/
+ * ship, cancel, TMS-retry — state + idempotency-key / reason-capture / conflict
+ * handling) moved to the `useOutboundActionDialog` / `useOutboundCancelDialog` /
+ * `useOutboundRetryDialog` hooks; this container keeps the orders/drill queries,
+ * the status/saga gating, and the assembly.
  */
 
 export interface OutboundOpsScreenProps {
@@ -105,154 +98,13 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
   const drillDegraded =
     drill.isError && (!drillApiError || drillApiError.status >= 500) && !drillForbidden;
 
-  // --- action dialog -------------------------------------------------------
-  const pick = usePickAction();
-  const pack = usePackAction();
-  const ship = useShipAction();
-  const [action, setAction] = useState<{
-    kind: ActionKind;
-    orderId: string;
-    idempotencyKey: string;
-  } | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionConflict, setActionConflict] = useState(false);
-
-  // --- cancel dialog (reason-required, role-escalating, async-saga) --------
-  const cancel = useCancelOrder();
-  const [cancelTarget, setCancelTarget] = useState<{
-    orderId: string;
-    orderLabel: string;
-    needsAdmin: boolean;
-    idempotencyKey: string;
-  } | null>(null);
-  const [cancelError, setCancelError] = useState<string | null>(null);
-  const [cancelConflict, setCancelConflict] = useState(false);
-
-  // --- TMS retry dialog (reason-free admin action; shipment-id resolved
-  //     server-side from the admin read-model) -------------------------------
-  const retry = useRetryTms();
-  const [retryTarget, setRetryTarget] = useState<{
-    orderId: string;
-    idempotencyKey: string;
-  } | null>(null);
-  const [retryError, setRetryError] = useState<string | null>(null);
-
-  const activeMutation =
-    action?.kind === 'pick' ? pick : action?.kind === 'pack' ? pack : ship;
-  const actionPending = pick.isPending || pack.isPending || ship.isPending;
-
-  function openAction(kind: ActionKind, orderId: string) {
-    setActionError(null);
-    setActionConflict(false);
-    // A fresh confirmed attempt → a fresh Idempotency-Key (§ 2.4.5.1
-    // stable-per-action / fresh-per-attempt).
-    setAction({ kind, orderId, idempotencyKey: crypto.randomUUID() });
-  }
-
-  function confirmAction() {
-    if (!action) return;
-    const m =
-      action.kind === 'pick' ? pick : action.kind === 'pack' ? pack : ship;
-    m.mutate(
-      { orderId: action.orderId, idempotencyKey: action.idempotencyKey },
-      {
-        onSuccess: () => {
-          setAction(null);
-          setActionError(null);
-          setActionConflict(false);
-        },
-        onError: (e) => {
-          const code = e instanceof ApiError ? e.code : 'SERVICE_UNAVAILABLE';
-          const status = e instanceof ApiError ? e.status : 0;
-          if (status === 409 && code === 'CONFLICT') {
-            // Optimistic-lock stale version: refetch the order, prompt retry —
-            // NEVER silently auto-retry with a bumped version.
-            drill.refetch();
-            setActionConflict(true);
-            setActionError(messageForCode('CONFLICT'));
-            return;
-          }
-          setActionConflict(false);
-          setActionError(
-            messageForCode(code, '작업을 처리하지 못했습니다.'),
-          );
-        },
-      },
-    );
-  }
-
-  function openCancel(
-    orderId: string,
-    orderLabel: string,
-    status: string | undefined,
-  ) {
-    setCancelError(null);
-    setCancelConflict(false);
-    // A fresh confirmed attempt → a fresh Idempotency-Key.
-    setCancelTarget({
-      orderId,
-      orderLabel,
-      needsAdmin: cancelNeedsAdmin(status),
-      idempotencyKey: crypto.randomUUID(),
-    });
-  }
-
-  function confirmCancel(reason: string) {
-    if (!cancelTarget) return;
-    cancel.mutate(
-      {
-        orderId: cancelTarget.orderId,
-        reason,
-        idempotencyKey: cancelTarget.idempotencyKey,
-      },
-      {
-        onSuccess: () => {
-          setCancelTarget(null);
-          setCancelError(null);
-          setCancelConflict(false);
-        },
-        onError: (e) => {
-          const code = e instanceof ApiError ? e.code : 'SERVICE_UNAVAILABLE';
-          const status = e instanceof ApiError ? e.status : 0;
-          if (status === 409 && code === 'CONFLICT') {
-            // Optimistic-lock stale version → refetch + prompt retry (never a
-            // silent auto-retry).
-            drill.refetch();
-            setCancelConflict(true);
-            setCancelError(messageForCode('CONFLICT'));
-            return;
-          }
-          setCancelConflict(false);
-          setCancelError(cancelErrorMessage(code));
-        },
-      },
-    );
-  }
-
-  function openRetry(orderId: string) {
-    setRetryError(null);
-    // A fresh confirmed attempt → a fresh Idempotency-Key.
-    setRetryTarget({ orderId, idempotencyKey: crypto.randomUUID() });
-  }
-
-  function confirmRetry() {
-    if (!retryTarget) return;
-    retry.mutate(
-      { orderId: retryTarget.orderId, idempotencyKey: retryTarget.idempotencyKey },
-      {
-        onSuccess: () => {
-          // The drill refetch reflects the recovered saga (→ COMPLETED) /
-          // tmsStatus; if it stayed NOT_NOTIFIED the action re-appears.
-          setRetryTarget(null);
-          setRetryError(null);
-        },
-        onError: (e) => {
-          const code = e instanceof ApiError ? e.code : 'SERVICE_UNAVAILABLE';
-          setRetryError(retryTmsErrorMessage(code));
-        },
-      },
-    );
-  }
+  // --- mutation-dialog lifecycles (state + idempotency-key / conflict) ------
+  const refetchDrill = () => {
+    drill.refetch();
+  };
+  const actionDialog = useOutboundActionDialog(refetchDrill);
+  const cancelDialog = useOutboundCancelDialog(refetchDrill);
+  const retryDialog = useOutboundRetryDialog();
 
   function submitStatusFilter(e: React.FormEvent) {
     e.preventDefault();
@@ -287,6 +139,10 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
       drillSagaState === 'CANCELLATION_REQUESTED',
     [drillStatus, drillSagaState],
   );
+
+  const { action } = actionDialog;
+  const { cancelTarget } = cancelDialog;
+  const { retryTarget } = retryDialog;
 
   return (
     <section aria-labelledby="wms-outbound-heading">
@@ -323,13 +179,13 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
           cancelVisible={cancelVisible}
           retryVisible={retryVisible}
           cancelPending={cancelPending}
-          actionPending={actionPending}
-          cancelMutationPending={cancel.isPending}
-          retryMutationPending={retry.isPending}
+          actionPending={actionDialog.actionPending}
+          cancelMutationPending={cancelDialog.cancelPending}
+          retryMutationPending={retryDialog.retryPending}
           onClose={() => setDrillOrderId(null)}
-          onAction={openAction}
-          onCancel={openCancel}
-          onRetry={openRetry}
+          onAction={actionDialog.openAction}
+          onCancel={cancelDialog.openCancel}
+          onRetry={retryDialog.openRetry}
         />
       )}
 
@@ -338,30 +194,22 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
         title={action ? ACTION_COPY[action.kind].title : ''}
         description={action ? ACTION_COPY[action.kind].description : ''}
         confirmLabel={action ? ACTION_COPY[action.kind].confirmLabel : ''}
-        pending={activeMutation.isPending}
-        errorMessage={actionError}
-        conflict={actionConflict}
-        onConfirm={confirmAction}
-        onCancel={() => {
-          setAction(null);
-          setActionError(null);
-          setActionConflict(false);
-        }}
+        pending={actionDialog.activeMutationPending}
+        errorMessage={actionDialog.actionError}
+        conflict={actionDialog.actionConflict}
+        onConfirm={actionDialog.confirmAction}
+        onCancel={actionDialog.closeAction}
       />
 
       <OutboundCancelDialog
         open={cancelTarget !== null}
         orderLabel={cancelTarget?.orderLabel ?? ''}
         needsAdmin={cancelTarget?.needsAdmin ?? false}
-        pending={cancel.isPending}
-        errorMessage={cancelError}
-        conflict={cancelConflict}
-        onConfirm={confirmCancel}
-        onCancel={() => {
-          setCancelTarget(null);
-          setCancelError(null);
-          setCancelConflict(false);
-        }}
+        pending={cancelDialog.cancelPending}
+        errorMessage={cancelDialog.cancelError}
+        conflict={cancelDialog.cancelConflict}
+        onConfirm={cancelDialog.confirmCancel}
+        onCancel={cancelDialog.closeCancel}
       />
 
       {/* TMS retry confirm — reason-free (reuse the generic action dialog). */}
@@ -370,13 +218,10 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
         title="TMS 재전송을 시도할까요?"
         description="택배사(TMS) 통보를 다시 시도합니다. 재고는 이미 차감되어 있고, 통보만 재전송됩니다. 성공하면 saga 가 COMPLETED 로 회복됩니다. 관리자(OUTBOUND_ADMIN) 권한이 필요합니다."
         confirmLabel="TMS 재전송"
-        pending={retry.isPending}
-        errorMessage={retryError}
-        onConfirm={confirmRetry}
-        onCancel={() => {
-          setRetryTarget(null);
-          setRetryError(null);
-        }}
+        pending={retryDialog.retryPending}
+        errorMessage={retryDialog.retryError}
+        onConfirm={retryDialog.confirmRetry}
+        onCancel={retryDialog.closeRetry}
       />
     </section>
   );
