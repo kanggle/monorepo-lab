@@ -1,6 +1,7 @@
 # TASK-PC-FE-216 — ecommerce-ops PromotionForm god-file 분할
 
-**Status:** ready
+**Status:** done
+**Done:** 2026-07-07 · impl PR #2303 squash `2a374df8b` (3-dim verified) — PromotionForm 258→100 + PromotionFormFields.tsx(188 leaf, ids/fields 2-prop 분리), tsc 0·lint 0·vitest 47/47. (ecommerce IT flake 1회 rerun 후 clean)
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving component split
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet 4.6 (단일 폼 borderline god-file — 분할 시리즈 표준 패턴)
 

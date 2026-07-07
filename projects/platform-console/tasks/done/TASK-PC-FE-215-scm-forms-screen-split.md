@@ -1,6 +1,7 @@
 # TASK-PC-FE-215 — SCM god-file 분할 (SupplierMapForm · PolicyForm · ReplenishmentScreen)
 
-**Status:** ready
+**Status:** done
+**Done:** 2026-07-07 · impl PR #2301 squash `e6eb6dfde` (3-dim verified) — SupplierMapForm 283→172·PolicyForm 255→149·ReplenishmentScreen 262→170, hook+공유 leaf, tsc 0·lint 0·vitest 32/32.
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving component split
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (SCM 폼/스크린 3종 — testid/markup/aria 보존)
 
