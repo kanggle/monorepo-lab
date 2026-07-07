@@ -1,14 +1,9 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
-import { ApiError, messageForCode } from '@/shared/api/errors';
-import { usePolicy, useUpsertPolicy } from '../hooks/use-scm-config';
-import {
-  ReorderPolicyInputSchema,
-  type ReorderPolicyInput,
-} from '../api/types';
+import { usePolicyForm } from '../hooks/use-policy-form';
 import { ConfigConfirmDialog } from './ConfigConfirmDialog';
+import { SeedFormStates } from './SeedFormStates';
 import { SeedNumberField } from './SeedNumberField';
 
 /**
@@ -16,117 +11,37 @@ import { SeedNumberField } from './SeedNumberField';
  * (TASK-PC-FE-080 / § 2.4.6.2). 404 = "not configured yet → create" (NOT an
  * error toast); PUT is confirm-gated, full-row, idempotent. Edits affect FUTURE
  * evaluation only.
+ *
+ * The form-model (field state, per-SKU hydration, validation, confirm-gated
+ * upsert) lives in {@link usePolicyForm}; the loading/forbidden/rate-limited/
+ * degraded banner in the shared {@link SeedFormStates} leaf (TASK-PC-FE-215
+ * split). This component keeps the JSX + wiring only.
  */
 
 export interface PolicyFormProps {
   skuCode: string;
 }
 
-interface FieldState {
-  reorderPoint: string;
-  safetyStock: string;
-  reorderQty: string;
-}
-
-const EMPTY_FIELDS: FieldState = {
-  reorderPoint: '',
-  safetyStock: '',
-  reorderQty: '',
-};
-
 export function PolicyForm({ skuCode }: PolicyFormProps) {
-  const reorderPointId = useId();
-  const safetyStockId = useId();
-  const reorderQtyId = useId();
+  const {
+    ids,
+    fields,
+    setFields,
+    fieldErrors,
+    pendingBody,
+    setPendingBody,
+    submitError,
+    isLoading,
+    forbidden,
+    rateLimited,
+    degraded,
+    notConfigured,
+    upsertPending,
+    openConfirm,
+    confirmUpsert,
+  } = usePolicyForm(skuCode);
 
-  const q = usePolicy(skuCode);
-  const upsert = useUpsertPolicy();
-
-  const [fields, setFields] = useState<FieldState>(EMPTY_FIELDS);
-  const [fieldErrors, setFieldErrors] = useState<Partial<FieldState>>({});
-  const [pendingBody, setPendingBody] = useState<ReorderPolicyInput | null>(
-    null,
-  );
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  // Tracks which SKU's row we've hydrated the form from, so re-entering a SKU
-  // re-seeds the inputs from the fetched row (but a user's in-progress edits
-  // are not clobbered on a background refetch of the SAME sku).
-  const [hydratedFor, setHydratedFor] = useState<string | null>(null);
-
-  // Seed the form from the fetched row once per SKU (a found row → its values;
-  // a not-found → blank create form).
-  useEffect(() => {
-    if (q.isSuccess && hydratedFor !== skuCode) {
-      if (q.data.found) {
-        const p = q.data.value;
-        setFields({
-          reorderPoint: p.reorderPoint?.toString() ?? '',
-          safetyStock: p.safetyStock?.toString() ?? '',
-          reorderQty: p.reorderQty?.toString() ?? '',
-        });
-      } else {
-        setFields(EMPTY_FIELDS);
-      }
-      setFieldErrors({});
-      setSubmitError(null);
-      setHydratedFor(skuCode);
-    }
-  }, [q.isSuccess, q.data, skuCode, hydratedFor]);
-
-  const apiError = q.error instanceof ApiError ? (q.error as ApiError) : null;
-  const forbidden = apiError?.status === 403;
-  const rateLimited = apiError?.code === 'RATE_LIMIT_EXCEEDED';
-  const degraded = q.isError && !forbidden && !rateLimited;
-  const notConfigured = q.isSuccess && !q.data.found;
-
-  function openConfirm(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitError(null);
-    const parsed = ReorderPolicyInputSchema.safeParse({
-      reorderPoint: Number(fields.reorderPoint),
-      safetyStock: Number(fields.safetyStock),
-      reorderQty: Number(fields.reorderQty),
-    });
-    if (!parsed.success) {
-      const errs: Partial<FieldState> = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0] as keyof FieldState;
-        if (key) errs[key] = '0 이상의 올바른 정수를 입력하세요.';
-      }
-      // A non-numeric input produces NaN → also a field error.
-      (['reorderPoint', 'safetyStock', 'reorderQty'] as const).forEach((k) => {
-        if (fields[k].trim() === '' || Number.isNaN(Number(fields[k]))) {
-          errs[k] = '0 이상의 올바른 정수를 입력하세요.';
-        }
-      });
-      setFieldErrors(errs);
-      return;
-    }
-    setFieldErrors({});
-    setPendingBody(parsed.data);
-  }
-
-  function confirmUpsert() {
-    if (!pendingBody) return;
-    upsert.mutate(
-      { skuCode, body: pendingBody },
-      {
-        onSuccess: () => {
-          setPendingBody(null);
-          setSubmitError(null);
-        },
-        onError: (err) => {
-          const code = err instanceof ApiError ? err.code : 'SERVICE_UNAVAILABLE';
-          // VALIDATION_ERROR (422) → inline; the entered values are preserved
-          // (we keep `fields` untouched, only close the confirm step).
-          setSubmitError(
-            messageForCode(code, '설정을 저장하지 못했습니다.'),
-          );
-          setPendingBody(null);
-        },
-      },
-    );
-  }
+  const blocked = isLoading || forbidden || rateLimited || degraded;
 
   return (
     <section
@@ -142,35 +57,14 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
         평가에만 반영됩니다.
       </p>
 
-      {q.isLoading ? (
-        <p className="mt-4 text-sm text-muted-foreground" data-testid="policy-loading">
-          불러오는 중…
-        </p>
-      ) : forbidden ? (
-        <p
-          role="status"
-          data-testid="policy-forbidden"
-          className="mt-4 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
-        >
-          {messageForCode('TENANT_FORBIDDEN')}
-        </p>
-      ) : rateLimited ? (
-        <p
-          role="status"
-          data-testid="policy-ratelimited"
-          className="mt-4 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
-        >
-          {messageForCode('RATE_LIMIT_EXCEEDED')}
-        </p>
-      ) : degraded ? (
-        <p
-          role="status"
-          data-testid="policy-degraded"
-          className="mt-4 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
-        >
-          재주문 정책을 일시적으로 불러올 수 없습니다. 콘솔의 다른 기능은 계속
-          사용할 수 있습니다.
-        </p>
+      {blocked ? (
+        <SeedFormStates
+          testidPrefix="policy"
+          isLoading={isLoading}
+          forbidden={forbidden}
+          rateLimited={rateLimited}
+          degradedMessage="재주문 정책을 일시적으로 불러올 수 없습니다. 콘솔의 다른 기능은 계속 사용할 수 있습니다."
+        />
       ) : (
         <>
           {notConfigured && (
@@ -186,7 +80,7 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
 
           <form onSubmit={openConfirm} className="mt-4 grid gap-4">
             <SeedNumberField
-              id={reorderPointId}
+              id={ids.reorderPointId}
               label="재주문점 (reorderPoint)"
               testid="policy-reorderPoint"
               value={fields.reorderPoint}
@@ -196,7 +90,7 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
               }
             />
             <SeedNumberField
-              id={safetyStockId}
+              id={ids.safetyStockId}
               label="안전재고 (safetyStock)"
               testid="policy-safetyStock"
               value={fields.safetyStock}
@@ -204,7 +98,7 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
               onChange={(v) => setFields((f) => ({ ...f, safetyStock: v }))}
             />
             <SeedNumberField
-              id={reorderQtyId}
+              id={ids.reorderQtyId}
               label="재주문 수량 (reorderQty)"
               testid="policy-reorderQty"
               value={fields.reorderQty}
@@ -245,7 +139,7 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
               ]
             : []
         }
-        pending={upsert.isPending}
+        pending={upsertPending}
         errorMessage={null}
         onConfirm={confirmUpsert}
         onCancel={() => setPendingBody(null)}
