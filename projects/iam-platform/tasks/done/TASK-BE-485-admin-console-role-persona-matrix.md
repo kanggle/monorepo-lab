@@ -8,7 +8,7 @@ operator-auth-token-model.md 가이드 § 6 에 "admin-console 롤은 누가 받
 
 # Status
 
-ready
+done
 
 # Owner
 
