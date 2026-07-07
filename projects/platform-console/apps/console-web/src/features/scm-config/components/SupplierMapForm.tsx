@@ -1,18 +1,10 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
-import { ApiError, messageForCode } from '@/shared/api/errors';
-import {
-  useSupplierMap,
-  useUpsertSupplierMap,
-} from '../hooks/use-scm-config';
-import {
-  SupplierMapInputSchema,
-  type SupplierMapInput,
-  COMMON_CURRENCIES,
-} from '../api/types';
+import { useSupplierMapForm } from '../hooks/use-supplier-map-form';
+import { COMMON_CURRENCIES } from '../api/types';
 import { ConfigConfirmDialog } from './ConfigConfirmDialog';
+import { SeedFormStates } from './SeedFormStates';
 import { SeedNumberField } from './SeedNumberField';
 import { SeedTextField } from './SeedTextField';
 
@@ -24,119 +16,37 @@ import { SeedTextField } from './SeedTextField';
  * PUT is confirm-gated, full-row, idempotent. `supplierId` is FREE-TEXT/uuid (no
  * supplier master in v1 — validate shape only). Edits affect FUTURE evaluation
  * only.
+ *
+ * The form-model (field state, per-SKU hydration, validation, confirm-gated
+ * upsert) lives in {@link useSupplierMapForm}; the loading/forbidden/rate-limited/
+ * degraded banner in the shared {@link SeedFormStates} leaf (TASK-PC-FE-215
+ * split). This component keeps the JSX + wiring only.
  */
 
 export interface SupplierMapFormProps {
   skuCode: string;
 }
 
-interface FieldState {
-  supplierId: string;
-  defaultOrderQty: string;
-  leadTimeDays: string;
-  currency: string;
-}
-
-const EMPTY_FIELDS: FieldState = {
-  supplierId: '',
-  defaultOrderQty: '',
-  leadTimeDays: '',
-  currency: 'KRW',
-};
-
 export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
-  const supplierIdId = useId();
-  const defaultOrderQtyId = useId();
-  const leadTimeDaysId = useId();
-  const currencyId = useId();
+  const {
+    ids,
+    fields,
+    setFields,
+    fieldErrors,
+    pendingBody,
+    setPendingBody,
+    submitError,
+    isLoading,
+    forbidden,
+    rateLimited,
+    degraded,
+    notConfigured,
+    upsertPending,
+    openConfirm,
+    confirmUpsert,
+  } = useSupplierMapForm(skuCode);
 
-  const q = useSupplierMap(skuCode);
-  const upsert = useUpsertSupplierMap();
-
-  const [fields, setFields] = useState<FieldState>(EMPTY_FIELDS);
-  const [fieldErrors, setFieldErrors] = useState<Partial<FieldState>>({});
-  const [pendingBody, setPendingBody] = useState<SupplierMapInput | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [hydratedFor, setHydratedFor] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (q.isSuccess && hydratedFor !== skuCode) {
-      if (q.data.found) {
-        const m = q.data.value;
-        setFields({
-          supplierId: m.supplierId ?? '',
-          defaultOrderQty: m.defaultOrderQty?.toString() ?? '',
-          leadTimeDays: m.leadTimeDays?.toString() ?? '',
-          currency: m.currency ?? 'KRW',
-        });
-      } else {
-        setFields(EMPTY_FIELDS);
-      }
-      setFieldErrors({});
-      setSubmitError(null);
-      setHydratedFor(skuCode);
-    }
-  }, [q.isSuccess, q.data, skuCode, hydratedFor]);
-
-  const apiError = q.error instanceof ApiError ? (q.error as ApiError) : null;
-  const forbidden = apiError?.status === 403;
-  const rateLimited = apiError?.code === 'RATE_LIMIT_EXCEEDED';
-  const degraded = q.isError && !forbidden && !rateLimited;
-  const notConfigured = q.isSuccess && !q.data.found;
-
-  function openConfirm(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitError(null);
-    const parsed = SupplierMapInputSchema.safeParse({
-      supplierId: fields.supplierId,
-      defaultOrderQty: Number(fields.defaultOrderQty),
-      leadTimeDays: Number(fields.leadTimeDays),
-      currency: fields.currency,
-    });
-    if (!parsed.success) {
-      const errs: Partial<FieldState> = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0] as keyof FieldState;
-        if (key) {
-          errs[key] =
-            key === 'supplierId'
-              ? '공급사 ID 를 입력하세요 (free-text/uuid).'
-              : key === 'currency'
-                ? '3자리 통화 코드를 입력하세요 (예: KRW).'
-                : '0 이상의 올바른 정수를 입력하세요.';
-        }
-      }
-      (['defaultOrderQty', 'leadTimeDays'] as const).forEach((k) => {
-        if (fields[k].trim() === '' || Number.isNaN(Number(fields[k]))) {
-          errs[k] = '0 이상의 올바른 정수를 입력하세요.';
-        }
-      });
-      setFieldErrors(errs);
-      return;
-    }
-    setFieldErrors({});
-    setPendingBody({ ...parsed.data, currency: parsed.data.currency.toUpperCase() });
-  }
-
-  function confirmUpsert() {
-    if (!pendingBody) return;
-    upsert.mutate(
-      { skuCode, body: pendingBody },
-      {
-        onSuccess: () => {
-          setPendingBody(null);
-          setSubmitError(null);
-        },
-        onError: (err) => {
-          const code = err instanceof ApiError ? err.code : 'SERVICE_UNAVAILABLE';
-          setSubmitError(
-            messageForCode(code, '매핑을 저장하지 못했습니다.'),
-          );
-          setPendingBody(null);
-        },
-      },
-    );
-  }
+  const blocked = isLoading || forbidden || rateLimited || degraded;
 
   return (
     <section
@@ -153,35 +63,14 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
         (<code>SKU_SUPPLIER_UNMAPPED</code>) 여기서 매핑을 추가합니다.
       </p>
 
-      {q.isLoading ? (
-        <p className="mt-4 text-sm text-muted-foreground" data-testid="map-loading">
-          불러오는 중…
-        </p>
-      ) : forbidden ? (
-        <p
-          role="status"
-          data-testid="map-forbidden"
-          className="mt-4 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
-        >
-          {messageForCode('TENANT_FORBIDDEN')}
-        </p>
-      ) : rateLimited ? (
-        <p
-          role="status"
-          data-testid="map-ratelimited"
-          className="mt-4 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
-        >
-          {messageForCode('RATE_LIMIT_EXCEEDED')}
-        </p>
-      ) : degraded ? (
-        <p
-          role="status"
-          data-testid="map-degraded"
-          className="mt-4 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
-        >
-          공급사 매핑을 일시적으로 불러올 수 없습니다. 콘솔의 다른 기능은 계속
-          사용할 수 있습니다.
-        </p>
+      {blocked ? (
+        <SeedFormStates
+          testidPrefix="map"
+          isLoading={isLoading}
+          forbidden={forbidden}
+          rateLimited={rateLimited}
+          degradedMessage="공급사 매핑을 일시적으로 불러올 수 없습니다. 콘솔의 다른 기능은 계속 사용할 수 있습니다."
+        />
       ) : (
         <>
           {notConfigured && (
@@ -197,7 +86,7 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
 
           <form onSubmit={openConfirm} className="mt-4 grid gap-4">
             <SeedTextField
-              id={supplierIdId}
+              id={ids.supplierIdId}
               label="공급사 ID (supplierId · free-text/uuid)"
               testid="map-supplierId"
               value={fields.supplierId}
@@ -206,7 +95,7 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
             />
 
             <SeedNumberField
-              id={defaultOrderQtyId}
+              id={ids.defaultOrderQtyId}
               label="기본 발주 수량 (defaultOrderQty)"
               testid="map-defaultOrderQty"
               value={fields.defaultOrderQty}
@@ -216,7 +105,7 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
               }
             />
             <SeedNumberField
-              id={leadTimeDaysId}
+              id={ids.leadTimeDaysId}
               label="리드타임 (leadTimeDays)"
               testid="map-leadTimeDays"
               value={fields.leadTimeDays}
@@ -225,7 +114,7 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
             />
 
             <SeedTextField
-              id={currencyId}
+              id={ids.currencyId}
               label="통화 (currency)"
               testid="map-currency"
               value={fields.currency}
@@ -273,7 +162,7 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
               ]
             : []
         }
-        pending={upsert.isPending}
+        pending={upsertPending}
         errorMessage={null}
         onConfirm={confirmUpsert}
         onCancel={() => setPendingBody(null)}
