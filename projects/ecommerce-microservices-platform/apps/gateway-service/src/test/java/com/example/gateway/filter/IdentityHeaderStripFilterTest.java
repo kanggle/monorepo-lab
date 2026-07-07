@@ -20,7 +20,7 @@ class IdentityHeaderStripFilterTest {
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/orders/123")
                 .header("X-User-Id", "client-injected-id")
                 .header("X-User-Email", "forged@example.com")
-                .header("X-User-Role", "ADMIN")
+                .header("X-User-Role", "ECOMMERCE_OPERATOR")
                 .header("X-Account-Type", "OPERATOR")
                 .header("X-Tenant-Id", "forged-tenant")
                 .header("Authorization", "Bearer xyz")

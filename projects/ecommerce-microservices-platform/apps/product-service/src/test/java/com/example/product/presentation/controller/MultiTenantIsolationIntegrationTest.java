@@ -95,7 +95,7 @@ class MultiTenantIsolationIntegrationTest {
 
     private String registerProduct(String tenantId, String name) throws Exception {
         var request = post("/api/admin/products")
-                .header(ROLE_HEADER, "ADMIN")
+                .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(productBody(name));
         // tenantId == null models the standalone/pre-multi-tenant path: no header
@@ -150,7 +150,7 @@ class MultiTenantIsolationIntegrationTest {
     void operatorPlaneRead_isScopedToTenant() throws Exception {
         // The new operator-overview snapshot leg (TASK-MONO-243) calls
         // GET /api/admin/products?page=0&size=1 — its totalElements must honour
-        // the same repo WHERE tenant_id chokepoint (no ADMIN role required).
+        // the same repo WHERE tenant_id chokepoint (no ECOMMERCE_OPERATOR role required).
         String idA = registerProduct(TENANT_A, "운영자평면 격리 A");
 
         // tenant B context — the new read must NOT count / surface tenant A's product.
@@ -186,7 +186,7 @@ class MultiTenantIsolationIntegrationTest {
 
         // tenant B's update targets an id it cannot see → 404 (row unreachable).
         mockMvc.perform(patch("/api/admin/products/{id}", idA)
-                        .header(ROLE_HEADER, "ADMIN")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                         .header(TENANT_HEADER, TENANT_B)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"탈취 시도\"}"))

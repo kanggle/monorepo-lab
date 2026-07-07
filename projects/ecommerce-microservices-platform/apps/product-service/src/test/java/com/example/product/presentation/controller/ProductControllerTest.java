@@ -203,7 +203,7 @@ class ProductControllerTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated());
@@ -232,7 +232,7 @@ class ProductControllerTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
@@ -251,7 +251,7 @@ class ProductControllerTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
@@ -276,7 +276,7 @@ class ProductControllerTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated())
@@ -297,7 +297,7 @@ class ProductControllerTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())

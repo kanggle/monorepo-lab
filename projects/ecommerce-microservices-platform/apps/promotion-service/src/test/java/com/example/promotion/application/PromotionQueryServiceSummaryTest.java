@@ -52,7 +52,7 @@ class PromotionQueryServiceSummaryTest {
         given(promotionRepository.countAllForTenant()).willReturn(0L);
         given(promotionRepository.countCreatedBetween(any(), any())).willReturn(0L);
 
-        PeriodSummary result = service.getPeriodSummary("ADMIN");
+        PeriodSummary result = service.getPeriodSummary("ECOMMERCE_OPERATOR");
 
         assertThat(result.total()).isZero();
         assertThat(result.today()).isZero();
@@ -76,7 +76,7 @@ class PromotionQueryServiceSummaryTest {
                 .willReturn(4L)   // week call  (weekStart, now)
                 .willReturn(4L);  // month call (monthStart, now)
 
-        PeriodSummary result = service.getPeriodSummary("ADMIN");
+        PeriodSummary result = service.getPeriodSummary("ECOMMERCE_OPERATOR");
 
         assertThat(result.total()).isEqualTo(5L);
         assertThat(result.today()).isEqualTo(2L);

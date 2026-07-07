@@ -29,12 +29,12 @@ class SearchAdminControllerTest {
     // ─── POST /api/search/admin/reindex ─────────────────────────────────
 
     @Test
-    @DisplayName("reindex - ADMIN 역할 시 200 반환")
+    @DisplayName("reindex - ECOMMERCE_OPERATOR 역할 시 200 반환")
     void reindex_adminRole_returns200() throws Exception {
         given(reindexAllUseCase.reindexAll(anyInt())).willReturn(42);
 
         mockMvc.perform(post("/api/search/admin/reindex")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.indexed").value(42));
     }
@@ -60,7 +60,7 @@ class SearchAdminControllerTest {
     @DisplayName("reindex - batchSize 0 이하 시 400 반환")
     void reindex_invalidBatchSize_returns400() throws Exception {
         mockMvc.perform(post("/api/search/admin/reindex")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .param("batchSize", "0"))
                 .andExpect(status().isBadRequest());
     }
@@ -68,28 +68,28 @@ class SearchAdminControllerTest {
     // ─── Multi-value X-User-Role (BE-393) ─────────────────────────────────
 
     @Test
-    @DisplayName("reindex - 멀티롤 헤더에 ADMIN 포함 시 200 (multi-domain operator)")
+    @DisplayName("reindex - 멀티롤 헤더에 ECOMMERCE_OPERATOR 포함 시 200 (multi-domain operator)")
     void reindex_multiRoleHeaderContainingAdmin_returns200() throws Exception {
         given(reindexAllUseCase.reindexAll(anyInt())).willReturn(10);
 
         mockMvc.perform(post("/api/search/admin/reindex")
-                        .header("X-User-Role", "ADMIN,ERP_OPERATOR,SCM_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.indexed").value(10));
     }
 
     @Test
-    @DisplayName("reindex - ADMIN만 있는 단일 롤 헤더 200 (회귀 방지)")
+    @DisplayName("reindex - ECOMMERCE_OPERATOR만 있는 단일 롤 헤더 200 (회귀 방지)")
     void reindex_singleAdminRole_returns200_regressionGuard() throws Exception {
         given(reindexAllUseCase.reindexAll(anyInt())).willReturn(5);
 
         mockMvc.perform(post("/api/search/admin/reindex")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("reindex - ADMIN 없는 멀티롤은 403")
+    @DisplayName("reindex - ECOMMERCE_OPERATOR 없는 멀티롤은 403")
     void reindex_multiRoleWithoutAdmin_returns403() throws Exception {
         mockMvc.perform(post("/api/search/admin/reindex")
                         .header("X-User-Role", "SCM_OPERATOR,ERP_OPERATOR"))

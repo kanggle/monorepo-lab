@@ -34,9 +34,9 @@ Step 2(product/order row-level `tenant_id` M1), Step 3(seller 축 TASK-BE-363), 
 |---|---|---|---|---|
 | **바깥 — tenant** | Shopify식 멀티테넌트 SaaS | `tenant_id` | 격리(isolation) | **재사용** — 플랫폼 federation 의 6번째 entitlement-trust 도메인 ([ADR-019](../../../../docs/adr/ADR-MONO-019-platform-console-customer-tenant-model.md) D5 진화를 ecommerce 에 적용; scm/erp 가 선례) |
 | **안쪽 — seller** | 쿠팡식 마켓플레이스(멀티벤더) | `seller_id` | 공유 + 참여자 귀속 | **net-new** — ecommerce-local `seller` 애그리거트 (`marketplace` 스코프, PROJECT.md 가 드롭했던 것) |
-| **평면 — roles** | 소비자/운영자 분리 | `roles` (소비자 `CUSTOMER` / 운영자 `ADMIN`) | 이미 존재 | **재사용** — IAM 발급 + gateway `AccountTypeEnforcementFilter` roles-only 강제 (TASK-BE-131; ADR-MONO-032/035 가 레거시 `account_type` 평면을 roles 로 대체) |
+| **평면 — roles** | 소비자/운영자 분리 | `roles` (소비자 `CUSTOMER` / 운영자 `ECOMMERCE_OPERATOR`) | 이미 존재 | **재사용** — IAM 발급 + gateway `AccountTypeEnforcementFilter` roles-only 강제 (TASK-BE-131; ADR-MONO-032/035 가 레거시 `account_type` 평면을 roles 로 대체) |
 
-**복합 신원 = `tenant_id`(어느 스토어) × `roles`(소비자 `CUSTOMER` / 운영자 `ADMIN`) × `seller_id`(어느 셀러; 운영자 평면 한정).**
+**복합 신원 = `tenant_id`(어느 스토어) × `roles`(소비자 `CUSTOMER` / 운영자 `ECOMMERCE_OPERATOR`) × `seller_id`(어느 셀러; 운영자 평면 한정).**
 중첩: `platform → tenant A(격리) → marketplace A → {seller a1, a2, …}`. 바깥축=격리, 안쪽축=한 테넌트 내부에서 공유 카탈로그/고객풀에 셀러 귀속.
 
 ---
@@ -47,7 +47,7 @@ Step 2(product/order row-level `tenant_id` M1), Step 3(seller 축 TASK-BE-363), 
 |---|---|---|
 | gateway `TenantClaimValidator` | **고정 슬러그** `tenant_id == 'ecommerce'` 만 통과 (ADR-019 *"before"* 상태) — [iam-integration.md](../integration/iam-integration.md) §Token 검증 §5 | **entitlement-trust** — JWKS 검증된 GAP/IAM 토큰의 임의 `tenant_id` 수용, row 로 격리 (ADR-019 D5) |
 | product/order 데이터 | `tenant_id` **없음** (모든 row = 암묵적 단일 스토어) | 모든 영속 row 에 `tenant_id` (M1) + `seller_id`(소유/귀속) |
-| 평면 | `roles` (소비자 `CUSTOMER` / 운영자 `ADMIN`) **이미 존재** (IAM 발급, gateway 강제) | 변경 없음 (재사용). 셀러 = 운영자(`ADMIN`) 평면 내부 `seller_id` |
+| 평면 | `roles` (소비자 `CUSTOMER` / 운영자 `ECOMMERCE_OPERATOR`) **이미 존재** (IAM 발급, gateway 강제) | 변경 없음 (재사용). 셀러 = 운영자(`ECOMMERCE_OPERATOR`) 평면 내부 `seller_id` |
 | 셀러 | 단일 판매자 (암묵) | `seller` 애그리거트 + `seller_id` (Step 3) |
 | `tenant_domain_subscription` | `domain_key='ecommerce'` **행 없음** | 행 추가 (콘솔 카탈로그가 ecommerce 를 구독 가능 도메인으로 렌더 — Step 4) |
 
@@ -117,10 +117,10 @@ M7 의 두 facet 을 **gateway-edge** (M2 layer-1) 에서 실현:
 | 평면 | roles | 경로 | 신원 권위 |
 |---|---|---|---|
 | 소비자(shopper) | `roles ∋ CUSTOMER` | `/api/**` | IAM (self-service signup) |
-| 운영자/셀러-어드민 | `roles ∋ ADMIN` | `/api/admin/**` | IAM (assume-tenant 도메인 롤 파생, ADR-035 4a) |
+| 운영자/셀러-어드민 | `roles ∋ ECOMMERCE_OPERATOR` | `/api/admin/**` | IAM (assume-tenant 도메인 롤 파생, ADR-035 4a) |
 
-- **단일 IdP(IAM), 평면 2개 = `roles` (`CUSTOMER` / `ADMIN`)**. 별도 ecommerce auth-service 아님 (auth-service 는 제거됨, TASK-BE-132).
-- **셀러 축은 운영자(`ADMIN`) 평면 내부**: `seller_id` 는 운영자 토큰/스코프에만 의미 있음. 소비자(`CUSTOMER`)는 `seller_id` 권위 없음(상품을 *볼* 뿐, 셀러로서 행위 불가).
+- **단일 IdP(IAM), 평면 2개 = `roles` (`CUSTOMER` / `ECOMMERCE_OPERATOR`)**. 별도 ecommerce auth-service 아님 (auth-service 는 제거됨, TASK-BE-132).
+- **셀러 축은 운영자(`ECOMMERCE_OPERATOR`) 평면 내부**: `seller_id` 는 운영자 토큰/스코프에만 의미 있음. 소비자(`CUSTOMER`)는 `seller_id` 권위 없음(상품을 *볼* 뿐, 셀러로서 행위 불가).
 - 소비자 주문은 여러 셀러 상품에 걸칠 수 있으나, 소비자 자신은 셀러가 아님 — `seller_id` 는 상품/주문항목의 **귀속 속성**이지 소비자 신원이 아니다.
 
 ---

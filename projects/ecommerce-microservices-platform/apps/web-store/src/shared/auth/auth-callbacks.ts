@@ -21,7 +21,7 @@ export interface IamOidcProfile {
 
 /**
  * ADR-MONO-035 (4b-1): the storefront requires the `CUSTOMER` role. Consumers
- * carry it; operators carry `ADMIN` / no `CUSTOMER`. Role-based replaces the
+ * carry it; operators carry `ECOMMERCE_OPERATOR` / no `CUSTOMER`. Role-based replaces the
  * legacy `account_type === 'CONSUMER'` check (ADR-MONO-032 D5 step 4 removes
  * `account_type`).
  */

@@ -151,7 +151,7 @@ class FulfillmentIntegrationTest {
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .put("/api/shippings/" + shippingId + "/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status":"SHIPPED","trackingNumber":"TRK-MC-1","carrier":"CJ대한통운","deductWmsInventory":true}
@@ -189,7 +189,7 @@ class FulfillmentIntegrationTest {
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .put("/api/shippings/" + shippingId + "/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status":"SHIPPED","trackingNumber":"TRK-MCOFF-1","carrier":"CJ대한통운"}

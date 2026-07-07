@@ -37,13 +37,13 @@ class AdminSellerSummaryControllerTest {
     private RegisterSellerService registerSellerService;
 
     @Test
-    @DisplayName("GET /api/admin/sellers/summary - ADMIN 헤더로 셀러 없을 때 모든 필드 0")
+    @DisplayName("GET /api/admin/sellers/summary - ECOMMERCE_OPERATOR 헤더로 셀러 없을 때 모든 필드 0")
     void summary_empty_allZeros() throws Exception {
         given(sellerQueryService.getPeriodSummary())
                 .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
         mockMvc.perform(get("/api/admin/sellers/summary")
-                        .header(ROLE_HEADER, "ADMIN"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.today").value(0))
                 .andExpect(jsonPath("$.week").value(0))
@@ -58,7 +58,7 @@ class AdminSellerSummaryControllerTest {
                 .willReturn(new PeriodSummary(1L, 1L, 1L, 3L));
 
         mockMvc.perform(get("/api/admin/sellers/summary")
-                        .header(ROLE_HEADER, "ADMIN"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.today").value(1))
                 .andExpect(jsonPath("$.week").value(1))
@@ -67,7 +67,7 @@ class AdminSellerSummaryControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/admin/sellers/summary - 비-ADMIN 역할은 403")
+    @DisplayName("GET /api/admin/sellers/summary - 비-ECOMMERCE_OPERATOR 역할은 403")
     void summary_nonAdmin_returns403() throws Exception {
         mockMvc.perform(get("/api/admin/sellers/summary")
                         .header(ROLE_HEADER, "USER"))
@@ -84,13 +84,13 @@ class AdminSellerSummaryControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/admin/sellers/summary - 멀티롤 헤더에 ADMIN 포함 시 200")
+    @DisplayName("GET /api/admin/sellers/summary - 멀티롤 헤더에 ECOMMERCE_OPERATOR 포함 시 200")
     void summary_multiRoleContainingAdmin_returns200() throws Exception {
         given(sellerQueryService.getPeriodSummary())
                 .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
         mockMvc.perform(get("/api/admin/sellers/summary")
-                        .header(ROLE_HEADER, "ADMIN,ERP_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ERP_OPERATOR"))
                 .andExpect(status().isOk());
     }
 }

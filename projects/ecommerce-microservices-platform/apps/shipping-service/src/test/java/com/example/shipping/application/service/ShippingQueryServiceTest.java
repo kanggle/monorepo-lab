@@ -76,7 +76,7 @@ class ShippingQueryServiceTest {
         PageQuery pageQuery = new PageQuery(0, 20, "createdAt", "DESC");
         given(shippingRepository.findAll(pageQuery)).willReturn(page);
 
-        PageResult<ShippingSummary> result = shippingQueryService.listShippings("ADMIN", null, pageQuery);
+        PageResult<ShippingSummary> result = shippingQueryService.listShippings("ECOMMERCE_OPERATOR", null, pageQuery);
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.totalElements()).isEqualTo(1);
@@ -89,7 +89,7 @@ class ShippingQueryServiceTest {
         PageQuery pageQuery = new PageQuery(0, 20, "createdAt", "DESC");
         given(shippingRepository.findByStatus(ShippingStatus.SHIPPED, pageQuery)).willReturn(page);
 
-        PageResult<ShippingSummary> result = shippingQueryService.listShippings("ADMIN", ShippingStatus.SHIPPED, pageQuery);
+        PageResult<ShippingSummary> result = shippingQueryService.listShippings("ECOMMERCE_OPERATOR", ShippingStatus.SHIPPED, pageQuery);
 
         assertThat(result.content()).isEmpty();
     }

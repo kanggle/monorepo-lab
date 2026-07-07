@@ -53,7 +53,7 @@ class SettlementControllerTest {
         given(queryService.listAccruals(any(), any(), any()))
                 .willReturn(new PageResult<>(List.of(a), 0, 20, 1L, 1));
 
-        mockMvc.perform(get("/api/admin/settlements/accruals").header("X-User-Role", "ADMIN"))
+        mockMvc.perform(get("/api/admin/settlements/accruals").header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].accrualId").value("a1"))
                 .andExpect(jsonPath("$.items[0].type").value("ACCRUAL"))
@@ -74,7 +74,7 @@ class SettlementControllerTest {
                 .willThrow(new SellerScopeForbiddenException("seller-2"));
 
         mockMvc.perform(get("/api/admin/settlements/accruals")
-                        .header("X-User-Role", "ADMIN").param("sellerId", "seller-2"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR").param("sellerId", "seller-2"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SETTLEMENT_NOT_FOUND"));
     }
@@ -87,7 +87,7 @@ class SettlementControllerTest {
                 .willReturn(new SellerBalance("seller-1", 27_000L, 3_000L, 30_000L, 1L));
 
         mockMvc.perform(get("/api/admin/settlements/sellers/seller-1/balance")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sellerId").value("seller-1"))
                 .andExpect(jsonPath("$.accruedNetMinor").value(27000))
@@ -100,7 +100,7 @@ class SettlementControllerTest {
                 .willThrow(new SellerScopeForbiddenException("seller-2"));
 
         mockMvc.perform(get("/api/admin/settlements/sellers/seller-2/balance")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SETTLEMENT_NOT_FOUND"));
     }
@@ -113,7 +113,7 @@ class SettlementControllerTest {
                 .willReturn(CommissionRate.platformDefault(0));
 
         mockMvc.perform(get("/api/admin/settlements/commission-rates/seller-1")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sellerId").value("seller-1"))
                 .andExpect(jsonPath("$.rateBps").value(0))
@@ -126,7 +126,7 @@ class SettlementControllerTest {
                 .willReturn(CommissionRate.sellerOverride(1200));
 
         mockMvc.perform(put("/api/admin/settlements/commission-rates/seller-1")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"rateBps": 1200}
@@ -142,7 +142,7 @@ class SettlementControllerTest {
                 .when(rateAdminService).setRate(eq("seller-1"), eq(10_001));
 
         mockMvc.perform(put("/api/admin/settlements/commission-rates/seller-1")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"rateBps": 10001}
@@ -154,7 +154,7 @@ class SettlementControllerTest {
     @Test
     void setRate_missingBody_returns400() throws Exception {
         mockMvc.perform(put("/api/admin/settlements/commission-rates/seller-1")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -180,7 +180,7 @@ class SettlementControllerTest {
                 .willReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
 
         mockMvc.perform(get("/api/admin/settlements/accruals")
-                        .header("X-User-Role", "ADMIN,ERP_OPERATOR,SCM_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR"))
                 .andExpect(status().isOk());
     }
 
@@ -190,7 +190,7 @@ class SettlementControllerTest {
                 .willReturn(new PageResult<>(List.of(), 0, 20, 0L, 0));
 
         mockMvc.perform(get("/api/admin/settlements/accruals")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk());
     }
 

@@ -116,7 +116,7 @@ class ShippingIntegrationTest {
                 """;
 
         mockMvc.perform(put("/api/shippings/" + shippingId + "/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody))
                 .andExpect(status().isOk())
@@ -141,7 +141,7 @@ class ShippingIntegrationTest {
 
         // PREPARING -> SHIPPED
         mockMvc.perform(put("/api/shippings/" + shippingId + "/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "SHIPPED", "trackingNumber": "TRK-999", "carrier": "한진택배"}
@@ -150,7 +150,7 @@ class ShippingIntegrationTest {
 
         // SHIPPED -> IN_TRANSIT
         mockMvc.perform(put("/api/shippings/" + shippingId + "/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "IN_TRANSIT"}
@@ -159,7 +159,7 @@ class ShippingIntegrationTest {
 
         // IN_TRANSIT -> DELIVERED
         mockMvc.perform(put("/api/shippings/" + shippingId + "/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "DELIVERED"}
@@ -194,7 +194,7 @@ class ShippingIntegrationTest {
 
         // PREPARING -> SHIPPED
         mockMvc.perform(put("/api/shippings/" + shippingId + "/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "SHIPPED", "trackingNumber": "TRK-111", "carrier": "롯데택배"}
@@ -203,7 +203,7 @@ class ShippingIntegrationTest {
 
         // SHIPPED -> PREPARING (역방향)
         mockMvc.perform(put("/api/shippings/" + shippingId + "/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "PREPARING"}
@@ -244,7 +244,7 @@ class ShippingIntegrationTest {
         orderConfirmedEventConsumer.onMessage(buildOrderConfirmedEventJson(orderId, userId));
 
         mockMvc.perform(get("/api/shippings")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .param("page", "0")
                         .param("size", "20"))
                 .andExpect(status().isOk())
@@ -298,7 +298,7 @@ class ShippingIntegrationTest {
                 .get("shippingId").asText();
 
         mockMvc.perform(put("/api/shippings/" + shippingId + "/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "SHIPPED"}

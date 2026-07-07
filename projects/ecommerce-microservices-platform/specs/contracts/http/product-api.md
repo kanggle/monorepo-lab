@@ -4,7 +4,7 @@
 Published HTTP API for product-service.
 All endpoints are accessible through gateway-service only.
 Public endpoints (`/api/products/**`) do not require authentication.
-All `/api/admin/products/**` endpoints — the operator-plane **read** `GET /api/admin/products` (TASK-MONO-243) and the **write** endpoints (POST/PATCH/DELETE) — are gated at the gateway by `roles ∋ ADMIN` + non-blank `tenant_id` (entitlement-trust). The platform-console operator obtains the `ADMIN` domain role via the ADR-MONO-035 4a assume-tenant derivation (ecommerce-entitled tenant → `ADMIN`); the service applies no additional ecommerce-local RBAC — the gateway is the single admission point. (ADR-MONO-035 4b removed the legacy `account_type=OPERATOR` gateway leg; `roles`-only admission is uniform across `/api/admin/**`.)
+All `/api/admin/products/**` endpoints — the operator-plane **read** `GET /api/admin/products` (TASK-MONO-243) and the **write** endpoints (POST/PATCH/DELETE) — are gated at the gateway by `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id` (entitlement-trust). The platform-console operator obtains the `ECOMMERCE_OPERATOR` domain role via the ADR-MONO-035 4a assume-tenant derivation (ecommerce-entitled tenant → `ECOMMERCE_OPERATOR`); the service applies no additional ecommerce-local RBAC — the gateway is the single admission point. (ADR-MONO-035 4b removed the legacy `account_type=OPERATOR` gateway leg; `roles`-only admission is uniform across `/api/admin/**`.)
 
 ---
 
@@ -89,11 +89,11 @@ read behind the platform-console Operator Overview ecommerce snapshot leg
 }
 ```
 
-**Authorization**: gateway **entitlement-trust + `roles ∋ ADMIN`**
-(the gateway's `AccountTypeEnforcementFilter` requires `ADMIN` for
+**Authorization**: gateway **entitlement-trust + `roles ∋ ECOMMERCE_OPERATOR`**
+(the gateway's `AccountTypeEnforcementFilter` requires `ECOMMERCE_OPERATOR` for
 `/api/admin/**`, and `TenantClaimValidator` requires a non-blank `tenant_id`).
-The platform-console operator carries the `ADMIN` domain role via the
-ADR-MONO-035 4a assume-tenant derivation (ecommerce-entitled tenant → `ADMIN`);
+The platform-console operator carries the `ECOMMERCE_OPERATOR` domain role via the
+ADR-MONO-035 4a assume-tenant derivation (ecommerce-entitled tenant → `ECOMMERCE_OPERATOR`);
 the service applies **no additional ecommerce-local RBAC** — the gateway is the
 single admission point for both this read and the write endpoints. (ADR-MONO-035 4b
 removed the legacy `account_type=OPERATOR` gateway leg; `roles`-only admission is
@@ -242,7 +242,7 @@ deactivated. Requires admin role. Idempotent + null-safe. **Response 204**.
 ### DELETE /api/admin/products/{productId}
 Delete a product (soft-delete). Requires admin role.
 
-**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id` (entitlement-trust). Service applies no additional ecommerce-local RBAC.
+**Authorization**: gateway `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id` (entitlement-trust). Service applies no additional ecommerce-local RBAC.
 
 **Response 204** (no body)
 
@@ -257,7 +257,7 @@ Delete a product (soft-delete). Requires admin role.
 ### POST /api/admin/products/{productId}/variants
 Add a variant to an existing product. Requires admin role.
 
-**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
+**Authorization**: gateway `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
 
 **Request Body**
 ```json
@@ -290,7 +290,7 @@ Add a variant to an existing product. Requires admin role.
 ### PATCH /api/admin/products/{productId}/variants/{variantId}
 Update a variant's option name and additional price. Requires admin role.
 
-**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
+**Authorization**: gateway `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
 
 **Request Body**
 ```json
@@ -323,7 +323,7 @@ Update a variant's option name and additional price. Requires admin role.
 ### DELETE /api/admin/products/{productId}/variants/{variantId}
 Remove a variant from a product. Requires admin role.
 
-**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
+**Authorization**: gateway `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
 
 **Response 204** (no body)
 
@@ -339,7 +339,7 @@ Remove a variant from a product. Requires admin role.
 ### GET /api/admin/products/{productId}/images
 List all images for a product on the operator plane, sorted by `sortOrder` ascending. Requires admin role.
 
-**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
+**Authorization**: gateway `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id`. Service applies no additional ecommerce-local RBAC.
 
 **Response 200**
 ```json
@@ -368,7 +368,7 @@ List all images for a product on the operator plane, sorted by `sortOrder` ascen
 ### GET /api/admin/sellers
 Tenant-scoped paged list of sellers (ADR-MONO-030 Step 4 facet f). Requires admin role.
 
-**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. The controller also validates `X-User-Role: ADMIN`. Service applies no additional ecommerce-local RBAC.
+**Authorization**: gateway `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id`. The controller also validates `X-User-Role: ECOMMERCE_OPERATOR`. Service applies no additional ecommerce-local RBAC.
 
 **Query Parameters**
 - `page` (default: 0) — page number
@@ -402,7 +402,7 @@ Tenant-scoped paged list of sellers (ADR-MONO-030 Step 4 facet f). Requires admi
 ### GET /api/admin/sellers/{sellerId}
 Tenant-scoped seller detail (ADR-MONO-030 Step 4 facet f). Requires admin role.
 
-**Authorization**: gateway `roles ∋ ADMIN` + non-blank `tenant_id`. The controller also validates `X-User-Role: ADMIN`. A cross-tenant or missing `sellerId` returns 404.
+**Authorization**: gateway `roles ∋ ECOMMERCE_OPERATOR` + non-blank `tenant_id`. The controller also validates `X-User-Role: ECOMMERCE_OPERATOR`. A cross-tenant or missing `sellerId` returns 404.
 
 **Response 200**
 ```json

@@ -111,7 +111,7 @@ class SellerAdminReadCrossTenantIsolationIntegrationTest {
                 { "sellerId": "%s", "displayName": "%s" }
                 """.formatted(sellerId, displayName);
         mockMvc.perform(post("/api/admin/sellers")
-                        .header(ROLE_HEADER, "ADMIN")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                         .header(TENANT_HEADER, tenantId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -126,7 +126,7 @@ class SellerAdminReadCrossTenantIsolationIntegrationTest {
 
         // (a) list under tenant A contains A's seller, never B's.
         MvcResult list = mockMvc.perform(get("/api/admin/sellers")
-                        .header(ROLE_HEADER, "ADMIN")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                         .header(TENANT_HEADER, TENANT_A)
                         .param("size", "100"))
                 .andExpect(status().isOk()).andReturn();
@@ -135,13 +135,13 @@ class SellerAdminReadCrossTenantIsolationIntegrationTest {
 
         // (b) tenant B's seller, queried under tenant A → 404 (existence hidden, M3).
         mockMvc.perform(get("/api/admin/sellers/{id}", SELLER_B)
-                        .header(ROLE_HEADER, "ADMIN")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                         .header(TENANT_HEADER, TENANT_A))
                 .andExpect(status().isNotFound());
 
         // sanity: tenant A's own seller resolves under tenant A.
         mockMvc.perform(get("/api/admin/sellers/{id}", SELLER_A)
-                        .header(ROLE_HEADER, "ADMIN")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                         .header(TENANT_HEADER, TENANT_A))
                 .andExpect(status().isOk());
     }

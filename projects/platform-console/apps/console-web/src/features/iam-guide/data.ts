@@ -9,7 +9,7 @@
  * 표면적 드리프트는 잡지만, 권한 키 설명 텍스트는 사람이 맞춰야 함).
  *
  * 이 6개는 **admin-console RBAC 역할**(IAM 콘솔 3화면을 게이트)이다. 테넌트
- * 직원/협력업체가 받는 **도메인 롤**(WMS_OPERATOR·ADMIN·SCM_OPERATOR…,
+ * 직원/협력업체가 받는 **도메인 롤**(WMS_OPERATOR·ECOMMERCE_OPERATOR·SCM_OPERATOR…,
  * assume-tenant 시 테넌트 구독 도메인에서 파생)은 별도의 축으로, 화면 하단
  * `DOMAIN_ROLE_NOTES` 에서 별도로 설명한다.
  */
@@ -213,7 +213,7 @@ export const DELEGATION_CHAIN: DelegationStep[] = [
   {
     actor: 'a회사 직원 / 협력업체',
     action:
-      '로그인 후 테넌트 선택(assume-tenant) 시, 배정된 테넌트의 구독 도메인에서 도메인 롤(WMS_OPERATOR·ADMIN…)이 자동 파생되어 도메인 서비스를 사용.',
+      '로그인 후 테넌트 선택(assume-tenant) 시, 배정된 테넌트의 구독 도메인에서 도메인 롤(WMS_OPERATOR·ECOMMERCE_OPERATOR…)이 자동 파생되어 도메인 서비스를 사용.',
   },
 ];
 
@@ -270,7 +270,7 @@ export const OPERATOR_ONBOARDING_AXES: OnboardingAxis[] = [
     api: 'POST / DELETE …/assignments/{tenantId}',
     desc: '운영자를 활성 테넌트의 운영 스코프로 편입(POST)·해제(DELETE) — 직원·협력업체 온보딩. assume-tenant 로 진입 가능한 대상 테넌트를 넓히는 축이며, 홈이 `*` 가 아닌 운영자에게 홈 밖 테넌트 운영을 여는 유일한 경로다. 사유(`X-Operator-Reason`) 필수, 대상 테넌트 confinement 은 생산자(TenantScopeGuard)가 강제한다.',
     ecommerceNote:
-      '이커머스 셀러 운영을 대행하는 협력업체 운영자를 이커머스 테넌트에 배정하면, 로그인 후 assume-tenant 로 그 테넌트를 골라 ADMIN 도메인 롤을 받아 운영 콘솔에 진입한다.',
+      '이커머스 셀러 운영을 대행하는 협력업체 운영자를 이커머스 테넌트에 배정하면, 로그인 후 assume-tenant 로 그 테넌트를 골라 ECOMMERCE_OPERATOR 도메인 롤을 받아 운영 콘솔에 진입한다.',
   },
   {
     term: 'org_scope',
@@ -288,7 +288,7 @@ export const OPERATOR_ONBOARDING_AXES: OnboardingAxis[] = [
  */
 export const DOMAIN_ROLE_MAP: { domain: string; roles: string }[] = [
   { domain: 'wms', roles: 'WMS_OPERATOR + 세분(OUTBOUND/INBOUND/INVENTORY READ·WRITE, MASTER_READ)' },
-  { domain: 'ecommerce', roles: 'ADMIN' },
+  { domain: 'ecommerce', roles: 'ECOMMERCE_OPERATOR' },
   { domain: 'scm', roles: 'SCM_OPERATOR' },
   { domain: 'erp', roles: 'ERP_OPERATOR' },
   { domain: 'finance', roles: 'FINANCE_OPERATOR' },

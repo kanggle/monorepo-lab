@@ -116,7 +116,7 @@ class ShippingControllerTest {
         given(shippingCommandService.updateStatus(any())).willReturn(result);
 
         mockMvc.perform(put("/api/shippings/ship-1/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "SHIPPED", "trackingNumber": "TRK-001", "carrier": "CJ"}
@@ -135,7 +135,7 @@ class ShippingControllerTest {
         given(shippingCommandService.updateStatus(captor.capture())).willReturn(result);
 
         mockMvc.perform(put("/api/shippings/ship-1/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "SHIPPED", "trackingNumber": "TRK-001", "carrier": "CJ", "deductWmsInventory": true}
@@ -154,7 +154,7 @@ class ShippingControllerTest {
         given(shippingCommandService.updateStatus(captor.capture())).willReturn(result);
 
         mockMvc.perform(put("/api/shippings/ship-1/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "SHIPPED", "trackingNumber": "TRK-001", "carrier": "CJ"}
@@ -171,10 +171,10 @@ class ShippingControllerTest {
     void refreshTracking_admin_returns200() throws Exception {
         UpdateShippingStatusResult result =
                 new UpdateShippingStatusResult("ship-1", ShippingStatus.DELIVERED, NOW);
-        given(refreshTrackingService.refreshFromCarrier(eq("ship-1"), eq("ADMIN"))).willReturn(result);
+        given(refreshTrackingService.refreshFromCarrier(eq("ship-1"), eq("ECOMMERCE_OPERATOR"))).willReturn(result);
 
         mockMvc.perform(post("/api/shippings/ship-1/refresh-tracking")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shippingId").value("ship-1"))
                 .andExpect(jsonPath("$.status").value("DELIVERED"));
@@ -192,7 +192,7 @@ class ShippingControllerTest {
     @DisplayName("깨진 JSON 본문이면 400 / VALIDATION_ERROR 반환")
     void updateShippingStatus_malformedBody_returns400() throws Exception {
         mockMvc.perform(put("/api/shippings/ship-1/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":"))
                 .andExpect(status().isBadRequest())
@@ -232,7 +232,7 @@ class ShippingControllerTest {
     @DisplayName("status가 null이면 400 반환")
     void updateShippingStatus_nullStatus_returns400() throws Exception {
         mockMvc.perform(put("/api/shippings/ship-1/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"trackingNumber": "TRK-001", "carrier": "CJ"}
@@ -245,7 +245,7 @@ class ShippingControllerTest {
     @DisplayName("유효하지 않은 status 값이면 400 반환")
     void updateShippingStatus_invalidStatus_returns400() throws Exception {
         mockMvc.perform(put("/api/shippings/ship-1/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "INVALID_STATUS"}
@@ -261,7 +261,7 @@ class ShippingControllerTest {
                 .willThrow(new ShippingNotFoundException("ship-x"));
 
         mockMvc.perform(put("/api/shippings/ship-x/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "SHIPPED", "trackingNumber": "TRK-001", "carrier": "CJ"}
@@ -277,7 +277,7 @@ class ShippingControllerTest {
                 .willThrow(new InvalidStatusTransitionException(ShippingStatus.PREPARING, ShippingStatus.DELIVERED));
 
         mockMvc.perform(put("/api/shippings/ship-1/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "DELIVERED"}
@@ -293,7 +293,7 @@ class ShippingControllerTest {
                 .willThrow(new InvalidShippingException("Tracking number is required when status is SHIPPED"));
 
         mockMvc.perform(put("/api/shippings/ship-1/status")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "SHIPPED"}
@@ -313,7 +313,7 @@ class ShippingControllerTest {
         given(shippingQueryService.listShippings(any(), any(), any())).willReturn(pageResult);
 
         mockMvc.perform(get("/api/shippings")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .param("page", "0")
                         .param("size", "20"))
                 .andExpect(status().isOk())
@@ -352,7 +352,7 @@ class ShippingControllerTest {
         given(shippingQueryService.listShippings(any(), eq(ShippingStatus.SHIPPED), any())).willReturn(pageResult);
 
         mockMvc.perform(get("/api/shippings")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .param("status", "SHIPPED"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
@@ -363,7 +363,7 @@ class ShippingControllerTest {
     @DisplayName("유효하지 않은 status 필터 시 400 반환")
     void listShippings_invalidStatusFilter_returns400() throws Exception {
         mockMvc.perform(get("/api/shippings")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .param("status", "INVALID"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_SHIPPING_REQUEST"));
@@ -380,7 +380,7 @@ class ShippingControllerTest {
                 });
 
         mockMvc.perform(get("/api/shippings")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .param("size", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.size").value(20));
@@ -396,7 +396,7 @@ class ShippingControllerTest {
                 });
 
         mockMvc.perform(get("/api/shippings")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .param("size", "200"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.size").value(100));
@@ -412,7 +412,7 @@ class ShippingControllerTest {
                 });
 
         mockMvc.perform(get("/api/shippings")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .param("page", "-1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page").value(0));

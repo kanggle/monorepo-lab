@@ -51,7 +51,7 @@ describe('auth.ts session callback — F2 token confidentiality', () => {
   it('operator(CUSTOMER 미보유)는 degraded(익명) 세션 + accessToken 없음', async () => {
     const session = await sessionCb({
       session: { user: { email: 'op@test.com' }, expires: '2099-01-01T00:00:00Z' },
-      token: { roles: ['ADMIN'], accountId: 'op-1', accessToken: 'secret-bearer' },
+      token: { roles: ['ECOMMERCE_OPERATOR'], accountId: 'op-1', accessToken: 'secret-bearer' },
     });
 
     expect(session.accountId).toBeNull();

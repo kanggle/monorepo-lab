@@ -78,7 +78,7 @@ final class OperatorRoleDerivation {
                 // (*_ADMIN / WMS_ADMIN — cancellation, force-saga-fail, master-data
                 // writes) are intentionally NOT granted by the operator entitlement.
                 case "wms" -> WMS_OPERATOR_ROLES;
-                case "ecommerce" -> List.of("ADMIN");
+                case "ecommerce" -> List.of("ECOMMERCE_OPERATOR");
                 case "scm" -> List.of("SCM_OPERATOR");
                 case "erp" -> List.of("ERP_OPERATOR");
                 case "finance" -> List.of("FINANCE_OPERATOR");

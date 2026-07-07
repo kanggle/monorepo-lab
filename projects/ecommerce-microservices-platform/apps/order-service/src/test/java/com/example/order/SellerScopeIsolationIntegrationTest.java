@@ -124,7 +124,7 @@ class SellerScopeIsolationIntegrationTest {
         String a2Order = placeOrder("user-a2-" + System.nanoTime(), singleSellerBody(SELLER_A2));
 
         String view = mockMvc.perform(get("/api/admin/orders")
-                        .header(ROLE_HEADER, "ADMIN")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                         .header(TENANT_HEADER, TENANT_A)
                         .header(SELLER_SCOPE_HEADER, SELLER_A1)
                         .param("size", "100"))
@@ -133,7 +133,7 @@ class SellerScopeIsolationIntegrationTest {
 
         // a1-scoped detail of a2's order → 404 (existence hidden, M3).
         mockMvc.perform(get("/api/admin/orders/{id}", a2Order)
-                        .header(ROLE_HEADER, "ADMIN")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                         .header(TENANT_HEADER, TENANT_A)
                         .header(SELLER_SCOPE_HEADER, SELLER_A1))
                 .andExpect(status().isNotFound());
@@ -150,7 +150,7 @@ class SellerScopeIsolationIntegrationTest {
         // guaranteed by Postgres — assert both sellers are present order-independently (the
         // prior $.items[0]/$.items[1] index assertion was the drifted expectation).
         mockMvc.perform(get("/api/admin/orders/{id}", orderId)
-                        .header(ROLE_HEADER, "ADMIN").header(TENANT_HEADER, TENANT_A)
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR").header(TENANT_HEADER, TENANT_A)
                         .header(SELLER_SCOPE_HEADER, SELLER_A1))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(2))
@@ -158,7 +158,7 @@ class SellerScopeIsolationIntegrationTest {
                         org.hamcrest.Matchers.containsInAnyOrder(SELLER_A1, SELLER_A2)));
         // ...and to a2's scope.
         mockMvc.perform(get("/api/admin/orders/{id}", orderId)
-                        .header(ROLE_HEADER, "ADMIN").header(TENANT_HEADER, TENANT_A)
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR").header(TENANT_HEADER, TENANT_A)
                         .header(SELLER_SCOPE_HEADER, SELLER_A2))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[*].sellerId",
@@ -172,12 +172,12 @@ class SellerScopeIsolationIntegrationTest {
         String a2Order = placeOrder("user-nz2-" + System.nanoTime(), singleSellerBody(SELLER_A2));
 
         String noScope = mockMvc.perform(get("/api/admin/orders")
-                        .header(ROLE_HEADER, "ADMIN").header(TENANT_HEADER, TENANT_A).param("size", "100"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR").header(TENANT_HEADER, TENANT_A).param("size", "100"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(noScope).contains(a1Order).contains(a2Order);
 
         String wildcard = mockMvc.perform(get("/api/admin/orders")
-                        .header(ROLE_HEADER, "ADMIN").header(TENANT_HEADER, TENANT_A)
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR").header(TENANT_HEADER, TENANT_A)
                         .header(SELLER_SCOPE_HEADER, "*").param("size", "100"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(wildcard).contains(a1Order).contains(a2Order);

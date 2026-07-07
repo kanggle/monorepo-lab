@@ -275,7 +275,7 @@ List notification templates.
 ### GET /api/notifications/templates/{templateId} (Admin)
 Get a single notification template by ID.
 
-**Authorization**: `X-User-Role: ADMIN` header required.
+**Authorization**: `X-User-Role: ECOMMERCE_OPERATOR` header required.
 
 **Response 200**
 ```json

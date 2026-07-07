@@ -43,10 +43,10 @@ class AccountTypeEnforcementFilterTest {
 
     @Test
     void consumerRoute_adminRoleOnly_returns403() {
-        // ADMIN without CUSTOMER cannot reach consumer routes.
+        // ECOMMERCE_OPERATOR without CUSTOMER cannot reach consumer routes.
         MockServerWebExchange exchange = exchangeFor("/api/orders/123");
         CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWithRoles("ADMIN");
+        Jwt jwt = jwtWithRoles("ECOMMERCE_OPERATOR");
 
         run(exchange, chain, jwt);
 
@@ -81,14 +81,14 @@ class AccountTypeEnforcementFilterTest {
     }
 
     // -----------------------------------------------------------------------
-    // Admin routes — ADMIN role required
+    // Admin routes — ECOMMERCE_OPERATOR role required
     // -----------------------------------------------------------------------
 
     @Test
     void adminRoute_adminRole_passesThrough() {
         MockServerWebExchange exchange = exchangeFor("/api/admin/products/42");
         CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWithRoles("ADMIN");
+        Jwt jwt = jwtWithRoles("ECOMMERCE_OPERATOR");
 
         run(exchange, chain, jwt);
 
@@ -153,7 +153,7 @@ class AccountTypeEnforcementFilterTest {
     void adminRoute_adminRole_noAccountType_passesThrough() {
         MockServerWebExchange exchange = exchangeFor("/api/admin/products/42");
         CapturingChain chain = new CapturingChain();
-        Jwt jwt = jwtWithRoles("ADMIN");
+        Jwt jwt = jwtWithRoles("ECOMMERCE_OPERATOR");
 
         run(exchange, chain, jwt);
 
@@ -163,8 +163,8 @@ class AccountTypeEnforcementFilterTest {
 
     @Test
     void dualCapability_customerAndAdminRoles_passBothSurfaces() {
-        // The unified-identity defining case: one account holds CUSTOMER + ADMIN.
-        Jwt jwt = jwtWithRoles("CUSTOMER", "ADMIN");
+        // The unified-identity defining case: one account holds CUSTOMER + ECOMMERCE_OPERATOR.
+        Jwt jwt = jwtWithRoles("CUSTOMER", "ECOMMERCE_OPERATOR");
 
         MockServerWebExchange consumer = exchangeFor("/api/orders/123");
         CapturingChain consumerChain = new CapturingChain();
@@ -178,7 +178,7 @@ class AccountTypeEnforcementFilterTest {
     }
 
     // -----------------------------------------------------------------------
-    // Operator-on-public admission (TASK-BE-380) — ADMIN admitted on the
+    // Operator-on-public admission (TASK-BE-380) — ECOMMERCE_OPERATOR admitted on the
     // promotion/shipping/notification read trees whose producer contracts host
     // Admin endpoints on the public path; the service self-gates via X-User-Role.
     // -----------------------------------------------------------------------
@@ -191,9 +191,9 @@ class AccountTypeEnforcementFilterTest {
                 "/api/notifications/templates", "/api/notifications/templates/t1"}) {
             MockServerWebExchange exchange = exchangeFor(path);
             CapturingChain chain = new CapturingChain();
-            run(exchange, chain, jwtWithRoles("ADMIN"));
+            run(exchange, chain, jwtWithRoles("ECOMMERCE_OPERATOR"));
 
-            assertThat(chain.called).as("ADMIN admitted on %s", path).isTrue();
+            assertThat(chain.called).as("ECOMMERCE_OPERATOR admitted on %s", path).isTrue();
             assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
         }
     }
@@ -211,14 +211,14 @@ class AccountTypeEnforcementFilterTest {
 
     @Test
     void nonOperatorPublicPath_adminRoleOnly_returns403() {
-        // Scope guard: the ADMIN exception is limited to the contracted operator
+        // Scope guard: the ECOMMERCE_OPERATOR exception is limited to the contracted operator
         // read trees — other public trees stay CUSTOMER-only.
         for (String path : new String[] {"/api/products/1", "/api/orders/1", "/api/search"}) {
             MockServerWebExchange exchange = exchangeFor(path);
             CapturingChain chain = new CapturingChain();
-            run(exchange, chain, jwtWithRoles("ADMIN"));
+            run(exchange, chain, jwtWithRoles("ECOMMERCE_OPERATOR"));
 
-            assertThat(chain.called).as("ADMIN blocked on non-operator public %s", path).isFalse();
+            assertThat(chain.called).as("ECOMMERCE_OPERATOR blocked on non-operator public %s", path).isFalse();
             assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         }
     }

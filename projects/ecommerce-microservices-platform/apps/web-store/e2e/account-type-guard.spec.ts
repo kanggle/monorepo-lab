@@ -6,7 +6,7 @@ import { loginAsOperatorAndExpectMismatch, shouldSkipGap, uniqueUser } from './h
  *
  * GAP V0012 시드는 web-store 가 `ecommerce.consumer` scope 만 요청하도록 등록한다.
  * operator 는 web-store 가 아니라 platform-console(hub) 을 사용한다. operator 의
- * web-store 토큰은 `CUSTOMER` 롤을 담지 않으므로(운영자는 assume-tenant 에서 `ADMIN`
+ * web-store 토큰은 `CUSTOMER` 롤을 담지 않으므로(운영자는 assume-tenant 에서 `ECOMMERCE_OPERATOR`
  * 도메인 롤을 파생받는다 — ADR-035 4a) web-store 로 진입하면:
  *   - GAP `/oauth2/authorize` 에서 callback 까지는 성공
  *   - NextAuth `signIn()`/`session()` 콜백이 `roles ∌ CUSTOMER` 인 경우 user 를 anonymous

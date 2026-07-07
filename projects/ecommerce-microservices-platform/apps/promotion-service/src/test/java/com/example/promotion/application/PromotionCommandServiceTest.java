@@ -57,7 +57,7 @@ class PromotionCommandServiceTest {
                 "테스트 프로모션", "설명", "FIXED", 5000, 10000, 100,
                 Instant.parse("2026-03-01T00:00:00Z"),
                 Instant.parse("2026-04-01T00:00:00Z"),
-                "ADMIN"
+                "ECOMMERCE_OPERATOR"
         );
 
         CreatePromotionResult result = service.createPromotion(command);
@@ -78,7 +78,7 @@ class PromotionCommandServiceTest {
                 "non-existent", "수정", "설명", "FIXED", 5000, 10000, 100,
                 Instant.parse("2026-03-01T00:00:00Z"),
                 Instant.parse("2026-04-01T00:00:00Z"),
-                "ADMIN"
+                "ECOMMERCE_OPERATOR"
         );
 
         assertThatThrownBy(() -> service.updatePromotion(command))
@@ -101,7 +101,7 @@ class PromotionCommandServiceTest {
 
         given(promotionRepository.findById(promotion.getPromotionId())).willReturn(Optional.of(promotion));
 
-        assertThatThrownBy(() -> service.deletePromotion(promotion.getPromotionId(), "ADMIN"))
+        assertThatThrownBy(() -> service.deletePromotion(promotion.getPromotionId(), "ECOMMERCE_OPERATOR"))
                 .isInstanceOf(PromotionHasIssuedCouponsException.class);
     }
 
@@ -113,7 +113,7 @@ class PromotionCommandServiceTest {
 
         given(promotionRepository.findById("non-existent")).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.deletePromotion("non-existent", "ADMIN"))
+        assertThatThrownBy(() -> service.deletePromotion("non-existent", "ECOMMERCE_OPERATOR"))
                 .isInstanceOf(PromotionNotFoundException.class);
     }
 

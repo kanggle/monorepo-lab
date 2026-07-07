@@ -71,7 +71,7 @@ public class RefreshTrackingService {
             return false;
         }
         for (String role : userRole.split(",")) {
-            if ("ADMIN".equalsIgnoreCase(role.trim())) {
+            if ("ECOMMERCE_OPERATOR".equalsIgnoreCase(role.trim())) {
                 return true;
             }
         }

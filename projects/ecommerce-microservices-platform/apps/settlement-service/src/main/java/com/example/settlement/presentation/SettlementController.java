@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Operator-plane settlement read + commission-rate admin (settlement-api.md). All
- * endpoints require an operator (gateway-trusted {@code X-User-Role = ADMIN}). There
+ * endpoints require an operator (gateway-trusted {@code X-User-Role = ECOMMERCE_OPERATOR}). There
  * is <b>no accrual write path</b> — commission is booked only from the event streams.
  * Tenant + seller scope are applied below the controller (filters → context → repo
  * chokepoint).
@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/settlements")
 public class SettlementController {
 
-    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
 
     private final SettlementQueryService queryService;
     private final CommissionRateAdminService rateAdminService;

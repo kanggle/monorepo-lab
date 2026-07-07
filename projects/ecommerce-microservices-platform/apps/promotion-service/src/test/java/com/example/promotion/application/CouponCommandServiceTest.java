@@ -73,7 +73,7 @@ class CouponCommandServiceTest {
         given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1", "user-2"), "ADMIN"
+                promotion.getPromotionId(), List.of("user-1", "user-2"), "ECOMMERCE_OPERATOR"
         );
 
         IssueCouponsResult result = service.issueCoupons(command);
@@ -160,7 +160,7 @@ class CouponCommandServiceTest {
 
         given(promotionRepository.findByIdForUpdate("non-existent")).willReturn(Optional.empty());
 
-        IssueCouponsCommand command = new IssueCouponsCommand("non-existent", List.of("user-1"), "ADMIN");
+        IssueCouponsCommand command = new IssueCouponsCommand("non-existent", List.of("user-1"), "ECOMMERCE_OPERATOR");
 
         assertThatThrownBy(() -> service.issueCoupons(command))
                 .isInstanceOf(PromotionNotFoundException.class);
@@ -213,7 +213,7 @@ class CouponCommandServiceTest {
     // ─── Multi-value X-User-Role (BE-393) ─────────────────────────────────
 
     @Test
-    @DisplayName("멀티롤 헤더에 ADMIN 포함 시 쿠폰 발급 허용 (multi-domain operator)")
+    @DisplayName("멀티롤 헤더에 ECOMMERCE_OPERATOR 포함 시 쿠폰 발급 허용 (multi-domain operator)")
     void issueCoupons_multiRoleHeaderContainingAdmin_admitted() {
         CouponCommandService service = createService();
 
@@ -229,7 +229,7 @@ class CouponCommandServiceTest {
         given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1"), "ADMIN,ERP_OPERATOR,SCM_OPERATOR"
+                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR"
         );
 
         assertThatCode(() -> service.issueCoupons(command))
@@ -237,7 +237,7 @@ class CouponCommandServiceTest {
     }
 
     @Test
-    @DisplayName("단일 ADMIN 롤 헤더는 계속 허용 (회귀 방지)")
+    @DisplayName("단일 ECOMMERCE_OPERATOR 롤 헤더는 계속 허용 (회귀 방지)")
     void issueCoupons_singleAdminRole_admitted() {
         CouponCommandService service = createService();
 
@@ -253,7 +253,7 @@ class CouponCommandServiceTest {
         given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1"), "ADMIN"
+                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR"
         );
 
         assertThatCode(() -> service.issueCoupons(command))
@@ -261,7 +261,7 @@ class CouponCommandServiceTest {
     }
 
     @Test
-    @DisplayName("ADMIN 없는 멀티롤 헤더는 거부")
+    @DisplayName("ECOMMERCE_OPERATOR 없는 멀티롤 헤더는 거부")
     void issueCoupons_multiRoleWithoutAdmin_throwsAccessDeniedException() {
         CouponCommandService service = createService();
 

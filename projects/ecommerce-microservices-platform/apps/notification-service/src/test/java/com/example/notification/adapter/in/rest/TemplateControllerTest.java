@@ -49,7 +49,7 @@ class TemplateControllerTest {
                 .willReturn(pageResult);
 
         mockMvc.perform(get("/api/notifications/templates")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].type").value("ORDER_PLACED"))
                 .andExpect(jsonPath("$.content[0].channel").value("EMAIL"))
@@ -57,17 +57,17 @@ class TemplateControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/notifications/templates - 멀티 role(콤마조인) 헤더에 ADMIN 포함 시 200")
+    @DisplayName("GET /api/notifications/templates - 멀티 role(콤마조인) 헤더에 ECOMMERCE_OPERATOR 포함 시 200")
     void getTemplates_multiRoleContainingAdmin_returns200() throws Exception {
         // The gateway (JwtHeaderEnrichmentFilter, ADR-MONO-035 4b-2a) joins the
         // roles claim with ","; a multi-domain operator presents e.g.
-        // "ADMIN,WMS_OPERATOR". ADMIN membership must be admitted (not exact-equals).
+        // "ECOMMERCE_OPERATOR,WMS_OPERATOR". ECOMMERCE_OPERATOR membership must be admitted (not exact-equals).
         PageResult<NotificationTemplate> pageResult = new PageResult<>(List.of(), 0, 20, 0L, 0);
         given(templateService.getTemplates(any()))
                 .willReturn(pageResult);
 
         mockMvc.perform(get("/api/notifications/templates")
-                        .header("X-User-Role", "ADMIN,WMS_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,WMS_OPERATOR"))
                 .andExpect(status().isOk());
     }
 
@@ -81,7 +81,7 @@ class TemplateControllerTest {
                 .willReturn(template);
 
         mockMvc.perform(get("/api/notifications/templates/" + template.getTemplateId())
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.templateId").value(template.getTemplateId()))
                 .andExpect(jsonPath("$.type").value("ORDER_PLACED"))
@@ -97,7 +97,7 @@ class TemplateControllerTest {
                 .willThrow(new TemplateNotFoundException("template-999"));
 
         mockMvc.perform(get("/api/notifications/templates/template-999")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("TEMPLATE_NOT_FOUND"));
     }
@@ -118,7 +118,7 @@ class TemplateControllerTest {
                 .willReturn(new TemplateResult("template-1"));
 
         mockMvc.perform(post("/api/notifications/templates")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"type\":\"ORDER_PLACED\",\"channel\":\"EMAIL\"," +
                                 "\"subject\":\"Order confirmed\",\"body\":\"Your order has been placed.\"}"))
@@ -130,7 +130,7 @@ class TemplateControllerTest {
     @DisplayName("POST /api/notifications/templates - 깨진 JSON 본문 시 400 / VALIDATION_ERROR")
     void createTemplate_malformedBody_returns400() throws Exception {
         mockMvc.perform(post("/api/notifications/templates")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"type\":"))
                 .andExpect(status().isBadRequest())
@@ -145,7 +145,7 @@ class TemplateControllerTest {
                 .willThrow(new TemplateAlreadyExistsException("ORDER_PLACED", "EMAIL"));
 
         mockMvc.perform(post("/api/notifications/templates")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"type\":\"ORDER_PLACED\",\"channel\":\"EMAIL\"," +
                                 "\"subject\":\"Subject\",\"body\":\"Body\"}"))
@@ -160,7 +160,7 @@ class TemplateControllerTest {
                 .willReturn(new TemplateResult("template-1"));
 
         mockMvc.perform(put("/api/notifications/templates/template-1")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"subject\":\"Updated subject\",\"body\":\"Updated body\"}"))
                 .andExpect(status().isOk())
@@ -174,7 +174,7 @@ class TemplateControllerTest {
                 .willThrow(new TemplateNotFoundException("template-999"));
 
         mockMvc.perform(put("/api/notifications/templates/template-999")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"subject\":\"Subject\",\"body\":\"Body\"}"))
                 .andExpect(status().isNotFound())
@@ -185,7 +185,7 @@ class TemplateControllerTest {
     @DisplayName("POST /api/notifications/templates - 필수 필드 누락 시 400")
     void createTemplate_missingField_returns400() throws Exception {
         mockMvc.perform(post("/api/notifications/templates")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"type\":\"ORDER_PLACED\"}"))
                 .andExpect(status().isBadRequest())

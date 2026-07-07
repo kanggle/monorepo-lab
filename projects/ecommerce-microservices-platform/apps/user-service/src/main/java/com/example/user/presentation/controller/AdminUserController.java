@@ -17,7 +17,7 @@ import java.util.UUID;
 @RequestMapping("/api/admin/users")
 public class AdminUserController {
 
-    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
 
     private final UserProfileService userProfileService;
 

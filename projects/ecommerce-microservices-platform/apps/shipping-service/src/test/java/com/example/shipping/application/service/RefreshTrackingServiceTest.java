@@ -66,7 +66,7 @@ class RefreshTrackingServiceTest {
                 .thenReturn(Optional.of(new CarrierTrackingSnapshot("DELIVERED")));
         when(shippingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
+        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ECOMMERCE_OPERATOR");
 
         assertThat(result.status()).isEqualTo(ShippingStatus.DELIVERED);
         assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.DELIVERED);
@@ -86,7 +86,7 @@ class RefreshTrackingServiceTest {
         when(shippingRepository.findByIdForTenant(id)).thenReturn(Optional.of(shipping));
         when(carrierTrackingPort.fetchLatest("CJ", "TRK-1")).thenReturn(Optional.empty());
 
-        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
+        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ECOMMERCE_OPERATOR");
 
         assertThat(result.status()).isEqualTo(ShippingStatus.SHIPPED);
         assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
@@ -105,7 +105,7 @@ class RefreshTrackingServiceTest {
         when(carrierTrackingPort.fetchLatest("CJ", "TRK-1"))
                 .thenReturn(Optional.of(new CarrierTrackingSnapshot("통관보류"))); // unmapped aggregator code
 
-        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
+        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ECOMMERCE_OPERATOR");
 
         assertThat(result.status()).isEqualTo(ShippingStatus.SHIPPED);
         assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
@@ -126,7 +126,7 @@ class RefreshTrackingServiceTest {
                 .thenReturn(Optional.of(new CarrierTrackingSnapshot("배송중"))); // aggregator Korean unified code
         when(shippingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
+        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ECOMMERCE_OPERATOR");
 
         assertThat(result.status()).isEqualTo(ShippingStatus.IN_TRANSIT);
         assertThat(meterRegistry.find("carrier_status_unmapped").counter()).isNull();
@@ -140,7 +140,7 @@ class RefreshTrackingServiceTest {
         when(carrierTrackingPort.fetchLatest("CJ", "TRK-1"))
                 .thenReturn(Optional.of(new CarrierTrackingSnapshot("SHIPPED"))); // == current
 
-        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
+        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ECOMMERCE_OPERATOR");
 
         assertThat(result.status()).isEqualTo(ShippingStatus.SHIPPED);
         verify(shippingRepository, never()).save(any());
@@ -154,7 +154,7 @@ class RefreshTrackingServiceTest {
         String id = preparing.getShippingId();
         when(shippingRepository.findByIdForTenant(id)).thenReturn(Optional.of(preparing));
 
-        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ADMIN");
+        UpdateShippingStatusResult result = service.refreshFromCarrier(id, "ECOMMERCE_OPERATOR");
 
         assertThat(result.status()).isEqualTo(ShippingStatus.PREPARING);
         verify(carrierTrackingPort, never()).fetchLatest(any(), any());
