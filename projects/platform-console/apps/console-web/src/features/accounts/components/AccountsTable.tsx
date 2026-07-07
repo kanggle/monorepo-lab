@@ -1,10 +1,11 @@
 'use client';
 
 import type { Dispatch, SetStateAction } from 'react';
-import { Button } from '@/shared/ui/Button';
 import type { AccountPage, AccountSummary } from '../api/types';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { AccountStatusBadge } from './AccountStatusBadge';
+import { AccountRowActions } from './AccountRowActions';
+import { AccountsPagination } from './AccountsPagination';
 import type { AccountsQuery, ActionKind } from './accounts-screen-helpers';
 
 /**
@@ -14,7 +15,9 @@ import type { AccountsQuery, ActionKind } from './accounts-screen-helpers';
  * pagination nav. Pure presentational — every `data-testid` / aria / class /
  * label is byte-identical to the pre-split container; all state lives in the
  * container, which passes the `setQuery` dispatcher as `onPageChange` so the
- * functional prev/next updates are preserved.
+ * functional prev/next updates are preserved. TASK-PC-FE-210 further extracted
+ * the per-row action cluster ({@link AccountRowActions}) and the pagination nav
+ * ({@link AccountsPagination}) into cohesive presentational siblings.
  */
 
 interface AccountsTableProps {
@@ -84,86 +87,22 @@ export function AccountsTable({
               </td>
               <td className="p-2 text-muted-foreground">{formatDateTime(acc.createdAt)}</td>
               <td className="p-2">
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onAction('lock', acc)}
-                    data-testid={`action-lock-${acc.id}`}
-                  >
-                    잠금
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onAction('unlock', acc)}
-                    data-testid={`action-unlock-${acc.id}`}
-                  >
-                    잠금 해제
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onAction('revoke-session', acc)}
-                    data-testid={`action-revoke-${acc.id}`}
-                  >
-                    세션 종료
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onExport(acc)}
-                    data-testid={`action-export-${acc.id}`}
-                  >
-                    내보내기
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="text-destructive"
-                    onClick={() => onAction('gdpr-delete', acc)}
-                    data-testid={`action-gdpr-${acc.id}`}
-                  >
-                    GDPR 삭제
-                  </Button>
-                </div>
+                <AccountRowActions
+                  account={acc}
+                  onAction={onAction}
+                  onExport={onExport}
+                />
               </td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <nav
-        className="mt-4 flex items-center justify-between"
-        aria-label="페이지 이동"
-      >
-        <Button
-          variant="secondary"
-          disabled={query.page <= 0 || !!query.email}
-          onClick={() =>
-            onPageChange((q) => ({ ...q, page: Math.max(0, q.page - 1) }))
-          }
-          data-testid="accounts-prev"
-        >
-          이전
-        </Button>
-        <span
-          className="text-sm text-muted-foreground"
-          data-testid="accounts-pageinfo"
-        >
-          {query.email
-            ? '단건 검색'
-            : `${page.page + 1} / ${Math.max(1, page.totalPages)} 페이지 · 총 ${page.totalElements}건`}
-        </span>
-        <Button
-          variant="secondary"
-          disabled={!!query.email || page.page + 1 >= page.totalPages}
-          onClick={() => onPageChange((q) => ({ ...q, page: q.page + 1 }))}
-          data-testid="accounts-next"
-        >
-          다음
-        </Button>
-      </nav>
+      <AccountsPagination
+        page={page}
+        query={query}
+        onPageChange={onPageChange}
+      />
     </>
   );
 }
