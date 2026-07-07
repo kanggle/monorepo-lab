@@ -1,15 +1,14 @@
 'use client';
 
 import type { FormEvent } from 'react';
-import { Button } from '@/shared/ui/Button';
 import {
-  OPERATOR_STATUSES,
   type OperatorPage,
   type OperatorSummary,
   type OperatorStatus,
 } from '../api/types';
-import { formatDateTime } from '@/shared/lib/datetime';
-import { OperatorRoleChips, OperatorStatusBadge } from './OperatorBadges';
+import { OperatorsFilterBar } from './OperatorsFilterBar';
+import { OperatorRow } from './OperatorRow';
+import { OperatorsPagination } from './OperatorsPagination';
 
 /**
  * Operators list region of the operators-management screen (TASK-PC-FE-105
@@ -17,6 +16,11 @@ import { OperatorRoleChips, OperatorStatusBadge } from './OperatorBadges';
  * operators table (with the per-row privilege-sensitive action buttons), and
  * the pagination nav. Pure presentation: all state + the action handlers live
  * in the `OperatorsScreen` container and arrive via props.
+ *
+ * TASK-PC-FE-209 split — the filter bar, the per-row action cluster, and the
+ * pagination nav are now the presentational siblings `OperatorsFilterBar` /
+ * `OperatorRow` / `OperatorsPagination`; this file stays the thin list frame
+ * (degraded notice + empty state + table shell).
  */
 export interface OperatorsTableProps {
   statusFilter: '' | OperatorStatus;
@@ -59,40 +63,11 @@ export function OperatorsTable({
 }: OperatorsTableProps) {
   return (
     <>
-      <form
-        onSubmit={onSubmitFilter}
-        className="mb-6 flex flex-wrap items-end gap-3"
-        role="search"
-        aria-label="운영자 목록 필터"
-      >
-        <div>
-          <label
-            htmlFor="operators-status-filter"
-            className="block text-sm font-medium text-foreground"
-          >
-            상태 필터
-          </label>
-          <select
-            id="operators-status-filter"
-            value={statusFilter}
-            onChange={(e) =>
-              onStatusFilterChange(e.target.value as '' | OperatorStatus)
-            }
-            data-testid="operators-status-filter"
-            className="mt-1 w-48 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <option value="">전체</option>
-            {OPERATOR_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Button type="submit" data-testid="operators-filter-submit">
-          조회
-        </Button>
-      </form>
+      <OperatorsFilterBar
+        statusFilter={statusFilter}
+        onStatusFilterChange={onStatusFilterChange}
+        onSubmitFilter={onSubmitFilter}
+      />
 
       {isListError && (
         <div
@@ -143,131 +118,26 @@ export function OperatorsTable({
             </thead>
             <tbody>
               {rows.map((op) => (
-                <tr
+                <OperatorRow
                   key={op.operatorId}
-                  data-testid={`operator-row-${op.operatorId}`}
-                  className="border-b border-border"
-                >
-                  <td className="p-2">{op.email}</td>
-                  <td className="p-2">{op.displayName}</td>
-                  <td className="p-2">
-                    <OperatorStatusBadge status={op.status} />
-                  </td>
-                  <td className="p-2">
-                    <OperatorRoleChips roles={op.roles} />
-                  </td>
-                  <td className="p-2 text-muted-foreground">
-                    {formatDateTime(op.createdAt)}
-                  </td>
-                  <td className="p-2">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onEditRoles(op)}
-                        data-testid={`action-edit-roles-${op.operatorId}`}
-                      >
-                        역할 변경
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className={
-                          op.status === 'SUSPENDED'
-                            ? undefined
-                            : 'text-destructive'
-                        }
-                        onClick={() => onChangeStatus(op)}
-                        data-testid={`action-status-${op.operatorId}`}
-                      >
-                        {op.status === 'SUSPENDED'
-                          ? '활성화'
-                          : '정지'}
-                      </Button>
-                      {/* TASK-PC-FE-017 — admin-on-behalf-of profile edit.
-                          Disabled on self row (producer-side rejection
-                          `400 SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH`
-                          is the fail-safe; UX layer hides the always-400). */}
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={
-                          selfOperatorId !== null &&
-                          selfOperatorId === op.operatorId
-                        }
-                        title={
-                          selfOperatorId !== null &&
-                          selfOperatorId === op.operatorId
-                            ? '자기 자신은 /operators 의 "내 프로파일" 영역에서 변경하세요.'
-                            : undefined
-                        }
-                        onClick={() => onEditProfile(op)}
-                        data-testid={`action-edit-profile-${op.operatorId}`}
-                      >
-                        프로파일 편집
-                      </Button>
-                      {/* TASK-PC-FE-050 — org_scope (데이터-스코프) per the
-                          active tenant's assignment row. */}
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onOrgScope(op)}
-                        data-testid={`action-org-scope-${op.operatorId}`}
-                      >
-                        조직 스코프
-                      </Button>
-                      {/* TASK-PC-FE-157 — remove this operator's assignment to
-                          the active tenant. A home-tenant-only operator has no
-                          explicit assignment → producer 404 maps inline. */}
-                      {onUnassign && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="text-destructive"
-                          onClick={() => onUnassign(op)}
-                          data-testid={`action-unassign-${op.operatorId}`}
-                        >
-                          배정 해제
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                  op={op}
+                  selfOperatorId={selfOperatorId}
+                  onEditRoles={onEditRoles}
+                  onChangeStatus={onChangeStatus}
+                  onEditProfile={onEditProfile}
+                  onOrgScope={onOrgScope}
+                  onUnassign={onUnassign}
+                />
               ))}
             </tbody>
           </table>
 
-          <nav
-            className="mt-4 flex items-center justify-between"
-            aria-label="페이지 이동"
-          >
-            <Button
-              variant="secondary"
-              disabled={currentPage <= 0}
-              onClick={onPrevPage}
-              data-testid="operators-prev"
-            >
-              이전
-            </Button>
-            <span
-              className="text-sm text-muted-foreground"
-              data-testid="operators-pageinfo"
-            >
-              {page
-                ? `${page.page + 1} / ${Math.max(1, page.totalPages)} 페이지 · 총 ${page.totalElements}명`
-                : '—'}
-            </span>
-            <Button
-              variant="secondary"
-              disabled={
-                !page || page.page + 1 >= page.totalPages
-              }
-              onClick={onNextPage}
-              data-testid="operators-next"
-            >
-              다음
-            </Button>
-          </nav>
+          <OperatorsPagination
+            page={page}
+            currentPage={currentPage}
+            onPrevPage={onPrevPage}
+            onNextPage={onNextPage}
+          />
         </>
       )}
     </>

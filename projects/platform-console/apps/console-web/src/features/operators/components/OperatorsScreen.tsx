@@ -24,6 +24,10 @@ import { OperatorProfileEditDialog } from './OperatorProfileEditDialog';
 import { OrgScopeDialog } from './OrgScopeDialog';
 import { OperatorsTable } from './OperatorsTable';
 import {
+  OperatorsPermissionDenied,
+  OperatorsDegradedNotice,
+} from './OperatorsListNotices';
+import {
   type PendingAction,
   newIdemKey,
   operatorConfirmTitle,
@@ -386,24 +390,9 @@ export function OperatorsScreen({
       </p>
 
       {permissionDenied ? (
-        <div
-          role="status"
-          data-testid="operators-permission-denied"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          {listApiError?.code === 'TENANT_SCOPE_DENIED'
-            ? messageForCode('TENANT_SCOPE_DENIED')
-            : messageForCode('OPERATOR_MANAGE_REQUIRED')}
-        </div>
+        <OperatorsPermissionDenied code={listApiError?.code} />
       ) : degraded ? (
-        <div
-          role="status"
-          data-testid="operators-degraded"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          운영자 서비스를 일시적으로 불러올 수 없습니다. 콘솔의 다른 기능은
-          계속 사용할 수 있습니다. 잠시 후 다시 시도하세요.
-        </div>
+        <OperatorsDegradedNotice />
       ) : (
         <>
           <CreateOperatorForm

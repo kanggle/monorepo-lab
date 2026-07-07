@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { KNOWN_OPERATOR_ROLES, ELEVATED_ROLE } from '../api/types';
+import { OperatorConfirmRoleEditor } from './OperatorConfirmRoleEditor';
 
 /**
  * Reason-capture + confirm dialog for the privilege-sensitive operators
@@ -174,62 +175,14 @@ export function OperatorConfirmDialog({
         </div>
 
         {roleEditor && (
-          <fieldset className="mt-4">
-            <legend
-              className="text-sm font-medium text-foreground"
-              id={rolesId}
-            >
-              역할 (전체 교체 — 비우면 모든 역할 제거)
-            </legend>
-            <div
-              className="mt-2 flex flex-wrap gap-3"
-              role="group"
-              aria-labelledby={rolesId}
-            >
-              {renderableRoles.map((role) => (
-                <label
-                  key={role}
-                  className="flex items-center gap-2 text-sm text-foreground"
-                >
-                  <input
-                    type="checkbox"
-                    checked={roles.includes(role)}
-                    onChange={() => toggleRole(role)}
-                    data-testid={`edit-roles-${role}`}
-                  />
-                  <span
-                    className={
-                      role === ELEVATED_ROLE
-                        ? 'font-medium text-destructive'
-                        : undefined
-                    }
-                  >
-                    {role}
-                    {role === ELEVATED_ROLE ? ' (특권)' : ''}
-                  </span>
-                </label>
-              ))}
-            </div>
-            {removingAll && (
-              <p
-                className="mt-2 text-xs text-destructive"
-                data-testid="edit-roles-remove-all-warning"
-                role="status"
-              >
-                이 운영자의 모든 역할이 제거됩니다. 이후 어떤 운영 권한도
-                갖지 않습니다.
-              </p>
-            )}
-            {grantingElevated && (
-              <p
-                className="mt-2 text-xs text-destructive"
-                data-testid="edit-roles-elevated-warning"
-                role="status"
-              >
-                이 운영자에게 SUPER_ADMIN 특권을 부여합니다.
-              </p>
-            )}
-          </fieldset>
+          <OperatorConfirmRoleEditor
+            rolesId={rolesId}
+            renderableRoles={renderableRoles}
+            roles={roles}
+            toggleRole={toggleRole}
+            removingAll={removingAll}
+            grantingElevated={grantingElevated}
+          />
         )}
 
         <div className="mt-4">
