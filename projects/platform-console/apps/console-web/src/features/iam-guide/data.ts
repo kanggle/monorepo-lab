@@ -354,3 +354,48 @@ export const ACCOUNT_HATS: AccountHat[] = [
     consoleNote: '파트너십 화면. 위임 slice만 · host 를 administer 불가.',
   },
 ];
+
+/**
+ * 권한 두 평면 (관리 평면 ⟂ 운영 평면) — operator token 이 담는 admin RBAC 롤과
+ * assume-tenant 가 담는 도메인 롤은 서로 다른 평면에 살고, 절대 교차하지 않는다
+ * (disjoint). 이 화면의 "역할 종류·접근 매트릭스"는 관리 평면을, "도메인 롤(별도
+ * 축)"은 운영 평면을 각각 상세히 다루며, 이 배열은 둘을 한눈에 대비한다.
+ *
+ * SoT: iam-platform/docs/guides/operator-auth-token-model.md § 6 +
+ * ADR-MONO-035("SUPER_ADMIN is not WMS_OPERATOR" — 평면 분리 불변식).
+ */
+export interface AuthPlane {
+  /** 평면 한글명. */
+  koName: string;
+  /** 이 평면을 담는 토큰. */
+  token: string;
+  /** 대상/목적 한 줄. */
+  purpose: string;
+  /** 롤이 저장/파생되는 방식. */
+  storage: string;
+  /** 대표 롤(표시용 문자열). */
+  roles: string;
+}
+
+export const AUTH_PLANES: AuthPlane[] = [
+  {
+    koName: '관리 평면 · admin RBAC 롤',
+    token: 'operator token',
+    purpose: 'IAM 관리 — /iam 콘솔 3화면(계정·운영자·감사) 게이트',
+    storage: 'admin_roles DB 저장 · 매 요청 조회',
+    roles:
+      'platform: SUPER_ADMIN · SUPPORT_READONLY · SUPPORT_LOCK · SECURITY_ANALYST / tenant: TENANT_ADMIN · TENANT_BILLING_ADMIN',
+  },
+  {
+    koName: '운영 평면 · 도메인 롤',
+    token: 'assume-tenant (2축)',
+    purpose: '도메인 운영 — 도메인 게이트웨이(WMS·E-Commerce·SCM…) 게이트',
+    storage: '저장 안 됨 · entitled_domains 에서 발급 시 파생',
+    roles:
+      'WMS_OPERATOR · ECOMMERCE_OPERATOR · SCM_OPERATOR · ERP_OPERATOR · FINANCE_OPERATOR · MES_OPERATOR · FAN_OPERATOR',
+  },
+];
+
+/** 두 평면 disjoint 불변식 (ADR-MONO-035). */
+export const AUTH_PLANE_DISJOINT =
+  'admin RBAC 롤은 assume-tenant 토큰에 실리지 않고, 도메인 롤은 admin_roles 에서 복사되지 않는다(구독에서 파생) — SUPER_ADMIN 이 WMS_OPERATOR 가 되지 않는다.';
