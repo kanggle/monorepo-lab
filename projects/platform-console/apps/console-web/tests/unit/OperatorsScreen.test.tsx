@@ -8,11 +8,13 @@ import type { OperatorPage } from '@/features/operators';
 import { runAxe } from '../a11y/axe-helper';
 
 // PC-FE-179 added a debounced account-existence pre-flight in CreateOperatorForm
-// (a GET /api/accounts lookup on email+tenant). That side-effecting fetch is
-// out of scope for OperatorsScreen behaviour tests and, when it races the create
-// flow, lands as the first `fetch` call — breaking `not.toHaveBeenCalled()` gates
-// and `mock.calls[0]` create-body assertions. Stub it to a no-network null
-// (unknown → no warning); its own behaviour is covered by CreateOperatorForm.test.
+// (a GET /api/accounts lookup on email+tenant), which TASK-MONO-334 turned into a
+// submit GATE (create is enabled only when the email resolves to an existing tenant
+// account). That side-effecting fetch is out of scope for OperatorsScreen behaviour
+// tests and, when it races the create flow, lands as the first `fetch` call. Stub it
+// to a no-network **exists (true)** so the create-flow tests can reach the confirm
+// dialog; those tests `await` the OIDC-ok note before submitting. The gate's own
+// absent/unavailable behaviour is covered by CreateOperatorForm.test.
 //
 // A PLAIN function (not vi.fn) on purpose: the 400ms debounce timer can fire
 // after a test's teardown, and clearAllMocks/clearMocks would wipe a vi.fn's
@@ -20,7 +22,7 @@ import { runAxe } from '../a11y/axe-helper';
 // throws inside the timer callback = an unhandled error (vitest exits non-zero
 // even with all tests "passing"). A plain arrow is immune to mock resets.
 vi.mock('@/features/operators/api/account-existence', () => ({
-  checkAccountExistsForTenant: () => Promise.resolve(null),
+  checkAccountExistsForTenant: () => Promise.resolve(true),
 }));
 
 /**
@@ -246,6 +248,9 @@ describe('OperatorsScreen — create form (policy mirror, tenant *, gate)', () =
       screen.getByTestId('create-operator-tenant'),
       'wms',
     );
+    // TASK-MONO-334: submit is account-gated — wait for the OIDC-ok state before
+    // clicking (the mocked probe resolves to exists).
+    await screen.findByTestId('create-operator-account-ok');
     await user.click(screen.getByTestId('create-operator-submit'));
 
     // The confirm dialog opens — the producer call has NOT fired yet.
@@ -449,6 +454,8 @@ describe('OperatorsScreen — permission / degrade UX', () => {
       screen.getByTestId('create-operator-tenant'),
       'wms',
     );
+    // TASK-MONO-334: submit is account-gated — wait for the OIDC-ok state first.
+    await screen.findByTestId('create-operator-account-ok');
     await user.click(screen.getByTestId('create-operator-submit'));
     const dialog = screen.getByTestId('operator-confirm-dialog');
     fetchMock.mockResolvedValue(
