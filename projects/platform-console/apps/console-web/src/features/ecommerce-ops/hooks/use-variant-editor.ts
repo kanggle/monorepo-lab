@@ -6,7 +6,7 @@ import {
   useAddVariant,
   useUpdateVariant,
   useDeleteVariant,
-} from '../hooks/use-ecommerce-products';
+} from './use-ecommerce-products';
 import type { Variant } from '../api/types';
 
 /**

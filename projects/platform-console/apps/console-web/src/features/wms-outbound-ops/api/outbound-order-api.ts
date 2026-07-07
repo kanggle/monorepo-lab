@@ -11,7 +11,7 @@ import {
   type CancelResult,
   type OutboundListParams,
 } from './types';
-import { callOutbound, clampSize } from './outbound-core-api';
+import { callOutbound, clampSize } from './outbound-client';
 
 /**
  * ORDER domain — wms outbound-service order reads and cancel mutation

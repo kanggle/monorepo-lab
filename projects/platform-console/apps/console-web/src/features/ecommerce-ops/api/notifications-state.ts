@@ -1,5 +1,5 @@
 import { mapSectionResilience, mapDetailResilience } from './section-state';
-import { listTemplates, getTemplate } from './notifications-api';
+import { listTemplates, getTemplate } from './ecommerce-api';
 import type {
   NotificationTemplateList,
   NotificationTemplateDetail,

@@ -2,7 +2,7 @@
 
 import { showPickerOnClick } from '@/shared/lib/show-picker';
 import { DISCOUNT_TYPE_VALUES } from '../api/types';
-import type { usePromotionForm } from './use-promotion-form';
+import type { usePromotionForm } from '../hooks/use-promotion-form';
 
 type PromotionFormHook = ReturnType<typeof usePromotionForm>;
 

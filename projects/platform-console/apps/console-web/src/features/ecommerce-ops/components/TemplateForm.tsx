@@ -9,7 +9,7 @@ import {
   type TemplateType,
 } from '../api/notification-types';
 import { ConfirmDialog } from './ConfirmDialog';
-import { useTemplateForm } from './use-template-form';
+import { useTemplateForm } from '../hooks/use-template-form';
 
 /**
  * Create / update notification template form (TASK-PC-FE-089 — ADR-031 Phase 5b).

@@ -6,7 +6,7 @@ import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useRegisterProduct,
   useUpdateProduct,
-} from '../hooks/use-ecommerce-products';
+} from './use-ecommerce-products';
 import {
   type ProductDetail,
   type RegisterProductBody,

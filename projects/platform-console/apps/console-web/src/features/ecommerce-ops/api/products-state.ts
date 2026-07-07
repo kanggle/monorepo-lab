@@ -1,5 +1,5 @@
 import { mapSectionResilience, mapDetailResilience } from './section-state';
-import { listProducts, getProduct } from './products-api';
+import { listProducts, getProduct } from './ecommerce-api';
 import type { ProductList, ProductDetail, ProductListParams } from './types';
 
 /**

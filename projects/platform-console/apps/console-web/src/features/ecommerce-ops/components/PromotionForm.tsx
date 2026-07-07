@@ -4,7 +4,7 @@ import { Button } from '@/shared/ui/Button';
 import { type PromotionDetail } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { PromotionFormFields } from './PromotionFormFields';
-import { usePromotionForm } from './use-promotion-form';
+import { usePromotionForm } from '../hooks/use-promotion-form';
 
 /**
  * Create / update promotion form (TASK-PC-FE-086 — ADR-031 Phase 3b).

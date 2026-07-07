@@ -6,7 +6,7 @@ import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
   useCreateTemplate,
   useUpdateTemplate,
-} from '../hooks/use-ecommerce-notifications';
+} from './use-ecommerce-notifications';
 import {
   TEMPLATE_TYPE_VALUES,
   NOTIFICATION_CHANNEL_VALUES,

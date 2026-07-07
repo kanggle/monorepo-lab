@@ -1,5 +1,5 @@
 import { mapSectionResilience, mapDetailResilience } from './section-state';
-import { listUsers, getUser } from './users-api';
+import { listUsers, getUser } from './ecommerce-api';
 import type { UserList, UserDetail, UserListParams } from './user-types';
 
 /**
