@@ -50,7 +50,7 @@ class OperatorRoleDerivationTest {
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("wms")))
                 .containsExactlyElementsOf(WMS);
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("ecommerce")))
-                .containsExactly("ADMIN");
+                .containsExactly("ECOMMERCE_OPERATOR");
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("scm")))
                 .containsExactly("SCM_OPERATOR");
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("erp")))

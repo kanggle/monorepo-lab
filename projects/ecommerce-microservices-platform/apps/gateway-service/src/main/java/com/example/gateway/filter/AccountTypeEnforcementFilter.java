@@ -21,10 +21,10 @@ import reactor.core.publisher.Mono;
 /**
  * Enforces role-based admission per route (ADR-MONO-035 4b-2a / ADR-032 D3):
  * <ul>
- *   <li>{@code /api/admin/**} → requires the {@code ADMIN} role; any other token → 403</li>
+ *   <li>{@code /api/admin/**} → requires the {@code ECOMMERCE_OPERATOR} role; any other token → 403</li>
  *   <li>{@code operator-on-public} read trees ({@code /api/promotions},
  *       {@code /api/shippings}, {@code /api/notifications}) → admit {@code CUSTOMER}
- *       <b>or</b> {@code ADMIN}; the per-endpoint operator/consumer split is enforced
+ *       <b>or</b> {@code ECOMMERCE_OPERATOR}; the per-endpoint operator/consumer split is enforced
  *       service-side via the gateway-injected {@code X-User-Role} header (TASK-BE-380).</li>
  *   <li>All other authenticated routes → requires the {@code CUSTOMER} role; any other token → 403</li>
  *   <li>Public routes (no security context) → passes through unchanged</li>
@@ -34,10 +34,10 @@ import reactor.core.publisher.Mono;
  * shipping-api.md and notification-api.md deliberately place their <i>operator</i>
  * (Admin) endpoints on the public path tree — e.g. {@code GET /api/promotions (Admin)},
  * {@code GET /api/shippings (Admin)}, {@code GET /api/notifications/templates (Admin)} —
- * each gated service-side by {@code X-User-Role == ADMIN}, NOT under {@code /api/admin/**}.
+ * each gated service-side by {@code X-User-Role == ECOMMERCE_OPERATOR}, NOT under {@code /api/admin/**}.
  * A prefix-only "{@code non-/api/admin → CUSTOMER}" rule therefore 403s the operator
  * before the request reaches the service that would accept it (live-surfaced by the
- * platform-console absorption PC-FE-086/088/089). Admitting {@code ADMIN} on exactly
+ * platform-console absorption PC-FE-086/088/089). Admitting {@code ECOMMERCE_OPERATOR} on exactly
  * these read trees reconciles the gateway with those producer contracts; the services
  * keep the fine-grained per-endpoint gating. iam-integration.md § "Account-Type 강제"
  * documents the exception.
@@ -74,15 +74,15 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
                     java.util.List<String> roles = token.getClaimAsStringList("roles");
                     boolean isAdmin = path.startsWith("/api/admin/");
                     if (isAdmin) {
-                        boolean allowed = hasRole(roles, "ADMIN");
+                        boolean allowed = hasRole(roles, "ECOMMERCE_OPERATOR");
                         return Mono.just(allowed);
                     } else {
                         // Consumers (CUSTOMER) pass everywhere on the public tree; operators
-                        // (ADMIN) are additionally admitted on the operator-on-public read
+                        // (ECOMMERCE_OPERATOR) are additionally admitted on the operator-on-public read
                         // trees (promotion/shipping/notification), where the producer
                         // contracts host Admin endpoints that self-gate via X-User-Role.
                         boolean allowed = hasRole(roles, "CUSTOMER")
-                                || (isOperatorPublicPath(path) && hasRole(roles, "ADMIN"));
+                                || (isOperatorPublicPath(path) && hasRole(roles, "ECOMMERCE_OPERATOR"));
                         return Mono.just(allowed);
                     }
                 })
@@ -110,10 +110,10 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
     /**
      * TASK-BE-380: the public-path read trees whose producer contracts host
      * <i>operator</i> (Admin) endpoints alongside consumer ones (promotion-api.md /
-     * shipping-api.md / notification-api.md). On these, an {@code ADMIN} token is
+     * shipping-api.md / notification-api.md). On these, an {@code ECOMMERCE_OPERATOR} token is
      * admitted in addition to {@code CUSTOMER}; the service then enforces the
-     * per-endpoint {@code X-User-Role == ADMIN} split. Scoped (not a blanket
-     * ADMIN-everywhere) to keep the blast radius to exactly the contracted trees.
+     * per-endpoint {@code X-User-Role == ECOMMERCE_OPERATOR} split. Scoped (not a blanket
+     * ECOMMERCE_OPERATOR-everywhere) to keep the blast radius to exactly the contracted trees.
      */
     private static boolean isOperatorPublicPath(String path) {
         return path.startsWith("/api/promotions")

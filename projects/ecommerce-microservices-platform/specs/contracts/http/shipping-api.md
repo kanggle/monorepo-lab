@@ -125,7 +125,7 @@ via the logistics aggregator and advances the shipment status accordingly. Best-
 outage or unknown status leaves the shipment unchanged (returns 200 with the current status).
 Default `shipping.carrier.mode=mock` is a no-op.
 
-**Authorization**: `X-User-Role: ADMIN` header required (forwarded by gateway).
+**Authorization**: `X-User-Role: ECOMMERCE_OPERATOR` header required (forwarded by gateway).
 
 **Response 200**
 ```json

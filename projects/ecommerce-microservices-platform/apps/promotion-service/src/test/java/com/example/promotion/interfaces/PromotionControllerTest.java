@@ -55,7 +55,7 @@ class PromotionControllerTest {
                 .willReturn(new CreatePromotionResult("promo-123"));
 
         mockMvc.perform(post("/api/promotions")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -77,7 +77,7 @@ class PromotionControllerTest {
     @DisplayName("깨진 JSON 본문이면 400 / VALIDATION_ERROR 반환")
     void createPromotion_malformedBody_returns400() throws Exception {
         mockMvc.perform(post("/api/promotions")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":"))
                 .andExpect(status().isBadRequest())
@@ -86,7 +86,7 @@ class PromotionControllerTest {
     }
 
     @Test
-    @DisplayName("ADMIN 아닌 역할로 요청 시 403이 반환된다")
+    @DisplayName("ECOMMERCE_OPERATOR 아닌 역할로 요청 시 403이 반환된다")
     void createPromotion_nonAdminRole_returns403() throws Exception {
         given(promotionCommandService.createPromotion(any()))
                 .willThrow(new AccessDeniedException());
@@ -117,11 +117,11 @@ class PromotionControllerTest {
                 Instant.parse("2026-04-01T00:00:00Z"),
                 PromotionStatus.ACTIVE
         );
-        given(promotionQueryService.getPromotions(0, 20, null, "ADMIN"))
+        given(promotionQueryService.getPromotions(0, 20, null, "ECOMMERCE_OPERATOR"))
                 .willReturn(new PageResult<>(List.of(summary), 0, 20, 1L, 1));
 
         mockMvc.perform(get("/api/promotions")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].promotionId").value("promo-1"))
                 .andExpect(jsonPath("$.totalElements").value(1));
@@ -139,10 +139,10 @@ class PromotionControllerTest {
                 Instant.parse("2026-02-28T00:00:00Z"),
                 Instant.parse("2026-02-28T00:00:00Z")
         );
-        given(promotionQueryService.getPromotion("promo-1", "ADMIN")).willReturn(detail);
+        given(promotionQueryService.getPromotion("promo-1", "ECOMMERCE_OPERATOR")).willReturn(detail);
 
         mockMvc.perform(get("/api/promotions/promo-1")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.promotionId").value("promo-1"))
                 .andExpect(jsonPath("$.name").value("할인"));
@@ -151,11 +151,11 @@ class PromotionControllerTest {
     @Test
     @DisplayName("존재하지 않는 프로모션 조회 시 404가 반환된다")
     void getPromotion_notFound_returns404() throws Exception {
-        given(promotionQueryService.getPromotion("non-existent", "ADMIN"))
+        given(promotionQueryService.getPromotion("non-existent", "ECOMMERCE_OPERATOR"))
                 .willThrow(new PromotionNotFoundException("non-existent"));
 
         mockMvc.perform(get("/api/promotions/non-existent")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PROMOTION_NOT_FOUND"));
     }
@@ -164,7 +164,7 @@ class PromotionControllerTest {
     @DisplayName("프로모션 삭제 시 204가 반환된다")
     void deletePromotion_validRequest_returns204() throws Exception {
         mockMvc.perform(delete("/api/promotions/promo-1")
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isNoContent());
     }
 
@@ -172,7 +172,7 @@ class PromotionControllerTest {
     @DisplayName("필수 필드 누락 시 400이 반환된다")
     void createPromotion_missingName_returns400() throws Exception {
         mockMvc.perform(post("/api/promotions")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

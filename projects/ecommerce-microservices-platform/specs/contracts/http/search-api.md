@@ -69,7 +69,7 @@ Full reindex of the Elasticsearch product index from product-service data. Inten
 operational recovery when the index diverges from the DB (e.g. event loss, seed data).
 **Not exposed through the public gateway** — accessible only on the internal service port (8085).
 
-**Authorization**: `X-User-Role: ADMIN` header required (validated in-service).
+**Authorization**: `X-User-Role: ECOMMERCE_OPERATOR` header required (validated in-service).
 
 **Query Parameters**
 - `batchSize` (default: 50, must be > 0) — number of products fetched per batch

@@ -933,7 +933,7 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
-    @DisplayName("BE-376 assume-tenant: entitled [ecommerce] → roles [ADMIN]")
+    @DisplayName("BE-376 assume-tenant: entitled [ecommerce] → roles [ECOMMERCE_OPERATOR]")
     void assumeTenant_ecommerceEntitled_derivesAdmin() {
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
@@ -947,7 +947,7 @@ class TenantClaimTokenCustomizerTest {
         customizer.customize(context);
 
         JwtClaimsSet built = claimsBuilder.build();
-        assertThat(built.<List<String>>getClaim("roles")).containsExactly("ADMIN");
+        assertThat(built.<List<String>>getClaim("roles")).containsExactly("ECOMMERCE_OPERATOR");
     }
 
     @Test

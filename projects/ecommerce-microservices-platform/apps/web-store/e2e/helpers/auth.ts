@@ -149,7 +149,7 @@ export async function completeGapSignIn(page: Page, user: TestUser): Promise<voi
 /**
  * Cross-app consumer-role guard (roles-based, ADR-MONO-035 4b-1): an operator
  * whose web-store token lacks the `CUSTOMER` role (operators carry the
- * assume-tenant-derived `ADMIN` domain role, not `CUSTOMER`) is rejected by
+ * assume-tenant-derived `ECOMMERCE_OPERATOR` domain role, not `CUSTOMER`) is rejected by
  * web-store and bounced back to `/login?error=account_type_mismatch` (the
  * error-code string is retained for UI compatibility; the legacy `account_type`
  * claim was removed in ADR-MONO-032 D5 step 4).

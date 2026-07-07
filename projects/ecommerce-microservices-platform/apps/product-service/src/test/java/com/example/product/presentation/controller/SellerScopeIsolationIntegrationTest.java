@@ -95,7 +95,7 @@ class SellerScopeIsolationIntegrationTest {
 
     private String registerProduct(String tenantId, String sellerId, String name) throws Exception {
         var request = post("/api/admin/products")
-                .header(ROLE_HEADER, "ADMIN")
+                .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
                 .header(TENANT_HEADER, tenantId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(productBody(name, sellerId));

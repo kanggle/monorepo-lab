@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
  * marketplace axis nested under {@code tenant_id}; settlement/commission remain Step 4.
  *
  * <p>Authorization is promotions-exact: every endpoint calls
- * {@link #validateAdminRole(String)} ({@code X-User-Role == ADMIN}); the routes sit
+ * {@link #validateAdminRole(String)} ({@code X-User-Role == ECOMMERCE_OPERATOR}); the routes sit
  * behind the gateway {@code /api/admin/**} OPERATOR branch.
  */
 @RestController
@@ -40,7 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AdminSellerController {
 
-    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
 
     /** Page-size cap mirrored from the product operator list. */
     private static final int MAX_PAGE_SIZE = 100;
@@ -51,7 +51,7 @@ public class AdminSellerController {
     /**
      * Tenant-scoped KST calendar-period-to-date seller counts for the Operator
      * Overview composition leg (TASK-BE-468, TASK-MONO-322). Authorization mirrors
-     * {@link #list}: {@code X-User-Role} must contain {@code ADMIN}; tenant
+     * {@link #list}: {@code X-User-Role} must contain {@code ECOMMERCE_OPERATOR}; tenant
      * isolation is the repository {@code WHERE tenant_id} chokepoint (M6).
      */
     @GetMapping("/summary")

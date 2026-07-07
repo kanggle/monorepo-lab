@@ -197,7 +197,7 @@ describe('EcommerceGuideScreen', () => {
     ]);
   });
 
-  it('renders the ecommerce domain-role note (single ADMIN axis)', () => {
+  it('renders the ecommerce domain-role note (single ECOMMERCE_OPERATOR axis)', () => {
     render(<EcommerceGuideScreen />);
     expect(screen.getByTestId('ecommerce-guide-roles')).toBeInTheDocument();
   });

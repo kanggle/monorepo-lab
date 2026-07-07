@@ -166,7 +166,7 @@ class GatewayIntegrationTest {
                 .uri("/api/orders/123")
                 .header("X-User-Id", "spoofed-user")
                 .header("X-User-Email", "spoofed@evil.com")
-                .header("X-User-Role", "ADMIN")
+                .header("X-User-Role", "ECOMMERCE_OPERATOR")
                 .exchange()
                 .expectStatus().isUnauthorized();
     }

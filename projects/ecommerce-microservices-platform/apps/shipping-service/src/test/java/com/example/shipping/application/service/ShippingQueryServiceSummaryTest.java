@@ -36,7 +36,7 @@ class ShippingQueryServiceSummaryTest {
         given(shippingRepository.countAllForTenant()).willReturn(0L);
         given(shippingRepository.countCreatedBetween(any(Instant.class), any(Instant.class))).willReturn(0L);
 
-        PeriodSummary result = shippingQueryService.getPeriodSummary("ADMIN");
+        PeriodSummary result = shippingQueryService.getPeriodSummary("ECOMMERCE_OPERATOR");
 
         assertThat(result.today()).isZero();
         assertThat(result.week()).isZero();
@@ -53,7 +53,7 @@ class ShippingQueryServiceSummaryTest {
         given(shippingRepository.countCreatedBetween(any(Instant.class), any(Instant.class)))
                 .willReturn(1L, 1L, 1L);
 
-        PeriodSummary result = shippingQueryService.getPeriodSummary("ADMIN");
+        PeriodSummary result = shippingQueryService.getPeriodSummary("ECOMMERCE_OPERATOR");
 
         assertThat(result.total()).isEqualTo(1L);
         assertThat(result.today()).isEqualTo(1L);

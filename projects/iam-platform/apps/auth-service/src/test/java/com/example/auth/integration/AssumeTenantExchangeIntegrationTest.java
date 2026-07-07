@@ -386,7 +386,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
         when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
         // The selected tenant is entitled to wms + ecommerce → the operator's derived
-        // domain roles are WMS_OPERATOR + ADMIN (OperatorRoleDerivation, BE-376 / 4a).
+        // domain roles are WMS_OPERATOR + ECOMMERCE_OPERATOR (OperatorRoleDerivation, BE-376 / 4a).
         stubEntitledDomains("wms", "ecommerce");
 
         String account = "unified-identity-step5-001";
@@ -416,7 +416,7 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
         assertThat(assumed.get("roles")).as("operator domain token must carry a roles claim").isNotNull();
         assertThat(assumed.get("roles").toString())
                 .as("operator capability: domain roles derived from entitled wms+ecommerce")
-                .contains("WMS_OPERATOR").contains("ADMIN");
+                .contains("WMS_OPERATOR").contains("ECOMMERCE_OPERATOR");
         // 4b: roles-only ADMISSION — the operator admits at the domain gateway via roles
         // ALONE; NO account_type leg remains on the operator token either.
         assertThat(assumed.has("account_type"))

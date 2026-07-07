@@ -5,9 +5,9 @@ Published HTTP API for settlement-service (ADR-MONO-030 Step 4 facet b — marke
 seller settlement / commission). All endpoints are accessible through
 gateway-service only. **Operator-plane only** (`/api/admin/**`) — there is no
 consumer-facing settlement surface. All endpoints require an authenticated
-operator (Bearer token, `roles ∋ ADMIN` — the platform-console operator's
+operator (Bearer token, `roles ∋ ECOMMERCE_OPERATOR` — the platform-console operator's
 ADR-MONO-035 4a assume-tenant-derived domain role; the gateway gates
-`/api/admin/**` on `roles ∋ ADMIN`).
+`/api/admin/**` on `roles ∋ ECOMMERCE_OPERATOR`).
 
 > **No write path for accruals.** Commission is booked **only** from the
 > order/payment event streams (see `settlement-subscriptions.md`). The HTTP
@@ -121,7 +121,7 @@ accruals booked *after* this call; already-booked accruals are immutable (F3).
 
 ## Period close + payout (period-close increment)
 
-Operator-plane (`roles ∋ ADMIN`), tenant-scoped like every other endpoint. A
+Operator-plane (`roles ∋ ECOMMERCE_OPERATOR`), tenant-scoped like every other endpoint. A
 period / payout in another tenant resolves to **404** (M3). The two read-list
 shapes below are also **seller-scoped** for payouts (the `X-Seller-Scope` filter, as
 on the accrual reads). Mirrors the finance-platform ledger period endpoints.

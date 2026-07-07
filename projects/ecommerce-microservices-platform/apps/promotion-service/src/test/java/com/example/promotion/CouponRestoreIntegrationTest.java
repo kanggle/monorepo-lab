@@ -127,7 +127,7 @@ class CouponRestoreIntegrationTest {
 
     private String createPromotion() throws Exception {
         MvcResult result = mockMvc.perform(post("/api/promotions")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -148,7 +148,7 @@ class CouponRestoreIntegrationTest {
 
     private void issueCoupon(String promotionId, String userId) throws Exception {
         mockMvc.perform(post("/api/promotions/" + promotionId + "/coupons/issue")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userIds\": [\"" + userId + "\"]}"))
                 .andExpect(status().isCreated());

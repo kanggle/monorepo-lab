@@ -82,16 +82,16 @@ class AdminProductControllerTest {
     // ─── GET /api/admin/products (operator-plane read — TASK-MONO-243) ──
 
     @Test
-    @DisplayName("GET /api/admin/products - ADMIN-role 헤더 없이 200 + paged 요약 반환 (게이트 entitlement-trust, controller 미검사)")
+    @DisplayName("GET /api/admin/products - ECOMMERCE_OPERATOR-role 헤더 없이 200 + paged 요약 반환 (게이트 entitlement-trust, controller 미검사)")
     void list_noRoleHeader_returns200WithPagedSummary() throws Exception {
         UUID id = UUID.randomUUID();
         ProductSummary summary = new ProductSummary(id, "상품", ProductStatus.ON_SALE, 10000L, null, null, "seller-a1");
         ProductListResult result = new ProductListResult(List.of(summary), 0, 1, 42L);
         given(queryProductService.findAll(any(), any(), any(), anyInt(), anyInt())).willReturn(result);
 
-        // No X-User-Role header at all — the read MUST NOT require ADMIN (the
+        // No X-User-Role header at all — the read MUST NOT require ECOMMERCE_OPERATOR (the
         // operator-overview leg presents an IAM OIDC token with no ecommerce
-        // ADMIN role claim; authz is the gateway's OPERATOR + entitlement-trust).
+        // ECOMMERCE_OPERATOR role claim; authz is the gateway's OPERATOR + entitlement-trust).
         mockMvc.perform(get("/api/admin/products")
                         .param("page", "0")
                         .param("size", "1"))

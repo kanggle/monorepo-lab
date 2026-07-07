@@ -28,7 +28,7 @@ class DelegatableRoleCatalogTest {
                         "INVENTORY_READ", "INVENTORY_WRITE",
                         "MASTER_READ",
                         // ecommerce operator role
-                        "ADMIN",
+                        "ECOMMERCE_OPERATOR",
                         // single-role domains
                         "SCM_OPERATOR", "ERP_OPERATOR", "FINANCE_OPERATOR",
                         "MES_OPERATOR", "FAN_OPERATOR");

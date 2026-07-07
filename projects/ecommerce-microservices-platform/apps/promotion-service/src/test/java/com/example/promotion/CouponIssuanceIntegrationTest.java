@@ -51,7 +51,7 @@ class CouponIssuanceIntegrationTest {
 
         // Create promotion
         MvcResult createResult = mockMvc.perform(post("/api/promotions")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -72,7 +72,7 @@ class CouponIssuanceIntegrationTest {
 
         // Issue coupons
         mockMvc.perform(post("/api/promotions/" + promotionId + "/coupons/issue")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userIds\": [\"" + userId + "\"]}"))
                 .andExpect(status().isCreated())
@@ -128,7 +128,7 @@ class CouponIssuanceIntegrationTest {
     void deletePromotion_withIssuedCoupons_returns422() throws Exception {
         // Create promotion
         MvcResult createResult = mockMvc.perform(post("/api/promotions")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -148,14 +148,14 @@ class CouponIssuanceIntegrationTest {
 
         // Issue coupons
         mockMvc.perform(post("/api/promotions/" + promotionId + "/coupons/issue")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userIds\": [\"user-del-test\"]}"))
                 .andExpect(status().isCreated());
 
         // Try to delete
         mockMvc.perform(delete("/api/promotions/" + promotionId)
-                        .header("X-User-Role", "ADMIN"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("PROMOTION_HAS_ISSUED_COUPONS"));
     }

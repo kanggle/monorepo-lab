@@ -18,7 +18,7 @@
  *   - 콘솔 소비 타입(producer enum verbatim 반영 — 2차 SoT):
  *     `features/ecommerce-ops/api/{types,order-types,shipping-types,seller-types,
  *     user-types,notification-types}.ts`.
- *   - 도메인 롤: auth-service `OperatorRoleDerivation`(assume-tenant 파생 — ecommerce ADMIN).
+ *   - 도메인 롤: auth-service `OperatorRoleDerivation`(assume-tenant 파생 — ecommerce ECOMMERCE_OPERATOR).
  *
  * 테스트(EcommerceGuideScreen.test.tsx)는 섹션/행 존재 등 **구조만** 단언하며,
  * 설명 텍스트 자체는 사람이 스펙과 맞춘다(iam-guide/wms-guide data.ts 동일 정책).
@@ -540,10 +540,10 @@ export const NOTIFICATION_NOTE = {
 /**
  * E-Commerce 도메인 롤. 운영자가 ecommerce 구독 테넌트로 assume-tenant 할 때
  * auth-service `OperatorRoleDerivation` 이 파생한다. WMS(세분 롤 다수)와 달리
- * **단일 coarse `ADMIN`** 하나뿐 — 7개 화면이 모두 동일하게 게이트된다. IAM
+ * **단일 coarse `ECOMMERCE_OPERATOR`** 하나뿐 — 7개 화면이 모두 동일하게 게이트된다. IAM
  * 가이드의 admin-console 역할과는 다른 축(도메인 롤).
  */
 export const ECOMMERCE_ROLE_NOTE = {
-  title: 'E-Commerce 도메인 롤 (단일 ADMIN)',
-  body: 'E-Commerce 화면은 단일 도메인 롤 `ADMIN` 으로 게이트된다. 운영자가 ecommerce 구독 테넌트로 테넌트 선택(assume-tenant)할 때 자동 파생되어 주입되며(auth-service OperatorRoleDerivation), 상품·주문·배송·프로모션·사용자·셀러·알림 7개 화면이 모두 이 하나의 롤로 동일하게 열린다. WMS 처럼 화면별 세분 롤(READ/WRITE)은 없다. ecommerce 구독이 없거나 롤이 없으면 도메인 게이트웨이가 403 을 반환하고 콘솔은 "접근 권한이 없습니다"로 표시한다. (IAM 콘솔을 게이트하는 admin-console 역할과는 별도 축 — IAM 가이드 참조.)',
+  title: 'E-Commerce 도메인 롤 (단일 ECOMMERCE_OPERATOR)',
+  body: 'E-Commerce 화면은 단일 도메인 롤 `ECOMMERCE_OPERATOR` 으로 게이트된다. 운영자가 ecommerce 구독 테넌트로 테넌트 선택(assume-tenant)할 때 자동 파생되어 주입되며(auth-service OperatorRoleDerivation), 상품·주문·배송·프로모션·사용자·셀러·알림 7개 화면이 모두 이 하나의 롤로 동일하게 열린다. WMS 처럼 화면별 세분 롤(READ/WRITE)은 없다. ecommerce 구독이 없거나 롤이 없으면 도메인 게이트웨이가 403 을 반환하고 콘솔은 "접근 권한이 없습니다"로 표시한다. (IAM 콘솔을 게이트하는 admin-console 역할과는 별도 축 — IAM 가이드 참조.)',
 } as const;

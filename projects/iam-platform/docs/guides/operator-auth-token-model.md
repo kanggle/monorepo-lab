@@ -116,7 +116,7 @@ operator token 도 성격상 인가이며, 다만 대상이 도메인 운영이 
 
 - **① 소비자** — B2C(예: web-store 쇼핑). 콘솔 진입 불가, 교환 없음. 로그인 토큰(1축)만.
 - **② 내가 운영하는 회사** — 내가 소유자/관리자인 테넌트. 조직을 **세팅**한다: 도메인 구독 켜기·운영자 생성·협력사에 slice 위임. IAM 관리(`/api/admin/**`)는 operator token 으로.
-- **③ 내가 다니는 회사** — 내가 직원-운영자로 **배정**된 테넌트. `operator_tenant_assignment` 로 assume 대상이 열리고, assume-tenant(2축) 진입 시 그 테넌트의 구독 도메인에서 도메인 롤(WMS_OPERATOR·ADMIN…)이 파생된다.
+- **③ 내가 다니는 회사** — 내가 직원-운영자로 **배정**된 테넌트. `operator_tenant_assignment` 로 assume 대상이 열리고, assume-tenant(2축) 진입 시 그 테넌트의 구독 도메인에서 도메인 롤(WMS_OPERATOR·ECOMMERCE_OPERATOR…)이 파생된다.
 - **④ 내 회사가 운영하는 다른 회사** — 우리 회사(partner 테넌트 B)가 host 테넌트 A 에게서 받은 위임 slice 안에서, 내가 그 참여자(participant). A 를 assume 하되 2축 토큰이 `delegated_scope` 로 cap 되고 admin 권한은 조직 경계를 넘지 못한다(§ 7 상세).
 
 **② ↔ ③ 구분** — 같은 "내 회사"라도 **owner(②, 조직을 세팅)** 냐 **assigned operator(③, 배정 범위를 운영)** 냐로 역할 티어가 다릅니다. ②는 구독·운영자·위임을 만들고, ③은 배정받은 도메인 범위에서 운영합니다.
@@ -127,7 +127,7 @@ operator token 도 성격상 인가이며, 다만 대상이 도메인 운영이 
 
 ### admin-console 롤은 누가 받나 — 대표·직원·협력업체
 
-위 4모자는 "관계"를, 이 절은 그 관계에서 받는 **IAM 관리(admin-console) 롤**을 정리합니다. IAM 관리 롤은 콘솔 `/iam` 관리 화면(계정·운영자·감사·구독·파트너십)을 게이트하며, **도메인 운영 롤**(`WMS_OPERATOR`·`SCM_OPERATOR`·ecommerce `ADMIN`…)과는 **별개 축**입니다 — 직원·협력업체의 실제 일감 대부분은 이 6개가 아니라 도메인 롤로 굴러갑니다.
+위 4모자는 "관계"를, 이 절은 그 관계에서 받는 **IAM 관리(admin-console) 롤**을 정리합니다. IAM 관리 롤은 콘솔 `/iam` 관리 화면(계정·운영자·감사·구독·파트너십)을 게이트하며, **도메인 운영 롤**(`WMS_OPERATOR`·`SCM_OPERATOR`·ecommerce `ECOMMERCE_OPERATOR`…)과는 **별개 축**입니다 — 직원·협력업체의 실제 일감 대부분은 이 6개가 아니라 도메인 롤로 굴러갑니다.
 
 seed 롤은 6개이고 **scope 로 두 부류**로 갈립니다:
 

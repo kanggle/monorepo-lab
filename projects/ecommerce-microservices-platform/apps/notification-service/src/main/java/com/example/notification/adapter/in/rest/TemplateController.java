@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/notifications/templates")
 public class TemplateController {
 
-    private static final String ADMIN_ROLE = "ADMIN";
+    private static final String ADMIN_ROLE = "ECOMMERCE_OPERATOR";
 
     private final ManageTemplateUseCase templateService;
 
@@ -98,7 +98,7 @@ public class TemplateController {
     /**
      * The API gateway ({@code JwtHeaderEnrichmentFilter}, ADR-MONO-035 4b-2a)
      * injects {@code X-User-Role} as the COMMA-JOINED {@code roles} claim — e.g.
-     * {@code "ADMIN,WMS_OPERATOR"} for a multi-domain operator. Admit when ADMIN
+     * {@code "ECOMMERCE_OPERATOR,WMS_OPERATOR"} for a multi-domain operator. Admit when ECOMMERCE_OPERATOR
      * is one of the joined roles; an exact-equals check wrongly 403s any operator
      * who holds more than one role.
      */

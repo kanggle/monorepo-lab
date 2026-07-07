@@ -151,13 +151,13 @@ class UserProfileIntegrationTest {
     class ListUsers {
 
         @Test
-        @DisplayName("ADMIN 권한으로 사용자 목록을 페이지네이션하여 반환한다")
+        @DisplayName("ECOMMERCE_OPERATOR 권한으로 사용자 목록을 페이지네이션하여 반환한다")
         void listUsers_withAdminRole_returns200() throws Exception {
             UUID userId = UUID.randomUUID();
             createAndSaveProfile(userId, "integ-list-" + userId + "@example.com", "목록테스트");
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ADMIN")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
                             .param("page", "0")
                             .param("size", "20"))
                     .andExpect(status().isOk())
@@ -168,7 +168,7 @@ class UserProfileIntegrationTest {
         }
 
         @Test
-        @DisplayName("ADMIN 권한 없이 요청하면 403을 반환한다")
+        @DisplayName("ECOMMERCE_OPERATOR 권한 없이 요청하면 403을 반환한다")
         void listUsers_withoutAdminRole_returns403() throws Exception {
             mockMvc.perform(get("/api/admin/users"))
                     .andExpect(status().isForbidden())
@@ -179,7 +179,7 @@ class UserProfileIntegrationTest {
         @DisplayName("status 필터로 사용자 목록을 조회한다")
         void listUsers_statusFilter_returns200() throws Exception {
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ADMIN")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
                             .param("status", "ACTIVE"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray());
@@ -192,7 +192,7 @@ class UserProfileIntegrationTest {
             createAndSaveProfile(userId, "integ-email-search@example.com", "이메일검색");
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ADMIN")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
                             .param("email", "integ-email-search"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray());
@@ -204,20 +204,20 @@ class UserProfileIntegrationTest {
     class GetUserById {
 
         @Test
-        @DisplayName("ADMIN 권한으로 특정 사용자 프로필을 조회하면 200을 반환한다")
+        @DisplayName("ECOMMERCE_OPERATOR 권한으로 특정 사용자 프로필을 조회하면 200을 반환한다")
         void getUser_withAdminRole_returns200() throws Exception {
             UUID userId = UUID.randomUUID();
             createAndSaveProfile(userId, "integ-admin-get@example.com", "관리자조회");
 
             mockMvc.perform(get("/api/admin/users/{userId}", userId)
-                            .header("X-User-Role", "ADMIN"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.userId").value(userId.toString()))
                     .andExpect(jsonPath("$.email").value("integ-admin-get@example.com"));
         }
 
         @Test
-        @DisplayName("ADMIN 권한 없이 특정 사용자 조회 시 403을 반환한다")
+        @DisplayName("ECOMMERCE_OPERATOR 권한 없이 특정 사용자 조회 시 403을 반환한다")
         void getUser_withoutAdminRole_returns403() throws Exception {
             UUID userId = UUID.randomUUID();
 
@@ -232,7 +232,7 @@ class UserProfileIntegrationTest {
             UUID userId = UUID.randomUUID();
 
             mockMvc.perform(get("/api/admin/users/{userId}", userId)
-                            .header("X-User-Role", "ADMIN"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("USER_PROFILE_NOT_FOUND"));
         }

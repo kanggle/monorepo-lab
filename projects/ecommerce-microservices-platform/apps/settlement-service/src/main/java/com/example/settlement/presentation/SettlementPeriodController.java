@@ -31,7 +31,7 @@ import java.util.List;
  * Operator-plane settlement-period endpoints (settlement-api.md § Period close).
  * Open a period, close it (folding in-window accruals into PENDING {@code seller_payout}
  * rows + emitting {@code settlement.period.closed.v1}), list periods, and execute /
- * read payout rows (TASK-BE-416). All require an operator ({@code X-User-Role ∋ ADMIN})
+ * read payout rows (TASK-BE-416). All require an operator ({@code X-User-Role ∋ ECOMMERCE_OPERATOR})
  * and are tenant-scoped (gateway {@code X-Tenant-Id} via {@link TenantContext}). The
  * use cases own the transaction boundary — the controller never touches JPA directly
  * (architecture.md § boundary).
@@ -41,7 +41,7 @@ import java.util.List;
 @RequestMapping("/api/admin/settlements/periods")
 public class SettlementPeriodController {
 
-    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
 
     private final OpenSettlementPeriodUseCase openPeriod;
     private final CloseSettlementPeriodUseCase closePeriod;

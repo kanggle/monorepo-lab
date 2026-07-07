@@ -152,7 +152,7 @@ class ProductApiContractTest {
         given(registerProductService.register(any())).willReturn(prodId);
 
         MvcResult result = mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", "노트북", "description", "설명",
@@ -175,7 +175,7 @@ class ProductApiContractTest {
         given(updateProductService.update(any())).willReturn(prodId);
 
         MvcResult result = mockMvc.perform(patch("/api/admin/products/" + prodId)
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("name", "새 이름"))))
                 .andExpect(status().isOk())
@@ -195,7 +195,7 @@ class ProductApiContractTest {
         given(adjustStockService.adjust(any())).willReturn(new AdjustStockResult(varId, 150));
 
         MvcResult result = mockMvc.perform(patch("/api/admin/products/" + prodId + "/stock")
-                        .header("X-User-Role", "ADMIN")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "variantId", varId.toString(), "quantity", 50, "reason", "RESTOCK"

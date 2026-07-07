@@ -2205,17 +2205,17 @@ calls the existing GETs verbatim.
 > **header-trust** service, **not** a JWT resource server — it reads a trusted
 > `X-Tenant-Id` injected upstream and does not itself validate bearer tokens.
 > The gateway is therefore the authorization boundary: it validates the IAM
-> OIDC access token, enforces `roles ∋ ADMIN` for `/api/admin/**`
+> OIDC access token, enforces `roles ∋ ECOMMERCE_OPERATOR` for `/api/admin/**`
 > (`AccountTypeEnforcementFilter`), requires a non-blank `tenant_id`
 > (`TenantClaimValidator`), injects the trusted `X-Tenant-Id`
 > (`JwtHeaderEnrichmentFilter`), and strips inbound client headers. Routing the
 > console leg direct-to-`product-service` would force console-bff to fabricate
-> `X-Tenant-Id` / `X-User-*` and bypass the gateway's `roles ∋ ADMIN` + JWT
+> `X-Tenant-Id` / `X-User-*` and bypass the gateway's `roles ∋ ECOMMERCE_OPERATOR` + JWT
 > validation — a security smell. The `product-service` `GET /api/admin/products`
-> read is gated at the gateway on `roles ∋ ADMIN`, **uniformly** with the
+> read is gated at the gateway on `roles ∋ ECOMMERCE_OPERATOR`, **uniformly** with the
 > `/api/admin/products/**` write endpoints: the operator's IAM OIDC token carries
-> the `ADMIN` domain role **derived at assume-tenant** from the selected
-> (ecommerce-entitled) tenant (ADR-MONO-035 4a) — no ecommerce-local `ADMIN`
+> the `ECOMMERCE_OPERATOR` domain role **derived at assume-tenant** from the selected
+> (ecommerce-entitled) tenant (ADR-MONO-035 4a) — no ecommerce-local `ECOMMERCE_OPERATOR`
 > grant is provisioned, the role rides the token — and the header-trust
 > `product-service` applies no additional ecommerce-local RBAC (the gateway is
 > the single admission point; authoritative detail in ecommerce `product-api.md`
@@ -2696,7 +2696,7 @@ scope, no § 3 row — attestation count stays **16**).
   ecommerce admin API is less formalised than wms-outbound, so this contract
   names the gaps rather than fabricating semantics):
   1. **Operator role mapping** — `AdminProductController` register/update/delete
-     require an `X-User-Role: ADMIN` header today. The console operator carries
+     require an `X-User-Role: ECOMMERCE_OPERATOR` header today. The console operator carries
      an IAM OIDC token, not `X-User-Role`. Phase 1 MUST resolve how the ecommerce
      gateway maps the OIDC operator identity → the producer's role gate (gateway
      header injection vs producer accepting the OIDC scope) — **no** raw
@@ -2998,7 +2998,7 @@ same-origin route handlers → ecommerce gateway direct, NO console-bff write le
   `ECOMMERCE_ADMIN_BASE_URL` = `http://ecommerce.local/api/admin`, same gateway
   + IAM-OIDC credential as § 2.4.10 products/orders/users — **NOT**
   `ECOMMERCE_PUBLIC_BASE_URL` which promotions/notifications/shippings use;
-  sellers live under the `/api/admin/**` subtree gated on `roles ∋ ADMIN` — the
+  sellers live under the `/api/admin/**` subtree gated on `roles ∋ ECOMMERCE_OPERATOR` — the
   operator's ADR-MONO-035 4a assume-tenant-derived domain role; the legacy
   `account_type=OPERATOR` gateway leg was removed at 4b):
 

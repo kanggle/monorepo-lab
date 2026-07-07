@@ -42,7 +42,7 @@ class AdminUserControllerTest {
     class ListUsers {
 
         @Test
-        @DisplayName("ADMIN 권한으로 사용자 목록을 페이지네이션하여 반환한다")
+        @DisplayName("ECOMMERCE_OPERATOR 권한으로 사용자 목록을 페이지네이션하여 반환한다")
         void listUsers_withAdminRole_returns200() throws Exception {
             var summary = new UserProfileSummaryResult(
                     UUID.randomUUID(), "test@example.com", "홍길동", "길동이",
@@ -52,7 +52,7 @@ class AdminUserControllerTest {
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ADMIN"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray())
                     .andExpect(jsonPath("$.content[0].email").value("test@example.com"))
@@ -62,7 +62,7 @@ class AdminUserControllerTest {
         }
 
         @Test
-        @DisplayName("ADMIN 권한 없이 요청하면 403을 반환한다")
+        @DisplayName("ECOMMERCE_OPERATOR 권한 없이 요청하면 403을 반환한다")
         void listUsers_withoutAdminRole_returns403() throws Exception {
             mockMvc.perform(get("/api/admin/users"))
                     .andExpect(status().isForbidden())
@@ -86,7 +86,7 @@ class AdminUserControllerTest {
                     .willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ADMIN")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
                             .param("status", "ACTIVE"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray());
@@ -100,7 +100,7 @@ class AdminUserControllerTest {
                     .willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ADMIN")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
                             .param("email", "test"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray());
@@ -114,7 +114,7 @@ class AdminUserControllerTest {
                     .willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ADMIN")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
                             .param("page", "2")
                             .param("size", "10"))
                     .andExpect(status().isOk());
@@ -126,7 +126,7 @@ class AdminUserControllerTest {
     class GetUser {
 
         @Test
-        @DisplayName("ADMIN 권한으로 특정 사용자 프로필을 조회하면 200을 반환한다")
+        @DisplayName("ECOMMERCE_OPERATOR 권한으로 특정 사용자 프로필을 조회하면 200을 반환한다")
         void getUser_withAdminRole_returns200() throws Exception {
             UUID userId = UUID.randomUUID();
             var result = new UserProfileResult(
@@ -138,14 +138,14 @@ class AdminUserControllerTest {
             given(userProfileService.getProfile(userId)).willReturn(result);
 
             mockMvc.perform(get("/api/admin/users/{userId}", userId)
-                            .header("X-User-Role", "ADMIN"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.userId").value(userId.toString()))
                     .andExpect(jsonPath("$.email").value("test@example.com"));
         }
 
         @Test
-        @DisplayName("ADMIN 권한 없이 특정 사용자 조회 시 403을 반환한다")
+        @DisplayName("ECOMMERCE_OPERATOR 권한 없이 특정 사용자 조회 시 403을 반환한다")
         void getUser_withoutAdminRole_returns403() throws Exception {
             UUID userId = UUID.randomUUID();
 
@@ -162,7 +162,7 @@ class AdminUserControllerTest {
                     .willThrow(new UserProfileNotFoundException(userId));
 
             mockMvc.perform(get("/api/admin/users/{userId}", userId)
-                            .header("X-User-Role", "ADMIN"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("USER_PROFILE_NOT_FOUND"));
         }
@@ -175,29 +175,29 @@ class AdminUserControllerTest {
     class MultiValueRoleGating {
 
         @Test
-        @DisplayName("멀티롤 헤더에 ADMIN 포함 시 200 (multi-domain operator)")
+        @DisplayName("멀티롤 헤더에 ECOMMERCE_OPERATOR 포함 시 200 (multi-domain operator)")
         void listUsers_multiRoleContainingAdmin_returns200() throws Exception {
             var page = new UserListPageResult(List.of(), 0L, 0, 0, 20);
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ADMIN,ERP_OPERATOR,SCM_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR"))
                     .andExpect(status().isOk());
         }
 
         @Test
-        @DisplayName("단일 ADMIN 롤 헤더는 계속 200 (회귀 방지)")
+        @DisplayName("단일 ECOMMERCE_OPERATOR 롤 헤더는 계속 200 (회귀 방지)")
         void listUsers_singleAdminRole_returns200_regressionGuard() throws Exception {
             var page = new UserListPageResult(List.of(), 0L, 0, 0, 20);
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ADMIN"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
                     .andExpect(status().isOk());
         }
 
         @Test
-        @DisplayName("ADMIN 없는 멀티롤은 403")
+        @DisplayName("ECOMMERCE_OPERATOR 없는 멀티롤은 403")
         void listUsers_multiRoleWithoutAdmin_returns403() throws Exception {
             mockMvc.perform(get("/api/admin/users")
                             .header("X-User-Role", "SCM_OPERATOR,ERP_OPERATOR"))

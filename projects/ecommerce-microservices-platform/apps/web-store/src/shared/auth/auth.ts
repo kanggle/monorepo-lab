@@ -23,7 +23,7 @@ export { refreshAccessToken } from '@/shared/auth/auth-callbacks';
  *   - scopes:        openid profile email tenant.read ecommerce.consumer
  *
  * web-store is the consumer-facing storefront. The token's `roles` must include
- * `CUSTOMER`; an operator (whose ecommerce token carries `ADMIN` / no `CUSTOMER`)
+ * `CUSTOMER`; an operator (whose ecommerce token carries `ECOMMERCE_OPERATOR` / no `CUSTOMER`)
  * is rejected at the sign-in + session callbacks and redirected to
  * `/login?error=account_type_mismatch`. ADR-MONO-035 (4b-1): the storefront guard
  * is **role-based** — the legacy `account_type` claim is being removed in
