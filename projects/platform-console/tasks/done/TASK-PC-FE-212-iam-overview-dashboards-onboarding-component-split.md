@@ -1,6 +1,6 @@
 # TASK-PC-FE-212 — IAM 개요·대시보드·운영자개요·온보딩 god-file 컴포넌트 분할 (iam-overview · dashboards · operator-overview · onboarding)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving god-file split
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (frontend-engineer 디스패치 — testid/markup byte-보존)
 
