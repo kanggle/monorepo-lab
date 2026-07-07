@@ -8,6 +8,7 @@ import {
   OPERATOR_ONBOARDING_AXES,
   PERMISSION_KEYS,
   ACCOUNT_HATS,
+  AUTH_PLANES,
 } from '@/features/iam-guide/data';
 import { runAxe } from '../a11y/axe-helper';
 
@@ -73,6 +74,22 @@ describe('IamGuideScreen', () => {
     expect(SCREEN_ACCESS[2].cells.SUPPORT_LOCK.level).toBe('partial');
     expect(SCREEN_ACCESS[2].cells.SECURITY_ANALYST.level).toBe('full');
     expect(SCREEN_ACCESS[2].cells.TENANT_ADMIN.level).toBe('none');
+  });
+
+  it('renders the two authorization planes (admin RBAC ⟂ domain roles) with the disjoint invariant', () => {
+    render(<IamGuideScreen />);
+    for (const plane of AUTH_PLANES) {
+      const card = screen.getByTestId(
+        `iam-guide-plane-${plane.token.split(' ')[0]}`,
+      );
+      expect(card).toBeInTheDocument();
+      expect(within(card).getByText(plane.koName)).toBeInTheDocument();
+      expect(within(card).getByText(plane.token)).toBeInTheDocument();
+    }
+    // the disjoint invariant (ADR-MONO-035) is surfaced verbatim
+    expect(
+      screen.getByText(/SUPER_ADMIN 이 WMS_OPERATOR 가 되지 않는다/),
+    ).toBeInTheDocument();
   });
 
   it('renders the delegation chain and the domain-role (separate axis) map', () => {

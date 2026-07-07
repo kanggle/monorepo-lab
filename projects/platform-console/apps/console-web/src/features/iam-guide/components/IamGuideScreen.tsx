@@ -1,6 +1,8 @@
 import { Card } from '@/shared/ui/Card';
 import {
   ACCOUNT_HATS,
+  AUTH_PLANE_DISJOINT,
+  AUTH_PLANES,
   DELEGATION_CHAIN,
   DELEGATION_GUARDS,
   DOMAIN_ROLE_MAP,
@@ -132,6 +134,45 @@ export function IamGuideScreen() {
         둘 다 테넌트를 assume 해 도메인을 운영하지만, ③은 내 회사 테넌트(자연
         배정)이고 ④는 남의 회사 테넌트(파트너십 위임 slice · scope cap · admin
         불가)입니다.
+      </p>
+
+      {/* 0.5 권한 두 평면 (관리 ⟂ 운영, disjoint) */}
+      <h2 className="mb-2 text-lg font-semibold">권한 두 평면 (관리 · 운영)</h2>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        운영자가 쥐는 롤은 <strong>서로 다른 두 평면</strong>에 삽니다 — operator
+        token 이 담는 <strong>admin RBAC 롤</strong>(관리 평면)과 assume-tenant 가
+        담는 <strong>도메인 롤</strong>(운영 평면). 아래 &ldquo;역할 종류 · 접근
+        매트릭스&rdquo;는 관리 평면을, 맨 아래 &ldquo;도메인 롤&rdquo;은 운영
+        평면을 상세히 다룹니다.
+      </p>
+      <div className="mb-4 grid gap-4 md:grid-cols-2">
+        {AUTH_PLANES.map((plane) => (
+          <Card
+            key={plane.token}
+            data-testid={`iam-guide-plane-${plane.token.split(' ')[0]}`}
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="rounded bg-muted px-2 py-0.5 text-sm font-semibold text-foreground">
+                {plane.koName}
+              </span>
+              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                {plane.token}
+              </span>
+            </div>
+            <p className="mb-1 text-sm text-muted-foreground">{plane.purpose}</p>
+            <p className="mb-2 text-xs text-muted-foreground">{plane.storage}</p>
+            <p className="font-mono text-xs leading-relaxed text-foreground">
+              {plane.roles}
+            </p>
+          </Card>
+        ))}
+      </div>
+      <p className="mb-10 max-w-3xl text-xs text-muted-foreground">
+        <span className="mr-1" aria-hidden="true">
+          ⛔
+        </span>
+        <strong className="text-foreground">disjoint</strong> —{' '}
+        {AUTH_PLANE_DISJOINT}
       </p>
 
       {/* 1. Role 종류 */}
