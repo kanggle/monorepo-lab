@@ -16,6 +16,7 @@ import com.example.admin.application.exception.InvalidRequestException;
 import com.example.admin.application.exception.InvalidRefreshTokenException;
 import com.example.admin.application.exception.InvalidTokenExchangeRequestException;
 import com.example.admin.application.exception.InvalidTwoFaCodeException;
+import com.example.admin.application.exception.OperatorAccountNotFoundException;
 import com.example.admin.application.exception.OperatorEmailConflictException;
 import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.exception.RefreshTokenReuseDetectedException;
@@ -258,6 +259,16 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleOperatorNotFound(OperatorNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("OPERATOR_NOT_FOUND", e.getMessage()));
+    }
+
+    // TASK-MONO-334 (ADR-MONO-035 amendment) — POST /api/admin/operators targets an
+    // email with no signed-up account in the tenant. An unprocessable precondition
+    // (mirrors the 422 IDENTITY_LINK family), DISTINCT from the 409 email-conflict:
+    // 409 = the email is already an operator; 422 = the email is not yet an account.
+    @ExceptionHandler(OperatorAccountNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleOperatorAccountNotFound(OperatorAccountNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("OPERATOR_ACCOUNT_NOT_FOUND", e.getMessage()));
     }
 
     // TASK-BE-373 (ADR-MONO-034 U3) — operator↔identity link errors.

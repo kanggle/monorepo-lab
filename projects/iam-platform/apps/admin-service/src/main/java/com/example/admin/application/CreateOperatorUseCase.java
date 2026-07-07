@@ -1,5 +1,6 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.OperatorAccountNotFoundException;
 import com.example.admin.application.exception.OperatorEmailConflictException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
@@ -80,6 +81,26 @@ public class CreateOperatorUseCase {
         String normalizedEmail = email == null ? null : email.trim().toLowerCase();
         if (normalizedEmail != null && operatorPort.existsByTenantIdAndEmail(tenantId, normalizedEmail)) {
             throw new OperatorEmailConflictException("Operator email already exists");
+        }
+
+        // TASK-MONO-334 (ADR-MONO-035 amendment): operator-create now REQUIRES a
+        // pre-existing signed-up account for this email in the target tenant — that
+        // account's unified IAM (OIDC) credential is the operator's primary login.
+        // This SUPERSEDES the TASK-PC-FE-179 fail-soft advisory: a "dangling"
+        // account-less operator is no longer creatable (even with a break-glass
+        // password — break-glass is now only a secondary login for an operator whose
+        // account already exists). Platform-scope ('*') is EXEMPT: there is no
+        // account_db tenant row for '*' to verify against (SUPER_ADMIN bootstrap).
+        // account-service unavailability propagates as DownstreamFailureException →
+        // 503 DOWNSTREAM_ERROR: fail-CLOSED — we never create an unverified operator.
+        if (normalizedEmail != null && !AdminOperator.PLATFORM_TENANT_ID.equals(tenantId)) {
+            AccountServiceClient.AccountSearchResponse accounts =
+                    accountServiceClient.search(tenantId, normalizedEmail);
+            boolean accountExists = accounts != null && accounts.totalElements() > 0;
+            if (!accountExists) {
+                throw new OperatorAccountNotFoundException(
+                        "No signed-up account exists for this email in the target tenant");
+            }
         }
 
         Map<String, AdminOperatorPort.RoleView> resolvedRoles = operatorPort.resolveRolesByName(roleNames);

@@ -1,5 +1,6 @@
 package com.example.admin.integration;
 
+import com.example.admin.infrastructure.client.AccountServiceClient;
 import com.example.admin.support.OperatorJwtTestFixture;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,8 +26,11 @@ import org.testcontainers.utility.DockerImageName;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -115,6 +120,19 @@ class OperatorAdminScopeConfinementIntegrationTest extends AbstractIntegrationTe
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+
+    // TASK-MONO-334: operator-create probes account-service for the target email's
+    // tenant account. account-service is not booted here (dead port) — mock the
+    // client so the in-scope create (→ 201) proceeds. The out-of-scope create (→ 403)
+    // throws at the tenant-scope guard BEFORE the probe, so it is unaffected either way.
+    @MockitoBean
+    AccountServiceClient accountServiceClient;
+
+    @BeforeEach
+    void stubAccountExists() {
+        when(accountServiceClient.search(anyString(), anyString()))
+                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 1, 0, 1, 1));
+    }
 
     @BeforeEach
     void seedActors() {

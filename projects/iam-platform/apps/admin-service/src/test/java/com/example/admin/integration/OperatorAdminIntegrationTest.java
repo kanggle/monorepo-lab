@@ -2,6 +2,7 @@ package com.example.admin.integration;
 
 import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
+import com.example.admin.infrastructure.client.AccountServiceClient;
 import com.example.admin.support.OperatorJwtTestFixture;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.example.security.password.PasswordHasher;
@@ -16,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,6 +32,8 @@ import java.util.Base64;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -114,10 +118,26 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     PasswordHasher passwordHasher;
 
+    // TASK-MONO-334: operator-create now probes account-service for the target
+    // email's tenant account. account-service is not booted in this test (base-url
+    // is a dead port), so mock the client: default the probe to "exists" so the
+    // create/list/patch flows proceed; the 422 test overrides it to "absent".
+    // (resolveOrCreateIdentity stays unstubbed → null → operator born unlinked,
+    // matching the prior dead-port fail-soft behavior.)
+    @MockitoBean
+    AccountServiceClient accountServiceClient;
+
     private static final String SUPER_ADMIN_UUID = "00000000-0000-7000-8000-000000000010";
 
     private String superAdminToken() {
         return "Bearer " + jwt.operatorToken(SUPER_ADMIN_UUID);
+    }
+
+    @BeforeEach
+    void stubAccountExists() {
+        // Default: the target email HAS a signed-up account in the tenant (totalElements=1).
+        when(accountServiceClient.search(anyString(), anyString()))
+                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 1, 0, 1, 1));
     }
 
     @BeforeEach
@@ -152,6 +172,38 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
                 WHERE r.name = 'SUPER_ADMIN' AND p.permission_key = 'operator.manage'
                 """, Integer.class);
         assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("MONO-334: POST /operators with an email that has no tenant account → 422 OPERATOR_ACCOUNT_NOT_FOUND")
+    void createOperator_accountNotFound_returns422() throws Exception {
+        String ghostEmail = "ghost-" + System.currentTimeMillis() + "@example.com";
+        // Override the default "exists" stub for this email → definitively absent.
+        when(accountServiceClient.search("fan-platform", ghostEmail))
+                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 0, 0, 1, 0));
+
+        String body = """
+                {
+                  "email": "%s",
+                  "displayName": "Ghost Op",
+                  "roles": ["SUPPORT_LOCK"],
+                  "tenantId": "fan-platform"
+                }
+                """.formatted(ghostEmail);
+
+        mockMvc.perform(post("/api/admin/operators")
+                        .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "provisioning")
+                        .header("Idempotency-Key", "idemp-ghost-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("OPERATOR_ACCOUNT_NOT_FOUND"));
+
+        // Fail-closed: no operator row was persisted for the ghost email.
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_operators WHERE email = ?", Integer.class, ghostEmail);
+        assertThat(count).isZero();
     }
 
     @Test

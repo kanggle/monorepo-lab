@@ -8,6 +8,7 @@ import com.example.admin.application.PatchOperatorRoleUseCase;
 import com.example.admin.application.PatchOperatorStatusUseCase;
 import com.example.admin.application.UpdateOwnOperatorProfileUseCase;
 import com.example.admin.application.exception.CurrentPasswordMismatchException;
+import com.example.admin.application.exception.OperatorAccountNotFoundException;
 import com.example.admin.application.exception.OperatorEmailConflictException;
 import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
@@ -312,6 +313,33 @@ class OperatorAdminControllerTest {
                                 """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OPERATOR_EMAIL_CONFLICT"));
+    }
+
+    // TASK-MONO-334 (ADR-MONO-035 amendment) — the target email has no signed-up
+    // account in the tenant → 422 OPERATOR_ACCOUNT_NOT_FOUND (distinct from the 409
+    // email-conflict above).
+    @Test
+    void create_operator_account_not_found_returns_422() throws Exception {
+        doThrow(new OperatorAccountNotFoundException("No signed-up account exists for this email in the target tenant"))
+                .when(createOperatorUseCase).createOperator(
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any());
+
+        mockMvc.perform(post("/api/admin/operators")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "provisioning")
+                        .header("Idempotency-Key", "idemp-2b")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "ghost@example.com",
+                                  "displayName": "Ghost",
+                                  "password": "StrongPass1!",
+                                  "roles": [],
+                                  "tenantId": "fan-platform"
+                                }
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("OPERATOR_ACCOUNT_NOT_FOUND"));
     }
 
     @Test
