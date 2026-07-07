@@ -8,7 +8,7 @@ TASK-MONO-332
 
 # Status
 
-ready
+done
 
 # Task Tags
 
