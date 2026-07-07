@@ -16,7 +16,7 @@ Rationale: [`docs/adr/ADR-MONO-006-lint-remediation-as-agent-context.md`](../doc
 [VIOLATION] HARDSTOP-01: No `PROJECT.md` is locatable for the current working context at <cwd>.
 [WHY] Every implementation request must resolve to exactly one project so rule layers (domain + traits) can be loaded; without `PROJECT.md` the rule resolver has no anchor and would silently default — Identify the Target Project is a CLAUDE.md prerequisite, not a fallback.
 [REMEDIATION] Choose one:
-  1. Move the working location into an existing project: `cd projects/<name>/` where `<name>` matches the request scope (see `docs/project-overview.md` § 2.1 for the 5 active projects).
+  1. Move the working location into an existing project: `cd projects/<name>/` where `<name>` matches the request scope (see `docs/project-overview.md` § 2 for the active project catalog).
   2. If the request is monorepo-level (touching `libs/`, `platform/`, `rules/`, `.claude/`, `tasks/templates/`, `docs/guides/`, `CLAUDE.md`, `TEMPLATE.md`), reframe as a root task per `tasks/INDEX.md` § "When to Use Root vs Project Tasks" and operate from repo root.
   3. If a new project is genuinely needed, file a `tasks/ready/TASK-MONO-XXX-bootstrap-<project>.md` and pause; do not implement before the project skeleton lands.
 [REFERENCE] CLAUDE.md § Identify the Target Project (Read First)

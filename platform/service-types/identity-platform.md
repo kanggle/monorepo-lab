@@ -39,7 +39,7 @@ The service is the single authoritative origin for the following concerns. No ot
 
 1. **Token issuance** — minting access and refresh tokens, including signing, claim assembly, and `aud` scoping.
 2. **Token validation primitives** — exposing the JWKS public keys and the optional introspection endpoint. Stateless validation by relying parties uses JWKS; stateful validation (revocation check) uses introspection.
-3. **Account lifecycle** — registration, identity-proofing hooks, password / credential storage, account deactivation, and account-type assignment (CONSUMER vs OPERATOR).
+3. **Account lifecycle** — registration, identity-proofing hooks, password / credential storage, account deactivation, and role assignment onto the unified identity (no account-type partition — one account = one identity, authorized by a set of roles; ADR-MONO-032).
 4. **Session and refresh-token lifecycle** — refresh token rotation, family invalidation on suspected reuse, explicit logout / revocation.
 5. **Key lifecycle** — generating, publishing, rotating, and retiring signing keys with grace periods.
 6. **Audit of authentication events** — every login attempt, token issuance, token revocation, key rotation, and account change.
@@ -60,7 +60,7 @@ All endpoints are versioned (`/v1/...`) except the OIDC-discovery and JWKS endpo
 | POST | `/v1/oauth/introspect` | Stateful introspection (returns `active`, claims, expiry) — internal callers only |
 | POST | `/v1/oauth/logout` | End the current session and revoke its refresh-token family |
 | GET | `/v1/accounts/me` | Authenticated account profile |
-| POST | `/v1/accounts` | Create a CONSUMER account (OPERATOR creation is admin-only and lives elsewhere) |
+| POST | `/v1/accounts` | Create an account via self-service signup (seeds consumer-facing roles per platform; operator/admin roles are provisioned separately onto the same identity) |
 
 The `password` grant type is forbidden. The `client_credentials` grant type is allowed only for internal service-to-service callers and MUST be scoped to a non-user `aud`.
 
@@ -74,7 +74,7 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 - Lifetime: **5 to 15 minutes** depending on the requested surface's capability
   - operator-facing platforms (wms, erp, mes, scm, ecommerce admin surface): 5 minutes (short-lived; high-privilege)
   - consumer-facing surfaces (ecommerce customer, fan-platform): 15 minutes
-- Required claims: `iss`, `sub`, `aud`, `iat`, `exp`, `kid` (in JOSE header), `jti`, `roles`, `scope`. (`account_type` is **deprecated** — migration-only per ADR-MONO-032; see the JWT Standard Claims contract § Migration Compatibility. `roles` is the authorization axis.)
+- Required claims: `iss`, `sub`, `aud`, `iat`, `exp`, `roles`, `email`. Recommended: `jti`, `kid` (in JOSE header). There is **no `scope` claim** — `roles` is the sole authorization axis. `account_type` is **removed** (no longer emitted on any token; `auth_db.credentials.account_type` column dropped per TASK-MONO-263 / ADR-MONO-032 D5 step 4). See the JWT Standard Claims contract § Standard Claims.
 - The `aud` claim MUST identify the target platform (e.g., `wms`, `ecommerce`). A token issued for one platform is invalid for another.
 - Access tokens are NOT stored server-side. Validation is stateless via JWKS.
 
@@ -128,7 +128,7 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 
 # Identity & Role Capability Rules
 
-> **Unified identity model (ADR-MONO-032, ACCEPTED 2026-06-14).** The platform has a **single kind of account** — an identity (`sub`) authorized by a **set of roles**. There is no immutable account-type partition. The former CONSUMER/OPERATOR account types are now **role capabilities** an identity may hold, and one identity may hold **both**. The `account_type` claim is deprecated (migration-only); `roles` is the authorization axis. See the JWT Standard Claims contract § Identity Model.
+> **Unified identity model (ADR-MONO-032, ACCEPTED 2026-06-14).** The platform has a **single kind of account** — an identity (`sub`) authorized by a **set of roles**. There is no immutable account-type partition. The former CONSUMER/OPERATOR account types are now **role capabilities** an identity may hold, and one identity may hold **both**. The `account_type` claim is **removed** (no longer emitted on any token; TASK-MONO-263 / ADR-MONO-032 D5 step 4); `roles` is the sole authorization axis. See the JWT Standard Claims contract § Identity Model.
 
 ## Consumer-facing capability
 
@@ -196,7 +196,7 @@ Every event below MUST produce an immutable audit record. Audit records MUST be 
 | Event | Required Fields |
 |---|---|
 | Login attempt (success and failure) | `accountId` (if known), `roles`, `clientId`, `ip`, `userAgent`, `outcome`, `failureReason` |
-| Token issuance | `accountId`, `aud`, `scope`, `tokenType`, `kid`, `jti`, `expiresAt` |
+| Token issuance | `accountId`, `aud`, `roles`, `tokenType`, `kid`, `jti`, `expiresAt` |
 | Token refresh | `accountId`, `previousJti`, `newJti`, `aud` |
 | Refresh-token reuse detection | `accountId`, `familyId`, all `jti`s revoked, originating `ip`/`userAgent` |
 | Token revocation | `accountId`, `jti`, `reason` |
@@ -204,7 +204,7 @@ Every event below MUST produce an immutable audit record. Audit records MUST be 
 | Key rotation | `previousKid`, `newKid`, `rotationReason`, `actorId` |
 | Admin action against an account (lock, unlock, force-logout) | `accountId`, `actorId`, `action`, `justification` |
 
-Retention: CONSUMER audit ≥ 1 year; OPERATOR audit ≥ 3 years (or longer per applicable regulation).
+Retention: consumer-facing account audit ≥ 1 year; operator-facing (staff) audit ≥ 3 years (or longer per applicable regulation).
 
 Audit events MAY be projected by an `event-consumer` service for query / reporting; the projection MUST NOT be the source of truth.
 
@@ -221,13 +221,13 @@ A relying party MUST:
 1. Resolve the JWKS URL from the OIDC discovery document at startup.
 2. Cache the JWKS response (recommended TTL: 1 hour) and refresh on `kid`-not-found.
 3. Validate every incoming bearer token: signature (via `kid`), `iss`, `aud` (matches its own platform), `exp`, `nbf` (if present).
-4. Authorize by **role presence** for the requested surface: admit iff `roles` contains a role valid for the route, otherwise reject (403). (During the ADR-MONO-032 migration window a relying party MAY accept legacy `account_type`-based OR role-based admission — see the JWT Standard Claims contract § Migration Compatibility. `account_type` is deprecated and MUST NOT be the sole gate once role-based admission is deployed.)
+4. Authorize by **role presence** for the requested surface: admit iff `roles` contains a role valid for the route, otherwise reject (403). (The ADR-MONO-032 D5 migration is **complete** — issuance is roles-only and the `account_type` claim is removed; gateways gate on `roles` only and ignore `account_type` if seen on a legacy token. See the JWT Standard Claims contract § Migration Compatibility for the historical staged rollout.)
 5. For high-privilege endpoints, OPTIONALLY call `/v1/oauth/introspect` to confirm the refresh-token family has not been revoked. Document this on a per-endpoint basis in the relying party's service spec.
 
 ## How the Gateway Integrates
 
 - The `gateway-service` of each downstream platform performs JWT validation at the edge using JWKS.
-- The gateway propagates the validated `accountId`, `roles`, and `scope` as trusted internal headers (e.g., `X-User-Id`, `X-User-Role`) to downstream services. Downstream services trust these headers ONLY when received via the gateway, never when received directly from the public internet. (`X-Account-Type` is no longer injected — the claim is deprecated per ADR-MONO-032; downstream services derive any consumer-vs-operator distinction from `X-User-Role`.)
+- The gateway propagates the validated `accountId` (`sub`), `roles`, and `email` as trusted internal headers (`X-User-Id`, `X-User-Role`, `X-User-Email`) to downstream services. Downstream services trust these headers ONLY when received via the gateway, never when received directly from the public internet. (`X-Account-Type` is no longer injected — the `account_type` claim is removed per ADR-MONO-032; downstream services derive any consumer-vs-operator distinction from `X-User-Role`.)
 - The gateway MUST NOT mint tokens. It is purely a relying party.
 
 ## Federated / External Identity Providers
@@ -298,11 +298,11 @@ When implementing or extending an `identity-platform` service:
 - [ ] Asymmetric signing key pair generated; `kid` strategy documented
 - [ ] JWKS endpoint reachable without auth, served with cache headers
 - [ ] OIDC discovery document published and referenced by relying parties
-- [ ] Access-token lifetimes match account-type policy (OPERATOR ≤ 5 min, CONSUMER ≤ 15 min)
+- [ ] Access-token lifetimes match surface capability (operator-facing ≤ 5 min, consumer-facing ≤ 15 min)
 - [ ] Refresh-token rotation + reuse-detection wired and tested
 - [ ] Key rotation procedure documented with 24h grace period
 - [ ] PKCE enforced; `state` validated; `redirect_uri` exact-match enforced
-- [ ] Account-type isolation enforced (no cross-type SSO)
+- [ ] Role-based admission enforced per surface (valid `aud` + ≥ 1 role for the requested surface); no account-type gate, no cross-type SSO prohibition (ADR-MONO-032)
 - [ ] Audit events emitted via outbox for every required event
 - [ ] Brute-force / enumeration defenses in place and tested
 - [ ] At least one relying party (gateway) validates tokens against JWKS end-to-end
