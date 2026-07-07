@@ -1,6 +1,6 @@
 # TASK-PC-FE-210 — IAM 계정·감사 god-file 컴포넌트 분할 (accounts · audit)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving god-file split
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (frontend-engineer 디스패치 — testid/markup byte-보존)
 
