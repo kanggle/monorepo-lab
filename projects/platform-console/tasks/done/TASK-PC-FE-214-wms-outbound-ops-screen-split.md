@@ -1,6 +1,7 @@
 # TASK-PC-FE-214 — wms-outbound-ops OutboundOpsScreen god-file 분할
 
-**Status:** ready
+**Status:** done
+**Done:** 2026-07-07 · impl PR #2299 squash `e575f1964` (3-dim verified) — OutboundOpsScreen 383→228, 3 dialog-생명주기 hook 추출(PC-FE-196), tsc 0·lint 0·vitest 57/57.
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving component split
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (WMS 분할 시리즈 선례 정합 — testid/markup/aria/dialog focus-trap 보존)
 

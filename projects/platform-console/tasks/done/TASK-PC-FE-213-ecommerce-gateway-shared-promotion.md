@@ -1,6 +1,7 @@
 # TASK-PC-FE-213 — 이커머스 게이트웨이 call-core를 shared/api로 승격 (scm/wms 정렬)
 
-**Status:** ready
+**Status:** done
+**Done:** 2026-07-07 · impl PR #2300 squash `e387e9f90` (3-dim verified) — ecommerce-gateway.ts(281) 승격, ecommerce-client.ts 242→101 shim, 8 slice 무접촉, tsc 0·lint 0·ecommerce 152/152.
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving client dedup (location + abstraction 정렬)
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (behavior-preservation 정밀 — 8-slice 계약 보존, resilience taxonomy byte-동일)
 

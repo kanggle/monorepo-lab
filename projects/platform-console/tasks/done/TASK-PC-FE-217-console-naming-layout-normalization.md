@@ -1,6 +1,7 @@
 # TASK-PC-FE-217 — console-web 네이밍/레이아웃 정규화 (3-도메인 컨벤션 정렬)
 
-**Status:** ready
+**Status:** done
+**Done:** 2026-07-07 · impl PR #2306 squash `2fdc8dedb` (3-dim verified) — EC hook 5개 components/→hooks/·outbound-core-api→outbound-client·EC api barrel 신설·(4)SCM demand-planning SKIP(근거), tsc 0·lint 0·vitest 228 files/2449 tests green.
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving rename/move (저위험 정리)
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet 4.6 (기계적 rename/move + import 갱신)
 
