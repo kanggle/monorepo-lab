@@ -125,6 +125,32 @@ operator token 도 성격상 인가이며, 다만 대상이 도메인 운영이 
 
 > 공통: ① 로그인(인증)은 넷 다 **동일한 계정 하나**. 나머지 세 모자는 그 위에 얹히는 **인가**입니다(operator token = IAM 관리, 2축 assume-tenant = 도메인 운영). "어느 토큰"은 § 4, "인증 vs 인가"는 § 5 를 참고하세요.
 
+### admin-console 롤은 누가 받나 — 대표·직원·협력업체
+
+위 4모자는 "관계"를, 이 절은 그 관계에서 받는 **IAM 관리(admin-console) 롤**을 정리합니다. IAM 관리 롤은 콘솔 `/iam` 관리 화면(계정·운영자·감사·구독·파트너십)을 게이트하며, **도메인 운영 롤**(`WMS_OPERATOR`·`SCM_OPERATOR`·ecommerce `ADMIN`…)과는 **별개 축**입니다 — 직원·협력업체의 실제 일감 대부분은 이 6개가 아니라 도메인 롤로 굴러갑니다.
+
+seed 롤은 6개이고 **scope 로 두 부류**로 갈립니다:
+
+| 롤 | scope | 원래 대상 | 대표(②) | 직원(③) | 협력업체(④) |
+|---|---|---|:---:|:---:|:---:|
+| `SUPER_ADMIN` | platform `*` | 플랫폼 운영팀 | ✕ | ✕ | ✕ |
+| `SUPPORT_READONLY` | platform | 플랫폼 CS L1 | ✕ | ✕ | ✕ |
+| `SUPPORT_LOCK` | platform | 플랫폼 CS L2 | ✕ | ✕ | ✕ |
+| `SECURITY_ANALYST` | platform | 플랫폼 보안팀 | ✕ | ✕ | ✕ |
+| `TENANT_ADMIN` | 내 테넌트 | 고객사 운영자 관리자 | ✅ | △ | ✕ |
+| `TENANT_BILLING_ADMIN` | 내 테넌트 | 고객사 구독 관리자 | ✅ | △ | ✕ |
+
+- **platform-scope 4종**(`SUPER_ADMIN`·`SUPPORT_READONLY`·`SUPPORT_LOCK`·`SECURITY_ANALYST`)은 **플랫폼(SaaS 제공자) 내부 직원 전용** — 고객(대표/직원/협력업체)은 **아무도 받지 않습니다**. CS·보안·슈퍼관리자는 우리 회사(고객사)의 관계가 아니라 플랫폼 운영조직의 역할입니다.
+- **tenant-scope 2종**(`TENANT_ADMIN`·`TENANT_BILLING_ADMIN`)만 고객사 롤입니다.
+
+**🟢 대표(모자 ②, owner)** — `/onboarding` 조직 생성 시 `TENANT_ADMIN` + `TENANT_BILLING_ADMIN` 을 **둘 다 자동으로**(ADR-044 D6), **방금 만든 내 테넌트 scope 로만** 받습니다(D2 confinement). → 운영자 생성·배정(`TENANT_ADMIN`) + 도메인 구독 켜기(`TENANT_BILLING_ADMIN`)를 스스로. (얻는 절차 = 아래 "② 만드는 법".)
+
+**🟡 직원(모자 ③, 배정 운영자)** — **기본은 이 6개 중 없음**. 직원은 IAM 을 관리하러 온 게 아니라 도메인을 운영하러 왔으므로, 테넌트 배정 후 assume-tenant(2축)로 **도메인 롤**을 받습니다. 단, 대표가 조직 운영자 관리를 맡기면 `TENANT_ADMIN` 을 **위임**할 수 있고(`tenant.admin.delegate` 보유자만, ≤-own), 구독까지 맡기면 `TENANT_BILLING_ADMIN` 도 — 이것이 △(기본 아님, 위임 시).
+
+**🔴 협력업체(모자 ④, cross-org 참여자)** — host 테넌트에선 **이 6개 중 아무것도 못 받습니다**. cross-org 위임은 **도메인 운영 reach 만** 넓히고 **admin 권한은 조직 경계를 넘지 못합니다**(host `/api/admin/**` → 403, § 7 상세). 받는 건 위임 slice 안의 **capped 도메인 롤**뿐입니다. (협력업체가 *자기 회사* 테넌트 안에서 owner 라면 그건 그 테넌트 기준의 모자 ②로, 별개 테넌트 얘기입니다.)
+
+> 즉 `TENANT_ADMIN`/`TENANT_BILLING_ADMIN` 만 고객용 → **대표는 둘 다 자동**, **직원은 위임받을 때만(△)**, **협력업체는 host 에서 절대 못 받음(✕)**. 나머지 4개는 플랫폼 내부 전용. 롤 정의·권한의 권위는 [admin-service rbac.md](../../specs/services/admin-service/rbac.md)·seed 롤이며, 이 표는 개념 매핑입니다.
+
 ### ② 만드는 법 — self-service 온보딩
 
 "회원가입하고 내가 소유한 회사를 운영하려면?" = 모자 ②를 얻는 길입니다. 플랫폼 관리자(SUPER_ADMIN) 개입 없이 스스로 만듭니다 — AWS "회원가입 → 새 계정 → root" / GCP "새 프로젝트 → owner" parity([ADR-MONO-044](../../../../docs/adr/ADR-MONO-044-self-service-tenant-onboarding.md)).
