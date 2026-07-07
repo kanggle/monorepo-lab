@@ -151,6 +151,25 @@ seed 롤은 6개이고 **scope 로 두 부류**로 갈립니다:
 
 > 즉 `TENANT_ADMIN`/`TENANT_BILLING_ADMIN` 만 고객용 → **대표는 둘 다 자동**, **직원은 위임받을 때만(△)**, **협력업체는 host 에서 절대 못 받음(✕)**. 나머지 4개는 플랫폼 내부 전용. 롤 정의·권한의 권위는 [admin-service rbac.md](../../specs/services/admin-service/rbac.md)·seed 롤이며, 이 표는 개념 매핑입니다.
 
+**두 평면 한눈에** — 두 인가 토큰이 담는 롤은 **서로 다른 평면**에 살고, 두 집합은 **절대 교차하지 않습니다(disjoint)**. 위 표(admin 롤)는 아래 관리 평면만 다루고, 직원·협력업체의 실제 일감은 운영 평면(도메인 롤)에서 굴러갑니다:
+
+```
+operator token  ─ IAM 관리 · admin_roles DB 저장, 매 요청 조회
+  ├ platform '*'  : SUPER_ADMIN · SUPPORT_READONLY · SUPPORT_LOCK · SECURITY_ANALYST
+  │                   └ 플랫폼(SaaS 제공자) 내부 직원 전용 — 고객 아무도 못 받음
+  └ tenant 특정   : TENANT_ADMIN · TENANT_BILLING_ADMIN
+                      └ 유일한 고객사 admin 롤 (대표 자동 / 직원 위임 시 △ / 협력사 ✕)
+
+   ⛔ disjoint ─ admin RBAC 롤은 assume-tenant 토큰에 실리지 않고,
+                 도메인 롤은 admin_roles 에서 복사되지 않음 (구독에서 파생)
+
+assume-tenant   ─ 도메인 운영 · 저장 안 됨, entitled_domains 에서 발급 시 파생
+  └ 도메인 롤     : WMS_OPERATOR · SCM_OPERATOR · FINANCE_OPERATOR · ERP_OPERATOR ·
+                    MES_OPERATOR · FAN_OPERATOR · ECOMMERCE_OPERATOR   (*_ADMIN 티어 제외)
+```
+
+> `SUPER_ADMIN` 이 `WMS_OPERATOR` 가 되지 않는다 — 관리 평면(operator token)과 운영 평면(assume-tenant)은 원칙적으로 분리됩니다([ADR-MONO-035](../../../../docs/adr/ADR-MONO-035-operator-auth-unification-model.md)). 도메인 롤 파생 규약의 권위는 auth-service 이며, 이 그림은 개념 요약입니다.
+
 ### ② 만드는 법 — self-service 온보딩
 
 "회원가입하고 내가 소유한 회사를 운영하려면?" = 모자 ②를 얻는 길입니다. 플랫폼 관리자(SUPER_ADMIN) 개입 없이 스스로 만듭니다 — AWS "회원가입 → 새 계정 → root" / GCP "새 프로젝트 → owner" parity([ADR-MONO-044](../../../../docs/adr/ADR-MONO-044-self-service-tenant-onboarding.md)).
