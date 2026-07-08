@@ -139,7 +139,8 @@ export interface NotificationInboxQueryParams {
 // ---------------------------------------------------------------------------
 
 /** True when `n.sourceType === 'APPROVAL'` — enables the deep-link
- *  `/erp?approval=<sourceId>` in the bell dropdown. Unknown / future source
+ *  `/erp/approval?request=<sourceId>` in the bell dropdown (the real 결재함
+ *  route, which preselects the request; PC-FE-230). Unknown / future source
  *  types render a generic label only (no deep-link). */
 export function isApprovalSource(n: Notification): boolean {
   return n.sourceType === 'APPROVAL';

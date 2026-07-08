@@ -10,8 +10,10 @@ import type { ReactNode } from 'react';
  *   - badge hidden when all items read / no notifications / zero count;
  *   - dropdown opens on bell click; lists notifications with type/title +
  *     unread dot visible on unread rows;
- *   - clicking a row triggers mark-read mutation + router.push('/erp?approval=<sourceId>')
- *     for APPROVAL source notifications (AC-2);
+ *   - clicking a row triggers mark-read mutation + router.push('/erp/approval?request=<sourceId>')
+ *     for APPROVAL source notifications (AC-2; PC-FE-230 — the real 결재함
+ *     route, NOT the masters `/erp` slice);
+ *   - a §1 `deepLink`, when present, is preferred over the approval fallback;
  *   - non-APPROVAL source type: no router push (generic label only);
  *   - empty state shows "새 알림이 없습니다" (AC-1);
  *   - DEGRADE: when inbox query errors (403/503/network), the bell renders
@@ -236,8 +238,8 @@ describe('NotificationBell — row click (mark-read + deep-link)', () => {
         ),
       ).toBe(true),
     );
-    // router.push was called with the approval deep-link.
-    expect(mockPush).toHaveBeenCalledWith('/erp?approval=appr-1');
+    // router.push was called with the approval deep-link (real 결재함 route).
+    expect(mockPush).toHaveBeenCalledWith('/erp/approval?request=appr-1');
     // Dropdown is closed.
     await waitFor(() =>
       expect(screen.queryByTestId('notification-dropdown')).not.toBeInTheDocument(),
@@ -302,7 +304,37 @@ describe('NotificationBell — row click (mark-read + deep-link)', () => {
     await user.click(screen.getByTestId('notification-row-ntf-1'));
 
     // router.push still fired despite mark-read failure.
-    expect(mockPush).toHaveBeenCalledWith('/erp?approval=appr-1');
+    expect(mockPush).toHaveBeenCalledWith('/erp/approval?request=appr-1');
+  });
+
+  it('prefers the §1 deepLink over the approval fallback when present', async () => {
+    const withDeepLink = {
+      ...UNREAD_NOTIFICATION,
+      deepLink: '/erp/approval?request=appr-canonical',
+    };
+    const listWithDeepLink = {
+      items: [withDeepLink],
+      meta: { page: 0, size: 20, totalElements: 1, timestamp: 'x' },
+      degradedDomains: [],
+    };
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).includes('/read')) {
+        return Promise.resolve(jsonResponse(MARK_READ_RESPONSE));
+      }
+      return Promise.resolve(jsonResponse(listWithDeepLink));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<NotificationBell />, { wrapper: wrapper() });
+
+    await user.click(screen.getByTestId('notification-bell-trigger'));
+    await waitFor(() =>
+      expect(screen.getByTestId('notification-row-ntf-1')).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId('notification-row-ntf-1'));
+
+    // deepLink wins over the sourceId-derived approval fallback.
+    expect(mockPush).toHaveBeenCalledWith('/erp/approval?request=appr-canonical');
   });
 });
 

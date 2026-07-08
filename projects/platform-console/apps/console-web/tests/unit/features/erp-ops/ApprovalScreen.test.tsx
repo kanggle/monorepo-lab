@@ -566,3 +566,71 @@ describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () 
     expect(screen.getByTestId('approval-approverId').textContent).toBe('emp-a');
   });
 });
+
+// ===========================================================================
+// deep-link preselect — /erp/approval?request=<id> (PC-FE-230).
+// ===========================================================================
+
+describe('ApprovalScreen — deep-link preselect (initialSelectedId)', () => {
+  it('no initialSelectedId → list only, detail dialog closed', () => {
+    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.getByTestId('approval-list-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('approval-detail')).not.toBeInTheDocument();
+  });
+
+  it('initialSelectedId opens the target request detail on mount (over the list)', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).includes('/requests/appr-1')) {
+        return Promise.resolve(jsonResponse({ data: { ...SUBMITTED, id: 'appr-1' } }));
+      }
+      return Promise.resolve(jsonResponse(LIST));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <ApprovalScreen
+        initialRequests={LIST}
+        initialInbox={INBOX}
+        initialSelectedId="appr-1"
+      />,
+      { wrapper: wrapper() },
+    );
+    // Detail dialog opened for the deep-linked id — and it fetched by that id.
+    await screen.findByTestId('approval-detail');
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) =>
+          String(c[0]).includes('/api/erp/approval/requests/appr-1'),
+        ),
+      ).toBe(true),
+    );
+    // The list is still rendered underneath (deep-link overlays, never replaces).
+    expect(screen.getByTestId('approval-screen')).toBeInTheDocument();
+  });
+
+  it('unknown / stale initialSelectedId → graceful not-found over the still-rendered list (no crash)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        String(url).includes('/requests/ghost')
+          ? Promise.resolve(errorResponse('APPROVAL_REQUEST_NOT_FOUND', 404))
+          : Promise.resolve(jsonResponse(LIST)),
+      ),
+    );
+    render(
+      <ApprovalScreen
+        initialRequests={LIST}
+        initialInbox={INBOX}
+        initialSelectedId="ghost"
+      />,
+      { wrapper: wrapper() },
+    );
+    // Graceful inline not-found in the detail dialog — never a crash.
+    const err = await screen.findByTestId('approval-detail-error');
+    expect(err.textContent).toContain('찾을 수 없습니다');
+    // The list screen is intact behind the notice.
+    expect(screen.getByTestId('approval-screen')).toBeInTheDocument();
+    expect(screen.getByTestId('approval-list-table')).toBeInTheDocument();
+  });
+});

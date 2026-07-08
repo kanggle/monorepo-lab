@@ -16,8 +16,17 @@ const HEADING = 'ERP 결재함';
  * approval requests list + the caller's inbox; together the route's SOLE
  * degrade authority (§ 2.4.8 / § 2.5). approval has no `?asOf=` concept.
  * Shared eligibility + notice (PC-FE-076).
+ *
+ * `?request=<id>` (PC-FE-230) — the notification bell's approval deep-link
+ * fallback opens this route with the target request preselected. An
+ * unknown / stale id degrades gracefully to the list (the detail dialog
+ * surfaces a not-found notice; never a crash).
  */
-export default async function ErpApprovalPage() {
+export default async function ErpApprovalPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ request?: string }>;
+}) {
   const { eligible, registryDegraded } = await resolveErpEligibility();
   if (registryDegraded) {
     return <ErpSectionNotice kind="registryDegraded" heading={HEADING} />;
@@ -35,10 +44,14 @@ export default async function ErpApprovalPage() {
     return <ErpSectionNotice kind="degraded" heading={HEADING} />;
   }
 
+  const sp = (await searchParams) ?? {};
+  const requestId = sp.request?.trim() || null;
+
   return (
     <ErpApprovalScreen
       initialApprovalRequests={state.approvalRequests}
       initialApprovalInbox={state.approvalInbox}
+      initialSelectedId={requestId}
     />
   );
 }

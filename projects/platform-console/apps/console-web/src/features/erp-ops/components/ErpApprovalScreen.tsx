@@ -12,11 +12,15 @@ import { ApprovalScreen } from './ApprovalScreen';
 export interface ErpApprovalScreenProps {
   initialApprovalRequests?: ApprovalListResponse | null;
   initialApprovalInbox?: ApprovalListResponse | null;
+  /** Deep-link target from `/erp/approval?request=<id>` (notification bell
+   *  approval fallback, PC-FE-230) — the request to open on mount. */
+  initialSelectedId?: string | null;
 }
 
 export function ErpApprovalScreen({
   initialApprovalRequests,
   initialApprovalInbox,
+  initialSelectedId,
 }: ErpApprovalScreenProps) {
   return (
     <section aria-labelledby="erp-heading">
@@ -31,6 +35,7 @@ export function ErpApprovalScreen({
       <ApprovalScreen
         initialRequests={initialApprovalRequests ?? undefined}
         initialInbox={initialApprovalInbox ?? undefined}
+        initialSelectedId={initialSelectedId ?? null}
       />
     </section>
   );

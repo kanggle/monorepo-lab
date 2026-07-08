@@ -18,7 +18,8 @@ import {
  * Dropdown behaviour (AccountMenu pattern):
  *   - outside-click or Escape closes the dropdown.
  *   - clicking a row: call mark-read (idempotent, fire-and-forget) then
- *     navigate if `isApprovalSource(n)` → `/erp?approval=<sourceId>`.
+ *     navigate if `isApprovalSource(n)` → `/erp/approval?request=<sourceId>`
+ *     (the real 결재함 route — the page preselects the request; PC-FE-230).
  *     mark-read failure MUST NOT block navigation.
  *   - empty state: "새 알림이 없습니다".
  *
@@ -87,11 +88,14 @@ function NotificationRow({ notification: n, onClose }: NotificationRowProps) {
     // NOT block navigation (the aggregator dispatches per-domain credential).
     markRead({ sourceDomain: n.sourceDomain, id: n.id });
     // Prefer the §1 deepLink when the domain supplies one; else fall back to the
-    // erp approval deep-link (sourceType/sourceId extension).
+    // erp approval deep-link (sourceType/sourceId extension). The fallback
+    // targets the real 결재함 route `/erp/approval` (which preselects the
+    // request via `?request=`), NOT `/erp` — the masters page ignores the
+    // param and would strand the operator on the wrong slice (PC-FE-230).
     if (n.deepLink) {
       router.push(n.deepLink);
     } else if (isApprovalSource(n) && n.sourceId) {
-      router.push(`/erp?approval=${encodeURIComponent(n.sourceId)}`);
+      router.push(`/erp/approval?request=${encodeURIComponent(n.sourceId)}`);
     }
     onClose();
   };
