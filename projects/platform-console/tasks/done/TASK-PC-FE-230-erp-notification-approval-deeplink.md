@@ -1,6 +1,6 @@
 # TASK-PC-FE-230 — ERP 결재 알림 딥링크 오라우팅 수정 + deepLink 계약 정합
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web (Phase A · 필수) · erp-platform / notification-service (Phase B · 선택, cross-project)
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (Phase A 단독 — FE 라우팅 소규모 수정) / Opus 4.8 (Phase B 동반 시 — cross-project 계약+백엔드 정합) (분석=Opus 4.8 / 구현 권장=Sonnet, Phase B 포함 시 Opus)
 **Origin:** 2026-07-08 ERP 기능↔콘솔 메뉴 배치 감사 — deepLink "미배선" 진단이 실제로는 **오라우팅 버그**로 확증됨(아래 검증 사실 참조).
