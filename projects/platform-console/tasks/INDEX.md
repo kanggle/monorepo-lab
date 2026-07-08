@@ -85,6 +85,12 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-PC-FE-221-ecommerce-settlement-console-surface.md` — **이커머스 정산(settlement) 운영자 콘솔 표면 신설**. 백엔드 `settlement-service`는 완비(게이트웨이 `Path=/api/admin/settlements/**`·운영자 REST 9개·BE-365/415/416/425/447 done)인데 **콘솔 표면만 공백**(7개 이커머스 도메인 중 정산만 메뉴·화면·프록시·api 부재; `ecommerce-guide/data.ts`가 `console: '—'`로 명시). 2026-07-08 기능↔메뉴 배치 감사에서 REAL-GAP 3중 검증(module-liveness+live-sibling+grep). 기존 `ecommerce-ops` 화면 패턴으로 배선(사이드바 `정산` drill 자식 → `/ecommerce/settlements` → 프록시 → shared `callEcommerceGateway` 재사용 → 상태 매퍼 → 화면). Phase A(조회+메뉴+가이드 flip) → Phase B(수수료율 PUT·기간 open/close·payout execute 변이) 분할 권장. review·search는 고객 중심이라 범위 밖. 분석=Opus 4.8 / 구현 권장=Opus 4.8. [[proj_console_ecommerce_detail_conventions]]
 
+**WMS 도메인 기능-메뉴 정렬 배치** (2026-07-08 발굴) — WMS producer 도메인 기능(입고·재고·출고·마스터·운영설정) 대비 콘솔 nav가 재고·출고만 노출하던 갭 표면화. 세 갭 모두 producer admin read-model 계약 존재 + 콘솔 gateway 코어(`callWmsAdmin`) 재사용 가능(신규 env 불필요) 확인 완료. 착수 권장 순서 = 입고 → 마스터 → 운영설정. (PC-FE-221 이커머스 정산과 동일한 기능↔메뉴 배치 감사 산물.)
+
+- `TASK-PC-FE-222-wms-inbound-menu.md` — **[우선순위 상]** WMS "입고" 전용 메뉴/페이지 신설(`/wms/inbound`). ASN·검수 read를 표면화 — `listAsns`/`getAsnInspection` 클라이언트는 이미 존재하나 소비처 0(PC-FE-173 재고 표면화 패턴). 출고만 있고 입고가 없던 nav 비대칭 해소. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
+- `TASK-PC-FE-223-wms-master-menu.md` — **[우선순위 중]** WMS "마스터" 참조 조회 메뉴 신설(`/wms/master`). 창고·로케이션·SKU·거래처 read-only(`listRefs` 재사용, 소비처 0). ref type 목록 착수 시 producer 계약으로 확정 필요. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
+- `TASK-PC-FE-224-wms-operations-settings-menu.md` — **[우선순위 하]** WMS "운영설정" 조회 메뉴 신설(`/wms/operations`). 예약 TTL·저재고 임계치·프로젝션 상태 read-only(`getProjectionStatus` 재사용 + settings GET 신규). 소규모. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
+
 _(직전 완료)_ **IAM 잔여 일관성 정리 완료** (PC-FE-218~219 DONE, 2026-07-08). PC-FE-217(WMS/SCM/EC 정규화) 후 IAM 평면을 동일 렌즈로 감사 → IAM은 sweep(208~212)로 이미 대체로 클린(gateway dedup·barrel·네이밍 클린)이라 잔여는 2건뿐이었고 모두 종결: use-operators.ts 460 hook 모듈 분할(218) + audit hook 배치 정규화(219, core-wrapper는 근거 있는 SKIP). → **콘솔 4도메인(WMS/SCM/EC/IAM) client-dedup·god-file·hook·네이밍/레이아웃 전면 정렬 완결.**
 
 ## in-progress
