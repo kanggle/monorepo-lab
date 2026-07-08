@@ -88,10 +88,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-**IAM 콘솔 메뉴 정석 재편성** (2026-07-08, ADR-MONO-046 관련 — AWS IAM/GCP Cloud IAM처럼 워크포스 평면(IAM)과 고객-신원 평면을 분리하는 nav taxonomy 정비. 「운영자 그룹」(admin_operators 묶음, IAM User Group/Google Group 대응) 화면 자체는 `docs/adr/ADR-MONO-046-operator-group-model.md`(PROPOSED, self-ACCEPT 금지)의 실행 로드맵에 게이팅되어 별도 착수 — 아래 두 태스크는 그 전제인 nav 재편성 + 이미 준비된 백엔드(테넌트) 소비만 다룸).
-
-- `TASK-PC-FE-226-tenant-management-screen.md` — 「테넌트」 메뉴 실 화면(목록·상세·생성·수정). 기존 `TenantAdminController`(GET/POST/PATCH `/api/admin/tenants`) 소비, `TenantSwitcher`(세션 전환)와 별개. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer). TASK-PC-FE-225 선행.
-
 **ERP 도메인 메뉴 정석 정렬** (2026-07-08, 기능↔메뉴 배치 감사 웨이브의 **마지막 도메인** — ecommerce 221·WMS 222~224·SCM 220·IAM 225·Finance 229에 이은 ERP). ERP는 콘솔 6개 도메인 중 유일하게 `가이드`가 없고 `개요`가 마스터에 임베드(PC-FE-161)돼 루트 `/erp`=마스터. producer 커버리지는 완전(HTTP 4계약 전부 표면 있음)이라 순수 nav 구조 파리티.
 
 - `TASK-PC-FE-232-erp-overview-guide-menu.md` — ERP nav 정석 파리티: `/erp`=개요(마스터 5 count + 결재 대기 + 활성 위임 fan-out; ERP는 목록 GET이 있어 정직한 count 개요 가능) 신설 + `/erp/guide` 정적 가이드 신설 + 마스터 표면 `/erp` → `/erp/masters` 이동. PC-FE-161 임베드 overview를 독립 개요로 승격(폐기 아닌 relocation+확장). Finance PC-FE-229와 동일 구조. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer). [[project_console_finance_overview_parked]]
@@ -106,7 +102,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-226-tenant-management-screen.md` — **구현 완료, impl PR 리뷰 중** (#2336). 「테넌트」 관리 화면(목록·상세·생성·수정) — `features/tenants/` 신설(api/state/hooks/components 배럴), `TenantAdminController`(GET/POST/PATCH `/api/admin/tenants`) 소비, BFF 프록시(`app/api/tenants`), `/tenants` 스텁→실화면 교체 + `[tenantId]` 상세. SUPER_ADMIN 게이트(목록부터 차단), 2-step 생성/수정(confirm), `TenantSwitcher`(세션 전환)와 분리. 검증: lint 0·tsc 0·vitest 258 files/2708 tests GREEN(flake 0). 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer).
 
 ## done
 

@@ -664,6 +664,37 @@ export class PartnershipsUnavailableError extends Error {
   }
 }
 
+/**
+ * IAM tenant-management surface degrade signal (TASK-PC-FE-226 /
+ * admin-api.md § "Tenant Lifecycle (TASK-BE-256)"). Sibling of
+ * {@link OperatorsUnavailableError} / {@link SubscriptionsUnavailableError} —
+ * identical resilience posture for the isolation-boundary CRUD surface
+ * (`TenantAdminController`, SUPER_ADMIN only for all 4 endpoints): a
+ * `503 DOWNSTREAM_ERROR`/`503 CIRCUIT_OPEN`/timeout on a tenant-management
+ * call degrades ONLY the tenants section (the console shell + every other IAM
+ * surface stay intact). Auth failures (401) are raised as {@link ApiError} so
+ * the caller forces a clean re-login (no partial authed state). Inline-
+ * recoverable producer errors (`403 PERMISSION_DENIED`/`TENANT_SCOPE_DENIED`
+ * — not SUPER_ADMIN, `400 VALIDATION_ERROR`/`TENANT_ID_RESERVED`,
+ * `404 TENANT_NOT_FOUND`, `409 TENANT_ALREADY_EXISTS`) are raised as
+ * {@link ApiError} so the UI renders an inline actionable message without
+ * crashing. No token / tenant PII is ever placed in this error.
+ */
+export class TenantsUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: TenantsUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'TenantsUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -881,6 +912,14 @@ const MESSAGES: Record<string, string> = {
     '해당 파트너 조직과 이미 진행 중인(대기·활성) 파트너십이 있습니다.',
   PARTNERSHIP_TRANSITION_INVALID:
     '현재 파트너십 상태에서는 이 작업을 수행할 수 없습니다. 목록을 새로고침한 뒤 확인하세요.',
+  // --- tenant management (TASK-PC-FE-226 / admin-api.md § Tenant Lifecycle) --
+  // (`TENANT_ALREADY_EXISTS` / `TENANT_NOT_FOUND` / `TENANT_SCOPE_DENIED` /
+  // `PERMISSION_DENIED` / `VALIDATION_ERROR` are already mapped above and
+  // reused verbatim — the producer codes are identical.)
+  TENANT_ID_RESERVED:
+    '예약어는 테넌트 ID로 사용할 수 없습니다 (admin·internal·system·null·default·public·gap·iam·auth·oauth·me).',
+  INTEGRATION_UNAVAILABLE:
+    '테넌트 위임 처리(account-service)가 일시적으로 응답할 수 없습니다. 잠시 후 다시 시도하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {
