@@ -9,7 +9,7 @@ import {
   isSecuritySource,
   type AuditSource,
 } from '../api/types';
-import type { FilterState } from './use-audit-screen';
+import type { FilterState } from '../hooks/use-audit-screen';
 
 /**
  * `AuditScreen` filter bar (TASK-PC-FE-210 split): the 계정 ID / 액션 코드 /

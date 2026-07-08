@@ -3,7 +3,7 @@
 import type { AuditPage } from '../api/types';
 import { AuditTable } from './AuditTable';
 import { AuditFilterBar } from './AuditFilterBar';
-import { useAuditScreen } from './use-audit-screen';
+import { useAuditScreen } from '../hooks/use-audit-screen';
 
 /**
  * IAM unified audit + security read surface (TASK-PC-FE-003 — Phase 2

@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
-import { useAuditQuery } from '../hooks/use-audit';
+import { useAuditQuery } from './use-audit';
 import {
   AUDIT_DEFAULT_PAGE_SIZE,
   isSecuritySource,
