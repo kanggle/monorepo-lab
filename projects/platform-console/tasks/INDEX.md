@@ -81,6 +81,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — `/finance` landing. **⚠️ PARKED / DECLINED (2026-07-03, user-approved):** finance v1 has no list/search GET → no count overview possible, no synthetic ₩. finance keeps `Finance 운영` (honest lookup surface); N/A for the PC-FE-162 capstone. **Do NOT re-pick from a backlog sweep** — resume only if the producer adds a list GET or a concrete non-count operator need appears (see task body).
 
+**IAM 「권한」/「권한 세트」 화면** (2026-07-08 발굴, ADR-MONO-046 관련 nav 재편성의 후속) — 둘 다 `projects/iam-platform/tasks/ready/TASK-BE-486-admin-role-permission-read-api.md`(admin-service role/permission 조회 API 신설) **선행 필수**. BE-486 머지 전에는 `backlog → ready` 이동 금지(계약 미확정).
+
+- `TASK-PC-FE-227-permissions-roles-screen.md` — 「권한」 메뉴 독립 조회 화면(role/permission drill-down). TASK-BE-486 의존. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
+- `TASK-PC-FE-228-permission-sets-screen.md` — 「권한 세트」 메뉴 조회 화면(`permission_set_id` = `admin_roles` 재사용 뷰). TASK-BE-486 의존. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
+
 ## ready
 
 - `TASK-PC-FE-221-ecommerce-settlement-console-surface.md` — **이커머스 정산(settlement) 운영자 콘솔 표면 신설**. 백엔드 `settlement-service`는 완비(게이트웨이 `Path=/api/admin/settlements/**`·운영자 REST 9개·BE-365/415/416/425/447 done)인데 **콘솔 표면만 공백**(7개 이커머스 도메인 중 정산만 메뉴·화면·프록시·api 부재; `ecommerce-guide/data.ts`가 `console: '—'`로 명시). 2026-07-08 기능↔메뉴 배치 감사에서 REAL-GAP 3중 검증(module-liveness+live-sibling+grep). 기존 `ecommerce-ops` 화면 패턴으로 배선(사이드바 `정산` drill 자식 → `/ecommerce/settlements` → 프록시 → shared `callEcommerceGateway` 재사용 → 상태 매퍼 → 화면). Phase A(조회+메뉴+가이드 flip) → Phase B(수수료율 PUT·기간 open/close·payout execute 변이) 분할 권장. review·search는 고객 중심이라 범위 밖. 분석=Opus 4.8 / 구현 권장=Opus 4.8. [[proj_console_ecommerce_detail_conventions]]
@@ -90,6 +95,11 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 - `TASK-PC-FE-222-wms-inbound-menu.md` — **[우선순위 상]** WMS "입고" 전용 메뉴/페이지 신설(`/wms/inbound`). ASN·검수 read를 표면화 — `listAsns`/`getAsnInspection` 클라이언트는 이미 존재하나 소비처 0(PC-FE-173 재고 표면화 패턴). 출고만 있고 입고가 없던 nav 비대칭 해소. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
 - `TASK-PC-FE-223-wms-master-menu.md` — **[우선순위 중]** WMS "마스터" 참조 조회 메뉴 신설(`/wms/master`). 창고·로케이션·SKU·거래처 read-only(`listRefs` 재사용, 소비처 0). ref type 목록 착수 시 producer 계약으로 확정 필요. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
 - `TASK-PC-FE-224-wms-operations-settings-menu.md` — **[우선순위 하]** WMS "운영설정" 조회 메뉴 신설(`/wms/operations`). 예약 TTL·저재고 임계치·프로젝션 상태 read-only(`getProjectionStatus` 재사용 + settings GET 신규). 소규모. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
+
+**IAM 콘솔 메뉴 정석 재편성** (2026-07-08, ADR-MONO-046 관련 — AWS IAM/GCP Cloud IAM처럼 워크포스 평면(IAM)과 고객-신원 평면을 분리하는 nav taxonomy 정비. 「운영자 그룹」(admin_operators 묶음, IAM User Group/Google Group 대응) 화면 자체는 `docs/adr/ADR-MONO-046-operator-group-model.md`(PROPOSED, self-ACCEPT 금지)의 실행 로드맵에 게이팅되어 별도 착수 — 아래 두 태스크는 그 전제인 nav 재편성 + 이미 준비된 백엔드(테넌트) 소비만 다룸).
+
+- `TASK-PC-FE-225-iam-nav-orthodox-restructure.md` — IAM nav 정석 재편성(IAM 평면: 테넌트·운영자·운영자 그룹·권한·권한 세트 / 고객-신원 평면: 계정 분리). 신규 4메뉴 스텁 + 계정 nav 이동. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
+- `TASK-PC-FE-226-tenant-management-screen.md` — 「테넌트」 메뉴 실 화면(목록·상세·생성·수정). 기존 `TenantAdminController`(GET/POST/PATCH `/api/admin/tenants`) 소비, `TenantSwitcher`(세션 전환)와 별개. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer). TASK-PC-FE-225 선행.
 
 _(직전 완료)_ **IAM 잔여 일관성 정리 완료** (PC-FE-218~219 DONE, 2026-07-08). PC-FE-217(WMS/SCM/EC 정규화) 후 IAM 평면을 동일 렌즈로 감사 → IAM은 sweep(208~212)로 이미 대체로 클린(gateway dedup·barrel·네이밍 클린)이라 잔여는 2건뿐이었고 모두 종결: use-operators.ts 460 hook 모듈 분할(218) + audit hook 배치 정규화(219, core-wrapper는 근거 있는 SKIP). → **콘솔 4도메인(WMS/SCM/EC/IAM) client-dedup·god-file·hook·네이밍/레이아웃 전면 정렬 완결.**
 
