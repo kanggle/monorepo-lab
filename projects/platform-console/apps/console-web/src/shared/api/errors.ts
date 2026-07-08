@@ -828,6 +828,19 @@ const MESSAGES: Record<string, string> = {
   TEMPLATE_ALREADY_EXISTS:
     '같은 유형·채널의 알림 템플릿이 이미 있습니다. 기존 템플릿을 수정하세요.',
   TEMPLATE_NOT_FOUND: '대상 알림 템플릿을 찾을 수 없습니다. 목록을 새로고침하세요.',
+  // --- ecommerce settlement mutations (TASK-PC-FE-221 Phase B / §2.4.10) -----
+  // The commission-rate set / period open·close / payout execute surface these
+  // producer codes via messageForCode (inline actionable, NOT a fake degrade).
+  SETTLEMENT_NOT_FOUND:
+    '대상 정산 리소스를 찾을 수 없습니다 (셀러·기간). 목록을 새로고침하세요.',
+  COMMISSION_RATE_INVALID:
+    '수수료율이 올바르지 않습니다. 0~10000 basis points (0.00%~100.00%) 범위로 입력하세요.',
+  PERIOD_WINDOW_INVALID:
+    '정산 기간이 올바르지 않습니다. 시작 시각이 종료 시각보다 앞서야 합니다.',
+  PERIOD_ALREADY_CLOSED:
+    '이미 마감된 정산 기간입니다. 목록을 새로고침한 뒤 확인하세요.',
+  PERIOD_NOT_CLOSED:
+    '아직 마감되지 않은 기간입니다. 기간을 먼저 마감한 뒤 지급을 실행할 수 있습니다.',
   // --- ecommerce promotions (TASK-PC-FE-128 / §2.4.10.2) -------------------
   // The promotion form (create/update via PromotionForm) + coupon issuance
   // surface producer codes via messageForCode. Without these, a 400

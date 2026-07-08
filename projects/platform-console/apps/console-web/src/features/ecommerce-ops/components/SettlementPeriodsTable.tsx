@@ -18,17 +18,22 @@ interface SettlementPeriodsTableProps {
     onPrev: () => void;
     onNext: () => void;
   };
+  /** Phase B — when provided, OPEN rows show a "마감" action (confirm handled by
+   *  the parent). Absent ⇒ read-only (Phase A behaviour). */
+  onClose?: (periodId: string) => void;
 }
 
 /**
- * Settlement periods table + pagination (TASK-PC-FE-221 Phase A, presentational
- * only). Each row drills into the period's payouts detail
+ * Settlement periods table + pagination (TASK-PC-FE-221, presentational only).
+ * Each row drills into the period's payouts detail
  * (`/ecommerce/settlements/periods/{periodId}`). The from/to bounds are
- * day-granular (`formatDate`); `closedAt` is a record timestamp (`formatDateTime`).
+ * day-granular (`formatDate`); `closedAt` is a record timestamp
+ * (`formatDateTime`). Phase B: OPEN rows expose a "마감" action via `onClose`.
  */
 export function SettlementPeriodsTable({
   rows,
   pagination,
+  onClose,
 }: SettlementPeriodsTableProps) {
   return (
     <>
@@ -89,15 +94,29 @@ export function SettlementPeriodsTable({
                   {p.sellerCount ?? '—'}
                 </td>
                 <td className="p-2">
-                  <Link href={`/ecommerce/settlements/periods/${p.periodId}`}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      data-testid={`period-detail-${i}`}
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/ecommerce/settlements/periods/${p.periodId}`}
                     >
-                      지급 내역
-                    </Button>
-                  </Link>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        data-testid={`period-detail-${i}`}
+                      >
+                        지급 내역
+                      </Button>
+                    </Link>
+                    {onClose && p.status === 'OPEN' && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onClose(p.periodId)}
+                        data-testid={`period-close-${i}`}
+                      >
+                        마감
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

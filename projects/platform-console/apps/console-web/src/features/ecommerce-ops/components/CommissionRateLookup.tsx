@@ -8,12 +8,14 @@ import {
   rateBpsToPercent,
   commissionSourceLabel,
 } from '../api/settlement-types';
+import { CommissionRateForm } from './CommissionRateForm';
 
 /**
- * Commission-rate lookup (TASK-PC-FE-221 Phase A). A `sellerId`-driven read of
- * the effective commission rate (basis points) + its resolution source
- * (SELLER_OVERRIDE / PLATFORM_DEFAULT). Read-only — setting the rate (PUT) is
- * Phase B, no form here.
+ * Commission-rate lookup + set (TASK-PC-FE-221). A `sellerId`-driven read of the
+ * effective commission rate (basis points) + its resolution source
+ * (SELLER_OVERRIDE / PLATFORM_DEFAULT), with the Phase-B confirm-gated SET form
+ * ({@link CommissionRateForm}) below the result. On a successful set the lookup
+ * re-displays the just-set seller so the operator sees the new rate.
  *
  * Resilience: 404 SETTLEMENT_NOT_FOUND → inline not-found; 403 → forbidden;
  * 503/timeout → inline degraded (never a crash).
@@ -132,6 +134,8 @@ export function CommissionRateLookup() {
           </div>
         </dl>
       ) : null}
+
+      <CommissionRateForm onApplied={(sid) => setSellerId(sid)} />
     </section>
   );
 }

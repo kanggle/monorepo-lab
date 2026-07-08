@@ -264,3 +264,47 @@ export interface PayoutsListParams {
   page?: number;
   size?: number;
 }
+
+// ===========================================================================
+// WRITE request bodies + write response shapes (TASK-PC-FE-221 Phase B)
+// ===========================================================================
+
+/** Inclusive commission-rate bounds (basis points; 0.00%–100.00%). The UI
+ *  validates against these for immediate feedback; the producer is authoritative
+ *  (422 COMMISSION_RATE_INVALID outside the range). */
+export const COMMISSION_RATE_MIN_BPS = 0;
+export const COMMISSION_RATE_MAX_BPS = 10000;
+
+/**
+ * PUT /settlements/commission-rates/{sellerId} body — `{ rateBps }`. SHAPE-only
+ * (integer) at the proxy layer so an out-of-range value reaches the producer and
+ * surfaces its authoritative `422 COMMISSION_RATE_INVALID` (not a generic proxy
+ * 422). The client form applies the `[0, 10000]` range gate for UX.
+ */
+export const SetCommissionRateBodySchema = z.object({
+  rateBps: z.number().int(),
+});
+export type SetCommissionRateBody = z.infer<typeof SetCommissionRateBodySchema>;
+
+/**
+ * POST /settlements/periods body — half-open `[from, to)`. SHAPE-only (non-empty
+ * ISO strings) at the proxy layer so a `from >= to` window reaches the producer
+ * and surfaces its authoritative `422 PERIOD_WINDOW_INVALID`. The client form
+ * applies the ordering gate for UX.
+ */
+export const OpenPeriodBodySchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+});
+export type OpenPeriodBody = z.infer<typeof OpenPeriodBodySchema>;
+
+/**
+ * POST /settlements/periods/{periodId}/close response — the closed period plus
+ * the payouts its accruals were folded into (the irreversible transition also
+ * emits `settlement.period.closed.v1`). Extends {@link SettlementPeriodSchema}
+ * (passthrough preserved) with the `payouts` array.
+ */
+export const PeriodCloseResultSchema = SettlementPeriodSchema.extend({
+  payouts: z.array(PayoutSchema),
+});
+export type PeriodCloseResult = z.infer<typeof PeriodCloseResultSchema>;
