@@ -274,6 +274,34 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   consumes): putaway instruct/confirm, ASN creation, inspection confirmation
   — read-only. Consumed read-only; no producer contract change.
 
+  **Console-side routing note (TASK-PC-FE-223, non-normative — no producer
+  change)**: operation #11 (master refs, `GET /dashboard/refs/{type}`) — the
+  console's `features/wms-ops` client (`wms-refs-api.ts`) had exported
+  `listRefs` since the § 1.7 client split but with **zero consumers** — is
+  surfaced on a **new dedicated `/wms/master`** surface (WMS 마스터, nav
+  `WMS ▸ 마스터`, after 출고 — a reference/settings-flavoured surface placed
+  after the physical inbound→inventory→outbound flow, not inside it). The
+  `/wms/master` screen renders op #11 as a **ref-type tabbed**, filtered/
+  paginated table: one tab per producer-documented `{type}`
+  (`admin-service-api.md` § 1.7: `warehouses | zones | locations | skus |
+  lots | partners`) — the console never invents a type the read-model
+  doesn't document. Each row is the producer's generic `*Ref` projection
+  (`admin-service` `domain-model.md` § 5 — denormalised `id`/type-specific
+  code field/`name`(absent on `LotRef`)/`status`/`lastEventAt`); the table
+  renders the common fields tolerantly (a `RefPageSchema` generic-row parse,
+  never a per-type hardcoded schema). **Filter params (`q`/`status`) are a
+  console-adopted convention, not enumerated by § 1.7** ("Query parameters
+  vary by `{type}`" — the producer contract does not name them); the console
+  reuses the same `q` (substring, mirrors § 2.2 `GET /users`) + `status`
+  filter shape already established elsewhere on this producer's list
+  endpoints, forwarded tolerantly. Only the default tab (`locations`) is
+  server-seeded (page 0, no filters); every other tab / a filter or page
+  change is a client-side re-query via the same-origin proxy. **Explicitly
+  out of this surface's scope** (task § Out of Scope): master data
+  create/update/delete — the admin read-model this section consumes is
+  read-only; the raw `master-service` owns that SoT. Consumed read-only; no
+  producer contract change.
+
 - **Per-domain credential selection (the key correctness element — normative)**:
   **each § 2.4.x binding declares which credential it uses, and an
   implementer MUST NOT blanket-apply one domain's auth model to another.**

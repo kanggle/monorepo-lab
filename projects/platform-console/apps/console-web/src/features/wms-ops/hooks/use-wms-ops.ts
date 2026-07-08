@@ -27,6 +27,10 @@ import {
   type Inspection,
   AckResultSchema,
   type AckResult,
+  RefPageSchema,
+  type RefPage,
+  type RefQueryParams,
+  type RefType,
   WMS_DEFAULT_PAGE_SIZE,
   WMS_MAX_PAGE_SIZE,
 } from '../api/types';
@@ -367,6 +371,66 @@ export function useWmsAsnInspection(asnId: string | null) {
     queryFn: () => fetchAsnInspection(asnId as string),
     enabled: asnId !== null,
     retry: false,
+  });
+}
+
+// --- master refs read (TASK-PC-FE-223, 마스터) -----------------------------
+
+export function refsKey(type: RefType, params: RefQueryParams) {
+  return [
+    WMS_KEY,
+    'refs',
+    type,
+    params.q ?? null,
+    params.status ?? null,
+    Math.max(0, params.page ?? 0),
+    clampSize(params.size),
+  ] as const;
+}
+
+export function buildRefsQs(params: RefQueryParams): string {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set('q', params.q);
+  if (params.status) qs.set('status', params.status);
+  qs.set('page', String(Math.max(0, params.page ?? 0)));
+  qs.set('size', String(clampSize(params.size)));
+  return qs.toString();
+}
+
+async function fetchRefs(
+  type: RefType,
+  params: RefQueryParams,
+): Promise<RefPage> {
+  const raw = await apiClient.get<unknown>(
+    `/api/wms/master/refs/${encodeURIComponent(type)}?${buildRefsQs(params)}`,
+  );
+  return RefPageSchema.parse(raw);
+}
+
+/**
+ * TASK-PC-FE-223 — the `/wms/master` screen. `initial` is seeded ONLY for
+ * the default tab's page-0/no-filter query (mirrors `useWmsAsns`); a tab
+ * switch or a filter/page change is a new `queryKey` → one fresh proxy call.
+ * NO refetch interval / window-focus — the read-model lag is surfaced, not
+ * polled-around (§ 2.4.5).
+ */
+export function useWmsRefs(
+  type: RefType,
+  params: RefQueryParams,
+  initial?: RefPage,
+) {
+  const seeded =
+    initial !== undefined &&
+    (params.page ?? 0) === 0 &&
+    !params.q &&
+    !params.status;
+  return useQuery({
+    queryKey: refsKey(type, params),
+    queryFn: () => fetchRefs(type, params),
+    initialData: seeded ? initial : undefined,
+    staleTime: seeded ? 30_000 : 0,
+    refetchOnMount: seeded ? false : true,
+    ...READ_QUERY_REFETCH,
   });
 }
 
