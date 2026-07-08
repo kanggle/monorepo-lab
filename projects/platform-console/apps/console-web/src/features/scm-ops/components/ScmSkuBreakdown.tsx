@@ -10,8 +10,9 @@ import type { SkuBreakdown, SnapshotResponse } from '../api/types';
  * (TASK-PC-FE-144 split) — the section S5 `meta.warning` + the on-demand
  * SKU lookup form + the result (which carries its OWN required S5
  * `meta.warning`, surfaced, never stripped) or the error / prompt notice.
- * Pure presentation: all state + handlers live in the `ScmOpsScreen`
- * container and arrive via props. STRICTLY READ-ONLY.
+ * Pure presentation: all state + handlers live in the `ScmInventoryScreen`
+ * container (TASK-PC-FE-220 split of the former ScmOpsScreen) and arrive
+ * via props. STRICTLY READ-ONLY.
  */
 import { S5Warning } from './S5Warning';
 

@@ -1,9 +1,11 @@
 /**
  * SCM 가이드 화면의 정적 참조 데이터 (TASK-PC-FE-188).
  *
- * SCM 콘솔의 3개 라이브 화면 — **개요(`/scm`: 발주 + 재고 가시성)** · **보충
- * (`/scm/replenishment`)** · **설정(`/scm/config`)** — 이 실제로 보여주는 값의
- * 의미와, 그 뒤의 scm-platform 마이크로서비스 구성을 운영자에게 설명한다. IAM
+ * SCM 콘솔의 라이브 화면 — **개요(`/scm`: 운영 현황 요약)** · **조달
+ * (`/scm/procurement`: 발주)** · **재고(`/scm/inventory`: 재고 가시성)** ·
+ * **보충 계획(`/scm/replenishment`)** · **보충 계획 설정(`/scm/config`)** — 이
+ * 실제로 보여주는 값의 의미와, 그 뒤의 scm-platform 마이크로서비스 구성을
+ * 운영자에게 설명한다(개요/조달/재고 분리는 TASK-PC-FE-220). IAM
  * 가이드(`features/iam-guide/data.ts`, TASK-PC-FE-163) · WMS 가이드
  * (`features/wms-guide/data.ts`, TASK-PC-FE-183) · E-Commerce 가이드
  * (`features/ecommerce-guide/data.ts`, TASK-PC-FE-184)와 같은 원칙: 타입 있는
@@ -46,9 +48,9 @@ export interface DomainService {
 
 /**
  * SCM 도메인은 단일 엣지 게이트웨이 뒤의 3개 producer 로 구성된 이벤트 기반
- * 시스템이다. 콘솔은 gateway 를 경유해 procurement(발주)·inventory-visibility
- * (재고 가시성)·demand-planning(보충·설정) 의 운영자 API 를 호출해 화면을
- * 렌더한다. SCM 은 v1 **단일테넌트** 도메인이다(맨 아래 롤 참조).
+ * 시스템이다. 콘솔은 gateway 를 경유해 procurement(조달)·inventory-visibility
+ * (재고)·demand-planning(보충 계획·보충 계획 설정) 의 운영자 API 를 호출해
+ * 화면을 렌더한다. SCM 은 v1 **단일테넌트** 도메인이다(맨 아래 롤 참조).
  */
 export const DOMAIN_SERVICES: DomainService[] = [
   {
@@ -63,21 +65,21 @@ export const DOMAIN_SERVICES: DomainService[] = [
     name: 'procurement-service',
     context: '발주 · 구매',
     desc: '발주(PurchaseOrder) 애그리거트를 소유. DRAFT→제출→확정→입고→정산 생명주기, 공급사 확인(ack)·부분입고·정산을 관리.',
-    console: '개요 (발주)',
+    console: '조달',
   },
   {
     key: 'inventory-visibility',
     name: 'inventory-visibility-service',
     context: '재고 가시성',
     desc: '다중 노드(창고/매장) 재고를 이벤트로 투영한 교차 조회 읽기모델. 모든 응답에 S5 경고("발주 결정 근거 아님")를 상시 부착.',
-    console: '개요 (재고 스냅샷)',
+    console: '재고',
   },
   {
     key: 'demand-planning',
     name: 'demand-planning-service',
     context: '수요계획 · 보충',
     desc: 'wms 저재고 알림을 소비해 보충 추천(SUGGESTED)을 생성, 운영자 승인 시 DRAFT 발주로 물질화(ADR-MONO-027 루프). 재주문 정책·공급사 매핑 시드를 소유.',
-    console: '보충 · 설정',
+    console: '보충 계획 · 보충 계획 설정',
   },
 ];
 
@@ -98,8 +100,8 @@ export interface PoState {
  * (마감 CLOSED · 취소 CANCELED). 콘솔 소비 순서는
  * `scm-ops-helpers.KNOWN_PO_STATUSES` 와 일치한다.
  *
- * **핵심 구분**: 콘솔 SCM 개요의 발주 목록은 **읽기 전용**이다(제출·확정·입고
- * 등 쓰기는 조달 백엔드 책임). 콘솔에서 발주 생성을 촉발하는 유일한 경로는
+ * **핵심 구분**: 콘솔 SCM 조달 화면의 발주 목록은 **읽기 전용**이다(제출·확정·
+ * 입고 등 쓰기는 조달 백엔드 책임). 콘솔에서 발주 생성을 촉발하는 유일한 경로는
  * 보충 추천 **승인** 뿐이며, 그것도 **DRAFT** 까지만 만든다(PO_NOTE 참조).
  */
 export const PO_STATES: PoState[] = [
@@ -164,7 +166,7 @@ export const PO_STATES: PoState[] = [
  */
 export const PO_NOTE = {
   title: '콘솔 발주는 읽기 전용 · 보충 승인이 DRAFT 를 만든다',
-  body: '콘솔 SCM 개요의 발주 목록은 조회 전용이다 — 제출(SUBMIT)·확정(CONFIRM)·입고(RECEIVE) 등 쓰기는 조달(procurement) 백엔드의 책임이다. 콘솔에서 발주 생성을 촉발하는 유일한 경로는 보충 추천 **승인**이며, 승인 시 procurement 는 **DRAFT** 발주만 만들고(그 이상 자동 진행 없음, ADR-MONO-027 D5), 이후 제출·확정(확정은 roles∋OPERATOR 필요)은 조달에서 별도로 진행한다.',
+  body: '콘솔 SCM 조달 화면의 발주 목록은 조회 전용이다 — 제출(SUBMIT)·확정(CONFIRM)·입고(RECEIVE) 등 쓰기는 조달(procurement) 백엔드의 책임이다. 콘솔에서 발주 생성을 촉발하는 유일한 경로는 보충 추천 **승인**이며, 승인 시 procurement 는 **DRAFT** 발주만 만들고(그 이상 자동 진행 없음, ADR-MONO-027 D5), 이후 제출·확정(확정은 roles∋OPERATOR 필요)은 조달에서 별도로 진행한다.',
 } as const;
 
 // ───────────────────────── 재고 가시성 (Inventory Visibility) ─────────────
@@ -205,7 +207,7 @@ export const STALENESS_STATES: StalenessState[] = [
  */
 export const S5_NOTE = {
   title: '재고 가시성 S5 — 발주 결정 근거가 아니다',
-  body: 'inventory-visibility 응답에는 항상 `Not for procurement decisions (S5)` 경고가 붙는다(계약 의무 — 콘솔은 이 문자열을 숨기거나 지우지 않고 재고 스냅샷 상단에 노출한다). 이 스냅샷은 다중 노드(창고/매장) 재고를 이벤트로 투영한 최종 일관성 읽기모델이라 순간적으로 과거일 수 있고, 실제 발주/재고 차감의 권위는 wms inventory-service 다. 개요의 재고 스냅샷 카운트가 보일 때 이 경고가 함께 뜬다.',
+  body: 'inventory-visibility 응답에는 항상 `Not for procurement decisions (S5)` 경고가 붙는다(계약 의무 — 콘솔은 이 문자열을 숨기거나 지우지 않고 재고 스냅샷 상단에 노출한다). 이 스냅샷은 다중 노드(창고/매장) 재고를 이벤트로 투영한 최종 일관성 읽기모델이라 순간적으로 과거일 수 있고, 실제 발주/재고 차감의 권위는 wms inventory-service 다. 재고 화면의 스냅샷과 개요의 재고 스냅샷 카운트에 이 경고가 함께 뜬다.',
 } as const;
 
 /**
@@ -213,7 +215,7 @@ export const S5_NOTE = {
  */
 export const NODE_NOTE = {
   title: '노드(Node)와 교차 조회',
-  body: '노드는 재고를 보유하는 물리 위치(창고·매장 등, nodeType)다. inventory-visibility 는 SKU 별로 여러 노드의 수량을 합산해 교차 조회를 제공한다(개요의 재고 스냅샷·SKU 분해·노드 목록). 노드별 staleness 로 어느 노드 데이터가 지연/도달불가인지 구분하며, 지연/도달불가 노드가 있으면 합산 수량을 그만큼 낮은 신뢰로 읽어야 한다.',
+  body: '노드는 재고를 보유하는 물리 위치(창고·매장 등, nodeType)다. inventory-visibility 는 SKU 별로 여러 노드의 수량을 합산해 교차 조회를 제공한다(재고 화면의 스냅샷·SKU 분해·노드 목록). 노드별 staleness 로 어느 노드 데이터가 지연/도달불가인지 구분하며, 지연/도달불가 노드가 있으면 합산 수량을 그만큼 낮은 신뢰로 읽어야 한다.',
 } as const;
 
 // ───────────────────────── 보충 추천 (Replenishment) ─────────────────────────
