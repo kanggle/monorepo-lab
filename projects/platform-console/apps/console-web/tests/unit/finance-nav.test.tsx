@@ -98,7 +98,7 @@ describe('finance nav — additive, does not disturb catalog routing (FE-001/002
       { wrapper: wrapper() },
     );
     expect(
-      screen.getByRole('heading', { name: 'Finance 운영' }),
+      screen.getByRole('heading', { name: 'Finance 계좌' }),
     ).toBeInTheDocument();
     // The lookup form renders even without an accountId — finance v1
     // has no list/search GET, so the section opens to the lookup

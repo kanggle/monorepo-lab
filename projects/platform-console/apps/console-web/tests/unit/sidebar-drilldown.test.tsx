@@ -36,12 +36,15 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     expect(scm).not.toHaveAttribute('href');
     expect(screen.queryByTestId('nav-scm-ops')).toBeNull();
     expect(screen.queryByTestId('nav-scm-replenishment')).toBeNull();
-    // Finance is ALSO a drill parent (운영 + 원장, TASK-PC-FE-078) — a toggle
+    // Finance is ALSO a drill parent (개요 + 가이드 + 계좌 + 원장,
+    // TASK-PC-FE-078, children realigned TASK-PC-FE-229) — a toggle
     // button, not a link, with its submenus collapsed until opened.
     const finance = screen.getByTestId('nav-finance');
     expect(finance.tagName).toBe('BUTTON');
     expect(finance).not.toHaveAttribute('href');
-    expect(screen.queryByTestId('nav-finance-ops')).toBeNull();
+    expect(screen.queryByTestId('nav-finance-overview')).toBeNull();
+    expect(screen.queryByTestId('nav-finance-guide')).toBeNull();
+    expect(screen.queryByTestId('nav-finance-accounts')).toBeNull();
     expect(screen.queryByTestId('nav-ledger')).toBeNull();
   });
 
@@ -216,15 +219,25 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
     );
   });
 
-  // --- Finance drill parent (TASK-PC-FE-078) — mirrors the WMS tests above ---
+  // --- Finance drill parent (TASK-PC-FE-078; children realigned
+  // TASK-PC-FE-229 — 개요 → 가이드 → 계좌 → 원장) — mirrors the WMS tests
+  // above.
 
-  it('clicking Finance drills in: reveals 운영 + 원장 with their destinations', () => {
+  it('clicking Finance drills in: reveals 개요 + 가이드 + 계좌 + 원장 with their destinations, in order', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-finance'));
 
-    expect(screen.getByTestId('nav-finance-ops')).toHaveAttribute(
+    expect(screen.getByTestId('nav-finance-overview')).toHaveAttribute(
       'href',
       '/finance',
+    );
+    expect(screen.getByTestId('nav-finance-guide')).toHaveAttribute(
+      'href',
+      '/finance/guide',
+    );
+    expect(screen.getByTestId('nav-finance-accounts')).toHaveAttribute(
+      'href',
+      '/finance/accounts',
     );
     expect(screen.getByTestId('nav-ledger')).toHaveAttribute('href', '/ledger');
     // Pinned parent is the first focusable nav control.
@@ -233,30 +246,75 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
       'data-testid',
       'nav-finance',
     );
+    // Order: 개요 → 가이드 → 계좌 → 원장.
+    const links = Array.from(nav.querySelectorAll('a')).map((a) =>
+      a.getAttribute('data-testid'),
+    );
+    expect(links).toEqual([
+      'nav-finance-overview',
+      'nav-finance-guide',
+      'nav-finance-accounts',
+      'nav-ledger',
+    ]);
     // The drill replaces the top-level list — sibling domains are gone.
     expect(screen.queryByTestId('nav-scm')).toBeNull();
   });
 
-  it('a deep link to /ledger auto-opens the Finance drill with 원장 active and 운영 inactive', () => {
+  it('a deep link to /ledger auto-opens the Finance drill with 원장 active and 개요/계좌 inactive', () => {
     mockPath = '/ledger';
     render(<ConsoleSidebarNav />);
     expect(screen.getByTestId('nav-ledger')).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(screen.getByTestId('nav-finance-ops')).not.toHaveAttribute(
+    expect(screen.getByTestId('nav-finance-overview')).not.toHaveAttribute(
+      'aria-current',
+    );
+    expect(screen.getByTestId('nav-finance-accounts')).not.toHaveAttribute(
       'aria-current',
     );
   });
 
-  it('a deep link to /finance auto-opens the Finance drill with 운영 active and 원장 inactive', () => {
+  it('a deep link to /finance auto-opens the Finance drill with 개요 active and 가이드/계좌/원장 inactive', () => {
     mockPath = '/finance';
     render(<ConsoleSidebarNav />);
-    expect(screen.getByTestId('nav-finance-ops')).toHaveAttribute(
+    expect(screen.getByTestId('nav-finance-overview')).toHaveAttribute(
       'aria-current',
       'page',
     );
+    expect(screen.getByTestId('nav-finance-guide')).not.toHaveAttribute(
+      'aria-current',
+    );
+    expect(screen.getByTestId('nav-finance-accounts')).not.toHaveAttribute(
+      'aria-current',
+    );
     expect(screen.getByTestId('nav-ledger')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('a deep link to /finance/guide auto-opens the Finance drill with 가이드 active and 개요 inactive', () => {
+    mockPath = '/finance/guide';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-finance-guide')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-finance-overview')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('a deep link to /finance/accounts auto-opens the Finance drill with 계좌 active and 개요 inactive (longest-match, AC-6)', () => {
+    mockPath = '/finance/accounts';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-finance-accounts')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    // 개요(/finance) must NOT also light up on the deeper /finance/accounts
+    // route — the longest-match guard (AC-6).
+    expect(screen.getByTestId('nav-finance-overview')).not.toHaveAttribute(
       'aria-current',
     );
   });

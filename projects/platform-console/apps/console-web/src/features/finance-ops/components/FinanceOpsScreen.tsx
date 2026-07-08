@@ -19,6 +19,10 @@ import { ApiError, messageForCode } from '@/shared/api/errors';
 /**
  * finance operations section (TASK-PC-FE-009 — ADR-MONO-013 Phase 5, the
  * THIRD non-IAM federated domain; closes the non-IAM federation cycle).
+ * Reached at `/finance/accounts` (relocated from the domain root `/finance`
+ * by TASK-PC-FE-229, which repoints the root at a new ledger + default-
+ * account overview landing — the heading below reads "Finance 계좌" to
+ * match, all logic below unchanged).
  *
  * STRICTLY READ-ONLY. The section renders:
  *   - AccountLookup (accountId entry — honest finance constraint: v1
@@ -88,7 +92,7 @@ export function FinanceOpsScreen({
   return (
     <section aria-labelledby="finance-heading">
       <h1 id="finance-heading" className="mb-2 text-2xl font-semibold">
-        Finance 운영
+        Finance 계좌
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
         계정 · 잔액 · 거래 조회 (읽기 전용). finance 운영 표면을 콘솔
