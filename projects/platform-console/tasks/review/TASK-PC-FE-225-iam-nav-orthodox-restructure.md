@@ -8,7 +8,7 @@ IAM nav 정석 재편성 (IAM 평면 / 고객-신원 평면 분리)
 
 # Status
 
-ready
+review
 
 # Owner
 

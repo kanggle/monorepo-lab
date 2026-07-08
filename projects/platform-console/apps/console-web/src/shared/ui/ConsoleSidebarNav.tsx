@@ -34,6 +34,7 @@ interface NavParent {
 type NavNode = NavLeaf | NavParent;
 interface NavGroup {
   label?: string;
+  testid?: string;
   items: NavNode[];
 }
 
@@ -56,11 +57,15 @@ const GROUPS: NavGroup[] = [
     label: '관리',
     items: [
       {
-        // The 3 IAM surfaces nest under one IAM drill parent: 계정 운영
-        // (/accounts — the catalog IAM tile's target via resolveConsoleRoute,
-        // TASK-PC-FE-062) + 감사·보안 + 운영자 관리
-        // (`${IAM_ADMIN_API_BASE}/api/admin/{audit,operators}`). TASK-PC-FE-060
-        // / -062 — same drill model as WMS.
+        // TASK-PC-FE-225 — orthodox IAM taxonomy: this drill parent is now the
+        // **workforce plane** only (AWS IAM / GCP Cloud IAM equivalent) —
+        // 테넌트 (isolation boundary, AWS account / GCP project) · 운영자
+        // (workforce identity, IAM User) · 운영자 그룹 (IAM User Group /
+        // Google Group, ADR-MONO-046) · 권한 (Action/Permission) · 권한 세트
+        // (IAM Policy/Role). The consumer-facing 계정(/accounts) surface moved
+        // OUT to its own 「고객 신원」 group below (Cognito / Identity Platform
+        // equivalent) — nav placement only, route/features unchanged
+        // (Catalog iam.baseRoute stays /accounts, FE-002).
         key: 'iam',
         label: 'IAM',
         testid: 'nav-iam',
@@ -70,20 +75,56 @@ const GROUPS: NavGroup[] = [
           // list endpoints) so an operator sees the domain state at a glance —
           // consistent with every other domain's 개요. The former static RBAC
           // guide is relocated to 가이드(/iam/guide, testid `nav-iam-guide`
-          // preserved) as the second child. Then the two management (write)
-          // surfaces in **setup-first** order — 운영자 관리 (provision the
-          // operators + grant the roles that gate every other IAM surface)
-          // BEFORE 계정 운영 (/accounts, the catalog IAM tile target; the
-          // day-to-day end-user account CS work those operators then perform) —
-          // then 감사·보안 (read-only oversight) last: orient → learn → configure
-          // → operate → review. (Catalog iam.baseRoute stays /accounts, FE-002.)
+          // preserved) as the second child. Then the workforce-plane
+          // management (write) surfaces in **setup-first** order — 운영자
+          // 관리 (provision the operators) immediately followed by 운영자
+          // 그룹 (bulk-grant roles to a group of operators, ADR-MONO-046) —
+          // then the isolation/permission surfaces 테넌트 · 권한 · 권한 세트 —
+          // then 감사·보안 (read-only oversight) last: orient → learn →
+          // configure → operate → review.
           { href: '/iam', label: '개요', testid: 'nav-iam-overview' },
           { href: '/iam/guide', label: '가이드', testid: 'nav-iam-guide' },
           { href: '/operators', label: '운영자 관리', testid: 'nav-operators' },
-          { href: '/accounts', label: '계정 운영', testid: 'nav-accounts' },
+          // 운영자 그룹 (TASK-PC-FE-225 stub; real feature = ADR-MONO-046
+          // execution roadmap) — IAM User Group / Google Group equivalent.
+          {
+            href: '/operator-groups',
+            label: '운영자 그룹',
+            testid: 'nav-iam-operator-groups',
+          },
+          // 테넌트 (TASK-PC-FE-225 stub; real feature = TASK-PC-FE-226) —
+          // isolation boundary, AWS account / GCP project equivalent.
+          { href: '/tenants', label: '테넌트', testid: 'nav-iam-tenants' },
+          // 권한 (TASK-PC-FE-225 stub; real feature = TASK-PC-FE-227) —
+          // Action/Permission equivalent.
+          {
+            href: '/permissions',
+            label: '권한',
+            testid: 'nav-iam-permissions',
+          },
+          // 권한 세트 (TASK-PC-FE-225 stub; real feature = TASK-PC-FE-228) —
+          // IAM Policy/Role equivalent.
+          {
+            href: '/permission-sets',
+            label: '권한 세트',
+            testid: 'nav-iam-permission-sets',
+          },
           { href: '/audit', label: '감사 · 보안', testid: 'nav-audit' },
         ],
       },
+    ],
+  },
+  {
+    // TASK-PC-FE-225 — the consumer-facing / B2C identity plane (AWS Cognito
+    // / GCP Identity Platform equivalent), split OUT of the workforce IAM
+    // group above (orthodox IAM taxonomy: workforce plane vs. customer
+    // identity plane are distinct surfaces even though both are "identity").
+    // A single flat leaf today (계정 운영, unchanged route/features/gating —
+    // nav placement only); not a drill parent since it has one destination.
+    label: '고객 신원',
+    testid: 'nav-group-customer-identity',
+    items: [
+      { href: '/accounts', label: '계정 운영', testid: 'nav-accounts' },
     ],
   },
   {
@@ -444,7 +485,10 @@ export function ConsoleSidebarNav() {
       {GROUPS.map((group, gi) => (
         <div key={group.label ?? `g${gi}`} className="flex flex-col gap-0.5">
           {group.label && (
-            <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <p
+              data-testid={group.testid}
+              className="px-2 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+            >
               {group.label}
             </p>
           )}

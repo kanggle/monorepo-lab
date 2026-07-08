@@ -92,7 +92,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **IAM 콘솔 메뉴 정석 재편성** (2026-07-08, ADR-MONO-046 관련 — AWS IAM/GCP Cloud IAM처럼 워크포스 평면(IAM)과 고객-신원 평면을 분리하는 nav taxonomy 정비. 「운영자 그룹」(admin_operators 묶음, IAM User Group/Google Group 대응) 화면 자체는 `docs/adr/ADR-MONO-046-operator-group-model.md`(PROPOSED, self-ACCEPT 금지)의 실행 로드맵에 게이팅되어 별도 착수 — 아래 두 태스크는 그 전제인 nav 재편성 + 이미 준비된 백엔드(테넌트) 소비만 다룸).
 
-- `TASK-PC-FE-225-iam-nav-orthodox-restructure.md` — IAM nav 정석 재편성(IAM 평면: 테넌트·운영자·운영자 그룹·권한·권한 세트 / 고객-신원 평면: 계정 분리). 신규 4메뉴 스텁 + 계정 nav 이동. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
 - `TASK-PC-FE-226-tenant-management-screen.md` — 「테넌트」 메뉴 실 화면(목록·상세·생성·수정). 기존 `TenantAdminController`(GET/POST/PATCH `/api/admin/tenants`) 소비, `TenantSwitcher`(세션 전환)와 별개. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer). TASK-PC-FE-225 선행.
 
 _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-07-08). 개요가 조달·재고 두 기능을 한 화면에 얹던 것을 분리: 개요=요약 밴드만, 조달(`/scm/procurement`)·재고(`/scm/inventory`) 신규 라우트, 보충/설정→보충 계획/보충 계획 설정 명칭 정리. 내부적으로 `getScmSectionState`→procurement/inventory 2분할 + `ScmOpsScreen`→2화면 분할. (WMS 기능-메뉴 배치 PC-FE-222~224와 같은 기능↔메뉴 정렬 계열.)
@@ -103,7 +102,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-225-iam-nav-orthodox-restructure.md` — **구현 완료, impl PR 리뷰 중** (스택 base=`feat/iam-console-menu-tasks`/#2319). IAM nav 정석 재편성: IAM 그룹 8자식(개요·가이드·운영자·운영자 그룹·테넌트·권한·권한 세트·감사) + 계정을 신규 「고객 신원」 그룹으로 이동, 신규 4메뉴 스텁 라우트. lint/tsc GREEN·관련 vitest 격리 GREEN(전체 스위트 실패는 무관 파일 기존 flake). 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer).
 
 ## done
 
