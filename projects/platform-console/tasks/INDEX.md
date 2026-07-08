@@ -89,11 +89,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 ## ready
 
 - `TASK-PC-FE-221-ecommerce-settlement-console-surface.md` — **이커머스 정산(settlement) 운영자 콘솔 표면 신설**. 백엔드 `settlement-service`는 완비(게이트웨이 `Path=/api/admin/settlements/**`·운영자 REST 9개·BE-365/415/416/425/447 done)인데 **콘솔 표면만 공백**(7개 이커머스 도메인 중 정산만 메뉴·화면·프록시·api 부재; `ecommerce-guide/data.ts`가 `console: '—'`로 명시). 2026-07-08 기능↔메뉴 배치 감사에서 REAL-GAP 3중 검증(module-liveness+live-sibling+grep). 기존 `ecommerce-ops` 화면 패턴으로 배선(사이드바 `정산` drill 자식 → `/ecommerce/settlements` → 프록시 → shared `callEcommerceGateway` 재사용 → 상태 매퍼 → 화면). Phase A(조회+메뉴+가이드 flip) → Phase B(수수료율 PUT·기간 open/close·payout execute 변이) 분할 권장. review·search는 고객 중심이라 범위 밖. 분석=Opus 4.8 / 구현 권장=Opus 4.8. [[proj_console_ecommerce_detail_conventions]]
-
-**IAM 콘솔 메뉴 정석 재편성** (2026-07-08, ADR-MONO-046 관련 — AWS IAM/GCP Cloud IAM처럼 워크포스 평면(IAM)과 고객-신원 평면을 분리하는 nav taxonomy 정비. 「운영자 그룹」(admin_operators 묶음, IAM User Group/Google Group 대응) 화면 자체는 `docs/adr/ADR-MONO-046-operator-group-model.md`(PROPOSED, self-ACCEPT 금지)의 실행 로드맵에 게이팅되어 별도 착수 — 아래 두 태스크는 그 전제인 nav 재편성 + 이미 준비된 백엔드(테넌트) 소비만 다룸).
-
-- `TASK-PC-FE-226-tenant-management-screen.md` — 「테넌트」 메뉴 실 화면(목록·상세·생성·수정). 기존 `TenantAdminController`(GET/POST/PATCH `/api/admin/tenants`) 소비, `TenantSwitcher`(세션 전환)와 별개. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer). TASK-PC-FE-225 선행.
-
 _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-07-08). 개요가 조달·재고 두 기능을 한 화면에 얹던 것을 분리: 개요=요약 밴드만, 조달(`/scm/procurement`)·재고(`/scm/inventory`) 신규 라우트, 보충/설정→보충 계획/보충 계획 설정 명칭 정리. 내부적으로 `getScmSectionState`→procurement/inventory 2분할 + `ScmOpsScreen`→2화면 분할. (WMS 기능-메뉴 배치 PC-FE-222~224와 같은 기능↔메뉴 정렬 계열.)
 
 ## in-progress
@@ -102,6 +97,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-226-tenant-management-screen.md` — **구현 완료, impl PR 리뷰 중**. 「테넌트」 관리 화면(목록·상세·생성·수정) — `features/tenants/` 신설(api/state/hooks/components 배럴), `TenantAdminController`(GET/POST/PATCH `/api/admin/tenants`) 소비, BFF 프록시(`app/api/tenants`), `/tenants` 스텁→실화면 교체 + `[tenantId]` 상세. SUPER_ADMIN 게이트(목록부터 차단), 2-step 생성/수정(confirm), `TenantSwitcher`(세션 전환)와 분리. 검증: lint 0·tsc 0·vitest 258 files/2708 tests GREEN(flake 0). 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer).
 - `TASK-PC-FE-225-iam-nav-orthodox-restructure.md` — **구현 완료, impl PR 리뷰 중** (스택 base=`feat/iam-console-menu-tasks`/#2319). IAM nav 정석 재편성: IAM 그룹 8자식(개요·가이드·운영자·운영자 그룹·테넌트·권한·권한 세트·감사) + 계정을 신규 「고객 신원」 그룹으로 이동, 신규 4메뉴 스텁 라우트. lint/tsc GREEN·관련 vitest 격리 GREEN(전체 스위트 실패는 무관 파일 기존 flake). 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer).
 
 ## done

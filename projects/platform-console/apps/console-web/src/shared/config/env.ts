@@ -122,6 +122,13 @@ const ServerEnvSchema = z.object({
    *  ADR-MONO-045 §3.4); request/response/error owned by IAM `admin-api.md`
    *  § Partnership Management (authoritative, consumed only). */
   PARTNERSHIPS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** Outbound timeout (ms) for IAM tenant-management calls (TASK-PC-FE-226 /
+   *  integration-heavy I1 — same convention as OPERATORS_TIMEOUT_MS). The 4
+   *  tenant CRUD endpoints (`TenantAdminController`, SUPER_ADMIN only) hang
+   *  off `${IAM_ADMIN_API_BASE}/api/admin/tenants...` — request/response/error
+   *  owned by IAM `admin-api.md` § "Tenant Lifecycle (TASK-BE-256)"
+   *  (authoritative, consumed only). */
+  TENANTS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** wms `admin-service` base for the operations surface (TASK-PC-FE-007 /
    *  § 2.4.5). The dashboard read-model + alert-ack endpoints hang off
    *  `${WMS_ADMIN_BASE_URL}/dashboard/...` (+ `/operations/...`) —
@@ -283,6 +290,7 @@ export function getServerEnv(): ServerEnv {
     OPERATORS_TIMEOUT_MS: process.env.OPERATORS_TIMEOUT_MS,
     SUBSCRIPTIONS_TIMEOUT_MS: process.env.SUBSCRIPTIONS_TIMEOUT_MS,
     PARTNERSHIPS_TIMEOUT_MS: process.env.PARTNERSHIPS_TIMEOUT_MS,
+    TENANTS_TIMEOUT_MS: process.env.TENANTS_TIMEOUT_MS,
     WMS_ADMIN_BASE_URL: process.env.WMS_ADMIN_BASE_URL,
     WMS_TIMEOUT_MS: process.env.WMS_TIMEOUT_MS,
     WMS_OUTBOUND_BASE_URL: process.env.WMS_OUTBOUND_BASE_URL,
