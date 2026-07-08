@@ -1,6 +1,7 @@
 # TASK-PC-FE-222 — WMS "입고" 전용 메뉴/페이지 신설 + 미노출 입고(ASN·검수·적치) 표면화
 
-**Status:** ready
+**Status:** done
+**Completed:** 2026-07-08, 3-dim verified — impl PR #2321 (squash `8dae87b4`). tsc 0 · next lint clean · vitest inbound 26/26 (state/nav/screen, forbidden/degraded/401/404 resilience). 3-dim: (a) MERGED+`8dae87b4`; (b) origin/main tip 일치; (c) pre-merge CLEAN(전 required SUCCESS, ecommerce IT 레인은 무관). 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer).
 **Area:** platform-console / console-web · **New route:** `app/(console)/wms/inbound` · **Nav:** `WMS ▸ 입고` (`nav-wms-inbound`)
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (frontend-engineer 위임) — 기존 재고/출고 화면 패턴 미러 (분석=Opus 4.8 / 구현 권장=Sonnet) · **검증:** Opus 재검증.
 **Follows:** TASK-PC-FE-173 (재고 전용 페이지 분리) — 동일 원칙: producer가 제공하지만 콘솔에 소비처가 0인 read 표면을 전용 페이지로 표면화.
