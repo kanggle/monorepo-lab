@@ -101,6 +101,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 ## review
 
 - `TASK-PC-FE-225-iam-nav-orthodox-restructure.md` — **구현 완료, impl PR 리뷰 중** (스택 base=`feat/iam-console-menu-tasks`/#2319). IAM nav 정석 재편성: IAM 그룹 8자식(개요·가이드·운영자·운영자 그룹·테넌트·권한·권한 세트·감사) + 계정을 신규 「고객 신원」 그룹으로 이동, 신규 4메뉴 스텁 라우트. lint/tsc GREEN·관련 vitest 격리 GREEN(전체 스위트 실패는 무관 파일 기존 flake). 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer).
+- `TASK-PC-FE-231-erp-architecture-spec-reconcile.md` — **[refactor-spec, 코드 무변경]** `console-web/architecture.md` erp 섹션이 실제 콘솔보다 심하게 stale(erp를 read-only masterdata 전용으로 기술)하던 것을 실제 상태로 정합. erp는 PC-FE-046/048/049/051/053/054/055/076을 거쳐 **read+write·3 백엔드 서비스**로 성장(masters CUD·approval 전이+`X-Operator-Reason`·delegation grant/revoke·read-model org-view/facts read-only). architecture.md 5블록 편집(route-tree·erp-ops 트리·prose·producer + credential `getAccessToken`→`getDomainFacingToken`). `console-integration-contract §2.4.8`은 이미 최신(SoT, 무변경). E2/E3·resilience·429-absent 등 유효 normative 보존. 발견=PC-FE-230/ERP-BE-028 딥링크 작업 중. 분석=Opus 4.8 / 구현=Sonnet.
 
 ## done
 
