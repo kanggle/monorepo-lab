@@ -1,5 +1,7 @@
 package com.example.admin.domain.rbac;
 
+import java.util.List;
+
 /**
  * Canonical permission key catalog for admin-service RBAC.
  * See specs/services/admin-service/rbac.md — "Permission Keys".
@@ -56,4 +58,35 @@ public final class Permission {
 
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";
+
+    /**
+     * TASK-BE-486 — the full, ordered permission-key catalog exposed by
+     * {@code GET /api/admin/permissions}. This is the canonical enumeration of
+     * every real permission key (the {@link #MISSING} sentinel is deliberately
+     * excluded — it is an audit marker, not a grantable permission), in the order
+     * declared by rbac.md § Permission Keys.
+     *
+     * <p>Sourcing the catalog from these constants (rather than {@code SELECT
+     * DISTINCT permission_key FROM admin_role_permissions}) makes the response
+     * drift-proof against seed state: a key that is defined but not yet granted
+     * to any seed role still appears. {@code CatalogDriftTest} pins this list to
+     * the reflected constant set so a new constant can never silently omit itself.
+     */
+    private static final List<String> CATALOG = List.of(
+            ACCOUNT_READ,
+            ACCOUNT_LOCK,
+            ACCOUNT_UNLOCK,
+            ACCOUNT_FORCE_LOGOUT,
+            AUDIT_READ,
+            SECURITY_EVENT_READ,
+            OPERATOR_MANAGE,
+            TENANT_MANAGE,
+            SUBSCRIPTION_MANAGE,
+            TENANT_ADMIN_DELEGATE,
+            PARTNERSHIP_MANAGE);
+
+    /** @return the canonical permission-key catalog (immutable, rbac.md order). */
+    public static List<String> catalog() {
+        return CATALOG;
+    }
 }
