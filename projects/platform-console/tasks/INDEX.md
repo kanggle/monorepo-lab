@@ -83,7 +83,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty) — **IAM 잔여 일관성 정리 완료** (PC-FE-218~219 DONE, 2026-07-08). PC-FE-217(WMS/SCM/EC 정규화) 후 IAM 평면을 동일 렌즈로 감사 → IAM은 sweep(208~212)로 이미 대체로 클린(gateway dedup·barrel·네이밍 클린)이라 잔여는 2건뿐이었고 모두 종결: use-operators.ts 460 hook 모듈 분할(218) + audit hook 배치 정규화(219, core-wrapper는 근거 있는 SKIP). → **콘솔 4도메인(WMS/SCM/EC/IAM) client-dedup·god-file·hook·네이밍/레이아웃 전면 정렬 완결.**
+- `TASK-PC-FE-221-ecommerce-settlement-console-surface.md` — **이커머스 정산(settlement) 운영자 콘솔 표면 신설**. 백엔드 `settlement-service`는 완비(게이트웨이 `Path=/api/admin/settlements/**`·운영자 REST 9개·BE-365/415/416/425/447 done)인데 **콘솔 표면만 공백**(7개 이커머스 도메인 중 정산만 메뉴·화면·프록시·api 부재; `ecommerce-guide/data.ts`가 `console: '—'`로 명시). 2026-07-08 기능↔메뉴 배치 감사에서 REAL-GAP 3중 검증(module-liveness+live-sibling+grep). 기존 `ecommerce-ops` 화면 패턴으로 배선(사이드바 `정산` drill 자식 → `/ecommerce/settlements` → 프록시 → shared `callEcommerceGateway` 재사용 → 상태 매퍼 → 화면). Phase A(조회+메뉴+가이드 flip) → Phase B(수수료율 PUT·기간 open/close·payout execute 변이) 분할 권장. review·search는 고객 중심이라 범위 밖. 분석=Opus 4.8 / 구현 권장=Opus 4.8. [[proj_console_ecommerce_detail_conventions]]
+
+_(직전 완료)_ **IAM 잔여 일관성 정리 완료** (PC-FE-218~219 DONE, 2026-07-08). PC-FE-217(WMS/SCM/EC 정규화) 후 IAM 평면을 동일 렌즈로 감사 → IAM은 sweep(208~212)로 이미 대체로 클린(gateway dedup·barrel·네이밍 클린)이라 잔여는 2건뿐이었고 모두 종결: use-operators.ts 460 hook 모듈 분할(218) + audit hook 배치 정규화(219, core-wrapper는 근거 있는 SKIP). → **콘솔 4도메인(WMS/SCM/EC/IAM) client-dedup·god-file·hook·네이밍/레이아웃 전면 정렬 완결.**
 
 ## in-progress
 
