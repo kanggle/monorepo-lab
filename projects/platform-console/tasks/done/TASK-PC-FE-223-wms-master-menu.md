@@ -1,6 +1,7 @@
 # TASK-PC-FE-223 — WMS "마스터" 참조 데이터 조회 메뉴 신설 (창고·로케이션·SKU·거래처 read-only)
 
-**Status:** ready
+**Status:** done
+**Completed:** 2026-07-08, 3-dim verified — impl PR #2323 (squash `6a5a4001`). 지원 ref type=warehouses|zones|locations|skus|lots|partners(admin-service-api §1.7+domain-model §5 대조). tsc 0 · next lint clean · vitest master 36/36 · 전체 2521/2521. 3-dim: (a) MERGED+`6a5a4001`; (b) tip 일치; (c) pre-merge CLEAN. refs `q`/`status`는 §2.2 관례 채택(스펙에 flag). 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer).
 **Area:** platform-console / console-web · **New route:** `app/(console)/wms/master` · **Nav:** `WMS ▸ 마스터` (`nav-wms-master`)
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (frontend-engineer 위임) — read-only 참조 테이블, 기존 refs 클라이언트 재사용 (분석=Opus 4.8 / 구현 권장=Sonnet) · **검증:** Opus 재검증.
 **Priority:** 중(입고 PC-FE-222 다음). 운영자 참조·무결성 확인용 read 표면.

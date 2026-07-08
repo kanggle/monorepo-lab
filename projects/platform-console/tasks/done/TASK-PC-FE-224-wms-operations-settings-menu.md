@@ -1,6 +1,7 @@
 # TASK-PC-FE-224 — WMS "운영설정" 조회 메뉴 신설 (예약 TTL·저재고 임계치·프로젝션 상태 read-only)
 
-**Status:** ready
+**Status:** done
+**Completed:** 2026-07-08, 3-dim verified — impl PR #2324 (squash `c5651caf`). settings §5.1/5.2(WMS_VIEWER)+projection §6.2 확정. 병렬 독립 셀 fan-out(한 섹션 degrade가 다른 섹션 미영향). tsc 0 · next lint clean · vitest operations 32/32 · wms+ops+master 241/241. 3-dim: (a) MERGED+`c5651caf`; (b) tip 일치; (c) pre-merge CLEAN. 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer). **→ WMS nav 최종: 개요·가이드·입고·재고·출고·마스터·운영설정 — producer 5 도메인 기능 전부 콘솔 노출 완결.**
 **Area:** platform-console / console-web · **New route:** `app/(console)/wms/operations` · **Nav:** `WMS ▸ 운영설정` (`nav-wms-operations`)
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (frontend-engineer 위임) — read-only 운영 상태·설정 조회, projection-status 클라이언트 재사용 + settings GET 신규 (분석=Opus 4.8 / 구현 권장=Sonnet) · **검증:** Opus 재검증.
 **Priority:** 하(입고 PC-FE-222·마스터 PC-FE-223 다음). 운영 파라미터 가시성 — 소규모.
