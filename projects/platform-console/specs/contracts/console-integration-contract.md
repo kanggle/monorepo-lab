@@ -226,10 +226,17 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   | 10 | **alert acknowledge** | `POST /api/v1/admin/dashboard/alerts/{alertId}/acknowledge` (§ 1.6) | **mutation** |
   | 11 | master refs | `GET /api/v1/admin/dashboard/refs/{type}` (§ 1.7) | read |
   | 12 | projection status | `GET /api/v1/admin/operations/projection-status` (§ 6.2) | read |
+  | 13 | settings list | `GET /api/v1/admin/settings` (§ 5.1) | read |
+  | 14 | settings get | `GET /api/v1/admin/settings/{key}` (§ 5.2) | read |
 
-  The wms write-admin surface (`admin-service-api.md` §§ 2–5: User / Role /
-  Assignment / Settings, `WMS_ADMIN`+ heavy writes) is **explicitly out of v1
-  console scope** — deferred to a later slice, not silently dropped.
+  The wms write-admin surface (`admin-service-api.md` §§ 2–4: User / Role /
+  Assignment, `WMS_ADMIN`+ heavy writes) plus **settings write**
+  (`PUT /api/v1/admin/settings/{key}`, § 5.3, also `WMS_ADMIN`+) is
+  **explicitly out of v1 console scope** — deferred to a later slice, not
+  silently dropped. Only the **settings read** (§ 5.1/5.2, ops #13–14,
+  `WMS_VIEWER`+) is in v1 scope (TASK-PC-FE-224 below) — a narrower carve-out
+  than the rest of §§ 2–5, granted because settings read is operationally
+  readable at the same role floor as every other § 1 dashboard read.
 
   **Console-side routing note (TASK-PC-FE-173, non-normative — no producer
   change)**: operations #1 (inventory snapshot) and #2 (inventory by-key) are
@@ -301,6 +308,31 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   create/update/delete — the admin read-model this section consumes is
   read-only; the raw `master-service` owns that SoT. Consumed read-only; no
   producer contract change.
+
+  **Console-side routing note (TASK-PC-FE-224, non-normative — no producer
+  change)**: operations #12 (projection status, `GET /operations/
+  projection-status`) — exported by `wms-refs-api.ts` since the § 6.2 client
+  split but with **zero consumers** — plus **new** operations #13–14
+  (settings list/get, `GET /settings` + `GET /settings/{key}`, § 5.1/5.2 —
+  the console's first settings client, `wms-settings-api.ts`) are surfaced
+  together on a **new dedicated `/wms/operations`** surface (WMS 운영설정,
+  nav `WMS ▸ 운영설정`, after 마스터 — the last child, an operational-
+  parameter surface placed after even the reference/settings-flavoured
+  마스터). The `/wms/operations` screen renders TWO independent sections:
+  (a) **운영 설정** — a fixed, console-owned key→label catalog (예약 TTL
+  `inventory.reservation.ttl_hours` + 저재고 기본 임계치 `inventory.
+  low_stock.default_threshold_qty`, the two settings the 개요 저재고/재고
+  배지 derive from) filtered against op #13's `content` array; a
+  producer-absent key renders **no row** (never a forced-blank row); (b)
+  **프로젝션 상태** — op #12's per-topic lag/last-processed table + the
+  `worstLagSeconds` summary. The two sections fan out **in parallel** and
+  degrade **independently** (mirrors the `/wms` 개요's `cell()` pattern,
+  § 2.4.5.2) — one section's 403/503 never blanks the other. **Explicitly
+  out of this surface's scope** (task § Out of Scope): settings **write**
+  (`PUT /settings/{key}`, § 5.3, `WMS_ADMIN`+) and operator RBAC (users /
+  roles / assignments, §§ 2–4, `WMS_ADMIN`+) — both outside this task's
+  `WMS_VIEWER` read-only range. Consumed read-only; no producer contract
+  change.
 
 - **Per-domain credential selection (the key correctness element — normative)**:
   **each § 2.4.x binding declares which credential it uses, and an
