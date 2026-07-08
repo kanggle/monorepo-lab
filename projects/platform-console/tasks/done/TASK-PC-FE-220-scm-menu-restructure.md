@@ -1,6 +1,6 @@
 # TASK-PC-FE-220 — SCM 콘솔 메뉴 재구성 (개요 슬림화 + 조달·재고 분리 + 보충 계획 명칭 정리)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **Routes:** `/scm/procurement`(신규) · `/scm/inventory`(신규) · `/scm`(슬림화) · **Nav:** SCM drill 자식 재구성 (개요 · 가이드 · 조달 · 재고 · 보충 계획 · 보충 계획 설정)
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (다-파일 화면/상태 분할 + 테스트 재편)
 
