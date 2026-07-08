@@ -96,6 +96,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-PC-FE-232-erp-overview-guide-menu.md` — ERP nav 정석 파리티: `/erp`=개요(마스터 5 count + 결재 대기 + 활성 위임 fan-out; ERP는 목록 GET이 있어 정직한 count 개요 가능) 신설 + `/erp/guide` 정적 가이드 신설 + 마스터 표면 `/erp` → `/erp/masters` 이동. PC-FE-161 임베드 overview를 독립 개요로 승격(폐기 아닌 relocation+확장). Finance PC-FE-229와 동일 구조. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer). [[project_console_finance_overview_parked]]
 
+_(직전 완료)_ **Finance 콘솔 메뉴 정석 정렬 완료** (PC-FE-229 DONE, 2026-07-08, PR #2325 squash `63fdd26c8`). `/finance`=개요(원장 browsable 집계+기본계좌 단건, 독립 degrade, 계좌 목록/synthetic ₩ 없음)+`/finance/guide`+계좌 표면 `/finance/accounts` 이동. PC-FE-160(count-overview) supersede. CI 22 GREEN·vitest 2490/2490. **task 파일은 authoring 브랜치 유실분을 done/에 소급 복원**(코드는 이미 #2325 라이브; PC-FE-232와 동반 reconcile PR). ERP PC-FE-232와 동일 구조.
+
 _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-07-08). 개요가 조달·재고 두 기능을 한 화면에 얹던 것을 분리: 개요=요약 밴드만, 조달(`/scm/procurement`)·재고(`/scm/inventory`) 신규 라우트, 보충/설정→보충 계획/보충 계획 설정 명칭 정리. 내부적으로 `getScmSectionState`→procurement/inventory 2분할 + `ScmOpsScreen`→2화면 분할. (WMS 기능-메뉴 배치 PC-FE-222~224와 같은 기능↔메뉴 정렬 계열.)
 
 ## in-progress
