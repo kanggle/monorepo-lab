@@ -222,6 +222,48 @@ export type {
 export { SELLER_STATUS_VALUES } from './api/seller-types';
 
 // ---------------------------------------------------------------------------
+// Settlement facet (TASK-PC-FE-221 Phase A — the 8th ecommerce-ops facet;
+// READ-ONLY accruals / seller balance / commission rate / periods / payouts)
+// ---------------------------------------------------------------------------
+export { SettlementsScreen } from './components/SettlementsScreen';
+export { PeriodPayoutsScreen } from './components/PeriodPayoutsScreen';
+
+export {
+  getSettlementsSectionState,
+  getPeriodPayoutsSectionState,
+} from './api/settlements-state';
+export type {
+  SettlementsSectionState,
+  PeriodPayoutsSectionState,
+} from './api/settlements-state';
+
+export type {
+  AccrualLine,
+  AccrualsResponse,
+  AccrualsListParams,
+  SellerBalance,
+  CommissionRate,
+  SettlementPeriod,
+  PeriodsResponse,
+  PeriodsListParams,
+  Payout,
+  PayoutsResponse,
+  PayoutsListParams,
+  AccrualType,
+  PeriodStatus,
+  PayoutStatus,
+  CommissionSource,
+} from './api/settlement-types';
+export {
+  ACCRUAL_TYPE_VALUES,
+  PERIOD_STATUS_VALUES,
+  PAYOUT_STATUS_VALUES,
+  COMMISSION_SOURCE_VALUES,
+  minorToWon,
+  rateBpsToPercent,
+} from './api/settlement-types';
+
+// ---------------------------------------------------------------------------
 // Overview snapshot (TASK-PC-FE-156 — /ecommerce landing operator overview;
 // console-web direct fan-out over the existing list endpoints, no BFF/producer)
 // ---------------------------------------------------------------------------
