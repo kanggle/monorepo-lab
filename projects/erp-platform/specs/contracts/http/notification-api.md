@@ -53,12 +53,12 @@ All endpoints:
 ```json
 { "id": "ntf-...",
   "sourceDomain": "erp",
-  "type": "APPROVAL_SUBMITTED|APPROVAL_APPROVED|APPROVAL_REJECTED|APPROVAL_WITHDRAWN",
+  "type": "APPROVAL_SUBMITTED|APPROVAL_APPROVED|APPROVAL_REJECTED|APPROVAL_WITHDRAWN|DELEGATION_GRANTED|DELEGATION_REVOKED",
   "title": "결재 상신 통지",
   "body": "...",
-  "deepLink": "<relative console route; ABSENT until erp derives one>",
-  "sourceType": "APPROVAL",
-  "sourceId": "appr-...",
+  "deepLink": "/erp/approval?request=<sourceId>  (APPROVAL) | /erp/delegation  (DELEGATION)",
+  "sourceType": "APPROVAL|DELEGATION",
+  "sourceId": "appr-... (APPROVAL) | grant-... (DELEGATION)",
   "read": false,
   "createdAt": "<ISO-8601 UTC>",
   "readAt": "<ISO-8601 UTC; ABSENT until the notification is read>" }
@@ -69,18 +69,24 @@ All endpoints:
   envelope ([`notification-inbox-contract.md`](../../../../../platform/contracts/notification-inbox-contract.md) § 1); always the
   constant `"erp"`. The console-bff aggregator (ADR-MONO-043 D2/P3) uses it to
   label + route each merged item.
-- `deepLink` — optional in-app link the shell may navigate to (contract § 1,
-  nullable). Currently `null` for erp (no console approval route is derived
-  yet), so it is **ABSENT** under the NON_NULL convention. A future task may map
-  `sourceType`/`sourceId` to a console route.
-- `type` — the four approval-notification types fanned out by
+- `deepLink` — the in-app console route the shell's notification bell navigates
+  to (contract § 1). **Derived** from `sourceType`/`sourceId` (TASK-ERP-BE-028):
+  `APPROVAL` → `/erp/approval?request=<sourceId>` (the 결재함 route preselects the
+  request — console PC-FE-230), `DELEGATION` → `/erp/delegation` (the 위임 route).
+  The console owns the route SoT; these strings track the console-web route table.
+  Non-null for every current source, so it is always present (NON_NULL still omits
+  it should a future source derive no route).
+- `type` — the approval + delegation notification types fanned out by
   [`notification-subscriptions.md`](../events/notification-subscriptions.md)
-  (1:1 with the consumed `eventType`).
-- `sourceType` — always `"APPROVAL"` in v1 (the only inbound source). A forward
-  enum so a v2 masterdata / permission source can be added additively.
-- `sourceId` — the originating `approvalRequestId` (the consumed
-  `aggregateId`). A client deep-links to the approval via
-  `GET /api/erp/approval/requests/{sourceId}` (source of record — E5).
+  (1:1 with the consumed `eventType`): the four `APPROVAL_*` transitions plus
+  `DELEGATION_GRANTED`/`DELEGATION_REVOKED`.
+- `sourceType` — `"APPROVAL"` (approval-workflow source) or `"DELEGATION"`
+  (delegation grant/revoke source). A forward enum so a v2 masterdata /
+  permission source can be added additively.
+- `sourceId` — for `APPROVAL` the originating `approvalRequestId`, for
+  `DELEGATION` the `grantId` (the consumed `aggregateId`). An APPROVAL client
+  deep-links to the request via `GET /api/erp/approval/requests/{sourceId}`
+  (source of record — E5).
 - `read` — boolean; `false` until acknowledged.
 - `readAt` — ISO-8601 UTC; **ABSENT** while `read == false`, present once read
   (NON_NULL absent convention — never `null`).
@@ -251,10 +257,12 @@ convention ([`read-model-api.md`](read-model-api.md),
 - **External delivery channels** (email / push / SMS / chat) — v1 is in-app
   inbox only. The inbox surface is unchanged when channels are added (channels
   are a delivery concern, not a read-API concern).
-- **Masterdata-change / permission / delegation notifications** — v1 fans out
-  only the four approval transitions
+- **Masterdata-change / permission notifications** — v1 fans out the four
+  approval transitions **and** the two delegation events (`DELEGATION_GRANTED`/
+  `DELEGATION_REVOKED`, `sourceType=DELEGATION`)
   ([`notification-subscriptions.md`](../events/notification-subscriptions.md));
-  a v2 increment adds `sourceType` values (`MASTERDATA`, `PERMISSION`) additively.
+  a v2 increment adds further `sourceType` values (`MASTERDATA`, `PERMISSION`)
+  additively.
 - **Recipient preferences** (per-type / per-channel mute, quiet hours) — v2.
 - **Digest / batching** (roll-up of N notifications into one) — v2.
 - **Cross-recipient operator inbox view** (an operator querying another
