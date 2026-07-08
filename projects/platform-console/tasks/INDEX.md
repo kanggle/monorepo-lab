@@ -92,6 +92,10 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-PC-FE-226-tenant-management-screen.md` — 「테넌트」 메뉴 실 화면(목록·상세·생성·수정). 기존 `TenantAdminController`(GET/POST/PATCH `/api/admin/tenants`) 소비, `TenantSwitcher`(세션 전환)와 별개. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer). TASK-PC-FE-225 선행.
 
+**ERP 도메인 메뉴 정석 정렬** (2026-07-08, 기능↔메뉴 배치 감사 웨이브의 **마지막 도메인** — ecommerce 221·WMS 222~224·SCM 220·IAM 225·Finance 229에 이은 ERP). ERP는 콘솔 6개 도메인 중 유일하게 `가이드`가 없고 `개요`가 마스터에 임베드(PC-FE-161)돼 루트 `/erp`=마스터. producer 커버리지는 완전(HTTP 4계약 전부 표면 있음)이라 순수 nav 구조 파리티.
+
+- `TASK-PC-FE-232-erp-overview-guide-menu.md` — ERP nav 정석 파리티: `/erp`=개요(마스터 5 count + 결재 대기 + 활성 위임 fan-out; ERP는 목록 GET이 있어 정직한 count 개요 가능) 신설 + `/erp/guide` 정적 가이드 신설 + 마스터 표면 `/erp` → `/erp/masters` 이동. PC-FE-161 임베드 overview를 독립 개요로 승격(폐기 아닌 relocation+확장). Finance PC-FE-229와 동일 구조. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer). [[project_console_finance_overview_parked]]
+
 _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-07-08). 개요가 조달·재고 두 기능을 한 화면에 얹던 것을 분리: 개요=요약 밴드만, 조달(`/scm/procurement`)·재고(`/scm/inventory`) 신규 라우트, 보충/설정→보충 계획/보충 계획 설정 명칭 정리. 내부적으로 `getScmSectionState`→procurement/inventory 2분할 + `ScmOpsScreen`→2화면 분할. (WMS 기능-메뉴 배치 PC-FE-222~224와 같은 기능↔메뉴 정렬 계열.)
 
 ## in-progress
