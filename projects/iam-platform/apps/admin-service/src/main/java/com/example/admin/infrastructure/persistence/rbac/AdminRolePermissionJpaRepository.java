@@ -23,4 +23,12 @@ public interface AdminRolePermissionJpaRepository
             + "WHERE p.permissionKey = :permission AND p.roleId IN :roleIds")
     List<Long> findRoleIdsGrantingPermission(@Param("permission") String permission,
                                              @Param("roleIds") Collection<Long> roleIds);
+
+    /**
+     * TASK-BE-486 — every {@code (role_id, permission_key)} binding for the given
+     * roles, so {@code GET /api/admin/roles} can assemble each role's permission-key
+     * set in a single query (no N+1). Ordering is implementation-defined; the
+     * catalog adapter sorts the keys per role.
+     */
+    List<AdminRolePermissionJpaEntity> findByRoleIdIn(Collection<Long> roleIds);
 }
