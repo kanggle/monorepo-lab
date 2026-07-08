@@ -1,27 +1,101 @@
+import Link from 'next/link';
+import { getRbacCatalogState } from '@/shared/api/rbac-catalog';
+import { PermissionsScreen } from '@/features/permissions';
+
+export const dynamic = 'force-dynamic';
+
 /**
- * 권한 스텁 라우트 (TASK-PC-FE-225 — IAM nav 정석 재편성).
+ * IAM RBAC 「권한」 화면 (TASK-PC-FE-227 — TASK-PC-FE-225 스텁 대체).
  *
- * 정석 IAM taxonomy의 워크포스 평면 중 「권한」(Action/Permission 대응) 메뉴
- * 항목의 목적지. 이 태스크는 nav 배치 + 스텁 라우트만 담당한다 — 실제
- * 목록/상세 기능은 TASK-PC-FE-227 에서 구현된다.
+ * Server component: the role + permission-key catalog is fetched
+ * server-side via `getRbacCatalogState()` (`shared/api/rbac-catalog.ts`,
+ * TASK-BE-486 `GET /api/admin/roles` + `GET /api/admin/permissions`, both
+ * gated by `operator.manage`). Resilience is handled there:
+ *   - 401 → `redirect('/login')` (clean re-login, no partial authed state).
+ *   - no active tenant → a "select a tenant" gate (never an empty
+ *     `X-Tenant-Id` — the catalog itself is global data, but the shared
+ *     gateway core still requires an active-tenant header).
+ *   - 403 PERMISSION_DENIED (lacks `operator.manage`) → an inline "not
+ *     permitted" state (no crash, no re-login loop).
+ *   - 503 / timeout → a degraded notice; the console shell stays intact
+ *     (the `(console)` layout still renders around this).
  *
- * 정적 서버 컴포넌트: 데이터 로딩·권한 게이트 없음(스텁이므로 `(console)`
- * 레이아웃의 인증 가드만 적용된다).
+ * v1 read-only — no edit affordance (Out of Scope: role/permission CRUD,
+ * operator↔role assignment UI stays on the existing `/operators` screen).
  */
-export default function PermissionsPage() {
+export default async function PermissionsPage() {
+  const state = await getRbacCatalogState();
+
+  if (state.noTenant) {
+    return (
+      <section aria-labelledby="permissions-heading">
+        <h1 id="permissions-heading" className="mb-6 text-2xl font-semibold">
+          권한
+        </h1>
+        <div
+          role="status"
+          data-testid="permissions-no-tenant"
+          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
+        >
+          <p className="mb-2 font-medium text-foreground">
+            테넌트를 먼저 선택하세요.
+          </p>
+          <p>
+            권한 카탈로그 조회는 테넌트 선택 후 이용할 수 있습니다. 상단의
+            테넌트 스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
+          </p>
+          <Link
+            href="/console"
+            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            카탈로그로 이동
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (state.permissionError) {
+    return (
+      <section aria-labelledby="permissions-heading">
+        <h1 id="permissions-heading" className="mb-6 text-2xl font-semibold">
+          권한
+        </h1>
+        <div
+          role="status"
+          data-testid="permissions-permission-denied"
+          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
+        >
+          권한 카탈로그 조회는 operator.manage 권한이 필요합니다 (SUPER_ADMIN
+          또는 자기 테넌트 TENANT_ADMIN).
+        </div>
+      </section>
+    );
+  }
+
+  if (state.degraded || !state.roles || !state.permissions) {
+    return (
+      <section aria-labelledby="permissions-heading">
+        <h1 id="permissions-heading" className="mb-6 text-2xl font-semibold">
+          권한
+        </h1>
+        <div
+          role="status"
+          data-testid="permissions-degraded"
+          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
+        >
+          권한 카탈로그 서비스를 일시적으로 불러올 수 없습니다. 콘솔의 다른
+          기능은 계속 사용할 수 있습니다. 잠시 후 다시 시도하세요.
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section aria-labelledby="permissions-heading">
-      <h1 id="permissions-heading" className="mb-6 text-2xl font-semibold">
-        권한
-      </h1>
-      <div
-        role="status"
-        data-testid="permissions-stub"
-        className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-      >
-        권한 관리 화면은 준비 중입니다. 후속 태스크(TASK-PC-FE-227)에서
-        구현됩니다.
-      </div>
-    </section>
+    <PermissionsScreen
+      roles={state.roles}
+      permissions={state.permissions}
+      scope={state.scope ?? 'global'}
+    />
   );
 }

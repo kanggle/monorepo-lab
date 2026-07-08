@@ -105,6 +105,14 @@ const ServerEnvSchema = z.object({
    *  per-endpoint headers/error owned by IAM `admin-api.md` (authoritative,
    *  consumed only). */
   OPERATORS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** Outbound timeout (ms) for the IAM RBAC catalog calls (TASK-BE-486 /
+   *  TASK-PC-FE-227 「권한」 + TASK-PC-FE-228 「권한 세트」 — integration-heavy
+   *  I1, same convention as OPERATORS_TIMEOUT_MS). The two read endpoints
+   *  hang off `${IAM_ADMIN_API_BASE}/api/admin/{roles,permissions}` —
+   *  request/response/error owned by IAM `admin-api.md` (authoritative,
+   *  consumed only, read-only). Shared by BOTH features via
+   *  `shared/api/rbac-catalog.ts` (one client, one timeout knob). */
+  RBAC_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** Outbound timeout (ms) for IAM tenant domain-subscription calls
    *  (TASK-PC-FE-183 / integration-heavy I1 — same convention as
    *  OPERATORS_TIMEOUT_MS). The subscribe POST + status PATCH hang off
@@ -288,6 +296,7 @@ export function getServerEnv(): ServerEnv {
     ACCOUNTS_TIMEOUT_MS: process.env.ACCOUNTS_TIMEOUT_MS,
     AUDIT_TIMEOUT_MS: process.env.AUDIT_TIMEOUT_MS,
     OPERATORS_TIMEOUT_MS: process.env.OPERATORS_TIMEOUT_MS,
+    RBAC_TIMEOUT_MS: process.env.RBAC_TIMEOUT_MS,
     SUBSCRIPTIONS_TIMEOUT_MS: process.env.SUBSCRIPTIONS_TIMEOUT_MS,
     PARTNERSHIPS_TIMEOUT_MS: process.env.PARTNERSHIPS_TIMEOUT_MS,
     TENANTS_TIMEOUT_MS: process.env.TENANTS_TIMEOUT_MS,
