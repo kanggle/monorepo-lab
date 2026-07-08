@@ -1,10 +1,11 @@
 /**
  * E-Commerce 가이드 화면의 정적 참조 데이터 (TASK-PC-FE-184).
  *
- * E-Commerce 콘솔의 7개 라이브 운영 화면 — **상품(`/ecommerce/products`)·
+ * E-Commerce 콘솔의 8개 라이브 운영 화면 — **상품(`/ecommerce/products`)·
  * 주문(`/ecommerce/orders`)·배송(`/ecommerce/shippings`)·프로모션
  * (`/ecommerce/promotions`)·사용자(`/ecommerce/users`)·셀러(`/ecommerce/sellers`)·
- * 알림(`/ecommerce/notifications/templates`)** — 이 실제로 보여주는 상태값의
+ * 정산(`/ecommerce/settlements`)·알림(`/ecommerce/notifications/templates`)** —
+ * 이 실제로 보여주는 상태값의
  * 의미와, 그 뒤의 이커머스 마이크로서비스 구성을 운영자에게 설명한다. IAM
  * 가이드(`features/iam-guide/data.ts`, TASK-PC-FE-163)·WMS 가이드
  * (`features/wms-guide/data.ts`, TASK-PC-FE-183)와 같은 원칙: 타입 있는 정적
@@ -41,8 +42,8 @@ export interface DomainService {
 
 /**
  * E-Commerce 도메인은 여러 마이크로서비스로 분리된 이벤트 기반 시스템이다. 콘솔
- * 은 이 중 7개 서비스의 운영자 API를 호출해 화면을 렌더한다(상품·주문·배송·
- * 프로모션·사용자·셀러·알림). settlement·review·search 는 도메인에는 있으나 콘솔
+ * 은 이 중 8개 서비스의 운영자 API를 호출해 화면을 렌더한다(상품·주문·배송·
+ * 프로모션·사용자·셀러·정산·알림). review·search 는 도메인에는 있으나 콘솔
  * 표면에는 아직 없다.
  */
 export const DOMAIN_SERVICES: DomainService[] = [
@@ -100,7 +101,7 @@ export const DOMAIN_SERVICES: DomainService[] = [
     name: 'settlement-service',
     context: '정산',
     desc: '셀러별 라인 단위 수수료 적립, 기간 마감 → 셀러 정산금 지급.',
-    console: '—',
+    console: '정산',
   },
   {
     key: 'review',
