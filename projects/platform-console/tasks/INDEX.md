@@ -83,7 +83,12 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty) — **콘솔 3-도메인(WMS/SCM/EC) 컨벤션 정렬 sweep 완료** (PC-FE-213~217 전부 DONE, 2026-07-07). IAM sweep(208~212) 완결 후 확인된 3 도메인 잔여 일관성 갭(EC gateway 미승격·잔여 god-file 5종·네이밍/레이아웃 편차)을 SCM/WMS 도착점에 맞춤. → 콘솔 4도메인(WMS/SCM/EC/IAM) client-dedup·god-file·네이밍/레이아웃 전면 정렬 완결.
+**IAM 잔여 일관성 정리** — PC-FE-217(WMS/SCM/EC 정규화) 후 IAM 평면을 동일 렌즈로 감사한 결과. IAM은 sweep(208 dedup + 209~212 분할)로 이미 대체로 클린: gateway dedup(5 client 전부 `callAdminGateway`)·api barrel·backend-concept 네이밍 = **클린**. 실제 잔여만 2건(파일 disjoint → 병렬 가능):
+
+- `TASK-PC-FE-218-operators-hooks-module-split.md` — **[P2·신규 god-file]** `operators/hooks/use-operators.ts`(460줄, ~11 React Query 훅 묶음, 분할 sweep 미접촉)를 cohesion별(list/mutations/assignments) 모듈 분할 + re-export 배럴로 소비처 import 불변. behavior-preserving. (분석=Opus / 구현 권장=Opus)
+- `TASK-PC-FE-219-iam-naming-layout-normalization.md` — **[P3·217 짝]** (1)`audit/components/use-audit-screen.ts`→`audit/hooks/` 이동(217 이커머스 hook 이동과 동일 패턴, 유일 IAM offender) + (2)accounts/audit core-wrapper 네이밍 판단(operators/partnerships/subscriptions는 `*-client.ts`, accounts/audit는 core를 `*-api.ts`에 접음 — 단일 endpoint 모듈이라 추출 vs SKIP 판단). (분석=Opus / 구현 권장=Sonnet)
+
+> 감사에서 확인된 **범위 외**(사용자 결정 "정규화+신규 god-file만"): OperatorsScreen 503·CreateOperatorForm 319·OperatorConfirmDialog 257·AccountsScreen 251 = PC-FE-209/210이 orchestration 이유로 의도적으로 남긴 컨테이너(재분할 가치 낮음). onboarding-client.ts = 별도 auth 계약(subjectToken-in-body)이라 공유 core 사용 불가(dedup 회귀 아님).
 
 ## in-progress
 
