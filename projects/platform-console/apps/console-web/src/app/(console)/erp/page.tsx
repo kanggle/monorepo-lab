@@ -1,36 +1,42 @@
 import {
-  ErpMastersScreen,
-  ErpMastersOverview,
+  ErpOverviewScreen,
   ErpSectionNotice,
-  getErpMastersState,
-  getErpMastersOverviewState,
+  getErpOverviewState,
   resolveErpEligibility,
 } from '@/features/erp-ops';
 
 export const dynamic = 'force-dynamic';
 
-const HEADING = 'ERP 마스터';
+const HEADING = 'ERP 개요';
 
 /**
- * erp **마스터** route (`/erp` — TASK-PC-FE-010 surface; TASK-PC-FE-076
- * drill-in split). The FIRST child of the sidebar ERP drill parent (the
- * parent route doubles as the first child, mirroring `/wms`=운영). Renders
- * ONLY the 5 masters slice — 통합 조회 / 결재함 / 위임 are now sibling routes
- * (`/erp/orgview`, `/erp/approval`, `/erp/delegation`).
+ * erp domain **overview** route (`/erp` — TASK-PC-FE-232). Repoints the
+ * domain root at a **live overview snapshot** (orthodox parity with every
+ * other domain's 개요-at-root convention — `/wms`, `/scm`, `/finance`,
+ * `/ecommerce`, `/iam` are all 개요 landings). The former masters surface
+ * that used to live at `/erp` is **relocated** to `/erp/masters` (a
+ * separate, unchanged route + feature — see
+ * `app/(console)/erp/masters/page.tsx`).
  *
- * Server component. STRICTLY READ-ONLY for the seed (the masterdata write
- * affordances are client-driven through the same-origin proxy). erp is
- * reached server-side with the HttpOnly **IAM OIDC access token** (§ 2.4.8
- * reuses the § 2.4.5 per-domain credential rule). Eligibility + the four
- * notice states are resolved by the shared `resolveErpEligibility()` +
- * `<ErpSectionNotice>` (TASK-PC-FE-076 — identical across all 4 erp routes).
+ * Supersedes(부분) the embedded TASK-PC-FE-161 overview snapshot — see
+ * `features/erp-ops/api/overview-state.ts` (`getErpOverviewState`) for the
+ * promotion: the 5 masterdata counts move here verbatim + 결재 대기 /
+ * 활성 위임 counts are added.
  *
- * E3 first-class: reads an optional `?asOf=` and threads it to the masters
- * loader verbatim (state-at-that-instant). Resilience (§ 2.5): 401 →
- * whole-session re-login (inside the loaders); 403 → inline forbidden;
- * 503 / timeout → only this route degrades.
+ * Server component. STRICTLY READ-ONLY. Mirrors the other erp routes'
+ * eligibility waterfall (registry `productKey='erp'` pre-flight →
+ * `resolveErpEligibility()` → registryDegraded → notEligible → happy). The
+ * overview fan-out does its OWN per-cell degrade (§ overview-state.ts) —
+ * a single count leg's 403/503 never blanks the whole page (AC-2), so
+ * this route intentionally has NO page-level forbidden/degraded branch
+ * beyond the shared registry pre-flight (identical shape to the promoted
+ * TASK-PC-FE-161 masters-overview fan-out it replaces).
+ *
+ * E3 first-class: reads an optional `?asOf=` and threads it to the
+ * masterdata count legs only (approval/delegation counts are current-time,
+ * § overview-state.ts).
  */
-export default async function ErpMastersPage({
+export default async function ErpOverviewPage({
   searchParams,
 }: {
   searchParams?: Promise<{ asOf?: string }>;
@@ -43,39 +49,13 @@ export default async function ErpMastersPage({
   const sp = (await searchParams) ?? {};
   const asOf = sp.asOf?.trim() || null;
 
-  // Fire the masters overview-snapshot fan-out (TASK-PC-FE-161) concurrently
-  // with the masters section state. Both are console-web DIRECT reads over the
-  // erp masterdata-service (PC-FE-168 read-leg decision), both thread `asOf`
-  // (E3) and redirect('/login') on a 401 internally. The overview does per-cell
-  // degrade; the section state gates the master lists below.
-  const [overviewState, state] = await Promise.all([
-    getErpMastersOverviewState(eligible, asOf),
-    getErpMastersState(eligible, asOf),
-  ]);
+  const state = await getErpOverviewState(eligible, asOf);
 
   if (state.notEligible) {
     return <ErpSectionNotice kind="notEligible" heading={HEADING} />;
   }
-  if (state.forbidden) {
-    return <ErpSectionNotice kind="forbidden" heading={HEADING} />;
-  }
-  if (state.degraded) {
-    return <ErpSectionNotice kind="degraded" heading={HEADING} />;
-  }
 
-  return (
-    <ErpMastersScreen
-      initialDepartments={state.departments}
-      initialEmployees={state.employees}
-      initialJobGrades={state.jobGrades}
-      initialCostCenters={state.costCenters}
-      initialBusinessPartners={state.businessPartners}
-      overview={<ErpMastersOverview state={overviewState} />}
-      // TASK-PC-FE-046/048 — erp masterdata write across all 5 masters.
-      // Eligible operators see the write affordances; the producer's E6
-      // fail-CLOSED authz is the authority (a 403 is surfaced inline — the
-      // console never pre-judges write authority). § 2.4.8 *Masterdata write*.
-      mastersWritable
-    />
-  );
+  // Per-cell degrade/forbidden are rendered inline by ErpOverviewScreen
+  // (so a sibling tile stays mounted) — never a whole-page block (AC-2).
+  return <ErpOverviewScreen state={state} />;
 }

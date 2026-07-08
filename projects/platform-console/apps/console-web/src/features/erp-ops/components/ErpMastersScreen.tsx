@@ -14,18 +14,21 @@ import { BusinessPartnerList } from './BusinessPartnerList';
 import type { MasterOption } from './MasterWriteDialog';
 
 /**
- * erp **마스터** route screen (`/erp` — TASK-PC-FE-076 drill-in split;
- * the masters slice of the former `ErpOpsScreen`). Renders the
- * `<AsOfPicker>` (E3) + the 5 master lists. When `mastersWritable`,
- * every master gains create/update/retire affordances; FK inputs
- * (employee → 부서/직급/비용센터, cost-center → 부서) are dropdowns
- * sourced from the section's loaded lists. The producer's E6 authz is
- * the authority (a 403 surfaces inline — the console never pre-judges
- * write authority).
+ * erp **마스터** route screen (`/erp/masters` — TASK-PC-FE-076 drill-in
+ * split; the masters slice of the former `ErpOpsScreen`; relocated from the
+ * domain root `/erp` by TASK-PC-FE-232). Renders the `<AsOfPicker>` (E3) +
+ * the 5 master lists. When `mastersWritable`, every master gains
+ * create/update/retire affordances; FK inputs (employee → 부서/직급/비용센터,
+ * cost-center → 부서) are dropdowns sourced from the section's loaded lists.
+ * The producer's E6 authz is the authority (a 403 surfaces inline — the
+ * console never pre-judges write authority).
  *
- * The other three erp sections (통합 조회 / 결재함 / 위임) are now their
- * own sibling routes reached via the sidebar ERP drill — they no longer
- * stack under this screen.
+ * The other four erp sections (개요 / 통합 조회 / 결재함 / 위임) are their own
+ * sibling routes reached via the sidebar ERP drill — they no longer stack
+ * under this screen. The operator overview snapshot that used to be
+ * embedded here (TASK-PC-FE-161 `ErpMastersOverview`) has been PROMOTED to
+ * the standalone `/erp` overview (`getErpOverviewState` + `ErpOverviewScreen`)
+ * — this screen is now a pure master-lists screen with no overview slot.
  */
 export interface ErpMastersScreenProps {
   initialDepartments: DepartmentListResponse | null;
@@ -35,10 +38,6 @@ export interface ErpMastersScreenProps {
   initialBusinessPartners: BusinessPartnerListResponse | null;
   /** TASK-PC-FE-046/048: enable the write affordances across all 5 masters. */
   mastersWritable?: boolean;
-  /** Optional operator overview-snapshot slot rendered above the master lists
-   *  (TASK-PC-FE-161 — the server page computes `getErpMastersOverviewState`
-   *  and passes an `<ErpMastersOverview>` node). Absent ⇒ no snapshot band. */
-  overview?: React.ReactNode;
 }
 
 /** Maps a list response's rows to `{ id, code, name }` parent/FK options. */
@@ -63,7 +62,6 @@ export function ErpMastersScreen({
   initialCostCenters,
   initialBusinessPartners,
   mastersWritable = false,
-  overview,
 }: ErpMastersScreenProps) {
   const departments = toOptions(initialDepartments);
   const jobGrades = toOptions(initialJobGrades);
@@ -79,9 +77,6 @@ export function ErpMastersScreen({
           ? '부서·직원·직급·비용센터·거래처 마스터를 조회하고 등록/수정/폐기할 수 있습니다 (TASK-PC-FE-048). 권한이 없는 작업은 실행 시 안내됩니다.'
           : '부서·직원·직급·비용센터·거래처 마스터 조회 (읽기 전용).'}
       </p>
-
-      {/* Operator overview snapshot band (TASK-PC-FE-161) — server-rendered slot. */}
-      {overview}
 
       <AsOfPicker />
 

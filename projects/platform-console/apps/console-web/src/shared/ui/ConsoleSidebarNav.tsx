@@ -249,15 +249,20 @@ const GROUPS: NavGroup[] = [
       },
       {
         // TASK-PC-FE-076 — ERP becomes a drill parent (same model as WMS):
-        // the single dense `/erp` page split into 4 section routes. The
-        // parent route `/erp` doubles as the first child (마스터), exactly
-        // as `/wms` is WMS's 운영 child. `nav-erp` now denotes the parent
-        // toggle; `nav-erp-masters` is the new child testid for `/erp`.
+        // the single dense `/erp` page split into section routes.
+        // TASK-PC-FE-232 — 정석(orthodox) 파리티 정렬: 구 마스터 표면을
+        // `/erp/masters`로 이동(testid `nav-erp-masters` 유지)하고, 도메인
+        // 루트 `/erp`를 IAM/WMS/SCM/E-Commerce/Finance 와 동일하게 **개요**
+        // 랜딩으로 교체 + **가이드**(`/erp/guide`) 신설. 순서 = 개요 → 가이드
+        // → 마스터 → 통합 조회 → 결재함 → 위임(모든 도메인의 개요→가이드→
+        // 기능 순서와 일치). 부모 testid `nav-erp` 는 유지.
         key: 'erp',
         label: 'ERP',
         testid: 'nav-erp',
         children: [
-          { href: '/erp', label: '마스터', testid: 'nav-erp-masters' },
+          { href: '/erp', label: '개요', testid: 'nav-erp-overview' },
+          { href: '/erp/guide', label: '가이드', testid: 'nav-erp-guide' },
+          { href: '/erp/masters', label: '마스터', testid: 'nav-erp-masters' },
           { href: '/erp/orgview', label: '통합 조회', testid: 'nav-erp-orgview' },
           { href: '/erp/approval', label: '결재함', testid: 'nav-erp-approval' },
           {

@@ -2092,25 +2092,72 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
 > dashboards) gate is **ungated to 5/5 domains live**
 > (IAM + wms + scm + finance + erp).
 
-#### 2.4.8.1 erp masters operator **overview snapshot** — `/erp` masters landing (TASK-PC-FE-161 — bff-domain overview, follows the wms § 2.4.5.2 reference)
+#### 2.4.8.1 erp domain **overview + guide** — `/erp` landing, `/erp/guide` (TASK-PC-FE-232 — orthodox nav parity; PROMOTES + EXPANDS the TASK-PC-FE-161 masters-embedded overview)
 
-The `/erp` **masters** landing gains an **operator overview snapshot** band
-above the master lists: 5 masterdata counts. The THINNEST of the 4 bff-domain
-overviews — masterdata counts only (no status distribution, no recent feed:
-erp masters are effective-dated masterdata, not an activity stream). Follows the
-PC-FE-168 shared read-leg decision + the wms § 2.4.5.2 reference.
+erp nav gains the **개요 → 가이드 → 마스터 → 통합 조회 → 결재함 → 위임** child
+order every other domain already has (IAM/WMS/SCM/E-Commerce/Finance: 개요 →
+가이드 → 기능). The domain root `/erp` — formerly the § 2.4.8 masters surface
+— is **repointed** at a live overview snapshot; the masters surface
+**relocates** to `/erp/masters` (label `마스터` unchanged, nav testid
+`nav-erp-masters` unchanged; the `/api/erp/masterdata/**` proxy and
+`features/erp-ops` masters components are **unchanged** — a pure route
+relocation). A static `/erp/guide` reference (erp-platform domain service map
++ the 6 console screens' meaning + effective-dating/결재 상태머신/위임/
+read-model/알림 concepts) is added, mirroring `features/finance-guide`
+(TASK-PC-FE-229) / `features/scm-guide` (TASK-PC-FE-188).
 
-- **Read model (console-web DIRECT fan-out).** Reuses the existing § 2.4.8
-  master `list*` reads server-side (`getDomainFacingToken()`); **no console-bff
-  leg.** Each count = `meta.totalElements` with `?page=0&size=1`:
-  부서 / 직원 / 직급 / 원가센터 / 거래처 (`GET /api/erp/masterdata/<master>`).
-- **E3 (§ 2.4.8).** An optional `?asOf=` threads through every count leg
-  verbatim (state-at-that-instant, matching the masters section state). `active`
-  is omitted so retired masters are counted too (E2 honesty — the true total).
-- **No aggregation endpoint (ADR-MONO-017 D3.B).** Counts from `totalElements`;
-  no producer `/summary`, no producer retrofit.
+- **PC-FE-161 promotion (relocation, not deprecation).** The former embedded
+  overview snapshot (5 masterdata counts, `meta.totalElements` with
+  `?page=0&size=1`, `?asOf=` threading, per-cell degrade — THINNEST of the 4
+  bff-domain overviews) is promoted verbatim into the standalone `/erp`
+  landing and **expanded** with two new counts, both reusing EXISTING § 2.4.8
+  reads (no new producer endpoint, ADR-MONO-017 D3.B):
+  - **결재 대기** — the CALLER's own pending approval inbox
+    (`GET /api/erp/approval/inbox`, already scoped to the caller's SUBMITTED
+    queue) `meta.totalElements` with `?page=0&size=1`.
+  - **활성 위임** — ACTIVE delegation-fact grants
+    (`GET /api/erp/read-model/delegations?status=ACTIVE`, org-scope aware)
+    `meta.totalElements` with `?page=0&size=1`.
+- **Read model (console-web DIRECT fan-out, unchanged model).** Reuses the
+  existing § 2.4.8 master `list*` reads + the approval inbox read + the
+  read-model delegation-facts read server-side (`getDomainFacingToken()`);
+  **no console-bff leg.**
+- **E3 (§ 2.4.8) — masterdata legs only.** An optional `?asOf=` threads
+  through every MASTERDATA count leg verbatim (state-at-that-instant,
+  matching the masters section state); `active` is omitted so retired
+  masters are counted too (E2 honesty — the true total). The approval /
+  delegation counts are **current-time only** — no asOf concept (a pending
+  inbox / an active grant has no historical point-in-time reading in the
+  console's read surface).
+- **Independent degrade (the decisive resilience rule, unchanged shape).**
+  Each of the 7 count legs runs in its OWN try/catch (the `cell()` pattern) —
+  a `503`/timeout/`403` in ANY ONE leg (e.g. approval-service down) degrades
+  ONLY that tile; every sibling tile renders normally. A `401` in ANY leg
+  triggers a whole-session `redirect('/login')` (no partial authed state).
+  Unlike the finance § 2.4.7.2 overview (whose two legs share ONE
+  domain-facing credential across TWO producer services and therefore
+  collapse a 403 to one whole-overview `forbidden`), erp's 7 legs are all
+  the SAME masterdata/approval/read-model producers already bound by
+  § 2.4.8 under the SAME credential — the per-cell shape is kept
+  (unchanged from PC-FE-161) rather than introducing a page-level
+  `forbidden`/`degraded` branch.
+- **No aggregation endpoint (ADR-MONO-017 D3.B).** Counts from
+  `totalElements`; no producer `/summary`, no producer retrofit.
 - **Deviation vs ecommerce (§ 2.4.10.6).** Count tiles are **read-only stat
-  tiles, NOT nav links** (`/erp` is a single-route masters screen).
+  tiles, NOT nav links** — the overview's shortcut nav (separate from the
+  tiles) links to 가이드/마스터/통합 조회/결재함/위임.
+- **Legacy `/erp` bookmark honesty.** Since masters relocated to
+  `/erp/masters`, the overview always renders a `마스터` shortcut link so the
+  relocation is never a dead end (mirrors PC-FE-229's `/finance?accountId=`
+  treatment, without needing to carry a query param — erp masters have no
+  id-driven bookmark state to preserve).
+- **Nav.** `ConsoleSidebarNav` ERP drill children reorder to `{ href: '/erp',
+  label: '개요' }, { href: '/erp/guide', label: '가이드' }, { href:
+  '/erp/masters', label: '마스터' }, { href: '/erp/orgview', label: '통합
+  조회' }, { href: '/erp/approval', label: '결재함' }, { href:
+  '/erp/delegation', label: '위임' }`. The existing longest-match
+  `activeHref` logic (unchanged code) keeps `/erp`(개요) from lighting up on
+  `/erp/masters`(마스터) — a nav test pins this.
 - **Resilience (§ 2.5).** Per-cell degrade cell-local; a `401` in ANY leg →
   whole-session `redirect('/login')`. Read-only; no auto-refetch.
 
