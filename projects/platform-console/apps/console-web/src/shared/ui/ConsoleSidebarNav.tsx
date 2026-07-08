@@ -166,20 +166,26 @@ const GROUPS: NavGroup[] = [
       },
       {
         // Finance is ONE domain (finance-platform) with TWO bound console
-        // surfaces — account-service (운영: 계좌·잔액·거래) + ledger-service
+        // surfaces — account-service (계좌: 계좌·잔액·거래) + ledger-service
         // (원장: 시산표·기간·대조, TASK-PC-FE-072). They share the finance
         // tenant gate + a single entitlement (entitled_domains ∋ finance gates
         // BOTH), so they nest under one Finance drill parent — the SAME model
-        // as WMS (운영 + 출고), IAM, and ERP. TASK-PC-FE-078 (was two flat
-        // sibling leaves nav-finance + nav-ledger). The parent keeps the domain
-        // testid `nav-finance`; the former /finance leaf's destination is now
-        // the 운영 child (`nav-finance-ops`), mirroring the WMS nav-wms →
-        // nav-wms-ops move.
+        // as WMS (개요 + 재고 + 출고), IAM, SCM, and ERP. TASK-PC-FE-078
+        // (was two flat sibling leaves nav-finance + nav-ledger).
+        // TASK-PC-FE-229 — 정석(orthodox) 파리티 정렬: `/finance`(구 계좌/운영
+        // 표면)를 `/finance/accounts`로 이동(라벨 `운영`→`계좌`, testid
+        // `nav-finance-ops`→`nav-finance-accounts`)하고, 도메인 루트
+        // `/finance`를 IAM/WMS/SCM/E-Commerce 와 동일하게 **개요** 랜딩으로
+        // 교체 + **가이드**(`/finance/guide`) 신설. 순서 = 개요 → 가이드 →
+        // 계좌 → 원장(모든 도메인의 개요→가이드→기능 순서와 일치). 부모
+        // testid `nav-finance` 는 유지.
         key: 'finance',
         label: 'Finance',
         testid: 'nav-finance',
         children: [
-          { href: '/finance', label: '운영', testid: 'nav-finance-ops' },
+          { href: '/finance', label: '개요', testid: 'nav-finance-overview' },
+          { href: '/finance/guide', label: '가이드', testid: 'nav-finance-guide' },
+          { href: '/finance/accounts', label: '계좌', testid: 'nav-finance-accounts' },
           { href: '/ledger', label: '원장', testid: 'nav-ledger' },
         ],
       },

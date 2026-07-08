@@ -1531,6 +1531,74 @@ obligation and points at the owning finance specs.
 > product can bind **multiple producer services** under one credential +
 > eligibility gate (the finance analog of the wms § 2.4.5 + § 2.4.5.1 pair).
 
+#### 2.4.7.2 finance domain **overview + guide** — `/finance` landing, `/finance/guide` (TASK-PC-FE-229 — orthodox nav parity; supersedes the PARKED TASK-PC-FE-160)
+
+Finance nav gains the **개요 → 가이드 → 계좌 → 원장** child order every other
+domain already has (IAM/WMS/SCM/E-Commerce: 개요 → 가이드 → 기능). The domain
+root `/finance` — formerly the § 2.4.7 account surface — is **repointed** at a
+live overview snapshot; the account surface **relocates** to
+`/finance/accounts` (label `운영` → `계좌`, nav testid `nav-finance-ops` →
+`nav-finance-accounts`; the `/api/finance/accounts/**` proxy and
+`features/finance-ops` are **unchanged** — a pure route relocation). A static
+`/finance/guide` reference (finance-platform domain service map + the 4
+console screens' meaning + regulated states/KYC/F5/double-entry/reconciliation
+concepts) is added, mirroring `features/scm-guide` (TASK-PC-FE-188) /
+`features/wms-guide` / `features/iam-guide`.
+
+- **PC-FE-160 supersession (honesty preserved, not relaxed).** § 2.4.9 "도메인
+  랜딩 운영 개요 스냅샷" classified finance as the **degenerate case**: v1 has
+  no account `list`/`search` GET, so a count fan-out over accounts is
+  **impossible** and a synthetic ₩ aggregate is **forbidden** — PC-FE-160
+  declined a landing on that basis. This overview does **not** reopen that
+  constraint: it aggregates ONLY (a) the **ledger-service** browsable index
+  reads already consumed by § 2.4.7.1 (trial balance `inBalance`, the
+  `periods` page filtered client-side to `status==='OPEN'` — an honestly
+  BOUNDED count captioned by its sample size, **not** a producer-filtered
+  exhaustive total — the periods list has no status query param;
+  `listDiscrepancies({status:'OPEN'}).meta.totalElements` — an accurate
+  producer-filtered total; and the FX rates cache freshness/stale count) and
+  (b) the operator's **own** default finance account — resolved via the
+  EXISTING `getFinanceDefaultAccountId()` (§ 2.2 registry
+  `operatorContext.defaultAccountId`, TASK-PC-FE-014/016) — as a **single**
+  `getAccount`/`getBalances` pair (§ 2.4.7). **No** account list/search call is
+  ever made; a test pins this (the overview state seed calls `getAccount`
+  exactly once, never a list endpoint).
+- **Read model (console-web DIRECT, reused clients).** No new producer
+  endpoint, no console-bff leg — the overview composes the SAME
+  `features/ledger-ops` + `features/finance-ops` server clients already bound
+  by §§ 2.4.7/2.4.7.1, exactly as the § 2.4.3.1 IAM overview snapshot composes
+  the existing IAM list clients.
+- **Independent degrade (the decisive resilience rule).** The ledger leg and
+  the account leg run in their OWN try/catch — a `503`/timeout in ONE leg
+  degrades ONLY that tile; the sibling tile renders normally (`ledgerDegraded`
+  / `accountDegraded` are separate flags). A `403` in EITHER leg (the SAME
+  domain-facing IAM OIDC token / finance tenant scope drives both § 2.4.7 and
+  § 2.4.7.1) collapses to ONE whole-overview `forbidden` block, mirroring the
+  `/finance/accounts` + `/ledger` page-level waterfall. A `401` in EITHER leg
+  triggers ONE whole-session `redirect('/login')` (no partial authed state,
+  no per-leg re-login loop). No default finance account configured
+  (`getFinanceDefaultAccountId()` → `null`) is a normal "not set up" state
+  (`defaultAccountMissing`), NOT a degrade — the ledger tiles still render.
+- **F5 (unchanged obligation).** The default-account snapshot's balances are
+  rendered via the SAME `formatMoney(...)` string-based scale-correct path as
+  § 2.4.7 — never `Number()`/`parseFloat()`/`parseInt()`.
+- **Nav.** `ConsoleSidebarNav` Finance drill children reorder to `{ href:
+  '/finance', label: '개요' }, { href: '/finance/guide', label: '가이드' }, {
+  href: '/finance/accounts', label: '계좌' }, { href: '/ledger', label:
+  '원장' }`. The existing longest-match `activeHref` logic (unchanged code)
+  keeps `/finance`(개요) from lighting up on `/finance/accounts`(계좌) — a nav
+  test pins this.
+- **Catalog tile unaffected/improved.** `resolveConsoleRoute` still sends
+  non-IAM products to their registry `baseRoute` (unchanged, finance
+  `baseRoute` stays `/finance`); the destination now being an overview
+  landing instead of an empty account-lookup form is a UX improvement, not a
+  contract change.
+
+> **Not a § 3 parity row**: like § 2.4.7 / § 2.4.7.1, this is an additive
+> nav/route composition over already-listed §§ 2.4.7/2.4.7.1 endpoints — adds
+> no § 3 row and changes none (count stays exactly 16 — the FE-006 no-drift
+> guard remains green).
+
 #### 2.4.8 erp operations surface (TASK-PC-FE-010 — cross-reference, not a redefinition)
 
 The **fourth non-IAM** per-domain binding of § 2.4 (ADR-MONO-013
