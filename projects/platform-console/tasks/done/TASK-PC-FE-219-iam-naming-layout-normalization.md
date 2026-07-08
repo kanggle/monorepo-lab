@@ -1,6 +1,7 @@
 # TASK-PC-FE-219 — IAM 네이밍/레이아웃 정규화 (audit hook 배치 + core-wrapper 판단)
 
-**Status:** ready
+**Status:** done
+**Done:** 2026-07-08 · impl PR #2313 squash `42b97837e` (3-dim verified) — (1)audit use-audit-screen.ts→hooks/(git mv+소비처 3), (2)accounts/audit core-wrapper SKIP 양쪽(근거: audit=const-move 과분할, accounts=exportAccount가 callGapAdmin 우회→PROFILE 누출), tsc 0·lint 0·audit 67/67.
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving rename/move (저위험 정리)
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet 4.6 (기계적 move + import 갱신 + 1 판단)
 
