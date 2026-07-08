@@ -1,6 +1,6 @@
 # TASK-ERP-BE-028 — notification `deepLink` 파생 (APPROVAL·DELEGATION 콘솔 라우트)
 
-**Status:** review
+**Status:** done
 **Area:** erp-platform / notification-service · **Type:** feature (contract-visible behavioural fill-in)
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (소규모 backend + 계약 정합) (분석=Opus 4.8 / 구현 권장=Sonnet)
 **Origin:** TASK-PC-FE-230 Phase B — 2026-07-08 ERP 알림 딥링크 감사에서 식별. FE(PC-FE-230, done)는 이미 `deepLink` 우선 소비하도록 배선됐고, 백엔드가 채우면 자동 우선.
