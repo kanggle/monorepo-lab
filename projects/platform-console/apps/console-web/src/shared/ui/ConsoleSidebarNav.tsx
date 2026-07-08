@@ -112,6 +112,10 @@ const GROUPS: NavGroup[] = [
           // 가이드(/wms/guide — TASK-PC-FE-183): 재고·출고 개념 정적 참조.
           // IAM 의 개요→가이드 순서와 동일하게 개요 다음(재고 앞)에 둔다.
           { href: '/wms/guide', label: '가이드', testid: 'nav-wms-guide' },
+          // 입고(/wms/inbound — TASK-PC-FE-222): ASN(입고예정) + 검수 조회
+          // 전용 화면. 물류 흐름(입고→재고→출고)을 그대로 반영해 가이드와
+          // 재고 사이에 둔다 — 출고(/wms/outbound)와 대칭인 입고 진입점.
+          { href: '/wms/inbound', label: '입고', testid: 'nav-wms-inbound' },
           {
             href: '/wms/inventory',
             label: '재고',

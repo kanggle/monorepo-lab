@@ -135,11 +135,52 @@ export const ShipmentPageSchema = wmsPage(ShipmentRowSchema);
 export type ShipmentPage = z.infer<typeof ShipmentPageSchema>;
 
 // --- 1.4 asns + inspection -----------------------------------------------
+// AsnSummary / InspectionSummary (admin-service domain-model.md § 6/§ 7) —
+// projected from `wms.inbound.*` events. TASK-PC-FE-222 surfaces the
+// previously-uncoded `GET /dashboard/asns` + `.../inspection` reads on the
+// dedicated `/wms/inbound` screen. Typed (vs. the prior GenericRowSchema)
+// so the ASN table + inspection panel can render named fields, but TOLERANT
+// (§ 2.4.5 tolerance invariant): only `asnId` is required on a row; every
+// other field is nullable/optional and unknown/future fields pass through
+// (never throws — the Failure Scenario this task guards against).
 
-export const AsnPageSchema = wmsPage(GenericRowSchema);
+export const AsnRowSchema = z
+  .object({
+    asnId: z.string(),
+    asnNo: z.string().nullable().optional(),
+    warehouseId: z.string().optional(),
+    supplierPartnerId: z.string().nullable().optional(),
+    supplierName: z.string().nullable().optional(),
+    status: z.string().optional(),
+    source: z.string().nullable().optional(),
+    expectedArriveDate: z.string().nullable().optional(),
+    lineCount: z.number().nullable().optional(),
+    receivedAt: z.string().nullable().optional(),
+    closedAt: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type AsnRow = z.infer<typeof AsnRowSchema>;
+export const AsnPageSchema = wmsPage(AsnRowSchema);
 export type AsnPage = z.infer<typeof AsnPageSchema>;
 
-export const InspectionSchema = GenericRowSchema;
+/** `GET /dashboard/asns/{asnId}/inspection` — the InspectionSummary (1:1 per
+ *  ASN, aggregate line-count/qty totals, not a per-line breakdown — the
+ *  admin read-model projects only the summary). `404` (not yet projected) is
+ *  handled by the caller as "검수 내역 없음", never parsed here. */
+export const InspectionSchema = z
+  .object({
+    asnId: z.string().optional(),
+    warehouseId: z.string().nullable().optional(),
+    inspectionCompletedAt: z.string().nullable().optional(),
+    inspectorId: z.string().nullable().optional(),
+    totalLines: z.number().nullable().optional(),
+    discrepancyCount: z.number().nullable().optional(),
+    totalQtyExpected: z.number().nullable().optional(),
+    totalQtyPassed: z.number().nullable().optional(),
+    totalQtyDamaged: z.number().nullable().optional(),
+    totalQtyShort: z.number().nullable().optional(),
+  })
+  .passthrough();
 export type Inspection = z.infer<typeof InspectionSchema>;
 
 // --- 1.5 adjustments audit (append-only — read only) ---------------------
@@ -260,6 +301,21 @@ export interface ShipmentQueryParams {
   shippedAtFrom?: string;
   /** ISO instant upper bound on `shippedAt` — `shippedAtTo` (§ 1.3). */
   shippedAtTo?: string;
+  page?: number;
+  size?: number;
+}
+
+/** `GET /dashboard/asns` query params (admin-service-api.md § 1.4 — TASK-PC-FE-222
+ *  dedicated `/wms/inbound` screen). `source` is a producer filter (`MANUAL` /
+ *  `WEBHOOK_ERP`) not surfaced as a form field in this task's scope. */
+export interface AsnQueryParams {
+  warehouseId?: string;
+  supplierPartnerId?: string;
+  status?: string;
+  /** ISO local-date lower bound on `expectedArriveDate` (inclusive). */
+  expectedArriveDateFrom?: string;
+  /** ISO local-date upper bound on `expectedArriveDate` (inclusive). */
+  expectedArriveDateTo?: string;
   page?: number;
   size?: number;
 }
