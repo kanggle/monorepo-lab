@@ -2,39 +2,32 @@ import Link from 'next/link';
 import { getCatalog } from '@/features/catalog';
 import { ApiError } from '@/shared/api/errors';
 import { redirect } from 'next/navigation';
-import {
-  getScmSectionState,
-  getScmOverviewState,
-  ScmOpsScreen,
-  ScmOverview,
-} from '@/features/scm-ops';
+import { getScmOverviewState, ScmOverview } from '@/features/scm-ops';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * scm operations section route (TASK-PC-FE-008 — ADR-MONO-013 Phase 4
- * slice 2, the SECOND non-IAM domain federated by the console; completes
- * Phase 4). An in-console nav destination, NOT a catalog product re-route
- * — the catalog `scm.baseRoute` stays data-driven (resolveConsoleRoute
- * leaves non-IAM products on their registry baseRoute; an
- * `available:false` scm is handled by the existing catalog "coming soon"
- * path — this route does not hard-crash when scm is unavailable).
+ * scm 개요 (overview) route (TASK-PC-FE-008 read section → TASK-PC-FE-167
+ * overview snapshot → TASK-PC-FE-220 slim-down). An in-console nav
+ * destination, NOT a catalog product re-route. Server component, STRICTLY
+ * READ-ONLY.
  *
- * Server component. STRICTLY READ-ONLY. scm is reached server-side with
- * the HttpOnly **IAM OIDC access token** (NOT the IAM exchanged operator
- * token — § 2.4.6 reuses the § 2.4.5 per-domain credential rule; the #569
- * invariant is GAP-domain-scoped and the scm gateway *requires* the GAP
- * OIDC token).
+ * TASK-PC-FE-220: 개요 now renders ONLY the operator overview-snapshot band
+ * (`ScmOverview` — per-area count tiles, PO-status distribution, recent
+ * POs). The combined procurement PO table + inventory-visibility
+ * snapshot/SKU/staleness tables were split out to the dedicated
+ * `/scm/procurement` (조달) and `/scm/inventory` (재고) routes. This keeps
+ * 개요 to a domain-at-a-glance summary, consistent with every other
+ * domain's 개요.
  *
- * Eligibility (§ 2.4.6 reusing § 2.4.5 tenant-model divergence): scm
- * resolves the tenant from the JWT `tenant_id ∈ {scm,*}` claim
- * producer-side — the console sends no tenant. To avoid fabricating a
- * cross-tenant call, the page resolves the operator's scm eligibility from
- * the data-driven registry (the app layer is the layer allowed to compose
- * `features/*`) and passes it into `getScmSectionState()`. Resilience
- * (§ 2.5): 401 → whole-session re-login; 403 → inline "not scoped";
- * 429 → rate-limited notice; 503/timeout → only this section degrades
- * (the `(console)` shell + GAP/wms sections stay).
+ * Auth (§ 2.4.6 reusing § 2.4.5): scm is reached server-side with the
+ * HttpOnly **IAM OIDC access token**. Eligibility (§ 2.4.6): scm resolves
+ * the tenant from the JWT `tenant_id ∈ {scm,*}` claim producer-side — the
+ * console sends no tenant. To avoid fabricating a cross-tenant call, the
+ * page resolves the operator's scm eligibility from the data-driven
+ * registry and passes it into `getScmOverviewState()`. Resilience (§ 2.5):
+ * 401 → whole-session re-login; not-eligible → inline "not scoped"; the
+ * overview band does per-cell degrade for a downstream 403/503/timeout.
  */
 export default async function ScmPage() {
   // Eligibility pre-flight from the data-driven registry (§ 2.2). A
@@ -72,17 +65,7 @@ export default async function ScmPage() {
     );
   }
 
-  // Fire the operator overview-snapshot fan-out (TASK-PC-FE-167) concurrently
-  // with the section-state fan-out. Both are console-web DIRECT reads over the
-  // scm gateway (PC-FE-168 read-leg decision); both redirect('/login') on a 401
-  // internally. The overview does per-cell degrade; the section state gates the
-  // tables below.
-  const [overviewState, state] = await Promise.all([
-    getScmOverviewState(eligible),
-    getScmSectionState(eligible),
-  ]);
-
-  if (state.notEligible) {
+  if (!eligible) {
     return (
       <section aria-labelledby="scm-heading">
         <h1 id="scm-heading" className="mb-6 text-2xl font-semibold">
@@ -111,71 +94,21 @@ export default async function ScmPage() {
     );
   }
 
-  if (state.forbidden) {
-    return (
-      <section aria-labelledby="scm-heading">
-        <h1 id="scm-heading" className="mb-6 text-2xl font-semibold">
-          SCM 개요
-        </h1>
-        <div
-          role="status"
-          data-testid="scm-forbidden"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          scm 운영 화면을 조회할 권한이 없습니다. (테넌트 스코프 / 역할
-          확인이 필요합니다.)
-        </div>
-      </section>
-    );
-  }
-
-  if (state.rateLimited) {
-    return (
-      <section aria-labelledby="scm-heading">
-        <h1 id="scm-heading" className="mb-6 text-2xl font-semibold">
-          SCM 개요
-        </h1>
-        <div
-          role="status"
-          data-testid="scm-ratelimited"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          scm 게이트웨이 요청이 일시적으로 제한되었습니다. 잠시 후 다시
-          시도하세요. 콘솔의 다른 기능은 계속 사용할 수 있습니다.
-        </div>
-      </section>
-    );
-  }
-
-  if (
-    state.degraded ||
-    !state.poList ||
-    !state.snapshot ||
-    !state.staleness
-  ) {
-    return (
-      <section aria-labelledby="scm-heading">
-        <h1 id="scm-heading" className="mb-6 text-2xl font-semibold">
-          SCM 개요
-        </h1>
-        <div
-          role="status"
-          data-testid="scm-degraded"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          scm 운영 정보를 일시적으로 불러올 수 없습니다. 콘솔의 다른
-          기능은 계속 사용할 수 있습니다. 잠시 후 다시 시도하세요.
-        </div>
-      </section>
-    );
-  }
+  // Operator overview-snapshot fan-out (TASK-PC-FE-167) — console-web DIRECT
+  // reads over the scm gateway (PC-FE-168 read-leg decision); redirects
+  // '/login' on a 401 internally. The overview does per-cell degrade.
+  const overviewState = await getScmOverviewState(eligible);
 
   return (
-    <ScmOpsScreen
-      poList={state.poList}
-      snapshot={state.snapshot}
-      staleness={state.staleness}
-      overview={<ScmOverview state={overviewState} />}
-    />
+    <section aria-labelledby="scm-heading">
+      <h1 id="scm-heading" className="mb-2 text-2xl font-semibold">
+        SCM 개요
+      </h1>
+      <p className="mb-6 text-sm text-muted-foreground">
+        scm 도메인 운영 현황 요약. 발주 조회는 조달, 재고 가시성은 재고
+        메뉴에서 볼 수 있습니다.
+      </p>
+      <ScmOverview state={overviewState} />
+    </section>
   );
 }

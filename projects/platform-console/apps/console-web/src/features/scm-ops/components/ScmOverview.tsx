@@ -12,8 +12,9 @@ import { poStatusTone } from './scm-ops-helpers';
 /**
  * scm operator **overview snapshot** presentation (TASK-PC-FE-167 — follows
  * the PC-FE-166 wms reference). Pure presentational component (no `'use
- * client'`, no server-only imports) — rendered server-side and passed as a slot
- * into the client `ScmOpsScreen`. STRICTLY READ-ONLY.
+ * client'`, no server-only imports) — rendered server-side directly by the
+ * `/scm` 개요 page (TASK-PC-FE-220: 개요 now shows ONLY this overview band).
+ * STRICTLY READ-ONLY.
  *
  * Renders the `getScmOverviewState` fan-out: per-area count tiles (발주/재고
  * 스냅샷), a PO-status distribution, and a recent-PO glance. When the 재고

@@ -122,15 +122,20 @@ const GROUPS: NavGroup[] = [
       },
       {
         // SCM is a drill-in parent (same model as WMS): 개요(/scm — the
-        // FE-008 read section) + 가이드(/scm/guide — TASK-PC-FE-188, static
-        // 도메인 서비스·발주·재고 가시성·보충·설정 reference, placed 개요 다음
-        // per IAM/WMS/E-Commerce's 개요 → 가이드 order) + 보충
-        // (/scm/replenishment — the FE-077 replenishment operator gate) + 설정
-        // (/scm/config — the FE-080 seed/config operator surface: per-SKU
-        // reorder-policy + sku-supplier-map upsert, the operational fix-path
-        // for the 보충 SKU_SUPPLIER_UNMAPPED gap). The /scm destination lives
-        // on the 개요 child (nav-scm-ops); nav-scm is the pinned parent
-        // back-toggle.
+        // overview snapshot band only, PC-FE-167/220) + 가이드(/scm/guide —
+        // TASK-PC-FE-188 static reference, placed 개요 다음 per
+        // IAM/WMS/E-Commerce's 개요 → 가이드 order) + 조달(/scm/procurement —
+        // the read-only PO list split out of 개요, PC-FE-220) + 재고
+        // (/scm/inventory — the read-only inventory-visibility snapshot/SKU/
+        // staleness split out of 개요, PC-FE-220) + 보충 계획(/scm/replenishment
+        // — the FE-077 replenishment operator gate) + 보충 계획 설정(/scm/config
+        // — the FE-080 seed/config operator surface: per-SKU reorder-policy +
+        // sku-supplier-map upsert, the operational fix-path for the 보충
+        // SKU_SUPPLIER_UNMAPPED gap). TASK-PC-FE-220 split 개요's combined
+        // procurement + inventory tables into their own 조달/재고 routes and
+        // renamed 보충/설정 → 보충 계획/보충 계획 설정 (href + testid unchanged).
+        // The /scm destination lives on the 개요 child (nav-scm-ops); nav-scm
+        // is the pinned parent back-toggle.
         key: 'scm',
         label: 'SCM',
         testid: 'nav-scm',
@@ -138,11 +143,25 @@ const GROUPS: NavGroup[] = [
           { href: '/scm', label: '개요', testid: 'nav-scm-ops' },
           { href: '/scm/guide', label: '가이드', testid: 'nav-scm-guide' },
           {
+            href: '/scm/procurement',
+            label: '조달',
+            testid: 'nav-scm-procurement',
+          },
+          {
+            href: '/scm/inventory',
+            label: '재고',
+            testid: 'nav-scm-inventory',
+          },
+          {
             href: '/scm/replenishment',
-            label: '보충',
+            label: '보충 계획',
             testid: 'nav-scm-replenishment',
           },
-          { href: '/scm/config', label: '설정', testid: 'nav-scm-config' },
+          {
+            href: '/scm/config',
+            label: '보충 계획 설정',
+            testid: 'nav-scm-config',
+          },
         ],
       },
       {

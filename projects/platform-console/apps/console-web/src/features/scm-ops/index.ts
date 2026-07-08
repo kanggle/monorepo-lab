@@ -15,12 +15,19 @@
  * `meta.warning` prominently (a contract obligation; required, surfaced
  * view-model field — never stripped).
  */
-export { ScmOpsScreen } from './components/ScmOpsScreen';
+export { ScmProcurementScreen } from './components/ScmProcurementScreen';
+export { ScmInventoryScreen } from './components/ScmInventoryScreen';
 export { S5Warning } from './components/S5Warning';
 export { ScmOverview } from './components/ScmOverview';
 export { PoDetailDialog } from './components/PoDetailDialog';
-export { getScmSectionState } from './api/scm-state';
-export type { ScmSectionState } from './api/scm-state';
+export {
+  getScmProcurementState,
+  getScmInventoryState,
+} from './api/scm-state';
+export type {
+  ScmProcurementState,
+  ScmInventoryState,
+} from './api/scm-state';
 export { getScmOverviewState } from './api/overview-state';
 export type {
   ScmOverviewState,

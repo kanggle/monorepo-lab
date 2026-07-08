@@ -16,7 +16,8 @@ import {
  * the status/supplier filter form + forbidden / rate-limited / degraded /
  * empty notices + the PO table + pagination nav + the per-row read-only
  * detail affordance. Pure presentation: all state + handlers live in the
- * `ScmOpsScreen` container and arrive via props. STRICTLY READ-ONLY.
+ * `ScmProcurementScreen` container (TASK-PC-FE-220 split of the former
+ * ScmOpsScreen) and arrive via props. STRICTLY READ-ONLY.
  */
 export interface ScmPoTableProps {
   statusFid: string;
