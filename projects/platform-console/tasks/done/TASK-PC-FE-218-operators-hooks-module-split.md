@@ -1,6 +1,7 @@
 # TASK-PC-FE-218 — operators use-operators.ts hook god-file 모듈 분할
 
-**Status:** ready
+**Status:** done
+**Done:** 2026-07-08 · impl PR #2312 squash `40ec3c056` (3-dim verified) — use-operators.ts 460→50(배럴) + 4 모듈(keys 37·list 44·mutations 165·assignments 224), 소비처 import 불변, tsc 0·lint 0·operators 113/113. (iam Testcontainers flake 1회 rerun 후 clean)
 **Area:** platform-console / console-web · **Refactor:** behavior-preserving hook module split
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (React Query 훅 다수·per-endpoint 헤더/무효화 매트릭스 보존)
 
