@@ -8,7 +8,7 @@ TASK-PC-FE-226
 
 # Status
 
-review
+done
 
 # Owner
 
