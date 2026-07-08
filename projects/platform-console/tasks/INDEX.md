@@ -103,7 +103,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-230-erp-notification-approval-deeplink.md` — **[ERP 기능↔메뉴 배치 감사 산물, 2026-07-08]** ERP 결재 알림 딥링크 **오라우팅** 수정(Phase A, console-web). 셸 `NotificationBell` fallback이 `/erp?approval=<id>`로 push하나 `/erp`(마스터)가 파라미터 무시 → 결재함 아닌 마스터 페이지로 오라우팅+결재건 소실(실측 확증). fallback → `/erp/approval?request=<sourceId>` + 결재함 페이지 `request` 프리선택(`ApprovalDetail` by-id, 미존재 id는 우아한 404). **Impl PR #2327**(`pc-fe-230-erp-deeplink`). 검증 tsc 0·lint 0·vitest 37/37(전체 2462 pass + 무관 flake 1). Phase B(erp-platform `deepLinkFor` + 계약)는 선택 후속 미착수(FE가 `deepLink` 우선 소비하도록 배선 완료). 분석=Opus 4.8 / 구현 권장=Sonnet.
 
 ## done
 
