@@ -124,8 +124,17 @@ const GROUPS: NavGroup[] = [
           { href: '/wms/outbound', label: '출고', testid: 'nav-wms-outbound' },
           // 마스터(/wms/master — TASK-PC-FE-223): 창고/구역/로케이션/SKU/Lot/
           // 거래처 참조 데이터 read-only 조회. 참조/설정 성격이라 물류 흐름
-          // (입고→재고→출고) 뒤, 맨 마지막에 둔다.
+          // (입고→재고→출고) 뒤에 둔다.
           { href: '/wms/master', label: '마스터', testid: 'nav-wms-master' },
+          // 운영설정(/wms/operations — TASK-PC-FE-224): 예약 TTL·저재고
+          // 기본 임계치 등 운영 설정 + read-model 프로젝션 상태 read-only
+          // 조회. 참조/설정 성격의 마스터보다도 더 후순위(운영 파라미터)라
+          // 맨 끝에 둔다.
+          {
+            href: '/wms/operations',
+            label: '운영설정',
+            testid: 'nav-wms-operations',
+          },
         ],
       },
       {

@@ -250,6 +250,33 @@ export type RefType = (typeof REF_TYPES)[number];
  *  is the most operationally-consulted ref during putaway/pick lookups. */
 export const DEFAULT_REF_TYPE: RefType = 'locations';
 
+// --- 5. settings ------------------------------------------------------------
+// Setting (admin-service-api.md § 5.1/5.2) — TASK-PC-FE-224 surfaces the
+// previously-unconsumed settings read on the dedicated `/wms/operations`
+// screen (예약 TTL `inventory.reservation.ttl_hours` + 저재고 기본 임계치
+// `inventory.low_stock.default_threshold_qty`). TOLERANT (§ 2.4.5 tolerance
+// invariant): only `key` is required; `valueJson`/`schemaJson` are `unknown`
+// (the schema shape is per-key, not fixed) and every other field is
+// optional/nullable so an unrecognised or future settings key still parses
+// (never throws — the screen filters down to the KNOWN operational keys it
+// renders; task Edge Case "설정 키 미제공 → 해당 행 생략").
+export const SettingSchema = z
+  .object({
+    key: z.string(),
+    scope: z.string().optional(),
+    warehouseId: z.string().nullable().optional(),
+    valueJson: z.unknown().optional(),
+    schemaJson: z.unknown().optional(),
+    description: z.string().nullable().optional(),
+    version: z.number().optional(),
+    updatedAt: z.string().nullable().optional(),
+    updatedBy: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type Setting = z.infer<typeof SettingSchema>;
+export const SettingPageSchema = wmsPage(SettingSchema);
+export type SettingPage = z.infer<typeof SettingPageSchema>;
+
 // --- 6.2 projection status ------------------------------------------------
 
 export const ProjectionStatusSchema = z
@@ -337,6 +364,18 @@ export interface AsnQueryParams {
 export interface RefQueryParams {
   q?: string;
   status?: string;
+  page?: number;
+  size?: number;
+}
+
+/** `GET /settings` query params (admin-service-api.md § 5.1 — TASK-PC-FE-224
+ *  dedicated `/wms/operations` screen). All optional filters; the operations
+ *  screen fetches the unfiltered page-0 list and filters client-side to the
+ *  KNOWN operational keys it renders. */
+export interface SettingQueryParams {
+  keyPrefix?: string;
+  scope?: string;
+  warehouseId?: string;
   page?: number;
   size?: number;
 }
