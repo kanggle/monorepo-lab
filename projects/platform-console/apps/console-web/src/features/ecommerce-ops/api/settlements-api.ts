@@ -18,9 +18,18 @@ import {
   PayoutsResponseSchema,
   type PayoutsResponse,
   type PayoutsListParams,
+  SettlementPeriodSchema,
+  type SettlementPeriod,
+  PayoutSchema,
+  type Payout,
+  PeriodCloseResultSchema,
+  type PeriodCloseResult,
+  type SetCommissionRateBody,
+  type OpenPeriodBody,
   SETTLEMENT_DEFAULT_PAGE_SIZE,
   SETTLEMENT_MAX_PAGE_SIZE,
 } from './settlement-types';
+import { z } from 'zod';
 
 /**
  * Server-side ecommerce `settlement-service` operator reads client
@@ -149,6 +158,88 @@ export function listPayouts(
       path: `/settlements/periods/${encodeURIComponent(periodId)}/payouts?${qs.toString()}`,
     },
     (j) => PayoutsResponseSchema.parse(j),
+    SETTLEMENT_LABEL,
+  );
+}
+
+// ===========================================================================
+// MUTATIONS (Phase B — confirm-gated in the UI; NO Idempotency-Key)
+// ===========================================================================
+
+/**
+ * PUT /settlements/commission-rates/{sellerId} — set a seller commission rate.
+ * Prospective (existing accruals are NOT recomputed). Producer 422
+ * COMMISSION_RATE_INVALID outside `[0, 10000]` bps. → 200 { …, source }.
+ */
+export function setCommissionRate(
+  sellerId: string,
+  body: SetCommissionRateBody,
+): Promise<CommissionRate> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'PUT',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: `/settlements/commission-rates/${encodeURIComponent(sellerId)}`,
+      body,
+    },
+    (j) => CommissionRateSchema.parse(j),
+    SETTLEMENT_LABEL,
+  );
+}
+
+/**
+ * POST /settlements/periods — open a settlement period (half-open `[from, to)`).
+ * Producer 422 PERIOD_WINDOW_INVALID on `from >= to`. → 201 SettlementPeriod.
+ */
+export function openPeriod(body: OpenPeriodBody): Promise<SettlementPeriod> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'POST',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: '/settlements/periods',
+      body,
+    },
+    (j) => SettlementPeriodSchema.parse(j),
+    SETTLEMENT_LABEL,
+  );
+}
+
+/**
+ * POST /settlements/periods/{periodId}/close — bodyless. Irreversible OPEN →
+ * CLOSED transition (accruals folded into PENDING payouts; emits
+ * `settlement.period.closed.v1`). Producer 409 PERIOD_ALREADY_CLOSED on re-close.
+ * → 200 { …period, status: CLOSED, closedAt, sellerCount, payouts }.
+ */
+export function closePeriod(periodId: string): Promise<PeriodCloseResult> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'POST',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: `/settlements/periods/${encodeURIComponent(periodId)}/close`,
+    },
+    (j) => PeriodCloseResultSchema.parse(j),
+    SETTLEMENT_LABEL,
+  );
+}
+
+/**
+ * POST /settlements/periods/{periodId}/payouts/execute — bodyless. SIMULATED
+ * payout (no real disbursement): PENDING → PAID/FAILED, `(periodId, sellerId)`
+ * idempotent (already-PAID unchanged). Producer 409 PERIOD_NOT_CLOSED when the
+ * period is not CLOSED. → 200 Payout[] (post-execution status).
+ */
+export function executePayouts(periodId: string): Promise<Payout[]> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'POST',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: `/settlements/periods/${encodeURIComponent(periodId)}/payouts/execute`,
+    },
+    (j) => z.array(PayoutSchema).parse(j),
     SETTLEMENT_LABEL,
   );
 }

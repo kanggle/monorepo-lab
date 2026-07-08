@@ -1,6 +1,10 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
 import { READ_QUERY_REFETCH } from '@/shared/api/query-options';
 import { clampPageSize } from '@/shared/lib/pagination';
@@ -18,19 +22,26 @@ import {
   PayoutsResponseSchema,
   type PayoutsResponse,
   type PayoutsListParams,
+  type SettlementPeriod,
+  type Payout,
+  type PeriodCloseResult,
+  type OpenPeriodBody,
   SETTLEMENT_DEFAULT_PAGE_SIZE,
   SETTLEMENT_MAX_PAGE_SIZE,
 } from '../api/settlement-types';
 
 /**
- * Client-side ecommerce-ops settlement hooks (TASK-PC-FE-221 Phase A). Every
- * call goes to the same-origin `/api/ecommerce/settlements/**` proxy (the typed
- * API client's single backend entry point); the proxy attaches the HttpOnly
+ * Client-side ecommerce-ops settlement hooks (TASK-PC-FE-221). Every call goes
+ * to the same-origin `/api/ecommerce/settlements/**` proxy (the typed API
+ * client's single backend entry point); the proxy attaches the HttpOnly
  * domain-facing IAM OIDC token server-side — the browser never reads a token or
  * calls the ecommerce gateway directly (contract § 2.3 / § 2.4.10).
  *
- * READ-ONLY — Phase A has no mutations. Seeded page-0 queries reuse the server
- * render as `initialData`; a paginated / lookup query fetches fresh.
+ * Phase A = reads (seeded page-0 queries reuse the server render as
+ * `initialData`; paginated / lookup queries fetch fresh). Phase B = four
+ * confirm-gated mutations, each invalidating the affected read query on success.
+ * NO `Idempotency-Key` (producer defines none) — confirm-gate + producer state
+ * guards are the double-submit defence.
  */
 
 const SETTLEMENTS_KEY = 'ecommerce-settlements';
@@ -207,5 +218,82 @@ export function usePeriodPayouts(
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
     ...READ_QUERY_REFETCH,
+  });
+}
+
+// ===========================================================================
+// MUTATIONS (Phase B — confirm-gated; NO Idempotency-Key)
+// ===========================================================================
+
+/**
+ * PUT /api/ecommerce/settlements/commission-rates/{sellerId}. On success,
+ * invalidates every commission-rate lookup so a mounted lookup for the same
+ * seller reflects the new rate.
+ */
+export function useSetCommissionRate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { sellerId: string; rateBps: number }) =>
+      apiClient.put<CommissionRate>(
+        `/api/ecommerce/settlements/commission-rates/${encodeURIComponent(vars.sellerId)}`,
+        { rateBps: vars.rateBps },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [SETTLEMENTS_KEY, 'commission-rate'] });
+    },
+  });
+}
+
+/**
+ * POST /api/ecommerce/settlements/periods (open). On success, invalidates the
+ * periods list so the new period appears.
+ */
+export function useOpenPeriod() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: OpenPeriodBody) =>
+      apiClient.post<SettlementPeriod>('/api/ecommerce/settlements/periods', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [SETTLEMENTS_KEY, 'periods'] });
+      qc.removeQueries({ queryKey: [SETTLEMENTS_KEY, 'periods'], type: 'inactive' });
+    },
+  });
+}
+
+/**
+ * POST /api/ecommerce/settlements/periods/{periodId}/close (bodyless). On
+ * success, invalidates the periods list + that period's payouts (the accruals
+ * were folded into PENDING payouts).
+ */
+export function useClosePeriod() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (periodId: string) =>
+      apiClient.post<PeriodCloseResult>(
+        `/api/ecommerce/settlements/periods/${encodeURIComponent(periodId)}/close`,
+      ),
+    onSuccess: (_d, periodId) => {
+      qc.invalidateQueries({ queryKey: [SETTLEMENTS_KEY, 'periods'] });
+      qc.removeQueries({ queryKey: [SETTLEMENTS_KEY, 'periods'], type: 'inactive' });
+      qc.invalidateQueries({ queryKey: [SETTLEMENTS_KEY, 'payouts', periodId] });
+    },
+  });
+}
+
+/**
+ * POST /api/ecommerce/settlements/periods/{periodId}/payouts/execute (bodyless,
+ * SIMULATED). On success, invalidates the period's payouts so the post-execution
+ * status (PAID/FAILED) renders.
+ */
+export function useExecutePayouts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (periodId: string) =>
+      apiClient.post<Payout[]>(
+        `/api/ecommerce/settlements/periods/${encodeURIComponent(periodId)}/payouts/execute`,
+      ),
+    onSuccess: (_d, periodId) => {
+      qc.invalidateQueries({ queryKey: [SETTLEMENTS_KEY, 'payouts', periodId] });
+    },
   });
 }
