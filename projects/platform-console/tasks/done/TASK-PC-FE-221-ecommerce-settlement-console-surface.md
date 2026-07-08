@@ -1,6 +1,7 @@
 # TASK-PC-FE-221 — 이커머스 정산(settlement) 운영자 콘솔 표면 신설
 
-**Status:** ready
+**Status:** done
+**Done:** 2026-07-08 · Phase A impl PR #2320 squash `6a52868fd` + Phase B impl PR #2328 squash `9575bbd42` (spec PR #2315). 3-dim verified. settlement은 운영자 백엔드가 완비(게이트웨이 `/api/admin/settlements/**`·REST 9)됐는데 콘솔 표면만 공백이던 유일 이커머스 도메인 — 기존 `ecommerce-ops` 패턴으로 조회+운영자 변이 전면 배선. **Phase A(read)**: `정산` 메뉴(drill)·api slice(`callEcommerce` core 재사용, 신규 core 없음)·프록시 5·SettlementsScreen(정산라인 필터·잔액/수수료율 조회·기간→지급내역)·minor-unit ₩(no float)·rateBps%·REVERSAL 부호·403 forbidden/503 degraded/404 notFound·가이드 flip(`console:'—'`→`정산`). **Phase B(write)**: confirm 게이팅 변이 4종(수수료율 PUT `[0,10000]`/422·기간 개시 POST 422·기간 마감 POST 409 비가역·payout 실행 POST 409 시뮬레이션), bodyless POST Content-Type 미부착·NO Idempotency-Key, 422/409 인라인(프록시 4xx 본문 보존, 가짜 500/degrade 방지). accrual write 경로 없음(event-sourced). **검증(node_modules junction, 메인 미접촉)**: tsc 0·next lint 0·vitest 정산 8파일/67 + 회귀 55파일/573 green. **3-dim**: (a) 두 PR MERGED(`6a52868fd`/`9575bbd42`); (b) origin/main tip 일치; (c) pre-merge failing required=0 — 프런트 3잡(unit/E2E/lint&build) 전부 SUCCESS; Phase B의 `master+notification+outbound` Java WMS 통합 레인 flake(DB 커넥션풀·console-web TS 인과 불가)는 rerun 후 clean 21 SUCCESS. review·search는 고객 중심이라 콘솔 미노출이 정상(범위 밖). 분석=Opus 4.8 / 구현=Opus 4.8(frontend-engineer). [[proj_console_ecommerce_detail_conventions]] [[env_worktree_pnpm_no_populate_verify_via_main]]
 **Area:** platform-console / console-web · **Type:** feature (new domain surface)
 **Analysis model:** Opus 4.8 · **Impl model:** Opus 4.8 (다운스트림 계약 정합 + 운영자 write 게이팅 — 복잡 도메인 배선)
 
