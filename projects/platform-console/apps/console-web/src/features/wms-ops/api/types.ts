@@ -245,6 +245,11 @@ export const REF_TYPES = [
 ] as const;
 export type RefType = (typeof REF_TYPES)[number];
 
+/** TASK-PC-FE-223 — the `/wms/master` screen's seeded tab (server-side
+ *  first-page seed, mirrors `inbound-state.ts`'s single-read seed). `locations`
+ *  is the most operationally-consulted ref during putaway/pick lookups. */
+export const DEFAULT_REF_TYPE: RefType = 'locations';
+
 // --- 6.2 projection status ------------------------------------------------
 
 export const ProjectionStatusSchema = z
@@ -316,6 +321,22 @@ export interface AsnQueryParams {
   expectedArriveDateFrom?: string;
   /** ISO local-date upper bound on `expectedArriveDate` (inclusive). */
   expectedArriveDateTo?: string;
+  page?: number;
+  size?: number;
+}
+
+/** `GET /dashboard/refs/{type}` query params (admin-service-api.md § 1.7 —
+ *  TASK-PC-FE-223 dedicated `/wms/master` screen). § 1.7 states "Query
+ *  parameters vary by `{type}`" WITHOUT enumerating names — this feature
+ *  adopts the same `q` (substring, mirrors § 2.2 `GET /users`) + `status`
+ *  filter convention already used elsewhere on this producer's list
+ *  endpoints, forwarded tolerantly (an unrecognised param is expected to be
+ *  ignored server-side, not rejected — ordinary Spring Data list-endpoint
+ *  behaviour). Both are OPTIONAL and per Edge Case, an empty `q` is never
+ *  sent (no `q=` on the wire). */
+export interface RefQueryParams {
+  q?: string;
+  status?: string;
   page?: number;
   size?: number;
 }

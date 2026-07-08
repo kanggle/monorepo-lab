@@ -122,6 +122,10 @@ const GROUPS: NavGroup[] = [
             testid: 'nav-wms-inventory',
           },
           { href: '/wms/outbound', label: '출고', testid: 'nav-wms-outbound' },
+          // 마스터(/wms/master — TASK-PC-FE-223): 창고/구역/로케이션/SKU/Lot/
+          // 거래처 참조 데이터 read-only 조회. 참조/설정 성격이라 물류 흐름
+          // (입고→재고→출고) 뒤, 맨 마지막에 둔다.
+          { href: '/wms/master', label: '마스터', testid: 'nav-wms-master' },
         ],
       },
       {
