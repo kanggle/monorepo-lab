@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-028-notification-deeplink-derivation.md` — **[TASK-PC-FE-230 Phase B]** `NotificationResponse.deepLinkFor`가 하드코딩 `null`이라 계약 §1 `deepLink`가 항상 비어 있던 것을 실제 파생으로 채움: APPROVAL→`/erp/approval?request=<sourceId>`, DELEGATION→`/erp/delegation`(enum switch). **갭 해소**: DELEGATION 알림은 FE fallback(APPROVAL 한정)이 라우팅 안 해 inert였음. 슬라이스 테스트 APPROVAL 값 + DELEGATION 파생 추가, 계약 deepLink/sourceType/type-enum + v2-deferred delegation 스테일 정정. console-web 무변경(FE `deepLink` 우선 소비, PC-FE-230 done). 검증 `:notification-service:test` GREEN. 분석=Opus 4.8 / 구현=Sonnet.
 
 ## done
 
