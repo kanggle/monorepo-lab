@@ -83,11 +83,27 @@ class NotificationInboxControllerSliceTest {
                 .andExpect(jsonPath("$.data[0].id").value("ntf-1"))
                 // ADR-MONO-043 P2: contract § 1 sourceDomain present + always "erp".
                 .andExpect(jsonPath("$.data[0].sourceDomain").value("erp"))
-                // deepLink is null → omitted (NON_NULL), per contract § 1.
-                .andExpect(jsonPath("$.data[0].deepLink").doesNotExist())
+                // deepLink derived from APPROVAL source → 결재함 route (TASK-ERP-BE-028).
+                .andExpect(jsonPath("$.data[0].deepLink").value("/erp/approval?request=appr-1"))
                 .andExpect(jsonPath("$.data[0].read").value(false))
                 .andExpect(jsonPath("$.data[0].readAt").doesNotExist())
                 .andExpect(jsonPath("$.meta.totalElements").value(1));
+    }
+
+    @Test
+    void deepLinkDerivedForDelegationSource() throws Exception {
+        Notification delegation = Notification.create("ntf-2", "erp", "emp-1",
+                NotificationType.DELEGATION_GRANTED, "결재 위임 지정", "body",
+                SourceRef.delegation("grant-9"), Instant.parse("2026-06-05T10:00:00Z"));
+        when(queryInbox.list(eq("erp"), eq("emp-1"), any(), eq(0), eq(20)))
+                .thenReturn(new InboxPage(List.of(delegation), 0, 20, 1L));
+
+        mockMvc.perform(get("/api/erp/notifications").with(caller("emp-1")))
+                .andExpect(status().isOk())
+                // DELEGATION source → 위임 route (TASK-ERP-BE-028).
+                .andExpect(jsonPath("$.data[0].deepLink").value("/erp/delegation"))
+                .andExpect(jsonPath("$.data[0].sourceType").value("DELEGATION"))
+                .andExpect(jsonPath("$.data[0].sourceId").value("grant-9"));
     }
 
     @Test
