@@ -52,14 +52,26 @@ export interface ApprovalScreenProps {
   /** Optional server-seeded first-page snapshots (the section landing). */
   initialRequests?: ApprovalListResponse | null;
   initialInbox?: ApprovalListResponse | null;
+  /**
+   * Deep-link target — the approval request to open on mount, seeded from
+   * `/erp/approval?request=<id>` (the notification bell's approval fallback,
+   * PC-FE-230). Absent → the plain list landing. An unknown / stale id opens
+   * the detail dialog which shows a graceful not-found notice (`ApprovalDetail`
+   * fetches by id and surfaces 404 inline) over the still-rendered list — never
+   * a crash.
+   */
+  initialSelectedId?: string | null;
 }
 
 export function ApprovalScreen({
   initialRequests,
   initialInbox,
+  initialSelectedId,
 }: ApprovalScreenProps) {
   const [statusFilter, setStatusFilter] = useState<string>('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialSelectedId ?? null,
+  );
   const [createOpen, setCreateOpen] = useState(false);
 
   const listQ = useApprovalRequests(
