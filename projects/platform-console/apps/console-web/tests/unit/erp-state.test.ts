@@ -5,7 +5,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * loaders (TASK-PC-FE-010 surface; TASK-PC-FE-076 drill-in split).
  * The monolithic `getErpSectionState` (one page, 9 legs) is replaced
  * by 4 focused loaders, each fetching ONLY its route's slice:
- *   - `getErpMastersState`    — 5 masters (`/erp`);
+ *   - `getErpMastersState`    — 5 masters (`/erp/masters` — relocated from
+ *     the domain root `/erp` by TASK-PC-FE-232, which repoints `/erp` at a
+ *     standalone 개요 landing; the loader itself is unchanged);
  *   - `getErpOrgViewState`    — read-model org-view (`/erp/orgview`);
  *   - `getErpApprovalState`   — requests + inbox (`/erp/approval`);
  *   - `getErpDelegationState` — delegation facts (`/erp/delegation`).
@@ -123,7 +125,7 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('getErpMastersState — `/erp` masters slice (§ 2.4.8 / PC-FE-076)', () => {
+describe('getErpMastersState — `/erp/masters` slice (§ 2.4.8 / PC-FE-076; relocated TASK-PC-FE-232)', () => {
   it('not eligible → notEligible block, NO erp call fabricated', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn();

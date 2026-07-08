@@ -322,29 +322,42 @@ describe('sidebar drill-in (TASK-PC-FE-059)', () => {
 
 /**
  * TASK-PC-FE-076 — ERP becomes the SECOND drill parent (after WMS): the
- * single dense `/erp` page is split into 4 section routes. The parent route
- * `/erp` doubles as the first child (마스터), exactly as `/wms` is WMS's 운영
- * child. Same drill machinery as FE-059 — these cases mirror the WMS suite.
+ * single dense `/erp` page is split into section routes. TASK-PC-FE-232 —
+ * 정석(orthodox) 파리티 정렬: children reordered to 개요 → 가이드 → 마스터 →
+ * 통합 조회 → 결재함 → 위임 (마스터 relocated from the domain root `/erp` to
+ * `/erp/masters`; `/erp` is now the 개요 landing, mirroring the Finance
+ * TASK-PC-FE-229 suite below). Same drill machinery as FE-059 — these
+ * cases mirror the WMS/Finance suites.
  */
-describe('sidebar drill-in — ERP parent (TASK-PC-FE-076)', () => {
+describe('sidebar drill-in — ERP parent (TASK-PC-FE-076; children realigned TASK-PC-FE-232)', () => {
   it('top-level list renders ERP as a toggle button, not a link, with submenus hidden', () => {
     render(<ConsoleSidebarNav />);
     const erp = screen.getByTestId('nav-erp');
     expect(erp.tagName).toBe('BUTTON');
     expect(erp).not.toHaveAttribute('href');
+    expect(screen.queryByTestId('nav-erp-overview')).toBeNull();
+    expect(screen.queryByTestId('nav-erp-guide')).toBeNull();
     expect(screen.queryByTestId('nav-erp-masters')).toBeNull();
     expect(screen.queryByTestId('nav-erp-orgview')).toBeNull();
     expect(screen.queryByTestId('nav-erp-approval')).toBeNull();
     expect(screen.queryByTestId('nav-erp-delegation')).toBeNull();
   });
 
-  it('clicking ERP drills in: pins ERP at top and reveals 마스터/통합 조회/결재함/위임', () => {
+  it('clicking ERP drills in: pins ERP at top and reveals 개요/가이드/마스터/통합 조회/결재함/위임, in order', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-erp'));
 
-    expect(screen.getByTestId('nav-erp-masters')).toHaveAttribute(
+    expect(screen.getByTestId('nav-erp-overview')).toHaveAttribute(
       'href',
       '/erp',
+    );
+    expect(screen.getByTestId('nav-erp-guide')).toHaveAttribute(
+      'href',
+      '/erp/guide',
+    );
+    expect(screen.getByTestId('nav-erp-masters')).toHaveAttribute(
+      'href',
+      '/erp/masters',
     );
     expect(screen.getByTestId('nav-erp-orgview')).toHaveAttribute(
       'href',
@@ -362,6 +375,18 @@ describe('sidebar drill-in — ERP parent (TASK-PC-FE-076)', () => {
     const nav = screen.getByRole('navigation');
     const firstControl = nav.querySelector('a,button');
     expect(firstControl).toHaveAttribute('data-testid', 'nav-erp');
+    // Order: 개요 → 가이드 → 마스터 → 통합 조회 → 결재함 → 위임.
+    const links = Array.from(nav.querySelectorAll('a')).map((a) =>
+      a.getAttribute('data-testid'),
+    );
+    expect(links).toEqual([
+      'nav-erp-overview',
+      'nav-erp-guide',
+      'nav-erp-masters',
+      'nav-erp-orgview',
+      'nav-erp-approval',
+      'nav-erp-delegation',
+    ]);
     // The drill replaces the top-level list — sibling domains are gone.
     expect(screen.queryByTestId('nav-scm')).toBeNull();
     expect(screen.queryByTestId('nav-wms')).toBeNull();
@@ -379,27 +404,62 @@ describe('sidebar drill-in — ERP parent (TASK-PC-FE-076)', () => {
     expect(screen.getByTestId('nav-dashboards')).toBeInTheDocument();
   });
 
-  it('a deep link to /erp/orgview auto-opens the ERP drill with 통합 조회 active and 마스터(/erp) inactive (longest-prefix)', () => {
+  it('a deep link to /erp/orgview auto-opens the ERP drill with 통합 조회 active and 개요/마스터 inactive (longest-prefix)', () => {
     mockPath = '/erp/orgview';
     render(<ConsoleSidebarNav />);
     expect(screen.getByTestId('nav-erp-orgview')).toHaveAttribute(
       'aria-current',
       'page',
     );
-    // `/erp` (마스터) must NOT also light up on the deeper child route.
+    // `/erp` (개요) must NOT also light up on the deeper child route.
+    expect(screen.getByTestId('nav-erp-overview')).not.toHaveAttribute(
+      'aria-current',
+    );
     expect(screen.getByTestId('nav-erp-masters')).not.toHaveAttribute(
       'aria-current',
     );
   });
 
-  it('a deep link to /erp auto-opens the ERP drill with 마스터 active', () => {
+  it('a deep link to /erp auto-opens the ERP drill with 개요 active and 가이드/마스터 inactive', () => {
     mockPath = '/erp';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-erp-overview')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-erp-guide')).not.toHaveAttribute(
+      'aria-current',
+    );
+    expect(screen.getByTestId('nav-erp-masters')).not.toHaveAttribute(
+      'aria-current',
+    );
+    expect(screen.getByTestId('nav-erp-orgview')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('a deep link to /erp/guide auto-opens the ERP drill with 가이드 active and 개요 inactive', () => {
+    mockPath = '/erp/guide';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-erp-guide')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-erp-overview')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('a deep link to /erp/masters auto-opens the ERP drill with 마스터 active and 개요 inactive (longest-match)', () => {
+    mockPath = '/erp/masters';
     render(<ConsoleSidebarNav />);
     expect(screen.getByTestId('nav-erp-masters')).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(screen.getByTestId('nav-erp-orgview')).not.toHaveAttribute(
+    // 개요(/erp) must NOT also light up on the deeper /erp/masters route —
+    // the longest-match guard (AC-5).
+    expect(screen.getByTestId('nav-erp-overview')).not.toHaveAttribute(
       'aria-current',
     );
   });
