@@ -81,12 +81,12 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — `/finance` landing. **⚠️ PARKED / DECLINED (2026-07-03, user-approved):** finance v1 has no list/search GET → no count overview possible, no synthetic ₩. finance keeps `Finance 운영` (honest lookup surface); N/A for the PC-FE-162 capstone. **Do NOT re-pick from a backlog sweep** — resume only if the producer adds a list GET or a concrete non-count operator need appears (see task body).
 
-**IAM 「권한」/「권한 세트」 화면** (2026-07-08 발굴, ADR-MONO-046 관련 nav 재편성의 후속) — 둘 다 `projects/iam-platform/tasks/ready/TASK-BE-486-admin-role-permission-read-api.md`(admin-service role/permission 조회 API 신설) **선행 필수**. BE-486 머지 전에는 `backlog → ready` 이동 금지(계약 미확정).
-
-- `TASK-PC-FE-227-permissions-roles-screen.md` — 「권한」 메뉴 독립 조회 화면(role/permission drill-down). TASK-BE-486 의존. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
-- `TASK-PC-FE-228-permission-sets-screen.md` — 「권한 세트」 메뉴 조회 화면(`permission_set_id` = `admin_roles` 재사용 뷰). TASK-BE-486 의존. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
-
 ## ready
+
+**IAM 「권한」/「권한 세트」 화면** (2026-07-09 promoted backlog→ready) — 두 선행 모두 충족: **BE-486 DONE**(#2331 `59070366` — `GET /api/admin/roles`+`/permissions` 라이브, 게이트 `operator.manage`) + **PC-FE-225 DONE**(nav 「권한」·「권한 세트」 스텁 라우트 존재). 둘 다 동일 BE-486 API 소비(228=role을 permission-set으로 재프레이밍, `/roles`가 커버 → 별도 `/permission-sets` 엔드포인트 없음). 응집도 높아 impl 1 PR 묶음 예정. read-only.
+
+- `TASK-PC-FE-227-permissions-roles-screen.md` — 「권한」 메뉴 독립 조회 화면(`/permissions` 스텁 대체, role 목록+permission drill-down, `KNOWN_OPERATOR_ROLES` 정적 목록 흡수). 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
+- `TASK-PC-FE-228-permission-sets-screen.md` — 「권한 세트」 메뉴 조회 화면(`/permission-sets` 스텁 대체, `permission_set_id`=`admin_roles` 재사용 뷰, NULL=operator-level 상속 표기). 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
 
 _(직전 완료)_ **ERP 콘솔 메뉴 정석 정렬 완료** (PC-FE-232 DONE, 2026-07-09, PR #2342 squash `63f1fc2bd`). `/erp`=개요(마스터 5 count + 결재 대기 + 활성 위임 7-tile fan-out, per-cell 독립 degrade, `meta.totalElements` 재사용·신규 endpoint 없음)+`/erp/guide` 정적 가이드+마스터 표면 `/erp/masters` 이동. PC-FE-161 임베드 overview 독립 승격. CI green(ecommerce Testcontainers IT 1회 flake→FE-only diff 확인 후 재실행 green)·vitest 2678/2678. **→ 콘솔 6도메인(ecommerce·WMS·SCM·IAM·Finance·ERP) 기능↔메뉴 정렬 웨이브 완결.**
 
