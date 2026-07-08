@@ -1,6 +1,6 @@
 # TASK-PC-FE-231 — console-web architecture.md erp 섹션 정합 (read-only 드리프트 해소)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / specs (console-web architecture.md) · **Type:** refactor-spec (문서 정합, 동작 변경 없음)
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (문서 정합, 코드 무변경) (분석=Opus 4.8 / 구현 권장=Sonnet)
 **Origin:** 2026-07-08 ERP 알림 딥링크 작업(PC-FE-230 / ERP-BE-028) 중 발견 — architecture.md의 erp 섹션이 실제 콘솔 표면보다 심하게 stale.
