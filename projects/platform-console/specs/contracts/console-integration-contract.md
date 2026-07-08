@@ -253,6 +253,55 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   the **recent-shipments glance**. Consumed read-only; no producer contract
   change.
 
+  **Console-side routing note (TASK-PC-FE-222, non-normative — no producer
+  change)**: operations #6 (asns, `GET /dashboard/asns`) and #7 (asn
+  inspection, `GET /dashboard/asns/{asnId}/inspection`) — the console's
+  `features/wms-ops` client (`wms-shipments-api.ts`) had exported these two
+  read functions since their addition alongside op #5 (TASK-PC-FE-146 split)
+  but with **zero consumers** — are surfaced on a **new dedicated
+  `/wms/inbound`** surface (WMS 입고, nav `WMS ▸ 입고`, between 가이드 and
+  재고 — the physical inbound→inventory→outbound flow). This closes the wms
+  domain's largest UI asymmetry: 출고 (op-set §2.4.5.1) had a dedicated
+  screen, 입고 had none. The `/wms/inbound` screen renders op #6 as a
+  filtered/paginated ASN table (filters: `status`, `warehouseId`,
+  `supplierPartnerId`, `expectedArriveDateFrom/To` — all already defined by
+  op #6's producer query-param contract) and op #7 as a per-row "검수" inline
+  detail panel (mirrors the `/wms/inventory` composite-key "상세" pattern —
+  no single `[id]` route). Op #7's `404` (no `inbound.inspection.completed`
+  projected yet for that ASN) is rendered as a distinguishing "검수 내역
+  없음" state, **not** a degrade. **Explicitly out of this surface's scope**
+  (raw `inbound-service` write ops, not on the admin read-model this section
+  consumes): putaway instruct/confirm, ASN creation, inspection confirmation
+  — read-only. Consumed read-only; no producer contract change.
+
+  **Console-side routing note (TASK-PC-FE-223, non-normative — no producer
+  change)**: operation #11 (master refs, `GET /dashboard/refs/{type}`) — the
+  console's `features/wms-ops` client (`wms-refs-api.ts`) had exported
+  `listRefs` since the § 1.7 client split but with **zero consumers** — is
+  surfaced on a **new dedicated `/wms/master`** surface (WMS 마스터, nav
+  `WMS ▸ 마스터`, after 출고 — a reference/settings-flavoured surface placed
+  after the physical inbound→inventory→outbound flow, not inside it). The
+  `/wms/master` screen renders op #11 as a **ref-type tabbed**, filtered/
+  paginated table: one tab per producer-documented `{type}`
+  (`admin-service-api.md` § 1.7: `warehouses | zones | locations | skus |
+  lots | partners`) — the console never invents a type the read-model
+  doesn't document. Each row is the producer's generic `*Ref` projection
+  (`admin-service` `domain-model.md` § 5 — denormalised `id`/type-specific
+  code field/`name`(absent on `LotRef`)/`status`/`lastEventAt`); the table
+  renders the common fields tolerantly (a `RefPageSchema` generic-row parse,
+  never a per-type hardcoded schema). **Filter params (`q`/`status`) are a
+  console-adopted convention, not enumerated by § 1.7** ("Query parameters
+  vary by `{type}`" — the producer contract does not name them); the console
+  reuses the same `q` (substring, mirrors § 2.2 `GET /users`) + `status`
+  filter shape already established elsewhere on this producer's list
+  endpoints, forwarded tolerantly. Only the default tab (`locations`) is
+  server-seeded (page 0, no filters); every other tab / a filter or page
+  change is a client-side re-query via the same-origin proxy. **Explicitly
+  out of this surface's scope** (task § Out of Scope): master data
+  create/update/delete — the admin read-model this section consumes is
+  read-only; the raw `master-service` owns that SoT. Consumed read-only; no
+  producer contract change.
+
 - **Per-domain credential selection (the key correctness element — normative)**:
   **each § 2.4.x binding declares which credential it uses, and an
   implementer MUST NOT blanket-apply one domain's auth model to another.**

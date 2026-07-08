@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * `features/scm-ops/api/scm-state.ts` — the server-side section state
- * (TASK-PC-FE-008 / § 2.4.6):
+ * `features/scm-ops/api/scm-state.ts` — the server-side section state,
+ * split per TASK-PC-FE-220 into `getScmProcurementState` (조달: PO list)
+ * and `getScmInventoryState` (재고: snapshot + staleness). Both share the
+ * same eligibility gate + resilience mapping (§ 2.4.6):
  *   - not scm-eligible → `notEligible` block, NO scm call fabricated
  *     (no cross-tenant call; the console never sends a tenant — scm
  *     resolves it from the JWT claim);
- *   - eligible → seeds PO list + snapshot + staleness (IAM OIDC token,
- *     server-side);
+ *   - eligible → seeds the route's own reads (IAM OIDC token, server-side);
  *   - 403 → `forbidden` (inline, no crash);
  *   - 429 → `rateLimited` (degrade with notice; api client already did
  *     ONE bounded backoff — no further storm);
  *   - 503/timeout → `degraded` (scm section only — shell intact);
+ *   - 401 → whole-session re-login (redirect).
  *   - the S5 meta.warning rides through the snapshot view-model.
- *
- * 401 → whole-session re-login (redirect) is exercised here too.
  */
 
 const cookieJar = new Map<string, string>();
@@ -58,7 +58,10 @@ vi.mock('@/shared/config/env', () => ({
   getServerEnv: () => ENV,
 }));
 
-import { getScmSectionState } from '@/features/scm-ops/api/scm-state';
+import {
+  getScmProcurementState,
+  getScmInventoryState,
+} from '@/features/scm-ops/api/scm-state';
 import { ACCESS_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -100,41 +103,50 @@ function routed() {
   });
 }
 
+function rateLimited() {
+  return vi.fn(() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({ code: 'RATE_LIMIT_EXCEEDED', message: 'x' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': '1',
+          },
+        },
+      ),
+    ),
+  );
+}
+
 beforeEach(() => {
   cookieJar.clear();
   vi.unstubAllGlobals();
 });
 
-describe('getScmSectionState — eligibility gate (§ 2.4.6)', () => {
+describe('getScmProcurementState — eligibility gate + resilience (§ 2.4.6)', () => {
   it('not eligible → notEligible block, NO scm call fabricated', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const state = await getScmSectionState(false);
+    const state = await getScmProcurementState(false);
     expect(state.notEligible).toBe(true);
     expect(state.poList).toBeNull();
-    expect(state.snapshot).toBeNull();
-    expect(state.staleness).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('eligible → seeds PO + snapshot + staleness (IAM OIDC token, server-side)', async () => {
+  it('eligible → seeds PO list (IAM OIDC token, server-side)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     const fetchMock = routed();
     vi.stubGlobal('fetch', fetchMock);
 
-    const state = await getScmSectionState(true);
+    const state = await getScmProcurementState(true);
     expect(state.notEligible).toBe(false);
     expect(state.degraded).toBe(false);
     expect(state.poList).not.toBeNull();
-    expect(state.snapshot).not.toBeNull();
-    expect(state.staleness).not.toBeNull();
-    // The S5 warning rides through (never stripped).
-    expect(state.snapshot!.meta.warning).toBe(
-      'Not for procurement decisions (S5)',
-    );
-    // Every seeded read carries the IAM OIDC access token.
+    // Every seeded read carries the IAM OIDC access token, no X-Tenant-Id.
     for (const [, init] of fetchMock.mock.calls) {
       const h = (init as RequestInit).headers as Record<string, string>;
       expect(h.Authorization).toBe('Bearer GAP-ACCESS');
@@ -148,29 +160,15 @@ describe('getScmSectionState — eligibility gate (§ 2.4.6)', () => {
       'fetch',
       vi.fn(() => Promise.resolve(scmError('TENANT_FORBIDDEN', 403))),
     );
-    const state = await getScmSectionState(true);
+    const state = await getScmProcurementState(true);
     expect(state.forbidden).toBe(true);
     expect(state.degraded).toBe(false);
   });
 
   it('persisting 429 → rateLimited (degrade w/ notice; ONE bounded backoff, no storm)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
-    const fetchMock = vi.fn(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({ code: 'RATE_LIMIT_EXCEEDED', message: 'x' }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              'Retry-After': '1',
-            },
-          },
-        ),
-      ),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-    const state = await getScmSectionState(true);
+    vi.stubGlobal('fetch', rateLimited());
+    const state = await getScmProcurementState(true);
     expect(state.rateLimited).toBe(true);
     expect(state.degraded).toBe(false);
   });
@@ -181,7 +179,7 @@ describe('getScmSectionState — eligibility gate (§ 2.4.6)', () => {
       'fetch',
       vi.fn(() => Promise.resolve(scmError('SERVICE_UNAVAILABLE', 503))),
     );
-    const state = await getScmSectionState(true);
+    const state = await getScmProcurementState(true);
     expect(state.degraded).toBe(true);
     expect(state.notEligible).toBe(false);
   });
@@ -192,7 +190,84 @@ describe('getScmSectionState — eligibility gate (§ 2.4.6)', () => {
       'fetch',
       vi.fn(() => Promise.resolve(scmError('UNAUTHORIZED', 401))),
     );
-    const err = await getScmSectionState(true).catch((e) => e);
+    const err = await getScmProcurementState(true).catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe('REDIRECT:/login');
+  });
+});
+
+describe('getScmInventoryState — eligibility gate + resilience (§ 2.4.6)', () => {
+  it('not eligible → notEligible block, NO scm call fabricated', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const state = await getScmInventoryState(false);
+    expect(state.notEligible).toBe(true);
+    expect(state.snapshot).toBeNull();
+    expect(state.staleness).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('eligible → seeds snapshot + staleness; S5 warning rides through (IAM OIDC token)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = routed();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const state = await getScmInventoryState(true);
+    expect(state.notEligible).toBe(false);
+    expect(state.degraded).toBe(false);
+    expect(state.snapshot).not.toBeNull();
+    expect(state.staleness).not.toBeNull();
+    // The S5 warning rides through (never stripped).
+    expect(state.snapshot!.meta.warning).toBe(
+      'Not for procurement decisions (S5)',
+    );
+    // Every seeded read carries the IAM OIDC access token, no X-Tenant-Id.
+    for (const [, init] of fetchMock.mock.calls) {
+      const h = (init as RequestInit).headers as Record<string, string>;
+      expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+      expect(h['X-Tenant-Id']).toBeUndefined();
+    }
+  });
+
+  it('403 → forbidden (inline, no crash)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(scmError('TENANT_FORBIDDEN', 403))),
+    );
+    const state = await getScmInventoryState(true);
+    expect(state.forbidden).toBe(true);
+    expect(state.degraded).toBe(false);
+  });
+
+  it('persisting 429 → rateLimited (degrade w/ notice; ONE bounded backoff, no storm)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal('fetch', rateLimited());
+    const state = await getScmInventoryState(true);
+    expect(state.rateLimited).toBe(true);
+    expect(state.degraded).toBe(false);
+  });
+
+  it('503 → degraded (scm section only — shell intact)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(scmError('SERVICE_UNAVAILABLE', 503))),
+    );
+    const state = await getScmInventoryState(true);
+    expect(state.degraded).toBe(true);
+    expect(state.notEligible).toBe(false);
+  });
+
+  it('401 → whole-session re-login (redirect, not a per-section degrade)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(scmError('UNAUTHORIZED', 401))),
+    );
+    const err = await getScmInventoryState(true).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).toBe('REDIRECT:/login');
   });

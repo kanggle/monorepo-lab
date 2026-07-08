@@ -1,9 +1,11 @@
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 import type { AlertRow } from '../api/types';
 
 /**
  * Pure helpers for the wms operations screen (TASK-PC-FE-103 split). The
- * inventory + shipment client-side filter shapes (+ their empty defaults) and
- * the alert label formatter. No hooks, no JSX.
+ * inventory + shipment + inbound (TASK-PC-FE-222) client-side filter shapes
+ * (+ their empty defaults), the alert label formatter, and the ASN status →
+ * semantic tone map. No hooks, no JSX.
  */
 
 export interface InvFilterState {
@@ -42,4 +44,54 @@ export const EMPTY_SHIP_FILTERS: ShipFilterState = {
 
 export function alertLabel(a: AlertRow): string {
   return a.alertType ? `${a.alertType} (${a.alertId})` : a.alertId;
+}
+
+// --- 입고 / ASN (TASK-PC-FE-222) ------------------------------------------
+
+export interface InboundFilterState {
+  status: string;
+  warehouseId: string;
+  supplierPartnerId: string;
+  expectedArriveDateFrom: string;
+  expectedArriveDateTo: string;
+}
+
+export const EMPTY_INBOUND_FILTERS: InboundFilterState = {
+  status: '',
+  warehouseId: '',
+  supplierPartnerId: '',
+  expectedArriveDateFrom: '',
+  expectedArriveDateTo: '',
+};
+
+/** ASN status vocabulary (wms-platform `inbound-service` asn-status.md). */
+export const ASN_STATUS_FILTER_OPTIONS = [
+  '',
+  'CREATED',
+  'INSPECTING',
+  'INSPECTED',
+  'IN_PUTAWAY',
+  'PUTAWAY_DONE',
+  'CLOSED',
+  'CANCELLED',
+] as const;
+
+/**
+ * Maps an ASN status to a shared semantic {@link StatusTone} (rendered via
+ * `<StatusBadge>`, TASK-PC-FE-158). Unknown / absent / future status →
+ * `neutral`, so the console never crashes on a producer enum it does not
+ * know (TOLERANCE invariant, mirrors `outboundStatusTone`).
+ */
+const ASN_STATUS_TONE: Record<string, StatusTone> = {
+  CREATED: 'warning',
+  INSPECTING: 'progress',
+  INSPECTED: 'progress',
+  IN_PUTAWAY: 'progress',
+  PUTAWAY_DONE: 'progress',
+  CLOSED: 'success',
+  CANCELLED: 'danger',
+};
+
+export function asnStatusTone(status: string | undefined): StatusTone {
+  return status ? (ASN_STATUS_TONE[status] ?? 'neutral') : 'neutral';
 }

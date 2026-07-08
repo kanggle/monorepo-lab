@@ -112,25 +112,38 @@ const GROUPS: NavGroup[] = [
           // 가이드(/wms/guide — TASK-PC-FE-183): 재고·출고 개념 정적 참조.
           // IAM 의 개요→가이드 순서와 동일하게 개요 다음(재고 앞)에 둔다.
           { href: '/wms/guide', label: '가이드', testid: 'nav-wms-guide' },
+          // 입고(/wms/inbound — TASK-PC-FE-222): ASN(입고예정) + 검수 조회
+          // 전용 화면. 물류 흐름(입고→재고→출고)을 그대로 반영해 가이드와
+          // 재고 사이에 둔다 — 출고(/wms/outbound)와 대칭인 입고 진입점.
+          { href: '/wms/inbound', label: '입고', testid: 'nav-wms-inbound' },
           {
             href: '/wms/inventory',
             label: '재고',
             testid: 'nav-wms-inventory',
           },
           { href: '/wms/outbound', label: '출고', testid: 'nav-wms-outbound' },
+          // 마스터(/wms/master — TASK-PC-FE-223): 창고/구역/로케이션/SKU/Lot/
+          // 거래처 참조 데이터 read-only 조회. 참조/설정 성격이라 물류 흐름
+          // (입고→재고→출고) 뒤, 맨 마지막에 둔다.
+          { href: '/wms/master', label: '마스터', testid: 'nav-wms-master' },
         ],
       },
       {
         // SCM is a drill-in parent (same model as WMS): 개요(/scm — the
-        // FE-008 read section) + 가이드(/scm/guide — TASK-PC-FE-188, static
-        // 도메인 서비스·발주·재고 가시성·보충·설정 reference, placed 개요 다음
-        // per IAM/WMS/E-Commerce's 개요 → 가이드 order) + 보충
-        // (/scm/replenishment — the FE-077 replenishment operator gate) + 설정
-        // (/scm/config — the FE-080 seed/config operator surface: per-SKU
-        // reorder-policy + sku-supplier-map upsert, the operational fix-path
-        // for the 보충 SKU_SUPPLIER_UNMAPPED gap). The /scm destination lives
-        // on the 개요 child (nav-scm-ops); nav-scm is the pinned parent
-        // back-toggle.
+        // overview snapshot band only, PC-FE-167/220) + 가이드(/scm/guide —
+        // TASK-PC-FE-188 static reference, placed 개요 다음 per
+        // IAM/WMS/E-Commerce's 개요 → 가이드 order) + 조달(/scm/procurement —
+        // the read-only PO list split out of 개요, PC-FE-220) + 재고
+        // (/scm/inventory — the read-only inventory-visibility snapshot/SKU/
+        // staleness split out of 개요, PC-FE-220) + 보충 계획(/scm/replenishment
+        // — the FE-077 replenishment operator gate) + 보충 계획 설정(/scm/config
+        // — the FE-080 seed/config operator surface: per-SKU reorder-policy +
+        // sku-supplier-map upsert, the operational fix-path for the 보충
+        // SKU_SUPPLIER_UNMAPPED gap). TASK-PC-FE-220 split 개요's combined
+        // procurement + inventory tables into their own 조달/재고 routes and
+        // renamed 보충/설정 → 보충 계획/보충 계획 설정 (href + testid unchanged).
+        // The /scm destination lives on the 개요 child (nav-scm-ops); nav-scm
+        // is the pinned parent back-toggle.
         key: 'scm',
         label: 'SCM',
         testid: 'nav-scm',
@@ -138,11 +151,25 @@ const GROUPS: NavGroup[] = [
           { href: '/scm', label: '개요', testid: 'nav-scm-ops' },
           { href: '/scm/guide', label: '가이드', testid: 'nav-scm-guide' },
           {
+            href: '/scm/procurement',
+            label: '조달',
+            testid: 'nav-scm-procurement',
+          },
+          {
+            href: '/scm/inventory',
+            label: '재고',
+            testid: 'nav-scm-inventory',
+          },
+          {
             href: '/scm/replenishment',
-            label: '보충',
+            label: '보충 계획',
             testid: 'nav-scm-replenishment',
           },
-          { href: '/scm/config', label: '설정', testid: 'nav-scm-config' },
+          {
+            href: '/scm/config',
+            label: '보충 계획 설정',
+            testid: 'nav-scm-config',
+          },
         ],
       },
       {

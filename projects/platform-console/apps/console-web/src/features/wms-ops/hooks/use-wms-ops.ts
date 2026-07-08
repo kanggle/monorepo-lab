@@ -20,8 +20,17 @@ import {
   ShipmentPageSchema,
   type ShipmentPage,
   type ShipmentQueryParams,
+  AsnPageSchema,
+  type AsnPage,
+  type AsnQueryParams,
+  InspectionSchema,
+  type Inspection,
   AckResultSchema,
   type AckResult,
+  RefPageSchema,
+  type RefPage,
+  type RefQueryParams,
+  type RefType,
   WMS_DEFAULT_PAGE_SIZE,
   WMS_MAX_PAGE_SIZE,
 } from '../api/types';
@@ -267,6 +276,158 @@ export function useWmsShipments(
     // Seeded page-0 ⇒ fresh; a filter/page change is a new queryKey → one
     // fresh proxy call. NO refetch interval / window-focus — the read-model
     // lag is surfaced, not polled-around (§ 2.4.5).
+    staleTime: seeded ? 30_000 : 0,
+    refetchOnMount: seeded ? false : true,
+    ...READ_QUERY_REFETCH,
+  });
+}
+
+// --- asns read (TASK-PC-FE-222, 입고/ASN) ---------------------------------
+
+export function asnsKey(params: AsnQueryParams) {
+  return [
+    WMS_KEY,
+    'asns',
+    params.warehouseId ?? null,
+    params.supplierPartnerId ?? null,
+    params.status ?? null,
+    params.expectedArriveDateFrom ?? null,
+    params.expectedArriveDateTo ?? null,
+    Math.max(0, params.page ?? 0),
+    clampSize(params.size),
+  ] as const;
+}
+
+export function buildAsnsQs(params: AsnQueryParams): string {
+  const qs = new URLSearchParams();
+  if (params.warehouseId) qs.set('warehouseId', params.warehouseId);
+  if (params.supplierPartnerId) {
+    qs.set('supplierPartnerId', params.supplierPartnerId);
+  }
+  if (params.status) qs.set('status', params.status);
+  if (params.expectedArriveDateFrom) {
+    qs.set('expectedArriveDateFrom', params.expectedArriveDateFrom);
+  }
+  if (params.expectedArriveDateTo) {
+    qs.set('expectedArriveDateTo', params.expectedArriveDateTo);
+  }
+  qs.set('page', String(Math.max(0, params.page ?? 0)));
+  qs.set('size', String(clampSize(params.size)));
+  return qs.toString();
+}
+
+async function fetchAsns(params: AsnQueryParams): Promise<AsnPage> {
+  const raw = await apiClient.get<unknown>(
+    `/api/wms/inbound/asns?${buildAsnsQs(params)}`,
+  );
+  return AsnPageSchema.parse(raw);
+}
+
+export function useWmsAsns(params: AsnQueryParams, initial?: AsnPage) {
+  const seeded =
+    initial !== undefined &&
+    (params.page ?? 0) === 0 &&
+    !params.warehouseId &&
+    !params.supplierPartnerId &&
+    !params.status &&
+    !params.expectedArriveDateFrom &&
+    !params.expectedArriveDateTo;
+  return useQuery({
+    queryKey: asnsKey(params),
+    queryFn: () => fetchAsns(params),
+    initialData: seeded ? initial : undefined,
+    // Seeded page-0 ⇒ fresh; a filter/page change is a new queryKey → one
+    // fresh proxy call. NO refetch interval / window-focus — the read-model
+    // lag is surfaced, not polled-around (§ 2.4.5).
+    staleTime: seeded ? 30_000 : 0,
+    refetchOnMount: seeded ? false : true,
+    ...READ_QUERY_REFETCH,
+  });
+}
+
+// --- asn inspection detail read (TASK-PC-FE-222) --------------------------
+
+export function asnInspectionKey(asnId: string | null) {
+  return [WMS_KEY, 'asn-inspection', asnId] as const;
+}
+
+async function fetchAsnInspection(asnId: string): Promise<Inspection> {
+  const raw = await apiClient.get<unknown>(
+    `/api/wms/inbound/asns/${encodeURIComponent(asnId)}/inspection`,
+  );
+  return InspectionSchema.parse(raw);
+}
+
+/**
+ * TASK-PC-FE-222 — the `/wms/inbound` row "검수" panel. `enabled`-gated on a
+ * selected ASN id (`null` ⇒ no fetch). A `404` (no inspection projected yet)
+ * surfaces as an `ApiError(404, …)` on `.error` — the screen distinguishes it
+ * from a degrade and renders "검수 내역 없음" (no retry storm — `retry: false`
+ * matches `useWmsInventoryByKey`).
+ */
+export function useWmsAsnInspection(asnId: string | null) {
+  return useQuery({
+    queryKey: asnInspectionKey(asnId),
+    queryFn: () => fetchAsnInspection(asnId as string),
+    enabled: asnId !== null,
+    retry: false,
+  });
+}
+
+// --- master refs read (TASK-PC-FE-223, 마스터) -----------------------------
+
+export function refsKey(type: RefType, params: RefQueryParams) {
+  return [
+    WMS_KEY,
+    'refs',
+    type,
+    params.q ?? null,
+    params.status ?? null,
+    Math.max(0, params.page ?? 0),
+    clampSize(params.size),
+  ] as const;
+}
+
+export function buildRefsQs(params: RefQueryParams): string {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set('q', params.q);
+  if (params.status) qs.set('status', params.status);
+  qs.set('page', String(Math.max(0, params.page ?? 0)));
+  qs.set('size', String(clampSize(params.size)));
+  return qs.toString();
+}
+
+async function fetchRefs(
+  type: RefType,
+  params: RefQueryParams,
+): Promise<RefPage> {
+  const raw = await apiClient.get<unknown>(
+    `/api/wms/master/refs/${encodeURIComponent(type)}?${buildRefsQs(params)}`,
+  );
+  return RefPageSchema.parse(raw);
+}
+
+/**
+ * TASK-PC-FE-223 — the `/wms/master` screen. `initial` is seeded ONLY for
+ * the default tab's page-0/no-filter query (mirrors `useWmsAsns`); a tab
+ * switch or a filter/page change is a new `queryKey` → one fresh proxy call.
+ * NO refetch interval / window-focus — the read-model lag is surfaced, not
+ * polled-around (§ 2.4.5).
+ */
+export function useWmsRefs(
+  type: RefType,
+  params: RefQueryParams,
+  initial?: RefPage,
+) {
+  const seeded =
+    initial !== undefined &&
+    (params.page ?? 0) === 0 &&
+    !params.q &&
+    !params.status;
+  return useQuery({
+    queryKey: refsKey(type, params),
+    queryFn: () => fetchRefs(type, params),
+    initialData: seeded ? initial : undefined,
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
     ...READ_QUERY_REFETCH,
