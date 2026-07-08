@@ -4,6 +4,7 @@ import {
   type ShipmentQueryParams,
   AsnPageSchema,
   type AsnPage,
+  type AsnQueryParams,
   InspectionSchema,
   type Inspection,
   AdjustmentPageSchema,
@@ -35,11 +36,20 @@ export function listShipments(
 // ---------------------------------------------------------------------------
 
 export function listAsns(
-  params: { warehouseId?: string; status?: string; page?: number; size?: number } = {},
+  params: AsnQueryParams = {},
 ): Promise<WmsResult<AsnPage>> {
   const qs = new URLSearchParams();
   if (params.warehouseId) qs.set('warehouseId', params.warehouseId);
+  if (params.supplierPartnerId) {
+    qs.set('supplierPartnerId', params.supplierPartnerId);
+  }
   if (params.status) qs.set('status', params.status);
+  if (params.expectedArriveDateFrom) {
+    qs.set('expectedArriveDateFrom', params.expectedArriveDateFrom);
+  }
+  if (params.expectedArriveDateTo) {
+    qs.set('expectedArriveDateTo', params.expectedArriveDateTo);
+  }
   pageParams(qs, params.page, params.size);
   return callWmsAdmin(
     { method: 'GET', path: `/dashboard/asns?${qs.toString()}` },

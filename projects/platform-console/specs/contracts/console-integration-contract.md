@@ -253,6 +253,27 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   the **recent-shipments glance**. Consumed read-only; no producer contract
   change.
 
+  **Console-side routing note (TASK-PC-FE-222, non-normative — no producer
+  change)**: operations #6 (asns, `GET /dashboard/asns`) and #7 (asn
+  inspection, `GET /dashboard/asns/{asnId}/inspection`) — the console's
+  `features/wms-ops` client (`wms-shipments-api.ts`) had exported these two
+  read functions since their addition alongside op #5 (TASK-PC-FE-146 split)
+  but with **zero consumers** — are surfaced on a **new dedicated
+  `/wms/inbound`** surface (WMS 입고, nav `WMS ▸ 입고`, between 가이드 and
+  재고 — the physical inbound→inventory→outbound flow). This closes the wms
+  domain's largest UI asymmetry: 출고 (op-set §2.4.5.1) had a dedicated
+  screen, 입고 had none. The `/wms/inbound` screen renders op #6 as a
+  filtered/paginated ASN table (filters: `status`, `warehouseId`,
+  `supplierPartnerId`, `expectedArriveDateFrom/To` — all already defined by
+  op #6's producer query-param contract) and op #7 as a per-row "검수" inline
+  detail panel (mirrors the `/wms/inventory` composite-key "상세" pattern —
+  no single `[id]` route). Op #7's `404` (no `inbound.inspection.completed`
+  projected yet for that ASN) is rendered as a distinguishing "검수 내역
+  없음" state, **not** a degrade. **Explicitly out of this surface's scope**
+  (raw `inbound-service` write ops, not on the admin read-model this section
+  consumes): putaway instruct/confirm, ASN creation, inspection confirmation
+  — read-only. Consumed read-only; no producer contract change.
+
 - **Per-domain credential selection (the key correctness element — normative)**:
   **each § 2.4.x binding declares which credential it uses, and an
   implementer MUST NOT blanket-apply one domain's auth model to another.**
