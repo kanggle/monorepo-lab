@@ -8,7 +8,7 @@ inbound-service 통합 테스트 스위트 복구 + CI 배선 (dormant PutawayLi
 
 # Status
 
-ready
+review
 
 # Owner
 
