@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { labelForUnknown } from '@/shared/lib/tolerant-label';
 import {
   KNOWN_PERIOD_STATUSES,
   periodStatusTone,
@@ -28,15 +29,6 @@ export interface PeriodsTableProps {
   initial: PeriodsResponse;
   selectedPeriodId: string | null;
   onSelect: (periodId: string) => void;
-}
-
-function labelForUnknown<T extends string>(
-  value: string,
-  known: readonly T[],
-): string {
-  return (known as readonly string[]).includes(value)
-    ? value
-    : `${value} (unknown)`;
 }
 
 export function PeriodsTable({

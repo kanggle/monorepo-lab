@@ -8,6 +8,7 @@ import {
 } from '../api/types';
 import { usePeriod } from '../hooks/use-ledger-ops';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { labelForUnknown } from '@/shared/lib/tolerant-label';
 
 /**
  * Accounting period detail (TASK-PC-FE-072 — § 2.4.7.1 / `ledger-api.md`
@@ -27,12 +28,6 @@ export interface PeriodDetailProps {
   /** Optional server-seeded period (when the detail was fetched
    *  server-side); otherwise the hook fetches via the proxy. */
   initial?: Period | null;
-}
-
-function labelForUnknown(value: string): string {
-  return (KNOWN_PERIOD_STATUSES as readonly string[]).includes(value)
-    ? value
-    : `${value} (unknown)`;
 }
 
 export function PeriodDetail({ periodId, initial }: PeriodDetailProps) {
@@ -85,7 +80,7 @@ export function PeriodDetail({ periodId, initial }: PeriodDetailProps) {
             data-testid="ledger-period-detail-status"
           >
             <StatusBadge tone={periodStatusTone(period.status)}>
-              {labelForUnknown(period.status)}
+              {labelForUnknown(period.status, KNOWN_PERIOD_STATUSES)}
             </StatusBadge>
           </dd>
         </div>

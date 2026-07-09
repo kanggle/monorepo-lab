@@ -3,6 +3,7 @@
 import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { labelForUnknown } from '@/shared/lib/tolerant-label';
 import {
   formatMoney,
   KNOWN_TXN_STATUSES,
@@ -46,15 +47,6 @@ interface FilterState {
   status: string;
 }
 const EMPTY_FILTERS: FilterState = { type: '', status: '' };
-
-function labelForUnknown<T extends string>(
-  value: string,
-  known: readonly T[],
-): string {
-  return (known as readonly string[]).includes(value)
-    ? value
-    : `${value} (unknown)`;
-}
 
 export function TransactionsTable({
   accountId,

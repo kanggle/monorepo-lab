@@ -5,6 +5,7 @@ import {
   type JournalEntry,
   type JournalLine,
 } from '../api/types';
+import { labelForUnknown } from '@/shared/lib/tolerant-label';
 
 /**
  * Journal entry detail (TASK-PC-FE-072 — § 2.4.7.1 / `ledger-api.md` § 1).
@@ -33,18 +34,6 @@ export interface JournalEntryDetailProps {
   entry: JournalEntry;
 }
 
-function sourceTypeLabel(sourceType: string): string {
-  return (KNOWN_SOURCE_TYPES as readonly string[]).includes(sourceType)
-    ? sourceType
-    : `${sourceType} (unknown)`;
-}
-
-function directionLabel(direction: string): string {
-  return (KNOWN_DIRECTIONS as readonly string[]).includes(direction)
-    ? direction
-    : `${direction} (unknown)`;
-}
-
 /** A revaluation provenance line has a zero transaction-currency amount
  *  (the foreign leg is 0) with a non-zero base KRW amount. Pure string
  *  comparison — NO Number coercion of the amount. */
@@ -70,7 +59,7 @@ export function JournalEntryDetail({ entry }: JournalEntryDetailProps) {
           data-testid="ledger-entry-source"
           className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
         >
-          {sourceTypeLabel(entry.source.sourceType)}
+          {labelForUnknown(entry.source.sourceType, KNOWN_SOURCE_TYPES)}
         </span>
         <span
           data-testid="ledger-entry-balanced"
@@ -150,7 +139,7 @@ export function JournalEntryDetail({ entry }: JournalEntryDetailProps) {
                   className="p-2"
                   data-testid={`ledger-line-direction-${i}`}
                 >
-                  {directionLabel(line.direction)}
+                  {labelForUnknown(line.direction, KNOWN_DIRECTIONS)}
                 </td>
                 <td className="p-2" data-testid={`ledger-line-money-${i}`}>
                   {formatMoney(line.money)}
