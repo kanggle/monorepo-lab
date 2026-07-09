@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
@@ -377,8 +378,15 @@ public class AuthorizationServerConfig {
      * <p>TASK-MONO-046-1 (Cluster B): without this bean SAS's
      * {@code oauth2ResourceServer().jwt()} configurer cannot resolve a decoder and
      * the userinfo filter chain rejects every bearer token with 403.
+     *
+     * <p>TASK-BE-487: {@code @Primary} because SecurityConfig now also defines a second
+     * {@code JwtDecoder} ({@code internalJwtDecoder}) for the {@code /internal/auth/**} chain. This
+     * one remains the default for every existing unqualified injection (this factory method's own
+     * {@code jwtDecoder} parameter, the SAS userinfo {@code oauth2ResourceServer} configurer, and the
+     * assume-tenant provider); the internal chain injects its decoder by explicit {@code @Qualifier}.
      */
     @Bean
+    @Primary
     public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
         return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
     }

@@ -63,6 +63,10 @@ class SignupAuthServiceDelayIntegrationTest extends AbstractIntegrationTest {
         // Use 15s read-timeout (the new default) — 4s delay stub must fit within this window
         registry.add("account.auth-service.connect-timeout-ms", () -> "3000");
         registry.add("account.auth-service.read-timeout-ms", () -> "15000");
+        // TASK-BE-487: AuthServiceClient mints a GAP client_credentials token before the credential
+        // call — point the token endpoint at the same WireMock (stubbed in resetWireMock).
+        registry.add("iam.internal-client.token-uri",
+                () -> "http://localhost:" + wireMock.port() + "/oauth2/token");
     }
 
     @BeforeAll
@@ -97,6 +101,12 @@ class SignupAuthServiceDelayIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void resetWireMock() {
         wireMock.resetAll();
+        // TASK-BE-487: token fetch must succeed so the credential-delay behaviour is the one under test.
+        wireMock.stubFor(WireMock.post(urlPathEqualTo("/oauth2/token"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"access_token\":\"test-cc-token\",\"expires_in\":300,\"token_type\":\"Bearer\"}")));
     }
 
     @Test

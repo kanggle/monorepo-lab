@@ -12,11 +12,15 @@ import org.junit.jupiter.api.Test;
 import java.util.Optional;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @DisplayName("AuthServiceClient 단위 테스트")
 class AuthServiceClientUnitTest {
@@ -30,8 +34,11 @@ class AuthServiceClientUnitTest {
     void setUp() {
         wireMockServer = new WireMockServer(wireMockConfig().dynamicPort());
         wireMockServer.start();
+        // TASK-BE-487: token provider mocked — returns a fixed bearer for the header assertion.
+        IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
+        when(tokenProvider.currentBearer()).thenReturn("test-jwt");
         // AuthServiceClient constructor explicitly sets HTTP/1.1 — no H2C fix needed.
-        client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000, "");
+        client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
     }
 
     @AfterEach
@@ -53,6 +60,22 @@ class AuthServiceClientUnitTest {
 
         assertThat(response.accountId()).isEqualTo("acc-1");
         assertThat(response.revokedTokenCount()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-487: 호출에 Authorization: Bearer 헤더를 첨부하고 X-Internal-Token 은 보내지 않는다")
+    void forceLogout_attachesBearerHeader_noXInternalToken() {
+        wireMockServer.stubFor(post(urlPathMatching("/internal/auth/accounts/.*/force-logout"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"revokedTokenCount\":0,\"revokedAt\":null}")));
+
+        client.forceLogout("acc-1", "op-1", "ADMIN_LOCK", "idemp-key-1", "fan-platform");
+
+        wireMockServer.verify(postRequestedFor(urlPathMatching("/internal/auth/accounts/.*/force-logout"))
+                .withHeader("Authorization", equalTo("Bearer test-jwt"))
+                .withoutHeader("X-Internal-Token"));
     }
 
     @Test

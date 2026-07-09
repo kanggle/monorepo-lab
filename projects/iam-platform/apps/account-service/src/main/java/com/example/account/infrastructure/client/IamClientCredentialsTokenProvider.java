@@ -1,4 +1,4 @@
-package com.example.admin.infrastructure.client;
+package com.example.account.infrastructure.client;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -14,21 +14,20 @@ import java.util.Base64;
 
 /**
  * Obtains and caches a GAP {@code client_credentials} access token (JWT) for authenticating
- * admin-service's outbound {@code /internal/**} calls with {@code Authorization: Bearer}
- * (TASK-BE-318b, ADR-005 단계 3b). Used by {@code AccountServiceClient},
- * {@code AccountServiceTenantClient} (→ account), {@code SecurityServiceClient} (→ security) and —
- * since TASK-BE-487 (ADR-005 단계 4) — {@code AuthServiceClient} (→ auth), now that auth-service's
- * {@code /internal/auth/**} receiver requires a GAP client_credentials JWT (its {@code permitAll} and
- * the static {@code X-Internal-Token} path were removed).
+ * account-service's outbound {@code /internal/auth/**} calls with {@code Authorization: Bearer}
+ * (TASK-BE-487, ADR-005 단계 4). Used by {@link AuthServiceClient} to authenticate credential
+ * create / identity-backfill requests into auth-service, which flipped its {@code /internal/auth/**}
+ * receiver from {@code permitAll()} to a JWT requirement in the same change.
  *
- * <p>Hand-rolled rather than {@code spring-boot-starter-oauth2-client} on purpose: that starter
- * pulls in {@code spring-security-web} client autoconfiguration; admin-service already runs its own
- * Spring Security chain, so to avoid perturbing it (and to keep parity with the security-service
- * blueprint, TASK-BE-318) this provider uses only a plain {@link RestClient} + Jackson — no new
- * dependency, no new autoconfiguration.
+ * <p>Hand-rolled rather than {@code spring-boot-starter-oauth2-client} on purpose: that starter pulls
+ * in OAuth2 client autoconfiguration that would perturb account-service's own Spring Security chain
+ * (which already runs an {@code oauth2ResourceServer} for its inbound {@code /internal/**}). This
+ * provider uses only a plain {@link RestClient} + Jackson — no new dependency, no new
+ * autoconfiguration (parity with the admin-service / auth-service blueprints, TASK-BE-318).
  *
  * <p>The token is cached and reused until {@code REFRESH_SKEW} before expiry, then re-fetched. Token
- * acquisition is lazy (first call), so application startup is not coupled to GAP availability.
+ * acquisition is lazy (first outbound auth call), so application startup is not coupled to GAP
+ * availability.
  */
 @Slf4j
 @Component
@@ -45,7 +44,7 @@ public class IamClientCredentialsTokenProvider {
 
     public IamClientCredentialsTokenProvider(
             @Value("${iam.internal-client.token-uri:http://localhost:8081/oauth2/token}") String tokenUri,
-            @Value("${iam.internal-client.client-id:admin-service-client}") String clientId,
+            @Value("${iam.internal-client.client-id:account-service-client}") String clientId,
             @Value("${iam.internal-client.client-secret:secret}") String clientSecret) {
         this.tokenUri = tokenUri;
         this.basicAuthHeader = "Basic " + Base64.getEncoder()

@@ -148,7 +148,6 @@ admin:
   downstream:
     connect-timeout-ms: ${DOWNSTREAM_CONNECT_TIMEOUT:3000}
     read-timeout-ms: ${DOWNSTREAM_READ_TIMEOUT:10000}
-    internal-token: ${INTERNAL_API_TOKEN:}
   auth-service:
     base-url: ${AUTH_SERVICE_URL:http://localhost:8081}
   account-service:
@@ -156,13 +155,13 @@ admin:
   security-service:
     base-url: ${SECURITY_SERVICE_URL:http://localhost:8084}
 
-# TASK-BE-318b (ADR-005 단계 3b): outbound /internal/** calls to account-service
-# (AccountServiceClient, AccountServiceTenantClient) and security-service
-# (SecurityServiceClient) authenticate with a GAP client_credentials Bearer JWT
-# (replaces the legacy X-Internal-Token; receivers dual-allow per BE-317). The
-# token is fetched from GAP /oauth2/token and cached by IamClientCredentialsTokenProvider.
-# admin → auth (AuthServiceClient) intentionally keeps X-Internal-Token (auth
-# receiver still permitAll) — admin.downstream.internal-token above is retained for it.
+# TASK-BE-318b (ADR-005 단계 3b) + TASK-BE-487 (단계 4): all outbound /internal/** calls —
+# account-service (AccountServiceClient, AccountServiceTenantClient), security-service
+# (SecurityServiceClient) and now auth-service (AuthServiceClient) — authenticate with a GAP
+# client_credentials Bearer JWT fetched from GAP /oauth2/token and cached by
+# IamClientCredentialsTokenProvider (client_id admin-service-client). The legacy static
+# X-Internal-Token is fully retired for admin (BE-487 closed the last auth-service receiver that
+# had stayed permitAll), so admin.downstream.internal-token is removed.
 
 # TASK-BE-327 (ADR-MONO-020 D2) / TASK-MONO-159 — INBOUND /internal/** chain
 # (GET /internal/operator-assignments/check, @Order(0) SecurityFilterChain).

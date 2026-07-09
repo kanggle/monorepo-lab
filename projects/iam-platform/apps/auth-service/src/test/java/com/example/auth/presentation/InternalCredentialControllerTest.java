@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,8 +32,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+// TASK-BE-487: /internal/auth/** is now JWT-only (fail-closed). These slice tests exercise the
+// controller behaviour, not the auth gate, so the dev/test bypass is enabled to reach the handler
+// without minting a real GAP client_credentials JWT (the fail-closed 401 path is covered by
+// InternalCredentialAuthSliceTest).
 @WebMvcTest(InternalCredentialController.class)
 @Import({SecurityConfig.class, AuthExceptionHandler.class})
+@TestPropertySource(properties = "internal.api.bypass-when-unconfigured=true")
 @DisplayName("InternalCredentialController slice tests")
 class InternalCredentialControllerTest {
 

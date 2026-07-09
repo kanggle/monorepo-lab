@@ -99,3 +99,14 @@ internal:
     jwt:
       jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
       issuer: ${OIDC_ISSUER_URL:http://localhost:8081}
+
+# TASK-BE-487 (ADR-005 단계 4): outbound /internal/auth/** calls (credential create / identity
+# backfill → auth-service) authenticate with a GAP client_credentials Bearer JWT (was unauthenticated).
+# The token is minted at auth-service's /oauth2/token with client_id=account-service-client (seeded in
+# auth V0019) and cached by IamClientCredentialsTokenProvider — lazy (first outbound auth call) so
+# startup never depends on auth-service being ready. Receiver (auth /internal/auth/**) now requires it.
+iam:
+  internal-client:
+    token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
+    client-id: ${ACCOUNT_SERVICE_CLIENT_ID:account-service-client}
+    client-secret: ${ACCOUNT_SERVICE_CLIENT_SECRET:secret}

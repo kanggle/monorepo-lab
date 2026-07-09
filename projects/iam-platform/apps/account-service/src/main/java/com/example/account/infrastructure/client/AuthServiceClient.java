@@ -45,11 +45,16 @@ public class AuthServiceClient implements AuthServicePort {
     private final RestClient restClient;
     private final CircuitBreaker circuitBreaker;
     private final Retry retry;
+    // TASK-BE-487 (ADR-005 단계 4): auth-service /internal/auth/** now requires a GAP
+    // client_credentials Bearer JWT (was permitAll). This mints/caches that token (client_id
+    // account-service-client).
+    private final IamClientCredentialsTokenProvider tokenProvider;
 
     public AuthServiceClient(
             @Value("${account.auth-service.base-url:http://localhost:8081}") String baseUrl,
             @Value("${account.auth-service.connect-timeout-ms:3000}") int connectTimeoutMs,
-            @Value("${account.auth-service.read-timeout-ms:15000}") int readTimeoutMs) {
+            @Value("${account.auth-service.read-timeout-ms:15000}") int readTimeoutMs,
+            IamClientCredentialsTokenProvider tokenProvider) {
         // Force HTTP/1.1: the JDK HttpClient defaults to HTTP/2 negotiation which
         // causes RST_STREAM failures against WireMock (integration tests) and adds
         // unnecessary upgrade round-trips for cleartext internal traffic.
@@ -65,6 +70,7 @@ public class AuthServiceClient implements AuthServicePort {
                 .build();
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("authService");
         this.retry = ResilienceClientFactory.buildRetry("authService");
+        this.tokenProvider = tokenProvider;
     }
 
     @Override
@@ -107,6 +113,8 @@ public class AuthServiceClient implements AuthServicePort {
         try {
             BackfillResponse response = restClient.post()
                     .uri(CREDENTIAL_IDENTITY_BACKFILL_PATH)
+                    // TASK-BE-487: GAP client_credentials Bearer JWT (auth /internal/auth/** is JWT-only).
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
@@ -152,6 +160,8 @@ public class AuthServiceClient implements AuthServicePort {
         }
         restClient.post()
                 .uri(CREDENTIALS_PATH)
+                // TASK-BE-487: GAP client_credentials Bearer JWT (auth /internal/auth/** is JWT-only).
+                .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body)
                 .retrieve()

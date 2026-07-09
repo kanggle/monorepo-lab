@@ -4,7 +4,7 @@ admin-service가 운영자 명령으로 auth-service에 강제 로그아웃 / re
 
 **호출 방향**: admin-service (client) → auth-service (server)
 **노출 경로**: `/internal/auth/*`
-**인증**: mTLS 또는 내부 서비스 토큰
+**인증** (TASK-BE-487, ADR-005 단계 4): admin-service 는 GAP `client_credentials` Bearer JWT(`admin-service-client`, auth V0019 seed)를 `Authorization: Bearer <token>` 로 첨부한다. auth-service 수신측 `/internal/auth/**` 는 이 JWT 를 self-JWKS·issuer 로 검증하며, 미제시/무효 시 `401 {"code":"UNAUTHORIZED"}` (fail-closed). 레거시 정적 `X-Internal-Token` 은 완전히 폐기됐다(auth 가 검증한 적 없는 dead 헤더).
 
 ---
 
