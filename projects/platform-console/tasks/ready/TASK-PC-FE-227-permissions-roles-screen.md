@@ -8,7 +8,7 @@ TASK-PC-FE-227
 
 # Status
 
-backlog
+ready
 
 # Owner
 
@@ -21,9 +21,9 @@ frontend
 
 ---
 
-# ⚠️ 선행 태스크 — TASK-BE-486
+# ✅ 선행 태스크 충족 — TASK-BE-486 (DONE) + TASK-PC-FE-225 (DONE)
 
-이 태스크는 **`projects/iam-platform/tasks/ready/TASK-BE-486-admin-role-permission-read-api.md`(admin-service role/permission 조회 API) 선행 필수**다. BE-486이 아직 구현·머지되지 않은 상태에서는 `backlog → ready` 이동 금지(move rule: related contracts identified — BE-486이 계약을 확정해야 이 태스크의 Related Contracts가 실제로 식별된 것으로 간주). BE-486 머지 후 계약(`admin-api.md` 신규 절)을 재확인하고 이 태스크를 `ready/`로 이동한다.
+**BE-486 머지 완료**(PR #2331 squash `59070366`, 2026-07-08): `GET /api/admin/roles`(role→permission 키 집합) + `GET /api/admin/permissions`(카탈로그) 라이브. 권한 게이트=`operator.manage`(신규 키 미도입). 계약=`projects/iam-platform/specs/contracts/http/admin-api.md`(두 read 절). **PC-FE-225 머지 완료**(nav 「권한」 스텁 `/permissions` 존재). 두 선행 모두 충족 → `backlog → ready` 이동(2026-07-09).
 
 ---
 

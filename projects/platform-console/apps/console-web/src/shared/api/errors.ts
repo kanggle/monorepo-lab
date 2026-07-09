@@ -189,6 +189,37 @@ export class OperatorsUnavailableError extends Error {
 }
 
 /**
+ * IAM RBAC catalog surface degrade signal (console-integration-contract
+ * § 2.4.3.2 / § 2.5 — TASK-BE-486 producer / TASK-PC-FE-227 「권한」 +
+ * TASK-PC-FE-228 「권한 세트」 consumers). Sibling of
+ * {@link OperatorsUnavailableError} — identical resilience posture for the
+ * READ-ONLY RBAC-catalog slice (`GET /api/admin/roles` +
+ * `GET /api/admin/permissions`, both features share this ONE client —
+ * `shared/api/rbac-catalog.ts`): a `503 DOWNSTREAM_ERROR` / `503 CIRCUIT_OPEN`
+ * / timeout on a catalog call degrades ONLY the 「권한」/「권한 세트」 sections
+ * (the console shell + every other IAM section stay intact). Auth failures
+ * (401) are raised as {@link ApiError} so the caller forces a clean re-login
+ * (no partial authed state). Inline-recoverable producer errors
+ * (`403 PERMISSION_DENIED` — lacks `operator.manage`) are raised as
+ * {@link ApiError} so the UI renders an inline actionable message without
+ * crashing. No token / PII is ever placed in this error.
+ */
+export class RbacUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: RbacUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RbacUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
+/**
  * wms `admin-service` operations surface degrade signal
  * (console-integration-contract § 2.4.5 / § 2.5). Sibling of
  * {@link AccountsUnavailableError} / {@link AuditUnavailableError} /
