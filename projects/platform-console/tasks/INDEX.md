@@ -88,9 +88,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-**ERP 도메인 메뉴 정석 정렬** (2026-07-08, 기능↔메뉴 배치 감사 웨이브의 **마지막 도메인** — ecommerce 221·WMS 222~224·SCM 220·IAM 225·Finance 229에 이은 ERP). ERP는 콘솔 6개 도메인 중 유일하게 `가이드`가 없고 `개요`가 마스터에 임베드(PC-FE-161)돼 루트 `/erp`=마스터. producer 커버리지는 완전(HTTP 4계약 전부 표면 있음)이라 순수 nav 구조 파리티.
-
-- `TASK-PC-FE-232-erp-overview-guide-menu.md` — ERP nav 정석 파리티: `/erp`=개요(마스터 5 count + 결재 대기 + 활성 위임 fan-out; ERP는 목록 GET이 있어 정직한 count 개요 가능) 신설 + `/erp/guide` 정적 가이드 신설 + 마스터 표면 `/erp` → `/erp/masters` 이동. PC-FE-161 임베드 overview를 독립 개요로 승격(폐기 아닌 relocation+확장). Finance PC-FE-229와 동일 구조. 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer). [[project_console_finance_overview_parked]]
+_(직전 완료)_ **ERP 콘솔 메뉴 정석 정렬 완료** (PC-FE-232 DONE, 2026-07-09, PR #2342 squash `63f1fc2bd`). `/erp`=개요(마스터 5 count + 결재 대기 + 활성 위임 7-tile fan-out, per-cell 독립 degrade, `meta.totalElements` 재사용·신규 endpoint 없음)+`/erp/guide` 정적 가이드+마스터 표면 `/erp/masters` 이동. PC-FE-161 임베드 overview 독립 승격. CI green(ecommerce Testcontainers IT 1회 flake→FE-only diff 확인 후 재실행 green)·vitest 2678/2678. **→ 콘솔 6도메인(ecommerce·WMS·SCM·IAM·Finance·ERP) 기능↔메뉴 정렬 웨이브 완결.**
 
 _(직전 완료)_ **Finance 콘솔 메뉴 정석 정렬 완료** (PC-FE-229 DONE, 2026-07-08, PR #2325 squash `63fdd26c8`). `/finance`=개요(원장 browsable 집계+기본계좌 단건, 독립 degrade, 계좌 목록/synthetic ₩ 없음)+`/finance/guide`+계좌 표면 `/finance/accounts` 이동. PC-FE-160(count-overview) supersede. CI 22 GREEN·vitest 2490/2490. **task 파일은 authoring 브랜치 유실분을 done/에 소급 복원**(코드는 이미 #2325 라이브; PC-FE-232와 동반 reconcile PR). ERP PC-FE-232와 동일 구조.
 

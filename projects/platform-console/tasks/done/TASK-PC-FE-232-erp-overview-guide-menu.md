@@ -1,6 +1,6 @@
 # TASK-PC-FE-232 — ERP 도메인 메뉴 정석 정렬: 가이드 신설 + 개요 파리티(`/erp`=개요, 마스터 표면 이동)
 
-**Status:** ready
+**Status:** done
 **Area:** platform-console / console-web · **New routes:** `app/(console)/erp` (개요로 전환) · `app/(console)/erp/guide` · **Moved route:** `app/(console)/erp/page.tsx` (마스터) → `app/(console)/erp/masters/page.tsx` · **Nav:** `ERP ▸ 개요·가이드·마스터·통합 조회·결재함·위임`
 **Analysis model:** Opus 4.8 · **Impl model:** Sonnet (frontend-engineer 위임) — 개요 fan-out은 PC-FE-161 `getErpMastersOverviewState` 카운트 로직 재사용+확장, 가이드는 `scm-guide` 정적 패턴, 마스터 이동은 라우트 relocation (분석=Opus 4.8 / 구현 권장=Sonnet) · **검증:** Opus 재검증.
 **Supersedes(부분):** TASK-PC-FE-161 (erp masters 임베드 overview, done) — 임베드를 독립 `개요`로 승격(아래 §PC-FE-161 임베드 승격). **Pattern:** TASK-PC-FE-229 (Finance 메뉴 정석 정렬 — `/finance`=개요 + 계좌 표면 이동 + 가이드, #2325 merged)와 **동일 구조**. **Compatible:** PC-FE-230(결재함 알림 딥링크, done) · PC-FE-231(erp architecture.md reconcile, done).
