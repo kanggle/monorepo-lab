@@ -61,6 +61,7 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
         // trigger (V5 W2) that rejects row DELETE; TRUNCATE does not fire row triggers.
         jdbc.update("TRUNCATE TABLE inventory_movement");
         jdbc.update("DELETE FROM inventory");
+        jdbc.update("DELETE FROM location_snapshot");
         if (thresholdPort instanceof InMemoryLowStockThresholdAdapter adapter) {
             adapter.clearAll();
         }
@@ -94,6 +95,11 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
         UUID source = UUID.randomUUID();
         UUID target = UUID.randomUUID();
         UUID sku = UUID.randomUUID();
+        // Realistic precondition: both locations are registered in the master
+        // read-model (same warehouse) so TransferStockService.resolveSameWarehouse
+        // can resolve the warehouse; inventory exists only for the source.
+        seedLocationSnapshot(source, warehouse);
+        seedLocationSnapshot(target, warehouse);
         seedInventoryRowAt(warehouse, source, sku, 100);
 
         transferStock.transfer(new TransferStockCommand(
@@ -147,6 +153,16 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
             assertThat(payload.get("availableQty").asInt()).isEqualTo(15);
             assertThat(payload.get("triggeringEventType").asText()).isEqualTo("inventory.adjusted");
         }
+    }
+
+    private void seedLocationSnapshot(UUID locationId, UUID warehouseId) {
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        jdbc.update("""
+                INSERT INTO location_snapshot
+                (id, location_code, warehouse_id, zone_id, location_type, status, cached_at, master_version)
+                VALUES (?, ?, ?, ?, 'BIN', 'ACTIVE', ?, 1)
+                """, locationId, "LOC-" + locationId.toString().substring(0, 8),
+                warehouseId, UUID.randomUUID(), now);
     }
 
     private UUID seedInventoryRow(UUID warehouseId, int qty) {

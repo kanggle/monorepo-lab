@@ -70,7 +70,10 @@ class PutawayLifecycleIntegrationTest extends InboundServiceIntegrationBase {
 
     @AfterEach
     void cleanup() {
-        jdbc.update("DELETE FROM putaway_confirmation");
+        // TRUNCATE, not DELETE: putaway_confirmation and inbound_outbox carry
+        // append-only BEFORE DELETE triggers (V7 W2) that reject row DELETE;
+        // TRUNCATE does not fire row triggers.
+        jdbc.update("TRUNCATE TABLE putaway_confirmation");
         jdbc.update("DELETE FROM putaway_line");
         jdbc.update("DELETE FROM putaway_instruction");
         jdbc.update("DELETE FROM inspection_discrepancy");
@@ -78,7 +81,7 @@ class PutawayLifecycleIntegrationTest extends InboundServiceIntegrationBase {
         jdbc.update("DELETE FROM inspection");
         jdbc.update("DELETE FROM asn_line");
         jdbc.update("DELETE FROM asn");
-        jdbc.update("DELETE FROM inbound_outbox");
+        jdbc.update("TRUNCATE TABLE inbound_outbox");
         jdbc.update("DELETE FROM location_snapshot");
         jdbc.update("DELETE FROM sku_snapshot");
         jdbc.update("DELETE FROM warehouse_snapshot");

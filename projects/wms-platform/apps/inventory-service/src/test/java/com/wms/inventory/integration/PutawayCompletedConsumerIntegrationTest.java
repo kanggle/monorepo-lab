@@ -108,20 +108,44 @@ class PutawayCompletedConsumerIntegrationTest extends InventoryServiceIntegratio
 
         String payload = buildPutawayEvent(eventId, warehouseId, asnId, locationId, skuId, null, 50);
         publish(INBOUND_TOPIC, payload);
+
+        // Wait until the first delivery is fully applied before redelivering, so the
+        // redelivery cannot race the initial application (both would otherwise be in
+        // flight and the dedupe insert-then-flush guard would not yet be committed).
+        await().atMost(45, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    Optional<Inventory> applied = inventoryRepository.findByKey(locationId, skuId, null);
+                    assertThat(applied).isPresent();
+                    assertThat(applied.get().availableQty()).isEqualTo(50);
+                });
+
+        // Redeliver the identical event, then publish a sentinel with a fresh eventId.
+        // All records share the producer key "key" → same partition → strict ordering,
+        // so once the sentinel is applied the redelivery is guaranteed to have been
+        // consumed (and, if dedupe works, skipped).
         publish(INBOUND_TOPIC, payload);
+        UUID sentinelEventId = UUID.randomUUID();
+        UUID sentinelLocationId = UUID.randomUUID();
+        UUID sentinelSkuId = UUID.randomUUID();
+        publish(INBOUND_TOPIC, buildPutawayEvent(sentinelEventId, warehouseId, asnId,
+                sentinelLocationId, sentinelSkuId, null, 10));
 
-        // Wait for the second message to be processed before asserting.
-        await().atMost(45, TimeUnit.SECONDS).until(() -> {
-            Integer count = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM inventory_event_dedupe WHERE event_id = ?",
-                    Integer.class, eventId);
-            return count != null && count == 1;
-        });
+        await().atMost(45, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    Optional<Inventory> sentinel =
+                            inventoryRepository.findByKey(sentinelLocationId, sentinelSkuId, null);
+                    assertThat(sentinel).isPresent();
+                    assertThat(sentinel.get().availableQty()).isEqualTo(10);
+                });
 
+        // The redelivery was skipped by EventDedupe: qty unchanged, single dedupe row.
         Optional<Inventory> row = inventoryRepository.findByKey(locationId, skuId, null);
         assertThat(row).isPresent();
-        // Single application — second attempt was skipped by EventDedupe.
         assertThat(row.get().availableQty()).isEqualTo(50);
+        Integer dedupeCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_event_dedupe WHERE event_id = ?",
+                Integer.class, eventId);
+        assertThat(dedupeCount).isEqualTo(1);
     }
 
     private void publish(String topic, String json) throws Exception {
