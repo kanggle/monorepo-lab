@@ -8,7 +8,7 @@ fed-e2e 로컬 기동의 **완전성 보장** — 손으로 나열한 서비스 
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -154,6 +154,26 @@ N/A — 절차/스크립트, 동작 불변, ADR 없음.
 - [ ] 완전성 단언 양방향 검증(통과 케이스 + 음성 케이스).
 - [ ] 19서비스 running, OTLP 실패 0건.
 - [ ] `tasks/INDEX.md` done entry.
+
+---
+
+# Implementation Result (2026-07-10)
+
+구현 = `scripts/fed-e2e-up.sh` + `scripts/fed-e2e-up.ps1` 신규, `tests/federation-hardening-e2e/README.md` 열거 제거.
+
+**단언이 켜지자마자 `victoriatraces`와 동일 상태의 서비스 2개를 추가 적발**: `finance-account-service` · `erp-masterdata-service` — compose 선언 + 옛 README 목록에도 있었으나 **컨테이너가 아예 없었다**(콘솔 Finance/ERP 도메인이 백엔드 없이 degrade 렌더 중이었음). 빌드 후 기동, 둘 다 healthy. 현재 선언 21/21 running.
+
+**검증**: `bash -n` + PS 파서 통과. 양성=두 스크립트 모두 `all 21 declared services are running` exit 0. **음성=더미 서비스 주입 시 두 스크립트 모두 exit 1 + 이름 지목**(compose 파일 원복 확인). OTLP export 실패 0건(프로듀서 4종). console-web 200.
+
+**계획 외 추가 — `ASSERT_ONLY` / `-AssertOnly`**: 라이브 데모 컨테이너는 gitignore된 로컬 오버레이까지 포함해 생성되므로, base+demo만으로 `up -d` 하면 config 드리프트로 `console-web`·`wms-admin-service`가 **재생성되며 오버레이 설정이 소실**된다. 기동 없이 완전성만 검사하는 모드가 필요했고, 로컬 검증도 이 모드로 수행.
+
+**구현 중 밟은 함정 2종(주석으로 코드에 고정)**:
+- 절대 POSIX 경로를 Windows docker 바이너리에 넘기면 `C:\c\Users\…`로 망가진다 → compose 디렉터리로 `cd` 후 **상대 `-f` 경로**.
+- PowerShell 5.1에서 `try { docker info *> $null } catch`는 네이티브 stderr를 ErrorRecord로 감싸 `$ErrorActionPreference='Stop'`과 만나 **정상 docker를 "not running"으로 오진** → `$LASTEXITCODE` 게이트로 교체.
+
+**미해명(정직 보고)**: 검증 중 `wms-*` 4개 + `ecommerce-kafka`가 `22:06:44Z`에 SIGTERM으로 동시 정지. 격리 실험 결과 두 스크립트는 컨테이너를 변경하지 않음(실행 전후 22개 불변). 원인 미특정. 컨테이너는 복구됨.
+
+**후속**: `TASK-MONO-338`(로그 로테이션, 증폭 차단)은 독립 — 이 task로 원인이 막혔으므로 우선순위 그대로 낮음.
 
 ---
 

@@ -143,7 +143,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 # Task List
 
-- `TASK-MONO-339-fed-e2e-bringup-completeness-guard.md` — **원인 차단 (MONO-338의 짝, 우선)**. `tests/federation-hardening-e2e/README.md`의 **손으로 나열한 서비스 목록(14)**이 compose 선언(19)과 갈라져 있다. 누락 5개 = `victoriatraces` · `scm-inv-postgres` · `scm-inventory-visibility-service` · `wms-admin-postgres` · `wms-admin-service`. `victoriatraces`가 **컨테이너로 생성된 적이 없어** 7개 서비스가 36시간 OTLP export 실패 → 컨테이너 로그 17.1GB(2026-07-10 사고). 해결 = Phase 2 열거 제거(전체 `up -d`) + 기동 후 **완전성 단언**(`compose config --services` ⊄ `ps --services --status running` → 실패). **음성 검증 필수**(더미 서비스 주입 시 비-0 종료 — `comm` 정렬/인자 실수는 통과 케이스로 못 잡음). untracked 오버레이(`.gitignore` 의도적 결정)와 `demo-up.sh` 이관(iam/wms 앱서비스 부재 + 41 JVM 로컬 검증 금지)은 범위 밖. 분석=Opus 4.8 / 구현 권장=Sonnet.
 - `TASK-MONO-338-e2e-compose-log-rotation.md` — **안전망 (우선순위 低, MONO-328/330 뒤)**. tracked e2e compose 3파일(base 19 + demo 6 + replenishment 4 = 29서비스)에 `logging: max-size 50m / max-file 3` 적용. 현재 `logging:` 선언 **0건** = 무제한 JSON 로그 → 2026-07-10 실측 사고(victoriatraces 누락 → OTLP export 실패 스택트레이스 17.1GB, 회수에 `diskpart compact` 전체 사이클 필요). 근본 원인은 해소, 증폭 조건("상한 없음")만 제거하는 작업. **함정**: `LogConfig`는 컨테이너 생성 시 고정 → 파일만 고치고 `docker start`하면 효과 0. `--force-recreate` 후 `docker inspect … LogConfig.Config` ≠ `map[]` 검증이 필수 게이트. daemon.json 경로는 RD가 재생성해 무효(실증). untracked 오버레이(ecommerce 등)는 범위 밖. 분석=Opus 4.8 / 구현 권장=Sonnet.
 - `TASK-MONO-330-extend-composites-nightly-fed.md` — **⏳ DEFERRED 백로그** (버전 bump / nightly 손댈 때 착수). MONO-326/329 composite(java-gradle + node-pnpm)를 nightly-e2e.yml / federation-hardening-e2e.yml의 잔존 셋업 블록으로 확장 → **버전 단일화 완성**(지금 ci.yml만 단일 소스라 nightly/fed가 옛 버전에 멈추는 드리프트 함정). **AC-0**: 트리거(①JDK/Node/pnpm bump 발생 ②nightly/fed 손대는 작업) 미관측 시 STOP. 검증 nightly-gated(PR 미실행). 782 no-cache 변이 처리 결정 포함. 분석=Opus 4.8 / 구현 권장=Sonnet.
 - `TASK-MONO-328-ci-gating-if-hoist.md` — **⏳ DEFERRED 백로그** (신호 관측 전 착수 금지). MONO-326(CI 본문 DRY)의 짝: 게이팅 `if:` OR-블록 ~15복사 → `changes.outputs.run-*` named 플래그로 hoist. **AC-0 verify-then-act**: 착수 트리거(①프로젝트 추가 잦아 `if:` 갱신 누락 발생 ②게이팅 실수로 e2e 누락 회귀) 미관측 시 STOP·보류 유지. 필터 정의 무수정(MONO-074/075 quirk). 페이오프 中·리스크 中(correctness-critical)·통증 신호 無 → 신호 시만. 분석=Opus 4.8 / 구현 권장=Opus.
@@ -154,7 +153,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-339-fed-e2e-bringup-completeness-guard.md` — impl PR #TBD (`feat/mono-339-fed-e2e-bringup-guard`). `scripts/fed-e2e-up.{sh,ps1}` 신규 + README 열거 제거. **단언 도입 즉시 `finance-account-service` · `erp-masterdata-service` 2개를 추가 적발** — `victoriatraces`와 동일하게 선언돼 있으나 컨테이너가 아예 없었음(콘솔 Finance/ERP 도메인이 백엔드 없이 degrade 렌더 중). 기동 후 21/21 running. 검증: 양성(exit 0) + **음성**(더미 주입 → 두 스크립트 모두 exit 1 + 이름 지목) + OTLP 실패 0건 + console 200. 계획 외 추가 = `ASSERT_ONLY`(오버레이로 생성된 라이브 컨테이너를 `up -d` 재생성으로 망가뜨리지 않고 검사). 미해명: 검증 중 `wms-*`+`ecommerce-kafka` 5개가 22:06:44Z SIGTERM 동시 정지 — 스크립트 무관함은 격리 실험으로 확인, 원인 미특정.
 
 ## done
 
