@@ -83,7 +83,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty — 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. 다음 후보=ADR-MONO-046 「운영자 그룹」 로드맵 게이팅.)
+- `TASK-PC-FE-237-adr047-org-hierarchy-console.md` — **ADR-047 § 4 step 3 (선행 `TASK-BE-492` 미머지 → 착수 불가)**. 「조직 계층」 IAM 화면 — org-node 트리 CRUD + **entitlement ceiling 편집기** + `ORG_ADMIN` 배정(no-escalation 게이팅, grantable-roles 컨벤션 재사용) + **테넌트 스위처 org-node 그룹핑**(AWS IdC account-picker parity). **UI 함정 2종을 AC 로 고정**: ① ceiling 은 "부여"가 아니라 **상한**(deny-only) — 문구가 부여로 읽히면 D2-A 의미가 뒤집힘. ② **unbounded(상한 미설정) ≠ `{}`(아무것도 불가)** — 한 컨트롤로 뭉치면 운영자가 회사 전체를 조용히 잠금(fail-closed 라 전 서비스 403). 추가로 **ungrouped(`org_node_id=null`) 테넌트는 스위처에서 절대 숨기지 않는다**(D7 lazy-migration 합법 상태), 그룹은 표시 전용 — 선택 가능한 건 언제나 leaf 테넌트(M1: 토큰은 단일 `tenant_id`). BFF 프록시 라우트 누락 = 프런트-only 404(ecommerce-ops 6대 버그 클래스 ①). 분석=Opus 4.8 / 구현 권장=Sonnet(frontend-engineer).
+
+_(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
 _(직전 완료)_ **IAM 「권한」/「권한 세트」 화면 완료** (PC-FE-227/228 DONE, 2026-07-09, PR #2343 squash `cbdc1a04`). `/permissions`·`/permission-sets` 스텁을 BE-486 RBAC 카탈로그(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`) 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(228=role을 권한 세트로 재프레이밍, 별도 엔드포인트 없음). native `<details>` drill-down·SSR 회복탄력성(operators/audit 매퍼 미러). vitest 2696/2696. **→ BE-486 언블록 소비 완료.**
 
