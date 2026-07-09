@@ -61,45 +61,32 @@ overlays have hit before (`ledger` ↔ `erp-read-model` on `18097`).
 cd projects/platform-console/apps/console-web && pnpm install && pnpm build && cd -
 ```
 
-### Start Phase 1 (GAP stack)
+### Bring the stack up
 
 ```bash
-cd tests/federation-hardening-e2e/docker
-docker compose -f docker-compose.federation-e2e.yml up -d --build \
-  mysql redis kafka auth-service account-service admin-service
+# from repo root
+bash scripts/fed-e2e-up.sh          # POSIX
+.\scripts\fed-e2e-up.ps1            # Windows
+
+BUILD=1 bash scripts/fed-e2e-up.sh  # rebuild images
+NO_SEED=1 bash scripts/fed-e2e-up.sh
 ```
 
-### Wait for admin-service healthy, then apply seed.sql
+The script starts IAM + datastores, applies `seed.sql`, then runs a bare
+`up -d` for everything else the compose files declare, applies the domain
+read-model seeds, and finally **asserts that every declared service has a
+running container** — exiting non-zero and naming the offenders if not.
 
-```bash
-docker compose -f docker-compose.federation-e2e.yml exec -T mysql \
-  mysql -uroot -prootpass < ../fixtures/seed.sql
-```
+Do not hand-enumerate services to `up -d` here. That is how this stack lost
+`victoriatraces`: the old procedure listed 14 of the 19 services the base
+compose declares, so seven services exported OTLP spans to a host that never
+existed and wrote 17.1GB of stack traces to their container logs before anyone
+noticed (TASK-MONO-339). Adding a service to the compose file is now the only
+step needed for it to be part of the stack.
 
-### Start Phase 2 (producers + console)
-
-```bash
-docker compose -f docker-compose.federation-e2e.yml up -d --build \
-  wms-postgres scm-postgres \
-  wms-master-service scm-procurement-service finance-account-service erp-masterdata-service \
-  console-bff console-web
-```
-
-### Apply domain seeds (after all producers healthy)
-
-```bash
-# MySQL domains (finance + erp)
-docker compose -f docker-compose.federation-e2e.yml exec -T mysql \
-  mysql -uroot -prootpass < ../fixtures/seed-domains.sql
-
-# WMS (PostgreSQL)
-docker compose -f docker-compose.federation-e2e.yml exec -T wms-postgres \
-  psql -U master -d master_db < ../fixtures/seed-wms.sql
-
-# SCM (PostgreSQL)
-docker compose -f docker-compose.federation-e2e.yml exec -T scm-postgres \
-  psql -U scm -d scm_procurement < ../fixtures/seed-scm.sql
-```
+Note the script passes `-p federation-hardening-e2e`. The compose files carry no
+top-level `name:`, so a bare `docker compose -f …` run from `docker/` would take
+its project name from the directory and build a second, parallel stack.
 
 ### Run Playwright suite
 
@@ -115,7 +102,9 @@ CONSOLE_BASE_URL=http://localhost:3000 pnpm exec playwright test --project=chrom
 
 ```bash
 cd tests/federation-hardening-e2e/docker
-docker compose -f docker-compose.federation-e2e.yml down -v
+docker compose -p federation-hardening-e2e \
+  -f docker-compose.federation-e2e.yml \
+  -f docker-compose.federation-e2e.demo.yml down -v
 ```
 
 ## Environment variables
