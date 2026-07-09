@@ -247,6 +247,18 @@ Per `service-types/event-consumer.md` and trait `transactional` rule T8
 | `master.location.created` / `.updated` | `wms.master.location.v1` | Refresh local read-model |
 | `master.sku.created` / `.updated` | `wms.master.sku.v1` | Same, for SKU |
 | `master.lot.*` | `wms.master.lot.v1` | Local read-model refresh; lot identity is referenced by `Inventory`, `ReservationLine`, `StockTransfer` rows (LOT-tracked SKUs) |
+| `admin.settings.changed` | `wms.admin.settings.v1` | **TASK-BE-459** — for `key == inventory.low_stock.default_threshold_qty` (GLOBAL), update the in-memory **default** low-stock threshold (`LowStockThresholdPort`) from `valueJson` live; other setting keys ignored |
+
+> **Low-stock threshold distribution (TASK-BE-459, Option B)**: the threshold is
+> **bootstrapped from the `inventory.alert.low-stock.default-threshold` config
+> default** and then updated live by the `admin.settings.changed` consumer above —
+> operators change it in the admin console without an inventory-service redeploy.
+> **No synchronous HTTP call** to admin-service is made (the "does NOT call any other
+> WMS service synchronously in v1" statement in § Dependencies stays true).
+> **Restart-durability is deferred**: on restart the config default applies until the
+> next `admin.settings.changed` arrives — recovering the last operator-set value on
+> startup needs a service-to-service HTTP read, which requires the (documented-but-
+> unbuilt) `wms-internal-services-client` credentials flow (Option A, separate task).
 
 ### Master aggregate coverage in v1 (intentional gaps)
 
