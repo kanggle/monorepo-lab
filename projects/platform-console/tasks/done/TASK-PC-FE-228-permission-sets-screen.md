@@ -8,7 +8,9 @@ TASK-PC-FE-228
 
 # Status
 
-ready
+done
+
+> **DONE (2026-07-09, 3-dim verified — impl PR #2343 squash `cbdc1a04`, PC-FE-227과 묶음)**. `/permission-sets` 스텁을 read-only 화면으로 대체. 227과 동일 공유 클라이언트 `shared/api/rbac-catalog.ts`(`GET /api/admin/roles` 재사용 — 별도 `/permission-sets` 엔드포인트 없음, BE-486 결정)로 role 카탈로그를 "권한 세트" 관점 재프레이밍(`permission_set_id`=`admin_roles.id`). `permission_set_id=NULL`(operator-level 상속) 범례 명시. 사용 배정 수는 BE-486 응답에 없어 생략("—", 프런트 N+1 미집계 — AC대로 후속). **검증**: tsc 0·lint 0·전체 vitest 2696/2696. **3-dim**: (a) MERGED+`cbdc1a04`; (b) tip 일치; (c) pre-merge Frontend 레인 SUCCESS. 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer). **→ IAM 「권한」/「권한 세트」 화면 완결(BE-486 언블록 소비 완료).**
 
 # Owner
 
