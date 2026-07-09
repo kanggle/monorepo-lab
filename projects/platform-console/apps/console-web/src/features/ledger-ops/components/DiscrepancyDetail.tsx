@@ -14,6 +14,7 @@ import {
 import { useDiscrepancy, useResolveDiscrepancy } from '../hooks/use-ledger-ops';
 import { DiscrepancyResolveDialog } from './DiscrepancyResolveDialog';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { labelForUnknown } from '@/shared/lib/tolerant-label';
 
 /**
  * Reconciliation discrepancy detail (TASK-PC-FE-072 — § 2.4.7.1 /
@@ -35,17 +36,6 @@ import { StatusBadge } from '@/shared/ui/StatusBadge';
  */
 export interface DiscrepancyDetailProps {
   discrepancyId: string;
-}
-
-function typeLabel(type: string): string {
-  return (KNOWN_DISCREPANCY_TYPES as readonly string[]).includes(type)
-    ? type
-    : `${type} (unknown)`;
-}
-function statusLabel(status: string): string {
-  return (KNOWN_DISCREPANCY_STATUSES as readonly string[]).includes(status)
-    ? status
-    : `${status} (unknown)`;
 }
 
 export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
@@ -122,7 +112,7 @@ export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
         <div>
           <dt className="text-muted-foreground">유형</dt>
           <dd className="text-foreground" data-testid="ledger-recon-detail-type">
-            {typeLabel(d.type)}
+            {labelForUnknown(d.type, KNOWN_DISCREPANCY_TYPES)}
           </dd>
         </div>
         <div>
@@ -132,7 +122,7 @@ export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
             data-testid="ledger-recon-detail-status"
           >
             <StatusBadge tone={discrepancyStatusTone(d.status)}>
-              {statusLabel(d.status)}
+              {labelForUnknown(d.status, KNOWN_DISCREPANCY_STATUSES)}
             </StatusBadge>
           </dd>
         </div>

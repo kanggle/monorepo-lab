@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { StatusTone } from '@/shared/ui/StatusBadge';
+import { labelForUnknown } from '@/shared/lib/tolerant-label';
 
 /**
  * erp-ops shared types — common building blocks (TASK-PC-FE-109 split of the
@@ -192,20 +193,16 @@ export interface ErpDetailQueryParams {
 }
 
 // ---------------------------------------------------------------------------
-// labelForUnknown — tolerant rendering helper for master / employment
+// labelForUnknownEnum — tolerant rendering helper for master / employment
 // status enums (used by the components; co-located with the schemas
-// because the known-enum sets live here).
+// because the known-enum sets live here). Extracted to
+// `@/shared/lib/tolerant-label` (TASK-PC-FE-234) — re-exported under this
+// module's original name so every existing `labelForUnknownEnum` consumer
+// (the `../api/types` barrel + the erp-ops components) keeps resolving it
+// unchanged.
 // ---------------------------------------------------------------------------
 
-export function labelForUnknownEnum<T extends string>(
-  value: string | undefined | null,
-  known: readonly T[],
-): string {
-  if (!value) return '—';
-  return (known as readonly string[]).includes(value)
-    ? value
-    : `${value} (unknown)`;
-}
+export const labelForUnknownEnum = labelForUnknown;
 
 /** True if `effectiveTo` is in the past relative to `now` (default
  *  = `new Date()`). Used by E2 rendering to mark retired rows

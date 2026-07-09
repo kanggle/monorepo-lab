@@ -1,6 +1,7 @@
 import type { Account } from '../api/types';
 import { KNOWN_ACCOUNT_STATUSES, accountStatusTone } from '../api/types';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { labelForUnknown } from '@/shared/lib/tolerant-label';
 
 /**
  * Account detail (TASK-PC-FE-009 — § 2.4.7).
@@ -24,10 +25,7 @@ export interface AccountDetailProps {
 }
 
 export function AccountDetail({ account }: AccountDetailProps) {
-  const known = (KNOWN_ACCOUNT_STATUSES as readonly string[]).includes(
-    account.status,
-  );
-  const label = known ? account.status : `${account.status} (unknown)`;
+  const label = labelForUnknown(account.status, KNOWN_ACCOUNT_STATUSES);
 
   return (
     <section

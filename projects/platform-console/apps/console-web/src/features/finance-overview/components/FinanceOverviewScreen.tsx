@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Card } from '@/shared/ui/Card';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { labelForUnknown } from '@/shared/lib/tolerant-label';
 import {
   KNOWN_ACCOUNT_STATUSES,
   accountStatusTone,
@@ -201,12 +202,10 @@ function AccountSnapshotCard({ state }: { state: FinanceOverviewState }) {
     );
   }
 
-  const known = (KNOWN_ACCOUNT_STATUSES as readonly string[]).includes(
+  const label = labelForUnknown(
     snapshot.account.status,
+    KNOWN_ACCOUNT_STATUSES,
   );
-  const label = known
-    ? snapshot.account.status
-    : `${snapshot.account.status} (unknown)`;
 
   return (
     <div data-testid="finance-overview-account-snapshot">

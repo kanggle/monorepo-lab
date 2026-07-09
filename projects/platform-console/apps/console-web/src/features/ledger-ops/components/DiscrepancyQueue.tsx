@@ -3,6 +3,7 @@
 import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { labelForUnknown } from '@/shared/lib/tolerant-label';
 import {
   formatMoney,
   discrepancyMoney,
@@ -41,16 +42,6 @@ export interface DiscrepancyQueueProps {
   onSelect: (id: string) => void;
 }
 
-function typeLabel(type: string): string {
-  return (KNOWN_DISCREPANCY_TYPES as readonly string[]).includes(type)
-    ? type
-    : `${type} (unknown)`;
-}
-function statusLabel(status: string): string {
-  return (KNOWN_DISCREPANCY_STATUSES as readonly string[]).includes(status)
-    ? status
-    : `${status} (unknown)`;
-}
 const STATUS_OPTIONS = ['OPEN', 'RESOLVED', ''] as const;
 
 export function DiscrepancyQueue({
@@ -176,7 +167,7 @@ export function DiscrepancyQueue({
                     className="border-b border-border"
                   >
                     <td className="p-2" data-testid={`ledger-recon-type-${i}`}>
-                      {typeLabel(d.type)}
+                      {labelForUnknown(d.type, KNOWN_DISCREPANCY_TYPES)}
                     </td>
                     <td
                       className="p-2"
@@ -207,7 +198,7 @@ export function DiscrepancyQueue({
                         tone={discrepancyStatusTone(d.status)}
                         data-testid={`ledger-recon-status-${i}`}
                       >
-                        {statusLabel(d.status)}
+                        {labelForUnknown(d.status, KNOWN_DISCREPANCY_STATUSES)}
                       </StatusBadge>
                     </td>
                     <td className="p-2">
