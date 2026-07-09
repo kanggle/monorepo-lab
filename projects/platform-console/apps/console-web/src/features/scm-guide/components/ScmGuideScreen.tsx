@@ -1,4 +1,3 @@
-import { Card } from '@/shared/ui/Card';
 import {
   CONFIG_NOTE,
   DOMAIN_SERVICES,
@@ -14,6 +13,12 @@ import {
   SUPPLIER_FIELDS,
   type ConfigField,
 } from '../data';
+import {
+  Mono,
+  NoteCard,
+  StateTh,
+  TerminalCell,
+} from '@/shared/ui/guide-primitives';
 
 /**
  * SCM 가이드 화면 (TASK-PC-FE-188). 순수 정적 참조 화면 — scm-platform 도메인
@@ -23,48 +28,6 @@ import {
  * IAM 가이드(IamGuideScreen) · WMS 가이드(WmsGuideScreen) · E-Commerce 가이드
  * (EcommerceGuideScreen)와 동일 패턴.
  */
-
-function Mono({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
-      {children}
-    </span>
-  );
-}
-
-function NoteCard({ title, body }: { title: string; body: string }) {
-  return (
-    <Card className="mb-10 bg-muted/40">
-      <p className="mb-1 text-sm font-medium text-foreground">{title}</p>
-      <p className="text-sm text-muted-foreground">{body}</p>
-    </Card>
-  );
-}
-
-/** 종료 상태 여부를 ●/— 로 표시하는 셀. */
-function TerminalCell({ terminal }: { terminal: boolean }) {
-  return terminal ? (
-    <span className="text-foreground" aria-label="종료 상태" title="종료 상태">
-      ●
-    </span>
-  ) : (
-    <span className="text-muted-foreground" aria-label="진행">
-      —
-    </span>
-  );
-}
-
-/** 상태명(한글 라벨 + enum) 행 헤더. */
-function StateTh({ label, name }: { label: string; name: string }) {
-  return (
-    <th scope="row" className="p-2 text-left">
-      <span className="font-medium text-foreground">{label}</span>
-      <span className="ml-2 font-mono text-[11px] text-muted-foreground">
-        {name}
-      </span>
-    </th>
-  );
-}
 
 /** 설정 필드 표(재주문 정책 · 공급사 매핑 공용). */
 function ConfigFieldTable({
@@ -212,7 +175,7 @@ export function ScmGuideScreen() {
               >
                 <StateTh label={s.label} name={s.name} />
                 <td className="p-2 text-sm">
-                  <TerminalCell terminal={s.terminal} />
+                  <TerminalCell terminal={s.terminal} inProgressLabel="진행" />
                 </td>
                 <td className="p-2 text-sm text-muted-foreground">{s.desc}</td>
               </tr>
@@ -322,7 +285,7 @@ export function ScmGuideScreen() {
                   )}
                 </td>
                 <td className="p-2 text-sm">
-                  <TerminalCell terminal={s.terminal} />
+                  <TerminalCell terminal={s.terminal} inProgressLabel="진행" />
                 </td>
                 <td className="p-2 text-sm text-muted-foreground">{s.desc}</td>
               </tr>
