@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,9 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
  * (the post-commit {@code TmsClientAdapter}) has no active TX after the
  * saga commit.
  *
- * <p>On PK conflict (concurrent re-fire of the same shipment) the second
- * writer is silently swallowed — the first row wins. The caller falls
- * back to {@link #findSnapshot(UUID)} on the next attempt.
+ * <p>Writes use {@code INSERT … ON CONFLICT (request_id) DO NOTHING}: on a
+ * concurrent re-fire of the same shipment the second writer is a silent no-op —
+ * the first row wins. The caller falls back to {@link #findSnapshot(UUID)} on
+ * the next attempt. (Previously {@code repository.save()} on a caller-assigned
+ * {@code @Id} routed to {@code merge()} — an UPDATE the W2 append-only trigger
+ * rejects at commit — so a re-fire threw instead of no-op'ing; TASK-BE-488.)
  */
 @Component("tmsRequestDedupePersistenceImpl")
 public class TmsRequestDedupeRepositoryImpl implements TmsRequestDedupePort {
@@ -44,10 +46,9 @@ public class TmsRequestDedupeRepositoryImpl implements TmsRequestDedupePort {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void saveSnapshot(UUID requestId, Instant sentAt, String responseSnapshot) {
-        try {
-            repository.save(new TmsRequestDedupeEntity(requestId, sentAt, responseSnapshot));
-        } catch (DataIntegrityViolationException duplicate) {
-            // Concurrent re-fire — first writer wins. Safe to swallow.
+        int inserted = repository.insertIfAbsent(requestId, sentAt, responseSnapshot);
+        if (inserted == 0) {
+            // Concurrent re-fire — first writer wins. Safe to no-op.
             log.debug("tms_dedupe_pk_conflict requestId={} (concurrent insert)", requestId);
         }
     }

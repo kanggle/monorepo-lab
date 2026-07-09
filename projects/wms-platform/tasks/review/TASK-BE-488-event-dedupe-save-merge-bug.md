@@ -8,7 +8,7 @@ TASK-BE-488
 
 # Status
 
-ready
+review
 
 # Owner
 
