@@ -57,7 +57,9 @@ class PutawayCompletedConsumerIntegrationTest extends InventoryServiceIntegratio
             producer.close();
         }
         jdbc.update("DELETE FROM inventory_outbox");
-        jdbc.update("DELETE FROM inventory_movement");
+        // TRUNCATE, not DELETE: inventory_movement has an append-only BEFORE DELETE
+        // trigger (V5 W2) that rejects row DELETE; TRUNCATE does not fire row triggers.
+        jdbc.update("TRUNCATE TABLE inventory_movement");
         jdbc.update("DELETE FROM inventory");
         jdbc.update("DELETE FROM inventory_event_dedupe");
     }

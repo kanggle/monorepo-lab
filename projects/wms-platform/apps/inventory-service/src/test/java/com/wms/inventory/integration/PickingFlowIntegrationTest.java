@@ -65,7 +65,9 @@ class PickingFlowIntegrationTest extends InventoryServiceIntegrationBase {
         jdbc.update("DELETE FROM inventory_outbox");
         jdbc.update("DELETE FROM reservation_line");
         jdbc.update("DELETE FROM reservation");
-        jdbc.update("DELETE FROM inventory_movement");
+        // TRUNCATE, not DELETE: inventory_movement has an append-only BEFORE DELETE
+        // trigger (V5 W2) that rejects row DELETE; TRUNCATE does not fire row triggers.
+        jdbc.update("TRUNCATE TABLE inventory_movement");
         jdbc.update("DELETE FROM inventory");
         jdbc.update("DELETE FROM inventory_event_dedupe");
     }
@@ -138,7 +140,8 @@ class PickingFlowIntegrationTest extends InventoryServiceIntegrationBase {
 
     private UUID seedInventoryRow(UUID warehouseId, UUID skuId, int qty) {
         UUID id = UUID.randomUUID();
-        java.time.Instant now = java.time.Instant.now();
+        // OffsetDateTime (timestamptz) — pgjdbc cannot infer the SQL type of a raw Instant.
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
         jdbc.update("""
                 INSERT INTO inventory
                 (id, warehouse_id, location_id, sku_id, lot_id,

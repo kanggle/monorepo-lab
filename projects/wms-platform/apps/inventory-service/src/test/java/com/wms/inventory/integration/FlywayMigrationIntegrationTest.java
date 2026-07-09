@@ -3,7 +3,8 @@ package com.wms.inventory.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -88,7 +89,7 @@ class FlywayMigrationIntegrationTest extends InventoryServiceIntegrationBase {
     @Transactional
     void inventory_buckets_nonneg_constraint() {
         UUID id = UUID.randomUUID();
-        Instant now = Instant.now();
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         assertThatThrownBy(() -> jdbc.update("""
                 INSERT INTO inventory
                 (id, warehouse_id, location_id, sku_id, lot_id,
@@ -106,7 +107,7 @@ class FlywayMigrationIntegrationTest extends InventoryServiceIntegrationBase {
     void movement_structural_check() {
         UUID inventoryId = seedInventoryRow();
         UUID movementId = UUID.randomUUID();
-        Instant now = Instant.now();
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         // Try to insert a movement where qty_after != qty_before + delta
         assertThatThrownBy(() -> jdbc.update("""
                 INSERT INTO inventory_movement
@@ -129,7 +130,7 @@ class FlywayMigrationIntegrationTest extends InventoryServiceIntegrationBase {
 
     private UUID seedInventoryRow() {
         UUID id = UUID.randomUUID();
-        Instant now = Instant.now();
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         Map<String, Object> params = Map.of();
         jdbc.update("""
                 INSERT INTO inventory
@@ -143,7 +144,7 @@ class FlywayMigrationIntegrationTest extends InventoryServiceIntegrationBase {
 
     private UUID seedMovementRow(UUID inventoryId, int before, int after) {
         UUID id = UUID.randomUUID();
-        Instant now = Instant.now();
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         jdbc.update("""
                 INSERT INTO inventory_movement
                 (id, inventory_id, movement_type, bucket, delta, qty_before, qty_after,

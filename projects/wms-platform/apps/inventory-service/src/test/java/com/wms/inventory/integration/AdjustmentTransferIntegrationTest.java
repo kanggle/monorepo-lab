@@ -57,7 +57,9 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
         jdbc.update("DELETE FROM inventory_outbox");
         jdbc.update("DELETE FROM stock_adjustment");
         jdbc.update("DELETE FROM stock_transfer");
-        jdbc.update("DELETE FROM inventory_movement");
+        // TRUNCATE, not DELETE: inventory_movement has an append-only BEFORE DELETE
+        // trigger (V5 W2) that rejects row DELETE; TRUNCATE does not fire row triggers.
+        jdbc.update("TRUNCATE TABLE inventory_movement");
         jdbc.update("DELETE FROM inventory");
         if (thresholdPort instanceof InMemoryLowStockThresholdAdapter adapter) {
             adapter.clearAll();
@@ -153,7 +155,8 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
 
     private UUID seedInventoryRowAt(UUID warehouseId, UUID locationId, UUID skuId, int qty) {
         UUID id = UUID.randomUUID();
-        java.time.Instant now = java.time.Instant.now();
+        // OffsetDateTime (timestamptz) — pgjdbc cannot infer the SQL type of a raw Instant.
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
         jdbc.update("""
                 INSERT INTO inventory
                 (id, warehouse_id, location_id, sku_id, lot_id,
