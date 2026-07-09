@@ -809,6 +809,43 @@ jobs:
         projects/wms-platform/apps/outbound-service/build/reports/tests/integrationTest/
         projects/wms-platform/apps/outbound-service/build/test-results/integrationTest/
 
+  wms-inventory-inbound-integration-tests:
+    name: Integration (inventory-service + inbound-service, Testcontainers)
+    needs: [changes, build-and-test]
+    # TASK-MONO-335: inventory-service + inbound-service integrationTest were
+    # wired into no CI lane and their IT contexts could not even load (their
+    # SecurityConfig required an HttpSecurity bean absent under webEnvironment=
+    # NONE — fixed here via @ConditionalOnWebApplication, mirroring BE-334).
+    # A SEPARATE job (not the 4-module WMS lane above) so their per-stack
+    # Testcontainers footprint is contention-isolated: MONO-331's flake was
+    # intra-runner (all stacks booting on one 2-CPU/7GB runner), so a distinct
+    # runner is safe. --no-parallel serializes the two stacks within this job.
+    # Same gating as the WMS lane (push / libs / workflows / wms).
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (
+        github.event_name == 'push' ||
+        needs.changes.outputs.libs == 'true' ||
+        needs.changes.outputs.workflows == 'true' ||
+        needs.changes.outputs.wms == 'true'
+      )
+    uses: ./.github/workflows/_integration.yml
+    with:
+      # Two modules, each its own Postgres + cp-kafka + Redis stack. Serialize
+      # (root gradle.properties sets org.gradle.parallel=true) so only one stack
+      # is live at a time on the 2-CPU/7GB runner (TASK-MONO-331 rationale).
+      timeout-minutes: 30
+      gradle-args: --no-parallel
+      gradle-tasks: >-
+        :projects:wms-platform:apps:inventory-service:integrationTest
+        :projects:wms-platform:apps:inbound-service:integrationTest
+      artifact-name: wms-inventory-inbound-integration-test-reports
+      report-paths: |
+        projects/wms-platform/apps/inventory-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/inventory-service/build/test-results/integrationTest/
+        projects/wms-platform/apps/inbound-service/build/reports/tests/integrationTest/
+        projects/wms-platform/apps/inbound-service/build/test-results/integrationTest/
+
   iam-integration-tests:
     name: Integration (iam, Testcontainers)
     needs: [changes, build-and-test]
