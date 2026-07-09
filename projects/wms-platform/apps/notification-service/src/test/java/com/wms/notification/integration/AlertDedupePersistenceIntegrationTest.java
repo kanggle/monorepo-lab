@@ -37,7 +37,7 @@ class AlertDedupePersistenceIntegrationTest extends NotificationServiceIntegrati
 
     @AfterEach
     void cleanup() {
-        jdbc.update("DELETE FROM notification_event_dedupe");
+        jdbc.update("TRUNCATE TABLE notification_event_dedupe");
     }
 
     @Test

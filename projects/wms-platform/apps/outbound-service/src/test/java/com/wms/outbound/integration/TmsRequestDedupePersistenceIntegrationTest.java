@@ -31,7 +31,10 @@ class TmsRequestDedupePersistenceIntegrationTest extends OutboundServiceIntegrat
 
     @AfterEach
     void cleanup() {
-        jdbc.update("DELETE FROM tms_request_dedupe");
+        // TRUNCATE, not DELETE: tms_request_dedupe is append-only (W2) with a
+        // BEFORE DELETE trigger that rejects row DELETE; TRUNCATE does not fire
+        // row-level triggers.
+        jdbc.update("TRUNCATE TABLE tms_request_dedupe");
     }
 
     @Test

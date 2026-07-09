@@ -37,7 +37,10 @@ class EventDedupePersistenceIntegrationTest extends OutboundServiceIntegrationBa
 
     @AfterEach
     void cleanup() {
-        jdbc.update("DELETE FROM outbound_event_dedupe");
+        // TRUNCATE, not DELETE: outbound_event_dedupe is append-only (W2) with a
+        // BEFORE DELETE trigger that rejects row DELETE; TRUNCATE does not fire
+        // row-level triggers.
+        jdbc.update("TRUNCATE TABLE outbound_event_dedupe");
     }
 
     @Test
