@@ -4,24 +4,15 @@ import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { CloseButton } from '@/shared/ui/CloseButton';
 import {
-  type ApprovalRequest,
   type ApprovalHistoryEntry,
   type ApprovalStage,
   type ApprovalTransition,
-  allowedTransitionsFor,
-  transitionRequiresReason,
 } from '../api/approval-types';
 import { statusToneClass, type StatusTone } from '@/shared/ui/StatusBadge';
-import {
-  useApprovalRequest,
-  useSubmitApproval,
-  useApproveApproval,
-  useRejectApproval,
-  useWithdrawApproval,
-} from '../hooks/use-erp-ops';
 import { approvalErrorMessage } from './approval-error';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { SUBJECT_LABEL, statusLabel, StatusBadge } from './approval-common';
+import { useApprovalDetail } from './use-approval-detail';
 
 // ===========================================================================
 // Detail view — status badge + history timeline + state-gated actions.
@@ -38,68 +29,18 @@ export function ApprovalDetail({
   id: string;
   onClose: () => void;
 }) {
-  const q = useApprovalRequest(id);
-  const [reasonFor, setReasonFor] = useState<ApprovalTransition | null>(null);
-
-  const submitM = useSubmitApproval();
-  const approveM = useApproveApproval();
-  const rejectM = useRejectApproval();
-  const withdrawM = useWithdrawApproval();
-
-  const data: ApprovalRequest | undefined = q.data;
-  const pending =
-    submitM.isPending ||
-    approveM.isPending ||
-    rejectM.isPending ||
-    withdrawM.isPending;
-
-  // The most recent action error (for inline display) — whichever mutation
-  // last failed.
-  const actionError =
-    submitM.error ?? approveM.error ?? rejectM.error ?? withdrawM.error;
-  const actionErrorTransition: ApprovalTransition | undefined = submitM.error
-    ? 'submit'
-    : approveM.error
-      ? 'approve'
-      : rejectM.error
-        ? 'reject'
-        : withdrawM.error
-          ? 'withdraw'
-          : undefined;
-
-  function newIdemKey(): string {
-    const g = globalThis as unknown as {
-      crypto?: { randomUUID?: () => string };
-    };
-    return (
-      g.crypto?.randomUUID?.() ??
-      `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    );
-  }
-
-  function runTransition(t: ApprovalTransition, reason?: string) {
-    const idempotencyKey = newIdemKey();
-    if (!data) return;
-    const args = { id: data.id, idempotencyKey, reason };
-    const done = () => setReasonFor(null);
-    if (t === 'submit') submitM.mutate(args, { onSuccess: done });
-    else if (t === 'approve') approveM.mutate(args, { onSuccess: done });
-    else if (t === 'reject') rejectM.mutate(args, { onSuccess: done });
-    else if (t === 'withdraw') withdrawM.mutate(args, { onSuccess: done });
-  }
-
-  function onAction(t: ApprovalTransition) {
-    // reject / withdraw require a reason → open the reason dialog.
-    if (transitionRequiresReason(t)) {
-      setReasonFor(t);
-      return;
-    }
-    runTransition(t);
-  }
-
-  const actions: ApprovalTransition[] = data
-    ? allowedTransitionsFor(data.status)
-    : [];
+  const {
+    q,
+    data,
+    pending,
+    actionError,
+    actionErrorTransition,
+    actions,
+    reasonFor,
+    clearReasonFor,
+    onAction,
+    runTransition,
+  } = useApprovalDetail(id);
 
   return (
     <div
@@ -359,7 +300,7 @@ export function ApprovalDetail({
           <ApprovalReasonDialog
             transition={reasonFor}
             pending={pending}
-            onCancel={() => setReasonFor(null)}
+            onCancel={clearReasonFor}
             onConfirm={(reason) => runTransition(reasonFor, reason)}
           />
         )}

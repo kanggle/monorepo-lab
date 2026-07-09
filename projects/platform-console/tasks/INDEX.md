@@ -87,6 +87,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 _(직전 완료)_ **IAM 「권한」/「권한 세트」 화면 완료** (PC-FE-227/228 DONE, 2026-07-09, PR #2343 squash `cbdc1a04`). `/permissions`·`/permission-sets` 스텁을 BE-486 RBAC 카탈로그(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`) 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(228=role을 권한 세트로 재프레이밍, 별도 엔드포인트 없음). native `<details>` drill-down·SSR 회복탄력성(operators/audit 매퍼 미러). vitest 2696/2696. **→ BE-486 언블록 소비 완료.**
 
+_(직전 완료)_ **ApprovalDetail hook-only split 완료** (PC-FE-235 DONE, 2026-07-09, 진단 P2). `erp-ops/components/ApprovalDetail.tsx`(451→391줄)의 state/변이/오케스트레이션(4 mutation·reasonFor·runTransition·newIdemKey·actions 파생)을 `use-approval-detail.ts`(105줄)로 추출, presentation-only化. reason 입력 로컬 유지·idem-key 불변. **테스트 무수정** 2757/2757. FE-150/151/152 hook-split 패턴. 잔여=guide atoms cross-domain(5도메인) 별개 task.
+
 _(직전 완료)_ **tolerant-label 헬퍼 shared 추출 완료** (PC-FE-234 DONE, 2026-07-09, 진단 P1). `${v} (unknown)` fallback 삼항 중복 8곳(ledger 5·finance 2·overview 1) + erp-ops 기존 `labelForUnknownEnum`을 `shared/lib/tolerant-label.ts`로 통합, erp public surface는 alias로 보존. -83/+26 순감·행동 불변(빈 문자열 edge만 `'—'`로 통일되나 required enum이라 실입력 도달 불가)·vitest 2757/2757. 잔여 진단 후보(P2 ApprovalDetail hook-split·cross-domain guide atoms 5도메인)는 백로그.
 
 _(직전 완료)_ **ledger types god-file 분할 완료** (PC-FE-233 DONE, 2026-07-09). `ledger-ops/api/types.ts`(810줄)→`api/types/`(money·trial-balance·journal·period·reconciliation·account·fx 7모듈 + barrel `index.ts`). 순수 구조 이동·행동 불변·call-site import 변경 0(barrel resolve). lint/tsc clean·vitest 2752/2752. finance/erp 리팩토링 진단(2026-07-09)의 실행 1건 — 잔여 진단 후보(P1 tolerant-label shared 추출 10곳·P2 ApprovalDetail hook-split·cross-domain guide atoms)는 별개 task 후보로 백로그.
