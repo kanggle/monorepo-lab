@@ -1,6 +1,6 @@
 # TASK-MONO-335 — Restore + CI-wire the dormant inventory-service integration suite (inbound-service split to TASK-BE-489)
 
-- **Status**: ready
+- **Status**: done
 - **Level**: monorepo (shared `.github/workflows/`) + wms-platform adaptation (atomic)
 - **Type**: CI reliability / dormant-test restoration
 - **Analysis model**: Opus 4.8 / **구현 권장**: Opus (multi-module dormant restore + flake-sensitive lane design)
