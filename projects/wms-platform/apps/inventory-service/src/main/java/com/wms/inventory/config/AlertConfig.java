@@ -29,8 +29,17 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @Configuration
 public class AlertConfig {
 
+    /**
+     * Single in-memory holder bean, typed as the concrete
+     * {@link InMemoryLowStockThresholdAdapter} so the <em>one</em> instance
+     * satisfies BOTH {@link LowStockThresholdPort} (read) and
+     * {@link LowStockThresholdWriterPort} (write) injections without ambiguity —
+     * {@code LowStockDetectionService} reads and {@code AdminSettingsConsumer}
+     * writes the same holder. (Declaring separate interface beans returning this
+     * instance would register two candidates per interface → NoUniqueBeanDefinition.)
+     */
     @Bean
-    @ConditionalOnMissingBean(InMemoryLowStockThresholdAdapter.class)
+    @ConditionalOnMissingBean(LowStockThresholdPort.class)
     InMemoryLowStockThresholdAdapter lowStockThresholdHolder(
             @Value("${inventory.alert.low-stock.default-threshold:#{null}}") Integer defaultThreshold) {
         InMemoryLowStockThresholdAdapter adapter = new InMemoryLowStockThresholdAdapter();
@@ -38,18 +47,6 @@ public class AlertConfig {
             adapter.setDefaultThreshold(defaultThreshold);
         }
         return adapter;
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(LowStockThresholdPort.class)
-    LowStockThresholdPort lowStockThresholdPort(InMemoryLowStockThresholdAdapter holder) {
-        return holder;
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(LowStockThresholdWriterPort.class)
-    LowStockThresholdWriterPort lowStockThresholdWriterPort(InMemoryLowStockThresholdAdapter holder) {
-        return holder;
     }
 
     @Bean
