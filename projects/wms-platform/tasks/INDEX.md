@@ -71,6 +71,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 |---|---|---|---|
 | TASK-BE-438 | **READY**. master-service outbox v1→v2 마이그레이션(ADR-MONO-004 §6 row 1). v2 `AbstractOutboxPublisher<R>`로 전환 — 신규 Flyway `master_outbox`(UUID event_id) + 엔티티/리포 + write-path(UUID/occurred_at 생성) + 스케줄러 교체 + `MicrometerOutboxMetrics` + 테스트 재작성. backoff/헤더/lag 메트릭 획득. ADR "cosmetic" 표기지만 실측 schema-migration급. master IT=CI Linux 권위(로컬 Testcontainers 차단). 구현 보류=별도 세션(Opus). | master-service | code, event |
 | TASK-BE-458 | **READY** (2026-06-29 code-marker sweep). master-service `WarehouseIntegrationTest.prometheusEndpoint_exposesOutboxMetrics` 가 `@DisabledIfEnvironmentVariable(CI)` — BE-020이 micrometer-kafka 미터 re-attach(브로커 재시작 후) vs `/actuator/prometheus` scrape-body race를 follow-up으로 미뤘으나 **티켓 미생성**(sweep 확인). race 진단·결정론화 후 guard 제거. 회귀 가드=≥20-run green(Kafka pause/unpause 순서 포함) + master `:integrationTest`. 구현 권장=Sonnet 4.6. | master-service | code, test |
+| TASK-BE-488 | **READY** (2026-07-09, TASK-MONO-335 발견). 이벤트 dedupe 무력화 버그: `EventDedupeRepositoryImpl` 이 `repository.save(할당-@Id)` → Spring Data merge/upsert → 중복 eventId 가 PK 충돌 없이 UPDATE → 이벤트 재적용(CI 결정론적 재현, `redeliveryIsDeduped` 50→100). 모든 inventory 컨슈머 영향. 수정(save→persist/Persistable, 예외-번역 경로 CI IT 검증) + 형제 서비스 감사(outbound/notification 동일 패턴, mock 단위테스트만) + `@Disabled` 테스트 재활성화. 구현 권장=Opus. | inventory-service (+outbound/notification 감사) | code, bug |
 
 ## in-progress
 
