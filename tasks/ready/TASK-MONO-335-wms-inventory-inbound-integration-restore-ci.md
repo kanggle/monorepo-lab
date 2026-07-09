@@ -1,4 +1,4 @@
-# TASK-MONO-335 — Restore + CI-wire the two dormant WMS integration suites (inventory-service, inbound-service)
+# TASK-MONO-335 — Restore + CI-wire the dormant inventory-service integration suite (inbound-service split to TASK-BE-489)
 
 - **Status**: ready
 - **Level**: monorepo (shared `.github/workflows/`) + wms-platform adaptation (atomic)
@@ -118,15 +118,20 @@ one were test-only and fixed in this PR:
 4. Transfer test: seeded `location_snapshot` (source+target, `STORAGE`) so
    `TransferStockService.resolveSameWarehouse` resolves the warehouse (realistic
    master-data-present precondition).
-5. inbound context load (2nd blocker, surfaced after the SecurityConfig fix):
-   `InboundServiceApplication` did not `exclude` the shared
-   `OutboxAutoConfiguration`, so the lib's `OutboxJpaConfig` entity-scanned
-   `ProcessedEventJpaEntity` (`processed_events`) — a table inbound has no
-   migration for → `ddl-auto=validate` failed. Applied the same one-line fix
-   inventory (TASK-BE-432) and outbound (TASK-BE-333) already carry: inbound
-   has its own outbox stack + dedupe, so it excludes the shared auto-config.
-   (A genuine latent production-startup misconfiguration, never caught because no
-   inbound full-context job ran — exactly the gap this task closes.)
+**inbound descoped to TASK-BE-489.** inbound was intended to ship in this PR
+too, but restoring it surfaced multi-layer rot beyond the SecurityConfig fix:
+(1) context load also needs `OutboxAutoConfiguration` excluded (`ProcessedEventJpaEntity`
+→ missing `processed_events` table); (2) even with both context fixes, the
+golden-path IT times out awaiting the emitted lifecycle events (a functional
+event-emission issue — the one-line exclusion likely also needs inventory's
+companion outbox-publish beans). Per this task's own failure-scenario plan
+("if inbound carries heavy unrelated rot, descope it and file a follow-up so the
+PR lands green"), **all inbound changes were reverted** and the CI job wires
+**inventory only**. inbound's full restore + wiring is TASK-BE-489.
+
+So this PR delivers: inventory-service IT fully restored (7 classes, 20 tests,
+`redeliveryIsDeduped` `@Disabled` → BE-488) + wired to a new
+`wms-inventory-integration-tests` CI job, all green.
 
 One failure was **not** test-only: `PutawayCompletedConsumerIntegrationTest`
 re-applied a redelivered event (`expected 50 but was 100`, deterministic across

@@ -809,18 +809,20 @@ jobs:
         projects/wms-platform/apps/outbound-service/build/reports/tests/integrationTest/
         projects/wms-platform/apps/outbound-service/build/test-results/integrationTest/
 
-  wms-inventory-inbound-integration-tests:
-    name: Integration (inventory-service + inbound-service, Testcontainers)
+  wms-inventory-integration-tests:
+    name: Integration (inventory-service, Testcontainers)
     needs: [changes, build-and-test]
-    # TASK-MONO-335: inventory-service + inbound-service integrationTest were
-    # wired into no CI lane and their IT contexts could not even load (their
-    # SecurityConfig required an HttpSecurity bean absent under webEnvironment=
-    # NONE — fixed here via @ConditionalOnWebApplication, mirroring BE-334).
-    # A SEPARATE job (not the 4-module WMS lane above) so their per-stack
-    # Testcontainers footprint is contention-isolated: MONO-331's flake was
-    # intra-runner (all stacks booting on one 2-CPU/7GB runner), so a distinct
-    # runner is safe. --no-parallel serializes the two stacks within this job.
-    # Same gating as the WMS lane (push / libs / workflows / wms).
+    # TASK-MONO-335: inventory-service integrationTest was wired into no CI lane
+    # and its IT context could not even load (SecurityConfig required an
+    # HttpSecurity bean absent under webEnvironment=NONE — fixed via
+    # @ConditionalOnWebApplication, mirroring BE-334). A SEPARATE job (not the
+    # 4-module WMS lane above) so its per-stack Testcontainers footprint is
+    # contention-isolated: MONO-331's flake was intra-runner (all stacks booting
+    # on one 2-CPU/7GB runner), so a distinct runner is safe. Same gating as the
+    # WMS lane (push / libs / workflows / wms).
+    # inbound-service integrationTest deliberately NOT wired here — its restore
+    # needs more than the SecurityConfig fix (OutboxAutoConfiguration exclusion +
+    # a functional golden-path event-emission issue); split to TASK-BE-489.
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
@@ -831,20 +833,13 @@ jobs:
       )
     uses: ./.github/workflows/_integration.yml
     with:
-      # Two modules, each its own Postgres + cp-kafka + Redis stack. Serialize
-      # (root gradle.properties sets org.gradle.parallel=true) so only one stack
-      # is live at a time on the 2-CPU/7GB runner (TASK-MONO-331 rationale).
       timeout-minutes: 30
-      gradle-args: --no-parallel
       gradle-tasks: >-
         :projects:wms-platform:apps:inventory-service:integrationTest
-        :projects:wms-platform:apps:inbound-service:integrationTest
-      artifact-name: wms-inventory-inbound-integration-test-reports
+      artifact-name: wms-inventory-integration-test-reports
       report-paths: |
         projects/wms-platform/apps/inventory-service/build/reports/tests/integrationTest/
         projects/wms-platform/apps/inventory-service/build/test-results/integrationTest/
-        projects/wms-platform/apps/inbound-service/build/reports/tests/integrationTest/
-        projects/wms-platform/apps/inbound-service/build/test-results/integrationTest/
 
   iam-integration-tests:
     name: Integration (iam, Testcontainers)
