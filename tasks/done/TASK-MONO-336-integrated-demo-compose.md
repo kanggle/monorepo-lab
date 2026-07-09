@@ -8,9 +8,7 @@ Assemble an integrated all-projects demo orchestration (`infra/demo/`) for the o
 
 # Status
 
-ready
-
-<!-- Implementation staged in worktree `mlab-mono-336` (branch task/mono-336-integrated-demo-compose), UNCOMMITTED. Awaiting user commit/review request. -->
+done
 
 # Owner
 
