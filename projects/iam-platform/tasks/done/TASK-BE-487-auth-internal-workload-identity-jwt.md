@@ -8,7 +8,7 @@ ADR-005 단계 4 완결 — auth-service `/internal/**` 를 `client_credentials`
 
 # Status
 
-ready
+done
 
 # Owner
 
