@@ -8,7 +8,9 @@ TASK-PC-FE-227
 
 # Status
 
-ready
+done
+
+> **DONE (2026-07-09, 3-dim verified — impl PR #2343 squash `cbdc1a04`, promotion+impl 묶음)**. `/permissions` 스텁을 BE-486 RBAC 카탈로그 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`, cross-feature import 금지 규칙에 따라 shared 승격, 228과 공유). `features/permissions`=권한 키 카탈로그 + role 목록 + native `<details>` role→permission drill-down(서버 컴포넌트, client JS 없음) + scope 그대로 표기. SSR 회복탄력성=operators/audit 매퍼 미러(401→redirect, no-tenant 게이트, 403→inline, 503→`RbacUnavailableError` 섹션 degrade). env `RBAC_TIMEOUT_MS`(기존 `IAM_ADMIN_API_BASE` 재사용, 신규 base 없음). **편차**: `KNOWN_OPERATOR_ROLES` 정적 목록 흡수는 연기(기존 iam-guide/operators 소비처 회귀 방지, 후속 가능). **검증**: tsc 0·lint 0·전체 vitest 2696/2696. **3-dim**: (a) MERGED+`cbdc1a04`; (b) tip 일치; (c) pre-merge — Frontend unit/E2E smoke/lint&build SUCCESS(ecommerce Java IT 무관 레인). 분석=Opus 4.8 / 구현=Sonnet(frontend-engineer).
 
 # Owner
 
