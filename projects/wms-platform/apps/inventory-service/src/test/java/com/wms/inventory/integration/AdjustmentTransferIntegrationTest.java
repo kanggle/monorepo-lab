@@ -57,8 +57,11 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
         jdbc.update("DELETE FROM inventory_outbox");
         jdbc.update("DELETE FROM stock_adjustment");
         jdbc.update("DELETE FROM stock_transfer");
-        jdbc.update("DELETE FROM inventory_movement");
+        // TRUNCATE, not DELETE: inventory_movement has an append-only BEFORE DELETE
+        // trigger (V5 W2) that rejects row DELETE; TRUNCATE does not fire row triggers.
+        jdbc.update("TRUNCATE TABLE inventory_movement");
         jdbc.update("DELETE FROM inventory");
+        jdbc.update("DELETE FROM location_snapshot");
         if (thresholdPort instanceof InMemoryLowStockThresholdAdapter adapter) {
             adapter.clearAll();
         }
@@ -92,6 +95,11 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
         UUID source = UUID.randomUUID();
         UUID target = UUID.randomUUID();
         UUID sku = UUID.randomUUID();
+        // Realistic precondition: both locations are registered in the master
+        // read-model (same warehouse) so TransferStockService.resolveSameWarehouse
+        // can resolve the warehouse; inventory exists only for the source.
+        seedLocationSnapshot(source, warehouse);
+        seedLocationSnapshot(target, warehouse);
         seedInventoryRowAt(warehouse, source, sku, 100);
 
         transferStock.transfer(new TransferStockCommand(
@@ -147,13 +155,24 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
         }
     }
 
+    private void seedLocationSnapshot(UUID locationId, UUID warehouseId) {
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        jdbc.update("""
+                INSERT INTO location_snapshot
+                (id, location_code, warehouse_id, zone_id, location_type, status, cached_at, master_version)
+                VALUES (?, ?, ?, ?, 'STORAGE', 'ACTIVE', ?, 1)
+                """, locationId, "LOC-" + locationId.toString().substring(0, 8),
+                warehouseId, UUID.randomUUID(), now);
+    }
+
     private UUID seedInventoryRow(UUID warehouseId, int qty) {
         return seedInventoryRowAt(warehouseId, UUID.randomUUID(), UUID.randomUUID(), qty);
     }
 
     private UUID seedInventoryRowAt(UUID warehouseId, UUID locationId, UUID skuId, int qty) {
         UUID id = UUID.randomUUID();
-        java.time.Instant now = java.time.Instant.now();
+        // OffsetDateTime (timestamptz) — pgjdbc cannot infer the SQL type of a raw Instant.
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
         jdbc.update("""
                 INSERT INTO inventory
                 (id, warehouse_id, location_id, sku_id, lot_id,
