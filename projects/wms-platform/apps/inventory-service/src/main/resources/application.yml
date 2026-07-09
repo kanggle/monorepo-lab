@@ -116,3 +116,7 @@ inventory:
       master-location: wms.master.location.v1
       master-sku: wms.master.sku.v1
       master-lot: wms.master.lot.v1
+      # TASK-BE-459: admin.settings.changed — inventory consumes the low-stock
+      # threshold key (inventory.low_stock.default_threshold_qty) to update the
+      # default threshold live (Option B: config-default bootstrap + event refresh).
+      admin-settings: wms.admin.settings.v1

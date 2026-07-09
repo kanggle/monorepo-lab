@@ -339,9 +339,17 @@ informational — the authoritative value is `valueJson`.
 
 Consumer expectations:
 
-- `inventory-service`: re-reads `inventory.reservation.ttl_hours` and adjusts
-  the reservation sweeper interval at the next scheduled tick (no immediate
-  cancellation of in-flight reservations)
+- `inventory-service` (**TASK-BE-459, live**): consumes `wms.admin.settings.v1` and,
+  for `key == inventory.low_stock.default_threshold_qty` with `scope == GLOBAL`,
+  updates the in-memory **default** low-stock threshold (`LowStockThresholdPort`)
+  from `valueJson` — so operators change the threshold without an inventory-service
+  redeploy. Other setting keys on the topic are ignored. **Option B (config-default
+  bootstrap)**: the startup value is the `inventory.alert.low-stock.default-threshold`
+  config default, not the last admin-set value; restart-durability is deferred until
+  WMS has a service-to-service HTTP read path. eventId dedupe (T8) applies.
+- `inventory-service` (planned): re-reads `inventory.reservation.ttl_hours` to adjust
+  the reservation sweeper interval — declared here but **not yet implemented** (the
+  sweeper still reads local config; separate follow-up).
 - `inbound-service`: re-reads `inbound.asn.auto_close_delay_hours`
 - `outbound-service`: re-reads `outbound.saga.sweeper_interval_seconds`
 - `admin-service`: ignores its own emitted `admin.settings.changed`
