@@ -8,7 +8,7 @@ fed-e2e 로컬 기동의 **완전성 보장** — 손으로 나열한 서비스 
 
 # Status
 
-review
+done
 
 # Owner
 
