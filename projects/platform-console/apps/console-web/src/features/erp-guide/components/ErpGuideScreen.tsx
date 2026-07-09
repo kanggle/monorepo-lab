@@ -1,4 +1,3 @@
-import { Card } from '@/shared/ui/Card';
 import {
   APPROVAL_ROUTING_NOTE,
   APPROVAL_STATUSES,
@@ -12,6 +11,13 @@ import {
   NOTIFICATION_NOTE,
   READ_MODEL_NOTE,
 } from '../data';
+import {
+  AttentionCell,
+  Mono,
+  NoteCard,
+  StateTh,
+  TerminalCell,
+} from '@/shared/ui/guide-primitives';
 
 /**
  * ERP 가이드 화면 (TASK-PC-FE-232). 순수 정적 참조 화면 — erp-platform
@@ -22,61 +28,6 @@ import {
  * 가능. Finance 가이드(FinanceGuideScreen) · SCM 가이드(ScmGuideScreen) ·
  * IAM 가이드(IamGuideScreen) · WMS 가이드(WmsGuideScreen)와 동일 패턴.
  */
-
-function Mono({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
-      {children}
-    </span>
-  );
-}
-
-function NoteCard({ title, body }: { title: string; body: string }) {
-  return (
-    <Card className="mb-10 bg-muted/40">
-      <p className="mb-1 text-sm font-medium text-foreground">{title}</p>
-      <p className="text-sm text-muted-foreground">{body}</p>
-    </Card>
-  );
-}
-
-/** 주의 필요 여부를 ●/— 로 표시하는 셀. */
-function AttentionCell({ attention }: { attention: boolean }) {
-  return attention ? (
-    <span className="text-foreground" aria-label="운영자 주의 필요" title="운영자 주의 필요">
-      ●
-    </span>
-  ) : (
-    <span className="text-muted-foreground" aria-label="정상">
-      —
-    </span>
-  );
-}
-
-/** 종료(terminal) 여부를 ●/— 로 표시하는 셀. */
-function TerminalCell({ terminal }: { terminal: boolean }) {
-  return terminal ? (
-    <span className="text-foreground" aria-label="종료 상태" title="종료 상태">
-      ●
-    </span>
-  ) : (
-    <span className="text-muted-foreground" aria-label="진행 중">
-      —
-    </span>
-  );
-}
-
-/** 상태명(한글 라벨 + enum) 행 헤더. */
-function StateTh({ label, name }: { label: string; name: string }) {
-  return (
-    <th scope="row" className="p-2 text-left">
-      <span className="font-medium text-foreground">{label}</span>
-      <span className="ml-2 font-mono text-[11px] text-muted-foreground">
-        {name}
-      </span>
-    </th>
-  );
-}
 
 export function ErpGuideScreen() {
   return (

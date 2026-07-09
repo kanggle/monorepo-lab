@@ -10,6 +10,7 @@ import {
   TMS_STATES,
   WMS_ROLES,
 } from '../data';
+import { Mono, NoteCard } from '@/shared/ui/guide-primitives';
 
 /**
  * WMS 가이드 화면 (TASK-PC-FE-183). 순수 정적 참조 화면 — 재고(수량 버킷·예약
@@ -17,23 +18,6 @@ import {
  * 설명한다. 데이터 페치·권한 게이트 없음(server component, no 'use client'):
  * 가이드는 콘솔 진입자 누구나 열람 가능. IAM 가이드(IamGuideScreen)와 동일 패턴.
  */
-
-function Mono({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
-      {children}
-    </span>
-  );
-}
-
-function NoteCard({ title, body }: { title: string; body: string }) {
-  return (
-    <Card className="mb-10 bg-muted/40">
-      <p className="mb-1 text-sm font-medium text-foreground">{title}</p>
-      <p className="text-sm text-muted-foreground">{body}</p>
-    </Card>
-  );
-}
 
 export function WmsGuideScreen() {
   return (
