@@ -4,7 +4,7 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
 
 **호출 방향**: account-service (client) → auth-service (server)
 **노출 경로**: `/internal/auth/*` — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../../../../rules/domains/saas.md) S2). 내부 네트워크 외부로 나가선 안 된다.
-**인증**: 내부 네트워크 경계 전제. 향후 X-Internal-Token 또는 mTLS 추가 예정 — 현 시점의 auth-service `SecurityConfig` 는 `/internal/**` 를 `permitAll()` 로 두고 있다 (TASK 별도).
+**인증** (TASK-BE-487, ADR-005 단계 4): 자격증명/액션 `/internal/auth/**` 엔드포인트(credential create·identity-backfill·force-logout·account-id-by-email)는 **GAP `client_credentials` Bearer JWT** 로만 통과한다. auth-service `SecurityConfig` 가 `permitAll()` 을 `oauth2ResourceServer(jwt)` + `.authenticated()` 로 전환했고(account-service BE-319b 수신 blueprint 복제, self-JWKS·issuer 검증), caller 는 `Authorization: Bearer <token>` 를 첨부한다(account-service=`account-service-client`, admin-service=`admin-service-client`, auth V0019 seed). 미제시/무효 토큰 → `401 {"code":"UNAUTHORIZED"}` (fail-closed). 단 **`GET /internal/auth/jwks` 는 계속 공개**(`permitAll`) — 게이트웨이가 토큰 *검증*용 공개키를 가져가는 경로라 토큰을 제시할 수 없다. `test`/`standalone` 프로파일은 `InternalApiFilter` bypass 로 실 JWT 없이 통과(운영은 항상 fail-closed).
 
 ---
 

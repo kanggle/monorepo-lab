@@ -56,6 +56,10 @@ class SignupRollbackIntegrationTest extends AbstractIntegrationTest {
         registry.add("account.auth-service.read-timeout-ms", () -> "1000");
         registry.add("account.auth-service.base-url",
                 () -> "http://localhost:" + wireMock.port());
+        // TASK-BE-487: AuthServiceClient now mints a GAP client_credentials token before each
+        // /internal/auth/** call. Point the token endpoint at the same WireMock (stubbed in resetWireMock).
+        registry.add("iam.internal-client.token-uri",
+                () -> "http://localhost:" + wireMock.port() + "/oauth2/token");
     }
 
     @BeforeAll
@@ -94,6 +98,13 @@ class SignupRollbackIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void resetWireMock() {
         wireMock.resetAll();
+        // TASK-BE-487: the GAP client_credentials token fetch must succeed so the credential call is
+        // the one under test (its 500 → rollback). Stub the token endpoint on every reset.
+        wireMock.stubFor(WireMock.post(urlPathEqualTo("/oauth2/token"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"access_token\":\"test-cc-token\",\"expires_in\":300,\"token_type\":\"Bearer\"}")));
     }
 
     @Test

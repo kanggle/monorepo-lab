@@ -32,13 +32,17 @@ import java.util.Optional;
 public class AuthServiceClient {
 
     private final RestClient restClient;
-    private final String internalToken;
+    // TASK-BE-487 (ADR-005 단계 4): auth-service /internal/auth/** flipped from permitAll to a GAP
+    // client_credentials Bearer JWT requirement. This client now presents that token (client_id
+    // admin-service-client, reusing the existing provider) instead of the static X-Internal-Token,
+    // which auth-service never validated and has been removed.
+    private final IamClientCredentialsTokenProvider tokenProvider;
 
     public AuthServiceClient(
             @Value("${admin.auth-service.base-url}") String baseUrl,
             @Value("${admin.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${admin.downstream.read-timeout-ms:10000}") int readTimeoutMs,
-            @Value("${admin.downstream.internal-token:}") String internalToken) {
+            IamClientCredentialsTokenProvider tokenProvider) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
@@ -49,7 +53,7 @@ public class AuthServiceClient {
                 .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .build();
-        this.internalToken = internalToken;
+        this.tokenProvider = tokenProvider;
     }
 
     /**
@@ -77,9 +81,8 @@ public class AuthServiceClient {
                         h.add("Idempotency-Key", idempotencyKey);
                         h.add("X-Operator-ID", operatorId);
                         if (tenantId != null) h.add("X-Tenant-Id", tenantId);
-                        if (internalToken != null && !internalToken.isBlank()) {
-                            h.add("X-Internal-Token", internalToken);
-                        }
+                        // TASK-BE-487: GAP client_credentials Bearer JWT (auth /internal/auth/** is JWT-only).
+                        h.setBearerAuth(tokenProvider.currentBearer());
                         h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
                     })
                     .body(body)
@@ -136,9 +139,8 @@ public class AuthServiceClient {
             ResolveAccountIdResponse resp = restClient.post()
                     .uri("/internal/auth/credentials/account-id-by-email")
                     .headers(h -> {
-                        if (internalToken != null && !internalToken.isBlank()) {
-                            h.add("X-Internal-Token", internalToken);
-                        }
+                        // TASK-BE-487: GAP client_credentials Bearer JWT (auth /internal/auth/** is JWT-only).
+                        h.setBearerAuth(tokenProvider.currentBearer());
                         h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
                     })
                     .body(body)

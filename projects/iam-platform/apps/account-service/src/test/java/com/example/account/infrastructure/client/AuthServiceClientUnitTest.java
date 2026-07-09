@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
@@ -25,6 +27,7 @@ class AuthServiceClientUnitTest {
 
     private static final String CREDENTIALS_PATH = "/internal/auth/credentials";
     private static final String BACKFILL_PATH = "/internal/auth/credentials/identity-backfill";
+    private static final String TOKEN_PATH = "/oauth2/token";
 
     private WireMockServer wireMockServer;
     private AuthServiceClient client;
@@ -33,8 +36,17 @@ class AuthServiceClientUnitTest {
     void setUp() {
         wireMockServer = new WireMockServer(wireMockConfig().dynamicPort());
         wireMockServer.start();
+        // TASK-BE-487: the client now mints a GAP client_credentials token before each /internal/auth/**
+        // call and presents it as Authorization: Bearer. Point the provider at this same WireMock and
+        // stub the token endpoint so the outbound credential calls carry a real bearer.
+        wireMockServer.stubFor(post(urlEqualTo(TOKEN_PATH))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"access_token\":\"test-cc-token\",\"expires_in\":300,\"token_type\":\"Bearer\"}")));
+        IamClientCredentialsTokenProvider tokenProvider = new IamClientCredentialsTokenProvider(
+                wireMockServer.baseUrl() + TOKEN_PATH, "account-service-client", "secret");
         // AuthServiceClient now enforces HTTP/1.1 internally, so no workaround needed here.
-        client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000);
+        client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
     }
 
     @AfterEach
@@ -50,6 +62,21 @@ class AuthServiceClientUnitTest {
 
         assertThatNoException().isThrownBy(() ->
                 client.createCredential("acc-1", "user@example.com", "pass123", "fan-platform", null));
+    }
+
+    @Test
+    @DisplayName("createCredential — TASK-BE-487: Authorization: Bearer <GAP client_credentials JWT> 전송")
+    void createCredential_sendsBearerJwt() {
+        wireMockServer.stubFor(post(urlEqualTo(CREDENTIALS_PATH))
+                .willReturn(aResponse().withStatus(201)));
+
+        client.createCredential("acc-b", "user@example.com", "pass123", "fan-platform", null);
+
+        wireMockServer.verify(postRequestedFor(urlEqualTo(CREDENTIALS_PATH))
+                .withHeader("Authorization", equalTo("Bearer test-cc-token")));
+        // The token was minted from the GAP token endpoint with the account-service-client credentials.
+        wireMockServer.verify(postRequestedFor(urlEqualTo(TOKEN_PATH))
+                .withRequestBody(matching(".*grant_type=client_credentials.*")));
     }
 
     @Test

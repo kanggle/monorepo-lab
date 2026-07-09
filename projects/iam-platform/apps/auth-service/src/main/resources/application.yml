@@ -159,3 +159,19 @@ iam:
     token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
     client-id: ${AUTH_SERVICE_CLIENT_ID:auth-service-client}
     client-secret: ${AUTH_SERVICE_CLIENT_SECRET:secret}
+
+# TASK-BE-487 (ADR-005 단계 4 — auth-service receiver): the credential/action /internal/auth/**
+# endpoints authenticate with a GAP-issued client_credentials JWT (Authorization: Bearer) ONLY —
+# closing the last internal boundary that was still permitAll. When bypass-when-unconfigured=false
+# (default) and no valid JWT is presented, those endpoints are rejected with 401 (fail-closed). The
+# bypass flag is for @WebMvcTest slice tests, local development and the 'test'/'standalone' profiles
+# only — never in production. /internal/auth/jwks stays public (the gateway fetches keys to validate
+# tokens and cannot present one). auth-service IS the GAP SAS, so the decoder validates tokens it
+# issued itself; JWKS is fetched lazily (no OIDC discovery at startup) so bootup is not coupled to the
+# SAS being ready.
+internal:
+  api:
+    bypass-when-unconfigured: ${INTERNAL_API_BYPASS_WHEN_UNCONFIGURED:false}
+    jwt:
+      jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
+      issuer: ${OIDC_ISSUER_URL:http://localhost:8081}
