@@ -160,7 +160,7 @@ class AdjustmentTransferIntegrationTest extends InventoryServiceIntegrationBase 
         jdbc.update("""
                 INSERT INTO location_snapshot
                 (id, location_code, warehouse_id, zone_id, location_type, status, cached_at, master_version)
-                VALUES (?, ?, ?, ?, 'BIN', 'ACTIVE', ?, 1)
+                VALUES (?, ?, ?, ?, 'STORAGE', 'ACTIVE', ?, 1)
                 """, locationId, "LOC-" + locationId.toString().substring(0, 8),
                 warehouseId, UUID.randomUUID(), now);
     }

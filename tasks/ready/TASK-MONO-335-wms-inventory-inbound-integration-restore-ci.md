@@ -103,3 +103,34 @@ into CI so the suites stay honest.
   `--no-parallel`; escalate to footprint reduction (MONO-331 follow-up).
 - 30-min timeout too tight for the 2-stack serial run → raise; worst case ≈
   2 × single-module wall-clock.
+
+## Delivered — Other-rot outcome (2026-07-09)
+
+Wiring the suites into CI surfaced the anticipated other-rot in waves; all but
+one were test-only and fixed in this PR:
+
+1. Context load: `@ConditionalOnWebApplication(SERVLET)` on inventory + inbound
+   `SecurityConfig` (per plan).
+2. `Instant`→`OffsetDateTime` for `TIMESTAMPTZ` binds (pgjdbc type-inference) —
+   AdjustmentTransfer / FlywayMigration / PickingFlow.
+3. `DELETE`→`TRUNCATE` for append-only teardown (inventory `inventory_movement`
+   V5 W2; inbound `putaway_confirmation` + `inbound_outbox` V7 W2).
+4. Transfer test: seeded `location_snapshot` (source+target, `STORAGE`) so
+   `TransferStockService.resolveSameWarehouse` resolves the warehouse (realistic
+   master-data-present precondition).
+
+One failure was **not** test-only: `PutawayCompletedConsumerIntegrationTest`
+re-applied a redelivered event (`expected 50 but was 100`, deterministic across
+runs). Root cause: **real production dedupe bug** — `EventDedupeRepositoryImpl`
+uses `repository.save()` on an assigned-`@Id` entity, which Spring Data treats as
+`merge()`/upsert, so duplicate `eventId`s silently UPDATE instead of colliding
+on the PK → the event re-applies. Per user decision (2026-07-09), that test is
+`@Disabled` here (the deterministic test body is kept) and the production bug +
+sibling-service audit (`outbound`/`notification` share the pattern, covered only
+by mock unit tests) is split to **TASK-BE-488** (wms-platform). CI is wired and
+guards the remaining 7 restored ITs + the suite going forward.
+
+A separate latent robustness gap discovered en route — `resolveSameWarehouse`'s
+documented "fall back to source row warehouse_id" is not implemented (unreachable
+on the normal snapshot-present path) — is noted in BE-488's Out-of-Scope for
+future consideration.
