@@ -3,18 +3,15 @@ package com.wms.outbound.adapter.out.persistence.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.wms.outbound.adapter.out.persistence.entity.OutboundEventDedupe;
 import com.wms.outbound.adapter.out.persistence.repository.OutboundEventDedupeRepository;
 import com.wms.outbound.application.port.out.EventDedupePort;
-import jakarta.persistence.EntityManager;
-import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -22,32 +19,32 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.dao.DataIntegrityViolationException;
 
+/**
+ * Unit tests for the dedupe adapter's INSERT-or-skip control flow. The native
+ * {@code insertIfAbsent} affected-row count is mocked; the authoritative
+ * merge-vs-insert behaviour against a real database is covered by
+ * {@code EventDedupePersistenceIntegrationTest} (TASK-BE-488).
+ */
 class EventDedupeRepositoryImplTest {
 
     private static final Instant FIXED_NOW = Instant.parse("2026-04-28T10:00:00Z");
 
     private OutboundEventDedupeRepository repository;
-    private EntityManager entityManager;
     private EventDedupeRepositoryImpl adapter;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         repository = mock(OutboundEventDedupeRepository.class);
-        entityManager = mock(EntityManager.class);
         Clock clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
         adapter = new EventDedupeRepositoryImpl(repository, clock);
-
-        Field field = EventDedupeRepositoryImpl.class.getDeclaredField("entityManager");
-        field.setAccessible(true);
-        field.set(adapter, entityManager);
     }
 
     @Test
     void firstOccurrenceRunsWorkAndReturnsApplied() {
+        when(repository.insertIfAbsent(any(), any(), any(), any())).thenReturn(1);
         AtomicInteger counter = new AtomicInteger();
+
         EventDedupePort.Outcome outcome = adapter.process(
                 UUID.randomUUID(),
                 "master.location.created",
@@ -55,17 +52,13 @@ class EventDedupeRepositoryImplTest {
 
         assertThat(outcome).isEqualTo(EventDedupePort.Outcome.APPLIED);
         assertThat(counter.get()).isEqualTo(1);
-
-        ArgumentCaptor<OutboundEventDedupe> captor = ArgumentCaptor.forClass(OutboundEventDedupe.class);
-        verify(repository, times(1)).save(captor.capture());
-        assertThat(captor.getValue().getOutcome()).isEqualTo("APPLIED");
-        verify(entityManager, times(1)).flush();
+        verify(repository, times(1)).insertIfAbsent(
+                any(), eq("master.location.created"), eq(FIXED_NOW), eq("APPLIED"));
     }
 
     @Test
     void duplicateOccurrenceSkipsWorkAndReturnsIgnored() {
-        doThrow(new DataIntegrityViolationException("duplicate event_id"))
-                .when(entityManager).flush();
+        when(repository.insertIfAbsent(any(), any(), any(), any())).thenReturn(0);
         AtomicInteger counter = new AtomicInteger();
 
         EventDedupePort.Outcome outcome = adapter.process(
@@ -81,12 +74,12 @@ class EventDedupeRepositoryImplTest {
     void rejectsNullEventId() {
         assertThatThrownBy(() -> adapter.process(null, "type", () -> {}))
                 .isInstanceOf(IllegalArgumentException.class);
-        verify(repository, never()).save(any());
+        verify(repository, never()).insertIfAbsent(any(), any(), any(), any());
     }
 
     @Test
     void workExceptionPropagatesAfterDedupeRowWritten() {
-        doNothing().when(entityManager).flush();
+        when(repository.insertIfAbsent(any(), any(), any(), any())).thenReturn(1);
         RuntimeException boom = new RuntimeException("downstream failure");
 
         assertThatThrownBy(() -> adapter.process(
@@ -94,6 +87,6 @@ class EventDedupeRepositoryImplTest {
                 "master.location.created",
                 () -> { throw boom; }))
                 .isSameAs(boom);
-        verify(repository, times(1)).save(any(OutboundEventDedupe.class));
+        verify(repository, times(1)).insertIfAbsent(any(), any(), any(), any());
     }
 }

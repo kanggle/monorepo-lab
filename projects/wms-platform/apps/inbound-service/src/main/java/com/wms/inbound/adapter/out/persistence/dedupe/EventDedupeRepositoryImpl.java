@@ -1,13 +1,10 @@
 package com.wms.inbound.adapter.out.persistence.dedupe;
 
 import com.wms.inbound.application.port.out.EventDedupePort;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,16 +12,24 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Persistence adapter for {@link EventDedupePort}.
  *
- * <p>Implementation: insert-then-flush. A unique-PK violation on
- * {@link DataIntegrityViolationException} signals a duplicate event — the
- * supplied work is skipped and {@link Outcome#IGNORED_DUPLICATE} is returned.
+ * <p>Implementation: {@code INSERT … ON CONFLICT (event_id) DO NOTHING} via
+ * {@link EventDedupeJpaRepository#insertIfAbsent}. The affected-row count is the
+ * dedupe signal — 1 means this eventId is new (run the work), 0 means it was
+ * already processed (skip and return {@link Outcome#IGNORED_DUPLICATE}).
  *
- * <p>The dedupe insert runs inside the caller's outer transaction
+ * <p>The insert runs inside the caller's outer transaction
  * ({@link Propagation#MANDATORY}) so the dedupe row, the consumer's domain
  * writes, and any outbox writes commit or rollback together. If {@code work}
  * throws, the transaction is rolled back and the dedupe row is removed
- * alongside, allowing a redelivery to retry. Mirrors
- * inventory-service's TASK-BE-027 pattern.
+ * alongside, allowing a redelivery to retry.
+ *
+ * <p>Why not {@code repository.save(...)}: the dedupe entity's {@code @Id} is a
+ * caller-assigned non-null UUID with no {@code @Version}, so Spring Data
+ * {@code save()} routes to {@code merge()} — a silent SELECT-then-UPDATE upsert
+ * that never collides on a duplicate PK. That made every redelivered event
+ * re-apply its side effects (TASK-BE-488). The unconditional {@code ON CONFLICT
+ * DO NOTHING} insert is the fix and never throws, so it cannot poison this
+ * MANDATORY transaction with rollback-only state.
  */
 @Component
 public class EventDedupeRepositoryImpl implements EventDedupePort {
@@ -33,9 +38,6 @@ public class EventDedupeRepositoryImpl implements EventDedupePort {
 
     private final EventDedupeJpaRepository repository;
     private final Clock clock;
-
-    @PersistenceContext
-    private EntityManager entityManager;
 
     public EventDedupeRepositoryImpl(EventDedupeJpaRepository repository, Clock clock) {
         this.repository = repository;
@@ -48,14 +50,9 @@ public class EventDedupeRepositoryImpl implements EventDedupePort {
         if (eventId == null) {
             throw new IllegalArgumentException("eventId must not be null");
         }
-        try {
-            EventDedupeJpaEntity row = new EventDedupeJpaEntity(
-                    eventId, eventType, clock.instant(), Outcome.APPLIED.name());
-            repository.save(row);
-            // Force the constraint check before running the side-effect so the
-            // duplicate signal arrives at the catch site, not at TX commit.
-            entityManager.flush();
-        } catch (DataIntegrityViolationException duplicate) {
+        int inserted = repository.insertIfAbsent(
+                eventId, eventType, clock.instant(), Outcome.APPLIED.name());
+        if (inserted == 0) {
             log.debug("event {} ({}) already processed; skipping", eventId, eventType);
             return Outcome.IGNORED_DUPLICATE;
         }

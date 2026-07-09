@@ -23,7 +23,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -99,11 +98,6 @@ class PutawayCompletedConsumerIntegrationTest extends InventoryServiceIntegratio
     }
 
     @Test
-    @Disabled("TASK-BE-488: exposes a real production dedupe bug — EventDedupeRepositoryImpl "
-            + "uses repository.save() on an assigned-@Id entity, which Spring Data treats as "
-            + "merge/upsert, so duplicate eventIds silently UPDATE instead of colliding and the "
-            + "event is re-applied. Test is deterministic and correct; re-enable when BE-488 "
-            + "fixes the production dedupe (save→persist / insert-only).")
     @DisplayName("re-delivery with same eventId is deduped")
     void redeliveryIsDeduped() throws Exception {
         UUID warehouseId = UUID.randomUUID();
