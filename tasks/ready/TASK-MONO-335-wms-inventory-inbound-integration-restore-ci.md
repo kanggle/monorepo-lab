@@ -118,6 +118,15 @@ one were test-only and fixed in this PR:
 4. Transfer test: seeded `location_snapshot` (source+target, `STORAGE`) so
    `TransferStockService.resolveSameWarehouse` resolves the warehouse (realistic
    master-data-present precondition).
+5. inbound context load (2nd blocker, surfaced after the SecurityConfig fix):
+   `InboundServiceApplication` did not `exclude` the shared
+   `OutboxAutoConfiguration`, so the lib's `OutboxJpaConfig` entity-scanned
+   `ProcessedEventJpaEntity` (`processed_events`) — a table inbound has no
+   migration for → `ddl-auto=validate` failed. Applied the same one-line fix
+   inventory (TASK-BE-432) and outbound (TASK-BE-333) already carry: inbound
+   has its own outbox stack + dedupe, so it excludes the shared auto-config.
+   (A genuine latent production-startup misconfiguration, never caught because no
+   inbound full-context job ran — exactly the gap this task closes.)
 
 One failure was **not** test-only: `PutawayCompletedConsumerIntegrationTest`
 re-applied a redelivered event (`expected 50 but was 100`, deterministic across
