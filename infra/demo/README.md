@@ -52,25 +52,47 @@ KEEP_TRAEFIK=1 bash infra/demo/demo-down.sh   # traefik-net 유지
 > 리소스 주의: `full`(41 JVM 동시)은 RAM ~32–48GB. 저사양/로컬에서는 OOM/exit137
 > 위험이 있으니 `demo-core` 부터 확인할 것. 실제 데모 호스트는 `m6i.4xlarge`(64GB) 기준.
 
-## 회귀 방어 (TASK-MONO-341)
+## 프로젝트당 compose 파일이 여러 개일 수 있다 (TASK-MONO-342/344)
+
+저장소에는 두 패턴이 공존한다:
+
+| 패턴 | base | 풀스택 | 프로젝트 |
+|---|---|---|---|
+| 1 | 인프라 전용 | `docker-compose.e2e.yml` | **iam · wms** |
+| 2 | 앱까지 전부 | — | scm · fan · finance · erp · ecommerce · console |
+
+패턴 1 에 base 만 주면 **DB 만 뜨고 앱이 0개**다. iam 은 OIDC IdP 이므로 그 경우
+전 도메인의 토큰 검증이 무너진다. 그래서 `projects.sh` 의 `COMPOSE[slug]` 는
+**공백 구분 파일 목록**이고, 아래 가드 (e)가 회귀를 막는다.
+
+크로스-프로젝트 env(무비밀번호 redis, wms→iam OIDC, 스텁 URL)는
+[`demo.env`](demo.env) 에 있고 `demo-up.sh` 가 source 한다. 프로젝트 compose 는
+byte-unchanged 로 둔다.
+
+> ⚠️ **선행 빌드 필수**: Java 서비스 Dockerfile 은 `COPY build/libs/<svc>.jar` 다
+> (도커 안에서 컴파일하지 않는다). `DEMO_BUILD=1` 전에 각 서비스 `bootJar` 와
+> `monorepo/java-service-base:v1` 이미지가 준비돼야 한다. AMI 가 이를 prebake 한다.
+
+## 회귀 방어 (TASK-MONO-341/344)
 
 프로젝트 맵은 [`projects.sh`](projects.sh) **단일 출처** — `demo-up.sh` / `demo-down.sh` /
 `verify-demo-wrapper.sh` 가 공통 source 한다.
 
 ```bash
-bash infra/demo/verify-demo-wrapper.sh          # 정적 (a)~(d)
-bash infra/demo/verify-demo-wrapper.sh --live   # + (e) 실기동 증명 (redis 2개, 자동 teardown)
+bash infra/demo/verify-demo-wrapper.sh          # 정적 (a)~(e)
+bash infra/demo/verify-demo-wrapper.sh --live   # + (f) 실기동 증명 (redis 2개, 자동 teardown)
 ```
 
 래퍼가 의존하는 불변식을 검증한다 — 하나라도 무너지면 데모가 **소리없이** 불완전 부팅된다:
 
 | # | 불변식 | 깨지면 |
 |---|---|---|
-| (a) | 9개 compose 가 각각 렌더된다 | 해당 프로젝트 미기동 |
+| (a) | 모든 compose 조합이 렌더된다 | 해당 프로젝트 미기동 |
 | (b) | `container_name` 전역 유일 | docker 가 중복 이름 거부 |
 | (c) | host `ports:` 전역 무충돌 | 포트 바인딩 실패 |
 | (d) | 모든 `projects/*/docker-compose.yml` 이 맵에 등록 | **신규 프로젝트가 데모에서 조용히 누락** |
-| (e) | 같은 키 `redis` 가 별도 `-p` 로 공존 | 누군가 `include:` 로 되돌림 = 침묵 병합 회귀 |
+| (e) | **각 프로젝트가 `build:` 서비스를 ≥1개 기여** | **DB 만 뜨고 앱이 0개** (MONO-342 가 겪은 결함) |
+| (f) | 같은 키 `redis` 가 별도 `-p` 로 공존 | 누군가 `include:` 로 되돌림 = 침묵 병합 회귀 |
 
 CI 잡 `demo-wrapper-smoke` (`.github/workflows/ci.yml`) 가 `infra/demo/**` ·
 `infra/traefik/**` · `projects/*/docker-compose.yml` 변경 PR 에서 위를 자동 검증한다.
