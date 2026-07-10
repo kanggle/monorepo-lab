@@ -70,19 +70,39 @@ jobs:
   # Edge case — workflow self-change PR (.github/workflows/** modified):
   #   The `workflows` flag catches it → all jobs activate (regression safety).
   #
-  # Edge case — dorny/paths-filter step itself fails (bug/timeout):
-  #   All outputs default to empty string (falsy).  The `if:` conditions below
-  #   use `|| github.event_name == 'push'` as a push-to-main fallback so main
-  #   branch protection is never compromised by a filter failure.
-  #   PR-level filtering simply falls back to "all skip" — the author can
-  #   close+reopen the PR to retry or add an empty commit to re-trigger.
+  # Push-to-main fallback (TASK-MONO-343):
+  #   The `if:` conditions below use
+  #     (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false')
+  #   so a main push runs the heavy lanes UNLESS the filter positively said there
+  #   is no code change.  Two properties depend on this exact spelling:
+  #
+  #   * `!= 'false'` — NOT `== 'true'`.  If dorny/paths-filter fails or is skipped,
+  #     every output is the empty string.  `'' != 'false'` is TRUE, so main still
+  #     runs everything and branch protection survives a filter failure.  Written
+  #     as `== 'true'` that fallback silently disappears and a regression could
+  #     land on main with zero verification.  This is the trap of this file.
+  #
+  #   * The fallback used to be an unconditional `github.event_name == 'push' ||`,
+  #     which overrode the filter verdict on every main push.  Doc-only commits
+  #     therefore ran all 8+ Testcontainers lanes — zero lines of code to regress,
+  #     so zero signal, while main appeared flake-RED and eroded the "is main
+  #     GREEN" check that the merge discipline (CLAUDE.md 3-dim) rests on.
+  #     On 2026-07-10, three of three doc-only main commits went RED this way.
   #
   # Edge case — root tasks/** or markdown-only change:
-  #   No project flag is true; libs/workflows are also false; contracts is false.
-  #   build-and-test activates via its own push-to-main fallback only (skips for
-  #   PRs); all other jobs skip. Spec/chore PRs complete in ~1-2 min.
+  #   No project flag is true; libs/workflows are also false; contracts is false;
+  #   code-changed is false.  All heavy jobs skip, on PRs *and* on main pushes.
   #   TASK-MONO-045 baseline → TASK-MONO-058 (project tasks/) →
-  #   TASK-MONO-074 (markdown-only, contracts force-full).
+  #   TASK-MONO-074 (markdown-only, contracts force-full) → TASK-MONO-343.
+  #   `build-and-test` skips too: with no code change there is nothing to compile,
+  #   and no workflow consumes its artifacts across runs (nightly-e2e.yml builds
+  #   its own boot jars in-run; there is no `workflow_run` / `run-id` consumer).
+  #
+  # Edge case — contracts-only change (markdown under specs/contracts/**):
+  #   `code-changed` is false, but the `contracts` flag is pure-positive and is
+  #   NOT AND-ed with code-changed, so it still force-fulls e2e as its own OR term.
+  #   Do not AND `contracts` with `code-changed` — that kills the cross-service
+  #   consumer-breakage gate (TASK-MONO-074).
   #
   # Edge case — contracts-only PR (single project's specs/contracts/** change):
   #   `contracts` flag activates → all 4 e2e jobs (wms e2e-tests +
@@ -306,7 +326,7 @@ jobs:
     #   - push to main always runs (safety net regardless of filter)
     # spec/chore PRs (tasks/** or *.md only) produce no matching flag → skip.
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.wms == 'true' ||
@@ -473,7 +493,7 @@ jobs:
     timeout-minutes: 15
     # Activate for wms changes or cross-project (libs/workflows).
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.wms == 'true'
@@ -514,7 +534,7 @@ jobs:
     # Packages all 12 ecommerce backend services and uploads the JARs as an
     # artifact consumed by the nightly-e2e workflow (TASK-MONO-014, TASK-MONO-045).
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.ecommerce == 'true'
@@ -578,7 +598,7 @@ jobs:
     # artist) as boot jars and uploads them as a single artifact consumed by
     # the `fan-platform-e2e` job (TASK-FAN-INT-001).
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.fan == 'true'
@@ -622,7 +642,7 @@ jobs:
     # inventory-visibility) as boot jars and uploads them as a single artifact
     # consumed by the `scm-platform-e2e` job (TASK-SCM-INT-001).
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.scm == 'true'
@@ -668,7 +688,7 @@ jobs:
     # with `code-changed` (changes job), so a markdown-only platform-console PR
     # stays skipped — no negation pattern needed (MONO-074/075 quirk rule).
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.ecommerce == 'true' ||
@@ -736,7 +756,7 @@ jobs:
     # cross-project, or any project's contract change (cross-service consumer
     # gate, MONO-074).
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.ecommerce == 'true' ||
@@ -837,7 +857,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.wms == 'true'
@@ -889,7 +909,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.wms == 'true'
@@ -918,7 +938,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.iam == 'true'
@@ -959,7 +979,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.fan == 'true'
@@ -999,7 +1019,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.iam == 'true' ||
@@ -1067,7 +1087,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.scm == 'true'
@@ -1094,7 +1114,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.finance == 'true'
@@ -1120,7 +1140,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.erp == 'true'
@@ -1149,7 +1169,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.platform-console == 'true'
@@ -1183,7 +1203,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.ecommerce == 'true'
@@ -1238,7 +1258,7 @@ jobs:
     # Activate for ecommerce or fan-platform frontend changes, or cross-project.
     # Frontend build depends on shared tsconfig.base.json (captured by libs flag).
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
       needs.changes.outputs.libs == 'true' ||
       needs.changes.outputs.workflows == 'true' ||
       needs.changes.outputs.ecommerce == 'true' ||
@@ -1297,7 +1317,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.wms == 'true' ||
@@ -1333,7 +1353,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.fan == 'true' ||
@@ -1372,7 +1392,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.libs == 'true' ||
         needs.changes.outputs.workflows == 'true' ||
         needs.changes.outputs.scm == 'true' ||
@@ -1431,7 +1451,7 @@ jobs:
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
-        github.event_name == 'push' ||
+        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
         needs.changes.outputs.observability == 'true' ||
         needs.changes.outputs.workflows == 'true'
       )
