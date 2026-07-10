@@ -179,5 +179,39 @@ class EntitlementCeilingTest {
             assertThat(c.domainsCsv()).isEqualTo("erp,wms"); // canonical order
             assertThat(EntitlementCeiling.fromStorage("BOUNDED", c.domainsCsv())).isEqualTo(c);
         }
+
+        /**
+         * TASK-BE-494 regression. The canonical order must come from the SORT, never from
+         * a hash-ordered set: {@code Set.copyOf} iterates by element hash mixed with a
+         * per-JVM random salt, so a two-element ceiling encoded correctly in roughly half
+         * of all JVM starts and the other half wrote "wms,erp". Six elements make an
+         * accidental pass a 1-in-720 event rather than a coin flip.
+         */
+        @Test
+        @DisplayName("canonical order is the sort order, not the hash order (BE-494)")
+        void domainsCsvIsSortedNotHashOrdered() {
+            List<String> shuffled = List.of("wms", "erp", "scm", "finance", "mes", "ecommerce");
+            EntitlementCeiling c = EntitlementCeiling.bounded(shuffled);
+
+            List<String> sorted = shuffled.stream().sorted().toList();
+            assertThat(c.domainsCsv()).isEqualTo(String.join(",", sorted));
+            // The field itself iterates in sort order — the CSV is not sorted on the way out.
+            assertThat(c.domains()).containsExactlyElementsOf(sorted);
+            // ...and it survives a storage round-trip unchanged.
+            EntitlementCeiling reparsed = EntitlementCeiling.fromStorage("BOUNDED", c.domainsCsv());
+            assertThat(reparsed.domains()).containsExactlyElementsOf(sorted);
+            assertThat(reparsed.domainsCsv()).isEqualTo(c.domainsCsv());
+        }
+
+        @Test
+        @DisplayName("intersect preserves the canonical order of the surviving domains")
+        void intersectStaysCanonical() {
+            EntitlementCeiling a =
+                    EntitlementCeiling.bounded(List.of("wms", "erp", "scm", "finance"));
+            EntitlementCeiling b =
+                    EntitlementCeiling.bounded(List.of("scm", "wms", "mes", "erp"));
+
+            assertThat(a.intersect(b).domainsCsv()).isEqualTo("erp,scm,wms");
+        }
     }
 }

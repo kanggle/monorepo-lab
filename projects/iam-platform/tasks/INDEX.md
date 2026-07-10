@@ -89,7 +89,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-494-entitlement-ceiling-csv-order.md` — **main CI RED 복구** (fix PR). `EntitlementCeiling` compact ctor 가 `Set.copyOf(new TreeSet<>(...))` 로 정렬을 버려(`ImmutableCollections` 순회 순서 = 원소 해시 × **JVM 기동마다 랜덤한 salt**), `domainsCsv()` 가 같은 ceiling 을 런마다 `erp,wms`/`wms,erp` 로 인코딩했다. javadoc 이 약속한 "canonical sorted CSV" 계약 위반 — **flaky 테스트가 아니라 flaky 프로덕션 인코딩**. `EntitlementCeilingTest > boundedRoundTrip` 이 ~50% 확률로 실패(로컬 JVM 8회 기동: 4/4 split). BE-491(#2370)이 운 좋은 실행에서 머지되어 main `954ecfef3` 이 RED. fix = `Collections.unmodifiableSet(new LinkedHashSet<>(new TreeSet<>(...)))` 로 정렬 순서를 필드까지 보존. 회귀 테스트 2종 추가(6원소 canonical 단언 — 우연 통과 1/720, `intersect` 결과 canonical). **버그 라인 복원 시 3 fail / fix 시 4회 연속 GREEN** 로 비-공허성 실증. `ceiling_domains` 백필은 불필요(org-node seed = inert, 아직 행 없음; `fromStorage` 는 순서 무관 파싱).
 
 ## done
 
