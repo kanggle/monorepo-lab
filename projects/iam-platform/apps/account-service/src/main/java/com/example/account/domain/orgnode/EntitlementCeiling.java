@@ -1,6 +1,7 @@
 package com.example.account.domain.orgnode;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.TreeSet;
@@ -55,7 +56,13 @@ public record EntitlementCeiling(Mode mode, Set<String> domains) {
             // would create two encodings of the identity element.
             throw new IllegalArgumentException("UNBOUNDED ceiling must not carry domains");
         }
-        domains = (domains == null) ? Set.of() : Set.copyOf(new TreeSet<>(domains));
+        // Sorted iteration order must survive into the field: `domainsCsv()` promises a
+        // canonical CSV. `Set.copyOf` would NOT preserve it — its iteration order is a
+        // function of element hashes and a per-JVM random salt, so the same ceiling would
+        // encode as "erp,wms" in one JVM and "wms,erp" in the next (TASK-BE-494).
+        domains = (domains == null)
+                ? Set.of()
+                : Collections.unmodifiableSet(new LinkedHashSet<>(new TreeSet<>(domains)));
     }
 
     /** The identity element: no ceiling. NOT "all known domains". */
