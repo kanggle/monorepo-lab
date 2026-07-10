@@ -26,6 +26,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -35,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -70,6 +73,10 @@ class AccountAdminControllerTest {
     @Autowired
     MockMvc mockMvc;
 
+    /** TASK-BE-495: lets the guard assert on route existence, not on a slice-dependent status. */
+    @Autowired
+    RequestMappingHandlerMapping handlerMapping;
+
     @MockitoBean
     AccountAdminUseCase useCase;
 
@@ -99,6 +106,57 @@ class AccountAdminControllerTest {
 
     private String bearer() {
         return "Bearer " + jwt.operatorToken("op-1");
+    }
+
+    /**
+     * TASK-BE-495 regression guard — the public detail surface
+     * {@code GET /api/admin/accounts/{accountId}} is REMOVED and must stay removed.
+     *
+     * <p>It was never in {@code admin-api.md}, had no consumer, and (unlike every
+     * sibling) skipped {@link QueryTenantScopeGate}, letting a tenant-scoped operator
+     * holding {@code account.read} read another tenant's account given only an
+     * accountId.
+     *
+     * <p>We assert on the <b>handler mapping</b> rather than on a response status:
+     * in a {@code @WebMvcTest} slice an unmapped path yields 500 (no static-resource
+     * handler is registered to turn it into a 404), so a status assertion would encode
+     * a slice artifact instead of the invariant. Absence from
+     * {@link RequestMappingHandlerMapping} is the invariant — and it turns RED the
+     * moment anyone re-adds the handler, gate or no gate.
+     */
+    @Test
+    void detail_surface_is_removed_from_the_handler_mapping() {
+        boolean detailRouteExists = handlerMapping.getHandlerMethods().keySet().stream()
+                .anyMatch(info -> {
+                    var methods = info.getMethodsCondition().getMethods();
+                    var patterns = info.getPathPatternsCondition() == null
+                            ? java.util.Set.<String>of()
+                            : info.getPathPatternsCondition().getPatternValues();
+                    return methods.contains(RequestMethod.GET)
+                            && patterns.contains("/api/admin/accounts/{accountId}");
+                });
+
+        assertThat(detailRouteExists)
+                .as("GET /api/admin/accounts/{accountId} was removed by TASK-BE-495; "
+                        + "re-adding it requires a spec-first admin-api.md section AND a "
+                        + "queryTenantScopeGate.resolve(...) call (cross-tenant => 404, never 403)")
+                .isFalse();
+    }
+
+    /** The sibling list surface must keep working — the removal is surgical. */
+    @Test
+    void list_surface_survives_the_detail_removal() {
+        boolean listRouteExists = handlerMapping.getHandlerMethods().keySet().stream()
+                .anyMatch(info -> {
+                    var methods = info.getMethodsCondition().getMethods();
+                    var patterns = info.getPathPatternsCondition() == null
+                            ? java.util.Set.<String>of()
+                            : info.getPathPatternsCondition().getPatternValues();
+                    return methods.contains(RequestMethod.GET)
+                            && patterns.contains("/api/admin/accounts");
+                });
+
+        assertThat(listRouteExists).isTrue();
     }
 
     @Test
