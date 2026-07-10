@@ -17,12 +17,16 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=infra/demo/projects.sh
 source "$HERE/projects.sh"
+# demo.env — up 과 동일한 ${VAR} 해소가 있어야 compose 가 같은 프로젝트를 인식한다
+# shellcheck source=infra/demo/demo.env
+set -a; source "$HERE/demo.env"; set +a
 
 KEEP_TRAEFIK="${KEEP_TRAEFIK:-0}"
 
 for p in "${DOWN_ORDER[@]}"; do
+  mapfile -t ARGS < <(compose_args "$p")
   echo "[demo] down: $p"
-  docker compose -p "$p" -f "$ROOT/${COMPOSE[$p]}" down --remove-orphans || true
+  docker compose -p "$p" "${ARGS[@]}" down --remove-orphans || true
 done
 
 if [ "$KEEP_TRAEFIK" = "1" ]; then
