@@ -391,6 +391,15 @@ strictlyAdministers(actor, N) = actor 가 SUPER_ADMIN, 또는 N 의 STRICT ances
 - **`SUPER_ADMIN` 은 절대 mintable 아님** — `ORG_ADMIN` grant 은 `role ≠ SUPER_ADMIN` 을 강제한다(ADR-024 D3 재사용).
 - **cross-scope 는 404** — actor 스코프 밖의 노드/tenant 대상은 **404 `ORG_NODE_NOT_FOUND`**(403 아님 — 403 은 subtree 밖 노드/tenant 의 존재를 누설; 기존 cross-scope confinement 규약과 동형) + best-effort DENIED `admin_actions` row.
 
+> **grant ceiling cap 의 정확한 판정식 (TASK-BE-492 구현 시 명세화 — 새 결정 아님, 위 두 규칙의 기계적 귀결).**
+> ```
+> requireGrantWithinCeiling(N, role):
+>     ceiling = effectiveCeiling(N)          # 실패 → BOUNDED({}) (fail-closed)
+>     if ceiling == BOUNDED({}): deny 422    # 아무 도메인도 불허하는 노드는 node-admin 을 받지 못한다
+>     if domainFootprint(role) ⊄ ceiling: deny 422
+> ```
+> `domainFootprint(role)` = 그 role 이 도달하는 도메인 키 집합. **`admin_roles` 의 현행 role 은 전부 cross-domain admin-tier 라 footprint 가 공집합**이며(`admin_role_permissions` 에 도메인 축이 없다), 따라서 부분집합 검사는 오늘 vacuously true 다. 실제로 발화하는 것은 첫 번째 절 — 그리고 그 절이 바로 [internal 계약](../../contracts/http/internal/admin-to-account.md#get-internalorg-nodesorgnodeideffective-ceiling)의 *"cap 계산 실패는 grant 를 거부(빈 ceiling = 아무 도메인도 부여 불가)로 resolve 한다 — 절대 `UNBOUNDED` 로 폴백하지 않는다"* 를 만족시키는 지점이다. role 별 domain footprint 를 정의하는 것(= "admin role 이 어느 도메인에 도달하는가")은 ADR-047 이 내리지 않은 **별도 결정**이므로 여기서 발명하지 않는다. 도메인-스코프 grantable role 이 도입되면 `domainFootprint` 만 채우면 되고 판정 지점은 이미 옳은 자리에 있다. **어느 방향으로도 over-grant 는 불가능하다 — 이 cap 은 거부만 한다.**
+
 **감사**: `admin_actions` action code = `ORG_NODE_CREATE` / `ORG_NODE_UPDATE` / `ORG_NODE_DELETE` / `ORG_NODE_CEILING_SET` / `ORG_ADMIN_GRANT` / `ORG_ADMIN_REVOKE`, `target_type='ORG_NODE'`, `target_id=<orgNodeId>`. GET 성공은 감사 row 미기록(`grantable-roles` / BE-486 read-path 규약); 403 은 best-effort DENIED row.
 
 **에러 코드**: 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 403 `ORG_NODE_SELF_CEILING_DENIED`, 404 `ORG_NODE_NOT_FOUND`(cross-scope 포함), 422 `ORG_ADMIN_GRANT_OUT_OF_CEILING`, 503 `INTEGRATION_UNAVAILABLE`.

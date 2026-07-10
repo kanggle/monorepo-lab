@@ -55,6 +55,23 @@ public final class Permission {
      * widens admin scope.
      */
     public static final String PARTNERSHIP_MANAGE = "partnership.manage";
+    /**
+     * TASK-BE-492 (ADR-MONO-047 D5): org-node tree authority — node CRUD, ceiling edits,
+     * and {@code ORG_ADMIN} grant/revoke. Held by {@code SUPER_ADMIN} (the only principal
+     * that may create a ROOT node) and by the new {@code ORG_ADMIN} role, whose grant is
+     * scoped to an org-node rather than to a tenant.
+     *
+     * <p>An org-node is a <b>data-less grouping node above {@code tenant}</b> — it groups
+     * tenants, it never nests them (ADR-047 D1), so the M1 single flat isolation key is
+     * untouched. admin-service does not store the tree: this key gates a <b>thin command
+     * gateway</b> onto account-service, which owns {@code tenants} and therefore
+     * {@code org_node} (D6).
+     *
+     * <p>Holding this key does NOT widen admin scope by itself — an {@code ORG_ADMIN}'s
+     * reach is the tenant subtree under the node named by its grant row's
+     * {@code admin_operator_roles.org_node_id}, resolved fail-closed.
+     */
+    public static final String ORG_MANAGE = "org.manage";
 
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";
@@ -83,7 +100,8 @@ public final class Permission {
             TENANT_MANAGE,
             SUBSCRIPTION_MANAGE,
             TENANT_ADMIN_DELEGATE,
-            PARTNERSHIP_MANAGE);
+            PARTNERSHIP_MANAGE,
+            ORG_MANAGE);
 
     /** @return the canonical permission-key catalog (immutable, rbac.md order). */
     public static List<String> catalog() {

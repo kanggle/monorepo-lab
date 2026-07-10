@@ -34,6 +34,29 @@ import java.util.Set;
  *
  * <p>Fail-closed: any unexpected error during resolution yields an empty scope
  * (deny), mirroring {@link PermissionEvaluatorImpl}.
+ *
+ * <p><b>ADR-MONO-047 D5 amendment (TASK-BE-492).</b> A grant row may now carry a
+ * nullable {@code org_node_id} (V0042). Each granting row resolves in this order:
+ * <ol>
+ *   <li>{@code tenant_id = '*'} → platform. Evaluated as a <b>PRE-SCAN over every
+ *       granting row, before any subtree round-trip</b>. It is deliberately NOT an
+ *       in-loop short-circuit: row iteration order would then decide whether
+ *       {@code subtreeTenantIds()} is called before the {@code '*'} row is reached, and
+ *       an account-service outage would make a {@code SUPER_ADMIN} <em>lose</em> platform
+ *       reach — fail-closed cutting down the one principal it must never cut down.</li>
+ *   <li>{@code org_node_id IS NOT NULL} → the tenants of that node's subtree, resolved
+ *       fail-closed ({@link OrgNodeSubtreeResolver}). An unresolvable subtree contributes
+ *       the EMPTY set — never {@code '*'}, never all tenants.</li>
+ *   <li>otherwise → {@code {tenant_id}} (byte-unchanged legacy behaviour).</li>
+ * </ol>
+ *
+ * <p>NET-ZERO until the first {@code ORG_ADMIN @ node} grant exists: V0041 seeds the role
+ * to nobody, so no row has a non-null {@code org_node_id} and branch (2) is unreachable.
+ *
+ * <p>The subtree round-trip happens inside this read-only transaction. That is bounded by
+ * the org-node client's short connect/read timeouts (no retry) plus a brief success-only
+ * cache, so a hung authority times the permission check out CLOSED rather than pinning a
+ * connection for the default 10s downstream window.
  */
 @Slf4j
 @Component
@@ -43,12 +66,14 @@ public class AdminGrantScopeEvaluator {
     private final AdminOperatorJpaRepository operators;
     private final AdminOperatorRoleJpaRepository operatorRoles;
     private final AdminRolePermissionJpaRepository rolePermissions;
+    private final OrgNodeSubtreeResolver subtreeResolver;
 
     /**
      * @param operatorId external operator UUID (JWT {@code sub})
      * @param permission the permission key (e.g. {@code operator.manage})
      * @return the {@code tenant_id}s of the actor's grant rows that confer
-     *         {@code permission}; contains {@code '*'} for a platform grant;
+     *         {@code permission}; exactly {@code {'*'}} for a platform grant;
+     *         a node-scoped grant contributes its subtree's tenants;
      *         empty if the actor does not hold the permission or is unknown/inactive
      */
     @Transactional(readOnly = true)
@@ -57,29 +82,26 @@ public class AdminGrantScopeEvaluator {
             return Set.of();
         }
         try {
-            Optional<AdminOperatorJpaEntity> op = operators.findByOperatorId(operatorId);
-            if (op.isEmpty()) {
+            List<AdminOperatorRoleJpaEntity> grantingRows = grantingRows(operatorId, permission);
+            if (grantingRows.isEmpty()) {
                 return Set.of();
             }
-            AdminOperatorJpaEntity operator = op.get();
-            if (!AdminOperator.Status.ACTIVE.name().equals(operator.getStatus())) {
-                return Set.of();
+
+            // (1) Platform pre-scan — FIRST, before any subtree round-trip. Order-independent.
+            for (AdminOperatorRoleJpaEntity row : grantingRows) {
+                if (AdminOperator.PLATFORM_TENANT_ID.equals(row.getTenantId())) {
+                    return Set.of(AdminOperator.PLATFORM_TENANT_ID);
+                }
             }
-            List<AdminOperatorRoleJpaEntity> roleRows = operatorRoles.findByOperatorId(operator.getId());
-            if (roleRows.isEmpty()) {
-                return Set.of();
-            }
-            List<Long> roleIds = roleRows.stream()
-                    .map(AdminOperatorRoleJpaEntity::getRoleId)
-                    .toList();
-            Set<Long> grantingRoleIds = Set.copyOf(
-                    rolePermissions.findRoleIdsGrantingPermission(permission, roleIds));
-            if (grantingRoleIds.isEmpty()) {
-                return Set.of();
-            }
+
             Set<String> scope = new LinkedHashSet<>();
-            for (AdminOperatorRoleJpaEntity row : roleRows) {
-                if (grantingRoleIds.contains(row.getRoleId()) && row.getTenantId() != null) {
+            for (AdminOperatorRoleJpaEntity row : grantingRows) {
+                if (row.getOrgNodeId() != null) {
+                    // (2) org-node-scoped grant (ORG_ADMIN) — subtree driver. Fail-closed:
+                    // an unresolvable subtree contributes nothing.
+                    scope.addAll(subtreeResolver.subtreeTenantIdsFailClosed(row.getOrgNodeId()));
+                } else if (row.getTenantId() != null) {
+                    // (3) tenant-scoped grant (TENANT_ADMIN) — byte-unchanged.
                     scope.add(row.getTenantId());
                 }
             }
@@ -89,6 +111,91 @@ public class AdminGrantScopeEvaluator {
                     operatorId, permission, ex);
             return Set.of();
         }
+    }
+
+    /**
+     * TASK-BE-492 (ADR-MONO-047 D5) — the org-node ids at which the actor holds a
+     * node-scoped grant conferring {@code permission}. Pure DB: no account-service
+     * round-trip, so the org-node reach predicates
+     * ({@code administers} / {@code strictlyAdministers}) can be evaluated without
+     * expanding any subtree.
+     *
+     * <p>Empty for a platform actor — {@code SUPER_ADMIN}'s reach comes from {@code '*'}
+     * (see {@link #isPlatformScope}), never from a node.
+     */
+    @Transactional(readOnly = true)
+    public Set<String> grantedOrgNodeIds(String operatorId, String permission) {
+        if (operatorId == null || permission == null) {
+            return Set.of();
+        }
+        try {
+            Set<String> nodeIds = new LinkedHashSet<>();
+            for (AdminOperatorRoleJpaEntity row : grantingRows(operatorId, permission)) {
+                if (row.getOrgNodeId() != null) {
+                    nodeIds.add(row.getOrgNodeId());
+                }
+            }
+            return Set.copyOf(nodeIds);
+        } catch (RuntimeException ex) {
+            log.error("Org-node grant resolution failed (fail-closed) operatorId={} permission={}",
+                    operatorId, permission, ex);
+            return Set.of();
+        }
+    }
+
+    /**
+     * TASK-BE-492 — {@code true} iff the actor holds {@code permission} via a platform grant
+     * ({@code tenant_id='*'}). Never issues a subtree round-trip, so it stays true while
+     * account-service is down.
+     */
+    @Transactional(readOnly = true)
+    public boolean isPlatformScope(String operatorId, String permission) {
+        if (operatorId == null || permission == null) {
+            return false;
+        }
+        try {
+            for (AdminOperatorRoleJpaEntity row : grantingRows(operatorId, permission)) {
+                if (AdminOperator.PLATFORM_TENANT_ID.equals(row.getTenantId())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (RuntimeException ex) {
+            log.error("Platform-scope resolution failed (fail-closed) operatorId={} permission={}",
+                    operatorId, permission, ex);
+            return false;
+        }
+    }
+
+    /**
+     * The ACTIVE actor's {@code admin_operator_roles} rows whose role confers
+     * {@code permission}. Empty when the operator is unknown, inactive, roleless, or holds
+     * no granting role.
+     */
+    private List<AdminOperatorRoleJpaEntity> grantingRows(String operatorId, String permission) {
+        Optional<AdminOperatorJpaEntity> op = operators.findByOperatorId(operatorId);
+        if (op.isEmpty()) {
+            return List.of();
+        }
+        AdminOperatorJpaEntity operator = op.get();
+        if (!AdminOperator.Status.ACTIVE.name().equals(operator.getStatus())) {
+            return List.of();
+        }
+        List<AdminOperatorRoleJpaEntity> roleRows = operatorRoles.findByOperatorId(operator.getId());
+        if (roleRows.isEmpty()) {
+            return List.of();
+        }
+        List<Long> roleIds = roleRows.stream()
+                .map(AdminOperatorRoleJpaEntity::getRoleId)
+                .toList();
+        Set<Long> grantingRoleIds = Set.copyOf(
+                rolePermissions.findRoleIdsGrantingPermission(permission, roleIds));
+        if (grantingRoleIds.isEmpty()) {
+            return List.of();
+        }
+        return roleRows.stream()
+                .filter(row -> grantingRoleIds.contains(row.getRoleId()))
+                .toList();
     }
 
     /**

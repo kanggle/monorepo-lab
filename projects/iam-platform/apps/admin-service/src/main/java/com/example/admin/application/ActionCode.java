@@ -79,5 +79,15 @@ public enum ActionCode {
     PARTNERSHIP_REACTIVATE,
     PARTNERSHIP_TERMINATE,
     PARTNERSHIP_PARTICIPANT_ADD,
-    PARTNERSHIP_PARTICIPANT_REMOVE
+    PARTNERSHIP_PARTICIPANT_REMOVE,
+    // TASK-BE-492 (ADR-MONO-047 D5): org-node tree mutations + ORG_ADMIN grant/revoke.
+    // target_type=ORG_NODE, target_id=<orgNodeId> (the granted/revoked operator rides in
+    // `detail` — the audit subject is the NODE, mirroring PARTNERSHIP_PARTICIPANT_*).
+    // permission_used=org.manage. Reads (GET) write no audit row (BE-486 read-path rule).
+    ORG_NODE_CREATE,
+    ORG_NODE_UPDATE,
+    ORG_NODE_DELETE,
+    ORG_NODE_CEILING_SET,
+    ORG_ADMIN_GRANT,
+    ORG_ADMIN_REVOKE
 }

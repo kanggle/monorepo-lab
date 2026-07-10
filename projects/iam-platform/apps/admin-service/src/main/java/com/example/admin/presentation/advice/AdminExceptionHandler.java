@@ -421,6 +421,43 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("PARTNERSHIP_TRANSITION_INVALID", e.getMessage()));
     }
 
+    // TASK-BE-492 (ADR-MONO-047 D5) — org-node tree errors.
+    //
+    // Cross-scope is 404, NOT 403: a 403 would confirm that a node outside the actor's
+    // subtree exists (same enumeration-safety rule as the cross-tenant account path).
+    @ExceptionHandler(com.example.admin.application.exception.OrgNodeNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleOrgNodeNotFound(
+            com.example.admin.application.exception.OrgNodeNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("ORG_NODE_NOT_FOUND", e.getMessage()));
+    }
+
+    // 403 (not 404) is right here: the actor demonstrably administers the node, so its
+    // existence is not a secret — it just may not edit its OWN ceiling (self-escalation).
+    @ExceptionHandler(com.example.admin.application.exception.OrgNodeSelfCeilingDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleOrgNodeSelfCeilingDenied(
+            com.example.admin.application.exception.OrgNodeSelfCeilingDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("ORG_NODE_SELF_CEILING_DENIED", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.OrgAdminGrantOutOfCeilingException.class)
+    public ResponseEntity<ErrorResponse> handleOrgAdminGrantOutOfCeiling(
+            com.example.admin.application.exception.OrgAdminGrantOutOfCeilingException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("ORG_ADMIN_GRANT_OUT_OF_CEILING", e.getMessage()));
+    }
+
+    // The account-service org-node authority's 422, passed through with its own code
+    // (ORG_NODE_CYCLE / ORG_NODE_DEPTH_EXCEEDED / ORG_NODE_CEILING_NOT_SUBSET /
+    // ORG_NODE_NOT_EMPTY). admin-service does not re-implement those invariants.
+    @ExceptionHandler(com.example.admin.application.exception.OrgNodeInvariantViolationException.class)
+    public ResponseEntity<ErrorResponse> handleOrgNodeInvariantViolation(
+            com.example.admin.application.exception.OrgNodeInvariantViolationException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(e.getCode(), e.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

@@ -176,6 +176,79 @@ public class AdminActionDenyWriter {
     }
 
     /**
+     * TASK-BE-492 (ADR-MONO-047 D5) — best-effort DENIED row for an org-node reach
+     * violation (the actor targeted a node it does not administer, or tried to alter the
+     * bounds of its own node). NOT fail-closed (A10 override, mirrors
+     * {@link #recordCrossTenantDenied}): the 404/403 always succeeds; an audit failure only
+     * logs + bumps the {@code admin.audit.org_node_scope_deny_failure} counter.
+     *
+     * <p>{@code target_id} is the ORG_NODE, matching the SUCCESS rows this surface writes.
+     * When the actor targeted a node that does not exist at all, {@code orgNodeId} may be
+     * null and the row records {@code "-"} — the denial is still attributable.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordOrgNodeScopeDenied(OperatorContext operator,
+                                         ActionCode actionCode,
+                                         String orgNodeId) {
+        try {
+            AdminActionAuditWriter.OperatorResolved resolved =
+                    AdminActionAuditWriter.resolveOperatorOrFail(operatorLookupPort, operator.operatorId());
+
+            Instant now = Instant.now();
+            String auditId = UUID.randomUUID().toString();
+            String targetType = permissions.targetTypeFor(actionCode);
+            String detail = "ORG_NODE_SCOPE_DENIED attempted_org_node_id=" + orgNodeId;
+            String targetId = orgNodeId != null ? orgNodeId : "-";
+
+            AdminActionJpaEntity entity = AdminActionJpaEntity.create(
+                    auditId,
+                    actionCode != null ? actionCode.name() : "UNKNOWN",
+                    operator.operatorId(),
+                    "UNKNOWN",
+                    resolved.pk(),
+                    Permission.ORG_MANAGE,
+                    targetType,
+                    targetId,
+                    "<org_node_scope_deny>",      // reason: synthetic constant
+                    null,
+                    "denied:" + auditId,
+                    Outcome.DENIED.name(),
+                    detail,
+                    now,
+                    now,
+                    resolved.tenantId(),
+                    resolved.tenantId());
+            repository.save(entity);
+
+            eventPublisher.publishAdminActionPerformed(new AdminEventPublisher.Envelope(
+                    operator.operatorId(),
+                    operator.jti(),
+                    Permission.ORG_MANAGE,
+                    AdminAuditRequestContext.currentEndpoint(),
+                    AdminAuditRequestContext.currentMethod(),
+                    targetType,
+                    targetId,
+                    Outcome.DENIED,
+                    detail,
+                    now));
+        } catch (RuntimeException ex) {
+            log.warn("Failed to write org-node-scope DENIED audit row (best-effort): "
+                            + "operatorId={} action={} orgNodeId={}",
+                    operator.operatorId(), actionCode, orgNodeId, ex);
+            try {
+                Counter counter = Counter.builder("admin.audit.org_node_scope_deny_failure")
+                        .tag("action", actionCode != null ? actionCode.name() : "UNKNOWN")
+                        .register(meterRegistry);
+                if (counter != null) {
+                    counter.increment();
+                }
+            } catch (RuntimeException metricEx) {
+                log.debug("Failed to increment org_node_scope_deny_failure counter", metricEx);
+            }
+        }
+    }
+
+    /**
      * TASK-BE-347 (ADR-MONO-024 D3) — best-effort DENIED row for a grant-menu
      * no-escalation violation (the actor tried to grant a role it may not).
      * NOT fail-closed (A10 override, mirrors {@link #recordCrossTenantDenied}):
