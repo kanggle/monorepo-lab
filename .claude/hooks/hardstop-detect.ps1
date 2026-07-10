@@ -107,7 +107,7 @@ try {
     }
 
     # Shared paths — files that must remain project-agnostic
-    $sharedPathPattern = '^(platform|rules|\.claude|libs|tasks/templates|docs/guides|CLAUDE\.md|TEMPLATE\.md|README\.md|build\.gradle|settings\.gradle)(?:$|/)'
+    $sharedPathPattern = '^(platform|rules|\.claude|libs|tasks/templates|docs/guides|CLAUDE\.md|TEMPLATE\.md|build\.gradle|settings\.gradle)(?:$|/)'
     $isSharedFile = $relFromRoot -match $sharedPathPattern
 
     # ===== HARDSTOP-05: edit on task file under tasks/in-progress/ or tasks/review/ =====

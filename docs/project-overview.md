@@ -1,6 +1,6 @@
 # Project Overview — monorepo-lab
 
-> **목적**: 본 monorepo 전체 (플랫폼 전략 + 5 프로젝트 + 공유 인프라) 의 단일 진입 스냅샷.
+> **목적**: 본 monorepo 전체 (플랫폼 전략 + 8 프로젝트 [7 도메인 + platform-console] + 공유 인프라) 의 단일 진입 스냅샷.
 > **갱신 시점**: 2026-06-08 (마지막 의미 있는 변화: **ecommerce↔wms 주문-이행 통합 (ADR-MONO-022) 종결** 2026-06-08 [monorepo 첫 business-domain↔business-domain "주문 방향" 런타임 결합 — 웹스토어 구매→연결창고 출고→주문 자동 SHIPPED. §D7 ①~④ 아크 + §D4 v2 양면: forward(MONO-193 ADR+contracts → BE-340/341 wms 소비 → e2e MONO-195 #1182) + **backorder 양 leg**(wms emit MONO-196 #1184 → ecommerce auto-cancel+refund v2(a) MONO-197 #1186) + **inventory reconciliation v2(b)**(MONO-198 #1188 — product-service 첫 인바운드 컨슈머가 `wms.inventory.*`+`wms.master.sku` 구독 → availableQty delta 를 sellable stock 에 반영, 이중장부 drift 수렴; ProductVariant `sku` 비즈니스 키 신설). ACL=ecommerce 측(wms 도메인 순수, D6); orderNo 왕복 상관(D5); §D4 전 항목 build 완료] + **gap→iam 전체 rename** 2026-06-06~07 [MONO-179/180/181 — `global-account-platform`→`iam-platform`(alias gap→iam): 디렉터리/Gradle/Docker/CI/hostname + Java 식별자 + user-token `iss` + 콘솔 도메인 slug/registry productKey/OIDC provider id/예약 tenant/console tenant_id + V0024 redirect_uris + spec dead-ref 16→0; 잔여 0] + Phase 5 LAUNCHED 2026-05-13 + Phase 6 finance/erp v1 양쪽 종결 2026-05-19/20 + Phase 7 console-bff LIVE 2026-05-20 + Phase 8 federation hardening MVP 2026-05-25/26 + portfolio architecture.md spec coverage 8/8 cluster 정합 2026-05-28 + **post-Phase-8 multi-tenant SaaS 실체화** 2026-05-31~06-02: ADR-MONO-019/020/021 ACCEPTED [customer-tenant entitlement-trust + operator N:M assume-tenant + `account_type` claim] + console overview consolidation [PC-FE-034] + console-web PR CI gate [MONO-166] + internal-system trait rules [MONO-167] + **console full-stack 로컬 데모 [MONO-170] 가 표면화한 런타임 producer↔consumer drift 청소 wave** 2026-06-02~03: ADR-MONO-020 D6 step4 "의도적 비실행" disposition [MONO-169 → ADR-020 사실상 완료] + SCM/WMS 런타임 federation 정합 8-fix [ERP-BE-006 / SCM-BE-020 decimal-string 계약 / MONO-171 seed UUID / BE-331·BE-332 read-model 42P18 PostgreSQL 쿼리 class / BE-333·BE-334 outbound 기동·security 전제층 / SCM-BE-021 read-model 422→500 관측성] + frontend Docker 빌드 캐시 최적화 [PC-FE-035 / FE-072, 60~82% 빌드시간↓] + **erp read-model-service 라이브화 + org_scope 데이터-스코프 3-stage authz 사슬** 2026-06-03~05: erp **read-model-service 첫 증분** [ERP-BE-007 — masterdata 변경이벤트 구독 → employee org-view 투영; §2.8 가 v2-deferred 로 잘못 분류하던 사실오류 교정] + 콘솔 통합 read 카드 [PC-FE-049] + **org_scope 3-stage** [BE-336 위임 `erp.write` scope / BE-337 assume-tenant `["*"]` bridge / BE-338 멤버십 출처 `operator_tenant_assignment.org_scope` / ERP-BE-008 erp subtree 소비 / BE-339 admin 관리 API / PC-FE-050 콘솔 설정 UI] + 콘솔 erp 마스터 write parity [PC-FE-046~048] + operators/audit active-tenant 스코핑 [MONO-175 / PC-FE-043] + self-service account 이동 [PC-FE-045] + demo redpanda 브로커 [MONO-174] + **erp 결재 워크플로 도메인 완성 (백엔드+콘솔 양면)** 2026-06-05: ADR-016 §D3 approval forward-declaration 3-증분 [ERP-BE-009 단일단계 → BE-012 다단계+IN_REVIEW → BE-013 대결/위임] + read-model approval-fact 투영 [ERP-BE-010] + notification-service [ERP-BE-011] + 콘솔 결재 surface [PC-FE-051 결재함 / 052 notification bell / 053 다단계 UI / 054 위임 grant 관리]).
 > **위치**: `docs/project-overview.md` — `docs/adr/` (결정 기록) · `docs/guides/` (휴먼 워크플로우 가이드) 와 sibling.
 
@@ -8,9 +8,9 @@
 
 ## 1. 한 줄 요약
 
-**multi-domain 백엔드/풀스택 포트폴리오 monorepo**. 5 도메인 프로젝트가 단일 라이브러리 (rules / platform / .claude / libs) 를 공유하면서 동거하고, 라이브러리가 stabilise 된 시점에 별도 Template 레포로 추출되는 **Discovery → Distribution** 전략을 따른다 ([TEMPLATE.md](../TEMPLATE.md)).
+**multi-domain 백엔드/풀스택 포트폴리오 monorepo**. 8 프로젝트 (7 도메인 + 가로축 platform-console) 가 단일 라이브러리 (rules / platform / .claude / libs) 를 공유하면서 동거하고, 라이브러리가 stabilise 된 시점에 별도 Template 레포로 추출되는 **Discovery → Distribution** 전략을 따른다 ([TEMPLATE.md](../TEMPLATE.md)).
 
-- **현재 단계**: Phase 8 federation hardening **COMPLETE** (2026-05-28, [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md) ACCEPTED) — cross-product e2e MVP (2026-05-26) + D4 observability federation ([ADR-MONO-007a](adr/ADR-MONO-007a-trace-layer.md) trace layer, MONO-142~147) + D5 multi-tenant isolation regression 모두 종결. Phase 5 = **LAUNCHED 2026-05-13** ([ADR-MONO-003b](adr/ADR-MONO-003b-phase-5-launch-criteria.md) ACCEPTED, `kanggle/project-template` public + `is_template: true`). Phase 6 = **COMPLETE** finance + erp v1 양쪽 종결 2026-05-19/20 ([ADR-MONO-008](adr/ADR-MONO-008-finance-platform-bootstrap.md) / [ADR-MONO-016](adr/ADR-MONO-016-erp-platform-bootstrap.md) ACCEPTED). Phase 7 = **LIVE** console-bff Operator Overview + Domain Health 2026-05-20 ([ADR-MONO-017](adr/ADR-MONO-017-platform-console-bff-architecture.md) ACCEPTED). 5/5 backend domains (iam·wms·scm·finance·erp) federated via platform-console.
+- **현재 단계**: Phase 8 federation hardening **COMPLETE** (2026-05-28, [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md) ACCEPTED) — cross-product e2e MVP (2026-05-26) + D4 observability federation ([ADR-MONO-007a](adr/ADR-MONO-007a-trace-layer.md) trace layer, MONO-142~147) + D5 multi-tenant isolation regression 모두 종결. Phase 5 = **LAUNCHED 2026-05-13** ([ADR-MONO-003b](adr/ADR-MONO-003b-phase-5-launch-criteria.md) ACCEPTED, `kanggle/project-template` public + `is_template: true`). Phase 6 = **COMPLETE** finance + erp v1 양쪽 종결 2026-05-19/20 ([ADR-MONO-008](adr/ADR-MONO-008-finance-platform-bootstrap.md) / [ADR-MONO-016](adr/ADR-MONO-016-erp-platform-bootstrap.md) ACCEPTED). Phase 7 = **LIVE** console-bff Operator Overview + Domain Health 2026-05-20 ([ADR-MONO-017](adr/ADR-MONO-017-platform-console-bff-architecture.md) ACCEPTED). **6/6 backend domains (iam·wms·scm·finance·erp·ecommerce) federated via platform-console** — ecommerce 는 Phase 7 이후 편입 (ADR-MONO-031 Phase 6 로 자체 admin-dashboard 가 콘솔에 흡수).
 - **AI-driven 운영**: Claude Code 기반 rule-driven · spec-driven · task-driven 워크플로우. 80+ skill / 12+ specialized agent / 도메인-trait 자동 dispatch.
 
 ---
@@ -70,38 +70,41 @@
 
 - **domain**: `ecommerce` · **traits**: `transactional`, `content-heavy`, `read-heavy`, `integration-heavy`
 - **포지션**: 첫 풀스택 프로젝트. **분류(taxonomy) 기반 규칙 시스템의 첫 dogfood**.
-- **상태**: end-to-end 운영 (12 backend + Next.js 15 storefront + admin dashboard + Playwright E2E)
-- **service map (12 backend + 2 frontend)**:
+- **상태**: end-to-end 운영 (12 backend + Next.js 15 storefront + Playwright E2E)
+- **service map (12 backend + 1 frontend)**:
 
 | Layer | Apps |
 |---|---|
 | Edge | `gateway-service` |
-| Identity | `auth-service`, `user-service` |
+| Identity | `user-service` |
 | Catalog & Search | `product-service`, `search-service` (Elasticsearch) |
-| Commerce | `order-service` (saga), `payment-service`, `promotion-service` |
+| Commerce | `order-service` (saga), `payment-service`, `promotion-service`, `settlement-service` |
 | Fulfillment | `shipping-service`, `notification-service` |
 | Engagement | `review-service` |
 | Async | `batch-worker` |
 | Frontend | `web-store` (Next.js 15) — operator UI absorbed into `platform-console` (ADR-MONO-031 Phase 6) |
+| ~~identity (구)~~ | ~~`auth-service`~~ — **RETIRED** (TASK-BE-132: `settings.gradle` include 제외, IAM OIDC 로 대체. 소스는 이력 보존 목적으로 `apps/auth-service/` 에 잔존) |
 
 - **stack**: Java 21 / Spring Boot 3.4 / Postgres / Kafka / Redis / Elasticsearch / MinIO
-- **IAM migration**: 향후 (TASK-MONO-020) — 현재 자체 auth-service.
+- **IAM migration**: **완료** — 자체 `auth-service` 는 TASK-BE-132 로 폐기되고 IAM OIDC 가 대체. 게이트웨이가 IAM RS256 access token 을 검증한다.
+- **`settlement-service` (TASK-BE-365, ADR-MONO-030 Step 4b)**: 마켓플레이스 셀러 정산 / 수수료. `event-consumer` + `rest-api` 하이브리드이며 **terminal consumer(no outbox)** — `order.order.placed` / `payment.payment.completed` / `payment.payment.refunded` 를 소비해 append-only 수수료 발생 원장을 적재한다.
 - **wms 주문-이행 통합 (2026-06-08, [ADR-MONO-022](adr/ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) ACCEPTED)**: **monorepo 첫 business-domain↔business-domain "주문 방향" 런타임 결합** — 웹스토어 구매 → 연결된 wms 창고 출고 → 주문 자동 SHIPPED. ACL/vocab 해소는 전부 ecommerce 측(wms 도메인 순수, §D6); ecommerce orderId 가 wms `orderNo` 로 왕복하는 상관키(§D5). **forward**: `shipping-service` 가 `OrderConfirmed` → wms-shaped `ecommerce.fulfillment.requested.v1` 발행(ecommerce 가 wms 의 **두 번째 외부 주문 소스**, ERP webhook 과 동격) → wms `outbound-service` 가 출고주문 생성, ship 시 `wms.outbound.shipping.confirmed.v1`(+orderNo) → `shipping-service` Shipping SHIPPED → `order-service` Order SHIPPED. **backorder(§D4)**: 재고부족 시 wms 가 `wms.outbound.order.cancelled.v1` 발행 → `shipping-service` ops alert(v1) + `order-service` **자동취소 + 기존 `order.cancelled` 환불 saga 재사용**(v2(a)). **inventory reconciliation(§D4 v2(b))**: `product-service`(서비스 첫 인바운드 컨슈머)가 `wms.inventory.{received,adjusted}` + `wms.master.sku` 구독 → warehouse-origin availableQty delta 를 sellable stock 에 반영(이중장부 drift 수렴, 주문시점 게이트 유지) — `ProductVariant.sku` 비즈니스 키 신설. e2e=ecommerce-owned(`tests/e2e/`, @Tag(full)→nightly). cross-project 이벤트 구독 선례=scm `inventory-visibility-service`(§2.4).
 
 ### 2.4 [scm-platform](../projects/scm-platform/PROJECT.md) — 공급망 통합 (v1 ✅)
 
 - **domain**: `scm` · **traits**: `transactional`, `integration-heavy`, `batch-heavy`
 - **포지션**: **Phase 4 catalyst 도메인** ([ADR-MONO-002](adr/ADR-MONO-002-phase-4-template-extraction-trigger.md)). `batch-heavy` trait 의 첫 사용 사례.
-- **상태**: v1 = 3 service skeleton + INT-001 series 완료 (2026-05-07)
-- **service map (v1)**:
+- **상태**: v1 = 3 service skeleton + INT-001 series 완료 (2026-05-07). v1.1 = `demand-planning-service` 라이브 (SCM-BE-024)
+- **service map (v1.x)**:
 
 | Service | Type | 책임 |
 |---|---|---|
 | `gateway-service` | rest-api | OIDC + `tenant_id=scm` gate |
 | `procurement-service` | rest-api | PO 발행/확정/취소, supplier ack, ASN 수신 |
 | `inventory-visibility-service` | rest-api | cross-node 재고 가시성 (read-model, wms snapshot 구독) |
+| `demand-planning-service` | event-consumer + batch-job + rest-api | ADR-027 Phase 1 보충 루프 — wms 저재고 alert 구독 + nightly sweep + 보충 제안 / reorder policy / sku-supplier map 운영 표면 (SCM-BE-024) |
 
-- **v2 deferred**: `supplier-service`, `demand-planning-service`, `logistics-service`, `settlement-service`, `notification-service`, `admin-service`
+- **v2 deferred**: `supplier-service`, `logistics-service`, `settlement-service`, `notification-service`, `admin-service`
 - **wms 와의 차별점**: wms = 단일 창고 내부 동선 (한 노드). scm = 노드들의 그래프 (조달 → 운송 → 정산).
 - **콘솔 운영 read consumer 런타임 정합 (2026-06-02~03, MONO-170 데모 표면화)**: `procurement` PO read 의 decimal 필드가 Jackson number → 콘솔 `z.string()` parse-fail = decimal-string 계약 위반 → `@JsonFormat(shape=STRING)` (SCM-BE-020); `inventory-visibility` globex 시드 non-UUID id 불변식 위반 (MONO-171) + corrupt read-model 재구성이 무로깅 `422` 로 둔갑 → `ReadModelCorruptException` → `500`+log 재정정 (SCM-BE-021). 이로써 SCM 운영 카드가 acme/globex 양 테넌트 풀 렌더.
 
@@ -109,24 +112,26 @@
 
 - **domain**: `fan-platform` · **traits**: `transactional`, `content-heavy`, `read-heavy`, `integration-heavy`, `multi-tenant`
 - **포지션**: 두 번째 풀스택 B2C 도메인. **비대칭 콘텐츠 관계** (아티스트 1 : N 팬) 가 도메인 핵심.
-- **상태**: v1 종결 (2026-05-03 backend 3 + frontend + e2e + IAM V0011 client + 19 PR 완성)
-- **service map (v1)**:
+- **상태**: v1 종결 (2026-05-03 backend 3 + frontend + e2e + IAM V0011 client + 19 PR 완성). v1.1 = membership 구독 루프 라이브 (FAN-BE-009/013)
+- **service map (v1.x)**:
 
 | Service | Type | 책임 |
 |---|---|---|
 | `gateway-service` | rest-api | OIDC + `tenant_id=fan-platform` gate |
 | `community-service` | rest-api | post / comment / reaction / 피드 (팔로우 기반) |
 | `artist-service` | rest-api | 아티스트 프로필 + follow 관계 + fandom 메타데이터 |
+| `membership-service` | rest-api (Layered) | 구독 상태기계 + PG mock + internal access-check (community `MembershipChecker` 의 원격 짝) + outbox 생애주기 이벤트 (FAN-BE-009) |
+| `notification-service` | event-consumer + rest-api | `fan.membership.{activated,canceled}.v1` 구독 → 팬별 알림 멱등 기록 + mock 채널 fan-out + thin inbox. terminal consumer (no outbox) (FAN-BE-013) |
 | `fan-platform-web` | frontend-app | Next.js 15 lean (5~7 페이지) |
 
-- **v2 deferred**: `membership-service` (PG 통합), `notification-service` (FCM/APNs), `admin-service` (모더레이션)
+- **v2 deferred**: `admin-service` (모더레이션). *(구 deferred 였던 `membership-service` / `notification-service` 는 v1.1 로 라이브 — 위 표 참조. 외부 채널 FCM/APNs 연동은 여전히 v2.)*
 
-### 2.6 [platform-console](../projects/platform-console/PROJECT.md) — 통합 운영 콘솔 (v1 ✅ Phase 7 LIVE — 5/5 federated domains, 도메인 축 아님)
+### 2.6 [platform-console](../projects/platform-console/PROJECT.md) — 통합 운영 콘솔 (v1 ✅ Phase 7 LIVE — 현재 6/6 federated domains, 도메인 축 아님)
 
 - **domain**: `saas` · **traits**: `multi-tenant`, `integration-heavy`, `audit-heavy` · **service_types**: `frontend-app`
 - **포지션**: 포트폴리오 엔터프라이즈 스위트(iam·wms·scm + 향후 erp·finance)를 **단일 AWS/GCP-콘솔식 화면**으로 통합. [ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) (ACCEPTED 2026-05-16) 부트스트랩. 6번째 프로젝트이나 도메인 축이 아닌 **가로축 콘솔**.
 - **모델**: Model B — 콘솔이 *유일한 프론트엔드*. wms/scm/erp/finance 백엔드-only를 콘솔이 gateway/admin API로 렌더(런처 아님). IAM `admin-web`은 콘솔 운영자 parity 검증 후 **Phase 3 폐기 완료 (2026-05-18, TASK-BE-299)** → IAM 백엔드-only IdP 회귀.
-- **상태**: ADR-MONO-013 § D6 Phase 1~6 COMPLETE + Phase 7 (`console-bff` + cross-domain dashboards) LIVE — 5/5 federated backend domains (`iam` + `wms` + `scm` + `finance` + `erp`) `available:true`. console-bff Operator Overview (PC-BE-001~003) + Domain Health (PC-BE-002) + Operator Overview finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration, 2026-05-21~22). ADR-MONO-017 (console-bff architecture) ACCEPTED 2026-05-20.
+- **상태**: ADR-MONO-013 § D6 Phase 1~6 COMPLETE + Phase 7 (`console-bff` + cross-domain dashboards) LIVE — Phase 7 시점 5/5 federated backend domains (`iam` + `wms` + `scm` + `finance` + `erp`) `available:true`; **현재는 `ecommerce` 편입으로 6/6** (ADR-MONO-031 Phase 6 — 콘솔 사이드바 「도메인 운영」 6 드릴인 + `console-bff` 6-leg 집계). console-bff Operator Overview (PC-BE-001~003) + Domain Health (PC-BE-002) + Operator Overview finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration, 2026-05-21~22). ADR-MONO-017 (console-bff architecture) ACCEPTED 2026-05-20.
 - **Phase 8 + multi-tenant 활성화 (2026-05-25~06-02)**: federation hardening (cross-product e2e + observability trace federation + isolation regression, [ADR-MONO-018](adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md)) + **런타임 entitlement-trust active-tenant 전환** (ADR-MONO-019/020 — console active-tenant switcher → assume-tenant A↔B GREEN, MONO-158~162) + **overview 화면 통폐합** (PC-FE-034 — 통합 개요 콘솔 홈 승격 / IAM-only 개요 = IAM-card drill-down / ERP 운영 nav 추가) + **console-web PR CI gate 편입** (MONO-166 — unit/tsc/lint).
 - **full-stack 로컬 데모 + 런타임 drift 청소 (2026-06-02~03, [MONO-170](../tasks/done/TASK-MONO-170-console-fullstack-local-dev-demo.md))**: 콘솔을 5/5 도메인 per-domain 운영 화면으로 실제 구동한 첫 full-stack 로컬 데모가 **producer↔consumer 런타임 drift 8건**을 표면화 → 전수 청소 (ERP-BE-006 effectivePeriod nesting / SCM-BE-020 decimal-string / MONO-171 seed / BE-331·332 read-model 42P18 / BE-333·334 outbound 전제층 / SCM-BE-021 422→500). 메타: 머지+CI GREEN ≠ 런타임 federation 정합 — full-stack 데모 구동이 mock/slice 테스트가 못 잡는 cross-service 계약·쿼리·시드 drift 의 sender. federation scm leg 경로는 MONO-162 에서 이미 정합. demo overlay 의 IAM outbox drain 을 위해 **실 redpanda 브로커** 를 federation-e2e 데모에 편입 (MONO-174).
 - **erp 운영 surface 심화 + org_scope 설정 + active-tenant 스코핑 (2026-06-03~05)**: 콘솔이 erp 를 read-only 조회를 넘어 **마스터데이터 write parity** 로 운영 — 부서 write 파일럿(PC-FE-046) → 상위부서 드롭다운(PC-FE-047) → **5개 마스터 전체 create/update/retire**(PC-FE-048, 직원/직급/비용센터/거래처) + read-model **통합 read 카드**(PC-FE-049 — ERP-BE-007 read-model-service 의 employee org-view 소비, 부서경로 breadcrumb + eventually-consistent 배너) + **org_scope 설정 UI**(PC-FE-050 — reason-gated `OrgScopeDialog`, 부서 picker + 전체/선택/차단 tri-state; org_scope 사슬 [설정→IAM 저장/전파→erp 소비→read 카드] 완결). **operators/audit active-tenant 스코핑** — 콘솔 스위처가 운영자 목록(MONO-175)·감사 조회(PC-FE-043)를 활성 테넌트로 따라가도록 (effective-scope 게이트, privilege 비확장). **self-service 이동** — 비밀번호/프로필 self-service 를 operators 화면 → account 화면으로 (PC-FE-045). 한글 사유 헤더 인코딩 fix (MONO-176).
@@ -143,14 +148,15 @@
 - **domain**: `fintech` · **traits**: `transactional`, `regulated`, `audit-heavy` · **service_types**: `rest-api`, `event-consumer`
 - **포지션**: monorepo Phase 6 **첫 Template 다운스트림 부트스트랩** ([ADR-MONO-008](adr/ADR-MONO-008-finance-platform-bootstrap.md), ACCEPTED 2026-05-18, Option C). 6번째 도메인 프로젝트, `regulated + audit-heavy` fintech 표면 동시 첫 사용 (`kanggle/finance-platform` standalone Template fork + monorepo direct-include 병존).
 - **상태**: v1 live — 부트스트랩 (TASK-MONO-114, 2026-05-19) + account-service 도메인 구현 chain (TASK-FIN-BE-001 + 002/003/004 honest green-wash TRUE TERMINAL + FIN-BE-005 platform-console operator read consumer reconciliation, 2026-05-19~20) + platform-console federation live (FE-009 `/finance` console section + `console-integration-contract.md § 2.4.7` per-domain credential). ADR-MONO-013 § D6 Phase 5 COMPLETE.
-- **service map (v1)**:
+- **service map (v1.x)**:
 
 | Service | Type | 책임 |
 |---|---|---|
-| `gateway-service` | rest-api | OIDC + `tenant_id=finance` gate (account-service 활성화와 함께) |
 | `account-service` | rest-api | Account 라이프사이클 — KYC / 가용·장부 잔액 hold·release·capture / 계좌 상태기계 / 자금 이동 멱등 / 불변 audit_log |
+| `ledger-service` | rest-api + event-consumer | 복식부기 총계정원장 (ADR-MONO-008 §D3 v2 첫 증분, FIN-BE-007) — 시산표 / 회계기간 / 대사. Hexagonal + DDD, terminal consumer (no outbox). 자체 스키마 `finance_ledger_db` (account-service `finance_db` 의 하류) |
 
-- **v2 deferred**: `ledger-service` (복식부기/GL/AP — fintech accounting 깊이, ADR-008 §D3), `wallet-service`, `kyc-service`, `notification-service`, `admin-service`
+- **게이트웨이 서비스 없음 (의도)**: finance 는 `gateway-service` 모듈을 갖지 않는다. `settings.gradle` include 에 없으며, Traefik 이 `finance.local` 호스트에서 경로를 보고 서비스로 **직접** 라우팅한다. ADR-MONO-008 부트스트랩 시점에 "v2 deferred" 로 적힌 이후 실제로 도입된 적이 없다 — **service map 표에 되살리지 말 것** (`scripts/check-service-map-drift.sh` 가 차단).
+- **v2 deferred**: `wallet-service`, `kyc-service`, `notification-service`, `admin-service`. *(구 deferred 였던 `ledger-service` 는 v2 첫 증분으로 라이브 — 위 표 참조. GL/AP 심화는 잔여.)*
 - **framing 정합**: 7축 메모리의 "분개/GL/AP accounting" 은 ADR-MONO-008 SoT 상 명시적으로 v2 (ledger-service); v1 = fintech Account/Balance/Transaction/KYC (PROJECT.md § ADR-MONO-008 vs 7축 framing 정합).
 - **ID provider**: IAM OIDC RS256 + `tenant_id=finance` claim (V0017 ×2 시드: account tenant + auth client_credentials `finance-platform-internal-services-client`).
 - **frontend**: 없음 — 통합 platform console 이 렌더 (ADR-MONO-013 §3.3, `frontend-app` service_type 없음).
@@ -166,12 +172,12 @@
 
 | Service | Type | 책임 |
 |---|---|---|
-| `gateway-service` | rest-api | OIDC + `tenant_id=erp` gate + internal-only 경계 (masterdata-service 활성화와 함께) |
 | `masterdata-service` | rest-api | 조직 마스터데이터 — 부서/직원/직급/비용센터/거래처 / 참조 무결성 / 유효기간 / 불변 audit_log + org_scope subtree data-scope (ERP-BE-008) |
 | `read-model-service` | rest-api + event-consumer | 통합 조회 read-model (v1.1 첫 증분) — masterdata 변경이벤트 구독 → employee org-view 투영 (직원+부서경로+비용센터+직급) + `erp.approval.*` 구독 → approval-fact 투영 (ERP-BE-010); org_scope subtree read 필터 (ERP-BE-007/008/010) |
 | `approval-service` | rest-api | 결재 워크플로 (v1.x 라이브) — 다단계 결재선(1~N) 상태기계 `DRAFT→SUBMITTED→(IN_REVIEW→)APPROVED\|REJECTED\|WITHDRAWN` + per-stage authz + 대결/위임(DelegationGrant) + 멱등 전이 + 불변 audit + outbox `erp.approval.{submitted,approved,rejected,withdrawn,delegated}.v1` (ERP-BE-009/012/013) |
 | `notification-service` | event-consumer + rest-api | in-app 알림 fan-out (v1 첫 증분) — `erp.approval.*` 구독 → recipient 해소 → `Notification` 영속 + recipient-scoped inbox; terminal consumer(no-outbox); ADR-005 Category C (ERP-BE-011) |
 
+- **게이트웨이 서비스 없음 (의도)**: erp 는 `gateway-service` 모듈을 갖지 않는다. `settings.gradle` include 에 없으며, Traefik 이 `erp.local` 호스트에서 경로 우선순위로 라우팅한다 (catch-all → `masterdata-service`, `/api/erp/read-model` → `read-model-service`, `/api/erp/approval` → `approval-service`). ADR-MONO-016 부트스트랩 시점의 "v2 deferred" 문구가 표의 행으로 옮겨 앉았던 것 — **되살리지 말 것** (`scripts/check-service-map-drift.sh` 가 차단).
 - **v2 deferred**: `permission-service` (권한 매트릭스 CRUD — ADR-016 §D3), `admin-service` (운영자 큐). (`approval-service` / `read-model-service` / `notification-service` 는 v1.x 라이브 — 위 상태 참조; 단 approval per-request/자동부재 위임 · notification 외부채널 · business-partner 등 풀 통합 조회 view 는 각 서비스 v2.)
 - **framing 정합**: 7축 메모리의 광의 erp("회계·구매·재고·HR 통합" + 자체 admin SPA) 는 ADR-MONO-016 SoT 상 v1=마스터데이터+결재+통합 read model (도메인 로직 미보유, 7축 책임 경계); UI=platform-console parity slice (ADR-MONO-013 바인딩, 자체 SPA superseded) (PROJECT.md § ADR-MONO-016 vs 7축 framing 정합).
 - **ID provider**: IAM OIDC RS256 + `tenant_id=erp` claim (V0018 ×2 시드: account tenant + auth client_credentials `erp-platform-internal-services-client`).
