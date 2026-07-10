@@ -8,7 +8,7 @@ ADR-047 § 4 step 3 — 콘솔 조직 계층 화면: org-node 트리 CRUD + enti
 
 # Status
 
-ready
+done
 
 # Owner
 

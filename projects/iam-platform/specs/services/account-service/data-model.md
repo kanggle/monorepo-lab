@@ -173,6 +173,14 @@ effectiveCeiling(tenant) = tenant.org_node_id IS NULL ? UNBOUNDED
 
 **D7 back-compat (net-zero)**: `tenants.org_node_id` 는 **NULLABLE**. `NULL` = "ungrouped singleton" = `effectiveCeiling` 가 `UNBOUNDED` = **바이트 동일한 레거시 동작**. 기존 row 는 무영향이며, 백필 마이그레이션(TASK-BE-493)은 lazy(한 번도 실행 안 함)여도 legal 하다 ([ADR-MONO-047](../../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D7).
 
+**백필 (TASK-BE-493, Flyway `V0028__backfill_org_node_per_tenant.sql`)**: `org_node_id IS NULL` 인 모든 tenant 에 대해 **`display_name` 을 이름으로 하는 depth-1 루트 노드 1개**(회사)를 만들고 링크한다. 노드 실링은 항상 **`UNBOUNDED`** — 즉 교집합 항등원이므로 백필은 **행위상 no-op** 이다. 오늘의 도메인 목록(`'wms,scm,erp,…'`)을 `BOUNDED` 로 적어 넣으면 안 된다: 오늘은 구분되지 않지만 **다음에 추가되는 도메인을 모든 레거시 tenant 에게 조용히 거부**한다.
+
+- 노드 id 는 `tenant_id` 에서 결정론적으로 유도한다(`SHA2` 기반, UUID 형태). MySQL `UUID()` 는 비결정적이라 삽입한 노드를 tenant 로 되짚어 연결할 수 없고, `name = display_name` 조인은 **동명이 회사 둘을 하나로 병합**해 버린다.
+- 두 문장 모두 `WHERE org_node_id IS NULL` 로 가드 → 재실행은 zero-row no-op 이고, 손으로 미리 그룹핑한 tenant 는 **재부모화되지 않는다**.
+- `org_node_id` 를 **NOT NULL 로 승격하지 말 것**. 백필 이후에도 `NULL` 은 합법적·영구적 상태이며(dev 전용 시드 `migration-dev/V9xxx` 는 이 파일보다 뒤에 실행되어 ungrouped 로 남는다), 콘솔 tenant-switcher 는 이들을 `그룹 없음` 으로 표시한다.
+
+증명은 `OrgNodeBackfillIntegrationTest` (마이그레이션 전/후 `entitled_domains` 바이트 동일성 스냅샷) 와 `V0028BackfillMigrationShapeTest` (Docker 없이 도는 구문 가드) 가 담당한다.
+
 **D6 seam (단일 지점 강제)**: 실링 교집합은 **account-service 소스에서 딱 한 번** 적용된다 — 전용 internal 엔드포인트 `GET /internal/tenants/{tenantId}/entitled-domains` 가 `ACTIVE subscriptions ∩ effectiveCeiling(tenant)` 를 반환. `GET /internal/tenant-domain-subscriptions` 는 여전히 **raw ACTIVE row** 를 반환한다(콘솔 카탈로그 + 구독 관리의 진실). auth-service `TenantClaimTokenCustomizer` 는 **바이트 불변** — `derive(E ∩ C) = derive(E) ∩ derive(C)` (ADR-035 파생이 도메인-키 기준 per-domain 이므로) ([ADR-MONO-047](../../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D6, roadmap step 2 seam note).
 
 **엔타이틀먼트-플레인 쓰기 게이트**: 도메인 `d` 의 `tenant_domain_subscription` 을 활성화(activate)하려는데 `!permits(effectiveCeiling(tenant), d)` 이면 **422 `SUBSCRIPTION_DOMAIN_OUT_OF_CEILING`**. 비활성화(deactivate)는 항상 허용(narrowing). 실링은 **엔타이틀먼트만** 제한할 뿐 IAM 역할을 부여하지 않는다 (ADR-023 plane separation).
