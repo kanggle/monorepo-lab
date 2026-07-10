@@ -32,18 +32,38 @@ public class TenantJpaEntity {
     @Column(name = "status", length = 10, nullable = false)
     private TenantStatus status;
 
+    /**
+     * TASK-BE-491 (ADR-MONO-047 § D1/D7): the grouping link to {@code org_node}.
+     * NULLABLE by design — {@code null} = "ungrouped singleton" = an UNBOUNDED effective
+     * ceiling = byte-identical pre-ADR-047 behaviour.
+     *
+     * <p>Held as a plain id rather than a {@code @ManyToOne} association: the tenant
+     * aggregate must not load the org tree; the ceiling is resolved through
+     * {@code OrgNodeQueryUseCase}, never by navigating from here.
+     */
+    @Column(name = "org_node_id", length = 36)
+    private String orgNodeId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * NOTE (TASK-BE-491): this builds a DETACHED entity which {@code TenantRepositoryImpl.save}
+     * hands to {@code JpaRepository.save} → {@code merge}. Every persisted column must
+     * therefore be carried across, or the merge silently NULLs it. {@code orgNodeId} is
+     * carried for exactly that reason: without it, an ordinary displayName/status PATCH
+     * ({@code TenantProvisionUseCase.update}) would un-group the tenant.
+     */
     public static TenantJpaEntity fromDomain(Tenant tenant) {
         TenantJpaEntity entity = new TenantJpaEntity();
         entity.tenantId = tenant.getTenantId().value();
         entity.displayName = tenant.getDisplayName();
         entity.tenantType = tenant.getTenantType();
         entity.status = tenant.getStatus();
+        entity.orgNodeId = tenant.getOrgNodeId() == null ? null : tenant.getOrgNodeId().value();
         entity.createdAt = tenant.getCreatedAt();
         entity.updatedAt = tenant.getUpdatedAt();
         return entity;
@@ -61,12 +81,19 @@ public class TenantJpaEntity {
         this.updatedAt = now;
     }
 
+    /** TASK-BE-491: attach/detach this tenant's grouping node ({@code null} = ungrouped). */
+    public void assignOrgNode(String newOrgNodeId, java.time.Instant now) {
+        this.orgNodeId = newOrgNodeId;
+        this.updatedAt = now;
+    }
+
     public Tenant toDomain() {
         return Tenant.reconstitute(
                 new TenantId(tenantId),
                 displayName,
                 tenantType,
                 status,
+                orgNodeId == null ? null : new com.example.account.domain.orgnode.OrgNodeId(orgNodeId),
                 createdAt,
                 updatedAt
         );

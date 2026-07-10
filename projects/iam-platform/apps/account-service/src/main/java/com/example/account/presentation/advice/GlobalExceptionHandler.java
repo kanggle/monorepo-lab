@@ -5,8 +5,10 @@ import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.exception.BulkLimitExceededException;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
 import com.example.account.application.exception.EmailVerificationTokenInvalidException;
+import com.example.account.application.exception.OrgNodeNotFoundException;
 import com.example.account.application.exception.RateLimitedException;
 import com.example.account.application.exception.SubscriptionAlreadyExistsException;
+import com.example.account.application.exception.SubscriptionDomainOutOfCeilingException;
 import com.example.account.application.exception.SubscriptionNotFoundException;
 import com.example.account.application.exception.TenantAlreadyExistsException;
 import com.example.account.application.exception.TenantNotFoundException;
@@ -14,6 +16,10 @@ import com.example.account.application.exception.TenantScopeDeniedException;
 import com.example.account.application.exception.TenantSuspendedException;
 import com.example.account.application.port.AuthServicePort;
 import com.example.account.domain.account.PasswordPolicyViolationException;
+import com.example.account.domain.orgnode.OrgNodeCeilingNotSubsetException;
+import com.example.account.domain.orgnode.OrgNodeCycleException;
+import com.example.account.domain.orgnode.OrgNodeDepthExceededException;
+import com.example.account.domain.orgnode.OrgNodeNotEmptyException;
 import com.example.account.domain.status.StateTransitionException;
 import com.example.account.domain.tenant.IllegalSubscriptionTransitionException;
 import com.example.web.dto.ErrorResponse;
@@ -187,5 +193,50 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
             IllegalSubscriptionTransitionException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("SUBSCRIPTION_TRANSITION_INVALID", e.getMessage()));
+    }
+
+    // TASK-BE-491 (ADR-MONO-047): org-node tree write invariants + the entitlement ceiling.
+    // An invariant violation is 422 (the request is well-formed, but the tree or the ceiling
+    // would end up inconsistent); a missing node is 404.
+
+    @ExceptionHandler(OrgNodeNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleOrgNodeNotFound(OrgNodeNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("ORG_NODE_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(OrgNodeCycleException.class)
+    public ResponseEntity<ErrorResponse> handleOrgNodeCycle(OrgNodeCycleException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("ORG_NODE_CYCLE", e.getMessage()));
+    }
+
+    @ExceptionHandler(OrgNodeDepthExceededException.class)
+    public ResponseEntity<ErrorResponse> handleOrgNodeDepthExceeded(OrgNodeDepthExceededException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("ORG_NODE_DEPTH_EXCEEDED", e.getMessage()));
+    }
+
+    @ExceptionHandler(OrgNodeCeilingNotSubsetException.class)
+    public ResponseEntity<ErrorResponse> handleOrgNodeCeilingNotSubset(OrgNodeCeilingNotSubsetException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("ORG_NODE_CEILING_NOT_SUBSET", e.getMessage()));
+    }
+
+    @ExceptionHandler(OrgNodeNotEmptyException.class)
+    public ResponseEntity<ErrorResponse> handleOrgNodeNotEmpty(OrgNodeNotEmptyException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("ORG_NODE_NOT_EMPTY", e.getMessage()));
+    }
+
+    /**
+     * ADR-MONO-047 § D2: activating a domain outside the tenant's effective ceiling. The
+     * ceiling narrows entitlement only — it never mints an IAM role (ADR-023 plane separation).
+     */
+    @ExceptionHandler(SubscriptionDomainOutOfCeilingException.class)
+    public ResponseEntity<ErrorResponse> handleSubscriptionOutOfCeiling(
+            SubscriptionDomainOutOfCeilingException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("SUBSCRIPTION_DOMAIN_OUT_OF_CEILING", e.getMessage()));
     }
 }

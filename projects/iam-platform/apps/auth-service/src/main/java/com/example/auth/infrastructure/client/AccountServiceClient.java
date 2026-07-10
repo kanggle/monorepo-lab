@@ -388,28 +388,46 @@ public class AccountServiceClient implements AccountServicePort {
         }
     }
 
+    /**
+     * TASK-BE-491 (ADR-MONO-047 § D6): repointed from
+     * {@code GET /internal/tenant-domain-subscriptions?tenantId=} to the dedicated
+     * {@code GET /internal/tenants/{tenantId}/entitled-domains}, which returns the
+     * <b>effective</b> set — {@code ACTIVE subscriptions ∩ effectiveCeiling(tenant)}.
+     *
+     * <p>The old endpoint still exists and still returns the RAW ACTIVE rows; it backs the
+     * console catalog and subscription management, which must keep seeing what is stored.
+     * Only this token-issuance leg moves. The ceiling is applied once, at the account-service
+     * source that owns {@code tenants} (hence {@code org_node}) — so
+     * {@code TenantClaimTokenCustomizer} and {@code OperatorRoleDerivation} are byte-unchanged,
+     * and {@code derive(E ∩ C) = derive(E) ∩ derive(C)} because ADR-035 derivation is
+     * per-domain.
+     *
+     * <p>An ungrouped tenant ({@code org_node_id = NULL}) has an UNBOUNDED ceiling, so this
+     * response is byte-identical to the old one for every pre-ADR-047 tenant (D7 net-zero).
+     *
+     * <p>Failure semantics are unchanged: any 4xx/5xx propagates to
+     * {@link #listEntitledDomains(String)}, which fail-softs into
+     * {@code AccountServiceUnavailableException}; the customizer then omits the claim and
+     * the domain gateway 403s. A failure can never <i>widen</i> reach.
+     */
     @SuppressWarnings("unchecked")
     private List<String> doListEntitledDomains(String tenantId) {
         try {
-            // account-service returns { "items": [ { "tenantId", "domainKey" }, ... ] }
+            // account-service returns { "tenantId": "...", "domainKeys": [ "wms", ... ] }
             Map<String, Object> body = restClient().get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/internal/tenant-domain-subscriptions")
-                            .queryParam("tenantId", tenantId)
-                            .build())
+                            .path("/internal/tenants/{tenantId}/entitled-domains")
+                            .build(tenantId))
                     // TASK-BE-318c: GAP client_credentials Bearer JWT.
                     .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
                     .body(Map.class);
 
             List<String> domainKeys = new ArrayList<>();
-            if (body != null && body.get("items") instanceof List<?> items) {
-                for (Object item : items) {
-                    if (item instanceof Map<?, ?> itemMap) {
-                        Object domainKey = itemMap.get("domainKey");
-                        if (domainKey instanceof String dk && !dk.isBlank()) {
-                            domainKeys.add(dk);
-                        }
+            if (body != null && body.get("domainKeys") instanceof List<?> keys) {
+                for (Object key : keys) {
+                    if (key instanceof String dk && !dk.isBlank()) {
+                        domainKeys.add(dk);
                     }
                 }
             }

@@ -122,17 +122,21 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     }
 
     private void stubEntitledDomains(String... domainKeys) {
-        StringBuilder items = new StringBuilder();
+        // TASK-BE-491 (ADR-MONO-047 D6): the entitled-domains leg now targets the dedicated
+        // EFFECTIVE-set endpoint, which returns { "tenantId", "domainKeys": [...] }.
+        // account-service applies the org-node ceiling there; auth-service just consumes the
+        // already-narrowed list, so TenantClaimTokenCustomizer is byte-unchanged.
+        StringBuilder keys = new StringBuilder();
         for (int i = 0; i < domainKeys.length; i++) {
-            if (i > 0) items.append(",");
-            items.append("{\"tenantId\":\"").append(SELECTED_TENANT)
-                 .append("\",\"domainKey\":\"").append(domainKeys[i]).append("\"}");
+            if (i > 0) keys.append(",");
+            keys.append("\"").append(domainKeys[i]).append("\"");
         }
-        wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenant-domain-subscriptions"))
+        wireMock.stubFor(WireMock.get(WireMock.urlPathMatching("/internal/tenants/.+/entitled-domains"))
                 .willReturn(WireMock.aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("{\"items\":[" + items + "]}")));
+                        .withBody("{\"tenantId\":\"" + SELECTED_TENANT + "\",\"domainKeys\":["
+                                + keys + "]}")));
     }
 
     /** Mints a real base GAP OIDC access token via the authorization_code flow. */
@@ -311,8 +315,12 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     void accountUnavailable_failSoft() throws Exception {
         when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
-        // account /internal/tenant-domain-subscriptions returns 503 → fail-soft.
-        wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenant-domain-subscriptions"))
+        // account /internal/tenants/{id}/entitled-domains returns 503 → fail-soft.
+        // TASK-BE-491 (ADR-MONO-047 D6): the ceiling is applied behind THIS call, so a failure
+        // can only OMIT the claim — it can never widen reach. Registered after the @BeforeEach
+        // 200 stubs on the same path pattern, so it wins (WireMock prefers the newest stub
+        // among equally-specific matches, and the shared server is not reset between tests).
+        wireMock.stubFor(WireMock.get(WireMock.urlPathMatching("/internal/tenants/.+/entitled-domains"))
                 .willReturn(WireMock.aResponse().withStatus(503)));
 
         String base = mintBaseToken("assume-op-004");

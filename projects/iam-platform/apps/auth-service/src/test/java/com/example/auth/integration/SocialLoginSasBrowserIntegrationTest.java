@@ -121,12 +121,14 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
                                 }
                                 """)));
 
-        // Entitled-domains reverse lookup (TenantClaimTokenCustomizer keystone).
-        wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenant-domain-subscriptions"))
+        // Effective entitled-domains lookup (TenantClaimTokenCustomizer keystone).
+        // TASK-BE-491 (ADR-MONO-047 D6): moved to the dedicated endpoint, whose response is
+        // already narrowed by the org-node ceiling.
+        wireMock.stubFor(WireMock.get(WireMock.urlPathMatching("/internal/tenants/.+/entitled-domains"))
                 .willReturn(WireMock.aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                { "items": [ { "tenantId": "ecommerce", "domainKey": "ecommerce" } ] }
+                                { "tenantId": "ecommerce", "domainKeys": [ "ecommerce" ] }
                                 """)));
 
         // account_roles lookup → empty so RoleSeedPolicy seeds [CUSTOMER] on platform=ecommerce.

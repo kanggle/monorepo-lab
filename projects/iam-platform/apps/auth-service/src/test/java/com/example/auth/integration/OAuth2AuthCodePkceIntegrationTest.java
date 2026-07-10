@@ -103,20 +103,16 @@ class OAuth2AuthCodePkceIntegrationTest extends AbstractIntegrationTest {
                                 }
                                 """)));
 
-        // TASK-BE-324: stub the tenant-domain-subscriptions reverse-lookup that the
-        // TenantClaimTokenCustomizer calls at authorization_code issuance time to
-        // populate the signed entitled_domains claim. Matched on path (any tenantId
-        // query value) — returns a single ACTIVE subscription so the claim is present.
-        wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenant-domain-subscriptions"))
+        // TASK-BE-324 → TASK-BE-491 (ADR-MONO-047 D6): stub the EFFECTIVE entitled-domains
+        // lookup the TenantClaimTokenCustomizer drives at authorization_code issuance time to
+        // populate the signed entitled_domains claim. The org-node ceiling is applied
+        // account-side, so the customizer is byte-unchanged and simply consumes this list.
+        wireMock.stubFor(WireMock.get(WireMock.urlPathMatching("/internal/tenants/.+/entitled-domains"))
                 .willReturn(WireMock.aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                {
-                                  "items": [
-                                    { "tenantId": "fan-platform", "domainKey": "finance" }
-                                  ]
-                                }
+                                { "tenantId": "fan-platform", "domainKeys": [ "finance" ] }
                                 """)));
     }
 

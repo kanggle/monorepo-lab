@@ -5,18 +5,21 @@ import com.example.account.application.exception.SubscriptionAlreadyExistsExcept
 import com.example.account.application.exception.SubscriptionNotFoundException;
 import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.result.SubscriptionMutationResult;
+import com.example.account.domain.orgnode.EntitlementCeiling;
 import com.example.account.domain.repository.TenantDomainSubscriptionRepository;
 import com.example.account.domain.repository.TenantRepository;
 import com.example.account.domain.tenant.IllegalSubscriptionTransitionException;
 import com.example.account.domain.tenant.SubscriptionStatus;
 import com.example.account.domain.tenant.TenantDomainSubscription;
 import com.example.account.domain.tenant.TenantId;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -49,10 +52,25 @@ class TenantDomainSubscriptionMutationUseCaseTest {
     private TenantRepository tenantRepository;
     @Mock
     private TenantDomainSubscriptionEventPublisher eventPublisher;
+    /** TASK-BE-491 (ADR-MONO-047 D2): collaborator behind the ACTIVE-only ceiling gate. */
+    @Mock
+    private OrgNodeQueryUseCase orgNodeQueryUseCase;
+
+    /**
+     * Every tenant in this suite is ungrouped, so its effective ceiling is UNBOUNDED and the
+     * ADR-047 gate is inert — which is exactly the pre-ADR-047 behaviour these cases pin
+     * (D7 net-zero). Lenient because the gate is only consulted when the target status is
+     * ACTIVE; the suspend/cancel cases never reach it.
+     */
+    @BeforeEach
+    void ungroupedTenantsAreUnbounded() {
+        Mockito.lenient().when(orgNodeQueryUseCase.effectiveCeilingForTenant(Mockito.anyString()))
+                .thenReturn(EntitlementCeiling.unbounded());
+    }
 
     private TenantDomainSubscriptionMutationUseCase useCase() {
         return new TenantDomainSubscriptionMutationUseCase(
-                subscriptionRepository, tenantRepository, eventPublisher);
+                subscriptionRepository, tenantRepository, eventPublisher, orgNodeQueryUseCase);
     }
 
     private static TenantDomainSubscription sub(String tenantId, String domainKey, SubscriptionStatus status) {

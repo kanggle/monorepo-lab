@@ -1,5 +1,6 @@
 package com.example.account.domain.tenant;
 
+import com.example.account.domain.orgnode.OrgNodeId;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -23,6 +24,13 @@ public class Tenant {
     private String displayName;
     private TenantType tenantType;
     private TenantStatus status;
+    /**
+     * TASK-BE-491 (ADR-MONO-047 § D1/D7): the grouping node that owns this service-tenant.
+     * {@code null} = ungrouped singleton ⟹ an UNBOUNDED effective ceiling ⟹ byte-identical
+     * pre-ADR-047 behaviour. The tenant remains the one and only isolation key (M1) — the
+     * node groups tenants, it does not nest them.
+     */
+    private OrgNodeId orgNodeId;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -31,15 +39,27 @@ public class Tenant {
 
     /**
      * Factory used by infrastructure mappers when reconstituting from persistence.
+     *
+     * <p>Overload retained so pre-ADR-047 call sites (which know nothing of the org tree)
+     * keep compiling unchanged; it reconstitutes an <b>ungrouped</b> tenant.
      */
     public static Tenant reconstitute(TenantId tenantId, String displayName,
                                        TenantType tenantType, TenantStatus status,
+                                       Instant createdAt, Instant updatedAt) {
+        return reconstitute(tenantId, displayName, tenantType, status, null, createdAt, updatedAt);
+    }
+
+    /** TASK-BE-491: full reconstitution including the optional grouping node. */
+    public static Tenant reconstitute(TenantId tenantId, String displayName,
+                                       TenantType tenantType, TenantStatus status,
+                                       OrgNodeId orgNodeId,
                                        Instant createdAt, Instant updatedAt) {
         Tenant tenant = new Tenant();
         tenant.tenantId = tenantId;
         tenant.displayName = displayName;
         tenant.tenantType = tenantType;
         tenant.status = status;
+        tenant.orgNodeId = orgNodeId;
         tenant.createdAt = createdAt;
         tenant.updatedAt = updatedAt;
         return tenant;
@@ -97,5 +117,17 @@ public class Tenant {
         this.status = newStatus;
         this.updatedAt = now;
         return true;
+    }
+
+    /**
+     * TASK-BE-491 (ADR-MONO-047 § D1/D7): attach this tenant to a grouping node, or detach
+     * it ({@code null} = ungrouped singleton).
+     *
+     * <p>Grouping never changes isolation: {@code tenantId} is untouched and the token
+     * still carries exactly one {@code tenant_id} (M1).
+     */
+    public void assignOrgNode(OrgNodeId newOrgNodeId, java.time.Instant now) {
+        this.orgNodeId = newOrgNodeId;
+        this.updatedAt = now;
     }
 }

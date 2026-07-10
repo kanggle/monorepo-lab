@@ -1,5 +1,6 @@
 package com.example.account.infrastructure.persistence;
 
+import com.example.account.domain.orgnode.OrgNodeId;
 import com.example.account.domain.repository.PageResult;
 import com.example.account.domain.repository.TenantRepository;
 import com.example.account.domain.tenant.Tenant;
@@ -11,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -52,5 +54,20 @@ public class TenantRepositoryImpl implements TenantRepository {
                 jpaPage.getSize(),
                 jpaPage.getTotalPages()
         );
+    }
+
+    @Override
+    public List<String> findTenantIdsByOrgNodeIdIn(List<String> orgNodeIds) {
+        // An empty IN (...) list is invalid SQL on some engines, and semantically matches
+        // nothing anyway — short-circuit rather than issue the query.
+        if (orgNodeIds == null || orgNodeIds.isEmpty()) {
+            return List.of();
+        }
+        return jpaRepository.findTenantIdsByOrgNodeIdIn(orgNodeIds);
+    }
+
+    @Override
+    public long countByOrgNodeId(OrgNodeId orgNodeId) {
+        return jpaRepository.countByOrgNodeId(orgNodeId.value());
     }
 }
