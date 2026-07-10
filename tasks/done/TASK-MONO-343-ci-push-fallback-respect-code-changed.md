@@ -8,7 +8,7 @@ TASK-MONO-343
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -92,12 +92,12 @@ if: >-
 
 # Acceptance Criteria
 
-- [ ] AC-1 — `ci.yml` 에 `github.event_name == 'push' ||` (무조건 형태) 가 **0건** 남는다. 22곳 모두 `code-changed != 'false'` 와 AND 결합된다.
-- [ ] AC-2 — `changes` 잡은 **무수정**(`code-changed` 는 이미 raw output). 기존 AND-합성 플래그(`libs`/`wms`/`iam`/…)의 계산식도 무수정.
-- [ ] AC-3 (R1 보존) — **코드 포함 main 푸시**에서 잡 집합이 리팩토링 전과 동일(전량 실행). 본 task 의 self-CI 가 곧 이 케이스다(`.github/workflows/**` 변경 → `workflows` 플래그 true → 전량 실행). self-CI GREEN 이 AC-3 의 증거.
-- [ ] AC-4 (R2 달성) — **doc-only main 푸시**에서 무거운 잡이 skip 된다. 검증: 이 PR 머지 **직후**의 main run 이 아니라, 후속 doc-only 커밋(예: 본 task 의 close chore = task md + INDEX 만 변경)의 main CI 에서 Testcontainers 레인이 **skipped** 임을 확인하고 run URL 을 close chore 에 기록. **이 검증이 AC 의 핵심** — close chore 자체가 자연스러운 테스트 케이스다.
-- [ ] AC-5 (R3 보존) — 필터 실패 시 전량 실행됨을 **논증**으로 확인: `paths-filter` 실패 → 모든 output 이 `''` → `'' != 'false'` 가 참 → 실행. `== 'true'` 로 썼다면 소멸했을 것임을 PR 본문에 명시. (실패를 인위적으로 유발하는 실검증은 불필요 — 표현식 semantics 로 충분.)
-- [ ] AC-6 — PR 경로 게이팅 무변경: doc-only PR = 무거운 잡 전 skip, 코드 PR = 해당 플래그대로. 본 PR 자체는 `workflows` 플래그로 전량 실행되므로 doc-only PR 케이스는 **직전 doc-only PR(예: #2374, "1 pass / 23 skipping")과 대조**로 확인.
+- [x] AC-1 — `ci.yml` 에 `github.event_name == 'push' ||` (무조건 형태) 가 **0건** 남는다. 22곳 모두 `code-changed != 'false'` 와 AND 결합. (`grep -cE "^\s+github\.event_name == 'push' \|\|$"` = 0, 새 형태 22건)
+- [x] AC-2 — `changes` 잡 **무수정**. `git diff -U0` 로 변경 라인이 **주석 + 게이팅 표현식 22줄뿐**이며 `filters:`/`outputs:` 는 무손상임을 확인.
+- [x] AC-3 (R1 보존) — self-CI(PR #2390, `.github/workflows/**` → `workflows` 플래그) **23 SUCCESS / 0 FAILURE / 2 skipped**(경로 게이팅 잡) = 전량 실행 실증. GREEN.
+- [ ] AC-4 (R2 달성) — **doc-only main 푸시**에서 무거운 잡 skip. **이 close chore 의 main run 에서 실증 예정** — 머지 후 Testcontainers 레인이 `skipped` 임을 확인하고 run URL 을 아래 DONE 노트/INDEX 에 기록.
+- [x] AC-5 (R3 보존) — 논증: `paths-filter` 실패 → 모든 output `''` → `'' != 'false'` 참 → 전량 실행. `== 'true'` 였다면 소멸. PR #2390 본문 + `ci.yml` 헤더 주석에 함정으로 명시.
+- [x] AC-6 — PR 경로 무변경(`github.event_name == 'push'` 가 PR 에서 거짓 → 추가된 AND 항 unreachable). 파싱 검증: 24 잡 중 22 AND-게이팅, `== 'true'` 오용 0.
 
 ---
 
@@ -166,10 +166,10 @@ None (CI 설정).
 
 # Definition of Done
 
-- [ ] `ci.yml` push 폴백 전부 축소, `code-changed` raw output 노출, 헤더 주석 갱신.
-- [ ] self-CI GREEN(R1 실증).
-- [ ] close chore 의 main run 에서 doc-only skip 실증 + run URL 기록(R2 실증).
-- [ ] `tasks/INDEX.md` done entry.
+- [x] `ci.yml` push 폴백 22곳 전부 축소, `code-changed` raw output 소비(노출은 기존), 헤더 주석 갱신.
+- [x] self-CI GREEN(R1 실증) — PR #2390, 23 SUCCESS.
+- [ ] close chore 의 main run 에서 doc-only skip 실증 + run URL 기록(R2 실증) — 이 close chore 머지 후.
+- [x] `tasks/INDEX.md` done entry.
 
 ---
 
