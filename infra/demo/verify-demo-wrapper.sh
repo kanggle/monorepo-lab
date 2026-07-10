@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# infra/demo/verify-demo-wrapper.sh — 통합 데모 래퍼 회귀 방어 (TASK-MONO-341/344)
+# infra/demo/verify-demo-wrapper.sh — 통합 데모 래퍼 회귀 방어 (TASK-MONO-341/344/346)
 # =============================================================================
 # 래퍼(demo-up.sh)의 정당성이 의존하는 불변식을 검증한다. 하나라도 무너지면
 # 데모가 부팅되지 않거나 일부 도메인이 "소리없이" 사라진다.
@@ -12,12 +12,17 @@
 #   (e) **앱 서비스 ≥1** — 각 프로젝트가 build: 를 가진 서비스를 최소 1개 기여한다
 #       (TASK-MONO-342: iam/wms 는 base 만 주면 DB 만 뜨고 앱이 0개였다. iam 은
 #        OIDC IdP 라 그 경우 전 도메인의 토큰 검증이 무너진다.)
+#   (g) **미설정 compose 변수 0건** — 렌더가 "variable is not set" 경고를 내면 FAIL
+#       (TASK-MONO-346: 미설정 변수는 error 가 아니라 warning 이라 (a)가 통과시킨다.
+#        ecommerce 의 bare ${VAR} 14개는 gitignored .env 에서 오므로 fresh clone
+#        (데모 AMI · CI 러너)에서 전부 빈 문자열이 됐고, 그 중 9개가
+#        POSTGRES_PASSWORD 라 postgres 가 초기화를 거부해 DB 9개 + 앱 12개가 죽었다.)
 #   (f) --live: 서로 다른 프로젝트의 같은 서비스 키(redis)가 별도 -p 로 공존 healthy
 #
 # jq 는 쓰지 않는다(러너 외 환경 호환) — `docker compose config` YAML 을 grep/awk 로 판다.
 #
 # 사용법:
-#   bash infra/demo/verify-demo-wrapper.sh          # 정적 (a)~(e)
+#   bash infra/demo/verify-demo-wrapper.sh          # 정적 (a)~(e),(g)
 #   bash infra/demo/verify-demo-wrapper.sh --live   # + (f) 실기동 증명
 # =============================================================================
 set -euo pipefail
@@ -126,6 +131,48 @@ done
 [ -z "$appless" ] || fail "앱 서비스를 하나도 기여하지 않는 프로젝트:"$'\n'"$appless"\
   $'\n'"→ 데모에서 DB 만 뜨고 앱이 안 뜹니다. 풀스택 compose(docker-compose.e2e.yml)를"\
   $'\n'"   projects.sh 의 COMPOSE[<slug>] 에 함께 등록하세요 (TASK-MONO-342)."
+
+# ---------------------------------------------------------------------------
+echo "[verify] (g) 미설정 compose 변수 0건 (demo.env 로 전부 채워지는가)"
+# ---------------------------------------------------------------------------
+# 근거(MONO-346): compose 는 미설정 변수를 error 가 아니라 warning 으로 처리하고
+# 빈 문자열로 보간한다. 비밀번호 자리에서 이는 "조용한 기동 실패"가 된다 —
+# postgres:16-alpine 은 빈 POSTGRES_PASSWORD 로 초기화를 거부한다.
+# 가드 (a)는 stderr 를 버리므로 이를 볼 수 없다. 여기서 경고를 에러로 승격한다.
+#
+# CI 의 fresh checkout 에는 gitignored `.env` 가 없으므로, 이 가드는 CI 에서
+# 권위를 갖는다(실 `.env` 를 가진 개발자 로컬은 결손을 가릴 수 있다).
+unset_vars() { # $1=slug|'traefik' → 미설정 변수명을 한 줄에 하나씩
+  local out
+  if [ "$1" = "traefik" ]; then
+    out="$(docker compose -p verify-traefik -f "$ROOT/$TRAEFIK_COMPOSE" config -q 2>&1 >/dev/null)"
+  else
+    local ARGS; mapfile -t ARGS < <(compose_args "$1")
+    out="$(docker compose -p "verify-$1" "${ARGS[@]}" config -q 2>&1 >/dev/null)"
+  fi
+  # 경고 문자열은 `\"NAME\"` 처럼 백슬래시-이스케이프된 따옴표를 포함한다.
+  # 벗기지 않으면 grep 이 매치하지 않아 거짓 "clean" 이 된다.
+  printf '%s\n' "$out" \
+    | sed 's/\\"/"/g' \
+    | grep -o '"[A-Za-z_][A-Za-z0-9_]*" variable is not set' \
+    | sed 's/^"//; s/" variable is not set$//' \
+    | sort -u || true
+}
+
+unset_report=""
+for p in traefik "${!COMPOSE[@]}"; do
+  vars="$(unset_vars "$p" | tr '\n' ' ')"
+  vars="${vars% }"
+  if [ -n "$vars" ]; then
+    unset_report="$unset_report  $p → $vars"$'\n'
+  else
+    ok "$p — 미설정 변수 없음"
+  fi
+done
+[ -z "$unset_report" ] || fail "빈 문자열로 보간되는 compose 변수:"$'\n'"$unset_report"\
+  $'\n'"→ compose 는 이를 경고로만 알립니다. 비밀번호 자리라면 컨테이너가 기동에"\
+  $'\n'"   실패합니다(postgres 는 빈 POSTGRES_PASSWORD 를 거부)."\
+  $'\n'"→ 값을 infra/demo/demo.env 에 추가하세요 (TASK-MONO-346)."
 
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
