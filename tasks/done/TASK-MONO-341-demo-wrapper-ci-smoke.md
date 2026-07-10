@@ -8,7 +8,7 @@ CI regression guard for the integrated demo wrapper (`infra/demo/`)
 
 # Status
 
-ready
+done
 
 # Owner
 
