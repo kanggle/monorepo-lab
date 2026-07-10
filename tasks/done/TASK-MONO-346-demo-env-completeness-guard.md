@@ -8,7 +8,7 @@ Complete `infra/demo/demo.env` for a fresh clone + add the "no unset compose var
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -89,7 +89,7 @@ Error: Database is uninitialized and superuser password is not specified.
 - [x] `.env.example` 이 compose 가 참조하는 bare 변수 14개를 전부 선언한다
 - [x] 프로젝트 `docker-compose.yml` / `infra/traefik/` git diff == 0
 - [x] 기존 가드 (a)~(f) 전부 여전히 PASS
-- [ ] CI `demo-wrapper-smoke` GREEN (이 PR 에서 확인)
+- [x] CI `demo-wrapper-smoke` GREEN (PR #2386 — 23 SUCCESS / 1 SKIPPED / failing required 0)
 
 ---
 
@@ -166,8 +166,8 @@ Error: Database is uninitialized and superuser password is not specified.
 
 # Definition of Done
 
-- [ ] `demo.env` 에 ecommerce 14개 변수, `.env.example` 에 `SETTLEMENT_DB_PASSWORD`
-- [ ] 가드 (g) 추가 + 네거티브 테스트로 작동 확인
-- [ ] fresh-clone 렌더 경고 0건 확인
-- [ ] CI GREEN
-- [ ] Ready for review
+- [x] `demo.env` 에 ecommerce 14개 변수, `.env.example` 에 `SETTLEMENT_DB_PASSWORD` + TOSS 키 2개
+- [x] 가드 (g) 추가 + 네거티브 테스트로 작동 확인
+- [x] fresh-clone 렌더 경고 0건 확인 (로컬 worktree + CI fresh checkout 양쪽)
+- [x] CI GREEN (PR #2386, squash `1e56305a9`)
+- [x] Ready for review
