@@ -8,7 +8,7 @@ fix(account-service): `EntitlementCeiling.domainsCsv()` 가 canonical sorted 가
 
 # Status
 
-review
+done
 
 # Owner
 

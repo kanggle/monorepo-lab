@@ -8,7 +8,7 @@ IAM 가이드 재구성 — 「메뉴 기능 사용법」과 「레퍼런스(역
 
 # Status
 
-review
+done
 
 # Owner
 
