@@ -83,6 +83,15 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.PARTNERSHIP_TERMINATE, "PARTNERSHIP");
         map.put(ActionCode.PARTNERSHIP_PARTICIPANT_ADD, "PARTNERSHIP");
         map.put(ActionCode.PARTNERSHIP_PARTICIPANT_REMOVE, "PARTNERSHIP");
+        // TASK-BE-492 (ADR-MONO-047 D5) — org-node tree mutations + ORG_ADMIN grant/revoke.
+        // The NODE is the audit subject for the grant/revoke rows too (the affected operator
+        // rides in `detail`), mirroring the PARTNERSHIP_PARTICIPANT_* convention above.
+        map.put(ActionCode.ORG_NODE_CREATE, "ORG_NODE");
+        map.put(ActionCode.ORG_NODE_UPDATE, "ORG_NODE");
+        map.put(ActionCode.ORG_NODE_DELETE, "ORG_NODE");
+        map.put(ActionCode.ORG_NODE_CEILING_SET, "ORG_NODE");
+        map.put(ActionCode.ORG_ADMIN_GRANT, "ORG_NODE");
+        map.put(ActionCode.ORG_ADMIN_REVOKE, "ORG_NODE");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -152,6 +161,9 @@ public class AdminActionPermissionRegistry {
                  PARTNERSHIP_REACTIVATE, PARTNERSHIP_TERMINATE,
                  PARTNERSHIP_PARTICIPANT_ADD, PARTNERSHIP_PARTICIPANT_REMOVE
                     -> Permission.PARTNERSHIP_MANAGE;
+            // TASK-BE-492 (ADR-MONO-047 D5) — every org-node mutation gates on org.manage.
+            case ORG_NODE_CREATE, ORG_NODE_UPDATE, ORG_NODE_DELETE, ORG_NODE_CEILING_SET,
+                 ORG_ADMIN_GRANT, ORG_ADMIN_REVOKE -> Permission.ORG_MANAGE;
             // TASK-BE-306 — self-serve operator profile mutation (no grantable permission;
             // synthetic <self_action> sentinel for symmetry with reason="<self_profile_update>").
             case OPERATOR_PROFILE_UPDATE -> AdminActionAuditor.PERMISSION_SELF_ACTION;

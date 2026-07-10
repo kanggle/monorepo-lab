@@ -41,6 +41,25 @@ public class AdminOperatorRoleJpaEntity {
     private String tenantId;
 
     /**
+     * TASK-BE-492 (ADR-MONO-047 D5, Flyway V0042) — the org-node <b>scope driver</b>.
+     *
+     * <p>Non-null ⇒ this grant's effective admin scope is the tenant SUBTREE under the
+     * named node (resolved from account-service at request time). Null ⇒ the legacy
+     * tenant-scoped grant, byte-unchanged.
+     *
+     * <p><b>{@link #tenantId} is not the scope column here.</b> On a node-scoped row it
+     * still mirrors the bound operator's own {@code admin_operators.tenant_id} (the
+     * BE-289 WI-2 audit-routing / row-isolation invariant); for a {@code TENANT_ADMIN} it
+     * merely <i>coincides</i> with the scope.
+     *
+     * <p>Opaque cross-service reference to account_db {@code org_node.id} — no FK is
+     * possible (separate physical database), same convention as
+     * {@code admin_operators.oidc_subject}.
+     */
+    @Column(name = "org_node_id", length = 36)
+    private String orgNodeId;
+
+    /**
      * Sole factory. {@code tenantId} MUST equal the bound operator's
      * {@code admin_operators.tenant_id} (per-tenant binding invariant —
      * data-model.md §admin_operator_roles; ADR-002).
@@ -59,6 +78,34 @@ public class AdminOperatorRoleJpaEntity {
         e.grantedAt = grantedAt;
         e.grantedBy = grantedBy;
         e.tenantId = tenantId;
+        return e;
+    }
+
+    /**
+     * TASK-BE-492 (ADR-MONO-047 D5) — factory for an org-node-scoped grant
+     * ({@code ORG_ADMIN @ node}).
+     *
+     * <p>{@code tenantId} is still the bound operator's own tenant (BE-289 WI-2), NOT the
+     * scope; {@code orgNodeId} drives the scope. A platform grant may not carry a node —
+     * rejected here and by the {@code ck_admin_operator_roles_node_not_platform} DB CHECK,
+     * because the {@code '*'} pre-scan in {@code AdminGrantScopeEvaluator} would make the
+     * node silently inert.
+     *
+     * @throws IllegalArgumentException if {@code orgNodeId} is blank, or
+     *                                  {@code tenantId} is the platform sentinel {@code '*'}
+     */
+    public static AdminOperatorRoleJpaEntity createNodeScoped(Long operatorId, Long roleId,
+                                                              Instant grantedAt, Long grantedBy,
+                                                              String tenantId, String orgNodeId) {
+        if (orgNodeId == null || orgNodeId.isBlank()) {
+            throw new IllegalArgumentException("orgNodeId is required for a node-scoped grant");
+        }
+        if (com.example.admin.domain.rbac.AdminOperator.PLATFORM_TENANT_ID.equals(tenantId)) {
+            throw new IllegalArgumentException(
+                    "A platform-scoped grant (tenant_id='*') may not also carry an org_node_id");
+        }
+        AdminOperatorRoleJpaEntity e = create(operatorId, roleId, grantedAt, grantedBy, tenantId);
+        e.orgNodeId = orgNodeId;
         return e;
     }
 

@@ -8,7 +8,7 @@ ADR-047 § 4 step 2a — account-service `org_node` authority: Flyway DDL (cycle
 
 # Status
 
-ready
+done
 
 # Owner
 

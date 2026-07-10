@@ -133,6 +133,13 @@ public class AdminActionAuditor {
         denyWriter.recordCrossTenantDenied(operator, operatorTenantId, actionCode, permissionUsed, attemptedTenantId);
     }
 
+    /** Best-effort org-node reach deny row (ADR-047 D5); see {@link AdminActionDenyWriter#recordOrgNodeScopeDenied}. */
+    public void recordOrgNodeScopeDenied(OperatorContext operator,
+                                         ActionCode actionCode,
+                                         String orgNodeId) {
+        denyWriter.recordOrgNodeScopeDenied(operator, actionCode, orgNodeId);
+    }
+
     /** Best-effort role-grant-forbidden deny row (ADR-024 D3); see {@link AdminActionDenyWriter#recordRoleGrantForbidden}. */
     public void recordRoleGrantForbidden(OperatorContext operator,
                                          ActionCode actionCode,

@@ -301,6 +301,17 @@ public class RequiresPermissionAspect {
             if ("unassignOperator".equals(name)) return ActionCode.OPERATOR_ASSIGNMENT_DELETE;
             // listAssignments is a read; fall through to null
         }
+        // TASK-BE-492 (ADR-MONO-047 D5) — org-node tree mutations; each maps to a dedicated
+        // action code so the DENIED row carries target_type=ORG_NODE.
+        if ("OrgNodeAdminController".equals(simple)) {
+            if ("createNode".equals(name)) return ActionCode.ORG_NODE_CREATE;
+            if ("updateNode".equals(name)) return ActionCode.ORG_NODE_UPDATE;
+            if ("deleteNode".equals(name)) return ActionCode.ORG_NODE_DELETE;
+            if ("setCeiling".equals(name)) return ActionCode.ORG_NODE_CEILING_SET;
+            if ("grantNodeAdmin".equals(name)) return ActionCode.ORG_ADMIN_GRANT;
+            if ("revokeNodeAdmin".equals(name)) return ActionCode.ORG_ADMIN_REVOKE;
+            // listNodes / getNode / listSubtreeTenants / listNodeAdmins are reads
+        }
         // Fallback for deny-by-default on unknown mutation endpoints.
         if (isMutation(m)) return null;
         return null;
