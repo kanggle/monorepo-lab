@@ -109,7 +109,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-238-iam-guide-usage-reference-split.md` — **IAM 가이드 3부 분리** (impl PR #2372). 레퍼런스 카탈로그(역할·권한 키·구독 도메인→도메인 롤)와 **메뉴 기능 사용법**을 분리하고 본문을 평이한 한국어로 재작성. 사용법 절 신설 — 기존엔 IAM 관련 **11개 메뉴 중 3개만** 문서화되어 있었다. 접근 매트릭스 3→**7개 라이브 표면**으로 확장 + 행=메뉴/열=역할 전치, 누락된 `partnership.manage` 키를 카탈로그와 `TENANT_ADMIN` 에 추가(`rbac.md` § Seed Matrix 정합). 비직관 셀 3개를 테스트로 고정: `/tenants`=SUPER_ADMIN 전용(read 도 `tenant.manage`), `/accounts`=SUPPORT_LOCK 불가(`account.read` 미보유), **`/partnerships`=SUPER_ADMIN 불가**(두 고객 테넌트 사이 관계 — 플랫폼은 당사자 아님). `ORG_ADMIN`/`org.manage`(ADR-047)는 **의도적 제외**(inert role + `/org-hierarchy` 화면 부재) → `TASK-PC-FE-237` 이 화면과 함께 반영, 사유를 `data.ts` 주석에 기록. lint/tsc clean · vitest 2761/2761(axe 포함).
 
 ## done
 
