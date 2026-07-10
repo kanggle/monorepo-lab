@@ -69,7 +69,11 @@ monorepo
 
 3. `scripts/check-service-map-drift.sh` 신규 — `settings.gradle` 의 `projects:<project>:apps:<service>` include 를 열거하고, `docs/project-overview.md` 의 **해당 프로젝트 섹션 안에** 각 `<service>` 가 등장하는지 단언. 누락 시 비-0 종료 + **누락 서비스명 출력**(이름을 찍지 않으면 CI 로그에서 무용지물 — MONO-339 의 교훈).
 4. **역방향 검사(유령 검출)** — 각 프로젝트 service map 표의 백틱 서비스명 중 `settings.gradle` 에 없고 폐기 마커(`~~취소선~~` / `RETIRED` / `FROZEN`)도 없는 것을 실패로 처리. 이 방향이 없으면 이번의 `finance:gateway-service` 유령을 못 잡는다.
-5. `.github/workflows/ci.yml` — 가드를 잡으로 배선. **순수-positive 필터**(negation 금지 — MONO-074/075 quirk). 트리거 경로 = `settings.gradle` · `docs/project-overview.md` · `scripts/check-service-map-drift.sh`.
+5. `.github/workflows/ci.yml` — 가드를 잡으로 배선. **순수-positive 필터**(negation 금지 — MONO-074/075 quirk). 트리거 경로 = `settings.gradle` · `docs/project-overview.md` · `scripts/check-service-map-drift.sh`. 필터를 `code-changed` 와 **AND 하지 말 것** — 이 가드가 잡는 드리프트는 markdown-only 편집으로 도착하므로 AND 하면 존재 이유인 바로 그 변경에서 꺼진다.
+
+## In Scope — Facet C (착수 중 편입, 2026-07-10)
+
+6. `.claude/hooks/hardstop-detect.ps1` — `$sharedPathPattern`(L110)에서 `README\.md` 제거. Facet A 의 README 파트가 이 훅에 막혀 **구현 불가**였다(§ Blocker). 훅이 `CLAUDE.md` 의 문서화된 공유 집합보다 넓었고, **훅 자신이 출력하는 `[WHY]` 스탠자조차 README 를 공유 경로로 열거하지 않는다**(L228) — 즉 패턴만 어긋나 있었다. 에이전트는 `.claude/` 를 스테이징할 수 없어 **사용자가 직접 적용·커밋**했다(`chore(hooks):` 커밋).
 
 ## Out of Scope
 
@@ -161,6 +165,21 @@ Facet A 의 `README.md` 파트는 **구현 불가 상태**다. 문서 문제가 
 
 > 이 Blocker 자체가 본 task 의 논지를 재확인한다 — 손으로 유지되는 목록(훅의 `$sharedPathPattern`)이 문서화된 규칙(`CLAUDE.md`)과 갈라졌고, 아무 절차도 실패하지 않았다.
 
+## 훅 조사 부산물 — 후속 티켓 **불필요** 판정 (2026-07-10)
+
+`$sharedPathPattern` 에는 `README\.md` 외에도 `build\.gradle` · `settings\.gradle` 이 있고 이 둘 역시 `CLAUDE.md` 의 공유 집합에 없다. 착수 중 "동일 드리프트 2건 잔존" 으로 의심했으나, **소스 확인 결과 무해**하므로 티켓을 끊지 않는다.
+
+- HARDSTOP-03 의 유일한 탐지 형태는 **슬래시 경로 토큰** `(?:projects|apps)/<project>/` 다(L216). 다른 형태는 없다.
+- `settings.gradle` 은 프로젝트를 **콜론 형태** `projects:wms-platform:apps:…` 로만 참조한다. 실측: `settings.gradle` · `build.gradle` 모두 슬래시 형태 **0건** → 정규식이 **원리적으로 발화 불가**. 두 항목은 패턴에 있으나 **동작상 inert** 하다.
+- 반면 `README.md` 는 Projects 표가 `[wms-platform](projects/wms-platform/)` 형태의 **슬래시 링크**를 쓰므로 매번 발화했다. README 만 실제 피해자였다.
+
+**부수 관찰 2건**(수정하지 않음 — `.claude/` 하드블록 + 본 task 범위 밖):
+
+1. L179~180 주석은 탐지 형태를 *"path token **or as a code-fenced identifier**"* 라 적지만 **코드-펜스 탐지 분기는 존재하지 않는다**. 주석이 구현보다 앞서 있다(또는 제거된 기능의 잔재).
+2. `$shortAliases`(L192~198)에 `finance-platform` · `erp-platform` · `platform-console` 이 없다. 세 프로젝트는 정식명으로만 탐지되고 축약형(`apps/erp/` 등)은 통과한다.
+
+둘 다 실질 위험이 낮고 관측된 피해가 없다 — **AC-0 미충족(트리거 미관측)** 이므로 MONO-328/330 과 같은 판단으로 **백로그화하지 않는다.** 재발 신호가 관측되면 그때 티켓을 끊는다.
+
 ---
 
 # Edge Cases
@@ -206,7 +225,7 @@ Facet A 의 `README.md` 파트는 **구현 불가 상태**다. 문서 문제가 
 
 - [x] `docs/project-overview.md` + 루트 `README.md` 가 `settings.gradle` 과 정합(AC-1~4).
 - [x] `scripts/check-service-map-drift.sh` 신규 + CI 배선 + 양성/네거티브 로그(AC-5~8).
-- [ ] **`.claude/hooks/hardstop-detect.ps1` 의 `README\.md` 제거를 본 PR 에 포함** — 사용자가 워킹트리에 적용했으나 `.claude/` 스테이징이 분류기 하드블록이라 **사용자가 직접 `git add` + `git commit`** 해야 한다. 이 커밋이 빠지면 머지 후 훅이 다시 README 편집을 막는다(본 task 의 AC-4 가 다음 세션에서 재현 불가).
+- [x] **`.claude/hooks/hardstop-detect.ps1` 의 `README\.md` 제거를 본 PR 에 포함**(Facet C) — 사용자가 직접 `git add` + `git commit`(`.claude/` 스테이징은 분류기 하드블록). 브랜치에 안착 확인.
 - [ ] 프로젝트-내부 `README.md` 드리프트를 발견했다면 각 프로젝트 `tasks/ready/` 로 spawn(고치지 말 것).
 - [ ] `tasks/INDEX.md` done entry — **역방향 검사를 보류했다면 그 사유와 놓치는 케이스를 여기 기록**. 역방향은 **보류하지 않고 배선함**(네거티브 테스트 통과).
 
