@@ -52,13 +52,38 @@ KEEP_TRAEFIK=1 bash infra/demo/demo-down.sh   # traefik-net 유지
 > 리소스 주의: `full`(41 JVM 동시)은 RAM ~32–48GB. 저사양/로컬에서는 OOM/exit137
 > 위험이 있으니 `demo-core` 부터 확인할 것. 실제 데모 호스트는 `m6i.4xlarge`(64GB) 기준.
 
-## 검증 상태 (이 task)
+## 회귀 방어 (TASK-MONO-341)
 
-- ✅ 8개 프로젝트 compose + traefik 가 각각 `docker compose config` 로 정상 렌더(문법·구조)
-- ✅ 래퍼 스크립트 `bash -n` 문법 통과
-- ✅ include/-f 병합이 중복 키를 잃는다는 실측 확인(위 근거)
-- ⏳ **full/demo-core 실기동 스모크는 EC2/CI 권위** — 로컬 Windows 는 Docker/Testcontainers
-  FLAKY + 41 JVM OOM 위험이라 이 host 에서 실행하지 않음(프로젝트 규율).
+프로젝트 맵은 [`projects.sh`](projects.sh) **단일 출처** — `demo-up.sh` / `demo-down.sh` /
+`verify-demo-wrapper.sh` 가 공통 source 한다.
+
+```bash
+bash infra/demo/verify-demo-wrapper.sh          # 정적 (a)~(d)
+bash infra/demo/verify-demo-wrapper.sh --live   # + (e) 실기동 증명 (redis 2개, 자동 teardown)
+```
+
+래퍼가 의존하는 불변식을 검증한다 — 하나라도 무너지면 데모가 **소리없이** 불완전 부팅된다:
+
+| # | 불변식 | 깨지면 |
+|---|---|---|
+| (a) | 9개 compose 가 각각 렌더된다 | 해당 프로젝트 미기동 |
+| (b) | `container_name` 전역 유일 | docker 가 중복 이름 거부 |
+| (c) | host `ports:` 전역 무충돌 | 포트 바인딩 실패 |
+| (d) | 모든 `projects/*/docker-compose.yml` 이 맵에 등록 | **신규 프로젝트가 데모에서 조용히 누락** |
+| (e) | 같은 키 `redis` 가 별도 `-p` 로 공존 | 누군가 `include:` 로 되돌림 = 침묵 병합 회귀 |
+
+CI 잡 `demo-wrapper-smoke` (`.github/workflows/ci.yml`) 가 `infra/demo/**` ·
+`infra/traefik/**` · `projects/*/docker-compose.yml` 변경 PR 에서 위를 자동 검증한다.
+(필터는 순수-positive + `code-changed` AND → README-only 변경은 skip.)
+
+## 검증 상태
+
+- ✅ 9개 compose `docker compose config` 렌더 / `bash -n` / container_name 84개 유일 / host port 무충돌
+- ✅ 커버리지 가드 네거티브 테스트 — 맵에서 프로젝트 제거 시 FAIL 확인
+- ✅ 실기동 증명 — `scm-platform-redis` + `fan-platform-redis` 동시 healthy (같은 compose 키 `redis`)
+- ✅ include/-f 가 중복 키를 잃는다는 실측 확인(위 근거)
+- ⏳ **`full`(41 JVM) 실기동 healthcheck 스모크는 EC2 권위** — GH 러너(16GB)·로컬 Windows
+  (Docker VM 11.68GiB) 모두 물리적 불가. `m6i.4xlarge`(64GB) 필요.
 
 ## 남은 작업 (federation env 배선 — 별도 증분)
 
