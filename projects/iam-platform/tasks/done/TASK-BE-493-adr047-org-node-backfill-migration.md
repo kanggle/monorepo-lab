@@ -8,7 +8,7 @@ ADR-047 § 4 step 4 — D7 migration: backfill one `org_node` per existing tenan
 
 # Status
 
-ready
+done
 
 # Owner
 
