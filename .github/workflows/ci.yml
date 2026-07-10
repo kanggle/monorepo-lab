@@ -142,6 +142,12 @@ jobs:
       # AND-composed with `code-changed` so a README-only edit under infra/demo
       # skips the smoke while the .sh / docker-compose.yml surfaces still trigger it.
       demo-wrapper: ${{ steps.filter.outputs.demo-wrapper == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      # TASK-MONO-345: raw filter — deliberately NOT AND-combined with
+      # `code-changed`. The guard's whole purpose is to catch a markdown edit to
+      # docs/project-overview.md that drifts from settings.gradle; a doc-only
+      # change has code-changed == 'false', so AND-combining would disable the
+      # guard exactly on the change it exists to police.
+      service-map: ${{ steps.filter.outputs.service-map }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
@@ -217,6 +223,16 @@ jobs:
               - 'infra/demo/**'
               - 'infra/traefik/**'
               - 'projects/*/docker-compose.yml'
+            # TASK-MONO-345: docs/project-overview.md carries a hand-maintained
+            # service map per project. settings.gradle is the only inventory the
+            # build reads. When they diverge, the doc is silently wrong and no
+            # procedure fails — the same failure class as MONO-339 (fed-e2e
+            # bring-up list) and MONO-341 (demo wrapper map).
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            service-map:
+              - 'settings.gradle'
+              - 'docs/project-overview.md'
+              - 'scripts/check-service-map-drift.sh'
             # TASK-MONO-075: pure-positive enumeration of code-bearing file
             # extensions. `'some'` quantifier behaves intuitively here (no
             # negation → no quirk). markdown-only / docs-only / lifecycle-only
@@ -266,6 +282,33 @@ jobs:
   # (m6i.4xlarge / 64GB) per MONO-336's carried-forward item. The live proof here
   # is deliberately minimal: two redis:7-alpine containers.
   # ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-345 — service-map drift guard.
+  #
+  # docs/project-overview.md hand-maintains a service map per project. The build
+  # only ever reads settings.gradle. On 2026-07-10 the two had drifted by eight
+  # entries (2 phantom services documented but never built, 5 shipped services
+  # never documented, 1 decommissioned service still described as current) and
+  # nothing failed — the doc is not executable, so the drift was invisible to
+  # every reader who did not independently open settings.gradle.
+  #
+  # This job is cheap (a few hundred ms of bash) and gates both directions.
+  # ---------------------------------------------------------------------------
+  service-map-drift:
+    name: Service map drift (settings.gradle vs project-overview.md)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.service-map == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-service-map-drift.sh
+
+      - name: Guard — settings.gradle <-> docs/project-overview.md
+        run: bash scripts/check-service-map-drift.sh
+
   demo-wrapper-smoke:
     name: Demo wrapper smoke (infra/demo)
     runs-on: ubuntu-latest

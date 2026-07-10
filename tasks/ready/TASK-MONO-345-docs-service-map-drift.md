@@ -58,7 +58,7 @@ monorepo
    - **게이트웨이 부재의 사유를 명시**: finance · erp 는 게이트웨이 모듈 없이 Traefik 이 라우팅한다는 사실을 각 § 에 한 줄로 남긴다. 단순 삭제만 하면 다음 독자가 "빠뜨린 것"으로 오해하고 되살린다.
    - 머리말 / § 1 / § 2 제목의 **프로젝트 수를 하나로** 통일(7 도메인 + platform-console = 8 프로젝트).
    - "5/5 federated" → **6/6**(ecommerce 포함). § 2.6 platform-console 상태 문장도 동반 수정.
-2. `README.md`(루트)
+2. `README.md`(루트) — **⛔ 착수 중 차단됨. 아래 § Blocker 참조. 훅 패치가 선행되어야 함(사용자 소관).**
    - Projects 표가 **4행뿐**이다(wms · ecommerce · iam · fan). scm · finance · erp · platform-console **4개 프로젝트가 통째로 없다**.
    - wms 행의 *"admin / notification: bootstrap pending"* → 둘 다 존재하므로 정정.
    - fan 행의 *"🚧 Bootstrapping"* → v1 종결(2026-05-03).
@@ -86,7 +86,7 @@ monorepo
 - [ ] AC-1 — `docs/project-overview.md` 의 모든 § 2.x service map 표가 `settings.gradle` include 집합과 일치한다. 유령 2건 삭제, 누락 5건 추가, 폐기 1건 표기.
 - [ ] AC-2 — finance · erp 의 **게이트웨이 부재 사유**가 각 § 에 문장으로 남는다(삭제만 하고 사유를 안 남기면 미달).
 - [ ] AC-3 — 프로젝트 수가 문서 전체에서 **하나로** 통일된다(머리말 · § 1 · § 2 제목). federated 도메인 수는 **6/6**.
-- [ ] AC-4 — 루트 `README.md` Projects 표에 **8개 프로젝트 전부**가 있고, wms · fan 의 상태 문구와 Phases 표가 실제 단계를 반영한다.
+- [ ] ~~AC-4 — 루트 `README.md` Projects 표에 **8개 프로젝트 전부**가 있고, wms · fan 의 상태 문구와 Phases 표가 실제 단계를 반영한다.~~ → **⛔ BLOCKED (§ Blocker)**. `hardstop-detect.ps1` 이 README 편집을 차단하고 escape 경로가 마크다운 표와 호환되지 않는다. 훅 패치(사용자 소관) 후 **후속 task 로 분리**. 본 task 의 DoD 에서 제외.
 - [ ] AC-5 — `scripts/check-service-map-drift.sh` 가 **현재 트리에서 exit 0**(= Facet A 가 실제로 정합함을 스크립트가 증명). Facet A 없이 AC-5 는 성립할 수 없다 — 두 Facet 은 서로의 검증이다.
 - [ ] AC-6 (**네거티브 테스트, 양성만으론 불충분**) — ① `settings.gradle` 에 더미 include 를 임시 추가 → 가드 exit 1 + 그 서비스명 출력. ② `project-overview.md` 표에 유령 행 임시 추가 → 가드 exit 1 + 그 이름 출력. 두 로그를 PR 본문에 첨부. (MONO-339 에서 `comm` 인자순서 실수를 양성 테스트가 못 잡은 전례.)
 - [ ] AC-7 — CI 잡이 `settings.gradle` 변경 PR 에서 **실행**되고, 무관 코드 PR 에서 **skip** 된다. 필터는 순수-positive.
@@ -139,6 +139,26 @@ None — 문서 + CI 설정. API/이벤트 계약 무변경.
 
 ---
 
+# Blocker — README.md 는 훅에 의해 에이전트 편집 불가 (2026-07-10 착수 중 발견)
+
+Facet A 의 `README.md` 파트는 **구현 불가 상태**다. 문서 문제가 아니라 훅 구성 문제다.
+
+- `.claude/hooks/hardstop-detect.ps1` **L110** 의 `$sharedPathPattern` 이 `README\.md` 를 **project-agnostic 공유 파일**로 포함한다. 따라서 README 에 `wms-platform` 같은 프로젝트 경로 토큰을 쓰는 모든 편집이 `HARDSTOP-03` 으로 차단된다.
+- 그런데 **`CLAUDE.md` 의 공유 목록에는 `README.md` 가 없다** — 명시된 집합은 `platform/` · `rules/` · `.claude/` · `libs/` · `tasks/templates/` · `tasks/INDEX.md` + 루트 `tasks/` · `docs/guides/` · `CLAUDE.md` · `TEMPLATE.md` 다. 훅이 문서화된 규칙보다 **넓다**. (`build.gradle` · `settings.gradle` 도 동일하게 훅에만 있다.)
+- 게다가 **`origin/main` 의 README 는 이미 4개 프로젝트를 이름으로 나열한다.** 즉 파일은 이미 "위반" 상태이고, 훅은 그것을 고치는 것만 막는다. README 는 포트폴리오 허브이며 **프로젝트를 호명하는 것이 존재 이유**다 — Template 추출 대상도 아니다.
+- 훅이 제공하는 정식 escape (`<!-- hardstop-allow: … -->`) 는 **바로 앞 줄**만 인정한다(**L213**, `$lines[$i-1]`). Projects 표는 마크다운 표이고 **표의 행 사이에는 주석을 넣을 수 없다**(표가 깨진다). 행마다 annotation 을 다는 것이 구조적으로 불가능하므로 escape 경로가 닫혀 있다.
+
+**해소 방법(사용자 소관)** — `.claude/hooks/` 편집·커밋은 분류기에 하드블록되어 에이전트가 적용할 수 없다. 다음 중 하나:
+
+1. **(권장)** L110 의 `$sharedPathPattern` 에서 `README\.md` 를 제거해 훅을 `CLAUDE.md` 의 문서화된 공유 집합과 일치시킨다. `docs/guides/` 와 달리 README 는 프로젝트-불가지가 아니어야 한다.
+2. L213 근처를 고쳐 **파일 상단의 단일 `<!-- hardstop-allow-file: … -->`** 를 인정하게 한다. 표 친화적이며 다른 마크다운 표에도 재사용된다.
+
+둘 중 하나가 적용되기 전까지 AC-4 는 **달성 불가**하며, 본 task 는 **Facet A(project-overview.md) + Facet B(가드+CI) 로 종결**한다. README 정정은 훅 패치 직후 **후속 doc-only task** 로 분리한다.
+
+> 이 Blocker 자체가 본 task 의 논지를 재확인한다 — 손으로 유지되는 목록(훅의 `$sharedPathPattern`)이 문서화된 규칙(`CLAUDE.md`)과 갈라졌고, 아무 절차도 실패하지 않았다.
+
+---
+
 # Edge Cases
 
 - **ADR 을 "고치려는" 충동 (최상위 함정)** — `ADR-MONO-008` / `-016` 이 `gateway` 를 v2 deferred 로 적은 것은 **결정 시점에 사실**이었다. ADR 은 append-only 기록이지 현재 상태 문서가 아니다. 유령의 원인은 ADR 이 아니라 그 문구를 service map **표의 행**으로 옮겨 적은 overview 다. ADR 을 건드리면 `HARDSTOP-04` 인접 영역 + 감사 추적 파괴.
@@ -180,10 +200,12 @@ None — 문서 + CI 설정. API/이벤트 계약 무변경.
 
 # Definition of Done
 
-- [ ] `docs/project-overview.md` + `README.md` 가 `settings.gradle` 과 정합(AC-1~4).
-- [ ] `scripts/check-service-map-drift.sh` 신규 + CI 배선 + 양성/네거티브 로그(AC-5~8).
+- [x] `docs/project-overview.md` 가 `settings.gradle` 과 정합(AC-1~3).
+- [ ] ~~루트 `README.md`~~ → § Blocker 로 후속 분리(AC-4 제외).
+- [x] `scripts/check-service-map-drift.sh` 신규 + CI 배선 + 양성/네거티브 로그(AC-5~8).
 - [ ] 프로젝트-내부 `README.md` 드리프트를 발견했다면 각 프로젝트 `tasks/ready/` 로 spawn(고치지 말 것).
-- [ ] `tasks/INDEX.md` done entry — **역방향 검사를 보류했다면 그 사유와 놓치는 케이스를 여기 기록**.
+- [ ] `tasks/INDEX.md` done entry — **역방향 검사를 보류했다면 그 사유와 놓치는 케이스를 여기 기록**. 역방향은 **보류하지 않고 배선함**(네거티브 테스트 통과).
+- [ ] 훅 패치가 적용되면 README 후속 task 착수.
 
 ---
 
