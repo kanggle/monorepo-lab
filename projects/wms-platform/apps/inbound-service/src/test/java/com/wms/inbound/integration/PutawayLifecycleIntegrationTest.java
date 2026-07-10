@@ -27,7 +27,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -37,6 +40,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -134,21 +138,25 @@ class PutawayLifecycleIntegrationTest extends InboundServiceIntegrationBase {
         assertThat(closeResult.status()).isEqualTo("CLOSED");
         assertThat(closeResult.summary().putawayConfirmedTotal()).isEqualTo(100);
 
-        // Wait for outbox publisher to push the three events to Kafka.
+        // Wait for outbox publisher to push the three events to Kafka. Drain them in ONE
+        // pass — see drainEvents: polling once per topic loses whatever else was co-batched.
         try (KafkaConsumer<String, String> consumer = newConsumer(
                 List.of(TOPIC_INSTRUCTED, TOPIC_COMPLETED, TOPIC_CLOSED))) {
-            JsonNode instructed = pollEventOnTopic(consumer, TOPIC_INSTRUCTED);
+            Map<String, JsonNode> events =
+                    drainEvents(consumer, Set.of(TOPIC_INSTRUCTED, TOPIC_COMPLETED, TOPIC_CLOSED));
+
+            JsonNode instructed = events.get(TOPIC_INSTRUCTED);
             assertThat(instructed.get("eventType").asText()).isEqualTo("inbound.putaway.instructed");
             assertThat(instructed.get("payload").get("asnId").asText()).isEqualTo(asnId.toString());
 
-            JsonNode completed = pollEventOnTopic(consumer, TOPIC_COMPLETED);
+            JsonNode completed = events.get(TOPIC_COMPLETED);
             assertThat(completed.get("eventType").asText()).isEqualTo("inbound.putaway.completed");
             assertThat(completed.get("payload").get("asnId").asText()).isEqualTo(asnId.toString());
             JsonNode lines = completed.get("payload").get("lines");
             assertThat(lines.size()).isEqualTo(1);
             assertThat(lines.get(0).get("qtyReceived").asInt()).isEqualTo(100);
 
-            JsonNode closed = pollEventOnTopic(consumer, TOPIC_CLOSED);
+            JsonNode closed = events.get(TOPIC_CLOSED);
             assertThat(closed.get("eventType").asText()).isEqualTo("inbound.asn.closed");
             assertThat(closed.get("payload").get("summary").get("putawayConfirmedTotal").asInt()).isEqualTo(100);
         }
@@ -200,16 +208,51 @@ class PutawayLifecycleIntegrationTest extends InboundServiceIntegrationBase {
         return consumer;
     }
 
-    private JsonNode pollEventOnTopic(KafkaConsumer<String, String> consumer, String topic) {
-        return await().atMost(45, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500))
-                .until(() -> {
-                    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
-                    for (ConsumerRecord<String, String> r : records) {
-                        if (topic.equals(r.topic())) {
-                            return objectMapper.readTree(r.value());
+    /**
+     * Drains records until one has been seen on every topic in {@code expectedTopics}.
+     *
+     * <p><b>Why this is a single accumulating drain and not one poll per topic.</b>
+     * {@code KafkaConsumer.poll()} returns a <em>batch</em> spanning every subscribed topic and
+     * advances the consumer's position past all of it. A per-topic helper that scans the batch
+     * for its own topic and returns therefore <b>throws away</b> every co-batched record — and
+     * they can never be re-read. The outbox publisher emits the three events in quick
+     * succession, so co-batching is the normal case on a fast runner: the first call would
+     * return {@code instructed} and silently drop {@code completed} + {@code closed}, and the
+     * next two calls would poll an empty topic until the 45s budget expired. That is what made
+     * this test look flaky (it passes only when the broker happens to split the three events
+     * across three batches) and it is not fixable by widening the timeout — the records are
+     * already gone.
+     *
+     * <p>First record per topic wins ({@code putIfAbsent}): a redelivery or a rebalance
+     * duplicate must not overwrite the record the assertions were about to read.
+     *
+     * @return {@code topic → envelope}, containing exactly {@code expectedTopics}
+     */
+    private Map<String, JsonNode> drainEvents(KafkaConsumer<String, String> consumer,
+                                              Set<String> expectedTopics) {
+        Map<String, JsonNode> received = new HashMap<>();
+        try {
+            await().atMost(45, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500))
+                    .until(() -> {
+                        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+                        for (ConsumerRecord<String, String> r : records) {
+                            if (expectedTopics.contains(r.topic())) {
+                                // readTree throwing is a malformed envelope — let it surface as a
+                                // test error rather than degrade into "not found" and time out.
+                                received.putIfAbsent(r.topic(), objectMapper.readTree(r.value()));
+                            }
                         }
-                    }
-                    return null;
-                }, java.util.Objects::nonNull);
+                        return received.keySet().containsAll(expectedTopics);
+                    });
+        } catch (ConditionTimeoutException e) {
+            Set<String> missing = new HashSet<>(expectedTopics);
+            missing.removeAll(received.keySet());
+            // Name the missing topics: a real publisher regression must not read as an
+            // anonymous TimeoutException.
+            throw new AssertionError(
+                    "Timed out after 45s waiting for inbound events. Missing topics: " + missing
+                            + "; received: " + received.keySet(), e);
+        }
+        return received;
     }
 }
