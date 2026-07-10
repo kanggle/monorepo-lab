@@ -35,7 +35,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -126,16 +125,17 @@ public class AccountAdminController {
         return ResponseEntity.ok(accountServiceClient.listAll(resolvedTenant, page, size, normalizedStatus));
     }
 
-    @GetMapping("/{accountId}")
-    @RequiresPermission(Permission.ACCOUNT_READ)
-    public ResponseEntity<?> detail(@PathVariable String accountId) {
-        try {
-            return ResponseEntity.ok(accountServiceClient.getDetail(accountId));
-        } catch (com.example.admin.application.exception.NonRetryableDownstreamException e) {
-            if (e.getHttpStatus() == 404) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            throw e;
-        }
-    }
+    // TASK-BE-495: the public `GET /api/admin/accounts/{accountId}` detail surface was
+    // REMOVED. It never appeared in `admin-api.md` (the contract lists exactly six
+    // accounts endpoints), no consumer called it (the console derives detail from the
+    // search/list item — console-integration-contract.md § 2.4.1), and — unlike every
+    // sibling here — it bypassed `queryTenantScopeGate`, so a tenant-scoped operator
+    // holding `account.read` could read another tenant's email/profile given only an
+    // accountId. Deleting the surface restores contract parity and makes the
+    // confinement unregressable. Do NOT re-add it without a spec-first `admin-api.md`
+    // section AND a `queryTenantScopeGate.resolve(...)` call (cross-tenant ⇒ 404, never
+    // 403 — 403 leaks existence). `AccountServiceClient.getDetail` stays: it is live,
+    // consumed by OnboardingController + LinkOperatorIdentityUseCase.
 
     @PostMapping("/{accountId}/lock")
     @RequiresPermission(Permission.ACCOUNT_LOCK)
