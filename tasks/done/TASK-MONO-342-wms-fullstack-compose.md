@@ -8,7 +8,7 @@ Add the missing wms-platform full-stack compose overlay (`docker-compose.e2e.yml
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -74,7 +74,7 @@ devops
 - [x] `projects/wms-platform/docker-compose.yml` git diff == 0 (byte-unchanged)
 - [x] MONO-341 가드 통과 — `container_name` 전역 유일, host port 무충돌
 - [x] **실기동 검증**: `postgres + redis + kafka + master-service` 기동 → `wms-master-service` **healthy**, `/actuator/health` = `{"status":"UP"}`, Flyway 8 마이그레이션 성공(master_db 테이블 10개)
-- [ ] (EC2/CI 권위) 7개 앱 전체 동시 기동 healthcheck
+- [ ] (EC2/CI 권위) 7개 앱 전체 동시 기동 healthcheck — **이월**: 개발 호스트 Docker VM 11.68 GiB 로 물리적 불가
 
 ---
 
@@ -157,6 +157,6 @@ devops
 
 - [x] `docker-compose.e2e.yml` 추가, base byte-unchanged
 - [x] 렌더 + MONO-341 가드 + master-service 실기동 healthy 검증
-- [ ] (EC2/CI) 전체 7앱 스모크
-- [ ] 후속 task 티켓화: `infra/demo` 통합 배선 + CI "앱 서비스 ≥1" 가드
-- [ ] Ready for review
+- [ ] (EC2/CI) 전체 7앱 스모크 — **이월**(호스트 물리 한계, EC2 `m6i.2xlarge` 권위)
+- [x] 후속 task 티켓화: `infra/demo` 통합 배선 + CI "앱 서비스 ≥1" 가드 → TASK-MONO-344 (동일 PR #2383 에서 함께 구현·머지)
+- [x] Ready for review
