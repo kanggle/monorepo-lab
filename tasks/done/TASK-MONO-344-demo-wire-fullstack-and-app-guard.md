@@ -8,7 +8,7 @@ Wire the full-stack composes into `infra/demo` and add the "app service ≥1" CI
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -81,7 +81,7 @@ MONO-336/341 의 검증(렌더·이름 유일성·포트·커버리지)은 **구
 - [x] 정적 (a)~(e) PASS, `--live` (f) PASS (두 redis 공존 healthy)
 - [x] `container_name` 91개 전역 유일, host port 무충돌
 - [x] 프로젝트 compose / `infra/traefik/` git diff == 0
-- [ ] CI `demo-wrapper-smoke` GREEN (이 PR 에서 확인)
+- [x] CI `demo-wrapper-smoke` GREEN (PR #2383, 22s, 1차 실행)
 
 ---
 
@@ -89,7 +89,7 @@ MONO-336/341 의 검증(렌더·이름 유일성·포트·커버리지)은 **구
 
 > Monorepo-level task. Read root `tasks/INDEX.md` § "When to Use Root vs Project Tasks" first.
 
-- `tasks/ready/TASK-MONO-342-wms-fullstack-compose.md` (선행 — wms 풀스택 compose 신설)
+- `tasks/done/TASK-MONO-342-wms-fullstack-compose.md` (선행 — wms 풀스택 compose 신설)
 - `tasks/done/TASK-MONO-336-integrated-demo-compose.md` (래퍼 도입 · 이 결함의 출처)
 - `tasks/done/TASK-MONO-341-demo-wrapper-ci-smoke.md` (CI 가드 잡)
 - `projects/iam-platform/docker-compose.yml` (헤더에 "infrastructure only" 명시)
@@ -159,5 +159,5 @@ MONO-336/341 의 검증(렌더·이름 유일성·포트·커버리지)은 **구
 - [x] `projects.sh` 다중 파일 + 헬퍼, `demo-up/down` 다중 `-f`, `demo.env` 신설
 - [x] 가드 (e) 추가 + 네거티브 테스트로 작동 확인
 - [x] 로컬 정적 + `--live` PASS, byte-unchanged 확인
-- [ ] CI GREEN
-- [ ] Ready for review
+- [x] CI GREEN (PR #2383 — 23 SUCCESS / 1 SKIPPED / failing required 0)
+- [x] Ready for review
