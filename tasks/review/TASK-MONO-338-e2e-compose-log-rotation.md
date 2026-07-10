@@ -8,7 +8,7 @@ e2e compose 서비스에 컨테이너 로그 로테이션(`logging: max-size/max
 
 # Status
 
-ready
+review
 
 # Owner
 

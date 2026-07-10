@@ -27,6 +27,16 @@
 
 name: federation-hardening-e2e
 
+# Container log rotation (TASK-MONO-338). json-file defaults to UNBOUNDED
+# append: one runaway service can fill the disk (2026-07-10: 17.1GB of OTLP
+# export stacktraces). 50m x 3 caps each service at 150MB. YAML anchors do
+# not cross file boundaries, so each compose file redeclares this.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   # ---------------------------------------------------------------------------
   # redpanda — TASK-MONO-174. A real single-node Kafka broker for the DEMO so
@@ -43,6 +53,7 @@ services:
   # CI keeps the placeholder (its specs never exercise event paths).
   # ---------------------------------------------------------------------------
   redpanda:
+    logging: *default-logging
     image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
     command:
       - redpanda
@@ -67,18 +78,21 @@ services:
   # auth/account/admin — point the outbox relay at the real broker (overrides
   # the base x-iam-service-env anchor's KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9999).
   auth-service:
+    logging: *default-logging
     environment:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
     depends_on:
       redpanda: { condition: service_healthy }
 
   account-service:
+    logging: *default-logging
     environment:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
     depends_on:
       redpanda: { condition: service_healthy }
 
   admin-service:
+    logging: *default-logging
     environment:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
     depends_on:
@@ -91,6 +105,7 @@ services:
   # (entitled_domains ∋ scm). JWKS startup probe targets the base auth-service.
   # ---------------------------------------------------------------------------
   scm-gateway:
+    logging: *default-logging
     build:
       context: ../../../projects/scm-platform/apps/gateway-service
       dockerfile: Dockerfile
@@ -130,6 +145,7 @@ services:
   # dual-accept entitled_domains); SCM goes through the gateway above.
   # ---------------------------------------------------------------------------
   console-web:
+    logging: *default-logging
     environment:
       WMS_ADMIN_BASE_URL: http://wms-admin-service:8086/api/v1/admin
       SCM_GATEWAY_BASE_URL: http://scm-gateway:8080

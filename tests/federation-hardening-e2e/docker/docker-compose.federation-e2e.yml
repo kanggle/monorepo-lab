@@ -77,6 +77,16 @@ x-iam-service-env: &iam-service-env
   JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
   OIDC_ISSUER_URL: http://auth-service:8081
 
+# Container log rotation (TASK-MONO-338). json-file defaults to UNBOUNDED
+# append: one runaway service can fill the disk (2026-07-10: 17.1GB of OTLP
+# export stacktraces). 50m x 3 caps each service at 150MB. YAML anchors do
+# not cross file boundaries, so each compose file redeclares this.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   # ---------------------------------------------------------------------------
   # MySQL — shared instance for GAP + finance + erp schemas.
@@ -86,6 +96,7 @@ services:
   # wms and scm use separate PostgreSQL sidecars (below).
   # ---------------------------------------------------------------------------
   mysql:
+    logging: *default-logging
     image: mysql:8.0
     command: ["--log-bin-trust-function-creators=1", "--max_connections=500"]
     environment:
@@ -108,6 +119,7 @@ services:
     networks: [fed-e2e]
 
   redis:
+    logging: *default-logging
     image: redis:7-alpine
     command: redis-server --appendonly no
     healthcheck:
@@ -122,6 +134,7 @@ services:
   # DNS-only Kafka placeholder — satisfies GAP Dockerfile BE-048 ENTRYPOINT
   # `getent hosts kafka` pre-flight without booting a real broker.
   kafka:
+    logging: *default-logging
     image: alpine:3.19
     command: ["sleep", "infinity"]
     restart: unless-stopped
@@ -143,6 +156,7 @@ services:
   # Host port 10428 mapped so the Playwright job (runs on the runner host)
   # can query the Jaeger-compat API at http://localhost:10428/select/jaeger/...
   victoriatraces:
+    logging: *default-logging
     image: victoriametrics/victoria-traces:v0.9.0
     command:
       - "--retentionPeriod=1d"
@@ -169,6 +183,7 @@ services:
   # Two separate instances to avoid cross-domain schema collision.
   # ---------------------------------------------------------------------------
   wms-postgres:
+    logging: *default-logging
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: master_db
@@ -184,6 +199,7 @@ services:
     networks: [fed-e2e]
 
   scm-postgres:
+    logging: *default-logging
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: scm_procurement
@@ -202,6 +218,7 @@ services:
   # master_db), so it needs its own sidecar (a shared instance would fail
   # admin-service Flyway/validate). TASK-MONO-162.
   wms-admin-postgres:
+    logging: *default-logging
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: admin_db
@@ -220,6 +237,7 @@ services:
   # (NOT procurement-service's scm_procurement), so it needs its own sidecar.
   # TASK-MONO-162.
   scm-inv-postgres:
+    logging: *default-logging
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: scm_inventory_visibility
@@ -238,6 +256,7 @@ services:
   # GAP auth-service — SAS OIDC AS.
   # ---------------------------------------------------------------------------
   auth-service:
+    logging: *default-logging
     build:
       context: ../../../projects/iam-platform
       dockerfile: apps/auth-service/Dockerfile
@@ -275,6 +294,7 @@ services:
   # GAP account-service.
   # ---------------------------------------------------------------------------
   account-service:
+    logging: *default-logging
     build:
       context: ../../../projects/iam-platform
       dockerfile: apps/account-service/Dockerfile
@@ -302,6 +322,7 @@ services:
   # GAP admin-service — operator-token issuer + operator registry.
   # ---------------------------------------------------------------------------
   admin-service:
+    logging: *default-logging
     build:
       context: ../../../projects/iam-platform
       dockerfile: apps/admin-service/Dockerfile
@@ -385,6 +406,7 @@ services:
   # Port 8081 internally (application.yml default SERVER_PORT).
   # ---------------------------------------------------------------------------
   wms-master-service:
+    logging: *default-logging
     build:
       context: ../../../projects/wms-platform/apps/master-service
       dockerfile: Dockerfile
@@ -424,6 +446,7 @@ services:
   # NOT master_db). Port 8086 internally (application.yml default SERVER_PORT).
   # ---------------------------------------------------------------------------
   wms-admin-service:
+    logging: *default-logging
     build:
       context: ../../../projects/wms-platform/apps/admin-service
       dockerfile: Dockerfile
@@ -462,6 +485,7 @@ services:
   # Port 8080 internally (application.yml SERVER_PORT default).
   # ---------------------------------------------------------------------------
   scm-procurement-service:
+    logging: *default-logging
     build:
       context: ../../../projects/scm-platform/apps/procurement-service
       dockerfile: Dockerfile
@@ -507,6 +531,7 @@ services:
   # postgres sidecar, NOT scm_procurement). Port 8080 internally.
   # ---------------------------------------------------------------------------
   scm-inventory-visibility-service:
+    logging: *default-logging
     build:
       context: ../../../projects/scm-platform/apps/inventory-visibility-service
       dockerfile: Dockerfile
@@ -549,6 +574,7 @@ services:
   # Reuse from platform-console docker-compose.e2e.yml verbatim.
   # ---------------------------------------------------------------------------
   finance-account-service:
+    logging: *default-logging
     build:
       context: ../../../projects/finance-platform/apps/account-service
       dockerfile: Dockerfile
@@ -587,6 +613,7 @@ services:
   # Uses MySQL (erp_db created at phase 1.5 seed.sql).
   # ---------------------------------------------------------------------------
   erp-masterdata-service:
+    logging: *default-logging
     build:
       context: ../../../projects/erp-platform/apps/masterdata-service
       dockerfile: Dockerfile
@@ -627,6 +654,7 @@ services:
   # with real producer hostnames (wms / scm / erp).
   # ---------------------------------------------------------------------------
   console-bff:
+    logging: *default-logging
     build:
       context: ../../../projects/platform-console/apps/console-bff
       dockerfile: Dockerfile
@@ -677,6 +705,7 @@ services:
   # Reuse from platform-console docker-compose.e2e.yml verbatim.
   # ---------------------------------------------------------------------------
   console-web:
+    logging: *default-logging
     build:
       context: ../../../projects/platform-console/apps/console-web
       dockerfile: Dockerfile
