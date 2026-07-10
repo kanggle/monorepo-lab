@@ -8,7 +8,7 @@ ADR-047 § 4 step 1 — org-node hierarchy specs + contracts (rbac.md `org.manag
 
 # Status
 
-ready
+done
 
 # Owner
 

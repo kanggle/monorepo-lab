@@ -21,4 +21,14 @@ public interface TenantJpaRepository extends JpaRepository<TenantJpaEntity, Stri
             @Param("status") TenantStatus status,
             @Param("tenantType") TenantType tenantType,
             Pageable pageable);
+
+    /**
+     * TASK-BE-491 (ADR-MONO-047 § D5): tenant ids attached to any of the given org-node ids
+     * — the subtree expansion leg. Ordered for deterministic projection.
+     */
+    @Query("SELECT t.tenantId FROM TenantJpaEntity t WHERE t.orgNodeId IN :orgNodeIds ORDER BY t.tenantId ASC")
+    java.util.List<String> findTenantIdsByOrgNodeIdIn(@Param("orgNodeIds") java.util.List<String> orgNodeIds);
+
+    /** TASK-BE-491 (invariant I4): tenants attached to this node — the delete guard. */
+    long countByOrgNodeId(String orgNodeId);
 }

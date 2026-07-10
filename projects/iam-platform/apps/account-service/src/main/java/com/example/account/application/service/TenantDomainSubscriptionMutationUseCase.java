@@ -2,6 +2,7 @@ package com.example.account.application.service;
 
 import com.example.account.application.event.TenantDomainSubscriptionEventPublisher;
 import com.example.account.application.exception.SubscriptionAlreadyExistsException;
+import com.example.account.application.exception.SubscriptionDomainOutOfCeilingException;
 import com.example.account.application.exception.SubscriptionNotFoundException;
 import com.example.account.application.result.SubscriptionMutationResult;
 import com.example.account.domain.repository.TenantDomainSubscriptionRepository;
@@ -34,6 +35,28 @@ public class TenantDomainSubscriptionMutationUseCase {
     private final TenantDomainSubscriptionRepository subscriptionRepository;
     private final TenantRepository tenantRepository;
     private final TenantDomainSubscriptionEventPublisher eventPublisher;
+    private final OrgNodeQueryUseCase orgNodeQueryUseCase;
+
+    /**
+     * TASK-BE-491 (ADR-MONO-047 § D2): the entitlement-plane write gate. A subscription may
+     * only be brought to ACTIVE for a domain inside the tenant's effective org-node ceiling.
+     *
+     * <p><b>Only ACTIVE is gated.</b> Every other target status narrows reach, and narrowing
+     * is always safe — suspending or cancelling an out-of-ceiling subscription must stay
+     * possible, or a newly-tightened ceiling would strand the very row it invalidated.
+     *
+     * <p>An ungrouped tenant has an UNBOUNDED ceiling, so this gate is inert for every
+     * pre-ADR-047 tenant (D7 net-zero). The ceiling bounds ENTITLEMENT only — it never mints
+     * an IAM role (ADR-023 plane separation).
+     */
+    private void requireWithinCeiling(String tenantId, String domainKey, SubscriptionStatus target) {
+        if (target != SubscriptionStatus.ACTIVE) {
+            return;
+        }
+        if (!orgNodeQueryUseCase.effectiveCeilingForTenant(tenantId).permits(domainKey)) {
+            throw new SubscriptionDomainOutOfCeilingException(tenantId, domainKey);
+        }
+    }
 
     /**
      * {@code subscribe} — create a new subscription. {@code status} defaults to
@@ -56,6 +79,7 @@ public class TenantDomainSubscriptionMutationUseCase {
         if (subscriptionRepository.findByTenantIdAndDomainKey(tenantId, domainKey).isPresent()) {
             throw new SubscriptionAlreadyExistsException(tenantId, domainKey);
         }
+        requireWithinCeiling(tenantId, domainKey, target);
         Instant now = Instant.now();
         TenantDomainSubscription created =
                 TenantDomainSubscription.create(new TenantId(tenantId), domainKey, target, now);
@@ -80,6 +104,7 @@ public class TenantDomainSubscriptionMutationUseCase {
         TenantDomainSubscription sub = subscriptionRepository
                 .findByTenantIdAndDomainKey(tenantId, domainKey)
                 .orElseThrow(() -> new SubscriptionNotFoundException(tenantId, domainKey));
+        requireWithinCeiling(tenantId, domainKey, target);
         Instant now = Instant.now();
         SubscriptionStatus previous = sub.changeStatus(target, now); // guard → 409 if illegal
         subscriptionRepository.save(sub);

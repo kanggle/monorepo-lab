@@ -77,22 +77,31 @@ public interface AccountServicePort {
     Optional<AccountProfileResult> getAccountProfile(String accountId);
 
     /**
-     * Returns the ACTIVE subscribed product/domain keys for a tenant.
+     * Returns the <b>effective</b> entitled product/domain keys for a tenant —
+     * {@code ACTIVE subscriptions ∩ effectiveCeiling(tenant)}.
      *
      * <p>TASK-BE-324 (ADR-MONO-019 § 3.3 keystone): called by
      * {@link com.example.auth.infrastructure.oauth2.TenantClaimTokenCustomizer} at
      * {@code authorization_code}/{@code refresh_token} issuance time to populate the
-     * signed {@code entitled_domains} claim. Calls
-     * {@code GET /internal/tenant-domain-subscriptions?tenantId=<tid>} and extracts
-     * {@code items[].domainKey}.</p>
+     * signed {@code entitled_domains} claim.</p>
+     *
+     * <p>TASK-BE-491 (ADR-MONO-047 § D6): now calls
+     * {@code GET /internal/tenants/<tid>/entitled-domains} and extracts {@code domainKeys[]}.
+     * account-service applies the org-node entitlement ceiling there — the single point of
+     * enforcement — so this port's <b>signature and every consumer are byte-unchanged</b>, and
+     * {@code derive(E ∩ C) = derive(E) ∩ derive(C)} because ADR-035 derivation is per-domain.
+     * The older {@code GET /internal/tenant-domain-subscriptions} still returns the RAW ACTIVE
+     * rows for the console catalog and subscription management; only this token-issuance leg
+     * moved.</p>
      *
      * <p>Throws {@link com.example.auth.application.exception.AccountServiceUnavailableException}
      * on account-service failure (5xx / circuit-open / timeout / IO) — consistent with the
      * sibling methods. The <b>caller decides fail-soft</b>: the token customizer catches this
-     * and omits the claim so token issuance never depends on account-service availability.</p>
+     * and omits the claim so token issuance never depends on account-service availability. A
+     * failure can therefore only narrow reach (the gateway 403s); it can never widen it.</p>
      *
-     * @param tenantId the tenant whose ACTIVE subscriptions to resolve
-     * @return the ACTIVE subscribed domainKeys (possibly empty)
+     * @param tenantId the tenant whose effective entitled domains to resolve
+     * @return the effective entitled domainKeys (possibly empty)
      * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
      */
     List<String> listEntitledDomains(String tenantId);

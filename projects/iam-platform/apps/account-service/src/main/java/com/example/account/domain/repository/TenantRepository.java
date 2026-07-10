@@ -1,10 +1,12 @@
 package com.example.account.domain.repository;
 
+import com.example.account.domain.orgnode.OrgNodeId;
 import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantId;
 import com.example.account.domain.tenant.TenantStatus;
 import com.example.account.domain.tenant.TenantType;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -40,4 +42,17 @@ public interface TenantRepository {
      * @param size page size
      */
     PageResult<Tenant> findAll(TenantStatus statusFilter, TenantType tenantTypeFilter, int page, int size);
+
+    /**
+     * TASK-BE-491 (ADR-MONO-047 § D5): tenant ids attached to any of the given org-node ids,
+     * ascending. Backs the subtree expansion admin-service uses to resolve an
+     * {@code ORG_ADMIN @ node} grant. An empty input yields an empty list.
+     */
+    List<String> findTenantIdsByOrgNodeIdIn(List<String> orgNodeIds);
+
+    /**
+     * TASK-BE-491 (ADR-MONO-047 invariant I4): how many tenants are attached to this node.
+     * A node with tenants may not be deleted — that would strand service-tenants.
+     */
+    long countByOrgNodeId(OrgNodeId orgNodeId);
 }
