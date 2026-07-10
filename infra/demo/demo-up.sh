@@ -8,10 +8,12 @@
 # 분리되어 충돌하지 않는다.
 #
 # 왜 단일 include/-f 파일이 아닌가 (실측 근거):
-#   docker compose 의 include: 와 -f 는 "같은 서비스 키"를 조용히 하나로 병합한다
+#   docker compose 의 include: 와 -f 는 "같은 서비스 키"를 조용히 병합한다
 #   (include=첫째 승, -f=마지막 승). 우리 8개 프로젝트는 서로 다른 컨테이너인데도
 #   redis/kafka/postgres 같은 키를 공유하므로, 단일 병합 파일은 7개 redis 중 6개를
 #   소리없이 잃는다. → 프로젝트당 별도 -p 만이 byte-unchanged 로 전부 살린다.
+#
+# 프로젝트 맵은 projects.sh 단일 출처 (TASK-MONO-341).
 #
 # 사용법:
 #   bash infra/demo/demo-up.sh [demo-core|full]
@@ -19,27 +21,13 @@
 # =============================================================================
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+# shellcheck source=infra/demo/projects.sh
+source "$HERE/projects.sh"
+
 PROFILE="${1:-demo-core}"
 BUILD="${DEMO_BUILD:-0}"
-
-# 프로젝트 slug -> compose 파일(ROOT 상대)
-declare -A COMPOSE=(
-  [iam]="projects/iam-platform/docker-compose.yml"
-  [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml"
-  [wms]="projects/wms-platform/docker-compose.yml"
-  [scm]="projects/scm-platform/docker-compose.yml"
-  [fan]="projects/fan-platform/docker-compose.yml"
-  [finance]="projects/finance-platform/docker-compose.yml"
-  [erp]="projects/erp-platform/docker-compose.yml"
-  [console]="projects/platform-console/docker-compose.yml"
-)
-
-# 기동 순서: iam 먼저(모두가 OIDC 검증 대상인 IdP), console 마지막(federation 소비자)
-FULL=(iam wms scm finance erp ecommerce fan console)
-# demo-core: 면접 콜드스타트 최소화용 핵심 경로 (IdP + 풀스택 스토어프론트 + 도메인 1 + 콘솔)
-# 콘솔은 core 에서 부분 federation(iam+wms), full 에서 5/5 로 렌더된다.
-CORE=(iam ecommerce wms console)
 
 case "$PROFILE" in
   full)      SET=("${FULL[@]}") ;;
@@ -52,7 +40,7 @@ build_flag=""
 
 echo "[demo] profile=$PROFILE  build=$BUILD"
 echo "[demo] ensuring shared traefik-net + edge router"
-docker compose -p traefik -f "$ROOT/infra/traefik/docker-compose.yml" up -d
+docker compose -p traefik -f "$ROOT/$TRAEFIK_COMPOSE" up -d
 
 for p in "${SET[@]}"; do
   echo "[demo] up: $p  (${COMPOSE[$p]})"
