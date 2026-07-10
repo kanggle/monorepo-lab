@@ -42,6 +42,16 @@
 # federation stack.
 # =============================================================================
 
+# Container log rotation (TASK-MONO-338). json-file defaults to UNBOUNDED
+# append: one runaway service can fill the disk (2026-07-10: 17.1GB of OTLP
+# export stacktraces). 50m x 3 caps each service at 150MB. YAML anchors do
+# not cross file boundaries, so each compose file redeclares this.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   # ---------------------------------------------------------------------------
   # redpanda — real Kafka broker for the replenishment event path. Dual listener:
@@ -53,6 +63,7 @@ services:
   # DLT create their topics on demand.
   # ---------------------------------------------------------------------------
   redpanda:
+    logging: *default-logging
     image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
     command:
       - redpanda
@@ -81,6 +92,7 @@ services:
   # shared instance would fail Flyway/validate across services).
   # ---------------------------------------------------------------------------
   scm-dp-postgres:
+    logging: *default-logging
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: scm_demand_planning
@@ -103,6 +115,7 @@ services:
   # has no curl → wget healthcheck (same as scm-inventory-visibility-service).
   # ---------------------------------------------------------------------------
   scm-demand-planning-service:
+    logging: *default-logging
     build:
       context: ../../../projects/scm-platform/apps/demand-planning-service
       dockerfile: Dockerfile
@@ -146,6 +159,7 @@ services:
   # fields inherit from the base compose.
   # ---------------------------------------------------------------------------
   scm-procurement-service:
+    logging: *default-logging
     environment:
       KAFKA_BOOTSTRAP: redpanda:9092
     depends_on:
