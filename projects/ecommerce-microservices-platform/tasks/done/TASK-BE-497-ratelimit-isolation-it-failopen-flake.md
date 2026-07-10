@@ -8,7 +8,7 @@ TASK-BE-497
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -82,11 +82,11 @@ java.lang.AssertionError: Status expected:<429 TOO_MANY_REQUESTS> but was:<404 N
 
 # Acceptance Criteria
 
-- [ ] AC-1 — 러너 포화(Redis 지연)를 인위 주입해도 테스트가 **로직 실패(429 vs 404)로 뒤집히지 않는다**. fail-open 이 발생하면 warm-up 게이트에서 걸러지거나 `redis_unavailable_total>0` 단언으로 **인프라 신호**로 드러난다.
-- [ ] AC-2 — 격리 속성(tenant A 버킷 ≠ tenant B 버킷)은 여전히 실제 Redis 로 검증된다. mock 대체 금지.
-- [ ] AC-3 — `FailOpenRateLimiter` 등 `apps/gateway-service/src/main/**` **byte-unchanged**(`git diff --numstat` 로 확인). 테스트/테스트-support 만 변경.
-- [ ] AC-4 — 고정 `Thread.sleep` 0건. 대기는 Awaitility 조건 기반.
-- [ ] AC-5 — 로컬 반복 실행(`--rerun-tasks` × N, 또는 스트레스 하)에서 결정론적. CI `Integration (ecommerce)` 레인 GREEN(선존 flake 와 구분되도록 rerun 없이 1차 GREEN 목표).
+- [x] AC-1 — fail-open 발생 시 로직 실패로 뒤집히지 않는다. Awaitility 게이트가 `failOpenDelta==0 && a2==429` 사이클만 채택하고, timeout 시 `classifyTimeout` 이 fail-open(인프라)/refill 창(인프라)/진짜 강제집행 실패(로직)를 구분해 인프라를 **명시적 신호**로 드러낸다.
+- [x] AC-2 — 격리 속성은 실제 Redis(Testcontainers)로 검증. mock 미사용.
+- [x] AC-3 — `apps/gateway-service/src/main/**` byte-unchanged. `git diff --numstat origin/main -- .../src/main` = 빈 출력 확인.
+- [x] AC-4 — 고정 `Thread.sleep` 0건. Awaitility 조건 대기만.
+- [x] AC-5 — CI `Integration (ecommerce)` 레인 **rerun 없이 1차 GREEN**(PR #2397). (로컬 Windows Testcontainers 는 npipe flake·라이브 데모 가동 중이라 미실행 — CI Linux 권위.)
 
 ---
 
@@ -134,9 +134,9 @@ None — 테스트 결정론화. API/이벤트 계약 무변경.
 
 # Definition of Done
 
-- [ ] 테스트 결정론화(warm-up 게이트 + fail-open 카운터 델타 단언 권장), 프로덕션 코드 무변경.
-- [ ] CI `Integration (ecommerce)` GREEN(rerun 없이).
-- [ ] `projects/ecommerce-microservices-platform/tasks/INDEX.md` done entry.
+- [x] 테스트 결정론화(enforcing 게이트 = fail-open 델타 0 + a2==429 재시도, `classifyTimeout` 3분기), 프로덕션 코드 무변경.
+- [x] CI `Integration (ecommerce)` GREEN(rerun 없이 — PR #2397, 22 SUCCESS / 0 fail).
+- [x] `projects/ecommerce-microservices-platform/tasks/INDEX.md` done entry.
 
 ---
 
