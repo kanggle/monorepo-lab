@@ -8,7 +8,7 @@ ADR-047 § 4 step 2b — admin-service org plane: `org.manage` permission + `ORG
 
 # Status
 
-ready
+done
 
 # Owner
 

@@ -12,7 +12,7 @@ import {
 import { type PromotionDetail as PromotionDetailType } from '../api/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { CouponIssueDialog } from './CouponIssueDialog';
-import { DetailHeader } from './DetailHeader';
+import { DetailHeader } from '@/shared/ui/DetailHeader';
 import { PromotionDetailFields } from './PromotionDetailFields';
 
 /**

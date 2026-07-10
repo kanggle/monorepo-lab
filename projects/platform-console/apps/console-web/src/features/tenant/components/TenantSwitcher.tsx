@@ -2,10 +2,21 @@
 
 import { useEffect, useId, useState } from 'react';
 import { useTenantSwitch } from '../hooks/use-tenant-switch';
+import type { CompanyGroup } from '../lib/tenant-options';
 
 interface Props {
   tenants: string[];
   activeTenant: string | null;
+  /**
+   * Org-node (company) grouping for the AWS-IdC-style account picker
+   * (TASK-PC-FE-237 / ADR-047). Empty ⇒ the flat switcher (byte-identical to
+   * pre-grouping behaviour — the no-org-node / degraded case). A company
+   * renders as a display-only `<optgroup>` (NOT selectable — the token carries
+   * exactly one `tenant_id`; only leaf tenants are options). An ungrouped
+   * tenant (D7 lazy-migration `org_node_id = null`) is a legal permanent state
+   * and is ALWAYS still rendered.
+   */
+  companies?: CompanyGroup[];
 }
 
 /**
@@ -16,7 +27,11 @@ interface Props {
  * not an error). The actual cross-tenant rejection is enforced server-side /
  * by IAM — this is only the UX gate (architecture.md § Boundary Rules).
  */
-export function TenantSwitcher({ tenants, activeTenant }: Props) {
+export function TenantSwitcher({
+  tenants,
+  activeTenant,
+  companies = [],
+}: Props) {
   const selectId = useId();
   const switchTenant = useTenantSwitch();
   // No active tenant ⇒ render an UNSELECTED placeholder, never a silent
@@ -58,6 +73,17 @@ export function TenantSwitcher({ tenants, activeTenant }: Props) {
     switchTenant.mutate(value);
   };
 
+  // Grouped rendering (companies present): display-only `<optgroup>` blocks
+  // followed by the ungrouped leaves under a plain `그룹 없음` label. An
+  // ungrouped tenant is any selectable tenant not claimed by a company — it
+  // must NEVER disappear (D7). With no companies we fall through to the flat
+  // list below (byte-identical to the pre-grouping switcher).
+  const hasCompanies = companies.length > 0;
+  const groupedTenants = new Set(
+    companies.flatMap((c) => c.tenants),
+  );
+  const ungrouped = tenants.filter((t) => !groupedTenants.has(t));
+
   return (
     <div className="flex items-center gap-2">
       <label
@@ -79,11 +105,34 @@ export function TenantSwitcher({ tenants, activeTenant }: Props) {
             테넌트 선택…
           </option>
         )}
-        {tenants.map((t) => (
-          <option key={t} value={t}>
-            {t}
-          </option>
-        ))}
+        {hasCompanies ? (
+          <>
+            {companies.map((c) => (
+              <optgroup key={c.orgNodeId} label={c.name}>
+                {c.tenants.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+            {ungrouped.length > 0 && (
+              <optgroup label="그룹 없음">
+                {ungrouped.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </>
+        ) : (
+          tenants.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))
+        )}
       </select>
       {switchTenant.isError && (
         <span role="alert" className="text-xs text-destructive">

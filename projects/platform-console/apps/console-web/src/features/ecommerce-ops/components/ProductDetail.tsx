@@ -16,7 +16,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { VariantEditor } from './VariantEditor';
 import { StockAdjustDialog } from './StockAdjustDialog';
 import { ImageManager } from './ImageManager';
-import { DetailHeader } from './DetailHeader';
+import { DetailHeader } from '@/shared/ui/DetailHeader';
 
 /**
  * ecommerce product detail section (TASK-PC-FE-081 — § 2.4.10 #2). The console

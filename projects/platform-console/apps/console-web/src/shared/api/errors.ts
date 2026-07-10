@@ -726,6 +726,40 @@ export class TenantsUnavailableError extends Error {
   }
 }
 
+/**
+ * ADR-047 org-node hierarchy surface degrade signal (TASK-PC-FE-237 /
+ * admin-api.md § org-node). Sibling of {@link TenantsUnavailableError} —
+ * identical resilience posture for the `org.manage`-gated org-node CRUD +
+ * ceiling + admin-assignment surface (`/api/admin/org-nodes`): a
+ * `503 DOWNSTREAM_ERROR`/`503 CIRCUIT_OPEN`/timeout on an org-node call
+ * degrades ONLY the 조직 계층 section (the console shell + every other IAM
+ * surface — including the tenant switcher's flat fallback — stay intact).
+ * Auth failures (401) are raised as {@link ApiError} so the caller forces a
+ * clean re-login (no partial authed state). Inline-recoverable producer
+ * errors (`403 PERMISSION_DENIED` — lacks `org.manage`,
+ * `403 ORG_NODE_SELF_CEILING_DENIED`, `404 ORG_NODE_NOT_FOUND` — also returned
+ * for any node outside the actor's reach, existence never leaked,
+ * `422 ORG_NODE_CYCLE`/`ORG_NODE_DEPTH_EXCEEDED`/`ORG_NODE_CEILING_NOT_SUBSET`/
+ * `ORG_NODE_NOT_EMPTY`/`ORG_ADMIN_GRANT_OUT_OF_CEILING`,
+ * `400 VALIDATION_ERROR`) are raised as {@link ApiError} so the UI renders an
+ * inline actionable message without crashing. No token / org PII is ever
+ * placed in this error.
+ */
+export class OrgNodesUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: OrgNodesUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'OrgNodesUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   TOKEN_INVALID: '세션이 만료되었습니다. 다시 로그인해주세요.',
   TOKEN_REVOKED: '세션이 종료되었습니다. 다시 로그인해주세요.',
@@ -951,6 +985,23 @@ const MESSAGES: Record<string, string> = {
     '예약어는 테넌트 ID로 사용할 수 없습니다 (admin·internal·system·null·default·public·gap·iam·auth·oauth·me).',
   INTEGRATION_UNAVAILABLE:
     '테넌트 위임 처리(account-service)가 일시적으로 응답할 수 없습니다. 잠시 후 다시 시도하세요.',
+  // --- org-node hierarchy (TASK-PC-FE-237 / ADR-MONO-047) ------------------
+  // (`VALIDATION_ERROR` / `PERMISSION_DENIED` / `NO_ACTIVE_TENANT` are already
+  // mapped above and reused verbatim — the producer codes are identical.)
+  ORG_NODE_NOT_FOUND:
+    '대상 조직 노드를 찾을 수 없습니다. (권한 범위 밖일 수도 있습니다.) 트리를 새로고침하세요.',
+  ORG_NODE_SELF_CEILING_DENIED:
+    '자기 노드의 상한은 편집할 수 없습니다. 상위 노드 관리자 또는 SUPER_ADMIN 만 변경할 수 있습니다.',
+  ORG_NODE_CYCLE: '노드를 자기 하위 노드 아래로 옮길 수 없습니다 (순환).',
+  ORG_NODE_DEPTH_EXCEEDED: '조직 계층의 최대 깊이(5)를 초과합니다.',
+  ORG_NODE_CEILING_NOT_SUBSET:
+    '상한은 상위 노드의 상한보다 넓을 수 없습니다. 하위 노드의 상한도 새 상한 이내여야 합니다.',
+  ORG_NODE_NOT_EMPTY:
+    '자식 노드 또는 소속 테넌트가 있어 삭제할 수 없습니다. 먼저 비운 뒤 삭제하세요.',
+  ORG_ADMIN_GRANT_OUT_OF_CEILING:
+    '이 노드의 유효 상한이 비어 있어(어떤 도메인도 허용하지 않음) 관리자를 배정할 수 없습니다. 상위 노드의 상한을 확인하세요.',
+  ORG_MANAGE_REQUIRED:
+    '조직 계층 관리는 org.manage 권한이 필요합니다 (SUPER_ADMIN 또는 상위 노드의 ORG_ADMIN).',
 };
 
 export function messageForCode(code: string, fallback?: string): string {

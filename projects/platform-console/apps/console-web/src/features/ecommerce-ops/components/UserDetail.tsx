@@ -5,7 +5,7 @@ import {
   userStatusTone,
   type UserDetail as UserDetailType,
 } from '../api/user-types';
-import { DetailHeader } from './DetailHeader';
+import { DetailHeader } from '@/shared/ui/DetailHeader';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 

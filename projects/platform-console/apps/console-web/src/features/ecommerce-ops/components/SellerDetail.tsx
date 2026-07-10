@@ -18,7 +18,7 @@ import {
   type SellerDetail as SellerDetailType,
 } from '../api/seller-types';
 import { ConfirmDialog } from './ConfirmDialog';
-import { DetailHeader } from './DetailHeader';
+import { DetailHeader } from '@/shared/ui/DetailHeader';
 
 /**
  * ecommerce seller detail section (TASK-PC-FE-090 read + TASK-PC-FE-154

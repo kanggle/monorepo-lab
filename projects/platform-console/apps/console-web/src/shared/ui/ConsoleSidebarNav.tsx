@@ -92,6 +92,15 @@ const GROUPS: NavGroup[] = [
             label: '운영자 그룹',
             testid: 'nav-iam-operator-groups',
           },
+          // 조직 계층 (TASK-PC-FE-237 / ADR-047) — company → service → domain
+          // 3-axis hierarchy (org-node tree + entitlement ceiling + ORG_ADMIN).
+          // Placed BEFORE 테넌트: a company (org node) sits above its
+          // service-tenants (AWS Organizations account-group above accounts).
+          {
+            href: '/org-hierarchy',
+            label: '조직 계층',
+            testid: 'nav-iam-org-hierarchy',
+          },
           // 테넌트 (TASK-PC-FE-225 stub; real feature = TASK-PC-FE-226) —
           // isolation boundary, AWS account / GCP project equivalent.
           { href: '/tenants', label: '테넌트', testid: 'nav-iam-tenants' },
