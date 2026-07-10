@@ -13,17 +13,14 @@
  *   2. 사용법   — `CONSOLE_MENUS` · `DELEGATION_CHAIN` · `OPERATOR_ONBOARDING_AXES`
  *   3. 레퍼런스 — `SEED_ROLES` · `SCREEN_ACCESS` · `PERMISSION_KEYS` · `DOMAIN_ROLE_MAP`
  *
- * **알려진 누락 — `ORG_ADMIN` / `org.manage` (ADR-MONO-047)**: `rbac.md` 는
- * 7번째 seed role `ORG_ADMIN` 과 `org.manage` 키를 정의하지만 이 파일은 6개 role
- * 만 다룬다. PC-FE-238 이 이 절을 쓸 당시엔 `/org-hierarchy` 화면이 없었고,
- * 존재하지 않는 메뉴를 가이드가 설명할 수는 없었다.
- *
- * **그 전제는 이제 거짓이다** — `TASK-PC-FE-237`(PR #2384)이 `/org-hierarchy`
- * 화면을 실제로 구현했다. 따라서 지금 이 누락은 스코프 결정이 아니라 **드리프트**
- * 이며, `TASK-PC-FE-239` 가 `ORG_ADMIN` 열 + `org.manage` 행 + 메뉴 엔트리를
- * 추가한다. (role 열 추가는 `SEED_ROLES`·`SCREEN_ACCESS`·`PERMISSION_KEYS`·
- * `CONSOLE_MENUS` 네 구조와 매트릭스를 DOM 위치로 단언하는 가이드 테스트를 함께
- * 움직이므로 별도 task 로 분리했다.)
+ * **`ORG_ADMIN` / `org.manage` / `/org-hierarchy` (ADR-MONO-047, TASK-PC-FE-239)**:
+ * 7번째 seed role `ORG_ADMIN` 과 `org.manage` 키, 그리고 「조직 계층」 메뉴가 여기에
+ * 포함된다. `ORG_ADMIN` 은 flat `TENANT_ADMIN` 의 company-wide 아날로그로 org-node
+ * subtree 에 confine 되며(scope `org-node`), **의도적으로 `subscription.manage` 와
+ * `partnership.manage` 를 갖지 않는다** — 그래서 `TENANT_ADMIN`(→ 구독·파트너십)을
+ * 발급할 수 없다(no-escalation, ADR-024 D3; v1 한계). 이것은 테스트를 통과시키려고
+ * 넓혀서는 안 되는 성질이다. 또한 org-node 의 ceiling 은 **상한(deny-only)** 이지
+ * 부여가 아니다 — 가이드가 "허용 도메인 부여"로 읽히면 D2-A 의미가 뒤집힌다.
  */
 
 /* ─────────────────────────── 1. 개념 ─────────────────────────── */
@@ -89,7 +86,7 @@ export const ACCOUNT_HATS: AccountHat[] = [
 /**
  * 권한 두 평면 — operator token 이 담는 admin RBAC 롤과 assume-tenant 가 담는
  * 도메인 롤은 서로 다른 평면에 살고, 절대 교차하지 않는다(disjoint). 이 화면의
- * 레퍼런스 절에서 전자는 "역할 6종", 후자는 "구독 도메인 → 도메인 롤" 표가 각각
+ * 레퍼런스 절에서 전자는 "역할 7종", 후자는 "구독 도메인 → 도메인 롤" 표가 각각
  * 상세히 다루며, 이 배열은 둘을 한눈에 대비한다.
  *
  * SoT: iam-platform/docs/guides/operator-auth-token-model.md § 6 +
@@ -195,6 +192,17 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     gate: '—',
     mutates: false,
     stub: true,
+  },
+  {
+    label: '조직 계층',
+    href: '/org-hierarchy',
+    purpose:
+      '회사를 조직 노드(company)로 묶어 트리를 만들고, 노드마다 쓸 수 있는 도메인 상한을 정하며, 노드 관리자를 세웁니다.',
+    actions:
+      '노드 생성 · 이름/부모 변경 · 삭제 · 엔타이틀먼트 상한(ceiling) 설정 · ORG_ADMIN 배정/해제 · 소속 테넌트 조회',
+    gate: 'org.manage',
+    mutates: true,
+    note: '상한은 하위 테넌트가 쓸 수 있는 도메인을 좁히기만 할 뿐 부여하지 않습니다. "상한 없음"과 "빈 상한(아무것도 불가)"은 정반대이니 혼동하지 마세요. 노드는 테넌트를 묶기만 하고 격리하지 않습니다 — 토큰은 여전히 테넌트 하나입니다.',
   },
   {
     label: '테넌트',
@@ -401,6 +409,10 @@ export const PERMISSION_KEYS: PermissionKey[] = [
     key: 'partnership.manage',
     desc: '자기 테넌트가 당사자인 회사 간 파트너십을 관리합니다. SUPER_ADMIN 은 갖지 않습니다.',
   },
+  {
+    key: 'org.manage',
+    desc: '조직 노드(회사) 트리를 만들고 관리하며, 노드의 엔타이틀먼트 상한(ceiling)을 정하고, 노드에 ORG_ADMIN 을 배정합니다. 상한은 하위 테넌트가 쓸 수 있는 도메인을 좁히기만 할 뿐 부여하지 않습니다.',
+  },
 ];
 
 /** admin-console RBAC seed role (rbac.md § Seed Roles). */
@@ -414,8 +426,11 @@ export interface SeedRole {
    * 스코프 평면. `platform` = 플랫폼 전역 운영 role(SUPER_ADMIN 및 플랫폼 측
    * CS·보안팀 — grant 가 플랫폼 스코프로 프로비저닝됨). `tenant` = grant row 의
    * `tenant_id` 로 자기 테넌트에 confine 되는 위임 role(ADR-MONO-024 D2).
+   * `org-node` = grant row 의 `org_node_id` 로 org-node subtree 에 confine 되는
+   * company-wide 위임 role(ADR-MONO-047 D5). `tenant_id` 가 아니라 `org_node_id`
+   * 가 스코프를 구동한다.
    */
-  scope: 'platform' | 'tenant';
+  scope: 'platform' | 'tenant' | 'org-node';
   /** 보유 권한 키 집합(합집합 평가). */
   permissions: string[];
   /** SUPER_ADMIN 처럼 특권 role 은 시각적으로 구분. */
@@ -439,6 +454,9 @@ export const SEED_ROLES: SeedRole[] = [
       'operator.manage',
       'tenant.manage',
       'subscription.manage',
+      // ADR-MONO-047 D5: SUPER_ADMIN 은 org.manage 를 추가로 얻어 ROOT 노드 생성
+      // 유일 주체가 된다(rbac.md § Seed Matrix). PC-FE-238 당시 누락되었던 키.
+      'org.manage',
     ],
     elevated: true,
   },
@@ -491,6 +509,14 @@ export const SEED_ROLES: SeedRole[] = [
       '자기 회사가 쓸 도메인 구독만 관리합니다. 운영자 관리 권한은 없습니다.',
     permissions: ['subscription.manage'],
   },
+  {
+    name: 'ORG_ADMIN',
+    koName: '조직 위임관리자',
+    scope: 'org-node',
+    intent:
+      '한 회사(조직 노드) 아래 모든 서비스 테넌트의 운영자를 관리하고, 노드 트리와 상한을 다룹니다. 구독과 파트너십은 다루지 못합니다 — 그래서 TENANT_ADMIN 을 세울 수 없습니다.',
+    permissions: ['org.manage', 'operator.manage', 'tenant.admin.delegate'],
+  },
 ];
 
 /** 매트릭스 셀 상태. */
@@ -500,8 +526,8 @@ export type AccessLevel = 'full' | 'partial' | 'none';
  * 메뉴 × role 접근 매트릭스 (rbac.md § Seed Matrix 파생).
  *
  * PC-FE-238 에서 3개 → 7개 라이브 표면으로 확장하고, 렌더를 **행=메뉴 / 열=역할**
- * 로 전치했다(역할 6열이 메뉴 7열보다 고정폭에 잘 맞는다). `data-testid` 규약
- * `iam-guide-cell-{role}-{href}` 는 전치와 무관하게 유지된다.
+ * 로 전치했다. PC-FE-239 가 `/org-hierarchy` 를 더해 8개 표면 × 7개 역할이 됐다.
+ * `data-testid` 규약 `iam-guide-cell-{role}-{href}` 는 전치와 무관하게 유지된다.
  *
  * `/operator-groups`(스텁, 권한 축 없음) · `/iam`(카드별 부분 게이트) · `/iam/guide`
  * (누구나) 는 권한 축이 없어 매트릭스에서 제외 — 사용법 표에만 나온다.
@@ -531,6 +557,22 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       SECURITY_ANALYST: { level: 'none' },
       TENANT_ADMIN: { level: 'full', note: '자기 테넌트' },
       TENANT_BILLING_ADMIN: { level: 'none' },
+      ORG_ADMIN: { level: 'full', note: '자기 노드 subtree' },
+    },
+  },
+  {
+    screen: '조직 계층',
+    href: '/org-hierarchy',
+    gate: 'org.manage',
+    cells: {
+      // ROOT 노드 생성 유일 주체는 SUPER_ADMIN(rbac.md § Seed Matrix, ADR-047 D5).
+      SUPER_ADMIN: { level: 'full' },
+      SUPPORT_READONLY: { level: 'none' },
+      SUPPORT_LOCK: { level: 'none' },
+      SECURITY_ANALYST: { level: 'none' },
+      TENANT_ADMIN: { level: 'none' },
+      TENANT_BILLING_ADMIN: { level: 'none' },
+      ORG_ADMIN: { level: 'full', note: '자기 노드 subtree' },
     },
   },
   {
@@ -544,6 +586,8 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       SECURITY_ANALYST: { level: 'none' },
       TENANT_ADMIN: { level: 'none' },
       TENANT_BILLING_ADMIN: { level: 'none' },
+      // ORG_ADMIN 은 tenant.manage 가 없다 — 노드는 관리하되 테넌트 원장은 못 만진다.
+      ORG_ADMIN: { level: 'none' },
     },
   },
   {
@@ -557,6 +601,8 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       SECURITY_ANALYST: { level: 'none' },
       TENANT_ADMIN: { level: 'full' },
       TENANT_BILLING_ADMIN: { level: 'none' },
+      // operator.manage 로 열린다(조회 카탈로그).
+      ORG_ADMIN: { level: 'full' },
     },
   },
   {
@@ -570,6 +616,7 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       SECURITY_ANALYST: { level: 'full', note: '보안 이벤트 포함' },
       TENANT_ADMIN: { level: 'none' },
       TENANT_BILLING_ADMIN: { level: 'none' },
+      ORG_ADMIN: { level: 'none' },
     },
   },
   {
@@ -584,6 +631,7 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       SECURITY_ANALYST: { level: 'none' },
       TENANT_ADMIN: { level: 'none' },
       TENANT_BILLING_ADMIN: { level: 'none' },
+      ORG_ADMIN: { level: 'none' },
     },
   },
   {
@@ -597,6 +645,9 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       SECURITY_ANALYST: { level: 'none' },
       TENANT_ADMIN: { level: 'none' },
       TENANT_BILLING_ADMIN: { level: 'full', note: '자기 테넌트' },
+      // 의도적(ADR-047 v1 한계) — ORG_ADMIN 은 subscription.manage 가 없다. 이게 있어야
+      // TENANT_ADMIN 을 세울 수 있으므로, 없는 것이 no-escalation 을 지킨다.
+      ORG_ADMIN: { level: 'none' },
     },
   },
   {
@@ -611,6 +662,8 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       SECURITY_ANALYST: { level: 'none' },
       TENANT_ADMIN: { level: 'full', note: '자기 테넌트' },
       TENANT_BILLING_ADMIN: { level: 'none' },
+      // 의도적(ADR-047 v1 한계) — ORG_ADMIN 은 partnership.manage 도 없다.
+      ORG_ADMIN: { level: 'none' },
     },
   },
 ];
