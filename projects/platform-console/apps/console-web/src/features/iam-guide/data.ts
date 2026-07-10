@@ -13,13 +13,17 @@
  *   2. 사용법   — `CONSOLE_MENUS` · `DELEGATION_CHAIN` · `OPERATOR_ONBOARDING_AXES`
  *   3. 레퍼런스 — `SEED_ROLES` · `SCREEN_ACCESS` · `PERMISSION_KEYS` · `DOMAIN_ROLE_MAP`
  *
- * **의도적 누락 — `ORG_ADMIN` / `org.manage` (ADR-MONO-047)**: `rbac.md` 는
- * 7번째 seed role `ORG_ADMIN` 과 `org.manage` 키를 정의하지만, 이 role 은 어떤
- * operator 에도 배정되지 않은 inert 상태이고 그것을 조작하는 콘솔 화면
- * (`/org-hierarchy`)이 아직 없다. 존재하지 않는 메뉴를 가이드가 설명하면 안
- * 되므로 여기서는 6개 role 만 다룬다. `TASK-PC-FE-237` 이 org-hierarchy 화면을
- * 구현할 때 이 파일에 `ORG_ADMIN` 열 + `org.manage` 행 + 메뉴 엔트리를 함께
- * 추가할 것. (드리프트가 아니라 스코프 결정이다.)
+ * **알려진 누락 — `ORG_ADMIN` / `org.manage` (ADR-MONO-047)**: `rbac.md` 는
+ * 7번째 seed role `ORG_ADMIN` 과 `org.manage` 키를 정의하지만 이 파일은 6개 role
+ * 만 다룬다. PC-FE-238 이 이 절을 쓸 당시엔 `/org-hierarchy` 화면이 없었고,
+ * 존재하지 않는 메뉴를 가이드가 설명할 수는 없었다.
+ *
+ * **그 전제는 이제 거짓이다** — `TASK-PC-FE-237`(PR #2384)이 `/org-hierarchy`
+ * 화면을 실제로 구현했다. 따라서 지금 이 누락은 스코프 결정이 아니라 **드리프트**
+ * 이며, `TASK-PC-FE-239` 가 `ORG_ADMIN` 열 + `org.manage` 행 + 메뉴 엔트리를
+ * 추가한다. (role 열 추가는 `SEED_ROLES`·`SCREEN_ACCESS`·`PERMISSION_KEYS`·
+ * `CONSOLE_MENUS` 네 구조와 매트릭스를 DOM 위치로 단언하는 가이드 테스트를 함께
+ * 움직이므로 별도 task 로 분리했다.)
  */
 
 /* ─────────────────────────── 1. 개념 ─────────────────────────── */
