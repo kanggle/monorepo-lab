@@ -75,6 +75,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
+| TASK-BE-497 | **READY — 착수 가능**. `CrossTenantRateLimitIsolationIntegrationTest`(M7 AC-1) 가 CI 러너 포화 시 간헐 `429 기대 → 404 수신`. **근본 원인=테스트↔설계 불일치**: `FailOpenRateLimiter` 는 TASK-BE-405 대로 Redis 지연 시 **의도적 fail-open**(허용) 하는데 테스트는 **강제 집행(429)** 을 단정. Redis blip 시 양 요청이 열려 둘 다 404 → 약한 1번째 assertion(`≠429`)이 통과시켜 가리고 강한 2번째(`정확히 429`)만 실패. **flake 확정**(rerun GREEN·main 재현·레인 교대·java 인과 0). 해법=**테스트를 fail-open 계약과 정합**(enforcing warm-up 게이트 + `gateway_ratelimit_redis_unavailable_total` 델타 단언), **프로덕션 코드 byte-unchanged**. 함정: ①1번째도 fail-open 이면 가려짐 ②replenish 창(1s) 안에 assertion 2개 인접 실행. MONO-343(머지됨)은 doc-only 노출만 차단·코드 PR 노출 잔존. 분석=Opus 4.8 / 구현 권장=Sonnet. | gateway-service | test, flake, gateway |
 
 ## in-progress
 
