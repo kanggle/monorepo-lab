@@ -22,9 +22,11 @@ ACTIVE 상태인 tenant↔domain 구독 전체를 조회한다. 선택적으로 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `domainKey` | string | No | 단일 도메인키 필터 (`iam`\|`wms`\|`scm`\|`erp`\|`finance`). 생략/공백이면 전체 ACTIVE 구독 반환. |
-| `tenantId` | string | No | 단일 테넌트 id 필터 — 그 테넌트의 ACTIVE 구독만 반환. auth-service 발급-시점 entitled_domains populate(ADR-019 keystone)용 역조회. 생략/공백이면 필터 미적용. |
+| `tenantId` | string | No | 단일 테넌트 id 필터 — 그 테넌트의 **RAW ACTIVE** 구독만 반환(ceiling 미적용). console-catalog + 구독 관리 truth. **토큰 발급용으로는 deprecated**(ADR-MONO-047 § D6 — 아래 참조). 생략/공백이면 필터 미적용. |
 
-> **`tenantId` + `domainKey` 조합**: 둘 다 지정 시 AND 로 합성된다 (그 테넌트의, 그 domainKey 인 ACTIVE 구독). `tenantId` 역조회(TASK-BE-324 ADR-019 § 3.3 keystone)는 auth-service `TenantClaimTokenCustomizer` 가 authorization_code/refresh_token 발급 시 그 테넌트의 ACTIVE domainKey 목록을 받아 서명된 `entitled_domains` claim 으로 주입하는 데 쓰인다 (실패/빈 결과 → claim 생략 fail-soft, net-zero).
+> **`tenantId` + `domainKey` 조합**: 둘 다 지정 시 AND 로 합성된다 (그 테넌트의, 그 domainKey 인 ACTIVE 구독).
+>
+> **⚠ 토큰 발급 역조회는 [`GET /internal/tenants/{tenantId}/entitled-domains`](#get-internaltenantstenantidentitled-domains) 로 이관됨 (ADR-MONO-047 § D6).** 과거 `tenantId` 역조회(TASK-BE-324 ADR-019 § 3.3 keystone)는 auth-service `TenantClaimTokenCustomizer` 가 발급 시 `entitled_domains` claim populate 에 이 표면을 썼으나, 그 경로는 이제 org-node ceiling 을 적용한 **effective** 표면을 호출한다. 이 `?tenantId=` 필터는 여전히 **RAW(ceiling 미적용) ACTIVE 행**을 반환하며 — catalog/구독관리 용도 — **narrow 되지 않으므로 토큰 발급에 직접 쓰면 안 된다**. 별도 엔드포인트로 분리한 이유: 보안 임계 엔드포인트의 의미가 쿼리 파라미터 하나로 뒤집히면(ceiling 적용/미적용) footgun 이기 때문이다. (실패/빈 결과 시 auth-service 는 claim 을 생략한다 — fail-soft, net-zero.)
 
 **Response 200 OK**:
 ```json
@@ -56,6 +58,41 @@ ACTIVE 상태인 tenant↔domain 구독 전체를 조회한다. 선택적으로 
 | 401 | `UNAUTHORIZED` | `Authorization: Bearer` JWT 누락/무효 (resource-server fail-closed) |
 
 > admin-service 측에서 account-service 5xx/timeout/CB-open 은 `DownstreamFailureException` → registry `503 DOWNSTREAM_ERROR`/`503 CIRCUIT_OPEN` 으로 매핑된다 (부분 카탈로그 미반환; `console-registry-api.md § Errors` 정합).
+
+---
+
+## GET /internal/tenants/{tenantId}/entitled-domains
+
+> **TASK-BE-490 (ADR-MONO-047 § D6 — org-node ceiling 의 단일 강제점).** 한 테넌트의 **effective** entitled-domain 집합 = `ACTIVE subscriptions ∩ effectiveCeiling(tenant)` 을 반환한다. `effectiveCeiling(tenant)` = 그 테넌트의 `org_node` 로부터 root 까지 체인의 노드 ceiling 교집합(narrow-only, deny-ceiling). **여기가 ceiling 이 적용되는 유일한 지점이다** — auth-service `TenantClaimTokenCustomizer` 는 **byte-unchanged** 이며 `AccountServicePort.listEntitledDomains(tenantId)` 를 소비할 뿐이고, 그 어댑터가 이제 이 엔드포인트를 겨냥한다.
+
+**Path Parameters**:
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `tenantId` | string | Yes | 대상 테넌트 id (`tenants.tenant_id`). 미등록 → 404. |
+
+**Response 200 OK**:
+```json
+{ "tenantId": "acme-corp", "domainKeys": ["wms"] }
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `tenantId` | string | 요청 테넌트 id (echo). |
+| `domainKeys` | string[] | `ACTIVE subscriptions ∩ effectiveCeiling(tenant)`. **ACTIVE 목록의 순서 보존.** 빈 배열은 **합법**이며 caller 가 fail-closed 해야 함을 뜻한다. |
+
+> **derive 합성 (ADR-MONO-035 × ADR-MONO-047 § D6).** ADR-035 파생은 domain-keyed/per-domain 이므로 `derive(E ∩ C) = derive(E) ∩ derive(C)` — 즉 여기서 좁힌 `E ∩ C` 를 auth-service 가 그대로 파생해도 D6 이 요구하는 `derive(E) ∩ ceiling` 과 정확히 일치한다. 강제를 이 한 곳으로 모으면 "이 테넌트가 도메인 X 에 도달 불가함"이 one-query 속성이 된다.
+
+> **Fail-soft 보존 (verbatim).** 이 호출의 어떤 실패(5xx/timeout/CB-open) 또는 **빈 결과** → auth-service 는 `entitled_domains` claim 을 **생략**한다(gateway 가 이후 403). **실패는 절대 reach 를 WIDEN 할 수 없다** — narrow-only.
+
+> **D7 net-zero.** `org_node_id = NULL` 인 테넌트는 `UNBOUNDED` effective ceiling 을 가지므로 `E ∩ UNBOUNDED = E`, 이 엔드포인트의 출력은 모든 pre-ADR-047 테넌트에 대해 구식 `?tenantId=` 출력과 **byte-identical** 하다.
+
+**Errors**:
+
+| Status | Code | Condition |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | `Authorization: Bearer` JWT 누락/무효 (resource-server fail-closed). |
+| 404 | `TENANT_NOT_FOUND` | `tenantId` 미등록 테넌트. |
 
 ---
 
