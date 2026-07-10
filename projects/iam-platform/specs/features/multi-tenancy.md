@@ -62,6 +62,72 @@
 
 ---
 
+## Org Node Model (ADR-MONO-047)
+
+한 회사(paying company)가 **각자 격리된 여러 개의 서비스**를 소유하고 싶을 때, flat 한 `tenant` 레지스트리만으로는 표현할 수 없다 — 유일한 격리 단위가 tenant 이므로 "회사 전체 = 한 tenant"(서비스 격리 없음)이거나 "서비스마다 별도 tenant"(그것들을 회사로 다시 묶는 객체 없음) 둘 중 하나였다. [ADR-MONO-047](../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) 은 그 중간 계층 — **회사 → 서비스 → 도메인** 3축 구조 — 를 도입한다. 이는 AWS Organizations 와 GCP Resource Hierarchy 가 제공하는 "격리 경계 **위의** 그룹핑 노드" 패싯의 앱-레벨 이식이다.
+
+### 3-축 구조
+
+| 축 | 객체 | 역할 | 이 플랫폼 |
+|---|---|---|---|
+| 회사 (그룹핑) | `org_node` | 데이터 없는 nestable 그룹핑 노드 + 엔타이틀먼트 실링 | **본 ADR 신규** ([account-service data-model § org_node](../services/account-service/data-model.md#org_node)) |
+| 서비스 (격리 leaf) | `tenant` | 단일 flat 격리/빌링 키 | **불변** (ADR-019, 본 문서 [Tenant Model](#tenant-model)) |
+| 도메인 (권한) | `tenant_domain_subscription` → 파생 역할 | leaf 내부의 도메인 권한 | **불변** (ADR-035) |
+
+하이퍼스케일러 패리티 ([ADR-MONO-047](../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § 1.2):
+
+| 개념 | AWS | GCP | 이 플랫폼 |
+|---|---|---|---|
+| 데이터 없는 그룹핑 노드 (nestable) | Organizational Unit (OU) | Folder | **`org_node`** |
+| 격리/빌링 leaf | Account | Project | **`tenant`** (불변) |
+| leaf 내부 권한 | IAM roles/policies | IAM roles | domain subscription → 역할 (불변) |
+| 트리 하향 상속 정책 | **SCP (deny-ceiling)** | Org Policy / IAM Deny (guardrail) | **엔타이틀먼트 실링 (deny-only, D2)** |
+| 노드 위임 관리자 | delegated administrator @ OU | Folder IAM admin | **`ORG_ADMIN @ node`** (D5) |
+
+### M1 보존 (그룹핑이지 중첩이 아님)
+
+`org_node` 는 tenant 를 **그룹핑(GROUP)** 할 뿐 **중첩(NEST)** 하지 않는다 ([ADR-MONO-047](../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D1-A, § 3.1):
+
+- `tenant_id` 는 여전히 **단일 flat 격리 축**이다 ([rules/traits/multi-tenant.md](../../../../rules/traits/multi-tenant.md) M1). 트리는 leaf **위에** 그룹핑을 더할 뿐 leaf 를 쪼개지 않는다.
+- 토큰은 여전히 정확히 **하나의 `tenant_id`** 만 담는다. org 트리는 **발급 전 실링 계산**에만 참여하며 토큰의 격리 신원에는 일절 관여하지 않는다 (D6).
+- 모든 row-isolation 가드(`WHERE tenant_id = ?`, `@TenantScoped`, M1–M7)는 **바이트 불변**이다. (참조: sub-tenant/nested tenant 안(D1-B)이 **거부**된 이유가 바로 이 blast radius — 하이퍼스케일러도 Account/Project 를 flat 하게 유지했다.)
+
+### 실링(ceiling) 의미 — deny-only, narrow-only
+
+노드에 붙는 엔타이틀먼트 실링은 하위로 상속되는 **최대(maximum) 도메인 집합**이며, tenant 가 구독/파생할 수 있는 것을 **좁히기만(narrow)** 할 뿐 **부여하지(grant) 않는다** ([ADR-MONO-047](../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D2-A). leaf 의 유효 실링 = 루트→노드 체인의 **교집합**(`child ⊆ parent` 강제). 잘못 설정된 노드는 도달 범위를 **줄일 뿐**(안전한 실패), 절대 넓히지 않는다.
+
+```
+effectiveCeiling(tenant) = tenant.org_node_id IS NULL ? UNBOUNDED
+                                                      : ⋂ ceiling(n)  for n in chain(root..node)
+```
+
+> ⚠ **`UNBOUNDED ≠ {}` 트랩.** `org_node_id = NULL`(ungrouped) 는 `UNBOUNDED`(실링 없음 = 레거시 동작, D7 net-zero)이고, 명시적으로 빈 실링 `BOUNDED({})` 는 그 **반대** — "아무 도메인도 구독 불가"(fail-closed)이다. 둘을 혼동하면 lazy 마이그레이션이 모든 tenant 를 조용히 잠가버린다. 저장 계층에서 `ceiling_mode`(`UNBOUNDED`/`BOUNDED`) 컬럼이 이 둘을 절대 conflate 하지 않도록 분리한다 ([account-service data-model § org_node](../services/account-service/data-model.md#org_node)). 도메인 파생과의 합성은 `derive(E ∩ C) = derive(E) ∩ derive(C)`(ADR-035 도메인-키 per-domain 파생)이므로 auth-service `TenantClaimTokenCustomizer` 는 바이트 불변이고, 실링 교집합은 account-service 소스에서 **한 번만** 적용된다 (D6 seam).
+
+### `org_node` (본 ADR) vs `org_scope` (ADR-025) — 혼동 금지
+
+**둘 다 트리지만 완전히 다른 축**이며 이름이 비슷해 쉽게 혼동된다 ([ADR-MONO-047](../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § 5 Neutral, [ADR-MONO-025](../../../../docs/adr/ADR-MONO-025-abac-data-scope-generalization.md)):
+
+| | **`org_node`** (본 ADR-047) | **`org_scope`** (ADR-025) |
+|---|---|---|
+| 위치 | tenant **위**의 트리 | **한 tenant/도메인 안**의 부서 서브트리 |
+| 무엇을 하나 | tenant 그룹핑 + 엔타이틀먼트 실링 상속 | row 에 대한 데이터 필터 (ABAC data-scope) |
+| 무엇에 작용 | 어떤 tenant 가 어떤 **도메인**을 구독 가능한가 (entitlement) | 한 도메인 안에서 어떤 **row/부서**를 볼 수 있는가 (data isolation) |
+| 격리 키와의 관계 | 격리 키 **위**(above) — `tenant_id` 를 건드리지 않음 | 격리 키 **안**(inside) — 이미 tenant-scoped 된 데이터를 추가로 좁힘 |
+| 방향성 | narrow-only (deny-ceiling) | narrow-only (ADR-025 "data-scope narrows, never grants") |
+
+한 문장으로: **`org_node` 는 "이 회사가 어떤 서비스·도메인을 살 수 있는가"의 상한이고, `org_scope` 는 "한 서비스 안에서 이 사람이 어떤 부서 데이터를 볼 수 있는가"의 필터다.** 둘은 서로 다른 계층에서 각각 독립적으로 좁히는 게이트다 (enforcement-stack 순서: RBAC → tenant-scope(incl. `ORG_ADMIN` 서브트리) → **org-node 실링** → **ABAC org_scope** → access-condition, D6).
+
+### 관련 ADR
+
+- [ADR-MONO-047](../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) — 본 모델의 권위 (D1–D7).
+- [ADR-MONO-019](../../../../docs/adr/ADR-MONO-019-platform-console-customer-tenant-model.md) § D1 — customer-tenant = 격리 키(이 트리가 위에 얹히는 leaf). ADR-047 이 optional parent 노드를 additive 추가.
+- [ADR-MONO-023](../../../../docs/adr/ADR-MONO-023-entitlement-iam-plane-separation.md) — 엔타이틀먼트/IAM plane 분리. 실링은 entitlement 만 제한할 뿐 IAM 역할을 직접 mint 하지 않는다.
+- [ADR-MONO-024](../../../../docs/adr/ADR-MONO-024-tenant-admin-delegation.md) § D2 — 위임 관리자·no-escalation. ADR-047 이 `ORG_ADMIN @ node` 의 서브트리 드라이버를 additive 추가.
+- [ADR-MONO-025](../../../../docs/adr/ADR-MONO-025-abac-data-scope-generalization.md) — `org_scope`(intra-tenant 부서 data-scope). 위 혼동 금지 표 참조.
+- [ADR-MONO-035](../../../../docs/adr/ADR-MONO-035-operator-auth-unification-model.md) § O1 — subscription→역할 파생. 실링은 그 출력을 교집합으로 좁힌다(byte-unchanged derivation).
+
+---
+
 ## Isolation Strategy
 
 ### 격리 수준

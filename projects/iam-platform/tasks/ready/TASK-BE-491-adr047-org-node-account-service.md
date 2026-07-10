@@ -35,10 +35,11 @@ Make **account-service the authority for the org-node tree**, because it owns th
 
 After this task:
 
-1. `org_node` exists as a data-less grouping node (`id, parent_id, name, entitlement_ceiling, depth`), and `tenants.org_node_id` is a **nullable** FK. Existing rows are untouched — `NULL` means "ungrouped singleton, unbounded ceiling" (D7 net-zero).
+1. `org_node` exists as a data-less grouping node (`id, parent_id, name, ceiling_mode, ceiling_domains, depth`), and `tenants.org_node_id` is a **nullable** FK. Existing rows are untouched — `NULL` means "ungrouped singleton, unbounded ceiling" (D7 net-zero).
+   > The ADR D1 sketch writes a single `entitlement_ceiling` field; storage splits it into `ceiling_mode ∈ {UNBOUNDED, BOUNDED}` + `ceiling_domains` (CSV) so that `UNBOUNDED` (intersection identity) and `BOUNDED({})` (nothing permitted) — which are **opposites** — cannot be conflated at the storage layer. Same value, safer encoding; not a re-decision.
 2. Writes are guarded: `parent_id` **cycle-check**, `max_depth = 5` (root = depth 1), and `child.entitlement_ceiling ⊆ parent.entitlement_ceiling`.
 3. `effectiveCeiling(tenantId)` = the **intersection** of `entitlement_ceiling` over the chain `root → … → tenant.org_node`. A `NULL` `org_node_id` yields *unbounded* (no ceiling), **not** the empty set.
-4. **D6 seam**: the internal entitled-domains resolution returns `ACTIVE subscriptions ∩ effectiveCeiling(tenant)`. This is the single point of enforcement. auth-service is **not modified** — `TenantClaimTokenCustomizer` already consumes this list, and `derive(E ∩ C) = derive(E) ∩ derive(C)` because ADR-035 derivation is per-domain.
+4. **D6 seam**: a dedicated `GET /internal/tenants/{tenantId}/entitled-domains` returns `ACTIVE subscriptions ∩ effectiveCeiling(tenant)`. This is the single point of enforcement. `TenantClaimTokenCustomizer` is **byte-unchanged** — it consumes `AccountServicePort.listEntitledDomains(tenantId)`, whose adapter is repointed to the new endpoint; `derive(E ∩ C) = derive(E) ∩ derive(C)` because ADR-035 derivation is per-domain. `GET /internal/tenant-domain-subscriptions` keeps returning **raw ACTIVE rows** for the console catalog and subscription management.
 5. The **entitlement plane** is bounded at write time too: activating a `tenant_domain_subscription` for a domain outside the tenant's effective ceiling is rejected (422). The ceiling never mints an IAM role (ADR-023 plane separation holds).
 6. Internal reads exist for admin-service: subtree tenant ids for a node, and a node's effective ceiling.
 
@@ -53,7 +54,7 @@ After this task:
 - **Domain** (`domain/orgnode/`): `OrgNode`, `OrgNodeId`, `EntitlementCeiling` (an ordered domain-key set with `intersect`, `isSubsetOf`, an explicit `unbounded()` sentinel distinct from `empty()`).
 - **Persistence**: `OrgNodeJpaEntity`, `OrgNodeRepository` (port) + `OrgNodeRepositoryImpl`, `TenantJpaEntity.orgNodeId` (nullable).
 - **Application**: `OrgNodeCommandService` (create / rename / re-parent / delete / set-ceiling — enforcing cycle, depth, `child ⊆ parent`, and "cannot delete a node with children or tenants"), `OrgNodeQueryService` (`effectiveCeiling(tenantId)`, `effectiveCeiling(nodeId)`, `subtreeTenantIds(nodeId)`, `tree()`).
-- **D6 wiring**: `TenantDomainSubscriptionQueryUseCase` (the *entitlement-resolution* leg feeding `/internal/**` entitled-domains) intersects with `effectiveCeiling`. The **subscription management read** (admin CRUD view) stays unnarrowed.
+- **D6 wiring**: new `GET /internal/tenants/{tenantId}/entitled-domains` = `ACTIVE ∩ effectiveCeiling`. auth-service `AccountServiceClient.doListEntitledDomains` repointed to it (URI + WireMock stubs only; `TenantClaimTokenCustomizer` and `AccountServicePort` signature untouched). The existing `GET /internal/tenant-domain-subscriptions` — the **subscription management + console-catalog read** — stays unnarrowed.
 - **Write gate**: subscription activation rejects an out-of-ceiling domain (422, distinct error code).
 - **Internal API** for admin-service, per BE-490's `admin-to-account.md`: `GET /internal/org-nodes` (tree), `GET /internal/org-nodes/{id}/tenants` (subtree tenant ids), `GET /internal/org-nodes/{id}/effective-ceiling`, plus the org-node command endpoints admin-service proxies.
 - **Tests**:
@@ -62,7 +63,7 @@ After this task:
 
 ## Out of Scope
 
-- **auth-service**: no change (D6 seam is at the source). If a change looks necessary, STOP — it means the intersection leaked to the wrong layer.
+- **auth-service logic**: no behavioural change. The ONLY permitted auth-service diff is repointing `AccountServiceClient.doListEntitledDomains`'s URI to the new endpoint (+ its WireMock stubs). `TenantClaimTokenCustomizer`, `OperatorRoleDerivation`, `applyCrossOrgCap` are byte-unchanged. If any of those needs editing, STOP — the intersection leaked to the wrong layer.
 - admin-service RBAC / `ORG_ADMIN` / `org.manage` / `TenantScopeGuard` → `TASK-BE-492`.
 - Console UI → `TASK-PC-FE-237`.
 - Backfilling existing tenants into nodes → `TASK-BE-493` (this task only makes the column nullable and the code `NULL`-safe).
@@ -76,9 +77,9 @@ After this task:
 - [ ] **AC-2**: Cycle (`parent_id` chain revisits a node, incl. self-parent) → rejected at write with a distinct 422 code. Depth > 5 (root = 1) → rejected.
 - [ ] **AC-3**: `child.entitlement_ceiling ⊆ parent.entitlement_ceiling` enforced on both create-with-parent and set-ceiling; a violating write is rejected 422 (and re-parenting that would break a descendant's subset property is rejected too).
 - [ ] **AC-4**: `effectiveCeiling(tenantId)` = intersection over root→node chain. `org_node_id = NULL` → **unbounded**; a node with `{}` → **nothing permitted**. A unit test pins that these two are different.
-- [ ] **AC-5**: Internal entitled-domains resolution returns `ACTIVE ∩ effectiveCeiling`, order preserved from the ACTIVE list. For a `NULL`-node tenant the output is **byte-identical** to the pre-change output (net-zero regression test).
+- [ ] **AC-5**: `GET /internal/tenants/{tenantId}/entitled-domains` returns `ACTIVE ∩ effectiveCeiling`, order preserved from the ACTIVE list. For a `NULL`-node tenant the output is **byte-identical** to what `GET /internal/tenant-domain-subscriptions?tenantId=` returned before this change (net-zero regression test). That older endpoint still returns raw ACTIVE rows and is asserted unchanged.
 - [ ] **AC-6**: Subscription activation for a domain outside the effective ceiling → 422 with a distinct code; the row is not written. Deactivation is always allowed (narrowing).
-- [ ] **AC-7**: auth-service source tree is **unmodified** by this task's diff, and an integration test proves an assume-tenant token's `entitled_domains` + derived `roles` are narrowed by an ancestor ceiling purely via the account-service change.
+- [ ] **AC-7**: The auth-service diff is confined to `AccountServiceClient`'s request URI (+ test stubs); `TenantClaimTokenCustomizer`, `OperatorRoleDerivation` and `AccountServicePort` are byte-unchanged (`git diff` asserted). An integration test proves an assume-tenant token's `entitled_domains` + derived `roles` are narrowed by an **ancestor** node's ceiling with no token-issuance logic change.
 - [ ] **AC-8**: `GET /internal/org-nodes/{id}/tenants` returns exactly the subtree's tenant ids (self + descendants); `/effective-ceiling` returns the chain intersection. Both are `/internal/**` (client_credentials Bearer, per ADR-005 step 4 / BE-487).
 - [ ] **AC-9**: `./gradlew :projects:iam-platform:apps:account-service:test` GREEN; Testcontainers integration suite GREEN in CI Linux (local Windows npipe is flaky and not authoritative).
 
@@ -115,7 +116,8 @@ Follow `projects/iam-platform/specs/services/account-service/architecture.md` (L
 # Implementation Notes
 
 - **Do not touch `TenantClaimTokenCustomizer`.** The ceiling is applied before auth-service ever sees the list. A diff there means the seam moved.
-- The **subscription management read** and the **entitlement resolution read** are different call sites even though both start from `tenant_domain_subscription`. Narrow only the latter; narrowing the former hides rows from the admin who must manage them.
+- The **subscription management read** and the **entitlement resolution read** are different call sites even though both start from `tenant_domain_subscription`. They now get **different endpoints** rather than one endpoint whose meaning flips on a query parameter — narrowing the management read would hide rows from the admin who must manage them, and a param-dependent security semantic is a footgun.
+- `GET /internal/tenant-domain-subscriptions` currently serves both admin-service (catalog, no `tenantId`) and auth-service (keystone, with `tenantId`). Only the latter moves.
 - `EntitlementCeiling.unbounded()` must not be modelled as "the set of all known domains" — a new domain added later would then be silently excluded from every legacy node. Model it as a distinct case that intersects as identity.
 - Depth is maintained on write (`parent.depth + 1`); re-parenting must recompute the moved subtree's depths and re-assert the cap.
 - Re-verify the next free Flyway version before writing `V0027` — another merged task may have taken it.
