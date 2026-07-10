@@ -8,7 +8,7 @@ TASK-BE-495
 
 # Status
 
-ready
+done
 
 # Owner
 
