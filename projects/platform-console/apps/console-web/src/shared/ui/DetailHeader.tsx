@@ -5,7 +5,7 @@ import { Button } from '@/shared/ui/Button';
 export interface DetailHeaderProps {
   /** `id` for the h1, referenced by the section's `aria-labelledby`. */
   headingId: string;
-  /** Page title. Convention across ecommerce-ops detail pages: "OO 상세". */
+  /** Page title. Convention across detail pages: "OO 상세". */
   title: string;
   /** Route the back button returns to (a list, or a parent detail). */
   backHref: string;
@@ -24,11 +24,12 @@ export interface DetailHeaderProps {
 }
 
 /**
- * Shared detail-page header for ecommerce-ops (product / order / user / seller /
- * promotion). Renders the page title on the left and a right-aligned action row
- * that always ends with an identical "목록" back button, so every detail page
- * presents the same back-to-list affordance and title convention. Extracted
- * 2026-07-02 to remove per-page drift in the header layout.
+ * Shared detail-page header (promoted 2026-07-10 from
+ * `features/ecommerce-ops/components/DetailHeader.tsx` to `shared/ui` so the
+ * org-hierarchy / IAM surfaces can reuse the same back-to-list affordance and
+ * title convention — TASK-PC-FE-237 § F). Renders the page title on the left
+ * and a right-aligned action row that always ends with an identical back
+ * button. Behaviour is byte-identical to the pre-promotion source.
  */
 export function DetailHeader({
   headingId,

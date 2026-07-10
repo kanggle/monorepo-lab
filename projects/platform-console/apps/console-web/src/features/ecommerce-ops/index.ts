@@ -20,7 +20,11 @@
  * (list/presigned-upload/register/update/delete, TASK-PC-FE-082 — the Phase 1b
  * CLOSING facet, embedded in the product detail).
  */
-export { DetailHeader } from './components/DetailHeader';
+// DetailHeader was promoted to `shared/ui/DetailHeader` (TASK-PC-FE-237 § F);
+// re-exported here so existing `@/features/ecommerce-ops` import sites keep
+// working unchanged.
+export { DetailHeader } from '@/shared/ui/DetailHeader';
+export type { DetailHeaderProps } from '@/shared/ui/DetailHeader';
 export { ProductsScreen } from './components/ProductsScreen';
 export { ProductDetail } from './components/ProductDetail';
 export { ProductForm } from './components/ProductForm';

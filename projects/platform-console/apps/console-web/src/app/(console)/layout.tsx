@@ -10,7 +10,14 @@ import {
 } from '@/shared/lib/session';
 import { decodeJwtPayload } from '@/shared/lib/jwt';
 import { getCatalog } from '@/features/catalog';
-import { selectableTenants, TenantSwitcher } from '@/features/tenant';
+import {
+  selectableTenants,
+  groupTenantsByCompany,
+  TenantSwitcher,
+  type CompanyGroup,
+  type CompanyGroupInput,
+} from '@/features/tenant';
+import { listOrgNodes, getOrgNodeTenants } from '@/features/org-hierarchy';
 import { ThemeToggle } from '@/shared/ui/ThemeToggle';
 import { AccountMenu } from '@/shared/ui/AccountMenu';
 import { NotificationBell } from '@/features/notifications';
@@ -99,6 +106,40 @@ export default async function ConsoleLayout({
     tenants = []; // degraded — switcher hidden, shell still usable
   }
 
+  // Org-node (company) grouping for the tenant switcher (TASK-PC-FE-237 /
+  // ADR-047). This CANNOT break the shell: any failure (403 for a
+  // non-`org.manage` operator, 503, timeout) falls back to `companies = []`,
+  // i.e. the flat switcher — unchanged behaviour.
+  //
+  // Only ROOT nodes (`parentId === null`) become companies, and we fetch each
+  // root's subtree tenants (`getOrgNodeTenants`). This bounds the extra
+  // requests to the number of ROOT companies, not the number of nodes: the
+  // discovery `listOrgNodes()` call plus one tenant call per root. With zero
+  // org nodes there are no roots, so the per-company fan-out is zero (the
+  // net-zero property — the world as it is today). A per-root failure drops
+  // just that company and keeps going.
+  let companies: CompanyGroup[] = [];
+  try {
+    const list = await listOrgNodes();
+    const roots = list.items.filter((n) => n.parentId === null);
+    const groups: CompanyGroupInput[] = [];
+    for (const root of roots) {
+      try {
+        const subtree = await getOrgNodeTenants(root.orgNodeId);
+        groups.push({
+          orgNodeId: root.orgNodeId,
+          name: root.name,
+          tenantIds: subtree.tenantIds,
+        });
+      } catch {
+        // drop just this company — keep the rest of the switcher intact
+      }
+    }
+    companies = groupTenantsByCompany(tenants, groups).companies;
+  } catch {
+    companies = []; // flat switcher — unchanged behaviour
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -110,7 +151,11 @@ export default async function ConsoleLayout({
             Platform Console
           </Link>
           <div className="flex items-center gap-3">
-            <TenantSwitcher tenants={tenants} activeTenant={activeTenant} />
+            <TenantSwitcher
+              tenants={tenants}
+              activeTenant={activeTenant}
+              companies={companies}
+            />
             <NotificationBell />
             <ThemeToggle />
             <AccountMenu accountLabel={accountLabel} />

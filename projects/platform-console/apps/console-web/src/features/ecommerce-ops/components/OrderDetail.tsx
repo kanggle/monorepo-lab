@@ -7,7 +7,7 @@ import {
   type OrderDetail as OrderDetailType,
 } from '../api/order-types';
 import { OrderStatusDialog } from './OrderStatusDialog';
-import { DetailHeader } from './DetailHeader';
+import { DetailHeader } from '@/shared/ui/DetailHeader';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { formatDateTime } from '@/shared/lib/datetime';
 

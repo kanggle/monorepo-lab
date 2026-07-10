@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
-import { DetailHeader } from './DetailHeader';
+import { DetailHeader } from '@/shared/ui/DetailHeader';
 import {
   usePeriodPayouts,
   useExecutePayouts,
