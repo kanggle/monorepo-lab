@@ -1,0 +1,238 @@
+# =============================================================================
+# WMS Platform — full-stack overlay (TASK-MONO-342)
+# =============================================================================
+# Purpose
+#   docker-compose.yml is INFRASTRUCTURE ONLY (postgres / redis / kafka /
+#   observability) — application services normally run via
+#   `./gradlew :apps:<svc>:bootRun`. iam-platform pairs its infra-only base with
+#   a `docker-compose.e2e.yml` full-stack harness; wms-platform had no such
+#   counterpart, so nothing could bring the wms applications up in containers.
+#   This file closes that gap.
+#
+#   It is an ADDITIVE overlay: it only adds the 7 application services and
+#   reuses the base file's `postgres` (6 DBs via docker/postgres/init.sh),
+#   `redis` and `kafka`. The base file stays BYTE-UNCHANGED.
+#
+# Usage
+#   # 1. Build the shared runtime base image + the service jars (REQUIRED —
+#   #    every wms Dockerfile does `COPY build/libs/<svc>.jar`, it does not
+#   #    compile inside Docker).
+#   ./gradlew :projects:wms-platform:apps:master-service:bootJar \
+#             :projects:wms-platform:apps:inbound-service:bootJar \
+#             :projects:wms-platform:apps:inventory-service:bootJar \
+#             :projects:wms-platform:apps:outbound-service:bootJar \
+#             :projects:wms-platform:apps:notification-service:bootJar \
+#             :projects:wms-platform:apps:admin-service:bootJar \
+#             :projects:wms-platform:apps:gateway-service:bootJar
+#
+#   # 2. Bring the full stack up (base + this overlay)
+#   docker compose \
+#     -f projects/wms-platform/docker-compose.yml \
+#     -f projects/wms-platform/docker-compose.e2e.yml up -d --build
+#
+# Notes
+#   - Backing services stay `expose:`-only (Local Network Convention,
+#     ADR-MONO-001). Only gateway-service is routed, via Traefik `wms.local`.
+#   - OIDC points at the iam-platform IdP. Defaults assume the integrated demo
+#     (infra/demo) where iam runs alongside on the shared `traefik-net`.
+#     Override OIDC_ISSUER_URL / JWT_JWKS_URI for other topologies.
+#   - `redis` in the base file is password-protected via ${REDIS_PASSWORD}. The
+#     wms services do NOT read a REDIS_PASSWORD env var, so run this overlay with
+#     REDIS_PASSWORD unset/empty (the base default) or the services will fail to
+#     authenticate.
+# =============================================================================
+
+x-wms-app-common: &wms-app-common
+  restart: unless-stopped
+  networks: [wms-net]
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    kafka: { condition: service_healthy }
+
+x-wms-oidc-env: &wms-oidc-env
+  OIDC_ISSUER_URL: ${WMS_OIDC_ISSUER_URL:-http://iam-gateway-service:8080}
+  OIDC_JWK_SET_URI: ${WMS_OIDC_JWK_SET_URI:-http://iam-auth-service:8081/oauth2/jwks}
+  JWT_JWKS_URI: ${WMS_OIDC_JWK_SET_URI:-http://iam-auth-service:8081/oauth2/jwks}
+  OIDC_ALLOWED_ISSUERS: ${WMS_OIDC_ALLOWED_ISSUERS:-http://iam-gateway-service:8080}
+  OIDC_REQUIRED_TENANT_ID: wms
+
+x-wms-infra-env: &wms-infra-env
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+services:
+  # ---------------------------------------------------------------------------
+  # Edge — the only service routed through Traefik (http://wms.local/).
+  # Stateless (no DB row in docker/postgres/init.sh).
+  # ---------------------------------------------------------------------------
+  gateway-service:
+    <<: *wms-app-common
+    build:
+      context: apps/gateway-service
+      dockerfile: Dockerfile
+    container_name: wms-gateway-service
+    environment:
+      <<: [*wms-infra-env, *wms-oidc-env]
+      SERVER_PORT: "8080"
+      MASTER_SERVICE_URI: http://wms-master-service:8081
+      INBOUND_SERVICE_URI: http://wms-inbound-service:8082
+      INVENTORY_SERVICE_URI: http://wms-inventory-service:8083
+      OUTBOUND_SERVICE_URI: http://wms-outbound-service:8084
+      ADMIN_SERVICE_URI: http://wms-admin-service:8086
+      CORS_ALLOWED_ORIGINS: ${WMS_CORS_ALLOWED_ORIGINS:-http://console.local}
+    expose: ["8080"]
+    networks: [wms-net, traefik-net]
+    depends_on:
+      redis: { condition: service_healthy }
+      master-service: { condition: service_started }
+      inventory-service: { condition: service_started }
+      inbound-service: { condition: service_started }
+      outbound-service: { condition: service_started }
+      admin-service: { condition: service_started }
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.wms.rule=Host(`wms.local`)"
+      - "traefik.http.routers.wms.entrypoints=web"
+      - "traefik.http.services.wms.loadbalancer.server.port=8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  master-service:
+    <<: *wms-app-common
+    build:
+      context: apps/master-service
+      dockerfile: Dockerfile
+    container_name: wms-master-service
+    environment:
+      <<: [*wms-infra-env, *wms-oidc-env]
+      SERVER_PORT: "8081"
+      DB_URL: jdbc:postgresql://postgres:5432/master_db
+      DB_USERNAME: master
+      DB_PASSWORD: ${MASTER_DB_PASSWORD:-master}
+    expose: ["8081"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  inbound-service:
+    <<: *wms-app-common
+    build:
+      context: apps/inbound-service
+      dockerfile: Dockerfile
+    container_name: wms-inbound-service
+    environment:
+      <<: [*wms-infra-env, *wms-oidc-env]
+      SERVER_PORT: "8082"
+      DB_URL: jdbc:postgresql://postgres:5432/inbound_db
+      DB_USERNAME: inbound
+      DB_PASSWORD: ${INBOUND_DB_PASSWORD:-inbound}
+      KAFKA_CONSUMER_GROUP: wms-inbound-service
+    expose: ["8082"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  inventory-service:
+    <<: *wms-app-common
+    build:
+      context: apps/inventory-service
+      dockerfile: Dockerfile
+    container_name: wms-inventory-service
+    environment:
+      <<: [*wms-infra-env, *wms-oidc-env]
+      SERVER_PORT: "8083"
+      DB_URL: jdbc:postgresql://postgres:5432/inventory_db
+      DB_USERNAME: inventory
+      DB_PASSWORD: ${INVENTORY_DB_PASSWORD:-inventory}
+      KAFKA_CONSUMER_GROUP: wms-inventory-service
+    expose: ["8083"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  outbound-service:
+    <<: *wms-app-common
+    build:
+      context: apps/outbound-service
+      dockerfile: Dockerfile
+    container_name: wms-outbound-service
+    environment:
+      <<: [*wms-infra-env, *wms-oidc-env]
+      SERVER_PORT: "8084"
+      DB_URL: jdbc:postgresql://postgres:5432/outbound_db
+      DB_USERNAME: outbound
+      DB_PASSWORD: ${OUTBOUND_DB_PASSWORD:-outbound}
+      KAFKA_CONSUMER_GROUP: wms-outbound-service
+      # TMS is a post-commit external stub in v1 (ADR-MONO-005 category D).
+      TMS_BASE_URL: ${WMS_TMS_BASE_URL:-http://localhost:9999}
+      TMS_API_KEY: ${WMS_TMS_API_KEY:-demo}
+    expose: ["8084"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # event-consumer (no OIDC surface — it exposes no authenticated HTTP API).
+  notification-service:
+    <<: *wms-app-common
+    build:
+      context: apps/notification-service
+      dockerfile: Dockerfile
+    container_name: wms-notification-service
+    environment:
+      <<: *wms-infra-env
+      SERVER_PORT: "8085"
+      DB_URL: jdbc:postgresql://postgres:5432/notification_db
+      DB_USERNAME: notification
+      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notification}
+      KAFKA_CONSUMER_GROUP: wms-notification-service
+      # Slack adapter is behind a Resilience4j CB; a stub URL keeps it degraded
+      # but harmless in the demo.
+      SLACK_WEBHOOK_URL_WMS_ALERTS: ${WMS_SLACK_ALERTS_URL:-http://localhost:9999/alerts}
+      SLACK_WEBHOOK_URL_WMS_SHIPPING: ${WMS_SLACK_SHIPPING_URL:-http://localhost:9999/shipping}
+    expose: ["8085"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8085/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  admin-service:
+    <<: *wms-app-common
+    build:
+      context: apps/admin-service
+      dockerfile: Dockerfile
+    container_name: wms-admin-service
+    environment:
+      <<: [*wms-infra-env, *wms-oidc-env]
+      SERVER_PORT: "8086"
+      DB_URL: jdbc:postgresql://postgres:5432/admin_db
+      DB_USERNAME: admin
+      DB_PASSWORD: ${ADMIN_DB_PASSWORD:-admin}
+      KAFKA_CONSUMER_GROUP: wms-admin-service
+    expose: ["8086"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8086/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
