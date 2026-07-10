@@ -138,6 +138,10 @@ jobs:
       platform-console: ${{ steps.filter.outputs.platform-console == 'true' && steps.filter.outputs.code-changed == 'true' }}
       contracts: ${{ steps.filter.outputs.contracts }}
       observability: ${{ steps.filter.outputs.observability }}
+      # TASK-MONO-341: integrated demo wrapper (infra/demo). Pure-positive filter,
+      # AND-composed with `code-changed` so a README-only edit under infra/demo
+      # skips the smoke while the .sh / docker-compose.yml surfaces still trigger it.
+      demo-wrapper: ${{ steps.filter.outputs.demo-wrapper == 'true' && steps.filter.outputs.code-changed == 'true' }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
@@ -203,6 +207,16 @@ jobs:
             observability:
               - 'infra/observability/**'
               - 'scripts/observability/**'
+            # TASK-MONO-341: the integrated demo wrapper depends on (1) every
+            # project compose rendering standalone, (2) globally-unique
+            # container_name, (3) no host-port collision, (4) every project
+            # compose being registered in infra/demo/projects.sh. Any of these
+            # breaking makes the demo boot silently incomplete.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            demo-wrapper:
+              - 'infra/demo/**'
+              - 'infra/traefik/**'
+              - 'projects/*/docker-compose.yml'
             # TASK-MONO-075: pure-positive enumeration of code-bearing file
             # extensions. `'some'` quantifier behaves intuitively here (no
             # negation → no quirk). markdown-only / docs-only / lifecycle-only
@@ -235,6 +249,51 @@ jobs:
               - '**/Dockerfile.*'
               - '**/.env'
               - '**/.env.*'
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-341 — integrated demo wrapper regression guard.
+  #
+  # TASK-MONO-336 replaced the (impossible) single merged compose file with a
+  # per-project `-p` wrapper, because docker compose `include:` / `-f` SILENTLY
+  # merge services that share a compose key (redis x7, kafka x6, postgres x3 ...)
+  # — 6 of 7 redis would vanish with no error.
+  #
+  # This job locks in the four invariants that make the wrapper valid, plus a
+  # live proof that two same-keyed services really do coexist under separate -p.
+  #
+  # Scope note: `full` (41 JVMs, 32-48GB RAM) and even `demo-core` (~26 services)
+  # exceed a GitHub runner (16GB). Real boot smoke stays EC2-authoritative
+  # (m6i.4xlarge / 64GB) per MONO-336's carried-forward item. The live proof here
+  # is deliberately minimal: two redis:7-alpine containers.
+  # ---------------------------------------------------------------------------
+  demo-wrapper-smoke:
+    name: Demo wrapper smoke (infra/demo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: changes
+    if: needs.changes.outputs.demo-wrapper == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: |
+          for f in infra/demo/projects.sh \
+                   infra/demo/demo-up.sh \
+                   infra/demo/demo-down.sh \
+                   infra/demo/verify-demo-wrapper.sh; do
+            bash -n "$f"
+            echo "ok $f"
+          done
+
+      - name: Verify wrapper invariants + live coexistence proof
+        run: bash infra/demo/verify-demo-wrapper.sh --live
+
+      - name: Teardown safety net
+        if: always()
+        run: |
+          docker ps -a --filter 'name=scm-platform-redis' \
+                      --filter 'name=fan-platform-redis' -q \
+            | xargs -r docker rm -f
 
   build-and-test:
     name: Build & Test (JDK 21, Linux)
