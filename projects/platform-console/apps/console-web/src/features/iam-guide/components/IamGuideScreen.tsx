@@ -1,8 +1,10 @@
 import { Card } from '@/shared/ui/Card';
+import { Mono, NoteCard } from '@/shared/ui/guide-primitives';
 import {
   ACCOUNT_HATS,
   AUTH_PLANE_DISJOINT,
   AUTH_PLANES,
+  CONSOLE_MENUS,
   DELEGATION_CHAIN,
   DELEGATION_GUARDS,
   DOMAIN_ROLE_MAP,
@@ -14,19 +16,20 @@ import {
 } from '../data';
 
 /**
- * IAM 개요(가이드) 화면 (TASK-PC-FE-163). 순수 정적 참조 화면 — role 카탈로그,
- * 권한 키, 화면 접근 매트릭스, 운영 시 롤 부여 위임 체인, 도메인 롤(별도 축)을
- * 한 화면에서 설명한다. 데이터 페치·권한 게이트 없음(server component, no
- * 'use client'): 가이드는 콘솔에 진입한 누구나 열람 가능하다.
+ * IAM 가이드 화면 (TASK-PC-FE-163, 재구성 TASK-PC-FE-238). 순수 정적 참조 화면 —
+ * 데이터 페치·권한 게이트 없음(server component, no 'use client'): 가이드는
+ * 콘솔에 진입한 누구나 열람 가능하다.
+ *
+ * 세 부분으로 **분리**된다 — 처음 온 사람은 1~2 만 읽으면 되고, 3 은 필요할 때
+ * 찾아보는 표다:
+ *   1. 개념     — 계정 4개의 모자 · 권한 두 종류
+ *   2. 메뉴 사용법 — 메뉴별 하는 일/작업/필요 권한 · 온보딩 흐름 · 도달 범위
+ *   3. 레퍼런스 — 역할 6종 · 접근 매트릭스 · 권한 키 · 구독 도메인별 도메인 롤
+ *
+ * 역할/권한 키/구독 도메인 **카탈로그는 3에만** 존재한다(2 는 그것을 참조만 한다).
  */
 
-function AccessCell({
-  level,
-  note,
-}: {
-  level: AccessLevel;
-  note?: string;
-}) {
+function AccessCell({ level, note }: { level: AccessLevel; note?: string }) {
   const glyph = level === 'full' ? '✅' : level === 'partial' ? '△' : '✕';
   const label =
     level === 'full' ? '가능' : level === 'partial' ? '부분' : '불가';
@@ -50,11 +53,22 @@ function AccessCell({
   );
 }
 
+/** 권한 키 칩 — IAM 고유(공용 `Mono` 와 달리 키 카탈로그 전용 스타일). */
 function PermChip({ label }: { label: string }) {
   return (
     <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
       {label}
     </span>
+  );
+}
+
+/** 절 제목 — 3부 구조의 최상위 구분자. */
+function PartHeading({ id, num, children }: { id: string; num: string; children: string }) {
+  return (
+    <h2 id={id} className="mb-2 border-b border-border pb-2 text-xl font-semibold">
+      <span className="mr-2 text-muted-foreground">{num}</span>
+      {children}
+    </h2>
   );
 }
 
@@ -64,40 +78,42 @@ export function IamGuideScreen() {
       <h1 id="iam-guide-heading" className="mb-2 text-2xl font-semibold">
         IAM 가이드
       </h1>
-      <p className="mb-8 max-w-3xl text-sm text-muted-foreground">
-        IAM 콘솔은 플랫폼 운영자의 <strong>역할 기반 접근제어(RBAC)</strong>로{' '}
-        <strong>계정 운영 · 운영자 관리 · 감사·보안</strong> 3개 화면을
-        게이트합니다. 아래는 운영자에게 부여하는 6개 역할의 의미·보유 권한과 각
-        화면의 접근 권한, 그리고 운영 시 역할을 부여하는 위임 흐름입니다. (테넌트
-        직원/협력업체가 받는 <strong>도메인 롤</strong>은 이와 다른 축 — 맨 아래
-        참조.)
+      <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
+        IAM 은 <strong>누가 콘솔의 어떤 메뉴를 쓸 수 있는지</strong>를 정하는
+        곳입니다. 처음이라면 <strong>1 · 2</strong> 만 읽으세요 —{' '}
+        <strong>3</strong> 은 역할 · 권한 키 · 도메인 롤을 찾아보는 표입니다.
       </p>
 
-      {/* 0. 계정·테넌트 관계 — 하나의 계정, 4개의 모자 */}
-      <h2 className="mb-2 text-lg font-semibold">
-        계정·테넌트 관계 (하나의 계정, 4개의 모자)
-      </h2>
-      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-        하나의 통합 IAM 계정은 처한 관계에 따라 서로 다른 인가(모자)를 씁니다 —
-        로그인(인증)은 항상 하나, 얹히는 권한만 상황별로 바뀝니다. 이 페이지의
-        나머지(역할·배정·도메인 롤)는 아래 <strong>②~④</strong> 모자의 세부입니다.
+      {/* ═════════════════ 1. 개념 ═════════════════ */}
+      <PartHeading id="iam-guide-concepts" num="1.">
+        먼저 알아둘 것
+      </PartHeading>
+      <p className="mb-8 max-w-3xl text-sm text-muted-foreground">
+        계정은 하나지만, 어떤 관계로 접속했느냐에 따라 쓸 수 있는 권한이
+        달라집니다.
       </p>
-      <div className="mb-4 overflow-x-auto">
+
+      <h3 className="mb-2 text-lg font-medium">하나의 계정, 4가지 상황</h3>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        로그인은 언제나 하나입니다. 그 위에 얹히는 권한만 상황별로 바뀝니다.
+        아래 <strong>②~④</strong> 가 이 가이드가 다루는 범위입니다.
+      </p>
+      <div className="mb-10 overflow-x-auto">
         <table className="data-table" data-testid="iam-guide-hats">
-          <caption className="sr-only">하나의 계정, 4개의 모자</caption>
+          <caption className="sr-only">하나의 계정, 4가지 상황</caption>
           <thead>
             <tr className="text-left">
               <th scope="col" className="p-2">
                 관계
               </th>
               <th scope="col" className="p-2">
-                정체성 · 역할
+                이 사람은 누구인가
               </th>
               <th scope="col" className="p-2">
-                토큰(인가)
+                권한이 붙는 시점
               </th>
               <th scope="col" className="p-2">
-                콘솔
+                콘솔에서
               </th>
             </tr>
           </thead>
@@ -127,35 +143,20 @@ export function IamGuideScreen() {
           </tbody>
         </table>
       </div>
-      <p className="mb-10 max-w-3xl text-xs text-muted-foreground">
-        <strong className="text-foreground">② ↔ ③</strong> 같은
-        &ldquo;내 회사&rdquo;라도 owner(조직을 세팅)냐 배정 직원(배정 범위를
-        운영)이냐로 티어가 다릅니다. <strong className="text-foreground">③ ↔ ④</strong>{' '}
-        둘 다 테넌트를 assume 해 도메인을 운영하지만, ③은 내 회사 테넌트(자연
-        배정)이고 ④는 남의 회사 테넌트(파트너십 위임 slice · scope cap · admin
-        불가)입니다.
-      </p>
 
-      {/* 0.5 권한 두 평면 (관리 ⟂ 운영, disjoint) */}
-      <h2 className="mb-2 text-lg font-semibold">권한 두 평면 (관리 · 운영)</h2>
+      <h3 className="mb-2 text-lg font-medium">권한은 두 종류</h3>
       <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-        운영자가 쥐는 롤은 <strong>서로 다른 두 평면</strong>에 삽니다 — operator
-        token 이 담는 <strong>admin RBAC 롤</strong>(관리 평면)과 assume-tenant 가
-        담는 <strong>도메인 롤</strong>(운영 평면). 아래 &ldquo;역할 종류 · 접근
-        매트릭스&rdquo;는 관리 평면을, 맨 아래 &ldquo;도메인 롤&rdquo;은 운영
-        평면을 상세히 다룹니다.
+        하나는 <strong>IAM 메뉴를 여는 권한</strong>, 다른 하나는{' '}
+        <strong>도메인 화면을 여는 권한</strong>입니다. 생기는 방식이 다릅니다.
       </p>
       <div className="mb-4 grid gap-4 md:grid-cols-2">
-        {AUTH_PLANES.map((plane) => (
-          <Card
-            key={plane.token}
-            data-testid={`iam-guide-plane-${plane.token.split(' ')[0]}`}
-          >
+        {AUTH_PLANES.map((plane, i) => (
+          <Card key={plane.koName} data-testid={`iam-guide-plane-${i}`}>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className="rounded bg-muted px-2 py-0.5 text-sm font-semibold text-foreground">
                 {plane.koName}
               </span>
-              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {plane.token}
               </span>
             </div>
@@ -167,16 +168,160 @@ export function IamGuideScreen() {
           </Card>
         ))}
       </div>
+      <NoteCard title="두 권한은 절대 섞이지 않습니다" body={AUTH_PLANE_DISJOINT} />
+
+      {/* ═════════════════ 2. 메뉴 사용법 ═════════════════ */}
+      <PartHeading id="iam-guide-usage" num="2.">
+        메뉴 사용법
+      </PartHeading>
+      <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
+        각 메뉴가 무엇을 하는 곳이고, 무엇을 할 수 있고, 무엇이 있어야 열리는지.
+        권한 키의 뜻은 <strong>3. 레퍼런스</strong>에서 찾아보세요.
+      </p>
+      <div className="mb-4 overflow-x-auto">
+        <table className="data-table" data-testid="iam-guide-menus">
+          <caption className="sr-only">IAM 관련 콘솔 메뉴 사용법</caption>
+          <thead>
+            <tr className="text-left">
+              <th scope="col" className="p-2">
+                메뉴
+              </th>
+              <th scope="col" className="p-2">
+                하는 일
+              </th>
+              <th scope="col" className="p-2">
+                할 수 있는 작업
+              </th>
+              <th scope="col" className="p-2">
+                열리는 조건
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {CONSOLE_MENUS.map((menu) => (
+              <tr
+                key={menu.href}
+                data-testid={`iam-guide-menu-${menu.href}`}
+                className="border-b border-border"
+              >
+                <th scope="row" className="p-2 text-left align-top">
+                  <span className="block text-sm font-medium text-foreground">
+                    {menu.label}
+                  </span>
+                  <span className="mt-0.5 block font-mono text-[11px] font-normal text-muted-foreground">
+                    {menu.href}
+                  </span>
+                  <span className="mt-1 inline-block rounded bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground">
+                    {menu.stub ? '준비 중' : menu.mutates ? '변경 가능' : '조회 전용'}
+                  </span>
+                </th>
+                <td className="p-2 align-top text-sm text-muted-foreground">
+                  {menu.purpose}
+                </td>
+                <td className="p-2 align-top text-sm text-muted-foreground">
+                  {menu.actions}
+                  {menu.note && (
+                    <span className="mt-1 block text-[11px] leading-tight text-muted-foreground">
+                      {menu.note}
+                    </span>
+                  )}
+                </td>
+                <td className="p-2 align-top text-sm">
+                  {menu.gate === '—' ? (
+                    <span className="text-muted-foreground">누구나</span>
+                  ) : menu.gate === '카드별로 다름' ? (
+                    <span className="text-muted-foreground">{menu.gate}</span>
+                  ) : (
+                    <Mono>{menu.gate}</Mono>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <p className="mb-10 max-w-3xl text-xs text-muted-foreground">
-        <span className="mr-1" aria-hidden="true">
-          ⛔
-        </span>
-        <strong className="text-foreground">disjoint</strong> —{' '}
-        {AUTH_PLANE_DISJOINT}
+        권한이 없어도 메뉴는 보입니다 — 콘솔은 메뉴를 미리 숨기지 않고, 열었을 때
+        안내 문구를 보여줍니다. 어떤 역할이 어떤 메뉴를 여는지는{' '}
+        <strong>3. 레퍼런스</strong>의 접근 매트릭스에 있습니다.
       </p>
 
-      {/* 1. Role 종류 */}
-      <h2 className="mb-4 text-lg font-semibold">역할(Role) 종류</h2>
+      <h3 className="mb-2 text-lg font-medium">운영자를 온보딩하는 흐름</h3>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        플랫폼 운영자 → 회사 관리자 → 직원 순으로 권한이 내려갑니다.
+      </p>
+      <ol className="mb-4 space-y-3">
+        {DELEGATION_CHAIN.map((step, i) => (
+          <li
+            key={step.actor}
+            className="flex gap-3"
+            data-testid={`iam-guide-delegation-${i}`}
+          >
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+              {i + 1}
+            </span>
+            <div>
+              <p className="text-sm font-medium text-foreground">{step.actor}</p>
+              <p className="text-sm text-muted-foreground">{step.action}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="mb-10 grid gap-3 md:grid-cols-2">
+        {DELEGATION_GUARDS.map((g) => (
+          <Card key={g.name} className="bg-muted/40">
+            <p className="mb-1 text-sm font-medium text-foreground">{g.name}</p>
+            <p className="text-sm text-muted-foreground">{g.desc}</p>
+          </Card>
+        ))}
+      </div>
+
+      <h3 className="mb-2 text-lg font-medium">
+        운영자가 어디까지 일할 수 있는지 정하는 3가지
+      </h3>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        역할을 받은 뒤, 실제 도달 범위는 아래 세 가지가 각각 독립적으로 정합니다.
+        모두 「운영자 관리」 화면에서 다룹니다.
+      </p>
+      <div className="mb-10 grid gap-4 md:grid-cols-3">
+        {OPERATOR_ONBOARDING_AXES.map((axis) => (
+          <Card
+            key={axis.term}
+            data-testid={`iam-guide-onboarding-axis-${axis.term.replace(
+              /\s+/g,
+              '-',
+            )}`}
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="rounded bg-muted px-2 py-0.5 text-sm font-semibold text-foreground">
+                {axis.koName}
+              </span>
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {axis.term}
+              </span>
+            </div>
+            <p className="mb-2 text-[11px] text-muted-foreground">{axis.api}</p>
+            <p className="mb-3 text-sm text-muted-foreground">{axis.desc}</p>
+            <p className="text-sm text-foreground">
+              <span className="mr-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                예시
+              </span>
+              {axis.ecommerceNote}
+            </p>
+          </Card>
+        ))}
+      </div>
+
+      {/* ═════════════════ 3. 레퍼런스 ═════════════════ */}
+      <PartHeading id="iam-guide-reference" num="3.">
+        레퍼런스
+      </PartHeading>
+      <p className="mb-8 max-w-3xl text-sm text-muted-foreground">
+        찾아보는 표입니다 — 역할의 종류, 역할별로 열리는 메뉴, 권한 키의 뜻, 그리고
+        구독 도메인에서 파생되는 도메인 롤.
+      </p>
+
+      <h3 className="mb-4 text-lg font-medium">역할 6종 (IAM 메뉴를 여는 권한)</h3>
       <div className="mb-10 grid gap-4 md:grid-cols-2">
         {SEED_ROLES.map((role) => (
           <Card key={role.name} data-testid={`iam-guide-role-${role.name}`}>
@@ -198,8 +343,8 @@ export function IamGuideScreen() {
                 data-testid={`iam-guide-scope-${role.name}`}
               >
                 {role.scope === 'platform'
-                  ? `플랫폼 스코프${role.elevated ? '(*)' : ''}`
-                  : '테넌트 스코프'}
+                  ? `플랫폼 전체${role.elevated ? '(제약 없음)' : ''}`
+                  : '자기 테넌트'}
               </span>
             </div>
             <p className="mb-3 text-sm text-muted-foreground">{role.intent}</p>
@@ -212,48 +357,44 @@ export function IamGuideScreen() {
         ))}
       </div>
 
-      {/* 2. 메뉴 접근 권한 매트릭스 */}
-      <h2 className="mb-2 text-lg font-semibold">메뉴 접근 권한</h2>
+      <h3 className="mb-2 text-lg font-medium">역할별로 열리는 메뉴</h3>
       <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-        각 화면은 특정 권한 키로 게이트됩니다. 권한은 역할의 합집합으로 평가되며,
-        화면이 요구하는 키를 보유하지 않으면 서버가 403 으로 거부합니다(콘솔은
-        생산자 권위 원칙에 따라 메뉴를 미리 숨기지 않고 진입 시 인라인 안내).
+        ✅ 가능 · △ 부분 · ✕ 불가. 권한은 보유한 역할들의 합집합으로 평가되고,
+        메뉴가 요구하는 키가 없으면 서버가 거부합니다.
       </p>
       <div className="mb-4 overflow-x-auto">
         <table className="data-table" data-testid="iam-guide-access-matrix">
-          <caption className="sr-only">역할별 IAM 화면 접근 권한</caption>
+          <caption className="sr-only">메뉴별 역할 접근 권한</caption>
           <thead>
             <tr className="text-left">
               <th scope="col" className="p-2">
-                역할 \ 화면
+                메뉴 \ 역할
               </th>
-              {SCREEN_ACCESS.map((s) => (
-                <th key={s.screen} scope="col" className="p-2 text-center">
-                  <span className="block">{s.screen}</span>
-                  <span className="block font-mono text-[11px] font-normal text-muted-foreground">
-                    {s.gate}
+              {SEED_ROLES.map((role) => (
+                <th key={role.name} scope="col" className="p-2 text-center">
+                  <span className="block font-mono text-[11px] font-normal text-foreground">
+                    {role.name}
                   </span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {SEED_ROLES.map((role) => (
-              <tr
-                key={role.name}
-                data-testid={`iam-guide-matrix-row-${role.name}`}
-              >
-                <th
-                  scope="row"
-                  className="p-2 text-left font-mono text-xs font-medium text-foreground"
-                >
-                  {role.name}
+            {SCREEN_ACCESS.map((s) => (
+              <tr key={s.href} data-testid={`iam-guide-matrix-row-${s.href}`}>
+                <th scope="row" className="p-2 text-left align-top">
+                  <span className="block text-sm font-medium text-foreground">
+                    {s.screen}
+                  </span>
+                  <span className="block font-mono text-[11px] font-normal text-muted-foreground">
+                    {s.gate}
+                  </span>
                 </th>
-                {SCREEN_ACCESS.map((s) => {
+                {SEED_ROLES.map((role) => {
                   const cell = s.cells[role.name] ?? { level: 'none' as const };
                   return (
                     <td
-                      key={s.screen}
+                      key={role.name}
                       className="p-2 text-center align-top"
                       data-testid={`iam-guide-cell-${role.name}-${s.href}`}
                       data-level={cell.level}
@@ -267,127 +408,26 @@ export function IamGuideScreen() {
           </tbody>
         </table>
       </div>
-      <p className="mb-10 text-xs text-muted-foreground">
-        ✅ 가능 · △ 부분(기본 감사만, 보안이벤트 제외) · ✕ 불가. 감사·보안의
-        보안이벤트(로그인 이력·의심 이벤트)는 <PermChip label="audit.read" /> 위에{' '}
-        <PermChip label="security.event.read" /> 를 추가로 요구합니다. 계정
-        운영은 <PermChip label="account.read" /> 로 게이트되므로 계정 제어
-        권한(잠금/해제)만 가진 SUPPORT_LOCK 은 목록 화면을 열 수 없습니다.
-      </p>
+      <ul className="mb-10 max-w-3xl list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+        <li>
+          <strong className="text-foreground">계정 운영</strong> 은{' '}
+          <PermChip label="account.read" /> 로 열립니다. 잠금 권한만 가진
+          SUPPORT_LOCK 은 목록을 열 수 없습니다.
+        </li>
+        <li>
+          <strong className="text-foreground">감사 · 보안</strong> 의 로그인 이력 ·
+          의심 활동은 <PermChip label="audit.read" /> 위에{' '}
+          <PermChip label="security.event.read" /> 를 더 요구합니다(△ = 그 부분만
+          안 보임).
+        </li>
+        <li>
+          <strong className="text-foreground">파트너십</strong> 은 SUPER_ADMIN 도
+          열 수 없습니다 — 두 고객사 사이의 관계라서 플랫폼은 당사자가 아닙니다.
+        </li>
+      </ul>
 
-      {/* 3. 운영 시 롤 부여 예시 */}
-      <h2 className="mb-4 text-lg font-semibold">운영 시 역할 부여 (위임 체인)</h2>
-      <ol className="mb-4 space-y-3">
-        {DELEGATION_CHAIN.map((step, i) => (
-          <li
-            key={step.actor}
-            className="flex gap-3"
-            data-testid={`iam-guide-delegation-${i}`}
-          >
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-              {i + 1}
-            </span>
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                {step.actor}
-              </p>
-              <p className="text-sm text-muted-foreground">{step.action}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <div className="mb-10 grid gap-3 md:grid-cols-2">
-        {DELEGATION_GUARDS.map((g) => (
-          <Card key={g.name} className="bg-muted/40">
-            <p className="mb-1 text-sm font-medium text-foreground">{g.name}</p>
-            <p className="text-sm text-muted-foreground">{g.desc}</p>
-          </Card>
-        ))}
-      </div>
-
-      {/* 3.5 운영자 온보딩 3축 (운영 도달 범위) */}
-      <h2 className="mb-2 text-lg font-semibold">
-        운영자 온보딩 3축 (운영 도달 범위)
-      </h2>
-      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-        위임으로 역할을 받은 뒤, 운영자가 <strong>어디를 · 얼마나</strong> 운영할
-        수 있는지는 아래 3개의 직교 축으로 정해집니다. assume-tenant 로 도메인
-        롤을 받는 운영(E-Commerce·WMS·SCM…)에 그대로 적용되며, 이커머스
-        입점사/협력업체 운영자 온보딩이 이 세 축으로 표현됩니다.
-      </p>
-      <div className="mb-10 grid gap-4 md:grid-cols-3">
-        {OPERATOR_ONBOARDING_AXES.map((axis) => (
-          <Card
-            key={axis.term}
-            data-testid={`iam-guide-onboarding-axis-${axis.term.replace(
-              /\s+/g,
-              '-',
-            )}`}
-          >
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="rounded bg-muted px-2 py-0.5 text-sm font-semibold text-foreground">
-                {axis.term}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {axis.koName}
-              </span>
-            </div>
-            <p className="mb-2 font-mono text-[11px] text-muted-foreground">
-              {axis.api}
-            </p>
-            <p className="mb-3 text-sm text-muted-foreground">{axis.desc}</p>
-            <p className="text-sm text-foreground">
-              <span className="mr-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                이커머스
-              </span>
-              {axis.ecommerceNote}
-            </p>
-          </Card>
-        ))}
-      </div>
-
-      {/* 4. 도메인 롤 (별도 축) */}
-      <h2 className="mb-2 text-lg font-semibold">
-        참고: 테넌트 직원/협력업체의 도메인 롤 (별도 축)
-      </h2>
-      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-        위 6개는 IAM 콘솔 3화면을 게이트하는 <strong>admin-console 역할</strong>
-        입니다. 테넌트 직원/협력업체는 이 역할이 아니라{' '}
-        <strong>도메인 롤</strong>을 받습니다 — 로그인 후 테넌트 선택
-        (assume-tenant) 시 그 테넌트의 <strong>구독 도메인</strong>에서 아래와
-        같이 자동 파생되어 도메인 서비스(WMS·E-Commerce·SCM…)를 게이트합니다.
-        협력업체는 같은 도메인 롤을 받되 배정의 <strong>org_scope(부서 subtree)</strong>
-        로 데이터 범위가 좁혀집니다.
-      </p>
-      <div className="overflow-x-auto">
-        <table className="data-table" data-testid="iam-guide-domain-role-map">
-          <caption className="sr-only">테넌트 구독 도메인별 파생 도메인 롤</caption>
-          <thead>
-            <tr className="text-left">
-              <th scope="col" className="p-2">
-                구독 도메인
-              </th>
-              <th scope="col" className="p-2">
-                파생 도메인 롤
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {DOMAIN_ROLE_MAP.map((d) => (
-              <tr key={d.domain}>
-                <td className="p-2 font-mono text-xs text-foreground">
-                  {d.domain}
-                </td>
-                <td className="p-2 text-sm text-muted-foreground">{d.roles}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 권한 키 카탈로그 (부록) */}
-      <h2 className="mb-4 mt-10 text-lg font-semibold">부록: 권한 키</h2>
-      <div className="overflow-x-auto">
+      <h3 className="mb-4 text-lg font-medium">권한 키</h3>
+      <div className="mb-10 overflow-x-auto">
         <table className="data-table" data-testid="iam-guide-permission-keys">
           <caption className="sr-only">권한 키 카탈로그</caption>
           <thead>
@@ -396,7 +436,7 @@ export function IamGuideScreen() {
                 권한 키
               </th>
               <th scope="col" className="p-2">
-                설명
+                이 키가 있으면
               </th>
             </tr>
           </thead>
@@ -407,6 +447,41 @@ export function IamGuideScreen() {
                   <PermChip label={p.key} />
                 </td>
                 <td className="p-2 text-sm text-muted-foreground">{p.desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 className="mb-2 text-lg font-medium">
+        구독 도메인에서 생기는 도메인 롤
+      </h3>
+      <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+        위 6개 역할과는 <strong>다른 축</strong>입니다. 직원 · 협력사는 이 역할을
+        따로 받지 않습니다 — 로그인 후 테넌트를 고르면, 그 테넌트가 구독 중인
+        도메인에서 아래처럼 자동으로 생깁니다. 협력사는 같은 롤을 받되 배정된 부서
+        범위만큼만 데이터를 봅니다.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="data-table" data-testid="iam-guide-domain-role-map">
+          <caption className="sr-only">테넌트 구독 도메인별 파생 도메인 롤</caption>
+          <thead>
+            <tr className="text-left">
+              <th scope="col" className="p-2">
+                구독 도메인
+              </th>
+              <th scope="col" className="p-2">
+                생기는 도메인 롤
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {DOMAIN_ROLE_MAP.map((d) => (
+              <tr key={d.domain}>
+                <td className="p-2 font-mono text-xs text-foreground">
+                  {d.domain}
+                </td>
+                <td className="p-2 text-sm text-muted-foreground">{d.roles}</td>
               </tr>
             ))}
           </tbody>
