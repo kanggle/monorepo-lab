@@ -24,7 +24,7 @@ import {
  * 찾아보는 표다:
  *   1. 개념     — 계정 4개의 모자 · 권한 두 종류
  *   2. 메뉴 사용법 — 메뉴별 하는 일/작업/필요 권한 · 온보딩 흐름 · 도달 범위
- *   3. 레퍼런스 — 역할 6종 · 접근 매트릭스 · 권한 키 · 구독 도메인별 도메인 롤
+ *   3. 레퍼런스 — 역할 7종 · 접근 매트릭스 · 권한 키 · 구독 도메인별 도메인 롤
  *
  * 역할/권한 키/구독 도메인 **카탈로그는 3에만** 존재한다(2 는 그것을 참조만 한다).
  */
@@ -321,7 +321,7 @@ export function IamGuideScreen() {
         구독 도메인에서 파생되는 도메인 롤.
       </p>
 
-      <h3 className="mb-4 text-lg font-medium">역할 6종 (IAM 메뉴를 여는 권한)</h3>
+      <h3 className="mb-4 text-lg font-medium">역할 7종 (IAM 메뉴를 여는 권한)</h3>
       <div className="mb-10 grid gap-4 md:grid-cols-2">
         {SEED_ROLES.map((role) => (
           <Card key={role.name} data-testid={`iam-guide-role-${role.name}`}>
@@ -344,7 +344,9 @@ export function IamGuideScreen() {
               >
                 {role.scope === 'platform'
                   ? `플랫폼 전체${role.elevated ? '(제약 없음)' : ''}`
-                  : '자기 테넌트'}
+                  : role.scope === 'org-node'
+                    ? '자기 노드 subtree'
+                    : '자기 테넌트'}
               </span>
             </div>
             <p className="mb-3 text-sm text-muted-foreground">{role.intent}</p>
@@ -457,7 +459,7 @@ export function IamGuideScreen() {
         구독 도메인에서 생기는 도메인 롤
       </h3>
       <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-        위 6개 역할과는 <strong>다른 축</strong>입니다. 직원 · 협력사는 이 역할을
+        위 7개 역할과는 <strong>다른 축</strong>입니다. 직원 · 협력사는 이 역할을
         따로 받지 않습니다 — 로그인 후 테넌트를 고르면, 그 테넌트가 구독 중인
         도메인에서 아래처럼 자동으로 생깁니다. 협력사는 같은 롤을 받되 배정된 부서
         범위만큼만 데이터를 봅니다.

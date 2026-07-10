@@ -17,9 +17,10 @@ import { runAxe } from '../a11y/axe-helper';
  * IAM 가이드 화면 (TASK-PC-FE-163, 재구성 TASK-PC-FE-238) — 순수 정적 참조 화면.
  *
  * 화면은 3부로 분리된다: 1. 개념 · 2. 메뉴 사용법 · 3. 레퍼런스.
- *   - 사용법: 11개 메뉴가 라우트·작업·게이트와 함께 렌더된다(스텁 구분 포함)
- *   - 레퍼런스: 6개 seed role 카드 + 7개 표면 × 6개 role 매트릭스 + 권한 키 + 도메인 롤
+ *   - 사용법: 12개 메뉴가 라우트·작업·게이트와 함께 렌더된다(스텁 구분 포함)
+ *   - 레퍼런스: 7개 seed role 카드 + 8개 표면 × 7개 role 매트릭스 + 권한 키 + 도메인 롤
  *   - 매트릭스가 data.ts(=rbac.md § Seed Matrix)와 셀 단위로 일치한다
+ *   - ORG_ADMIN(ADR-047)은 subscription/partnership 을 갖지 않는다 — no-escalation
  *   - WCAG AA axe-clean
  */
 describe('IamGuideScreen', () => {
@@ -120,6 +121,11 @@ describe('IamGuideScreen', () => {
       if (role.scope === 'platform') {
         expect(badge).toHaveTextContent('플랫폼 전체');
         if (role.elevated) expect(badge).toHaveTextContent('제약 없음');
+      } else if (role.scope === 'org-node') {
+        // ORG_ADMIN is confined to a node subtree, NOT a single tenant — the badge
+        // must not read '자기 테넌트' or a reader mistakes it for a flat TENANT_ADMIN.
+        expect(badge).toHaveTextContent('자기 노드 subtree');
+        expect(badge).not.toHaveTextContent('자기 테넌트');
       } else {
         expect(badge).toHaveTextContent('자기 테넌트');
       }
@@ -132,6 +138,74 @@ describe('IamGuideScreen', () => {
     // SUPER_ADMIN deliberately does NOT hold it.
     const superAdmin = SEED_ROLES.find((r) => r.name === 'SUPER_ADMIN');
     expect(superAdmin?.permissions).not.toContain('partnership.manage');
+  });
+
+  it('gives SUPER_ADMIN the org.manage key (rbac.md § Seed Matrix — the ROOT-node creator)', () => {
+    // rbac.md line 89/112: SUPER_ADMIN holds org.manage; it was missing from data.ts
+    // before PC-FE-239. Without it the catalog contradicted the producer.
+    const superAdmin = SEED_ROLES.find((r) => r.name === 'SUPER_ADMIN');
+    expect(superAdmin?.permissions).toContain('org.manage');
+  });
+
+  it('models ORG_ADMIN as node-scoped and no-escalation (ADR-047 D5 / D3)', () => {
+    const orgAdmin = SEED_ROLES.find((r) => r.name === 'ORG_ADMIN');
+    expect(orgAdmin).toBeDefined();
+    expect(orgAdmin?.scope).toBe('org-node');
+    // Exactly the rbac.md § Seed Roles set — org.manage + operator.manage + delegate.
+    expect(orgAdmin?.permissions).toEqual(
+      expect.arrayContaining([
+        'org.manage',
+        'operator.manage',
+        'tenant.admin.delegate',
+      ]),
+    );
+    // The load-bearing OMISSIONS: without subscription.manage / partnership.manage
+    // an ORG_ADMIN cannot mint a TENANT_ADMIN. Widening the seed to make a matrix
+    // look tidy would break no-escalation (ADR-024 D3). This is a v1 limitation, not
+    // a bug — pin it so nobody "fixes" it.
+    expect(orgAdmin?.permissions).not.toContain('subscription.manage');
+    expect(orgAdmin?.permissions).not.toContain('partnership.manage');
+    // Never the platform role.
+    expect(orgAdmin?.permissions).not.toContain('tenant.manage');
+    expect(orgAdmin?.name).not.toBe('SUPER_ADMIN');
+  });
+
+  it('adds the /org-hierarchy surface gated by org.manage (SUPER_ADMIN + ORG_ADMIN only)', () => {
+    const row = SCREEN_ACCESS.find((s) => s.href === '/org-hierarchy');
+    expect(row).toBeDefined();
+    expect(row?.gate).toBe('org.manage');
+    expect(row?.cells.SUPER_ADMIN.level).toBe('full');
+    expect(row?.cells.ORG_ADMIN.level).toBe('full');
+    // Every role WITHOUT org.manage is locked out.
+    for (const name of [
+      'SUPPORT_READONLY',
+      'SUPPORT_LOCK',
+      'SECURITY_ANALYST',
+      'TENANT_ADMIN',
+      'TENANT_BILLING_ADMIN',
+    ]) {
+      expect(row?.cells[name]?.level ?? 'none').toBe('none');
+    }
+    // And ORG_ADMIN, lacking subscription.manage / partnership.manage, is locked out
+    // of exactly those two surfaces — the console mirror of the no-escalation cap.
+    const subs = SCREEN_ACCESS.find((s) => s.href === '/subscriptions');
+    const partners = SCREEN_ACCESS.find((s) => s.href === '/partnerships');
+    expect(subs?.cells.ORG_ADMIN?.level ?? 'none').toBe('none');
+    expect(partners?.cells.ORG_ADMIN?.level ?? 'none').toBe('none');
+  });
+
+  it('lists the 조직 계층 menu with the ceiling-is-a-cap-not-a-grant caveat', () => {
+    render(<IamGuideScreen />);
+    const menu = CONSOLE_MENUS.find((m) => m.href === '/org-hierarchy');
+    expect(menu).toBeDefined();
+    const row = screen.getByTestId('iam-guide-menu-/org-hierarchy');
+    expect(row).toHaveTextContent('조직 계층');
+    expect(row).toHaveTextContent('변경 가능');
+    // The note must frame the ceiling as a cap that only narrows (좁히기만) and
+    // explicitly does not grant (부여하지 않) — otherwise an operator widens a
+    // ceiling expecting access to open (the D2-A inversion this whole feature guards).
+    expect(menu?.note).toMatch(/좁히기만/);
+    expect(menu?.note).toMatch(/부여하지 않/);
   });
 
   it('renders an access matrix cell for every screen × role matching data.ts levels', () => {
