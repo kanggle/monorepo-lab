@@ -79,7 +79,7 @@ byte-unchanged 로 둔다.
 `verify-demo-wrapper.sh` 가 공통 source 한다.
 
 ```bash
-bash infra/demo/verify-demo-wrapper.sh          # 정적 (a)~(e)
+bash infra/demo/verify-demo-wrapper.sh          # 정적 (a)~(e),(g)
 bash infra/demo/verify-demo-wrapper.sh --live   # + (f) 실기동 증명 (redis 2개, 자동 teardown)
 ```
 
@@ -92,7 +92,12 @@ bash infra/demo/verify-demo-wrapper.sh --live   # + (f) 실기동 증명 (redis 
 | (c) | host `ports:` 전역 무충돌 | 포트 바인딩 실패 |
 | (d) | 모든 `projects/*/docker-compose.yml` 이 맵에 등록 | **신규 프로젝트가 데모에서 조용히 누락** |
 | (e) | **각 프로젝트가 `build:` 서비스를 ≥1개 기여** | **DB 만 뜨고 앱이 0개** (MONO-342 가 겪은 결함) |
+| (g) | **미설정 compose 변수 0건** | **빈 비밀번호 → postgres 초기화 거부** (MONO-346 이 겪은 결함) |
 | (f) | 같은 키 `redis` 가 별도 `-p` 로 공존 | 누군가 `include:` 로 되돌림 = 침묵 병합 회귀 |
+
+> (g)는 **fresh clone 에서 권위**를 갖는다. 프로젝트 `.env` 는 gitignored 이므로
+> 로컬에 실 `.env` 를 가진 개발자는 결손을 보지 못한다 — CI 러너와 데모 AMI 는 본다.
+> 데모에 필요한 값은 전부 [`demo.env`](demo.env) 에 있어야 한다.
 
 CI 잡 `demo-wrapper-smoke` (`.github/workflows/ci.yml`) 가 `infra/demo/**` ·
 `infra/traefik/**` · `projects/*/docker-compose.yml` 변경 PR 에서 위를 자동 검증한다.
@@ -100,8 +105,10 @@ CI 잡 `demo-wrapper-smoke` (`.github/workflows/ci.yml`) 가 `infra/demo/**` ·
 
 ## 검증 상태
 
-- ✅ 9개 compose `docker compose config` 렌더 / `bash -n` / container_name 84개 유일 / host port 무충돌
+- ✅ 9개 compose `docker compose config` 렌더 / `bash -n` / container_name 91개 유일 / host port 무충돌
 - ✅ 커버리지 가드 네거티브 테스트 — 맵에서 프로젝트 제거 시 FAIL 확인
+- ✅ (g) 네거티브 테스트 — `demo.env` 에서 `SETTLEMENT_DB_PASSWORD` 제거 시 exit 1 + 변수명 지목
+- ✅ (g) fresh clone(=`.env` 부재) 조건에서 8 프로젝트 + traefik 미설정 변수 0건
 - ✅ 실기동 증명 — `scm-platform-redis` + `fan-platform-redis` 동시 healthy (같은 compose 키 `redis`)
 - ✅ include/-f 가 중복 키를 잃는다는 실측 확인(위 근거)
 - ⏳ **`full`(41 JVM) 실기동 healthcheck 스모크는 EC2 권위** — GH 러너(16GB)·로컬 Windows
