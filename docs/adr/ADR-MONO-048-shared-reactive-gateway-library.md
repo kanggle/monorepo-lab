@@ -1,8 +1,8 @@
 # ADR-MONO-048 — `libs/java-gateway`: a shared **reactive** (WebFlux) gateway library, extracted from four copy-pasted edges whose divergence had already started costing security fixes
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
-**Date:** 2026-07-11
+**Date:** 2026-07-11 (PROPOSED, PR #2411) → **ACCEPTED 2026-07-11** — user-explicit (`ADR-MONO-048 ACCEPTED`)
 
 **Decision driver:** `TASK-MONO-347` (finance/erp have no gateway although `platform/api-gateway-policy.md` says every project does) prompted a full gateway diagnosis. It found the five gateways are **not** copy-paste siblings but **three lineages**, and that four real defects were living in the gaps between them — including a rate-limiter fix that had propagated to three of four gateways and **silently missed the fourth**. `TASK-BE-501` / `TASK-BE-502` (merged, PR #2409 `b83adf4c3`) closed the defects. This ADR decides whether to remove the substrate that produced them.
 
@@ -171,13 +171,15 @@ Every extraction PR must show:
 
 | step | task | content |
 |---|---|---|
-| 0 | `TASK-MONO-349` | **This ADR** (PROPOSED). No code. |
-| 1 | `TASK-MONO-350` | Create the module. Extract **Tier 1** + migrate `wms`/`scm`/`fan`; `ecommerce` adopts `AllowedIssuersValidator` (its only 4/4 class). De-risks the reactive-module wiring first. |
-| 2 | `TASK-MONO-351` | **Tier 2** parameterization + migrate `wms`/`scm`/`fan`. |
-| 3 | `TASK-MONO-352` | Migrate `ecommerce` onto Tier 2 (needs `FailOpenRateLimiter` delegate-signature reconciliation — ecommerce generalised it to `RateLimiter<Config>` to support its override decorator). |
-| 4 | `TASK-MONO-353` | **Create `finance` / `erp` gateways.** After steps 1–3 this is nearly free — route yml + a handful of properties. **Resolves `TASK-MONO-347` direction A** without the policy exception that direction B would have required. |
+| 0 | `TASK-MONO-349` | **This ADR.** No code. |
+| 1 | `TASK-MONO-351` | Create the module. Extract **Tier 1** + migrate `wms`/`scm`/`fan`; `ecommerce` adopts `AllowedIssuersValidator` (its only 4/4 class). De-risks the reactive-module wiring first. |
+| 2 | `TASK-MONO-352` | **Tier 2** parameterization + migrate `wms`/`scm`/`fan`. |
+| 3 | `TASK-MONO-353` | Migrate `ecommerce` onto Tier 2 (needs `FailOpenRateLimiter` delegate-signature reconciliation — ecommerce generalised it to `RateLimiter<Config>` to support its override decorator). |
+| 4 | `TASK-MONO-354` | **Create `finance` / `erp` gateways.** After steps 1–3 this is nearly free — route yml + a handful of properties. **Resolves `TASK-MONO-347` direction A** without the policy exception that direction B would have required. |
 
-Steps 1–4 are spawned **on acceptance**, not before.
+Step 1 is spawned on acceptance. Steps 2–4 are spawned **as each predecessor lands**, not up front: each step's scope should be written against what the previous step actually *proved*, not against what it was expected to prove.
+
+> **`TASK-MONO-350` is absent from this chain on purpose.** Two concurrent sessions independently claimed `TASK-MONO-349`, and then each tried to yield the number to the other. The resolution that landed (PR #2412) is the correct one — *the ticket with nothing depending on it is the one that moves* — so an unrelated backlog ticket took `350` and this ADR kept `349`. The extraction chain therefore begins at `351`. The gap is a scar, not a mistake; renumbering now would only break references this ADR already ships with.
 
 Step 4 is the payoff that makes this worth doing beyond de-duplication: the reason finance/erp never got gateways is that standing one up meant copying ~15 classes. That is precisely the cost this library removes.
 
@@ -219,13 +221,19 @@ Step 4 is the payoff that makes this worth doing beyond de-duplication: the reas
 
 ---
 
-## 6. Execution gate
+## 6. Execution gate — **UNPAUSED (ACCEPTED 2026-07-11)**
 
-**This ADR is PROPOSED. No `libs/java-gateway` code may be written until it is ACCEPTED.**
+Accepted by the user, explicitly (`ADR-MONO-048 ACCEPTED`).
 
-D7 steps 1–4 (`TASK-MONO-350` … `TASK-MONO-353`) do not exist yet and are **not to be created** until acceptance. On acceptance: flip Status to ACCEPTED, record the accepting date here, and spawn step 1.
+This ADR was authored and opened as PROPOSED precisely so acceptance would be a **decision** rather than a fait accompli: it authorises a new shared library and the rewiring of **four production security edges**, which is the class of decision [`platform/shared-library-policy.md`](../../platform/shared-library-policy.md) § Change Rule reserves for an ADR rather than a task. **No agent self-accept** — that gate held.
 
-Acceptance is a **human decision** and must be explicit (`ADR-MONO-048 ACCEPTED`). An agent must not self-accept: this ADR authorises a new shared library and a rewiring of four production security edges, which is precisely the class of decision [`platform/shared-library-policy.md`](../../platform/shared-library-policy.md) § Change Rule reserves for an ADR rather than a task.
+**D7 is live.** Step 1 (`TASK-MONO-351`) is spawned with this commit.
+
+**The gate that remains is D6, and it binds every step:**
+
+> Behaviour-invariance is a **proof obligation**, not a claim. A consuming service's test that had to be **changed** to pass is a behaviour change wearing a refactor's clothes. If a step cannot show byte-identical bodies (Tier 1) / per-domain parameter equivalence (Tier 2) / unmodified consumer tests / a mutation check that bites — **it does not land.**
+
+That obligation is the *entire* reason this extraction is permitted to touch four security edges at once. Drop it and the ADR's argument inverts: instead of removing the mechanism that **loses** fixes, we become a mechanism that **changes four gateways' behaviour simultaneously while calling it cleanup**.
 
 **Related**
 - `TASK-BE-501` / `TASK-BE-502` (merged, PR #2409 `b83adf4c3`) — the defects that motivated this; the convergence that makes extraction provable.
