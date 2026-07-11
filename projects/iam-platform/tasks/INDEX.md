@@ -72,7 +72,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(비어 있음 — 정식 ready 큐 소진. `tasks/ready/TASK-BE-398` 은 날짜 게이트 대기.)
+- `TASK-BE-500-account-status-http-spec-drift.md` — iam 스펙 트리의 계정상태 HTTP 드리프트 정정(문서 + 누락 가드). `TASK-BE-462` 가 계정상태 로그인 거부를 **blanket 403 → 코드별 매핑**으로 바꾸며 코드와 `platform/error-handling.md` 는 갱신했으나 **iam 스펙 4파일을 403 에 남겨뒀다**(`auth-api.md` 7행 + `features/account-lifecycle.md` + `use-cases/signup-and-login.md` EF-4/5/6 + `use-cases/account-lockout-and-unlock.md`). 배포 현실 = `ACCOUNT_LOCKED`/`DORMANT` **423**, `DELETED` **410**, 인식불가 **500**(fail-loud). 클라이언트가 이 코드로 분기하는 곳은 없어 **런타임 버그는 아니나**, `platform/`(SoT 5층) 이 `specs/contracts/`(6층) 보다 높으므로 계약만 읽는 구현자는 **HARDSTOP-06(스펙 충돌)** 위에 앉아 있고 그걸 **볼 수 없다**. 라이더로 스테일 `422 VALIDATION_ERROR` 2행(`:369` `:655`) 도 400 으로 정정(공유 `CommonGlobalExceptionHandler` 는 전 경로 400). **핵심 발견**: `ACCOUNT_LOCKED`→423 만 테스트가 고정하고 **`DORMANT`→423 · `DELETED`→410 은 미고정**(= `handleAccountStatus` switch 가 결정하는 바로 그 두 값), `AuthExceptionHandler` 단위 테스트 부재 — **스펙이 403 이어도 아무것도 실패하지 않은 이유**이자 `TASK-MONO-348` 과 동일한 구조적 원인. `AuthExceptionHandlerTest` 신설(test-only, main 무수정)로 4값 + "어떤 계정상태 거부도 403 이 아니다" 고정, mutation-check 로 blanket-403 회귀 주입 시 4/5 실패 확인. 방향-미정 모순(`INVALID_STATE` · `INVALID_CREDENTIALS` · `INVALID_CODE`)은 **손대지 않고** root `TASK-MONO-349`(AC-0 사람-결정 게이트)로 분리. 분석·구현=Opus 4.8.
+
+> `tasks/ready/TASK-BE-398` 은 날짜 게이트 대기.
 
 > **ADR-MONO-047 org-node tenant hierarchy — § 4 실행 로드맵 전량 종결** (ACCEPTED 2026-07-10 `TASK-MONO-340` 사용자 정확형 intent → 2026-07-10 완주). step 1 **BE-490**(spec) → 2a **BE-491**(account-service, org_node 권위 + D6 seam) → 2b **BE-492**(admin-service RBAC 평면, `b6b7d4c21`) → 3 **PC-FE-237**(console 조직 계층, `9a5e4b120`) → 4 **BE-493**(D7 backfill, `2e6fab9e0`). 후속 ADR(role-level ceiling D3-B / grant-at-node D2-C / cross-owner consortium)은 본 스코프 밖. 잔여 = `TASK-PC-FE-239`(IAM 가이드에 `ORG_ADMIN` 표면 반영, platform-console 큐).
 
