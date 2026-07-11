@@ -33,6 +33,32 @@ monorepo
 
 ---
 
+# ✅ AC-0 관측 기록 (2026-07-12) — 트리거 2 충족, 착수
+
+**트리거 2("nightly-e2e.yml / federation-hardening-e2e.yml 을 어차피 손대는 작업")가 관측됐다.**
+
+`TASK-MONO-359`(이미지-실재 가드에 time 트리거 부여)가 `nightly-e2e.yml` 에 신규 잡 `demo-image-liveness` 를 추가한다. 즉 nightly 를 **이미 열어 편집하는 중**이고, 그 PR 의 머지-후 nightly 사이클이 **어차피 관측 대상**이다. MONO-330 의 DoD 가 요구하는 "머지 후 nightly/fed 1사이클 GREEN" 을 **같은 사이클로 처리**할 수 있다 — 따로 하면 검증 사이클을 두 번 태워야 한다. 이것이 트리거 2 가 노린 정확한 상황이다.
+
+→ MONO-359 와 **한 PR 로 묶어 착수**한다.
+
+## 782 no-cache 변이 — 결정: **인라인 유지도, composite 분기도 아니다. 그건 누락이었다.**
+
+이 task 는 `nightly-e2e.yml:782` 의 cache 없는 `setup-node` 블록을 "규격 불일치 변이"로 보고 (a) 인라인 유지 / (b) composite 에 cache-optional 분기 추가 중 하나를 고르라고 남겨 두었다. **둘 다 틀린 전제였다** — 조사 결과 그 블록은 *의도된 변이가 아니라 누락*이다:
+
+- 그 잡(`platform-console-e2e-fullstack`)은 `projects/platform-console/apps/console-web` 에서 `pnpm install --frozen-lockfile` 을 돌린다.
+- **`federation-hardening-e2e.yml` 은 동일한 console-web install 을 하면서 `cache: 'pnpm'` 을 정확히 그 lockfile 로 걸어 둔다.**
+- 즉 "cache 를 걸지 않을 이유"가 있는 게 아니라, `#726`(PC-FE-019)에서 블록이 들어올 때 **빠뜨린 것**이다. lockfile 은 실재한다.
+
+→ **composite 를 그대로 적용하고 cache 를 붙인다.** `--frozen-lockfile` 이므로 해석되는 의존성 집합은 불변이고, 얻는 것은 캐시다. composite 에 optional 분기를 파는 복잡도(이 task 가 우려한 것)는 **필요 없다.**
+
+## 두 번째 변이 — `nightly-e2e.yml:355` (이 task 가 예상하지 못한 것)
+
+`web-store-iam-logout-e2e` 잡은 JDK 만 설치하고 **`gradle/actions/setup-gradle` 이 없다** — 그런데 바로 다음 스텝이 `./gradlew … bootJar` 를 돌린다. 이 레포의 다른 모든 JVM 잡은 둘을 짝으로 갖는다. composite 적용은 여기에 `setup-gradle` 을 **추가**한다(Gradle 의존성·빌드 캐시).
+
+→ **byte-등가 치환이 아니라 의도된 superset 이다.** 이 사실을 워크플로 주석과 PR 본문에 명시한다. 숨기면 리뷰어가 "동작 보존" 이라는 이 task 의 약속과 diff 가 어긋나는 것으로 읽는다.
+
+---
+
 # Goal
 
 `TASK-MONO-326`(setup-java-gradle) · `TASK-MONO-329`(setup-node-pnpm)이 두 셋업 composite를 도입했으나 **ci.yml에만** 적용했다(nightly/fed는 `pull_request` 미트리거라 PR 검증 불가 → 유예). 그 결과 JDK/Node/pnpm 버전이 **ci.yml에서만 단일 소스**이고, nightly-e2e.yml / federation-hardening-e2e.yml은 **하드코딩 셋업 블록이 잔존**한다.
