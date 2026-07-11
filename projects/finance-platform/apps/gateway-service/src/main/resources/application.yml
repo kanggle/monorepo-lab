@@ -1,0 +1,124 @@
+spring:
+  application:
+    name: finance-platform-gateway-service
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URL:http://iam.local}
+          # Default to /oauth2/jwks (GAP's SAS endpoint), not /.well-known/jwks.json.
+          jwk-set-uri: ${OIDC_JWK_SET_URI:${JWT_JWKS_URI:${OIDC_ISSUER_URL:http://iam.local}/oauth2/jwks}}
+
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: ${CORS_ALLOWED_ORIGINS:http://finance.local}
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - Authorization
+              - Content-Type
+              - X-Request-Id
+              - Idempotency-Key
+            exposedHeaders:
+              - X-Request-Id
+              - ETag
+              - Retry-After
+            maxAge: 3600
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 10s
+      routes:
+        # No RewritePath: finance's controllers already serve /api/finance/**, and Traefik
+        # was routing that namespace straight at them. Introducing a /api/v1/ external prefix
+        # here (as wms/scm/fan do) would be a client-visible contract change, not a gateway
+        # bootstrap — so the gateway forwards 1:1 (TASK-MONO-357 § Routes).
+        - id: account-service
+          uri: ${ACCOUNT_SERVICE_URI:http://account-service:8080}
+          predicates:
+            - Path=/api/finance/accounts/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
+        - id: ledger-service
+          uri: ${LEDGER_SERVICE_URI:http://ledger-service:8080}
+          predicates:
+            - Path=/api/finance/ledger/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO
+    com.example.finance.gateway: INFO
+    org.springframework.cloud.gateway: INFO
+    org.springframework.web: INFO
+  pattern:
+    level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-}]"
+
+financeplatform:
+  oauth2:
+    # Acceptable iss values during the D2-b deprecation window: the SAS issuer URL and the
+    # legacy "iam" string. An EMPTY list is a misconfiguration, not "accept any issuer" —
+    # AllowedIssuersValidator refuses to construct from one, so a missing value fails the boot.
+    allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://iam.local},iam}
+    # Same tenant the finance services' own ServiceLevelOAuth2Config requires. The gateway and
+    # the service behind it must not disagree about which tokens are valid.
+    required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:finance}
+
+gateway:
+  jwks:
+    startup-probe:
+      enabled: ${GATEWAY_JWKS_STARTUP_PROBE_ENABLED:true}
+      timeout-seconds: ${GATEWAY_JWKS_STARTUP_PROBE_TIMEOUT_SECONDS:30}

@@ -33,51 +33,65 @@
 
 services:
   # ---------------------------------------------------------------------------
-  # gateway-service — activated by a follow-up task.
-  # Edge router, OIDC token validation (GAP RS256 JWT), tenant gate
-  # (tenant_id=erp only), internal-only boundary enforcement, rate limit.
+  # gateway-service — activated by TASK-MONO-357 (ADR-MONO-048 D7 step 4).
+  #
+  # This block sat commented out with the note "activated by a follow-up task"
+  # because standing a gateway up meant hand-copying ~15 classes. libs/java-gateway
+  # removed that cost; the gateway's own code is now 4 classes.
+  #
+  # It TAKES OVER `erp.local` from the four backend services. Until now Traefik split
+  # the hostname across them by PathPrefix rule — doing the gateway's routing job with
+  # none of its validation: no JWT check, no identity-header strip, no rate limit, no
+  # error envelope. That is what platform/api-gateway-policy.md L13/L14 forbid. The
+  # backends below now carry no Traefik labels and are `expose:`-only, per TEMPLATE.md
+  # § Local Network Convention.
   # ---------------------------------------------------------------------------
-  # gateway-service:
-  #   image: erp-platform/gateway-service:local
-  #   container_name: erp-platform-gateway
-  #   build:
-  #     context: ./apps/gateway-service
-  #     dockerfile: Dockerfile
-  #   restart: unless-stopped
-  #   expose:
-  #     - "8080"
-  #   environment:
-  #     SERVER_PORT: "8080"
-  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
-  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
-  #     OIDC_REQUIRED_TENANT_ID: erp
-  #     OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-erp-platform-internal-services-client}
-  #     OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-erp-dev}
-  #     REDIS_HOST: redis
-  #     REDIS_PORT: "6379"
-  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-  #     CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://erp.local}
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #     mysql:
-  #       condition: service_healthy
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=traefik-net"
-  #     - "traefik.http.routers.erp-platform.rule=Host(`erp.local`)"
-  #     - "traefik.http.routers.erp-platform.entrypoints=web"
-  #     - "traefik.http.services.erp-platform.loadbalancer.server.port=8080"
-  #   networks:
-  #     - erp-platform-net
-  #     - traefik-net
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
-  #     interval: 30s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 30s
+  gateway-service:
+    image: erp-platform/gateway-service:local
+    container_name: erp-platform-gateway
+    build:
+      context: ./apps/gateway-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
+      OIDC_REQUIRED_TENANT_ID: erp
+      MASTERDATA_SERVICE_URI: http://masterdata-service:8080
+      APPROVAL_SERVICE_URI: http://approval-service:8080
+      NOTIFICATION_SERVICE_URI: http://notification-service:8080
+      READ_MODEL_SERVICE_URI: http://read-model-service:8080
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://erp.local}
+    depends_on:
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.erp-platform.rule=Host(`erp.local`)"
+      - "traefik.http.routers.erp-platform.entrypoints=web"
+      - "traefik.http.services.erp-platform.loadbalancer.server.port=8080"
+    networks:
+      - erp-platform-net
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "3"
 
   # ---------------------------------------------------------------------------
   # masterdata-service — TASK-ERP-BE-001 active. Organization master data:
@@ -116,20 +130,12 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      # Catch-all for erp.local — masterdata-service serves every path EXCEPT
-      # /api/erp/read-model/** (routed to read-model-service by the higher-
-      # priority router on that service). priority=1 keeps this the fallback
-      # until gateway-service (v1-deferred) takes over edge routing.
-      - "traefik.http.routers.erp-platform.rule=Host(`erp.local`)"
-      - "traefik.http.routers.erp-platform.entrypoints=web"
-      - "traefik.http.routers.erp-platform.priority=1"
-      - "traefik.http.services.erp-platform.loadbalancer.server.port=8080"
+    # TASK-MONO-357: no Traefik labels. gateway-service took over edge routing, which is
+    # what the "until gateway-service takes over" note here was waiting for. This service
+    # is now reachable only from inside the compose network, via the gateway — which
+    # validates the JWT and strips client-supplied identity headers first.
     networks:
       - erp-platform-net
-      - traefik-net
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
@@ -170,21 +176,15 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
-    labels:
       # Path-based routing on erp.local (TASK-PC-FE-049): /api/erp/read-model/**
       # → read-model-service; everything else → masterdata-service (catch-all,
       # priority=1). priority=100 ensures this PathPrefix router wins. This is
       # the v1 direct-routing bridge until gateway-service (v1-deferred) owns
       # the edge.
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.erp-readmodel.rule=Host(`erp.local`) && PathPrefix(`/api/erp/read-model`)"
-      - "traefik.http.routers.erp-readmodel.entrypoints=web"
-      - "traefik.http.routers.erp-readmodel.priority=100"
-      - "traefik.http.services.erp-readmodel.loadbalancer.server.port=8080"
+      # TASK-MONO-357: Traefik no longer routes this service. gateway-service owns
+      # erp.local and forwards /api/erp/read-model/** here over the internal network.
     networks:
       - erp-platform-net
-      - traefik-net
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
@@ -232,20 +232,14 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
-    labels:
       # Path-based routing on erp.local: /api/erp/approval/** → approval-service.
       # priority=100 ensures this PathPrefix router wins over the masterdata-service
       # catch-all (priority=1); the read-model router (also priority=100) owns a
       # distinct PathPrefix (/api/erp/read-model) so the two never collide.
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.erp-approval.rule=Host(`erp.local`) && PathPrefix(`/api/erp/approval`)"
-      - "traefik.http.routers.erp-approval.entrypoints=web"
-      - "traefik.http.routers.erp-approval.priority=100"
-      - "traefik.http.services.erp-approval.loadbalancer.server.port=8080"
+      # TASK-MONO-357: Traefik no longer routes this service. gateway-service owns
+      # erp.local and forwards /api/erp/approval/** here over the internal network.
     networks:
       - erp-platform-net
-      - traefik-net
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
@@ -290,20 +284,14 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
-    labels:
       # Path-based routing on erp.local: /api/erp/notifications/** →
       # notification-service. priority=100 wins over the masterdata-service
       # catch-all (priority=1); read-model (/api/erp/read-model) + approval
       # (/api/erp/approval) own distinct PathPrefixes so the routers never collide.
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.erp-notification.rule=Host(`erp.local`) && PathPrefix(`/api/erp/notifications`)"
-      - "traefik.http.routers.erp-notification.entrypoints=web"
-      - "traefik.http.routers.erp-notification.priority=100"
-      - "traefik.http.services.erp-notification.loadbalancer.server.port=8080"
+      # TASK-MONO-357: Traefik no longer routes this service. gateway-service owns
+      # erp.local and forwards /api/erp/notifications/** here over the internal network.
     networks:
       - erp-platform-net
-      - traefik-net
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
       interval: 30s

@@ -86,28 +86,33 @@ declaration.
 
 ## Package Layout
 
+**Most of this service now lives in `libs/java-gateway`** (ADR-MONO-048, TASK-MONO-351/355/356/357).
+The classes below are what remains scm-specific — its routes, its property prefix, its
+tenant-gate policy and its header policy:
+
 ```
 com.example.scmplatform.gateway/
-├── GatewayServiceApplication.java
+├── GatewayServiceApplication.java         ← scanBasePackages MUST name com.example.apigateway
 ├── config/
-│   ├── SecurityConfig.java                ← OAuth2 Resource Server + path rules
-│   ├── OAuth2ResourceServerConfig.java    ← decoder + validator chain
-│   └── RateLimitConfig.java               ← key resolvers + fail-open wrapper
-├── filter/
-│   ├── IdentityHeaderStripFilter.java     ← global filter, HIGHEST precedence
-│   ├── RequestIdFilter.java               ← generate / echo X-Request-Id
-│   ├── JwtHeaderEnrichmentFilter.java     ← propagates X-Tenant-Id / X-Account-Id / X-Roles / X-Scopes / X-Token-Type
-│   └── RetryAfterFilter.java              ← Retry-After: 1 on 429
-├── ratelimit/
-│   └── FailOpenRateLimiter.java           ← Redis fail-open wrapper + metric
-├── security/
-│   ├── AllowedIssuersValidator.java       ← SAS issuer + legacy iam-platform
-│   ├── TenantClaimValidator.java          ← dual-accept: tenant_id ∈ { scm, * } ∪ entitled_domains ∋ scm
-│   └── JwksHealthProbe.java               ← startup-time JWKS reachability probe
-└── error/
-    ├── ApiErrorEnvelope.java
-    └── GatewayErrorHandler.java           ← 401 / 403 / 429 / 5xx → platform envelope
+│   ├── GatewayIdentityConfig.java         ← strip additions (X-Token-Type, X-Scopes) + enrichment mappings
+│   ├── OAuth2ResourceServerConfig.java    ← property prefix + tenantGate() + JWKS probe bean
+│   └── RateLimitConfig.java               ← key resolvers (account-keyed, rate:scm-platform:)
+└── security/
+    ├── JwksHealthProbe.java  → moved to libs/java-gateway (TASK-MONO-357); wired here as an
+    │                            opt-in @Bean, because the library class carries no @Component —
+    │                            with one, every gateway that scans the library package would
+    │                            register it, including wms, which has never had a startup probe.
+    └── ScmTokenType.java                  ← client_credentials heuristic for X-Token-Type (scm-only)
 ```
+
+From `libs/java-gateway` (**not** re-implemented here): `SecurityConfig`,
+`IdentityHeaderStripFilter`, `JwtHeaderEnrichmentFilter`, `RequestIdFilter`, `RetryAfterFilter`,
+`TenantClaimValidator`, `AllowedIssuersValidator`, `GatewayJwtDecoders`, `JwtClaims`,
+`FailOpenRateLimiter`, `JwksHealthProbe`, `ApiErrorEnvelope`, `GatewayErrorHandler`.
+
+> **The component scan is load-bearing.** Omit `com.example.apigateway` from
+> `scanBasePackages` and the gateway boots **without its security chain** — every unit test
+> still passes, the build is green, and nothing says so. `GatewayComponentScanTest` asserts it.
 
 > **Naming note**: TASK-SCM-BE-001 § Architecture lists `TenantGateFilter` and
 > `HeaderEnrichmentFilter` as two separate components. The wms / fan-platform

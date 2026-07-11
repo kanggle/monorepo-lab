@@ -114,7 +114,14 @@ include(
     // increment — ADR-MONO-008 § D3). Hexagonal + DDD; rest-api + event-consumer
     // (terminal — no outbox). Own schema finance_ledger_db (downstream of
     // account-service's finance_db).
-    'projects:finance-platform:apps:ledger-service'
+    'projects:finance-platform:apps:ledger-service',
+    // TASK-MONO-357 (ADR-MONO-048 D7 step 4): gateway-service — no longer "deferred
+    // to v2". It was deferred because standing a gateway up meant hand-copying ~15
+    // classes; libs/java-gateway removed that cost. Until now Traefik routed
+    // finance.local straight at account-service — a reverse proxy with no JWT
+    // validation, no identity-header strip and no rate limit, in plain violation of
+    // platform/api-gateway-policy.md L13/L14 (TASK-MONO-347).
+    'projects:finance-platform:apps:gateway-service'
 )
 
 // Project: erp-platform
@@ -139,7 +146,14 @@ include(
     // erp.approval.*.v1 topics, resolves recipient + renders, persists in-app
     // Notification + Category C delivery (IN_APP), serves a recipient-scoped
     // inbox. Terminal consumer (no outbox; ADR-MONO-016 §D3 forward-decl realised).
-    'projects:erp-platform:apps:notification-service'
+    'projects:erp-platform:apps:notification-service',
+    // TASK-MONO-357 (ADR-MONO-048 D7 step 4): gateway-service — no longer "deferred
+    // to v2". It was deferred because standing a gateway up meant hand-copying ~15
+    // classes; libs/java-gateway removed that cost. Until now Traefik routed erp.local
+    // straight at the four backend services by PathPrefix — a reverse proxy with no JWT
+    // validation, no identity-header strip and no rate limit, in plain violation of
+    // platform/api-gateway-policy.md L13/L14 (TASK-MONO-347).
+    'projects:erp-platform:apps:gateway-service'
 )
 
 // Project: platform-console

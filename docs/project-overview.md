@@ -152,10 +152,11 @@
 
 | Service | Type | 책임 |
 |---|---|---|
+| `gateway-service` | rest-api (edge) | 엣지 라우팅 + GAP RS256 JWT 검증 + 테넌트 게이트(`tenant_id ∈ {finance, *}` ∪ `entitled_domains ∋ finance`) + 신원 헤더 strip→enrich + rate limit + 통일 에러 봉투. `libs/java-gateway` 소비 (TASK-MONO-357) |
 | `account-service` | rest-api | Account 라이프사이클 — KYC / 가용·장부 잔액 hold·release·capture / 계좌 상태기계 / 자금 이동 멱등 / 불변 audit_log |
 | `ledger-service` | rest-api + event-consumer | 복식부기 총계정원장 (ADR-MONO-008 §D3 v2 첫 증분, FIN-BE-007) — 시산표 / 회계기간 / 대사. Hexagonal + DDD, terminal consumer (no outbox). 자체 스키마 `finance_ledger_db` (account-service `finance_db` 의 하류) |
 
-- **게이트웨이 서비스 없음 (의도)**: finance 는 `gateway-service` 모듈을 갖지 않는다. `settings.gradle` include 에 없으며, Traefik 이 `finance.local` 호스트에서 경로를 보고 서비스로 **직접** 라우팅한다. ADR-MONO-008 부트스트랩 시점에 "v2 deferred" 로 적힌 이후 실제로 도입된 적이 없다 — **service map 표에 되살리지 말 것** (`scripts/check-service-map-drift.sh` 가 차단).
+- **게이트웨이 도입됨 (2026-07-12, TASK-MONO-357 / ADR-MONO-048 D7 step 4)**: 이 자리에는 오랫동안 *"게이트웨이 서비스 없음 (의도) — 되살리지 말 것"* 이 적혀 있었다. **그 문구는 이제 무효다.** 게이트웨이가 없던 이유는 설계 의도가 아니라 **비용**이었다(세우려면 클래스 ~15개 손복사) — `libs/java-gateway` 가 그 비용을 없앴고(새 게이트웨이 자체 코드 = **4클래스/161줄**, 라이브러리가 16클래스/701줄 제공), 사용자가 ADR-MONO-048 을 ACCEPT 하면서 `TASK-MONO-347` 의 **direction A**(코드를 정책에 맞춤)를 택했다. **그전까지 Traefik 이 `finance.local` 을 account-service 에, `ledger.local` 을 ledger-service 에 직결**하고 있었는데, 이는 검증 없는 리버스 프록시이자 `platform/api-gateway-policy.md` L13/L14("모든 외부 트래픽은 게이트웨이를 통과해야 한다" / "백엔드 서비스를 직접 노출하지 말 것") 정면 위반이었다. 이제 **게이트웨이가 `finance.local` 을 소유**하고 백엔드는 `expose:` 전용이다.
 - **v2 deferred**: `wallet-service`, `kyc-service`, `notification-service`, `admin-service`. *(구 deferred 였던 `ledger-service` 는 v2 첫 증분으로 라이브 — 위 표 참조. GL/AP 심화는 잔여.)*
 - **framing 정합**: 7축 메모리의 "분개/GL/AP accounting" 은 ADR-MONO-008 SoT 상 명시적으로 v2 (ledger-service); v1 = fintech Account/Balance/Transaction/KYC (PROJECT.md § ADR-MONO-008 vs 7축 framing 정합).
 - **ID provider**: IAM OIDC RS256 + `tenant_id=finance` claim (V0017 ×2 시드: account tenant + auth client_credentials `finance-platform-internal-services-client`).
@@ -172,12 +173,13 @@
 
 | Service | Type | 책임 |
 |---|---|---|
+| `gateway-service` | rest-api (edge) | 엣지 라우팅 + GAP RS256 JWT 검증 + 테넌트 게이트(`tenant_id ∈ {erp, *}` ∪ `entitled_domains ∋ erp`) + 신원 헤더 strip→enrich + rate limit + 통일 에러 봉투. `libs/java-gateway` 소비 (TASK-MONO-357) |
 | `masterdata-service` | rest-api | 조직 마스터데이터 — 부서/직원/직급/비용센터/거래처 / 참조 무결성 / 유효기간 / 불변 audit_log + org_scope subtree data-scope (ERP-BE-008) |
 | `read-model-service` | rest-api + event-consumer | 통합 조회 read-model (v1.1 첫 증분) — masterdata 변경이벤트 구독 → employee org-view 투영 (직원+부서경로+비용센터+직급) + `erp.approval.*` 구독 → approval-fact 투영 (ERP-BE-010); org_scope subtree read 필터 (ERP-BE-007/008/010) |
 | `approval-service` | rest-api | 결재 워크플로 (v1.x 라이브) — 다단계 결재선(1~N) 상태기계 `DRAFT→SUBMITTED→(IN_REVIEW→)APPROVED\|REJECTED\|WITHDRAWN` + per-stage authz + 대결/위임(DelegationGrant) + 멱등 전이 + 불변 audit + outbox `erp.approval.{submitted,approved,rejected,withdrawn,delegated}.v1` (ERP-BE-009/012/013) |
 | `notification-service` | event-consumer + rest-api | in-app 알림 fan-out (v1 첫 증분) — `erp.approval.*` 구독 → recipient 해소 → `Notification` 영속 + recipient-scoped inbox; terminal consumer(no-outbox); ADR-005 Category C (ERP-BE-011) |
 
-- **게이트웨이 서비스 없음 (의도)**: erp 는 `gateway-service` 모듈을 갖지 않는다. `settings.gradle` include 에 없으며, Traefik 이 `erp.local` 호스트에서 경로 우선순위로 라우팅한다 (catch-all → `masterdata-service`, `/api/erp/read-model` → `read-model-service`, `/api/erp/approval` → `approval-service`). ADR-MONO-016 부트스트랩 시점의 "v2 deferred" 문구가 표의 행으로 옮겨 앉았던 것 — **되살리지 말 것** (`scripts/check-service-map-drift.sh` 가 차단).
+- **게이트웨이 도입됨 (2026-07-12, TASK-MONO-357 / ADR-MONO-048 D7 step 4)**: 이 자리에는 오랫동안 *"게이트웨이 서비스 없음 (의도) — 되살리지 말 것"* 이 적혀 있었다. **그 문구는 이제 무효다.** 게이트웨이가 없던 이유는 설계 의도가 아니라 **비용**이었고, `libs/java-gateway` 가 그 비용을 없앴다(새 게이트웨이 자체 코드 = **4클래스/161줄**). 사용자가 ADR-MONO-048 을 ACCEPT 하면서 `TASK-MONO-347` 의 **direction A** 를 택했다. **그전까지 Traefik 이 `erp.local` 을 PathPrefix 우선순위로 백엔드 4개에 직접 쪼개 넣고 있었다**(catch-all → `masterdata-service`, `/api/erp/read-model` → `read-model-service`, `/api/erp/approval` → `approval-service`, `/api/erp/notifications` → `notification-service`) — **게이트웨이의 라우팅 일을 하면서 JWT 검증·헤더 strip·rate limit·에러봉투는 하나도 없는 리버스 프록시**였고 `platform/api-gateway-policy.md` L13/L14 정면 위반이었다. 이제 **게이트웨이가 `erp.local` 을 소유**하고 그 4개 경로를 내부망으로 포워딩하며, 백엔드는 `expose:` 전용이다.
 - **v2 deferred**: `permission-service` (권한 매트릭스 CRUD — ADR-016 §D3), `admin-service` (운영자 큐). (`approval-service` / `read-model-service` / `notification-service` 는 v1.x 라이브 — 위 상태 참조; 단 approval per-request/자동부재 위임 · notification 외부채널 · business-partner 등 풀 통합 조회 view 는 각 서비스 v2.)
 - **framing 정합**: 7축 메모리의 광의 erp("회계·구매·재고·HR 통합" + 자체 admin SPA) 는 ADR-MONO-016 SoT 상 v1=마스터데이터+결재+통합 read model (도메인 로직 미보유, 7축 책임 경계); UI=platform-console parity slice (ADR-MONO-013 바인딩, 자체 SPA superseded) (PROJECT.md § ADR-MONO-016 vs 7축 framing 정합).
 - **ID provider**: IAM OIDC RS256 + `tenant_id=erp` claim (V0018 ×2 시드: account tenant + auth client_credentials `erp-platform-internal-services-client`).
