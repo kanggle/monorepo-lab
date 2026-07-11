@@ -1,5 +1,6 @@
 package com.wms.gateway.security;
 
+import com.example.apigateway.security.GatewayErrorCodes;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
@@ -27,7 +28,13 @@ import java.util.Objects;
  */
 public class TenantClaimValidator implements OAuth2TokenValidator<Jwt> {
 
-    public static final String ERROR_CODE_TENANT_MISMATCH = "tenant_mismatch";
+    /**
+     * Same value it has always had, now sourced from the shared library so the code this
+     * validator <em>raises</em> and the code the shared {@code SecurityConfig} maps to 403
+     * cannot drift apart (TASK-MONO-351). This class itself stays per-domain — the tenant
+     * gate policy differs across gateways — until ADR-MONO-048 D7 step 2.
+     */
+    public static final String ERROR_CODE_TENANT_MISMATCH = GatewayErrorCodes.TENANT_MISMATCH;
     public static final String CLAIM_TENANT_ID = "tenant_id";
     public static final String CLAIM_ENTITLED_DOMAINS = "entitled_domains";
 

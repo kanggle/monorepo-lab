@@ -1,6 +1,6 @@
 package com.wms.gateway.config;
 
-import com.wms.gateway.ratelimit.FailOpenRateLimiter;
+import com.example.apigateway.ratelimit.FailOpenRateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.InetSocketAddress;
 import java.util.Optional;

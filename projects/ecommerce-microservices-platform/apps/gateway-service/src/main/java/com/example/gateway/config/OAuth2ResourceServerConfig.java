@@ -1,6 +1,6 @@
 package com.example.gateway.config;
 
-import com.example.gateway.security.AllowedIssuersValidator;
+import com.example.apigateway.security.AllowedIssuersValidator;
 import com.example.gateway.security.TenantClaimValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

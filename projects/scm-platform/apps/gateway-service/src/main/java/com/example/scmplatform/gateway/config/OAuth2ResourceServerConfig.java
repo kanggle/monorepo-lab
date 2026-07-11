@@ -1,6 +1,6 @@
 package com.example.scmplatform.gateway.config;
 
-import com.example.scmplatform.gateway.security.AllowedIssuersValidator;
+import com.example.apigateway.security.AllowedIssuersValidator;
 import com.example.scmplatform.gateway.security.TenantClaimValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
