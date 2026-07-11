@@ -157,6 +157,7 @@ compliance 요구사항은 프로젝트 `PROJECT.md` 의 `compliance` 필드 선
 | Shipping | `Shipping` |
 | Identity / User | `User` |
 | Notification | `Notification` |
+| Settlement (marketplace commission/payout, ADR-MONO-030) | `Settlement` |
 
 플랫폼 공통 에러 (`VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `RATE_LIMIT_EXCEEDED`, `CONFLICT`, `STATE_TRANSITION_INVALID`, …) 는 모든 도메인이 공유한다. 미디어 업로드 실패는 Content-Heavy Trait 공통 코드(`STORAGE_UNAVAILABLE`, `MEDIA_NOT_FOUND`, `MEDIA_VALIDATION_FAILED`) 를 사용한다.
 

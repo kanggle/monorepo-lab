@@ -71,6 +71,48 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 - `ACCOUNT_NOT_FOUND` — 대상 계정 미존재 (admin 경로 전용 맥락; 공개 account-api와 의미 동일하나 등록 맥락이 admin) (404)
 - `STATE_TRANSITION_INVALID` — 현재 상태에서 허용되지 않는 상태 전이 (admin 경로; S3 상태 기계와 교차) (422)
 - `TOTP_NOT_ENROLLED` — TOTP 미등록 운영자가 복구 코드 재발급 요청 시 (admin 경로; 재발급 전 `/api/admin/auth/2fa/enroll` 선행 필요) (404)
+- `ROLE_GRANT_FORBIDDEN` — 부여자가 자기 수준을 넘는 role 을 부여 시도 (no-escalation 가드, ADR-MONO-024 D3) (403)
+- `ASSIGNMENT_ALREADY_EXISTS` — 해당 테넌트/도메인에 이미 배정된 운영자 (409)
+- `ACCESS_CONDITION_UNMET` — 엔드포인트에 걸린 접근 조건 미충족 (`SOURCE_IP`·`TIME_WINDOW`·`RESOURCE_TAG` AND 결합, ADR-MONO-026/028/029). restriction-only — 이미 인가된 행위를 **좁힐 뿐 부여하지 않는다** (403)
+- `OPERATOR_ACCOUNT_NOT_FOUND` — 연결 대상 account 신원 미존재 (422)
+- `OPERATOR_ALREADY_LINKED` — 이미 account 신원에 연결된 운영자 (409)
+- `IDENTITY_LINK_EMAIL_MISMATCH` — 운영자 이메일과 연결 대상 신원의 이메일 불일치 (422)
+- `ACCOUNT_IDENTITY_UNRESOLVABLE` — 권위 서비스에서 운영자의 account 신원을 해석 실패 (422)
+- `OPTIMISTIC_LOCK_CONFLICT` — `admin_operators.version` 낙관적 락 충돌 (409). Platform-Common `CONFLICT`/`CONCURRENT_MODIFICATION` 의 **등록된 의도적 별칭** — admin-service 가 부모 핸들러 매핑을 오버라이드해 `admin-api.md` 가 요구하는 canonical 코드를 낸다 (TASK-BE-306)
+
+### Tenant 축 — 도메인 구독 / org-node / 파트너십
+
+다음 코드는 [../../platform/error-handling.md](../../platform/error-handling.md) 의 `Tenant  [domain: saas]` 섹션에 등록되어 있다. 권위는 `account-service` 이고 `admin-service` 는 얇은 커맨드 게이트웨이로서 권위의 코드를 **그대로 통과**시킨다 — 불변식을 재구현하지 않는다(중복 검사는 반드시 드리프트한다).
+
+**도메인 구독** (ADR-MONO-019 / ADR-MONO-047)
+
+- `SUBSCRIPTION_ALREADY_EXISTS` — 이미 구독 중인 도메인 (409)
+- `SUBSCRIPTION_TRANSITION_INVALID` — 허용되지 않는 구독 상태 전이 (409)
+- `SUBSCRIPTION_DOMAIN_OUT_OF_CEILING` — 요청 도메인이 테넌트의 org-node **entitlement ceiling** 밖 (422). `BOUNDED` 는 열거된 도메인만 허용하고 `UNBOUNDED` 는 천장 없음(교집합 항등원 — **"오늘 아는 도메인 전부" 가 아니다**)
+
+**org-node 계층** (ADR-MONO-047) — `org_node` 는 tenant **위**의 data-less 그룹핑 노드다. tenant 를 **묶을 뿐 중첩하지 않으므로** `tenant_id` 는 여전히 단일 flat 격리키다.
+
+- `ORG_NODE_NOT_FOUND` — 노드 미존재 또는 호출자 subtree 밖 (404)
+- `ORG_NODE_CYCLE` — 요청한 `parent_id` 가 트리에 사이클을 만든다 (422)
+- `ORG_NODE_DEPTH_EXCEEDED` — 최대 깊이(5) 초과 (422)
+- `ORG_NODE_CEILING_NOT_SUBSET` — 자식 ceiling 이 부모의 부분집합이 아니다 — 노드는 상속받은 것을 **좁히기만** 할 수 있고 넓힐 수 없다 (422)
+- `ORG_NODE_NOT_EMPTY` — 자식 노드/테넌트가 남아 있어 삭제 거부 (422)
+- `ORG_NODE_SELF_CEILING_DENIED` — `ORG_ADMIN` 이 **자기 노드**의 ceiling 을 편집 시도 (아래 노드만 좁힐 수 있다 — no-self-escalation) (403)
+- `ORG_NODE_INVARIANT_VIOLATION` — **폴백 전용** (422). 권위가 코드를 비워 보낼 때만 나타나므로 **이 코드가 보이면 두 서비스가 드리프트했다는 뜻**이다
+- `ORG_ADMIN_GRANT_OUT_OF_CEILING` — `ORG_ADMIN` 이 자기 노드 ceiling 밖 도메인을 부여 시도 (422)
+
+**cross-org 파트너십** (ADR-MONO-045)
+
+- `PARTNERSHIP_NOT_FOUND` (404) / `PARTNERSHIP_ALREADY_EXISTS` (409) / `PARTNERSHIP_TRANSITION_INVALID` (409)
+- `PARTNERSHIP_SCOPE_DENIED` — 호출자 테넌트가 해당 파트너십의 당사자가 아님 (403)
+- `PARTNERSHIP_SCOPE_INVALID` — 요청 스코프가 부정형이거나 허용되지 않음 (422)
+- `PARTICIPANT_NOT_FOUND` (404)
+- `PARTICIPANT_NOT_OWN_OPERATOR` — 참가자로 추가하려는 운영자가 호출 테넌트 소속이 아님 (422)
+- `PARTICIPANT_SCOPE_EXCEEDS_DELEGATION` — 참가자 스코프가 파트너십이 위임한 범위보다 넓다 — 참가자는 **부분집합만** 받을 수 있다 (422)
+
+**기타**
+
+- `TENANT_SCOPE_MISMATCH` — 요청 테넌트가 운영자가 현재 행위 중인 테넌트와 불일치 (403). 토큰 **스코프**에 관한 `TENANT_SCOPE_DENIED` 와 구분된다
 
 ### Email Verification (account-service 전용)
 

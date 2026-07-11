@@ -92,6 +92,9 @@ fintech 도메인에서 공통으로 발생하는 에러는 [../../platform/erro
 - `LEDGER_ENTRY_UNBALANCED` — 차변·대변 합 ≠ 0 (복식부기 불변식 위반)
 - `LEDGER_PERIOD_CLOSED` — 마감된 회계 기간 분개 시도
 
+### FX (ledger-service 실장)
+- `SETTLEMENT_AMOUNT_INVALID` — 부분 FX 정산 금액이 0·반대부호이거나 포지션을 초과(`> |F|`) (422). 포지션 상대적 검증이므로 rate 값 가드인 `SETTLEMENT_RATE_INVALID` 와 별개다
+
 ### Cross
 - `PERMISSION_DENIED` — 운영자/계정 권한 없음
 
