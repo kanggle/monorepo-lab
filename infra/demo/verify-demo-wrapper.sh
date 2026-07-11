@@ -295,6 +295,52 @@ rm -f "$aliases_file" "$hosts_file"
 ok "Host() ↔ alias 정합 ($(router_hosts | wc -l | tr -d ' ') 호스트명)"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (j) IPv4-only 바인딩 서비스의 헬스체크가 localhost 를 찌르지 않는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358): `HOSTNAME=0.0.0.0` 은 Node 를 **IPv4 전용**으로 바인딩시킨다
+# (`node server.js` 가 그 값을 그대로 `server.listen` 에 넘기고, 0.0.0.0 은 IPv4 주소다.
+#  env 를 빼면 Node 는 `::` 듀얼스택으로 연다). 그런데 alpine 의 /etc/hosts 는
+# `localhost` 를 127.0.0.1 **과 ::1 둘 다** 로 매핑하고, **busybox wget 은 ::1 을 골라
+# 실패한 뒤 IPv4 로 폴백하지 않는다**(curl 은 폴백한다).
+#
+# 결과: 앱은 멀쩡한데 프로브만 죽는다. 컨테이너 안에서 실측한 값이다 —
+#   wget http://127.0.0.1:3000/api/health → {"status":"ok"}
+#   wget http://localhost:3000/api/health → Connection refused
+#
+# 파급이 오타에 비해 터무니없이 크다: **Traefik 은 healthy 가 아닌 컨테이너를 조용히
+# 건너뛴다**(debug 로그, 에러 0건). 그래서 콘솔은 통합 데모에서 **라우트 자체가 없었다.**
+# 잘못된 루프백 주소 하나가 콘솔 전체를 보이지 않게 만들었다.
+#
+# 가드를 `wget + localhost` 전체로 넓히지 않는 이유: 저장소에 그 조합이 24곳 있고 대부분
+# 정상 동작한다(듀얼스택으로 바인딩하므로). **오탐은 누락보다 나쁘다** — 멀쩡한 것을
+# 고치라고 사람을 압박하면 가드가 신뢰를 잃는다. 실패 조건은 정확히 **IPv4-only 바인딩
+# ∧ localhost 프로브** 이며, 여기서만 문다.
+bad_hc=""
+for p in "${!COMPOSE[@]}"; do
+  found="$(render "$p" | awk '
+    /^  [A-Za-z0-9._-]+:$/ {
+      if (svc != "" && ipv4only && hclocal) print svc
+      svc = $1; sub(/:$/, "", svc); ipv4only = 0; hclocal = 0; inhc = 0; next
+    }
+    /^      HOSTNAME:[[:space:]]*"?0\.0\.0\.0"?/ { ipv4only = 1 }
+    /^    healthcheck:/                          { inhc = 1; next }
+    inhc && /^    [a-z]/                         { inhc = 0 }
+    inhc && /localhost/                          { hclocal = 1 }
+    END { if (svc != "" && ipv4only && hclocal) print svc }
+  ')"
+  [ -z "$found" ] || bad_hc="$bad_hc  $p → $(echo $found)"$'\n'
+done
+
+[ -z "$bad_hc" ] || fail "IPv4-only 로 바인딩하면서 헬스체크는 localhost 를 찌르는 서비스:"$'\n'"$bad_hc"\
+  $'\n'"→ HOSTNAME=0.0.0.0 은 IPv4 전용 바인딩입니다. alpine 의 localhost 는 ::1 로도"\
+  $'\n'"   해소되고 busybox wget 은 ::1 실패 후 IPv4 로 폴백하지 않습니다."\
+  $'\n'"→ 앱이 멀쩡해도 프로브가 죽고, **Traefik 은 healthy 가 아닌 컨테이너를 건너뛰므로**"\
+  $'\n'"   그 서비스는 데모에서 라우트가 통째로 사라집니다(에러 로그 없이)."\
+  $'\n'"→ 헬스체크 주소를 127.0.0.1 로 바꾸세요 (web-store 가 이미 그렇게 합니다)."
+
+ok "IPv4-only 서비스의 헬스체크 주소 정상"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0

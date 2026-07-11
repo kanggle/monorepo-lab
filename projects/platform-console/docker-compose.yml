@@ -67,7 +67,24 @@ services:
     networks:
       - traefik-net
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      # 127.0.0.1, NOT localhost. (TASK-MONO-358)
+      #
+      # `HOSTNAME: "0.0.0.0"` above makes Next bind **IPv4 only** — `node server.js` hands
+      # the hostname straight to `server.listen`, and 0.0.0.0 is an IPv4 address. Alpine's
+      # /etc/hosts maps `localhost` to BOTH 127.0.0.1 and ::1, and **busybox wget picks ::1
+      # and does not fall back to IPv4**. The probe got `Connection refused` while the app
+      # was perfectly healthy: measured inside the container,
+      #   wget http://127.0.0.1:3000/api/health -> {"status":"ok"}
+      #   wget http://localhost:3000/api/health -> Connection refused
+      # (curl *does* fall back, which is why console-bff's curl probe was green right next
+      # to this one. web-store already probes an IPv4 literal — someone hit this before and
+      # fixed one of the two without writing down why.)
+      #
+      # The blast radius was out of all proportion to the typo: **Traefik silently skips
+      # containers that are not `healthy`** (debug-level log, no error anywhere), so the
+      # console had no route at all in the integrated demo. A wrong loopback address made
+      # the entire console invisible.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
