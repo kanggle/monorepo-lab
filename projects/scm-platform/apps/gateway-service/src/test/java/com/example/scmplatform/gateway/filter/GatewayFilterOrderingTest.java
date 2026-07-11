@@ -2,6 +2,7 @@ package com.example.scmplatform.gateway.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.apigateway.filter.IdentityHeaderStripFilter;
 import com.example.apigateway.filter.RequestIdFilter;
 import com.example.apigateway.filter.RetryAfterFilter;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 class GatewayFilterOrderingTest {
 
     private final IdentityHeaderStripFilter strip = new IdentityHeaderStripFilter();
+
     private final RequestIdFilter requestId = new RequestIdFilter();
     private final RetryAfterFilter retryAfter = new RetryAfterFilter();
 

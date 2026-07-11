@@ -2,6 +2,9 @@ package com.wms.gateway.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.apigateway.filter.JwtHeaderEnrichmentFilter;
+import com.wms.gateway.config.GatewayIdentityConfig;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +25,10 @@ import reactor.core.publisher.Mono;
  */
 class JwtHeaderEnrichmentFilterTest {
 
-    private final JwtHeaderEnrichmentFilter filter = new JwtHeaderEnrichmentFilter();
+    // The bean this gateway actually registers — remove a mapping from GatewayIdentityConfig
+    // and these assertions go red (TASK-MONO-355).
+    private final JwtHeaderEnrichmentFilter filter =
+            new GatewayIdentityConfig().jwtHeaderEnrichmentFilter();
 
     @Test
     void enrichesHeadersFromJwtSubjectEmailAndRoleClaim() {

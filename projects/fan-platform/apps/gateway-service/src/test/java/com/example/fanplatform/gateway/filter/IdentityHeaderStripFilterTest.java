@@ -2,6 +2,9 @@ package com.example.fanplatform.gateway.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.apigateway.filter.IdentityHeaderStripFilter;
+import com.example.fanplatform.gateway.config.GatewayIdentityConfig;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -12,7 +15,10 @@ import reactor.core.publisher.Mono;
 
 class IdentityHeaderStripFilterTest {
 
-    private final IdentityHeaderStripFilter filter = new IdentityHeaderStripFilter();
+    // The bean this gateway actually registers — remove a header from GatewayIdentityConfig
+    // and these assertions go red (TASK-MONO-355).
+    private final IdentityHeaderStripFilter filter =
+            new GatewayIdentityConfig().identityHeaderStripFilter();
 
     @Test
     void stripsAllClientSuppliedIdentityHeaders() {
