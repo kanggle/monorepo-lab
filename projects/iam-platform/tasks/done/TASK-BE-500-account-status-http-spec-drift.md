@@ -8,7 +8,7 @@ iam 스펙 트리의 계정상태 HTTP 드리프트 정정 — `ACCOUNT_LOCKED`/
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -92,8 +92,8 @@ public ResponseEntity<ErrorResponse> handleAccountStatus(AccountStatusException 
 ## OUT (의도적 제외 — 근거 포함)
 
 - **코드 무수정.** 코드가 옳다(레지스트리와 일치). 고칠 대상은 스펙이다.
-- **`INVALID_STATE` / `INVALID_CREDENTIALS` 상태 모순 → `TASK-MONO-349`(root 백로그, AC-0 사람-결정 게이트)로 분리.** 같은 파일(`auth-api.md`)에 있지만 **성질이 다르다**: 저건 방향이 정해져 있지 않다(iam 401 ↔ ecommerce 400 ↔ 레지스트리 400). 에이전트가 임의로 한쪽을 고르면 **라이브 로그인 흐름의 클라이언트 가시 계약을 아무 결정 없이 바꾸는 것**이 된다. 본 task 는 **방향이 유일한** 드리프트만 다룬다.
-- **`auth-api.md:692` 의 `| 401 | INVALID_CODE |` → `TASK-MONO-349` 로 이관.** 이 코드는 **전 코드베이스에 emitter 가 0 건**이다(Java 전수 grep). 계약에만 존재하는 유령 행이고, 실제 authorization-code 교환 실패는 `OAuthProviderException` → **502 `PROVIDER_ERROR`** 로 나간다(= 클라이언트 오류가 게이트웨이 오류로 보고된다). **행을 삭제할지 vs 코드를 구현할지는 사람 판단**이므로 본 task 에서 손대지 않는다. 조용히 지우면 "구현 예정이던 것"을 없애는 것일 수도 있다.
+- **`INVALID_STATE` / `INVALID_CREDENTIALS` 상태 모순 → `TASK-MONO-350`(root 백로그, AC-0 사람-결정 게이트)로 분리.** 같은 파일(`auth-api.md`)에 있지만 **성질이 다르다**: 저건 방향이 정해져 있지 않다(iam 401 ↔ ecommerce 400 ↔ 레지스트리 400). 에이전트가 임의로 한쪽을 고르면 **라이브 로그인 흐름의 클라이언트 가시 계약을 아무 결정 없이 바꾸는 것**이 된다. 본 task 는 **방향이 유일한** 드리프트만 다룬다.
+- **`auth-api.md:692` 의 `| 401 | INVALID_CODE |` → `TASK-MONO-350` 로 이관.** 이 코드는 **전 코드베이스에 emitter 가 0 건**이다(Java 전수 grep). 계약에만 존재하는 유령 행이고, 실제 authorization-code 교환 실패는 `OAuthProviderException` → **502 `PROVIDER_ERROR`** 로 나간다(= 클라이언트 오류가 게이트웨이 오류로 보고된다). **행을 삭제할지 vs 코드를 구현할지는 사람 판단**이므로 본 task 에서 손대지 않는다. 조용히 지우면 "구현 예정이던 것"을 없애는 것일 수도 있다.
 
 ---
 
@@ -133,4 +133,4 @@ public ResponseEntity<ErrorResponse> handleAccountStatus(AccountStatusException 
 
 - **부분 수정** — `auth-api.md` 만 고치고 `use-cases/`·`features/` 를 남기면 **드리프트가 그대로 남는다**(다음 독자는 use-case 를 읽는다). AC-4 의 grep 이 이걸 막는다.
 - **방향 오판** — "스펙이 403 이니 코드를 403 으로 되돌리자"는 **정반대 수정**이다. 레지스트리(상위 SoT)가 423/410 이고 TASK-BE-462 가 의도적으로 바꾼 것이다. 코드는 건드리지 않는다.
-- **범위 전염** — 같은 파일의 `INVALID_STATE`(401 vs 400) 가 눈에 띄어 "겸사겸사" 고치고 싶어진다. **하지 말 것** — 방향이 정해지지 않았다(`TASK-MONO-349`).
+- **범위 전염** — 같은 파일의 `INVALID_STATE`(401 vs 400) 가 눈에 띄어 "겸사겸사" 고치고 싶어진다. **하지 말 것** — 방향이 정해지지 않았다(`TASK-MONO-350`).

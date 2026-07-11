@@ -1,6 +1,8 @@
 # Task ID
 
-TASK-MONO-349
+TASK-MONO-350
+
+> **재번호 (id 충돌).** 이 task 는 `TASK-MONO-349` 로 생성돼 PR #2408 로 머지됐으나, **동시 세션이 같은 번호를 ADR-MONO-048 gateway 라이브러리 task 에 사용**했다(#2411, `tasks/review/TASK-MONO-349-adr-shared-reactive-gateway-library.md`). 저쪽은 `review/` 에 **진행 중 PR 체인**이 걸려 있고 이쪽은 착수 전 백로그이므로, **움직이는 쪽(이 파일)을 350 으로 재번호**했다. 동시 세션 task-id 충돌 예방: 픽 전에 `git worktree list` + `origin` + `git log --all` 로 in-flight 를 확인할 것.
 
 # Title
 
