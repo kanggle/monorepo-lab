@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.integration.support.KafkaTestConsumer;
+import com.wms.master.integration.support.TestCodes;
 import java.time.Duration;
 import java.util.UUID;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -47,7 +48,7 @@ class ZoneIntegrationTest extends MasterServiceIntegrationBase {
     void createZone_publishesEvent() throws Exception {
         String warehouseId = seedWarehouse();
 
-        String zoneCode = "Z-" + shortSuffix();
+        String zoneCode = "Z-" + TestCodes.uniqueSuffix();
         String zoneBody = """
                 {"zoneCode":"%s","name":"Ambient","zoneType":"AMBIENT"}
                 """.formatted(zoneCode);
@@ -100,7 +101,7 @@ class ZoneIntegrationTest extends MasterServiceIntegrationBase {
 
         String zoneBody = """
                 {"zoneCode":"Z-%s","name":"Blocked","zoneType":"AMBIENT"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
         ResponseEntity<String> attempt = post(
                 "/api/v1/master/warehouses/" + warehouseId + "/zones",
                 zoneBody, UUID.randomUUID().toString(), WRITE_ROLE);
@@ -111,7 +112,7 @@ class ZoneIntegrationTest extends MasterServiceIntegrationBase {
     // ---------- helpers ----------
 
     private String seedWarehouse() throws Exception {
-        String code = "WH" + shortSuffix();
+        String code = "WH" + TestCodes.uniqueSuffix();
         String body = """
                 {"warehouseCode":"%s","name":"Zone parent","timezone":"UTC"}
                 """.formatted(code);
@@ -130,9 +131,5 @@ class ZoneIntegrationTest extends MasterServiceIntegrationBase {
         headers.add("X-Actor-Id", "integration-actor");
         return rest.exchange(path, HttpMethod.POST,
                 new HttpEntity<>(body, headers), String.class);
-    }
-
-    private static String shortSuffix() {
-        return String.valueOf(10 + (int) (Math.random() * 890));
     }
 }
