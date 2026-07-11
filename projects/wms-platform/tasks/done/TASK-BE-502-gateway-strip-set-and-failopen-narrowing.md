@@ -8,7 +8,7 @@ wms gateway 가 **자기 스펙이 명시한 strip 대상**(`X-Account-Id`·`X-T
 
 # Status
 
-review
+done
 
 # Owner
 
