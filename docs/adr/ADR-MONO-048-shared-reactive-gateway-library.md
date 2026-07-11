@@ -64,6 +64,16 @@ Across `wms` / `scm` / `fan`:
 
 So the duplication is **real and large** (6 classes are byte-for-byte the same across three services; one across four), and the variation is **small and enumerable** (5 classes, each varying along exactly one axis).
 
+> **Correction (TASK-MONO-357 scoping, 2026-07-12): this census counted the gateways and nothing else, and it therefore understated the duplication by more than half.**
+>
+> `AllowedIssuersValidator` and `TenantClaimValidator` also exist as **six further copies each** — one in every finance / erp *backend* service (`ServiceLevelOAuth2Config` replicates the gateway's validation chain inside the service, precisely because those projects have no gateway; see `TASK-MONO-347`). The erp copy of `AllowedIssuersValidator` is **byte-identical** to the one now in `libs/java-gateway`.
+>
+> So the true count for these two security classes was **ten copies each**, not four. § 1.3's argument — *four copies of a security boundary is a mechanism for losing fixes* — holds a fortiori, and the ADR simply did not look outside the gateway directory.
+>
+> **They cannot be shared from `libs/java-gateway`.** Both are framework-neutral (zero reactor / WebFlux / `ServerWebExchange` references — they implement `OAuth2TokenValidator<Jwt>`, which is servlet-agnostic), but the *module* is not: its `implementation` dependencies land on a consumer's **runtime** classpath, so a servlet service consuming it would take WebFlux and Spring Cloud Gateway with it — the exact bleed § D1 quarantines, and the mirror image of the `TASK-MONO-044a` incident.
+>
+> The fix is a **framework-neutral home** for the two validators, which `libs/java-gateway` then depends on and servlet services consume directly. That is a new shared-library decision, so `platform/shared-library-policy.md` § Change Rule puts it behind **an ADR** — the same gate that produced this one. It is **not** folded into D7; the roadmap below is unchanged.
+
 ### 1.3 The cost is not hypothetical — it has already been paid
 
 `FailOpenRateLimiter` wraps Spring Cloud Gateway's Redis limiter to fail **open** when Redis dies (rate limiting is a soft protection; losing the counter store must not take the edge offline). The original implementation caught **every `Throwable`**:
@@ -182,7 +192,7 @@ Every extraction PR must show:
 | 0 | `TASK-MONO-349` | **This ADR.** No code. |
 | 1 | `TASK-MONO-351` | ✅ **DONE.** Create the module. Extract **Tier 1** + migrate `wms`/`scm`/`fan`; `ecommerce` adopts `AllowedIssuersValidator` (its only 4/4 class). De-risks the reactive-module wiring first. |
 | 2 | `TASK-MONO-355` | ✅ **DONE.** **Tier 2** parameterization + migrate `wms`/`scm`/`fan`. `RateLimitConfig` descoped (see the correction under D3); `requireTenantMatch` deferred to step 3, where its only consumer lives. |
-| 3 | `TASK-MONO-356` | Migrate `ecommerce` onto Tier 2 (needs `FailOpenRateLimiter` delegate-signature reconciliation — ecommerce generalised it to `RateLimiter<Config>` to support its override decorator). |
+| 3 | `TASK-MONO-356` | ✅ **DONE.** Migrate `ecommerce` onto Tier 2 (needs `FailOpenRateLimiter` delegate-signature reconciliation — ecommerce generalised it to `RateLimiter<Config>` to support its override decorator). |
 | 4 | `TASK-MONO-357` | **Create `finance` / `erp` gateways.** After steps 1–3 this is nearly free — route yml + a handful of properties. **Resolves `TASK-MONO-347` direction A** without the policy exception that direction B would have required. |
 
 Step 1 is spawned on acceptance. Steps 2–4 are spawned **as each predecessor lands**, not up front: each step's scope should be written against what the previous step actually *proved*, not against what it was expected to prove.
