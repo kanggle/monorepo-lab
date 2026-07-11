@@ -46,10 +46,22 @@ import org.testcontainers.utility.DockerImageName;
  * saturation the limiter therefore opens, an "expected 429" request resolves to 404, and
  * the test used to flip to a <em>logic</em> failure ({@code 429 vs 404}). This test now
  * only asserts enforcement inside a cycle that <em>demonstrably enforced</em> — no
- * fail-open (counter delta 0) and the burst actually rejected ({@code a2 == 429}) — and
- * retries with fresh keys until such a cycle occurs (bounded). If Redis never enforces
- * within the window the failure surfaces as an explicit infrastructure signal, never as a
- * 429-vs-404 logic assertion. Production limiter code is byte-unchanged (AC-3).
+ * fail-open (counter delta 0), the bucket really fresh ({@code a1 != 429}) and the burst
+ * really rejected ({@code a2 == 429}) — and retries with fresh keys until such a cycle
+ * occurs (bounded). If Redis never enforces within the window the failure surfaces as an
+ * explicit infrastructure signal, never as a 429-vs-404 logic assertion. Production limiter
+ * code is byte-unchanged (AC-3).
+ *
+ * <p><strong>Why that hardening still flaked (TASK-BE-503).</strong> Two holes, and they
+ * composed. {@code cleanRateKeys()} globbed {@code rate:ecommerce-gw:*} — the string the
+ * KeyResolver returns, which is the <em>id</em> SCG passes to {@code RedisRateLimiter}, not
+ * the key SCG derives from it ({@code request_rate_limiter.{…}.tokens}). It matched nothing,
+ * so "retry with fresh keys" never actually got fresh keys. And the gate constrained only
+ * {@code a2}, so a retry on tenant A's still-drained bucket ({@code a1 == 429, a2 == 429})
+ * <em>satisfied</em> it and was accepted — the loop terminated on exactly the state the AC-1
+ * assertion then rejects. Saturation was only the trigger that forced a retry in the first
+ * place; the failure was a state leak. Both holes are closed here, and
+ * {@link #cleanupRemovesTheLimiterKeys()} pins the cleanup so the premise cannot rot again.
  *
  * <p>{@code @Tag("integration")}: excluded from the Docker-free {@code test} run; CI
  * executes it against a real Redis (Testcontainers).
@@ -139,19 +151,46 @@ class CrossTenantRateLimitIsolationIntegrationTest {
      *                      (infrastructure), so nothing about 429-vs-404 is a logic signal
      * @param a1ToA2Millis  wall-clock between the two tenant-A limiter hits; only consulted
      *                      when classifying a timeout (refill window vs broken limiter)
+     * @param keysCleared   how many Redis keys {@link #cleanRateKeys()} actually removed before
+     *                      this cycle. Recorded because the whole "retry with fresh keys" design
+     *                      silently rested on a cleanup that was deleting nothing (TASK-BE-503).
      */
-    private record Cycle(Probe a1, Probe a2, Probe b1, double failOpenDelta, long a1ToA2Millis) {}
+    private record Cycle(Probe a1, Probe a2, Probe b1, double failOpenDelta, long a1ToA2Millis,
+                         long keysCleared) {}
 
     private double redisUnavailableCount() {
         Counter c = meterRegistry.find(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).counter();
         return c == null ? 0.0 : c.count();
     }
 
-    private void cleanRateKeys() {
-        redisTemplate.keys("rate:ecommerce-gw:*")
+    /**
+     * Clear every rate-limiter bucket so the next cycle starts fresh, and report how many
+     * keys were actually removed.
+     *
+     * <p><b>Deliberately prefix-agnostic (TASK-BE-503).</b> This used to match
+     * {@code "rate:ecommerce-gw:*"} — the string
+     * {@code TenantRouteRateLimitConfig#tenantRouteKeyResolver} returns. That is not a Redis
+     * key: it is the {@code id} Spring Cloud Gateway hands to {@code RedisRateLimiter}, which
+     * wraps it in a key shape of its own ({@code request_rate_limiter.{<routeId>.<id>}.tokens}
+     * / {@code .timestamp}). A glob anchored on the resolver's prefix therefore matched
+     * <b>nothing</b>, so every retry below reused tenant A's already-drained bucket.
+     *
+     * <p>The container is dedicated to this class and the gateway writes nothing else to it,
+     * so clearing wholesale is both correct and immune to SCG changing its key format —
+     * guessing that format is what produced the bug. {@code cleanupRemovesTheLimiterKeys()}
+     * pins the invariant.
+     */
+    private long cleanRateKeys() {
+        Long removed = redisTemplate.keys("*")
                 .flatMap(redisTemplate::delete)
-                .collectList()
+                .reduce(0L, Long::sum)
                 .block(Duration.ofSeconds(5));
+        return removed == null ? 0L : removed;
+    }
+
+    private long liveKeyCount() {
+        Long count = redisTemplate.keys("*").count().block(Duration.ofSeconds(5));
+        return count == null ? 0L : count;
     }
 
     private Probe probe(String token) {
@@ -164,7 +203,7 @@ class CrossTenantRateLimitIsolationIntegrationTest {
     }
 
     private Cycle runCycle(String tokenA, String tokenB) {
-        cleanRateKeys();
+        long cleared = cleanRateKeys();
         double before = redisUnavailableCount();
         long a1Start = System.nanoTime();
         Probe a1 = probe(tokenA);       // drains the burst=1 bucket (enforced → allowed)
@@ -172,7 +211,7 @@ class CrossTenantRateLimitIsolationIntegrationTest {
         Probe a2 = probe(tokenA);       // bucket empty → 429 (unless it refilled or failed open)
         Probe b1 = probe(tokenB);       // independent (tenant_id, route_id) bucket → allowed
         double after = redisUnavailableCount();
-        return new Cycle(a1, a2, b1, after - before, (a2Start - a1Start) / 1_000_000);
+        return new Cycle(a1, a2, b1, after - before, (a2Start - a1Start) / 1_000_000, cleared);
     }
 
     @Test
@@ -181,10 +220,15 @@ class CrossTenantRateLimitIsolationIntegrationTest {
         String tokenA = tokenForTenant("tenant-a");
         String tokenB = tokenForTenant("tenant-b");
 
-        // Retry with fresh keys until Redis demonstrably enforced this cycle: no fail-open
-        // (delta 0) AND the burst was actually rejected (a2 == 429). This single gate
-        // subsumes a warm-up and sidesteps the replenish window — a slow cycle whose bucket
-        // refilled (a2 != 429) is simply discarded and retried. `.ignoreExceptions()` lets a
+        // Retry with fresh keys until Redis demonstrably enforced this cycle:
+        //   * no fail-open (delta 0),
+        //   * the bucket really was fresh   (a1 != 429),
+        //   * the burst really was rejected (a2 == 429).
+        // The a1 clause is TASK-BE-503. Without it the gate accepted a cycle that started on
+        // an already-drained bucket (a1 == 429, a2 == 429) — the retry loop terminated on
+        // precisely the state the assertions below then reject, instead of discarding it.
+        // BE-497 covered the opposite direction (a slow cycle whose bucket refilled, a2 != 429,
+        // is discarded and retried) but left this one open. `.ignoreExceptions()` lets a
         // transient connection error under saturation retry instead of failing.
         AtomicReference<Cycle> last = new AtomicReference<>();
         Cycle enforced;
@@ -198,7 +242,9 @@ class CrossTenantRateLimitIsolationIntegrationTest {
                         Cycle c = runCycle(tokenA, tokenB);
                         last.set(c);
                         return c;
-                    }, c -> c.failOpenDelta() == 0.0 && c.a2().status() == 429);
+                    }, c -> c.failOpenDelta() == 0.0
+                            && c.a1().status() != 429
+                            && c.a2().status() == 429);
         } catch (ConditionTimeoutException timeout) {
             throw classifyTimeout(last.get(), timeout);
         }
@@ -222,6 +268,48 @@ class CrossTenantRateLimitIsolationIntegrationTest {
     }
 
     /**
+     * The invariant the whole "retry with fresh keys" design rests on, asserted directly: a
+     * clean must actually clean. It never did — {@link #cleanRateKeys()} globbed on the
+     * KeyResolver's {@code rate:ecommerce-gw:} prefix, which is the {@code id} handed to Spring
+     * Cloud Gateway, not the Redis key SCG derives from it. It deleted zero keys, so any retry
+     * reran on tenant A's drained bucket and the gate (which did not constrain {@code a1})
+     * accepted that cycle — the intermittent AC-1 failure (TASK-BE-503).
+     *
+     * <p>Lives outside the Awaitility loop on purpose: {@code ignoreExceptions()} swallows
+     * {@link Throwable}, so an assertion inside that loop would be silently retried into a
+     * timeout instead of failing.
+     */
+    @Test
+    @DisplayName("정리가 실제로 rate-limiter 키를 제거한다 (BE-503 회귀 가드)")
+    void cleanupRemovesTheLimiterKeys() {
+        cleanRateKeys();
+
+        // A request must actually leave bucket keys behind, or the assertions below are vacuous:
+        // a failed-open request writes nothing, and "removed 0 of 0" would read as success.
+        Awaitility.await("the rate limiter to write its bucket keys to Redis")
+                .atMost(ENFORCING_WINDOW)
+                .pollDelay(Duration.ZERO)
+                .pollInterval(Duration.ofMillis(500))
+                .ignoreExceptions()
+                .until(() -> {
+                    probe(tokenForTenant("tenant-cleanup"));
+                    return liveKeyCount() > 0;
+                });
+
+        long removed = cleanRateKeys();
+
+        Assertions.assertThat(removed)
+                .as("cleanRateKeys() must delete the limiter's keys. Globbing the KeyResolver's "
+                        + "prefix (rate:ecommerce-gw:*) matches nothing — SCG stores the bucket "
+                        + "under request_rate_limiter.{<routeId>.<id>}.tokens/.timestamp")
+                .isPositive();
+        Assertions.assertThat(liveKeyCount())
+                .as("no rate-limiter state may survive a clean — every cycle must start on a "
+                        + "fresh bucket, which is the premise the retry gate depends on")
+                .isZero();
+    }
+
+    /**
      * Turns a timeout into the right kind of failure. A fail-open or a refill-window cycle
      * is infrastructure and must not read as a 429-vs-404 logic defect; only a fast,
      * Redis-up cycle whose burst still failed to reject is a genuine enforcement failure.
@@ -239,6 +327,18 @@ class CrossTenantRateLimitIsolationIntegrationTest {
                     ENFORCING_WINDOW, FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE,
                     last.failOpenDelta(), last.a1().status(), last.a2().status(), last.b1().status()),
                     timeout);
+        }
+        // Redis is up and the bucket is STILL drained at the first request of a supposedly fresh
+        // cycle → cleanRateKeys() is not removing the limiter's keys. Say that, rather than let
+        // the next reader file it under "runner saturation" for a third time (TASK-BE-503).
+        if (last.a1().status() == 429) {
+            return new AssertionError(String.format(
+                    "tenant A's bucket was already drained at the FIRST request of a cycle that "
+                    + "was supposed to start fresh (a1=429), and Redis was up (no fail-open). The "
+                    + "cleanup is not removing the rate limiter's keys — the last attempt cleared "
+                    + "%d key(s). This is a state leak, not runner saturation: check that "
+                    + "cleanRateKeys() still matches Spring Cloud Gateway's actual key shape.",
+                    last.keysCleared()), timeout);
         }
         if (last.a1ToA2Millis() >= REPLENISH_GUARD_MILLIS) {
             return new AssertionError(String.format(
