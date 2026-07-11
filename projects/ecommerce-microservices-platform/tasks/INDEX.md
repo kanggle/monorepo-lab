@@ -74,6 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-503 | Cross-tenant rate-limit IT 간헐 RED 의 **실근인** 제거. `cleanRateKeys()` 가 `rate:ecommerce-gw:*` 로 glob 했는데 그건 KeyResolver 반환값(=SCG 에 넘기는 `id`)이지 Redis 키가 아니다 — SCG 는 그걸 `request_rate_limiter.{<routeId>.<id>}.tokens` 로 감싼다 → **매치 0건 = 정리가 완전한 no-op**. 게다가 Awaitility 게이트가 `a2==429` 만 요구하고 **`a1` 을 제약하지 않아**, 드레인된 버킷에서 시작한 사이클(`a1=429,a2=429`)이 **게이트를 통과해 채택**되고 곧바로 `a1 != 429` 단언이 터진다. 두 결함이 맞물려 간헐성을 만든다(첫 사이클은 진짜 빈 Redis 라 항상 통과 → 재시도가 필요할 때만 실패). **포화는 방아쇠이지 원인이 아니다.** 정리를 접두어-무관으로 + 게이트에 `a1 != 429` + 정리 계약 가드 신설. 운영 코드 무수정. | gateway-service | bug, test, flaky |
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
 
 ## in-progress
