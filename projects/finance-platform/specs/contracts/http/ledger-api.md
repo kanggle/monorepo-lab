@@ -652,6 +652,8 @@ EP's empty-200 stance from FIN-BE-033). This applies to both truly unsupported c
 | `SETTLEMENT_RATE_INVALID` | 422 | **(10th incr)** FX settlement `settlementRate` not strictly positive on `POST /settlements` (`SettlementRateInvalidException`) |
 | `FX_RATE_UNAVAILABLE` | 422 | **(24th incr)** `closingRate` / `settlementRate` omitted on `POST /revaluations` / `/settlements` and no fresh cached quote can supply it — feed disabled, no quote, or stale (`FxRateUnavailableException`, ADR-002 D3); operator must supply a manual rate or wait for a fresh quote |
 | `SETTLEMENT_AMOUNT_INVALID` | 422 | **(12th incr)** partial FX settlement `settleForeignAmount` zero / opposite-sign / over-settle (`> \|F\|`) on `POST /settlements` (`SettlementAmountInvalidException`) |
+| `VALIDATION_ERROR` | 400 | Request field missing / malformed / unparseable — malformed JSON body, path-or-query type mismatch, and a non-numeric `settlementRate` / `closingRate` / `settleForeignAmount` string (the F5 string-decimal fields are parsed by hand, so bean validation never sees them). Platform-Common code; **always 400 in this service** |
+| `ILLEGAL_STATE` | 422 | Aggregate invariant violated at the controller boundary — the unclassified `IllegalStateException` fallback (Platform-Common). Prefer a domain code above where the failure is a known one |
 
 ## Out of scope (forward-declared — later increments)
 

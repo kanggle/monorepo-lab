@@ -427,6 +427,7 @@ E5; v1 has no inbound enforcement surface here.)
 | `EXTERNAL_TRAFFIC_REJECTED` | 403 | external (non-internal-network) ingress (E7) — primarily enforced at Traefik / network layer; this code is the application-layer fallback surface |
 | `UNAUTHORIZED` | 401 | missing / invalid / expired JWT (Platform-Common Authentication) |
 | `CONCURRENT_MODIFICATION` | 409 | optimistic-lock conflict on revision append (Platform-Common Transactional Trait `CONFLICT` semantic; this surface uses the erp-specific name) |
+| `ILLEGAL_STATE` | 422 | aggregate invariant violated at the controller boundary — the unclassified `IllegalStateException` fallback (Platform-Common General). Prefer a domain code above where the failure is a known one |
 
 > `IDEMPOTENCY_STORE_UNAVAILABLE` (503) is **v1-emittable but rare** — v1 uses
 > the DB-table primary inside the mutation Tx (see architecture.md

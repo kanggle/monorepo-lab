@@ -17,7 +17,9 @@ import java.time.Instant;
  * OPTIONAL.</b> Omitting it (null/blank) resolves the rate from the FX rate feed cache when
  * the feed is enabled and a fresh quote exists; otherwise the use case fails closed with 422
  * {@code FX_RATE_UNAVAILABLE}. A supplied rate is used verbatim (net-zero). A non-numeric
- * supplied value still surfaces as a 422 (unchanged).
+ * supplied value surfaces as {@code 400 VALIDATION_ERROR} — it is a malformed request field,
+ * no different from malformed JSON (TASK-MONO-348; it used to answer a nonsensical
+ * {@code 422 CURRENCY_MISMATCH} via the handler's IAE catch-all).
  */
 public record RevaluationRequest(
         String ledgerAccountCode,
@@ -32,7 +34,7 @@ public record RevaluationRequest(
      * key) to the application command. The currency resolve surfaces an unsupported
      * currency as a 422 via the handler; {@code closingRate} is parsed as an exact
      * {@link BigDecimal} when present, or {@code null} when omitted (feed fallback in the
-     * use case — 24th increment). A non-numeric value surfaces as a 422.
+     * use case — 24th increment). A non-numeric value surfaces as {@code 400 VALIDATION_ERROR}.
      */
     public RevalueForeignBalanceCommand toCommand(String tenantId, String operatorSubject,
                                                   String idempotencyKey) {

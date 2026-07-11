@@ -177,6 +177,7 @@ Paginated (`?page=&size=&type=&status=`).
 | `TENANT_FORBIDDEN` | 403 | tenant_id ∉ {finance,*} |
 | `IDEMPOTENCY_STORE_UNAVAILABLE` | 503 | Redis + DB idempotency store both down |
 | `CONCURRENT_MODIFICATION` | 409 | optimistic-lock conflict |
+| `ILLEGAL_STATE` | 422 | aggregate invariant violated at the controller boundary — the unclassified `IllegalStateException` fallback (Platform-Common). Prefer a domain code above where the failure is a known one |
 
 All registered in `platform/error-handling.md` (this PR). Reversal: there is
 **no** "edit transaction" endpoint — corrections are operator-initiated
