@@ -1,5 +1,6 @@
 package com.example.gateway.config;
 
+import com.example.gateway.security.TenantClaimValidator;
 import com.example.web.dto.ErrorResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +14,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
@@ -91,14 +94,60 @@ public class SecurityConfig {
         return http.build();
     }
 
-    private ServerAuthenticationEntryPoint unauthorizedEntryPoint(
+    /**
+     * Distinguishes cross-tenant token misuse from generic authentication failures.
+     * {@link TenantClaimValidator} attaches the {@code tenant_mismatch} error code;
+     * we surface that as 403 {@code TENANT_FORBIDDEN} instead of the default 401.
+     * <p>
+     * The distinction is not cosmetic: 401 tells a client "your token is stale, get a
+     * new one", which for a cross-tenant token is a lie — re-issuing produces the same
+     * rejection. 403 says "this token is valid but not for this edge", which is both
+     * true and actionable, and it stops clients from looping on token refresh.
+     * TASK-BE-501 — {@code TenantClaimValidator} has promised this mapping in its
+     * javadoc since it was written, but the branch was never implemented here.
+     */
+    // Package-private, not private: this lambda IS the branch under test. A test that
+    // reached it only through a booted context would need Docker (Redis) and would still
+    // be testing Spring's wiring rather than the mapping decision itself.
+    ServerAuthenticationEntryPoint unauthorizedEntryPoint(
             ObjectMapper objectMapper, GatewayMetrics gatewayMetrics) {
         return (exchange, ex) -> {
+            OAuth2Error oauthError = extractOAuth2Error(ex);
+            if (oauthError != null
+                    && TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(oauthError.getErrorCode())) {
+                log.debug("Cross-tenant token rejected: {}", oauthError.getDescription());
+                gatewayMetrics.incrementJwtValidationFailure(GatewayMetrics.REASON_TENANT_MISMATCH);
+                String message = oauthError.getDescription() != null
+                        ? oauthError.getDescription()
+                        : "Cross-tenant access denied";
+                return writeErrorResponse(exchange, HttpStatus.FORBIDDEN,
+                        ErrorResponse.of("TENANT_FORBIDDEN", message), objectMapper);
+            }
             log.debug("JWT authentication failed: {}", ex.getMessage());
             gatewayMetrics.incrementJwtValidationFailure("invalid");
             return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED,
                     ErrorResponse.of("UNAUTHORIZED", "Authentication required"), objectMapper);
         };
+    }
+
+    /**
+     * Digs the {@link OAuth2Error} out of the authentication exception. Spring wraps the
+     * decode-time validator failure in an {@link OAuth2AuthenticationException}, but the
+     * resource-server filter may in turn wrap that in a generic
+     * {@link org.springframework.security.core.AuthenticationException}, so walk the
+     * cause chain rather than testing only the top frame. Guards against a self-cause
+     * loop.
+     */
+    private static OAuth2Error extractOAuth2Error(Throwable ex) {
+        for (Throwable cur = ex; cur != null; cur = cur.getCause()) {
+            if (cur instanceof OAuth2AuthenticationException oauthEx) {
+                return oauthEx.getError();
+            }
+            if (cur == cur.getCause()) {
+                break;
+            }
+        }
+        return null;
     }
 
     private ServerAccessDeniedHandler forbiddenHandler(ObjectMapper objectMapper) {

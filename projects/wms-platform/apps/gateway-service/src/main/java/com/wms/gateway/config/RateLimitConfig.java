@@ -1,6 +1,7 @@
 package com.wms.gateway.config;
 
 import com.wms.gateway.ratelimit.FailOpenRateLimiter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.net.InetSocketAddress;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -41,14 +42,18 @@ public class RateLimitConfig {
 
     /**
      * Primary {@link RateLimiter} exposed to Spring Cloud Gateway. Wraps the
-     * autoconfigured {@link RedisRateLimiter} with fail-open semantics: on Redis
+     * autoconfigured {@link RedisRateLimiter} with fail-open semantics: on <em>Redis</em>
      * connectivity errors, requests are allowed through with a WARN log. Rate limiting
      * is a soft protection, not a correctness boundary — see {@code api-gateway-policy.md}.
+     * <p>
+     * Fail-open is scoped to Redis-class failures only (TASK-BE-502); any other error
+     * propagates so it surfaces as a 5xx rather than silently disabling the limiter.
      */
     @Bean
     @Primary
-    RateLimiter<RedisRateLimiter.Config> failOpenRateLimiter(RedisRateLimiter delegate) {
-        return new FailOpenRateLimiter(delegate);
+    RateLimiter<RedisRateLimiter.Config> failOpenRateLimiter(
+            RedisRateLimiter delegate, MeterRegistry meterRegistry) {
+        return new FailOpenRateLimiter(delegate, meterRegistry);
     }
 
     private static String resolveClientIp(ServerWebExchange exchange) {
