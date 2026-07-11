@@ -43,7 +43,7 @@ services:
     expose: ["8080"]                              # internal-only, no host port
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.<project>.rule=Host(`<project>.local`)"
+      - "traefik.http.routers.<project>.rule=Host(`<project>.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.services.<project>.loadbalancer.server.port=8080"
     networks:
       - traefik-net
@@ -61,6 +61,27 @@ networks:
 ```
 
 Then access via `http://<project>.local/...` from your machine.
+
+### Two things you MUST also do (TASK-MONO-358)
+
+**1. Add the hostname to Traefik's network aliases** — `infra/traefik/docker-compose.yml`,
+`networks.traefik-net.aliases`.
+
+The suffix is `${DEMO_DOMAIN:-local}` because the integrated demo also runs on a cloud host,
+where visitors reach it as `<project>.<ip>.sslip.io`. There, the hostname must resolve from
+**two** sides: the browser (public DNS → public IP → Traefik) *and* other containers (a
+service doing a server-side call to `http://<project>.<domain>/…`). Public DNS does not work
+from inside — AWS does not route an instance's traffic to its own public IP — so Traefik
+carries a network alias for every hostname it serves.
+
+**Forget the alias and the demo still works locally** (your hosts file resolves it) **and
+breaks only on the cloud.** Guard (i) in `infra/demo/verify-demo-wrapper.sh` fails the build
+if the two lists diverge in either direction.
+
+**2. Never leave a hostname without a router.** `iam.local` was referenced as the default of
+`OIDC_ISSUER_URL` in six compose files while **no router served it** — so the integrated demo
+could never log in, even though all 96 containers reported healthy. Guard (i) also catches
+this direction (an alias with no router).
 
 ## Hostname → 127.0.0.1 mapping (one-time setup)
 

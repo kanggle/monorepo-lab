@@ -55,7 +55,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.fan-platform.rule=Host(`fan-platform.local`)"
+      - "traefik.http.routers.fan-platform.rule=Host(`fan-platform.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.fan-platform.entrypoints=web"
       - "traefik.http.services.fan-platform.loadbalancer.server.port=8080"
     networks:

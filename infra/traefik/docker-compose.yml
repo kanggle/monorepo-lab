@@ -27,7 +27,43 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - traefik-net
+      # -----------------------------------------------------------------------
+      # Network aliases — the same hostname must resolve from BOTH sides.
+      # -----------------------------------------------------------------------
+      # A browser resolves `console.<ip>.sslip.io` through public DNS to the
+      # host's public IP and arrives at Traefik. But containers must reach these
+      # hostnames too: console-web performs the OIDC code exchange *server-side*
+      # against `${OIDC_ISSUER_URL}/oauth2/token`.
+      #
+      # Public DNS is not an option from inside: on AWS an instance cannot reach
+      # its own public IP (the IGW does not hairpin), so a container resolving
+      # `iam.<ip>.sslip.io` would get the public IP and the packet would die.
+      #
+      # These aliases make Docker's embedded DNS resolve the very same names to
+      # this container. One hostname, two paths, same destination.
+      #
+      # The list is hand-maintained and therefore drifts. Guard (i) in
+      # infra/demo/verify-demo-wrapper.sh enforces parity with the Host() rules:
+      # add a router without its alias and the demo breaks ONLY on the cloud
+      # (locally the hosts file still resolves it) — exactly the failure mode a
+      # guard has to catch. (TASK-MONO-358)
+      traefik-net:
+        aliases:
+          - iam.${DEMO_DOMAIN:-local}
+          - console.${DEMO_DOMAIN:-local}
+          - console-bff.${DEMO_DOMAIN:-local}
+          - ecommerce.${DEMO_DOMAIN:-local}
+          - web.ecommerce.${DEMO_DOMAIN:-local}
+          - wms.${DEMO_DOMAIN:-local}
+          - scm.${DEMO_DOMAIN:-local}
+          - erp.${DEMO_DOMAIN:-local}
+          - finance.${DEMO_DOMAIN:-local}
+          - ledger.${DEMO_DOMAIN:-local}
+          - fan-platform.${DEMO_DOMAIN:-local}
+          - kafka.iam.${DEMO_DOMAIN:-local}
+          - grafana.iam.${DEMO_DOMAIN:-local}
+          - kafka.wms.${DEMO_DOMAIN:-local}
+          - grafana.wms.${DEMO_DOMAIN:-local}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/rawdata"]
       interval: 10s

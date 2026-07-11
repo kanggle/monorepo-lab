@@ -21,7 +21,11 @@
 # =============================================================================
 
 declare -A COMPOSE=(
-  [iam]="projects/iam-platform/docker-compose.yml projects/iam-platform/docker-compose.e2e.yml"
+  # iam 은 세 번째 파일을 받는다: e2e 오버레이(CI 소유)가 iam 앱을 `iam-e2e` 네트워크에
+  # 가둬 두기 때문에, 데모에서는 traefik-net 합류 + Traefik 라우터 + 다른 도메인이 부르는
+  # 이름의 alias 를 얹어야 한다. 이것이 없으면 96 컨테이너가 전부 healthy 로 떠도
+  # **로그인이 불가능**하다(도달할 iam 엣지가 없다). 상세: iam-traefik.override.yml
+  [iam]="projects/iam-platform/docker-compose.yml projects/iam-platform/docker-compose.e2e.yml infra/demo/iam-traefik.override.yml"
   [wms]="projects/wms-platform/docker-compose.yml projects/wms-platform/docker-compose.e2e.yml"
   [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml"
   [scm]="projects/scm-platform/docker-compose.yml"

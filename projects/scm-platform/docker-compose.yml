@@ -65,7 +65,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.scm-platform.rule=Host(`scm.local`)"
+      - "traefik.http.routers.scm-platform.rule=Host(`scm.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.scm-platform.entrypoints=web"
       - "traefik.http.services.scm-platform.loadbalancer.server.port=8080"
     networks:

@@ -61,7 +61,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.platform-console.rule=Host(`console.local`)"
+      - "traefik.http.routers.platform-console.rule=Host(`console.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.platform-console.entrypoints=web"
       - "traefik.http.services.platform-console.loadbalancer.server.port=3000"
     networks:
@@ -100,7 +100,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.console-bff.rule=Host(`console-bff.local`)"
+      - "traefik.http.routers.console-bff.rule=Host(`console-bff.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.console-bff.entrypoints=web"
       - "traefik.http.services.console-bff.loadbalancer.server.port=8080"
       # NOTE: CORS NOT enabled — internal-only; only console-web server-side

@@ -244,7 +244,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.wms-kafka-ui.rule=Host(`kafka.wms.local`)"
+      - "traefik.http.routers.wms-kafka-ui.rule=Host(`kafka.wms.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.wms-kafka-ui.entrypoints=web"
       - "traefik.http.services.wms-kafka-ui.loadbalancer.server.port=8080"
     healthcheck:
@@ -354,7 +354,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.wms-grafana.rule=Host(`grafana.wms.local`)"
+      - "traefik.http.routers.wms-grafana.rule=Host(`grafana.wms.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.wms-grafana.entrypoints=web"
       - "traefik.http.services.wms-grafana.loadbalancer.server.port=3000"
     depends_on:

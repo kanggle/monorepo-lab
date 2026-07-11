@@ -94,7 +94,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.wms.rule=Host(`wms.local`)"
+      - "traefik.http.routers.wms.rule=Host(`wms.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.wms.entrypoints=web"
       - "traefik.http.services.wms.loadbalancer.server.port=8080"
     healthcheck:

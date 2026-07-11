@@ -66,7 +66,7 @@ services:
   #   labels:
   #     - "traefik.enable=true"
   #     - "traefik.docker.network=traefik-net"
-  #     - "traefik.http.routers.erp-platform.rule=Host(`erp.local`)"
+  #     - "traefik.http.routers.erp-platform.rule=Host(`erp.${DEMO_DOMAIN:-local}`)"
   #     - "traefik.http.routers.erp-platform.entrypoints=web"
   #     - "traefik.http.services.erp-platform.loadbalancer.server.port=8080"
   #   networks:
@@ -123,7 +123,7 @@ services:
       # /api/erp/read-model/** (routed to read-model-service by the higher-
       # priority router on that service). priority=1 keeps this the fallback
       # until gateway-service (v1-deferred) takes over edge routing.
-      - "traefik.http.routers.erp-platform.rule=Host(`erp.local`)"
+      - "traefik.http.routers.erp-platform.rule=Host(`erp.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.erp-platform.entrypoints=web"
       - "traefik.http.routers.erp-platform.priority=1"
       - "traefik.http.services.erp-platform.loadbalancer.server.port=8080"
@@ -178,7 +178,7 @@ services:
       # the edge.
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.erp-readmodel.rule=Host(`erp.local`) && PathPrefix(`/api/erp/read-model`)"
+      - "traefik.http.routers.erp-readmodel.rule=Host(`erp.${DEMO_DOMAIN:-local}`) && PathPrefix(`/api/erp/read-model`)"
       - "traefik.http.routers.erp-readmodel.entrypoints=web"
       - "traefik.http.routers.erp-readmodel.priority=100"
       - "traefik.http.services.erp-readmodel.loadbalancer.server.port=8080"
@@ -239,7 +239,7 @@ services:
       # distinct PathPrefix (/api/erp/read-model) so the two never collide.
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.erp-approval.rule=Host(`erp.local`) && PathPrefix(`/api/erp/approval`)"
+      - "traefik.http.routers.erp-approval.rule=Host(`erp.${DEMO_DOMAIN:-local}`) && PathPrefix(`/api/erp/approval`)"
       - "traefik.http.routers.erp-approval.entrypoints=web"
       - "traefik.http.routers.erp-approval.priority=100"
       - "traefik.http.services.erp-approval.loadbalancer.server.port=8080"
@@ -297,7 +297,7 @@ services:
       # (/api/erp/approval) own distinct PathPrefixes so the routers never collide.
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.erp-notification.rule=Host(`erp.local`) && PathPrefix(`/api/erp/notifications`)"
+      - "traefik.http.routers.erp-notification.rule=Host(`erp.${DEMO_DOMAIN:-local}`) && PathPrefix(`/api/erp/notifications`)"
       - "traefik.http.routers.erp-notification.entrypoints=web"
       - "traefik.http.routers.erp-notification.priority=100"
       - "traefik.http.services.erp-notification.loadbalancer.server.port=8080"

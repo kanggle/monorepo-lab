@@ -242,6 +242,59 @@ if [ "$img_skip" -gt 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
+echo "[verify] (i) Traefik Host() ↔ network alias 정합"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358): 데모 호스트명은 **두 곳에서 해소돼야** 한다.
+#   · 브라우저 → 공용 DNS(sslip.io) → 공인 IP → Traefik
+#   · 컨테이너 → Docker 임베디드 DNS → Traefik 컨테이너
+#     (console-web 이 OIDC 코드 교환을 **서버사이드**로 하기 때문. 그리고 AWS 는
+#      인스턴스가 자기 공인 IP 로 보낸 트래픽을 되돌려주지 않으므로 — IGW hairpin
+#      부재 — 컨테이너가 공용 DNS 를 타면 죽는다.)
+#
+# 두 번째를 Traefik 컨테이너의 network alias 가 담당하는데, 그 목록은 **수기 열거**라
+# 라우터가 늘면 드리프트한다. 그리고 이 드리프트의 실패 모드가 고약하다:
+# **로컬에서는 hosts 파일이 여전히 해소해 주므로 전부 통과하고, 클라우드에서만 터진다.**
+# 정확히 가드가 있어야 하는 자리다.
+traefik_aliases() {
+  render traefik | awk '
+    /^    networks:/      { innet = 1; next }
+    innet && /aliases:/   { inal = 1; next }
+    inal && /^          - / { sub(/^          - /, ""); print; next }
+    inal && !/^          - / { inal = 0; innet = 0 }
+  ' | tr -d '"' | sort -u
+}
+
+router_hosts() { # 프로젝트 compose 가 선언한 모든 Host(...) 호스트명
+  for p in "${!COMPOSE[@]}"; do
+    render "$p" | grep -oE 'Host\(`[^`]+`\)' | sed 's/Host(`//; s/`)//'
+  done | sort -u
+}
+
+aliases_file="$(mktemp)"; hosts_file="$(mktemp)"
+traefik_aliases > "$aliases_file"
+router_hosts    > "$hosts_file"
+
+missing_alias="$(comm -23 "$hosts_file" "$aliases_file")"
+orphan_alias="$(comm -13 "$hosts_file" "$aliases_file")"
+rm -f "$aliases_file" "$hosts_file"
+
+[ -z "$missing_alias" ] || fail "Traefik alias 가 없는 라우터 호스트명:"$'\n'"$(printf '  %s\n' $missing_alias)"\
+  $'\n'"→ 브라우저에서는 동작하지만 **컨테이너 안에서 이 이름이 해소되지 않습니다.**"\
+  $'\n'"   console-web 의 서버사이드 OIDC 토큰 교환처럼 컨테이너→호스트명 호출이 죽습니다."\
+  $'\n'"→ 로컬은 hosts 파일 덕에 멀쩡하고 **클라우드에서만 터집니다.**"\
+  $'\n'"→ infra/traefik/docker-compose.yml 의 networks.traefik-net.aliases 에 추가하세요."
+
+[ -z "$orphan_alias" ] || fail "라우터가 없는 고아 alias:"$'\n'"$(printf '  %s\n' $orphan_alias)"\
+  $'\n'"→ 서빙하는 라우터가 없는 호스트명입니다. 정확히 iam.local 이 그랬고(6개 compose 가"\
+  $'\n'"   기본값으로 참조하는데 라우터는 없었다), 그래서 데모 로그인이 불가능했습니다."
+# NOTE: 위 메시지에 백틱을 쓰지 말 것. bash 큰따옴표 안의 `x` 는 **명령 치환으로 실행**되어
+# `iam.local: command not found` 를 뱉고 그 자리가 빈 문자열이 된다 — 진단 메시지가 조용히
+# 사라진다. 가드가 무는 것과 **가드가 이유를 말해주는 것**은 별개이고, 후자를 잃으면 사람은
+# 무엇을 고쳐야 하는지 알 수 없다. (mutation-check 를 돌려봤기에 발견했다.)
+
+ok "Host() ↔ alias 정합 ($(router_hosts | wc -l | tr -d ' ') 호스트명)"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0
