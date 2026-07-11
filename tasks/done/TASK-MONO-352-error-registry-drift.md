@@ -8,7 +8,7 @@ TASK-MONO-352
 
 # Status
 
-ready
+done
 
 # Owner
 
