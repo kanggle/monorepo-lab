@@ -11,7 +11,7 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 import com.example.apigateway.security.AllowedIssuersValidator;
-import com.example.fanplatform.gateway.security.TenantClaimValidator;
+import com.example.apigateway.security.TenantClaimValidator;
 
 /**
  * Unit-level wiring test for {@link OAuth2ResourceServerConfig#jwtTokenValidator()}.
@@ -112,18 +112,13 @@ class OAuth2ResourceServerConfigTest {
         assertThat(result.hasErrors()).isFalse();
     }
 
-    private static OAuth2ResourceServerConfig configWithDefaults() throws Exception {
-        OAuth2ResourceServerConfig config = new OAuth2ResourceServerConfig();
-        writeField(config, "jwkSetUri", "http://iam.local/.well-known/jwks.json");
-        writeField(config, "allowedIssuersCsv", "http://iam.local,iam");
-        writeField(config, "requiredTenantId", "fan-platform");
-        return config;
-    }
-
-    private static void writeField(Object target, String name, Object value) throws Exception {
-        Field f = target.getClass().getDeclaredField(name);
-        f.setAccessible(true);
-        f.set(target, value);
+    /**
+     * The config now takes its properties on the constructor (TASK-MONO-355), so the
+     * reflective field-write this helper used to need is gone. Same values, same keys.
+     */
+    private static OAuth2ResourceServerConfig configWithDefaults() {
+        return new OAuth2ResourceServerConfig(
+                "http://iam.local/.well-known/jwks.json", "http://iam.local,iam", "fan-platform");
     }
 
     private static Object readField(Object target, String name) throws Exception {

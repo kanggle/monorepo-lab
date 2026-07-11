@@ -1,4 +1,4 @@
-package com.wms.gateway.security;
+package com.example.apigateway.security;
 
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -12,6 +12,10 @@ import reactor.core.publisher.Mono;
  * authentication is not a {@link JwtAuthenticationToken} (e.g. public paths
  * configured via {@code permitAll()}). Callers retain responsibility for any
  * fallback (typically via {@code defaultIfEmpty(...)}).
+ *
+ * <p>Moved here from wms (TASK-MONO-355). scm and fan inlined this same chain inside
+ * their enrichment filters; the shared {@link com.example.apigateway.filter.JwtHeaderEnrichmentFilter}
+ * now uses this single definition.
  */
 public final class ReactiveJwtAccess {
 

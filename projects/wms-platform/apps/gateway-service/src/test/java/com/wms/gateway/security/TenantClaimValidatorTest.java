@@ -1,5 +1,8 @@
 package com.wms.gateway.security;
 
+import com.example.apigateway.security.TenantClaimValidator;
+import com.wms.gateway.config.OAuth2ResourceServerConfig;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
@@ -13,7 +16,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("TenantClaimValidator 단위 테스트 (gateway)")
 class TenantClaimValidatorTest {
 
-    private final TenantClaimValidator validator = new TenantClaimValidator("wms");
+    // Built from the production wiring, not hand-constructed: relax the gate in
+    // OAuth2ResourceServerConfig#tenantGate and these assertions go red (TASK-MONO-355).
+    private final TenantClaimValidator validator = new OAuth2ResourceServerConfig(
+            "http://iam.local/oauth2/jwks", "http://iam.local,iam", "wms").tenantGate();
 
     private static Jwt jwtWithClaim(String name, Object value) {
         return Jwt.withTokenValue("token")
@@ -24,6 +30,27 @@ class TenantClaimValidatorTest {
                 .expiresAt(Instant.now().plusSeconds(60))
                 .claim(name, value)
                 .build();
+    }
+
+    /**
+     * wms rejects the {@code "*"} SUPER_ADMIN wildcard that scm and fan accept. ADR-MONO-048
+     * § D5 confirmed this is a documented choice rather than drift — and then TASK-MONO-355
+     * found that <strong>nothing was asserting it</strong>. The suite pinned what this gate
+     * <em>accepts</em> and never what it deliberately refuses, so adding
+     * {@code .allowSuperAdminWildcard()} to {@code OAuth2ResourceServerConfig#tenantGate}
+     * would have opened the wms edge to every platform-scope token in complete silence.
+     *
+     * <p>The validator under test is built from that method, so this test is the guard.
+     */
+    @Test
+    @DisplayName("tenant_id=* (SUPER_ADMIN wildcard) → tenant_mismatch — wms 만의 의도적 거부")
+    void superAdminWildcardRejected() {
+        OAuth2TokenValidatorResult r = validator.validate(
+                jwtWithClaim(TenantClaimValidator.CLAIM_TENANT_ID,
+                        TenantClaimValidator.WILDCARD_TENANT));
+        assertThat(r.hasErrors()).isTrue();
+        assertThat(r.getErrors()).anyMatch(
+                e -> TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(e.getErrorCode()));
     }
 
     @Test

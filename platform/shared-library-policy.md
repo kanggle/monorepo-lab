@@ -17,7 +17,7 @@ They must not become a container for service-specific business logic.
 | Module | Contents | Consumers |
 |---|---|---|
 | `libs/java-common` | framework-neutral technical utilities | most services |
-| `libs/java-gateway` | **reactive** (WebFlux / Spring Cloud Gateway) edge plumbing — error envelope + writer, request-id / retry-after filters, the fail-open rate-limiter decorator, the allowed-issuer validator, the shared reactive security chain | **gateway services only** (wms, scm, fan, ecommerce). Not iam — its gateway is an independent implementation (ADR-MONO-048 § D2) |
+| `libs/java-gateway` | **reactive** (WebFlux / Spring Cloud Gateway) edge plumbing — error envelope + writer, request-id / retry-after filters, the fail-open rate-limiter decorator, the shared reactive security chain, and the token/identity boundary: allowed-issuer validator, parameterized tenant gate, identity-header strip (add-only baseline) + JWT header enrichment, claim extractors, JWT decoder + validator-chain assembly | **gateway services only** (wms, scm, fan, ecommerce). Not iam — its gateway is an independent implementation (ADR-MONO-048 § D2) |
 | `libs/java-messaging` | messaging / outbox transport scaffolding (ADR-MONO-004) | event producers + consumers |
 | `libs/java-notification` | notification contract + client (ADR-MONO-043) | notification producers |
 | `libs/java-observability` | tracing / metrics helpers | most services |

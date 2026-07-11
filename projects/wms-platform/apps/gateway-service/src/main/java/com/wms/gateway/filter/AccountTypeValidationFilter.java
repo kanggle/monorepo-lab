@@ -1,7 +1,7 @@
 package com.wms.gateway.filter;
 
 import com.example.apigateway.error.GatewayErrorHandler;
-import com.wms.gateway.security.ReactiveJwtAccess;
+import com.example.apigateway.security.ReactiveJwtAccess;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
