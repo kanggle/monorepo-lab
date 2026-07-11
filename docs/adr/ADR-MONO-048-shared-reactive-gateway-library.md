@@ -172,12 +172,14 @@ Every extraction PR must show:
 | step | task | content |
 |---|---|---|
 | 0 | `TASK-MONO-349` | **This ADR.** No code. |
-| 1 | `TASK-MONO-351` | Create the module. Extract **Tier 1** + migrate `wms`/`scm`/`fan`; `ecommerce` adopts `AllowedIssuersValidator` (its only 4/4 class). De-risks the reactive-module wiring first. |
-| 2 | `TASK-MONO-352` | **Tier 2** parameterization + migrate `wms`/`scm`/`fan`. |
-| 3 | `TASK-MONO-353` | Migrate `ecommerce` onto Tier 2 (needs `FailOpenRateLimiter` delegate-signature reconciliation — ecommerce generalised it to `RateLimiter<Config>` to support its override decorator). |
-| 4 | `TASK-MONO-354` | **Create `finance` / `erp` gateways.** After steps 1–3 this is nearly free — route yml + a handful of properties. **Resolves `TASK-MONO-347` direction A** without the policy exception that direction B would have required. |
+| 1 | `TASK-MONO-351` | ✅ **DONE.** Create the module. Extract **Tier 1** + migrate `wms`/`scm`/`fan`; `ecommerce` adopts `AllowedIssuersValidator` (its only 4/4 class). De-risks the reactive-module wiring first. |
+| 2 | `TASK-MONO-355` | **Tier 2** parameterization + migrate `wms`/`scm`/`fan`. |
+| 3 | `TASK-MONO-356` | Migrate `ecommerce` onto Tier 2 (needs `FailOpenRateLimiter` delegate-signature reconciliation — ecommerce generalised it to `RateLimiter<Config>` to support its override decorator). |
+| 4 | `TASK-MONO-357` | **Create `finance` / `erp` gateways.** After steps 1–3 this is nearly free — route yml + a handful of properties. **Resolves `TASK-MONO-347` direction A** without the policy exception that direction B would have required. |
 
 Step 1 is spawned on acceptance. Steps 2–4 are spawned **as each predecessor lands**, not up front: each step's scope should be written against what the previous step actually *proved*, not against what it was expected to prove.
+
+> **Steps 2–4 were renumbered `352`/`353`/`354` → `355`/`356`/`357` (2026-07-11).** A concurrent session allocated all three of the original numbers to unrelated tasks (`352` error-code registry, `353` bitnami-kafka dead image, `354` repo-hygiene drift) in the window between this ADR landing and step 1 merging — the direct consequence of *not* spawning steps 2–4 up front, which is the price of the sequencing rule above and is worth paying. This renumber is **not** the same call as the `350` gap below: an absent number is inert, whereas `352`–`354` now resolve to **real tasks about something else**, so leaving them would have sent a reader following step 2 to the error-code registry. Decisions D1–D6 are untouched; only these three pointers moved.
 
 > **`TASK-MONO-350` is absent from this chain on purpose.** Two concurrent sessions independently claimed `TASK-MONO-349`, and then each tried to yield the number to the other. The resolution that landed (PR #2412) is the correct one — *the ticket with nothing depending on it is the one that moves* — so an unrelated backlog ticket took `350` and this ADR kept `349`. The extraction chain therefore begins at `351`. The gap is a scar, not a mistake; renumbering now would only break references this ADR already ships with.
 
@@ -227,7 +229,7 @@ Accepted by the user, explicitly (`ADR-MONO-048 ACCEPTED`).
 
 This ADR was authored and opened as PROPOSED precisely so acceptance would be a **decision** rather than a fait accompli: it authorises a new shared library and the rewiring of **four production security edges**, which is the class of decision [`platform/shared-library-policy.md`](../../platform/shared-library-policy.md) § Change Rule reserves for an ADR rather than a task. **No agent self-accept** — that gate held.
 
-**D7 is live.** Step 1 (`TASK-MONO-351`) is spawned with this commit.
+**D7 is live.** Step 1 (`TASK-MONO-351`) is **done** (PR #2417, squash `80e33a6c6`) — the module stands up, all six D6 obligations discharged. Step 2 (`TASK-MONO-355`) is spawned.
 
 **The gate that remains is D6, and it binds every step:**
 
