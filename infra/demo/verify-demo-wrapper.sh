@@ -17,6 +17,11 @@
 #        ecommerce 의 bare ${VAR} 14개는 gitignored .env 에서 오므로 fresh clone
 #        (데모 AMI · CI 러너)에서 전부 빈 문자열이 됐고, 그 중 9개가
 #        POSTGRES_PASSWORD 라 postgres 가 초기화를 거부해 DB 9개 + 앱 12개가 죽었다.)
+#   (h) **참조 이미지가 레지스트리에 실재한다** — compose 가 가리키는 image: 가 사라지면
+#       기동이 즉사한다. (TASK-MONO-353: bitnami/kafka:3.7 이 Docker Hub 에서 삭제되어
+#        scm/erp/fan 의 compose 가 전부 깨졌다. 우리 커밋과 무관하게 외부에서 깨지므로
+#        어떤 diff-기반 검사로도 안 잡히고, 그 3개 compose 를 실행하는 CI 잡이 하나도
+#        없어(E2E 는 Testcontainers 기반) 오래 방치됐다.)
 #   (f) --live: 서로 다른 프로젝트의 같은 서비스 키(redis)가 별도 -p 로 공존 healthy
 #
 # jq 는 쓰지 않는다(러너 외 환경 호환) — `docker compose config` YAML 을 grep/awk 로 판다.
@@ -173,6 +178,68 @@ done
   $'\n'"→ compose 는 이를 경고로만 알립니다. 비밀번호 자리라면 컨테이너가 기동에"\
   $'\n'"   실패합니다(postgres 는 빈 POSTGRES_PASSWORD 를 거부)."\
   $'\n'"→ 값을 infra/demo/demo.env 에 추가하세요 (TASK-MONO-346)."
+
+# ---------------------------------------------------------------------------
+echo "[verify] (h) 참조 이미지가 레지스트리에 실재하는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-353): `bitnami/kafka:3.7` 이 Docker Hub 에서 **삭제**됐다(태그 404,
+# 레포 태그 목록 자체가 빔). scm/erp/fan compose 가 이를 참조하고 있었고
+# `docker compose up` 이 `failed to resolve reference` 로 즉사했다.
+#
+# 이 결함의 성질이 중요하다: **우리 커밋과 무관하게 외부에서 깨진다.** 따라서
+# 어떤 diff-기반 검사로도 잡히지 않는다. 게다가 CI 의 scm/erp/fan E2E 는
+# Testcontainers 기반이라 이 compose 파일들을 **한 번도 실행하지 않았다** —
+# 3개 프로젝트의 compose 가 완전히 깨진 채로 CI 는 계속 초록이었다.
+#
+# 레이트리밋과 "삭제"를 구분한다. 구분 없이 실패시키면 Docker Hub 익명 한도
+# (IP 당 100/6h, GH 러너는 IP 공유)에 걸려 가드가 flaky 해지고, flaky 한 가드는
+# 결국 꺼진다. **확정적 부재에만 FAIL** 하고 나머지는 skip 하되 건수를 찍는다
+# (조용한 truncation 금지 — skip 이 0이 아니면 커버리지가 그만큼 비었다는 뜻).
+# `build:` 를 가진 서비스의 image: 는 **우리가 소스에서 굽는 태그**(`…:local`)라
+# 레지스트리에 존재하지 않는다. 이를 검사에 넣으면 30여 건이 전부 "확인 실패"로
+# 잡혀 skip 목록을 가득 채우고, 그 소음이 **진짜 레이트리밋 skip 을 가린다** —
+# 가드의 신호가 죽는다. 서비스 블록 단위로 build: 유무를 보고 걸러낸다.
+all_images() { # 렌더된 compose 전부에서 '레지스트리에서 받아오는' image: 만 뽑는다
+  for p in traefik "${!COMPOSE[@]}"; do
+    render "$p" | awk '
+      /^  [A-Za-z0-9._-]+:$/ { if (img != "" && !hasbuild) print img; img = ""; hasbuild = 0; next }
+      /^    build:/          { hasbuild = 1 }
+      /^    image:/          { img = $2 }
+      END                    { if (img != "" && !hasbuild) print img }
+    '
+  done | tr -d '"' | sed '/^$/d' | sort -u
+}
+
+img_gone=""
+img_ok=0
+img_skip=0
+img_skip_list=""
+while read -r img; do
+  [ -n "$img" ] || continue
+  if err="$(docker manifest inspect "$img" 2>&1 >/dev/null)"; then
+    img_ok=$((img_ok + 1))
+    continue
+  fi
+  case "$err" in
+    *"manifest unknown"* | *"no such manifest"* | *"not found"* | *"repository does not exist"*)
+      img_gone="$img_gone  $img"$'\n' ;;
+    *)
+      # 레이트리밋 / 네트워크 / 인증 — 이미지의 결함이 아니다
+      img_skip=$((img_skip + 1))
+      img_skip_list="$img_skip_list  $img → ${err%%$'\n'*}"$'\n' ;;
+  esac
+done < <(all_images)
+
+[ -z "$img_gone" ] || fail "레지스트리에서 사라진 이미지:"$'\n'"$img_gone"\
+  $'\n'"→ compose 가 참조하는 이미지가 더 이상 존재하지 않습니다. 캐시가 없는 모든"\
+  $'\n'"   환경(새 개발자 머신, 데모 AMI, 캐시 미스 CI)에서 기동이 실패합니다."\
+  $'\n'"→ 살아있는 대체 이미지로 교체하세요 (TASK-MONO-353: bitnami/kafka → apache/kafka)."
+
+ok "이미지 ${img_ok}개 확인됨"
+if [ "$img_skip" -gt 0 ]; then
+  echo "  ⚠ ${img_skip}개는 확인하지 못했습니다(레지스트리 사정 — 결함 아님):" >&2
+  printf '%s' "$img_skip_list" >&2
+fi
 
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
