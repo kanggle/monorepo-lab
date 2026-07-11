@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.integration.support.KafkaTestConsumer;
+import com.wms.master.integration.support.TestCodes;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.UUID;
@@ -71,7 +72,7 @@ class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
                 // publisher retries against a paused broker until its bounded
                 // `delivery.timeout.ms` (see application-integration.yml) fires
                 // and surfaces the failure to onKafkaSendFailure.
-                String code = "WH" + shortSuffix();
+                String code = "WH" + TestCodes.uniqueSuffix();
                 String body = """
                         {"warehouseCode":"%s","name":"Paused","timezone":"UTC"}
                         """.formatted(code);
@@ -133,9 +134,5 @@ class PublisherResilienceIntegrationTest extends MasterServiceIntegrationBase {
         return meterRegistry.find(PUBLISH_FAILURE_TOTAL).counters().stream()
                 .mapToDouble(io.micrometer.core.instrument.Counter::count)
                 .sum();
-    }
-
-    private static String shortSuffix() {
-        return String.valueOf(10 + (int) (Math.random() * 890));
     }
 }

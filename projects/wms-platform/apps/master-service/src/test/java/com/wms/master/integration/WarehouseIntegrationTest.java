@@ -6,10 +6,10 @@ import static org.awaitility.Awaitility.await;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.integration.support.KafkaTestConsumer;
+import com.wms.master.integration.support.TestCodes;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,10 +44,6 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
     private static final String PENDING_COUNT = "master.outbox.pending.count";
     private static final String PUBLISH_SUCCESS_TOTAL = "master.outbox.publish.success.total";
 
-    // Sequence for the prometheus test's warehouse code, kept in the WH900–WH999
-    // slot (outside shortSuffix()'s WH10–WH899 range) to avoid code collisions.
-    private static final AtomicInteger METRICS_WH_SEQ = new AtomicInteger(0);
-
     @Autowired
     private TestRestTemplate rest;
 
@@ -60,7 +56,7 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
     @Test
     @DisplayName("create persists, writes outbox row, publishes envelope, idempotency replay returns cached response")
     void create_then_replay_then_event() throws Exception {
-        String code = "WH" + shortSuffix();
+        String code = "WH" + TestCodes.uniqueSuffix();
         String body = """
                 {"warehouseCode":"%s","name":"IT Main","address":"Seoul","timezone":"Asia/Seoul"}
                 """.formatted(code);
@@ -116,7 +112,7 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
     void forbidden_onMissingWriteRole() {
         String body = """
                 {"warehouseCode":"WH%s","name":"Role","timezone":"UTC"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
 
         ResponseEntity<String> response =
                 post("/api/v1/master/warehouses", body, UUID.randomUUID().toString(), READ_ROLE);
@@ -129,7 +125,7 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
     @DisplayName("patch with stale version returns 409 CONFLICT and does NOT publish an event")
     void versionCollision_returns409() throws Exception {
         // Seed
-        String code = "WH" + shortSuffix();
+        String code = "WH" + TestCodes.uniqueSuffix();
         String createBody = """
                 {"warehouseCode":"%s","name":"For update","timezone":"UTC"}
                 """.formatted(code);
@@ -184,11 +180,7 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
         // failure-counter family is induced + asserted by
         // PublisherResilienceIntegrationTest, so it is intentionally not required
         // here (asserting it would re-couple this test to cross-class ordering).
-        // Use a code in the WH900–WH999 slot: shortSuffix() only emits WH10–WH899,
-        // so this never collides with the random codes the other test methods /
-        // classes create (warehouseCode is unique-constrained, ^WH\d{2,3}$). Keeps
-        // this test from adding to the suite's small-code-space collision risk.
-        String metricsCode = "WH" + (900 + METRICS_WH_SEQ.getAndIncrement());
+        String metricsCode = "WH" + TestCodes.uniqueSuffix();
         String createBody = """
                 {"warehouseCode":"%s","name":"Metrics WH","address":"Seoul","timezone":"Asia/Seoul"}
                 """.formatted(metricsCode);
@@ -252,10 +244,5 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
         return meterRegistry.find(PUBLISH_SUCCESS_TOTAL).counters().stream()
                 .mapToDouble(io.micrometer.core.instrument.Counter::count)
                 .sum();
-    }
-
-    private static String shortSuffix() {
-        // Two-to-three digit suffix to match WH\d{2,3}
-        return String.valueOf(10 + (int) (Math.random() * 890));
     }
 }

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.integration.MasterServiceIntegrationBase;
 import com.wms.master.integration.support.KafkaTestConsumer;
+import com.wms.master.integration.support.TestCodes;
 import java.time.Duration;
 import java.util.UUID;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -56,7 +57,7 @@ class EventContractTest extends MasterServiceIntegrationBase {
             String whId = createWarehouse();
             String zoneBody = """
                     {"zoneCode":"Z-%s","name":"Event Contract","zoneType":"AMBIENT"}
-                    """.formatted(shortSuffix());
+                    """.formatted(TestCodes.uniqueSuffix());
             ResponseEntity<String> zone = post("/api/v1/master/warehouses/" + whId + "/zones",
                     zoneBody, UUID.randomUUID().toString(), "MASTER_WRITE");
             assertThat(zone.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -75,7 +76,7 @@ class EventContractTest extends MasterServiceIntegrationBase {
             String warehouseCode = lastWarehouseCode;
             String zoneBody = """
                     {"zoneCode":"Z-%s","name":"Loc event","zoneType":"AMBIENT"}
-                    """.formatted(shortSuffix());
+                    """.formatted(TestCodes.uniqueSuffix());
             ResponseEntity<String> zone = post("/api/v1/master/warehouses/" + whId + "/zones",
                     zoneBody, UUID.randomUUID().toString(), "MASTER_WRITE");
             String zoneId = objectMapper.readTree(zone.getBody()).get("id").asText();
@@ -103,7 +104,7 @@ class EventContractTest extends MasterServiceIntegrationBase {
             String skuId = createLotTrackedSku();
             String lotBody = """
                     {"lotNo":"LOT-%s"}
-                    """.formatted(shortSuffix());
+                    """.formatted(TestCodes.uniqueSuffix());
             ResponseEntity<String> lot = post("/api/v1/master/skus/" + skuId + "/lots",
                     lotBody, UUID.randomUUID().toString(), "MASTER_WRITE");
             assertThat(lot.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -121,7 +122,7 @@ class EventContractTest extends MasterServiceIntegrationBase {
     private String lastWarehouseCode;
 
     private String createWarehouse() throws Exception {
-        String code = "WH" + shortSuffix();
+        String code = "WH" + TestCodes.uniqueSuffix();
         String body = """
                 {"warehouseCode":"%s","name":"Event contract","timezone":"UTC"}
                 """.formatted(code);
@@ -133,7 +134,7 @@ class EventContractTest extends MasterServiceIntegrationBase {
     }
 
     private String createLotTrackedSku() throws Exception {
-        String skuCode = "SKU-LOT-" + shortSuffix();
+        String skuCode = "SKU-LOT-" + TestCodes.uniqueSuffix();
         String body = """
                 {"skuCode":"%s","name":"Lot-Tracked SKU","baseUom":"EA","trackingType":"LOT"}
                 """.formatted(skuCode);
@@ -152,9 +153,5 @@ class EventContractTest extends MasterServiceIntegrationBase {
         headers.add("X-Actor-Id", "event-contract-actor");
         return rest.exchange(path, HttpMethod.POST,
                 new HttpEntity<>(body, headers), String.class);
-    }
-
-    private static String shortSuffix() {
-        return String.valueOf(10 + (int) (Math.random() * 890));
     }
 }

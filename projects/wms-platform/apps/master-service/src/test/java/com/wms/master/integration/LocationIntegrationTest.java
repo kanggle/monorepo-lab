@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.integration.support.KafkaTestConsumer;
+import com.wms.master.integration.support.TestCodes;
 import java.time.Duration;
 import java.util.UUID;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -133,7 +134,7 @@ class LocationIntegrationTest extends MasterServiceIntegrationBase {
     private record Seed(String warehouseId, String warehouseCode, String zoneId) {}
 
     private Seed seedWarehouseAndZone() throws Exception {
-        String warehouseCode = "WH" + shortSuffix();
+        String warehouseCode = "WH" + TestCodes.uniqueSuffix();
         String whBody = """
                 {"warehouseCode":"%s","name":"Loc parent","timezone":"UTC"}
                 """.formatted(warehouseCode);
@@ -144,7 +145,7 @@ class LocationIntegrationTest extends MasterServiceIntegrationBase {
 
         String zoneBody = """
                 {"zoneCode":"Z-%s","name":"Loc zone","zoneType":"AMBIENT"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
         ResponseEntity<String> zone = post(
                 "/api/v1/master/warehouses/" + warehouseId + "/zones",
                 zoneBody, UUID.randomUUID().toString(), WRITE_ROLE);
@@ -162,9 +163,5 @@ class LocationIntegrationTest extends MasterServiceIntegrationBase {
         headers.add("X-Actor-Id", "integration-actor");
         return rest.exchange(path, HttpMethod.POST,
                 new HttpEntity<>(body, headers), String.class);
-    }
-
-    private static String shortSuffix() {
-        return String.valueOf(10 + (int) (Math.random() * 890));
     }
 }

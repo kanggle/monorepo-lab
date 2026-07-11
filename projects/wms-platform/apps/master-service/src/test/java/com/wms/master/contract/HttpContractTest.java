@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.integration.MasterServiceIntegrationBase;
+import com.wms.master.integration.support.TestCodes;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,7 @@ class HttpContractTest extends MasterServiceIntegrationBase {
     void createWarehouse_matchesSchema() {
         String body = """
                 {"warehouseCode":"WH%s","name":"Contract WH","timezone":"UTC"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
         ResponseEntity<String> response = post("/api/v1/master/warehouses", body,
                 UUID.randomUUID().toString(), "MASTER_WRITE");
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -67,7 +68,7 @@ class HttpContractTest extends MasterServiceIntegrationBase {
     void getWarehouse_matchesSchema() throws Exception {
         String body = """
                 {"warehouseCode":"WH%s","name":"Contract Get","timezone":"UTC"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
         ResponseEntity<String> created = post("/api/v1/master/warehouses", body,
                 UUID.randomUUID().toString(), "MASTER_WRITE");
         JsonNode createdNode = objectMapper.readTree(created.getBody());
@@ -84,7 +85,7 @@ class HttpContractTest extends MasterServiceIntegrationBase {
         String warehouseId = seedWarehouse();
         String zoneBody = """
                 {"zoneCode":"Z-%s","name":"Contract Zone","zoneType":"AMBIENT"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
         ResponseEntity<String> response = post(
                 "/api/v1/master/warehouses/" + warehouseId + "/zones",
                 zoneBody, UUID.randomUUID().toString(), "MASTER_WRITE");
@@ -115,7 +116,7 @@ class HttpContractTest extends MasterServiceIntegrationBase {
         String skuId = seedLotTrackedSku();
         String lotBody = """
                 {"lotNo":"LOT-%s"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
         ResponseEntity<String> response = post("/api/v1/master/skus/" + skuId + "/lots",
                 lotBody, UUID.randomUUID().toString(), "MASTER_WRITE");
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -128,7 +129,7 @@ class HttpContractTest extends MasterServiceIntegrationBase {
         String skuId = seedLotTrackedSku();
         String lotBody = """
                 {"lotNo":"LOT-%s"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
         ResponseEntity<String> created = post("/api/v1/master/skus/" + skuId + "/lots",
                 lotBody, UUID.randomUUID().toString(), "MASTER_WRITE");
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -179,14 +180,14 @@ class HttpContractTest extends MasterServiceIntegrationBase {
     private String seedWarehouse() throws Exception {
         String body = """
                 {"warehouseCode":"WH%s","name":"Seed","timezone":"UTC"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
         ResponseEntity<String> response = post("/api/v1/master/warehouses",
                 body, UUID.randomUUID().toString(), "MASTER_WRITE");
         return objectMapper.readTree(response.getBody()).get("id").asText();
     }
 
     private Seed seedWarehouseZone() throws Exception {
-        String warehouseCode = "WH" + shortSuffix();
+        String warehouseCode = "WH" + TestCodes.uniqueSuffix();
         String whBody = """
                 {"warehouseCode":"%s","name":"Seed WH","timezone":"UTC"}
                 """.formatted(warehouseCode);
@@ -195,7 +196,7 @@ class HttpContractTest extends MasterServiceIntegrationBase {
         String warehouseId = objectMapper.readTree(wh.getBody()).get("id").asText();
         String zoneBody = """
                 {"zoneCode":"Z-%s","name":"Seed Zone","zoneType":"AMBIENT"}
-                """.formatted(shortSuffix());
+                """.formatted(TestCodes.uniqueSuffix());
         ResponseEntity<String> zone = post(
                 "/api/v1/master/warehouses/" + warehouseId + "/zones",
                 zoneBody, UUID.randomUUID().toString(), "MASTER_WRITE");
@@ -204,7 +205,7 @@ class HttpContractTest extends MasterServiceIntegrationBase {
     }
 
     private String seedLotTrackedSku() throws Exception {
-        String skuCode = "SKU-LOT-" + shortSuffix();
+        String skuCode = "SKU-LOT-" + TestCodes.uniqueSuffix();
         String body = """
                 {"skuCode":"%s","name":"Lot-Tracked SKU","baseUom":"EA","trackingType":"LOT"}
                 """.formatted(skuCode);
@@ -232,9 +233,5 @@ class HttpContractTest extends MasterServiceIntegrationBase {
         headers.add("X-Actor-Id", "contract-actor");
         return rest.exchange(path, HttpMethod.GET,
                 new HttpEntity<>(headers), String.class);
-    }
-
-    private static String shortSuffix() {
-        return String.valueOf(10 + (int) (Math.random() * 890));
     }
 }
