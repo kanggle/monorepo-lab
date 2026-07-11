@@ -7,9 +7,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class GatewayMetrics {
 
+    /** Reason tag for a cross-tenant / missing-tenant token rejection (TASK-BE-501). */
+    public static final String REASON_TENANT_MISMATCH = "tenant_mismatch";
+
     private final Counter jwtMissing;
     private final Counter jwtExpired;
     private final Counter jwtInvalid;
+    private final Counter jwtTenantMismatch;
     private final MeterRegistry registry;
 
     public GatewayMetrics(MeterRegistry registry) {
@@ -29,12 +33,21 @@ public class GatewayMetrics {
                 .description("Total JWT validation failures by reason")
                 .tag("reason", "invalid")
                 .register(registry);
+
+        // A cross-tenant token is signature-valid — bucketing it under "invalid"
+        // hides an authorization signal inside an authentication counter, so an
+        // operator watching for tenant-boundary probing sees only generic noise.
+        this.jwtTenantMismatch = Counter.builder("gateway_jwt_validation_failure_total")
+                .description("Total JWT validation failures by reason")
+                .tag("reason", REASON_TENANT_MISMATCH)
+                .register(registry);
     }
 
     public void incrementJwtValidationFailure(String reason) {
         switch (reason) {
             case "missing" -> jwtMissing.increment();
             case "expired" -> jwtExpired.increment();
+            case REASON_TENANT_MISMATCH -> jwtTenantMismatch.increment();
             default -> jwtInvalid.increment();
         }
     }

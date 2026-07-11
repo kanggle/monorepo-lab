@@ -26,7 +26,16 @@ public class IdentityHeaderStripFilter implements GlobalFilter, Ordered {
             "X-User-Email",
             "X-User-Role",
             "X-Actor-Id",
-            "X-Account-Type"
+            "X-Account-Type",
+            // Named by specs/services/gateway-service/overview.md § Responsibilities but
+            // absent from this set until TASK-BE-502. Nothing in wms reads them yet, and
+            // JwtHeaderEnrichmentFilter does not re-set them — so a forged X-Tenant-Id
+            // would have crossed the edge intact, which is precisely the tenant boundary
+            // ADR-MONO-024 D2 exists to hold. Strip is the whole defence here; the first
+            // controller to read one of these must not inherit a hole.
+            "X-Account-Id",
+            "X-Tenant-Id",
+            "X-Roles"
     );
 
     @Override
