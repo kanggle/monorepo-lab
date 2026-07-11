@@ -8,7 +8,7 @@ IAM 가이드에 `ORG_ADMIN` / `org.manage` / `/org-hierarchy` 표면 추가 (PC
 
 # Status
 
-ready
+done
 
 # Owner
 
