@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
  * Verifies the prometheus scrape endpoint isolation contract.
  *
  * <p>Design: {@code /actuator/prometheus} is NOT added to the gateway's PUBLIC_PATHS
- * in {@link com.example.scmplatform.gateway.config.SecurityConfig}. The gateway
+ * in {@link com.example.apigateway.config.SecurityConfig}. The gateway
  * does not proxy this path to any downstream service. An unauthenticated external
  * caller therefore receives 401 UNAUTHORIZED — the gateway's own Spring Security
  * filter chain rejects it before reaching the actuator endpoint.

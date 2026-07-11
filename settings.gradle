@@ -1,8 +1,16 @@
 rootProject.name = 'monorepo-lab'
 
 // Shared libraries (at repo root)
+//
+// libs:java-gateway is REACTIVE (WebFlux / Spring Cloud Gateway) and is consumed
+// only by gateway-service modules. It is a separate module rather than an addition
+// to libs:java-web because java-web is the framework-agnostic surface shared with
+// servlet services — the same reason libs:java-web-servlet was split out by
+// TASK-MONO-044a, after a servlet leak triggered BeanDefinitionOverrideException in
+// three reactive gateway classpaths. (ADR-MONO-048 § D1 / TASK-MONO-351.)
 include(
     'libs:java-common',
+    'libs:java-gateway',
     'libs:java-messaging',
     'libs:java-notification',
     'libs:java-observability',

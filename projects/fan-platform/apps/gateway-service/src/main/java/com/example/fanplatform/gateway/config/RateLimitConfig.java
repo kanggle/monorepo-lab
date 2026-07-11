@@ -1,6 +1,6 @@
 package com.example.fanplatform.gateway.config;
 
-import com.example.fanplatform.gateway.ratelimit.FailOpenRateLimiter;
+import com.example.apigateway.ratelimit.FailOpenRateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.InetSocketAddress;
 import java.util.Optional;

@@ -12,6 +12,24 @@ They must not become a container for service-specific business logic.
 
 ---
 
+# Catalog
+
+| Module | Contents | Consumers |
+|---|---|---|
+| `libs/java-common` | framework-neutral technical utilities | most services |
+| `libs/java-gateway` | **reactive** (WebFlux / Spring Cloud Gateway) edge plumbing — error envelope + writer, request-id / retry-after filters, the fail-open rate-limiter decorator, the allowed-issuer validator, the shared reactive security chain | **gateway services only** (wms, scm, fan, ecommerce). Not iam — its gateway is an independent implementation (ADR-MONO-048 § D2) |
+| `libs/java-messaging` | messaging / outbox transport scaffolding (ADR-MONO-004) | event producers + consumers |
+| `libs/java-notification` | notification contract + client (ADR-MONO-043) | notification producers |
+| `libs/java-observability` | tracing / metrics helpers | most services |
+| `libs/java-security` | JWT signing/verification, password hashing | auth-side services |
+| `libs/java-test-support` | test fixtures + helpers | test source sets |
+| `libs/java-web` | **framework-agnostic** web primitives — safe on both servlet and reactive classpaths | servlet services + gateways |
+| `libs/java-web-servlet` | servlet-only web helpers | servlet services |
+
+> **Reactive / servlet separation is load-bearing, not stylistic.** `libs/java-web-servlet` was split out of `libs/java-web` by TASK-MONO-044a *after* a servlet leak triggered `BeanDefinitionOverrideException` in three reactive gateway classpaths. `libs/java-gateway` exists for the mirror-image reason (ADR-MONO-048 § D1): putting Spring Cloud Gateway into `java-web` would drag WebFlux onto every servlet service that consumes it. **Do not add reactive types to `java-web`, or servlet types to `java-gateway`.**
+
+---
+
 # Allowed in Shared Libraries
 
 Shared libraries may contain:
@@ -23,6 +41,7 @@ Shared libraries may contain:
 - messaging abstractions used by multiple services
 - observability helpers
 - test support utilities
+- reactive gateway/edge plumbing (filters, error envelope, rate-limiter decorators, token validators) — `libs/java-gateway` only
 - common DTO primitives only if they are truly cross-service and stable
 
 ## Messaging-specific guidance (per ADR-MONO-004)

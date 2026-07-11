@@ -9,6 +9,13 @@ ext {
 
 dependencies {
     // Shared Web
+    // libs:java-gateway — ecommerce adopts AllowedIssuersValidator only (the one Tier-1
+    // class that was byte-identical across all four gateways). It deliberately does NOT
+    // add com.example.apigateway to its component scan: its SecurityConfig encodes route
+    // knowledge and stays in the service (ADR-MONO-048 § D4), so the library's
+    // SecurityConfig / filters must not auto-register here. AllowedIssuersValidator is
+    // constructed with `new`, never a bean, so adopting it costs nothing but an import.
+    implementation project(':libs:java-gateway')
     implementation project(':libs:java-web')
 
     // Observability

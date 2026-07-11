@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
  * TASK-FAN-BE-004 (option c — network isolation).
  *
  * <p>Design: {@code /actuator/prometheus} is NOT added to the gateway's PUBLIC_PATHS
- * in {@link com.example.fanplatform.gateway.config.SecurityConfig}. The gateway
+ * in {@link com.example.apigateway.config.SecurityConfig}. The gateway
  * does not proxy this path to any downstream service. An unauthenticated external
  * caller therefore receives 401 UNAUTHORIZED — the gateway's own Spring Security
  * filter chain rejects it before reaching the actuator endpoint.

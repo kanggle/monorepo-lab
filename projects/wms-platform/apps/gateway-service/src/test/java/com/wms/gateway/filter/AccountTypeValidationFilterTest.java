@@ -3,7 +3,7 @@ package com.wms.gateway.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wms.gateway.error.GatewayErrorHandler;
+import com.example.apigateway.error.GatewayErrorHandler;
 import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.Test;

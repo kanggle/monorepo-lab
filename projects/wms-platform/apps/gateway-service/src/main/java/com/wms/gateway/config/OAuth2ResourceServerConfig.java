@@ -1,6 +1,6 @@
 package com.wms.gateway.config;
 
-import com.wms.gateway.security.AllowedIssuersValidator;
+import com.example.apigateway.security.AllowedIssuersValidator;
 import com.wms.gateway.security.TenantClaimValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

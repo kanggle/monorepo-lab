@@ -1,6 +1,6 @@
 package com.example.fanplatform.gateway.config;
 
-import com.example.fanplatform.gateway.security.AllowedIssuersValidator;
+import com.example.apigateway.security.AllowedIssuersValidator;
 import com.example.fanplatform.gateway.security.TenantClaimValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
