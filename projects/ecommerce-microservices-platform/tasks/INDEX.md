@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-501 | **REVIEW (impl PR 열림)** — gateway 결함 2건. **① `X-Actor-Id` 미-strip** = `platform/api-gateway-policy.md` L74 정면 위반. `IdentityHeaderStripFilter` 는 이 헤더를 안 지우고 `JwtHeaderEnrichmentFilter` 도 안 세팅 → **클라이언트 위조값이 백엔드까지 그대로 통과**. ecommerce 리더는 현재 0건(장전 안 된 총)이나 **wms 는 이미 12개 컨트롤러가 이 헤더를 감사 주체로 신뢰**(`ACTOR_HEADER`) → 여기 리더가 생기는 순간 감사로그 위조. "enrich 가 덮으니 괜찮다" 는 성립 안 함: public 라우트(`GET /api/products/**`, 캐리어 웹훅)엔 JWT 가 없어 enrich 가 **no-op** 이고 strip 이 유일 방어선. **② `tenant_mismatch` → 401** — `TenantClaimValidator` javadoc 이 작성 시점부터 **403 `TENANT_FORBIDDEN`** 을 약속했는데 `SecurityConfig` 는 모든 인증실패를 401 로 응답, 약속된 코드는 **코드베이스 어디서도 방출 안 됨**. 401 은 cross-tenant 클라이언트에게 "토큰 새로 받아라" 는 **거짓말**(재발급해도 동일 거절 → 갱신 루프). 부수: 그간 cross-tenant 거절이 `reason="invalid"` 로 집계돼 **인가 신호가 인증 카운터 안에 숨어 있었음** → `reason="tenant_mismatch"` 분리. **AC-4 mutation check 통과**(픽스 되돌리면 5건 RED, 그 외 무손상). 자매=`TASK-BE-502`(wms), 동일 PR. 진단 부산물: fan 의 `entitled_domains` 부재는 **오탐**(fan 은 `ProductCatalog` 밖 = 엔타이틀먼트 평면 외부). 분석=Opus 4.8 / 구현=Opus 직접. | gateway-service | code, security, gateway, contract |
 
 ## done
 

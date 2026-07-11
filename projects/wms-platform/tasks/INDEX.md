@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-BE-502-gateway-strip-set-and-failopen-narrowing.md` — **REVIEW (impl PR 열림)**. gateway 결함 2건. **① strip 집합이 자기 스펙을 위반** — `specs/services/gateway-service/overview.md` L23 은 `X-Account-Id`·`X-Tenant-Id`·`X-Roles` strip 을 **이름 붙여 요구**하는데 `IdentityHeaderStripFilter` 는 **셋 다 안 지운다**(스펙에 없는 것들만 지우고 있었다). enrich 도 이 셋을 세팅하지 않으므로 덮어쓰기 방어도 없음 → 클라이언트가 붙인 `X-Tenant-Id: victim-tenant` 가 엣지를 **그대로 통과**(= ADR-MONO-024 D2 tenant confinement 가 지키려는 바로 그 경계). wms 리더는 현재 0건이나, **같은 서비스가 `X-Actor-Id` 는 12개 컨트롤러에서 신뢰**한다 — "게이트웨이가 걸러줬을 것" 이라는 전제가 이미 코드에 박혀 있고, 누가 `X-Tenant-Id` 를 같은 전제로 읽는 순간 뚫린다. scm(10개)·fan(8개)은 이미 strip 중, **wms 만 빠졌다**. **② `FailOpenRateLimiter` 가 모든 `Throwable` 을 삼킨다** — `onErrorResume(err -> ...)` 에 predicate 가 없어 NPE·CCE·Lua 인자오류까지 **"Redis 다운"으로 해석되어 요청 통과**. 필터 체인 버그 하나면 wms 는 **레이트리밋 없는 게이트웨이**가 되는데 로그는 Redis 를 지목해 엉뚱한 곳을 파게 만든다. **이 버그는 이미 한 번 고쳐졌다** — scm/fan/ecommerce 는 `isRedisFailure` 협소화 + 메트릭 2종을 갖췄는데 **wms 에만 전파되지 않았다**(= 복붙 게이트웨이가 치르던 대가의 실물, 이번 진단의 정당화 근거). 수정=scm 구현으로 수렴(cause-chain 인식 + self-cause 가드), 비-Redis 는 전파 + `gateway_ratelimit_unexpected_error_total`. **곁다리 발견**: 기존 테스트 `failsOpenOnAnyReactiveError` 가 **결함을 "의도된 계약"으로 명세에 못박고 있었다** — 그래서 스위트가 영원히 이의를 제기할 수 없었다. 올바른 기대로 교체. 스펙 각주: 새로 strip 하는 3개의 "re-set" 절은 리더 0건 + 클레임 매핑 미정의라 **의도적 보류**(아무도 안 읽는 헤더를 주입하면 다음 사람이 그걸 신뢰한다). **AC-4 mutation check 통과**(픽스 되돌리면 5건 RED, 그 외 무손상). 자매=`TASK-BE-501`(ecommerce), 동일 PR. 분석=Opus 4.8 / 구현=Opus 직접.
 
 ## done
 
