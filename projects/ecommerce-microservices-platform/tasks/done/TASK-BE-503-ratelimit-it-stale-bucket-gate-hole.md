@@ -8,7 +8,7 @@ Cross-tenant rate-limit IT 의 간헐 RED 실근인 제거 — `cleanRateKeys()`
 
 # Status
 
-ready
+done
 
 # Owner
 
