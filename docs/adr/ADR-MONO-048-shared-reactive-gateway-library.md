@@ -143,7 +143,13 @@ Every existing `libs/java-*` is servlet-based or framework-neutral. Gateways are
 
 - **`ecommerce`'s `SecurityConfig`** — encodes route knowledge (`/api/shippings/carrier-webhook`, `GET /api/products/**` public, CORS preflight permit) and depends on `com.example.web.dto.ErrorResponse` + `GatewayMetrics`. Route policy is domain knowledge; hoisting it would be exactly the "domain ownership over reuse convenience" violation the policy names.
 - **`ecommerce`'s per-tenant rate-limit override classes** (`OverrideAwareRateLimiter`, `RateLimitOverrideProperties`, `TenantRouteRateLimitConfig`) — a genuine marketplace requirement no other domain has.
-- **`ecommerce`'s `RouteService`, `SwaggerAggregationConfig`, `GatewayMetrics`, `AccountTypeEnforcementFilter`; `wms`'s `AccountTypeValidationFilter`; `scm`/`fan`'s `JwksHealthProbe`** — single-consumer classes. The policy's Decision Rule question 1 fails. **Do not promote a class to `libs/` because it might be shared later.**
+- **`ecommerce`'s `RouteService`, `SwaggerAggregationConfig`, `GatewayMetrics`, `AccountTypeEnforcementFilter`; `wms`'s `AccountTypeValidationFilter`** — single-consumer classes. The policy's Decision Rule question 1 fails. **Do not promote a class to `libs/` because it might be shared later.**
+
+> **Correction (TASK-MONO-356, 2026-07-12): `scm`/`fan`'s `JwksHealthProbe` was listed above as single-consumer. It is not — it has two, and their bodies are byte-identical.** The Decision Rule's question 1 *passes* for it, so it is a legitimate Tier-1 candidate and this ADR misclassified it.
+>
+> It was **not** extracted in step 3, and not out of tidiness: it is a `@Component`, and wms's `GatewayServiceApplication` scans `com.example.apigateway`. Moving it to the library as-is would make **wms register a JWKS health probe it has never had** — a behaviour change, arriving silently, under the banner of de-duplication. That is the precise thing § D6 exists to forbid, and it would have been easy to do by accident. A correct extraction has to convert it to a per-domain `@Bean` (scm/fan only), which is its own scoped change with its own proof, not a drive-by inside an ecommerce migration.
+>
+> Known remaining duplication after step 3, both deliberate: **`JwksHealthProbe`** (scm/fan, byte-identical — pending the change above) and **`RateLimitConfig`** (scm/fan differ by one string; wms differs structurally — descoped, see the D3 correction: the keying strategy is a decision for a human, not for an extraction).
 
 ### D5 — The four tenant-gate policies are **intentional**, and the library must preserve all four
 
@@ -175,7 +181,7 @@ Every extraction PR must show:
 |---|---|---|
 | 0 | `TASK-MONO-349` | **This ADR.** No code. |
 | 1 | `TASK-MONO-351` | ✅ **DONE.** Create the module. Extract **Tier 1** + migrate `wms`/`scm`/`fan`; `ecommerce` adopts `AllowedIssuersValidator` (its only 4/4 class). De-risks the reactive-module wiring first. |
-| 2 | `TASK-MONO-355` | **Tier 2** parameterization + migrate `wms`/`scm`/`fan`. |
+| 2 | `TASK-MONO-355` | ✅ **DONE.** **Tier 2** parameterization + migrate `wms`/`scm`/`fan`. `RateLimitConfig` descoped (see the correction under D3); `requireTenantMatch` deferred to step 3, where its only consumer lives. |
 | 3 | `TASK-MONO-356` | Migrate `ecommerce` onto Tier 2 (needs `FailOpenRateLimiter` delegate-signature reconciliation — ecommerce generalised it to `RateLimiter<Config>` to support its override decorator). |
 | 4 | `TASK-MONO-357` | **Create `finance` / `erp` gateways.** After steps 1–3 this is nearly free — route yml + a handful of properties. **Resolves `TASK-MONO-347` direction A** without the policy exception that direction B would have required. |
 
@@ -231,7 +237,11 @@ Accepted by the user, explicitly (`ADR-MONO-048 ACCEPTED`).
 
 This ADR was authored and opened as PROPOSED precisely so acceptance would be a **decision** rather than a fait accompli: it authorises a new shared library and the rewiring of **four production security edges**, which is the class of decision [`platform/shared-library-policy.md`](../../platform/shared-library-policy.md) § Change Rule reserves for an ADR rather than a task. **No agent self-accept** — that gate held.
 
-**D7 is live.** Step 1 (`TASK-MONO-351`) is **done** (PR #2417, squash `80e33a6c6`) — the module stands up, all six D6 obligations discharged. Step 2 (`TASK-MONO-355`) is spawned.
+**D7 is live.** Steps 1 and 2 are **done** — `TASK-MONO-351` (PR #2417, squash `80e33a6c6`: the module stands up) and `TASK-MONO-355` (PR #2425, squash `caa188e78`: Tier 2 parameterized, wms/scm/fan migrated). Every D6 obligation discharged in both, mutation checks biting in both. Step 3 (`TASK-MONO-356` — `ecommerce`) is spawned.
+
+**Two corrections this ADR needed, both found by the step that had to act on it** — the D3 `RateLimitConfig` row (above) and the D7 step numbering (below). Neither was visible from reading; both surfaced only when a step tried to do what the table said. That is an argument for the sequencing rule, not against it.
+
+**What step 2 found that this ADR did not anticipate:** the per-domain suites pinned what each tenant gate **accepts** and never what it deliberately **refuses**. wms's rejection of the `"*"` wildcard — the gate § D5 singles out as a documented choice, and the very thing that made this extraction permissible — had **zero test coverage**, as did fan's non-consultation of `entitled_domains`. Adding `.allowSuperAdminWildcard()` to wms would have opened its edge to every platform-scope token, silently. § D5 said these policies were *documented*; it did not occur to anyone to ask whether they were *asserted*. They now are.
 
 **The gate that remains is D6, and it binds every step:**
 

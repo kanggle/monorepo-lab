@@ -43,9 +43,17 @@ import reactor.core.publisher.Mono;
  * (ADR-MONO-048 § 1.3).
  *
  * <p>Configuration binding (the {@code spring.cloud.gateway.filter.request-rate-limiter}
- * {@code FilterArgsEvent} machinery) is delegated to the wrapped {@link RedisRateLimiter},
- * which remains the bean that listens for the event. This decorator only wraps
- * {@code isAllowed}.
+ * {@code FilterArgsEvent} machinery) is delegated to the wrapped limiter, which remains the
+ * bean that listens for the event. This decorator only wraps {@code isAllowed}.
+ *
+ * <p>The delegate is typed {@code RateLimiter<RedisRateLimiter.Config>} rather than
+ * {@code RedisRateLimiter} so that another decorator may sit between this one and Redis.
+ * ecommerce needs exactly that — {@code FailOpenRateLimiter → OverrideAwareRateLimiter →
+ * RedisRateLimiter}, its per-tenant rate-limit overrides being a marketplace requirement no
+ * other domain has (TASK-MONO-356). Widening is transparent to wms/scm/fan, which pass a
+ * {@link RedisRateLimiter} and get identical behaviour; narrowing ecommerce to fit the
+ * concrete type instead would have left it unable to wrap its override limiter, silently
+ * dropping the overrides.
  */
 public class FailOpenRateLimiter implements RateLimiter<RedisRateLimiter.Config> {
 
@@ -53,11 +61,12 @@ public class FailOpenRateLimiter implements RateLimiter<RedisRateLimiter.Config>
     public static final String METRIC_REDIS_UNAVAILABLE = "gateway_ratelimit_redis_unavailable_total";
     public static final String METRIC_UNEXPECTED_ERROR = "gateway_ratelimit_unexpected_error_total";
 
-    private final RedisRateLimiter delegate;
+    private final RateLimiter<RedisRateLimiter.Config> delegate;
     private final Counter redisUnavailableCounter;
     private final Counter unexpectedErrorCounter;
 
-    public FailOpenRateLimiter(RedisRateLimiter delegate, MeterRegistry meterRegistry) {
+    public FailOpenRateLimiter(
+            RateLimiter<RedisRateLimiter.Config> delegate, MeterRegistry meterRegistry) {
         this.delegate = delegate;
         this.redisUnavailableCounter = Counter.builder(METRIC_REDIS_UNAVAILABLE)
                 .description("Gateway rate-limit Redis backend unavailable; failed open.")
