@@ -1,4 +1,4 @@
-package com.example.fanplatform.gateway.security;
+package com.example.apigateway.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.atLeastOnce;
@@ -27,8 +27,34 @@ import org.springframework.web.reactive.function.client.WebClient;
  *   <li>Probe transiently fails (503) but recovers within the window → context NOT closed.</li>
  *   <li>Probe fails for the entire window → {@code applicationContext.close()} is called.</li>
  * </ul>
+ *
+ * <p>Plus the guard that made moving this class here safe at all — see
+ * {@link #isNotAComponentSoItCannotLeakIntoAScanningGateway()}.
  */
 class JwksHealthProbeTest {
+
+    /**
+     * The scm and fan copies carried {@code @Component}. Moving the class into
+     * {@code libs/java-gateway} with the annotation intact would have registered it in every
+     * gateway that scans {@code com.example.apigateway} — including <strong>wms, which has
+     * never had a JWKS startup probe</strong>. wms would have silently gained a boot-time
+     * dependency on the IdP being reachable: a behaviour change, arriving under the banner of
+     * de-duplication, which is exactly what ADR-MONO-048 § D6 forbids.
+     *
+     * <p>Registration is therefore opt-in — each gateway that wants the probe declares a
+     * {@code @Bean}. Re-adding a stereotype here would silently re-open that door, so this
+     * test closes it: it fails the build instead (TASK-MONO-357).
+     */
+    @Test
+    void isNotAComponentSoItCannotLeakIntoAScanningGateway() {
+        assertThat(JwksHealthProbe.class.getAnnotations())
+                .as("a stereotype here registers the probe in EVERY gateway that scans this "
+                        + "package — wms scans it and has never had a JWKS startup probe")
+                .noneMatch(a -> a.annotationType().getName()
+                        .startsWith("org.springframework.stereotype")
+                        || a.annotationType().getName()
+                                .equals("org.springframework.context.annotation.Configuration"));
+    }
 
     private MockWebServer jwksServer;
     private static final String JWKS_BODY = "{\"keys\":[]}";
@@ -119,7 +145,7 @@ class JwksHealthProbeTest {
         // is a transient error; backoff exhausts inside the configured window.
         ConfigurableApplicationContext ctx = mock(ConfigurableApplicationContext.class);
         JwksHealthProbe probe = new JwksHealthProbe(
-                "http://127.0.0.1:1/.well-known/jwks.json",
+                "http://127.0.0.1:1/oauth2/jwks",
                 3,
                 ctx,
                 WebClient.builder());
@@ -166,6 +192,6 @@ class JwksHealthProbeTest {
 
     private String jwksUrl() {
         return "http://" + jwksServer.getHostName() + ":" + jwksServer.getPort()
-                + "/.well-known/jwks.json";
+                + "/oauth2/jwks";
     }
 }

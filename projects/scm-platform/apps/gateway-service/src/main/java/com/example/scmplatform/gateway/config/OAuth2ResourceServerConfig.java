@@ -1,9 +1,11 @@
 package com.example.scmplatform.gateway.config;
 
 import com.example.apigateway.security.GatewayJwtDecoders;
+import com.example.apigateway.security.JwksHealthProbe;
 import com.example.apigateway.security.TenantClaimValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -71,5 +73,24 @@ public class OAuth2ResourceServerConfig {
                 .allowSuperAdminWildcard()
                 .trustEntitledDomains()
                 .build();
+    }
+
+    /**
+     * Fails the gateway's boot fast when the IdP's JWKS endpoint is unreachable, instead of
+     * letting the first real caller discover it as a 401 (TASK-SCM-BE-001 § Edge Cases).
+     *
+     * <p>The probe moved to {@code libs/java-gateway} in TASK-MONO-357, and it deliberately
+     * carries <strong>no {@code @Component}</strong>: this gateway scans the library package,
+     * and so does wms — which has never had a startup probe. Registration is opt-in, so the
+     * declaration lives here rather than in the library.
+     */
+    @Bean
+    @ConditionalOnProperty(
+            value = "gateway.jwks.startup-probe.enabled", havingValue = "true", matchIfMissing = true)
+    public JwksHealthProbe jwksHealthProbe(
+            @Value("${gateway.jwks.startup-probe.timeout-seconds:30}") long timeoutSeconds,
+            org.springframework.context.ConfigurableApplicationContext applicationContext,
+            org.springframework.web.reactive.function.client.WebClient.Builder webClientBuilder) {
+        return new JwksHealthProbe(jwkSetUri, timeoutSeconds, applicationContext, webClientBuilder);
     }
 }

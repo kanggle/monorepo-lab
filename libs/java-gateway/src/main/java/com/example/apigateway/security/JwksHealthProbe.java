@@ -1,41 +1,43 @@
-package com.example.fanplatform.gateway.security;
+package com.example.apigateway.security;
 
 import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 /**
- * Probes the configured JWKS endpoint at boot time and fails the application fast
- * if it is unreachable for longer than the configured timeout window.
+ * Probes the configured JWKS endpoint at boot and fails the application fast if it stays
+ * unreachable past the timeout window.
  *
- * <p>{@link org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder}'s
- * {@code .withJwkSetUri(...).build()} fetches JWKS lazily on the first protected
- * request — meaning a GAP outage at startup is not surfaced until the first
- * caller hits a 401/500. The task spec § Edge Cases mandates the opposite:
+ * <p>{@code NimbusReactiveJwtDecoder.withJwkSetUri(...).build()} fetches JWKS <em>lazily</em>,
+ * on the first protected request — so an IdP outage at startup stays invisible until a real
+ * caller eats a 401/500. This probe runs once on {@link ApplicationReadyEvent}, retries with
+ * exponential backoff (1s → 2s → 4s → 8s → 16s, ~31s total), and on final failure logs ERROR
+ * and closes the context so Spring Boot exits non-zero and an operator sees it immediately.
  *
- * <blockquote>OIDC discovery 실패 (GAP 다운): gateway 시작 시 retry. 30초 후에도
- * 실패하면 fail-fast (Spring Boot 부트 실패) — 운영자가 즉시 인지.</blockquote>
+ * <h2>Not a {@code @Component}, and that is the point</h2>
  *
- * <p>This probe runs once on {@link ApplicationReadyEvent}, retries with
- * exponential backoff (1s, 2s, 4s, 8s, 16s — total ~31s window), and on final
- * failure logs ERROR + calls {@link ConfigurableApplicationContext#close()} so
- * Spring Boot exits with a non-zero status code.
+ * The scm and fan copies of this class carried {@code @Component}. Moving it here with the
+ * annotation intact would have registered it in <strong>every</strong> gateway that scans
+ * {@code com.example.apigateway} — including <strong>wms, which has never had a JWKS startup
+ * probe.</strong> wms would silently gain a boot-time dependency on the IdP being up: a
+ * behaviour change, arriving under the banner of de-duplication, which is precisely what
+ * ADR-MONO-048 § D6 exists to forbid.
  *
- * <p>Disabled by setting {@code gateway.jwks.startup-probe.enabled=false} —
- * required for slice tests and unit tests that do not stand up a JWKS endpoint.
+ * <p>So registration is opt-in: a gateway that wants the probe declares it as a {@code @Bean}.
+ * {@code JwksHealthProbeWiringTest} asserts that wms does not (TASK-MONO-357). ADR-MONO-048
+ * § D4 previously listed this class as "single-consumer"; it had two, and now four.
+ *
+ * <p>Consumers should guard the bean with
+ * {@code @ConditionalOnProperty("gateway.jwks.startup-probe.enabled")} so slice tests, which
+ * stand up no JWKS endpoint, can switch it off.
  */
-@Component
-@ConditionalOnProperty(value = "gateway.jwks.startup-probe.enabled", havingValue = "true", matchIfMissing = true)
 public class JwksHealthProbe implements ApplicationListener<ApplicationReadyEvent> {
 
     private static final Logger log = LoggerFactory.getLogger(JwksHealthProbe.class);
@@ -46,8 +48,8 @@ public class JwksHealthProbe implements ApplicationListener<ApplicationReadyEven
     private final WebClient webClient;
 
     public JwksHealthProbe(
-            @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") String jwkSetUri,
-            @Value("${gateway.jwks.startup-probe.timeout-seconds:30}") long timeoutSeconds,
+            String jwkSetUri,
+            long timeoutSeconds,
             ConfigurableApplicationContext applicationContext,
             WebClient.Builder webClientBuilder) {
         this.jwkSetUri = jwkSetUri;
@@ -72,12 +74,11 @@ public class JwksHealthProbe implements ApplicationListener<ApplicationReadyEven
     }
 
     /**
-     * Issues a single GET against the JWKS URI, retrying with exponential backoff
-     * (1s → 2s → 4s → 8s → 16s) until either success or the {@link #overallTimeout}
-     * elapses. 4xx responses are treated as terminal (probe gives up immediately —
-     * the URI is misconfigured, retrying will not help).
+     * Issues a single GET against the JWKS URI, retrying with exponential backoff until either
+     * success or {@link #overallTimeout} elapses. 4xx responses are terminal — the URI is
+     * misconfigured and retrying cannot help.
      */
-    Mono<String> probe() {
+    public Mono<String> probe() {
         return webClient.get()
                 .uri(jwkSetUri)
                 .retrieve()
@@ -93,11 +94,10 @@ public class JwksHealthProbe implements ApplicationListener<ApplicationReadyEven
     }
 
     /**
-     * 4xx responses are configuration errors (wrong URL, auth issue) — retrying
-     * will not help, fail fast immediately. Other failures (connection refused,
-     * 5xx, timeout) are transient.
+     * 4xx is a configuration error (wrong URL, auth problem) — retrying will not help, so give
+     * up at once. Everything else (connection refused, 5xx, timeout) is transient.
      */
-    static boolean isTransient(Throwable t) {
+    public static boolean isTransient(Throwable t) {
         if (t instanceof WebClientResponseException wcre) {
             return !wcre.getStatusCode().is4xxClientError();
         }

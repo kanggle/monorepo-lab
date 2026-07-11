@@ -193,7 +193,7 @@ Every extraction PR must show:
 | 1 | `TASK-MONO-351` | ✅ **DONE.** Create the module. Extract **Tier 1** + migrate `wms`/`scm`/`fan`; `ecommerce` adopts `AllowedIssuersValidator` (its only 4/4 class). De-risks the reactive-module wiring first. |
 | 2 | `TASK-MONO-355` | ✅ **DONE.** **Tier 2** parameterization + migrate `wms`/`scm`/`fan`. `RateLimitConfig` descoped (see the correction under D3); `requireTenantMatch` deferred to step 3, where its only consumer lives. |
 | 3 | `TASK-MONO-356` | ✅ **DONE.** Migrate `ecommerce` onto Tier 2 (needs `FailOpenRateLimiter` delegate-signature reconciliation — ecommerce generalised it to `RateLimiter<Config>` to support its override decorator). |
-| 4 | `TASK-MONO-357` | **Create `finance` / `erp` gateways.** After steps 1–3 this is nearly free — route yml + a handful of properties. **Resolves `TASK-MONO-347` direction A** without the policy exception that direction B would have required. |
+| 4 | `TASK-MONO-357` | ✅ **DONE.** **Create `finance` / `erp` gateways.** After steps 1–3 this is nearly free — route yml + a handful of properties. **Resolves `TASK-MONO-347` direction A** without the policy exception that direction B would have required. |
 
 Step 1 is spawned on acceptance. Steps 2–4 are spawned **as each predecessor lands**, not up front: each step's scope should be written against what the previous step actually *proved*, not against what it was expected to prove.
 
@@ -247,7 +247,17 @@ Accepted by the user, explicitly (`ADR-MONO-048 ACCEPTED`).
 
 This ADR was authored and opened as PROPOSED precisely so acceptance would be a **decision** rather than a fait accompli: it authorises a new shared library and the rewiring of **four production security edges**, which is the class of decision [`platform/shared-library-policy.md`](../../platform/shared-library-policy.md) § Change Rule reserves for an ADR rather than a task. **No agent self-accept** — that gate held.
 
-**D7 is live.** Steps 1 and 2 are **done** — `TASK-MONO-351` (PR #2417, squash `80e33a6c6`: the module stands up) and `TASK-MONO-355` (PR #2425, squash `caa188e78`: Tier 2 parameterized, wms/scm/fan migrated). Every D6 obligation discharged in both, mutation checks biting in both. Step 3 (`TASK-MONO-356` — `ecommerce`) is spawned.
+**D7 is complete.** `TASK-MONO-351` (PR #2417 `80e33a6c6` — the module stands up) → `TASK-MONO-355` (PR #2425 `caa188e78` — Tier 2 parameterized; wms/scm/fan) → `TASK-MONO-356` (PR #2427 `7967ac12d` — ecommerce; found `X-Seller-Scope` unstripped) → `TASK-MONO-357` (finance/erp gateways created). Every D6 obligation discharged at every step, mutation checks biting at every step.
+
+### The roadmap's central claim, finally measured
+
+Step 4 existed to test an assertion this ADR made and never checked: *"the reason finance/erp never got gateways is that standing one up meant copying ~15 classes. That is precisely the cost this library removes."*
+
+**Measured (TASK-MONO-357):** a new gateway now needs **4 classes / 161 lines** of its own code — its routes, its property prefix, its tenant-gate policy, its header policy — against **16 classes / 701 lines** supplied by the library. **About 81% of a gateway is now the library.** The claim was true, and if anything understated: 16 classes, not 15.
+
+The two projects had even scaffolded the intent. Both `docker-compose.yml` files carried a **commented-out gateway block** annotated *"activated by a follow-up task"*, while Traefik routed `finance.local` straight at `account-service` and split `erp.local` across four backends by `PathPrefix` — doing the gateway's routing job with none of its validation. That is what `api-gateway-policy.md` L13/L14 forbid, and it is what `TASK-MONO-347` was pointing at. The gateways now own those hostnames; the backends are `expose:`-only.
+
+**All three axes of that drift closed without touching two of them:** the policy needed no change, and both `PROJECT.md`s already listed `gateway-service` as v1-IN. Only the code was wrong. It is now right.
 
 **Two corrections this ADR needed, both found by the step that had to act on it** — the D3 `RateLimitConfig` row (above) and the D7 step numbering (below). Neither was visible from reading; both surfaced only when a step tried to do what the table said. That is an argument for the sequencing rule, not against it.
 
