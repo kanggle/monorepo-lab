@@ -25,9 +25,10 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +55,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>TASK-BE-098: extends {@link AbstractIntegrationTest} so MySQL/Kafka containers are
  * shared per-JVM (platform/testing-strategy.md "Container Lifecycle"). The internal API
  * token property is registered via a subclass {@code @DynamicPropertySource}.
+ *
+ * <p><b>TASK-BE-498 — timestamp fixtures must not use {@code java.sql.Timestamp}.</b> This class
+ * seeds {@code deleted_at} / {@code masked_at} through a raw {@code JdbcTemplate} but reads them
+ * back through the application's Hibernate {@code Instant} mapping. Those two paths only agree if
+ * the fixture writes the <b>UTC wall clock</b> — see {@link #utcWallClock(Instant)}. Writing a
+ * {@code Timestamp} instead makes the driver format it in the JVM's default timezone, and the
+ * suite then fails by exactly the host's UTC offset (it did: 9h on a KST machine, invisible on
+ * CI's UTC runners).
  */
 @SpringBootTest
 @Testcontainers
@@ -182,11 +191,15 @@ class AccountAnonymizationSchedulerIntegrationTest extends AbstractIntegrationTe
         setDeletedAt(account.getId(), Instant.now().minus(60, ChronoUnit.DAYS));
 
         // Pre-mark the profile as already anonymized (simulates a prior run completing).
-        Instant priorMaskedAt = Instant.now().minus(10, ChronoUnit.DAYS);
+        // Truncated to MICROS up front: MySQL DATETIME(6) cannot store Instant.now()'s nanos, so
+        // rounding here (rather than loosening the assertion later) keeps the round-trip EXACT —
+        // a 9h timezone skew must fail, and it cannot hide behind a tolerant comparison.
+        Instant priorMaskedAt = Instant.now().minus(10, ChronoUnit.DAYS)
+                .truncatedTo(ChronoUnit.MICROS);
         jdbcTemplate.update(
                 "UPDATE profiles SET masked_at = ?, display_name = NULL, phone_number = NULL, birth_date = NULL "
                         + "WHERE account_id = ?",
-                Timestamp.from(priorMaskedAt),
+                utcWallClock(priorMaskedAt),
                 account.getId());
         // Also rewrite the email to a unique anonymized-form value so we can detect any second-pass
         // corruption. The 12-char prefix is hex chars from the account UUID for per-test uniqueness
@@ -209,9 +222,16 @@ class AccountAnonymizationSchedulerIntegrationTest extends AbstractIntegrationTe
 
         Profile profile = profileRepository.findByAccountId(account.getId()).orElseThrow();
         assertThat(profile.getMaskedAt()).isNotNull();
-        // masked_at must NOT be advanced — same instant as the prior run (truncated to MySQL precision).
-        assertThat(profile.getMaskedAt().truncatedTo(ChronoUnit.SECONDS))
-                .isEqualTo(priorMaskedAt.truncatedTo(ChronoUnit.SECONDS));
+        // masked_at must NOT be advanced — it is the very instant the prior run stamped.
+        //
+        // TASK-BE-498: this is an EXACT equality, deliberately. It carries two proofs at once:
+        //   1. the idempotence guard held (a second pass did not re-stamp), and
+        //   2. the fixture's write convention round-trips through the application's read path
+        //      without a timezone shift — the host-timezone bug this assertion used to hide.
+        // Widening it (isCloseTo, truncating to HOURS/DAYS) would let a re-stamp OR a timezone
+        // skew slip through. The value was truncated to MySQL's DATETIME(6) precision at write
+        // time so no tolerance is needed here.
+        assertThat(profile.getMaskedAt()).isEqualTo(priorMaskedAt);
 
         // No additional account.deleted (anonymized=true) outbox row.
         assertThat(countAnonymizedDeletedEvents(account.getId())).isEqualTo(anonymizedEventsBefore);
@@ -274,8 +294,43 @@ class AccountAnonymizationSchedulerIntegrationTest extends AbstractIntegrationTe
     private void setDeletedAt(String accountId, Instant deletedAt) {
         jdbcTemplate.update(
                 "UPDATE accounts SET deleted_at = ? WHERE id = ?",
-                Timestamp.from(deletedAt),
+                utcWallClock(deletedAt),
                 accountId);
+    }
+
+    /**
+     * TASK-BE-498: binds an {@link Instant} to a MySQL {@code DATETIME} column using the SAME
+     * convention Hibernate reads it back with — the UTC wall clock.
+     *
+     * <p><b>Why not {@code java.sql.Timestamp.from(instant)}.</b> That is what this class used
+     * to do, and it made the suite fail on any host whose JVM default timezone is not UTC.
+     * The two paths disagreed:
+     *
+     * <ul>
+     *   <li><b>write</b> (this fixture only): Connector/J formats a {@code Timestamp} using the
+     *       <b>JVM default timezone</b>, so on a KST host the naive {@code DATETIME} stored is
+     *       the wall clock {@code instant + 9h};</li>
+     *   <li><b>read</b> (the same path the application uses): Hibernate maps the naive
+     *       {@code DATETIME} to an {@code Instant} by interpreting it as <b>UTC</b>.</li>
+     * </ul>
+     *
+     * <p>So the value read back was the value written plus the host's UTC offset — exactly the
+     * 9h skew observed. On CI (Linux, UTC) the offset is 0, which is why it stayed green there
+     * and red only on a developer machine.
+     *
+     * <p>A {@code LocalDateTime} is written literally by the driver (no timezone conversion),
+     * so storing {@code LocalDateTime.ofInstant(instant, UTC)} puts the UTC wall clock in the
+     * column and the Hibernate read reconstructs the original {@code Instant} exactly — on any
+     * host. The round-trip is asserted, not assumed: see
+     * {@link #runAnonymizationBatch_alreadyAnonymized_isNotReprocessed()}.
+     *
+     * <p>The application itself never had this bug — it holds no {@code JdbcTemplate} and no
+     * {@code java.sql.Timestamp}; every timestamp goes through the JPA {@code Instant} mapping,
+     * and the batch binds its threshold to a JPQL (not native) query. The mismatch existed only
+     * between this test's write and its read.
+     */
+    private static LocalDateTime utcWallClock(Instant instant) {
+        return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
     private List<AccountOutboxJpaEntity> findOutboxByAggregate(String aggregateId) {
