@@ -1,5 +1,8 @@
 package com.example.gateway.filter;
 
+import com.example.apigateway.filter.JwtHeaderEnrichmentFilter;
+import com.example.gateway.config.GatewayIdentityConfig;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
@@ -22,7 +25,10 @@ import reactor.core.publisher.Mono;
  */
 class JwtHeaderEnrichmentFilterTest {
 
-    private final JwtHeaderEnrichmentFilter filter = new JwtHeaderEnrichmentFilter();
+    // The bean this gateway actually registers — remove a mapping from GatewayIdentityConfig
+    // and these assertions go red (TASK-MONO-356).
+    private final JwtHeaderEnrichmentFilter filter =
+            new GatewayIdentityConfig().jwtHeaderEnrichmentFilter();
 
     // -----------------------------------------------------------------------
     // Header injection

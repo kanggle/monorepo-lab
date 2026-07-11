@@ -252,6 +252,55 @@ class FailOpenRateLimiterTest {
         assertThat(response.isAllowed()).isFalse();
     }
 
+    /**
+     * The delegate is typed {@code RateLimiter<RedisRateLimiter.Config>}, not
+     * {@code RedisRateLimiter}, so another decorator may sit in between — which is exactly what
+     * ecommerce does: {@code FailOpenRateLimiter → OverrideAwareRateLimiter → RedisRateLimiter},
+     * its per-tenant rate-limit overrides being a marketplace requirement no other domain has
+     * (TASK-MONO-356).
+     *
+     * <p>Widening was the only safe direction. Narrowing ecommerce to the concrete type instead
+     * would have left it unable to wrap its override limiter at all — and the overrides would
+     * have disappeared silently, under the banner of adopting a shared class.
+     */
+    @Test
+    void wrapsAnIntermediateDecoratorNotJustARedisRateLimiter() {
+        @SuppressWarnings("unchecked")
+        RateLimiter<RedisRateLimiter.Config> intermediateDecorator = mock(RateLimiter.class);
+        RateLimiter.Response denied = new RateLimiter.Response(false,
+                java.util.Map.of(RedisRateLimiter.REMAINING_HEADER, "0"));
+        when(intermediateDecorator.isAllowed(ROUTE, "tenant-a:198.51.100.7"))
+                .thenReturn(Mono.just(denied));
+
+        MeterRegistry registry = new SimpleMeterRegistry();
+        FailOpenRateLimiter limiter = new FailOpenRateLimiter(intermediateDecorator, registry);
+
+        RateLimiter.Response response = limiter.isAllowed(ROUTE, "tenant-a:198.51.100.7").block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.isAllowed())
+                .as("the intermediate decorator's decision must survive the fail-open wrapper")
+                .isFalse();
+    }
+
+    /** Fail-open still applies through an intermediate decorator — the narrowing is on the exception type, not on the delegate type. */
+    @Test
+    void failsOpenWhenAnIntermediateDecoratorEmitsARedisFailure() {
+        @SuppressWarnings("unchecked")
+        RateLimiter<RedisRateLimiter.Config> intermediateDecorator = mock(RateLimiter.class);
+        when(intermediateDecorator.isAllowed(ROUTE, "tenant-a:198.51.100.8"))
+                .thenReturn(Mono.error(new RedisConnectionFailureException("redis down")));
+
+        MeterRegistry registry = new SimpleMeterRegistry();
+        FailOpenRateLimiter limiter = new FailOpenRateLimiter(intermediateDecorator, registry);
+
+        StepVerifier.create(limiter.isAllowed(ROUTE, "tenant-a:198.51.100.8"))
+                .assertNext(response -> assertThat(response.isAllowed()).isTrue())
+                .verifyComplete();
+        assertThat(registry.counter(FailOpenRateLimiter.METRIC_REDIS_UNAVAILABLE).count())
+                .isEqualTo(1.0);
+    }
+
     /** Cause chain that points back at itself — the loop guard's target. */
     private static final class SelfCausingException extends RuntimeException {
         @Override

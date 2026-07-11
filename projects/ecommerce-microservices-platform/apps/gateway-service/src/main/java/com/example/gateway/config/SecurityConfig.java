@@ -1,6 +1,6 @@
 package com.example.gateway.config;
 
-import com.example.gateway.security.TenantClaimValidator;
+import com.example.apigateway.security.TenantClaimValidator;
 import com.example.web.dto.ErrorResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
