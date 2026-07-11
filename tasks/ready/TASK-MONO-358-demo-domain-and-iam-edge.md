@@ -44,6 +44,44 @@ Traefik 라우터 규칙 **14개가 전부 `Host(\`x.local\`)` 하드코딩**이
 
 이 두 결함을 함께 고친다. 같은 축("어떤 호스트명이 무엇을 가리키는가")이고, 해법 메커니즘도 같다.
 
+## EC2 실기동에서 추가로 드러난 결함 C~F
+
+A·B 를 고치고 **실제로 부팅했더니** 네 개가 더 나왔다. **전부 정적 검사로는 잡히지 않고, 새 호스트에서만 문다.** 이것이 이 task 에서 "실기동 로그인 증명" 을 AC 로 못박은 이유다.
+
+### 결함 C — Traefik v3.2 는 Docker Engine 29 와 말이 통하지 않는다
+
+라벨이 완벽해도 **라우터가 0개**였다. Traefik ≤ v3.5 의 Docker 프로바이더는 API 1.24 를 요구하는데 Docker 29 의 최소는 1.40 이다. 에러는 조용하다(프로바이더가 그냥 아무것도 못 찾는다). → `traefik:v3.6`.
+
+### 결함 D — console-web 헬스체크가 `localhost` 를 찌른다 → **콘솔에 라우트가 아예 없었다**
+
+`HOSTNAME=0.0.0.0` 은 Node 를 IPv4 전용으로 바인딩하는데, alpine 의 `localhost` 는 ::1 로도 해소되고 **busybox wget 은 ::1 실패 후 IPv4 로 폴백하지 않는다**. 앱은 멀쩡한데 프로브만 죽는다. 그리고 **Traefik 은 healthy 가 아닌 컨테이너를 조용히 건너뛴다** — 오타 하나가 콘솔 전체를 데모에서 사라지게 했다. → `127.0.0.1`.
+
+### 결함 E — 데모 도메인 `redirect_uri` 는 **등록될 수 없다**
+
+OAuth2 는 `redirect_uri` 를 **정확 일치**로 검증하는데, 브라우저용 클라이언트의 콜백은 **Flyway 마이그레이션에 리터럴로** 박혀 있다(`console.local`, `web.ecommerce.local`, `fan-platform.local`). 데모 도메인은 부팅 때 IP 에서 파생되므로 마이그레이션이 알 수 없는 값이다.
+
+미등록 `redirect_uri` 에 auth-service 가 돌려주는 응답이 특히 나쁘다:
+
+```
+HTTP/1.1 401
+{"code":"UNAUTHORIZED","message":"Missing or invalid internal credentials"}
+```
+
+자격증명 문제가 아닌데 자격증명을 가리킨다. **등록된 `console.local` 로 같은 요청을 replay 하니 302** — 차이는 `redirect_uri` 하나뿐임을 그렇게 격리했다.
+
+### 결함 F — SAS 로그인 폼은 게이트웨이 뒤에서 도달 불가능하다
+
+등록된 `redirect_uri` 로 authorize 를 치면 게이트웨이가 이렇게 답한다:
+
+```
+HTTP/1.1 302
+Location: http://auth-service:8081/login      ← 내부 컨테이너 DNS
+```
+
+Spring Authorization Server 는 로그인 리다이렉트를 **자기가 보는 요청 호스트**로 만드는데, 게이트웨이가 `http://auth-service:8081` 로 프록시하므로 그 이름이 그대로 브라우저에 나간다. 게다가 게이트웨이는 `/login` 에 **라우트 자체가 없다**(404).
+
+⇒ **`iam.local` Traefik 경로의 콘솔 로그인은 원래부터 동작한 적이 없다.** 동작하는 CI e2e 는 Traefik 을 아예 우회해 `auth-service:8081` 을 issuer 로 쓴다 — 그래서 아무도 눈치채지 못했다.
+
 ---
 
 # 설계
@@ -102,18 +140,35 @@ iam `application.yml` 이 이미 둘을 나눠 갖고 있고, `docker-compose.e2
 
 → **`infra/demo/iam-traefik.override.yml` 신설**하고 `projects.sh` 의 `COMPOSE[iam]` 에 덧붙인다. "프로젝트 compose 는 그대로 두고 데모 토폴로지는 데모 파일이 책임진다" 는 `demo.env` 와 **정확히 같은 원칙**이다.
 
+## 6) 브라우저용 OIDC 경로만 auth-service 로 직행 (결함 F)
+
+게이트웨이가 X-Forwarded-* 를 이해하고 재발신하게 만드는 길(프록시 2홉)은 각 홉이 원본 Host 를 보존해야 해서 깨지기 쉽다. 대신 **`/oauth2`·`/login`·`/.well-known` 만 Traefik 에서 auth-service 로 직행**시킨다(1홉).
+
+- 게이트웨이 라우터와 **같은 호스트명**(`iam.${DEMO_DOMAIN}`)을 쓰고 PathPrefix 로 좁힌 뒤 `priority` 를 높여 앞세운다. 호스트가 하나여야 SAS 세션 쿠키(JSESSIONID)가 `authorize → /login → authorize` 왕복 내내 유지된다.
+- `SERVER_FORWARD_HEADERS_STRATEGY: FRAMEWORK` 가 **동작 조건**이다. 없으면 Spring 이 X-Forwarded-* 를 무시하고 다시 내부 호스트로 리다이렉트한다. auth-service 의 `application.yml` 에는 이 설정이 없으므로 **제품 코드를 건드리지 않고 데모 오버레이에서 env 로만** 켠다.
+
+## 7) 데모 도메인 `redirect_uri` 를 런타임에 등록 (결함 E)
+
+마이그레이션은 정적이고 도메인은 런타임에 정해진다 → **`infra/demo/seed-demo-domain.sh`** 가 부팅 후 등록한다.
+
+- **클라이언트 목록을 하드코딩하지 않는다.** `.local/` 을 담은 **모든** 등록 URI 를 찾아 `.${DEMO_DOMAIN}/` 로 치환한 사본을 덧붙인다(원본 유지 — 같은 DB 를 로컬 `*.local` 로도 쓸 수 있어야 한다). 새 클라이언트가 `.local` 콜백을 들고 와도 스크립트 수정이 필요 없다.
+- `post_logout_redirect_uris` 도 함께. 이 값은 `client_settings` JSON 안에 Jackson default-typing 형태(`["java.util.ArrayList", [...]]`)로 있어 **실제 배열은 `[1]`** 이다(V0016/V0021 의 교훈).
+- 멱등. `DEMO_DOMAIN=local` 이면 no-op.
+
 ---
 
 # Scope
 
 ## In Scope
 
-- 8개 프로젝트 compose 의 Traefik 라우터 규칙 14개 → `${DEMO_DOMAIN:-local}`.
-- `infra/traefik/docker-compose.yml` — network alias(전 호스트명).
-- **`infra/demo/iam-traefik.override.yml` 신설** — iam gateway-service 를 `Host(\`iam.${DEMO_DOMAIN:-local}\`)` 로 노출 + traefik-net 합류.
+- 9개 프로젝트 compose 의 Traefik 라우터 규칙 17개 → `${DEMO_DOMAIN:-local}`.
+- `infra/traefik/docker-compose.yml` — network alias(전 호스트명) + **`traefik:v3.2` → `v3.6`**(결함 C).
+- **`infra/demo/iam-traefik.override.yml` 신설** — iam gateway-service 를 `Host(\`iam.${DEMO_DOMAIN:-local}\`)` 로 노출 + traefik-net 합류 + **auth-service OIDC 라우터/forward-headers**(결함 F).
+- **`infra/demo/seed-demo-domain.sh` 신설** — 데모 도메인 `redirect_uri` 런타임 등록(결함 E). `demo-up.sh` 가 호출.
 - `infra/demo/projects.sh` — `COMPOSE[iam]` 에 오버레이 추가.
 - `infra/demo/demo.env` — `DEMO_DOMAIN=local` + console/iam OIDC·CORS 값을 `${DEMO_DOMAIN}` 기반으로 **일관되게** 주입.
-- `infra/demo/verify-demo-wrapper.sh` — **가드 (i)**.
+- `projects/platform-console/docker-compose{,.e2e}.yml` — console-web 헬스체크 `localhost` → `127.0.0.1`(결함 D).
+- `infra/demo/verify-demo-wrapper.sh` — **가드 (i)(j)(k)(l)**.
 - `infra/traefik/README.md` · `infra/demo/README.md` 갱신.
 
 ## Out of Scope
@@ -131,9 +186,18 @@ iam `application.yml` 이 이미 둘을 나눠 갖고 있고, `docker-compose.e2
 - [ ] **로컬 회귀 0**: 9개 프로젝트 compose 를 **단독 렌더**(`DEMO_DOMAIN` 미설정)했을 때 `docker compose config` 결과가 변경 전과 **바이트 동일**. ← 개발자 무영향의 유일한 증거.
       **정확히 말한다**: *데모* 렌더(`demo.env` 를 source 한 상태)는 **의도적으로 바뀐다** — iam 이 Traefik 엣지를 얻고, OIDC issuer/jwks 가 재배선된다. **그게 이 task 의 수정 내용이다.** 둘을 뭉뚱그려 "전부 동일" 이라 주장하면 거짓이 된다.
 - [ ] `DEMO_DOMAIN=1-2-3-4.sslip.io` 시 렌더에 그 호스트가 나타나고, **Traefik alias 목록과 Host() 목록이 정확히 일치**.
-- [ ] **가드 (i)**: 렌더된 모든 `Host(...)` 호스트명이 Traefik 의 network alias 에 존재한다(그 역도). **mutation-check 필수** — 라우터를 하나 추가하고 alias 를 빼면 FAIL 해야 한다. 통과만으로는 가드가 무는지 알 수 없다.
-- [ ] **iam 게이트웨이가 Traefik 으로 라우팅**되고 `http://iam.${DEMO_DOMAIN}/` 가 200.
-- [ ] **실기동 로그인 증명 (이것만이 진짜 검증이다)**: EC2 에서 브라우저로 `http://console.<ip>.sslip.io/` → **OIDC 로그인 왕복 성공** → 콘솔 대시보드 진입.
+- [ ] **가드 4종 — 전부 mutation-check 필수.** 통과만으로는 가드가 무는지 알 수 없다.
+      - **(i)** 렌더된 모든 `Host(...)` 호스트명이 Traefik network alias 에 존재한다(그 역도).
+      - **(j)** IPv4-only 바인딩(`HOSTNAME=0.0.0.0`) ∧ 헬스체크가 `localhost` → FAIL (결함 D).
+      - **(k)** 마이그레이션의 `.local` 콜백을 시드 치환이 전부 덮는가 + `demo-up.sh` 가 시드를 호출하는가 (결함 E). **vacuity 가드 포함** — 0건 발견 시 통과가 아니라 FAIL(grep 이 깨진 것이다).
+      - **(l)** OIDC 라우터와 `SERVER_FORWARD_HEADERS_STRATEGY` 가 분리되지 않는가 (결함 F). 한쪽만 있으면 **라우팅은 되는데 로그인만 죽는다** — 가장 진단하기 나쁜 모양.
+- [ ] **iam 이 Traefik 으로 라우팅**되고 `http://iam.${DEMO_DOMAIN}/actuator/health` = `{"status":"UP"}`, `/oauth2/jwks` = 200, discovery 의 `issuer` 가 데모 도메인.
+- [ ] **실기동 로그인 증명 (이것만이 진짜 검증이다)**: EC2 에서 `http://console.<ip>.sslip.io/` → **OIDC 로그인 왕복 성공**. 왕복의 각 홉을 명시적으로 확인한다:
+      1. console `/api/auth/login` → 302 to `http://iam.<D>/oauth2/authorize` (`redirect_uri=http://console.<D>/api/auth/callback`)
+      2. authorize → 302 to **`http://iam.<D>/login`** — `auth-service:8081` 이 새어나오면 실패 (결함 F)
+      3. `/login` 200 (SAS HTML 폼) → POST → 302 back to authorize
+      4. authorize → 302 to `http://console.<D>/api/auth/callback?code=…` — **`redirect_uri` 시드가 없으면 여기서 401** (결함 E)
+      5. 콜백 → 콘솔 세션 성립
       `docker compose config` 렌더도, 컨테이너 healthy 도 **이것을 증명하지 못한다**.
 - [ ] CI GREEN (demo wrapper smoke 포함).
 
