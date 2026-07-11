@@ -341,6 +341,85 @@ done
 ok "IPv4-only 서비스의 헬스체크 주소 정상"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (k) 마이그레이션에 박힌 .local 콜백을 데모 시드가 전부 덮는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358): OAuth2 `redirect_uri` 는 **정확 일치** 검증이다. 브라우저용 클라이언트의
+# 콜백 URL 은 Flyway 마이그레이션에 `http://console.local/api/auth/callback` 처럼 리터럴로
+# 박혀 있는데, 온디맨드 데모는 부팅 때 파생되는 도메인 위에 뜬다. 마이그레이션이 알 수
+# 없는 값이므로 `seed-demo-domain.sh` 가 런타임에 등록한다.
+#
+# 그 시드는 **`.local/` → `.${DEMO_DOMAIN}/`** 치환 하나로 동작한다. 즉 새 클라이언트가
+# 그 형태를 벗어난 `.local` 콜백(`http://x.local:8080/cb` 처럼 포트가 붙거나, 경로 없이
+# `http://x.local` 로 끝나는 것)을 들고 오면 **치환이 안 되고 그 도메인 로그인만 조용히
+# 죽는다** — 컨테이너는 전부 healthy 하고 에러 로그도 없다. 정확히 이 저장소가 이미 한 번
+# 당한 실패 모드(healthy ≠ usable)라 정적으로 막는다.
+#
+# 도달 가능성: 마이그레이션 추가는 diff 로 오므로 paths-filter 가 잡는다 — 시계가 아니라
+# 이 가드가 물 기회를 실제로 얻는다.
+seed_sh="$ROOT/infra/demo/seed-demo-domain.sh"
+[ -f "$seed_sh" ] || fail "infra/demo/seed-demo-domain.sh 가 없습니다 — 데모 도메인 로그인이 불가능합니다."
+grep -q 'seed-demo-domain.sh' "$ROOT/infra/demo/demo-up.sh" \
+  || fail "demo-up.sh 가 seed-demo-domain.sh 를 호출하지 않습니다 — 시드가 실행되지 않으면 로그인은 401 입니다."
+
+# 마이그레이션의 redirect_uri 리터럴 중 `.local` 을 담은 것들.
+mapfile -t local_cbs < <(
+  grep -rhoE "http://[A-Za-z0-9.-]+\.local[^\"',[:space:]]*" \
+    "$ROOT"/projects/iam-platform/apps/auth-service/src/main/resources/db/migration/*.sql 2>/dev/null \
+  | sort -u
+)
+# vacuity 가드: 한 건도 못 찾았다면 grep 이 깨진 것이지 "안전"한 게 아니다.
+# (0건을 통과로 보고하면 가드는 아무것도 안 하면서 초록을 준다.)
+[ "${#local_cbs[@]}" -gt 0 ] \
+  || fail "마이그레이션에서 .local URI 를 한 건도 찾지 못했습니다 — 가드가 헛돌고 있습니다"\
+     $'\n'"   (경로가 바뀌었거나 grep 패턴이 깨졌습니다). 0건을 통과로 취급하지 않습니다."
+
+uncovered=""
+for u in "${local_cbs[@]}"; do
+  # 시드의 치환 앵커는 `.local/` 이다. 이걸 포함하지 않으면 치환 대상이 되지 못한다.
+  case "$u" in
+    *.local/*) : ;;
+    *) uncovered="$uncovered  $u"$'\n' ;;
+  esac
+done
+[ -z "$uncovered" ] || fail "seed-demo-domain.sh 의 '.local/' 치환이 덮지 못하는 콜백 URI:"$'\n'"$uncovered"\
+  $'\n'"→ 시드는 '.local/' → '.\${DEMO_DOMAIN}/' 치환 하나로 동작합니다. 위 URI 는 그 형태가"\
+  $'\n'"   아니어서 데모 도메인에 등록되지 않습니다."\
+  $'\n'"→ OAuth2 redirect_uri 는 정확 일치 검증입니다. 미등록이면 auth-service 가"\
+  $'\n'"   401 {\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid internal credentials\"} 를"\
+  $'\n'"   돌려줍니다 — 원인을 전혀 가리키지 않는 메시지라 오진하기 쉽습니다."\
+  $'\n'"→ 마이그레이션의 URI 를 '.local/…' 형태로 맞추거나, seed-demo-domain.sh 의 치환 규칙을"\
+  $'\n'"   넓히세요."
+
+ok "마이그레이션의 .local 콜백 ${#local_cbs[@]}개 전부 시드 치환 범위 안"
+
+# ---------------------------------------------------------------------------
+echo "[verify] (l) Traefik 에 노출된 auth-service 가 X-Forwarded-* 를 이해하는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358, EC2 실측): SAS 는 로그인 리다이렉트를 **자기가 보는 요청 호스트**로
+# 만든다. 리버스 프록시 뒤에서 `server.forward-headers-strategy` 없이 두면:
+#
+#     HTTP/1.1 302
+#     Location: http://auth-service:8081/login     ← 내부 컨테이너 DNS 가 브라우저로 샌다
+#
+# 브라우저는 이 이름을 해소할 수 없다 ⇒ 로그인 화면에 도달하지 못한다. auth-service 의
+# application.yml 에는 이 설정이 없으므로 **데모 오버레이가 env 로 켜 줘야만** 한다.
+# 라우터 라벨과 이 env 는 항상 함께 있어야 하는 한 쌍이다 — 한쪽만 지우면 라우팅은
+# 되는데 로그인만 죽는 상태가 된다(가장 진단하기 나쁜 모양).
+ov="$ROOT/infra/demo/iam-traefik.override.yml"
+if grep -q 'traefik.http.routers.iam-oidc' "$ov"; then
+  grep -q 'SERVER_FORWARD_HEADERS_STRATEGY' "$ov" \
+    || fail "iam-traefik.override.yml 이 auth-service 를 Traefik 에 노출하면서"\
+       $'\n'"   SERVER_FORWARD_HEADERS_STRATEGY 를 설정하지 않습니다."\
+       $'\n'"→ 이게 없으면 Spring 이 X-Forwarded-Host 를 무시하고 로그인 리다이렉트를"\
+       $'\n'"   'http://auth-service:8081/login' 로 내보냅니다 — 브라우저가 해소 못 하는 이름입니다."\
+       $'\n'"→ auth-service.environment 에 SERVER_FORWARD_HEADERS_STRATEGY: FRAMEWORK 를 넣으세요."
+  ok "auth-service OIDC 라우터 + forward-headers 쌍 유지"
+else
+  fail "iam-traefik.override.yml 에 auth-service OIDC 라우터(iam-oidc)가 없습니다 —"\
+    $'\n'"   게이트웨이는 /login 을 라우팅하지 않으므로(404) 로그인 화면에 도달할 수 없습니다."
+fi
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0

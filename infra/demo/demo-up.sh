@@ -61,5 +61,12 @@ for p in "${SET[@]}"; do
   docker compose -p "$p" "${ARGS[@]}" up -d $build_flag
 done
 
+# OIDC 클라이언트의 redirect_uri 는 마이그레이션에 `.local` 로 박혀 있다. 데모 도메인은
+# 부팅 때 정해지므로 마이그레이션이 알 수 없다 → 여기서 등록한다. DEMO_DOMAIN=local 이면
+# no-op. (자세한 근거는 seed-demo-domain.sh 헤더. 가드 (k) 가 이 호출을 지킨다.)
+if [[ " ${SET[*]} " == *" iam "* ]]; then
+  bash "$HERE/seed-demo-domain.sh"
+fi
+
 echo "[demo] up complete — profile=$PROFILE"
-echo "[demo] 호스트: console.local / web.ecommerce.local / wms.local / <domain>.local (Traefik)"
+echo "[demo] 호스트: console.${DEMO_DOMAIN} / web.ecommerce.${DEMO_DOMAIN} / wms.${DEMO_DOMAIN} / <domain>.${DEMO_DOMAIN} (Traefik)"
