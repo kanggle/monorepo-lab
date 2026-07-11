@@ -92,8 +92,21 @@ class VisibilityTierE2ETest extends FanPlatformE2ETestBase {
         assertThat(readJson.get("data").get("visibility").asText()).isEqualTo("PUBLIC");
     }
 
+    /**
+     * Asserts the behaviour of the <b>inert fallback stub</b>, not the production gate.
+     * This live trio deliberately sets {@code COMMUNITY_MEMBERSHIP_SERVICE_ENABLED=false}
+     * (FAN-INT-002) so {@code AlwaysAllowMembershipChecker} is selected instead of
+     * {@code HttpMembershipChecker}; the always-pass + WARN is that stub's escape-hatch
+     * behaviour. <b>Production hard fail-closes on PREMIUM</b> (FAN-BE-010) — covered by
+     * {@code MembershipGateIntegrationTest} and federation-hardening-e2e.
+     *
+     * <p>The name used to read "v1 always-pass", which is how a reader grepping for
+     * always-pass kept finding a test that appeared to assert an open PREMIUM gate in
+     * production (TASK-MONO-354).
+     */
     @Test
-    @DisplayName("PREMIUM post -> v1 always-pass + WARN log captured in container stdout")
+    @DisplayName("PREMIUM post -> inert stub (membership-service disabled) always-passes + WARN log "
+            + "captured in container stdout — NOT the production gate, which fail-closes")
     void premiumPostBypassesGateAndLogsWarn() throws Exception {
         String authorAccountId = randomAccountId();
         String authorToken = jwt.signFanToken(authorAccountId);

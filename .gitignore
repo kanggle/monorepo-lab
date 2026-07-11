@@ -45,3 +45,13 @@ cycle1.log
 # uncommitted; project memory env_webstore_standalone_bringup_against_fed_e2e)
 projects/ecommerce-microservices-platform/apps/web-store/verify-webstore-*.mjs
 projects/ecommerce-microservices-platform/apps/web-store/webstore-*.png
+
+# HotSpot crash artifacts (TASK-MONO-354). Four of these — 1.06 MB of a JVM that ran
+# out of memory — rode into `e839bb26b init wms-platform` and sat in
+# libs/java-observability/ ever since, referenced by nothing. They are a recurring
+# hazard rather than a one-off: a JVM OOM on a dev machine scatters them wherever the
+# process happened to be running, so deleting them without an ignore rule just means
+# the next crash re-commits them. Named exactly (not `*.log`) so a deliberately
+# committed log fixture is never swallowed.
+hs_err_pid*.log
+replay_pid*.log

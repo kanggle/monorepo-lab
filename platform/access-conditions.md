@@ -20,7 +20,7 @@ A condition is one of a **fixed, code-defined** set of types. Adding a type is a
 | Type | Input | Evaluates | Status |
 |---|---|---|---|
 | `SOURCE_IP` | request source IP | the IP is within an allowed CIDR set | **implemented** (`SourceIpCondition`) — iam pilot (ADR-026 § D4) |
-| `TIME_WINDOW` | request time + zone | request-time within an allowed local time-of-day / day-of-week window | **implemented** (`TimeWindowCondition`) — iam pilot composed with `SOURCE_IP` (ADR-028) |
+| `TIME_WINDOW` | request time + zone | request-time within an allowed **same-day** local time-of-day / day-of-week window (`start < end`) | **implemented** (`TimeWindowCondition`) — iam pilot composed with `SOURCE_IP` (ADR-028). **Same-day only**: a cross-midnight window (`end <= start`, e.g. a `22:00`–`06:00` night-shift window) is **out of scope for the pilot** — ADR-028 § D3 fixed midnight-wrap as a deferred fast-follow at ACCEPTED — and is treated as a **misconfiguration that fails closed** (the window matches nothing, so every request is denied). It does not fall open. Configuring one is therefore a total lockout of the guarded surface, with no error at startup |
 | `RESOURCE_TAG` | targeted resource's tags | the resource carries (deny-if-present) / lacks (require) a tag | **implemented** (`ResourceTagCondition`) — iam pilot (operators tagged `protected`, deny-if-present), aspect-resolved (ADR-029) |
 
 **Combination is AND-only**: when more than one condition guards an action, all must hold. There is no OR/NOT nesting; a single negation is expressed *within* a type (e.g. a `RESOURCE_TAG` deny-if-present variant), never as a combinator.
