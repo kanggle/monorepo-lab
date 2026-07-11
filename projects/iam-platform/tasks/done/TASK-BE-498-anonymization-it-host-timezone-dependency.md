@@ -8,7 +8,7 @@ TASK-BE-498
 
 # Status
 
-ready
+done
 
 # Owner
 
