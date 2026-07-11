@@ -8,7 +8,7 @@ TASK-MONO-356
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -81,9 +81,31 @@ ecommerce 가 일반화한 이유는 실재한다: 자기 `OverrideAwareRateLimi
 
 ecommerce 주입: `X-User-Id` · `X-User-Email` · `X-User-Role`(always) · `X-Tenant-Id`. `X-Account-Id`/`X-Roles`/`X-Scopes`/`X-Token-Type` 주입 없음. 매핑 리스트로 표현 가능해 보인다 — **착수 시 각 헤더의 존재 규칙(null-skip vs blank-skip vs always)을 소스에서 직접 확인**할 것(355 가 이 축에서 세 도메인이 실제로 달랐음을 발견했다).
 
-### ⑤ 조사 필요 — `X-Account-Type` 의 출처
+### ⑤ ~~조사 필요 — `X-Account-Type` 의 출처~~ → **정정: 이 항목은 틀렸다**
 
-ecommerce 는 `X-Account-Type` 을 **strip 하지만 enrich 하지 않는다**. 그런데 다운스트림 **8곳이 읽는다**. 그렇다면 그 값을 누가 넣는가? 후보: `AccountTypeEnforcementFilter`(gateway, D4 잔류). **이 배선을 이해하기 전에는 enrichment 를 건드리지 말 것** — 매핑 리스트로 옮기다가 이 경로를 끊으면 8곳이 조용히 빈 값을 받는다.
+**착수 시 재측정 결과, "다운스트림 8곳이 `X-Account-Type` 을 읽는다" 는 이 task 를 쓰면서 만든 grep 아티팩트였다.** 당시 census 명령에 `-h`(파일명 억제)가 있어 뒤따르는 `grep -v gateway-service` 필터가 **아무것도 걸러내지 못했고**, 게이트웨이 자신의 출현 8건을 다운스트림으로 오독했다. 게이트웨이 javadoc 이 옳았다 — **읽는 다운스트림은 0건**이다.
+
+**올바른 census (2026-07-12)** — ecommerce 비-게이트웨이 코드가 실제로 읽는 신원 헤더:
+
+| 헤더 | 읽는 곳 | 게이트웨이 strip 집합에 있나 |
+|---|---|---|
+| `X-User-Id` | 291 | ✅ |
+| `X-User-Role` | 179 | ✅ |
+| `X-Tenant-Id` | 25 | ✅ |
+| **`X-Seller-Scope`** | **5** | ❌ **없다** |
+| `X-Account-Type` · `X-User-Email` · `X-Actor-Id` · `X-Account-Id` · `X-Roles` | **0** | — |
+
+### ⑤′ **진짜 발견 — `X-Seller-Scope` 가 strip 되지 않는다**
+
+`order` · `product` · `settlement` **세 서비스**가 각각 `SellerScopeContextFilter`(`OncePerRequestFilter`, `HIGHEST_PRECEDENCE+1`)를 두고 **인바운드 요청에서** `X-Seller-Scope` 를 읽어 `SellerScopeContext` 에 바인딩하며, 각 리포지토리가 이를 `AND EXISTS(... seller_id = :sellerScope)` 로 건다(ADR-MONO-030 Step 3 §3.3 — 셀러 데이터-스코프 축).
+
+그 필터의 javadoc 은 이렇게 적혀 있다: *"Reads the **gateway-injected** `X-Seller-Scope` header"*, *"The **gateway only forwards this header on the OPERATOR plane**"*. **둘 다 사실이 아니었다** — 게이트웨이는 이 헤더를 **strip 하지도 inject 하지도 않으며**, `/api/admin/orders/**` · `/api/admin/products/**` · `/api/admin/settlements/**` 를 라우팅한다. 즉 **클라이언트가 보낸 값이 그대로 그 필터들에 도달했다.**
+
+**오늘 악용 가능하지는 않다 — 순전히 순서 운이다.** 이 헤더를 생산하는 코드가 저장소에 **0건**이고(claim→헤더 배선은 ADR-MONO-030 **Step 4**, 미구현), 비활성 상태에서 헤더 부재 = **무제한**(ADR-MONO-025 의 문서화된 net-zero / fail-OPEN 불변, BE-363 F1: *"셀러 제약 없는 테넌트 운영자는 전체를 봐야 한다 — fail-closed 금지"*)이다. 위조해봐야 **자기 시야를 좁힐 뿐**이다.
+
+**Step 4 가 주입을 켜는 순간 구멍이 열린다** — 자기 `seller_id` 로 가둬진 셀러가 자기 `X-Seller-Scope` 를 실어 보내면, 지우는 게 없으니 **전체 테넌트 조망으로 탈출**한다. `platform/api-gateway-policy.md` § Identity Header Handling 은 이미 게이트웨이가 클라이언트발 신원 헤더를 거부하라고 요구한다. `TASK-BE-501` 과 같은 결함 클래스이되, **도달 가능해지기 한 걸음 전에** 잡은 것이다.
+
+⇒ **`X-Seller-Scope` 를 ecommerce strip 추가분에 넣는다.** 오늘 net-zero, 활성화가 구멍을 함께 배포하지 못하게 만든다. (주입은 별개 결정 — Step 4 의 몫이며 이 task 의 몫이 아니다.)
 
 ## D4 — 서비스에 잔류 (이관 대상 아님)
 

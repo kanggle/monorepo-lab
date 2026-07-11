@@ -143,7 +143,13 @@ Every existing `libs/java-*` is servlet-based or framework-neutral. Gateways are
 
 - **`ecommerce`'s `SecurityConfig`** — encodes route knowledge (`/api/shippings/carrier-webhook`, `GET /api/products/**` public, CORS preflight permit) and depends on `com.example.web.dto.ErrorResponse` + `GatewayMetrics`. Route policy is domain knowledge; hoisting it would be exactly the "domain ownership over reuse convenience" violation the policy names.
 - **`ecommerce`'s per-tenant rate-limit override classes** (`OverrideAwareRateLimiter`, `RateLimitOverrideProperties`, `TenantRouteRateLimitConfig`) — a genuine marketplace requirement no other domain has.
-- **`ecommerce`'s `RouteService`, `SwaggerAggregationConfig`, `GatewayMetrics`, `AccountTypeEnforcementFilter`; `wms`'s `AccountTypeValidationFilter`; `scm`/`fan`'s `JwksHealthProbe`** — single-consumer classes. The policy's Decision Rule question 1 fails. **Do not promote a class to `libs/` because it might be shared later.**
+- **`ecommerce`'s `RouteService`, `SwaggerAggregationConfig`, `GatewayMetrics`, `AccountTypeEnforcementFilter`; `wms`'s `AccountTypeValidationFilter`** — single-consumer classes. The policy's Decision Rule question 1 fails. **Do not promote a class to `libs/` because it might be shared later.**
+
+> **Correction (TASK-MONO-356, 2026-07-12): `scm`/`fan`'s `JwksHealthProbe` was listed above as single-consumer. It is not — it has two, and their bodies are byte-identical.** The Decision Rule's question 1 *passes* for it, so it is a legitimate Tier-1 candidate and this ADR misclassified it.
+>
+> It was **not** extracted in step 3, and not out of tidiness: it is a `@Component`, and wms's `GatewayServiceApplication` scans `com.example.apigateway`. Moving it to the library as-is would make **wms register a JWKS health probe it has never had** — a behaviour change, arriving silently, under the banner of de-duplication. That is the precise thing § D6 exists to forbid, and it would have been easy to do by accident. A correct extraction has to convert it to a per-domain `@Bean` (scm/fan only), which is its own scoped change with its own proof, not a drive-by inside an ecommerce migration.
+>
+> Known remaining duplication after step 3, both deliberate: **`JwksHealthProbe`** (scm/fan, byte-identical — pending the change above) and **`RateLimitConfig`** (scm/fan differ by one string; wms differs structurally — descoped, see the D3 correction: the keying strategy is a decision for a human, not for an extraction).
 
 ### D5 — The four tenant-gate policies are **intentional**, and the library must preserve all four
 
