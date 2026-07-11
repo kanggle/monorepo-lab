@@ -168,6 +168,9 @@ jobs:
       # change has code-changed == 'false', so AND-combining would disable the
       # guard exactly on the change it exists to police.
       service-map: ${{ steps.filter.outputs.service-map }}
+      # Same reasoning as service-map above: deleting a row from error-handling.md is a
+      # docs-only diff, and that is precisely the change the guard must catch.
+      error-registry: ${{ steps.filter.outputs.error-registry }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
@@ -253,6 +256,16 @@ jobs:
               - 'settings.gradle'
               - 'docs/project-overview.md'
               - 'scripts/check-service-map-drift.sh'
+            # TASK-MONO-352: platform/error-handling.md declares itself "the single
+            # authoritative registry" and mandates that every new error code be added
+            # to it — but nothing enforced that, and 37 live codes had drifted out.
+            # Any Java change can introduce a new emitted code, so this filter is
+            # deliberately wide on the source tree.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            error-registry:
+              - '**/*.java'
+              - 'platform/error-handling.md'
+              - 'scripts/check-error-code-registry.sh'
             # TASK-MONO-075: pure-positive enumeration of code-bearing file
             # extensions. `'some'` quantifier behaves intuitively here (no
             # negation → no quirk). markdown-only / docs-only / lifecycle-only
@@ -328,6 +341,27 @@ jobs:
 
       - name: Guard — settings.gradle <-> docs/project-overview.md
         run: bash scripts/check-service-map-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-352: platform/error-handling.md calls itself the single authoritative
+  # error registry and mandates registration before use — as prose, which nothing
+  # checked. 37 live codes had drifted out of it, including whole ADR-045/047 code
+  # families. This makes the protocol enforceable. Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  error-code-registry:
+    name: Error code registry (emitted codes vs platform/error-handling.md)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.error-registry == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-error-code-registry.sh
+
+      - name: Guard — every emitted error code is registered
+        run: bash scripts/check-error-code-registry.sh
 
   demo-wrapper-smoke:
     name: Demo wrapper smoke (infra/demo)

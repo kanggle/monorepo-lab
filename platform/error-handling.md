@@ -93,6 +93,7 @@ Services that return additional context (trace/request ids, structured `details`
 |---|---|---|
 | VALIDATION_ERROR | 400 | Request field is missing, malformed, or fails validation |
 | BAD_REQUEST | 400 | Request violates structural constraints not captured by a specific validation code |
+| INVALID_REQUEST | 400 | Request rejected by an application-level precondition rather than field validation (`InvalidRequestException`). Emitted by ecommerce `order-service` and IAM `admin-service` with identical semantics. Overlaps `BAD_REQUEST` in shape — prefer `VALIDATION_ERROR` / `BAD_REQUEST` in new code; this row registers what two live services already emit (TASK-MONO-352) |
 
 ## Rate Limiting
 
@@ -268,6 +269,7 @@ Owned by `product-service`. See `rules/domains/ecommerce.md`.
 | VARIANT_NOT_FOUND | 404 | Variant with given ID does not exist |
 | INSUFFICIENT_STOCK | 400 | Stock adjustment would result in negative stock. Same string as the wms Inventory `INSUFFICIENT_STOCK` (422) but a distinct operation — this is an invalid stock adjustment (400), not a reservation/withdrawal exceeding available stock |
 | IMAGE_NOT_FOUND | 404 | Image with given ID does not exist for this product |
+| SELLER_NOT_FOUND | 404 | Seller with given ID does not exist (marketplace seller surface, ADR-MONO-030) |
 | IMAGE_LIMIT_EXCEEDED | 422 | Product already has the maximum number of images |
 | MEDIA_NOT_FOUND | 404 | Media object not found in object storage by key (product-service `MediaNotFoundException`) |
 | MEDIA_VALIDATION_FAILED | 400 | Media upload payload fails format, size, or MIME-type validation (product-service `MediaValidationException`) |
@@ -304,6 +306,7 @@ Owned by `order-service`. See `rules/domains/ecommerce.md` rules E1, E2.
 | ORDER_NOT_FOUND | 404 | Order with given ID does not exist |
 | INVALID_ORDER_REQUEST | 400 | Order request is invalid (missing fields, invalid quantity) |
 | ORDER_CANNOT_BE_CANCELLED | 422 | Order cannot be cancelled in its current status |
+| DUPLICATE_ORDER_REQUEST | 409 | The same `Idempotency-Key` was replayed with a different order payload (`DuplicateOrderRequestException`) |
 
 ## Payment  `[domain: ecommerce]`
 
@@ -359,6 +362,7 @@ Owned by `notification-service`.
 | INVALID_TEMPLATE_REQUEST | 400 | Notification template request is invalid |
 | TEMPLATE_NOT_FOUND | 404 | Template with given ID does not exist |
 | TEMPLATE_ALREADY_EXISTS | 409 | Template for this type and channel already exists |
+| PUSH_NOT_CONFIGURED | 503 | The push channel is not configured for this deployment, so a push send cannot be attempted (`PushNotConfiguredException`). 503 rather than 4xx: the caller's request is valid, the capability is absent |
 
 ## Review  `[domain: ecommerce]`
 
@@ -402,6 +406,9 @@ Owned by `settlement-service` (ADR-MONO-030 marketplace settlement / commission,
 |---|---|---|
 | SETTLEMENT_NOT_FOUND | 404 | Settlement record does not exist. Also returned when a seller-scope / cross-tenant access is rejected, so existence is not leaked (`SettlementNotFoundException` / `SellerScopeForbiddenException`). |
 | COMMISSION_RATE_INVALID | 422 | Commission rate value is outside the allowed range on `PUT /commission-rates/{sellerId}` (`InvalidCommissionRateException`). |
+| PERIOD_WINDOW_INVALID | 422 | The settlement period window is malformed (`from >= to`, or it overlaps an existing period). |
+| PERIOD_ALREADY_CLOSED | 409 | The settlement period is already CLOSED — it cannot be closed or re-settled again. |
+| PERIOD_NOT_CLOSED | 409 | The operation requires a CLOSED period (e.g. payout) but the period is still open. |
 
 > `TENANT_FORBIDDEN` (403, cross-tenant JWT) — see `Tenant  [domain: saas]`
 > section; ecommerce gateway-service + settlement-service consume the same
@@ -417,7 +424,7 @@ Owned by `procurement-service`. PO state machine + supplier integration.
 | Code | HTTP | Description |
 |---|---|---|
 | PO_NOT_FOUND | 404 | Purchase order does not exist |
-| PO_STATE_TRANSITION_INVALID | 422 | Requested PO state transition is not allowed from current state (use `STATE_TRANSITION_INVALID` from Transactional Trait if generic) |
+| PO_STATUS_TRANSITION_INVALID | 422 | Requested PO status transition is not allowed from the current status (`PoStatusTransitionInvalidException`; carries `from`/`to`/`actor` in `details`). Use `STATE_TRANSITION_INVALID` from the Transactional Trait where the failure is generic. **Registered as `PO_STATE_TRANSITION_INVALID` until TASK-MONO-352** — a string nothing emitted, while the string the service and `procurement-api.md` actually use (`…_STATUS_…`) was unregistered |
 | PO_ALREADY_CONFIRMED | 422 | PO is already in CONFIRMED state; idempotent re-confirm is rejected (`PoAlreadyConfirmedException`) |
 | PO_QUANTITY_EXCEEDED | 422 | ASN line quantity exceeds the remaining open PO line quantity (`PoQuantityExceededException`) |
 | SUPPLIER_NOT_FOUND | 404 | Supplier reference does not exist |
@@ -428,6 +435,7 @@ Owned by `procurement-service`. PO state machine + supplier integration.
 | SETTLEMENT_PERIOD_LOCKED | 422 | Settlement period is locked; cannot modify PO line in this period (S3 immutability) — **v2-planned**, no `SettlementPeriodLockedException` class yet (deferred to v2 settlement-service) |
 | ASN_OVERRECEIPT | 422 | ASN reports more units than the PO line ordered (per spec deviation policy) |
 | RECONCILIATION_DISCREPANCY_OPEN | 422 | Discrepancy exists; manual operator review required (S8 — auto-close forbidden) — **v2-planned**, no exception class yet (deferred to v2 settlement-service) |
+| REQUEST_ERROR | *(pass-through)* | Fallback code of procurement-service's `ResponseStatusException` handler, which **carries the exception's own status through** and only chooses the code: 401 → `UNAUTHORIZED`, 403 → `PERMISSION_DENIED`, anything else → `REQUEST_ERROR`. This is the one registry row with no fixed status, by construction. No procurement main-code path throws `ResponseStatusException` today, but Spring's own subclasses route here (e.g. `NoResourceFoundException`, 404) |
 
 > `IDEMPOTENCY_KEY_REQUIRED` (400) is also emitted by procurement-service via handler guard — see Platform-Common Transactional Trait section.
 
@@ -516,6 +524,45 @@ Owned by `account-service` + `admin-service` (per multi-tenant trait M1).
 | TENANT_SCOPE_DENIED | 403 | Token scope does not include the requested tenant context |
 | TENANT_SUSPENDED | 423 | Tenant is suspended (administrative action) |
 | TENANT_ID_RESERVED | 400 | Tenant ID is reserved and cannot be used (admin-service `TenantIdReservedException`) |
+| TENANT_SCOPE_MISMATCH | 403 | The requested tenant does not match the tenant the operator is currently acting in (admin-service). Distinct from `TENANT_SCOPE_DENIED`, which is about the token's scope rather than the active context |
+
+### Domain subscriptions  (ADR-MONO-019 / ADR-MONO-047)
+
+Owned by `account-service` (authority) and proxied by `admin-service`.
+
+| Code | HTTP | Description |
+|---|---|---|
+| SUBSCRIPTION_ALREADY_EXISTS | 409 | The tenant already subscribes to this domain |
+| SUBSCRIPTION_TRANSITION_INVALID | 409 | Subscription status transition is not legal from the current status |
+| SUBSCRIPTION_DOMAIN_OUT_OF_CEILING | 422 | The requested domain lies outside the tenant's org-node entitlement ceiling (ADR-MONO-047 D3). A `BOUNDED` ceiling permits only the listed domains; `UNBOUNDED` permits any |
+
+### Org-node hierarchy  (ADR-MONO-047)
+
+`org_node` is a data-less grouping node **above** `tenant` — it groups tenants, it never nests them, so `tenant_id` remains the single flat isolation key. Owned by `account-service` (the authority that enforces the tree invariants); `admin-service` is a thin command gateway that carries the authority's code through unchanged rather than re-implementing the checks.
+
+| Code | HTTP | Description |
+|---|---|---|
+| ORG_NODE_NOT_FOUND | 404 | Org-node id unknown, or outside the caller's subtree |
+| ORG_NODE_CYCLE | 422 | The requested `parent_id` would close a cycle in the tree |
+| ORG_NODE_DEPTH_EXCEEDED | 422 | The move/create would push the tree past its maximum depth (5) |
+| ORG_NODE_CEILING_NOT_SUBSET | 422 | A child node's entitlement ceiling is not a subset of its parent's — a node may only narrow what it inherits, never widen it |
+| ORG_NODE_NOT_EMPTY | 422 | Delete refused: the node still has child nodes or tenants |
+| ORG_NODE_SELF_CEILING_DENIED | 403 | An `ORG_ADMIN` attempted to edit the ceiling of their own node (they may only narrow ceilings *below* it) — the no-self-escalation guard |
+| ORG_NODE_INVARIANT_VIOLATION | 422 | **Fallback only.** `admin-service` passes the authority's specific code through (`ORG_NODE_CYCLE` / `_DEPTH_EXCEEDED` / `_CEILING_NOT_SUBSET` / `_NOT_EMPTY`); this string appears only when the authority returned a blank/unknown code, so seeing it means the two services have drifted (`OrgNodeInvariantViolationException`) |
+| ORG_ADMIN_GRANT_OUT_OF_CEILING | 422 | An `ORG_ADMIN` attempted to grant a domain outside their node's ceiling |
+
+### Cross-org partnerships  (ADR-MONO-045)
+
+| Code | HTTP | Description |
+|---|---|---|
+| PARTNERSHIP_NOT_FOUND | 404 | Partnership id unknown, or not visible to the caller's tenant |
+| PARTNERSHIP_ALREADY_EXISTS | 409 | A partnership already exists between these two tenants |
+| PARTNERSHIP_TRANSITION_INVALID | 409 | Partnership status transition is not legal from the current status |
+| PARTNERSHIP_SCOPE_DENIED | 403 | The caller's tenant is not a party to this partnership |
+| PARTNERSHIP_SCOPE_INVALID | 422 | The requested partnership scope is malformed or not permitted |
+| PARTICIPANT_NOT_FOUND | 404 | Participant unknown within the partnership |
+| PARTICIPANT_NOT_OWN_OPERATOR | 422 | The operator being added as a participant does not belong to the calling tenant |
+| PARTICIPANT_SCOPE_EXCEEDS_DELEGATION | 422 | The participant's requested scope is wider than what the partnership delegates — a participant can only be granted a subset |
 
 ## Admin  `[domain: saas]`
 
@@ -545,6 +592,14 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | SELF_SUSPEND_FORBIDDEN | 400 | Operator cannot suspend their own account (`SelfSuspendForbiddenException`) |
 | CURRENT_PASSWORD_MISMATCH | 400 | Current password does not match stored credential (`CurrentPasswordMismatchException`) |
 | SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH | 400 | Operator attempted to edit their own profile through the admin operator-management path; must use the self-service path instead (`SelfProfileUpdateForbiddenException`). Referenced by platform-console |
+| ROLE_GRANT_FORBIDDEN | 403 | The granting operator may not confer this role — a role can never be granted above the granter's own level (the no-escalation guard, ADR-MONO-024 D3) |
+| ASSIGNMENT_ALREADY_EXISTS | 409 | The operator is already assigned to this tenant/domain |
+| ACCESS_CONDITION_UNMET | 403 | An access condition attached to the endpoint was not satisfied — `SOURCE_IP`, `TIME_WINDOW` and/or `RESOURCE_TAG` are AND-composed, and any configured one that is unsatisfied denies (ADR-MONO-026/028/029). Restriction-only: a condition can gate an already-authorised action, never grant one |
+| OPERATOR_ACCOUNT_NOT_FOUND | 422 | The account-service identity this operator should link to does not exist |
+| OPERATOR_ALREADY_LINKED | 409 | The operator is already linked to an account identity |
+| IDENTITY_LINK_EMAIL_MISMATCH | 422 | The operator's email does not match the account identity being linked |
+| ACCOUNT_IDENTITY_UNRESOLVABLE | 422 | The operator's account identity could not be resolved from the authority |
+| OPTIMISTIC_LOCK_CONFLICT | 409 | Optimistic-lock collision on `admin_operators.version`. **Registered intentional alias** of Platform-Common `CONFLICT` / `CONCURRENT_MODIFICATION` (same 409 shape) — `admin-service` overrides the parent handler's mapping so the code matches what `admin-api.md` mandates for this surface (TASK-BE-306; alias precedent TASK-MONO-244) |
 
 ## Community  `[domain: saas]`
 
@@ -734,6 +789,7 @@ regulated, no estimated-rate P&L; the supplied-rate path is byte-identical, net-
 | REVALUATION_RATE_INVALID | 422 | **(9th incr)** FX revaluation `closingRate` is not strictly positive — `ledger-service` (`RevaluationRateInvalidException`). The rate is the base-minor-per-foreign-minor spot factor (caller-supplied); a non-positive rate cannot value a position |
 | SETTLEMENT_RATE_INVALID | 422 | **(10th incr)** FX settlement `settlementRate` is not strictly positive — `ledger-service` (`SettlementRateInvalidException`). Same base-minor-per-foreign-minor spot factor; a non-positive rate cannot settle a position |
 | FX_RATE_UNAVAILABLE | 422 | **(24th incr)** No FX rate supplied and no fresh cached quote available (feed disabled / no quote / stale) on `POST /revaluations` / `/settlements` — `ledger-service` (`FxRateUnavailableException`, ADR-002 D3); regulated fail-closed (no estimated-rate P&L) — operator must supply a manual rate or wait for a fresh quote |
+| SETTLEMENT_AMOUNT_INVALID | 422 | **(12th incr)** Partial FX settlement `settleForeignAmount` is zero, opposite-sign, or over-settles the position (`> \|F\|`) on `POST /settlements` — `ledger-service` (`SettlementAmountInvalidException`). Position-relative, so it is distinct from `SETTLEMENT_RATE_INVALID` (a rate-value guard) |
 
 ---
 

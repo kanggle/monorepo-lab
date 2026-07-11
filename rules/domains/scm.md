@@ -61,7 +61,8 @@ scm 도메인에서 공통으로 발생하는 에러는 [../../platform/error-ha
 - `PO_NOT_FOUND` — 존재하지 않는 PO
 - `PO_ALREADY_CONFIRMED` — 이미 확정된 PO 의 수정/취소 시도
 - `PO_QUANTITY_EXCEEDED` — supplier ack 수량이 PO 수량 초과
-- `PO_STATUS_TRANSITION_INVALID` — 허용되지 않는 PO 상태 전이
+- `PO_STATUS_TRANSITION_INVALID` — 허용되지 않는 PO 상태 전이 (422). 플랫폼 레지스트리는 TASK-MONO-352 전까지 이 코드를 `PO_STATE_TRANSITION_INVALID` 라는 **아무도 발행하지 않는 오타 문자열**로 등록해 두었다 — 코드·계약·이 파일은 처음부터 `_STATUS_` 로 일치했다
+- `REQUEST_ERROR` — `ResponseStatusException` 핸들러의 폴백 코드. **상태는 예외의 것을 그대로 통과**시키고 코드만 고른다(401→`UNAUTHORIZED`, 403→`PERMISSION_DENIED`, 그 외→`REQUEST_ERROR`). 도메인 개념이 아니라 프레임워크 경유 코드다
 - `ASN_OVERRECEIPT` — ASN 수량이 PO 잔여 수량 초과
 - `CATALOG_SKU_UNKNOWN` — supplier 카탈로그에 없는 SKU 로 PO 작성 시도
 
