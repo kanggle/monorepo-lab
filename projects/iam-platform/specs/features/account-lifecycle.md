@@ -19,7 +19,7 @@
 정상 사용 중. 로그인·API 사용 가능. 모든 신규 계정의 초기 상태.
 
 ### LOCKED
-일시 차단. 로그인 시도 시 403 `ACCOUNT_LOCKED`. 잠금 원인:
+일시 차단. 로그인 시도 시 **423** `ACCOUNT_LOCKED` ([`platform/error-handling.md`](../../../../platform/error-handling.md) § Account, TASK-BE-462 — blanket 403 이 아니다). 잠금 원인:
 - `ADMIN_LOCK`: 운영자 수동 잠금
 - `AUTO_DETECT`: security-service의 비정상 탐지 (velocity/geo/device/token-reuse)
 - `PASSWORD_FAILURE_THRESHOLD`: 로그인 실패 임계치 초과 (미래 자동 잠금)
@@ -27,12 +27,12 @@
 해제: 운영자 unlock 또는 사용자 본인 복구 (미래).
 
 ### DORMANT
-장기 미사용 휴면. 로그인 시도 시 403 `ACCOUNT_DORMANT`. 전이 조건:
+장기 미사용 휴면. 로그인 시도 시 **423** `ACCOUNT_DORMANT`. 전이 조건:
 - 마지막 로그인 성공 후 **365일** 경과 (배치 또는 스케줄러)
 - 사용자가 로그인하면 즉시 ACTIVE 복귀
 
 ### DELETED
-삭제 유예 상태. 로그인 불가. 전이 원인:
+삭제 유예 상태. 로그인 시도 시 **410** `ACCOUNT_DELETED`. 전이 원인:
 - `USER_REQUEST`: 사용자 자발적 탈퇴
 - `ADMIN_DELETE`: 운영자 강제 삭제
 - `REGULATED_DELETION`: 규제 요구 삭제 (GDPR 등)

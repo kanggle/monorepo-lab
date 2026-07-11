@@ -25,7 +25,7 @@
 
 ### Post-Condition
 - 계정 LOCKED
-- 이후 로그인 시도 시 403 `ACCOUNT_LOCKED`
+- 이후 로그인 시도 시 **423** `ACCOUNT_LOCKED` ([`platform/error-handling.md`](../../../../platform/error-handling.md) § Account, TASK-BE-462)
 - 운영자 unlock 필요
 
 ---

@@ -59,10 +59,13 @@
 - **EF-1**: 이메일 미존재 → 401 `INVALID_CREDENTIALS` (이메일 존재 여부 미노출)
 - **EF-2**: 패스워드 불일치 → 401 `INVALID_CREDENTIALS` + 실패 카운터 증가
 - **EF-3**: 실패 카운터 5회 초과 → 429 `LOGIN_RATE_LIMITED`
-- **EF-4**: 계정 LOCKED → 403 `ACCOUNT_LOCKED`
-- **EF-5**: 계정 DORMANT → 403 `ACCOUNT_DORMANT`
-- **EF-6**: 계정 DELETED → 403 `ACCOUNT_DELETED`
+- **EF-4**: 계정 LOCKED → **423** `ACCOUNT_LOCKED`
+- **EF-5**: 계정 DORMANT → **423** `ACCOUNT_DORMANT`
+- **EF-6**: 계정 DELETED → **410** `ACCOUNT_DELETED`
 - **EF-7**: account-service 장애 → 503 `SERVICE_UNAVAILABLE`
+- **EF-8**: 인식 불가 계정 상태 → 500 `ACCOUNT_STATUS_UNKNOWN` (의도된 fail-loud)
+
+> EF-4~6 은 blanket 403 이 아니다 — 권위는 [`platform/error-handling.md`](../../../../platform/error-handling.md) § Account (TASK-BE-462).
 
 ---
 
