@@ -42,7 +42,23 @@ public class GlobalExceptionHandler {
             Map.entry("EXTERNAL_TRAFFIC_REJECTED", HttpStatus.FORBIDDEN),
             Map.entry("UNAUTHORIZED", HttpStatus.UNAUTHORIZED),
             Map.entry("CONCURRENT_MODIFICATION", HttpStatus.CONFLICT),
-            Map.entry("IDEMPOTENCY_STORE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE));
+            Map.entry("IDEMPOTENCY_STORE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE),
+            Map.entry("ILLEGAL_STATE", HttpStatus.UNPROCESSABLE_ENTITY));
+
+    /**
+     * Resolve a code's status from {@link #STATUS_BY_CODE} — the single place a
+     * code→status pair is decided. Handlers that <i>mint</i> a code (rather than
+     * carry one on a {@link MasterdataDomainException}) route through here too, so one
+     * code can never leave this service at two different statuses.
+     *
+     * <p>{@link #handleGeneral} is deliberately NOT routed here: {@code INTERNAL_ERROR}
+     * is absent from the table, so the {@code getOrDefault} fallback would turn its
+     * 500 into a 422.
+     */
+    private ResponseEntity<ApiErrorBody> respond(String code, String message) {
+        HttpStatus status = STATUS_BY_CODE.getOrDefault(code, HttpStatus.UNPROCESSABLE_ENTITY);
+        return ResponseEntity.status(status).body(ApiErrorBody.of(code, message));
+    }
 
     @ExceptionHandler(MasterdataDomainException.class)
     public ResponseEntity<ApiErrorBody> handleDomain(MasterdataDomainException e) {
@@ -57,13 +73,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ApiErrorBody> handleMissingHeader(MissingRequestHeaderException e) {
         if ("Idempotency-Key".equalsIgnoreCase(e.getHeaderName())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiErrorBody.of("IDEMPOTENCY_KEY_REQUIRED",
-                            "Idempotency-Key header is required for mutating endpoints"));
+            return respond("IDEMPOTENCY_KEY_REQUIRED",
+                    "Idempotency-Key header is required for mutating endpoints");
         }
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR",
-                        "Missing required header: " + e.getHeaderName()));
+        return respond("VALIDATION_ERROR", "Missing required header: " + e.getHeaderName());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -72,42 +85,36 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .orElse("Validation failed");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", message));
+        return respond("VALIDATION_ERROR", message);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiErrorBody> handleIllegalArgument(IllegalArgumentException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", e.getMessage()));
+        return respond("VALIDATION_ERROR", e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiErrorBody> handleTypeMismatch(
             MethodArgumentTypeMismatchException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Invalid parameter: " + e.getName()));
+        return respond("VALIDATION_ERROR", "Invalid parameter: " + e.getName());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorBody> handleMalformed(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Malformed request body"));
+        return respond("VALIDATION_ERROR", "Malformed request body");
     }
 
     @ExceptionHandler({OptimisticLockException.class,
             ObjectOptimisticLockingFailureException.class})
     public ResponseEntity<ApiErrorBody> handleOptimisticLock(Exception e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorBody.of("CONCURRENT_MODIFICATION",
-                        "Concurrent modification detected. Please retry."));
+        return respond("CONCURRENT_MODIFICATION",
+                "Concurrent modification detected. Please retry.");
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiErrorBody> handleIllegalState(IllegalStateException e) {
         log.warn("illegal state at controller boundary", e);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", e.getMessage()));
+        return respond("ILLEGAL_STATE", e.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

@@ -55,7 +55,23 @@ public class GlobalExceptionHandler {
             Map.entry("PERMISSION_DENIED", HttpStatus.FORBIDDEN),
             Map.entry("TENANT_FORBIDDEN", HttpStatus.FORBIDDEN),
             Map.entry("IDEMPOTENCY_STORE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE),
-            Map.entry("CONCURRENT_MODIFICATION", HttpStatus.CONFLICT));
+            Map.entry("CONCURRENT_MODIFICATION", HttpStatus.CONFLICT),
+            Map.entry("ILLEGAL_STATE", HttpStatus.UNPROCESSABLE_ENTITY));
+
+    /**
+     * Resolve a code's status from {@link #STATUS_BY_CODE} — the single place a
+     * code→status pair is decided. Handlers that <i>mint</i> a code (rather than
+     * carry one on a {@link FinanceDomainException}) route through here too, so one
+     * code can never leave this service at two different statuses.
+     *
+     * <p>{@link #handleGeneral} is deliberately NOT routed here: {@code INTERNAL_ERROR}
+     * is absent from the table, so the {@code getOrDefault} fallback would turn its
+     * 500 into a 422.
+     */
+    private ResponseEntity<ApiErrorBody> respond(String code, String message) {
+        HttpStatus status = STATUS_BY_CODE.getOrDefault(code, HttpStatus.UNPROCESSABLE_ENTITY);
+        return ResponseEntity.status(status).body(ApiErrorBody.of(code, message));
+    }
 
     @ExceptionHandler(FinanceDomainException.class)
     public ResponseEntity<ApiErrorBody> handleDomain(FinanceDomainException e) {
@@ -70,27 +86,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Currency.UnsupportedCurrencyException.class)
     public ResponseEntity<ApiErrorBody> handleUnsupportedCurrency(
             Currency.UnsupportedCurrencyException e) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("CURRENCY_MISMATCH", e.getMessage()));
+        return respond("CURRENCY_MISMATCH", e.getMessage());
     }
 
     @ExceptionHandler(Money.CurrencyMismatchException.class)
     public ResponseEntity<ApiErrorBody> handleMoneyCurrencyMismatch(
             Money.CurrencyMismatchException e) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("CURRENCY_MISMATCH", e.getMessage()));
+        return respond("CURRENCY_MISMATCH", e.getMessage());
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ApiErrorBody> handleMissingHeader(MissingRequestHeaderException e) {
         if ("Idempotency-Key".equalsIgnoreCase(e.getHeaderName())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiErrorBody.of("IDEMPOTENCY_KEY_REQUIRED",
-                            "Idempotency-Key header is required for mutating endpoints"));
+            return respond("IDEMPOTENCY_KEY_REQUIRED",
+                    "Idempotency-Key header is required for mutating endpoints");
         }
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR",
-                        "Missing required header: " + e.getHeaderName()));
+        return respond("VALIDATION_ERROR", "Missing required header: " + e.getHeaderName());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -99,49 +110,52 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .orElse("Validation failed");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", message));
+        return respond("VALIDATION_ERROR", message);
     }
 
+    /**
+     * An unclassified bad argument reaching the controller boundary. Unlike
+     * ledger-service — whose IAE catch-all answers {@code 400 VALIDATION_ERROR} —
+     * this service keeps {@code 422 AMOUNT_INVALID}, and the asymmetry is deliberate:
+     * {@code Money.of()} is the dominant IAE source here (negative minor units, or a
+     * non-integer minor-unit string), and account-api.md registers exactly that as
+     * {@code AMOUNT_INVALID | 422 | ≤0 / scale / minor-unit violation}. Reclassifying
+     * it to 400 would break a documented behaviour. ledger has no {@code AMOUNT_INVALID}
+     * code at all and its IAEs come from hand-parsed FX rate strings, hence the split
+     * (TASK-MONO-348).
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiErrorBody> handleIllegalArgument(IllegalArgumentException e) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("AMOUNT_INVALID", e.getMessage()));
+        return respond("AMOUNT_INVALID", e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiErrorBody> handleTypeMismatch(
             MethodArgumentTypeMismatchException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Invalid parameter: " + e.getName()));
+        return respond("VALIDATION_ERROR", "Invalid parameter: " + e.getName());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorBody> handleMalformed(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Malformed request body"));
+        return respond("VALIDATION_ERROR", "Malformed request body");
     }
 
     @ExceptionHandler({OptimisticLockException.class,
             ObjectOptimisticLockingFailureException.class})
     public ResponseEntity<ApiErrorBody> handleOptimisticLock(Exception e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorBody.of("CONCURRENT_MODIFICATION",
-                        "Concurrent modification detected. Please retry."));
+        return respond("CONCURRENT_MODIFICATION",
+                "Concurrent modification detected. Please retry.");
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorBody> handleIntegrity(DataIntegrityViolationException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorBody.of("CONCURRENT_MODIFICATION",
-                        "Data integrity conflict"));
+        return respond("CONCURRENT_MODIFICATION", "Data integrity conflict");
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiErrorBody> handleIllegalState(IllegalStateException e) {
         log.warn("illegal state at controller boundary", e);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", e.getMessage()));
+        return respond("ILLEGAL_STATE", e.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

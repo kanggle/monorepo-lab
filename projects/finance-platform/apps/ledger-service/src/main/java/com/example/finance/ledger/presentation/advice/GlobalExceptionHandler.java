@@ -48,7 +48,23 @@ public class GlobalExceptionHandler {
             Map.entry("SETTLEMENT_AMOUNT_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("FX_RATE_UNAVAILABLE", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("VALIDATION_ERROR", HttpStatus.BAD_REQUEST),
+            Map.entry("ILLEGAL_STATE", HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry("TENANT_FORBIDDEN", HttpStatus.FORBIDDEN));
+
+    /**
+     * Resolve a code's status from {@link #STATUS_BY_CODE} — the single place a
+     * code→status pair is decided. Handlers that <i>mint</i> a code (rather than
+     * carry one on a {@link LedgerDomainException}) route through here too, so one
+     * code can never leave this service at two different statuses.
+     *
+     * <p>{@link #handleGeneral} is deliberately NOT routed here: {@code INTERNAL_ERROR}
+     * is absent from the table, so the {@code getOrDefault} fallback would turn its
+     * 500 into a 422.
+     */
+    private ResponseEntity<ApiErrorBody> respond(String code, String message) {
+        HttpStatus status = STATUS_BY_CODE.getOrDefault(code, HttpStatus.UNPROCESSABLE_ENTITY);
+        return ResponseEntity.status(status).body(ApiErrorBody.of(code, message));
+    }
 
     @ExceptionHandler(LedgerDomainException.class)
     public ResponseEntity<ApiErrorBody> handleDomain(LedgerDomainException e) {
@@ -63,15 +79,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Currency.UnsupportedCurrencyException.class)
     public ResponseEntity<ApiErrorBody> handleUnsupportedCurrency(
             Currency.UnsupportedCurrencyException e) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("CURRENCY_MISMATCH", e.getMessage()));
+        return respond("CURRENCY_MISMATCH", e.getMessage());
     }
 
     @ExceptionHandler(Money.CurrencyMismatchException.class)
     public ResponseEntity<ApiErrorBody> handleMoneyCurrencyMismatch(
             Money.CurrencyMismatchException e) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("CURRENCY_MISMATCH", e.getMessage()));
+        return respond("CURRENCY_MISMATCH", e.getMessage());
     }
 
     /**
@@ -82,34 +96,42 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ApiErrorBody> handleMissingHeader(MissingRequestHeaderException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("IDEMPOTENCY_KEY_REQUIRED",
-                        "Missing required header: " + e.getHeaderName()));
+        return respond("IDEMPOTENCY_KEY_REQUIRED", "Missing required header: " + e.getHeaderName());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiErrorBody> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Invalid parameter: " + e.getName()));
+        return respond("VALIDATION_ERROR", "Invalid parameter: " + e.getName());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorBody> handleMalformed(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", "Malformed request body"));
+        return respond("VALIDATION_ERROR", "Malformed request body");
     }
 
+    /**
+     * An unclassified bad argument reaching the controller boundary — in practice a
+     * request field this service parses by hand rather than through bean validation:
+     * the F5 string-decimal {@code settlementRate} / {@code closingRate} /
+     * {@code settleForeignAmount} (see {@code SettlementRequest.parseRate}).
+     *
+     * <p>Every <i>currency</i> failure has its own handler above
+     * ({@code Currency.UnsupportedCurrencyException}, {@code Money.CurrencyMismatchException},
+     * {@code LedgerErrors.CurrencyMismatchException} → {@code handleDomain}), so nothing
+     * that reaches this catch-all is a currency mismatch. It used to answer
+     * {@code 422 CURRENCY_MISMATCH} regardless, which put a code and a message that
+     * contradict each other in the same body and made FX dashboards over-count currency
+     * faults (TASK-MONO-348).
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiErrorBody> handleIllegalArgument(IllegalArgumentException e) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("CURRENCY_MISMATCH", e.getMessage()));
+        return respond("VALIDATION_ERROR", e.getMessage());
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiErrorBody> handleIllegalState(IllegalStateException e) {
         log.warn("illegal state at controller boundary", e);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiErrorBody.of("VALIDATION_ERROR", e.getMessage()));
+        return respond("ILLEGAL_STATE", e.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

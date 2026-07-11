@@ -452,6 +452,7 @@ filtering (v2 deferred).
 | `TENANT_FORBIDDEN` | 403 | `tenant_id ∉ {erp, *}` |
 | `UNAUTHORIZED` | 401 | missing / invalid / expired JWT (Platform-Common Authentication) |
 | `EXTERNAL_TRAFFIC_REJECTED` | 403 | external (non-internal-network) ingress (E7) — primarily enforced at Traefik / network layer; application-layer fallback surface |
+| `ILLEGAL_STATE` | 422 | aggregate invariant violated at the controller boundary — the unclassified `IllegalStateException` fallback (Platform-Common General). Prefer a domain code above (`APPROVAL_STATUS_TRANSITION_INVALID`) where the failure is a known state-machine transition |
 
 The 5 approval-specific codes (`APPROVAL_REQUEST_NOT_FOUND`,
 `APPROVAL_STATUS_TRANSITION_INVALID`, `APPROVAL_NOT_AUTHORIZED_APPROVER`,
