@@ -171,6 +171,12 @@ jobs:
       # Same reasoning as service-map above: deleting a row from error-handling.md is a
       # docs-only diff, and that is precisely the change the guard must catch.
       error-registry: ${{ steps.filter.outputs.error-registry }}
+      # TASK-MONO-360: same reasoning again, and this one is the reason the rule
+      # exists. TASK-MONO-347's drift ARRIVES as a one-line markdown edit — a
+      # PROJECT.md that promises a `gateway-service` the build never builds.
+      # AND-combining with `code-changed` would switch the guard off on exactly
+      # the diff it is here to police.
+      gateway-policy: ${{ steps.filter.outputs.gateway-policy }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
@@ -266,6 +272,19 @@ jobs:
               - '**/*.java'
               - 'platform/error-handling.md'
               - 'scripts/check-error-code-registry.sh'
+            # TASK-MONO-360 (carries TASK-MONO-347 AC-3): three hand-maintained
+            # declarations about gateways — api-gateway-policy.md prose,
+            # PROJECT.md, and the compose Traefik labels — against one build
+            # truth, settings.gradle. Nothing compared them, and for months
+            # finance/erp had no gateway while their PROJECT.md said v1-IN and
+            # Traefik routed finance.local straight at account-service.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            gateway-policy:
+              - 'settings.gradle'
+              - 'projects/*/PROJECT.md'
+              - 'projects/*/docker-compose.yml'
+              - 'platform/api-gateway-policy.md'
+              - 'scripts/check-gateway-drift.sh'
             # TASK-MONO-075: pure-positive enumeration of code-bearing file
             # extensions. `'some'` quantifier behaves intuitively here (no
             # negation → no quirk). markdown-only / docs-only / lifecycle-only
@@ -341,6 +360,41 @@ jobs:
 
       - name: Guard — settings.gradle <-> docs/project-overview.md
         run: bash scripts/check-service-map-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-360 — gateway declaration / exposure drift guard.
+  # (Carries TASK-MONO-347 AC-3, which TASK-MONO-357 did not satisfy.)
+  #
+  # api-gateway-policy.md declares without exception that every project has a
+  # gateway, that all external traffic passes through it, and that no backend is
+  # directly exposed. For months finance and erp had no gateway module at all —
+  # while their own PROJECT.md files listed gateway-service as v1-IN, and Traefik
+  # routed finance.local straight at account-service and split erp.local across
+  # four backends by PathPrefix. Policy, plan and code each said a different
+  # thing, the L13/L14 violation was live, and nothing failed.
+  #
+  # MONO-357 created the two gateways. It closed the INSTANCE of that drift; it
+  # did not close the PATH by which it recurs. MONO-345's service-map guard reads
+  # settings.gradle and docs/project-overview.md only — neither PROJECT.md nor the
+  # compose Traefik labels. This job covers those two axes.
+  #
+  # Note the filter above is NOT AND-combined with `code-changed`: this drift
+  # arrives as a one-line markdown edit to a PROJECT.md.
+  # ---------------------------------------------------------------------------
+  gateway-drift:
+    name: Gateway drift (PROJECT.md / settings.gradle / Traefik labels)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.gateway-policy == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-gateway-drift.sh
+
+      - name: Guard — gateway declaration <-> module <-> exposure
+        run: bash scripts/check-gateway-drift.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-352: platform/error-handling.md calls itself the single authoritative
