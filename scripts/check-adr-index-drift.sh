@@ -40,7 +40,9 @@
 #     (008, 018, 019) while the rest record the current-status date. Comparing it
 #     would fail on day one for reasons that are not drift — and a guard that is
 #     red on day one gets switched off, which is worse than no guard at all
-#     (TASK-MONO-360). Canonicalising the field first would make it guardable.
+#     (TASK-MONO-360). The root cause is that the Authoring Convention never said
+#     what Date means, so authors picked both readings. TASK-MONO-369 settles the
+#     semantics and then extends this script to cover the Date axis.
 #
 #   * The Title column. Index titles are curated summaries, not copies of the
 #     ADR's H1 (several H1s are full sentences). Comparing them would be a
