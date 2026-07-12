@@ -2,6 +2,7 @@ package com.example.apigateway.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.security.oauth2.TenantClaimValidator;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

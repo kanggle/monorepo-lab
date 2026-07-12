@@ -11,6 +11,19 @@ dependencies {
     // password4j for argon2id hashing (pure Java, Windows compatible)
     implementation 'com.password4j:password4j:1.8.2'
 
+    // Spring Security's OAuth2 resource-server value types — the `com.example.security.oauth2`
+    // package implements OAuth2TokenValidator<Jwt> (ADR-MONO-049 § D5-1).
+    //
+    // This is the FIRST Spring dependency in this module, and it reaches the runtime classpath
+    // of every consumer — so § D3 V1 asserts what it must NOT bring, precisely: no WebFlux, no
+    // Spring Cloud Gateway, no jakarta.servlet. A blanket "no Spring" assertion would be red on
+    // day one and would therefore be switched off (TASK-MONO-360), which is worse than none.
+    //
+    // Framework-neutral is not the same as Spring-free: `oauth2-jose` is neither servlet nor
+    // reactive. That distinction is the whole reason this module can be the home for a class
+    // that both the reactive gateways and the twenty servlet services consume.
+    implementation 'org.springframework.security:spring-security-oauth2-jose'
+
     // Test
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
@@ -22,3 +35,72 @@ dependencyManagement {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
     }
 }
+
+// -------------------------------------------------------------------------
+// ADR-MONO-049 § D3, assertion V1 — NEUTRALITY IS HELD BY THE BUILD, NOT BY A COMMENT.
+//
+// This module is consumed by BOTH the six reactive gateways and (from § D5-3 on) twenty
+// servlet services. If a reactive or servlet artefact ever reaches its runtime classpath, it
+// reaches all of them — and the failure would not be a compile error. It would be a class
+// that works until something scans or reflects over it, and then fails at boot, in the edge,
+// in production. TASK-MONO-044a already paid for that once, in the other direction.
+//
+// NOTE ON ADR-MONO-049 § D3's OWN CLAIM: it says "ADR-MONO-048 § D1's AC-6 already asserts
+// SCG/WebFlux on a servlet service's runtimeClasspath = 0. Extend it." IT DOES NOT EXIST.
+// AC-6 was written as prose and never became a task — grep the repo. This is the first
+// executable form of it. (TASK-MONO-378 measured that; the ADR has been corrected.)
+//
+// WHY THE LIST IS SPECIFIC AND NOT "no Spring": adding spring-security-oauth2-jose above put
+// Spring Security on this classpath deliberately. A blanket "no Spring" assertion would be RED
+// ON DAY ONE — and a guard that is red on day one gets switched off, which is worse than no
+// guard, because a skipped check reports green (TASK-MONO-360). Framework-neutral does not
+// mean Spring-free. It means: neither servlet nor reactive.
+// -------------------------------------------------------------------------
+def neutralityForbidden = [
+        'spring-webflux'       : 'WebFlux — would make this module reactive-bound',
+        'spring-cloud-gateway' : 'Spring Cloud Gateway — the reactive edge, ADR-MONO-048 § D1',
+        'jakarta.servlet-api'  : 'the servlet API — would make this module servlet-bound',
+        'spring-webmvc'        : 'Spring MVC — servlet-bound',
+        'tomcat-embed-core'    : 'an embedded servlet container',
+]
+
+tasks.register('assertClasspathNeutrality') {
+    group = 'verification'
+    description = 'ADR-MONO-049 § D3 V1 — libs:java-security must be neither servlet nor reactive.'
+
+    def runtimeCp = configurations.named('runtimeClasspath')
+    def forbidden = neutralityForbidden
+
+    doLast {
+        def names = runtimeCp.get().files*.name
+        if (names.isEmpty()) {
+            // No signal is not a pass (TASK-MONO-359). An empty classpath means the
+            // configuration did not resolve, and every check below would pass vacuously.
+            throw new GradleException(
+                    'assertClasspathNeutrality: runtimeClasspath resolved to ZERO artefacts. ' +
+                    'The assertion would pass having verified nothing.')
+        }
+        def violations = []
+        forbidden.each { marker, why ->
+            def hits = names.findAll { it.startsWith(marker) }
+            if (hits) {
+                violations << "  ${hits.join(', ')}\n      -> ${why}"
+            }
+        }
+        if (violations) {
+            throw new GradleException(
+                    "libs:java-security is no longer framework-neutral. Its runtimeClasspath " +
+                    "reaches every consumer — the six reactive gateways AND twenty servlet " +
+                    "services (ADR-MONO-049 § D1 / § D3 V1).\n\n" +
+                    violations.join('\n') + "\n\n" +
+                    "  Do NOT relax this list to make the build pass. If a class here genuinely " +
+                    "needs a servlet or reactive type, it does not belong in this module — that " +
+                    "is what libs:java-security-servlet and libs:java-gateway are for.\n" +
+                    "  (${names.size()} artefacts inspected.)")
+        }
+        logger.lifecycle("assertClasspathNeutrality: OK — ${names.size()} artefacts on " +
+                "libs:java-security's runtimeClasspath, none servlet-bound, none reactive.")
+    }
+}
+
+tasks.named('check') { dependsOn 'assertClasspathNeutrality' }

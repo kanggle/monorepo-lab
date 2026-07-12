@@ -1,6 +1,6 @@
 package com.wms.gateway.security;
 
-import com.example.apigateway.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.wms.gateway.config.OAuth2ResourceServerConfig;
 
 import org.junit.jupiter.api.DisplayName;

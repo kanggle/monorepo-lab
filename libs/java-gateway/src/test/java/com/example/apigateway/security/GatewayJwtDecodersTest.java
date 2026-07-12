@@ -3,6 +3,8 @@ package com.example.apigateway.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;

@@ -16,6 +16,17 @@ dependencies {
     // SecurityConfig / filters must not auto-register here. AllowedIssuersValidator is
     // constructed with `new`, never a bean, so adopting it costs nothing but an import.
     implementation project(':libs:java-gateway')
+
+    // AllowedIssuersValidator + TenantClaimValidator moved here from libs:java-gateway
+    // (ADR-MONO-049 § D5-1) — they are framework-neutral and twenty SERVLET services also
+    // hold copies of them, and a servlet service cannot consume java-gateway without
+    // dragging WebFlux + Spring Cloud Gateway onto its runtime classpath.
+    //
+    // java-gateway depends on java-security with `implementation`, which does NOT transit to
+    // this compile classpath — so this gateway declares it directly (§ D2: no `api`, anywhere).
+    // Without this line the gateway does not compile; it is not optional wiring.
+    implementation project(':libs:java-security')
+
     implementation project(':libs:java-web')
 
     // Observability

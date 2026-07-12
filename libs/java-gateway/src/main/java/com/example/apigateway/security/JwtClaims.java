@@ -1,5 +1,6 @@
 package com.example.apigateway.security;
 
+import com.example.security.oauth2.TenantClaimValidator;
 import java.util.Collection;
 import org.springframework.security.oauth2.jwt.Jwt;
 
