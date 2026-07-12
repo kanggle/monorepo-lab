@@ -1,12 +1,16 @@
 # ADR-MONO-049 — `libs/java-security`: a **framework-neutral** security library, because 18 hand-copied validators are only 8 tests away from a fix that lands nowhere
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
 **Date:** 2026-07-12 (PROPOSED)
 
+**History:** PROPOSED 2026-07-12 → **ACCEPTED 2026-07-13 with scope A** (`TASK-MONO-377`) — D5 widened to **all 20 services**; see § 1.7.
+
 **Decision driver:** `ADR-MONO-048` extracted `libs/java-gateway` from four copy-pasted **reactive** edges. While closing its last step, § 1.1 was corrected twice — and it was still wrong. The two security validators it counted at four copies each exist as **six more copies each inside the finance/erp servlet services**, plus a third class it never counted at all. `TASK-MONO-361` measured 3 classes × 6 copies = 18 files **in finance and erp**. This ADR decides whether to remove them.
 
-> 🔴 **And that count was low too — see § 1.6 (`TASK-MONO-375`).** The same three classes also live in **wms, fan, scm and iam**. Fleet-wide: **49 copies / 3,522 lines / 20 services / 6 projects**. Read § 1.1 and § 4 as *"finance and erp"*, not *"the fleet"*. **§ 3 is still `PROPOSED`; the scope question § 1.6 raises is the one to settle before ACCEPT.**
+> 🔴 **And that count was low too — see § 1.6 (`TASK-MONO-375`).** The same three classes also live in **wms, fan, scm and iam**. Fleet-wide: **49 copies / 3,522 lines / 20 services / 6 projects**. Read § 1.1 and § 4 as *"finance and erp"*, not *"the fleet"*.
+>
+> ✅ **Settled 2026-07-13 — `ACCEPTED`, scope A (`TASK-MONO-377`): D5 covers all 20 services.** § 1.7 records the exact per-service population, which had never been enumerated. **Two more estimates were wrong in the safe direction** — § 1.7 corrects them, so the price paid is the measured one, not the feared one.
 
 **Supersedes:** none. **Extends** `ADR-MONO-048` § 1.1, whose duplication count was low **three** times over (4 copies → the corrected 10 → 18 → the fleet-wide **49**). Each pass looked only where the previous task happened to be standing; that is the pattern, not arithmetic.
 
@@ -144,7 +148,61 @@ So **D4's premise is false as written**: *"All six servlet `TenantClaimValidator
 
 **How this draft got it wrong:** § 1.1 was measured by `TASK-MONO-361`, whose job was finance and erp. I inherited its scope without re-asking *"is this everywhere?"* — the same failure as § 1.5, one level up: **§ 1.5 asked "does a home already exist"; nobody asked "is this the whole population".** A count that has now been wrong three times is not a measurement problem. It is that each pass looked only where the previous task happened to be standing.
 
-**This section does not decide the scope — § 3 does, and § 3 is still `PROPOSED`.** The choice is between widening D5 to all 20 services and explicitly recording why 14 are left behind. What it does is make sure the choice is made against the real number.
+**This section does not decide the scope — § 3 does.** The choice is between widening D5 to all 20 services and explicitly recording why 14 are left behind. What it does is make sure the choice is made against the real number.
+
+### 1.7 ✅ The scope decision, and the population it was finally measured against (`TASK-MONO-377`, 2026-07-13, `origin/main` `ae54af58d`)
+
+**Scope A. D5 covers all 20 services.** § 1.6's argument is accepted as stated: `AllowedIssuersValidator`'s 18 copies are byte-identical after normalisation, so migrating 6 would leave **12 identical copies of the class this ADR is in the act of declaring canonical**. There is no coherent line to draw at finance+erp — that boundary is an artefact of which task last did the measuring, not a property of the code.
+
+**Nobody had ever enumerated the 20.** § 1.6 gave per-project totals; this is the per-service matrix, and it is not the uniform sweep the step list implied:
+
+| project | `AllowedIssuersValidator` + `TenantClaimValidator` | `TenantClaimEnforcer` | services |
+|---|---|---|---|
+| erp | 4 | 4 | approval · masterdata · notification · read-model |
+| fan | 4 | 4 | artist · community · membership · notification |
+| finance | 2 | 2 | account · ledger |
+| scm | **1** | **3** | procurement *(all three)* · demand-planning, inventory-visibility *(**Enforcer only**)* |
+| wms | **5** | **0** | admin · inbound · inventory · master · outbound *(**validators only**)* |
+| iam | **2** | **0** | community · membership *(**validators only**)* |
+| **total** | **18** | **13** | **20 services** |
+
+**Two things fall out of that table that the step list would have got wrong:**
+
+- **wms (5) and iam (2) hold no `TenantClaimEnforcer` at all** — they need `libs/java-security` only, never `java-security-servlet`.
+- **scm's demand-planning and inventory-visibility hold *only* the Enforcer** — they need `java-security-servlet` and no validator migration.
+
+#### Three more estimates were wrong — **two harmlessly, one not**
+
+| | ADR said | measured (`TASK-MONO-377`) |
+|---|---|---|
+| servlet services needing **new** `java-security` wiring | *(§ 4.1: 6)* · § 1.6 feared *"6 → 20"* | **1** — `wms/admin-service` is the **only** one of the 20 whose `build.gradle` does not already declare `libs:java-security` |
+| consumers needing `java-security-servlet` wiring | § 1.6: *"6 → 20"* | **13** — only the Enforcer holders |
+| framework of the 20 | *(assumed servlet)* | **✅ all 20 are servlet.** No reactive service holds a copy — D1's `compileOnly` trap is real, but nothing is standing in it today |
+
+**So scope A costs less than the ADR's own worst case.** The deletion roughly triples (18 → 49 copies) but the *build-graph* cost barely moves: **one new module, one new `settings.gradle` line, and 13 `java-security-servlet` lines.**
+
+##### 🔴 And one estimate was wrong in the **dangerous** direction — D5-1 is not free
+
+D1 and D5 both assert, of the very first step:
+
+> *"`java-gateway` and the 6 gateways **already depend on it** — **no new wiring.**"*
+
+**Both halves are false, and the second one breaks the build:**
+
+| claim | measured |
+|---|---|
+| `libs/java-gateway` depends on `libs/java-security` | **It does not.** Its `build.gradle` declares SCG, `starter-security`, `oauth2-resource-server`, `data-redis-reactive`, micrometer, jackson. **No project dependency at all.** And it **uses both classes in code** — `GatewayJwtDecoders` constructs `new AllowedIssuersValidator(...)` and takes a `TenantClaimValidator` parameter; `JwtClaims` reads `TenantClaimValidator.CLAIM_TENANT_ID`. ⇒ it needs the dependency the moment they move. |
+| the 6 gateways already depend on `java-security` | **Only 3 do** — fan, scm, wms. **ecommerce, erp and finance do not.** They compile against these classes **today** only because the classes live *inside* `java-gateway`, which they declare directly. Gradle `implementation` does **not** put a module's own dependencies on a consumer's compile classpath, so once the classes move, **those three stop compiling.** D2 forbids the tempting fix (`api project(':libs:java-security')`), and D2 is right — so each declares it itself. |
+
+**D5-1's real cost: 4 new dependency lines** (`java-gateway` + ecommerce/erp/finance gateways) **and an import change in all 6 gateways.** Still small — but *"no new wiring"* would have been discovered by a red build, not by reading.
+
+**This is the fourth time a count in this lineage moved.** Two of the three corrections above are *down*, which is new — and they moved because they were measured against the code rather than inherited from the previous document. **The one that went the other way is the one that mattered**: an underestimate of cost is an inconvenience; an underestimate of *breakage* is a broken `main`.
+
+#### What is now settled, and what is not
+
+- **Settled:** D5 covers all 20. The per-project policy differences (§ 1.6's four shapes) are **expressed through the MONO-355 builder, not preserved as copies** — that is what makes them expressible at all.
+- **Still true, still not a defect:** each project's servlet policy exactly mirrors its own gateway. **There is no live defect here**, and this migration must not create one. § 6 V6 is the guard: *if a per-domain suite has to change, the migration changed behaviour.*
+- **Not in scope, unchanged:** the **iam gateway** (§ D6 — a different, defensible design; audited by `TASK-MONO-365`). **Note the distinction, because it is easy to misread:** iam's *gateway* is out of scope; iam's *servlet services* (community, membership) are **in** scope — they hold 4 of the 49 copies.
 
 ---
 
@@ -177,7 +235,7 @@ Superficially the cheapest fix, and the one this monorepo has reached for four t
 
 | module | contents | status | consumed by |
 |---|---|---|---|
-| **`libs/java-security`** *(exists — `settings.gradle:17`)* | **+ `AllowedIssuersValidator`, `TenantClaimValidator`** (moved out of `libs/java-gateway`) | **already wired into 32 `build.gradle` files**, incl. all 6 servlet services and the wms/scm/fan/iam gateways | unchanged |
+| **`libs/java-security`** *(exists — `settings.gradle:17`)* | **+ `AllowedIssuersValidator`, `TenantClaimValidator`** (moved out of `libs/java-gateway`) | **already wired into 32 `build.gradle` files** — 🔴 **but not into the four that matter first.** § 1.7 measured it: `libs/java-gateway` **does not** declare it (and uses both classes in `GatewayJwtDecoders`/`JwtClaims`), and of the 6 gateways **only fan, scm and wms** do — **ecommerce, erp and finance do not.** D5-1 adds **4** lines. | unchanged |
 | **`libs/java-security-servlet`** *(new)* | `TenantClaimEnforcer` | **the only new module** | the 6 servlet services **only** |
 
 `libs/java-security` gains exactly one dependency: **`spring-security-oauth2-jose`** (the two classes implement `OAuth2TokenValidator<Jwt>`). It is neither servlet nor reactive — but it reaches the runtime classpath of **all 32 consumers**, which § D3 V1 must therefore assert *precisely* (no WebFlux, no SCG, no `jakarta.servlet`) rather than as a blanket "no Spring".
@@ -217,14 +275,25 @@ TenantClaimValidator.forTenant("finance")
 
 **The risk this creates, stated plainly:** one file now decides the tenant gate for **12 edges** — 6 gateways and 6 services. `TASK-MONO-355` already met this and answered it: ***every switch defaults closed; a shared security class whose defaults open the gate is one typo away from opening all of them.*** That discipline is **carried forward verbatim**, and the module's own suite must assert, for each switch, both what it **admits** and what it **refuses** — MONO-355's other lesson, learned when it found that wms's rejection of the `*` wildcard, the single most distinctive gate in the fleet, had **zero test coverage**.
 
-### D5 — Migration in four PRs, each leaving `main` green
+### D5 — Migration in **eight** PRs, each leaving `main` green — **scope A: all 20 services**
 
-> 🔴 **Corrected by § 1.6 — this is the part that most needs a decision before ACCEPT.** Steps 3–4 cover **finance (2) and erp (4)**: 6 of the **20** services that hold these classes. It would leave **14 services duplicating**, including **12 byte-identical copies of `AllowedIssuersValidator`** — a change that reaches some services and not others, which is the failure this ADR exists to argue against. **Either widen D5 to all 20 services (adding wms 5, fan 4, scm 3, iam 2), or record explicitly why 14 are left behind and what triggers their migration.** The four policy shapes make this bigger than the step list below implies; it is not the mechanical sweep it reads as.
+> ✅ **Widened by § 1.7 (`TASK-MONO-377`, ACCEPT).** The four-step list below used to stop at finance+erp — 6 of 20 — which would have left **12 byte-identical copies of `AllowedIssuersValidator`**, a class this ADR declares canonical in the same breath. § 1.6 called that *"this ADR's own thesis happening to this ADR"*, and it was right. **The steps below are derived from § 1.7's per-service matrix, not from the project list** — which is why wms and iam never wire the servlet module, and two scm services never touch a validator.
 
-1. **Move the two neutral classes into the existing `libs/java-security`** (out of `libs/java-gateway`); add `spring-security-oauth2-jose` to that module. `java-gateway` and the 6 gateways already depend on it — **no new wiring.** **No servlet service touched.** Behaviour identical; the 6 gateway suites are the proof.
-2. **`libs/java-security-servlet`** (the one new module) — canonical `TenantClaimEnforcer`. No consumer yet.
-3. **finance** (2 services) — delete 6 copies; the `java-security` dependency is **already there**, so only the servlet module is new wiring.
-4. **erp** (4 services) — delete 12 copies, same shape.
+**Every step is independently mergeable and leaves `main` green. They are strictly serialised** — steps 1–2 create the shared modules that 3–8 consume, and all of them touch `libs/` and `settings.gradle`, so a parallel step is a merge conflict by construction. **Ticket each step only when its predecessor has landed** (a `ready/` queue full of blocked, conflicting tasks is an invitation for two sessions to collide).
+
+| step | scope | copies deleted | new wiring |
+|---|---|---|---|
+| **D5-1** | Move `AllowedIssuersValidator` + `TenantClaimValidator` (and their two tests) **out of `libs/java-gateway`, into the existing `libs/java-security`**; add `spring-security-oauth2-jose` there. **No servlet service touched.** Behaviour identical; the 6 gateway suites are the proof. **⚠️ Not "no new wiring" — see § 1.7:** `java-gateway` itself uses both classes (`GatewayJwtDecoders`, `JwtClaims`) and **3 of the 6 gateways do not declare `java-security`**, so **4 dependency lines are new** and all 6 gateways' imports change. | 0 | **4** × `java-security` |
+| **D5-2** | **`libs/java-security-servlet`** — the one new module; canonical `TenantClaimEnforcer`. No consumer yet. | 0 | 1 `settings.gradle` line |
+| **D5-3** | **finance** — account, ledger | 6 | 2 × servlet |
+| **D5-4** | **erp** — approval, masterdata, notification, read-model | 12 | 4 × servlet |
+| **D5-5** | **scm** — procurement *(all three)*; demand-planning + inventory-visibility *(**Enforcer only** — no validator migration)* | 5 | 3 × servlet |
+| **D5-6** | **fan** — artist, community, membership, notification | 12 | 4 × servlet |
+| **D5-7** | **wms** — admin, inbound, inventory, master, outbound. **Validators only; wms holds no Enforcer, so it never wires the servlet module.** `admin-service` is the **one service in the fleet** whose `build.gradle` lacks `libs:java-security` — that single line is the only new `java-security` wiring in the whole migration. | 10 | 1 × `java-security` |
+| **D5-8** | **iam** — community, membership. **Validators only** (no Enforcer). *(The iam **gateway** stays out of scope — § D6. Its **servlet services** do not.)* | 4 | — |
+| | | **49** | |
+
+Per-domain tests **stay per-domain**: they pin *that domain's* gate policy, and MONO-355 is the standing evidence that a suite which only records what a gate accepts will not notice when what it refuses changes. **The four policy shapes (§ 1.6) are expressed through the builder, never preserved as copies** — that is what makes them expressible at all. What moves into the modules' own suite is the **class-level** contract (malformed `entitled_domains` → fail-closed; absent `tenant_id` → reject; issuer not in the allowlist → reject). **That is what closes § 1.3: all six domains inherit that coverage by construction, including the nine copies that have none today.**
 
 Per-domain tests **stay per-domain**: they pin *that domain's* gate policy, and MONO-355 is the standing evidence that a suite which only records what a gate accepts will not notice when what it refuses changes. What moves into the modules' own suite is the **class-level** contract (malformed `entitled_domains` → fail-closed; absent `tenant_id` → reject; issuer not in the allowlist → reject). **That is what closes § 1.3: all six domains inherit that coverage by construction, including the ten copies that have none today.**
 
@@ -233,13 +302,15 @@ Per-domain tests **stay per-domain**: they pin *that domain's* gate policy, and 
 - **Removing the service-level validators.** They are **load-bearing**, not vestigial: `TASK-MONO-361` verified that console-bff still reaches these backends **directly** (`CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: http://finance-account-service:8080`), never crossing the gateway. The gateway fronts only the `finance.local` / `erp.local` hostname. **This ADR de-duplicates the second layer. It does not delete it.**
 - **The iam gateway — ✅ audited (`TASK-MONO-365`), and the earlier framing here was wrong.** The first draft said it *"hand-rolls `TokenValidator` / `JwksCache` / `TokenBucketRateLimiter`"* and implied a safety gap. **It does not hand-roll the crypto**: its `TokenValidator` delegates to **`libs/java-security`'s `Rs256JwtVerifier`** — the same shared verifier the rest of the platform uses (and the discovery that produced § 1.5). The audit found it **strips spoofed identity headers**, and its strip set (`X-Account-ID` / `X-Device-Id` / `X-Tenant-Id`) **exactly matches what its downstream actually reads** — no forgeable-header gap; the set is narrower because an IdP's downstream vocabulary is narrower, not because it is missing anything. Its tenant legacy-fallback **defaults closed**, and its rate limiter is **Redis + an atomic Lua script** (distributed, not per-instance). **It is not a shared-library gap. It is a different, defensible design** — and this ADR's scope does not include it.
   **What the audit *did* find is a live issuer defect, and it is `TASK-MONO-365`'s subject, not this ADR's:** the iam gateway pins a **single** `expected-issuer`, defaulting to the **legacy** `iam` — while the other six gateways carry a CSV **allowlist** (SAS issuer **+** legacy). `TASK-BE-398` retires the legacy custom-JWT flow that mints `iss=iam`. **When it lands, iam's own edge accepts nothing.**
-- **wms rate-limit keying** (IP-only, unnamespaced, no recorded rationale — open since MONO-355, awaiting a human).
+- ~~**wms rate-limit keying** (IP-only, unnamespaced, no recorded rationale — open since MONO-355, awaiting a human).~~ **✅ Resolved 2026-07-12, and it did not resolve the way this line assumed.** wms was not the outlier: `platform/api-gateway-policy.md` made it the *only conformer*. The real defect was **ecommerce**, whose per-tenant bucket was **vacuous** — the `tenant_id` claim it keyed on is minted from the initiating OAuth client, so it is a **constant** for all shopper traffic and every shopper shared one bucket (`TASK-MONO-368`). `TASK-MONO-370` then aligned wms to the rule and removed five synthetic `acct:null` buckets across scm/fan/finance/erp. The policy now states the rule (*"a claim that your own config pins to a constant is not a bucket"*) and `check-gateway-drift.sh` I4 guards it. **This ADR's non-goal list was itself a stale declaration** — the exact class it exists to argue against.
 
 ---
 
 ## 4. Cost — measured, per `TASK-MONO-364` AC-5
 
-> 🔴 **Every number in § 4 and § 4.1 is scoped to § 1.1 — i.e. to finance and erp only. See § 1.6.** Fleet-wide: **49 copies / 3,522 lines / 20 services / 6 projects**; `AllowedIssuersValidator` exists **19** times, not 7; copies with no test are **9 of 49**, not 10 of 18. If D5 is widened, the deletion roughly **triples** and the consumers needing servlet-module wiring go from 6 to 20. The § 4.1 build-graph savings (1 new module, not 2) are unaffected — `libs/java-security` is already consumed by all of them.
+> 🔴 **Every number in § 4 and § 4.1 is scoped to § 1.1 — i.e. to finance and erp only. See § 1.6.** Fleet-wide: **49 copies / 3,522 lines / 20 services / 6 projects**; `AllowedIssuersValidator` exists **19** times, not 7; copies with no test are **9 of 49**, not 10 of 18.
+>
+> ✅ **D5 *was* widened (scope A, `TASK-MONO-377`). The fleet-wide cost is § 1.7's table, not this one — and it is cheaper than this note feared.** The deletion triples (18 → **49**), but the build-graph cost barely moves: **1** new module, **1** new `settings.gradle` line, **13** `java-security-servlet` wirings (only the Enforcer holders — not 20), and **1** new `java-security` wiring in the entire fleet (`wms/admin-service`, the sole service of the 20 that does not already declare it). *"The consumers needing servlet-module wiring go from 6 to 20"*, written above before anyone counted, was **itself an inherited guess**.
 
 `ADR-MONO-048` claimed a gateway was ~15 hand-copied classes and only proved it at the last step (it was 16; **~81% of a gateway is the library**). This ADR answers its own version of that question **before** asking for a decision.
 
@@ -301,23 +372,28 @@ How each decision is shown to hold — **and how each is shown to fail when viol
 
 **V5 is the one that matters.** MONO-355 found that wms's rejection of the `*` SUPER_ADMIN wildcard — the most distinctive gate in the fleet, and the one ADR-048 § D5 names by reason — had **zero test coverage**. A suite that records only what a gate accepts will not notice when what it refuses changes.
 
-## 7. Outstanding follow-ups (**do not create these tasks until ACCEPT**)
+## 7. Roadmap — **ACCEPTED, scope A** (`TASK-MONO-377`, 2026-07-13)
 
-Per `TASK-MONO-364` § AC-6, the roadmap lives here, not in `tasks/ready/`:
+Per `TASK-MONO-364` § AC-6 the roadmap lives here, not in `tasks/ready/`. **Ticket each step only once its predecessor has landed** — the steps are strictly serialised (they all touch `libs/` and `settings.gradle`), so a `ready/` queue holding all eight would be eight tasks that cannot be started and two sessions that collide trying.
 
-| step | scope |
-|---|---|
-| D5-1 | `libs/java-security` + `java-gateway` and 6 gateways migrated |
-| D5-2 | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` |
-| D5-3 | finance (2 services, 6 copies deleted) |
-| D5-4 | erp (4 services, 12 copies deleted) |
+| step | scope | copies | status |
+|---|---|---|---|
+| **D5-1** | move the two neutral validators `java-gateway` → `java-security` | 0 | **`TASK-MONO-378` (ready)** |
+| D5-2 | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | ⏳ after D5-1 |
+| D5-3 | finance — account, ledger | 6 | ⏳ |
+| D5-4 | erp — approval, masterdata, notification, read-model | 12 | ⏳ |
+| D5-5 | scm — procurement (all 3); demand-planning + inventory-visibility (**Enforcer only**) | 5 | ⏳ |
+| D5-6 | fan — artist, community, membership, notification | 12 | ⏳ |
+| D5-7 | wms — 5 services (**validators only**; `admin-service` needs the one new `java-security` line) | 10 | ⏳ |
+| D5-8 | iam — community, membership (**validators only**; the **gateway** stays out — § D6) | 4 | ⏳ |
+| | | **49** | |
 
 Carried forward, **not** resolved by this ADR (§ D6):
 
-- **iam gateway audit** — the only gateway that does not consume `libs/java-gateway`; it hand-rolls JWT validation, JWKS caching and rate limiting. Excluded from ADR-048 on **cost** grounds; **never approved on safety grounds.**
-- **wms rate-limit keying** — IP-only, unnamespaced, no recorded rationale. Open since MONO-355, awaiting a human.
+- **iam gateway audit** — the only gateway that does not consume `libs/java-gateway`; it hand-rolls JWT validation, JWKS caching and rate limiting. Excluded from ADR-048 on **cost** grounds; **never approved on safety grounds.** ⚠️ **Do not read this as excluding iam.** `TASK-MONO-365` audited the gateway and found it defensible; iam's **servlet services** (community, membership) are **in scope** — D5-8.
+- ~~**wms rate-limit keying.**~~ **✅ Resolved** — `TASK-MONO-368` / `TASK-MONO-370`. See § D6.
 
 ---
 
-**`PROPOSED → ACCEPTED` requires the user's exact intent (`ADR-MONO-049 ACCEPTED`). Agent self-ACCEPT is forbidden; implementing before ACCEPT is HARDSTOP-09.**
+**`ACCEPTED` 2026-07-13 (`TASK-MONO-377`), scope A.** The gate held: this document sat at `PROPOSED` through three tasks that each wanted to start implementing, and the count it would have been implemented against was wrong every one of those times.
 </content>
