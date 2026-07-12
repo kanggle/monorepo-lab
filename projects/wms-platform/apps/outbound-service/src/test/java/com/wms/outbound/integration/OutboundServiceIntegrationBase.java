@@ -4,6 +4,7 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.redis.testcontainers.RedisContainer;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -20,6 +21,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.listener.MessageListenerContainer;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 import org.testcontainers.containers.Network;
@@ -157,6 +161,36 @@ public abstract class OutboundServiceIntegrationBase {
         WIREMOCK.resetAll();
     }
 
+    /**
+     * Start the one {@code @KafkaListener} container that subscribes to {@code topic}, and
+     * block until it holds its partition (TASK-MONO-376).
+     *
+     * <p>Listener containers do not auto-start in this profile — see the {@code
+     * spring.kafka.listener.auto-startup=false} note in {@link Initializer}. A test that
+     * needs a listener starts exactly that one, so the consumer group has a single member
+     * with a single subscription and settles in one rebalance. Starting all twelve, as the
+     * default did, makes each member's join revoke every other member's assignment, and the
+     * container a test is waiting on loses its partition as fast as it gains it.
+     *
+     * <p>Idempotent: starting an already-running container is a no-op, so a test may call
+     * this per-method without tracking state.
+     */
+    protected static void startAndAwaitListener(KafkaListenerEndpointRegistry registry, String topic) {
+        MessageListenerContainer container = registry.getListenerContainers().stream()
+                .filter(c -> {
+                    String[] topics = c.getContainerProperties().getTopics();
+                    return topics != null && Arrays.asList(topics).contains(topic);
+                })
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "No @KafkaListener container subscribed to topic " + topic));
+
+        if (!container.isRunning()) {
+            container.start();
+        }
+        ContainerTestUtils.waitForAssignment(container, 1);
+    }
+
     public static class Initializer
             implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 
@@ -178,6 +212,43 @@ public abstract class OutboundServiceIntegrationBase {
                     // topic pre-creation + waitForAssignment.
                     "spring.kafka.consumer.auto-offset-reset=earliest",
                     "spring.kafka.consumer.properties.metadata.max.age.ms=2000",
+                    // TASK-MONO-376: do not auto-start the listener containers.
+                    //
+                    // All 12 @KafkaListener methods inherit one group-id
+                    // (`outbound-service`, application.yml) and each subscribes to a
+                    // DIFFERENT topic. Twelve members of one consumer group with twelve
+                    // disjoint subscriptions is a rebalance engine: every member that
+                    // joins revokes the assignments of all the others, so the group
+                    // churns while it converges — and a test awaiting one specific
+                    // container watches its partition get taken away again and again.
+                    //
+                    // Measured, not assumed. Same suite, same code:
+                    //   quiet host (4 CPU) : 34 join attempts, 12 successful joins  -> converges, passes
+                    //   CI runner          : 45 join attempts,  1 successful join   -> never converges, times out
+                    //     (FulfillmentRequestedConsumerIT / InventoryReserveFailedConsumerIT,
+                    //      "Expected 1 but got 0 partitions" — three separate PRs whose diffs
+                    //      touched no wms code at all: MONO-354, MONO-362, MONO-371.)
+                    //
+                    // TASK-BE-504 removed the *topic* churn (twelve topics being lazily
+                    // auto-created one at a time). It could not remove the *member* churn,
+                    // which is what this is, and it said so — it kept the failure on watch
+                    // rather than claiming a green run as proof. This is that follow-up.
+                    //
+                    // With auto-start off, the group has zero members until a test starts
+                    // the one container it needs: one member, one subscription, one
+                    // rebalance, immediate assignment. Nothing is masked — the churn is
+                    // gone, not waited out. Only three ITs use a listener at all
+                    // (Fulfillment, InventoryReserveFailed, ListenerTopicsPrecreated); the
+                    // other eight never even produce to Kafka, and were paying for a
+                    // twelve-member rebalance storm they had no use for.
+                    //
+                    // Production is untouched: there every listener starts, as it should.
+                    //
+                    // Falsifiable, and falsified on purpose: flipping this one value to
+                    // `true` brings the churn straight back — 1 join attempt becomes 22 on
+                    // the same host, same suite. That is the revert-brings-it-back evidence
+                    // TASK-MONO-376 AC-1 demands; without it this would be a correlation.
+                    "spring.kafka.listener.auto-startup=false",
                     "spring.data.redis.host=" + REDIS.getHost(),
                     "spring.data.redis.port=" + REDIS.getFirstMappedPort(),
                     "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://localhost:0/.well-known/jwks.json",
