@@ -1,6 +1,30 @@
 services:
   traefik:
-    image: traefik:v3.2
+    # v3.2 → v3.6: **v3.2 cannot talk to Docker Engine 29.** (TASK-MONO-358)
+    #
+    # Docker 29 raised its minimum API version to 1.40; Traefik ≤ v3.5 negotiates 1.24
+    # and the daemon refuses it:
+    #
+    #   ERR Failed to retrieve information of the docker client and server host
+    #       error="client version 1.24 is too old. Minimum supported API version is 1.40"
+    #       providerName=docker
+    #
+    # The provider then discovers **zero** containers, so Traefik answers 404 for every
+    # hostname — while the labels, networks and router rules all look perfect. Nothing in
+    # the config is wrong; the component that reads it is dead.
+    # `DOCKER_API_VERSION=1.44` in the environment does NOT help (measured) — the version
+    # is pinned inside Traefik.
+    #
+    # Same class as MONO-353's deleted image: it breaks from the **outside**, only on a
+    # **fresh** host, and nobody notices — an existing dev box with an older Docker keeps
+    # working. Measured on a clean Ubuntu 24.04 + docker-ce 29.6.1:
+    #   v3.2 → 0 routers · v3.5 → 0 routers · v3.6 / v3.7 / latest → all routers found.
+    #
+    # NOTE: Traefik's docker provider **skips containers that are not `healthy`** (it logs
+    # this at debug level, so an unhealthy service looks like a missing route with no error
+    # anywhere). A 404 on one hostname while its siblings answer usually means that
+    # container's healthcheck is failing — look there before suspecting the routing.
+    image: traefik:v3.6
     container_name: monorepo-traefik
     restart: unless-stopped
     command:
@@ -27,7 +51,41 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - traefik-net
+      # -----------------------------------------------------------------------
+      # Network aliases — the same hostname must resolve from BOTH sides.
+      # -----------------------------------------------------------------------
+      # A browser resolves `console.<ip>.sslip.io` through public DNS to the
+      # host's public IP and arrives at Traefik. But containers must reach these
+      # hostnames too: console-web performs the OIDC code exchange *server-side*
+      # against `${OIDC_ISSUER_URL}/oauth2/token`.
+      #
+      # Public DNS is not an option from inside: on AWS an instance cannot reach
+      # its own public IP (the IGW does not hairpin), so a container resolving
+      # `iam.<ip>.sslip.io` would get the public IP and the packet would die.
+      #
+      # These aliases make Docker's embedded DNS resolve the very same names to
+      # this container. One hostname, two paths, same destination.
+      #
+      # The list is hand-maintained and therefore drifts. Guard (i) in
+      # infra/demo/verify-demo-wrapper.sh enforces parity with the Host() rules:
+      # add a router without its alias and the demo breaks ONLY on the cloud
+      # (locally the hosts file still resolves it) — exactly the failure mode a
+      # guard has to catch. (TASK-MONO-358)
+      traefik-net:
+        aliases:
+          - iam.${DEMO_DOMAIN:-local}
+          - console.${DEMO_DOMAIN:-local}
+          - ecommerce.${DEMO_DOMAIN:-local}
+          - web.ecommerce.${DEMO_DOMAIN:-local}
+          - wms.${DEMO_DOMAIN:-local}
+          - scm.${DEMO_DOMAIN:-local}
+          - erp.${DEMO_DOMAIN:-local}
+          - finance.${DEMO_DOMAIN:-local}
+          - fan-platform.${DEMO_DOMAIN:-local}
+          - kafka.iam.${DEMO_DOMAIN:-local}
+          - grafana.iam.${DEMO_DOMAIN:-local}
+          - kafka.wms.${DEMO_DOMAIN:-local}
+          - grafana.wms.${DEMO_DOMAIN:-local}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/rawdata"]
       interval: 10s

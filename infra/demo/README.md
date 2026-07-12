@@ -94,6 +94,11 @@ bash infra/demo/verify-demo-wrapper.sh --live   # + (f) 실기동 증명 (redis 
 | (e) | **각 프로젝트가 `build:` 서비스를 ≥1개 기여** | **DB 만 뜨고 앱이 0개** (MONO-342 가 겪은 결함) |
 | (g) | **미설정 compose 변수 0건** | **빈 비밀번호 → postgres 초기화 거부** (MONO-346 이 겪은 결함) |
 | (f) | 같은 키 `redis` 가 별도 `-p` 로 공존 | 누군가 `include:` 로 되돌림 = 침묵 병합 회귀 |
+| (h) | 참조 이미지가 레지스트리에 실재 | **업스트림이 이미지를 지우면 데모가 즉사** (MONO-353: `bitnami/kafka:3.7` 삭제) |
+| (i) | `Host()` ↔ Traefik network alias 정합 | 브라우저는 되는데 **서버사이드 토큰 교환만** 실패 (AWS hairpin 부재) |
+| (j) | IPv4-only 바인딩 ∧ 헬스체크 `localhost` 금지 | 앱은 멀쩡한데 프로브가 죽고 → **Traefik 이 그 컨테이너를 조용히 건너뛴다** |
+| (k) | 마이그레이션의 `.local` 콜백을 데모 시드가 전부 덮는가 | 데모 도메인 로그인만 **401** (컨테이너는 전부 healthy) |
+| (l) | OIDC 라우터 ↔ `SERVER_FORWARD_HEADERS_STRATEGY` 쌍 유지 | 라우팅은 되는데 **로그인만** 죽는다 |
 
 > (g)는 **fresh clone 에서 권위**를 갖는다. 프로젝트 `.env` 는 gitignored 이므로
 > 로컬에 실 `.env` 를 가진 개발자는 결손을 보지 못한다 — CI 러너와 데모 AMI 는 본다.
@@ -113,6 +118,27 @@ CI 잡 `demo-wrapper-smoke` (`.github/workflows/ci.yml`) 가 `infra/demo/**` ·
 - ✅ include/-f 가 중복 키를 잃는다는 실측 확인(위 근거)
 - ⏳ **`full`(41 JVM) 실기동 healthcheck 스모크는 EC2 권위** — GH 러너(16GB)·로컬 Windows
   (Docker VM 11.68GiB) 모두 물리적 불가. `m6i.4xlarge`(64GB) 필요.
+
+## 데모 도메인 (`DEMO_DOMAIN`) — TASK-MONO-358
+
+호스트명 접미사가 파라미터다. **기본값 `local` 이라 개발자에게는 아무것도 바뀌지 않는다.**
+
+```bash
+bash infra/demo/demo-up.sh full                                   # console.local …
+DEMO_DOMAIN=43-200-71-219.sslip.io bash infra/demo/demo-up.sh full   # console.43-200-71-219.sslip.io …
+```
+
+`<anything>.1-2-3-4.sslip.io` → `1.2.3.4` 로 해석되는 공개 와일드카드 DNS다(도메인 구매·DNS 설정·비용 0). EC2 데모 호스트는 부팅 시 IMDSv2 로 공인 IP 를 읽어 주입한다.
+
+로컬 밖에서 **로그인까지** 되게 하려면 호스트명만으로 부족하다. 셋이 더 필요하다:
+
+1. **[`iam-traefik.override.yml`](iam-traefik.override.yml)** — iam 은 CI e2e 파일이 앱을 정의해서 Traefik 라벨이 없다. 데모 오버레이가 게이트웨이를 `iam.${DEMO_DOMAIN}` 으로 노출하고, **브라우저용 OIDC 경로(`/oauth2`·`/login`·`/.well-known`)만 auth-service 로 직행**시킨다. 게이트웨이를 거치면 Spring Authorization Server 가 `Location: http://auth-service:8081/login` — **내부 컨테이너 DNS** 를 브라우저에 돌려준다.
+
+2. **[`seed-demo-domain.sh`](seed-demo-domain.sh)** — OAuth2 `redirect_uri` 는 **정확 일치** 검증인데 콜백 URL 이 Flyway 마이그레이션에 `.local` 로 박혀 있다. 데모 도메인은 부팅 때 정해지므로 마이그레이션이 알 수 없다 → 런타임에 등록한다. `demo-up.sh` 가 자동 호출.
+
+3. **Traefik network alias** — `console-web` 은 토큰 교환을 서버사이드로 한다. **AWS 는 인스턴스가 자기 공인 IP 로 보내는 트래픽을 되돌려주지 않으므로**(hairpin 부재) 컨테이너 안에서 `iam.<ip>.sslip.io` 로 나가면 죽는다. alias 가 같은 이름을 Docker 임베디드 DNS 로 해소해 준다.
+
+> 셋 중 하나만 빠져도 **컨테이너는 전부 healthy 한데 로그인만 안 된다.** `docker compose config` 도 healthcheck 도 이것을 증명하지 못한다 — 가드 (i)(j)(k)(l) 과 EC2 실기동 왕복만이 증명한다.
 
 ## 남은 작업 (federation env 배선 — 별도 증분)
 

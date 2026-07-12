@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
-import { getServerEnv } from '@/shared/config/env';
+import { getServerEnv, publicOrigin } from '@/shared/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
@@ -80,7 +80,7 @@ export async function GET(req: Request) {
 
   if (oauthError) {
     logger.warn('oidc_provider_error', { requestId, oauthError });
-    return loginRedirect(env.NEXT_PUBLIC_APP_URL, 'provider_error');
+    return loginRedirect(publicOrigin(env), 'provider_error');
   }
 
   if (!code || !state || !verifier || !stateCookie) {
@@ -90,13 +90,13 @@ export async function GET(req: Request) {
       hasState: !!state,
       hasVerifier: !!verifier,
     });
-    return loginRedirect(env.NEXT_PUBLIC_APP_URL, 'invalid_state');
+    return loginRedirect(publicOrigin(env), 'invalid_state');
   }
 
   const [expectedState, postLoginPath = '/'] = stateCookie.split('|');
   if (state !== expectedState) {
     logger.warn('oidc_state_mismatch', { requestId });
-    return loginRedirect(env.NEXT_PUBLIC_APP_URL, 'state_mismatch');
+    return loginRedirect(publicOrigin(env), 'state_mismatch');
   }
 
   try {
@@ -125,7 +125,7 @@ export async function GET(req: Request) {
         status: upstream.status,
         error: (body as { error?: string }).error,
       });
-      return loginRedirect(env.NEXT_PUBLIC_APP_URL, 'token_exchange_failed');
+      return loginRedirect(publicOrigin(env), 'token_exchange_failed');
     }
 
     const data = TokenResponseSchema.parse(await upstream.json());
@@ -186,7 +186,7 @@ export async function GET(req: Request) {
           requestId,
         });
         return NextResponse.redirect(
-          new URL('/onboarding', env.NEXT_PUBLIC_APP_URL).toString(),
+          new URL('/onboarding', publicOrigin(env)).toString(),
         );
       }
 
@@ -200,7 +200,7 @@ export async function GET(req: Request) {
       jar.delete(ID_TOKEN_COOKIE);
       logger.warn('operator_exchange_unavailable_on_callback', { requestId });
       return loginRedirect(
-        env.NEXT_PUBLIC_APP_URL,
+        publicOrigin(env),
         'operator_exchange_unavailable',
       );
     }
@@ -228,10 +228,10 @@ export async function GET(req: Request) {
 
     logger.info('oidc_login_success', { requestId });
     return NextResponse.redirect(
-      new URL(postLoginPath, env.NEXT_PUBLIC_APP_URL).toString(),
+      new URL(postLoginPath, publicOrigin(env)).toString(),
     );
   } catch (err) {
     logger.error('oidc_callback_error', { requestId, err: String(err) });
-    return loginRedirect(env.NEXT_PUBLIC_APP_URL, 'token_exchange_failed');
+    return loginRedirect(publicOrigin(env), 'token_exchange_failed');
   }
 }

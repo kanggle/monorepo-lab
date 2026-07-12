@@ -61,9 +61,32 @@ export const OAUTH_STATE_COOKIE = 'console_oauth_state';
  * insecure-transport attacks; CSRF for state-changing operations is
  * separately handled via dedicated tokens.
  */
+/**
+ * `Secure` must match the transport the browser actually uses. It is `true`
+ * everywhere EXCEPT an explicitly-declared plain-HTTP deployment.
+ *
+ * <p>TASK-MONO-358 — measured, not assumed. A browser **refuses to store** a
+ * `Secure` cookie that arrives over `http://` on any origin other than
+ * `localhost` (which the spec treats as a trustworthy origin). The portfolio
+ * demo serves the console over plain HTTP on `console.<domain>`, so the PKCE
+ * and OAuth-state cookies were never stored at all and `/api/auth/callback`
+ * bounced every login with `error=invalid_state`. curl reproduced it exactly:
+ * the cookie jar came back **empty** after the Set-Cookie.
+ *
+ * <p>That is also why the only console login path that has ever worked is
+ * `http://localhost:3000` — `console.local` fails for the same reason.
+ *
+ * <p>The flag is opt-OUT and requires the exact string `'false'`: any typo,
+ * empty value, or unset variable leaves `Secure` on. Only
+ * `infra/demo/demo.env` sets it, and `verify-demo-wrapper.sh` guard (m) fails
+ * the build if a deployment ever pairs `CONSOLE_COOKIE_SECURE=false` with an
+ * `https://` origin — the one combination that would be a real downgrade.
+ */
+const cookieSecure = process.env.CONSOLE_COOKIE_SECURE !== 'false';
+
 export const tokenCookieOpts = {
   httpOnly: true,
-  secure: true,
+  secure: cookieSecure,
   sameSite: 'lax' as const,
   path: '/',
 };

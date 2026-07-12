@@ -115,7 +115,9 @@ describe('useOperatorOverview — explicit retry only (no auto-refresh)', () => 
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0][0])).toBe(
-      'http://console.local/api/console/dashboards/operator-overview',
+      // TASK-MONO-358 — relative same-origin path in the browser (see
+      // operator-overview-api.test.ts).
+      '/api/console/dashboards/operator-overview',
     );
   });
 

@@ -1150,7 +1150,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.ecommerce.rule=Host(`ecommerce.local`)"
+      - "traefik.http.routers.ecommerce.rule=Host(`ecommerce.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.ecommerce.entrypoints=web"
       - "traefik.http.services.ecommerce.loadbalancer.server.port=8080"
     healthcheck:
@@ -1194,7 +1194,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.ecommerce-web.rule=Host(`web.ecommerce.local`)"
+      - "traefik.http.routers.ecommerce-web.rule=Host(`web.ecommerce.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.ecommerce-web.entrypoints=web"
       - "traefik.http.services.ecommerce-web.loadbalancer.server.port=3000"
     healthcheck:

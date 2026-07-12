@@ -44,7 +44,17 @@ import { DomainHealthSchema, type DomainHealth } from './types';
 const DOMAIN_HEALTH_PATH = '/api/console/dashboards/domain-health';
 
 function domainHealthUrl(): string {
-  const base = clientEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
+  // In the browser this call is same-origin by definition, so no base is
+  // needed — and none may be used: `NEXT_PUBLIC_APP_URL` is inlined at BUILD
+  // time (TASK-MONO-358), so a prebuilt image would send the browser to
+  // whatever host the build knew about (`console.local`) instead of the one
+  // it is actually being served from. Relative is both simpler and correct.
+  if (typeof window !== 'undefined') return DOMAIN_HEALTH_PATH;
+  // Server-side (SSR route entry): fetch() needs an absolute URL. Prefer the
+  // runtime-resolvable origin; fall back to the build-time value.
+  const base = (
+    process.env.CONSOLE_PUBLIC_ORIGIN ?? clientEnv.NEXT_PUBLIC_APP_URL
+  ).replace(/\/$/, '');
   return `${base}${DOMAIN_HEALTH_PATH}`;
 }
 

@@ -451,7 +451,11 @@ services:
     ports: ["3000:3000"]
     networks: [pc-e2e]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      # 127.0.0.1, NOT localhost — same defect as the base compose (TASK-MONO-358).
+      # `HOSTNAME: "0.0.0.0"` binds Next to IPv4 only; alpine maps `localhost` to ::1 as
+      # well, and busybox wget picks ::1 without falling back. The probe fails while the
+      # app is healthy. Full reasoning in projects/platform-console/docker-compose.yml.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 8

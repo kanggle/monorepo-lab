@@ -74,7 +74,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.finance-platform.rule=Host(`finance.local`)"
+      - "traefik.http.routers.finance-platform.rule=Host(`finance.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.finance-platform.entrypoints=web"
       - "traefik.http.services.finance-platform.loadbalancer.server.port=8080"
     networks:

@@ -280,6 +280,228 @@ if [ "$REQUIRE_COVERAGE" -eq 1 ] && [ "$img_ok" -eq 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
+echo "[verify] (i) Traefik Host() ↔ network alias 정합"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358): 데모 호스트명은 **두 곳에서 해소돼야** 한다.
+#   · 브라우저 → 공용 DNS(sslip.io) → 공인 IP → Traefik
+#   · 컨테이너 → Docker 임베디드 DNS → Traefik 컨테이너
+#     (console-web 이 OIDC 코드 교환을 **서버사이드**로 하기 때문. 그리고 AWS 는
+#      인스턴스가 자기 공인 IP 로 보낸 트래픽을 되돌려주지 않으므로 — IGW hairpin
+#      부재 — 컨테이너가 공용 DNS 를 타면 죽는다.)
+#
+# 두 번째를 Traefik 컨테이너의 network alias 가 담당하는데, 그 목록은 **수기 열거**라
+# 라우터가 늘면 드리프트한다. 그리고 이 드리프트의 실패 모드가 고약하다:
+# **로컬에서는 hosts 파일이 여전히 해소해 주므로 전부 통과하고, 클라우드에서만 터진다.**
+# 정확히 가드가 있어야 하는 자리다.
+traefik_aliases() {
+  render traefik | awk '
+    /^    networks:/      { innet = 1; next }
+    innet && /aliases:/   { inal = 1; next }
+    inal && /^          - / { sub(/^          - /, ""); print; next }
+    inal && !/^          - / { inal = 0; innet = 0 }
+  ' | tr -d '"' | sort -u
+}
+
+router_hosts() { # 프로젝트 compose 가 선언한 모든 Host(...) 호스트명
+  for p in "${!COMPOSE[@]}"; do
+    render "$p" | grep -oE 'Host\(`[^`]+`\)' | sed 's/Host(`//; s/`)//'
+  done | sort -u
+}
+
+aliases_file="$(mktemp)"; hosts_file="$(mktemp)"
+traefik_aliases > "$aliases_file"
+router_hosts    > "$hosts_file"
+
+missing_alias="$(comm -23 "$hosts_file" "$aliases_file")"
+orphan_alias="$(comm -13 "$hosts_file" "$aliases_file")"
+rm -f "$aliases_file" "$hosts_file"
+
+[ -z "$missing_alias" ] || fail "Traefik alias 가 없는 라우터 호스트명:"$'\n'"$(printf '  %s\n' $missing_alias)"\
+  $'\n'"→ 브라우저에서는 동작하지만 **컨테이너 안에서 이 이름이 해소되지 않습니다.**"\
+  $'\n'"   console-web 의 서버사이드 OIDC 토큰 교환처럼 컨테이너→호스트명 호출이 죽습니다."\
+  $'\n'"→ 로컬은 hosts 파일 덕에 멀쩡하고 **클라우드에서만 터집니다.**"\
+  $'\n'"→ infra/traefik/docker-compose.yml 의 networks.traefik-net.aliases 에 추가하세요."
+
+[ -z "$orphan_alias" ] || fail "라우터가 없는 고아 alias:"$'\n'"$(printf '  %s\n' $orphan_alias)"\
+  $'\n'"→ 서빙하는 라우터가 없는 호스트명입니다. 정확히 iam.local 이 그랬고(6개 compose 가"\
+  $'\n'"   기본값으로 참조하는데 라우터는 없었다), 그래서 데모 로그인이 불가능했습니다."
+# NOTE: 위 메시지에 백틱을 쓰지 말 것. bash 큰따옴표 안의 `x` 는 **명령 치환으로 실행**되어
+# `iam.local: command not found` 를 뱉고 그 자리가 빈 문자열이 된다 — 진단 메시지가 조용히
+# 사라진다. 가드가 무는 것과 **가드가 이유를 말해주는 것**은 별개이고, 후자를 잃으면 사람은
+# 무엇을 고쳐야 하는지 알 수 없다. (mutation-check 를 돌려봤기에 발견했다.)
+
+ok "Host() ↔ alias 정합 ($(router_hosts | wc -l | tr -d ' ') 호스트명)"
+
+# ---------------------------------------------------------------------------
+echo "[verify] (j) IPv4-only 바인딩 서비스의 헬스체크가 localhost 를 찌르지 않는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358): `HOSTNAME=0.0.0.0` 은 Node 를 **IPv4 전용**으로 바인딩시킨다
+# (`node server.js` 가 그 값을 그대로 `server.listen` 에 넘기고, 0.0.0.0 은 IPv4 주소다.
+#  env 를 빼면 Node 는 `::` 듀얼스택으로 연다). 그런데 alpine 의 /etc/hosts 는
+# `localhost` 를 127.0.0.1 **과 ::1 둘 다** 로 매핑하고, **busybox wget 은 ::1 을 골라
+# 실패한 뒤 IPv4 로 폴백하지 않는다**(curl 은 폴백한다).
+#
+# 결과: 앱은 멀쩡한데 프로브만 죽는다. 컨테이너 안에서 실측한 값이다 —
+#   wget http://127.0.0.1:3000/api/health → {"status":"ok"}
+#   wget http://localhost:3000/api/health → Connection refused
+#
+# 파급이 오타에 비해 터무니없이 크다: **Traefik 은 healthy 가 아닌 컨테이너를 조용히
+# 건너뛴다**(debug 로그, 에러 0건). 그래서 콘솔은 통합 데모에서 **라우트 자체가 없었다.**
+# 잘못된 루프백 주소 하나가 콘솔 전체를 보이지 않게 만들었다.
+#
+# 가드를 `wget + localhost` 전체로 넓히지 않는 이유: 저장소에 그 조합이 24곳 있고 대부분
+# 정상 동작한다(듀얼스택으로 바인딩하므로). **오탐은 누락보다 나쁘다** — 멀쩡한 것을
+# 고치라고 사람을 압박하면 가드가 신뢰를 잃는다. 실패 조건은 정확히 **IPv4-only 바인딩
+# ∧ localhost 프로브** 이며, 여기서만 문다.
+bad_hc=""
+for p in "${!COMPOSE[@]}"; do
+  found="$(render "$p" | awk '
+    /^  [A-Za-z0-9._-]+:$/ {
+      if (svc != "" && ipv4only && hclocal) print svc
+      svc = $1; sub(/:$/, "", svc); ipv4only = 0; hclocal = 0; inhc = 0; next
+    }
+    /^      HOSTNAME:[[:space:]]*"?0\.0\.0\.0"?/ { ipv4only = 1 }
+    /^    healthcheck:/                          { inhc = 1; next }
+    inhc && /^    [a-z]/                         { inhc = 0 }
+    inhc && /localhost/                          { hclocal = 1 }
+    END { if (svc != "" && ipv4only && hclocal) print svc }
+  ')"
+  [ -z "$found" ] || bad_hc="$bad_hc  $p → $(echo $found)"$'\n'
+done
+
+[ -z "$bad_hc" ] || fail "IPv4-only 로 바인딩하면서 헬스체크는 localhost 를 찌르는 서비스:"$'\n'"$bad_hc"\
+  $'\n'"→ HOSTNAME=0.0.0.0 은 IPv4 전용 바인딩입니다. alpine 의 localhost 는 ::1 로도"\
+  $'\n'"   해소되고 busybox wget 은 ::1 실패 후 IPv4 로 폴백하지 않습니다."\
+  $'\n'"→ 앱이 멀쩡해도 프로브가 죽고, **Traefik 은 healthy 가 아닌 컨테이너를 건너뛰므로**"\
+  $'\n'"   그 서비스는 데모에서 라우트가 통째로 사라집니다(에러 로그 없이)."\
+  $'\n'"→ 헬스체크 주소를 127.0.0.1 로 바꾸세요 (web-store 가 이미 그렇게 합니다)."
+
+ok "IPv4-only 서비스의 헬스체크 주소 정상"
+
+# ---------------------------------------------------------------------------
+echo "[verify] (k) 마이그레이션에 박힌 .local 콜백을 데모 시드가 전부 덮는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358): OAuth2 `redirect_uri` 는 **정확 일치** 검증이다. 브라우저용 클라이언트의
+# 콜백 URL 은 Flyway 마이그레이션에 `http://console.local/api/auth/callback` 처럼 리터럴로
+# 박혀 있는데, 온디맨드 데모는 부팅 때 파생되는 도메인 위에 뜬다. 마이그레이션이 알 수
+# 없는 값이므로 `seed-demo-domain.sh` 가 런타임에 등록한다.
+#
+# 그 시드는 **`.local/` → `.${DEMO_DOMAIN}/`** 치환 하나로 동작한다. 즉 새 클라이언트가
+# 그 형태를 벗어난 `.local` 콜백(`http://x.local:8080/cb` 처럼 포트가 붙거나, 경로 없이
+# `http://x.local` 로 끝나는 것)을 들고 오면 **치환이 안 되고 그 도메인 로그인만 조용히
+# 죽는다** — 컨테이너는 전부 healthy 하고 에러 로그도 없다. 정확히 이 저장소가 이미 한 번
+# 당한 실패 모드(healthy ≠ usable)라 정적으로 막는다.
+#
+# 도달 가능성: 마이그레이션 추가는 diff 로 오므로 paths-filter 가 잡는다 — 시계가 아니라
+# 이 가드가 물 기회를 실제로 얻는다.
+seed_sh="$ROOT/infra/demo/seed-demo-domain.sh"
+[ -f "$seed_sh" ] || fail "infra/demo/seed-demo-domain.sh 가 없습니다 — 데모 도메인 로그인이 불가능합니다."
+# 주석을 먼저 걷어낸다. `demo-up.sh` 는 이 스크립트를 **주석에서도** 언급하므로
+# 순진한 grep 은 호출이 삭제돼도 주석에 매치돼 통과한다 — mutation-check 로 잡은 실제 결함.
+sed 's/#.*//' "$ROOT/infra/demo/demo-up.sh" | grep -q 'seed-demo-domain\.sh' \
+  || fail "demo-up.sh 가 seed-demo-domain.sh 를 호출하지 않습니다 — 시드가 실행되지 않으면 로그인은 401 입니다."
+
+# 마이그레이션의 redirect_uri 리터럴 중 `.local` 을 담은 것들.
+mapfile -t local_cbs < <(
+  grep -rhoE "http://[A-Za-z0-9.-]+\.local[^\"',[:space:]]*" \
+    "$ROOT"/projects/iam-platform/apps/auth-service/src/main/resources/db/migration/*.sql 2>/dev/null \
+  | sort -u
+)
+# vacuity 가드: 한 건도 못 찾았다면 grep 이 깨진 것이지 "안전"한 게 아니다.
+# (0건을 통과로 보고하면 가드는 아무것도 안 하면서 초록을 준다.)
+[ "${#local_cbs[@]}" -gt 0 ] \
+  || fail "마이그레이션에서 .local URI 를 한 건도 찾지 못했습니다 — 가드가 헛돌고 있습니다"\
+     $'\n'"   (경로가 바뀌었거나 grep 패턴이 깨졌습니다). 0건을 통과로 취급하지 않습니다."
+
+uncovered=""
+for u in "${local_cbs[@]}"; do
+  # 시드의 치환 앵커는 `.local/` 이다. 이걸 포함하지 않으면 치환 대상이 되지 못한다.
+  case "$u" in
+    *.local/*) : ;;
+    *) uncovered="$uncovered  $u"$'\n' ;;
+  esac
+done
+[ -z "$uncovered" ] || fail "seed-demo-domain.sh 의 '.local/' 치환이 덮지 못하는 콜백 URI:"$'\n'"$uncovered"\
+  $'\n'"→ 시드는 '.local/' → '.\${DEMO_DOMAIN}/' 치환 하나로 동작합니다. 위 URI 는 그 형태가"\
+  $'\n'"   아니어서 데모 도메인에 등록되지 않습니다."\
+  $'\n'"→ OAuth2 redirect_uri 는 정확 일치 검증입니다. 미등록이면 auth-service 가"\
+  $'\n'"   401 {\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid internal credentials\"} 를"\
+  $'\n'"   돌려줍니다 — 원인을 전혀 가리키지 않는 메시지라 오진하기 쉽습니다."\
+  $'\n'"→ 마이그레이션의 URI 를 '.local/…' 형태로 맞추거나, seed-demo-domain.sh 의 치환 규칙을"\
+  $'\n'"   넓히세요."
+
+ok "마이그레이션의 .local 콜백 ${#local_cbs[@]}개 전부 시드 치환 범위 안"
+
+# ---------------------------------------------------------------------------
+echo "[verify] (l) Traefik 에 노출된 auth-service 가 X-Forwarded-* 를 이해하는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358, EC2 실측): SAS 는 로그인 리다이렉트를 **자기가 보는 요청 호스트**로
+# 만든다. 리버스 프록시 뒤에서 `server.forward-headers-strategy` 없이 두면:
+#
+#     HTTP/1.1 302
+#     Location: http://auth-service:8081/login     ← 내부 컨테이너 DNS 가 브라우저로 샌다
+#
+# 브라우저는 이 이름을 해소할 수 없다 ⇒ 로그인 화면에 도달하지 못한다. auth-service 의
+# application.yml 에는 이 설정이 없으므로 **데모 오버레이가 env 로 켜 줘야만** 한다.
+# 라우터 라벨과 이 env 는 항상 함께 있어야 하는 한 쌍이다 — 한쪽만 지우면 라우팅은
+# 되는데 로그인만 죽는 상태가 된다(가장 진단하기 나쁜 모양).
+ov="$ROOT/infra/demo/iam-traefik.override.yml"
+if grep -q 'traefik.http.routers.iam-oidc' "$ov"; then
+  grep -q 'SERVER_FORWARD_HEADERS_STRATEGY' "$ov" \
+    || fail "iam-traefik.override.yml 이 auth-service 를 Traefik 에 노출하면서"\
+       $'\n'"   SERVER_FORWARD_HEADERS_STRATEGY 를 설정하지 않습니다."\
+       $'\n'"→ 이게 없으면 Spring 이 X-Forwarded-Host 를 무시하고 로그인 리다이렉트를"\
+       $'\n'"   'http://auth-service:8081/login' 로 내보냅니다 — 브라우저가 해소 못 하는 이름입니다."\
+       $'\n'"→ auth-service.environment 에 SERVER_FORWARD_HEADERS_STRATEGY: FRAMEWORK 를 넣으세요."
+  ok "auth-service OIDC 라우터 + forward-headers 쌍 유지"
+else
+  fail "iam-traefik.override.yml 에 auth-service OIDC 라우터(iam-oidc)가 없습니다 —"\
+    $'\n'"   게이트웨이는 /login 을 라우팅하지 않으므로(404) 로그인 화면에 도달할 수 없습니다."
+fi
+
+# ---------------------------------------------------------------------------
+echo "[verify] (m) 쿠키 Secure 해제와 https 오리진이 함께 쓰이지 않는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358): 데모는 평문 HTTP 다. 브라우저는 **localhost 가 아닌 오리진에서 http 로
+# 온 `Secure` 쿠키를 저장조차 하지 않으므로**(curl 도 동일 — Set-Cookie 를 받고도 쿠키 자가
+# 비었다) PKCE/state 쿠키가 사라지고 모든 로그인이 `invalid_state` 로 튕긴다. 그래서
+# `CONSOLE_COOKIE_SECURE=false` 가 데모에 **필요**하다.
+#
+# 위험한 것은 그 자체가 아니라 **조합**이다: TLS 오리진(https://)에서 Secure 를 끄면 그건
+# 진짜 다운그레이드다(세션 쿠키가 평문으로 샐 수 있다). 그 하나만 막는다. Secure 를 끄는
+# 것 자체를 금지하면 데모가 성립하지 않으므로, 금지 대상을 정확히 좁힌다.
+#
+# 동시에 `CONSOLE_PUBLIC_ORIGIN` 이 데모 도메인을 가리키는지도 본다 — 빠지면 로그인 직후
+# 콜백이 브라우저를 `console.local` 로 보낸다(빌드타임 인라인된 NEXT_PUBLIC_APP_URL).
+console_render="$(render console)"
+# NOTE: do NOT split on ': ' — a URL contains one ("http://…"), so an awk
+# field-split hands back "http" and the https check below silently never
+# matches. Strip exactly the `KEY:` prefix instead. (Caught by mutation-check;
+# the guard passed either way, which is precisely the failure it exists to
+# prevent.)
+yaml_val() { # $1=key → value, quotes stripped
+  printf '%s\n' "$console_render" \
+    | sed -n "s/^[[:space:]]*$1:[[:space:]]*//p" | tr -d '"' | head -1
+}
+cookie_secure="$(yaml_val CONSOLE_COOKIE_SECURE)"
+pub_origin="$(yaml_val CONSOLE_PUBLIC_ORIGIN)"
+
+[ -n "$pub_origin" ] || fail "console 렌더에 CONSOLE_PUBLIC_ORIGIN 이 없습니다 —"\
+  $'\n'"   NEXT_PUBLIC_APP_URL 은 빌드타임에 인라인되므로 프리베이크 이미지의 오리진을 바꾸지"\
+  $'\n'"   못합니다. 로그인 직후 콜백이 브라우저를 http://console.local 로 보냅니다."
+
+case "$cookie_secure:$pub_origin" in
+  false:https://*)
+    fail "CONSOLE_COOKIE_SECURE=false 인데 CONSOLE_PUBLIC_ORIGIN 이 https 입니다: $pub_origin"\
+      $'\n'"→ TLS 오리진에서 Secure 를 끄는 것은 진짜 다운그레이드입니다(세션 쿠키 평문 노출)."\
+      $'\n'"→ https 를 쓴다면 CONSOLE_COOKIE_SECURE 를 지우세요(기본값 true)."
+    ;;
+esac
+
+# `false` 를 쓰는 쪽은 반드시 http 오리진이어야 하고, 그 역(https + Secure)은 항상 안전하다.
+ok "쿠키 Secure=$cookie_secure ↔ 오리진 $pub_origin (조합 안전)"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0

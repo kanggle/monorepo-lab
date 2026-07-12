@@ -75,7 +75,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.erp-platform.rule=Host(`erp.local`)"
+      - "traefik.http.routers.erp-platform.rule=Host(`erp.${DEMO_DOMAIN:-local}`)"
       - "traefik.http.routers.erp-platform.entrypoints=web"
       - "traefik.http.services.erp-platform.loadbalancer.server.port=8080"
     networks:

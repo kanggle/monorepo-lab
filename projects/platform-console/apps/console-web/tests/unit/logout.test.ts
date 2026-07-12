@@ -42,6 +42,12 @@ const { ENV } = vi.hoisted(() => ({
 vi.mock('@/shared/config/env', () => ({
   clientEnv: { NEXT_PUBLIC_APP_URL: ENV.NEXT_PUBLIC_APP_URL },
   getServerEnv: () => ENV,
+  // TASK-MONO-358 — see auth-routes.test.ts: the post-logout target is built
+  // from the runtime-resolvable origin, so the mock must export it.
+  publicOrigin: (e: {
+    CONSOLE_PUBLIC_ORIGIN?: string;
+    NEXT_PUBLIC_APP_URL: string;
+  }) => e.CONSOLE_PUBLIC_ORIGIN ?? e.NEXT_PUBLIC_APP_URL,
 }));
 
 import { POST as logoutPOST } from '@/app/api/auth/logout/route';

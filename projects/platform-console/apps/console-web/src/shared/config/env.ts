@@ -278,9 +278,39 @@ const ServerEnvSchema = z.object({
   ECOMMERCE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
+  /** Browser-visible origin of the console, resolved at RUNTIME.
+   *
+   *  TASK-MONO-358. `NEXT_PUBLIC_APP_URL` cannot do this job: Next inlines
+   *  every literal `process.env.NEXT_PUBLIC_*` at BUILD time, so a prebuilt
+   *  image carries whatever value the build had — `http://console.local` —
+   *  and no container env can change it. The JSDoc at the top of this file
+   *  already states the requirement it violates: *"build artifacts must work
+   *  across environments without rebuild"*.
+   *
+   *  That is fatal for the on-demand demo, whose hostname is derived from the
+   *  instance's public IP at boot: `/api/auth/callback` would 302 the browser
+   *  to `http://console.local/...` — a host it cannot resolve — right after a
+   *  successful login. Measured on EC2.
+   *
+   *  This variable has no `NEXT_PUBLIC_` prefix, so it is NOT inlined and IS
+   *  read at runtime. Unset → falls back to `NEXT_PUBLIC_APP_URL`, so every
+   *  existing deployment behaves byte-identically. */
+  CONSOLE_PUBLIC_ORIGIN: z.string().url().optional(),
 });
 
 export type ServerEnv = z.infer<typeof ServerEnvSchema>;
+
+/**
+ * The origin to build browser-facing absolute URLs from (post-login redirects,
+ * post-logout target, SSR same-origin proxy calls).
+ *
+ * Prefers the runtime-resolvable {@link ServerEnv.CONSOLE_PUBLIC_ORIGIN} and
+ * falls back to the build-time-inlined `NEXT_PUBLIC_APP_URL` — see that field's
+ * JSDoc for why the fallback exists and why it is not enough on its own.
+ */
+export function publicOrigin(env: ServerEnv): string {
+  return env.CONSOLE_PUBLIC_ORIGIN ?? env.NEXT_PUBLIC_APP_URL;
+}
 
 /**
  * Returns validated server-side environment.
@@ -325,5 +355,6 @@ export function getServerEnv(): ServerEnv {
     ECOMMERCE_TIMEOUT_MS: process.env.ECOMMERCE_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    CONSOLE_PUBLIC_ORIGIN: process.env.CONSOLE_PUBLIC_ORIGIN,
   });
 }

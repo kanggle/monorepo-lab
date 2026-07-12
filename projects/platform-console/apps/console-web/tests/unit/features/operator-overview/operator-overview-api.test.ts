@@ -186,7 +186,11 @@ describe('fetchOperatorOverview — happy path', () => {
     const [url, init] = fetchMock.mock.calls[0];
     // Same-origin via NEXT_PUBLIC_APP_URL.
     expect(String(url)).toBe(
-      'http://console.local/api/console/dashboards/operator-overview',
+      // TASK-MONO-358 — relative in the browser. The absolute base used to come
+      // from `NEXT_PUBLIC_APP_URL`, which Next inlines at BUILD time, pinning a
+      // prebuilt image to the build host instead of the serving host. A
+      // same-origin call needs no base.
+      '/api/console/dashboards/operator-overview',
     );
     const opts = init as RequestInit;
     expect(opts.method).toBe('GET');

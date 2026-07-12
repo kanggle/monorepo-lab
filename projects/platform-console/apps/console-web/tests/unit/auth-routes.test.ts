@@ -45,6 +45,14 @@ const { ENV } = vi.hoisted(() => ({
 vi.mock('@/shared/config/env', () => ({
   clientEnv: { NEXT_PUBLIC_APP_URL: ENV.NEXT_PUBLIC_APP_URL },
   getServerEnv: () => ENV,
+  // TASK-MONO-358 — the callback resolves the browser-visible origin through
+  // publicOrigin() so a prebuilt image is not pinned to the host it was built
+  // on (`NEXT_PUBLIC_APP_URL` is inlined at build time). A module mock that
+  // omits it leaves the import undefined and every callback test throws.
+  publicOrigin: (e: {
+    CONSOLE_PUBLIC_ORIGIN?: string;
+    NEXT_PUBLIC_APP_URL: string;
+  }) => e.CONSOLE_PUBLIC_ORIGIN ?? e.NEXT_PUBLIC_APP_URL,
 }));
 
 import { GET as loginGET } from '@/app/api/auth/login/route';
