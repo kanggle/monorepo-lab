@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portfolio — Live Demo</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 8vh auto; padding: 0 20px; line-height: 1.6; }
+    h1 { font-size: 1.6rem; }
+    .card { border: 1px solid #8883; border-radius: 14px; padding: 24px; margin-top: 24px; }
+    button { font-size: 1rem; padding: 12px 22px; border-radius: 10px; border: 0; cursor: pointer; }
+    #start { background: #2563eb; color: #fff; }
+    #stop { background: #444; color: #fff; margin-left: 8px; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #bar { height: 8px; background: #8883; border-radius: 999px; overflow: hidden; margin: 16px 0; display: none; }
+    #bar > i { display: block; height: 100%; width: 30%; background: #2563eb; animation: slide 1.4s infinite; }
+    @keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+    #msg { margin-top: 8px; font-size: .95rem; opacity: .85; }
+    a.open { display: none; margin-top: 14px; font-weight: 600; }
+    .hint { font-size: .82rem; opacity: .6; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>🚀 라이브 데모 (온디맨드)</h1>
+  <p>이 데모 스택은 평소 꺼져 있어 비용이 들지 않습니다. 아래 버튼을 누르면 서버가 기동됩니다(약 2~4분). 20분간 활동이 없으면 자동으로 종료됩니다.</p>
+
+  <div class="card">
+    <button id="start">▶ 데모 시작</button>
+    <button id="stop" disabled>■ 데모 종료</button>
+    <div id="bar"><i></i></div>
+    <div id="msg">상태 확인 중…</div>
+    <a class="open" id="open" target="_blank" rel="noopener">데모 사이트 열기 →</a>
+  </div>
+
+  <p class="hint">자동 종료: 20분 무활동 · 최대 3시간. 요금 안전장치가 이중으로 걸려 있습니다.</p>
+
+  <script>
+    // terraform output api_base_url  (2026-07-11 apply 결과)
+    const API_BASE = "https://7l4n2ydrkd.execute-api.ap-northeast-2.amazonaws.com";
+
+    // 데모 진입 URL 은 /status 가 돌려주는 공인 IP 로 **동적 구성**한다.
+    // 인스턴스에 EIP 가 없어 start 마다 IP 가 바뀌므로 상수로 박을 수 없다.
+    //
+    // sslip.io: `<anything>.1.2.3.4.sslip.io` → 1.2.3.4 로 해석되는 공개 와일드카드
+    // DNS. 도메인 구매도 DNS 설정도 필요 없다.
+    //
+    // ⚠️ 전제: 데모 호스트의 Traefik 라우터가 `Host(`console.${DEMO_DOMAIN}`)` 처럼
+    //    접미사를 파라미터화하고, 부팅 시 DEMO_DOMAIN=<ip>.sslip.io 를 주입해야 한다.
+    //    현재 저장소의 compose 는 `Host(`console.local`)` 로 하드코딩되어 있어,
+    //    그 변경 전에는 IP 로 접속해도 Traefik 이 어떤 라우터에도 매치시키지 못한다.
+    const demoUrl = (ip) => `http://console.${ip}.sslip.io/`;
+
+    const $ = (id) => document.getElementById(id);
+    let beatTimer = null, pollTimer = null;
+
+    async function api(path, method = "GET") {
+      const r = await fetch(API_BASE + path, { method });
+      const body = await r.json().catch(() => ({}));
+      // 상태코드를 버리면 429(월 예산 소진) 가 조용히 무시된다 — 사용자는 영원히
+      // "기동 중" 을 보게 된다. ok 를 함께 돌려주고 호출부가 반드시 확인한다.
+      return { ok: r.ok, status: r.status, body };
+    }
+
+    function running(state) { return state === "running"; }
+
+    function render(state, ip, usage) {
+      const isRun = running(state);
+      $("start").disabled = isRun || state === "pending" || state === "starting";
+      $("stop").disabled = !isRun;
+      $("bar").style.display = (state === "pending" || state === "starting") ? "block" : "none";
+      $("open").style.display = (isRun && ip) ? "inline-block" : "none";
+      if (ip) $("open").href = demoUrl(ip);
+      const label = {
+        stopped: "🟢 대기 중 — 시작을 누르세요",
+        pending: "🟡 인스턴스 기동 중…",
+        starting: "🟡 서비스 웜업 중… (2~4분)",
+        running: "✅ 준비 완료 — 데모 사이트를 여세요",
+        stopping: "🔻 종료 중…",
+      }[state] || state;
+      $("msg").textContent = usage
+        ? `${label}  ·  이번 달 ${usage.used}/${usage.budget}분 사용`
+        : label;
+    }
+
+    function startHeartbeat() {
+      stopHeartbeat();
+      beatTimer = setInterval(() => api("/heartbeat", "POST").catch(() => {}), 30000);
+    }
+    function stopHeartbeat() { if (beatTimer) clearInterval(beatTimer); beatTimer = null; }
+
+    async function poll() {
+      try {
+        const { ok, body } = await api("/status");
+        if (!ok) { $("msg").textContent = "상태 확인 실패"; return; }
+        const usage = (body.budget_minutes != null)
+          ? { used: body.used_minutes, budget: body.budget_minutes } : null;
+        render(body.state, body.ip, usage);
+        if (running(body.state)) startHeartbeat(); else stopHeartbeat();
+      } catch (e) { $("msg").textContent = "상태 확인 실패"; }
+    }
+
+    $("start").onclick = async () => {
+      $("msg").textContent = "기동 요청 중…";
+      const { ok, status, body } = await api("/start", "POST");
+      if (!ok) {
+        // 429 = 월 예산 소진, 409 = 이전 종료 진행 중, 503 = 인스턴스 없음
+        $("msg").textContent = body.message || `기동 실패 (${status})`;
+        $("start").disabled = (status === 429);
+        $("bar").style.display = "none";
+        return;
+      }
+      render("pending");
+    };
+    $("stop").onclick = async () => {
+      await api("/stop", "POST");
+      render("stopping");
+      stopHeartbeat();
+    };
+
+    poll();
+    pollTimer = setInterval(poll, 10000); // 10초마다 상태 폴링
+  </script>
+</body>
+</html>

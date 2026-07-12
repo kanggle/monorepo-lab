@@ -397,6 +397,21 @@ jobs:
               - '**/Dockerfile.*'
               - '**/.env'
               - '**/.env.*'
+              # TASK-MONO-366 — these were MISSING, and the omission made a guard
+              # unreachable on the exact files it polices. `demo-wrapper` is
+              # AND-composed with `code-changed`, so a diff confined to
+              # `demo-stack.service` (say, reverting ExecStart back to demo-up.sh —
+              # precisely the defect guard (n) exists to catch) produced
+              # code-changed == false → the smoke job SKIPPED → reported green.
+              # Same for handler.py: the Lambda's budget-guard tests would never
+              # have run on a change to the Lambda. This is the MONO-359 lesson
+              # restated — a guard that can bite is worthless if it never gets the
+              # chance. Pure-positive, per the MONO-074/075 no-negation rule.
+              - '**/*.py'
+              - '**/*.tf'
+              - '**/*.hcl'
+              - '**/*.service'
+              - '**/*.html'
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-341 — integrated demo wrapper regression guard.
@@ -615,10 +630,34 @@ jobs:
           for f in infra/demo/projects.sh \
                    infra/demo/demo-up.sh \
                    infra/demo/demo-down.sh \
+                   infra/demo/demo-boot.sh \
+                   infra/demo/seed-demo-domain.sh \
                    infra/demo/verify-demo-wrapper.sh; do
             bash -n "$f"
             echo "ok $f"
           done
+
+      # TASK-MONO-366 — demo-boot.sh must be safe OFF AWS. The link-local
+      # metadata address is a routing black hole outside EC2, so an unbounded
+      # probe would just hang; and an EMPTY DEMO_DOMAIN is worse than a missing
+      # one — it produces Host(`console.`), which Traefik accepts without
+      # complaint and simply never matches. The runner IS off-AWS, so this
+      # asserts the fallback on the only host that can prove it.
+      - name: demo-boot.sh falls back to `local` off AWS (never empty, never hangs)
+        run: |
+          set -eu
+          tmp="$(mktemp -d)"
+          cp infra/demo/demo-boot.sh "$tmp/"
+          printf '%s\n' 'echo "DEMO_DOMAIN=[${DEMO_DOMAIN}]"' > "$tmp/demo-up.sh"
+          out="$(cd "$tmp" && timeout 30 bash demo-boot.sh full)"
+          echo "$out"
+          echo "$out" | grep -qx 'DEMO_DOMAIN=\[local\]' \
+            || { echo "::error::demo-boot.sh did not fall back to 'local' off AWS"; exit 1; }
+
+      - name: Lambda handler unit tests (start/stop/idle + monthly budget guard)
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest infra/demo/aws/tests -q
 
       - name: Verify wrapper invariants + live coexistence proof
         run: bash infra/demo/verify-demo-wrapper.sh --live

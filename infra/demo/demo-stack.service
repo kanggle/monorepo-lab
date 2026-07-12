@@ -1,0 +1,46 @@
+# =============================================================================
+# infra/demo/demo-stack.service — 데모 호스트의 부팅 유닛 (TASK-MONO-366)
+# =============================================================================
+# AMI 빌드가 이 파일을 **저장소에서** /etc/systemd/system/ 로 복사한다.
+#
+# 왜 저장소가 유닛을 소유하는가
+# -----------------------------------------------------------------------------
+# 이 유닛은 원래 Packer 템플릿 옆(scratchpad)에 있었고 `demo-up.sh` 를 **직접** 불렀다.
+# 그래서 `TASK-MONO-358` 이 "데모는 `DEMO_DOMAIN` 을 받아야 한다" 는 계약을 저장소에
+# 만들었을 때, **유닛은 그걸 알 수 없었다** — 계약이 두 곳에 나뉘어 있으면 한쪽만 바뀐다.
+# 실제로 그렇게 됐고, 스택은 96개 컨테이너가 전부 healthy 한 채로 `*.local` 에 떠서
+# **아무도 도달할 수 없었다.**
+#
+# 이제 유닛도 저장소 파일이고, `demo-boot.sh` 를 부른다. 부팅 계약이 한 곳에 있다.
+#
+# NOTE: 단일 docker-compose.demo.yml 은 존재하지 않는다(폐기). docker compose 의
+#   include:/-f 는 중복 서비스 키를 **조용히 병합**하므로(redis ×7, kafka ×6, …)
+#   8개 프로젝트를 한 파일로 묶을 수 없다 — `demo-up.sh` 가 프로젝트당 별도 compose
+#   프로젝트(-p)로 기동한다. 근거: infra/demo/README.md (TASK-MONO-336).
+# =============================================================================
+[Unit]
+Description=Portfolio on-demand integrated demo stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/monorepo-lab
+
+# 프로파일: full(9 프로젝트) | demo-core(iam+ecommerce+wms+console)
+Environment=DEMO_PROFILE=full
+
+# ⚠️ `demo-up.sh` 를 직접 부르지 않는다 — 그것이 MONO-366 이 고치는 결함이다.
+# systemd 의 `Environment=` 는 셸이 아니라 **명령 치환이 안 된다**. 공인 IP 는 부팅
+# 시점에 IMDSv2 로 읽어야 하므로 파생은 반드시 스크립트 안에서 일어나야 한다.
+# 가드 (n) 이 이 줄을 지킨다.
+ExecStart=/usr/bin/bash /opt/monorepo-lab/infra/demo/demo-boot.sh ${DEMO_PROFILE}
+ExecStop=/usr/bin/bash /opt/monorepo-lab/infra/demo/demo-down.sh
+
+# `full` 은 96 컨테이너(JVM 40+)다. 콜드 스타트에 여유를 준다.
+TimeoutStartSec=1200
+
+[Install]
+WantedBy=multi-user.target
