@@ -86,3 +86,5 @@ GAP 측 선행 작업 (spec-first, [TASK-BE-296](../iam-platform/tasks/ready/TAS
 - **scope**: <which service(s)>
 - **expiry**: <date or condition>
 ```
+
+| `gateway-service` | rest-api | AC-4 reachability probe — TASK-MONO-360. This PR is NOT for merge. |
