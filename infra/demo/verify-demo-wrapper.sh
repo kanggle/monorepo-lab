@@ -592,11 +592,21 @@ echo "[verify] (o) Packer 가 AWS 에 보내는 문자열이 ASCII 인가"
 # 것이다 — 전형적인 "선언 ↔ 진실" 드리프트.
 if [ -f "$pkr" ]; then
   # ami_name 도 함께 본다 — 같은 API 가 같은 이유로 거부한다.
-  bad="$(grep -nE '^[[:space:]]*(ami_description|ami_name)[[:space:]]*=' "$pkr" \
-           | LC_ALL=C grep -P '[^\x00-\x7F]' || true)"
+  #
+  # `grep -P '[^\x00-\x7F]'` 를 쓰지 않는다. 첫 판이 그랬는데, msys/Windows 의 grep 이
+  #   grep: -P supports only unibyte and UTF-8 locales
+  # 로 죽었고 `|| true` 가 그 실패를 삼켜 **가드가 정상 트리에서도, em dash 를 주입한
+  # 트리에서도 통과했다.** 물지 못하는 가드다 — mutation-check 로만 잡힌다.
+  # `tr` 은 바이트로 동작하므로 로케일·구현에 무관하다: 0x00–0x7F 를 지우고 남는 것이
+  # 있으면 그 줄에 비-ASCII 바이트가 있다.
+  bad=""
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    [ -n "$(printf '%s' "$line" | LC_ALL=C tr -d '\0-\177')" ] && bad="$bad   $line"$'\n'
+  done < <(grep -nE '^[[:space:]]*(ami_description|ami_name)[[:space:]]*=' "$pkr" || true)
   if [ -n "$bad" ]; then
     fail "packer 템플릿의 ami_description/ami_name 에 비-ASCII 문자가 있습니다:"\
-      $'\n'"   $bad"\
+      $'\n'"$bad"\
       $'\n'"→ EC2 ModifyImageAttribute 가 이를 거부하고, Packer 는 **이미지를 다 구운 뒤에**"\
       $'\n'"   그 속성을 설정하므로 빌드가 실패하며 **방금 만든 AMI 와 스냅샷을 지웁니다.**"\
       $'\n'"   40분과 산출물이 함께 사라집니다. packer validate 는 이것을 잡지 못합니다."\
