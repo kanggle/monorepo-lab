@@ -23,7 +23,7 @@ backend
 
 # Goal
 
-`security-service` 의 `DetectionE2EIntegrationTest.velocityTriggersAutoLockE2E` 가 **확률적으로 실패한다.** 결함은 프로덕션 코드가 아니라 **테스트의 단언 하나**에 있다: WireMock `verify()` 만이 이 테스트에서 **유일하게 `await` 밖에** 있다.
+`security-service` 의 `DetectionE2EIntegrationTest.velocityTriggersAutoLockE2E` 가 **확률적으로 실패한다.** 결함은 프로덕션 코드가 아니라 **테스트**에 있다: `await` 가 끝난 뒤 **DB 를 다시 조회해 다른 행을 검증 대상으로 집고**(163), 그 검증만이 **유일하게 `await` 밖**이라(169) 재시도 없이 즉사한다. (착수 전 가설은 후자를 원인으로 봤으나 **코드가 순서를 뒤집었다** — § *"코드가 진단을 확정한다"*.)
 
 **지금 고쳐야 하는 이유는 `TASK-MONO-374` 다.** 374 이전에는 main 의 push 런들이 서로를 취소해서 통합 잡이 거의 실행되지 않았고(최근 main 12 런에서 `Integration (iam)` 이 실제로 완주한 것은 **2 회**), 이 결함은 **보이지 않았다.** 374 가 기준선을 되살렸으므로 **이제 코드가 머지될 때마다 이 스위트가 완주하고, 이 경합은 main 을 상습적으로 RED 로 만든다.**
 
@@ -70,13 +70,34 @@ No requests exactly matched. Most similar request was:
 
 **요청은 결국 도착했다. 단언이 너무 일찍 물었을 뿐이다.** 그래서 "기대와 실제가 같은데 실패" 라는, 논리적으로 불가능해 보이는 메시지가 나온다.
 
-## 두 번째 축 — 검증 대상 행이 기다림이 검증한 행과 다를 수 있다
+## 🔴 코드가 진단을 확정한다 — 그리고 주·부가 뒤집힌다
 
-부수적이지만 같은 뿌리다. 테스트는 실패 로그인 **10 건을 한 번에** 발행한다(임계치 3). 임계치를 넘는 이벤트마다 suspicious_event 행이 생기고 **행마다 자기 id 를 `Idempotency-Key` 로 쓰는 lock 호출이 따로 나간다**(`AccountServiceClient:80` — `.header("Idempotency-Key", event.getId())`).
+**착수 전 가설**("verify 가 안 기다려서 비행 중 요청을 놓친다")만으로는 증거와 안 맞는 구석이 있었다: `await`(150) 는 `lockRequestResult == SUCCESS` 를 단언하는데, **SUCCESS 가 쓰였다는 건 HTTP 가 이미 응답까지 받았다는 뜻**아닌가? 그러면 요청은 저널에 있어야 한다.
 
-`await`(150) 는 *"`AUTO_LOCK` 행이 **하나라도** 있는가"* 만 보장한다. 그런데 163 행이 **기다림이 끝난 뒤 DB 를 다시 조회해** 최신 행(`detectedAt DESC` 의 `rows.get(0)`)을 뽑아 그 id 로 169 를 검증한다. **버스트가 계속 행을 만드는 중이므로, 재조회가 집는 최신 행은 `await` 가 검증한 행이 아닐 수 있다** — 그 행의 lock 호출은 아직 비행 중일 수 있다.
+`IssueAutoLockCommandUseCase:20-27` 이 답한다:
 
-⇒ **두 축 모두 같은 수정으로 닫힌다**: 검증을 기다리게 만들고, **기다림이 검증한 행을 그대로 검증 대상으로 고정**한다.
+```java
+AccountLockClient.LockResult result = accountLockClient.lock(event);   // ① HTTP 호출이 먼저
+...
+persistenceService.updateLockResult(updated);                          // ② 결과를 그 다음에 기록
+```
+
+`updateLockResult` 는 **update** 다 — **행은 그 전에 이미 존재한다**(`lockRequestResult` = null/`PENDING`; `SuspiciousEvent:27` 이 그 어휘를 선언한다). 여기서 두 가지가 따라온다:
+
+1. **`SUCCESS` 가 찍힌 행은 요청이 이미 완료됐음을 함의한다** → 그 행의 요청은 **반드시** 저널에 있다.
+2. **그러나 행은 lock 호출 전에도 존재한다** → `await` 이후 **재조회가 집는 "최신 행"은 아직 호출이 나가지 않은 행일 수 있다.**
+
+⇒ **진짜 원인은 행 재조회(163)** 이고, **`await` 없는 `verify()`(169) 는 그것을 재시도 없이 즉사시키는 역할**이다. 두 축은 독립이 아니라 **원인과 증폭기**다.
+
+**관측된 "expected == actual" 도 이것으로 설명된다**: 재조회가 집은 최신 행의 lock 호출이 막 나가는 중 → `verify` 시점 저널엔 없음 → 매칭 실패 → 그 직후 요청 도착 → WireMock 이 near-miss 를 계산하며 저널을 **다시 읽어** 방금 도착한 그 요청을 출력 → **기대와 동일한 actual.**
+
+## 이 수정이 결정론적으로 옳은 이유 (mutation 재현보다 강한 근거)
+
+**`await` 가 통과시킨 행은 `SUCCESS` 이므로, 그 행의 요청은 이미 저널에 있다**(①). 따라서 **그 행의 id 를 고정해 검증하면 경합이 구조적으로 사라진다** — 확률이 낮아지는 게 아니라 **불가능해진다.**
+
+이 명제는 `IssueAutoLockCommandUseCase` 의 **호출 순서에서 따라 나오는 증명**이지, 초록 실행 몇 번의 귀납이 아니다. 확률적 결함에서 재현 실험은 **음성이 무의미하다**(원래 대부분 초록이었다) — 그래서 이 task 의 근거는 **재현이 아니라 순서 증명**에 둔다.
+
+⇒ 수정: **기다림이 통과시킨 행을 고정** + **검증도 `await` 안으로**(TOCTOU 에 대한 이중 방어이자, 다른 두 단언과 같은 규율).
 
 ---
 
@@ -114,12 +135,11 @@ No requests exactly matched. Most similar request was:
 
 - [ ] **`verify()` 가 `await` 안에 있다** — WireMock 검증이 다른 두 단언과 같은 규율을 따른다. 비행 중 요청을 실패로 읽지 않는다.
 - [ ] **검증 대상 행이 `await` 가 검증한 행과 동일하다** — 기다림이 통과시킨 `suspiciousEventId` 를 그대로 쓴다. `await` 이후의 재조회로 다른 행을 집지 않는다.
-- [ ] **🔴 수정이 실제로 무는지 확인한다 — 통과는 증거가 아니다.**
-      고친 테스트가 **고치기 전 결함을 잡는지**를 보여야 한다. 최소한 다음 중 하나:
-      - lock 호출 경로에 인위적 지연을 넣어(스텁 `withFixedDelay`) **옛 코드(await 없는 verify)가 RED, 새 코드가 GREEN** 임을 실측.
-      - 또는 `verify()` 를 `await` 밖으로 되돌린 mutation 이 **재현 가능하게 RED** 임을 실측.
-      **그냥 초록인 것은 아무것도 증명하지 않는다** — 이 결함은 원래 대부분의 실행에서 초록이었다.
-- [ ] **반복 실행으로 안정성 확인** — `integrationTest` 를 연속 3 회 GREEN(`--rerun-tasks`). 1 회 초록은 확률적 결함에 대해 증거가 아니다.
+- [ ] **🔴 근거는 재현이 아니라 순서 증명이다 — 초록은 증거가 아니다.**
+      이 결함은 **원래 대부분의 실행에서 초록이었다.** 그러므로 "고친 뒤 초록" 도, "옛 코드로 되돌렸더니 초록" 도 **아무것도 증명하지 못한다**(재현 실험의 음성은 무의미하다). 근거는 코드 순서에서 따라 나와야 한다:
+      **`IssueAutoLockCommandUseCase:20` 이 `lock()` 을, `:27` 이 `updateLockResult()` 를 부른다 ⇒ `SUCCESS` 행의 요청은 이미 저널에 있다 ⇒ 그 행을 고정하면 경합은 확률이 낮아지는 게 아니라 구조적으로 불가능해진다.**
+      task 본문 § *"이 수정이 결정론적으로 옳은 이유"* 가 이 증명을 담고, PR 이 그것을 근거로 제시한다.
+- [ ] **반복 실행으로 회귀 없음 확인** — `integrationTest` 연속 3 회 GREEN(`--rerun-tasks`). **이것은 결함 부재의 증거가 아니라 회귀 부재의 확인**이다(위 증명이 정당화를 담당한다).
 - [ ] CI GREEN.
 
 ---
