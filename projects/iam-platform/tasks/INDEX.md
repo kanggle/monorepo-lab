@@ -72,7 +72,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(비어 있음 — 정식 ready 큐 소진.)
+- `TASK-BE-506-signup-tenant-hardcoded-fan-platform-be229-stale.md` — **READY (조사 우선) — `TASK-MONO-381` 산물.** **두 가입 use case(`SignupUseCase:35` + `SocialSignupUseCase:33`)가 모든 소비자를 `TenantId.FAN_PLATFORM` 로 하드코딩**하는데, 주석은 *"until TASK-BE-229 introduces dynamic tenant injection"* 라고 하고 **BE-229 는 이미 done** — 선언(주석)↔진실(코드) 드리프트. web-store 가입은 `signIn('iam')` 로 IAM 가입에 리다이렉트되므로 **ecommerce 소비자도 `tenant=fan-platform` 으로 생성될 가능성**이 있고, 그러면 `credentials.tenant_id`(BE-313)·토큰 `tenant_id` 도 fan 이 되어 — **web-store 게이트웨이가 `acceptAnyWellFormedTenant` 를 켠 이유**(소비자가 `tenant=ecommerce` 를 안 가짐)와 정확히 맞물린다. **⚠️ 본체 = AC-0 반경 실측**(로컬 가입 → DB/토큰 디코드로 실제 배정 확인; BE-229 가 이 경로를 의도적으로 제외했는지 vs 누락인지 가른다 — "stale 주석 = 결함" 속단 금지). 국소 수정이면 여기서, 넓으면 후속 분리. **`MONO-381`(web-store role 가드 vacuity)이 이 조사에 park 되어 의존** — tenant 배정이 신뢰 가능해져야 381 의 seed-gating 결정이 성립한다. 분석=Opus 4.8 / 구현 권장=Sonnet(조사 후 국소면).
 
 > `tasks/ready/TASK-BE-398` 은 날짜 게이트 대기.
 

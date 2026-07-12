@@ -10,6 +10,8 @@ web-store 의 role 기반 로그인 가드가 **구조적으로 절대 발화하
 
 ready
 
+> **⏸️ BLOCKED / PARKED (2026-07-13) — 구현 실측 결과 깔끔한 수정이 없고, tenant 배정 정리에 의존한다. 방향은 (A) 로 사람이 정했으나(2026-07-13), 착수는 아래 § "구현 실측" 의 선행이 풀린 뒤.** 심각도 낮음(운영자가 소비자로도 쇼핑 가능 — 권한상승·크로스테넌트 유출 아님)이라 우선순위도 낮다.
+
 # Owner
 
 monorepo
@@ -142,6 +144,25 @@ monorepo
 
 - [ ] AC-1 ~ AC-4.
 - [ ] `tasks/INDEX.md` done entry.
+
+---
+
+# 구현 실측 (2026-07-13) — 방향 (A) 착수 시도 결과: 깔끔한 수정이 없다
+
+사용자가 방향 **(A) 결함으로 고침**을 택한 뒤 최소 수정을 찾으려다 **막혔다.** 기록:
+
+**시도한 깔끔한 수정 (성립 안 함).** `populateRoles` 에서 seed 를 *"claim `tenant_id` == platform `tenant_id`(`ecommerce`) 일 때만"* 으로 좁히면 operator(홈 tenant 또는 `'*'`)는 걸러지고 소비자만 CUSTOMER 를 받을 것 같았다. **그러나 소비자도 `tenant_id='ecommerce'` 가 아니다** — 아래 선행 때문에.
+
+**선행 (blocker) — 소비자 tenant 배정이 미완성 stopgap.** `account-service` 의 **두 가입 경로 모두**가 tenant 를 하드코딩한다:
+- `SignupUseCase.java:35` — `TenantId tenantId = TenantId.FAN_PLATFORM;`
+- `SocialSignupUseCase.java:33` — 동일.
+둘 다 주석이 *"TASK-BE-228: tenant context is fixed to FAN_PLATFORM **until TASK-BE-229** introduces dynamic tenant injection"* 라는데 — **`TASK-BE-229` 는 이미 `done`** 이고 이 경로들은 갱신되지 않았다(stale 주석 + 미완 배선). ⇒ 소비자의 `tenant_id` 를 seed 판정 기준으로 **쓸 수 없다**(정상 소비자까지 걸러질 것). **이 stopgap 이 web-store 게이트웨이가 `acceptAnyWellFormedTenant` 를 쓰는 이유와도 연결된다** — 소비자가 `tenant=ecommerce` 를 안 갖기 때문. ⇒ **별건 조사 `TASK-BE-506` 로 분리**(반경 미확정).
+
+**남은 수정 대안 — 둘 다 설계 결정이다.**
+- **(a) 가입 시 `account_roles` 에 CUSTOMER 프로비저닝** (ADR-033: account_roles 가 authoritative) + blind seed 축소/제거. → 기존 소비자 데이터 마이그레이션 수반.
+- **(b) 소비자 로그인 hot-path 에 "이 계정이 operator 인가"(admin_operators 조회) 추가.** → 다운스트림 의존 + fail-soft 의미론을 소비자 로그인 경로에 얹음.
+
+⇒ **원 티켓의 "ADR-035 개정 결정 필요" 판단이 실측으로 재확인됐다.** 게다가 (a)/(b) 어느 쪽도 `TASK-BE-506`(tenant 배정 정리)의 결론에 의존한다. **그래서 park.** tenant 모델이 정리되면 방향 (A) 하에 (a)/(b) 를 결정해 재개.
 
 ---
 
