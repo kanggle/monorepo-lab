@@ -177,6 +177,25 @@ jobs:
       # AND-combining with `code-changed` would switch the guard off on exactly
       # the diff it is here to police.
       gateway-policy: ${{ steps.filter.outputs.gateway-policy }}
+      # TASK-MONO-363: same rule a fourth time, and here it is unavoidable. This
+      # drift arrives as `git add docs/adr/ADR-MONO-050-*.md` — a markdown-only
+      # diff, by construction. AND-combining with `code-changed` would skip the
+      # guard on literally every change it exists to catch, and a skipped job
+      # reports green.
+      adr-index: ${{ steps.filter.outputs.adr-index }}
+      # TASK-MONO-371: raw filter, NOT AND-combined with `code-changed`.
+      #
+      # The task specified an AND here, reasoning that this drift arrives as a
+      # new `.claim(...)` in a .java file. That is one of its two arrival paths,
+      # and the task missed the other: someone deletes a row from
+      # jwt-standard-claims.md while the identity-platform keeps minting the
+      # claim. That diff is markdown-only, so `code-changed` is false, so an
+      # AND-ed guard would SKIP — and a skipped job reports green, which is how
+      # the contract lost `tenant_id` in the first place.
+      #
+      # Not AND-ing strictly dominates: it covers both paths, and the cost on a
+      # doc-only PR is a few hundred ms of bash.
+      jwt-claims: ${{ steps.filter.outputs.jwt-claims }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
@@ -285,6 +304,36 @@ jobs:
               - 'projects/*/docker-compose.yml'
               - 'platform/api-gateway-policy.md'
               - 'scripts/check-gateway-drift.sh'
+              # TASK-MONO-365: the guard's I3 reads the gateways' own application.yml
+              # (the `iss` allowlist). Without this path the check could never fire on
+              # the change it polices — MONO-359's lesson: a guard must not only be able
+              # to bite, it must get the chance to, and a job that never runs reports
+              # GREEN.
+              - 'projects/*/apps/gateway-service/src/main/resources/application.yml'
+              # TASK-MONO-368: I4 reads the gateways' rate-limit keying source. The
+              # regression it guards (dropping the account segment, so every authenticated
+              # caller shares one bucket) arrives as a .java edit under this path and
+              # nowhere else.
+              - 'projects/*/apps/gateway-service/src/main/java/**/*RateLimit*.java'
+            # TASK-MONO-363: docs/adr/INDEX.md is the only entry point for "has this
+            # already been decided?". It died at ADR-MONO-012a and by 2026-07-12 was
+            # missing 38 of 53 ADRs — and was wrong about one it did list (008 was
+            # ACCEPTED on 2026-05-18; the table still said PROPOSED). Nothing failed,
+            # because the index is prose.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            adr-index:
+              - 'docs/adr/**'
+              - 'scripts/check-adr-index-drift.sh'
+            # TASK-MONO-371: platform/contracts/jwt-standard-claims.md declares that
+            # every access token MUST carry the claims it lists. It was missing four of
+            # them — including tenant_id, which every gateway in the fleet rejects tokens
+            # for lacking. Both arrival paths are covered: a new `.claim(...)` in the IdP,
+            # and a row deleted from the contract.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            jwt-claims:
+              - 'projects/iam-platform/apps/auth-service/src/main/**/*.java'
+              - 'platform/contracts/jwt-standard-claims.md'
+              - 'scripts/check-jwt-claims-registry.sh'
             # TASK-MONO-075: pure-positive enumeration of code-bearing file
             # extensions. `'some'` quantifier behaves intuitively here (no
             # negation → no quirk). markdown-only / docs-only / lifecycle-only
@@ -410,6 +459,75 @@ jobs:
 
       - name: Guard — gateway declaration <-> module <-> exposure
         run: bash scripts/check-gateway-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-363 — ADR index drift guard.
+  #
+  # docs/adr/INDEX.md is where anyone — human or agent — looks to find out what
+  # has already been decided. If a decision is not there, the honest conclusion
+  # is that it was never made, and it gets made again. The table stopped being
+  # updated at ADR-MONO-012a (2026-05-15); by 2026-07-12 it was missing 38 of 53
+  # ADRs, including 013 (console), 019 (tenant model), 022 (fulfillment), 043
+  # (notification), 047 (org-node) and 048 (gateway library) — and it was wrong
+  # about one of the 15 it did carry: ADR-MONO-008 was ACCEPTED on 2026-05-18 and
+  # the row still read PROPOSED, for two months.
+  #
+  # The Status check is the sharp one. PROPOSED -> ACCEPTED is a human gate here
+  # (an agent may not self-ACCEPT), so an index that disagrees with its ADR is
+  # either hiding a decision or inventing one.
+  #
+  # The filter is NOT AND-combined with `code-changed` — see the outputs block.
+  # Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  adr-index-drift:
+    name: ADR index drift (docs/adr/*.md vs docs/adr/INDEX.md)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.adr-index == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-adr-index-drift.sh
+
+      - name: Guard — every ADR is indexed, no phantom rows, Status matches
+        run: bash scripts/check-adr-index-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-371 — JWT standard-claims registry drift guard.
+  #
+  # platform/contracts/jwt-standard-claims.md says, of itself: "All access tokens
+  # issued by the identity-platform service MUST include the following claims" —
+  # and then lists nine. The identity-platform was minting four more that the
+  # document never named once: tenant_id, tenant_type, entitled_domains, org_scope.
+  #
+  # tenant_id is not an extra. It is the tenant-isolation axis: TenantClaimValidator
+  # fails a token that lacks it ("tenant_id claim is required"), because "any tenant"
+  # is not "no tenant" — a token with no tenant context leaves the persistence layer's
+  # WHERE tenant_id filter with nothing to filter on. So the contract that a new
+  # service author reads to learn what a token carries did not mention the one claim
+  # that keeps tenants apart.
+  #
+  # The runtime was never wrong. Only the document was — and a document does not fail.
+  #
+  # Forward-only (minted -> registered); the reverse would be red on day one for the
+  # six framework-default claims. Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  jwt-claims-registry:
+    name: JWT claims registry (minted claims vs jwt-standard-claims.md)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.jwt-claims == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-jwt-claims-registry.sh
+
+      - name: Guard — every claim the IdP mints is registered in the contract
+        run: bash scripts/check-jwt-claims-registry.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-352: platform/error-handling.md calls itself the single authoritative

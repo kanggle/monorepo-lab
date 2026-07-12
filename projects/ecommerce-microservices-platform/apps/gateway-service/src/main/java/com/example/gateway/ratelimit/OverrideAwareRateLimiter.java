@@ -24,8 +24,11 @@ import reactor.core.publisher.Mono;
  * <ol>
  *   <li>The resolved request key ({@code id}) produced by
  *       {@code TenantRouteRateLimitConfig#tenantRouteKeyResolver} encodes the tenant as a
- *       {@code :t:<tenantId>} segment ({@code rate:ecommerce-gw:<routeId>:t:<tenantId>[:ip:<ip>]}).
- *       This decorator parses {@code <tenantId>} back out of the key.</li>
+ *       {@code :t:<tenantId>} segment, optionally followed by an account qualifier
+ *       ({@code :acct:<sub>}, authenticated) or an IP qualifier ({@code :ip:<ip>}, anonymous):
+ *       {@code rate:ecommerce-gw:<routeId>:t:<tenantId>[:acct:<sub>|:ip:<ip>]}.
+ *       This decorator parses {@code <tenantId>} back out of the key — see
+ *       {@link #parseTenant}, which must stop at <em>either</em> qualifier.</li>
  *   <li>If {@link RateLimitOverrideProperties} has a valid override for
  *       {@code (tenantId, routeId)}, the call is delegated to a small cached
  *       {@link RedisRateLimiter} instance whose static {@code Config} for that route id is
@@ -65,6 +68,14 @@ public class OverrideAwareRateLimiter implements RateLimiter<RedisRateLimiter.Co
     public static final String TENANT_SEGMENT = ":t:";
     /** Key segment that follows the tenant id (anonymous/pre-auth IP qualifier), if present. */
     public static final String IP_SEGMENT = ":ip:";
+    /**
+     * Key segment that follows the tenant id on <em>authenticated</em> keys (TASK-MONO-368).
+     * The tenant alone is not a bucket: every shopper's {@code tenant_id} is the constant
+     * {@code ecommerce}, so a tenant-only key put the whole marketplace in one bucket. The
+     * account segment restores per-caller isolation without giving up the tenant segment
+     * that {@link #parseTenant} needs for override lookup.
+     */
+    public static final String ACCOUNT_SEGMENT = ":acct:";
 
     private final RedisRateLimiter defaultDelegate;
     private final RateLimitOverrideProperties overrideProperties;
@@ -115,9 +126,17 @@ public class OverrideAwareRateLimiter implements RateLimiter<RedisRateLimiter.Co
     }
 
     /**
-     * Extracts {@code <tenantId>} from {@code ...:t:<tenantId>} (or
-     * {@code ...:t:<tenantId>:ip:<ip>}). Returns {@code null} when the key carries no tenant
+     * Extracts {@code <tenantId>} from {@code ...:t:<tenantId>}, {@code ...:t:<tenantId>:ip:<ip>},
+     * or {@code ...:t:<tenantId>:acct:<sub>}. Returns {@code null} when the key carries no tenant
      * segment — the caller then resolves no override (default path), never a null limit.
+     *
+     * <p>The tenant ends at <b>whichever qualifier comes first</b>. Terminating only at
+     * {@link #IP_SEGMENT} would parse an authenticated key's tenant as
+     * {@code ecommerce:acct:<uuid>} — a distinct string per account — so
+     * {@code overrides.<tenant>.<route>} would never match again and every per-tenant override
+     * would silently stop applying. No error, no log, and the existing tests still pass: the
+     * override path just quietly becomes dead code. That is the failure this method exists to
+     * not have.
      */
     static String parseTenant(String id) {
         if (id == null) {
@@ -128,9 +147,22 @@ public class OverrideAwareRateLimiter implements RateLimiter<RedisRateLimiter.Co
             return null;
         }
         int start = t + TENANT_SEGMENT.length();
-        int ip = id.indexOf(IP_SEGMENT, start);
-        String tenant = (ip < 0) ? id.substring(start) : id.substring(start, ip);
+        int end = firstQualifier(id, start);
+        String tenant = (end < 0) ? id.substring(start) : id.substring(start, end);
         return tenant.isBlank() ? null : tenant;
+    }
+
+    /** Index of the earliest qualifier segment at/after {@code start}, or {@code -1} if none. */
+    private static int firstQualifier(String id, int start) {
+        int ip = id.indexOf(IP_SEGMENT, start);
+        int acct = id.indexOf(ACCOUNT_SEGMENT, start);
+        if (ip < 0) {
+            return acct;
+        }
+        if (acct < 0) {
+            return ip;
+        }
+        return Math.min(ip, acct);
     }
 
     private static String cacheKey(String routeId, String tenantId) {

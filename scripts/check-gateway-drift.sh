@@ -48,6 +48,17 @@
 #           the gateway, or be on the explicit allowlist below. This is policy
 #           L14, and it is the axis that was live-violated and unseen.
 #
+#   I3      Every gateway validates `iss` against an ALLOWLIST that includes the
+#           SAS issuer (`OIDC_ISSUER_URL`) — not a single pinned value.
+#           TASK-MONO-365: iam's gateway was the one edge of seven that pinned a
+#           single `expected-issuer`, and it pinned the LEGACY one. SAS-issued
+#           tokens — what the other six take as primary — were 401'd there, and
+#           nothing failed, because console-bff bypasses that edge entirely
+#           (TASK-MONO-347). Worse, TASK-BE-398 retires the legacy issuer: under
+#           that config the edge would have ended up accepting NOTHING, on a
+#           date, with nobody watching. This check exists so an edge cannot
+#           quietly fall off the fleet's issuer axis again.
+#
 # WHAT THIS SCRIPT DOES *NOT* GUARD (do not claim otherwise)
 #
 #   * The prose of api-gateway-policy.md. "Every project that exposes HTTP
@@ -111,6 +122,15 @@ PROJECTS_DIR="${PROJECTS_DIR:-$ROOT/projects}"
 #   kafka-ui     operator tooling, not an application surface.
 #   grafana      operator tooling, not an application surface.
 TRAEFIK_ALLOWLIST="web-store console-web kafka-ui grafana"
+
+# I4 — gateways permitted to key their rate limit on client IP alone, by RECORDED
+# deviation (api-gateway-policy.md § Rate Limiting > Current fleet). EXACT NAMES ONLY.
+#
+# EMPTY, and it should stay that way. wms was the sole entry (MONO-368) and TASK-MONO-370
+# aligned it, so every gateway now keys authenticated traffic on the principal. An entry here
+# is a promise that someone wrote down WHY in the policy's fleet table — not a place to park a
+# guard you could not get green.
+RATELIMIT_IP_ONLY_ALLOWLIST=""
 
 fail=0
 
@@ -199,6 +219,92 @@ for project_md in "$PROJECTS_DIR"/*/PROJECT.md; do
       echo "                 tooling — add it to TRAEFIK_ALLOWLIST by exact name, with a reason.)"
       fail=1
     done
+  fi
+
+  # I3 — the gateway's `iss` check must be an ALLOWLIST that includes the SAS issuer.
+  gateway_yml="$PROJECTS_DIR/$project/apps/gateway-service/src/main/resources/application.yml"
+  if [ "$module" = "1" ] && [ -r "$gateway_yml" ]; then
+    issuer_line="$(tr -d '\r' < "$gateway_yml" \
+      | grep -E '^[[:space:]]*(allowed-issuers|expected-issuer):' || true)"
+
+    if [ -z "$issuer_line" ]; then
+      echo "NO-ISSUER-CHECK  $project — the gateway's application.yml declares neither 'allowed-issuers'"
+      echo "                 nor 'expected-issuer'. An edge that does not pin 'iss' will accept a token from"
+      echo "                 any issuer whose signing key it can resolve."
+      fail=1
+    elif printf '%s\n' "$issuer_line" | grep -qE '^[[:space:]]*expected-issuer:'; then
+      echo "SINGLE-ISSUER  $project — the gateway pins a single 'expected-issuer'. Every edge must take an"
+      echo "               ALLOWLIST ('allowed-issuers'): IAM mints TWO issuers during the D2-b window (the"
+      echo "               SAS/OIDC issuer and the legacy 'iam' string). This is the exact state TASK-MONO-365"
+      echo "               found on the iam edge — it pinned the LEGACY value alone, so SAS-issued tokens were"
+      echo "               401'd there while the other six gateways took them as primary. Nothing failed,"
+      echo "               because console-bff bypasses that edge (TASK-MONO-347). And TASK-BE-398 retires the"
+      echo "               legacy issuer: under that config the edge would have ended up accepting NOTHING."
+      fail=1
+    elif ! printf '%s\n' "$issuer_line" | grep -q 'OIDC_ISSUER_URL'; then
+      echo "ISSUER-MISSING-SAS  $project — the gateway's 'allowed-issuers' default never references"
+      echo "                    OIDC_ISSUER_URL, so it cannot accept SAS/OIDC-issued tokens — the issuer the"
+      echo "                    rest of the fleet treats as primary. The legacy 'iam' entry is the one that"
+      echo "                    goes away at the TASK-BE-398 sunset; the SAS entry is the one that must stay."
+      fail=1
+    fi
+  fi
+
+  # I4 — the authenticated rate-limit key must identify the CALLER, not just the tenant
+  # (api-gateway-policy.md § Rate Limiting > Key shape).
+  #
+  # A rate limit is only as good as the thing it counts. TASK-MONO-368: ecommerce keyed
+  # authenticated traffic on the `tenant_id` claim alone, citing multi-tenant M7 — but its own
+  # gate makes that claim a CONSTANT for shopper traffic ('ecommerce', derived from the OAuth
+  # client), so every authenticated shopper landed in ONE bucket and a single account could 429
+  # the whole marketplace. Anonymous traffic, meanwhile, WAS split by IP. The callers we can
+  # identify were the ones sharing a bucket.
+  #
+  # A claim your own config pins to a constant is not a bucket. So: if a gateway's rate-limit
+  # keying reads the JWT at all, it must read the SUBJECT.
+  if [ "$module" = "1" ]; then
+    rl_src="$(find "$PROJECTS_DIR/$project/apps/gateway-service/src/main/java" \
+      -name '*RateLimit*.java' -type f 2>/dev/null | sort || true)"
+
+    if [ -n "$rl_src" ]; then
+      ip_only=0
+      for ok in $RATELIMIT_IP_ONLY_ALLOWLIST; do [ "$project" = "$ok" ] && ip_only=1; done
+
+      # Does the keying read the authenticated principal?
+      #
+      # Both spellings count. Six gateways use Spring Security's Jwt#getSubject(); the iam
+      # gateway hand-decodes the payload and reads the "sub" claim with Jackson (it rate-limits
+      # BEFORE signature verification, so it cannot use the Spring Jwt type). A predicate that
+      # only knew getSubject() flagged iam on this guard's first run — a false positive, and a
+      # guard that is RED on day one gets switched off, which is worse than no guard at all.
+      keys_on_subject=0
+      grep -lqE 'getSubject\(\)|"sub"' $rl_src 2>/dev/null && keys_on_subject=1
+
+      # Does it read the tenant claim?
+      keys_on_tenant=0
+      grep -lqE 'tenant_id|CLAIM_TENANT_ID' $rl_src 2>/dev/null && keys_on_tenant=1
+
+      if [ "$keys_on_subject" = "0" ] && [ "$ip_only" = "0" ]; then
+        if [ "$keys_on_tenant" = "1" ]; then
+          echo "TENANT-ONLY-BUCKET  $project — the rate-limit key reads the tenant claim but never the JWT"
+          echo "                    subject. If this gateway's tenant gate pins 'required-tenant-id', that claim"
+          echo "                    is the SAME VALUE for every token it admits — so this is not per-tenant"
+          echo "                    isolation, it is one global bucket per route wearing that costume, and any"
+          echo "                    single authenticated caller can exhaust it for everyone. This is the exact"
+          echo "                    shape TASK-MONO-368 found on the ecommerce edge. Add an account segment."
+        else
+          echo "IP-ONLY-BUCKET  $project — the gateway's routes are authenticated, but its rate-limit key never"
+          echo "                reads the JWT subject. Everyone behind one NAT then shares a bucket, while an"
+          echo "                abuser rotating IPs is never throttled per account (api-gateway-policy.md"
+          echo "                § Rate Limiting > Key shape). Key authenticated traffic on 'sub'; keep IP for"
+          echo "                pre-auth routes only."
+        fi
+        echo "                (If this is a deliberate, RECORDED deviation, add the project to"
+        echo "                RATELIMIT_IP_ONLY_ALLOWLIST by exact name AND to the fleet table in"
+        echo "                api-gateway-policy.md — a deviation nobody wrote down is drift, not a decision.)"
+        fail=1
+      fi
+    fi
   fi
 done
 

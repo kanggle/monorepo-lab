@@ -22,28 +22,24 @@ import reactor.core.publisher.Mono;
 /**
  * Rate-limit keying for finance's edge.
  *
- * <h2>Why this shape and not wms's</h2>
+ * <h2>Why key on the account</h2>
  *
- * The fleet has two rate-limit keying shapes, and only one of them can be justified:
+ * Anonymous traffic has no identity, so it can only be bucketed by client IP — that is what
+ * {@code platform/api-gateway-policy.md} § Rate Limiting prescribes. Authenticated traffic
+ * <em>does</em> have an identity, and bucketing it by IP throws that away: everyone behind one
+ * NAT shares a bucket, while an abuser rotating IPs is never throttled per account. So finance
+ * keys pre-auth requests by IP and authenticated requests by the JWT {@code sub}, both under a
+ * project-scoped prefix that cannot collide with another domain sharing a Redis.
  *
- * <ul>
- *   <li><strong>scm / fan</strong> — key by the authenticated account's {@code sub}, falling back
- *       to client IP for pre-auth traffic, under a project-scoped key prefix.</li>
- *   <li><strong>wms</strong> — key by client IP only, with <em>no</em> prefix (its Redis keys are
- *       a bare {@code {ip}:{routeId}}), and <strong>no documented rationale</strong> for either
- *       choice.</li>
- * </ul>
- *
- * TASK-MONO-355 measured that difference and descoped it: choosing a default on an axis with no
- * owner would have been an ownerless policy decision, so it remains open for a human. A
- * <em>new</em> gateway, though, has to pick something — and it must not pick the unjustified
- * shape, because copying an unresolved decision into new code propagates it instead of resolving
- * it.
- *
- * <p>So finance takes the shape that can be defended. Keying by IP alone means everyone behind
- * one NAT shares a bucket while an authenticated abuser rotating IPs is unthrottled per account;
- * an unprefixed key collides across domains the moment two projects share a Redis. Neither is a
- * property to inherit on purpose.
+ * <p><b>Correction (TASK-MONO-368 → 370).</b> This Javadoc once asserted that wms — which keyed by
+ * client IP only — had "no documented rationale" and had picked an unjustifiable shape. That was
+ * false: {@code api-gateway-policy.md} L92 declared {@code (clientIp, routeId)} as the platform
+ * <em>default</em> at the time, so wms was the gateway that <b>conformed</b>. The claim was
+ * asserted from a fleet head-count instead of read from the policy. MONO-368 raised the rule and
+ * left wms as a recorded deviation rather than changing a live edge silently; MONO-370 made that
+ * decision and aligned it. The fleet now keys authenticated traffic on the principal everywhere —
+ * but the lesson is the mistake, not the outcome: a source comment does not get to settle a
+ * platform question by assertion.
  */
 @Configuration
 public class RateLimitConfig {
@@ -71,9 +67,16 @@ public class RateLimitConfig {
                 .map(ctx -> ctx.getAuthentication())
                 .filter(JwtAuthenticationToken.class::isInstance)
                 .cast(JwtAuthenticationToken.class)
-                .map(token -> buildKey(resolveRouteId(exchange),
-                        "acct:" + token.getToken().getSubject()))
-                .switchIfEmpty(Mono.just(buildKey(resolveRouteId(exchange), resolveClientIp(exchange))));
+                // TASK-MONO-370. Was `"acct:" + getSubject()` — a token with no `sub` string-
+                // concatenated to the literal key "acct:null", merging every such caller into one
+                // synthetic shared bucket. flatMap + justOrEmpty makes "no usable identity" empty
+                // (map cannot: Reactor NPEs when a map lambda returns null), so it falls through to
+                // the IP key — the coarse-but-correct answer for an unidentifiable caller.
+                .flatMap(token -> Mono.justOrEmpty(token.getToken().getSubject()))
+                .filter(subject -> !subject.isBlank())
+                .map(subject -> buildKey(resolveRouteId(exchange), "acct:" + subject))
+                .switchIfEmpty(Mono.fromSupplier(
+                        () -> buildKey(resolveRouteId(exchange), resolveClientIp(exchange))));
     }
 
     /**

@@ -22,7 +22,7 @@
 - **JWT validation** — OAuth2 Resource Server; validates `aud=wms-platform` + `tenant_id` claim. The tenant gate (`TenantClaimValidator`) is now **entitlement-trust dual-accept** (ADR-MONO-019 § D5): a token passes when **either** the legacy strict `tenant_id == wms` matches **or** the IAM-signed `entitled_domains` claim contains `wms`; rejection (`tenant_mismatch` → 403 `TENANT_FORBIDDEN`) requires **both** to fail. wms keeps strict legacy equality (no `*` wildcard); `entitled_domains` is read only from an RS256/JWKS-verified token so it is unforgeable. While IAM has not populated the claim it is absent → legacy-only (production net-zero); the legacy branch is removed in step 4 once IAM populates it (separate follow-up).
 - **Identity header pipeline** — strip client-supplied headers (`X-Account-Id`, `X-Tenant-Id`, `X-Roles`); re-set from verified JWT claims.
   > **Implementation status (TASK-BE-502).** The **strip** half is enforced: `IdentityHeaderStripFilter` removes all three (plus `X-User-Id`, `X-User-Email`, `X-User-Role`, `X-Actor-Id`, `X-Account-Type`). The **re-set** half is deliberately *not* implemented for these three: no wms service reads them (0 readers in `apps/*/src/main`), and `X-Account-Id` / `X-Roles` have no defined claim mapping anywhere. Injecting a header nobody reads invites the next author to trust it, so wms supplies only what it can vouch for (`JwtHeaderEnrichmentFilter` sets `X-User-Id`, `X-Actor-Id`, `X-User-Email`, `X-User-Role` from verified claims). When a reader appears, add the enrichment in the same change — and settle what "re-set" means for `X-Account-Id` / `X-Roles` then. Stripping without re-setting is safe in both directions; the reverse is not.
-- **Per-(clientIp, routeId) rate limiting** — Redis-backed token bucket; webhook tier higher than admin tier.
+- **Per-(account, routeId) rate limiting** — Redis-backed token bucket keyed on the JWT `sub` (IP fallback when unauthenticated); webhook tier higher than admin tier.
 - **Webhook bypass** — `/webhooks/erp/**` routes use HMAC signature only (no JWT filter), routed to `inbound-service` / `outbound-service`.
 - **Error envelope normalize** — all gateway-level errors (401 / 403 / 429 / 503) emit platform envelope.
 - **Trace propagation** — generate / echo `X-Request-Id` + OTel trace context.
@@ -40,7 +40,7 @@
 | `/webhooks/erp/order` | HMAC (gateway bypass) | `outbound-service:8080` |
 | `/actuator/health`, `/actuator/info` | none (local) | self |
 
-Rate-limit tiers (per `(clientIp, routeId)`): standard 100 rpm/IP, admin 60 rpm/IP, webhook 300 rpm/IP. Redis 장애 시 **fail-open** (per `platform/api-gateway-policy.md`).
+Rate-limit tiers (per `(account, routeId)`): standard 100 rps, admin 60 rps, webhook 300 rps (webhooks are HMAC-only so they key on IP). Redis 장애 시 **fail-open** (per `platform/api-gateway-policy.md`).
 
 ## Key invariants
 

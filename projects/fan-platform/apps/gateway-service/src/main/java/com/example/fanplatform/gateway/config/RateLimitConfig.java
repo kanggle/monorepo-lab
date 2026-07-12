@@ -65,9 +65,16 @@ public class RateLimitConfig {
                 .map(ctx -> ctx.getAuthentication())
                 .filter(JwtAuthenticationToken.class::isInstance)
                 .cast(JwtAuthenticationToken.class)
-                .map(token -> buildKey(resolveRouteId(exchange),
-                        "acct:" + token.getToken().getSubject()))
-                .switchIfEmpty(Mono.just(buildKey(resolveRouteId(exchange), resolveClientIp(exchange))));
+                // TASK-MONO-370. Was `"acct:" + getSubject()` — a token with no `sub` string-
+                // concatenated to the literal key "acct:null", merging every such caller into one
+                // synthetic shared bucket. flatMap + justOrEmpty makes "no usable identity" empty
+                // (map cannot: Reactor NPEs when a map lambda returns null), so it falls through to
+                // the IP key — the coarse-but-correct answer for an unidentifiable caller.
+                .flatMap(token -> Mono.justOrEmpty(token.getToken().getSubject()))
+                .filter(subject -> !subject.isBlank())
+                .map(subject -> buildKey(resolveRouteId(exchange), "acct:" + subject))
+                .switchIfEmpty(Mono.fromSupplier(
+                        () -> buildKey(resolveRouteId(exchange), resolveClientIp(exchange))));
     }
 
     /**

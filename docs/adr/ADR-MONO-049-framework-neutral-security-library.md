@@ -4,9 +4,11 @@
 
 **Date:** 2026-07-12 (PROPOSED)
 
-**Decision driver:** `ADR-MONO-048` extracted `libs/java-gateway` from four copy-pasted **reactive** edges. While closing its last step, § 1.1 was corrected twice — and it was still wrong. The two security validators it counted at four copies each exist as **six more copies each inside the finance/erp servlet services**, plus a third class it never counted at all. `TASK-MONO-361` measured the real shape: **3 classes × 6 copies = 18 files**. This ADR decides whether to remove them.
+**Decision driver:** `ADR-MONO-048` extracted `libs/java-gateway` from four copy-pasted **reactive** edges. While closing its last step, § 1.1 was corrected twice — and it was still wrong. The two security validators it counted at four copies each exist as **six more copies each inside the finance/erp servlet services**, plus a third class it never counted at all. `TASK-MONO-361` measured 3 classes × 6 copies = 18 files **in finance and erp**. This ADR decides whether to remove them.
 
-**Supersedes:** none. **Extends** `ADR-MONO-048` § 1.1, whose duplication count was low twice over (4 copies → the corrected 10 → the measured **18**, across **3** classes, not 2).
+> 🔴 **And that count was low too — see § 1.6 (`TASK-MONO-375`).** The same three classes also live in **wms, fan, scm and iam**. Fleet-wide: **49 copies / 3,522 lines / 20 services / 6 projects**. Read § 1.1 and § 4 as *"finance and erp"*, not *"the fleet"*. **§ 3 is still `PROPOSED`; the scope question § 1.6 raises is the one to settle before ACCEPT.**
+
+**Supersedes:** none. **Extends** `ADR-MONO-048` § 1.1, whose duplication count was low **three** times over (4 copies → the corrected 10 → 18 → the fleet-wide **49**). Each pass looked only where the previous task happened to be standing; that is the pattern, not arithmetic.
 
 **Related:** [`ADR-MONO-048`](ADR-MONO-048-shared-reactive-gateway-library.md) (`libs/java-gateway`; its § D1 is the constraint that forces a *second* module here) · [`ADR-MONO-019`](ADR-MONO-019-platform-console-customer-tenant-model.md) § D5 (entitlement-trust dual-accept — the policy these validators implement) · `TASK-MONO-355` (builder parameterisation + closed-by-default discipline) · `TASK-MONO-360` (why a text guard is the wrong instrument here) · `TASK-MONO-361` (the measurement behind § 1) · `TASK-MONO-044a` (the servlet/reactive bleed incident this must not repeat — recorded in `ADR-MONO-048` § D1, not as an ADR of its own)
 
@@ -90,6 +92,60 @@ I found it while auditing the iam gateway (§ D6), whose `TokenValidator` turned
 
 **How the first draft got this wrong:** I measured the duplication (§ 1.1–1.3) and never asked whether a home already existed. The three classes I was counting sit *next to* `Rs256JwtVerifier` in the same six services' `build.gradle` files. **The evidence was one `grep` away and I proposed building what was already built.** § 4 has been re-costed accordingly.
 
+### 1.6 🔴 Correction (`TASK-MONO-375`) — **the count is low a third time, and § 1.1 is not "the real shape"**
+
+This document opens by noting that `ADR-MONO-048`'s duplication count *"was low twice over (4 copies → the corrected 10 → the measured **18**)"*. **It is low a third time, and this ADR is the one that is wrong now.**
+
+§ 1.1 counted the servlet copies in **finance and erp**. It then presented that number as the fleet's shape (*"`TASK-MONO-361` measured the real shape: 3 classes × 6 copies = 18 files"*). The same three classes also exist in **wms, fan, scm and iam**, which this document never mentions.
+
+**Re-measured against `origin/main` `1929c2627` (2026-07-12):**
+
+| class | copies | lines | distinct normalised bodies |
+|---|---|---|---|
+| `AllowedIssuersValidator` | **18** | 760 | **1** — all eighteen identical |
+| `TenantClaimValidator` | **18** | 1,409 | **10** |
+| `TenantClaimEnforcer` | **13** | 1,353 | **8** |
+| | **49** | **3,522** | |
+
+Spread over **20 services in 6 projects** — erp (4), fan (4), wms (5), finance (2), scm (3), iam (2) — not the 6 services in 2 projects § 1.1 names. **§ 1.1's 18 is 37% of the copies and its 6 consumers are 30% of the services.**
+
+Normalised body comparison confirms these are the *same* class, not namesakes: wms's, fan's, scm's and iam's `AllowedIssuersValidator` are **byte-identical** to finance's after stripping package/import/comments.
+
+#### And § 1.2 fact 2 — *"Behavioural drift: zero"* — is true only inside § 1.1's scope
+
+Fleet-wide, the servlet tenant gates implement **four different policies**:
+
+| project | wildcard `"*"` | `entitled_domains` |
+|---|---|---|
+| wms | ❌ | ✅ |
+| fan | ✅ | ❌ |
+| scm / finance / erp | ✅ | ✅ |
+| iam | ❌ | ❌ (strict equality only) |
+
+So **D4's premise is false as written**: *"All six servlet `TenantClaimValidator` copies implement exactly: legacy `tenant_id ∈ {expected, "*"}` **or** signed `entitled_domains`"* holds for finance and erp — and for nobody else.
+
+**But there is no live defect here, and saying otherwise would be the exaggeration § 1.2 warns against.** Each project's servlet policy **mirrors its own gateway's** exactly (verified by comparing the servlet copies against each gateway's `OAuth2ResourceServerConfig` builder calls, with comments stripped — a first pass that grepped raw text false-positived on wms, whose Javadoc *explains* that it rejects the wildcard):
+
+| project | gateway | servlet | |
+|---|---|---|---|
+| wms | entitled, no wildcard | entitled, no wildcard | ✅ |
+| fan | wildcard, no entitled | wildcard, no entitled | ✅ |
+| scm / finance / erp | wildcard + entitled | wildcard + entitled | ✅ |
+
+**Both layers of the defence agree in every project.** The divergence across the 18 copies is **deliberate per-project policy**, not rot.
+
+#### What this changes for the decision
+
+1. **D4's mechanism survives; its risk statement does not.** The builder is still the right shape — `TASK-MONO-355` parameterised `libs/java-gateway`'s validator for exactly these switches, and the servlet copies **hard-code what the gateway already parameterises**. But *"one file now decides the tenant gate for **12 edges** — 6 gateways and 6 services"* is really **26 edges: 6 gateways and 20 services**, and that file must express **four** policy shapes, not one. The closed-by-default discipline it inherits from MONO-355 matters more, not less.
+2. **D5 as written consolidates 6 of 20 services and leaves 14.** That is *this ADR's own thesis happening to this ADR*: a change that reaches some services and not others. `AllowedIssuersValidator` makes it starkest — **all 18 copies are identical**, so migrating 6 would leave **12 identical copies of a class we just declared canonical**.
+3. **§ 4's numbers are all scoped to § 1.1** and must be read as such: `AllowedIssuersValidator` copies "before: 7" is really **19** (18 + the library's); copies with no test "10 of 18" is, fleet-wide, **9 of 49** (listed below). The `finance/ledger-service` finding in § 1.3 **holds** — it carries all three classes and has **zero** tests for any of them.
+
+**The nine untested copies (fleet-wide):** `AllowedIssuersValidator` in erp/approval, erp/masterdata, finance/ledger, scm/procurement, wms/admin · `TenantClaimValidator` in finance/ledger · `TenantClaimEnforcer` in erp/approval, finance/ledger, scm/demand-planning.
+
+**How this draft got it wrong:** § 1.1 was measured by `TASK-MONO-361`, whose job was finance and erp. I inherited its scope without re-asking *"is this everywhere?"* — the same failure as § 1.5, one level up: **§ 1.5 asked "does a home already exist"; nobody asked "is this the whole population".** A count that has now been wrong three times is not a measurement problem. It is that each pass looked only where the previous task happened to be standing.
+
+**This section does not decide the scope — § 3 does, and § 3 is still `PROPOSED`.** The choice is between widening D5 to all 20 services and explicitly recording why 14 are left behind. What it does is make sure the choice is made against the real number.
+
 ---
 
 ## 2. Alternatives considered
@@ -148,6 +204,8 @@ The six gateway `OAuth2ResourceServerConfig` classes import `TenantClaimValidato
 
 ### D4 — The servlet services adopt the MONO-355 builder, and inherit its closed-by-default discipline
 
+> 🔴 **Corrected by § 1.6.** The paragraph below is true of finance and erp and of **no other project**. Fleet-wide the servlet gates implement **four** policies (wms: no wildcard; fan: no `entitled_domains`; iam: neither), each **correctly mirroring its own gateway**. The builder is still the right mechanism — that is what makes the four expressible — but it decides the gate for **26 edges (6 gateways + 20 services)**, not 12.
+
 All six servlet `TenantClaimValidator` copies implement exactly: *legacy `tenant_id ∈ {expected, "*"}`* **or** *signed `entitled_domains` contains the domain*. That maps onto the existing builder with no behavioural change:
 
 ```java
@@ -160,6 +218,8 @@ TenantClaimValidator.forTenant("finance")
 **The risk this creates, stated plainly:** one file now decides the tenant gate for **12 edges** — 6 gateways and 6 services. `TASK-MONO-355` already met this and answered it: ***every switch defaults closed; a shared security class whose defaults open the gate is one typo away from opening all of them.*** That discipline is **carried forward verbatim**, and the module's own suite must assert, for each switch, both what it **admits** and what it **refuses** — MONO-355's other lesson, learned when it found that wms's rejection of the `*` wildcard, the single most distinctive gate in the fleet, had **zero test coverage**.
 
 ### D5 — Migration in four PRs, each leaving `main` green
+
+> 🔴 **Corrected by § 1.6 — this is the part that most needs a decision before ACCEPT.** Steps 3–4 cover **finance (2) and erp (4)**: 6 of the **20** services that hold these classes. It would leave **14 services duplicating**, including **12 byte-identical copies of `AllowedIssuersValidator`** — a change that reaches some services and not others, which is the failure this ADR exists to argue against. **Either widen D5 to all 20 services (adding wms 5, fan 4, scm 3, iam 2), or record explicitly why 14 are left behind and what triggers their migration.** The four policy shapes make this bigger than the step list below implies; it is not the mechanical sweep it reads as.
 
 1. **Move the two neutral classes into the existing `libs/java-security`** (out of `libs/java-gateway`); add `spring-security-oauth2-jose` to that module. `java-gateway` and the 6 gateways already depend on it — **no new wiring.** **No servlet service touched.** Behaviour identical; the 6 gateway suites are the proof.
 2. **`libs/java-security-servlet`** (the one new module) — canonical `TenantClaimEnforcer`. No consumer yet.
@@ -178,6 +238,8 @@ Per-domain tests **stay per-domain**: they pin *that domain's* gate policy, and 
 ---
 
 ## 4. Cost — measured, per `TASK-MONO-364` AC-5
+
+> 🔴 **Every number in § 4 and § 4.1 is scoped to § 1.1 — i.e. to finance and erp only. See § 1.6.** Fleet-wide: **49 copies / 3,522 lines / 20 services / 6 projects**; `AllowedIssuersValidator` exists **19** times, not 7; copies with no test are **9 of 49**, not 10 of 18. If D5 is widened, the deletion roughly **triples** and the consumers needing servlet-module wiring go from 6 to 20. The § 4.1 build-graph savings (1 new module, not 2) are unaffected — `libs/java-security` is already consumed by all of them.
 
 `ADR-MONO-048` claimed a gateway was ~15 hand-copied classes and only proved it at the last step (it was 16; **~81% of a gateway is the library**). This ADR answers its own version of that question **before** asking for a decision.
 
