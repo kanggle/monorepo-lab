@@ -140,6 +140,20 @@ DEMO_DOMAIN=43-200-71-219.sslip.io bash infra/demo/demo-up.sh full   # console.4
 
 > 셋 중 하나만 빠져도 **컨테이너는 전부 healthy 한데 로그인만 안 된다.** `docker compose config` 도 healthcheck 도 이것을 증명하지 못한다 — 가드 (i)(j)(k)(l) 과 EC2 실기동 왕복만이 증명한다.
 
+## 부팅 — 누가 `DEMO_DOMAIN` 을 주는가 (TASK-MONO-366)
+
+위 계약은 **누군가 `DEMO_DOMAIN` 을 준다**는 전제 위에 있다. 데모 호스트에서 그 "누군가" 는 [`demo-boot.sh`](demo-boot.sh) 다.
+
+```
+systemd(demo-stack.service) → demo-boot.sh → (IMDSv2 로 공인 IP → DEMO_DOMAIN) → demo-up.sh
+```
+
+- **유닛도 저장소 파일이다** ([`demo-stack.service`](demo-stack.service)). 예전엔 Packer 옆의 사본이었고, 그래서 **저장소가 계약을 바꿔도 유닛은 몰랐다** — 유닛이 `demo-up.sh` 를 직접 부르는 동안 스택은 96개 컨테이너가 전부 healthy 한 채로 `*.local` 에 떠서 **아무도 도달할 수 없었다.** AMI 는 이제 이 파일을 저장소 체크아웃에서 복사한다.
+- **빈 `DEMO_DOMAIN` 이 없는 것보다 위험하다.** `Host(\`console.\`)` 라우터가 만들어지는데 **Traefik 은 그걸 거부하지 않는다** — 그냥 아무 요청과도 매치하지 않는다. 에러 0건, 전부 healthy, 그런데 404. 그래서 파생 실패는 **반드시 `local` 로 떨어지고 그 사실을 말한다**(AWS 밖 실행도 안전하다 — 링크로컬 주소는 EC2 밖에서 라우팅 블랙홀이라 프로브를 `--max-time` 으로 끊는다).
+- **`demo.env` 의 `DEMO_DOMAIN=${DEMO_DOMAIN:-local}` 형태는 load-bearing 이다.** bare 대입이면 `demo-up.sh` 의 `set -a; source demo.env` 가 **`demo-boot.sh` 가 export 한 파생값을 덮어쓴다** — 파생은 성공했는데 스택은 여전히 `.local` 로 뜬다. 실제로 당했다.
+
+**가드 (n)** 이 이 세 고리를 전부 지킨다(유닛 → `demo-boot.sh` → export → `demo-up.sh`, + Packer 가 유닛을 저장소에서 설치). AWS 인프라(Packer/Terraform/Lambda/사이트)는 [`aws/`](aws/) 참조.
+
 ## 남은 작업 (federation env 배선 — 별도 증분)
 
 이 래퍼는 각 프로젝트를 **표준 구성**으로 띄운다. 콘솔이 5/5 도메인을 실제
