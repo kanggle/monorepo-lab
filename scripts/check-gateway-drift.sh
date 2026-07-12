@@ -125,12 +125,12 @@ TRAEFIK_ALLOWLIST="web-store console-web kafka-ui grafana"
 
 # I4 — gateways permitted to key their rate limit on client IP alone, by RECORDED
 # deviation (api-gateway-policy.md § Rate Limiting > Current fleet). EXACT NAMES ONLY.
-#   wms-platform  Every wms route is authenticated, yet it keys by IP. That WAS the
-#                 platform default (policy L92, pre-MONO-368), so wms is the gateway that
-#                 conformed to it — it is not a bug to be "fixed" by whoever notices next.
-#                 Changing it alters who gets 429'd on a live edge, so it needs an explicit
-#                 decision: TASK-MONO-368 § Out of Scope. Delete this entry when that lands.
-RATELIMIT_IP_ONLY_ALLOWLIST="wms-platform"
+#
+# EMPTY, and it should stay that way. wms was the sole entry (MONO-368) and TASK-MONO-370
+# aligned it, so every gateway now keys authenticated traffic on the principal. An entry here
+# is a promise that someone wrote down WHY in the policy's fleet table — not a place to park a
+# guard you could not get green.
+RATELIMIT_IP_ONLY_ALLOWLIST=""
 
 fail=0
 

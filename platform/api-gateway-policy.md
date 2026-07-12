@@ -105,8 +105,12 @@ A rate limit is only as good as the thing it counts. The key decides **who gets 
 | Gateway | Anonymous | Authenticated | Note |
 |---|---|---|---|
 | ecommerce | `ip` | `t:<tenant>:acct:<sub>` | tenant is real for assume-tenant tokens; account restores per-caller isolation (MONO-368) |
-| scm / fan / finance / erp | `ip` | `acct:<sub>` | conforms |
-| **wms** | — | **`ip` only** | ⚠️ **recorded deviation** — every wms route is authenticated, yet it keys by IP. This predates the rule above and was the platform default at the time. It is **not** a violation to be fixed silently: changing it alters who gets 429'd on a live edge, so it needs an explicit decision. See TASK-MONO-368 § Out of Scope. |
+| wms / scm / fan / finance / erp | `ip` | `acct:<sub>` | conforms |
+| iam | `ip` (login / signup — pre-auth by definition) | `acct:<sub>` (refresh) | conforms; it rate-limits *before* signature verification, so it reads `sub` from the decoded payload rather than a Spring `Jwt` |
+
+**No recorded deviations.** wms held one until TASK-MONO-370: every wms route is authenticated, yet it keyed by IP — which was **compliance with the previous rule**, not drift, since L92 declared `(clientIp, routeId)` as the platform default. When this section was raised (MONO-368) wms was entered as an explicit deviation rather than changed silently, because it alters who gets 429'd on a live edge. MONO-370 made the decision and aligned it. The guard's `RATELIMIT_IP_ONLY_ALLOWLIST` is now **empty, and should stay that way** — an entry there is a promise that someone wrote down why.
+
+**A degrade rule that is easy to get wrong.** When no usable principal is present (no security context, or a token with no `sub`), fall back to the **IP key**. Do not build `"acct:" + subject` unguarded: a null subject concatenates to the literal key `acct:null`, which merges every such caller into one synthetic shared bucket. In Reactor, `map` cannot express "no identity" — a `map` lambda returning null throws — so use `flatMap` + `Mono.justOrEmpty`. All five reactive gateways carried the unguarded form until TASK-MONO-370.
 
 ## Behaviour
 

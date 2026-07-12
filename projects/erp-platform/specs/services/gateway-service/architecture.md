@@ -187,12 +187,16 @@ boot rather than as the first caller's 401. Disable in tests via
 - `RedisRateLimiter` (token bucket) wrapped by the library's `FailOpenRateLimiter`.
 - Key resolver: `accountKeyResolver` → `rate:erp-platform:<routeId>:acct:<sub>` for
   authenticated traffic, falling back to `rate:erp-platform:<routeId>:<clientIp>`.
-- **Why account-keyed and project-prefixed**: this is the shape scm and fan use and can
-  justify. wms keys by client IP with no namespace and carries **no documented rationale**
-  for it; TASK-MONO-355 descoped that as a decision for a human and it remains open. A new
-  gateway must not propagate an unresolved decision — so it takes the justified shape.
-  (IP-keying also means everyone behind one NAT shares a bucket, while an authenticated
-  abuser rotating IPs is unthrottled per account.)
+- **Why account-keyed and project-prefixed**: an authenticated caller is individually
+  identifiable, and bucketing them by IP throws that away — everyone behind one NAT shares a
+  bucket while an abuser rotating IPs is never throttled per account. The prefix keeps two
+  domains from colliding if they ever share a Redis. This is what
+  `platform/api-gateway-policy.md` § Rate Limiting > Key shape now requires of every gateway.
+  > **Correction (TASK-MONO-370).** This section used to say wms's IP-only keying carried
+  > "no documented rationale". It did: policy L92 declared `(clientIp, routeId)` as the
+  > platform *default* at the time, so wms was the gateway that **conformed**. TASK-MONO-368
+  > raised the rule; TASK-MONO-370 aligned wms. The claim was false when written — it asserted
+  > a fleet convention from a head-count instead of reading the policy.
 - Redis unavailable → **fail open** + `gateway_ratelimit_redis_unavailable_total` + WARN.
   Non-Redis errors **propagate** + `gateway_ratelimit_unexpected_error_total`. Narrowing
   fail-open to Redis-class failures is `TASK-BE-502`; do not widen it back.

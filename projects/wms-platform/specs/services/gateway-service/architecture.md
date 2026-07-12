@@ -40,7 +40,7 @@ Per `platform/api-gateway-policy.md` it MUST:
 - Route every `/api/v1/**` request to the owning service.
 - Validate JWT bearer tokens (OAuth2 Resource Server).
 - Strip client-supplied identity headers and set them from verified claims.
-- Enforce rate limits per `(clientIp, routeId)`.
+- Enforce rate limits per `(account, routeId)` — the JWT `sub`, falling back to client IP when a request carries no security context (TASK-MONO-370).
 - Normalize gateway-level errors to the platform error envelope.
 - Echo/generate `X-Request-Id` and propagate OTel trace context.
 
@@ -89,13 +89,13 @@ com.wms.gateway/
 
 | Path prefix | Target | Auth | Rate Limit |
 |---|---|---|---|
-| `/api/v1/master/**` | `master-service:8081` | required (any authenticated role) | standard (100 rpm/IP) |
-| `/api/v1/inventory/**` | `inventory-service:8083` | required (any authenticated role) | standard (100 rpm/IP) |
-| `/api/v1/inbound/**` | `inbound-service:8082` | required (any authenticated role) | standard (100 rpm/IP) |
-| `/api/v1/outbound/**` | `outbound-service:8080` | required (any authenticated role) | standard (100 rpm/IP) |
-| `/api/v1/admin/**` | `admin-service:8086` | required (`WMS_VIEWER` minimum for read paths; finer authz at downstream) | admin tier (60 rpm/IP, separate key resolver) |
-| `/webhooks/erp/asn` | `inbound-service:8082` | **HMAC-only** (no JWT, no auth filter) | webhook tier (300 rpm/IP, separate key resolver) |
-| `/webhooks/erp/order` | `outbound-service:8080` | **HMAC-only** (no JWT, no auth filter) | webhook tier (300 rpm/IP, separate key resolver) |
+| `/api/v1/master/**` | `master-service:8081` | required (any authenticated role) | standard (100 rps/account) |
+| `/api/v1/inventory/**` | `inventory-service:8083` | required (any authenticated role) | standard (100 rps/account) |
+| `/api/v1/inbound/**` | `inbound-service:8082` | required (any authenticated role) | standard (100 rps/account) |
+| `/api/v1/outbound/**` | `outbound-service:8080` | required (any authenticated role) | standard (100 rps/account) |
+| `/api/v1/admin/**` | `admin-service:8086` | required (`WMS_VIEWER` minimum for read paths; finer authz at downstream) | admin tier (60 rps/account — a lower tier on the same key resolver; the tier lives in the route filter args) |
+| `/webhooks/erp/asn` | `inbound-service:8082` | **HMAC-only** (no JWT, no auth filter) | webhook tier (300 rps/IP — HMAC routes carry no JWT, so IP is the only available key) |
+| `/webhooks/erp/order` | `outbound-service:8080` | **HMAC-only** (no JWT, no auth filter) | webhook tier (300 rps/IP — HMAC routes carry no JWT, so IP is the only available key) |
 | `/actuator/health` | local | none | n/a |
 | `/actuator/info` | local | none | n/a |
 
@@ -112,7 +112,7 @@ per [`specs/contracts/http/admin-service-api.md`](../../contracts/http/admin-ser
 JWT enforcement and header stripping follow the same pattern as
 `/api/v1/master/**`. Differences:
 
-- **Lower rate-limit tier (60 rpm/IP)** — admin endpoints are operator-driven
+- **Lower rate-limit tier (60 rps/account)** — admin endpoints are operator-driven
   with low natural QPS; tightening the bucket reduces blast radius if
   credentials are leaked. Mutating endpoints under `/admin/users`,
   `/admin/roles`, `/admin/assignments`, `/admin/settings` are coarse-guarded
@@ -207,7 +207,7 @@ Per `platform/security-rules.md` and master-service's config:
 ## Rate Limiting
 
 - Library: Spring Cloud Gateway's built-in `RedisRateLimiter` (token bucket).
-- Key resolver: `(clientIp, routeId)`; client IP from `X-Forwarded-For` if a
+- Key resolver: `(account, routeId)` — `rate:wms-platform:<routeId>:acct:<sub>`. Without a security context it degrades to `rate:wms-platform:<routeId>:<clientIp>`; client IP from `X-Forwarded-For` if a
   trusted proxy is in front (trust config documented in `application.yml`).
 - Standard tier: replenish 100/min, burst 200. Values per
   `platform/api-gateway-policy.md` defaults.
