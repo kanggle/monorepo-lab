@@ -8,6 +8,7 @@ import com.example.security.infrastructure.persistence.SuspiciousEventJpaReposit
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.http.RequestMethod;
 import com.github.tomakehurst.wiremock.matching.RequestPatternBuilder;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -30,6 +31,7 @@ import org.testcontainers.utility.DockerImageName;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -146,7 +148,17 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
             kafkaTemplate.send("auth.login.failed", accountId, json);
         }
 
-        // Wait until a SuspiciousEvent with AUTO_LOCK action is persisted for this account.
+        // Wait until a SuspiciousEvent with AUTO_LOCK action is persisted for this account, and
+        // keep the id of the row the wait actually validated (TASK-BE-505). Re-querying after the
+        // wait is what made this test flaky: IssueAutoLockCommandUseCase calls the lock endpoint
+        // BEFORE writing lockRequestResult, so rows exist (result still null/PENDING) while their
+        // lock call has not been issued yet. The burst of 10 events keeps appending such rows, and
+        // a re-query ordered by detectedAt DESC can hand back one of them — a row the wait asserted
+        // nothing about, and whose request WireMock has therefore never seen.
+        //
+        // Pinning the awaited row is what makes this deterministic: lockRequestResult=SUCCESS is
+        // only written after the HTTP call returns, so that row's request is necessarily journaled.
+        AtomicReference<String> validatedEventId = new AtomicReference<>();
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
             List<SuspiciousEventJpaEntity> rows = suspiciousEventJpaRepository
                     .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
@@ -157,21 +169,27 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
             assertThat(row.getActionTaken()).isEqualTo("AUTO_LOCK");
             assertThat(row.getRiskScore()).isGreaterThanOrEqualTo(80);
             assertThat(row.getLockRequestResult()).isEqualTo("SUCCESS");
+            validatedEventId.set(row.getId());
         });
+        String suspiciousEventId = validatedEventId.get();
 
         // WireMock received the lock call with Idempotency-Key header set to the suspicious event id.
-        List<SuspiciousEventJpaEntity> rows = suspiciousEventJpaRepository
-                .findByTenantIdAndAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
-                        Tenants.DEFAULT_TENANT_ID, accountId,
-                        Instant.now().minusSeconds(600), Instant.now().plusSeconds(60));
-        String suspiciousEventId = rows.get(0).getId();
-
-        wireMockServer.verify(
-                RequestPatternBuilder.newRequestPattern(
-                                com.github.tomakehurst.wiremock.http.RequestMethod.POST,
-                                urlEqualTo("/internal/accounts/" + accountId + "/lock"))
-                        .withHeader("Idempotency-Key", equalTo(suspiciousEventId))
-                        .withHeader("Content-Type", equalTo("application/json")));
+        // Awaited, like every other assertion in this test. Asserting on findAll() rather than
+        // verify() keeps a miss an AssertionError, which Awaitility retries; a VerificationException
+        // would not be retried, and its message actively misleads — WireMock computes near-misses
+        // after the match fails, re-reading the journal, so a request that lands in between renders
+        // as "no requests exactly matched" whose nearest miss is byte-identical to what was asked
+        // for. That is the message this test used to fail with.
+        RequestPatternBuilder lockRequest = RequestPatternBuilder.newRequestPattern(
+                        RequestMethod.POST,
+                        urlEqualTo("/internal/accounts/" + accountId + "/lock"))
+                .withHeader("Idempotency-Key", equalTo(suspiciousEventId))
+                .withHeader("Content-Type", equalTo("application/json"));
+        // "at least one" — a retried attempt is a legitimate second request, not a failure.
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() ->
+                assertThat(wireMockServer.findAll(lockRequest))
+                        .as("lock POST with Idempotency-Key=%s", suspiciousEventId)
+                        .isNotEmpty());
 
         // Outbox row for security.auto.lock.triggered event with normalized lockRequestResult=SUCCESS.
         // The burst publishes 10 events → up to 10 auto-lock-triggered outbox rows
