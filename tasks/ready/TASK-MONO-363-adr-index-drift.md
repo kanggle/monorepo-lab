@@ -24,7 +24,7 @@ monorepo
 
 # Dependency Markers
 
-- **발굴 출처**: [`TASK-MONO-362`](TASK-MONO-362-adr-framework-neutral-security-module.md) — `ADR-MONO-049` 를 등재하려다 표가 죽어 있는 걸 발견했다. **049 만 추가하지 않았다**: 38개가 틀린 표에 한 줄 더 얹으면 **표가 최신인 것처럼 보이게** 만드는 것이고, 그게 정확히 이 계열의 결함이다.
+- **발굴 출처**: [`TASK-MONO-364`](TASK-MONO-364-adr-framework-neutral-security-module.md) — `ADR-MONO-049` 를 등재하려다 표가 죽어 있는 걸 발견했다. **049 만 추가하지 않았다**: 38개가 틀린 표에 한 줄 더 얹으면 **표가 최신인 것처럼 보이게** 만드는 것이고, 그게 정확히 이 계열의 결함이다.
 - **같은 계열 (선례 = 가드 형태의 참조 구현)**: `TASK-MONO-345`(service map — `settings.gradle` ↔ `docs/project-overview.md`) · `TASK-MONO-352`(error registry) · `TASK-MONO-360`(gateway 선언 ↔ 모듈 ↔ 노출). **`scripts/check-service-map-drift.sh` 가 거의 그대로 재사용 가능한 형태다** — 디렉터리의 파일 ↔ 표의 행, 양방향.
 
 ---
@@ -112,7 +112,7 @@ monorepo
 
 # Provenance
 
-발굴 2026-07-12 — `TASK-MONO-362`(ADR-MONO-049 저술) 중 049 를 표에 등재하려다 발견. **표가 두 달간 죽어 있었고 아무것도 실패하지 않았다.**
+발굴 2026-07-12 — `TASK-MONO-364`(ADR-MONO-049 저술) 중 049 를 표에 등재하려다 발견. **표가 두 달간 죽어 있었고 아무것도 실패하지 않았다.**
 
 이 저장소가 반복해서 잡아온 결함의 또 한 사례다: **사람이 손으로 유지하는 선언 ↔ 기계가 아는 진실**(`MONO-339` fed-e2e 목록 · `MONO-341` 데모 래퍼 맵 · `MONO-345` service map · `MONO-352` error registry · `MONO-360` gateway 선언). **이번엔 그 대상이 "우리가 무슨 결정을 내렸는가" 의 목록 자체다.**
 
