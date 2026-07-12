@@ -8,7 +8,7 @@ ecommerce 의 "per-tenant" rate limit 은 **인증 트래픽 전체가 공유하
 
 # Status
 
-review
+done
 
 # Owner
 
