@@ -8,7 +8,7 @@ iam 게이트웨이 실사 결과 — **레거시 발급자 일몰이 iam 자기
 
 # Status
 
-ready
+review
 
 # Owner
 

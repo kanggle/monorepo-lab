@@ -27,6 +27,22 @@ backend
 
 ---
 
+# 🔴 선행 의존 (2026-07-12 추가 — `TASK-MONO-365`)
+
+**이 task 는 `iss=iam` 을 발행하는 유일한 경로를 제거한다.** 그런데 **iam 게이트웨이가 그 발급자를 받고 있었다** — 그것도 **단일 값으로**(`expected-issuer: ${JWT_EXPECTED_ISSUER:iam}`, 전 compose 통틀어 오버라이드 0건). 이 task 를 그 상태로 착수했다면 **게이트웨이가 받을 수 있는 발급자가 0 이 되어 엣지가 전면 사망**했을 것이다.
+
+**`TASK-MONO-365` 가 그것을 이미 고쳤다** — iam 게이트웨이는 이제 나머지 6개와 같은 **CSV allowlist**(`allowed-issuers: ${JWT_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:...},iam}`)를 쓴다.
+
+**착수 시 반드시 할 것**:
+
+1. `projects/iam-platform/apps/gateway-service/src/main/resources/application.yml` 의 `allowed-issuers` 기본값에서 **후행 `,iam` 을 제거**한다. **이 task 의 체크리스트에 넣어라** — 안 지우면 폐기된 발급자를 계속 받는다.
+2. `TokenValidatorUnitTest#theEdgeSurvivesTheLegacyIssuerSunset` 가 **이미 그 세계를 단언하고 있다**(레거시 뺀 allowlist 로 SAS 토큰 통과 + 레거시 토큰 거부). 초록이면 엣지는 살아있다.
+3. **`,iam` 은 iam 게이트웨이 하나가 아니라 게이트웨이 6개 전부의 기본값에 있다**(wms · scm · fan · ecommerce · finance · erp). `TASK-BE-390` 은 **ecommerce 하나만** 본다 — `TASK-MONO-365` § F2 의 범위 판단을 확인할 것.
+
+**왜 이 노트가 필요한가**: 날짜 게이트 task 는 **두 달 뒤 컨텍스트 없이 집어들린다.** 이 결함이 아무 데서도 안 터진 이유는 console-bff 가 게이트웨이를 우회하기 때문이고(`TASK-MONO-347`), 그래서 **착수자가 스스로 알아챌 신호가 없다.**
+
+---
+
 # Goal
 
 ADR-001 D2-b(2026-05-01 deprecated, removal ≥2026-08-01) + ADR-006(BE-396 이 `/api/auth/oauth/**` 커스텀-JWT 소셜 플로우를 SAS 브라우저 세션 플로우로 대체)에 따라, **레거시 커스텀-JWT 인증 경로를 제거**한다.
