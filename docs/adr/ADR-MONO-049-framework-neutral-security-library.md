@@ -67,6 +67,29 @@ Its `implementation` dependencies land on a **consumer's runtime classpath**. A 
 
 The classes are framework-neutral; **the module they live in is not.**
 
+### 1.5 ⚠️ Correction (`TASK-MONO-365`) — **`libs/java-security` already exists**
+
+**The first draft of this ADR proposed creating it. It is already there, and this changes § 3 and § 4.**
+
+I found it while auditing the iam gateway (§ D6), whose `TokenValidator` turned out to delegate to `com.example.security.jwt.Rs256JwtVerifier` — **a class in `libs/java-security`**. Verified against `origin/main` `8ffe49793`:
+
+| | |
+|---|---|
+| module | **`libs/java-security`**, registered at `settings.gradle:17` |
+| contents | `Rs256JwtVerifier` / `Rs256JwtSigner` / `JwtVerifier` / `JwksProvider` / `AbacDataScope` · `Argon2idPasswordHasher` · `PiiMaskingUtils` · ABAC conditions · `RedisKeyHelper` |
+| dependencies | **jjwt + password4j. Zero Spring Web, zero WebFlux, zero servlet.** |
+| consumers | **32 `build.gradle` files** — including **all six** finance/erp servlet services that hold the duplicated validators, **and** the wms / scm / fan / iam gateways |
+
+**It is already the framework-neutral security module this ADR was asking for, and every target consumer already depends on it.**
+
+**What this changes:**
+
+- **The neutral pair needs no new module and no new wiring.** `AllowedIssuersValidator` and `TenantClaimValidator` move *into* `libs/java-security`. The 12 consumers already declare it. There is nothing to add to `settings.gradle`, and nothing to wire in 12 `build.gradle` files.
+- **One dependency must be added to `libs/java-security`**: `spring-security-oauth2-jose` (the two classes implement `OAuth2TokenValidator<Jwt>`). That dependency is **neither servlet nor reactive** — but it lands on the runtime classpath of **all 32 consumers**, and that is a real consequence, not a footnote. § D3's V1 must be rewritten to assert what the module must *not* pull in (WebFlux, SCG, `jakarta.servlet`) rather than a blanket "no Spring".
+- **`TenantClaimEnforcer` still cannot go there** — it is `jakarta.servlet`-bound, and `libs/java-security` is consumed by four *reactive* gateways. § D1's second module stands, and § 1.2 fact 1 is why.
+
+**How the first draft got this wrong:** I measured the duplication (§ 1.1–1.3) and never asked whether a home already existed. The three classes I was counting sit *next to* `Rs256JwtVerifier` in the same six services' `build.gradle` files. **The evidence was one `grep` away and I proposed building what was already built.** § 4 has been re-costed accordingly.
+
 ---
 
 ## 2. Alternatives considered
@@ -92,16 +115,20 @@ Superficially the cheapest fix, and the one this monorepo has reached for four t
 
 ## 3. Decision
 
-### D1 — Two modules, because one of the three classes is not neutral
+### D1 — **Join** the existing `libs/java-security`; add **one** module, because one of the three classes is not neutral
 
-| module | contents | depends on | consumed by |
+> **Revised by § 1.5.** The first draft said "create `libs/java-security`". **It already exists**, it is already framework-neutral, and **all twelve target consumers already depend on it.** The neutral pair has a home; only the servlet-bound class needs a new one.
+
+| module | contents | status | consumed by |
 |---|---|---|---|
-| **`libs/java-security`** | `AllowedIssuersValidator`, `TenantClaimValidator` | `spring-security-oauth2-jose` only | `libs/java-gateway` **and** the 6 servlet services |
-| **`libs/java-security-servlet`** | `TenantClaimEnforcer` | `libs/java-security` + `spring-web` + `jakarta.servlet-api` | the 6 servlet services **only** |
+| **`libs/java-security`** *(exists — `settings.gradle:17`)* | **+ `AllowedIssuersValidator`, `TenantClaimValidator`** (moved out of `libs/java-gateway`) | **already wired into 32 `build.gradle` files**, incl. all 6 servlet services and the wms/scm/fan/iam gateways | unchanged |
+| **`libs/java-security-servlet`** *(new)* | `TenantClaimEnforcer` | **the only new module** | the 6 servlet services **only** |
 
-**The rejected shortcut, named so it is not quietly re-attempted:** put all three in one module and mark the servlet dependencies `compileOnly`. That compiles. It also puts a `jakarta.servlet`-bound class on the **reactive gateways'** classpath, where the servlet API does not exist at runtime. It would work — until something scans or reflects over it, and then it fails at boot, in the edge, in production. **A class that only works because nobody has loaded it yet is the failure class this entire line of work has been chasing.** Two modules cost one `settings.gradle` line. Take the line.
+`libs/java-security` gains exactly one dependency: **`spring-security-oauth2-jose`** (the two classes implement `OAuth2TokenValidator<Jwt>`). It is neither servlet nor reactive — but it reaches the runtime classpath of **all 32 consumers**, which § D3 V1 must therefore assert *precisely* (no WebFlux, no SCG, no `jakarta.servlet`) rather than as a blanket "no Spring".
 
-`libs/java-gateway` depends on `java-security` and **never** on `java-security-servlet`. The reactive edge cannot see the servlet filter at all.
+**The rejected shortcut, named so it is not quietly re-attempted:** put all three in `libs/java-security` and mark the servlet dependency `compileOnly`. That compiles. It also puts a `jakarta.servlet`-bound class on the classpath of the **four reactive gateways that already consume this module**, where the servlet API does not exist at runtime. It would work — until something scans or reflects over it, and then it fails at boot, in the edge, in production. **A class that only works because nobody has loaded it yet is the failure class this entire line of work has been chasing.** One new module costs one `settings.gradle` line. Take the line.
+
+`libs/java-gateway` keeps depending on `java-security` and **never** on `java-security-servlet`. The reactive edge cannot see the servlet filter at all.
 
 ### D2 — Every consumer declares `java-security` directly. No `api`, anywhere.
 
@@ -134,17 +161,18 @@ TenantClaimValidator.forTenant("finance")
 
 ### D5 — Migration in four PRs, each leaving `main` green
 
-1. **`libs/java-security`** — move the two neutral classes out of `java-gateway`; `java-gateway` and the 6 gateways consume it. **No servlet service touched.** Behaviour identical; the 6 gateway suites are the proof.
-2. **`libs/java-security-servlet`** — canonical `TenantClaimEnforcer`. No consumer yet.
-3. **finance** (2 services) — delete 6 copies, wire the modules.
-4. **erp** (4 services) — delete 12 copies, wire the modules.
+1. **Move the two neutral classes into the existing `libs/java-security`** (out of `libs/java-gateway`); add `spring-security-oauth2-jose` to that module. `java-gateway` and the 6 gateways already depend on it — **no new wiring.** **No servlet service touched.** Behaviour identical; the 6 gateway suites are the proof.
+2. **`libs/java-security-servlet`** (the one new module) — canonical `TenantClaimEnforcer`. No consumer yet.
+3. **finance** (2 services) — delete 6 copies; the `java-security` dependency is **already there**, so only the servlet module is new wiring.
+4. **erp** (4 services) — delete 12 copies, same shape.
 
 Per-domain tests **stay per-domain**: they pin *that domain's* gate policy, and MONO-355 is the standing evidence that a suite which only records what a gate accepts will not notice when what it refuses changes. What moves into the modules' own suite is the **class-level** contract (malformed `entitled_domains` → fail-closed; absent `tenant_id` → reject; issuer not in the allowlist → reject). **That is what closes § 1.3: all six domains inherit that coverage by construction, including the ten copies that have none today.**
 
 ### D6 — Non-goals
 
 - **Removing the service-level validators.** They are **load-bearing**, not vestigial: `TASK-MONO-361` verified that console-bff still reaches these backends **directly** (`CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: http://finance-account-service:8080`), never crossing the gateway. The gateway fronts only the `finance.local` / `erp.local` hostname. **This ADR de-duplicates the second layer. It does not delete it.**
-- **The iam gateway.** It is the one gateway that does **not** consume `libs/java-gateway`: it hand-rolls `TokenValidator` / `JwksCache` / `TokenBucketRateLimiter` instead of using Spring Security's Resource Server. `ADR-MONO-048` excluded it on **cost** grounds and never approved it on **safety** grounds. That is a separate audit, and it should happen.
+- **The iam gateway — ✅ audited (`TASK-MONO-365`), and the earlier framing here was wrong.** The first draft said it *"hand-rolls `TokenValidator` / `JwksCache` / `TokenBucketRateLimiter`"* and implied a safety gap. **It does not hand-roll the crypto**: its `TokenValidator` delegates to **`libs/java-security`'s `Rs256JwtVerifier`** — the same shared verifier the rest of the platform uses (and the discovery that produced § 1.5). The audit found it **strips spoofed identity headers**, and its strip set (`X-Account-ID` / `X-Device-Id` / `X-Tenant-Id`) **exactly matches what its downstream actually reads** — no forgeable-header gap; the set is narrower because an IdP's downstream vocabulary is narrower, not because it is missing anything. Its tenant legacy-fallback **defaults closed**, and its rate limiter is **Redis + an atomic Lua script** (distributed, not per-instance). **It is not a shared-library gap. It is a different, defensible design** — and this ADR's scope does not include it.
+  **What the audit *did* find is a live issuer defect, and it is `TASK-MONO-365`'s subject, not this ADR's:** the iam gateway pins a **single** `expected-issuer`, defaulting to the **legacy** `iam` — while the other six gateways carry a CSV **allowlist** (SAS issuer **+** legacy). `TASK-BE-398` retires the legacy custom-JWT flow that mints `iss=iam`. **When it lands, iam's own edge accepts nothing.**
 - **wms rate-limit keying** (IP-only, unnamespaced, no recorded rationale — open since MONO-355, awaiting a human).
 
 ---
@@ -170,6 +198,19 @@ And the number that actually matters:
 | security copies with **no test** | **10 of 18** | **0 of 3** |
 
 **The extraction is not marginal, and "keep the copies" would have been the wrong call.** But that conclusion is a *result* here, not a premise — § 2.3 was a live option until § 4 was measured.
+
+### 4.1 Re-costed after § 1.5 — **it is cheaper than the table above says**
+
+The first draft priced in **two new Gradle modules and twelve consumers to wire**. `libs/java-security` **already exists and all twelve already consume it**, so:
+
+| | first draft | actual |
+|---|---|---|
+| new Gradle modules | 2 | **1** (`libs/java-security-servlet`) |
+| `settings.gradle` lines added | 2 | **1** |
+| consumers needing new wiring | 12 | **6** (the servlet services, for the servlet module only) |
+| new dependency on an existing module | — | **1** (`spring-security-oauth2-jose` on `libs/java-security` — reaches **32** consumers' runtime classpath; § D3 V1 asserts what it must *not* bring) |
+
+**The source-deletion numbers above are unchanged.** What shrinks is the build-graph cost — which is the half of the price § 2.3 was weighing.
 
 ---
 
