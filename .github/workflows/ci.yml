@@ -6,8 +6,21 @@ on:
   pull_request:
     branches: [main]
 
+# A `push` to main is the POST-MERGE BASELINE — the only run that can answer
+# "is main green at this commit?". Keying the group on `github.ref` put every
+# main push into ONE group, so the next merge cancelled the run that was still
+# proving the last one. This repo's own task lifecycle made that the norm: an
+# impl PR merges, its integration suites start (~10 min), the close-chore PR
+# merges minutes later, and the impl's run dies. Over 20 main runs, 12
+# integration-job executions were killed mid-flight this way — 8 of the 9 on
+# c4417b432 alone — and `cancelled` is neither success nor failure, so nothing
+# ever reported it (TASK-MONO-374).
+#
+# `github.sha` gives every pushed commit its own group, so no push can cancel
+# another. Pull-request runs keep the ref-keyed group and go on cancelling
+# superseded pushes to the same branch, which is what cancel-in-progress is for.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -196,6 +209,11 @@ jobs:
       # Not AND-ing strictly dominates: it covers both paths, and the cost on a
       # doc-only PR is a few hundred ms of bash.
       jwt-claims: ${{ steps.filter.outputs.jwt-claims }}
+      # TASK-MONO-374. NOT AND-combined with `code-changed`: a workflow file and a
+      # bash guard are not "code" by that filter's definition, and AND-ing would
+      # make this guard unreachable on exactly the edits that break it — the
+      # mistake MONO-360 measured.
+      ci-baseline: ${{ steps.filter.outputs.ci-baseline }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
@@ -334,6 +352,19 @@ jobs:
               - 'projects/iam-platform/apps/auth-service/src/main/**/*.java'
               - 'platform/contracts/jwt-standard-claims.md'
               - 'scripts/check-jwt-claims-registry.sh'
+            # TASK-MONO-374: a `push` run is the post-merge baseline — the only run
+            # that can say "main is green at this commit". A ref-keyed concurrency
+            # group put every main push in ONE group, so each merge cancelled the
+            # run still proving the previous one, and `cancelled` is not `failure`,
+            # so nothing said so. It can only regress two ways, and both are here:
+            # a concurrency block edited under .github/workflows/, and the guard's
+            # own script weakened (the `workflows` filter does not cover scripts/,
+            # so listing it there would leave the guard unable to see its own
+            # removal — TASK-MONO-360's reachability rule).
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            ci-baseline:
+              - '.github/workflows/**'
+              - 'scripts/check-ci-baseline-reachable.sh'
             # TASK-MONO-075: pure-positive enumeration of code-bearing file
             # extensions. `'some'` quantifier behaves intuitively here (no
             # negation → no quirk). markdown-only / docs-only / lifecycle-only
@@ -478,6 +509,41 @@ jobs:
 
       - name: Guard — every ADR is indexed, no phantom rows, Status matches
         run: bash scripts/check-adr-index-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-374 — post-merge baseline reachability.
+  #
+  # A `push` run on main is the only run that can say "main is green at this
+  # commit". Keying the concurrency group on `github.ref` put every main push in
+  # one group, so the next merge cancelled the run still proving the last one —
+  # and this repo's task lifecycle (impl PR, then the close-chore PR minutes
+  # later) made that the norm. Measured over 20 main runs: 12 integration-job
+  # executions killed mid-flight, 8 of 9 on c4417b432 alone. `cancelled` is not
+  # `failure`, so nothing ever reported it. TASK-MONO-359/360's proposition —
+  # A CHECK THAT DOES NOT RUN REPORTS GREEN — applied to the baseline run itself.
+  #
+  # Trigger follows the defect's arrival path (TASK-MONO-360): the two ways this
+  # regresses are a concurrency block edited under `.github/workflows/**` and the
+  # guard's own script weakened — the `ci-baseline` filter matches both. It is NOT
+  # AND-combined with `code-changed`: neither a workflow file nor a bash guard is
+  # "code" by that filter's definition, and AND-ing would make this unreachable on
+  # precisely the edits that break it.
+  # Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  ci-baseline-reachable:
+    name: CI baseline reachable (a merge must not cancel the previous one's run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.ci-baseline == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-ci-baseline-reachable.sh
+
+      - name: Guard — every pushed commit gets its own concurrency group
+        run: bash scripts/check-ci-baseline-reachable.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-371 — JWT standard-claims registry drift guard.
