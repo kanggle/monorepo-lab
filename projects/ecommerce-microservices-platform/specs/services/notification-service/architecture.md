@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `notification-service` |
 | Project | `ecommerce-microservices-platform` |
-| Service Type | `event-consumer` (single — see Service Type Composition below) |
+| Service Type | `event-consumer` (primary) + `rest-api` (in-app inbox / preferences / push-subscription / templates) — dual-type, see Service Type Composition |
 | Architecture Style | **Hexagonal Architecture** (Ports & Adapters) |
 | Domain | ecommerce |
 | Primary language / stack | Java 21, Spring Boot |
@@ -24,11 +24,31 @@ and `platform/architecture-decision-rule.md`.
 
 ### Service Type Composition
 
-`notification-service` is a single-type `event-consumer` service per
-`platform/service-types/INDEX.md`. ecommerce 의 lifecycle 이벤트 소비 후 외부
-채널 (email / SMS / push) 로 발송. Hexagonal 으로 외부 vendor adapter 격리.
+`notification-service` combines two service types in one deployable unit (the same
+documented exception as erp `notification-service`):
+
+- `event-consumer` (**primary**) — ecommerce 의 lifecycle 이벤트 소비 후 외부 채널
+  (email / SMS / push) 로 발송. Hexagonal 으로 외부 vendor adapter 격리. 이것이 핵심
+  워크로드다: 모든 알림은 이벤트에서 시작하며 REST mutation 에서 시작하지 않는다.
+- `rest-api` — the **read/manage** surface over what the consumer produced: three
+  `@RestController`s under `/api/notifications` (in-app inbox), `/api/notifications/me`
+  (preferences, push subscriptions, VAPID key) and `/api/notifications/templates`.
+
+**This file declared `event-consumer` (single) until TASK-MONO-372**, while the repo
+was simultaneously publishing an HTTP contract for the service
+([`specs/contracts/http/notification-api.md`](../../contracts/http/notification-api.md)).
+One hand-maintained surface published an API for a service whose other hand-maintained
+surface said it had none — so `rest-api.md` was never in the loaded rule set for any
+task touching those controllers. `scripts/check-service-type-drift.sh` now compares the
+declaration against the code.
+
+> The Identity table's `Event publication | none (terminal consumer)` row remains true:
+> the service publishes no domain events. It is about *publication*, not about HTTP.
+
 적용되는 규칙:
-[platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md).
+[platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)
+(primary) 와
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
 
 ---
 
