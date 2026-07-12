@@ -381,7 +381,7 @@ Per `TASK-MONO-364` § AC-6 the roadmap lives here, not in `tasks/ready/`. **Tic
 | step | scope | copies | status |
 |---|---|---|---|
 | **D5-1** | move the two neutral validators `java-gateway` → `java-security` (`com.example.security.oauth2`) | 0 | **✅ `TASK-MONO-378`** — 4 dependency lines, 6 gateways' imports, **0 assertions changed**. V1/V2/V4 built and mutation-verified. |
-| **D5-2** | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | **⏳ next — ticket it now that D5-1 has landed** |
+| **D5-2** | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | **`TASK-MONO-382` (ready)** — 🔴 **not the mechanical step it reads as: the 13 copies hold *eight* distinct normalised bodies, and at least one difference is a security boundary** (`fan/membership` skips tenant enforcement on `/internal/**`; its three sibling services do not). Pick a canonical body naively and you either break membership's internal calls or **open `/internal/**` on twelve services**. § 1.6's *"behavioural drift: zero"* was measured on the servlet-vs-gateway *mirroring* axis; **this is a different axis and nobody has looked at it.** |
 | D5-3 | finance — account, ledger | 6 | ⏳ |
 | D5-4 | erp — approval, masterdata, notification, read-model | 12 | ⏳ |
 | D5-5 | scm — procurement (all 3); demand-planning + inventory-visibility (**Enforcer only**) | 5 | ⏳ |
