@@ -62,6 +62,15 @@ services:
       # the EXCHANGED operator token (NOT the GAP OIDC token).
       CONSOLE_REGISTRY_URL: ${CONSOLE_REGISTRY_URL:-http://iam.local/api/admin/console/registry}
       REGISTRY_TIMEOUT_MS: ${REGISTRY_TIMEOUT_MS:-5000}
+      # console-bff is reached on the DOCKER NETWORK, never through the Traefik
+      # edge (TASK-MONO-362). Both containers sit on traefik-net, so Docker's
+      # embedded DNS resolves the service name. The BFF holds no Traefik router:
+      # being ON the network is not the same as being exposed BY it — exposure
+      # comes from the router labels, and it has none.
+      #
+      # Same value the federation-hardening-e2e stack has always used; this
+      # aligns the thin `pnpm console:up` stack with the one CI actually runs.
+      CONSOLE_BFF_URL: ${CONSOLE_BFF_URL:-http://console-bff:8080}
       # GAP admin-service RFC 8693 operator-token exchange — AUTHORITATIVE
       # producer path (TASK-BE-298 / admin-api.md / ADR-MONO-014): POST
       # /api/admin/auth/token-exchange on the same /api/admin/** operator-auth
@@ -79,23 +88,6 @@ services:
     networks:
       - traefik-net
     healthcheck:
-      # 127.0.0.1, NOT localhost. (TASK-MONO-358)
-      #
-      # `HOSTNAME: "0.0.0.0"` above makes Next bind **IPv4 only** — `node server.js` hands
-      # the hostname straight to `server.listen`, and 0.0.0.0 is an IPv4 address. Alpine's
-      # /etc/hosts maps `localhost` to BOTH 127.0.0.1 and ::1, and **busybox wget picks ::1
-      # and does not fall back to IPv4**. The probe got `Connection refused` while the app
-      # was perfectly healthy: measured inside the container,
-      #   wget http://127.0.0.1:3000/api/health -> {"status":"ok"}
-      #   wget http://localhost:3000/api/health -> Connection refused
-      # (curl *does* fall back, which is why console-bff's curl probe was green right next
-      # to this one. web-store already probes an IPv4 literal — someone hit this before and
-      # fixed one of the two without writing down why.)
-      #
-      # The blast radius was out of all proportion to the typo: **Traefik silently skips
-      # containers that are not `healthy`** (debug-level log, no error anywhere), so the
-      # console had no route at all in the integrated demo. A wrong loopback address made
-      # the entire console invisible.
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
       interval: 30s
       timeout: 5s
@@ -105,11 +97,25 @@ services:
   # ---------------------------------------------------------------------------
   # console-bff — Spring Boot Hexagonal BFF (TASK-PC-BE-001).
   #
-  # Internal-only (console-web server-side calls only — browser never reaches
-  # this hostname directly). Traefik routes console-bff.local → this container.
-  # NO CORS labels (architecture.md § Edge Routing + AC-11 internal-only).
-  # expose: only — no host-port publish (Local Network Convention ADR-MONO-001).
+  # INTERNAL-ONLY, and now actually wired that way (TASK-MONO-362).
   #
+  # It used to hold a Traefik router (`Host(console-bff.local)`) while the comment
+  # right here said "internal-only — the browser never reaches this hostname".
+  # Both cannot be true: a router on the shared edge means anyone who can send
+  # `Host: console-bff.local` reaches the BFF. "Internal-only" was a comment, not a
+  # constraint — and it made this the only BACKEND service in the monorepo holding
+  # an edge router, which is precisely what api-gateway-policy.md L14 forbids
+  # ("No backend service may be directly exposed to external traffic").
+  #
+  # The router is gone. console-web calls it on the docker network instead
+  # (CONSOLE_BFF_URL=http://console-bff:8080) — the wiring the federation-hardening
+  # e2e stack, the one CI actually runs, has always used.
+  #
+  # It STAYS on traefik-net: that is the network it shares with console-web, and
+  # network membership is not exposure. Exposure comes from the router labels.
+  # Traefik cannot route to a container it has no route for.
+  #
+  # expose: only — no host-port publish (Local Network Convention ADR-MONO-001).
   # Per-domain credential dispatch is request-scoped (stateless, no DB/Redis).
   # GAP issuer URL is passed via CONSOLE_BFF_IAM_ISSUER_URL (JWKS discovery).
   # ---------------------------------------------------------------------------
@@ -126,14 +132,10 @@ services:
       SERVER_PORT: "8080"
       # GAP OIDC issuer for RS256 JWKS validation of inbound bearer tokens.
       CONSOLE_BFF_IAM_ISSUER_URL: ${CONSOLE_BFF_IAM_ISSUER_URL:-http://iam.local}
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.console-bff.rule=Host(`console-bff.${DEMO_DOMAIN:-local}`)"
-      - "traefik.http.routers.console-bff.entrypoints=web"
-      - "traefik.http.services.console-bff.loadbalancer.server.port=8080"
-      # NOTE: CORS NOT enabled — internal-only; only console-web server-side
-      # calls reach this hostname (architecture.md § Edge Routing).
+    # No Traefik labels — deliberately unroutable from the edge (TASK-MONO-362).
+    # Do not re-add them: `scripts/check-gateway-drift.sh` (I2) will fail, which is
+    # the point. A backend service reachable at the edge without a gateway has no
+    # rate limiting, no identity-header strip→enrich, and no uniform error envelope.
     networks:
       - traefik-net
     healthcheck:

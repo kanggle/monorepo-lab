@@ -1,6 +1,6 @@
 package com.example.gateway.integration;
 
-import com.example.gateway.ratelimit.FailOpenRateLimiter;
+import com.example.apigateway.ratelimit.FailOpenRateLimiter;
 import com.example.gateway.testsupport.JwksMockServer;
 import com.example.gateway.testsupport.JwtTestHelper;
 import com.redis.testcontainers.RedisContainer;

@@ -371,19 +371,48 @@ class OAuthLoginIntegrationTest extends AbstractIntegrationTest {
     // ----------------------------------------------------------------------
 
     @Test
-    @DisplayName("State missing from Redis → 401 INVALID_STATE")
+    @DisplayName("State missing from Redis → 400 INVALID_STATE (TASK-MONO-350: a forged/expired callback is a bad request, not a failed login)")
     void stateExpired() throws Exception {
         String state = performAuthorize("google");
         // Simulate expiry by deleting the Redis key
         redisTemplate.delete("oauth:state:" + state);
 
         performCallback("google", "auth-code", state)
-                .andExpect(status().isUnauthorized())
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_STATE"));
     }
 
+    /**
+     * TASK-MONO-350. The provider answers the token call with {@code 400 invalid_grant} —
+     * the authorization code was expired, already redeemed (they are single-use), or forged.
+     *
+     * <p>This used to be flattened into {@code 502 PROVIDER_ERROR} along with every other
+     * failure, so a user merely re-opening a stale callback URL was reported as an upstream
+     * outage: 5xx-keyed alerting paged an operator for a user's mistake, and retry-on-5xx
+     * clients replayed a single-use code that could never succeed. The contract has promised
+     * {@code 401 INVALID_CODE} all along; nothing emitted it.
+     *
+     * <p>Read together with {@link #microsoftProvider5xx}: these two tests are the whole
+     * point. Same endpoint, same adapter — the <b>only</b> difference is the provider's status
+     * class, and the two now diverge (4xx → 401, 5xx → 502) instead of collapsing into one.
+     */
     @Test
-    @DisplayName("Microsoft token endpoint 5xx → 502 PROVIDER_ERROR")
+    @DisplayName("Microsoft token endpoint 4xx (invalid_grant) → 401 INVALID_CODE, not 502")
+    void microsoftRejectsAuthorizationCode() throws Exception {
+        String state = performAuthorize("microsoft");
+
+        wireMock.stubFor(WireMock.post(urlEqualTo("/microsoft/token"))
+                .willReturn(aResponse().withStatus(400)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"error\":\"invalid_grant\",\"error_description\":\"code expired\"}")));
+
+        performCallback("microsoft", "stale-auth-code", state)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CODE"));
+    }
+
+    @Test
+    @DisplayName("Microsoft token endpoint 5xx → 502 PROVIDER_ERROR (a real outage stays a real outage)")
     void microsoftProvider5xx() throws Exception {
         String state = performAuthorize("microsoft");
 

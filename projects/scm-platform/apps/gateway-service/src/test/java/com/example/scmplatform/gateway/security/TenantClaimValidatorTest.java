@@ -1,5 +1,8 @@
 package com.example.scmplatform.gateway.security;
 
+import com.example.apigateway.security.TenantClaimValidator;
+import com.example.scmplatform.gateway.config.OAuth2ResourceServerConfig;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
@@ -12,7 +15,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("TenantClaimValidator 단위 테스트 (scm-platform gateway)")
 class TenantClaimValidatorTest {
 
-    private final TenantClaimValidator validator = new TenantClaimValidator("scm");
+    // Built from the production wiring, not hand-constructed: change the gate in
+    // OAuth2ResourceServerConfig#tenantGate and these assertions go red (TASK-MONO-355).
+    private final TenantClaimValidator validator = new OAuth2ResourceServerConfig(
+            "http://iam.local/oauth2/jwks", "http://iam.local,iam", "scm").tenantGate();
 
     private static Jwt jwtWithClaim(String name, Object value) {
         return Jwt.withTokenValue("token")

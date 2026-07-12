@@ -31,6 +31,27 @@ taxonomy_version: 0.1
 - **integration-heavy**: PG(결제), 택배 트래킹, 알림 채널(SMS/Email/Push), 소셜 로그인, 검색 엔진 등 외부 시스템 연동 다수. Circuit breaker, retry, DLQ, idempotent side-effect 패턴이 반복 적용. [apps/notification-service/](apps/notification-service/), [apps/shipping-service/](apps/shipping-service/)
 - **multi-tenant**: ecommerce 를 멀티벤더 마켓플레이스 SaaS 로 승격하는 **바깥(tenant) 축** ([ADR-MONO-030](../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md) Step 2). row-level `tenant_id` + 3-layer 격리(gateway entitlement-trust → `X-Tenant-Id` 컨텍스트 → persistence `WHERE tenant_id`) + M3 404 + M5 이벤트 봉투 전파. **product-service + order-service(Step 2 M1) + user-service(V4) + promotion-service(V6) + shipping-service(V7) + notification-service(V5) 에 적용 완료**; 나머지 6개 서비스는 named migration backlog (아래 Out of Scope "in-migration"). default-tenant 시드로 net-zero(D8). SoT = [specs/features/multi-tenancy-and-marketplace.md](specs/features/multi-tenancy-and-marketplace.md) §2, [rules/traits/multi-tenant.md](../../rules/traits/multi-tenant.md). [apps/product-service/](apps/product-service/), [apps/order-service/](apps/order-service/)
 
+## Service Map
+
+12 backend (`settings.gradle` 의 `projects:ecommerce-microservices-platform:apps:*`) + 1 frontend. `Service Type` 은 각 서비스의 `specs/services/<service>/architecture.md` 선언을 그대로 옮긴 것이다(그쪽이 권위 — 미선언 시 HARDSTOP-10).
+
+| Service | Service Type | 역할 |
+|---|---|---|
+| `gateway-service` | `rest-api` | 엣지 라우팅, IAM RS256 JWT 검증 (OAuth2 Resource Server), 신원 헤더 strip→enrich, rate limit, CORS, 통일 에러 envelope. `libs/java-gateway` 소비 (ADR-MONO-048) |
+| `user-service` | `rest-api + event-consumer` | 회원 프로필·주소·위시리스트. 자체 인증은 없음 (IAM OIDC 로 대체) |
+| `product-service` | `rest-api` | 상품·카탈로그·재고. wms `inventory.{received,adjusted}` 구독으로 창고 재고 반영 (ADR-MONO-022 §D4) |
+| `search-service` | `rest-api + event-consumer` | Elasticsearch 색인·검색 |
+| `order-service` | `rest-api + event-consumer` | 주문 saga. 결제·배송·프로모션 오케스트레이션 |
+| `payment-service` | `rest-api + event-consumer` | PG 연동, 결제·환불 |
+| `promotion-service` | `rest-api + event-consumer` | 쿠폰·프로모션·할인 정책 |
+| `settlement-service` | `event-consumer + rest-api` | 마켓플레이스 셀러 정산/수수료. terminal consumer (no outbox) — ADR-MONO-030 Step 4b |
+| `shipping-service` | `rest-api + event-consumer` | 배송·택배 트래킹. wms 풀필먼트 루프의 ecommerce 측 ACL (ADR-MONO-022) |
+| `notification-service` | `event-consumer` | SMS/Email/Push 발송 |
+| `review-service` | `rest-api` | 상품 리뷰·평점 |
+| `batch-worker` | `batch-job` | 비동기 배치 |
+| `web-store` | `frontend-app` | Next.js 15 스토어프런트. 운영자 UI 는 platform-console 로 흡수됨 (ADR-MONO-031 Phase 6) |
+| ~~`auth-service`~~ | ~~`rest-api`~~ | **RETIRED** (TASK-BE-132) — `settings.gradle` include 제외, IAM OIDC 로 대체. 소스는 이력 보존 목적으로 `apps/auth-service/` 에 잔존 |
+
 ## Out of Scope (의도적 제외)
 
 명시적으로 선언하지 않은 분류:

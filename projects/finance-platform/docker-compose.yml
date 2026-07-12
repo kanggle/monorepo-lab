@@ -33,58 +33,75 @@
 
 services:
   # ---------------------------------------------------------------------------
-  # gateway-service — activated by a follow-up task.
-  # Edge router, OIDC token validation (GAP RS256 JWT), tenant gate
-  # (tenant_id=finance only), rate limit.
+  # gateway-service — activated by TASK-MONO-357 (ADR-MONO-048 D7 step 4).
+  #
+  # This block sat commented out with the note "activated by a follow-up task"
+  # because standing a gateway up meant hand-copying ~15 classes. libs/java-gateway
+  # removed that cost; the gateway's own code is now 4 classes.
+  #
+  # It TAKES OVER `finance.local` from account-service. Until now Traefik routed the
+  # hostname straight at the backend — a reverse proxy with no JWT validation, no
+  # identity-header strip and no rate limit — which is exactly what
+  # platform/api-gateway-policy.md L13/L14 forbid ("All external traffic MUST pass
+  # through the gateway" / "No backend service may be directly exposed"). The backends
+  # below now carry no Traefik labels and are `expose:`-only, per TEMPLATE.md
+  # § Local Network Convention.
   # ---------------------------------------------------------------------------
-  # gateway-service:
-  #   image: finance-platform/gateway-service:local
-  #   container_name: finance-platform-gateway
-  #   build:
-  #     context: ./apps/gateway-service
-  #     dockerfile: Dockerfile
-  #   restart: unless-stopped
-  #   expose:
-  #     - "8080"
-  #   environment:
-  #     SERVER_PORT: "8080"
-  #     SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-  #     OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
-  #     JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
-  #     OIDC_REQUIRED_TENANT_ID: finance
-  #     OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-finance-platform-internal-services-client}
-  #     OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-finance-dev}
-  #     REDIS_HOST: redis
-  #     REDIS_PORT: "6379"
-  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-  #     CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://finance.local}
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #     mysql:
-  #       condition: service_healthy
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=traefik-net"
-  #     - "traefik.http.routers.finance-platform.rule=Host(`finance.${DEMO_DOMAIN:-local}`)"
-  #     - "traefik.http.routers.finance-platform.entrypoints=web"
-  #     - "traefik.http.services.finance-platform.loadbalancer.server.port=8080"
-  #   networks:
-  #     - finance-platform-net
-  #     - traefik-net
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
-  #     interval: 30s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 30s
+  gateway-service:
+    image: finance-platform/gateway-service:local
+    container_name: finance-platform-gateway
+    build:
+      context: ./apps/gateway-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
+      JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
+      OIDC_REQUIRED_TENANT_ID: finance
+      ACCOUNT_SERVICE_URI: http://account-service:8080
+      LEDGER_SERVICE_URI: http://ledger-service:8080
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://finance.local}
+    depends_on:
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.finance-platform.rule=Host(`finance.${DEMO_DOMAIN:-local}`)"
+      - "traefik.http.routers.finance-platform.entrypoints=web"
+      - "traefik.http.services.finance-platform.loadbalancer.server.port=8080"
+    networks:
+      - finance-platform-net
+      - traefik-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "3"
 
   # ---------------------------------------------------------------------------
   # account-service — activated by TASK-FIN-BE-001. Account lifecycle: KYC,
   # available/ledger balance, hold/release/capture, account state machine,
-  # idempotent fund movement, immutable audit_log. gateway-service is v1-
-  # deferred (architecture.md § Identity), so Traefik routes finance.local
-  # directly to account-service until the gateway lands.
+  # idempotent fund movement, immutable audit_log.
+  #
+  # TASK-MONO-357: the gateway landed, so this service no longer registers a Traefik
+  # hostname. It is `expose:`-only and reachable solely from inside the compose network
+  # — via the gateway, which validates the JWT and strips client-supplied identity
+  # headers before forwarding. Re-adding a Traefik label here would put the backend
+  # back on the public hostname and bypass the edge (api-gateway-policy.md L14).
   # ---------------------------------------------------------------------------
   account-service:
     image: finance-platform/account-service:local
@@ -112,15 +129,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.finance-platform.rule=Host(`finance.${DEMO_DOMAIN:-local}`)"
-      - "traefik.http.routers.finance-platform.entrypoints=web"
-      - "traefik.http.services.finance-platform.loadbalancer.server.port=8080"
+    # No Traefik labels: reachable only through gateway-service (TASK-MONO-357).
     networks:
       - finance-platform-net
-      - traefik-net
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
@@ -134,7 +145,11 @@ services:
   # (finance.transaction.{completed,reversed}.v1) and posts balanced journal
   # entries per the Posting Policy, then serves a read-only ledger REST API.
   # Terminal consumer (no outbox). Own schema finance_ledger_db (separate from
-  # account-service's finance_db). Reached via http://ledger.local/.
+  # account-service's finance_db).
+  #
+  # TASK-MONO-357: was reachable at http://ledger.local/ — a backend service on its own
+  # public hostname, with no edge in front of it. It is now `expose:`-only and served
+  # through the gateway at http://finance.local/api/finance/ledger/**.
   # ---------------------------------------------------------------------------
   ledger-service:
     image: finance-platform/ledger-service:local
@@ -159,15 +174,9 @@ services:
     depends_on:
       ledger-mysql:
         condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.finance-platform-ledger.rule=Host(`ledger.${DEMO_DOMAIN:-local}`)"
-      - "traefik.http.routers.finance-platform-ledger.entrypoints=web"
-      - "traefik.http.services.finance-platform-ledger.loadbalancer.server.port=8080"
+    # No Traefik labels: reachable only through gateway-service (TASK-MONO-357).
     networks:
       - finance-platform-net
-      - traefik-net
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
       interval: 30s

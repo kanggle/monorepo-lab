@@ -1,5 +1,8 @@
 package com.example.gateway.filter;
 
+import com.example.apigateway.filter.IdentityHeaderStripFilter;
+import com.example.gateway.config.GatewayIdentityConfig;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
@@ -15,7 +18,46 @@ import reactor.core.publisher.Mono;
 
 class IdentityHeaderStripFilterTest {
 
-    private final IdentityHeaderStripFilter filter = new IdentityHeaderStripFilter();
+    // The bean this gateway actually registers — remove a header from GatewayIdentityConfig
+    // and these assertions go red (TASK-MONO-356).
+    private final IdentityHeaderStripFilter filter =
+            new GatewayIdentityConfig().identityHeaderStripFilter();
+
+    /**
+     * {@code X-Seller-Scope} is the seller data-scope axis (ADR-MONO-030 Step 3 § 3.3). Three
+     * services — order, product, settlement — read it <em>from the inbound request</em> in a
+     * {@code SellerScopeContextFilter} and hand it to their repositories as
+     * {@code AND EXISTS(... seller_id = :sellerScope)}. That filter's javadoc calls it "the
+     * gateway-injected header" and says "the gateway only forwards this header on the OPERATOR
+     * plane". Until TASK-MONO-356, <strong>neither was true</strong>: this gateway neither
+     * stripped nor injected it, and it routes {@code /api/admin/orders/**},
+     * {@code /api/admin/products/**} and {@code /api/admin/settlements/**} — so a client-supplied
+     * value reached those filters intact.
+     *
+     * <p>It was not exploitable, by luck of sequencing: the confinement it feeds is inert
+     * (nothing produces the header yet — the claim plumbing is ADR-MONO-030 Step 4), and while
+     * inert, an absent header means "unrestricted" (the documented net-zero / fail-OPEN invariant
+     * of ADR-MONO-025), so forging it can only narrow one's own view.
+     *
+     * <p><strong>The day Step 4 injects it, the hole opens</strong> — a seller confined to their
+     * own {@code seller_id} could send their own value and, with nothing stripping it, escape
+     * into the full-tenant view. This assertion is what stops the activation from shipping the
+     * hole with it.
+     */
+    @Test
+    void stripsTheSellerScopeHeaderThatThreeServicesTrustFromTheRequest() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/admin/orders")
+                .header("X-Seller-Scope", "*")
+                .header("X-Tenant-Id", "victim-tenant")
+                .build();
+        CapturingChain chain = new CapturingChain();
+
+        filter.filter(MockServerWebExchange.from(request), chain).block();
+
+        assertThat(chain.captured.getRequest().getHeaders().getFirst("X-Seller-Scope"))
+                .as("a client may not choose its own seller data-scope")
+                .isNull();
+    }
 
     @Test
     void stripsAllIdentityHeaders() {

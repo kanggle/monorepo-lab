@@ -24,6 +24,14 @@ name: Nightly E2E (full-stack web-store + 5 backend full suites + cross-project 
 # Total 11 backend full unit + ecommerce frontend-e2e-fullstack. All jobs
 # run in parallel — backend jobs do NOT depend on ecommerce-boot-jars-nightly.
 #
+# Plus one non-e2e guard job:
+#
+#   7. demo-image-liveness (TASK-MONO-359) — every image referenced by a demo
+#      compose file still resolves in its registry. It lives here, rather than in
+#      ci.yml, because it needs a TIME trigger: an upstream image deletion arrives
+#      with no diff at all, so no paths-filtered job can ever reach it. Cheap
+#      (renders + manifest lookups; nothing boots).
+#
 # Backend full jobs were introduced by ADR-MONO-011 (PROPOSED 2026-05-13,
 # PR #434 → ACCEPTED via TASK-MONO-079 impl PR) — Phase 3 of the e2e 3단계
 # 전략 (skip / light / full). Phase 1 = path-filter (TASK-MONO-074/075).
@@ -68,6 +76,58 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-359 — time trigger for the compose image-liveness guard.
+  #
+  # TASK-MONO-353 added guard (h) to infra/demo/verify-demo-wrapper.sh: every
+  # registry image a compose file references must still resolve. Its own rationale
+  # states the defect's nature precisely:
+  #
+  #   "이 결함의 성질이 중요하다: 우리 커밋과 무관하게 외부에서 깨진다. 따라서
+  #    어떤 diff-기반 검사로도 잡히지 않는다."   (verify-demo-wrapper.sh:189-190)
+  #
+  # But the only job that ran it — ci.yml `demo-wrapper-smoke` — is gated on a
+  # paths-filter (infra/demo/**, infra/traefik/**, projects/*/docker-compose.yml)
+  # AND-ed with `code-changed`. It fires only when OUR diff touches a compose file.
+  # An upstream deletion produces no diff at all, so the guard could never fire for
+  # the very defect it was built for: bitnami/kafka:3.7 would rot a second time,
+  # with CI green, exactly as it did the first time.
+  #
+  # A guard against a diff-less defect needs a TIME trigger, not a path trigger.
+  # This job is that trigger. It is cheap — `docker compose config` renders plus one
+  # `docker manifest inspect` per distinct image. Nothing boots (no --live; the live
+  # coexistence proof stays in ci.yml where a compose diff justifies paying for it).
+  #
+  # Why nightly's existing jobs do NOT already cover this: they are Testcontainers-
+  # based and never execute projects/*/docker-compose.yml at all. That is the root
+  # reason MONO-353 sat undetected for so long.
+  # ---------------------------------------------------------------------------
+  demo-image-liveness:
+    name: Demo compose image liveness (registry images still resolve)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.repository == 'kanggle/monorepo-lab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Static mode (no --live): guards (a)-(e), (g) and (h). Guard (h) is the one
+      # that needs the clock.
+      #
+      # --require-coverage matters here and NOWHERE else. A rate-limited manifest
+      # lookup is counted as a skip and never failed — that tolerance is right, and
+      # deliberately kept, because a guard that flakes on Docker Hub's anonymous
+      # limit is a guard someone eventually switches off. But the tolerance has a
+      # sharp edge: if EVERY lookup is skipped, guard (h) verifies nothing and still
+      # exits 0. On a PR that is the correct trade (an external rate limit must not
+      # block a merge). On a scheduled run it is the opposite of correct — it would
+      # report "all clear" every night while looking at nothing, which is precisely
+      # the false assurance this job exists to abolish. So the clocked caller, and
+      # only the clocked caller, demands that the run actually verified something.
+      - name: Guard — every compose-referenced image still exists in its registry
+        run: bash infra/demo/verify-demo-wrapper.sh --require-coverage
+
   # Build all ecommerce backend boot jars needed for docker compose.
   # Separated from the e2e job so the jar-build step appears clearly in the
   # Actions UI and the artifact is available for re-use / debugging.
@@ -81,14 +141,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       # ⚠️ ADDING AN ECOMMERCE SERVICE? Update ALL of the following in lockstep,
       # or the nightly goes RED (ci.yml passing is NOT sufficient — these are
@@ -173,17 +227,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - name: Set up Node 20 + pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          version: '9.15.0'
-
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: projects/ecommerce-microservices-platform/pnpm-lock.yaml
+          cache-dependency-path: |
+            projects/ecommerce-microservices-platform/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -352,11 +400,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
+      # TASK-MONO-330: this was the one JVM block that set up the JDK but NOT
+      # gradle/actions/setup-gradle — although the very next step runs ./gradlew.
+      # Adopting the composite therefore ADDS setup-gradle here (Gradle dependency
+      # + build cache). That is a deliberate superset, not a byte-equivalent swap:
+      # it is the shape every other JVM job in this repo already has.
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       # Build the GAP auth-service bootJar (the iam-e2e Dockerfile COPYs it).
       # The monorepo has a single root gradlew (no projects/iam-platform/gradlew),
@@ -371,17 +421,11 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: echo "127.0.0.1 auth-service" | sudo tee -a /etc/hosts
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - name: Set up Node 20 + pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          version: '9.15.0'
-
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: projects/ecommerce-microservices-platform/pnpm-lock.yaml
+          cache-dependency-path: |
+            projects/ecommerce-microservices-platform/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -576,14 +620,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build iam boot jars
         # 5 services = docker-compose.e2e.yml `build:` directive service set
@@ -645,14 +683,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build ecommerce order + shipping boot jars
         run: >-
@@ -733,14 +765,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build platform-console e2e boot jars
         # 5 boot jars — IAM auth/account/admin + finance account + console-bff.
@@ -779,15 +805,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      # TASK-MONO-330: this block had no pnpm cache at all. That was an oversight,
+      # not a deliberate variant — federation-hardening-e2e.yml runs the identical
+      # console-web `pnpm install --frozen-lockfile` and DOES cache it, keyed on
+      # exactly this lockfile. Adopting the composite adds the cache; the frozen
+      # lockfile guarantees the resolved dependency set is byte-identical.
+      - name: Set up Node 20 + pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          version: '9.15.0'
-
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+          cache-dependency-path: |
+            projects/platform-console/apps/console-web/pnpm-lock.yaml
 
       - name: Install console-web dependencies
         working-directory: projects/platform-console/apps/console-web

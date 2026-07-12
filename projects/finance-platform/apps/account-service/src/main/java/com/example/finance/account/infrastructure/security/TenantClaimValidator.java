@@ -10,7 +10,7 @@ import java.util.Objects;
 
 /**
  * Service-level fail-closed re-validation of {@code tenant_id} (architecture.md
- * § Multi-tenancy). Even if a request bypasses the (v1-deferred) gateway, this
+ * § Multi-tenancy). Even if a request bypasses the gateway, this
  * validator rejects cross-tenant traffic at JWT decode time.
  *
  * <p>The gate is <strong>entitlement-trust dual-accept</strong>

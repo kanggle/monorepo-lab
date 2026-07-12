@@ -27,8 +27,16 @@
 # jq 는 쓰지 않는다(러너 외 환경 호환) — `docker compose config` YAML 을 grep/awk 로 판다.
 #
 # 사용법:
-#   bash infra/demo/verify-demo-wrapper.sh          # 정적 (a)~(e),(g)
-#   bash infra/demo/verify-demo-wrapper.sh --live   # + (f) 실기동 증명
+#   bash infra/demo/verify-demo-wrapper.sh                     # 정적 (a)~(e),(g),(h)
+#   bash infra/demo/verify-demo-wrapper.sh --live              # + (f) 실기동 증명
+#   bash infra/demo/verify-demo-wrapper.sh --require-coverage  # + (h) 무신호 실행을 FAIL
+#
+# --require-coverage (TASK-MONO-359): 가드 (h) 가 **한 건도 확인하지 못한 실행**을
+# 합격으로 처리하지 않는다. 레지스트리 레이트리밋에 걸리면 (h) 는 전 이미지를 skip 하고
+# 그대로 통과하는데(아래 설계 근거 참조), 그건 PR 에서는 옳지만 **스케줄 실행에서는
+# "무신호"를 "이상 없음"으로 보고하는 것**이다. 시계가 달린 잡(nightly)만 이 플래그를
+# 켜서 커버리지 0 을 FAIL 로 만든다. PR 잡은 켜지 않는다 — 외부 레이트리밋이 머지를
+# 막아서는 안 된다.
 # =============================================================================
 set -euo pipefail
 
@@ -40,7 +48,14 @@ source "$HERE/projects.sh"
 set -a; source "$HERE/demo.env"; set +a
 
 LIVE=0
-[ "${1:-}" = "--live" ] && LIVE=1
+REQUIRE_COVERAGE=0
+for arg in "$@"; do
+  case "$arg" in
+    --live)             LIVE=1 ;;
+    --require-coverage) REQUIRE_COVERAGE=1 ;;
+    *) echo "알 수 없는 플래그: $arg (사용법은 파일 상단 참조)" >&2; exit 2 ;;
+  esac
+done
 
 fail() { echo "  FAIL: $*" >&2; exit 1; }
 ok()   { echo "  ok: $*"; }
@@ -235,10 +250,33 @@ done < <(all_images)
   $'\n'"   환경(새 개발자 머신, 데모 AMI, 캐시 미스 CI)에서 기동이 실패합니다."\
   $'\n'"→ 살아있는 대체 이미지로 교체하세요 (TASK-MONO-353: bitnami/kafka → apache/kafka)."
 
-ok "이미지 ${img_ok}개 확인됨"
+ok "이미지 실재 검증 커버리지 ${img_ok}/$((img_ok + img_skip)) (skip ${img_skip}건)"
 if [ "$img_skip" -gt 0 ]; then
-  echo "  ⚠ ${img_skip}개는 확인하지 못했습니다(레지스트리 사정 — 결함 아님):" >&2
+  echo "  ⚠ ${img_skip}개는 확인하지 못했습니다(레지스트리 사정 — 결함 아님)." >&2
+  echo "     skip 은 '이 이미지는 멀쩡하다'가 아니라 **'모른다'** 입니다 — 그만큼 커버리지가 빈 것입니다." >&2
   printf '%s' "$img_skip_list" >&2
+fi
+
+# --- 커버리지 단언 (TASK-MONO-359) ------------------------------------------
+# 위 skip 설계는 옳다: 레이트리밋을 FAIL 로 바꾸면 가드가 flaky 해지고, flaky 한
+# 가드는 결국 꺼진다. 그러나 그 관용에는 대가가 있다 — **전부 skip 되면 (h) 는
+# 아무것도 확인하지 않고 통과한다.** 로컬에서 실제로 그렇게 됐다(익명 pull 한도
+# 소진 → 전 이미지 `toomanyrequests` → img_ok=0, 그런데도 PASS).
+#
+# PR 잡에서는 그 관용이 맞다(외부 레이트리밋이 머지를 막으면 안 된다). 하지만
+# **시계가 달린 잡에서 무신호를 초록으로 보고하는 것은 이 가드의 존재 이유를
+# 정면으로 배신한다** — 매일 밤 아무것도 안 보고 등대를 켜는 셈이다.
+# 그래서 커버리지 요구는 호출자가 켠다: nightly 만 --require-coverage 를 쓴다.
+#
+# 개별 이미지의 판정(확정 부재만 FAIL, 나머지는 skip)은 **바꾸지 않았다**.
+# 이건 그 위에 얹은 '이번 실행이 무언가를 보긴 했는가' 단언이다.
+if [ "$REQUIRE_COVERAGE" -eq 1 ] && [ "$img_ok" -eq 0 ]; then
+  fail "이미지 실재 검증 커버리지가 0 입니다 — 이 실행은 단 한 건도 확인하지 못했습니다."\
+    $'\n'"→ 이미지의 결함이 아닙니다. 이 실행이 **아무 신호도 만들지 못했다**는 뜻입니다"\
+    $'\n'"   (skip ${img_skip}건 — 대개 레지스트리 익명 pull 레이트리밋)."\
+    $'\n'"→ 무신호를 초록으로 보고하면 가드가 있으나 마나이므로, 시계가 달린 실행"\
+    $'\n'"   (--require-coverage)에서는 이를 실패로 취급합니다."\
+    $'\n'"→ 반복되면 docker/login-action 으로 인증 pull(한도 상향)을 붙이세요."
 fi
 
 # ---------------------------------------------------------------------------

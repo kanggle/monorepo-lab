@@ -74,27 +74,32 @@ business logic.
 
 ## Package Layout
 
+**Most of this service now lives in `libs/java-gateway`** (ADR-MONO-048, TASK-MONO-351/355/356/357).
+The classes below are what remains fan-specific — its routes, its property prefix, its
+tenant-gate policy and its header policy:
+
 ```
 com.example.fanplatform.gateway/
-├── GatewayServiceApplication.java
-├── config/
-│   ├── SecurityConfig.java                ← OAuth2 Resource Server + path rules
-│   ├── OAuth2ResourceServerConfig.java    ← decoder + validator chain
-│   └── RateLimitConfig.java               ← key resolvers + fail-open wrapper
-├── filter/
-│   ├── IdentityHeaderStripFilter.java     ← global filter, HIGHEST precedence
-│   ├── RequestIdFilter.java               ← generate / echo X-Request-Id
-│   ├── JwtHeaderEnrichmentFilter.java     ← propagates X-Tenant-Id / X-Account-Id / X-Roles
-│   └── RetryAfterFilter.java              ← Retry-After: 1 on 429
-├── ratelimit/
-│   └── FailOpenRateLimiter.java           ← Redis fail-open wrapper + metric
-├── security/
-│   ├── AllowedIssuersValidator.java       ← SAS issuer + legacy iam-platform
-│   └── TenantClaimValidator.java          ← tenant_id ∈ { fan-platform, * }
-└── error/
-    ├── ApiErrorEnvelope.java
-    └── GatewayErrorHandler.java           ← 401 / 403 / 429 / 5xx → platform envelope
+├── GatewayServiceApplication.java         ← scanBasePackages MUST name com.example.apigateway
+└── config/
+    ├── GatewayIdentityConfig.java         ← strip set (baseline) + enrichment mappings
+    ├── OAuth2ResourceServerConfig.java    ← property prefix + tenantGate() + JWKS probe bean
+    └── RateLimitConfig.java               ← key resolvers (account-keyed, rate:fan-platform:)
 ```
+
+From `libs/java-gateway` (**not** re-implemented here): `SecurityConfig`,
+`IdentityHeaderStripFilter`, `JwtHeaderEnrichmentFilter`, `RequestIdFilter`, `RetryAfterFilter`,
+`TenantClaimValidator`, `AllowedIssuersValidator`, `GatewayJwtDecoders`, `JwtClaims`,
+`FailOpenRateLimiter`, `JwksHealthProbe`, `ApiErrorEnvelope`, `GatewayErrorHandler`.
+
+> `JwksHealthProbe` moved to the library in TASK-MONO-357 and is wired here as an **opt-in
+> `@Bean`**. The library class deliberately carries no `@Component`: with one, every gateway that
+> scans the library package would register it — including wms, which has never had a JWKS startup
+> probe and would have silently gained a boot-time dependency on the IdP.
+
+> **The component scan is load-bearing.** Omit `com.example.apigateway` from
+> `scanBasePackages` and the gateway boots **without its security chain** — every unit test
+> still passes, the build is green, and nothing says so. `GatewayComponentScanTest` asserts it.
 
 > **Naming note**: TASK-FAN-BE-001 §Architecture lists `TenantGateFilter` and
 > `HeaderEnrichmentFilter` as two separate components. The wms reference

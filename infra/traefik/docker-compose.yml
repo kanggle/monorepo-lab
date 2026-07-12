@@ -75,14 +75,12 @@ services:
         aliases:
           - iam.${DEMO_DOMAIN:-local}
           - console.${DEMO_DOMAIN:-local}
-          - console-bff.${DEMO_DOMAIN:-local}
           - ecommerce.${DEMO_DOMAIN:-local}
           - web.ecommerce.${DEMO_DOMAIN:-local}
           - wms.${DEMO_DOMAIN:-local}
           - scm.${DEMO_DOMAIN:-local}
           - erp.${DEMO_DOMAIN:-local}
           - finance.${DEMO_DOMAIN:-local}
-          - ledger.${DEMO_DOMAIN:-local}
           - fan-platform.${DEMO_DOMAIN:-local}
           - kafka.iam.${DEMO_DOMAIN:-local}
           - grafana.iam.${DEMO_DOMAIN:-local}

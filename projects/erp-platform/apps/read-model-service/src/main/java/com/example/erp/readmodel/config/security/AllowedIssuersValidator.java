@@ -13,7 +13,7 @@ import java.util.Objects;
  * Accepts tokens whose {@code iss} matches any configured allowed issuer
  * (SAS issuer + legacy {@code iam} D2-b window). Mirrors
  * masterdata-service's validator so a direct call to read-model-service gets
- * the same issuer verdict the (v1-deferred) gateway would apply.
+ * the same issuer verdict the gateway would apply.
  */
 public class AllowedIssuersValidator implements OAuth2TokenValidator<Jwt> {
 

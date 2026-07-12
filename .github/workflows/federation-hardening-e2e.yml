@@ -65,14 +65,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JDK 21 + Gradle
+        uses: ./.github/actions/setup-java-gradle
 
       - name: Build federation hardening e2e boot jars
         # 11 boot jars: IAM (auth/account/admin) + finance-account + wms-master
@@ -133,17 +127,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - name: Set up Node 20 + pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          version: '9.15.0'
-
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: projects/platform-console/apps/console-web/pnpm-lock.yaml
+          cache-dependency-path: |
+            projects/platform-console/apps/console-web/pnpm-lock.yaml
 
       - name: Install console-web dependencies
         working-directory: projects/platform-console/apps/console-web

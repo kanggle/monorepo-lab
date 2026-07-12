@@ -485,16 +485,19 @@ A monorepo-root `infra/traefik/docker-compose.yml` runs Traefik once, on host po
 | `erp.local` | erp-platform | hostname routing from bootstrap |
 | `finance.local` | finance-platform | hostname routing |
 | `console.local` | platform-console (web) | hostname routing |
-| `console-bff.local` | platform-console (BFF) | hostname routing |
 
 New projects pick an unused `*.local` hostname and register it in this table in the bootstrap PR.
+
+> **Only edge surfaces get a hostname.** A `*.local` name means "routable through the shared Traefik" — i.e. reachable by anything that can send that `Host` header. That is for **gateways**, **browser-facing frontends** and **operator tooling**. A backend service must not have one: on the edge without a gateway there is no rate limiting, no identity-header strip→enrich and no uniform error envelope (`platform/api-gateway-policy.md` L13/L14).
+>
+> `console-bff` **deliberately has no hostname** (TASK-MONO-362). It is reached by `console-web` on the docker network (`http://console-bff:8080`) — every call is server-side, the browser never touches it. **This is not a missing entry; do not add one.** `scripts/check-gateway-drift.sh` (I2) fails if any backend service acquires a Traefik router.
 
 ### One-time developer setup
 
 Append to `/etc/hosts` (Linux/macOS) or `C:\Windows\System32\drivers\etc\hosts` (Windows):
 
 ```
-127.0.0.1  ecommerce.local wms.local iam.local fan-platform.local scm.local erp.local finance.local console.local console-bff.local
+127.0.0.1  ecommerce.local wms.local iam.local fan-platform.local scm.local erp.local finance.local console.local
 ```
 
 (Or run dnsmasq with `address=/.local/127.0.0.1` for a wildcard.)
@@ -523,7 +526,7 @@ Tear down with the matching `:down` command (named volumes are preserved).
 | scm-platform | `pnpm scm:up` / `scm:down` | `scm.local` | ✅ |
 | erp-platform | `pnpm erp:up` / `erp:down` | `erp.local` | ✅ |
 | finance-platform | `pnpm finance:up` / `finance:down` | `finance.local`, `ledger.local` | ✅ |
-| platform-console | `pnpm console:up` / `console:down` | `console.local`, `console-bff.local` | ✅ |
+| platform-console | `pnpm console:up` / `console:down` | `console.local` | ✅ |
 
 Each project's `docs/onboarding/local-dev.md` records that stack's service/resource inventory (or points to its `docker-compose.yml` as the authoritative inventory) plus any project-specific bring-up notes. **The full resource list for a project is always its `docker-compose.yml`** — this matrix is the ordering contract, not the inventory.
 

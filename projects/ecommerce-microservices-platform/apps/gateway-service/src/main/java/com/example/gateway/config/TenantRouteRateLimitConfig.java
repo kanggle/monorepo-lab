@@ -1,6 +1,6 @@
 package com.example.gateway.config;
 
-import com.example.gateway.ratelimit.FailOpenRateLimiter;
+import com.example.apigateway.ratelimit.FailOpenRateLimiter;
 import com.example.gateway.ratelimit.OverrideAwareRateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.InetSocketAddress;
