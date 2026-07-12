@@ -65,6 +65,25 @@ iam 계약은 **둘 다 문서화**한다(`auth-api.md:362` = 401, `:726` = 400 
 
 ---
 
+# ✅ AC-0 통과 (2026-07-12) — 사람이 세 방향을 모두 선택함
+
+사용자가 세 모순 각각에 대해 방향을 **직접 선택**했다(에이전트 자의 아님):
+
+| 모순 | 선택된 방향 |
+|---|---|
+| `INVALID_STATE` | **A — iam 을 400 으로 정렬** (iam 이 1:3 아웃라이어; ecommerce·레지스트리·RFC 6749 §10.12 가 모두 400) |
+| `INVALID_CREDENTIALS` | **B — 새 코드 `CURRENT_PASSWORD_MISMATCH`(400) 분리** (400 자체는 옳다 — 401 이면 클라이언트가 세션만료로 읽고 로그아웃시킨다. 문제는 상태가 아니라 **이름**이다) |
+| `INVALID_CODE` | **B — 구현** (만료된 code 가 502 로 나가 온콜을 부르고 1회용 코드를 재시도하게 만든다) |
+
+## 착수 후 발견 — 결정 내용이 예상보다 **더 작았다**
+
+1. **`CURRENT_PASSWORD_MISMATCH` 는 레지스트리에 이미 있었다** (`error-handling.md` § Admin, 400, `CurrentPasswordMismatchException` 이름까지 정확히). 즉 **새 코드를 발명하는 게 아니라 이미 문서화된 값을 코드가 발행하지 않고 있었다.** admin-service 가 두 번째 emitter 이므로, `INVALID_STATE` 가 MONO-052 에서 처리된 방식 그대로 **Platform-Common § Authentication 으로 승격 + § Admin 은 교차참조**로 바꿨다(한 코드 = 한 행. 두 섹션에 등록하면 그게 곧 두 상태로 갈라지는 경로다).
+2. **`INVALID_CODE` 는 계약이 이미 401 로 약속**하고 있었다 → 구현은 계약을 따라잡는 것일 뿐 새 결정이 아니다.
+3. **분류 정보는 이미 손에 있었다** — `GoogleOAuthClient:108` 의 `catch (Exception e)` 가 provider 의 4xx(`invalid_grant`)를 5xx·타임아웃과 **뭉뚱그려 버리고** 있었다. Spring `RestClient` 는 4xx 를 `HttpClientErrorException` 으로 던지므로 구분자가 이미 그 자리에 있었다.
+4. **Kakao/Naver 는 호출이 두 개**(token 교환 + user-info)라 메서드 전체를 감싸면 **user-info 4xx 까지 "잘못된 code"로 오분류**한다 → **token 교환 호출만** 좁게 감쌌다. 코드가 원인을 잘못 이름 붙이는 것이 이 task 의 주제인데, 반대 방향으로 같은 죄를 지을 뻔했다.
+
+---
+
 # AC-0 — 착수 게이트 (사람이 통과시켜야 함)
 
 **에이전트는 방향을 스스로 고르지 말 것.** 각 모순마다 아래에서 **사람이 하나를 선택**해야 한다. 에이전트가 임의로 "문서만 고치는" 쪽을 고르면 그건 **아무 결정 없이 일어난 계약 완화**이고, "코드를 고치는" 쪽을 고르면 **라이브 로그인 응답의 클라이언트 가시 변경**이다.

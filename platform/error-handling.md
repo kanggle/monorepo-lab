@@ -74,11 +74,13 @@ Services that return additional context (trace/request ids, structured `details`
 | Code | HTTP | Description |
 |---|---|---|
 | UNAUTHORIZED | 401 | Access token missing or invalid |
-| INVALID_CREDENTIALS | 401 | Login credentials rejected |
+| INVALID_CREDENTIALS | 401 | **Login** credentials rejected. **401 only** — a wrong *current password* during a password change is `CURRENT_PASSWORD_MISMATCH` (400), not this code. IAM auth-service emitted this code at both statuses until TASK-MONO-350; a client branching on `code` could not tell a failed login from a bad form field. Pinned by `AuthExceptionHandlerTest#oneCodeOneStatus` |
+| CURRENT_PASSWORD_MISMATCH | 400 | Supplied *current password* does not match the stored credential (`CurrentPasswordMismatchException`). **400 is deliberate**: the caller is already authenticated, so this is request-field validation, not a failed login — answering 401 reads as "your session died" and tends to log the user out mid-change. Promoted to Platform-Common in TASK-MONO-350 (second emitter): IAM `auth-service` (`PATCH /api/auth/password`) and `admin-service` (operator self-service password change) |
 | INVALID_REFRESH_TOKEN | 401 | Refresh token not found or expired |
 | REFRESH_TOKEN_REVOKED | 401 | Refresh token has been explicitly revoked |
 | TOKEN_REVOKED | 401 | Access token has been revoked (e.g. logout blacklist) |
-| INVALID_STATE | 400 | OAuth `state` parameter missing, malformed, or does not match the stored CSRF token (RFC 6749 §10.12). Promoted to Platform-Common in TASK-MONO-052 — emitted by both ecommerce `auth-service` and IAM `auth-service` with identical semantics |
+| INVALID_STATE | 400 | OAuth `state` parameter missing, malformed, or does not match the stored CSRF token (RFC 6749 §10.12). Rejected *before* any credential is evaluated — a malformed/forged callback, not an authentication failure. Promoted to Platform-Common in TASK-MONO-052 — emitted by both ecommerce `auth-service` and IAM `auth-service` with identical semantics. **That "identical semantics" claim was false from the day it was written until TASK-MONO-350**: IAM answered **401** while ecommerce answered 400. It is true now, and `AuthExceptionHandlerTest#invalidOAuthStateIsBadRequest` keeps it true |
+| INVALID_CODE | 401 | The provider **rejected the authorization code itself** during token exchange (OAuth2 `invalid_grant`: expired, already redeemed — they are single-use — or forged). `OAuthCodeInvalidException`. **Distinct from `PROVIDER_ERROR` (502), which means the provider actually failed.** Until TASK-MONO-350 the adapters flattened every exchange failure into 502, so re-opening a stale callback URL was reported as an upstream outage: 5xx-keyed alerting paged an operator for a user's mistake, and retry-on-5xx clients replayed a single-use code that could never succeed. `auth-api.md` had promised this code all along and nothing emitted it |
 
 ## Authorization
 
@@ -590,7 +592,6 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | OPERATOR_NOT_FOUND | 404 | Operator account not found (`OperatorNotFoundException`) |
 | ROLE_NOT_FOUND | 400 | Role identifier not recognized (`RoleNotFoundException`). Note HTTP 400 (not 404) — invalid identifier value, not missing resource |
 | SELF_SUSPEND_FORBIDDEN | 400 | Operator cannot suspend their own account (`SelfSuspendForbiddenException`) |
-| CURRENT_PASSWORD_MISMATCH | 400 | Current password does not match stored credential (`CurrentPasswordMismatchException`) |
 | SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH | 400 | Operator attempted to edit their own profile through the admin operator-management path; must use the self-service path instead (`SelfProfileUpdateForbiddenException`). Referenced by platform-console |
 | ROLE_GRANT_FORBIDDEN | 403 | The granting operator may not confer this role — a role can never be granted above the granter's own level (the no-escalation guard, ADR-MONO-024 D3) |
 | ASSIGNMENT_ALREADY_EXISTS | 409 | The operator is already assigned to this tenant/domain |
@@ -600,6 +601,8 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | IDENTITY_LINK_EMAIL_MISMATCH | 422 | The operator's email does not match the account identity being linked |
 | ACCOUNT_IDENTITY_UNRESOLVABLE | 422 | The operator's account identity could not be resolved from the authority |
 | OPTIMISTIC_LOCK_CONFLICT | 409 | Optimistic-lock collision on `admin_operators.version`. **Registered intentional alias** of Platform-Common `CONFLICT` / `CONCURRENT_MODIFICATION` (same 409 shape) — `admin-service` overrides the parent handler's mapping so the code matches what `admin-api.md` mandates for this surface (TASK-BE-306; alias precedent TASK-MONO-244) |
+
+> `CURRENT_PASSWORD_MISMATCH` is emitted by this service but is documented under Platform-Common Authentication — TASK-MONO-350 promoted it there when IAM `auth-service` became a second emitter with identical semantics (400, `CurrentPasswordMismatchException`). One code, one row: registering it in two sections is how a shared code drifts to two different statuses.
 
 ## Community  `[domain: saas]`
 

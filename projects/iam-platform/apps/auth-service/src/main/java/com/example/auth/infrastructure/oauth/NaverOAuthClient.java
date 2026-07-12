@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import static com.example.auth.infrastructure.oauth.OAuthClientSupport.buildHttp11RestClient;
 
@@ -54,12 +55,21 @@ public class NaverOAuthClient implements OAuthClient {
             formData.add("client_id", props.getClientId());
             formData.add("client_secret", props.getClientSecret());
 
-            String tokenResponseBody = restClient.post()
-                    .uri(props.getTokenUri())
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(formData)
-                    .retrieve()
-                    .body(String.class);
+            // TASK-MONO-350: a 4xx on the TOKEN call is the provider rejecting the
+            // authorization code (invalid_grant) → 401 INVALID_CODE. The user-info call
+            // below is deliberately NOT wrapped: a 4xx there is a bad/insufficient access
+            // token, which is a different fault and must stay 502 PROVIDER_ERROR.
+            String tokenResponseBody;
+            try {
+                tokenResponseBody = restClient.post()
+                        .uri(props.getTokenUri())
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .body(formData)
+                        .retrieve()
+                        .body(String.class);
+            } catch (RestClientException e) {
+                throw OAuthClientSupport.classifyTokenExchangeFailure("Naver", e);
+            }
 
             JsonNode tokenResponse = objectMapper.readTree(tokenResponseBody);
             String accessToken = tokenResponse.path("access_token").asText(null);

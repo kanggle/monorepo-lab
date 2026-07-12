@@ -172,6 +172,13 @@ public class OAuthLoginUseCase {
         OAuthUserInfo userInfo;
         try {
             userInfo = client.exchangeCodeForUserInfo(command.code(), effectiveRedirectUri);
+        } catch (OAuthCodeInvalidException e) {
+            // TASK-MONO-350: a rejected authorization code is a user/client fault (stale or
+            // replayed callback), not an incident. WARN, not ERROR — otherwise log-based
+            // alerting pages an operator for someone re-opening an old callback URL. Must be
+            // caught before OAuthProviderException: it is a subclass.
+            log.warn("OAuth authorization code rejected by {}: {}", provider, e.getMessage());
+            throw e;
         } catch (OAuthProviderException e) {
             log.error("OAuth provider error for {}: {}", provider, e.getMessage());
             throw e;
