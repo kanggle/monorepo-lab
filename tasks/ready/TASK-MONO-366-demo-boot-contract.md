@@ -86,6 +86,21 @@ infra/demo/aws/
 
 **비밀은 올리지 않는다** — `terraform.tfvars`(내 공인 IP CIDR 포함) · `*.tfstate` · `.terraform/` 은 gitignore. `.example` 만 커밋.
 
+## 4-a) 착수 후 발견 — **가드가 자기가 감시하는 파일에서 도달 불가능했다**
+
+가드 (n) 을 쓰고 mutation 까지 확인한 **바로 그 커밋이** 그 가드를 도달 불가능하게 만들고 있었다.
+
+`ci.yml` 의 `code-changed` 는 **순수-positive 확장자 열거**인데 **`.py` · `.tf` · `.hcl` · `.service` 가 빠져 있었다.** `demo-wrapper` 필터는 `code-changed` 와 **AND** 되므로:
+
+- `demo-stack.service` **하나만** 고치면(예: `ExecStart` 를 `demo-up.sh` 로 되돌리는 것 — **정확히 (n) 이 잡으라고 만든 결함**) → `code-changed=false` → **잡 SKIP → CI 초록.**
+- `handler.py` 만 고치면 → **Lambda 의 월 예산 가드 테스트가 영영 안 돈다.**
+
+`TASK-MONO-359` 가 실측한 명제의 재현이다 — **물 수 있는가 ≠ 물 기회를 얻는가.** 확장자 5종(`.py`/`.tf`/`.hcl`/`.service`/`.html`)을 `code-changed` 에 추가한다.
+
+## 4-b) 착수 후 발견 — 가드가 **진단 없이 죽었다**
+
+mutation N2(`export DEMO_DOMAIN` 제거)에서 가드는 FAIL 을 냈지만 **아무 메시지도 출력하지 않았다.** `set -euo pipefail` 아래에서 무매치 `grep` 이 1 을 반환해 **`fail` 이 출력되기 전에 스크립트가 죽은** 것이다. "물지만 이유를 말하지 못하는 가드" 이고, 그건 이 파일이 계속 경고해온 실패 모드다. `|| true` 로 고쳤다 — **통과만 봤으면 절대 못 봤다.**
+
 ## 4) 가드 (n) — 부팅 경로가 도메인을 실제로 설정하는가
 
 `verify-demo-wrapper.sh` 에 추가한다. 세 가지를 본다:
@@ -121,12 +136,14 @@ infra/demo/aws/
 
 # Acceptance Criteria
 
-- [ ] **`demo-boot.sh` 가 AWS 밖에서 안전하다** — 메타데이터 서비스 부재 시 `DEMO_DOMAIN=local` 로 폴백하고 그 사실을 출력한다. **빈 문자열이 되지 않는다**(빈 값이면 `Host(\`console.\`)` 같은 라우터가 생기고 아무도 도달하지 못한다).
-- [ ] **가드 (n) — mutation 필수.** 통과만으로는 무는지 알 수 없다:
-      - 유닛의 `ExecStart` 를 `demo-up.sh` 직접 호출로 되돌리면 **FAIL**
-      - `demo-boot.sh` 에서 `export DEMO_DOMAIN` 을 지우면 **FAIL**
-      - Packer 가 유닛을 저장소 밖에서 복사하면 **FAIL**
-      - vacuity: 정상 트리에서 PASS (항상-FAIL 하는 가드가 아님)
+- [x] **`demo-boot.sh` 가 AWS 밖에서 안전하다** — 메타데이터 서비스 부재 시 `DEMO_DOMAIN=local` 로 폴백하고 그 사실을 출력한다. **빈 문자열이 되지 않는다**(빈 값이면 `Host(\`console.\`)` 라우터가 생기는데 **Traefik 은 거부하지 않고 그냥 아무와도 매치하지 않는다** — 에러 0건, 전부 healthy, 404). 링크로컬 주소는 EC2 밖에서 **라우팅 블랙홀**이라 프로브를 `--max-time 2` 로 끊는다(안 끊으면 로컬 실행이 멈춘다). **CI 러너가 AWS 밖이므로 CI 가 이 폴백의 권위**다 — 스텝으로 단언했다.
+- [x] **가드 (n) — mutation 5방향 확인.** 통과만으로는 무는지 알 수 없다:
+      - N1 유닛의 `ExecStart` 를 `demo-up.sh` 직접 호출로 되돌림 → **FAIL** ✅
+      - N2 `demo-boot.sh` 에서 `export DEMO_DOMAIN` 제거 → **FAIL** ✅
+      - N3 `demo.env` 를 bare 대입으로(`DEMO_DOMAIN="local"`) → **FAIL** ✅
+      - N4 Packer 가 유닛을 저장소 밖에서 복사 → **FAIL** ✅
+      - N5 vacuity: 정상 트리에서 **PASS** ✅ (항상-FAIL 하는 가드가 아니다)
+- [x] **가드의 도달 가능성** — `code-changed` 에 `.py`/`.tf`/`.hcl`/`.service`/`.html` 추가. 없으면 **가드가 자기가 감시하는 파일에서 SKIP=초록** 이었다(§ 4-a).
 - [ ] **AMI 가 현재 main 을 굽는다** — 새 AMI 의 `console-web` 이미지가 `CONSOLE_PUBLIC_ORIGIN` / `CONSOLE_COOKIE_SECURE` 를 알고, Traefik 이 v3.6 이다.
 - [ ] **실기동 증명 — 사람 손 0. 이것만이 진짜 검증이다.**
       `terraform apply` → 정적 사이트의 **Start Demo** 클릭(또는 `POST /start`) → **SSH·SSM 접속 없이** 브라우저로 `http://console.<ip>.sslip.io/` → **OIDC 로그인 왕복 성공.**
