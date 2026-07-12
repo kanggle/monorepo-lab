@@ -109,8 +109,13 @@ source "amazon-ebs" "demo" {
     delete_on_termination = true
   }
 
-  ami_name        = "portfolio-demo-{{timestamp}}"
-  ami_description = "Portfolio on-demand demo host — docker + prebuilt images + demo-stack.service"
+  ami_name = "portfolio-demo-{{timestamp}}"
+  # ASCII only. EC2's ModifyImageAttribute rejects any byte above 0x7F in a
+  # description, and Packer treats that rejection as a build failure — after the
+  # image is already baked, so it deregisters the AMI and deletes the snapshot it
+  # just spent forty minutes producing. `packer validate` does not catch it.
+  # An em dash cost exactly that (TASK-MONO-379). Guard (o) now asserts it.
+  ami_description = "Portfolio on-demand demo host - docker + prebuilt images + demo-stack.service"
   tags = {
     Name    = "portfolio-demo"
     Project = "monorepo-lab"

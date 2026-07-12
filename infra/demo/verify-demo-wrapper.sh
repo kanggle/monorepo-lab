@@ -572,6 +572,39 @@ fi
 
 ok "부팅 계약 유지 (유닛 → demo-boot.sh → DEMO_DOMAIN export → demo-up.sh)"
 
+echo "[verify] (o) Packer 가 AWS 에 보내는 문자열이 ASCII 인가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-379): EC2 의 ModifyImageAttribute 는 description 에 0x7F 초과 바이트를
+# 거부한다. 그런데 Packer 는 그 속성을 **이미지를 다 구운 뒤에** 설정하고, 거부를
+# 빌드 실패로 취급해 **방금 만든 AMI 를 deregister 하고 스냅샷까지 지운다.**
+#
+#   Modifying: description
+#   Error: InvalidParameterValue: Character sets beyond ASCII are not supported.
+#   ==> Deregistered AMI id: ami-01b26cf9e9ae69632
+#   ==> Deleted snapshot: snap-...
+#
+# em dash(U+2014) 하나가 40분치 빌드를 태우고 산출물을 파괴했다. **`packer validate`
+# 는 통과한다** — 문법은 멀쩡하고, AWS 만이 거부한다. 이 저장소가 이미 배운 명제의
+# 재현이다: 정적 검사가 통과하는 것과 동작하는 것은 다른 명제다.
+#
+# 왜 하필 지금 터졌나: scratchpad PoC 를 저장소로 승격하면서 산문 습관대로 em dash 가
+# 들어갔고, **승격본은 한 번도 빌드된 적이 없었다.** 옛 AMI 는 승격 전 사본으로 구운
+# 것이다 — 전형적인 "선언 ↔ 진실" 드리프트.
+if [ -f "$pkr" ]; then
+  # ami_name 도 함께 본다 — 같은 API 가 같은 이유로 거부한다.
+  bad="$(grep -nE '^[[:space:]]*(ami_description|ami_name)[[:space:]]*=' "$pkr" \
+           | LC_ALL=C grep -P '[^\x00-\x7F]' || true)"
+  if [ -n "$bad" ]; then
+    fail "packer 템플릿의 ami_description/ami_name 에 비-ASCII 문자가 있습니다:"\
+      $'\n'"   $bad"\
+      $'\n'"→ EC2 ModifyImageAttribute 가 이를 거부하고, Packer 는 **이미지를 다 구운 뒤에**"\
+      $'\n'"   그 속성을 설정하므로 빌드가 실패하며 **방금 만든 AMI 와 스냅샷을 지웁니다.**"\
+      $'\n'"   40분과 산출물이 함께 사라집니다. packer validate 는 이것을 잡지 못합니다."\
+      $'\n'"→ ASCII 하이픈(-)을 쓰십시오."
+  fi
+fi
+ok "packer 의 AMI 이름/설명이 ASCII"
+
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
