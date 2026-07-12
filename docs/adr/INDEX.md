@@ -8,7 +8,7 @@ ADRs live under `projects/<name>/docs/adr/`.
 |---|---|---|---|
 | [ADR-MONO-001](ADR-MONO-001-port-prefix-scaling.md) | PORT_PREFIX 슬롯 부족과 7개+ 프로젝트 동시 운영 정책 | ACCEPTED | 2026-05-02 |
 | [ADR-MONO-002](ADR-MONO-002-phase-4-template-extraction-trigger.md) | Phase 4 (Template 레포 추출 진입 결정 + scm catalyst) | ACCEPTED | 2026-05-04 |
-| [ADR-MONO-003](ADR-MONO-003-phase-5-template-extraction-deferred.md) | Phase 5 (Template 레포 추출 발사) 결정 — DEFERRED → SUPERSEDED (D4 by 003a, D1 by 003b on launch) | SUPERSEDED | 2026-05-08 → 2026-05-13 |
+| [ADR-MONO-003](ADR-MONO-003-phase-5-template-extraction-deferred.md) | Phase 5 (Template 레포 추출 발사) 결정 — DEFERRED → SUPERSEDED (D4 by 003a, D1 by 003b on launch) | SUPERSEDED | 2026-05-08 |
 | [ADR-MONO-003a](ADR-MONO-003a-d4-override-scope-canonicalization.md) | D4 OVERRIDE Scope Canonicalization (meta-policy: IN/OUT scope + meta-rule) | ACCEPTED | 2026-05-12 |
 | [ADR-MONO-003b](ADR-MONO-003b-phase-5-launch-criteria.md) | Phase 5 Launch Criteria — Template Repo Extraction (Phase 5 LAUNCHED 2026-05-13, `kanggle/project-template`) | ACCEPTED | 2026-05-13 |
 | [ADR-MONO-004](ADR-MONO-004-shared-messaging-scaffolding.md) | Shared Messaging Scaffolding in `libs/java-messaging` | ACCEPTED | 2026-05-10 |
@@ -16,7 +16,7 @@ ADRs live under `projects/<name>/docs/adr/`.
 | [ADR-MONO-006](ADR-MONO-006-lint-remediation-as-agent-context.md) | Lint Remediation Message as Agent Context (OpenAI Harness gap A, 4-block standard) | ACCEPTED | 2026-05-12 |
 | [ADR-MONO-007](ADR-MONO-007-worktree-ephemeral-observability-stack.md) | Worktree-isolated Ephemeral Observability Stack (OpenAI Harness gap #3, Vector + VictoriaLogs/Metrics) | ACCEPTED | 2026-05-12 |
 | [ADR-MONO-007a](ADR-MONO-007a-trace-layer.md) | Trace Layer (VictoriaTraces + OTLP-via-Vector) | ACCEPTED | 2026-05-28 |
-| [ADR-MONO-008](ADR-MONO-008-finance-platform-bootstrap.md) | finance-platform Bootstrap Criteria (next domain after Phase 5 launch) | ACCEPTED | 2026-05-18 |
+| [ADR-MONO-008](ADR-MONO-008-finance-platform-bootstrap.md) | finance-platform Bootstrap Criteria (next domain after Phase 5 launch) | ACCEPTED | 2026-05-13 |
 | [ADR-MONO-009](ADR-MONO-009-chrome-devtools-mcp-visual-regression.md) | Chrome DevTools MCP Visual Regression Loop (OpenAI Harness gap #4, triple-snapshot LOOP UNTIL CLEAN) | PROPOSED | 2026-05-13 |
 | [ADR-MONO-010](ADR-MONO-010-e2e-tag-taxonomy.md) | E2E Test Tag Taxonomy (`smoke` / `full`) and Gradle / CI Job Split — Phase 2 of e2e 3단계 전략 | ACCEPTED | 2026-05-13 |
 | [ADR-MONO-011](ADR-MONO-011-nightly-full-e2e-cadence.md) | Nightly + Push-to-main Cadence for `@Tag("full")` E2E Suites — Phase 3 of e2e 3단계 전략 | ACCEPTED | 2026-05-13 |
@@ -27,10 +27,10 @@ ADRs live under `projects/<name>/docs/adr/`.
 | [ADR-MONO-015](ADR-MONO-015-platform-console-dashboards-model.md) | platform-console Dashboards Model (Composed Operator Overview, not Grafana Embed) | ACCEPTED | 2026-05-16 |
 | [ADR-MONO-016](ADR-MONO-016-erp-platform-bootstrap.md) | erp-platform Bootstrap Criteria, Integration Mode, Classification, Procedure, Readiness | ACCEPTED | 2026-05-19 |
 | [ADR-MONO-017](ADR-MONO-017-platform-console-bff-architecture.md) | platform-console-bff Architecture (Phase 7 Aggregation & Cross-Domain Dashboards) | ACCEPTED | 2026-05-20 |
-| [ADR-MONO-018](ADR-MONO-018-platform-console-phase-8-federation-hardening.md) | platform-console Phase 8 Federation Hardening Architecture (Cross-Product E2E + Observability Federation + Multi-Tenant Isolation Regression) | ACCEPTED | 2026-05-26 |
-| [ADR-MONO-019](ADR-MONO-019-platform-console-customer-tenant-model.md) | platform-console Real Customer-Tenant Model (AWS IAM Identity Center-style tenant ↔ domain subscription, decoupling tenant from product/domain) | ACCEPTED | 2026-05-31 |
+| [ADR-MONO-018](ADR-MONO-018-platform-console-phase-8-federation-hardening.md) | platform-console Phase 8 Federation Hardening Architecture (Cross-Product E2E + Observability Federation + Multi-Tenant Isolation Regression) | ACCEPTED | 2026-05-25 |
+| [ADR-MONO-019](ADR-MONO-019-platform-console-customer-tenant-model.md) | platform-console Real Customer-Tenant Model (AWS IAM Identity Center-style tenant ↔ domain subscription, decoupling tenant from product/domain) | ACCEPTED | 2026-05-30 |
 | [ADR-MONO-020](ADR-MONO-020-operator-multitenant-assignment.md) | Operator ↔ multi-customer assignment (AWS IAM Identity Center "user → multiple account assignments" parity; active-tenant token scoping) | ACCEPTED | 2026-05-31 |
-| [ADR-MONO-021](ADR-MONO-021-account-type-claim-source.md) | `account_type` OIDC claim source (CONSUMER vs OPERATOR — per-account, denormalized on the credential) | SUPERSEDED | 2026-06-14 |
+| [ADR-MONO-021](ADR-MONO-021-account-type-claim-source.md) | `account_type` OIDC claim source (CONSUMER vs OPERATOR — per-account, denormalized on the credential) | SUPERSEDED | 2026-06-02 |
 | [ADR-MONO-022](ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) | ecommerce ↔ wms Cross-Project Order-Fulfillment Integration | ACCEPTED | 2026-06-08 |
 | [ADR-MONO-023](ADR-MONO-023-entitlement-iam-plane-separation.md) | Entitlement/Subscription Plane ↔ IAM Plane Separation (subscription lifecycle state machine; GCP billing↔IAM parity; entitlement suspension never mutates IAM bindings) | ACCEPTED | 2026-06-10 |
 | [ADR-MONO-024](ADR-MONO-024-tenant-admin-delegation.md) | Tenant-Admin Delegation (a tenant-scoped operator-management authority; a customer's own admin manages its operators/assignments within its tenant; strict no-escalation confinement; AWS Organizations "delegated administrator" / GCP project-IAM-admin parity) | ACCEPTED | 2026-06-10 |
@@ -52,7 +52,7 @@ ADRs live under `projects/<name>/docs/adr/`.
 | [ADR-MONO-040](ADR-MONO-040-oidc-subject-claim-account-id-contract-alignment.md) | Align the SAS OIDC access-token `sub` to the platform `jwt-standard-claims` contract (`sub` = account UUID), and unblock ecommerce consumer authed writes | ACCEPTED | 2026-06-17 |
 | [ADR-MONO-041](ADR-MONO-041-container-image-build-standard.md) | Container image build standard: layered-jar extraction, a shared Java-service base image, and per-service build-context narrowing | ACCEPTED | 2026-06-17 |
 | [ADR-MONO-042](ADR-MONO-042-ecommerce-seller-onboarding-iam-provisioning.md) | Ecommerce seller onboarding mints a real IAM seller-operator account: replace the "trusted token claim, no real account" seller with born-unified IAM provisioning (ADR-036 reuse) + seller-lifecycle deactivation, fail-soft | ACCEPTED | 2026-06-18 |
-| [ADR-MONO-043](ADR-MONO-043-notification-architecture-unification.md) | Notification architecture unification: a shared notification contract + lifted consumer/delivery library + a console notification aggregator over the four per-domain notification-services | ACCEPTED | 2026-06-28 |
+| [ADR-MONO-043](ADR-MONO-043-notification-architecture-unification.md) | Notification architecture unification: a shared notification contract + lifted consumer/delivery library + a console notification aggregator over the four per-domain notification-services | ACCEPTED | 2026-06-26 |
 | [ADR-MONO-044](ADR-MONO-044-self-service-tenant-onboarding.md) | Self-Service B2B Tenant Onboarding (an authenticated visitor creates a NEW tenant and is appointed its first `TENANT_ADMIN` with zero platform-operator in the loop; AWS "create account → root" / GCP "create project → owner" parity) | ACCEPTED | 2026-07-04 |
 | [ADR-MONO-045](ADR-MONO-045-cross-org-partner-delegation.md) | Cross-Org Partner Delegation (a first-class tenant↔tenant partnership that lets a partner organization operate a **bounded, attenuated, revocable-as-a-unit** slice of another tenant, with **relationship-scoped offboarding** — the first privilege origination that crosses the org boundary ADR-024 and ADR-044 both keep inside a single tenant) | ACCEPTED | 2026-07-04 |
 | [ADR-MONO-046](ADR-MONO-046-operator-group-model.md) | Operator Group Model (a first-class grouping primitive for `admin_operators` that lets an admin assign roles / tenant-assignments to **many operators as a unit** — the workforce-grouping facet AWS IAM User Group, IdC Group, and Google Group all provide but the portfolio has never had) | PROPOSED | 2026-07-08 |
@@ -60,19 +60,19 @@ ADRs live under `projects/<name>/docs/adr/`.
 | [ADR-MONO-048](ADR-MONO-048-shared-reactive-gateway-library.md) | `libs/java-gateway`: a shared **reactive** (WebFlux) gateway library, extracted from four copy-pasted edges whose divergence had already started costing security fixes | ACCEPTED | 2026-07-11 |
 | [ADR-MONO-049](ADR-MONO-049-framework-neutral-security-library.md) | `libs/java-security`: a **framework-neutral** security library, because 18 hand-copied validators are only 8 tests away from a fix that lands nowhere | PROPOSED | 2026-07-12 |
 
-**Status** is read from each ADR's own `**Status:**` header and is enforced by
-`scripts/check-adr-index-drift.sh` (both directions, plus the value itself). The file is
-the authority — if a row and its ADR disagree, the row is wrong.
+Every column above is read from the ADR files themselves and enforced by
+`scripts/check-adr-index-drift.sh` — every ADR has a row, every row has an ADR, and each
+row's `Status` and `Date` equal that ADR's own header. **The file is the authority: if a
+row and its ADR disagree, the row is wrong.**
 
-**Date** means *the date the ADR reached the Status shown*, not the date it was first
-proposed. That distinction is not decorative: it is why `ADR-MONO-008` reads 2026-05-18
-(accepted, TASK-MONO-113) rather than the 2026-05-13 in its own `**Date:**` field, which
-records only when it was proposed. `018` and `019` are the same shape. **Date is NOT
-guarded** — 12 ADRs carry no `**Date:**` header at all, and among those that do, the field
-sometimes means "proposed" and sometimes "accepted", so a machine check would be a false-
-positive generator rather than a guard. The root cause is that the Authoring Convention
-below never said what `Date` means. **TASK-MONO-369** settles the semantics, fills the 12
-gaps, and only then guards this axis.
+`Date` is **the date the ADR was proposed** (see § Authoring Convention), so it does not
+move when an ADR is accepted. To find out *when* a decision took effect, open the ADR —
+its `History` line, or the annotations on its own `Date` line, carry the transitions.
+The index deliberately does not restate them: those live in the files in half a dozen
+different prose shapes, and a guard that had to parse them would be a false-positive
+generator rather than a guard — and a guard that is red on day one gets switched off,
+which is worse than no guard, because a skipped job reports green. `Title` is likewise
+unguarded: the titles here are curated summaries, not copies of the ADRs' H1 lines.
 
 ---
 
@@ -80,6 +80,17 @@ gaps, and only then guards this axis.
 
 - File name: `ADR-MONO-NNN-short-kebab-title.md`
 - Required header fields: `Status`, `Date`, `Decision driver`, `Supersedes`, `Related`
-- Status lifecycle: `PROPOSED → ACCEPTED | DEFERRED | REJECTED | SUPERSEDED`
+- **`Status`** — the ADR's current state. Lifecycle: `PROPOSED → ACCEPTED | DEFERRED | REJECTED | SUPERSEDED`.
+  `PROPOSED → ACCEPTED` is a **human gate**: an agent may not accept its own ADR.
+- **`Date`** — **the date this decision record was authored, i.e. the date it was proposed.**
+  It is *not* the date the ADR was accepted, and it does not move when the `Status` does.
+  This was never written down until TASK-MONO-369, and the omission cost: 12 ADRs shipped
+  with no `Date` at all, and the three where the two readings are distinguishable
+  (`008`, `018`, `019`) recorded the proposed date while the index recorded the accepted one.
+  Everywhere else PROPOSED and ACCEPTED landed on the same day, so nobody could see the split.
+- **`History`** (optional but recommended) — the `PROPOSED → ACCEPTED` transitions, with dates.
+  Older ADRs instead annotate their transitions inline on the `Date` line; both are accepted,
+  and neither is machine-parsed. **Put the transition dates somewhere** — for `040` and `041`
+  they are in neither place, so when those decisions took effect is now unrecoverable from the file.
 - Sections: `Context`, `Decision` (numbered `D1, D2, …`), `Alternatives Considered`, `Consequences`, `Verification`, `Outstanding follow-ups`
 - Reference: `platform/architecture-decision-rule.md`
