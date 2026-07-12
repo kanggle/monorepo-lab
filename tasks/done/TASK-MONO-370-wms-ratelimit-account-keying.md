@@ -8,7 +8,7 @@ wms 를 정책의 키잉 규칙으로 정렬한다 — 그리고 **MONO-368 이 
 
 # Status
 
-review
+done
 
 # Owner
 
