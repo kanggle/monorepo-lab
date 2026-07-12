@@ -210,30 +210,16 @@ class FulfillmentRequestedConsumerIT extends OutboundServiceIntegrationBase {
     }
 
     /**
-     * Blocks until the fulfillment {@code @KafkaListener} container has been
-     * assigned its partition, so a subsequently-produced record is guaranteed
-     * to be consumed (no metadata-refresh race). Only the fulfillment container
-     * is awaited — other listeners (master.* consumers) subscribe to topics
-     * that may not exist in this slice and would never be assigned.
+     * Starts the fulfillment {@code @KafkaListener} container and blocks until it holds its
+     * partition, so a subsequently-produced record is guaranteed to be consumed.
+     *
+     * <p>Only this one container is started (TASK-MONO-376). The other eleven listeners
+     * share its consumer group and subscribe to other topics, and starting them makes every
+     * join revoke this container's assignment — on a loaded CI runner the group never
+     * converged and this wait timed out with "Expected 1 but got 0 partitions".
      */
     private void waitForListenerAssignment() {
-        MessageListenerContainer fulfillment = findFulfillmentContainer();
-        ContainerTestUtils.waitForAssignment(fulfillment, 1);
-    }
-
-    private MessageListenerContainer findFulfillmentContainer() {
-        for (MessageListenerContainer container : listenerRegistry.getListenerContainers()) {
-            String[] topics = container.getContainerProperties().getTopics();
-            if (topics != null) {
-                for (String t : topics) {
-                    if (TOPIC.equals(t)) {
-                        return container;
-                    }
-                }
-            }
-        }
-        throw new IllegalStateException(
-                "No @KafkaListener container is subscribed to topic " + TOPIC);
+        startAndAwaitListener(listenerRegistry, TOPIC);
     }
 
     private void publish(String json) throws Exception {
