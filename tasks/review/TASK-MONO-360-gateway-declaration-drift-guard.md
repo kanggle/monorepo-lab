@@ -8,7 +8,7 @@ TASK-MONO-360
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -95,18 +95,34 @@ monorepo
 
 ---
 
+# ⚠️ 착수 후 정정 — 이 task 의 AC-1 전제가 틀렸다
+
+**AC-1 은 원래 *"현 트리에서 GREEN(8프로젝트 전부 정합)"* 이라 적었다. 틀렸다.** 가드를 처음 돌리자 **ecommerce 가 즉시 RED** 였다:
+
+- `settings.gradle` 은 `projects:ecommerce-microservices-platform:apps:gateway-service` 를 **빌드하는데**, ecommerce 의 `PROJECT.md` 는 `gateway-service` 를 **한 번도 언급하지 않는다**.
+- 더 근본적으로, **ecommerce 의 `PROJECT.md` 에는 `## Service Map` 섹션 자체가 없다** — `TEMPLATE.md` L206 이 규정한 섹션인데도. 8개 프로젝트 중 유일하다.
+
+**이것은 347 드리프트의 가장 강한 형태다.** 347 은 *"문서가 거짓말을 한다"* 였다(PROJECT.md 가 없는 게이트웨이를 있다고 말함). ecommerce 는 **문서가 아무 말도 안 한다** — 그래서 **드리프트가 날 수조차 없었고, 그래서 아무도 못 봤다.** 대조할 선언이 없는 문서는 "정합" 이 아니라 **반증 불가능**이다.
+
+⇒ 그래서 가드에 **STRUCT 체크**(모든 `PROJECT.md` 는 `## Service Map` 을 가져야 한다)를 추가했다. 선언 표면이 조용히 사라지는 것이 선언 대조 가드를 무력화하는 방법이기 때문이다. **ecommerce 의 `PROJECT.md` 에 Service Map 을 신설**해 RED 를 해소했다(12 backend + 1 frontend + RETIRED `auth-service`; `Service Type` 은 전부 각 서비스 `architecture.md` 선언에서 옮겼다 — 지어낸 값 0).
+
+---
+
 # Acceptance Criteria
 
-- [ ] **AC-1 — I1 가드**: `PROJECT.md` 게이트웨이 선언 ↔ `settings.gradle` 모듈, **양방향**. 현 트리(`7296d1ac6`)에서 **GREEN**(8프로젝트 전부 정합).
-- [ ] **AC-2 — I2 가드**: 게이트웨이 보유 프로젝트의 compose 에서 비-게이트웨이 앱 서비스가 `Host()` 라우터를 들면 RED. **wms/iam(인프라 전용 compose)에서 오탐 없음** — 이걸 못 지키면 가드가 첫날부터 RED 이고, 그러면 사람은 가드를 끈다.
-- [ ] **AC-3 — mutation 4방향, 전부 물어야 함**:
-  1. **유령 선언**: `platform-console/PROJECT.md` 에 `gateway-service` v1 IN 을 주입 → **RED**.
-  2. **모듈 증발**: `settings.gradle` 에서 `projects:finance-platform:apps:gateway-service` 제거(PROJECT.md 는 그대로) → **RED**.
-  3. **노출 회귀**: finance `account-service` 에 `Host(\`finance.local\`)` 라우터 라벨 재부착 → **RED**. **이것이 몇 달간 라이브였던 바로 그 상태다.**
-  4. **allowlist 우회**: `web-store` 가 아닌 새 백엔드에 프런트처럼 보이는 이름(`*-web`)을 주고 라벨 부착 → **RED**(allowlist 가 정규식이면 여기서 샌다).
-- [ ] **AC-4 — 도달 가능성 (MONO-359 의 교훈)**: `PROJECT.md` **한 줄만 고친 markdown-only PR** 에서 이 잡이 **실제로 실행되는지** 확인한다. **skip 은 초록으로 보고된다** — 물 수 있는지와 **물 기회를 얻는지는 별개**이며, 359 는 후자만으로 가드 하나가 무력했음을 보였다. `code-changed` AND 금지가 이 AC 의 실질이다.
-- [ ] **AC-5 — 과잉 주장 금지**: 스크립트 주석이 **무엇을 지키지 못하는지** 명시한다 — `api-gateway-policy.md` 의 전칭 산문은 대조 대상이 아니며, 새 프로젝트가 `PROJECT.md` 에 게이트웨이를 **아예 안 적고** 백엔드를 직접 노출하면 I1 은 침묵한다(I2 는 게이트웨이 모듈이 없으므로 발화하지 않는다). **이 구멍을 아는 채로 남기는 것과 모르는 채로 남기는 것은 다르다.**
-- [ ] **AC-6** — `./gradlew check` 무영향(스크립트/워크플로 전용) · 로컬 `bash scripts/<guard>.sh` GREEN · `bash -n` 통과.
+- [x] **AC-1 — I1 가드**: `PROJECT.md` 게이트웨이 선언 ↔ `settings.gradle` 모듈, **양방향**. ~~현 트리에서 GREEN(8프로젝트 전부 정합)~~ → **위 § 정정 참조. 현 트리는 GREEN 이 아니었다**(ecommerce 1건). 고친 뒤 GREEN.
+- [x] **AC-2 — I2 가드**: 게이트웨이 보유 프로젝트의 compose 에서 비-게이트웨이 앱 서비스가 `Host()` 라우터를 들면 RED. **wms/iam(인프라 전용 compose)·platform-console(게이트웨이 없음=설계) 오탐 0건** 확인.
+- [x] **AC-3 — mutation, 전부 물어야 함** (4방향 요구 → **5방향 실시**, 5/5 RED):
+  1. **유령 선언**: `platform-console/PROJECT.md` 에 `gateway-service` 행 주입 → `PHANTOM-GATEWAY` **exit=1** ✅
+  2. **모듈 증발**: `settings.gradle` 의 finance 게이트웨이 제거(PROJECT.md 는 그대로) → `PHANTOM-GATEWAY` **exit=1** ✅
+  3. **노출 회귀**: finance `account-service` 에 `Host(\`finance.local\`)` 재부착 = **357 이전 상태 그대로 복원** → `DIRECT-EXPOSURE` **exit=1** ✅
+  4. **allowlist 우회**: `web-store` → `web-store-next` 개명 → `DIRECT-EXPOSURE` **exit=1** ✅ (allowlist 가 **정확 이름 비교**이지 패턴이 아님을 증명 — 정규식이었다면 샜다)
+  5. **선언 표면 증발**(추가): scm 의 `## Service Map` 헤딩 제거 → `NO-SERVICE-MAP` **exit=1** ✅
+  - **vacuity**: baseline / 복원 후 **exit=0** — 이 가드는 통과할 수도, 실패할 수도 있다.
+  - **⚠️ 함정 재발**: M3 의 1차 시도는 perl 백틱 이스케이프가 깨져 **라벨이 0건 주입**됐는데 가드는 `OK / exit=0` 을 냈다. **그대로 읽으면 "노출 회귀를 못 문다" 는 거짓 결론이 나온다.** 357 에서 겪은 것과 같은 클래스(적용 실패 ≠ 가드 미발화). **mutation 은 적용됐는지 먼저 확인한 뒤에만 결과를 읽을 것.**
+- [ ] **AC-4 — 도달 가능성 (MONO-359 의 교훈)**: `PROJECT.md` **한 줄만 고친 markdown-only PR** 에서 이 잡이 **실제로 실행되는지** 확인한다. **skip 은 초록으로 보고된다** — 물 수 있는지와 **물 기회를 얻는지는 별개**이며, 359 는 후자만으로 가드 하나가 무력했음을 보였다. `code-changed` AND 금지가 이 AC 의 실질이다. **주의: 이 impl PR 로는 증명되지 않는다** — 이 PR 은 `ci.yml` 을 건드리므로 `workflows` 필터가 모든 잡을 켠다. **별도 markdown-only PR 로 실측할 것.**
+- [x] **AC-5 — 과잉 주장 금지**: 스크립트가 § "WHAT THIS SCRIPT DOES *NOT* GUARD" 에 **못 지키는 것 2가지**를 명시한다 — ① `api-gateway-policy.md` 의 전칭 산문은 대조 대상이 아니다(간접적으로만 지켜진다) ② **새 프로젝트가 `PROJECT.md` 에 게이트웨이를 아예 안 적고 백엔드를 직접 노출하면 I1 도 I2 도 침묵한다**(선언이 없으니 I1 무발화, 게이트웨이 모듈이 없으니 I2 무발화). 닫으려면 "어떤 프로젝트가 외부 트래픽을 노출하는가" 를 **기계적으로 판정**해야 하는데 그건 조회가 아니라 판단이다. **이 구멍을 아는 채로 남기는 것과 모르는 채로 남기는 것은 다르다.**
+- [x] **AC-6** — `./gradlew check` 무영향(스크립트/워크플로 전용) · 로컬 `bash scripts/check-gateway-drift.sh` **GREEN** · `bash -n` 통과 · `ci.yml` YAML 파싱 통과 · MONO-345 의 `check-service-map-drift.sh` 여전히 GREEN(회귀 없음).
 
 ---
 
