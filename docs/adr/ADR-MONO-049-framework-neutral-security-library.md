@@ -10,7 +10,7 @@
 
 **Related:** [`ADR-MONO-048`](ADR-MONO-048-shared-reactive-gateway-library.md) (`libs/java-gateway`; its § D1 is the constraint that forces a *second* module here) · [`ADR-MONO-019`](ADR-MONO-019-platform-console-customer-tenant-model.md) § D5 (entitlement-trust dual-accept — the policy these validators implement) · `TASK-MONO-355` (builder parameterisation + closed-by-default discipline) · `TASK-MONO-360` (why a text guard is the wrong instrument here) · `TASK-MONO-361` (the measurement behind § 1) · `TASK-MONO-044a` (the servlet/reactive bleed incident this must not repeat — recorded in `ADR-MONO-048` § D1, not as an ADR of its own)
 
-**Why an ADR (HARDSTOP-09):** [`platform/shared-library-policy.md`](../../platform/shared-library-policy.md) § Change Rule — *"New shared-library introduction or breaking expansion requires an ADR."* This proposes a new shared library consumed by two projects and six services. It cannot proceed without an ACCEPTED decision here. **That gate has now visibly held three times** (MONO-349 → ADR-048; MONO-357, which stopped short of this exact work; MONO-362, this document).
+**Why an ADR (HARDSTOP-09):** [`platform/shared-library-policy.md`](../../platform/shared-library-policy.md) § Change Rule — *"New shared-library introduction or breaking expansion requires an ADR."* This proposes a new shared library consumed by two projects and six services. It cannot proceed without an ACCEPTED decision here. **That gate has now visibly held three times** (MONO-349 → ADR-048; MONO-357, which stopped short of this exact work; MONO-364, this document).
 
 ---
 
@@ -86,7 +86,7 @@ Superficially the cheapest fix, and the one this monorepo has reached for four t
 
 ### 2.3 Status quo, with the reasoning recorded — **rejected, but it was a live option**
 
-`TASK-MONO-362` § AC-5 required this ADR to *measure* what disappears rather than assume the extraction pays for itself, and to accept "keep the copies" if the number came out small. **It did not come out small** (§ 4). Combined with § 1.3 — ten untested copies of a security boundary — status quo means keeping a mechanism that has already fired once, in a shape where the next firing is invisible.
+`TASK-MONO-364` § AC-5 required this ADR to *measure* what disappears rather than assume the extraction pays for itself, and to accept "keep the copies" if the number came out small. **It did not come out small** (§ 4). Combined with § 1.3 — ten untested copies of a security boundary — status quo means keeping a mechanism that has already fired once, in a shape where the next firing is invisible.
 
 ---
 
@@ -149,7 +149,7 @@ Per-domain tests **stay per-domain**: they pin *that domain's* gate policy, and 
 
 ---
 
-## 4. Cost — measured, per `TASK-MONO-362` AC-5
+## 4. Cost — measured, per `TASK-MONO-364` AC-5
 
 `ADR-MONO-048` claimed a gateway was ~15 hand-copied classes and only proved it at the last step (it was 16; **~81% of a gateway is the library**). This ADR answers its own version of that question **before** asking for a decision.
 
@@ -200,7 +200,7 @@ How each decision is shown to hold — **and how each is shown to fail when viol
 
 ## 7. Outstanding follow-ups (**do not create these tasks until ACCEPT**)
 
-Per `TASK-MONO-362` § AC-6, the roadmap lives here, not in `tasks/ready/`:
+Per `TASK-MONO-364` § AC-6, the roadmap lives here, not in `tasks/ready/`:
 
 | step | scope |
 |---|---|
