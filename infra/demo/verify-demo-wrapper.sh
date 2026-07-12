@@ -541,8 +541,11 @@ esac
 # (2) 진입점이 demo-up.sh 호출 **전에** DEMO_DOMAIN 을 export 하는가.
 #     순서가 load-bearing 이다 — 나중에 export 하면 demo-up 은 이미 떠난 뒤다.
 boot_body="$(sed 's/#.*//' "$boot_sh")"
-exp_line="$(printf '%s\n' "$boot_body" | grep -n 'export DEMO_DOMAIN' | head -1 | cut -d: -f1)"
-up_line="$(printf '%s\n' "$boot_body"  | grep -n 'demo-up\.sh'        | head -1 | cut -d: -f1)"
+# `|| true` 는 장식이 아니다. 이 스크립트는 `set -euo pipefail` 로 돈다 — grep 이 매치를
+# 못 찾으면 1 을 반환하고, 그러면 아래의 `fail` 이 **출력되기 전에** 스크립트가 조용히
+# 죽는다. 즉 가드는 "물지만 이유를 말하지 못하는" 상태가 된다. mutation-check 로 잡았다.
+exp_line="$(printf '%s\n' "$boot_body" | grep -n 'export DEMO_DOMAIN' | head -1 | cut -d: -f1 || true)"
+up_line="$(printf '%s\n' "$boot_body"  | grep -n 'demo-up\.sh'        | head -1 | cut -d: -f1 || true)"
 [ -n "$exp_line" ] || fail "demo-boot.sh 가 DEMO_DOMAIN 을 export 하지 않습니다 —"\
   $'\n'"   그러면 demo.env 의 기본값 local 이 그대로 먹고 데모는 도달 불가능해집니다."
 [ -n "$up_line" ]  || fail "demo-boot.sh 가 demo-up.sh 를 호출하지 않습니다."
