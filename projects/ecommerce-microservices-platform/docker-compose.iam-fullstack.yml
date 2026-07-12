@@ -25,9 +25,26 @@
 # renders `kafka.image: alpine:3.19`.
 #
 # So this overlay declares the IAM services under names that do NOT collide
-# (`iam-mysql`, `iam-redis`) and REUSES the ecommerce stack's own `kafka` — the
-# lean file's placeholder existed only so the `kafka` hostname resolves at boot,
-# and on `ecommerce-net` the real broker already provides it.
+# (`iam-mysql`, `iam-redis`) and REUSES the ecommerce stack's own `kafka`.
+#
+# ...WHICH MEANS THE NAMES STILL HAVE TO RESOLVE. The auth-service image does not
+# read DB_HOST/REDIS_HOST to decide what to wait for — its ENTRYPOINT hardcodes a
+# literal DNS gate before the JVM even starts:
+#
+#     until getent hosts mysql && getent hosts kafka && getent hosts redis; do ...
+#
+# (apps/auth-service/Dockerfile — it exists so the JVM never caches a negative
+# lookup during Hikari/Flyway startup.) That gate — not any actual connection —
+# is the whole reason the lean file carries `kafka` and `redis` at all. On
+# ecommerce-net `kafka` and `redis` already resolve (the ecommerce stack owns
+# both), but `mysql` would NOT, because we renamed it — so auth-service hung at
+# "waiting for DNS: mysql/kafka/redis" and never went healthy. Measured in CI,
+# run 29205883948, before this alias existed.
+#
+# Hence the `mysql` network alias on iam-mysql below. Note the asymmetry it
+# leaves: the gate's `redis` resolves to the ECOMMERCE redis, while auth-service
+# actually connects to `iam-redis` (REDIS_HOST). That is fine — the gate only
+# checks that the name resolves — but it is a trap worth naming out loud.
 #
 # The two files must stay in sync on the auth-service contract (image build,
 # keys volume, issuer, ACCOUNT_SERVICE_URL). They deliberately differ on: service
@@ -52,10 +69,11 @@
 # =============================================================================
 
 services:
-  # auth_db for the IAM auth-service. Named `iam-mysql` (not `mysql`) purely to
-  # stay collision-free with the ecommerce stack; the ecommerce services are all
-  # Postgres, so there is no `mysql` key today — the rename is defensive, and it
-  # keeps this file symmetrical with `iam-redis`, which DOES collide.
+  # auth_db for the IAM auth-service. Named `iam-mysql` (not `mysql`) to stay
+  # collision-free with the ecommerce stack, and aliased back to `mysql` because
+  # the auth-service ENTRYPOINT blocks on `getent hosts mysql` before the JVM
+  # starts (see the header). The explicit name says what it is; the alias keeps
+  # the image's hardcoded DNS gate satisfied.
   iam-mysql:
     image: mysql:8.0
     command: ["--log-bin-trust-function-creators=1", "--max_connections=500"]
@@ -75,7 +93,9 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
-    networks: [ecommerce-net]
+    networks:
+      ecommerce-net:
+        aliases: [mysql]   # satisfies the auth-service ENTRYPOINT DNS gate
 
   # MUST NOT be called `redis` — the ecommerce stack already owns that key.
   # A separate instance (rather than reusing the ecommerce redis) keeps IAM's
