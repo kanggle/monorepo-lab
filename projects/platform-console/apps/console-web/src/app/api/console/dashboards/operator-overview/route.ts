@@ -62,12 +62,12 @@ export const runtime = 'nodejs';
  * No token / source PII is ever logged (only request id + status).
  */
 
-/** Target URL on the console-bff side. Env-overridable; defaults to
- *  `http://console-bff.local` per the local-network convention
- *  (ADR-MONO-001 hostname-based routing). */
+/** Target URL on the console-bff side. Env-overridable; defaults to the BFF's
+ *  address on the docker network — NOT a `*.local` Traefik hostname
+ *  (TASK-MONO-362: console-bff holds no edge router; every call is server-side). */
 function bffUrl(): string {
   const base = (
-    process.env.CONSOLE_BFF_URL || 'http://console-bff.local'
+    process.env.CONSOLE_BFF_URL || 'http://console-bff:8080'
   ).replace(/\/$/, '');
   return `${base}/api/console/dashboards/operator-overview`;
 }

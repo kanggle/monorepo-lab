@@ -24,7 +24,8 @@ HOSTS=(
     "erp.local"
     "finance.local"
     "console.local"
-    "console-bff.local"
+    # console-bff.local intentionally absent (TASK-MONO-362): the BFF is a backend
+    # service with no Traefik router — console-web reaches it on the docker network.
 )
 
 if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then

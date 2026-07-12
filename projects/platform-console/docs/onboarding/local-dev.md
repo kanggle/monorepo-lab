@@ -15,7 +15,7 @@ for the full ordered procedure and the cross-project matrix.
 | Up / down (thin standalone) | `pnpm console:up` / `pnpm console:down` |
 | Full federated demo | `pnpm console-demo:up` / `pnpm console-demo:down` |
 | Status / logs | `pnpm console:ps` / `pnpm console:logs` |
-| Entry hostname(s) | `console.local` (web), `console-bff.local` (BFF) |
+| Entry hostname(s) | `console.local` (web) — **the BFF has none, by design** (see below) |
 | Needs IAM first | ✅ `pnpm iam:up` before this stack |
 
 Quick start — thin standalone (from repo root):
@@ -35,7 +35,7 @@ pnpm console:ps
 Authoritative inventory: [`docker-compose.yml`](../../docker-compose.yml). At a glance:
 
 - **`platform-console-web`** (`console.local`, Next.js console UI).
-- **`platform-console-bff`** (`console-bff.local`, backend-for-frontend that fans out to upstream domain services).
+- **`platform-console-bff`** (**no hostname** — backend-for-frontend that fans out to upstream domain services). It holds no Traefik router: `console-web` calls it **server-side on the docker network** (`http://console-bff:8080`), and the browser never reaches it. A backend service on the shared edge would have no gateway in front of it — no rate limiting, no identity-header strip→enrich, no uniform error envelope (`platform/api-gateway-policy.md` L13/L14, enforced by `scripts/check-gateway-drift.sh`). TASK-MONO-362.
 
 ## Project-specific notes
 
