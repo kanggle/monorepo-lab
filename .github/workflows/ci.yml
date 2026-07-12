@@ -177,6 +177,12 @@ jobs:
       # AND-combining with `code-changed` would switch the guard off on exactly
       # the diff it is here to police.
       gateway-policy: ${{ steps.filter.outputs.gateway-policy }}
+      # TASK-MONO-363: same rule a fourth time, and here it is unavoidable. This
+      # drift arrives as `git add docs/adr/ADR-MONO-050-*.md` — a markdown-only
+      # diff, by construction. AND-combining with `code-changed` would skip the
+      # guard on literally every change it exists to catch, and a skipped job
+      # reports green.
+      adr-index: ${{ steps.filter.outputs.adr-index }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
@@ -291,6 +297,15 @@ jobs:
               # to bite, it must get the chance to, and a job that never runs reports
               # GREEN.
               - 'projects/*/apps/gateway-service/src/main/resources/application.yml'
+            # TASK-MONO-363: docs/adr/INDEX.md is the only entry point for "has this
+            # already been decided?". It died at ADR-MONO-012a and by 2026-07-12 was
+            # missing 38 of 53 ADRs — and was wrong about one it did list (008 was
+            # ACCEPTED on 2026-05-18; the table still said PROPOSED). Nothing failed,
+            # because the index is prose.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            adr-index:
+              - 'docs/adr/**'
+              - 'scripts/check-adr-index-drift.sh'
             # TASK-MONO-075: pure-positive enumeration of code-bearing file
             # extensions. `'some'` quantifier behaves intuitively here (no
             # negation → no quirk). markdown-only / docs-only / lifecycle-only
@@ -401,6 +416,40 @@ jobs:
 
       - name: Guard — gateway declaration <-> module <-> exposure
         run: bash scripts/check-gateway-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-363 — ADR index drift guard.
+  #
+  # docs/adr/INDEX.md is where anyone — human or agent — looks to find out what
+  # has already been decided. If a decision is not there, the honest conclusion
+  # is that it was never made, and it gets made again. The table stopped being
+  # updated at ADR-MONO-012a (2026-05-15); by 2026-07-12 it was missing 38 of 53
+  # ADRs, including 013 (console), 019 (tenant model), 022 (fulfillment), 043
+  # (notification), 047 (org-node) and 048 (gateway library) — and it was wrong
+  # about one of the 15 it did carry: ADR-MONO-008 was ACCEPTED on 2026-05-18 and
+  # the row still read PROPOSED, for two months.
+  #
+  # The Status check is the sharp one. PROPOSED -> ACCEPTED is a human gate here
+  # (an agent may not self-ACCEPT), so an index that disagrees with its ADR is
+  # either hiding a decision or inventing one.
+  #
+  # The filter is NOT AND-combined with `code-changed` — see the outputs block.
+  # Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  adr-index-drift:
+    name: ADR index drift (docs/adr/*.md vs docs/adr/INDEX.md)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.adr-index == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-adr-index-drift.sh
+
+      - name: Guard — every ADR is indexed, no phantom rows, Status matches
+        run: bash scripts/check-adr-index-drift.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-352: platform/error-handling.md calls itself the single authoritative
