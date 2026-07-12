@@ -8,7 +8,7 @@ finance/erp 서비스 보안 클래스 14파일이 **게이트웨이를 "(v1-def
 
 # Status
 
-review
+done
 
 # Owner
 
