@@ -502,6 +502,74 @@ esac
 ok "쿠키 Secure=$cookie_secure ↔ 오리진 $pub_origin (조합 안전)"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (n) 부팅 경로가 DEMO_DOMAIN 을 실제로 설정하는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-366): MONO-358 이 저장소 쪽 계약을 만들었다 — **`DEMO_DOMAIN` 을 주면 그
+# 도메인으로 뜨고 로그인까지 된다.** 그런데 **부팅 자동화가 그 계약을 쓰지 않았다.**
+# systemd 유닛이 `demo-up.sh` 를 직접 불렀고 `DEMO_DOMAIN` 은 어디에도 없었다:
+#
+#   ExecStart=... /opt/monorepo-lab/infra/demo/demo-up.sh ${DEMO_PROFILE}
+#
+# → `demo.env` 기본값 `local` → 라우터가 전부 `Host(x.local)` → 방문자 브라우저는
+# `Host: <공인IP>` 를 보내므로 **전 도메인 404**. 그런데 **컨테이너 96개는 전부 healthy
+# 하다.** healthcheck 도, compose 렌더도, CI 도 이걸 볼 수 없다 — 358 의 로그인 증명이
+# 매번 손으로 재기동해서 얻어진 이유이고, 자동 경로는 한 번도 동작한 적이 없다.
+#
+# 이 가드는 부팅 계약의 세 고리를 본다. 하나만 끊겨도 데모는 조용히 도달 불가능해진다.
+boot_sh="$ROOT/infra/demo/demo-boot.sh"
+unit="$ROOT/infra/demo/demo-stack.service"
+pkr="$ROOT/infra/demo/aws/packer/demo-ami.pkr.hcl"
+
+[ -f "$boot_sh" ] || fail "infra/demo/demo-boot.sh 가 없습니다 — 부팅 시 도메인을 파생할 곳이 없습니다."
+[ -f "$unit" ]    || fail "infra/demo/demo-stack.service 가 없습니다 — 유닛을 저장소가 소유해야 계약이 한 곳에 있습니다."
+
+# (1) 유닛이 부팅 진입점을 부르는가 — `demo-up.sh` 직접 호출은 정확히 그 결함이다.
+#     주석은 걷어내고 본다: 유닛 헤더가 결함을 **설명하느라** `demo-up.sh` 를 언급하므로,
+#     순진한 grep 은 자기 주석에 매치해 통과한다. (k) 가 358 에서 당한 함정이다.
+unit_exec="$(sed 's/#.*//' "$unit" | grep -E '^[[:space:]]*ExecStart=' || true)"
+[ -n "$unit_exec" ] || fail "demo-stack.service 에 ExecStart 가 없습니다."
+case "$unit_exec" in
+  *demo-boot.sh*) : ;;
+  *) fail "demo-stack.service 의 ExecStart 가 demo-boot.sh 를 부르지 않습니다:"\
+       $'\n'"   $unit_exec"\
+       $'\n'"→ demo-up.sh 를 직접 부르면 DEMO_DOMAIN 이 설정되지 않아 스택이 *.local 로 뜹니다."\
+       $'\n'"   방문자 브라우저는 Host: <공인IP> 를 보내므로 어떤 라우터에도 매치되지 않습니다(전 도메인 404)."\
+       $'\n'"→ systemd 의 Environment= 는 셸이 아니라 명령 치환이 안 됩니다. 공인 IP 는 부팅 시점에"\
+       $'\n'"   IMDSv2 로 읽어야 하므로 파생은 반드시 스크립트(demo-boot.sh) 안에서 일어나야 합니다." ;;
+esac
+
+# (2) 진입점이 demo-up.sh 호출 **전에** DEMO_DOMAIN 을 export 하는가.
+#     순서가 load-bearing 이다 — 나중에 export 하면 demo-up 은 이미 떠난 뒤다.
+boot_body="$(sed 's/#.*//' "$boot_sh")"
+exp_line="$(printf '%s\n' "$boot_body" | grep -n 'export DEMO_DOMAIN' | head -1 | cut -d: -f1)"
+up_line="$(printf '%s\n' "$boot_body"  | grep -n 'demo-up\.sh'        | head -1 | cut -d: -f1)"
+[ -n "$exp_line" ] || fail "demo-boot.sh 가 DEMO_DOMAIN 을 export 하지 않습니다 —"\
+  $'\n'"   그러면 demo.env 의 기본값 local 이 그대로 먹고 데모는 도달 불가능해집니다."
+[ -n "$up_line" ]  || fail "demo-boot.sh 가 demo-up.sh 를 호출하지 않습니다."
+[ "$exp_line" -lt "$up_line" ] || fail "demo-boot.sh 가 demo-up.sh 를 호출한 뒤에 DEMO_DOMAIN 을 export 합니다"\
+  $'\n'"   (export=L$exp_line, demo-up=L$up_line) — 순서가 뒤집히면 파생값이 전달되지 않습니다."
+
+# (3) demo.env 의 DEMO_DOMAIN 은 `${DEMO_DOMAIN:-local}` 이어야 한다.
+#     bare 대입(`DEMO_DOMAIN=local`)이면 demo-up.sh 의 `set -a; source demo.env` 가
+#     **demo-boot.sh 가 export 한 값을 덮어쓴다.** MONO-358 에서 실제로 당했고, 증상은
+#     "파생은 성공했는데 스택은 여전히 .local" 이라 원인이 보이지 않는다.
+grep -qE '^DEMO_DOMAIN="?\$\{DEMO_DOMAIN:-local\}"?' "$ROOT/infra/demo/demo.env" \
+  || fail "demo.env 의 DEMO_DOMAIN 이 \${DEMO_DOMAIN:-local} 형태가 아닙니다."\
+     $'\n'"→ bare 대입이면 demo-up.sh 의 'set -a; source demo.env' 가 demo-boot.sh 가 export 한"\
+     $'\n'"   파생값을 덮어씁니다. 파생은 성공하는데 스택은 여전히 .local 로 뜹니다."
+
+# (4) Packer 가 유닛을 **저장소에서** 설치하는가. 사본을 구우면 저장소가 계약을 바꿔도
+#     AMI 는 옛 유닛을 들고 있다 — 이 task 가 고치는 드리프트의 근원이다.
+if [ -f "$pkr" ]; then
+  grep -q '/opt/monorepo-lab/infra/demo/demo-stack.service' "$pkr" \
+    || fail "packer 템플릿이 systemd 유닛을 저장소 경로에서 설치하지 않습니다."\
+       $'\n'"→ 사본(예: ../ec2/demo-stack.service)을 구우면 저장소가 부팅 계약을 바꿔도"\
+       $'\n'"   AMI 는 옛 유닛을 들고 부팅합니다. 인스턴스에는 이미 저장소가 클론돼 있습니다."
+fi
+
+ok "부팅 계약 유지 (유닛 → demo-boot.sh → DEMO_DOMAIN export → demo-up.sh)"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0

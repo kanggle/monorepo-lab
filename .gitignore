@@ -55,3 +55,16 @@ projects/ecommerce-microservices-platform/apps/web-store/webstore-*.png
 # committed log fixture is never swallowed.
 hs_err_pid*.log
 replay_pid*.log
+
+# --- infra/demo/aws (TASK-MONO-366) -----------------------------------------
+# Terraform state carries resource IDs and can carry secrets; tfvars carries the
+# operator's own public IP (admin_ssh_cidr). Neither belongs in a public repo.
+# `terraform.tfvars.example` IS committed — it is the reproduction contract.
+infra/demo/aws/terraform/terraform.tfvars
+infra/demo/aws/terraform/*.tfstate
+infra/demo/aws/terraform/*.tfstate.*
+infra/demo/aws/terraform/.terraform/
+infra/demo/aws/terraform/.terraform.lock.hcl
+infra/demo/aws/terraform/tfplan
+infra/demo/aws/terraform/lambda/__pycache__/
+infra/demo/aws/terraform/*.zip
