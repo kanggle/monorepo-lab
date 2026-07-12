@@ -8,7 +8,7 @@ TASK-MONO-360
 
 # Status
 
-review
+done
 
 # Owner
 
