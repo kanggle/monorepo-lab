@@ -70,7 +70,9 @@ proposed. That distinction is not decorative: it is why `ADR-MONO-008` reads 202
 records only when it was proposed. `018` and `019` are the same shape. **Date is NOT
 guarded** — 12 ADRs carry no `**Date:**` header at all, and among those that do, the field
 sometimes means "proposed" and sometimes "accepted", so a machine check would be a false-
-positive generator rather than a guard. See TASK-MONO-363 § "does not guard".
+positive generator rather than a guard. The root cause is that the Authoring Convention
+below never said what `Date` means. **TASK-MONO-369** settles the semantics, fills the 12
+gaps, and only then guards this axis.
 
 ---
 
