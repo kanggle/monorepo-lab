@@ -82,6 +82,22 @@ Spring Authorization Server 는 로그인 리다이렉트를 **자기가 보는 
 
 ⇒ **`iam.local` Traefik 경로의 콘솔 로그인은 원래부터 동작한 적이 없다.** 동작하는 CI e2e 는 Traefik 을 아예 우회해 `auth-service:8081` 을 issuer 로 쓴다 — 그래서 아무도 눈치채지 못했다.
 
+### 결함 G — `Secure` 쿠키 + 평문 HTTP = 브라우저가 쿠키를 **저장조차 하지 않는다**
+
+브라우저는 `http://` 로 온 `Secure` 쿠키를 **localhost 를 제외한 모든 오리진에서 거부**한다(localhost 만 spec 상 trustworthy origin). 콘솔의 PKCE/state 쿠키는 `Secure` 라서 데모 도메인에서 **아예 저장되지 않았고**, 콜백은 매번 `error=invalid_state` 로 튕겼다. curl 이 그대로 재현했다 — Set-Cookie 를 받고도 **쿠키 자가 비어 있다.**
+
+⇒ 부수적 결론: **지금껏 동작한 콘솔 로그인 경로는 `localhost:3000` 뿐이다.** `console.local` 도 같은 이유로 실패한다.
+
+**TLS 로 피할 수 없다.** `sslip.io` 는 **Public Suffix List 에 없다**(리스트 대조 확인, `github.io` 를 positive control 로 사용). PSL 에 없으면 Let's Encrypt 는 `sslip.io` **전체를 하나의 등록 도메인**으로 취급하므로 주당 50장 한도를 전 세계 사용자와 공유한다 — 실 도메인을 사지 않는 한 ACME 발급이 성립하지 않는다. **데모는 HTTP 여야 하고, 그렇다면 `Secure` 를 배포별로 제어할 수 있어야 한다.**
+
+### 결함 H — `NEXT_PUBLIC_APP_URL` 은 런타임에 파생되는 호스트를 가리킬 수 없다
+
+Next 는 `process.env.NEXT_PUBLIC_*` 리터럴을 **빌드타임에 인라인**한다. 즉 프리베이크된 AMI 이미지는 **빌드가 알던 호스트에 영구 고정**된다. `env.ts` 헤더가 스스로 못박아 둔 규칙을 정면으로 깬다:
+
+> *server-only secrets injected at runtime, not build time; **build artifacts must work across environments without rebuild***
+
+온디맨드 데모의 호스트명은 부팅 때 인스턴스 IP 에서 파생된다 ⇒ 로그인에 성공해도 콜백이 브라우저를 **해소 불가능한 `http://console.local/...`** 로 302 시킨다(EC2 실측).
+
 ---
 
 # 설계
@@ -147,6 +163,18 @@ iam `application.yml` 이 이미 둘을 나눠 갖고 있고, `docker-compose.e2
 - 게이트웨이 라우터와 **같은 호스트명**(`iam.${DEMO_DOMAIN}`)을 쓰고 PathPrefix 로 좁힌 뒤 `priority` 를 높여 앞세운다. 호스트가 하나여야 SAS 세션 쿠키(JSESSIONID)가 `authorize → /login → authorize` 왕복 내내 유지된다.
 - `SERVER_FORWARD_HEADERS_STRATEGY: FRAMEWORK` 가 **동작 조건**이다. 없으면 Spring 이 X-Forwarded-* 를 무시하고 다시 내부 호스트로 리다이렉트한다. auth-service 의 `application.yml` 에는 이 설정이 없으므로 **제품 코드를 건드리지 않고 데모 오버레이에서 env 로만** 켠다.
 
+## 8) 쿠키 `Secure` 를 배포별로 (결함 G) — 기본값은 그대로 `true`
+
+`CONSOLE_COOKIE_SECURE` 로 게이트한다. **opt-OUT 이고, 정확히 문자열 `"false"` 만** 끈다 — 미설정·빈값·`"FALSE"`·`"0"`·`" false"` 는 전부 Secure 를 유지한다. 배포 env 의 오타가 **프로덕션 세션 쿠키에서 Secure 를 조용히 벗기는** 것이 이 변경의 유일한 진짜 위험이므로, 실패는 안전한 쪽으로 떨어뜨린다. 단위 테스트가 양방향으로 못박는다.
+
+진짜 다운그레이드는 **조합** 하나뿐이다: `https://` 오리진에서 Secure 를 끄는 것. 가드 (m) 이 그것만 정확히 막는다(끄는 행위 자체를 금지하면 데모가 성립하지 않는다).
+
+## 9) 브라우저가 볼 오리진을 런타임에 (결함 H)
+
+`CONSOLE_PUBLIC_ORIGIN` — **`NEXT_PUBLIC_` 접두사가 없으므로 인라인되지 않고 런타임에 읽힌다.** 미설정 시 `NEXT_PUBLIC_APP_URL` 로 폴백하므로 기존 배포는 **바이트 동일**하다.
+
+같은 뿌리의 곁가지: 대시보드의 두 same-origin fetch 가 절대 URL 을 `NEXT_PUBLIC_APP_URL` 로 만들고 있었다. **same-origin 호출에는 base 가 애초에 필요 없다** — 브라우저에서는 상대 경로를 쓰고, 절대 URL 이 필요한 SSR 경로에서만 런타임 오리진을 쓴다.
+
 ## 7) 데모 도메인 `redirect_uri` 를 런타임에 등록 (결함 E)
 
 마이그레이션은 정적이고 도메인은 런타임에 정해진다 → **`infra/demo/seed-demo-domain.sh`** 가 부팅 후 등록한다.
@@ -168,15 +196,17 @@ iam `application.yml` 이 이미 둘을 나눠 갖고 있고, `docker-compose.e2
 - `infra/demo/projects.sh` — `COMPOSE[iam]` 에 오버레이 추가.
 - `infra/demo/demo.env` — `DEMO_DOMAIN=local` + console/iam OIDC·CORS 값을 `${DEMO_DOMAIN}` 기반으로 **일관되게** 주입.
 - `projects/platform-console/docker-compose{,.e2e}.yml` — console-web 헬스체크 `localhost` → `127.0.0.1`(결함 D).
-- `infra/demo/verify-demo-wrapper.sh` — **가드 (i)(j)(k)(l)**.
+- **`projects/platform-console/apps/console-web/`** — 쿠키 `Secure` env 게이트(결함 G) + 런타임 오리진 `CONSOLE_PUBLIC_ORIGIN`(결함 H) + same-origin fetch 상대화. **기본값 전부 불변**(미설정 시 기존 동작과 바이트 동일).
+- `infra/demo/verify-demo-wrapper.sh` — **가드 (i)(j)(k)(l)(m)**.
 - `infra/traefik/README.md` · `infra/demo/README.md` 갱신.
 
 ## Out of Scope
 
-- TLS/HTTPS (sslip.io + HTTP 로 충분; ACM/Let's Encrypt 는 별개 증분).
+- **TLS/HTTPS** — 실 도메인 없이는 **불가능**함을 확인했다(결함 G): `sslip.io` 가 PSL 에 없어 Let's Encrypt 가 도메인 전체를 한 덩어리로 묶는다. 데모는 HTTP 로 간다. 도메인 구매 + Route53 + Traefik ACME 는 **별개 증분**이며, 그때 `CONSOLE_COOKIE_SECURE` 를 지우면(기본 `true`) 그대로 강화된다.
 - EIP · 커스텀 도메인.
 - `projects/*/docker-compose.e2e.yml` 의 CI 동작(무변경).
 - `wms-notification-service` unhealthy(별개 티켓).
+- **데모 호스트 systemd 유닛의 `DEMO_DOMAIN` 파생** — 현재 `demo-stack.service` 는 스택을 `*.local` 로 올린다(IMDSv2 를 읽지 않는다). 부팅 자동화는 PoC(`scratchpad/ondemand-demo/`) 소유이고 이 저장소 밖이다. 저장소 쪽 계약(`DEMO_DOMAIN` 을 주면 그 도메인으로 뜬다)은 이 task 가 이행한다.
 
 ---
 
@@ -186,19 +216,33 @@ iam `application.yml` 이 이미 둘을 나눠 갖고 있고, `docker-compose.e2
 - [ ] **로컬 회귀 0**: 9개 프로젝트 compose 를 **단독 렌더**(`DEMO_DOMAIN` 미설정)했을 때 `docker compose config` 결과가 변경 전과 **바이트 동일**. ← 개발자 무영향의 유일한 증거.
       **정확히 말한다**: *데모* 렌더(`demo.env` 를 source 한 상태)는 **의도적으로 바뀐다** — iam 이 Traefik 엣지를 얻고, OIDC issuer/jwks 가 재배선된다. **그게 이 task 의 수정 내용이다.** 둘을 뭉뚱그려 "전부 동일" 이라 주장하면 거짓이 된다.
 - [ ] `DEMO_DOMAIN=1-2-3-4.sslip.io` 시 렌더에 그 호스트가 나타나고, **Traefik alias 목록과 Host() 목록이 정확히 일치**.
-- [ ] **가드 4종 — 전부 mutation-check 필수.** 통과만으로는 가드가 무는지 알 수 없다.
+- [x] **가드 5종 — 전부 mutation-check 완료(M1~M7).** 통과만으로는 가드가 무는지 알 수 없다.
       - **(i)** 렌더된 모든 `Host(...)` 호스트명이 Traefik network alias 에 존재한다(그 역도).
       - **(j)** IPv4-only 바인딩(`HOSTNAME=0.0.0.0`) ∧ 헬스체크가 `localhost` → FAIL (결함 D).
       - **(k)** 마이그레이션의 `.local` 콜백을 시드 치환이 전부 덮는가 + `demo-up.sh` 가 시드를 호출하는가 (결함 E). **vacuity 가드 포함** — 0건 발견 시 통과가 아니라 FAIL(grep 이 깨진 것이다).
       - **(l)** OIDC 라우터와 `SERVER_FORWARD_HEADERS_STRATEGY` 가 분리되지 않는가 (결함 F). 한쪽만 있으면 **라우팅은 되는데 로그인만 죽는다** — 가장 진단하기 나쁜 모양.
-- [ ] **iam 이 Traefik 으로 라우팅**되고 `http://iam.${DEMO_DOMAIN}/actuator/health` = `{"status":"UP"}`, `/oauth2/jwks` = 200, discovery 의 `issuer` 가 데모 도메인.
-- [ ] **실기동 로그인 증명 (이것만이 진짜 검증이다)**: EC2 에서 `http://console.<ip>.sslip.io/` → **OIDC 로그인 왕복 성공**. 왕복의 각 홉을 명시적으로 확인한다:
-      1. console `/api/auth/login` → 302 to `http://iam.<D>/oauth2/authorize` (`redirect_uri=http://console.<D>/api/auth/callback`)
-      2. authorize → 302 to **`http://iam.<D>/login`** — `auth-service:8081` 이 새어나오면 실패 (결함 F)
-      3. `/login` 200 (SAS HTML 폼) → POST → 302 back to authorize
-      4. authorize → 302 to `http://console.<D>/api/auth/callback?code=…` — **`redirect_uri` 시드가 없으면 여기서 401** (결함 E)
-      5. 콜백 → 콘솔 세션 성립
-      `docker compose config` 렌더도, 컨테이너 healthy 도 **이것을 증명하지 못한다**.
+      - **(m)** `CONSOLE_COOKIE_SECURE=false` ∧ `https://` 오리진 → FAIL (결함 G). `CONSOLE_PUBLIC_ORIGIN` 누락도 FAIL (결함 H).
+
+      > **mutation 이 가드 자신의 결함을 둘 잡았다.** 둘 다 **실제 트리에서는 통과**했으므로, 주입하지 않았으면 "가드 있음" 이라고 보고했을 것이다.
+      > - (k) 의 `grep -q 'seed-demo-domain.sh'` 가 **자기 주석 줄**에 매치 → 시드 호출을 통째로 지워도 초록.
+      > - (m) 이 YAML 을 `': '` 로 field-split → `http://` 의 스킴에서 잘려 `$2="http"` → **위험 조합(https)을 영원히 못 잡음.**
+- [x] **iam 이 Traefik 으로 라우팅**되고 `http://iam.${DEMO_DOMAIN}/actuator/health` = `{"status":"UP"}`, `/oauth2/jwks` = 200, discovery 의 `issuer` 가 데모 도메인. ✅ 14 호스트명 전부 라우팅.
+- [x] **실기동 로그인 증명 (이것만이 진짜 검증이다)** — EC2 `3-36-16-31.sslip.io`, 커밋 `c5d9076`, **평문 HTTP**:
+
+      0) signup 409 (기존 계정)
+      1) console /api/auth/login  → http://iam.3-36-16-31.sslip.io/oauth2/authorize
+         PKCE/state 쿠키 클라이언트 보관: **2개**   ← 수정 전 **0개** (결함 G)
+      2) authorize                → http://iam.3-36-16-31.sslip.io/login   ← 내부 DNS 아님 (결함 F)
+      3) SAS 로그인 폼            → 200
+      4) POST /login              → authorize 재개
+      5) authorize                → http://console.3-36-16-31.sslip.io/api/auth/callback?code=…  (결함 E)
+      6) callback                 → http://console.3-36-16-31.sslip.io/onboarding  ← console.local 아님 (결함 H)
+      7) session                  → {"authenticated":true}
+      8) 랜딩 페이지              → 200  <title>Platform Console</title>
+
+      콜백이 `/onboarding` 으로 가는 것은 정상이다 — 이 계정은 소속 조직이 없어 self-service 온보딩으로 라우팅된다(ADR-MONO-044 / PC-FE-182).
+      `docker compose config` 렌더도, 컨테이너 healthy 도 **이것을 증명하지 못한다.**
+- [x] console-web: `next lint` clean · `tsc` clean · vitest **2804/2804 GREEN**.
 - [ ] CI GREEN (demo wrapper smoke 포함).
 
 ---
