@@ -85,7 +85,18 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
     await erp.click();
     const masters = page.getByTestId('nav-erp-masters');
     await expect(masters).toBeVisible();
-    await expect(masters).toHaveAttribute('href', '/erp');
+    // PC-FE-232 (orthodox parity): the masters surface moved OFF the domain root.
+    // `/erp` is now the 개요 child; 마스터 lives at `/erp/masters`. Watch the two
+    // apart — swapping them keeps the test green while inverting its meaning.
+    await expect(masters).toHaveAttribute('href', '/erp/masters');
+    await expect(page.getByTestId('nav-erp-overview')).toHaveAttribute(
+      'href',
+      '/erp',
+    );
+    await expect(page.getByTestId('nav-erp-guide')).toHaveAttribute(
+      'href',
+      '/erp/guide',
+    );
     await expect(page.getByTestId('nav-erp-orgview')).toHaveAttribute(
       'href',
       '/erp/orgview',
@@ -98,9 +109,12 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
       'href',
       '/erp/delegation',
     );
-    // The 마스터 child navigates to /erp and renders the masters screen.
+    // The 마스터 child navigates to /erp/masters and renders the masters screen.
+    // NOTE: the glob `**/erp` does NOT match `/erp/masters` — it only matches paths
+    // ENDING in /erp. Fixing the href assertion above without fixing this one just
+    // moves the failure three lines down.
     await masters.click();
-    await page.waitForURL('**/erp', { timeout: 15_000 });
+    await page.waitForURL('**/erp/masters', { timeout: 15_000 });
     await expect(
       page.getByRole('heading', { name: 'ERP 마스터' }),
     ).toBeVisible();
