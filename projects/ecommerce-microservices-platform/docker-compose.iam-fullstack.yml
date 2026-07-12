@@ -1,0 +1,159 @@
+# =============================================================================
+# IAM overlay for the FULL-STACK web-store e2e lane (TASK-MONO-373)
+# =============================================================================
+# Adds a real IAM (GAP) OIDC provider to the ecommerce backend stack, so the
+# consumer checkout-path specs (golden-flow / cart-management / wishlist) can
+# actually log in. Before this file, nightly had two jobs each holding HALF the
+# stack — `frontend-e2e-fullstack` booted the ecommerce backend but no IAM, and
+# `web-store-iam-logout-e2e` booted IAM but no ecommerce backend — so no job
+# ever satisfied both conditions and those specs ran NOWHERE.
+#
+# Usage (CI only — this file is an overlay, never standalone):
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.ci.yml \
+#                  -f docker-compose.iam-fullstack.yml up -d ...
+#
+# -----------------------------------------------------------------------------
+# WHY THIS IS A SEPARATE FILE FROM `docker-compose.iam-e2e.yml`
+# -----------------------------------------------------------------------------
+# The lean file CANNOT be merged into the ecommerce stack with `-f`. It defines
+# services named `kafka` and `redis`, and so does docker-compose.yml. Compose
+# merges same-named services key-by-key with NO error and NO warning — the lean
+# file's `kafka` (an `alpine:3.19` + `sleep infinity` DNS placeholder) would
+# override the image of the ecommerce stack's REAL broker, silently breaking all
+# 12 backends. Measured, not assumed: `docker compose config` on the merged pair
+# renders `kafka.image: alpine:3.19`.
+#
+# So this overlay declares the IAM services under names that do NOT collide
+# (`iam-mysql`, `iam-redis`) and REUSES the ecommerce stack's own `kafka`.
+#
+# ...WHICH MEANS THE NAMES STILL HAVE TO RESOLVE. The auth-service image does not
+# read DB_HOST/REDIS_HOST to decide what to wait for — its ENTRYPOINT hardcodes a
+# literal DNS gate before the JVM even starts:
+#
+#     until getent hosts mysql && getent hosts kafka && getent hosts redis; do ...
+#
+# (apps/auth-service/Dockerfile — it exists so the JVM never caches a negative
+# lookup during Hikari/Flyway startup.) That gate — not any actual connection —
+# is the whole reason the lean file carries `kafka` and `redis` at all. On
+# ecommerce-net `kafka` and `redis` already resolve (the ecommerce stack owns
+# both), but `mysql` would NOT, because we renamed it — so auth-service hung at
+# "waiting for DNS: mysql/kafka/redis" and never went healthy. Measured in CI,
+# run 29205883948, before this alias existed.
+#
+# Hence the `mysql` network alias on iam-mysql below. Note the asymmetry it
+# leaves: the gate's `redis` resolves to the ECOMMERCE redis, while auth-service
+# actually connects to `iam-redis` (REDIS_HOST). That is fine — the gate only
+# checks that the name resolves — but it is a trap worth naming out loud.
+#
+# The two files must stay in sync on the auth-service contract (image build,
+# keys volume, issuer, ACCOUNT_SERVICE_URL). They deliberately differ on: service
+# names, network, and the absence of a kafka placeholder here.
+#
+# -----------------------------------------------------------------------------
+# WHY `account-mock` AND NOT A REAL account-service
+# -----------------------------------------------------------------------------
+# BE-407 made GAP form-login resolve tenant_type from account-service as a
+# NON-fail-soft call, so the stack cannot omit a responder outright (login would
+# fail closed as "Invalid email or password"). The nginx stub answers only
+# GET /internal/tenants/{tid}; the roles / entitled-domains calls 404 and are
+# fail-soft, falling back to RoleSeedPolicy (ecommerce -> CUSTOMER), which is
+# exactly the role web-store's sign-in guard requires.
+#
+# CONSEQUENCE (TASK-MONO-378): because that seed is keyed on the *client's*
+# platform (ecommerce), EVERY credential logging in through web-store gets
+# CUSTOMER. A token WITHOUT CUSTOMER is therefore unrepresentable here, so
+# `account-type-guard.spec.ts` (which asserts an operator is rejected) cannot be
+# exercised against this stack at all. It needs a real account-service — that is
+# MONO-378, and the spec is `test.fixme()`-marked with that reference.
+# =============================================================================
+
+services:
+  # auth_db for the IAM auth-service. Named `iam-mysql` (not `mysql`) to stay
+  # collision-free with the ecommerce stack, and aliased back to `mysql` because
+  # the auth-service ENTRYPOINT blocks on `getent hosts mysql` before the JVM
+  # starts (see the header). The explicit name says what it is; the alias keeps
+  # the image's hardcoded DNS gate satisfied.
+  iam-mysql:
+    image: mysql:8.0
+    command: ["--log-bin-trust-function-creators=1", "--max_connections=500"]
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      AUTH_DB_PASSWORD: auth_pass
+      ACCOUNT_DB_PASSWORD: account_pass
+      SECURITY_DB_PASSWORD: security_pass
+      ADMIN_DB_PASSWORD: admin_pass
+      COMMUNITY_DB_PASSWORD: community_pass
+      MEMBERSHIP_DB_PASSWORD: membership_pass
+    volumes:
+      - ../iam-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      ecommerce-net:
+        aliases: [mysql]   # satisfies the auth-service ENTRYPOINT DNS gate
+
+  # MUST NOT be called `redis` — the ecommerce stack already owns that key.
+  # A separate instance (rather than reusing the ecommerce redis) keeps IAM's
+  # keyspace from sharing a DB with the gateway's rate-limit buckets.
+  iam-redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [ecommerce-net]
+
+  account-mock:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./apps/web-store/e2e/fixtures/account-mock.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [ecommerce-net]
+
+  auth-service:
+    build:
+      context: ../iam-platform
+      dockerfile: apps/auth-service/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: e2e
+      DB_HOST: iam-mysql
+      DB_PORT: "3306"
+      DB_NAME: auth_db
+      DB_USERNAME: auth_user
+      DB_PASSWORD: auth_pass
+      REDIS_HOST: iam-redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      # The lean stack points this at a closed port on purpose: auth-service
+      # never produces in the e2e profile. Kept identical here so this overlay
+      # is a minimal delta from a configuration already proven green in nightly.
+      KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9999
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+      # The issuer host must be spelled the SAME from inside docker (where it
+      # resolves to this container) and from the host (where /etc/hosts maps it
+      # to 127.0.0.1 and `ports:` publishes 8081). One string, both sides — that
+      # is why the gateway, the browser and the Next.js server can all agree on
+      # the `iss` value. Same constraint as platform-console's e2e (PC-FE-028).
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_PRIVATE_KEY_PATH: file:/app/keys/private.pem
+      JWT_PUBLIC_KEY_PATH: file:/app/keys/public.pem
+      ACCOUNT_SERVICE_URL: http://account-mock:8080
+    volumes:
+      - ../iam-platform/apps/auth-service/src/test/resources/keys:/app/keys:ro
+    depends_on:
+      iam-mysql: { condition: service_healthy }
+      iam-redis: { condition: service_healthy }
+      account-mock: { condition: service_started }
+    ports: ["8081:8081"]
+    networks: [ecommerce-net]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s

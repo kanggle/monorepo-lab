@@ -4,7 +4,12 @@ name: Nightly E2E (full-stack web-store + 5 backend full suites + cross-project 
 #
 #   1. ecommerce frontend-e2e-fullstack (TASK-MONO-014) — Playwright 4 specs
 #      against docker-compose 12 backends + Postgres ×10 + Kafka + Redis +
-#      Elasticsearch + MinIO + web-store Next.js.
+#      Elasticsearch + MinIO + IAM (GAP OIDC) + web-store Next.js.
+#      NOTE (TASK-MONO-373): "4 specs" was false for months — the job booted the
+#      backend but no IAM, so the 4 IAM-dependent specs were skipped and exactly
+#      ONE spec ran (auth-redirect, which makes zero backend calls). MONO-373
+#      added the IAM overlay; the count is true again for 3 of them, and the 4th
+#      (account-type-guard) is `test.fixme()` — see TASK-MONO-378.
 #   2. wms-platform-e2e-full        — wms gateway-master @Tag("full") method-
 #                                      level subset (2 method: RateLimit 800-
 #                                      burst + MasterOutage container-pause).
@@ -221,9 +226,24 @@ jobs:
     # without architectural change. Local developers should not use the
     # overlay — `pnpm traefik:up` + http://ecommerce.local/ is the dev path.
     #
+    # TASK-MONO-373: this job now also boots a real IAM (GAP OIDC) via
+    # docker-compose.iam-fullstack.yml and runs with SKIP_GAP_E2E=0. Before that
+    # it booted 22 containers and ran exactly one spec — `auth-redirect`, which
+    # asserts a NextAuth middleware redirect and makes ZERO backend calls. The
+    # job would have passed with every backend switched off. The four specs that
+    # exercise the checkout path were skipped here (no IAM) and skipped in
+    # web-store-iam-logout-e2e too (no ecommerce backend): each lane held half
+    # the stack, so those specs ran in NO job at all. `Assert the required specs
+    # actually ran` below is what stops that from silently coming back.
+    #
     # Scoped to kanggle/monorepo-lab: extracted portfolio repos have no backend
-    # stack and the smoke job (frontend-e2e-smoke in ci.yml) covers them instead.
-    # TASK-MONO-014, TASK-MONO-024, TASK-MONO-045.
+    # stack, so THOSE REPOS get frontend coverage from the smoke job
+    # (frontend-e2e-smoke in ci.yml) instead of this one. To be explicit, since
+    # the wording used to invite the opposite reading: the smoke job does NOT
+    # cover the specs this job skips. It runs a different directory entirely
+    # (playwright.smoke.config.ts testDir = ./e2e-smoke, one file), while these
+    # specs live in ./e2e.
+    # TASK-MONO-014, TASK-MONO-024, TASK-MONO-045, TASK-MONO-373.
     if: github.repository == 'kanggle/monorepo-lab'
     defaults:
       run:
@@ -241,6 +261,27 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # --- IAM (TASK-MONO-373) -------------------------------------------------
+      # The ecommerce boot-jars artifact does not carry auth-service (it lives in
+      # projects/iam-platform), and the iam Dockerfile COPYs a prebuilt jar — so
+      # build it here, exactly as web-store-iam-logout-e2e does.
+      - name: Set up JDK 21 + Gradle (for the IAM auth-service jar)
+        uses: ./.github/actions/setup-java-gradle
+
+      - name: Build IAM auth-service bootJar
+        working-directory: ${{ github.workspace }}
+        run: ./gradlew :projects:iam-platform:apps:auth-service:bootJar --no-daemon
+
+      - name: Issuer hostname resolves on the host (browser + Next.js server)
+        # The OIDC issuer is spelled `http://auth-service:8081` from INSIDE docker
+        # (where it is a container name on ecommerce-net) — so the gateway's JWKS
+        # fetch and the token's `iss` agree. The browser and the host-side Next.js
+        # server must resolve the SAME string, or the `iss` check fails and the
+        # OIDC redirect goes nowhere. Hence /etc/hosts + the published 8081.
+        # Same constraint as platform-console's e2e (PC-FE-028).
+        working-directory: ${{ github.workspace }}
+        run: echo "127.0.0.1 auth-service" | sudo tee -a /etc/hosts
 
       - name: Download ecommerce boot jars
         uses: actions/download-artifact@v4
@@ -290,13 +331,24 @@ jobs:
           GRAFANA_ADMIN_PASSWORD=admin
           CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
           OAUTH_CALLBACK_ALLOWLIST=http://localhost:3000/oauth/callback
+          # TASK-MONO-373 — point the gateway's OIDC validation at the IAM this
+          # job now boots. docker-compose.yml already reads all three through
+          # `${VAR:-http://iam.local}` substitution, so wiring the real IdP in
+          # needs ZERO change to the compose file itself.
+          OIDC_ISSUER_URL=http://auth-service:8081
+          JWT_JWKS_URI=http://auth-service:8081/oauth2/jwks
+          OIDC_ALLOWED_ISSUERS=http://auth-service:8081
           EOF
 
       - name: Build web-store (Next.js prod build)
         # NEXT_PUBLIC_* vars are baked into the bundle at build time, not runtime.
         # Set the gateway URL here so browser-side API calls reach port 18080.
+        # The OIDC/NextAuth values are read at RUNTIME by the server (set on the
+        # e2e run step); only AUTH_TRUST_HOST is wanted at build (TASK-MONO-373,
+        # mirroring web-store-iam-logout-e2e).
         env:
           NEXT_PUBLIC_API_URL: http://localhost:18080
+          AUTH_TRUST_HOST: 'true'
         run: pnpm --filter web-store build
 
       - name: Ensure traefik-net exists (CI mitigation for TASK-MONO-024)
@@ -316,12 +368,22 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: docker build -t monorepo/java-service-base:v1 docker/java-service-base
 
-      - name: Start docker compose stack (backends + infra, no observability)
+      - name: Start docker compose stack (backends + infra + IAM, no observability)
         # Apply the CI overlay so gateway-service is published on host
-        # port 18080 (the shared Traefik stack is not started in CI).
+        # port 18080 (the shared Traefik stack is not started in CI), and the
+        # IAM overlay (TASK-MONO-373) so the checkout-path specs can log in.
+        #
+        # WARNING — do NOT reach for `docker-compose.iam-e2e.yml` here. It names
+        # services `kafka` and `redis`, and so does docker-compose.yml. Compose
+        # merges same-named services silently: `docker compose config` on that
+        # pair renders the ecommerce broker as `image: alpine:3.19` /
+        # `command: [sleep, infinity]`, with no error and no warning. That is why
+        # docker-compose.iam-fullstack.yml exists and uses collision-free names.
         run: |
-          # auth-postgres and auth-service excluded by TASK-BE-132 — decommissioned.
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml up --build -d \
+          # auth-postgres and the OLD ecommerce auth-service were removed by
+          # TASK-BE-132. The `auth-service` below is the IAM (GAP) one, from
+          # projects/iam-platform — a different service with the same name.
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.iam-fullstack.yml up --build -d \
             kafka redis elasticsearch minio minio-init \
             product-postgres order-postgres payment-postgres \
             user-postgres batch-postgres shipping-postgres review-postgres \
@@ -329,7 +391,24 @@ jobs:
             product-service search-service user-service \
             order-service payment-service batch-worker shipping-service \
             review-service promotion-service notification-service \
-            gateway-service
+            gateway-service \
+            iam-mysql iam-redis account-mock auth-service
+
+      - name: Wait for IAM auth-service healthy
+        run: |
+          echo "Waiting for the IAM auth-service to be healthy (up to 5 min)..."
+          cid="$(docker compose -f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.iam-fullstack.yml ps -q auth-service)"
+          for i in $(seq 1 60); do
+            s="$(docker inspect -f '{{.State.Health.Status}}' "$cid")"
+            if [ "$s" = "healthy" ]; then
+              echo "auth-service healthy after $((i * 5))s"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "auth-service did not become healthy within 5 minutes"
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.iam-fullstack.yml logs --tail=80 auth-service
+          exit 1
 
       - name: Wait for gateway health
         # docker-compose.ci.yml publishes gateway-service on host port 18080.
@@ -345,35 +424,77 @@ jobs:
             sleep 10
           done
           echo "Gateway did not become healthy within 7 minutes"
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail=50 gateway-service
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.iam-fullstack.yml logs --tail=50 gateway-service
           exit 1
+
+      # --- seed the ONE identity, on BOTH sides (TASK-MONO-373) ----------------
+      # The consumer exists twice: as a credential in IAM (auth_db.credentials)
+      # and as a profile in ecommerce (user_db.user_profiles). In production the
+      # second is created by the `account.created` Kafka event; this stack cannot
+      # emit it (the credential is inserted by SQL, and auth-service points at a
+      # closed broker port), so it is seeded directly.
+      #
+      # The two rows MUST agree on the UUID: the gateway forwards
+      # X-User-Id <- jwt.sub, and since ADR-MONO-040 Phase 3B the SAS `sub` IS
+      # credentials.account_id. If they drift, wishlist writes 404 — which is the
+      # exact failure TASK-MONO-291 spent a task diagnosing.
+      - name: Seed the IAM consumer credential
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.iam-fullstack.yml exec -T iam-mysql \
+            mysql -uroot -prootpass \
+            < apps/web-store/e2e/fixtures/iam-consumer-seed.sql
+
+      - name: Seed the ecommerce user profile for that same identity
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.iam-fullstack.yml exec -T user-postgres \
+            psql -U user_user -d user_db \
+            < apps/web-store/e2e/fixtures/user-profile-seed.sql
 
       - name: Install Playwright browsers (chromium, with system deps)
         run: pnpm --filter web-store exec playwright install --with-deps chromium
 
       - name: Run full-stack E2E
-        # SKIP_GAP_E2E gates the 4 IAM-dependent specs (account-type-guard,
-        # cart-management, golden-flow, wishlist) at the Playwright runner
-        # level via `test.skip(shouldSkipGap, ...)` in each spec file. The
-        # docker-compose stack does NOT yet boot a IAM container (deferred per
-        # TASK-MONO-014 § Out of Scope), so these specs would otherwise drive
-        # NextAuth `/api/auth/signin/gap` → OIDC discovery against
-        # OIDC_ISSUER_URL=http://127.0.0.1:1 (closed loopback per
-        # playwright.config.ts webServer.env) and emit `fetch failed`.
-        # The webServer env already carries SKIP_GAP_E2E=1 to gate NextAuth
-        # boot — but the runner process needs it too to honor the
-        # spec-level `test.skip()` gate. Setting it once at the job level
-        # keeps both processes in sync.
+        # SKIP_GAP_E2E=0 (TASK-MONO-373): the stack now boots a real IAM, so the
+        # checkout-path specs finally run. It must be set for BOTH processes —
+        # the Playwright runner (which honors the spec-level `test.skip()` gate)
+        # AND the webServer env, which playwright.config.ts passes through
+        # separately to gate NextAuth's OIDC boot. Setting it at the job level
+        # keeps them in sync; the OIDC_* values below flow into the webServer the
+        # same way, replacing the closed-loopback default (http://127.0.0.1:1).
+        #
+        # `--reporter=list,json` adds the machine-readable report the next step
+        # asserts on. A green run is not evidence — the counts are.
+        working-directory: projects/ecommerce-microservices-platform/apps/web-store
         env:
-          SKIP_GAP_E2E: '1'
-        run: pnpm --filter web-store run e2e
+          CI: '1'
+          SKIP_GAP_E2E: '0'
+          OIDC_ISSUER_URL: http://auth-service:8081
+          ECOMMERCE_WEB_STORE_CLIENT_ID: ecommerce-web-store-client
+          ECOMMERCE_WEB_STORE_CLIENT_SECRET: ecommerce-dev
+          NEXTAUTH_SECRET: fullstack-iam-e2e-secret
+          NEXTAUTH_URL: http://localhost:3000
+          AUTH_TRUST_HOST: 'true'
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-report/results.json
+        run: pnpm exec playwright test --reporter=list,json
+
+      - name: Assert the required specs actually ran
+        # THE POINT OF THIS TASK. Before MONO-373 this job was green while running
+        # a single spec that makes no backend calls — it would have passed with
+        # every backend switched off. A skipped test reports green, so "the job
+        # passed" cannot distinguish "the checkout path works" from "the checkout
+        # path was never tested". This step can.
+        if: always()
+        working-directory: projects/ecommerce-microservices-platform/apps/web-store
+        run: node e2e/tools/assert-specs-ran.mjs playwright-report/results.json
 
       - name: Stop docker compose stack
         if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml -f docker-compose.iam-fullstack.yml down
 
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload Playwright report
+        # Uploaded on success too: AC-2's evidence (the per-spec run counts) is
+        # only inspectable if the report survives a GREEN run.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-fullstack-nightly
