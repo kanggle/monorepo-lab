@@ -4,6 +4,14 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.redis.testcontainers.RedisContainer;
 import java.time.Duration;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -70,11 +78,78 @@ public abstract class OutboundServiceIntegrationBase {
     protected static final WireMockServer WIREMOCK =
             new WireMockServer(WireMockConfiguration.options().dynamicPort());
 
+    /**
+     * Every topic an outbound-service {@code @KafkaListener} subscribes to, with the
+     * default names the ITs run under (no property overrides in the test profile).
+     *
+     * <p>Pinned against the live listener registry by
+     * {@code ListenerTopicsPrecreatedIT} — add a {@code @KafkaListener} without adding
+     * its topic here and that test fails. A hand-kept list with nothing checking it is
+     * how this would quietly go stale.
+     */
+    protected static final List<String> LISTENER_TOPICS = List.of(
+            "ecommerce.fulfillment.requested.v1",
+            "ecommerce.shipping.manual-confirm-requested.v1",
+            "wms.inventory.confirmed.v1",
+            "wms.inventory.released.v1",
+            "wms.inventory.reserved.v1",
+            "wms.inventory.reserve.failed.v1",
+            "wms.master.warehouse.v1",
+            "wms.master.zone.v1",
+            "wms.master.location.v1",
+            "wms.master.sku.v1",
+            "wms.master.partner.v1",
+            "wms.master.lot.v1");
+
     static {
         WIREMOCK.start();
         POSTGRES.start();
         KAFKA.start();
         REDIS.start();
+        precreateListenerTopics();
+    }
+
+    /**
+     * Create every listener topic <b>before the Spring context starts</b> (TASK-BE-504).
+     *
+     * <p>All 12 {@code @KafkaListener} consumers share one group ({@code outbound-service}).
+     * Left to themselves they subscribe to topics that do not exist yet, Kafka auto-creates
+     * each one lazily, and every appearance changes the group's subscription metadata — so
+     * the group rebalances repeatedly while the suite starts up. On a quiet host that
+     * settles in well under a second and nobody notices. On a contended CI runner it does
+     * not always settle before {@code ContainerTestUtils.waitForAssignment} gives up, and
+     * the test dies with the message the Gradle console does not print:
+     *
+     * <pre>java.lang.IllegalStateException: Expected 1 but got 0 partitions</pre>
+     *
+     * <p>Creating the whole topic set up front collapses that startup cascade into a single
+     * rebalance: the subscription metadata is already final when the first consumer joins.
+     *
+     * <p><b>What this is not.</b> It is not a longer timeout — it removes a source of
+     * rebalance churn rather than waiting out the symptom. But it is also <b>not a proven
+     * fix</b>: the CI failure could not be reproduced locally (the full outbound suite is
+     * green on a quiet host, 26/26), so a green CI run after this change is not evidence
+     * that this was the cause. The failure signature stays on watch — see TASK-BE-504.
+     */
+    private static void precreateListenerTopics() {
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
+        try (AdminClient admin = AdminClient.create(props)) {
+            admin.createTopics(LISTENER_TOPICS.stream()
+                            .map(t -> new NewTopic(t, 1, (short) 1))
+                            .toList())
+                    .all()
+                    .get(30, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            if (!(e.getCause() instanceof TopicExistsException)) {
+                throw new IllegalStateException("Failed to pre-create listener topics", e);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted pre-creating listener topics", e);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to pre-create listener topics", e);
+        }
     }
 
     @AfterAll
