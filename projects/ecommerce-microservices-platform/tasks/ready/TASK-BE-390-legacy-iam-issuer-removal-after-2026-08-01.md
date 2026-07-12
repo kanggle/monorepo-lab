@@ -9,6 +9,20 @@
 
 ---
 
+## 🔴 SCOPE WARNING (added 2026-07-12 — `TASK-MONO-365`)
+
+**This task sees one gateway of seven. The legacy `,iam` default lives in all of them** — wms, scm, fan, **ecommerce**, finance, erp, and iam.
+
+Its AC-3 greps only this project's tree, so a diligent execution of this task **removes the legacy issuer from ecommerce alone and leaves six gateways still accepting a retired issuer** — while everyone believes the sunset has happened. That is the failure mode: not that the work is wrong, but that **finishing it looks like finishing the job.**
+
+**The complete list of what must happen on that date is [`TASK-MONO-367`](../../../../tasks/ready/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md)** (root-level, because `,iam` spans six projects and a project task may not edit another project — `CLAUDE.md` shared/project boundary).
+
+**Do not run this task standalone.** Either execute it as part of MONO-367, or let MONO-367 absorb it (MONO-367 § AC-5 requires that the two do not both own the same file).
+
+**Also relevant:** the servlet services in finance/erp enforce the same allowlist in their `ServiceLevelOAuth2Config`. Removing the issuer at the gateways alone leaves the inner layer of the defense-in-depth still accepting it.
+
+---
+
 ## Goal
 
 During the ADR-MONO-019 D2-b plane-separation migration, the ecommerce gateway accepts **two** `iss` claim values so tokens minted by both the new SAS issuer and the legacy path validate during the transition:

@@ -74,8 +74,23 @@ gateway:
     jwks-refresh-interval-ms: 600000
     jwks-cache-ttl-seconds: 600
     grace-period-seconds: 300
-    # TASK-BE-143: enforce iss claim. Must match auth.jwt.issuer in auth-service.
-    expected-issuer: ${JWT_EXPECTED_ISSUER:iam}
+    # TASK-BE-143: enforce the iss claim.
+    #
+    # TASK-MONO-365: an ALLOWLIST, not a single value — and this edge was the only
+    # gateway of seven that pinned one. IAM mints two issuers during the D2-b window:
+    # the SAS/OIDC issuer (auth-service application.yml L177) and the legacy `iam`
+    # string (L114). The other six gateways accept both. This one accepted the LEGACY
+    # value only, and JWT_EXPECTED_ISSUER was overridden in no compose file anywhere —
+    # so SAS-issued tokens, which the rest of the fleet takes as primary, were 401'd
+    # here. Nothing failed, because console-bff reaches the IAM services directly and
+    # never crosses this edge (TASK-MONO-347).
+    #
+    # TASK-BE-398 retires the legacy custom-JWT flow that mints `iss=iam`. Under the
+    # old single-value config, that would have left this gateway with NO acceptable
+    # issuer at all. When BE-398 lands, drop the trailing `,iam` here — and
+    # `TokenValidatorUnitTest#theEdgeSurvivesTheLegacyIssuerSunset` already asserts
+    # that the edge keeps working when you do.
+    allowed-issuers: ${JWT_ALLOWED_ISSUERS:${OIDC_ISSUER_URL:http://localhost:8081},iam}
 
   tenant:
     legacy-fallback:

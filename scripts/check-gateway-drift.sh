@@ -48,6 +48,17 @@
 #           the gateway, or be on the explicit allowlist below. This is policy
 #           L14, and it is the axis that was live-violated and unseen.
 #
+#   I3      Every gateway validates `iss` against an ALLOWLIST that includes the
+#           SAS issuer (`OIDC_ISSUER_URL`) — not a single pinned value.
+#           TASK-MONO-365: iam's gateway was the one edge of seven that pinned a
+#           single `expected-issuer`, and it pinned the LEGACY one. SAS-issued
+#           tokens — what the other six take as primary — were 401'd there, and
+#           nothing failed, because console-bff bypasses that edge entirely
+#           (TASK-MONO-347). Worse, TASK-BE-398 retires the legacy issuer: under
+#           that config the edge would have ended up accepting NOTHING, on a
+#           date, with nobody watching. This check exists so an edge cannot
+#           quietly fall off the fleet's issuer axis again.
+#
 # WHAT THIS SCRIPT DOES *NOT* GUARD (do not claim otherwise)
 #
 #   * The prose of api-gateway-policy.md. "Every project that exposes HTTP
@@ -199,6 +210,35 @@ for project_md in "$PROJECTS_DIR"/*/PROJECT.md; do
       echo "                 tooling — add it to TRAEFIK_ALLOWLIST by exact name, with a reason.)"
       fail=1
     done
+  fi
+
+  # I3 — the gateway's `iss` check must be an ALLOWLIST that includes the SAS issuer.
+  gateway_yml="$PROJECTS_DIR/$project/apps/gateway-service/src/main/resources/application.yml"
+  if [ "$module" = "1" ] && [ -r "$gateway_yml" ]; then
+    issuer_line="$(tr -d '\r' < "$gateway_yml" \
+      | grep -E '^[[:space:]]*(allowed-issuers|expected-issuer):' || true)"
+
+    if [ -z "$issuer_line" ]; then
+      echo "NO-ISSUER-CHECK  $project — the gateway's application.yml declares neither 'allowed-issuers'"
+      echo "                 nor 'expected-issuer'. An edge that does not pin 'iss' will accept a token from"
+      echo "                 any issuer whose signing key it can resolve."
+      fail=1
+    elif printf '%s\n' "$issuer_line" | grep -qE '^[[:space:]]*expected-issuer:'; then
+      echo "SINGLE-ISSUER  $project — the gateway pins a single 'expected-issuer'. Every edge must take an"
+      echo "               ALLOWLIST ('allowed-issuers'): IAM mints TWO issuers during the D2-b window (the"
+      echo "               SAS/OIDC issuer and the legacy 'iam' string). This is the exact state TASK-MONO-365"
+      echo "               found on the iam edge — it pinned the LEGACY value alone, so SAS-issued tokens were"
+      echo "               401'd there while the other six gateways took them as primary. Nothing failed,"
+      echo "               because console-bff bypasses that edge (TASK-MONO-347). And TASK-BE-398 retires the"
+      echo "               legacy issuer: under that config the edge would have ended up accepting NOTHING."
+      fail=1
+    elif ! printf '%s\n' "$issuer_line" | grep -q 'OIDC_ISSUER_URL'; then
+      echo "ISSUER-MISSING-SAS  $project — the gateway's 'allowed-issuers' default never references"
+      echo "                    OIDC_ISSUER_URL, so it cannot accept SAS/OIDC-issued tokens — the issuer the"
+      echo "                    rest of the fleet treats as primary. The legacy 'iam' entry is the one that"
+      echo "                    goes away at the TASK-BE-398 sunset; the SAS entry is the one that must stay."
+      fail=1
+    fi
   fi
 done
 
