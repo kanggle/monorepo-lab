@@ -64,8 +64,14 @@ on:
 # Only monorepo-lab has the backend stack; extracted portfolio repos skip.
 # Enforced at the job level via `if: github.repository == 'kanggle/monorepo-lab'`.
 
+# `schedule` and `push` both report `github.ref` as `refs/heads/main`, so a
+# ref-keyed group put the nightly cron run and every merge to main into the SAME
+# group: a merge landing while the nightly was in flight killed it. A cancelled
+# run reports neither success nor failure, so the nightly would simply not have
+# happened, and nothing would say so (TASK-MONO-374). Per-commit grouping for
+# pushes; the cron run keeps the ref group to itself.
 concurrency:
-  group: nightly-e2e-${{ github.ref }}
+  group: nightly-e2e-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
