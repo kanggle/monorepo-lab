@@ -29,8 +29,8 @@ import { readFileSync } from 'node:fs';
  * NOT in this list, on purpose: `account-type-guard.spec.ts` — it is
  * `test.fixme()`-marked, because the e2e IAM stack cannot mint a token without
  * the CUSTOMER role (RoleSeedPolicy keys its fail-soft seed on the client's
- * platform, not the user). That deferral is held by TASK-MONO-378, not by this
- * list. If MONO-378 lands, add it here.
+ * platform, not the user). That deferral is held by TASK-MONO-381, not by this
+ * list. If MONO-381 lands, add it here.
  *
  * `rp-initiated-logout.spec.ts` is also absent: it runs in its own lane
  * (web-store-iam-logout-e2e), against the lean IAM stack with no ecommerce
