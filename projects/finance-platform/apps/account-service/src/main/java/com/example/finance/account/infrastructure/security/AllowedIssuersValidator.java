@@ -13,7 +13,7 @@ import java.util.Objects;
  * Accepts tokens whose {@code iss} matches any configured allowed issuer
  * (SAS issuer + legacy {@code iam} D2-b window). Mirrors
  * the scm-platform service-level validator (defense-in-depth — byte-identical
- * to the future finance gateway-service allowed-issuers).
+ * to the finance gateway-service allowed-issuers).
  */
 public class AllowedIssuersValidator implements OAuth2TokenValidator<Jwt> {
 
