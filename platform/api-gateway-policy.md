@@ -89,15 +89,35 @@ This is a security boundary — incorrect ordering (setting before stripping) cr
 
 # Rate Limiting
 
-- The gateway applies rate limits per `(clientIp, routeId)` tuple by default.
+## Key shape
+
+A rate limit is only as good as the thing it counts. The key decides **who gets throttled**, so it is a design rule, not a config detail.
+
+- **Anonymous / pre-auth traffic** — key on `(clientIp, routeId)`. There is no identity to key on, and IP is the only bound available.
+- **Authenticated traffic** — key on the **authenticated principal** (`sub`), not the client IP. An authenticated caller is individually identifiable; collapsing them into an IP bucket means everyone behind one NAT shares a limit while an abuser rotating IPs is never throttled per account.
+- **Tenant segment** — add a tenant component **only where the tenant claim is genuinely variable** for the traffic in question.
+  > **A claim that your own config pins to a constant is not a bucket.** If a gateway requires `tenant_id == <its own domain>`, then every token past its gate carries the same value, and keying on it yields **one global bucket** wearing the costume of per-tenant isolation. Verify the claim varies before you key on it. (TASK-MONO-368 — this is not hypothetical; ecommerce shipped exactly that, and every authenticated shopper shared one bucket.)
+- **Key prefix** — prefix keys with the project (`rate:<project>:…`) so two domains sharing a Redis cannot collide.
+- **Deviations must be recorded** in the project's `PROJECT.md` § Overrides with a reason. A gateway that silently keys differently from this section is drift, not a decision.
+
+### Current fleet (2026-07-12)
+
+| Gateway | Anonymous | Authenticated | Note |
+|---|---|---|---|
+| ecommerce | `ip` | `t:<tenant>:acct:<sub>` | tenant is real for assume-tenant tokens; account restores per-caller isolation (MONO-368) |
+| scm / fan / finance / erp | `ip` | `acct:<sub>` | conforms |
+| **wms** | — | **`ip` only** | ⚠️ **recorded deviation** — every wms route is authenticated, yet it keys by IP. This predates the rule above and was the platform default at the time. It is **not** a violation to be fixed silently: changing it alters who gets 429'd on a live edge, so it needs an explicit decision. See TASK-MONO-368 § Out of Scope. |
+
+## Behaviour
+
 - Exceeding the limit returns `429 RATE_LIMIT_EXCEEDED` with a `Retry-After` header.
 - Rate limits are configured per route and declared in the project's gateway spec.
 - Typical tier structure (a project chooses its values):
 
 | Tier | Default Guidance |
 |---|---|
-| Standard (default) | ~100 req/min per IP per route |
-| Sensitive (auth, credential handling) | Stricter — ~10 req/min per IP (brute-force protection) |
+| Standard (default) | ~100 req/min per **key** per route (§ Key shape — account when authenticated, IP when not) |
+| Sensitive (auth, credential handling) | Stricter — ~10 req/min. These routes are pre-auth by definition, so the key **is** the IP (brute-force protection) |
 | Internal-only | Higher or unlimited (internal traffic) |
 
 - **Redis unavailable for rate limit counters**: fail **open** (allow request, log at WARN, alert). Rate limiting is a soft protection, not a correctness boundary.

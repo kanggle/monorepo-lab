@@ -123,6 +123,15 @@ PROJECTS_DIR="${PROJECTS_DIR:-$ROOT/projects}"
 #   grafana      operator tooling, not an application surface.
 TRAEFIK_ALLOWLIST="web-store console-web kafka-ui grafana"
 
+# I4 — gateways permitted to key their rate limit on client IP alone, by RECORDED
+# deviation (api-gateway-policy.md § Rate Limiting > Current fleet). EXACT NAMES ONLY.
+#   wms-platform  Every wms route is authenticated, yet it keys by IP. That WAS the
+#                 platform default (policy L92, pre-MONO-368), so wms is the gateway that
+#                 conformed to it — it is not a bug to be "fixed" by whoever notices next.
+#                 Changing it alters who gets 429'd on a live edge, so it needs an explicit
+#                 decision: TASK-MONO-368 § Out of Scope. Delete this entry when that lands.
+RATELIMIT_IP_ONLY_ALLOWLIST="wms-platform"
+
 fail=0
 
 # --- gradle side: which projects own a gateway module ------------------------
@@ -238,6 +247,63 @@ for project_md in "$PROJECTS_DIR"/*/PROJECT.md; do
       echo "                    rest of the fleet treats as primary. The legacy 'iam' entry is the one that"
       echo "                    goes away at the TASK-BE-398 sunset; the SAS entry is the one that must stay."
       fail=1
+    fi
+  fi
+
+  # I4 — the authenticated rate-limit key must identify the CALLER, not just the tenant
+  # (api-gateway-policy.md § Rate Limiting > Key shape).
+  #
+  # A rate limit is only as good as the thing it counts. TASK-MONO-368: ecommerce keyed
+  # authenticated traffic on the `tenant_id` claim alone, citing multi-tenant M7 — but its own
+  # gate makes that claim a CONSTANT for shopper traffic ('ecommerce', derived from the OAuth
+  # client), so every authenticated shopper landed in ONE bucket and a single account could 429
+  # the whole marketplace. Anonymous traffic, meanwhile, WAS split by IP. The callers we can
+  # identify were the ones sharing a bucket.
+  #
+  # A claim your own config pins to a constant is not a bucket. So: if a gateway's rate-limit
+  # keying reads the JWT at all, it must read the SUBJECT.
+  if [ "$module" = "1" ]; then
+    rl_src="$(find "$PROJECTS_DIR/$project/apps/gateway-service/src/main/java" \
+      -name '*RateLimit*.java' -type f 2>/dev/null | sort || true)"
+
+    if [ -n "$rl_src" ]; then
+      ip_only=0
+      for ok in $RATELIMIT_IP_ONLY_ALLOWLIST; do [ "$project" = "$ok" ] && ip_only=1; done
+
+      # Does the keying read the authenticated principal?
+      #
+      # Both spellings count. Six gateways use Spring Security's Jwt#getSubject(); the iam
+      # gateway hand-decodes the payload and reads the "sub" claim with Jackson (it rate-limits
+      # BEFORE signature verification, so it cannot use the Spring Jwt type). A predicate that
+      # only knew getSubject() flagged iam on this guard's first run — a false positive, and a
+      # guard that is RED on day one gets switched off, which is worse than no guard at all.
+      keys_on_subject=0
+      grep -lqE 'getSubject\(\)|"sub"' $rl_src 2>/dev/null && keys_on_subject=1
+
+      # Does it read the tenant claim?
+      keys_on_tenant=0
+      grep -lqE 'tenant_id|CLAIM_TENANT_ID' $rl_src 2>/dev/null && keys_on_tenant=1
+
+      if [ "$keys_on_subject" = "0" ] && [ "$ip_only" = "0" ]; then
+        if [ "$keys_on_tenant" = "1" ]; then
+          echo "TENANT-ONLY-BUCKET  $project — the rate-limit key reads the tenant claim but never the JWT"
+          echo "                    subject. If this gateway's tenant gate pins 'required-tenant-id', that claim"
+          echo "                    is the SAME VALUE for every token it admits — so this is not per-tenant"
+          echo "                    isolation, it is one global bucket per route wearing that costume, and any"
+          echo "                    single authenticated caller can exhaust it for everyone. This is the exact"
+          echo "                    shape TASK-MONO-368 found on the ecommerce edge. Add an account segment."
+        else
+          echo "IP-ONLY-BUCKET  $project — the gateway's routes are authenticated, but its rate-limit key never"
+          echo "                reads the JWT subject. Everyone behind one NAT then shares a bucket, while an"
+          echo "                abuser rotating IPs is never throttled per account (api-gateway-policy.md"
+          echo "                § Rate Limiting > Key shape). Key authenticated traffic on 'sub'; keep IP for"
+          echo "                pre-auth routes only."
+        fi
+        echo "                (If this is a deliberate, RECORDED deviation, add the project to"
+        echo "                RATELIMIT_IP_ONLY_ALLOWLIST by exact name AND to the fleet table in"
+        echo "                api-gateway-policy.md — a deviation nobody wrote down is drift, not a decision.)"
+        fail=1
+      fi
     fi
   fi
 done

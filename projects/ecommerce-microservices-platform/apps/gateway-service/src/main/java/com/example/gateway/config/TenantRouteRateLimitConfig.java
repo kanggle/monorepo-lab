@@ -28,19 +28,35 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 /**
- * Per-tenant API rate-limit wiring (TASK-BE-405 — M7 realization, ADR-MONO-030 Step 4
- * facet e). Realizes {@code rules/traits/multi-tenant.md} M7: the gateway rate limit is
- * keyed by the {@code (tenant_id, route_id)} tuple so one tenant's burst cannot consume
- * another tenant's bucket / affect its latency.
+ * API rate-limit wiring for ecommerce's edge (TASK-BE-405 — M7 realization, ADR-MONO-030
+ * Step 4 facet e; key corrected by TASK-MONO-368).
+ *
+ * <h2>Why the key carries an account and not just a tenant</h2>
+ *
+ * BE-405 keyed authenticated traffic on {@code (tenant_id, route_id)} alone, citing
+ * {@code rules/traits/multi-tenant.md} M7. That key does not isolate what it claims to,
+ * because <b>a shopper's {@code tenant_id} is a constant</b>: the auth-code flow derives the
+ * claim from the initiating OAuth client, and the ecommerce clients are seeded
+ * {@code tenant_id='ecommerce'}. Every shopper therefore hashed to the same bucket, so one
+ * authenticated account bursting could 429 the entire marketplace — the exact failure M7
+ * exists to prevent, relocated from the tenant axis to the account axis. Worse, anonymous
+ * traffic <em>was</em> split by IP, so the callers we can identify individually were the ones
+ * sharing a bucket.
+ *
+ * <p>The tenant segment is kept (it is a real variable for assume-tenant / operator tokens,
+ * and {@link OverrideAwareRateLimiter} parses it back out to resolve per-tenant overrides) and
+ * an account segment is appended. A finer key strictly strengthens M7: two different tenants
+ * still never share a bucket, and now neither do two accounts within one tenant.
  *
  * <h2>Key shape</h2>
  * <ul>
- *   <li><b>Authenticated (post-auth)</b> — {@code rate:ecommerce-gw:<routeId>:t:<tenantId>}.
- *       The tenant is the {@code tenant_id} claim of the JWKS- and issuer-verified JWT,
- *       read from the reactive security context (the authoritative source — the gate has
- *       already rejected a blank/missing claim, and this does not depend on the
+ *   <li><b>Authenticated (post-auth)</b> —
+ *       {@code rate:ecommerce-gw:<routeId>:t:<tenantId>:acct:<sub>}.
+ *       Both values come from the JWKS- and issuer-verified JWT read from the reactive
+ *       security context (the authoritative source — this does not depend on the
  *       {@code X-Tenant-Id} header injected by {@code JwtHeaderEnrichmentFilter} whose
- *       ordering relative to the {@code RequestRateLimiter} filter is unspecified).</li>
+ *       ordering relative to the {@code RequestRateLimiter} filter is unspecified). A token
+ *       with no usable {@code sub} degrades to the tenant-only key rather than a null key.</li>
  *   <li><b>Anonymous / pre-auth</b> ({@code /api/search/**}, public {@code GET
  *       /api/products/**}, the carrier webhook) — no security context, so the tenant
  *       resolves to the <b>default tenant</b> {@value #DEFAULT_TENANT} (D8 net-zero —
@@ -50,7 +66,7 @@ import reactor.core.publisher.Mono;
  *       {@code ipKeyResolver} provided on pre-auth routes (TASK-BE-405 § Failure
  *       Scenarios — "IP-limit removed without replacement"); without the IP suffix every
  *       anonymous caller on a public route would collapse into one shared default-tenant
- *       bucket.</li>
+ *       bucket. <b>Unchanged</b> by MONO-368 — this half was already right.</li>
  * </ul>
  *
  * <h2>Degrade</h2>
@@ -105,11 +121,24 @@ public class TenantRouteRateLimitConfig {
                 .switchIfEmpty(Mono.fromSupplier(() -> anonymousKey(exchange)));
     }
 
-    /** {@code rate:ecommerce-gw:<routeId>:t:<tenantId>} — never a null tenant. */
+    /**
+     * {@code rate:ecommerce-gw:<routeId>:t:<tenantId>:acct:<sub>} — never a null tenant.
+     *
+     * <p>A token with no usable {@code sub} falls back to the tenant-only key: that is the
+     * pre-MONO-368 shape, which is coarse but correct, and it is strictly better than
+     * fabricating an account segment that would silently merge every such caller into one
+     * synthetic bucket.
+     */
     private static String authenticatedKey(ServerWebExchange exchange, Jwt jwt) {
-        String tenantId = resolveTenant(jwt);
-        return KEY_PREFIX + ":" + resolveRouteId(exchange)
-                + OverrideAwareRateLimiter.TENANT_SEGMENT + tenantId;
+        String tenantKey = KEY_PREFIX + ":" + resolveRouteId(exchange)
+                + OverrideAwareRateLimiter.TENANT_SEGMENT + resolveTenant(jwt);
+        String subject = jwt.getSubject();
+        if (subject == null || subject.isBlank()) {
+            log.warn("Authenticated rate-limit key has no 'sub' claim; falling back to the "
+                    + "tenant-only bucket for route '{}'", resolveRouteId(exchange));
+            return tenantKey;
+        }
+        return tenantKey + OverrideAwareRateLimiter.ACCOUNT_SEGMENT + subject;
     }
 
     /**
