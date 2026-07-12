@@ -1,4 +1,4 @@
-package com.example.apigateway.security;
+package com.example.security.oauth2;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -220,8 +220,12 @@ class TenantClaimValidatorTest {
             OAuth2TokenValidatorResult r = v.validate(jwt("scm", null));
             assertThat(r.getErrors()).anyMatch(
                     e -> TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(e.getErrorCode()));
-            assertThat(TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH)
-                    .isEqualTo(GatewayErrorCodes.TENANT_MISMATCH);
+            // The wire value itself, pinned here because this class now OWNS it (ADR-MONO-049
+            // § D5-1 — it used to delegate to java-gateway's GatewayErrorCodes, which would be
+            // a module cycle from here). That the gateway's 403 mapping still agrees with this
+            // string is asserted from the other side, in GatewayErrorCodesTest — java-gateway
+            // can see this module; this module cannot see java-gateway.
+            assertThat(TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH).isEqualTo("tenant_mismatch");
         }
 
         @Test

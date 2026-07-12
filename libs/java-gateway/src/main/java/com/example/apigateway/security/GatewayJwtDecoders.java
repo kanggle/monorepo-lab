@@ -1,5 +1,7 @@
 package com.example.apigateway.security;
 
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;

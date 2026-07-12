@@ -2,7 +2,7 @@ package com.example.finance.gateway.config;
 
 import com.example.apigateway.security.GatewayJwtDecoders;
 import com.example.apigateway.security.JwksHealthProbe;
-import com.example.apigateway.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
