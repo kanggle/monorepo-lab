@@ -44,6 +44,13 @@ dependencies {
     // Shared libs
     implementation project(':libs:java-common')
     implementation project(':libs:java-gateway')
+
+    // AllowedIssuersValidator + TenantClaimValidator moved here from libs:java-gateway
+    // (ADR-MONO-049 § D5-1). java-gateway depends on java-security with `implementation`,
+    // which does NOT transit to this compile classpath — so this gateway declares it directly
+    // (§ D2: no `api`, anywhere). Without this line the gateway does not compile.
+    implementation project(':libs:java-security')
+
     implementation project(':libs:java-observability')
 
     // Test

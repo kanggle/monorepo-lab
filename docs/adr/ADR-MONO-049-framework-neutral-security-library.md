@@ -252,7 +252,9 @@ The six gateway `OAuth2ResourceServerConfig` classes import `TenantClaimValidato
 
 ### D3 — The isolation is asserted by the build, not by intent
 
-`ADR-MONO-048` § D1's AC-6 already asserts *"SCG/WebFlux on a servlet service's `runtimeClasspath` = 0."* Extend it, and add the converse:
+> 🔴 **Corrected by `TASK-MONO-378`.** The sentence below says AC-6 *"already asserts"* this. **It does not.** `ADR-MONO-048` § D1's AC-6 was written as prose and **never became a task** — grep the repo before believing it. D5-1 built the first executable form: `assertClasspathNeutrality` (`libs:java-security`), `assertNoServletOnReactiveEdge` (`libs:java-gateway`) and `assertNoApiOnSharedLibs` (root), all wired into `check` and all mutation-verified. **This is the fifth claim in this ADR's lineage that was true only as an intention.** *(An assertion nobody has watched fail is a comment with a `Task` around it — § 6 says so, and § D3 was itself the counter-example.)*
+
+`ADR-MONO-048` § D1's AC-6 ~~already asserts~~ **states, as prose only,** *"SCG/WebFlux on a servlet service's `runtimeClasspath` = 0."* Make it executable, and add the converse:
 
 - `libs:java-security` `runtimeClasspath` contains **0** WebFlux, **0** Spring Cloud Gateway, **0** `jakarta.servlet` entries. *(Neutrality is a property of the module, so the build should be the one holding it — not a comment.)*
 - `libs:java-gateway` `runtimeClasspath` contains **0** `jakarta.servlet` entries.
@@ -378,8 +380,8 @@ Per `TASK-MONO-364` § AC-6 the roadmap lives here, not in `tasks/ready/`. **Tic
 
 | step | scope | copies | status |
 |---|---|---|---|
-| **D5-1** | move the two neutral validators `java-gateway` → `java-security` | 0 | **`TASK-MONO-378` (ready)** |
-| D5-2 | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | ⏳ after D5-1 |
+| **D5-1** | move the two neutral validators `java-gateway` → `java-security` (`com.example.security.oauth2`) | 0 | **✅ `TASK-MONO-378`** — 4 dependency lines, 6 gateways' imports, **0 assertions changed**. V1/V2/V4 built and mutation-verified. |
+| **D5-2** | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | **⏳ next — ticket it now that D5-1 has landed** |
 | D5-3 | finance — account, ledger | 6 | ⏳ |
 | D5-4 | erp — approval, masterdata, notification, read-model | 12 | ⏳ |
 | D5-5 | scm — procurement (all 3); demand-planning + inventory-visibility (**Enforcer only**) | 5 | ⏳ |

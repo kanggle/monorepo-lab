@@ -31,7 +31,7 @@ public final class JwtTestHelper {
     /**
      * Default issuer matches the legacy {@code POST /api/auth/login} issuer
      * ({@code "iam"}) — kept on the
-     * {@link com.example.apigateway.security.AllowedIssuersValidator} allowlist while
+     * {@link com.example.security.oauth2.AllowedIssuersValidator} allowlist while
      * D2-b deprecation is in flight (TASK-MONO-019).
      */
     public static final String LEGACY_ISSUER = "iam";

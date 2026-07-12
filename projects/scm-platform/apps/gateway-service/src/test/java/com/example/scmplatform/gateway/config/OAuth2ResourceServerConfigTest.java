@@ -10,8 +10,8 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 
-import com.example.apigateway.security.AllowedIssuersValidator;
-import com.example.apigateway.security.TenantClaimValidator;
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 
 /**
  * Unit-level wiring test for {@link OAuth2ResourceServerConfig#jwtTokenValidator()}.
