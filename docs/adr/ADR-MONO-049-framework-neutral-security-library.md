@@ -204,6 +204,45 @@ D1 and D5 both assert, of the very first step:
 - **Still true, still not a defect:** each project's servlet policy exactly mirrors its own gateway. **There is no live defect here**, and this migration must not create one. § 6 V6 is the guard: *if a per-domain suite has to change, the migration changed behaviour.*
 - **Not in scope, unchanged:** the **iam gateway** (§ D6 — a different, defensible design; audited by `TASK-MONO-365`). **Note the distinction, because it is easy to misread:** iam's *gateway* is out of scope; iam's *servlet services* (community, membership) are **in** scope — they hold 4 of the 49 copies.
 
+### 1.8 🔴 The thirteen `TenantClaimEnforcer` copies, and the axis nobody had counted (`TASK-MONO-382`, D5-2)
+
+§ 1.6 measured **behavioural drift on the axis of "does each project's servlet policy mirror its own gateway?"** and answered: **yes, everywhere.** That answer still stands.
+
+**It is not the only axis.** D5-2 compared all thirteen `TenantClaimEnforcer` copies before writing the canonical one. They hold **eight distinct normalised bodies** — but the eight reduce to **three policy axes**; the rest was line-wrapping, an inlined `@Value` import, and locally re-declared claim constants:
+
+| axis | what the fleet actually does |
+|---|---|
+| **wildcard `"*"`** | **all 13 allow it** |
+| **`entitled_domains`** | erp (4) · finance (2) · scm (3) = **9 honour it** · **fan (4) do not** *(fan sits outside the entitlement plane — the branch would be dead code)* |
+| 🔴 **public-path exemption (`shouldNotFilter`)** | **three different answers — and this is a security boundary** |
+
+#### The exemption axis, in full
+
+| shape | services |
+|---|---|
+| `PublicPaths.isPublic(request)` | **10** |
+| `PublicPaths.isPublic(request) \|\| uri.startsWith("/internal/")` | **`fan/membership`** — its three fan siblings do **not** |
+| `path.startsWith("/actuator/")` — **`PublicPaths` is not consulted at all** | **`scm/demand-planning`, `scm/inventory-visibility`** |
+
+**The scm pair's exemption is *wider* than their own sibling's.** `scm/procurement`'s `PublicPaths` exempts exactly `/actuator/health`, `/actuator/info`, `/actuator/prometheus` (+ a webhook prefix). The other two exempt **every** `/actuator/**` path — `env`, `beans`, `heapdump`, `loggers`.
+
+#### 🟢 It is not a live vulnerability — and saying otherwise would cost the real argument
+
+Both services' `SecurityConfig` permits **only** `health` / `info` / `prometheus` and ends with **`anyRequest().denyAll()`**. Spring Security rejects `/actuator/env` before the enforcer's exemption is ever consulted. **Measured, not assumed.**
+
+**But the line is being held in one place while the exemption is maintained in another.** Add `.requestMatchers("/actuator/**").permitAll()` to either service — an ordinary-looking change — and the tenant gate silently disappears for every actuator endpoint there. And these two services hold **no `TenantClaimValidator`** (§ 1.7): the enforcer is their *only* servlet-layer tenant check.
+
+#### What this changes for D5-3 … D5-8
+
+**The canonical `TenantClaimEnforcer` takes its exemption as a `Predicate<HttpServletRequest>`, defaulting to *exempt nothing*.** Each adopting service passes its own rule — which means **each adoption step must decide, explicitly, which of the three shapes that service is actually entitled to**, rather than inheriting whichever body got copied into it.
+
+Two of those decisions are already known to be non-trivial:
+
+- **`fan/membership`** — keep the `/internal/**` exemption, or remove it? Keeping it preserves behaviour (§ 6 V6). Removing it is a *narrowing*, and would need its internal callers checked first.
+- **`scm/demand-planning`, `scm/inventory-visibility`** — pass `PublicPaths::isPublic` like every other service (a **narrowing**, and the safer default), or reproduce the blanket `/actuator/` exemption? **Narrowing is a behaviour change and must be an explicit decision, not a silent one.**
+
+> **The copies did not disagree because anyone decided they should.** They disagreed because thirteen files were maintained by hand and nothing ever compared them. **Extracting them is what made the disagreement visible** — which is the whole argument of this ADR, arriving as evidence rather than assertion.
+
 ---
 
 ## 2. Alternatives considered
@@ -381,7 +420,7 @@ Per `TASK-MONO-364` § AC-6 the roadmap lives here, not in `tasks/ready/`. **Tic
 | step | scope | copies | status |
 |---|---|---|---|
 | **D5-1** | move the two neutral validators `java-gateway` → `java-security` (`com.example.security.oauth2`) | 0 | **✅ `TASK-MONO-378`** — 4 dependency lines, 6 gateways' imports, **0 assertions changed**. V1/V2/V4 built and mutation-verified. |
-| **D5-2** | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | **`TASK-MONO-382` (ready)** — 🔴 **not the mechanical step it reads as: the 13 copies hold *eight* distinct normalised bodies, and at least one difference is a security boundary** (`fan/membership` skips tenant enforcement on `/internal/**`; its three sibling services do not). Pick a canonical body naively and you either break membership's internal calls or **open `/internal/**` on twelve services**. § 1.6's *"behavioural drift: zero"* was measured on the servlet-vs-gateway *mirroring* axis; **this is a different axis and nobody has looked at it.** |
+| **D5-2** | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | **✅ `TASK-MONO-382`.** The 13 copies hold **eight distinct bodies**, which reduce to **three policy axes** — everything else was line-wrapping and an inlined `@Value`. **The axes are recorded in § 1.8, because one of them is a security boundary and D5-3…D5-8 have to carry it.** Canonical class is builder-parameterised, **every switch closed by default** (including the wildcard, which all 13 copies enable — *a default is what you get when someone forgets*). 19 tests; each switch asserted **on *and* off**. |
 | D5-3 | finance — account, ledger | 6 | ⏳ |
 | D5-4 | erp — approval, masterdata, notification, read-model | 12 | ⏳ |
 | D5-5 | scm — procurement (all 3); demand-planning + inventory-visibility (**Enforcer only**) | 5 | ⏳ |
