@@ -10,7 +10,7 @@ TASK-MONO-350
 
 # Status
 
-ready
+done
 
 # Owner
 
