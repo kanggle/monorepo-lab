@@ -8,7 +8,7 @@ TASK-PC-FE-240
 
 # Status
 
-ready
+done
 
 # Owner
 
