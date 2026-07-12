@@ -168,19 +168,14 @@ class InventoryReserveFailedConsumerIT extends OutboundServiceIntegrationBase {
         }
     }
 
+    /**
+     * Starts the one listener subscribed to {@code topic} and blocks until it holds its
+     * partition. Only the containers this test actually needs are started (TASK-MONO-376) —
+     * the other listeners share the same consumer group, and every one of them that joins
+     * revokes the assignment of the container under test.
+     */
     private void waitForAssignment(String topic) {
-        for (MessageListenerContainer container : listenerRegistry.getListenerContainers()) {
-            String[] topics = container.getContainerProperties().getTopics();
-            if (topics != null) {
-                for (String t : topics) {
-                    if (topic.equals(t)) {
-                        ContainerTestUtils.waitForAssignment(container, 1);
-                        return;
-                    }
-                }
-            }
-        }
-        throw new IllegalStateException("No @KafkaListener container subscribed to topic " + topic);
+        startAndAwaitListener(listenerRegistry, topic);
     }
 
     private void publish(String topic, String json) throws Exception {
