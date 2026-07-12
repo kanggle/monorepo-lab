@@ -297,6 +297,11 @@ jobs:
               # to bite, it must get the chance to, and a job that never runs reports
               # GREEN.
               - 'projects/*/apps/gateway-service/src/main/resources/application.yml'
+              # TASK-MONO-368: I4 reads the gateways' rate-limit keying source. The
+              # regression it guards (dropping the account segment, so every authenticated
+              # caller shares one bucket) arrives as a .java edit under this path and
+              # nowhere else.
+              - 'projects/*/apps/gateway-service/src/main/java/**/*RateLimit*.java'
             # TASK-MONO-363: docs/adr/INDEX.md is the only entry point for "has this
             # already been decided?". It died at ADR-MONO-012a and by 2026-07-12 was
             # missing 38 of 53 ADRs — and was wrong about one it did list (008 was

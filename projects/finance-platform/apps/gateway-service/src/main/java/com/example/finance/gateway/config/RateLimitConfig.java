@@ -22,28 +22,22 @@ import reactor.core.publisher.Mono;
 /**
  * Rate-limit keying for finance's edge.
  *
- * <h2>Why this shape and not wms's</h2>
+ * <h2>Why key on the account</h2>
  *
- * The fleet has two rate-limit keying shapes, and only one of them can be justified:
+ * Anonymous traffic has no identity, so it can only be bucketed by client IP — that is what
+ * {@code platform/api-gateway-policy.md} § Rate Limiting prescribes. Authenticated traffic
+ * <em>does</em> have an identity, and bucketing it by IP throws that away: everyone behind one
+ * NAT shares a bucket, while an abuser rotating IPs is never throttled per account. So finance
+ * keys pre-auth requests by IP and authenticated requests by the JWT {@code sub}, both under a
+ * project-scoped prefix that cannot collide with another domain sharing a Redis.
  *
- * <ul>
- *   <li><strong>scm / fan</strong> — key by the authenticated account's {@code sub}, falling back
- *       to client IP for pre-auth traffic, under a project-scoped key prefix.</li>
- *   <li><strong>wms</strong> — key by client IP only, with <em>no</em> prefix (its Redis keys are
- *       a bare {@code {ip}:{routeId}}), and <strong>no documented rationale</strong> for either
- *       choice.</li>
- * </ul>
- *
- * TASK-MONO-355 measured that difference and descoped it: choosing a default on an axis with no
- * owner would have been an ownerless policy decision, so it remains open for a human. A
- * <em>new</em> gateway, though, has to pick something — and it must not pick the unjustified
- * shape, because copying an unresolved decision into new code propagates it instead of resolving
- * it.
- *
- * <p>So finance takes the shape that can be defended. Keying by IP alone means everyone behind
- * one NAT shares a bucket while an authenticated abuser rotating IPs is unthrottled per account;
- * an unprefixed key collides across domains the moment two projects share a Redis. Neither is a
- * property to inherit on purpose.
+ * <p><b>Correction (TASK-MONO-368).</b> This Javadoc previously asserted that wms — which keys by
+ * client IP only — had "no documented rationale" and had picked an unjustifiable shape. That was
+ * wrong, and it was wrong because it reasoned from a fleet head-count instead of reading the
+ * policy: {@code platform/api-gateway-policy.md} L92 declares {@code (clientIp, routeId)} as the
+ * platform <em>default</em>, so wms is the gateway that conforms to it. Whether that default
+ * should be raised to "key on the authenticated principal where one exists" is a policy question,
+ * tracked by TASK-MONO-368 — not something a service's source comment gets to settle by assertion.
  */
 @Configuration
 public class RateLimitConfig {

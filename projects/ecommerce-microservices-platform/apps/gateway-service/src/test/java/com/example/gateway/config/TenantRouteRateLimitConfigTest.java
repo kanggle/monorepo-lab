@@ -24,13 +24,17 @@ import reactor.core.publisher.Mono;
 import reactor.util.context.Context;
 
 /**
- * Unit tests for the {@code tenantRouteKeyResolver} bean (TASK-BE-405 — M7 realization).
+ * Unit tests for the {@code tenantRouteKeyResolver} bean (TASK-BE-405 M7 realization; key
+ * corrected by TASK-MONO-368).
  *
- * <p>Verifies the {@code (tenant_id, route_id)} key tuple (AC-1): an authenticated request
- * keys on its JWT {@code tenant_id} claim ({@code rate:ecommerce-gw:<route>:t:<tenant>}),
- * an anonymous request falls back to the default tenant {@code 'ecommerce'} qualified by
- * client IP (AC-3 / D8 net-zero, and pre-auth IP bounding is preserved). The key is never
- * null (default-tenant guard, § Failure Scenarios).
+ * <p><b>What the pre-MONO-368 suite could not see.</b> It asserted that two different
+ * {@code tenant_id} claims produce two different keys — and they do. But a shopper's
+ * {@code tenant_id} is a constant ({@code ecommerce}, derived from the OAuth client), so those
+ * two values never coexist in shopper traffic. The suite built an input production does not
+ * produce, and therefore proved an isolation that did not exist: in reality every authenticated
+ * shopper shared one bucket. The tenant cases below are kept — they are real for assume-tenant /
+ * operator tokens, where {@code tenant_id} genuinely varies — and the case that matters for the
+ * dominant traffic is added: <b>same tenant, different accounts</b>.
  */
 @DisplayName("tenantRouteKeyResolver 단위 테스트")
 class TenantRouteRateLimitConfigTest {
@@ -38,41 +42,65 @@ class TenantRouteRateLimitConfigTest {
     private final KeyResolver resolver = new TenantRouteRateLimitConfig().tenantRouteKeyResolver();
 
     @Test
-    @DisplayName("인증 요청 → rate:ecommerce-gw:<route>:t:<tenant> (claim tenant)")
-    void authenticatedRequest_keysByTenantAndRoute() {
+    @DisplayName("인증 요청 → rate:ecommerce-gw:<route>:t:<tenant>:acct:<sub>")
+    void authenticatedRequest_keysByTenantAccountAndRoute() {
         MockServerWebExchange exchange = exchangeFor("10.0.0.5", routeWithId("product-service"));
 
         String key = resolver.resolve(exchange)
-                .contextWrite(authContext(jwtWithTenant("acme")))
+                .contextWrite(authContext(jwt("acme", "user-123")))
                 .block();
 
-        assertThat(key).isEqualTo("rate:ecommerce-gw:product-service:t:acme");
+        assertThat(key).isEqualTo("rate:ecommerce-gw:product-service:t:acme:acct:user-123");
     }
 
+    /**
+     * The regression this whole task exists for. Every ecommerce shopper carries
+     * {@code tenant_id=ecommerce}; before MONO-368 they all collapsed into
+     * {@code rate:ecommerce-gw:<route>:t:ecommerce} and one bursting account could 429 the
+     * entire marketplace.
+     */
     @Test
-    @DisplayName("같은 IP라도 tenant 가 다르면 키가 분리된다 (cross-tenant 격리)")
-    void differentTenantsSameIp_produceIndependentKeys() {
+    @DisplayName("같은 tenant 의 서로 다른 두 계정 → 키 분리 (한 쇼퍼가 전체를 굶기지 못한다)")
+    void sameTenantDifferentAccounts_produceIndependentKeys() {
         MockServerWebExchange exchangeA = exchangeFor("10.0.0.9", routeWithId("order-service"));
         MockServerWebExchange exchangeB = exchangeFor("10.0.0.9", routeWithId("order-service"));
 
-        String keyA = resolver.resolve(exchangeA).contextWrite(authContext(jwtWithTenant("tenant-a"))).block();
-        String keyB = resolver.resolve(exchangeB).contextWrite(authContext(jwtWithTenant("tenant-b"))).block();
+        String keyA = resolver.resolve(exchangeA)
+                .contextWrite(authContext(jwt("ecommerce", "shopper-a"))).block();
+        String keyB = resolver.resolve(exchangeB)
+                .contextWrite(authContext(jwt("ecommerce", "shopper-b"))).block();
 
-        assertThat(keyA).isEqualTo("rate:ecommerce-gw:order-service:t:tenant-a");
-        assertThat(keyB).isEqualTo("rate:ecommerce-gw:order-service:t:tenant-b");
+        assertThat(keyA).isEqualTo("rate:ecommerce-gw:order-service:t:ecommerce:acct:shopper-a");
+        assertThat(keyB).isEqualTo("rate:ecommerce-gw:order-service:t:ecommerce:acct:shopper-b");
         assertThat(keyA).isNotEqualTo(keyB);
     }
 
     @Test
-    @DisplayName("같은 tenant, 다른 route → 키 분리 (route_id tuple)")
+    @DisplayName("같은 IP라도 tenant 가 다르면 키가 분리된다 (cross-tenant 격리, M7)")
+    void differentTenantsSameIp_produceIndependentKeys() {
+        MockServerWebExchange exchangeA = exchangeFor("10.0.0.9", routeWithId("order-service"));
+        MockServerWebExchange exchangeB = exchangeFor("10.0.0.9", routeWithId("order-service"));
+
+        String keyA = resolver.resolve(exchangeA)
+                .contextWrite(authContext(jwt("tenant-a", "user-123"))).block();
+        String keyB = resolver.resolve(exchangeB)
+                .contextWrite(authContext(jwt("tenant-b", "user-123"))).block();
+
+        assertThat(keyA).isEqualTo("rate:ecommerce-gw:order-service:t:tenant-a:acct:user-123");
+        assertThat(keyB).isEqualTo("rate:ecommerce-gw:order-service:t:tenant-b:acct:user-123");
+        assertThat(keyA).isNotEqualTo(keyB);
+    }
+
+    @Test
+    @DisplayName("같은 tenant+계정, 다른 route → 키 분리 (route_id tuple)")
     void sameTenantDifferentRoutes_produceIndependentKeys() {
         String keyProducts = resolver.resolve(exchangeFor("10.0.0.1", routeWithId("product-service")))
-                .contextWrite(authContext(jwtWithTenant("acme"))).block();
+                .contextWrite(authContext(jwt("acme", "user-123"))).block();
         String keyOrders = resolver.resolve(exchangeFor("10.0.0.1", routeWithId("order-service")))
-                .contextWrite(authContext(jwtWithTenant("acme"))).block();
+                .contextWrite(authContext(jwt("acme", "user-123"))).block();
 
-        assertThat(keyProducts).isEqualTo("rate:ecommerce-gw:product-service:t:acme");
-        assertThat(keyOrders).isEqualTo("rate:ecommerce-gw:order-service:t:acme");
+        assertThat(keyProducts).isEqualTo("rate:ecommerce-gw:product-service:t:acme:acct:user-123");
+        assertThat(keyOrders).isEqualTo("rate:ecommerce-gw:order-service:t:acme:acct:user-123");
         assertThat(keyProducts).isNotEqualTo(keyOrders);
     }
 
@@ -82,14 +110,34 @@ class TenantRouteRateLimitConfigTest {
         MockServerWebExchange exchange = exchangeFor("10.0.0.5", routeWithId("product-service"));
 
         String key = resolver.resolve(exchange)
-                .contextWrite(authContext(jwtWithTenant("")))
+                .contextWrite(authContext(jwt("", "user-123")))
                 .block();
 
-        assertThat(key).isEqualTo("rate:ecommerce-gw:product-service:t:ecommerce");
+        assertThat(key).isEqualTo("rate:ecommerce-gw:product-service:t:ecommerce:acct:user-123");
+    }
+
+    /**
+     * A token with no usable {@code sub} degrades to the tenant-only bucket — coarse, but it
+     * must never produce a null key or a synthetic account that merges distinct callers.
+     */
+    @Test
+    @DisplayName("sub 가 없는 인증 토큰 → tenant-only 키로 강등 (null 키 금지)")
+    void missingSubject_degradesToTenantOnlyKey() {
+        MockServerWebExchange exchange = exchangeFor("10.0.0.5", routeWithId("product-service"));
+        Jwt noSubject = Jwt.withTokenValue("token")
+                .header("alg", "RS256")
+                .claim("tenant_id", "acme")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+
+        String key = resolver.resolve(exchange).contextWrite(authContext(noSubject)).block();
+
+        assertThat(key).isEqualTo("rate:ecommerce-gw:product-service:t:acme");
     }
 
     @Test
-    @DisplayName("익명/pre-auth 요청 → 기본 테넌트 + client IP 로 키 (IP 바운딩 보존)")
+    @DisplayName("익명/pre-auth 요청 → 기본 테넌트 + client IP 로 키 (IP 바운딩 보존, MONO-368 무변경)")
     void anonymousRequest_fallsBackToDefaultTenantQualifiedByIp() {
         MockServerWebExchange exchange = exchangeFor("203.0.113.7", routeWithId("search-service"));
 
@@ -150,14 +198,14 @@ class TenantRouteRateLimitConfigTest {
                 Mono.just(new SecurityContextImpl(token)));
     }
 
-    private static Jwt jwtWithTenant(String tenantId) {
-        Jwt.Builder builder = Jwt.withTokenValue("token")
+    private static Jwt jwt(String tenantId, String subject) {
+        return Jwt.withTokenValue("token")
                 .header("alg", "RS256")
-                .subject("user-123")
+                .subject(subject)
+                .claim("tenant_id", tenantId)
                 .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(300));
-        builder.claim("tenant_id", tenantId);
-        return builder.build();
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
     }
 
     private static MockServerWebExchange exchangeFor(String ip, Route route) {
