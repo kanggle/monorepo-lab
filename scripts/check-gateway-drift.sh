@@ -70,10 +70,23 @@
 #     it only forbids a NON-gateway app service from holding one. A guard that
 #     is RED on day one gets switched off, and a switched-off guard is worse
 #     than no guard, because a skip reports green.
-#   * platform-console owns no gateway BY DESIGN (ADR-MONO-013 Model B), and
-#     `console-bff` deliberately holds `console-bff.local`. I2 is scoped to
-#     gateway-owning projects, so it must not fire here — calling a structure
-#     the policy explicitly permits a "violation" is how a guard loses trust.
+#   * platform-console owns no gateway BY DESIGN (ADR-MONO-013 Model B). That much
+#     is true, and I1 must not demand one here.
+#
+#     What was NOT true is the reason this file originally gave for exempting the
+#     project from I2: that `console-bff` "deliberately holds `console-bff.local`"
+#     and that this is "a structure the policy explicitly permits". The policy
+#     permits no such thing — L14 forbids exactly it, and no ADR ever granted an
+#     exception (ADR-MONO-013 decides Model B; ADR-MONO-017 lists the Traefik label
+#     in a follow-up task's checklist, which is not a decision). So the guard was
+#     blessing, in an executable artifact, the one thing the policy bans in prose —
+#     while every reader of the policy still believed the absolute rule.
+#
+#     TASK-MONO-362 removed the router instead of writing the exception into policy:
+#     console-web reaches the BFF on the docker network, as the fed-e2e stack always
+#     had. platform-console is now IN I2's scope and passes, because its only
+#     router-holder is `console-web`, which is allowlisted below on its merits.
+#     The exception was deleted, not legalised — the guard got stricter.
 #   * The I2 allowlist is a list of EXACT NAMES, never a pattern. A regex like
 #     `*-web` would wave through the next backend that happens to end in -web.
 #
@@ -146,10 +159,17 @@ for project_md in "$PROJECTS_DIR"/*/PROJECT.md; do
     fail=1
   fi
 
-  # I2 — policy L14: in a gateway-owning project, only the gateway (or an
-  # allowlisted non-backend surface) may hold a Traefik router.
+  # I2 — policy L14: no backend service may hold a Traefik router. Only the
+  # gateway, or an allowlisted non-backend surface (browser-facing frontend /
+  # operator tooling), may sit on the edge.
+  #
+  # TASK-MONO-362 widened this to EVERY project. It used to run only on
+  # gateway-owning ones, which exempted platform-console — the one project that
+  # was actually violating L14 (`console-bff`, a backend, held
+  # `Host(console-bff.local)`). Scoping a policy check to the projects that
+  # already comply is how the single offender goes unchecked.
   compose="$PROJECTS_DIR/$project/docker-compose.yml"
-  if [ "$module" = "1" ] && [ -r "$compose" ]; then
+  if [ -r "$compose" ]; then
     exposed="$(
       tr -d '\r' < "$compose" | awk '
         /^  [a-zA-Z0-9._-]+:[[:space:]]*$/ { svc = $1; sub(/:$/, "", svc) }
@@ -161,12 +181,22 @@ for project_md in "$PROJECTS_DIR"/*/PROJECT.md; do
       allowed=0
       for ok in $TRAEFIK_ALLOWLIST; do [ "$svc" = "$ok" ] && allowed=1; done
       [ "$allowed" = "1" ] && continue
-      echo "DIRECT-EXPOSURE  $project:$svc — holds a Traefik router in $project/docker-compose.yml, but this"
-      echo "                 project owns a gateway. api-gateway-policy.md L13/L14: all external traffic MUST"
-      echo "                 pass through the gateway; no backend service may be directly exposed. Route it via"
-      echo "                 gateway-service and give this service 'expose:' only. (If it is genuinely not a"
-      echo "                 backend — a browser-facing frontend or operator tooling — add it to"
-      echo "                 TRAEFIK_ALLOWLIST by exact name, with a reason.)"
+      echo "DIRECT-EXPOSURE  $project:$svc — holds a Traefik router in $project/docker-compose.yml."
+      echo "                 api-gateway-policy.md L13/L14: all external traffic MUST pass through the"
+      echo "                 gateway; no backend service may be directly exposed. On the edge without a"
+      echo "                 gateway there is no rate limiting, no identity-header strip->enrich, and no"
+      echo "                 uniform error envelope."
+      if [ "$module" = "1" ]; then
+        echo "                 This project HAS a gateway: route the service through gateway-service and"
+        echo "                 give it 'expose:' only."
+      else
+        echo "                 This project has NO gateway, so nothing sits in front of it at all. Either"
+        echo "                 drop the router and reach the service on the docker network (TASK-MONO-362"
+        echo "                 did this for console-bff), or give the project a gateway (TASK-MONO-357 did"
+        echo "                 this for finance/erp)."
+      fi
+      echo "                 (If it is genuinely not a backend — a browser-facing frontend or operator"
+      echo "                 tooling — add it to TRAEFIK_ALLOWLIST by exact name, with a reason.)"
       fail=1
     done
   fi
@@ -178,4 +208,4 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
-echo "OK: every gateway declaration matches a module, and no backend is directly exposed in a gateway-owning project."
+echo "OK: every gateway declaration matches a module, and no backend service holds a Traefik router in any project."

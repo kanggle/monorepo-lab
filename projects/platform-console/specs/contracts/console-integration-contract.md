@@ -2308,15 +2308,27 @@ obligations (e.g. finance F7, erp E7).
 
 ##### Edge routing (Local Network Convention)
 
-`console-bff` registers Traefik labels for hostname `console-bff.local` (no
-`PORT_PREFIX`, hostname-based routing; the [`infra/traefik/`](../../../../infra/traefik/)
-shared stack). The hostname is **internal-only** — `console-web` server-side
-routes call it server-side; the browser never reaches it. The BFF therefore
-does **not** route through a `gateway-service` (there is none in
-`platform-console`); the trust boundary at the Traefik front is the same
-`console.local` host that fronts `console-web`. This is identical to the
-structural exception `console-web` itself takes from `rest-api.md`'s
-"all external traffic enters through gateway-service" requirement.
+**`console-bff` has no hostname and registers no Traefik labels** (TASK-MONO-362).
+`console-web`'s server-side route handlers reach it on the docker network at
+`http://console-bff:8080` (`CONSOLE_BFF_URL`); the browser never reaches it.
+
+It previously held `console-bff.local` while this same paragraph called that hostname
+"internal-only". Both cannot be true — a router on the shared
+[`infra/traefik/`](../../../../infra/traefik/) edge means anything able to send
+`Host: console-bff.local` reaches the BFF. That made it the only **backend** service
+in the monorepo sitting on the edge, which `platform/api-gateway-policy.md` L13/L14
+forbids outright. The exposure was removed rather than excepted; the
+`federation-hardening-e2e` stack had always used the docker-network address, so this
+is a convergence, not a new design.
+
+The trust boundary is the Traefik-fronted `console.local` host in front of
+`console-web`. A browser-facing frontend **is** the external client, so it is not
+"a backend directly exposed" — no exception to `rest-api.md`'s "all external traffic
+enters through gateway-service" is needed or claimed: `console-bff` takes no external
+traffic at all. `platform-console` owns no `gateway-service` (ADR-MONO-013 Model B),
+and with the BFF off the edge it needs none. Enforced by
+`scripts/check-gateway-drift.sh` (I2), which fails on any backend service holding a
+Traefik router in any project.
 
 ##### v1 (skeleton task TASK-PC-BE-001) endpoint surface
 

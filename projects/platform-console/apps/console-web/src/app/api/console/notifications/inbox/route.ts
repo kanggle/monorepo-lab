@@ -36,10 +36,11 @@ export const runtime = 'nodejs';
  * No token is ever logged (only request id + status).
  */
 
-/** Target URL on the console-bff side (ADR-MONO-001 hostname routing). */
+/** Target URL on the console-bff side — the docker network, not the Traefik edge
+ *  (TASK-MONO-362: console-bff holds no edge router). */
 function bffUrl(search: string): string {
   const base = (
-    process.env.CONSOLE_BFF_URL || 'http://console-bff.local'
+    process.env.CONSOLE_BFF_URL || 'http://console-bff:8080'
   ).replace(/\/$/, '');
   return `${base}/api/console/notifications/inbox${search}`;
 }

@@ -325,25 +325,38 @@ which leg degraded" anti-pattern; MUST NOT regress.
 ## Edge Routing (Local Network Convention)
 
 `platform-console` is on the shared Traefik stack (`infra/traefik/`,
-`TASK-MONO-022`, hostname-based routing, no `PORT_PREFIX`). The BFF gets a
-dedicated hostname:
+`TASK-MONO-022`, hostname-based routing, no `PORT_PREFIX`). **The BFF has no
+hostname** (TASK-MONO-362):
 
-- `console-bff.local` → `apps/console-bff/` Spring Boot, registered via the
-  docker-compose `traefik.http.routers.console-bff-*` labels (sibling of the
-  existing `console.local` for `console-web`).
-- Routing scope is **internal-only** (the BFF is not exposed to operator
-  browsers — `console-web`'s server routes call it server-side; see § Auth
-  Flow inbound). The Traefik router restricts it to the BFF host header; no
-  external CORS surface.
-- Backing service `expose:` only — there is no backing service for the BFF
-  (stateless, see § Persistence).
+- **`console-bff` holds no Traefik router.** It is reached only on the docker
+  network, at `http://console-bff:8080`, by `console-web`'s server-side route
+  handlers (`CONSOLE_BFF_URL`). The browser never touches it — see § Auth Flow
+  inbound.
+- It **stays on `traefik-net`**, because that is the network it shares with
+  `console-web`. **Network membership is not exposure**: exposure comes from the
+  router labels, and Traefik cannot route to a container it has no route for.
+- `expose:` only — no host-port publish. No backing service (stateless, see
+  § Persistence).
 
-The BFF deviates from `rest-api.md` "all external traffic enters through
-gateway-service" because the platform-console domain has **no
-`gateway-service`** — operator traffic enters at the Traefik-fronted
-`console-web` hostname, which is the trust boundary; `console-web`'s
-server-side calls into `console-bff` are the only inbound traffic. This is the
-identical structural exception `console-web` itself takes.
+> **Why the hostname was removed.** It used to hold `console-bff.local` while this
+> very section called the routing "internal-only". Both cannot be true: a router on
+> the shared edge means anything that can send `Host: console-bff.local` reaches the
+> BFF. "Internal-only" was a comment, not a constraint — and it made `console-bff`
+> the **only backend service in the monorepo on the edge**, which is exactly what
+> `platform/api-gateway-policy.md` L14 forbids. The fix was to delete the exposure,
+> not to write an exception into the policy: the `federation-hardening-e2e` stack —
+> the one CI actually runs — had always reached the BFF on the docker network, so
+> this converges the thin `pnpm console:up` stack onto the proven wiring.
+> `scripts/check-gateway-drift.sh` (I2) now fails if any backend service acquires a
+> Traefik router, in any project.
+
+`rest-api.md` says "all external traffic enters through gateway-service".
+`console-bff` takes **no exception to that rule, because it takes no external
+traffic at all.** Operator traffic enters at the Traefik-fronted `console-web`
+hostname, which is the trust boundary; a browser-facing frontend is the external
+client, not "a backend directly exposed". The platform-console domain owns no
+`gateway-service` (ADR-MONO-013 Model B) — and with the BFF off the edge, it does
+not need one.
 
 ---
 

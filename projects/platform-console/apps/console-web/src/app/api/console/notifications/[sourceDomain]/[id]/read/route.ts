@@ -25,9 +25,11 @@ export const runtime = 'nodejs';
  *   - other / network / parse → 502 BAD_GATEWAY.
  */
 
+/** Docker-network address, not the Traefik edge (TASK-MONO-362: console-bff holds
+ *  no edge router — every call is server-side, from this route handler). */
 function bffUrl(sourceDomain: string, id: string): string {
   const base = (
-    process.env.CONSOLE_BFF_URL || 'http://console-bff.local'
+    process.env.CONSOLE_BFF_URL || 'http://console-bff:8080'
   ).replace(/\/$/, '');
   return `${base}/api/console/notifications/${encodeURIComponent(sourceDomain)}/${encodeURIComponent(id)}/read`;
 }
