@@ -291,6 +291,12 @@ jobs:
               - 'projects/*/docker-compose.yml'
               - 'platform/api-gateway-policy.md'
               - 'scripts/check-gateway-drift.sh'
+              # TASK-MONO-365: the guard's I3 reads the gateways' own application.yml
+              # (the `iss` allowlist). Without this path the check could never fire on
+              # the change it polices — MONO-359's lesson: a guard must not only be able
+              # to bite, it must get the chance to, and a job that never runs reports
+              # GREEN.
+              - 'projects/*/apps/gateway-service/src/main/resources/application.yml'
             # TASK-MONO-363: docs/adr/INDEX.md is the only entry point for "has this
             # already been decided?". It died at ADR-MONO-012a and by 2026-07-12 was
             # missing 38 of 53 ADRs — and was wrong about one it did list (008 was
