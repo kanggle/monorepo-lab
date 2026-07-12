@@ -67,10 +67,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-| ID | Title | Service | Tags |
-|---|---|---|---|
-| TASK-BE-438 | **READY**. master-service outbox v1→v2 마이그레이션(ADR-MONO-004 §6 row 1). v2 `AbstractOutboxPublisher<R>`로 전환 — 신규 Flyway `master_outbox`(UUID event_id) + 엔티티/리포 + write-path(UUID/occurred_at 생성) + 스케줄러 교체 + `MicrometerOutboxMetrics` + 테스트 재작성. backoff/헤더/lag 메트릭 획득. ADR "cosmetic" 표기지만 실측 schema-migration급. master IT=CI Linux 권위(로컬 Testcontainers 차단). 구현 보류=별도 세션(Opus). | master-service | code, event |
-| TASK-BE-458 | **READY** (2026-06-29 code-marker sweep). master-service `WarehouseIntegrationTest.prometheusEndpoint_exposesOutboxMetrics` 가 `@DisabledIfEnvironmentVariable(CI)` — BE-020이 micrometer-kafka 미터 re-attach(브로커 재시작 후) vs `/actuator/prometheus` scrape-body race를 follow-up으로 미뤘으나 **티켓 미생성**(sweep 확인). race 진단·결정론화 후 guard 제거. 회귀 가드=≥20-run green(Kafka pause/unpause 순서 포함) + master `:integrationTest`. 구현 권장=Sonnet 4.6. | master-service | code, test |
+(empty)
+
+> 2026-07-12: `TASK-BE-438`(outbox v1→v2) 과 `TASK-BE-458`(prometheus IT 재활성화) 이 **이미 `done/` 에 있는데도 이 표에 `**READY**` 로 남아 있었다** — 두 close chore 가 파일만 옮기고 표를 안 지웠다. 표를 읽고 큐를 고르는 사람에게 이건 **이미 끝난 일을 집어들라는 지시**다. 제거함(`TASK-MONO-363` 곁다리, 같은 "손-유지 목록이 조용히 틀린다" 클래스).
 
 ## in-progress
 
