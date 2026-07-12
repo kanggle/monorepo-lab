@@ -43,6 +43,18 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-platform-console-web}
       OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://console.local/api/auth/callback}
       OIDC_SCOPE: ${OIDC_SCOPE:-openid profile email tenant.read}
+      # Browser-visible console origin, resolved at RUNTIME (TASK-MONO-358).
+      # `NEXT_PUBLIC_APP_URL` cannot serve this purpose — Next inlines every
+      # `process.env.NEXT_PUBLIC_*` at BUILD time, so a prebuilt image is
+      # permanently pinned to the host the build knew about. Unset → the code
+      # falls back to `NEXT_PUBLIC_APP_URL`, so this default is a no-op.
+      CONSOLE_PUBLIC_ORIGIN: ${CONSOLE_PUBLIC_ORIGIN:-http://console.local}
+      # Cookie `Secure` flag. Defaults ON; only a declared plain-HTTP
+      # deployment (the portfolio demo) sets it to the literal "false".
+      # A browser REFUSES TO STORE a Secure cookie delivered over http:// on
+      # any origin but localhost — with it on, the PKCE/state cookies are never
+      # stored and every login bounces with `invalid_state`.
+      CONSOLE_COOKIE_SECURE: ${CONSOLE_COOKIE_SECURE:-true}
       # GAP product/tenant registry — AUTHORITATIVE producer path
       # (TASK-BE-296 / console-registry-api.md): admin-service operator-auth
       # boundary GET /api/admin/console/registry (gateway public-path subtree

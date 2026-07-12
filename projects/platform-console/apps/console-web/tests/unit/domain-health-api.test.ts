@@ -200,9 +200,16 @@ describe('fetchDomainHealth — happy path', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe(
-      'http://console.local/api/console/dashboards/domain-health',
-    );
+    // TASK-MONO-358 — in the browser this is a RELATIVE same-origin path, not
+    // an absolute one. It used to be built from `NEXT_PUBLIC_APP_URL`, which
+    // Next inlines at BUILD time: a prebuilt image would send the browser to
+    // whatever host the build knew about (`console.local`) rather than the host
+    // it is actually being served from. The on-demand demo, whose hostname is
+    // derived from the instance IP at boot, made that fatal. Same-origin needs
+    // no base at all — this suite runs under jsdom, so it exercises the browser
+    // branch. (The SSR branch still resolves an absolute origin; fetch() there
+    // requires one.)
+    expect(String(url)).toBe('/api/console/dashboards/domain-health');
     const opts = init as RequestInit;
     expect(opts.method).toBe('GET');
     expect(opts.body).toBeUndefined();

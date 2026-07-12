@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getServerEnv } from '@/shared/config/env';
+import { getServerEnv, publicOrigin } from '@/shared/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
@@ -75,7 +75,7 @@ export async function POST() {
   // Post-logout landing — must EXACTLY match a registered
   // `post-logout-redirect-uris` entry on the IAM `platform-console-web` client
   // (auth-service V0021). No query string (SAS matches the URI exactly).
-  const postLogout = new URL('/login', env.NEXT_PUBLIC_APP_URL).toString();
+  const postLogout = new URL('/login', publicOrigin(env)).toString();
 
   let logoutUrl: string;
   if (idToken) {

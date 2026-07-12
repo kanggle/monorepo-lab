@@ -422,6 +422,48 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+echo "[verify] (m) 쿠키 Secure 해제와 https 오리진이 함께 쓰이지 않는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-358): 데모는 평문 HTTP 다. 브라우저는 **localhost 가 아닌 오리진에서 http 로
+# 온 `Secure` 쿠키를 저장조차 하지 않으므로**(curl 도 동일 — Set-Cookie 를 받고도 쿠키 자가
+# 비었다) PKCE/state 쿠키가 사라지고 모든 로그인이 `invalid_state` 로 튕긴다. 그래서
+# `CONSOLE_COOKIE_SECURE=false` 가 데모에 **필요**하다.
+#
+# 위험한 것은 그 자체가 아니라 **조합**이다: TLS 오리진(https://)에서 Secure 를 끄면 그건
+# 진짜 다운그레이드다(세션 쿠키가 평문으로 샐 수 있다). 그 하나만 막는다. Secure 를 끄는
+# 것 자체를 금지하면 데모가 성립하지 않으므로, 금지 대상을 정확히 좁힌다.
+#
+# 동시에 `CONSOLE_PUBLIC_ORIGIN` 이 데모 도메인을 가리키는지도 본다 — 빠지면 로그인 직후
+# 콜백이 브라우저를 `console.local` 로 보낸다(빌드타임 인라인된 NEXT_PUBLIC_APP_URL).
+console_render="$(render console)"
+# NOTE: do NOT split on ': ' — a URL contains one ("http://…"), so an awk
+# field-split hands back "http" and the https check below silently never
+# matches. Strip exactly the `KEY:` prefix instead. (Caught by mutation-check;
+# the guard passed either way, which is precisely the failure it exists to
+# prevent.)
+yaml_val() { # $1=key → value, quotes stripped
+  printf '%s\n' "$console_render" \
+    | sed -n "s/^[[:space:]]*$1:[[:space:]]*//p" | tr -d '"' | head -1
+}
+cookie_secure="$(yaml_val CONSOLE_COOKIE_SECURE)"
+pub_origin="$(yaml_val CONSOLE_PUBLIC_ORIGIN)"
+
+[ -n "$pub_origin" ] || fail "console 렌더에 CONSOLE_PUBLIC_ORIGIN 이 없습니다 —"\
+  $'\n'"   NEXT_PUBLIC_APP_URL 은 빌드타임에 인라인되므로 프리베이크 이미지의 오리진을 바꾸지"\
+  $'\n'"   못합니다. 로그인 직후 콜백이 브라우저를 http://console.local 로 보냅니다."
+
+case "$cookie_secure:$pub_origin" in
+  false:https://*)
+    fail "CONSOLE_COOKIE_SECURE=false 인데 CONSOLE_PUBLIC_ORIGIN 이 https 입니다: $pub_origin"\
+      $'\n'"→ TLS 오리진에서 Secure 를 끄는 것은 진짜 다운그레이드입니다(세션 쿠키 평문 노출)."\
+      $'\n'"→ https 를 쓴다면 CONSOLE_COOKIE_SECURE 를 지우세요(기본값 true)."
+    ;;
+esac
+
+# `false` 를 쓰는 쪽은 반드시 http 오리진이어야 하고, 그 역(https + Secure)은 항상 안전하다.
+ok "쿠키 Secure=$cookie_secure ↔ 오리진 $pub_origin (조합 안전)"
+
+# ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
   exit 0

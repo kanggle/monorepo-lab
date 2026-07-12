@@ -47,7 +47,13 @@ const OPERATOR_OVERVIEW_PATH = '/api/console/dashboards/operator-overview';
  * valid in both contexts without leaking server-only env.
  */
 function operatorOverviewUrl(): string {
-  const base = clientEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
+  // Same-origin in the browser → relative. `NEXT_PUBLIC_APP_URL` is inlined at
+  // BUILD time (TASK-MONO-358), so an absolute base baked into the bundle
+  // points at the build host, not the serving host. See domain-health-api.ts.
+  if (typeof window !== 'undefined') return OPERATOR_OVERVIEW_PATH;
+  const base = (
+    process.env.CONSOLE_PUBLIC_ORIGIN ?? clientEnv.NEXT_PUBLIC_APP_URL
+  ).replace(/\/$/, '');
   return `${base}${OPERATOR_OVERVIEW_PATH}`;
 }
 
