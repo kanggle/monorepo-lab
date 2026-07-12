@@ -2,11 +2,23 @@ package com.example.auth.presentation.exception;
 
 import com.example.auth.application.exception.AccountLockedException;
 import com.example.auth.application.exception.AccountStatusException;
+import com.example.auth.application.exception.CredentialsInvalidException;
+import com.example.auth.application.exception.CurrentPasswordMismatchException;
+import com.example.auth.application.exception.InvalidOAuthStateException;
+import com.example.auth.application.exception.OAuthCodeInvalidException;
+import com.example.auth.application.exception.OAuthProviderException;
 import com.example.web.dto.ErrorResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -84,6 +96,97 @@ class AuthExceptionHandlerTest {
         assertThat(handler.handleAccountStatus(
                         new AccountStatusException("DELETED", "ACCOUNT_DELETED")).getStatusCode())
                 .isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ---------------------------------------------------------------------
+    // TASK-MONO-350 — the three contradictions between code, contract and registry.
+    // ---------------------------------------------------------------------
+
+    /**
+     * State mismatch is a malformed/forged callback, caught before any credential is
+     * evaluated — a bad request, not an authentication failure. iam answered 401 while
+     * ecommerce auth-service, the shared registry and RFC 6749 § 10.12 all said 400, and
+     * the registry meanwhile asserted the two services emit this code "with identical
+     * semantics" — a claim that was false precisely because of this handler.
+     */
+    @Test
+    @DisplayName("INVALID_STATE → 400 (not 401): a forged/expired callback is a bad request")
+    void invalidOAuthStateIsBadRequest() {
+        assertStatus(handler.handleInvalidOAuthState(new InvalidOAuthStateException()),
+                HttpStatus.BAD_REQUEST, "INVALID_STATE");
+    }
+
+    /**
+     * 400 is correct here and is NOT what changed — answering 401 to an authenticated
+     * user's password change reads as "your session died" and tends to log them out.
+     * What changed is the code: it used to be {@code INVALID_CREDENTIALS}, the same code
+     * a failed login emits at 401.
+     */
+    @Test
+    @DisplayName("current-password mismatch → 400 CURRENT_PASSWORD_MISMATCH (no longer INVALID_CREDENTIALS)")
+    void currentPasswordMismatchHasItsOwnCode() {
+        assertStatus(handler.handleCurrentPasswordMismatch(new CurrentPasswordMismatchException()),
+                HttpStatus.BAD_REQUEST, "CURRENT_PASSWORD_MISMATCH");
+    }
+
+    /**
+     * The contract has always promised {@code 401 INVALID_CODE} and nothing ever emitted it:
+     * every exchange failure was flattened into a 502, so a stale callback URL was reported
+     * as an upstream outage.
+     */
+    @Test
+    @DisplayName("rejected authorization code → 401 INVALID_CODE (not 502)")
+    void rejectedCodeIsUnauthorizedNotBadGateway() {
+        ResponseEntity<ErrorResponse> r =
+                handler.handleOAuthCodeInvalid(new OAuthCodeInvalidException("Google rejected the code (400)"));
+
+        assertStatus(r, HttpStatus.UNAUTHORIZED, "INVALID_CODE");
+        assertThat(r.getStatusCode().is5xxServerError())
+                .as("a rejected authorization code is the caller's fault; reporting 5xx pages an "
+                        + "operator for a user error and invites retry-on-5xx to replay a single-use code")
+                .isFalse();
+    }
+
+    /** A genuine provider failure must still be a 502 — the fix must not swallow real outages. */
+    @Test
+    @DisplayName("genuine provider failure → 502 PROVIDER_ERROR (unchanged)")
+    void providerOutageStaysBadGateway() {
+        assertStatus(handler.handleOAuthProviderError(new OAuthProviderException("Google 503")),
+                HttpStatus.BAD_GATEWAY, "PROVIDER_ERROR");
+    }
+
+    /**
+     * The guard that would have caught all of this. TASK-MONO-348 established the rule in
+     * finance/erp: a service that emits one {@code code} at two different statuses breaks
+     * every client that branches on {@code code}. iam did exactly that with
+     * {@code INVALID_CREDENTIALS} (401 on login, 400 on password change) and nothing failed,
+     * because no test ever compared the handlers against each other.
+     */
+    @Test
+    @DisplayName("no code leaves this service at two different HTTP statuses")
+    void oneCodeOneStatus() {
+        List<ResponseEntity<ErrorResponse>> everyHandler = List.of(
+                handler.handleCredentialsInvalid(new CredentialsInvalidException()),
+                handler.handleCurrentPasswordMismatch(new CurrentPasswordMismatchException()),
+                handler.handleInvalidOAuthState(new InvalidOAuthStateException()),
+                handler.handleOAuthCodeInvalid(new OAuthCodeInvalidException("rejected")),
+                handler.handleOAuthProviderError(new OAuthProviderException("outage")),
+                handler.handleAccountLocked(new AccountLockedException()),
+                handler.handleAccountStatus(new AccountStatusException("DORMANT", "ACCOUNT_DORMANT")),
+                handler.handleAccountStatus(new AccountStatusException("DELETED", "ACCOUNT_DELETED")),
+                handler.handleAccountStatus(new AccountStatusException("SOMETHING_NEW", "ACCOUNT_STATUS_UNKNOWN")));
+
+        Map<String, Set<HttpStatusCode>> statusesByCode = new LinkedHashMap<>();
+        for (ResponseEntity<ErrorResponse> r : everyHandler) {
+            statusesByCode
+                    .computeIfAbsent(r.getBody().code(), k -> new LinkedHashSet<>())
+                    .add(r.getStatusCode());
+        }
+
+        assertThat(statusesByCode).allSatisfy((code, statuses) -> assertThat(statuses)
+                .as("code %s is emitted at more than one status: %s — a client branching on "
+                        + "`code` cannot tell the two conditions apart", code, statuses)
+                .hasSize(1));
     }
 
     private static void assertStatus(ResponseEntity<ErrorResponse> r,

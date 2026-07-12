@@ -59,7 +59,7 @@ class PasswordControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH /api/auth/password returns 400 INVALID_CREDENTIALS when current password mismatches")
+    @DisplayName("PATCH /api/auth/password returns 400 CURRENT_PASSWORD_MISMATCH when current password mismatches")
     void changePassword_currentPasswordMismatch_returns400() throws Exception {
         doThrow(new CurrentPasswordMismatchException())
                 .when(changePasswordUseCase).execute(any(ChangePasswordCommand.class));
@@ -74,7 +74,10 @@ class PasswordControllerTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+                // TASK-MONO-350: was INVALID_CREDENTIALS — the same code a failed login emits
+                // at 401. The status (400) is unchanged and correct; only the code is now
+                // distinct, so a client can tell the two conditions apart.
+                .andExpect(jsonPath("$.code").value("CURRENT_PASSWORD_MISMATCH"));
     }
 
     @Test

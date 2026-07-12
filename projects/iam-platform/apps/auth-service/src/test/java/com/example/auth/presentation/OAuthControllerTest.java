@@ -134,7 +134,10 @@ class OAuthControllerTest {
                                   "state": "tampered-state"
                                 }
                                 """))
-                .andExpect(status().isUnauthorized())
+                // TASK-MONO-350: 400, not 401 — a tampered state is a forged/malformed
+                // callback, rejected before any credential is evaluated. Matches ecommerce
+                // auth-service, platform/error-handling.md and RFC 6749 § 10.12.
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_STATE"));
     }
 

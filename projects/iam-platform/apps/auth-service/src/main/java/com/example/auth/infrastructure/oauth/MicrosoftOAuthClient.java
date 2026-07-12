@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.util.Map;
 
@@ -81,12 +82,20 @@ public class MicrosoftOAuthClient implements OAuthClient {
             formData.add("client_id", props.getClientId());
             formData.add("client_secret", props.getClientSecret());
 
-            String responseBody = restClient.post()
-                    .uri(props.getTokenUri())
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(formData)
-                    .retrieve()
-                    .body(String.class);
+            // TASK-MONO-350: a 4xx here is the provider rejecting the authorization code
+            // (invalid_grant), not an outage. Classified narrowly so the later id_token /
+            // JWKS work below still falls through to the generic provider-error path.
+            String responseBody;
+            try {
+                responseBody = restClient.post()
+                        .uri(props.getTokenUri())
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .body(formData)
+                        .retrieve()
+                        .body(String.class);
+            } catch (RestClientException e) {
+                throw OAuthClientSupport.classifyTokenExchangeFailure("Microsoft", e);
+            }
 
             JsonNode tokenResponse = objectMapper.readTree(responseBody);
 
