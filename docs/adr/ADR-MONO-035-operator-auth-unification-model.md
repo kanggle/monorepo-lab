@@ -2,6 +2,8 @@
 
 **Status:** ACCEPTED
 
+**Date:** 2026-06-14
+
 ## Amendments
 
 **2026-07-07 (TASK-MONO-332):** ecommerce operator role renamed from the legacy `ADMIN` to standard `ECOMMERCE_OPERATOR` (`<DOMAIN>_OPERATOR` parity with WMS/SCM/ERP/FINANCE/FAN). Model unchanged — naming standardization only.
