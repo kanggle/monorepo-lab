@@ -209,6 +209,11 @@ jobs:
       # Not AND-ing strictly dominates: it covers both paths, and the cost on a
       # doc-only PR is a few hundred ms of bash.
       jwt-claims: ${{ steps.filter.outputs.jwt-claims }}
+      # TASK-MONO-372: raw filter, NOT AND-combined with `code-changed`. The
+      # declaration side of this drift is a one-line edit to an architecture.md —
+      # markdown-only. AND-ing would switch the guard off on exactly half the diffs
+      # it exists to police, and a skipped job reports green.
+      service-type: ${{ steps.filter.outputs.service-type }}
       # TASK-MONO-374. NOT AND-combined with `code-changed`: a workflow file and a
       # bash guard are not "code" by that filter's definition, and AND-ing would
       # make this guard unreachable on exactly the edits that break it — the
@@ -352,6 +357,17 @@ jobs:
               - 'projects/iam-platform/apps/auth-service/src/main/**/*.java'
               - 'platform/contracts/jwt-standard-claims.md'
               - 'scripts/check-jwt-claims-registry.sh'
+            # TASK-MONO-372: the Service Type cell in specs/services/*/architecture.md
+            # chooses which platform/service-types/*.md rule set is loaded for a service
+            # (platform/entrypoint.md: "read EXACTLY ONE file matching the declared
+            # Service Type"). HARDSTOP-10 checks it is declared; nothing checked it was
+            # true, and three of them were not. Both arrival paths: an annotation added
+            # in Java, and a declaration edited in markdown.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            service-type:
+              - 'projects/*/specs/services/*/architecture.md'
+              - 'projects/*/apps/*/src/main/**/*.java'
+              - 'scripts/check-service-type-drift.sh'
             # TASK-MONO-374: a `push` run is the post-merge baseline — the only run
             # that can say "main is green at this commit". A ref-keyed concurrency
             # group put every main push in ONE group, so each merge cancelled the
@@ -579,6 +595,46 @@ jobs:
 
       - name: Guard — every claim the IdP mints is registered in the contract
         run: bash scripts/check-jwt-claims-registry.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-372 — Service Type declaration drift guard.
+  #
+  # Every service declares one cell: | Service Type | `rest-api` (primary) + ... |
+  # That cell is not documentation. platform/entrypoint.md § "Service-Type-Specific"
+  # says to read EXACTLY ONE platform/service-types/*.md file, chosen by it — so the
+  # cell decides which MUSTs apply to the service at all.
+  #
+  # HARDSTOP-10 enforces that the cell exists and names a known type. Nothing
+  # enforced that it was true, and three of 45 were not: ecommerce product-service
+  # declared `rest-api` (single) while running six @KafkaListeners (so
+  # event-consumer.md had never been loaded for it, and its own spec still claimed
+  # "all three consumers dedupe on event_id" — there are six); ecommerce
+  # notification-service declared `event-consumer` (single) while serving 13 HTTP
+  # endpoints for which the repo publishes a contract.
+  #
+  # Two directions only. Deliberately NOT checked, because each is red on day one
+  # for legitimate reasons: @Scheduled => batch-job (29 services carry @Scheduled
+  # for outbox relay and none declare batch-job, correctly), and the reverse of
+  # rest-api (all 7 gateway-service modules declare rest-api and have zero
+  # controllers — they route with Spring Cloud Gateway).
+  #
+  # The filter is NOT AND-combined with `code-changed` — see the outputs block.
+  # Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  service-type-drift:
+    name: Service type drift (architecture.md declarations vs annotations)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.service-type == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-service-type-drift.sh
+
+      - name: Guard — declared Service Type matches the code's annotations
+        run: bash scripts/check-service-type-drift.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-352: platform/error-handling.md calls itself the single authoritative

@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `product-service` |
 | Project | `ecommerce-microservices-platform` |
-| Service Type | `rest-api` (single — see Service Type Composition below) |
+| Service Type | `rest-api` (primary) + `event-consumer` (reservation saga, IAM lifecycle, WMS reconciliation) — dual-type, see Service Type Composition |
 | Architecture Style | **DDD-style Architecture** (4-layer + domain/port) |
 | Domain | ecommerce |
 | Primary language / stack | Java 21, Spring Boot |
@@ -24,12 +24,31 @@ and `platform/architecture-decision-rule.md`.
 
 ### Service Type Composition
 
-`product-service` is a single-type `rest-api` service per
-`platform/service-types/INDEX.md`. Product catalog 도메인 — aggregates,
-variants, inventory, pricing rules, lifecycle. S3 image storage 는
-ProductImageBucketResolver domain port 경유 (TASK-BE-143 cherry-pick). 적용되는
-규칙:
-[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
+`product-service` combines two service types in one deployable unit:
+
+- `rest-api` (**primary**) — the product catalog surface: aggregates, variants,
+  inventory, pricing rules, lifecycle. S3 image storage 는
+  ProductImageBucketResolver domain port 경유 (TASK-BE-143 cherry-pick).
+- `event-consumer` — **six** `@KafkaListener` classes across three consumer groups:
+  - `product-service-reservation` — the reservation saga:
+    `order.order.placed` · `order.order.cancelled` · `payment.payment.completed`
+  - `product-service-iam` — `account.status.changed` (a locked seller-operator
+    account suspends the matching `Seller`, ADR-MONO-042 D4-C)
+  - `product-service-wms` — `wms.inventory.adjusted.v1` ·
+    `wms.inventory.received.v1` · `wms.master.sku.v1`
+
+**This file declared `rest-api` (single) until TASK-MONO-372**, while six consumers
+had been running for months. That was not cosmetic: `platform/entrypoint.md` loads
+**exactly one** service-type rule file from this cell, so `event-consumer.md` — its
+idempotency, retry/DLQ and version-branching MUSTs — was never in the rule set for
+any task touching those consumers. HARDSTOP-10 checks that a Service Type is
+*declared*, never that it is *true*; `scripts/check-service-type-drift.sh` now does.
+
+적용되는 규칙:
+[platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md)
+(primary) 와
+[platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md)
+(consumer path).
 
 ---
 
@@ -113,8 +132,14 @@ the `StockChanged(ORDER_RESERVED)` event the order-service confirm saga waits fo
   `RESERVED`, restore each line's stock + emit `StockChanged(ORDER_CANCELLED, orderId)`;
   if `BACKORDERED`/`NEW`, release without stock change (so a later restock never
   reserves for a cancelled order).
-- **Idempotency**: all three consumers dedupe on `event_id`; per-order convergence
-  and per-reservation transactions isolate concurrent retries/cancels.
+- **Idempotency**: the three reservation-saga consumers dedupe on `event_id`; per-order
+  convergence and per-reservation transactions isolate concurrent retries/cancels.
+  The WMS reconciliation consumers (`wms.inventory.*`, `wms.master.sku.v1`) dedupe the
+  same way. `AccountStatusChangedSellerConsumer` **does not** — it is idempotent by
+  construction: it acts only on `LOCKED`, and suspending an already-`SUSPENDED` seller
+  returns without side effect, so a redelivery is a no-op. That is a valid strategy, but
+  it is a *different* one, and it went unreviewed against `event-consumer.md § Idempotency`
+  for as long as this file declared the service `rest-api` (single) — see TASK-MONO-372.
 
 ## Integration Rules
 - HTTP behavior must follow published contracts

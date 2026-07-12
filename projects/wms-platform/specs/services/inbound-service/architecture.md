@@ -11,7 +11,7 @@ and `platform/architecture-decision-rule.md`.
 | Field | Value |
 |---|---|
 | Service name | `inbound-service` |
-| Service Type | `rest-api` (primary; see Service Type Composition below) |
+| Service Type | `rest-api` (primary) + `event-consumer` (master-data read-model snapshots) — dual-type, see Service Type Composition |
 | Architecture Style | **Hexagonal (Ports & Adapters)** |
 | Primary language / stack | Java 21, Spring Boot |
 | Bounded Context | **Inbound** (per `rules/domains/wms.md`) |
@@ -31,6 +31,13 @@ time; this is internal maintenance, not a primary integration surface.
 
 Read `platform/service-types/rest-api.md` (primary) and
 `platform/service-types/event-consumer.md` (consumer path).
+
+> **TASK-MONO-372 note.** This prose was already honest — it named the consumer path
+> and told you to read `event-consumer.md`. The **Service Type cell** did not: it said
+> `rest-api` (primary) and stopped. That cell is the only thing a rule-loader reads
+> (`platform/entrypoint.md` § "Read **exactly one** file matching the declared Service
+> Type"), so the honest prose bought nothing mechanical. The cell now names both types,
+> and `scripts/check-service-type-drift.sh` keeps it that way.
 
 ---
 
