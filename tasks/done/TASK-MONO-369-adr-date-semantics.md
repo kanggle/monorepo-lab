@@ -8,7 +8,7 @@ ADR 의 `Date` 축이 기계 검사 불가능하다 — **Convention 이 `Date` 
 
 # Status
 
-ready
+done
 
 # Owner
 
