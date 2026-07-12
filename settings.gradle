@@ -8,6 +8,20 @@ rootProject.name = 'monorepo-lab'
 // servlet services — the same reason libs:java-web-servlet was split out by
 // TASK-MONO-044a, after a servlet leak triggered BeanDefinitionOverrideException in
 // three reactive gateway classpaths. (ADR-MONO-048 § D1 / TASK-MONO-351.)
+//
+// libs:java-security is FRAMEWORK-NEUTRAL — neither servlet nor reactive. It holds the
+// two token validators (ADR-MONO-049 § D5-1) precisely because BOTH the reactive
+// gateways and twenty servlet services consume them.
+//
+// libs:java-security-servlet is the servlet half, and the split is not bookkeeping
+// (ADR-MONO-049 § D1 / § D5-2). TenantClaimEnforcer is a OncePerRequestFilter — servlet-
+// bound. Putting it in java-security with a `compileOnly` servlet dependency compiles,
+// and puts a servlet-bound class on the runtime classpath of six reactive gateways where
+// the servlet API does not exist. It would work until something scanned or reflected over
+// it, and then fail at boot, at the edge, in production. A class that only works because
+// nobody has loaded it yet is the failure this whole line of work has been chasing.
+// One module costs one line. `libs:java-gateway` MUST NOT depend on it —
+// `assertNoServletOnReactiveEdge` goes red if it ever does.
 include(
     'libs:java-common',
     'libs:java-gateway',
@@ -15,6 +29,7 @@ include(
     'libs:java-notification',
     'libs:java-observability',
     'libs:java-security',
+    'libs:java-security-servlet',
     'libs:java-test-support',
     'libs:java-web',
     'libs:java-web-servlet'

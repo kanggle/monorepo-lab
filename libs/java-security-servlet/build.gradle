@@ -1,0 +1,104 @@
+plugins {
+    id 'io.spring.dependency-management'
+}
+
+// -------------------------------------------------------------------------
+// libs/java-security-servlet — the SERVLET half of the shared security surface.
+//
+// ADR-MONO-049 § D1 / § D5-2. The only new module the ADR creates.
+//
+// WHY IT IS NOT PART OF libs:java-security:
+//   TenantClaimEnforcer is a OncePerRequestFilter — servlet-bound. libs:java-security is
+//   consumed by SIX REACTIVE GATEWAYS as well as the servlet services, and the rejected
+//   shortcut (put the filter there, mark the servlet dependency `compileOnly`) compiles
+//   cleanly while placing a jakarta.servlet-bound class on the runtime classpath of every
+//   one of those gateways, where the servlet API does not exist. It works right up until
+//   something scans or reflects over it — and then it fails at boot, in the edge, in
+//   production. TASK-MONO-044a already paid for that bleed once, in the other direction.
+//
+// THE CONVERSE IS ASSERTED, NOT ASSUMED:
+//   libs:java-gateway MUST NOT depend on this module. `assertNoServletOnReactiveEdge`
+//   (built in TASK-MONO-378) goes red the moment it does — that assertion was written
+//   for exactly this step.
+//
+// DEPENDENCY DISCIPLINE:
+//   - `implementation`, never `api` (§ D2; enforced by root `assertNoApiOnSharedLibs`).
+//   - MUST NOT depend on any service module. The canonical filter takes its public-path
+//     exemption as a Predicate, precisely so the library never has to reach into a
+//     project's PublicPaths class (platform/shared-library-policy.md § Dependency Rule).
+// -------------------------------------------------------------------------
+
+dependencies {
+    // The framework-neutral half: TenantClaimValidator supplies the claim names, the
+    // wildcard token, the entitled-domains predicate and the wire error code. One
+    // definition, both layers pointing at it (TASK-MONO-351).
+    implementation project(':libs:java-security')
+
+    // Servlet + Spring Security. This module is servlet-bound BY DESIGN — that is why it
+    // is a separate module rather than a package in java-security.
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // The 403 body the thirteen copies all write: {code, message, timestamp}.
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.assertj:assertj-core'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+    }
+}
+
+// -------------------------------------------------------------------------
+// ADR-MONO-049 § D3 — the servlet half's own neutrality assertion.
+//
+// This module IS servlet-bound, so the forbidden list is the complement of
+// libs:java-security's: servlet is allowed, REACTIVE is not. A WebFlux or Spring Cloud
+// Gateway artefact here would mean the servlet filter had acquired a reactive dependency
+// that could then reach a gateway's classpath through a consumer.
+// -------------------------------------------------------------------------
+tasks.register('assertClasspathNeutrality') {
+    group = 'verification'
+    description = 'ADR-MONO-049 § D3 — libs:java-security-servlet is servlet-bound and must never be reactive.'
+
+    def runtimeCp = configurations.named('runtimeClasspath')
+    def forbidden = [
+            'spring-webflux'      : 'WebFlux in the servlet security module',
+            'spring-cloud-gateway': 'Spring Cloud Gateway in the servlet security module (ADR-MONO-048 § D1)',
+            'reactor-netty'       : 'the reactive HTTP stack in the servlet security module',
+    ]
+
+    doLast {
+        def names = runtimeCp.get().files*.name
+        if (names.isEmpty()) {
+            // No signal is not a pass (TASK-MONO-359).
+            throw new GradleException(
+                    'assertClasspathNeutrality: runtimeClasspath resolved to ZERO artefacts. ' +
+                    'The assertion would pass having verified nothing.')
+        }
+        def violations = []
+        forbidden.each { marker, why ->
+            def hits = names.findAll { it.startsWith(marker) }
+            if (hits) {
+                violations << "  ${hits.join(', ')}\n      -> ${why}"
+            }
+        }
+        if (violations) {
+            throw new GradleException(
+                    "libs:java-security-servlet has a REACTIVE artefact on its runtime classpath. " +
+                    "It is the servlet half; a reactive dependency here can reach a gateway through " +
+                    "a shared consumer, which is the split this module exists to prevent " +
+                    "(ADR-MONO-049 § D1).\n\n" + violations.join('\n') + "\n\n" +
+                    "  (${names.size()} artefacts inspected.)")
+        }
+        logger.lifecycle("assertClasspathNeutrality: OK — ${names.size()} artefacts on " +
+                "libs:java-security-servlet's runtimeClasspath, none reactive.")
+    }
+}
+
+tasks.named('check') { dependsOn 'assertClasspathNeutrality' }

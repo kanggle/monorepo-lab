@@ -8,7 +8,7 @@ TASK-MONO-382
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -109,13 +109,42 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (8개 body 의 축이 분류됐다)** — 13 사본의 정규화 body 8개가 **전수 대조**됐고, 각 차이가 **포매팅** 또는 **정책** 으로 분류돼 기록됐다. **정책 축은 하나도 빠짐없이 정경의 파라미터가 됐다.** *(최소 하나는 정책이다: `fan/membership` 의 `/internal/**` 예외.)*
-- [ ] **AC-2 (닫힌 상태가 기본)** — 정경의 모든 스위치가 **기본 닫힘**. 파라미터 없는 생성은 **가장 엄격한** 게이트를 만든다. `/internal/**` 예외는 **명시적으로 켜야** 한다.
-- [ ] **AC-3 (거부도 단언한다 — § 6 V5)** — 모듈 스위트가 각 스위치에 대해 **허용 + 거부**를 둘 다 단언한다. **`/internal/**` 예외가 꺼진 상태에서 `/internal/x` 가 실제로 **거부되는지** 단언한다** — 켠 상태만 테스트하면 그 스위치가 사라져도 아무도 모른다.
-- [ ] **AC-4 (신규 모듈 격리)** — `libs:java-security-servlet` 의 `runtimeClasspath`: **WebFlux 0 · SCG 0** (servlet 은 허용). **mutation**: `spring-boot-starter-webflux` 주입 → **RED**. **주입 적용 여부를 결과 읽기 전에 확인.**
-- [ ] **AC-5 (reactive 엣지는 여전히 servlet 을 못 본다)** — `assertNoServletOnReactiveEdge` **GREEN**. **mutation**: `libs/java-gateway` 를 `java-security-servlet` 에 의존시키면 → **RED**. *(D5-1 이 이 단언을 만든 이유가 바로 이 순간이다.)*
-- [ ] **AC-6 (소비자 0 · 사본 0 삭제)** — 이 단계는 **아무 서비스도 안 건드린다**. 사본 **18 / 18 / 13 = 49 그대로**. **줄었으면 범위를 넘었다.**
-- [ ] **AC-7** — `assertNoApiOnSharedLibs` **GREEN** (신규 모듈도 `api` 로 재수출되지 않는다).
+- [x] **AC-1 (8개 body 의 축이 분류됐다)** — ✅ 13 사본 전수 대조. **8개 body → 정책 축 3개**로 환원되고 나머지는 전부 형식이었다(줄바꿈 · `@Value` 완전수식 vs import · 지역 재선언한 claim 상수).
+  ⚠️ **첫 해시가 8을 준 것 자체가 거친 술어였다** — `tr -d ' \t'` 가 **개행을 안 지워** 줄바꿈 차이를 다른 body 로 셌다. 개행까지 지워도 8이 나온 뒤에야 **토큰 차이**임이 확인됐고, 그제서야 축을 뽑을 수 있었다.
+  **정책 축 3개** = ①**면제 경로**(`PublicPaths.isPublic` **10** / `+/internal/**` **1**=fan/membership / **`/actuator/` 전체** **2**=scm demand-planning·inventory-visibility) ②**`entitled_domains`**(erp4·finance2·scm3 = **9** / fan **0**) ③**wildcard**(**13/13**). **셋 다 정경의 파라미터가 됐다.**
+- [x] **AC-2 (닫힌 상태가 기본)** — ✅ `forTenant(x).build()` = **정확 일치만, 면제 0, wildcard 거부**. **wildcard 는 13개 전부가 켜고 있는데도 기본이 꺼짐** — *기본값은 다수결이 아니라 **누군가 잊었을 때 얻는 것**이고, 그때 원하는 건 닫힌 게이트다.*
+- [x] **AC-3 (거부도 단언한다 — § 6 V5)** — ✅ **19 tests / 0 skipped / 0 failures.** 각 스위치를 **켠 상태 + 끈 상태** 둘 다 단언한다.
+  **mutation ✅ (이게 AC-3 의 증명이다)**: wildcard 기본값을 `true` 로 뒤집으면 → **19 중 2 FAIL**(*"OFF 면 거부한다"* 단언 둘). 면제 기본값을 `/actuator/` 로 열면 → **1 FAIL**(*"기본값은 `/actuator/health` 조차 면제 안 한다"*). **켠 상태만 테스트했다면 두 mutation 모두 초록으로 통과했을 것이다** — `TASK-MONO-355` 가 wms 에서 발견한 그 구멍.
+- [x] **AC-4 (신규 모듈 격리)** — ✅ **신설 `assertClasspathNeutrality`**(`libs:java-security-servlet`): 50 아티팩트, WebFlux/SCG/reactor-netty **0** (servlet 은 **허용** — 이 모듈은 servlet 바인딩이 목적이다). 빈 클래스패스면 **exit 2**(공허 통과 금지).
+  **mutation ✅**: `spring-boot-starter-webflux` 주입 → **RED**(`spring-webflux` · `reactor-netty-*` 를 이름으로 지목).
+- [x] **AC-5 (reactive 엣지는 여전히 servlet 을 못 본다)** — ✅ `assertNoServletOnReactiveEdge` **GREEN**.
+  **mutation ✅**: `libs/java-gateway` 를 `java-security-servlet` 에 의존시키면 → **RED**, 그리고 **D5-1 이 써둔 진단 메시지가 원인을 이름으로 지목한다**: *"가장 유력한 원인: 이 모듈이 `libs:java-security-servlet` 에 의존하게 됐다."* **예언한 실수를 예언한 문장이 잡았다.**
+- [x] **AC-6 (소비자 0 · 사본 0 삭제)** — ✅ 사본 **18 / 18 / 13 = 49 그대로**. `projects/` **한 파일도 안 건드렸다**(`git diff --stat origin/main -- projects/` = 비어 있음). `project(':libs:java-security-servlet')` 실제 선언 **0건**(grep 히트 3건은 전부 주석·에러메시지 — **매치를 의존으로 읽지 않고 확인했다**).
+- [x] **AC-7** — ✅ `assertNoApiOnSharedLibs` **GREEN**. 전체 `./gradlew check` **BUILD SUCCESSFUL**, FAILED 태스크 **0**, 단언 4개 전부 실행·통과.
+
+## 착수 후 드러난 것 — **두 번째 보안 축**
+
+**AC-1 을 하다가 `fan/membership` 의 `/internal/**` 말고 하나가 더 나왔다.**
+
+`scm/demand-planning` 과 `scm/inventory-visibility` 는 **`PublicPaths` 를 아예 참조하지 않는다**:
+
+```java
+protected boolean shouldNotFilter(HttpServletRequest request) {
+    return request.getRequestURI().startsWith("/actuator/");   // PublicPaths.isPublic() 이 아니다
+}
+```
+
+**형제인 `scm/procurement` 의 `PublicPaths` 는 `/actuator/health`·`/info`·`/prometheus` 3개만 면제한다.** 저 둘은 **`/actuator/` 전체** — `env`·`beans`·`heapdump`·`loggers` 포함. **더 넓다.**
+
+### 🟢 그러나 라이브 취약점은 아니다 — 과장하면 진짜 논거까지 죽는다
+
+두 서비스의 `SecurityConfig` 는 `health`/`info`/`prometheus` 만 `permitAll()` 하고 **`anyRequest().denyAll()`** 로 끝난다. `/actuator/env` 는 **Spring Security 가 먼저 막는다**. **실측했다.**
+
+**하지만 선을 지키는 곳과 면제를 정의하는 곳이 다르다.** 누군가 `.requestMatchers("/actuator/**").permitAll()` 을 넣으면 — 평범해 보이는 변경이다 — **그 두 서비스의 모든 actuator 엔드포인트에서 테넌트 게이트가 조용히 사라진다.** 그리고 **그 둘은 `TenantClaimValidator` 를 안 갖는다**(§1.7) — **Enforcer 가 servlet 계층의 유일한 테넌트 검사다.**
+
+⇒ **§ 1.8 에 기록했다. D5-5(scm)가 이 결정을 명시적으로 내려야 한다** — `PublicPaths::isPublic` 로 **좁힐 것인가**(더 안전하지만 **행동 변경**), 아니면 현재 면제를 재현할 것인가. **조용히 결정하면 안 된다.**
+
+> **13개 사본이 갈라진 건 누가 그렇게 결정해서가 아니다.** 손으로 유지되는 파일 13개를 **아무도 대조한 적이 없어서**다. **추출이 그 불일치를 보이게 만들었다** — 이 ADR 의 논지가 주장이 아니라 **증거로** 도착한 셈이다.
 
 ---
 
