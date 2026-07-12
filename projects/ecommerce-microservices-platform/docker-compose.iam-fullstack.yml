@@ -60,12 +60,12 @@
 # fail-soft, falling back to RoleSeedPolicy (ecommerce -> CUSTOMER), which is
 # exactly the role web-store's sign-in guard requires.
 #
-# CONSEQUENCE (TASK-MONO-378): because that seed is keyed on the *client's*
+# CONSEQUENCE (TASK-MONO-381): because that seed is keyed on the *client's*
 # platform (ecommerce), EVERY credential logging in through web-store gets
 # CUSTOMER. A token WITHOUT CUSTOMER is therefore unrepresentable here, so
 # `account-type-guard.spec.ts` (which asserts an operator is rejected) cannot be
 # exercised against this stack at all. It needs a real account-service — that is
-# MONO-378, and the spec is `test.fixme()`-marked with that reference.
+# MONO-381, and the spec is `test.fixme()`-marked with that reference.
 # =============================================================================
 
 services:

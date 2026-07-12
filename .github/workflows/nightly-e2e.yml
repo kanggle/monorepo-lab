@@ -9,7 +9,7 @@ name: Nightly E2E (full-stack web-store + 5 backend full suites + cross-project 
 #      backend but no IAM, so the 4 IAM-dependent specs were skipped and exactly
 #      ONE spec ran (auth-redirect, which makes zero backend calls). MONO-373
 #      added the IAM overlay; the count is true again for 3 of them, and the 4th
-#      (account-type-guard) is `test.fixme()` — see TASK-MONO-378.
+#      (account-type-guard) is `test.fixme()` — see TASK-MONO-381.
 #   2. wms-platform-e2e-full        — wms gateway-master @Tag("full") method-
 #                                      level subset (2 method: RateLimit 800-
 #                                      burst + MasterOutage container-pause).
