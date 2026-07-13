@@ -94,14 +94,15 @@ class TenantClaimValidatorTest {
     }
 
     /**
-     * The marketplace edge (ecommerce) admits any well-formed tenant. erp is a single-tenant
-     * edge and must not — that switch is the only one in the library that opens a gate, and this
-     * asserts it did not leak here.
+     * A stranger's tenant does not get in. This used to also assert that the library's
+     * accept-any switch had not leaked here — ecommerce, the marketplace edge, was its only
+     * caller. That switch no longer exists: ecommerce reaches its edge through entitlement like
+     * everyone else (TASK-MONO-388), so there is nothing left to leak. The behavioural assertion
+     * is the one that mattered, and it is unchanged.
      */
     @Test
-    @DisplayName("아무 테넌트나 통과시키지 않는다 — accept-any 스위치는 마켓플레이스 엣지 전용이다")
+    @DisplayName("아무 테넌트나 통과시키지 않는다 — 낯선 테넌트는 거부된다")
     void doesNotAcceptAnyWellFormedTenant() {
-        assertThat(validator.acceptsAnyWellFormedTenant()).isFalse();
         assertThat(accepts("some-stranger-tenant", null)).isFalse();
     }
 
