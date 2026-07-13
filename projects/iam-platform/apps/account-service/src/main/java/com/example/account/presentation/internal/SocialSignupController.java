@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,14 +22,21 @@ public class SocialSignupController {
 
     private final SocialSignupUseCase socialSignupUseCase;
 
+    /**
+     * TASK-BE-507: {@code X-Tenant-Id} carries the tenant auth-service already resolved from
+     * the initiating OIDC client for the social-identity row and the token. Absent / blank /
+     * {@code "*"} → {@code fan-platform} (net-zero).
+     */
     @PostMapping("/social-signup")
     public ResponseEntity<SocialSignupResponse> socialSignup(
+            @RequestHeader(name = "X-Tenant-Id", required = false) String tenantId,
             @Valid @RequestBody SocialSignupRequest request) {
         SocialSignupCommand command = new SocialSignupCommand(
                 request.email(),
                 request.provider(),
                 request.providerUserId(),
-                request.displayName()
+                request.displayName(),
+                tenantId
         );
 
         SocialSignupResult result = socialSignupUseCase.execute(command);

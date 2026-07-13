@@ -3,6 +3,7 @@ package com.example.account.presentation;
 import com.example.account.application.result.VerifyEmailResult;
 import com.example.account.application.service.SendVerificationEmailUseCase;
 import com.example.account.application.service.VerifyEmailUseCase;
+import com.example.account.domain.tenant.TenantId;
 import com.example.account.presentation.dto.request.VerifyEmailRequest;
 import com.example.account.presentation.dto.response.VerifyEmailResponse;
 import jakarta.validation.Valid;
@@ -44,10 +45,17 @@ public class EmailVerificationController {
         return ResponseEntity.ok(VerifyEmailResponse.from(result));
     }
 
+    /**
+     * TASK-BE-507: {@code X-Tenant-Id} (gateway-propagated, BE-230) scopes the account
+     * lookup and is minted into the token, so the token-authenticated verify endpoint —
+     * which receives no header — can scope its own lookup. Absent / blank / {@code "*"}
+     * → {@code fan-platform} (net-zero).
+     */
     @PostMapping("/resend-verification-email")
     public ResponseEntity<Void> resendVerificationEmail(
-            @RequestHeader("X-Account-Id") String accountId) {
-        sendVerificationEmailUseCase.execute(accountId);
+            @RequestHeader("X-Account-Id") String accountId,
+            @RequestHeader(name = "X-Tenant-Id", required = false) String tenantId) {
+        sendVerificationEmailUseCase.execute(accountId, TenantId.fromHeaderOrDefault(tenantId));
         return ResponseEntity.noContent().build();
     }
 }

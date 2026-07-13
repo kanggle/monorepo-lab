@@ -1,6 +1,7 @@
 package com.example.account.infrastructure.redis;
 
 import com.example.account.domain.repository.EmailVerificationTokenStore;
+import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -16,13 +17,19 @@ import java.util.Optional;
  * <p>Storage layout:
  * <pre>
  *   token entry:   "email-verify:{token}"           (UUID v4 from the use case layer)
- *                   value: "{accountId}"
+ *                   value: "{tenantId}|{accountId}"  (TASK-BE-507)
  *                   TTL:   24h (non-blocking signup spec)
  *
  *   resend marker: "email-verify:rate:{accountId}"  (SET-NX semantics)
  *                   value: "1"
  *                   TTL:   300s (5 minutes)
  * </pre>
+ *
+ * <p>TASK-BE-507: the value gained a {@code {tenantId}|} prefix so the verify path can
+ * scope its account lookup (it is token-authenticated — no {@code X-Tenant-Id} reaches
+ * it). A value with no separator is a <b>pre-BE-507 token still inside its 24h TTL</b>
+ * and resolves to {@code fan-platform} — the only tenant signup could produce before this
+ * task, so the fallback is exact, not a guess. It can be dropped once a deploy is 24h old.
  *
  * <p>Token reads/writes propagate Redis exceptions to the caller — verification
  * is security-sensitive so we do not silently drop a token write that the user
@@ -41,18 +48,29 @@ public class RedisEmailVerificationTokenStore implements EmailVerificationTokenS
 
     private static final String TOKEN_KEY_PREFIX = "email-verify:";
     private static final String RATE_KEY_PREFIX = "email-verify:rate:";
+    /** Separator for the {@code {tenantId}|{accountId}} value. A tenant slug can never contain it. */
+    private static final char VALUE_SEPARATOR = '|';
 
     private final StringRedisTemplate redisTemplate;
 
     @Override
-    public void save(String token, String accountId, Duration ttl) {
-        redisTemplate.opsForValue().set(TOKEN_KEY_PREFIX + token, accountId, ttl);
+    public void save(String token, String tenantId, String accountId, Duration ttl) {
+        redisTemplate.opsForValue().set(TOKEN_KEY_PREFIX + token, tenantId + VALUE_SEPARATOR + accountId, ttl);
     }
 
     @Override
-    public Optional<String> findAccountId(String token) {
-        String accountId = redisTemplate.opsForValue().get(TOKEN_KEY_PREFIX + token);
-        return Optional.ofNullable(accountId);
+    public Optional<Subject> findSubject(String token) {
+        String raw = redisTemplate.opsForValue().get(TOKEN_KEY_PREFIX + token);
+        if (raw == null) {
+            return Optional.empty();
+        }
+        int sep = raw.indexOf(VALUE_SEPARATOR);
+        if (sep < 0) {
+            // Pre-BE-507 token minted before the tenant prefix existed. Signup could only
+            // produce fan-platform accounts back then, so this resolves exactly.
+            return Optional.of(new Subject(TenantId.FAN_PLATFORM.value(), raw));
+        }
+        return Optional.of(new Subject(raw.substring(0, sep), raw.substring(sep + 1)));
     }
 
     @Override

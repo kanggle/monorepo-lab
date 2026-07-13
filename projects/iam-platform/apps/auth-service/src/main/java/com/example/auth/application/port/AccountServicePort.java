@@ -24,14 +24,21 @@ public interface AccountServicePort {
      * <p>This targets the <b>public</b> signup endpoint (no bearer token), distinct
      * from the {@code /internal/**} calls the other port methods make.
      *
+     * <p>TASK-BE-507: {@code tenantId} is the tenant of the OIDC client the user is
+     * registering through — resolved from the saved {@code /oauth2/authorize} request by
+     * {@code SavedRequestTenantResolver} and sent as {@code X-Tenant-Id}. Before BE-507 no
+     * tenant crossed this hop, so every consumer (including every ecommerce shopper) was born
+     * {@code fan-platform}. A {@code null} keeps that old default.
+     *
      * @param email       the new account email
      * @param password    the raw password (account-service + auth-service PasswordPolicy validate)
      * @param displayName the optional display name (nullable/blank → omitted)
+     * @param tenantId    the tenant to create the account in (nullable → account-service pins fan-platform)
      * @throws com.example.auth.application.exception.SignupEmailConflictException on 409 (email taken)
      * @throws com.example.auth.application.exception.SignupInvalidException on 400/422 (validation)
      * @throws com.example.auth.application.exception.AccountServiceUnavailableException on 5xx / timeout / IO
      */
-    void signup(String email, String password, String displayName);
+    void signup(String email, String password, String displayName, String tenantId);
 
     /**
      * Looks up an account's current status by id.
@@ -51,14 +58,21 @@ public interface AccountServicePort {
      * If an account with the given email already exists, returns the existing accountId.
      * If not, creates a new account and returns the new accountId.
      *
+     * <p>TASK-BE-507: {@code tenantId} is the tenant already resolved from the initiating OIDC
+     * client for the social-identity row and the token ({@code SavedRequestTenantResolver}).
+     * It was previously dropped on this hop, so the account row said {@code fan-platform}
+     * while the token said {@code ecommerce} — the two now agree.
+     *
      * @param email          the user's email from the OAuth provider
      * @param provider       the OAuth provider name (e.g., "GOOGLE", "KAKAO")
      * @param providerUserId the user's unique ID from the OAuth provider
      * @param displayName    the user's display name from the OAuth provider (nullable)
+     * @param tenantId       the tenant to create the account in (nullable → account-service pins fan-platform)
      * @return social signup result with accountId, status, and whether it's a new account
      * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
      */
-    SocialSignupResult socialSignup(String email, String provider, String providerUserId, String displayName);
+    SocialSignupResult socialSignup(String email, String provider, String providerUserId,
+                                    String displayName, String tenantId);
 
     /**
      * Retrieves the full profile of an account for OIDC userinfo response construction.

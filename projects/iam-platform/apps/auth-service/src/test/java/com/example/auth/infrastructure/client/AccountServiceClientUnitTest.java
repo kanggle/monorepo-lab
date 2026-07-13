@@ -24,6 +24,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,11 +145,31 @@ class AccountServiceClientUnitTest {
                         .withBody("{\"accountId\":\"acc-new\",\"accountStatus\":\"ACTIVE\",\"newAccount\":true}")));
 
         SocialSignupResult result = client.socialSignup(
-                "user@example.com", "GOOGLE", "google-uid-1", "Alice");
+                "user@example.com", "GOOGLE", "google-uid-1", "Alice", "ecommerce");
 
         assertThat(result.accountId()).isEqualTo("acc-new");
         assertThat(result.accountStatus()).isEqualTo("ACTIVE");
         assertThat(result.newAccount()).isTrue();
+
+        // TASK-BE-507: the client-derived tenant must actually leave the process. Asserting on
+        // the wire (not on a mock) is the point — the whole defect was a tenant that existed in
+        // auth-service and never crossed this hop.
+        wireMockServer.verify(postRequestedFor(urlEqualTo(SOCIAL_SIGNUP_PATH))
+                .withHeader("X-Tenant-Id", equalTo("ecommerce")));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-507: tenant 미해석(null) → X-Tenant-Id 헤더 자체를 보내지 않는다 (account-service 가 fan-platform 로 핀 — net-zero)")
+    void socialSignup_noTenant_omitsHeader() {
+        wireMockServer.stubFor(post(urlEqualTo(SOCIAL_SIGNUP_PATH))
+                .willReturn(aResponse().withStatus(201)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-x\",\"accountStatus\":\"ACTIVE\",\"newAccount\":true}")));
+
+        client.socialSignup("user@example.com", "GOOGLE", "google-uid-9", "Dana", null);
+
+        wireMockServer.verify(postRequestedFor(urlEqualTo(SOCIAL_SIGNUP_PATH))
+                .withoutHeader("X-Tenant-Id"));
     }
 
     @Test
@@ -158,7 +179,7 @@ class AccountServiceClientUnitTest {
                 .willReturn(aResponse().withStatus(422)));
 
         assertThatThrownBy(() -> client.socialSignup(
-                "user@example.com", "GOOGLE", "google-uid-2", "Bob"))
+                "user@example.com", "GOOGLE", "google-uid-2", "Bob", null))
                 .isInstanceOf(AccountServiceUnavailableException.class);
     }
 
@@ -169,7 +190,7 @@ class AccountServiceClientUnitTest {
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
         assertThatThrownBy(() -> client.socialSignup(
-                "user@example.com", "GOOGLE", "google-uid-err", "Carol"))
+                "user@example.com", "GOOGLE", "google-uid-err", "Carol", null))
                 .isInstanceOf(AccountServiceUnavailableException.class);
     }
 

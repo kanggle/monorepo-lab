@@ -5,6 +5,7 @@ import com.example.account.application.result.ProfileUpdateResult;
 import com.example.account.application.service.ProfileUseCase;
 import com.example.account.infrastructure.config.SecurityConfig;
 import com.example.account.presentation.advice.GlobalExceptionHandler;
+import com.example.account.domain.tenant.TenantId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +46,7 @@ class ProfileControllerTest {
         var result = new AccountMeResult("acc-123", "test@example.com", "ACTIVE",
                 profileResult, Instant.now());
 
-        given(profileUseCase.getMe(eq("acc-123"))).willReturn(result);
+        given(profileUseCase.getMe(eq("acc-123"), eq(TenantId.FAN_PLATFORM))).willReturn(result);
 
         mockMvc.perform(get("/api/accounts/me")
                         .header("X-Account-Id", "acc-123"))
@@ -68,7 +69,7 @@ class ProfileControllerTest {
                 "새이름", "010-****-5678", LocalDate.of(1990, 1, 1),
                 "ko-KR", "Asia/Seoul", null);
 
-        given(profileUseCase.updateProfile(any())).willReturn(result);
+        given(profileUseCase.updateProfile(any(), eq(TenantId.FAN_PLATFORM))).willReturn(result);
 
         mockMvc.perform(patch("/api/accounts/me/profile")
                         .header("X-Account-Id", "acc-123")

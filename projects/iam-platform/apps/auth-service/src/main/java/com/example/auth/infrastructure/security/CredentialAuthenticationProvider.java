@@ -16,6 +16,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.HashMap;
 import java.util.List;
@@ -36,11 +39,19 @@ import java.util.Optional;
  * credential-verify portion of {@link com.example.auth.application.LoginUseCase}
  * to a shared service and call it from both paths.
  *
- * <p>Tenant resolution mirrors {@link com.example.auth.application.LoginUseCase}'s
- * TASK-BE-229 logic in simplified form. v1 single-tenant assumption: if an
- * email matches multiple tenants the login fails closed with
- * {@link BadCredentialsException} (user sees "invalid credentials" rather
- * than a tenant-chooser UI). A tenant chooser is a separate future task.
+ * <p><b>Tenant resolution (TASK-BE-507, D1-a).</b> The lookup is scoped to the tenant of the
+ * OIDC client the user is logging in through ({@link SavedRequestTenantResolver}, the same
+ * source the social path uses), falling back to the pre-BE-507 cross-tenant lookup when the
+ * scoped lookup finds nothing — which is what keeps every account created before BE-507
+ * (all of them {@code fan-platform}, including ecommerce shoppers) logging in exactly as
+ * before. Without the fallback, scoping alone would lock out every existing shopper the
+ * moment web-store started asking for {@code ecommerce}.
+ *
+ * <p>The cross-tenant fallback keeps its fail-closed ambiguity guard (an email in two tenants
+ * → {@link BadCredentialsException}) — but BE-507 makes that unreachable for the case it was
+ * written for: once the same email exists in fan-platform AND ecommerce, the scoped lookup
+ * resolves it by client and never reaches the fallback. Ambiguity now only surfaces for a
+ * caller with no initiating client at all.
  *
  * <p>The resolved tenant is published as
  * {@code Authentication.getDetails() = Map.of("tenant_id", ..., "tenant_type", ...)}
@@ -57,6 +68,58 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
     private final CredentialRepository credentialRepository;
     private final PasswordHasher passwordHasher;
     private final TenantTypePort tenantTypePort;
+    private final SavedRequestTenantResolver savedRequestTenantResolver;
+
+    /**
+     * TASK-BE-507 (D1-a): resolve the credential by the tenant of the initiating OIDC client
+     * first; fall back to the pre-BE-507 cross-tenant lookup when that misses.
+     *
+     * <p>The fallback is what makes this safe to ship without a data migration: every account
+     * that exists today is {@code fan-platform}, so an ecommerce shopper logging in through the
+     * web-store client misses the scoped lookup and is found by the fallback — byte-identical to
+     * today. New shoppers, born {@code ecommerce}, hit the scoped lookup instead.
+     */
+    private Credential resolveCredential(String email) {
+        String clientTenant = resolveClientTenant();
+        if (clientTenant != null) {
+            Optional<Credential> scoped = credentialRepository.findByTenantIdAndEmail(clientTenant, email);
+            if (scoped.isPresent()) {
+                return scoped.get();
+            }
+            log.debug("form-login scoped lookup miss in tenant={} — falling back to cross-tenant "
+                    + "(a pre-BE-507 account lives in another tenant)", clientTenant);
+        }
+
+        List<Credential> matches = credentialRepository.findAllByEmail(email);
+        if (matches.isEmpty()) {
+            log.debug("form-login credential lookup miss for emailHash=<redacted>");
+            throw new BadCredentialsException("Invalid credentials");
+        }
+        if (matches.size() > 1) {
+            // Only reachable without an initiating client (no saved authorize request): with one,
+            // the scoped lookup above already disambiguated. Still fail-closed.
+            log.warn("form-login tenant ambiguity: email matches {} tenants and no initiating "
+                    + "client tenant is available — failing closed", matches.size());
+            throw new BadCredentialsException("Invalid credentials");
+        }
+        return matches.get(0);
+    }
+
+    /**
+     * The tenant of the OIDC client whose {@code /oauth2/authorize} request sent the user to
+     * the login form, or {@code null} when there is no request context / no saved request
+     * (e.g. a direct visit to {@code /login}) — in which case the caller keeps the legacy
+     * cross-tenant behaviour.
+     */
+    private String resolveClientTenant() {
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (!(attrs instanceof ServletRequestAttributes servletAttrs)) {
+            return null;
+        }
+        return savedRequestTenantResolver
+                .resolve(servletAttrs.getRequest(), servletAttrs.getResponse())
+                .tenantId();
+    }
 
     @Override
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
@@ -69,21 +132,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
             throw new BadCredentialsException("Invalid credentials");
         }
 
-        // Cross-tenant lookup — v1 fails closed on ambiguity. A tenant-chooser
-        // UI is a separate future task; for now ambiguity manifests as
-        // "invalid credentials" from the user's perspective.
-        List<Credential> matches = credentialRepository.findAllByEmail(email);
-        if (matches.isEmpty()) {
-            log.debug("form-login credential lookup miss for emailHash=<redacted>");
-            throw new BadCredentialsException("Invalid credentials");
-        }
-        if (matches.size() > 1) {
-            log.warn("form-login tenant ambiguity: email matches {} tenants — failing closed "
-                    + "(tenant chooser UI is a future task)", matches.size());
-            throw new BadCredentialsException("Invalid credentials");
-        }
-
-        Credential credential = matches.get(0);
+        Credential credential = resolveCredential(email);
         if (!passwordHasher.verify(password, credential.getCredentialHash())) {
             log.debug("form-login password verification failed for emailHash=<redacted>");
             throw new BadCredentialsException("Invalid credentials");

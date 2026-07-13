@@ -1,5 +1,6 @@
 package com.example.account.infrastructure.redis;
 
+import com.example.account.domain.repository.EmailVerificationTokenStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,7 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -37,14 +39,16 @@ class RedisEmailVerificationTokenStoreUnitTest {
     // ── save ───────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("save — 정상: 키/값/TTL 로 set 호출")
+    @DisplayName("save — 정상: 키/값(tenant|account)/TTL 로 set 호출")
     void save_normal_setsKeyWithTtl() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         Duration ttl = Duration.ofHours(24);
 
-        store.save("token-abc", "acc-1", ttl);
+        store.save("token-abc", "ecommerce", "acc-1", ttl);
 
-        verify(valueOps).set("email-verify:token-abc", "acc-1", ttl);
+        // TASK-BE-507: the tenant rides on the value so the token-authenticated verify path
+        // can scope its account lookup.
+        verify(valueOps).set("email-verify:token-abc", "ecommerce|acc-1", ttl);
     }
 
     @Test
@@ -52,30 +56,41 @@ class RedisEmailVerificationTokenStoreUnitTest {
     void save_redisException_propagates() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         doThrow(new QueryTimeoutException("Redis timeout"))
-                .when(valueOps).set(eq("email-verify:token-err"), eq("acc-x"), any(Duration.class));
+                .when(valueOps).set(eq("email-verify:token-err"), anyString(), any(Duration.class));
 
-        assertThatThrownBy(() -> store.save("token-err", "acc-x", Duration.ofHours(24)))
+        assertThatThrownBy(() -> store.save("token-err", "fan-platform", "acc-x", Duration.ofHours(24)))
                 .isInstanceOf(QueryTimeoutException.class);
     }
 
-    // ── findAccountId ──────────────────────────────────────────────────────────
+    // ── findSubject ────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("findAccountId — 키 존재 → accountId 반환")
-    void findAccountId_keyExists_returnsAccountId() {
+    @DisplayName("findSubject — 키 존재 → (tenant, accountId) 반환")
+    void findSubject_keyExists_returnsTenantAndAccountId() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.get("email-verify:token-1")).thenReturn("acc-1");
+        when(valueOps.get("email-verify:token-1")).thenReturn("ecommerce|acc-1");
 
-        assertThat(store.findAccountId("token-1")).contains("acc-1");
+        assertThat(store.findSubject("token-1"))
+                .contains(new EmailVerificationTokenStore.Subject("ecommerce", "acc-1"));
     }
 
     @Test
-    @DisplayName("findAccountId — 키 없음 → Optional.empty()")
-    void findAccountId_keyAbsent_returnsEmpty() {
+    @DisplayName("TASK-BE-507: 구분자 없는 값 = BE-507 이전에 발급된 토큰 → fan-platform (TTL 24h 안의 인-플라이트 토큰이 안 깨진다)")
+    void findSubject_legacyValueWithoutTenant_fallsBackToFanPlatform() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("email-verify:token-legacy")).thenReturn("acc-legacy");
+
+        assertThat(store.findSubject("token-legacy"))
+                .contains(new EmailVerificationTokenStore.Subject("fan-platform", "acc-legacy"));
+    }
+
+    @Test
+    @DisplayName("findSubject — 키 없음 → Optional.empty()")
+    void findSubject_keyAbsent_returnsEmpty() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         when(valueOps.get("email-verify:token-none")).thenReturn(null);
 
-        assertThat(store.findAccountId("token-none")).isEmpty();
+        assertThat(store.findSubject("token-none")).isEmpty();
     }
 
     // ── delete ─────────────────────────────────────────────────────────────────

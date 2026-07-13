@@ -3,6 +3,7 @@ package com.example.auth.presentation;
 import com.example.auth.application.exception.SignupEmailConflictException;
 import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
@@ -34,11 +36,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SignupPageControllerTest {
 
     private AccountServicePort accountServicePort;
+    private SavedRequestTenantResolver savedRequestTenantResolver;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         accountServicePort = mock(AccountServicePort.class);
+        // TASK-BE-507: by default the resolver behaves as it does for a direct /signup visit
+        // (no saved /oauth2/authorize request) → fan-platform. The ecommerce case is asserted
+        // in its own test below.
+        savedRequestTenantResolver = mock(SavedRequestTenantResolver.class);
+        when(savedRequestTenantResolver.resolve(any(), any()))
+                .thenReturn(new SavedRequestTenantResolver.Resolution("fan-platform", "B2C_CONSUMER", null));
         // InternalResourceViewResolver special-cases the "redirect:" prefix (→ RedirectView,
         // so redirectedUrl() works) while resolving plain names (e.g. "signup") to an
         // InternalResourceView that only records forwardedUrl — no throw in a standalone setup.
@@ -48,7 +57,7 @@ class SignupPageControllerTest {
         // guard against the "/signup" handler URL. "redirect:" is still special-cased.
         viewResolver.setPrefix("/WEB-INF/views/");
         viewResolver.setSuffix(".jsp");
-        mockMvc = MockMvcBuilders.standaloneSetup(new SignupPageController(accountServicePort))
+        mockMvc = MockMvcBuilders.standaloneSetup(new SignupPageController(accountServicePort, savedRequestTenantResolver))
                 .setViewResolvers(viewResolver)
                 .build();
     }
@@ -64,7 +73,7 @@ class SignupPageControllerTest {
     @Test
     @DisplayName("POST /signup success proxies to account-service and redirects to /login?registered")
     void signupSuccessRedirects() throws Exception {
-        doNothing().when(accountServicePort).signup(any(), any(), any());
+        doNothing().when(accountServicePort).signup(any(), any(), any(), any());
 
         mockMvc.perform(post("/signup")
                         .param("email", "new@example.com")
@@ -74,7 +83,7 @@ class SignupPageControllerTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login?registered"));
 
-        verify(accountServicePort).signup("new@example.com", "Str0ng!pass", "New User");
+        verify(accountServicePort).signup("new@example.com", "Str0ng!pass", "New User", "fan-platform");
     }
 
     @Test
@@ -88,7 +97,7 @@ class SignupPageControllerTest {
                 .andExpect(view().name("signup"))
                 .andExpect(model().attributeExists("error"));
 
-        verify(accountServicePort, never()).signup(any(), any(), any());
+        verify(accountServicePort, never()).signup(any(), any(), any(), any());
     }
 
     @Test
@@ -104,7 +113,7 @@ class SignupPageControllerTest {
                 .andExpect(view().name("signup"))
                 .andExpect(model().attribute("error", containsString("이메일 형식")));
 
-        verify(accountServicePort, never()).signup(any(), any(), any());
+        verify(accountServicePort, never()).signup(any(), any(), any(), any());
     }
 
     @Test
@@ -112,7 +121,7 @@ class SignupPageControllerTest {
             + "both email and password")
     void signupInvalidExceptionMessageNamesEmailAndPassword() throws Exception {
         doThrow(new SignupInvalidException("validation failed"))
-                .when(accountServicePort).signup(any(), any(), any());
+                .when(accountServicePort).signup(any(), any(), any(), any());
 
         mockMvc.perform(post("/signup")
                         .param("email", "ok@example.com")
@@ -128,7 +137,7 @@ class SignupPageControllerTest {
     @DisplayName("POST /signup on email conflict re-renders signup with an error")
     void signupConflictReRenders() throws Exception {
         doThrow(new SignupEmailConflictException("taken"))
-                .when(accountServicePort).signup(any(), any(), any());
+                .when(accountServicePort).signup(any(), any(), any(), any());
 
         mockMvc.perform(post("/signup")
                         .param("email", "dupe@example.com")
@@ -137,5 +146,25 @@ class SignupPageControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("signup"))
                 .andExpect(model().attributeExists("error"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-507: web-store 클라이언트에서 온 가입은 tenant=ecommerce 로 account-service 에 전달된다")
+    void signupForwardsTheInitiatingClientsTenant() throws Exception {
+        // The user arrived here from web-store's signIn('iam') → /oauth2/authorize (client
+        // ecommerce-web-store-client) → /login → "회원가입". The saved authorize request is what
+        // tells us who they are registering with — before BE-507 this page never asked.
+        when(savedRequestTenantResolver.resolve(any(), any()))
+                .thenReturn(new SavedRequestTenantResolver.Resolution("ecommerce", "B2C_CONSUMER", null));
+
+        mockMvc.perform(post("/signup")
+                        .param("email", "shopper@example.com")
+                        .param("displayName", "Shopper")
+                        .param("password", "Str0ng!pass")
+                        .param("confirmPassword", "Str0ng!pass"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login?registered"));
+
+        verify(accountServicePort).signup("shopper@example.com", "Str0ng!pass", "Shopper", "ecommerce");
     }
 }

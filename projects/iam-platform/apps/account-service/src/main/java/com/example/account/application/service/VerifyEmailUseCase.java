@@ -51,13 +51,16 @@ public class VerifyEmailUseCase {
 
     @Transactional
     public VerifyEmailResult execute(String token) {
-        // 1) Resolve token. Missing / expired → uniform 400.
-        String accountId = tokenStore.findAccountId(token)
+        // 1) Resolve token → (tenant, account). Missing / expired → uniform 400.
+        //    TASK-BE-507: the tenant rides on the token because this endpoint is
+        //    token-authenticated — no X-Tenant-Id header reaches it, and a tenant-less
+        //    findById is forbidden (multi-tenancy § Repository level).
+        EmailVerificationTokenStore.Subject subject = tokenStore.findSubject(token)
                 .orElseThrow(EmailVerificationTokenInvalidException::new);
+        String accountId = subject.accountId();
 
         // 2) Load account. Vanished accounts surface as the same uniform 400.
-        // TASK-BE-228: tenant context is fixed to FAN_PLATFORM until TASK-BE-229.
-        Account account = accountRepository.findById(TenantId.FAN_PLATFORM, accountId)
+        Account account = accountRepository.findById(new TenantId(subject.tenantId()), accountId)
                 .orElseThrow(EmailVerificationTokenInvalidException::new);
 
         // 3) Domain rule: emailVerifiedAt is a write-once field. Already-verified

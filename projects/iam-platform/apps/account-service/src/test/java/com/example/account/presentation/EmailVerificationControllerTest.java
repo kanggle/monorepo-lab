@@ -8,6 +8,7 @@ import com.example.account.application.service.SendVerificationEmailUseCase;
 import com.example.account.application.service.VerifyEmailUseCase;
 import com.example.account.infrastructure.config.SecurityConfig;
 import com.example.account.presentation.advice.GlobalExceptionHandler;
+import com.example.account.domain.tenant.TenantId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doNothing;
@@ -125,20 +127,20 @@ class EmailVerificationControllerTest {
     @Test
     @DisplayName("resend — 정상 호출 시 204")
     void resend_validRequest_returns204() throws Exception {
-        doNothing().when(sendVerificationEmailUseCase).execute(anyString());
+        doNothing().when(sendVerificationEmailUseCase).execute(anyString(), any(TenantId.class));
 
         mockMvc.perform(post("/api/accounts/signup/resend-verification-email")
                         .header("X-Account-Id", "acc-1"))
                 .andExpect(status().isNoContent());
 
-        verify(sendVerificationEmailUseCase).execute("acc-1");
+        verify(sendVerificationEmailUseCase).execute("acc-1", TenantId.FAN_PLATFORM);
     }
 
     @Test
     @DisplayName("resend — 5분 내 재시도는 429 RATE_LIMITED")
     void resend_rateLimited_returns429() throws Exception {
         doThrow(new RateLimitedException("Resend rate limit exceeded — try again later"))
-                .when(sendVerificationEmailUseCase).execute(anyString());
+                .when(sendVerificationEmailUseCase).execute(anyString(), any(TenantId.class));
 
         mockMvc.perform(post("/api/accounts/signup/resend-verification-email")
                         .header("X-Account-Id", "acc-1"))
@@ -150,7 +152,7 @@ class EmailVerificationControllerTest {
     @DisplayName("resend — 이미 인증된 계정은 409 EMAIL_ALREADY_VERIFIED")
     void resend_alreadyVerified_returns409() throws Exception {
         doThrow(new EmailAlreadyVerifiedException())
-                .when(sendVerificationEmailUseCase).execute(anyString());
+                .when(sendVerificationEmailUseCase).execute(anyString(), any(TenantId.class));
 
         mockMvc.perform(post("/api/accounts/signup/resend-verification-email")
                         .header("X-Account-Id", "acc-1"))

@@ -1,6 +1,7 @@
 package com.example.account.infrastructure.kafka;
 
 import com.example.account.application.service.UpdateLastLoginUseCase;
+import com.example.account.domain.tenant.TenantId;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +58,7 @@ class LoginSucceededConsumerUnitTest {
                   "partitionKey": "acc-1",
                   "payload": {
                     "accountId": "acc-1",
+                    "tenantId": "ecommerce",
                     "ipMasked": "192.168.*.*",
                     "userAgentFamily": "Chrome 120",
                     "deviceFingerprint": "fp-1",
@@ -69,9 +71,35 @@ class LoginSucceededConsumerUnitTest {
 
         consumer.onMessage(record(json));
 
+        // TASK-BE-507: payload.tenantId has been required since BE-248 (auth-events.md schema v2,
+        // fail-closed at the emitter) — this consumer just never read it, so every non-fan
+        // account's login silently no-opped inside the use case's fan-pinned lookup.
         verify(updateLastLoginUseCase).execute(
                 "11111111-1111-1111-1111-111111111111",
                 "acc-1",
+                new TenantId("ecommerce"),
+                Instant.parse("2026-04-26T10:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-507: payload.tenantId 누락(레거시 인-플라이트 이벤트) → fan-platform 폴백, 파티션 미독")
+    void onMessage_legacyEventWithoutTenant_fallsBackToFanPlatform() {
+        String json = """
+                {
+                  "eventId": "55555555-5555-5555-5555-555555555555",
+                  "payload": {
+                    "accountId": "acc-1",
+                    "timestamp": "2026-04-26T10:00:00Z"
+                  }
+                }
+                """;
+
+        consumer.onMessage(record(json));
+
+        verify(updateLastLoginUseCase).execute(
+                "55555555-5555-5555-5555-555555555555",
+                "acc-1",
+                TenantId.FAN_PLATFORM,
                 Instant.parse("2026-04-26T10:00:00Z"));
     }
 
@@ -128,6 +156,7 @@ class LoginSucceededConsumerUnitTest {
         verify(updateLastLoginUseCase).execute(
                 org.mockito.ArgumentMatchers.eq("33333333-3333-3333-3333-333333333333"),
                 org.mockito.ArgumentMatchers.eq("acc-1"),
+                org.mockito.ArgumentMatchers.eq(TenantId.FAN_PLATFORM),
                 org.mockito.ArgumentMatchers.argThat(
                         ts -> !ts.isBefore(before) && !ts.isAfter(after)));
     }
@@ -152,6 +181,7 @@ class LoginSucceededConsumerUnitTest {
         verify(updateLastLoginUseCase).execute(
                 org.mockito.ArgumentMatchers.eq("44444444-4444-4444-4444-444444444444"),
                 org.mockito.ArgumentMatchers.eq("acc-1"),
+                org.mockito.ArgumentMatchers.eq(TenantId.FAN_PLATFORM),
                 org.mockito.ArgumentMatchers.argThat(
                         ts -> !ts.isBefore(before) && !ts.isAfter(after)));
     }
@@ -164,6 +194,7 @@ class LoginSucceededConsumerUnitTest {
                 .hasMessageContaining("auth.login.succeeded deserialization failed");
 
         verify(updateLastLoginUseCase, never()).execute(
+                org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any());
