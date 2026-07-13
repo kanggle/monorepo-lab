@@ -266,13 +266,14 @@ class GatewayIntegrationTest {
     }
 
     @Test
-    @DisplayName("tenant_id=globex (arbitrary entitled tenant) → JWT 필터 통과 (entitlement-trust)")
-    void protectedRoute_arbitraryTenant_passesJwtFilter() {
-        // ADR-MONO-030 § 2.4: the entitlement-trust edge accepts any well-formed
-        // tenant_id from a verified token (formerly a cross-tenant 401). Isolation is
-        // enforced at the row layer downstream, not by this gate.
-        String token = jwtHelper.signTokenWithIssuerAndTenant(
-                "https://test.local/issuer", "globex");
+    @DisplayName("tenant_id=globex + entitled_domains ∋ ecommerce (고객 테넌트 운영자) → JWT 필터 통과")
+    void protectedRoute_entitledForeignTenant_passesJwtFilter() {
+        // The marketplace property (ADR-MONO-030 § D1-A): each customer-tenant runs its own store,
+        // so its user's token names THEIR tenant, not this gateway's. It reaches this edge by
+        // being entitled to ecommerce — the same way erp, finance, scm and wms are reached
+        // (ADR-MONO-019 § D5). TASK-MONO-388.
+        String token = jwtHelper.signTokenWithIssuerTenantAndEntitlements(
+                "https://test.local/issuer", "globex", java.util.List.of("ecommerce"));
 
         webTestClient.get()
                 .uri("/api/orders/123")
@@ -280,6 +281,47 @@ class GatewayIntegrationTest {
                 .exchange()
                 .expectStatus().value(status ->
                         org.assertj.core.api.Assertions.assertThat(status).isNotEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("🔴 tenant_id=globex, ecommerce 미구독 → 거부. 이 한 줄이 TASK-MONO-388 의 전부다.")
+    void protectedRoute_unentitledForeignTenant_isRefused() {
+        // This exact token PASSED before TASK-MONO-388, and this suite asserted that it did —
+        // the test was called protectedRoute_arbitraryTenant_passesJwtFilter and its comment
+        // called it "entitlement-trust". It was not: the gate admitted any well-formed tenant_id,
+        // which is a weaker question than entitlement asks, so a tenant entitled only to some
+        // other domain walked in (TASK-BE-506).
+        String token = jwtHelper.signTokenWithIssuerAndTenant(
+                "https://test.local/issuer", "globex");
+
+        webTestClient.get()
+                .uri("/api/orders/123")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                // The gate rejects; SecurityConfig maps tenant_mismatch to 403 rather than 401,
+                // because telling a client with a perfectly valid token to "re-authenticate"
+                // would be a lie it can never act on (SecurityConfigTenantErrorMappingTest).
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status)
+                                .as("an unentitled foreign tenant must not reach ecommerce")
+                                .isIn(401, 403));
+    }
+
+    @Test
+    @DisplayName("tenant_id=wms, ecommerce 미구독 → 거부 (다른 도메인에만 구독된 테넌트)")
+    void protectedRoute_tenantEntitledElsewhere_isRefused() {
+        // Entitled to SOMETHING, just not to us. IAM issues a tenant_id only for an entitled
+        // tenant, so "well-formed" felt like "entitled" — but entitled to WHICH domain was the
+        // question nobody asked.
+        String token = jwtHelper.signTokenWithIssuerTenantAndEntitlements(
+                "https://test.local/issuer", "wms", java.util.List.of("wms"));
+
+        webTestClient.get()
+                .uri("/api/orders/123")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().value(status ->
+                        org.assertj.core.api.Assertions.assertThat(status).isIn(401, 403));
     }
 
     @Test

@@ -61,26 +61,41 @@ public class OAuth2ResourceServerConfig {
     }
 
     /**
-     * ecommerce's tenant gate: <strong>any well-formed {@code tenant_id} is accepted</strong>;
-     * only a missing / blank / non-string claim is rejected (as 403 {@code TENANT_FORBIDDEN}).
+     * ecommerce's tenant gate — <strong>the fleet's gate</strong>: an exact {@code tenant_id}
+     * match, the SUPER_ADMIN wildcard, or a GAP-signed {@code entitled_domains} claim naming
+     * this domain. Anything else is rejected (as 403 {@code TENANT_FORBIDDEN}).
      *
-     * <p>This is the only gate in the fleet that opens rather than narrows, and the reason is
-     * structural rather than lax (ADR-MONO-030 § 2.4): ecommerce <em>is</em> the multi-tenant
-     * marketplace — it serves every tenant, so "does this token's tenant match this gateway's
-     * tenant?" is not a question it can ask. Entitlement is decided at IAM issuance time and
-     * the edge trusts issuance; tenant separation is enforced one layer down, by the
-     * persistence-layer {@code WHERE tenant_id} filter that the M6 cross-tenant-leak IT exists
-     * to prove. "Any tenant" is still not "no tenant" — a blank claim would leave that filter
-     * with nothing to filter on, so it fails here.
+     * <p>ecommerce is the multi-tenant marketplace (ADR-MONO-030 § D1-A), so this edge must
+     * admit tokens whose {@code tenant_id} names some <em>other</em> tenant — a customer-tenant
+     * operator running their own store carries {@code tenant_id=<their tenant>}. That is exactly
+     * what {@link TenantClaimValidator.Builder#trustEntitledDomains() entitlement-trust} is for,
+     * and it is how erp, finance, scm and wms have always reached their edges
+     * (ADR-MONO-019 § D5). ADR-MONO-030 D1-A said so in as many words: ecommerce becomes the
+     * <em>sixth entitlement-trust domain</em>.
+     *
+     * <p><strong>It never was one, until now.</strong> This gate used to call
+     * {@code acceptAnyWellFormedTenant()} — admit any non-blank {@code tenant_id} — which is a
+     * <em>weaker</em> question than entitlement asks. "Is this tenant entitled to ecommerce?"
+     * became "does this token name a tenant at all?", so a token entitled only to some other
+     * domain walked in (TASK-BE-506). The switch is gone from the library; ecommerce asks the
+     * same question as everyone else (TASK-MONO-388).
+     *
+     * <p>Shoppers do not carry {@code entitled_domains} — they are consumers, not subscribers
+     * (ADR-MONO-030 § D4-A) — and they do not need to: their {@code tenant_id} is
+     * {@code ecommerce}, so they pass on the exact match. <strong>Entitlement-trust is the
+     * operator path, not the shopper path.</strong> Do not "fix" a shopper failure by issuing
+     * them an {@code entitled_domains} claim.
+     *
+     * <p>Tenant separation below the edge is unchanged: the persistence layer's
+     * {@code WHERE tenant_id} filter, which the M6 cross-tenant-leak IT exists to prove.
      *
      * <p>This is a test seam: {@code TenantClaimValidatorTest} builds its validator from
-     * <em>this</em> method, and {@code TenantGatePolicyLeakTest} in the library asserts that
-     * {@code acceptAnyWellFormedTenant} is <strong>off</strong> in wms, scm and fan — a switch
-     * that opens an edge needs a test that says where it isn't.
+     * <em>this</em> method, so changing the gate here turns those assertions red.
      */
     public TenantClaimValidator tenantGate() {
         return TenantClaimValidator.forTenant(requiredTenantId)
-                .acceptAnyWellFormedTenant()
+                .allowSuperAdminWildcard()
+                .trustEntitledDomains()
                 .build();
     }
 }
