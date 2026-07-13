@@ -173,7 +173,10 @@ def start():
     # 이미 running/pending 이어도 heartbeat/started 는 갱신해 세션 연장
     _put(STARTED_PARAM, _now())
     _put(BEAT_PARAM, _now())
-    return _resp({"state": "starting", "message": "기동 시작 — 41서비스 웜업까지 약 2~4분"})
+    # "약 10분" 은 실측이다(MONO-389, 데모 호스트 저널): 부팅 → `up complete` 9분 32초.
+    # 예전엔 "약 2~4분" 이라 적혀 있었다 — 잰 적 없는 숫자이고, 그 시점엔 console 이
+    # 아직 시작도 안 했다. 방문자를 정확히 포기할 시점에 포기시키는 문구였다.
+    return _resp({"state": "starting", "message": "기동 시작 — 8개 프로젝트 웜업까지 약 10분"})
 
 
 def stop():

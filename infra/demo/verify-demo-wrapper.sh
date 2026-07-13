@@ -748,6 +748,41 @@ hits="$(git -C "$ROOT" grep -nIE "$volatile_re" -- \
   $'\n'"→ destroy/재생성 한 번이면 죽습니다. 유일한 출처는 \`terraform output site_url\` 입니다."
 ok "저장소에 휘발성 엔드포인트 리터럴 없음"
 
+echo "[verify] (t) 페이지가 만드는 데모 도메인이 부팅이 파생하는 것과 같은가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-389): `demo-boot.sh` 는 IMDSv2 로 읽은 IP 를 **대시**로 바꿔 파생한다
+# (`tr '.' '-'`) 그리고 Traefik 라우터는 그 표기로만 뜬다. 그런데 `site/index.html` 은
+# **점 표기**로 링크를 만들고 있었다.
+#
+# sslip.io 가 두 표기를 모두 해석해 주는 것이 함정이다: DNS 는 풀리고 TCP 도 붙는데
+# **Traefik 이 매치되는 라우터를 못 찾아 404** 를 낸다. 실측: 점 → 404 / 대시 → 307.
+# 사이트 200, `/start` 200, 96개 컨테이너 healthy — 그런데 방문자는 데모에 못 들어간다.
+# **"버튼이 200 을 낸다" 와 "방문자가 도달한다" 는 다른 명제다.**
+#
+# 그래서 이 가드는 문자열을 열거하지 않고 **두 규칙을 같은 입력으로 실행해 대조한다.**
+# 어느 쪽이 바뀌든(대시→점, 접미사 변경, 서브도메인 추가) 두 값이 갈라지는 순간 빨개진다.
+site_html="$ROOT/infra/demo/aws/site/index.html"
+if [ -f "$site_html" ]; then
+  command -v node >/dev/null 2>&1 || fail "(t) node 가 없습니다 — 이 가드는 페이지의 규칙을 **실행**해서 대조합니다."\
+    $'\n'"→ 조용히 건너뛰면 skip 이 초록으로 보고됩니다(MONO-360). 건너뛰지 않습니다."
+
+  sample_ip="203.0.113.7"   # TEST-NET-3. 실주소가 아니므로 값이 새어도 무해하다.
+  boot_host="$(printf '%s' "$sample_ip" | tr '.' '-').sslip.io"
+
+  page_expr="$(sed -n 's/^[[:space:]]*\(const demoHost =.*\); \/\/ GUARD-T-ANCHOR.*/\1/p' "$site_html")"
+  [ -n "$page_expr" ] || fail "(t) index.html 에서 GUARD-T-ANCHOR 를 못 찾았습니다 — **가드가 공허합니다.**"\
+    $'\n'"→ demoHost 를 바꿨다면 앵커 주석도 함께 유지하세요."
+
+  page_host="$(node -e "$page_expr; process.stdout.write(demoHost('$sample_ip'))")"
+
+  [ "$page_host" = "$boot_host" ] || fail "페이지가 만드는 데모 도메인이 부팅의 파생과 다릅니다:"\
+    $'\n'"    demo-boot.sh  → $boot_host"\
+    $'\n'"    index.html    → $page_host"\
+    $'\n'"→ Traefik 라우터는 **부팅이 파생한 표기로만** 존재합니다. 다른 표기로 링크하면"\
+    $'\n'"   DNS 는 풀리고 TCP 도 붙지만 **404** 가 납니다 (실측: 점 404 / 대시 307)."
+  ok "페이지와 부팅이 같은 도메인을 만든다 ($page_host)"
+fi
+
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
