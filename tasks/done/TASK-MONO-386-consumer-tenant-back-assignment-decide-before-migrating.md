@@ -8,7 +8,7 @@ BE-507 이전 소비자의 tenant 소급 재배정 — **그런데 재배정할 
 
 # Status
 
-review
+done
 
 # Owner
 
