@@ -13,8 +13,6 @@ AUTH_DB_PASSWORD="${AUTH_DB_PASSWORD:-auth_pass}"
 ACCOUNT_DB_PASSWORD="${ACCOUNT_DB_PASSWORD:-account_pass}"
 SECURITY_DB_PASSWORD="${SECURITY_DB_PASSWORD:-security_pass}"
 ADMIN_DB_PASSWORD="${ADMIN_DB_PASSWORD:-admin_pass}"
-COMMUNITY_DB_PASSWORD="${COMMUNITY_DB_PASSWORD:-community_pass}"
-MEMBERSHIP_DB_PASSWORD="${MEMBERSHIP_DB_PASSWORD:-membership_pass}"
 
 # TASK-BE-278 (cycle 6 of nightly iam-e2e-full): `CREATE TEMPORARY TABLES`
 # is a separate MySQL 8.0 privilege from the plain `CREATE`. account-service
@@ -48,14 +46,6 @@ CREATE DATABASE IF NOT EXISTS \`admin_db\`
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
-CREATE DATABASE IF NOT EXISTS \`community_db\`
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-
-CREATE DATABASE IF NOT EXISTS \`membership_db\`
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-
 -- ---------------------------------------------------------------------------
 -- Service Users (least-privilege for each service)
 -- ---------------------------------------------------------------------------
@@ -75,14 +65,6 @@ GRANT ${SERVICE_PRIVILEGES} ON \`security_db\`.* TO 'security_user'@'%';
 -- admin-service user
 CREATE USER IF NOT EXISTS 'admin_user'@'%' IDENTIFIED BY '${ADMIN_DB_PASSWORD}';
 GRANT ${SERVICE_PRIVILEGES} ON \`admin_db\`.* TO 'admin_user'@'%';
-
--- community-service user
-CREATE USER IF NOT EXISTS 'community_user'@'%' IDENTIFIED BY '${COMMUNITY_DB_PASSWORD}';
-GRANT ${SERVICE_PRIVILEGES} ON \`community_db\`.* TO 'community_user'@'%';
-
--- membership-service user
-CREATE USER IF NOT EXISTS 'membership_user'@'%' IDENTIFIED BY '${MEMBERSHIP_DB_PASSWORD}';
-GRANT ${SERVICE_PRIVILEGES} ON \`membership_db\`.* TO 'membership_user'@'%';
 
 FLUSH PRIVILEGES;
 EOSQL

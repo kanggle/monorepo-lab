@@ -171,8 +171,9 @@ build {
   // 목록은 이 저장소가 이미 두 번 데인 실패 모드다(MONO-339 의 README 서비스
   // 목록, MONO-344 의 compose 파일 목록).
   //
-  // iam 의 community-service / membership-service 는 bootJar 는 있으나
-  // Dockerfile 이 없다 — 여분 jar 2개는 무해하다.
+  // (TASK-MONO-394 이전에는 iam 의 community-service / membership-service 가
+  // bootJar 만 있고 Dockerfile 이 없어 여분 jar 2개를 남겼다. 두 서비스는
+  // RETIRED 되어 더는 빌드되지 않는다.)
   //
   // 사후 가드는 gradle 자신에게 기대값을 묻는다. 매직 넘버(`-ge 40`)를 박으면
   // 서비스가 늘어도 통과하고, `find . -path '*/build/libs/*.jar'` 처럼 넓게 세면

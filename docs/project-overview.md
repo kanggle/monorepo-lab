@@ -46,7 +46,7 @@
 - **domain**: `saas` · **traits**: `transactional`, `regulated`, `audit-heavy`, `integration-heavy`, `multi-tenant`
 - **포지션**: monorepo 의 **표준 OIDC IdP** (ADR-001 ACCEPTED). 모든 프로젝트가 IAM 의 RS256 access token 을 OAuth2 Resource Server 패턴으로 검증.
 - **상태**: 5 backend 운영 (**backend-only IdP**). `admin-web` 운영자 콘솔은 2026-05-18 폐기 — 운영자 UI 는 통합 platform console 이 흡수 ([ADR-MONO-013](adr/ADR-MONO-013-platform-console-foundation.md) Phase 3, TASK-BE-299). 표준 `/oauth2/{authorize,token,jwks,userinfo,revoke,introspect}` + `/.well-known/openid-configuration` 노출.
-- **service map (5 active + 2 frozen demo)**:
+- **service map (5 active)** — `community-service` · `membership-service` 는 **RETIRED 2026-07-14** (TASK-MONO-394: iam 의 FROZEN product-layer demo 였으나 `fan-platform` 이 같은 도메인을 실제 배포하면서 중복이 됨):
 
 | Service | Type | 책임 |
 |---|---|---|
@@ -56,8 +56,8 @@
 | `security-service` | event-consumer | Kafka 보안 이벤트 + 비정상 탐지 + 감사 read-only HTTP |
 | `admin-service` | rest-api | 운영자 lock/unlock, 강제 로그아웃, 감사 조회 |
 | ~~`admin-web`~~ | ~~frontend-app~~ | **RETIRED 2026-05-18** — 운영자 UI 는 platform console 이 흡수 (ADR-MONO-013 Phase 3) |
-| ~~`community-service`~~ | rest-api | **FROZEN** — product-layer demo (신규 기능 금지) |
-| ~~`membership-service`~~ | rest-api | **FROZEN** — product-layer demo (신규 기능 금지) |
+| ~~`community-service`~~ | ~~rest-api~~ | **RETIRED 2026-07-14** — product-layer demo. `fan-platform` 이 같은 도메인을 실제 배포 (TASK-MONO-394) |
+| ~~`membership-service`~~ | ~~rest-api~~ | **RETIRED 2026-07-14** — product-layer demo. `fan-platform` 이 같은 도메인을 실제 배포 (TASK-MONO-394) |
 
 - **multi-tenancy**: row-level isolation (`accounts.tenant_id`). JWT `tenant_id` claim 으로 cross-tenant 거부. 현재 등록 tenant: `wms` / `scm` / `fan-platform` / `finance` / `erp` + B2C 기본.
 - **internal provisioning**: `POST /internal/tenants/{id}/accounts:bulk` 로 enterprise 소비자 (wms/scm/finance/erp) 가 사용자 일괄 생성.

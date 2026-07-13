@@ -32,9 +32,14 @@
 #     are excluded by construction. `batch-worker` / `console-bff` are still
 #     checked in the forward direction.
 #   * A row is exempt from the reverse check when it is struck through (`~~`) or
-#     says RETIRED / FROZEN. The marker means "not current", NOT "no module":
-#     iam's `community-service` and `membership-service` are FROZEN yet present
-#     in settings.gradle, and must still satisfy the forward check.
+#     says RETIRED / FROZEN. The marker means "not current", which may or may not
+#     mean "no module" — the two are independent, and the exemption covers both:
+#       - RETIRED with no module: iam's `community-service` / `membership-service`
+#         (TASK-MONO-394) and `admin-web` (TASK-BE-299). Row kept for the history,
+#         module gone. The reverse check must not demand a gradle include.
+#       - Marked but still present: no current instance, but the exemption is
+#         deliberately written to allow it (a service can be frozen before it is
+#         removed), and such a row still satisfies the forward check anyway.
 #
 # Usage: bash scripts/check-service-map-drift.sh
 # Exit:  0 = in sync, 1 = drift (offending names are printed)

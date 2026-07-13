@@ -580,7 +580,7 @@ public void onAccountDeleted(ConsumerRecord<String, AccountEvent> rec) {
 
 세부 GDPR 정책은 [data-rights.md](data-rights.md) 참조.
 
-> **TASK-BE-258 — 소비자 의무 계약**: IAM 내부 소비자(security-service, community-service, membership-service, admin-service) 각각의 마스킹 SLA와 실패 처리 의무는 [account-events.md § Consumer Obligations](../contracts/events/account-events.md#consumer-obligations-task-be-258) 에 표 형식으로 정의되어 있다. 외부 소비자(WMS 등) 도 해당 표의 "External 소비자 가이드" 절을 준수해야 한다.
+> **TASK-BE-258 — 소비자 의무 계약**: IAM 내부 소비자(security-service, admin-service — `community-service`·`membership-service` 는 TASK-MONO-394 로 RETIRED) 각각의 마스킹 SLA와 실패 처리 의무는 [account-events.md § Consumer Obligations](../contracts/events/account-events.md#consumer-obligations-task-be-258) 에 표 형식으로 정의되어 있다. 외부 소비자(WMS 등) 도 해당 표의 "External 소비자 가이드" 절을 준수해야 한다.
 >
 > security-service의 reference 구현(`AccountDeletedAnonymizedConsumer`)이 마스킹 완료 후 발행하는 `security.pii.masked` audit 이벤트 스펙: [security-events.md § security.pii.masked](../contracts/events/security-events.md#securitypiimasked-task-be-258).
 

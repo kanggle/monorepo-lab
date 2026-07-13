@@ -58,18 +58,8 @@ scrape_configs:
         labels:
           service: admin-service
 
-  - job_name: 'community-service'
-    metrics_path: /actuator/prometheus
-    scrape_interval: 15s
-    static_configs:
-      - targets: ['host.docker.internal:8086']
-        labels:
-          service: community-service
-
-  - job_name: 'membership-service'
-    metrics_path: /actuator/prometheus
-    scrape_interval: 15s
-    static_configs:
-      - targets: ['host.docker.internal:8087']
-        labels:
-          service: membership-service
+# TASK-MONO-394: the community-service (:8086) and membership-service (:8087)
+# scrape jobs are gone with the services (RETIRED 2026-07-14). They had been
+# scraping targets no compose in this repository ever started — this file said
+# it was watching two services that did not exist, which is how the retirement
+# investigation nearly misread them as deployed.

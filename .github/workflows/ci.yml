@@ -822,9 +822,7 @@ jobs:
           :projects:iam-platform:apps:auth-service:check
           :projects:iam-platform:apps:account-service:check
           :projects:iam-platform:apps:admin-service:check
-          :projects:iam-platform:apps:community-service:check
           :projects:iam-platform:apps:gateway-service:check
-          :projects:iam-platform:apps:membership-service:check
           :projects:iam-platform:apps:security-service:check
           :projects:iam-platform:tests:e2e:check
           --no-daemon --stacktrace
@@ -1372,9 +1370,7 @@ jobs:
         :projects:iam-platform:apps:auth-service:integrationTest
         :projects:iam-platform:apps:account-service:integrationTest
         :projects:iam-platform:apps:admin-service:integrationTest
-        :projects:iam-platform:apps:community-service:integrationTest
         :projects:iam-platform:apps:gateway-service:integrationTest
-        :projects:iam-platform:apps:membership-service:integrationTest
         :projects:iam-platform:apps:security-service:integrationTest
       artifact-name: iam-integration-test-reports
       # TASK-MONO-393: seven modules, each booting its own MySQL + Kafka + Redis +

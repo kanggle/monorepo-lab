@@ -246,9 +246,15 @@ class TenantProvisioningE2ETest extends E2EBase {
                 .as("step2 must run first (login must succeed)")
                 .isNotBlank();
 
-        // The community-service endpoint (/api/community/**) is a fan-platform tenant scope.
-        // A WMS JWT should be rejected with 403 TENANT_SCOPE_DENIED.
-        // Note: community-service is not in the E2E compose; gateway will respond before forwarding.
+        // TASK-MONO-394 (found while retiring iam's community-service — NOT fixed here,
+        // this class is @Disabled under TASK-BE-313 and the fix belongs to whoever
+        // re-enables it): this step cannot pass as written. The gateway raises
+        // TENANT_SCOPE_DENIED only for `/internal/tenants/{id}/**` (see
+        // JwtAuthenticationFilter#INTERNAL_TENANT_PATTERN); `/api/community/**` is not a
+        // gateway route at all, so an unrouted path yields 404, not 403. It never
+        // reached community-service — the service was never in the E2E compose and the
+        // gateway never routed to it. Re-enabling this test needs a genuinely
+        // tenant-scoped path, not a resurrected service.
         Response crossTenant = RestAssured.given()
                 .baseUri(GATEWAY_BASE_URL)
                 .contentType(ContentType.JSON)
