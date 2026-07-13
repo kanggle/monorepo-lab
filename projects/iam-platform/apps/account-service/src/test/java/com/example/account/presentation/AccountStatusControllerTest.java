@@ -8,6 +8,7 @@ import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.status.StatusChangeReason;
 import com.example.account.infrastructure.config.SecurityConfig;
 import com.example.account.presentation.advice.GlobalExceptionHandler;
+import com.example.account.domain.tenant.TenantId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ class AccountStatusControllerTest {
     @Test
     @DisplayName("GET /api/accounts/me/status returns 200")
     void getStatus_validRequest_returns200() throws Exception {
-        given(accountStatusUseCase.getStatus(eq("acc-123")))
+        given(accountStatusUseCase.getStatus(eq("acc-123"), eq(TenantId.FAN_PLATFORM)))
                 .willReturn(new AccountStatusResult("acc-123", "ACTIVE", Instant.now(), null));
 
         mockMvc.perform(get("/api/accounts/me/status")
@@ -55,7 +56,7 @@ class AccountStatusControllerTest {
     @DisplayName("DELETE /api/accounts/me returns 202")
     void deleteAccount_validRequest_returns202() throws Exception {
         Instant gracePeriodEndsAt = Instant.now().plusSeconds(86400L * 30);
-        given(accountStatusUseCase.deleteAccount(eq("acc-123"), any(), any(), any()))
+        given(accountStatusUseCase.deleteAccount(eq("acc-123"), any(), any(), any(), eq(TenantId.FAN_PLATFORM)))
                 .willReturn(new DeleteAccountResult("acc-123", "ACTIVE", "DELETED", gracePeriodEndsAt));
 
         mockMvc.perform(delete("/api/accounts/me")
@@ -76,7 +77,7 @@ class AccountStatusControllerTest {
     @Test
     @DisplayName("DELETE /api/accounts/me already DELETED returns 409")
     void deleteAccount_alreadyDeleted_returns409() throws Exception {
-        given(accountStatusUseCase.deleteAccount(eq("acc-123"), any(), any(), any()))
+        given(accountStatusUseCase.deleteAccount(eq("acc-123"), any(), any(), any(), eq(TenantId.FAN_PLATFORM)))
                 .willThrow(new StateTransitionException(AccountStatus.DELETED, AccountStatus.DELETED,
                         StatusChangeReason.USER_REQUEST));
 

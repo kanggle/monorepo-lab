@@ -96,11 +96,29 @@ class SendVerificationEmailUseCaseTest {
         // is forwarded to the notifier.
         ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Duration> tokenTtlCaptor = ArgumentCaptor.forClass(Duration.class);
-        verify(tokenStore).save(tokenCaptor.capture(), eq(ACCOUNT_ID), tokenTtlCaptor.capture());
+        // TASK-BE-507: the account's tenant is minted into the token — the verify endpoint is
+        // token-authenticated and has no other way to scope its lookup.
+        verify(tokenStore).save(tokenCaptor.capture(), eq(TenantId.FAN_PLATFORM.value()),
+                eq(ACCOUNT_ID), tokenTtlCaptor.capture());
         verify(notifier).sendVerificationEmail(eq(EMAIL), eq(tokenCaptor.getValue()));
 
         assertThat(tokenTtlCaptor.getValue()).isEqualTo(Duration.ofHours(24));
         assertThat(UUID.fromString(tokenCaptor.getValue())).isNotNull();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-507: ecommerce 소비자의 재발송 — 계정 조회도 토큰도 ecommerce tenant 로")
+    void execute_tenantAware_scopesLookupAndMintsTenantIntoToken() {
+        TenantId ecommerce = new TenantId("ecommerce");
+        given(accountRepository.findById(ecommerce, ACCOUNT_ID))
+                .willReturn(Optional.of(unverifiedAccount()));
+        given(tokenStore.tryAcquireResendSlot(eq(ACCOUNT_ID), any(Duration.class)))
+                .willReturn(true);
+
+        useCase.execute(ACCOUNT_ID, ecommerce);
+
+        verify(accountRepository).findById(ecommerce, ACCOUNT_ID);
+        verify(tokenStore).save(anyString(), eq("ecommerce"), eq(ACCOUNT_ID), any(Duration.class));
     }
 
     @Test
@@ -139,7 +157,7 @@ class SendVerificationEmailUseCaseTest {
         assertThatThrownBy(() -> useCase.execute(ACCOUNT_ID))
                 .isInstanceOf(RateLimitedException.class);
 
-        verify(tokenStore, never()).save(anyString(), anyString(), any(Duration.class));
+        verify(tokenStore, never()).save(anyString(), anyString(), anyString(), any(Duration.class));
         verifyNoInteractions(notifier);
     }
 
@@ -156,7 +174,7 @@ class SendVerificationEmailUseCaseTest {
         // Must not propagate.
         useCase.execute(ACCOUNT_ID);
 
-        verify(tokenStore).save(anyString(), eq(ACCOUNT_ID), any(Duration.class));
+        verify(tokenStore).save(anyString(), anyString(), eq(ACCOUNT_ID), any(Duration.class));
         verify(notifier).sendVerificationEmail(eq(EMAIL), anyString());
     }
 }

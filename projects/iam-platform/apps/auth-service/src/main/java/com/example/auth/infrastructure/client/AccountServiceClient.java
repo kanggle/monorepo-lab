@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -162,6 +163,17 @@ public class AccountServiceClient implements AccountServicePort {
     }
 
     /**
+     * TASK-BE-507: set {@code X-Tenant-Id} when the tenant was resolved. A blank/null tenant
+     * sends no header at all, which account-service reads as "pin to fan-platform" — exactly
+     * the pre-BE-507 behaviour, so an unresolvable client cannot break signup.
+     */
+    private static void setTenantHeader(HttpHeaders headers, String tenantId) {
+        if (tenantId != null && !tenantId.isBlank()) {
+            headers.set("X-Tenant-Id", tenantId);
+        }
+    }
+
+    /**
      * TASK-BE-470-fix-001: server-side proxy for the browser signup page. Calls the
      * <b>public</b> {@code POST /api/accounts/signup} (no bearer token) and maps the
      * account-api error contract to typed exceptions the {@code /signup} controller
@@ -170,7 +182,7 @@ public class AccountServiceClient implements AccountServicePort {
      * caller shows an inline error and the user retries deliberately.
      */
     @Override
-    public void signup(String email, String password, String displayName) {
+    public void signup(String email, String password, String displayName, String tenantId) {
         Map<String, String> body = new java.util.HashMap<>();
         body.put("email", email);
         body.put("password", password);
@@ -180,6 +192,9 @@ public class AccountServiceClient implements AccountServicePort {
         try {
             restClient().post()
                     .uri("/api/accounts/signup")
+                    // TASK-BE-507: the tenant of the OIDC client the user registered through.
+                    // Omitted when unresolved — account-service then pins fan-platform (net-zero).
+                    .headers(h -> setTenantHeader(h, tenantId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
@@ -262,9 +277,10 @@ public class AccountServiceClient implements AccountServicePort {
 
     @Override
     public SocialSignupResult socialSignup(String email, String provider,
-                                            String providerUserId, String displayName) {
+                                            String providerUserId, String displayName,
+                                            String tenantId) {
         try {
-            return callResilient(() -> doSocialSignup(email, provider, providerUserId, displayName));
+            return callResilient(() -> doSocialSignup(email, provider, providerUserId, displayName, tenantId));
         } catch (HttpClientErrorException e) {
             log.warn("Account service social-signup returned client error {}: {}",
                     e.getStatusCode(), e.getMessage());
@@ -284,7 +300,8 @@ public class AccountServiceClient implements AccountServicePort {
     }
 
     private SocialSignupResult doSocialSignup(String email, String provider,
-                                               String providerUserId, String displayName) {
+                                               String providerUserId, String displayName,
+                                               String tenantId) {
         try {
             Map<String, String> requestBody = Map.of(
                     "email", email,
@@ -296,7 +313,12 @@ public class AccountServiceClient implements AccountServicePort {
             return restClient().post()
                     .uri("/internal/accounts/social-signup")
                     // TASK-BE-318c: GAP client_credentials Bearer JWT.
-                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    // TASK-BE-507: X-Tenant-Id — the same client-derived tenant this login
+                    // already stamps on the social-identity row and the token.
+                    .headers(h -> {
+                        h.setBearerAuth(tokenProvider.currentBearer());
+                        setTenantHeader(h, tenantId);
+                    })
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(requestBody)
                     .retrieve()

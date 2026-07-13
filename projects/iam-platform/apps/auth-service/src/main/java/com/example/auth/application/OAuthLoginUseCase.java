@@ -95,7 +95,9 @@ public class OAuthLoginUseCase {
      * {@code (provider, provider_user_id)} is enforced at the DB).
      */
     public OAuthLoginResult callback(OAuthCallbackCommand command) {
-        ResolvedSocialLogin resolved = resolveSocialLogin(command);
+        // TASK-BE-507: the legacy custom-JWT flow has no initiating OIDC client to derive a
+        // tenant from, so it passes none — account-service pins fan-platform, exactly as before.
+        ResolvedSocialLogin resolved = resolveSocialLogin(command, null);
         SessionContext ctx = command.sessionContext();
 
         // Hand off to the transactional bean — DB writes happen atomically here.
@@ -129,7 +131,10 @@ public class OAuthLoginUseCase {
      * @return the resolved account id, email, and new-account flag (no tokens)
      */
     public BrowserLoginResolution resolveBrowserLogin(OAuthCallbackCommand command, String tenantId) {
-        ResolvedSocialLogin resolved = resolveSocialLogin(command);
+        // TASK-BE-507: the same client-derived tenant that attributes the social-identity row
+        // (below) and the token now also reaches socialSignup — so the ACCOUNT row agrees with
+        // them. Before BE-507 it stopped here and the account was born fan-platform.
+        ResolvedSocialLogin resolved = resolveSocialLogin(command, tenantId);
 
         // Session-establishing transactional tail — social_identity upsert + status
         // check ONLY. No JWT / device session / refresh token / login events.
@@ -148,7 +153,7 @@ public class OAuthLoginUseCase {
      * TASK-BE-069 / TASK-BE-072 / TASK-BE-063 design rationale on the
      * outside-transaction HTTP ordering and the empty-status semantics.
      */
-    private ResolvedSocialLogin resolveSocialLogin(OAuthCallbackCommand command) {
+    private ResolvedSocialLogin resolveSocialLogin(OAuthCallbackCommand command, String tenantId) {
         OAuthProvider provider = parseProvider(command.provider());
 
         // Verify state via the domain port (GETDEL for atomic check-and-delete).
@@ -202,7 +207,8 @@ public class OAuthLoginUseCase {
             isNewAccount = false;
         } else {
             SocialSignupResult signupResult = accountServicePort.socialSignup(
-                    userInfo.email(), provider.name(), userInfo.providerUserId(), userInfo.name());
+                    userInfo.email(), provider.name(), userInfo.providerUserId(), userInfo.name(),
+                    tenantId);
             accountId = signupResult.accountId();
             isNewAccount = signupResult.newAccount();
         }

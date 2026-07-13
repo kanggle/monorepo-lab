@@ -3,6 +3,8 @@ package com.example.account.application.service;
 import com.example.account.application.command.SignupCommand;
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.exception.AccountAlreadyExistsException;
+import com.example.account.application.exception.TenantNotFoundException;
+import com.example.account.application.exception.TenantSuspendedException;
 import com.example.account.application.port.AuthServicePort;
 import com.example.account.application.result.SignupResult;
 import com.example.account.domain.account.Account;
@@ -10,6 +12,8 @@ import com.example.account.domain.account.PasswordPolicy;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.ProfileRepository;
+import com.example.account.domain.repository.TenantRepository;
+import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,19 +31,30 @@ public class SignupUseCase {
     private final AccountEventPublisher eventPublisher;
     private final AuthServicePort authServicePort;
     private final AccountIdentityProvisioner accountIdentityProvisioner;
+    private final TenantRepository tenantRepository;
+
+    /**
+     * TASK-BE-507: an account must never be born into a tenant that does not exist or is
+     * suspended. Mirrors {@code ProvisionAccountUseCase} — without it the only guard would be
+     * the accounts.tenant_id FK, whose DataIntegrityViolationException this use case already
+     * maps to "email already exists" (a misleading 409 for what is really a bad tenant).
+     */
+    private void requireActiveTenant(TenantId tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException(tenantId.value()));
+        if (!tenant.isActive()) {
+            throw new TenantSuspendedException(tenantId.value());
+        }
+    }
 
     @Transactional
     public SignupResult execute(SignupCommand command) {
-        // TASK-BE-506: consumer signup is fan-platform-only, by construction. The old note
-        // here promised dynamic tenant injection "until TASK-BE-229" — that promise was
-        // never going to arrive: BE-229 (done) taught auth-service to *consume* the tenant
-        // already sitting on the credential row; it never gave account-service a tenant
-        // input. So a shopper registering through the ecommerce web-store OIDC client is
-        // still born tenant=fan-platform, and that value rides on into credentials.tenant_id
-        // and the token's tenant_id claim. Resolving the tenant from the initiating OIDC
-        // client is TASK-BE-507 — it cannot be done here alone (the consumer read paths are
-        // keyed on FAN_PLATFORM too, and form login looks credentials up cross-tenant).
-        TenantId tenantId = TenantId.FAN_PLATFORM;
+        // TASK-BE-507 (was BE-506's finding): the account is born into the tenant of the OIDC
+        // client the user actually registered through — auth-service resolves it from the saved
+        // /oauth2/authorize request and sends it as X-Tenant-Id. A header-less caller still pins
+        // to fan-platform, so nothing that worked before changes.
+        TenantId tenantId = TenantId.fromHeaderOrDefault(command.tenantId());
+        requireActiveTenant(tenantId);
 
         // Check email uniqueness within this tenant (primary defense: DB unique constraint)
         if (accountRepository.existsByEmail(tenantId, command.email().trim().toLowerCase())) {

@@ -20,11 +20,23 @@ public class ProfileUseCase {
     private final AccountRepository accountRepository;
     private final ProfileRepository profileRepository;
 
+    /**
+     * NET-ZERO overload — a header-less caller stays pinned to {@link TenantId#FAN_PLATFORM},
+     * byte-identical to the pre-BE-507 behaviour.
+     */
     @Transactional(readOnly = true)
     public AccountMeResult getMe(String accountId) {
-        // TASK-BE-506: fan-platform-only lookup — FAN_PLATFORM is a compile-time constant,
-        // not a resolved tenant (see TenantId.FAN_PLATFORM; dynamic resolution is TASK-BE-507).
-        Account account = accountRepository.findById(TenantId.FAN_PLATFORM, accountId)
+        return getMe(accountId, TenantId.FAN_PLATFORM);
+    }
+
+    /**
+     * TASK-BE-507 — tenant-aware profile read. The tenant comes from the gateway-propagated
+     * {@code X-Tenant-Id} (the caller's token claim), so an ecommerce consumer's profile is
+     * found in their own tenant instead of only in fan-platform.
+     */
+    @Transactional(readOnly = true)
+    public AccountMeResult getMe(String accountId, TenantId tenantId) {
+        Account account = accountRepository.findById(tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
         Profile profile = profileRepository.findByAccountId(accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
@@ -32,11 +44,21 @@ public class ProfileUseCase {
         return AccountMeResult.from(account, profile);
     }
 
+    /**
+     * NET-ZERO overload — see {@link #getMe(String)}.
+     */
     @Transactional
     public ProfileUpdateResult updateProfile(UpdateProfileCommand command) {
-        // TASK-BE-506: fan-platform-only lookup — FAN_PLATFORM is a compile-time constant,
-        // not a resolved tenant (see TenantId.FAN_PLATFORM; dynamic resolution is TASK-BE-507).
-        accountRepository.findById(TenantId.FAN_PLATFORM, command.accountId())
+        return updateProfile(command, TenantId.FAN_PLATFORM);
+    }
+
+    /**
+     * TASK-BE-507 — tenant-aware profile update. A cross-tenant target resolves through the
+     * tenant-scoped {@code findById} to a 404 (enumeration-safe confinement, as BE-467).
+     */
+    @Transactional
+    public ProfileUpdateResult updateProfile(UpdateProfileCommand command, TenantId tenantId) {
+        accountRepository.findById(tenantId, command.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
 
         Profile profile = profileRepository.findByAccountId(command.accountId())

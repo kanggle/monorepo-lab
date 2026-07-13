@@ -54,12 +54,24 @@ public class SendVerificationEmailUseCase {
     private final EmailVerificationTokenStore tokenStore;
     private final EmailVerificationNotifier notifier;
 
+    /**
+     * NET-ZERO overload — a header-less caller stays pinned to {@link TenantId#FAN_PLATFORM},
+     * byte-identical to the pre-BE-507 behaviour.
+     */
     @Transactional(readOnly = true)
     public void execute(String accountId) {
-        // 1) Account must exist.
-        // TASK-BE-506: fan-platform-only lookup — FAN_PLATFORM is a compile-time constant,
-        // not a resolved tenant (see TenantId.FAN_PLATFORM; dynamic resolution is TASK-BE-507).
-        Account account = accountRepository.findById(TenantId.FAN_PLATFORM, accountId)
+        execute(accountId, TenantId.FAN_PLATFORM);
+    }
+
+    /**
+     * TASK-BE-507 — tenant-aware resend. The tenant is minted into the token
+     * ({@link EmailVerificationTokenStore#save}) so the verify path, which is
+     * token-authenticated and sees no {@code X-Tenant-Id}, can scope its own lookup.
+     */
+    @Transactional(readOnly = true)
+    public void execute(String accountId, TenantId tenantId) {
+        // 1) Account must exist in the caller's tenant.
+        Account account = accountRepository.findById(tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         // 2) Idempotent guard: don't issue a token that cannot be consumed.
@@ -78,7 +90,7 @@ public class SendVerificationEmailUseCase {
         //    do not roll back the token write: the user can wait for the
         //    rate-limit window to expire and try again.
         String token = UUID.randomUUID().toString();
-        tokenStore.save(token, accountId, TOKEN_TTL);
+        tokenStore.save(token, tenantId.value(), accountId, TOKEN_TTL);
 
         try {
             notifier.sendVerificationEmail(account.getEmail(), token);

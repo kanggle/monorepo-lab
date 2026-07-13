@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -130,7 +131,7 @@ class OAuthLoginUseCaseTest {
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(
-                "user@example.com", "GOOGLE", "provider-user-1", "User"))
+                "user@example.com", "GOOGLE", "provider-user-1", "User", null))
                 .thenReturn(new SocialSignupResult("acc-123", "ACTIVE", true));
         when(accountServicePort.getAccountStatus("acc-123"))
                 .thenReturn(Optional.of(new AccountStatusLookupResult("acc-123", "ACTIVE")));
@@ -146,7 +147,7 @@ class OAuthLoginUseCaseTest {
         InOrder order = inOrder(oAuthClient, accountServicePort, oAuthLoginTransactionalStep);
         order.verify(oAuthClient).exchangeCodeForUserInfo(CODE, REDIRECT_URI);
         order.verify(accountServicePort).socialSignup(
-                "user@example.com", "GOOGLE", "provider-user-1", "User");
+                "user@example.com", "GOOGLE", "provider-user-1", "User", null);
         order.verify(accountServicePort).getAccountStatus("acc-123");
         order.verify(oAuthLoginTransactionalStep).persistLogin(any(OAuthCallbackTxnCommand.class));
 
@@ -184,7 +185,7 @@ class OAuthLoginUseCaseTest {
         oAuthLoginUseCase.callback(command);
 
         // socialSignup must NOT be called on the existing-identity path
-        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString());
+        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
 
         // Ordering: provider HTTP → getAccountStatus → persistLogin
         InOrder order = inOrder(oAuthClient, accountServicePort, oAuthLoginTransactionalStep);
@@ -209,7 +210,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
-        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString()))
+        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), isNull()))
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
         when(accountServicePort.getAccountStatus("acc-new")).thenReturn(Optional.empty());
         when(oAuthLoginTransactionalStep.persistLogin(any(OAuthCallbackTxnCommand.class)))
@@ -232,7 +233,7 @@ class OAuthLoginUseCaseTest {
                 .isInstanceOf(InvalidOAuthStateException.class);
 
         verify(oAuthClientProvider, never()).getClient(any());
-        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString());
+        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
         verify(accountServicePort, never()).getAccountStatus(anyString());
         verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
     }
@@ -249,7 +250,7 @@ class OAuthLoginUseCaseTest {
         assertThatThrownBy(() -> oAuthLoginUseCase.callback(command))
                 .isSameAs(providerFailure);
 
-        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString());
+        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
         verify(accountServicePort, never()).getAccountStatus(anyString());
         verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
     }
@@ -266,7 +267,7 @@ class OAuthLoginUseCaseTest {
         assertThatThrownBy(() -> oAuthLoginUseCase.callback(command))
                 .isInstanceOf(OAuthEmailRequiredException.class);
 
-        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString());
+        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
         verify(accountServicePort, never()).getAccountStatus(anyString());
         verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
     }
@@ -280,7 +281,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
-        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString()))
+        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), isNull()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));
         when(accountServicePort.getAccountStatus("acc-1"))
                 .thenReturn(Optional.of(new AccountStatusLookupResult("acc-1", "ACTIVE")));
@@ -293,7 +294,7 @@ class OAuthLoginUseCaseTest {
 
         // HTTP fetches happened exactly once; no retry after txn failure
         verify(oAuthClient).exchangeCodeForUserInfo(CODE, REDIRECT_URI);
-        verify(accountServicePort).socialSignup("user@example.com", "GOOGLE", "provider-user-1", "User");
+        verify(accountServicePort).socialSignup("user@example.com", "GOOGLE", "provider-user-1", "User", null);
         verify(accountServicePort).getAccountStatus("acc-1");
     }
 
@@ -363,7 +364,7 @@ class OAuthLoginUseCaseTest {
                 .isInstanceOf(InvalidOAuthRedirectUriException.class);
 
         verify(oAuthClientProvider, never()).getClient(any());
-        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString());
+        verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
         verify(accountServicePort, never()).getAccountStatus(anyString());
         verify(oAuthLoginTransactionalStep, never()).persistLogin(any());
     }
@@ -395,7 +396,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthClient.exchangeCodeForUserInfo(anyString(), anyString())).thenReturn(USER_INFO);
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
-        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString()))
+        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), isNull()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));
         when(accountServicePort.getAccountStatus("acc-1"))
                 .thenReturn(Optional.of(new AccountStatusLookupResult("acc-1", "ACTIVE")));

@@ -2,6 +2,10 @@
 
 모든 엔드포인트는 gateway 경유. base path: `/api/accounts`
 
+> **`X-Tenant-Id` (TASK-BE-507)** — 소비자 표면 전체가 tenant-aware 다. 게이트웨이가 토큰의 `tenant_id` claim 을 이 헤더로 전파하며(BE-230), account-service 는 이를 계정 조회/생성의 스코프로 쓴다. **부재/공백/`*` → `fan-platform`** 이므로 헤더 없는 기존 호출자는 BE-507 이전과 바이트 동일하게 동작한다. 적용 대상: `POST /signup`, `GET /me`, `PATCH /me/profile`, `GET /me/status`, `DELETE /me`, `POST /signup/resend-verification-email`.
+>
+> 예외 — `POST /signup/verify-email` 은 **토큰 자체가 인증**이라 헤더를 받지 않는다. tenant 는 발급 시점에 토큰에 실려(`email-verify:{token}` → `{tenantId}|{accountId}`) 검증 경로가 스스로 스코프한다.
+
 ---
 
 ## POST /api/accounts/signup
@@ -10,10 +14,18 @@
 
 **Auth required**: No
 
+**Headers** (TASK-BE-507):
+
+| Header | 필수 | 의미 |
+|---|---|---|
+| `X-Tenant-Id` | 선택 | **계정이 태어날 tenant.** 호출자(auth-service)가 가입을 개시한 **OIDC client** 로부터 유도한 값 (`SavedRequestTenantResolver`) — 예: web-store 클라이언트 → `ecommerce`. **부재/공백/`*` → `fan-platform`** (BE-507 이전 동작과 바이트 동일 ⇒ 헤더 없는 호출자 무손실). 이메일 유일성은 `(tenant_id, email)` 복합 unique 로 **tenant 안에서만** 강제되므로, 같은 이메일이 서로 다른 tenant 에 존재할 수 있다. |
+
+> **왜 body 가 아니라 헤더인가**: tenant 는 사용자가 입력하는 값이 아니라 호출 컨텍스트다. `X-Tenant-Id` 는 이미 게이트웨이가 토큰 claim 으로부터 전파하는 축(BE-230)이며, account-service 의 다른 내부 경로도 같은 헤더를 쓴다(BE-467).
+
 **Request**:
 ```json
 {
-  "email": "string (required, email format, unique)",
+  "email": "string (required, email format, unique within the tenant)",
   "password": "string (required, min 8, complexity rule per PasswordPolicy)",
   "displayName": "string (optional, max 100)",
   "locale": "string (optional, default 'ko-KR')",
@@ -35,9 +47,11 @@
 
 | Status | Code | 조건 |
 |---|---|---|
-| 409 | `ACCOUNT_ALREADY_EXISTS` | 이메일 중복 |
+| 409 | `ACCOUNT_ALREADY_EXISTS` | **해당 tenant 안에서** 이메일 중복 |
 | 422 | `VALIDATION_ERROR` | 이메일 형식, 패스워드 복잡도 미달 |
 | 429 | `RATE_LIMITED` | 가입 시도 rate limit 초과 |
+| 404 | `TENANT_NOT_FOUND` | `X-Tenant-Id` 가 미등록 tenant (TASK-BE-507 — 유령 tenant 로 계정이 태어나지 않는다) |
+| 409 | `TENANT_SUSPENDED` | `X-Tenant-Id` 가 SUSPENDED tenant (TASK-BE-507; `GlobalExceptionHandler` 가 이 예외를 409 로 매핑한다 — provisioning 경로와 동일) |
 | 503 | `AUTH_SERVICE_UNAVAILABLE` | Authentication service is temporarily unavailable |
 
 **Side Effects**:

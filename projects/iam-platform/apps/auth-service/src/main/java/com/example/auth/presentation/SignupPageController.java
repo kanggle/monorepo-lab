@@ -4,6 +4,9 @@ import com.example.auth.application.exception.AccountServiceUnavailableException
 import com.example.auth.application.exception.SignupEmailConflictException;
 import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -46,6 +49,16 @@ public class SignupPageController {
     private final AccountServicePort accountServicePort;
 
     /**
+     * TASK-BE-507: resolves the tenant of the OIDC client that sent the user here, from the
+     * saved {@code /oauth2/authorize} request. {@code SocialLoginBrowserController} has used
+     * this resolver all along (for the social-identity row and the token) — the form-signup
+     * path did not, which is why every consumer, ecommerce shoppers included, was born
+     * {@code fan-platform}. A direct visit to {@code /signup} (no saved authorize request)
+     * resolves to {@code fan-platform}, the pre-BE-507 default.
+     */
+    private final SavedRequestTenantResolver savedRequestTenantResolver;
+
+    /**
      * TASK-BE-472: mirror account-service's {@code Email} value-object regex
      * ({@code account.domain.account.Email}) so a malformed email is caught here with a
      * precise message instead of being proxied and coming back as an opaque 400 that the
@@ -67,6 +80,8 @@ public class SignupPageController {
             @RequestParam(name = "displayName", required = false) String displayName,
             @RequestParam(name = "password", required = false) String password,
             @RequestParam(name = "confirmPassword", required = false) String confirmPassword,
+            HttpServletRequest request,
+            HttpServletResponse response,
             Model model) {
 
         String normalizedEmail = email == null ? "" : email.trim();
@@ -97,8 +112,13 @@ public class SignupPageController {
             return "signup";
         }
 
+        // TASK-BE-507: the account is created in the tenant of the client that sent the user
+        // here (a web-store client → ecommerce), NOT in a hard-coded fan-platform. Resolved
+        // from the saved /oauth2/authorize request — the same source the social path uses.
+        String tenantId = savedRequestTenantResolver.resolve(request, response).tenantId();
+
         try {
-            accountServicePort.signup(normalizedEmail, password, normalizedDisplayName);
+            accountServicePort.signup(normalizedEmail, password, normalizedDisplayName, tenantId);
             // Success → land on the login page with the success banner.
             return "redirect:/login?registered";
         } catch (SignupEmailConflictException e) {

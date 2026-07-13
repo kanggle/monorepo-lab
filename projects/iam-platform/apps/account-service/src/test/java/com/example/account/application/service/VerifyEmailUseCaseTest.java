@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -72,7 +73,8 @@ class VerifyEmailUseCaseTest {
     @Test
     @DisplayName("정상 인증 — 토큰 조회 → verifyEmail → save → token delete 순서, emailVerifiedAt 반환")
     void execute_validToken_verifiesAndDeletesToken() {
-        given(tokenStore.findAccountId(TOKEN)).willReturn(Optional.of(ACCOUNT_ID));
+        given(tokenStore.findSubject(TOKEN)).willReturn(
+                Optional.of(new EmailVerificationTokenStore.Subject(TenantId.FAN_PLATFORM.value(), ACCOUNT_ID)));
         given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID)).willReturn(Optional.of(unverifiedAccount()));
         given(accountRepository.save(any(Account.class))).willAnswer(inv -> inv.getArgument(0));
 
@@ -89,7 +91,7 @@ class VerifyEmailUseCaseTest {
         // Critical ordering: account.save MUST happen before token delete so
         // a transient delete failure does not leave us with no token + no flag.
         InOrder order = inOrder(tokenStore, accountRepository);
-        order.verify(tokenStore).findAccountId(TOKEN);
+        order.verify(tokenStore).findSubject(TOKEN);
         order.verify(accountRepository).findById(TenantId.FAN_PLATFORM, ACCOUNT_ID);
         order.verify(accountRepository).save(any(Account.class));
         order.verify(tokenStore).delete(TOKEN);
@@ -98,7 +100,7 @@ class VerifyEmailUseCaseTest {
     @Test
     @DisplayName("토큰 미존재 — EmailVerificationTokenInvalidException, account 조회/save/delete 모두 호출 안 됨")
     void execute_unknownToken_throwsAndHasNoSideEffects() {
-        given(tokenStore.findAccountId(TOKEN)).willReturn(Optional.empty());
+        given(tokenStore.findSubject(TOKEN)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute(TOKEN))
                 .isInstanceOf(EmailVerificationTokenInvalidException.class);
@@ -111,7 +113,8 @@ class VerifyEmailUseCaseTest {
     @Test
     @DisplayName("토큰은 유효하나 account 가 사라진 경우 동일하게 EmailVerificationTokenInvalidException")
     void execute_accountVanished_throwsAndDoesNotDeleteToken() {
-        given(tokenStore.findAccountId(TOKEN)).willReturn(Optional.of(ACCOUNT_ID));
+        given(tokenStore.findSubject(TOKEN)).willReturn(
+                Optional.of(new EmailVerificationTokenStore.Subject(TenantId.FAN_PLATFORM.value(), ACCOUNT_ID)));
         given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute(TOKEN))
@@ -126,7 +129,8 @@ class VerifyEmailUseCaseTest {
     @DisplayName("이미 인증된 계정 — EmailAlreadyVerifiedException, save/delete 호출 안 됨")
     void execute_alreadyVerified_throwsEmailAlreadyVerified() {
         Instant priorVerification = Instant.parse("2026-04-01T00:00:00Z");
-        given(tokenStore.findAccountId(TOKEN)).willReturn(Optional.of(ACCOUNT_ID));
+        given(tokenStore.findSubject(TOKEN)).willReturn(
+                Optional.of(new EmailVerificationTokenStore.Subject(TenantId.FAN_PLATFORM.value(), ACCOUNT_ID)));
         given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID))
                 .willReturn(Optional.of(verifiedAccount(priorVerification)));
 
@@ -137,5 +141,23 @@ class VerifyEmailUseCaseTest {
         // Do not delete the token — leaves the resend pathway clean and the
         // 409 response idempotent.
         verify(tokenStore, never()).delete(anyString());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-507: 토큰이 실어 온 tenant 로 계정을 찾는다 — ecommerce 소비자의 이메일 인증이 동작한다")
+    void execute_tenantOnToken_scopesTheLookup() {
+        TenantId ecommerce = new TenantId("ecommerce");
+        given(tokenStore.findSubject(TOKEN)).willReturn(
+                Optional.of(new EmailVerificationTokenStore.Subject("ecommerce", ACCOUNT_ID)));
+        given(accountRepository.findById(ecommerce, ACCOUNT_ID)).willReturn(Optional.of(unverifiedAccount()));
+        given(accountRepository.save(any(Account.class))).willAnswer(inv -> inv.getArgument(0));
+
+        VerifyEmailResult result = useCase.execute(TOKEN);
+
+        assertThat(result.accountId()).isEqualTo(ACCOUNT_ID);
+        // The lookup must NOT fall back to fan-platform — that pin is what made a non-fan
+        // account's verification impossible before BE-507.
+        verify(accountRepository).findById(ecommerce, ACCOUNT_ID);
+        verify(accountRepository, never()).findById(eq(TenantId.FAN_PLATFORM), anyString());
     }
 }

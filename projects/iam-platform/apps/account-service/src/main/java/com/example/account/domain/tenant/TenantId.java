@@ -21,24 +21,21 @@ public record TenantId(String value) {
     private static final Pattern PATTERN = Pattern.compile("^[a-z][a-z0-9-]{1,31}$");
 
     /**
-     * Default tenant for the B2C fan platform product — and, measured by TASK-BE-506, the
-     * <b>only</b> tenant the consumer surface of this service can produce or see.
+     * Default tenant for the B2C fan platform product, and the <b>fallback</b> whenever no
+     * tenant reaches us — never again a hard pin.
      *
-     * <p>Both signup use cases stamp this constant on every account they create, and the
-     * consumer read/mutation paths ({@code ProfileUseCase}, {@code AccountStatusUseCase},
-     * {@code VerifyEmailUseCase}, {@code SendVerificationEmailUseCase},
-     * {@code UpdateLastLoginUseCase}) look accounts up under it. Consequences:
-     * a shopper who registers through the ecommerce web-store OIDC client is born
-     * {@code tenant=fan-platform} (and that value flows into {@code credentials.tenant_id}
-     * and the token's {@code tenant_id} claim), while an account provisioned into any other
-     * tenant is invisible to those read paths — the same residue TASK-BE-357 already had to
-     * fix in the admin email search ({@code AccountQueryPortImpl#findByEmail}).
+     * <p>Until TASK-BE-507 this constant WAS the consumer surface: both signup use cases
+     * stamped it on every account they created, and the consumer read paths looked accounts up
+     * under it, so a shopper registering through the ecommerce web-store OIDC client was born
+     * {@code fan-platform} and that value rode on into {@code credentials.tenant_id} and the
+     * token's {@code tenant_id} claim (TASK-BE-506 measured the radius: 8 files, 10 sites).
+     * The tenant is now resolved from the initiating OIDC client by auth-service and arrives
+     * as {@code X-Tenant-Id}; see {@link #fromHeaderOrDefault(String)}.
      *
-     * <p>The earlier note here said dynamic injection was "pending TASK-BE-229". That was
-     * false: BE-229 is done — it taught auth-service to <i>consume</i> the tenant already on
-     * the credential row and never introduced a tenant input to account-service. Resolving
-     * the tenant from the initiating OIDC client is TASK-BE-507, which must move the create
-     * paths, these read paths, and auth-service's cross-tenant login lookup together.
+     * <p>It remains the value for a header-less caller — that is deliberate and is what makes
+     * BE-507 net-zero for everything that worked before (every account created before BE-507
+     * lives here, and form login still finds them: {@code CredentialAuthenticationProvider}
+     * falls back to a cross-tenant lookup when the client-scoped one misses).
      */
     public static final TenantId FAN_PLATFORM = new TenantId("fan-platform");
 
@@ -49,8 +46,10 @@ public record TenantId(String value) {
     }
 
     /**
-     * TASK-BE-467 — resolve an inbound {@code X-Tenant-Id} header into a concrete
-     * tenant for the admin account-mutation write-path.
+     * TASK-BE-467 — resolve an inbound {@code X-Tenant-Id} header into a concrete tenant for
+     * the admin account-mutation write-path. TASK-BE-507 extended it to the <b>consumer</b>
+     * surface: both signup paths and the consumer read paths (profile / status / email
+     * verification) now resolve their tenant through here instead of pinning the constant.
      *
      * <p><b>NET-ZERO default:</b> an absent, blank, or platform-scope wildcard
      * ({@code "*"}) header pins to {@link #FAN_PLATFORM} — byte-identical to the

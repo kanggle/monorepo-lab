@@ -1,6 +1,7 @@
 package com.example.account.infrastructure.kafka;
 
 import com.example.account.application.service.UpdateLastLoginUseCase;
+import com.example.account.domain.tenant.TenantId;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -67,12 +68,38 @@ public class LoginSucceededConsumer {
 
             Instant occurredAt = parseTimestamp(payload, eventId);
 
-            updateLastLoginUseCase.execute(eventId, accountId, occurredAt);
+            updateLastLoginUseCase.execute(eventId, accountId, parseTenant(payload, eventId), occurredAt);
         } catch (JsonProcessingException e) {
             // Bubble up so Spring Kafka's error handler can retry / route to DLQ.
             log.error("Failed to deserialize auth.login.succeeded envelope from topic={}, key={}",
                     record.topic(), record.key(), e);
             throw new RuntimeException("auth.login.succeeded deserialization failed", e);
+        }
+    }
+
+    /**
+     * TASK-BE-507: read {@code payload.tenantId} — required since TASK-BE-248
+     * (auth-events.md schema v2; the emitter fail-closes on a blank tenant). Until now this
+     * consumer ignored it and looked every account up in {@code fan-platform}, so a login by
+     * any non-fan account silently no-opped and left {@code last_login_succeeded_at} unset.
+     *
+     * <p>An absent / blank / malformed tenant falls back to {@code fan-platform}: that covers
+     * a legacy in-flight event and keeps the consumer from poisoning its partition over a
+     * payload it cannot fix by retrying (the same stance as the accountId guard above).
+     */
+    private TenantId parseTenant(JsonNode payload, String eventId) {
+        String raw = payload.path("tenantId").asText("");
+        if (raw.isBlank()) {
+            log.warn("auth.login.succeeded missing payload.tenantId — using {}. eventId={}",
+                    TenantId.FAN_PLATFORM, eventId);
+            return TenantId.FAN_PLATFORM;
+        }
+        try {
+            return new TenantId(raw);
+        } catch (IllegalArgumentException e) {
+            log.warn("auth.login.succeeded unparseable payload.tenantId={} — using {}. eventId={}",
+                    raw, TenantId.FAN_PLATFORM, eventId);
+            return TenantId.FAN_PLATFORM;
         }
     }
 

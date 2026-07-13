@@ -40,11 +40,21 @@ public class AccountStatusUseCase {
         this.gracePeriodDays = gracePeriodDays;
     }
 
+    /**
+     * NET-ZERO overload — a header-less caller stays pinned to {@link TenantId#FAN_PLATFORM},
+     * byte-identical to the pre-BE-507 behaviour.
+     */
     @Transactional(readOnly = true)
     public AccountStatusResult getStatus(String accountId) {
-        // TASK-BE-506: fan-platform-only lookup — FAN_PLATFORM is a compile-time constant,
-        // not a resolved tenant (see TenantId.FAN_PLATFORM; dynamic resolution is TASK-BE-507).
-        Account account = accountRepository.findById(TenantId.FAN_PLATFORM, accountId)
+        return getStatus(accountId, TenantId.FAN_PLATFORM);
+    }
+
+    /**
+     * TASK-BE-507 — tenant-aware status read (the gateway-propagated {@code X-Tenant-Id}).
+     */
+    @Transactional(readOnly = true)
+    public AccountStatusResult getStatus(String accountId, TenantId tenantId) {
+        Account account = accountRepository.findById(tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         var latestHistory = historyRepository.findTopByAccountIdOrderByOccurredAtDesc(accountId);

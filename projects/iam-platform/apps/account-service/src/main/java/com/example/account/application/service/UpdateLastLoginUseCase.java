@@ -41,8 +41,23 @@ public class UpdateLastLoginUseCase {
     private final AccountRepository accountRepository;
     private final ProcessedEventJpaRepository processedEventRepository;
 
+    /**
+     * NET-ZERO overload — a legacy event with no {@code tenantId} in its payload stays
+     * pinned to {@link TenantId#FAN_PLATFORM}, byte-identical to the pre-BE-507 behaviour.
+     */
     @Transactional(noRollbackFor = DataIntegrityViolationException.class)
     public void execute(String eventId, String accountId, Instant occurredAt) {
+        execute(eventId, accountId, TenantId.FAN_PLATFORM, occurredAt);
+    }
+
+    /**
+     * TASK-BE-507 — tenant-aware last-login update. The {@code auth.login.succeeded}
+     * payload has carried a required {@code tenantId} since TASK-BE-248 (auth-events.md
+     * schema v2, fail-closed at the emitter); this consumer simply never read it, so a
+     * login by any non-fan account silently no-opped through the poison-pill guard below.
+     */
+    @Transactional(noRollbackFor = DataIntegrityViolationException.class)
+    public void execute(String eventId, String accountId, TenantId tenantId, Instant occurredAt) {
         if (processedEventRepository.existsByEventId(eventId)) {
             log.info("Duplicate auth.login.succeeded event skipped: eventId={}", eventId);
             return;
@@ -63,12 +78,7 @@ public class UpdateLastLoginUseCase {
             return;
         }
 
-        // TASK-BE-506: fan-platform-only lookup — FAN_PLATFORM is a compile-time constant,
-        // not a resolved tenant (see TenantId.FAN_PLATFORM; dynamic resolution is TASK-BE-507).
-        // The auth.login.succeeded event carries no tenant_id, so there is nothing to key on
-        // even if this lookup were tenant-aware: a login by any non-fan account silently
-        // no-ops below (the poison-pill guard), leaving last_login_at unset. Part of BE-507.
-        Optional<Account> maybeAccount = accountRepository.findById(TenantId.FAN_PLATFORM, accountId);
+        Optional<Account> maybeAccount = accountRepository.findById(tenantId, accountId);
         if (maybeAccount.isEmpty()) {
             // Poison-pill guard — log and return without throwing so that the
             // consumer commits the offset and moves on. Missing accounts can
