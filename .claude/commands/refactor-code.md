@@ -148,10 +148,13 @@ For each refactoring unit:
 
 1. Launch one Agent with `isolation: "worktree"` and `subagent_type: "refactoring-engineer"` using the Agent Prompt Template below
 2. Wait for completion
-3. If successful: merge worktree branch into main
+3. If successful: merge the worktree branch into the coordinator's **integration branch** — **never into `main`**
    ```
-   git merge <worktree-branch> --no-ff -m "refactor(<service>): <description>"
+   # once, before the first unit: git worktree add -b task/batch-<id> ../wt-batch-<id> origin/main
+   git -C ../wt-batch-<id> merge <worktree-branch> --no-ff -m "refactor(<service>): <description>"
    ```
+   `protect-main-branch.ps1` blocks pushes to `main` but **not** a local merge into it — merging into `main`
+   succeeds quietly and then can never be pushed. Land the integration branch to `main` via PR.
 4. If failed: discard worktree, skip dependent items
 5. Proceed to next unit
 
