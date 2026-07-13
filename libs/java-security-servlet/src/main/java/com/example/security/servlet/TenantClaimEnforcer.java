@@ -222,17 +222,30 @@ public class TenantClaimEnforcer extends OncePerRequestFilter implements Ordered
 
         Jwt token = jwtAuth.getToken();
         String tenantId = token.getClaimAsString(TenantClaimValidator.CLAIM_TENANT_ID);
+        boolean entitled = trustEntitledDomains
+                && TenantClaimValidator.isEntitled(token, expectedTenantId);
 
-        // "Any tenant" is not "no tenant". A token with no tenant context would leave the
-        // persistence layer's WHERE tenant_id filter with nothing to filter on, so an absent
-        // or blank claim is rejected before any relaxation is consulted.
-        if (tenantId == null || tenantId.isBlank()) {
+        // A token with neither a tenant_id nor an entitlement carries no tenant context at
+        // all, which would leave the persistence layer's WHERE tenant_id filter with nothing
+        // to filter on. 401 — but only when the entitlement branch is also silent.
+        //
+        // The `&& !entitled` is not decoration (TASK-MONO-383). TenantClaimValidator, which
+        // runs at decode time in these same services, consults the entitlement relaxation
+        // BEFORE it rejects an absent claim. An enforcer that rejected unconditionally would
+        // therefore refuse a token the decoder had just admitted — the decode-pass /
+        // filter-block split that the thirteen hand-written copies each took care to avoid.
+        // When trustEntitledDomains is off (fan), `entitled` is always false and this
+        // degenerates to the unconditional rejection those four copies wrote by hand.
+        if ((tenantId == null || tenantId.isBlank()) && !entitled) {
             writeError(response, HttpStatus.UNAUTHORIZED.value(),
                     CODE_UNAUTHORIZED, "tenant_id claim is required");
             return;
         }
 
-        if (admits(token, tenantId)) {
+        // Dual-accept: reject only when BOTH the legacy slug and the signed entitled_domains
+        // claim fail. Entitlement only ever widens (fail-closed on any claim-shape anomaly —
+        // see TenantClaimValidator#isEntitled).
+        if (admitsLegacy(tenantId) || entitled) {
             chain.doFilter(request, response);
             return;
         }
@@ -243,14 +256,10 @@ public class TenantClaimEnforcer extends OncePerRequestFilter implements Ordered
                 "tenant_id '" + tenantId + "' is not allowed");
     }
 
-    private boolean admits(Jwt token, String tenantId) {
-        if (expectedTenantId.equals(tenantId)) {
-            return true;
-        }
-        if (allowWildcard && TenantClaimValidator.WILDCARD_TENANT.equals(tenantId)) {
-            return true;
-        }
-        return trustEntitledDomains && TenantClaimValidator.isEntitled(token, expectedTenantId);
+    /** The {@code tenant_id}-only half of the gate: exact match, plus the wildcard if enabled. */
+    private boolean admitsLegacy(String tenantId) {
+        return expectedTenantId.equals(tenantId)
+                || (allowWildcard && TenantClaimValidator.WILDCARD_TENANT.equals(tenantId));
     }
 
     private static void writeError(HttpServletResponse response, int status,

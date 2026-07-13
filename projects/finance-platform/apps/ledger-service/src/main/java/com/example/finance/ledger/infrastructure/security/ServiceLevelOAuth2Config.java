@@ -1,5 +1,9 @@
 package com.example.finance.ledger.infrastructure.security;
 
+import com.example.finance.ledger.presentation.security.PublicPaths;
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.TenantClaimEnforcer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -16,19 +20,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Service-level Resource Server JWT decoder. Mirrors the finance
- * gateway-service validator chain inside ledger-service so any direct call gets
- * the same {@link AllowedIssuersValidator} + {@link TenantClaimValidator} verdict
- * (architecture.md § Multi-tenancy — defense-in-depth). RS256 only (IAM JWKS).
+ * Service-level Resource Server JWT decoder, plus the servlet tenant gate that backs it up.
+ * Mirrors the finance gateway-service verdict inside ledger-service so any direct call meets
+ * the same gate (architecture.md § Multi-tenancy — defense-in-depth). RS256 only (IAM JWKS).
  *
- * <p>The gateway <strong>exists</strong> as of TASK-MONO-357 (ADR-MONO-048 D7).
- * This chain is therefore no longer a stand-in for a missing edge — it is the
- * second layer, and it is load-bearing: the gateway only fronts traffic arriving
- * on the {@code finance.local} hostname, while anything already inside the compose
- * network (console-bff's outbound legs, service-to-service calls) reaches this
- * service directly and never crosses the edge. A request that skipped the gateway
- * must still meet the same verdict here. Keep this chain if the duplicated
- * validators are ever consolidated.
+ * <p>The gateway <strong>exists</strong> as of TASK-MONO-357 (ADR-MONO-048 D7). This chain is
+ * therefore no longer a stand-in for a missing edge — it is the second layer, and it is
+ * load-bearing: the gateway only fronts traffic arriving on the {@code finance.local} hostname,
+ * while anything already inside the compose network (console-bff's outbound legs,
+ * service-to-service calls) reaches this service directly and never crosses the edge. A request
+ * that skipped the gateway must still meet the same verdict here.
+ *
+ * <h2>The three classes are shared now (ADR-MONO-049 § D5-3)</h2>
+ *
+ * {@link AllowedIssuersValidator}, {@link TenantClaimValidator} and {@link TenantClaimEnforcer}
+ * used to be hand-maintained copies in this service — and, per {@code ADR-MONO-049} § 1.3, copies
+ * with <strong>no tests at all</strong>. They now come from {@code libs/java-security} and
+ * {@code libs/java-security-servlet} (whose suites this service inherits), and <strong>this file
+ * is where finance's tenant policy is stated</strong>: every switch below defaults to
+ * <em>closed</em> in the shared classes, so each relaxation has to be named here, in the open.
  */
 @Configuration
 public class ServiceLevelOAuth2Config {
@@ -56,9 +66,32 @@ public class ServiceLevelOAuth2Config {
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(new JwtTimestampValidator());
         validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(new TenantClaimValidator(requiredTenantId));
+        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
+                .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
+                .trustEntitledDomains()      // entitlement-trust dual-accept (TASK-FIN-BE-006)
+                .build());
         validators.add(JwtValidators.createDefault());
         return new DelegatingOAuth2TokenValidator<>(validators);
+    }
+
+    /**
+     * finance's servlet tenant gate — the inner layer behind {@link #jwtTokenValidator()}.
+     *
+     * <p>Declared as an explicit {@code @Bean} rather than picked up by component scan. The copy
+     * this replaces was a {@code @Component} in the service's own source tree, so its policy was
+     * wherever that file happened to be; a shared class annotated {@code @Component} would decide
+     * the same policy somewhere nobody looks. The three relaxations below are the whole of
+     * finance's deviation from the closed default, and they must match {@link #jwtTokenValidator()}
+     * above — a decoder and an enforcer that disagree are not defence in depth (ADR-MONO-049
+     * § 1.8, TASK-MONO-383).
+     */
+    @Bean
+    public TenantClaimEnforcer tenantClaimEnforcer() {
+        return TenantClaimEnforcer.forTenant(requiredTenantId)
+                .exempt(PublicPaths::isPublic)   // finance's own list: the actuator probes only
+                .allowSuperAdminWildcard()
+                .trustEntitledDomains()
+                .build();
     }
 
     private static List<String> parseCsv(String csv) {

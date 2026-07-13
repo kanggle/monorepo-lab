@@ -1,6 +1,7 @@
 package com.example.finance.account.infrastructure.security;
 
 import com.example.finance.account.application.ActorContext;
+import com.example.security.oauth2.TenantClaimValidator;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;

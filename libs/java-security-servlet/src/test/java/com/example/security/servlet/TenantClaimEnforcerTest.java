@@ -232,6 +232,124 @@ class TenantClaimEnforcerTest {
             enforcer.doFilter(get("/api/x"), response, chain);
             assertForbidden();
         }
+
+        @Test
+        @DisplayName("ON: an ABSENT tenant_id but a valid entitlement passes — the switch reaches "
+                + "the 401 branch too, not just the 403 one")
+        void entitledWithoutTenantIdAdmittedWhenOn() throws Exception {
+            TenantClaimEnforcer enforcer =
+                    TenantClaimEnforcer.forTenant("scm").trustEntitledDomains().build();
+            authenticate(jwt(null, List.of("scm")));
+            enforcer.doFilter(get("/api/x"), response, chain);
+            assertThat(chain.called)
+                    .as("TenantClaimValidator consults the entitlement relaxation BEFORE it "
+                            + "rejects an absent claim. An enforcer that rejected here would "
+                            + "refuse a token the decoder had just admitted (TASK-MONO-383)")
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("OFF: an absent tenant_id is 401 even WITH an entitlement — fan's shape")
+        void entitledWithoutTenantIdRefusedWhenOff() throws Exception {
+            TenantClaimEnforcer enforcer = TenantClaimEnforcer.forTenant("scm").build();
+            authenticate(jwt(null, List.of("scm")));
+            enforcer.doFilter(get("/api/x"), response, chain);
+
+            assertThat(chain.called).isFalse();
+            assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+        }
+
+        @Test
+        @DisplayName("ON: an absent tenant_id with NO entitlement is still 401 — the relaxation "
+                + "widens, it does not disable the check")
+        void absentTenantWithoutEntitlementStill401() throws Exception {
+            TenantClaimEnforcer enforcer =
+                    TenantClaimEnforcer.forTenant("scm").trustEntitledDomains().build();
+            authenticate(jwt(null, List.of("erp")));   // entitled, but to somewhere else
+            enforcer.doFilter(get("/api/x"), response, chain);
+
+            assertThat(chain.called).isFalse();
+            assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // The enforcer is the INNER layer of a defence in depth whose outer layer is
+    // TenantClaimValidator, running at decode time in the same service. Two layers that
+    // disagree are not defence in depth — the inner one refusing what the outer one just
+    // admitted is a decode-pass / filter-block split, and it is the failure the thirteen
+    // hand-written copies each took care to avoid. TASK-MONO-383 found the canonical class
+    // had reintroduced it; this pins it shut.
+    // ---------------------------------------------------------------------
+    @Nested
+    @DisplayName("agrees with the decoder it backs up (TenantClaimValidator)")
+    class AgreesWithTheDecoder {
+
+        /** The wiring erp, finance and scm all use: wildcard on, entitlement trusted. */
+        private final TenantClaimEnforcer enforcer = TenantClaimEnforcer.forTenant("scm")
+                .allowSuperAdminWildcard()
+                .trustEntitledDomains()
+                .build();
+
+        private final TenantClaimValidator validator = TenantClaimValidator.forTenant("scm")
+                .allowSuperAdminWildcard()
+                .trustEntitledDomains()
+                .build();
+
+        @Test
+        @DisplayName("every token the validator admits, the enforcer admits")
+        void noTokenIsAdmittedByTheDecoderAndRefusedByTheFilter() throws Exception {
+            List<Jwt> tokens = List.of(
+                    jwt("scm", null),                          // exact
+                    jwt(TenantClaimValidator.WILDCARD_TENANT, null),  // wildcard
+                    jwt("erp", List.of("scm")),                // entitled, wrong slug
+                    jwt(null, List.of("scm")),                 // entitled, NO slug  <-- MONO-383
+                    jwt("", List.of("scm")));                  // entitled, blank slug
+
+            for (Jwt token : tokens) {
+                assertThat(validator.validate(token).hasErrors())
+                        .as("precondition: the decoder admits %s", token.getClaims())
+                        .isFalse();
+
+                MockHttpServletResponse res = new MockHttpServletResponse();
+                RecordingChain ch = new RecordingChain();
+                SecurityContextHolder.getContext()
+                        .setAuthentication(new JwtAuthenticationToken(token));
+                enforcer.doFilter(get("/api/x"), res, ch);
+
+                assertThat(ch.called)
+                        .as("the decoder admitted %s; the enforcer behind it must not refuse it "
+                                + "(got %d)", token.getClaims(), res.getStatus())
+                        .isTrue();
+            }
+        }
+
+        @Test
+        @DisplayName("every token the validator refuses, the enforcer refuses")
+        void noTokenIsRefusedByTheDecoderAndAdmittedByTheFilter() throws Exception {
+            List<Jwt> tokens = List.of(
+                    jwt("erp", null),                    // wrong tenant, no entitlement
+                    jwt("erp", List.of("finance")),      // entitled elsewhere
+                    jwt(null, null),                     // no tenant context at all
+                    jwt("", null));                      // blank
+
+            for (Jwt token : tokens) {
+                assertThat(validator.validate(token).hasErrors())
+                        .as("precondition: the decoder refuses %s", token.getClaims())
+                        .isTrue();
+
+                MockHttpServletResponse res = new MockHttpServletResponse();
+                RecordingChain ch = new RecordingChain();
+                SecurityContextHolder.getContext()
+                        .setAuthentication(new JwtAuthenticationToken(token));
+                enforcer.doFilter(get("/api/x"), res, ch);
+
+                assertThat(ch.called)
+                        .as("the decoder refused %s; the enforcer must not let it through",
+                                token.getClaims())
+                        .isFalse();
+            }
+        }
     }
 
     // ---------------------------------------------------------------------
