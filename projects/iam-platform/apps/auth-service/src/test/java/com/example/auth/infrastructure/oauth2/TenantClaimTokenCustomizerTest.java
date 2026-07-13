@@ -823,7 +823,11 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
-    @DisplayName("MONO-381: SUPER_ADMIN('*')이 storefront 클라이언트로 로그인 → roles 클레임 없음 (게이트웨이의 acceptAnyWellFormedTenant 가 '*' 를 통과시켜도 가드가 막는다)")
+    // The mechanism this name used to cite no longer exists: TASK-MONO-388 removed
+    // acceptAnyWellFormedTenant from the shared validator. The ecommerce gate admits '*' via
+    // allowSuperAdminWildcard now — deliberately, not incidentally. The assertion is unchanged;
+    // only the reason the token gets that far is named correctly.
+    @DisplayName("MONO-381: SUPER_ADMIN('*')이 storefront 클라이언트로 로그인 → roles 클레임 없음 (게이트웨이가 allowSuperAdminWildcard 로 '*' 를 통과시켜도 가드가 막는다)")
     void authorizationCode_superAdminWildcard_onEcommerceClient_omitsRoles() {
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
         givenEcommerceClientWith("*", claimsBuilder);
