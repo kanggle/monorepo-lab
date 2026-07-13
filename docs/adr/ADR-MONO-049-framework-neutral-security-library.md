@@ -451,6 +451,23 @@ The residue check afterwards looked for leftover `.premut` files and stray canar
 >
 > **What caught it was the policy pin this task wrote.** A test authored in this commit turned CI red against its own commit. That is the entire thesis of § 1.12, executed on the person writing § 1.12: *the value of a suite is not that it passes; it is that it is watching.* It was watching. **And "the tests passed locally" was never the claim worth making — the artefact I tested and the artefact I committed had drifted apart, and only one of them was real.**
 
+#### Two gates guard the same tenant and answer the same question differently (`TASK-MONO-394`)
+
+Writing iam's policy pin required asking *"which tenant does this service actually gate?"* The answer was **`fan-platform`** — and that is when it became visible that **`fan-platform` has services of the same names**, which D5-6 had migrated a day earlier.
+
+| | SUPER_ADMIN wildcard (`tenant_id="*"`) | entitlement |
+|---|---|---|
+| **`fan-platform/community`** — deployed | **✅ accepts** | ✗ |
+| **`iam-platform/community`** — **deployed nowhere** | **❌ refuses** | ✗ |
+
+**Two gates guarding the same tenant slug answer the SUPER_ADMIN question in opposite directions.** § 1.7's table recorded both projects and **never connected them** — the same failure as § 1.6's counts, one row apart.
+
+Which answer is right is a question **about behaviour**, and an extraction does not change behaviour, so D5-8 preserved iam's OFF/OFF and changed nothing. **But the follow-up cannot start with the policy.** Measured on `origin/main` `480b8f8ae`: `iam-platform/docker-compose.yml` starts `auth`, `account`, `security`, `admin` and `gateway` — **not these two.** Nothing routes to them, nothing references them outside `settings.gradle` and `ci.yml`. They are **built and tested by CI and deployed nowhere**, while `iam-platform/infra/prometheus/prometheus.yml` still scrapes them on `:8086` / `:8087` — *a monitoring config for services its own compose does not start*, which is why they looked alive.
+
+So the question is not *"which wildcard policy is correct"*. It is **"should these two services exist at all"** — and reconciling the policy of a dead module would be work that protects nothing. **`TASK-MONO-394` asks the live-or-dead question first, and it is a human's decision because the likely answer is deletion.**
+
+> ⚠️ **And this subsection is late.** `TASK-MONO-392` § AC-8 required the divergence to be recorded *here*, and its PR body said it had been. It had not — it went into the task file and the INDEX and **not into the ADR**. **A declaration-versus-truth drift, inside the document whose thesis is that declarations drift.** Caught while ticketing the follow-up, by re-reading the section instead of trusting what the PR claimed about it.
+
 ---
 
 ## 2. Alternatives considered
