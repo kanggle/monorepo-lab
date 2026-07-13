@@ -1,5 +1,9 @@
 package com.example.fanplatform.membership.infrastructure.security;
 
+import com.example.fanplatform.membership.presentation.security.PublicPaths;
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.TenantClaimEnforcer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -64,7 +68,10 @@ public class ServiceLevelOAuth2Config {
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(new JwtTimestampValidator());
         validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(new TenantClaimValidator(requiredTenantId));
+        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
+                .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
+                // no .trustEntitledDomains() — fan is outside the entitlement plane
+                .build());
         validators.add(JwtValidators.createDefault());
         return new DelegatingOAuth2TokenValidator<>(validators);
     }
@@ -78,6 +85,54 @@ public class ServiceLevelOAuth2Config {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(internalJwkSetUri).build();
         decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(internalIssuer));
         return decoder;
+    }
+
+    /**
+     * The prefix the workload-identity chain owns. Kept here, next to the exemption that needs
+     * it, rather than inside the filter — the filter is shared now.
+     */
+    private static final String INTERNAL_PREFIX = "/internal/";
+
+    /**
+     * fan's servlet tenant gate — the inner layer behind {@link #endUserTokenValidator()}.
+     *
+     * <h2>{@code trustEntitledDomains()} is deliberately NOT called</h2>
+     *
+     * fan sits outside the entitlement plane — none of its four copies ever held an
+     * {@code isEntitled} branch (measured: zero). <strong>This is the first place in the D5
+     * series where a switch stays OFF.</strong> Adding {@code .trustEntitledDomains()} would
+     * <em>widen</em> fan's gate to honour a claim it has never honoured, and widening is the
+     * quiet direction. The policy pin asserts the refusal, not just the acceptance.
+     *
+     * <h2>Why {@code /internal/**} is exempt, and why that is not a hole</h2>
+     *
+     * membership runs <strong>two</strong> filter chains: an {@code @Order(1)}
+     * {@code securityMatcher("/internal/**")} workload-identity chain, and the end-user chain.
+     * The internal chain authenticates with {@link #internalJwtDecoder()}, whose Javadoc says it
+     * plainly — <em>"does NOT pin tenant_id"</em>. It still puts a {@code JwtAuthenticationToken}
+     * in the context, so this filter (registered outside the chains, at
+     * {@code LOWEST_PRECEDENCE-100}) sees it — and a token with no {@code tenant_id} is exactly
+     * what the gate 401s.
+     *
+     * <p><strong>Without the exemption, every internal call 401s</strong> and
+     * {@code community/HttpMembershipChecker} stops working. That is not an argument, it is a
+     * prediction, and {@code TASK-MONO-387} AC-6 tested it by removing the clause and running
+     * the suite. It went red. The exemption is load-bearing; it stays.
+     *
+     * <p>It is <em>not</em> a hole in the tenant gate: {@code /internal/**} is not an end-user
+     * route, it is workload identity, and the chain that guards it requires
+     * {@code hasRole("INTERNAL")}. A tenant claim is not the thing standing between a caller and
+     * that surface.
+     */
+    @Bean
+    public TenantClaimEnforcer tenantClaimEnforcer() {
+        return TenantClaimEnforcer.forTenant(requiredTenantId)
+                .exempt(request -> PublicPaths.isPublic(request)
+                        || (request.getRequestURI() != null
+                                && request.getRequestURI().startsWith(INTERNAL_PREFIX)))
+                .allowSuperAdminWildcard()
+                // no .trustEntitledDomains() — see above
+                .build();
     }
 
     private static List<String> parseCsv(String csv) {

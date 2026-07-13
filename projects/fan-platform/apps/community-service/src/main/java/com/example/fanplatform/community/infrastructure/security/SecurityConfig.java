@@ -1,5 +1,7 @@
 package com.example.fanplatform.community.infrastructure.security;
 
+import com.example.security.oauth2.TenantClaimValidator;
+
 import com.example.fanplatform.community.presentation.security.PublicPaths;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

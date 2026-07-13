@@ -8,9 +8,9 @@ web-store 의 role 기반 로그인 가드가 **구조적으로 절대 발화하
 
 # Status
 
-ready
+review
 
-> **⏸️ BLOCKED / PARKED (2026-07-13) — 구현 실측 결과 깔끔한 수정이 없고, tenant 배정 정리에 의존한다. 방향은 (A) 로 사람이 정했으나(2026-07-13), 착수는 아래 § "구현 실측" 의 선행이 풀린 뒤.** 심각도 낮음(운영자가 소비자로도 쇼핑 가능 — 권한상승·크로스테넌트 유출 아님)이라 우선순위도 낮다.
+> **▶️ UNPARKED + 구현 완료 (2026-07-13).** park 사유(*"tenant 로 seed 를 좁히려 했으나 소비자도 `ecommerce` 가 아니다"*)는 `TASK-BE-507` 이 해소했다. **그러나 재개해 실측하니 방향 (A) 의 전제가 무너졌다 — 이 가드는 *운영자 가드*가 될 수 없다.** 사용자가 **A′(cross-tenant 가드로 재정의)** 를 택했고(2026-07-13), 그대로 구현했다. 아래 § "재개 실측" 참조.
 
 # Owner
 
@@ -96,12 +96,51 @@ monorepo
 
 ---
 
+# 재개 실측 (2026-07-13) — **이 가드는 운영자 가드가 될 수 없다**
+
+BE-507 이 park 을 풀어줬으므로 원래 계획(seed 를 *"claim tenant == 클라이언트 platform"* 으로 좁히기)을 다시 검토했다. **좁히기는 유효하지만, 그것이 막는 대상은 티켓이 믿었던 대상이 아니다.**
+
+**결정적 사실 (코드로 확인):**
+
+1. `CreateOperatorUseCase:86-98` (**TASK-MONO-334**) — 운영자 생성은 **그 운영자의 홈 tenant 에 이미 가입 계정이 있어야** 가능하다 (`accountServiceClient.search(tenantId, normalizedEmail)`; 주석: *"that account's unified IAM (OIDC) credential is the operator's primary login"*).
+2. **BE-507 이후** 가입 계정의 tenant = **가입한 OIDC 클라이언트의 tenant**.
+3. ⇒ **`ecommerce` 운영자가 되려면 `tenant='ecommerce'` 계정이 있어야 하고, 그건 web-store 클라이언트로 가입했다는 뜻 — 즉 그는 이미 등록된 쇼핑객이다.**
+
+**⇒ "CUSTOMER 없는 ecommerce 운영자 토큰" 은 seed 정책과 무관하게 *구성 불가능*하다.** 같은-tenant 운영자에 대해 이 가드가 vacuous 한 것은 **MONO-334 의 설계 귀결**이지 seed 의 사고가 아니다. 원 티켓의 (A)/(B) 프레이밍 — *"운영자를 막을 것인가"* — 은 **답할 수 없는 질문**이었다.
+
+**부수 실측**: 소비자에게 `account_roles` 를 심는 경로가 **0건**이다(`SignupUseCase`/`SocialSignupUseCase` 는 `AccountRole` 을 참조조차 안 함; 모든 writer 는 provisioning/admin 경로). ⇒ **seed 는 fallback 이 아니라 `roles` 클레임의 유일한 출처**다. 이것이 "가드가 물 대상을 발급 단계에서 이미 잃었다" 의 정확한 기전이다.
+
+## 결정 — **A′ (사용자, 2026-07-13): cross-tenant 가드로 재정의**
+
+seed 는 **principal 자신의 tenant 가 클라이언트의 platform 일 때만** 발화한다. 이 가드가 실제로 막는 것:
+
+| principal | claim tenant | seed | roles | web-store |
+|---|---|---|---|---|
+| 신규 ecommerce 소비자 | `ecommerce` | ✅ | `[CUSTOMER]` | 통과 (의도) |
+| **ecommerce 운영자** | `ecommerce` | ✅ | `[CUSTOMER]` | 통과 — **정당**(그는 등록된 쇼핑객이다) |
+| **wms/acme 운영자** | `wms` 등 | ❌ | 없음 | **차단** ← 새로 막힌다 |
+| **SUPER_ADMIN** | `*` | ❌ | 없음 | **차단** ← 게이트웨이가 `acceptAnyWellFormedTenant` 로 `'*'` 를 통과시키므로 **이 가드가 유일한 방어** |
+| 레거시 소비자(BE-507 이전) | `fan-platform` | ❌ | 없음 | **차단** ⚠️ 아래 |
+
+## ⚠️ 의도된 대가 — 레거시 소비자, 그리고 이것이 `TASK-MONO-386` 의 forcing function 이다
+
+BE-507 이전에 만들어진 소비자는 `tenant='fan-platform'` 이라 스토어프론트에서 seed 를 못 받는다 ⇒ **로그인은 되지만**(BE-507 의 cross-tenant credential 폴백) **스토어프론트는 거부**된다. 이 모집단은 **장수 데모 인스턴스에만 존재**한다(`TASK-MONO-386` 실측: 시드가 소비자 계정을 만들지 않고, 갓 부팅한 스택은 `credentials` 가 빈다). **A′ 는 MONO-386 의 D1(방치/폐기/부분재배정)을 강제한다** — 그 결정 전까지 장수 데모의 기존 쇼핑객은 재가입이 필요하다.
+
+---
+
 # Acceptance Criteria
 
-- [ ] **AC-1** — 방향 (A)/(B) 가 `ADR-MONO-035` 개정(또는 새 ADR)에 기록되고 **사람이 ACCEPT**.
-- [ ] **AC-2** — (A): operator 토큰에 `CUSTOMER` 가 **없음**을 디코드로 확인 → `account-type-guard.spec.ts` 가 CI 에서 실행·통과. (B): 스펙 삭제 + ADR 정정.
-- [ ] **AC-3 (A only, 가드가 무는가)** — operator 에게 `CUSTOMER` 를 강제 부여한 mutation 에서 이 스펙이 **RED**.
-- [ ] **AC-4** — MONO-373 의 3개 스펙 + `auth-redirect` + `rp-initiated-logout` 무손실.
+- [x] **AC-1** — **A′** 가 `ADR-MONO-035` **§ Amendments (2026-07-13, TASK-MONO-381)** 에 기록됐다: *"§4b-iii 의 가드는 cross-tenant 가드이지 operator 가드가 아니다"* + 그 근거(위 3단 논증) + 레거시 대가. **방향은 사용자가 정했다**(self-ACCEPT 아님).
+- [x] **AC-2** — 발급 측: `TenantClaimTokenCustomizer.seedFor(claim, platform)` 로 좁힘. **토큰 디코드 대신 발급 로직 단위 테스트 4종**으로 고정(cross-tenant operator · SUPER_ADMIN `'*'` · 레거시 fan 소비자 · **fail-soft 가 seed 를 되살리지 못함**). e2e: `account-type-guard.spec.ts` **`test.fixme` 해제** — cross-tenant 자격증명(`tenant_id='*'`)을 시드해 실제로 돌게 했다. **`assert-specs-ran.mjs` 의 REQUIRED 목록에도 추가**(이 스펙이 "안 돌면서 초록"으로 돌아가지 못하게).
+- [x] **AC-3 (가드가 무는가)** — **mutation-check**: 좁히기를 제거(=옛 blind seed 복원)하자 **새 가드 4개만 정확히 FAILED**, 나머지 44개 통과(**오탐 0**). 복구 확인.
+- [x] **AC-4 (무손실)** — auth-service 단위 전량 그린. 기존 `authorizationCode_emptyStored_ecommerce_seedsCustomer`(claim==platform)·`fan-platform → FAN`·`rolesLookupThrows_failSoftToSeed` 모두 유지. web-store `tsc` exit=0 · `next lint` **경고/에러 0**.
+
+## 검증
+
+- **auth-service 단위**: 전량 그린(`TenantClaimTokenCustomizerTest` 48건 포함).
+- **mutation-check**: 위 AC-3.
+- **web-store**: `tsc --noEmit` exit=0, `next lint --max-warnings=0` clean (worktree 에 pnpm 미populate → 메인의 `node_modules` 를 junction 으로 붙여 검증 후 **junction 선제거**).
+- **미실행**: Testcontainers IT(`SocialLoginSasBrowserIntegrationTest` — 소셜 브라우저 로그인은 claim==platform 이므로 계속 `CUSTOMER` 여야 한다) + **full-stack e2e**. 로컬 Docker 백엔드 행(`timed out dialing Hyper-V socket`) ⇒ **CI/nightly 가 권위**. **`account-type-guard.spec.ts` 는 이번에 처음 실행되는 스펙이므로 nightly 가 첫 실측이다.**
 
 ---
 

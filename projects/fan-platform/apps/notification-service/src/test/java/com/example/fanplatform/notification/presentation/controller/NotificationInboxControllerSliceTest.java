@@ -8,7 +8,6 @@ import com.example.fanplatform.notification.domain.notification.NotificationPage
 import com.example.fanplatform.notification.domain.notification.NotificationStatus;
 import com.example.fanplatform.notification.domain.notification.NotificationType;
 import com.example.fanplatform.notification.presentation.advice.GlobalExceptionHandler;
-import com.example.fanplatform.notification.presentation.filter.TenantClaimEnforcer;
 import com.example.fanplatform.notification.testsupport.JwtTestHelper;
 import com.example.fanplatform.notification.testsupport.SliceTestSecurityConfig;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = NotificationInboxController.class)
-@Import({SliceTestSecurityConfig.class, GlobalExceptionHandler.class, TenantClaimEnforcer.class})
+@Import({SliceTestSecurityConfig.class, GlobalExceptionHandler.class})
 class NotificationInboxControllerSliceTest {
 
     private static final JwtTestHelper JWT = new JwtTestHelper();

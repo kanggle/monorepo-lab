@@ -1,5 +1,9 @@
 package com.example.fanplatform.notification.infrastructure.security;
 
+import com.example.fanplatform.notification.presentation.security.PublicPaths;
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.TenantClaimEnforcer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,9 +51,44 @@ public class ServiceLevelOAuth2Config {
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(new JwtTimestampValidator());
         validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(new TenantClaimValidator(requiredTenantId));
+        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
+                .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
+                // no .trustEntitledDomains() — fan is outside the entitlement plane
+                .build());
         validators.add(JwtValidators.createDefault());
         return new DelegatingOAuth2TokenValidator<>(validators);
+    }
+
+    /**
+     * fan's servlet tenant gate — the inner layer behind {@link #jwtTokenValidator()}.
+     *
+     * <p>An explicit {@code @Bean}, not a component scan: a shared class annotated
+     * {@code @Component} would decide this service's policy somewhere nobody looks.
+     *
+     * <h2>{@code trustEntitledDomains()} is deliberately NOT called</h2>
+     *
+     * fan sits outside the entitlement plane — none of its four copies ever held an
+     * {@code isEntitled} branch (measured: zero, fleet-wide). <strong>This is the first place in
+     * the D5 series where a switch stays OFF</strong>, and it is what "every switch defaults
+     * closed" was built for: adding {@code .trustEntitledDomains()} here would <em>widen</em>
+     * fan's gate to honour a claim it has never honoured, and widening is the quiet direction.
+     * The policy pin asserts the refusal, not just the acceptance (ADR-MONO-049 § 1.9,
+     * TASK-MONO-387).
+     *
+     * <p>The exemption is {@code PublicPaths} only — the three actuator probes plus the
+     * {@code /actuator/health/} subtree. <strong>community's copy reasoned about this axis
+     * explicitly and refused the blanket {@code /actuator/} prefix that scm's services shipped</strong>
+     * ("a blanket prefix would bypass the tenant gate for endpoints that may be added later …
+     * we want a fail-closed posture there"). That judgement is preserved here, where it now
+     * holds for the whole project rather than for whoever happened to read that one file.
+     */
+    @Bean
+    public TenantClaimEnforcer tenantClaimEnforcer() {
+        return TenantClaimEnforcer.forTenant(requiredTenantId)
+                .exempt(PublicPaths::isPublic)
+                .allowSuperAdminWildcard()
+                // no .trustEntitledDomains() — see above
+                .build();
     }
 
     private static List<String> parseCsv(String csv) {

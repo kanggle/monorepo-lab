@@ -41,6 +41,9 @@ dependencies {
     implementation project(':libs:java-common')
     // Shared servlet Idempotency-Key filter abstraction (ADR-MONO-038).
     implementation project(':libs:java-web-servlet')
+    // Framework-neutral OAuth2 validators (ADR-MONO-049 § D5). The other four wms
+    // servlet services already declared this; admin-service was the one that did not.
+    implementation project(':libs:java-security')
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
