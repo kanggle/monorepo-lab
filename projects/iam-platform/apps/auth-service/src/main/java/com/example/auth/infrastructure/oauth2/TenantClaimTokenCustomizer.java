@@ -592,7 +592,7 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
 
         java.util.List<String> roles = (stored != null && !stored.isEmpty())
                 ? stored
-                : RoleSeedPolicy.seed(platformTenantId);
+                : seedFor(claimTenantId, platformTenantId);
 
         if (roles != null && !roles.isEmpty()) {
             // SecurityJackson2Modules allowlist: the seed returns an
@@ -607,6 +607,42 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                     roles, platformTenantId,
                     (stored != null && !stored.isEmpty()) ? "stored" : "seed");
         }
+    }
+
+    /**
+     * TASK-MONO-381 (ADR-MONO-035 amendment — the role guard is a CROSS-TENANT guard):
+     * the aud-default seed fires only for a principal <b>whose own tenant is the client's
+     * platform</b>. A cross-tenant principal — a {@code wms} operator, or SUPER_ADMIN with
+     * {@code tenant_id='*'} — reaching the ecommerce storefront client gets no seed, so no
+     * {@code roles} claim, so web-store's {@code signInCallback} rejects them.
+     *
+     * <p><b>Why the seed was vacuous.</b> It was keyed on the client alone, so <i>every</i>
+     * principal authenticated through the web-store client received {@code CUSTOMER} — a
+     * CUSTOMER-less token was unconstructible on that path, and the guard ADR-MONO-035 §4b-iii
+     * built could never fire. (Nothing provisions {@code account_roles} for consumers, so the
+     * seed is not a fallback — it is the only source of the claim.)
+     *
+     * <p><b>What this does NOT fix, and cannot.</b> An <i>ecommerce</i> operator still gets
+     * {@code CUSTOMER}, because their own tenant IS {@code ecommerce}: TASK-MONO-334 requires an
+     * operator to already hold a signed-up account in their home tenant, and post-TASK-BE-507 a
+     * signup lands in the tenant of the client it came through — so being creatable as an
+     * ecommerce operator means having registered through the storefront, i.e. <b>being a
+     * shopper</b>. That is not a hole this seed can close; it is what MONO-334 defines. The
+     * guard is therefore a cross-tenant guard, never an operator guard (MONO-381's measurement).
+     *
+     * <p><b>Legacy consumers.</b> An account created before BE-507 carries {@code fan-platform}
+     * and no longer seeds on the storefront — it is admitted to <i>login</i> (BE-507's
+     * cross-tenant credential fallback) but rejected by web-store's role guard. That population
+     * exists only on long-lived demo instances (TASK-MONO-386 measured it: a freshly booted
+     * stack has zero credentials, and no seed creates consumer accounts), and this narrowing is
+     * the forcing function for MONO-386's D1.
+     */
+    private static java.util.List<String> seedFor(String claimTenantId, String platformTenantId) {
+        if (claimTenantId == null || platformTenantId == null
+                || !claimTenantId.trim().equals(platformTenantId.trim())) {
+            return java.util.List.of();
+        }
+        return RoleSeedPolicy.seed(platformTenantId);
     }
 
     /**

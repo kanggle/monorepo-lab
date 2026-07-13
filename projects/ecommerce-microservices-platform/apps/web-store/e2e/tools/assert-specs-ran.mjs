@@ -26,13 +26,16 @@ import { readFileSync } from 'node:fs';
 /**
  * Specs that MUST run in the full-stack lane.
  *
- * NOT in this list, on purpose: `account-type-guard.spec.ts` — it is
- * `test.fixme()`-marked, because the e2e IAM stack cannot mint a token without
- * the CUSTOMER role (RoleSeedPolicy keys its fail-soft seed on the client's
- * platform, not the user). That deferral is held by TASK-MONO-381, not by this
- * list. If MONO-381 lands, add it here.
+ * `account-type-guard.spec.ts` is now IN this list (TASK-MONO-381). It was excluded while it
+ * was `test.fixme()`-marked, because the e2e IAM stack could not mint a token WITHOUT the
+ * CUSTOMER role — `RoleSeedPolicy`'s fail-soft seed was keyed on the client's platform rather
+ * than the principal, so every credential on the storefront client got CUSTOMER. MONO-381
+ * narrowed the seed (it fires only when the principal's own tenant IS the client's platform)
+ * and seeded a cross-tenant credential, so the guard finally has something to bite. It belongs
+ * here precisely because the deferral it used to hold is exactly what this tool exists to
+ * prevent: a check that does not run reports as green.
  *
- * `rp-initiated-logout.spec.ts` is also absent: it runs in its own lane
+ * `rp-initiated-logout.spec.ts` is absent: it runs in its own lane
  * (web-store-iam-logout-e2e), against the lean IAM stack with no ecommerce
  * backend.
  */
@@ -41,6 +44,7 @@ const REQUIRED = [
   'golden-flow.spec.ts',
   'cart-management.spec.ts',
   'wishlist.spec.ts',
+  'account-type-guard.spec.ts',
 ];
 
 const reportPath = process.argv[2];
