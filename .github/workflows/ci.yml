@@ -1373,10 +1373,13 @@ jobs:
         :projects:iam-platform:apps:gateway-service:integrationTest
         :projects:iam-platform:apps:security-service:integrationTest
       artifact-name: iam-integration-test-reports
-      # TASK-MONO-393: seven modules, each booting its own MySQL + Kafka + Redis +
-      # WireMock Testcontainers stack. With org.gradle.parallel=true they boot at once
-      # on the 2-CPU/7GB runner — the exact condition TASK-MONO-331 diagnosed for WMS
-      # (four modules), except this lane has seven and never got the mitigation.
+      # TASK-MONO-393: each module boots its own MySQL + Kafka + Redis + WireMock
+      # Testcontainers stack. With org.gradle.parallel=true they boot at once on the
+      # 2-CPU/7GB runner — the exact condition TASK-MONO-331 diagnosed for WMS (four
+      # modules), except this lane had seven and never got the mitigation.
+      # (TASK-MONO-394 has since retired community-service and membership-service, so
+      # the lane is five now. The mitigation still earns its keep — five concurrent
+      # stacks is still above the four that exhausted the runner for WMS.)
       #
       # Observed (PR #2515, attempt 2): Redis connections were severed mid-run
       # ("RedisConnectionFailureException: Unable to connect to Redis"), and because the
