@@ -37,11 +37,12 @@ When a specific task ID is given:
 6. Read Related Contracts
 7. Read `.claude/skills/INDEX.md` → read skill files matching Related Skills
 8. Read existing code in the target service to understand current patterns and structure
-9. Move task from `tasks/ready/` → `tasks/in-progress/`
+9. Set the task's `Status` to `in-progress` **while the file is still in `tasks/ready/`**, then move it to `tasks/in-progress/`. Files under `in-progress/` and `review/` are frozen except for that single field, so the edit must precede the move.
 10. Implement
 11. Write and run tests as specified in Test Requirements
 12. Verify all Acceptance Criteria are met
-13. Move task from `tasks/in-progress/` → `tasks/review/`
+13. Set `Status` to `review` while the file is still in `tasks/in-progress/`, then move it to `tasks/review/` (same reason as step 9).
+14. Open the **impl PR**. Landing happens through a PR — `main` is hook-protected and cannot be pushed directly. **The task is not closed here**: `review/ → done/` is a separate close-chore PR gated on merge verification (see `/review-task` § Close Chore).
 
 ---
 
@@ -56,11 +57,11 @@ Main context (lightweight — plan + coordinate only)
   ├─ Phase 1~4: Discovery, Analysis, Dependencies, Plan
   ├─ Phase 5: Delegate to subagents (worktree-isolated)
   │    ├─ Round 1: Agent[BE-A](worktree-1) + Agent[BE-B](worktree-2)  (parallel)
-  │    │    └─ merge worktree branches → main
-  │    ├─ Round 2: Agent[BE-C](worktree-3)  (depends on Round 1)
-  │    │    └─ merge worktree branch → main
+  │    │    └─ merge worktree branches → task/batch-<id>   (integration branch, NOT main)
+  │    ├─ Round 2: Agent[BE-C](worktree-3)  (branches off task/batch-<id>)
+  │    │    └─ merge worktree branch → task/batch-<id>
   │    └─ Round N: ...
-  └─ Phase 6: Collect results + Summary
+  └─ Phase 6: Collect results + Summary → land task/batch-<id> to main via PR
 ```
 
 Main context never reads specs, skills, or source code directly — subagents do all heavy lifting.
@@ -68,8 +69,8 @@ Main context never reads specs, skills, or source code directly — subagents do
 ### Isolation Strategy
 
 - **Parallel rounds**: Each agent runs with `isolation: "worktree"` — gets its own copy of the repo on a temporary branch. No file conflicts possible.
-- **Sequential rounds**: Also use worktree for safety — failed tasks leave main branch untouched.
-- **After each round**: Merge completed worktree branches into main before starting the next round. This ensures the next round sees all prior changes.
+- **Sequential rounds**: Also use worktree for safety — failed tasks leave the integration branch untouched.
+- **After each round**: Merge completed worktree branches into the coordinator's **integration branch** (`task/batch-<id>`), never into `main`, before starting the next round. This ensures the next round sees all prior changes. `main` is landed once at the end, via PR.
 
 ### Phase 1: Discovery (main context)
 
@@ -146,16 +147,32 @@ If `--dry-run` is specified, **stop here** and do not proceed to Phase 5.
    - Launch one agent at a time with `isolation: "worktree"` and appropriate `subagent_type`
    - Wait for completion before launching the next
 
-3. **Between rounds** (merge step):
+3. **Between rounds** (integration step):
+
+   **Never merge into `main` and never push `main`.** `protect-main-branch.ps1` blocks pushes to `main`,
+   but it does **not** block a local `git merge` into it — so merging here succeeds quietly and the result
+   can then never be pushed (local `main` runs ahead of `origin/main` and the work is stranded). It also
+   moves HEAD in a checkout that concurrent sessions may be sharing.
+
+   Integrate rounds on a **coordinator-owned integration branch** instead:
+   ```
+   # once, before Round 1 — off latest origin/main, in its own worktree
+   git fetch origin main
+   git worktree add -b task/batch-<id> ../wt-batch-<id> origin/main
+
+   # after each round, from the integration worktree
+   git -C ../wt-batch-<id> merge <agent-branch> --no-ff -m "Merge {taskId}: {title}"
+   ```
+   The next round's agent worktrees branch off `task/batch-<id>`, **not** `origin/main`, so they see the
+   prior rounds' output.
+
    - Check each agent's result (success/failure)
-   - For successful agents: merge their worktree branch into main
-     ```
-     git merge <worktree-branch> --no-ff -m "Merge {taskId}: {title}"
-     ```
-   - For failed agents: discard the worktree (main stays clean)
+   - For successful agents: merge their branch into the integration branch (above)
+   - For failed agents: discard the worktree (the integration branch stays clean)
    - If a task failed, mark all tasks that depend on it as `blocked`
    - Do not launch blocked tasks
-   - Verify main branch builds/compiles after merge before proceeding
+   - Verify the **integration branch** builds/compiles after each merge before proceeding
+   - Landing to `main` happens **once, at the end, via PR** — never by merging locally
 
 #### Agent Prompt Template
 
@@ -171,7 +188,7 @@ You are implementing a task in this project. Follow these steps exactly:
 ## Steps
 1. Read `CLAUDE.md`
 2. Read the task file at `tasks/ready/{taskFileName}`
-3. Move task from `tasks/ready/` to `tasks/in-progress/`
+3. Set the task's `Status` to `in-progress` while the file is still in `tasks/ready/`, then move it to `tasks/in-progress/` (files under `in-progress/`/`review/` are frozen except for that field — edit before the move)
 4. Read `platform/entrypoint.md` and follow the spec reading order
 5. Read all Related Specs listed in the task
 6. Read all Related Contracts listed in the task
@@ -181,7 +198,8 @@ You are implementing a task in this project. Follow these steps exactly:
 10. Write tests as specified in Test Requirements
 11. Run tests for the target service's stack — backend (Gradle): `./gradlew :apps:{service}:test`; frontend (Node): `pnpm --filter {service} test` (per the service's build.gradle.kts / package.json).
 12. Verify all Acceptance Criteria are met
-13. Move task from `tasks/in-progress/` to `tasks/review/`
+13. Set `Status` to `review` while the file is still in `tasks/in-progress/`, then move it to `tasks/review/` (edit before the move — same reason as step 3)
+14. Commit and push your branch. **Do not merge into `main` and do not push `main`** — the coordinator integrates your branch.
 
 ## Category-specific instructions
 {categoryInstructions}
@@ -258,7 +276,14 @@ Moved to review: [list]
 - Proceed without asking confirmation questions (unless `--dry-run`)
 - In batch mode, main context does NOT read specs, skills, or source code — subagents do
 - In batch mode, always use `isolation: "worktree"` when launching task agents
-- In batch mode, always merge worktree branches between rounds
+- **Never `git merge` into `main` and never push `main`.** Pushes to `main` are hook-blocked; a local merge
+  into `main` is *not* blocked, so it succeeds quietly and strands the work (it can never be pushed) while
+  moving HEAD in a checkout other sessions may share. In batch mode, integrate rounds on the coordinator's
+  integration branch (`task/batch-<id>`) and land to `main` once, via PR
+- Lifecycle moves (`ready/ → in-progress/ → review/`) and implementation commits both live in the **impl PR**,
+  as separate commits. Do not bundle task-spec authoring or close chores into it (`tasks/INDEX.md`
+  § PR Separation Rule). **Implementation never closes a task** — `review/ → done/` is a separate chore PR
+  gated on merge verification
 - If a task fails, log the failure and continue with the next independent task
 - Do not launch tasks that depend on a failed task — mark them as blocked
 - If merge conflict occurs, resolve it before proceeding to the next round

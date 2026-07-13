@@ -194,6 +194,58 @@ class RefreshTokenJpaRepositoryTest {
         assertThat(repo.findActiveJtisByDeviceId(deviceId)).isEmpty();
     }
 
+    /**
+     * TASK-MONO-393 — the isolation property, which nothing asserted until now.
+     *
+     * <p>Every other fixture in this class seeds a SINGLE device, so it cannot tell a
+     * device-scoped predicate apart from an account-scoped one: swap
+     * {@code WHERE r.deviceId = :deviceId} for {@code WHERE r.accountId = :accountId} and
+     * they all still pass. Two devices on ONE account is the smallest fixture that can see
+     * the difference — and "one user, several devices" is the only shape this query exists for.
+     *
+     * <p>This is the property behind "log this device out": it must log out exactly that
+     * device. The integration test that nominally covered it goes through HTTP, where a Redis
+     * outage makes the fail-closed blacklist check answer 401 for every token — so it can fail
+     * (and pass) for reasons that have nothing to do with scoping. This one cannot.
+     */
+    @Test
+    @DisplayName("revokeAllByDeviceId — 같은 계정의 다른 device 토큰은 살아남는다 (account 스코프였다면 RED)")
+    void revokeAllByDeviceId_leavesOtherDevicesOfTheSameAccountAlone() {
+        String accountId = uuid();          // ONE account …
+        String deviceA = uuid();            // … on TWO devices
+        String deviceB = uuid();
+        String jtiA = uuid();
+        String jtiB = uuid();
+
+        repo.save(activeWithDevice(jtiA, accountId, deviceA));
+        repo.save(activeWithDevice(jtiB, accountId, deviceB));
+
+        int count = repo.revokeAllByDeviceId(deviceA);
+
+        assertThat(count).isEqualTo(1);
+        assertThat(repo.findByJti(jtiA)).isPresent().get()
+                .extracting(RefreshTokenJpaEntity::isRevoked).isEqualTo(true);
+        assertThat(repo.findByJti(jtiB)).isPresent().get()
+                .extracting(RefreshTokenJpaEntity::isRevoked).isEqualTo(false);
+        assertThat(repo.findActiveJtisByDeviceId(deviceB)).containsExactly(jtiB);
+    }
+
+    @Test
+    @DisplayName("findActiveJtisByDeviceId — 같은 계정의 다른 device JTI 는 새어 나오지 않는다")
+    void findActiveJtisByDeviceId_doesNotLeakOtherDevicesOfTheSameAccount() {
+        String accountId = uuid();
+        String deviceA = uuid();
+        String deviceB = uuid();
+        String jtiA = uuid();
+        String jtiB = uuid();
+
+        repo.save(activeWithDevice(jtiA, accountId, deviceA));
+        repo.save(activeWithDevice(jtiB, accountId, deviceB));
+
+        assertThat(repo.findActiveJtisByDeviceId(deviceA)).containsExactly(jtiA);
+        assertThat(repo.findActiveJtisByDeviceId(deviceB)).containsExactly(jtiB);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static String uuid() {
