@@ -58,7 +58,7 @@ Follow the full `/implement-task` batch mode procedure. **`/implement-task` (bat
 10. Execute via worktree-isolated subagents following `/implement-task` batch mode Phase 5 rules:
     - Parallel rounds for independent tasks, `subagent_type` per task category per `/implement-task` Phase 5 (`"backend-engineer"` / `"frontend-engineer"`; `"refactoring-engineer"` for simple-refactor; `"api-designer"` + `"event-architect"` for contract-change)
     - Sequential rounds for dependent tasks
-    - Merge worktree branches between rounds, then verify main builds/compiles before the next round (per `/implement-task` Phase 5 step 3, merge sub-step)
+    - Merge worktree branches between rounds into the coordinator's **integration branch** (`task/batch-<id>`) — **never into `main`** — then verify that branch builds/compiles before the next round (per `/implement-task` Phase 5 step 3, integration sub-step)
     - Mark dependents of failed tasks as blocked
 11. Collect implementation results
 
@@ -72,10 +72,10 @@ After Phase 1 completes, follow the full `/review-task` batch mode procedure. **
 4. If `--dry-run`, show review targets and skip to Phase 3
 5. Launch all review agents in parallel with `isolation: "worktree"` and `subagent_type: "code-reviewer"` following `/review-task` batch mode rules:
     - Each agent reviews one task against specs, architecture, code quality, and testing checklists
-    - No issues → move to `tasks/done/`
-    - Issues found → create fix task in `tasks/ready/`, move original to `tasks/done/`
-6. Merge each successful agent's worktree branch into main with an explicit `git merge`, then **verify main builds before proceeding** (mirrors `/review-task` batch Rules and `/implement-task` Phase 5 step 3)
-7. Collect review results
+    - **Review does not move the task file** — it returns a verdict (`approved` / `fix_needed`). The task stays in `tasks/review/`
+    - Issues found → create fix task in `tasks/ready/`
+6. Collect the review agents' fix-task files and land them in **one spec PR**. **Never `git merge` into `main` and never push `main`** (mirrors `/review-task` batch Rules and `/implement-task` Phase 5 step 3)
+7. Collect review results. **The pipeline does not close tasks**: `review/ → done/` is a separate close-chore PR gated on 3-dimension merge verification of each impl PR (`/review-task` § Close Chore). Report which reviewed tasks are ready for that chore
 
 ### Phase 3: Summary
 
