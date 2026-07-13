@@ -1,7 +1,7 @@
 package com.example.community.infrastructure.config;
 
 import com.example.community.infrastructure.security.ActorContextJwtAuthenticationConverter;
-import com.example.community.infrastructure.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
