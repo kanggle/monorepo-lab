@@ -8,7 +8,7 @@ TASK-MONO-383
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -93,20 +93,39 @@ TenantClaimEnforcer.forTenant(expectedTenantId)
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (사본이 실제로 사라졌다)** — `projects/finance-platform` 에 `AllowedIssuersValidator` · `TenantClaimValidator` · `TenantClaimEnforcer` 파일 **0개**. 함대 총계 **49 → 43** (17 / 17 / 12 · **gateway 는 이미 lib 판을 쓰므로 무관**).
-- [ ] **AC-2 (행동 불변 — § 6 V6)** — finance 의 두 서비스 스위트가 통과한다. **`account-service` 의 기존 두 테스트가 단언하던 *동작*은 한 줄도 바뀌면 안 된다** — 주어(subject)만 사본에서 공유 클래스로 바뀐다. *단언을 고쳐야 했다면 채택이 정책을 바꾼 것이다.*
-- [ ] **AC-3 (per-domain 테스트 = 정책 핀, 허용 **과** 거부 둘 다)** — 두 서비스 각각, **finance 의 게이트가 무엇을 허용하고 무엇을 거부하는지** 단언한다:
-  - `tenant_id=finance` → **통과**
-  - `tenant_id="*"` → **통과** (wildcard 켬)
-  - `entitled_domains=[finance]` + `tenant_id=erp` → **통과** (entitled 켬)
-  - `tenant_id=erp`, entitled 없음 → **403 TENANT_FORBIDDEN**
-  - `tenant_id` 부재 → **401**
-  - `PublicPaths` 면제 경로 → **게이트 건너뜀** / 비면제 경로 → **게이트 적용**
-  **거부 쪽이 절반이다.** 허용만 기록하는 스위트는 스위치가 사라져도 초록이다(MONO-355).
-- [ ] **AC-4 (`ledger-service` 가 처음으로 커버리지를 얻는다)** — § 1.3 이 지목한 **테스트 0** 상태가 해소됐다. AC-3 의 단언이 `ledger-service` 에도 존재한다.
-- [ ] **AC-5 (mutation — 배선이 진짜인가)** — builder 에서 **`.allowSuperAdminWildcard()` 를 빼면 finance 스위트가 RED** 여야 한다. **`.trustEntitledDomains()` 를 빼도 RED.** **`.exempt(...)` 를 빼도 RED.** *(빼도 초록이면 그 스위치는 테스트되지 않고 있고, D5-4~D5-8 에서 조용히 틀릴 것이다.)* **주입 적용 여부를 결과 읽기 전에 확인할 것.**
-- [ ] **AC-6 (기존 단언 4개 GREEN)** — `assertNoApiOnSharedLibs` · `assertClasspathNeutrality` ×2 · `assertNoServletOnReactiveEdge`.
-- [ ] **AC-7 (`./gradlew check` GREEN)** — **`BUILD SUCCESSFUL` 을 믿지 말고 XML 로 테스트 수·skipped 를 확인**할 것.
+- [x] **AC-1 (사본이 실제로 사라졌다)** — `projects/finance-platform` 에 세 클래스 파일 **0개**. 함대 총계 **49 → 43**, `git grep` 전수 재카운트로 확인.
+      **초안의 `17 / 17 / 12` 는 산술이 틀렸다**(합이 46). 실제 내역은 **16 / 16 / 11 = 43** (착수 전 18 / 18 / 13 = 49 에서 finance 가 2 / 2 / 2 를 반납). *숫자를 물려받지 말고 다시 셀 것 — 이 시리즈에서 카운트가 틀린 다섯 번째 사례다.*
+- [x] **AC-2 (행동 불변 — § 6 V6)** — 통과. 단, **V6 가 실제로 물었다**: 정경 클래스가 행동을 바꾸고 있었다 → **§ 1.9 / 아래 "정경 클래스 수정" 참조**. 기존 두 테스트의 **단언은 전부 새 정책 핀으로 이전**됐고(주어만 교체), 단 하나 `publicPathBypassed` 만 형태가 바뀌었다 — 옛 테스트는 same-package 라서 `protected shouldNotFilter()` 를 직접 호출했으나 공유 필터는 다른 패키지다. **속성은 동일하되 `doFilter` 를 통해 관측**한다(오히려 강한 단언). *정책이 아니라 가시성의 문제였다.*
+- [x] **AC-3 (per-domain 테스트 = 정책 핀, 허용 **과** 거부 둘 다)** — `FinanceTenantGatePolicyTest`, **서비스당 20 tests**. decode 층과 servlet 층을 **각각** 허용/거부 양쪽으로 단언하고, **두 층이 같은 판정을 내리는지**까지 단언한다.
+      **결정적으로 — 이 테스트는 `ServiceLevelOAuth2Config` 에서 빈을 꺼내 쓴다.** 자기 builder 로 subject 를 새로 만들면 config 에서 스위치가 빠져도 초록이라 AC-5 가 무의미해진다.
+- [x] **AC-4 (`ledger-service` 가 처음으로 커버리지를 얻는다)** — § 1.3 의 **테스트 0** 해소. 20개 단언 신설.
+- [x] **AC-5 (mutation — 배선이 진짜인가)** — 세 스위치 **전부 RED 확인**:
+
+      | 뺀 것 | gradle | 정책핀 실패 |
+      |---|---|---|
+      | `.allowSuperAdminWildcard()` | 1 | 2 |
+      | `.trustEntitledDomains()` | 1 | 2 |
+      | `.exempt(PublicPaths::isPublic)` | 1 | 1 |
+
+      **첫 시도의 mutation 러너는 거짓 GREEN 을 냈다.** 가드가 `git diff` 를 **HEAD 기준**으로 봤는데, mutation 이 지우는 줄은 *이 task 가 방금 추가한* 줄이라 diff 에 `-` 로 나타나지 않는다 — 기준 프레임이 틀렸다(게다가 `bc` 부재로 실패 카운트는 **빈 문자열**이었다). **mutation 직전 파일을 기준으로 삼고 사라진 줄을 출력**하도록 고친 뒤에야 셋 다 RED 가 나왔다. *탐지식의 0건은 "없음"이 아니다 — 또.*
+- [x] **AC-6 (기존 단언 4개 GREEN)** — `assertNoApiOnSharedLibs` OK · `assertClasspathNeutrality`(java-security, 23 artefacts) OK · `assertClasspathNeutrality`(java-security-servlet, 50) OK · `assertNoServletOnReactiveEdge`(java-gateway, 94) OK.
+- [x] **AC-7 (테스트 GREEN — XML 실측)** — account 136 · ledger 422 · finance gateway 22 · java-security 95 · java-security-servlet 24 = **699 tests / 0 skipped / 0 failures / 0 errors**.
+
+---
+
+# 범위 이탈 — 정경 클래스를 고쳤다 (보고)
+
+초안의 Out of Scope 는 *"정경 클래스 수정 — D5-2 에서 확정. 파라미터가 부족하다고 느껴지면 § 1.8 이 틀렸다는 뜻이니 멈추고 보고할 것"* 이었다.
+
+**§ 1.8 은 틀리지 않았다 — 3축 모델은 맞다.** 틀린 것은 정경 클래스가 그 중 한 축(`trustEntitledDomains`)을 **401 분기에 적용하지 않은 것**이다. 새 파라미터도, 새 축도 아니고, 이미 있는 스위치를 안 보던 자리에 보게 한 **3줄**이다.
+
+고치지 않는 선택지는 없었다. 그대로 채택했다면 **entitled 를 켠 9개 서비스에서 decoder 가 통과시킨 토큰을 enforcer 가 401 로 막는다** — 사본들이 Javadoc 에 명시적으로 *"mismatch would create a decode-pass / filter-block split"* 이라 적어두고 피하려던 바로 그 상태. AC-2(행동 불변)를 만족시킬 방법이 없다.
+
+**라이브 취약점은 아니다** — IAM 은 `tenant_id` 가 확정된 뒤에만 `entitled_domains` 를 넣고, 부재 시 발급이 fail-closed 다. 소비자 0인 클래스의 **잠복** 결함이었고, **첫 채택이 잡았다**. 별도 hotfix task 로 쪼개지 않은 이유: main 에 라이브 결함이 없고, D5 시리즈는 직렬이라 3줄짜리 선행 task 는 머지 홉만 하나 더 만든다.
+
+**"entitled 만 있고 tenant_id 없는 토큰을 통과시켜야 하는가"** 는 진짜 정책 질문이고 **이 리팩터링이 답할 것이 아니다.** 오늘 두 층 모두 "통과"라고 말한다. 그게 틀렸다면 **validator 에서도 틀린 것**이고 함대 전체 · 별도 ADR 의 일이다. D5 가 해서는 안 되는 일은, 행동 불변을 표방하면서 **한 층에서만 조용히 답을 바꾸는 것**이다.
+
+상세: `ADR-MONO-049` **§ 1.9**.
 
 ---
 

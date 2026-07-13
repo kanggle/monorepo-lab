@@ -243,6 +243,42 @@ Two of those decisions are already known to be non-trivial:
 
 > **The copies did not disagree because anyone decided they should.** They disagreed because thirteen files were maintained by hand and nothing ever compared them. **Extracting them is what made the disagreement visible** — which is the whole argument of this ADR, arriving as evidence rather than assertion.
 
+### 1.9 🔴 The canonical class had reintroduced the split the copies were written to avoid (`TASK-MONO-383`, D5-3)
+
+D5-3 is the first step that adopts the canonical `TenantClaimEnforcer` in a live service, and § 6 V6 (**behaviour invariance**) is the check it has to pass. **It did not pass on the first attempt** — and what it caught was in the shared class, not in finance.
+
+The thirteen copies split **two ways** on how they reject a token with no `tenant_id`:
+
+| shape | services |
+|---|---|
+| `if ((tenantId == null \|\| blank) && !entitled)` → 401 | **9** — erp (4), finance (2), scm (3) |
+| `if (tenantId == null \|\| blank)` → 401, unconditionally | **4** — fan |
+
+**That is not a fourth axis.** The two sets are exactly the `entitled_domains` axis (§ 1.8): fan has no `entitled` variable at all, so its condition *degenerates* to the unconditional form. **The three-axis model holds.**
+
+But D5-2's canonical class rejected **unconditionally, regardless of the switch** — so adopting it would have *narrowed* the gate for the nine entitlement-honouring services. And narrowed it into a specific, named failure:
+
+> **`TenantClaimValidator` — the decode-time gate running in the very same services — consults the entitlement relaxation *before* it rejects an absent claim** (`TenantClaimValidator#validate`: the `trustEntitledDomains && isEntitled(...)` branch precedes the null check). An enforcer that rejected unconditionally would **refuse a token the decoder had just admitted.**
+
+The copies' own Javadoc names this hazard verbatim — *"both enforcement points share a single source of truth (**mismatch would create a decode-pass / filter-block split**)"* — and finance's pre-existing `TenantClaimValidatorTest` already **asserted the admitted side** (`entitled_domains containing finance grants even when tenant_id absent` → `hasErrors()` is `false`). The property was pinned on one layer and about to be contradicted on the other.
+
+**Not live-reachable today, and the ADR should say so plainly.** IAM only ever populates `entitled_domains` *after* a `tenant_id` is resolved, and every issuance path fails closed (`IllegalStateException`) when it is absent — so no issuable token has one without the other. This was a **latent** defect in a class with **zero consumers**, caught by the first adoption. It was not a live vulnerability, and claiming otherwise would cost the real point.
+
+**The real point is the shape of the failure.** The enforcer exists to still be standing when the decoder is misconfigured. Two layers of a defence in depth that reach *opposite verdicts* on the same token are not defence in depth — the inner one is contradicting the outer one, which is precisely the state the enforcer was built to survive.
+
+**Fix (in D5-3):** the null branch consults the switch, exactly as all thirteen copies do —
+
+```java
+boolean entitled = trustEntitledDomains && TenantClaimValidator.isEntitled(token, expectedTenantId);
+if ((tenantId == null || tenantId.isBlank()) && !entitled) { /* 401 */ }
+```
+
+With `trustEntitledDomains` off (fan), `entitled` is always `false` and this **is** the unconditional rejection those four copies wrote by hand. One expression, both shapes, no new axis.
+
+**Guarded, both ways.** `TenantClaimEnforcerTest` gains a nested `AgreesWithTheDecoder` group that runs a token set through **both** the validator and the enforcer and asserts the verdicts match — in *both* directions (nothing the decoder admits is refused; nothing it refuses is admitted). Each finance service's `FinanceTenantGatePolicyTest` asserts the same agreement over its own wiring. Mutation-verified: restoring the unconditional shape turns both red.
+
+> **Whether an entitlement without a `tenant_id` *should* be admitted is a real policy question — and it is not this refactor's to answer.** Today both layers say yes. If that is wrong, it is wrong at the *validator* too, fleet-wide, and belongs in its own ticket with its own ADR. What D5 may not do is change the answer silently, on one layer only, while claiming behaviour invariance.
+
 ---
 
 ## 2. Alternatives considered
@@ -421,7 +457,7 @@ Per `TASK-MONO-364` § AC-6 the roadmap lives here, not in `tasks/ready/`. **Tic
 |---|---|---|---|
 | **D5-1** | move the two neutral validators `java-gateway` → `java-security` (`com.example.security.oauth2`) | 0 | **✅ `TASK-MONO-378`** — 4 dependency lines, 6 gateways' imports, **0 assertions changed**. V1/V2/V4 built and mutation-verified. |
 | **D5-2** | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | **✅ `TASK-MONO-382`.** The 13 copies hold **eight distinct bodies**, which reduce to **three policy axes** — everything else was line-wrapping and an inlined `@Value`. **The axes are recorded in § 1.8, because one of them is a security boundary and D5-3…D5-8 have to carry it.** Canonical class is builder-parameterised, **every switch closed by default** (including the wildcard, which all 13 copies enable — *a default is what you get when someone forgets*). 19 tests; each switch asserted **on *and* off**. |
-| **D5-3** | finance — account, ledger | 6 | **`TASK-MONO-383` (ready)** — **the first step that deletes anything, and therefore the first that can change behaviour.** finance's policy (§ 1.8): wildcard **on**, `entitled_domains` **on**, exemption = its own `PublicPaths::isPublic`. All three switches default **closed**, so each must be turned on explicitly — a miss *narrows* the gate and 403s a legitimate request, which is loud, not silent. **`ledger-service` gets test coverage for these classes for the first time** — it is the service § 1.3 names: all three classes, zero tests. |
+| **D5-3** | finance — account, ledger | 6 | **✅ `TASK-MONO-383`** — the first deletion: **49 → 43**. All three switches wired explicitly and **mutation-verified** (remove any one → finance's suite goes red). **`ledger-service` has test coverage for these classes for the first time** — the service § 1.3 names (all three classes, zero tests) now holds 20 policy assertions. **V6 earned its keep on its first run: it caught a latent decode-pass / filter-block split in D5-2's canonical class — see § 1.9.** |
 | D5-4 | erp — approval, masterdata, notification, read-model | 12 | ⏳ |
 | D5-5 | scm — procurement (all 3); demand-planning + inventory-visibility (**Enforcer only**) | 5 | ⏳ |
 | D5-6 | fan — artist, community, membership, notification | 12 | ⏳ |
