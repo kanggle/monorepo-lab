@@ -1,6 +1,6 @@
 package com.example.erp.notification.presentation.security;
 
-import com.example.erp.notification.config.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;

@@ -4,12 +4,12 @@ import com.example.erp.notification.application.MarkNotificationReadUseCase;
 import com.example.erp.notification.application.QueryInboxUseCase;
 import com.example.erp.notification.application.query.InboxPage;
 import com.example.erp.notification.config.SecurityConfig;
+import com.example.erp.notification.config.ServiceLevelOAuth2Config;
 import com.example.erp.notification.domain.error.NotificationNotFoundException;
 import com.example.erp.notification.domain.notification.Notification;
 import com.example.erp.notification.domain.notification.NotificationType;
 import com.example.erp.notification.domain.notification.SourceRef;
 import com.example.erp.notification.presentation.advice.GlobalExceptionHandler;
-import com.example.erp.notification.presentation.filter.TenantClaimEnforcer;
 import com.example.erp.notification.presentation.security.ReadAccessDeniedException;
 import com.example.erp.notification.presentation.security.ReadAuthorizationGate;
 import org.junit.jupiter.api.Test;
@@ -43,8 +43,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * NOTIFICATION_NOT_FOUND path, and the mark-read shape.
  */
 @WebMvcTest(NotificationInboxController.class)
-@Import({SecurityConfig.class, TenantClaimEnforcer.class, GlobalExceptionHandler.class})
-@TestPropertySource(properties = "erpplatform.oauth2.required-tenant-id=erp")
+// The tenant filter used to be @Import-ed as a component class of its own. It is a shared class
+// now (ADR-MONO-049 § D5-4) with a private constructor, so it arrives the only way its policy is
+// ever expressed: as the @Bean that ServiceLevelOAuth2Config builds. Importing the real config —
+// rather than a test double that re-states the three switches — is deliberate: a second place to
+// write the policy is the thing this ADR exists to remove.
+@Import({SecurityConfig.class, ServiceLevelOAuth2Config.class, GlobalExceptionHandler.class})
+@TestPropertySource(properties = {
+        "erpplatform.oauth2.required-tenant-id=erp",
+        "erpplatform.oauth2.allowed-issuers=http://iam.local",
+        // NimbusJwtDecoder resolves the JWKS lazily, so this is never fetched — the jwt()
+        // post-processor supplies the already-decoded token.
+        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://iam.local/oauth2/jwks"
+})
 class NotificationInboxControllerSliceTest {
 
     @Autowired

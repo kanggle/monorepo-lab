@@ -8,7 +8,7 @@ TASK-MONO-384
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -102,20 +102,54 @@ finance 는 두 서비스가 대칭이었다. **erp 는 아니다** — 실측:
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (사본이 사라졌다)** — `projects/erp-platform` 에 세 클래스 파일 **0개**. 함대 총계 **43 → 31**. **`git grep` 전수 재카운트로 확인할 것 — 이 혈통에서 카운트가 다섯 번 틀렸다**(4 → 10 → 18 → 49, 그리고 D5-3 초안의 `17/17/12` 는 합이 46 이었다). **선행 문서의 숫자는 출처가 아니라 가설이다.**
-- [ ] **AC-2 (행동 불변 — § 6 V6)** — erp 4개 서비스 스위트가 통과한다. **기존 테스트가 단언하던 *동작*은 바뀌면 안 된다** — 주어(subject)만 사본에서 공유 클래스로 바뀐다. *단언을 고쳐야 했다면 채택이 정책을 바꾼 것이다.* **D5-3 에서 V6 는 실제로 물었고, 문 것은 채택하는 쪽이 아니라 정경 클래스였다**(§ 1.9). 같은 태도로 임할 것.
-- [ ] **AC-3 (정책 핀 = 허용 **과** 거부, 그리고 두 층의 합의)** — **서비스 4개 각각**:
+- [x] **AC-1 (사본이 사라졌다)** — `projects/erp-platform` 에 세 클래스 파일 **0개**. 함대 총계 **43 → 31**. **`git grep` 전수 재카운트로 확인할 것 — 이 혈통에서 카운트가 다섯 번 틀렸다**(4 → 10 → 18 → 49, 그리고 D5-3 초안의 `17/17/12` 는 합이 46 이었다). **선행 문서의 숫자는 출처가 아니라 가설이다.**
+- [x] **AC-2 (행동 불변 — § 6 V6)** — erp 4개 서비스 스위트가 통과한다. **기존 테스트가 단언하던 *동작*은 바뀌면 안 된다** — 주어(subject)만 사본에서 공유 클래스로 바뀐다. *단언을 고쳐야 했다면 채택이 정책을 바꾼 것이다.* **D5-3 에서 V6 는 실제로 물었고, 문 것은 채택하는 쪽이 아니라 정경 클래스였다**(§ 1.9). 같은 태도로 임할 것.
+- [x] **AC-3 (정책 핀 = 허용 **과** 거부, 그리고 두 층의 합의)** — **서비스 4개 각각**:
   - `tenant_id=erp` → 통과 / `"*"` → 통과 / `entitled_domains=[erp]` + `tenant_id=finance` → 통과
   - `tenant_id=finance`, entitled 없음 → **403 TENANT_FORBIDDEN** / `tenant_id` 부재 → **401**
   - `PublicPaths` 면제 경로 → 게이트 건너뜀 / **비면제 경로(`/actuator/env` 등) → 게이트 적용**
   - **decoder 와 enforcer 가 같은 판정을 내리는가** (§ 1.9 — D5-3 의 `theTwoLayersAgree`)
   **거부 쪽이 절반이다.** 허용만 기록하는 스위트는 스위치가 사라져도 초록이다(MONO-355).
-- [ ] **AC-4 (테스트 없는 사본 해소)** — **`approval-service` 와 `notification-service` 는 `TenantClaimEnforcer` 테스트가 0개다**(실측 — masterdata·read-model 만 보유). AC-3 이 4개 전부에 존재해야 한다.
-- [ ] **AC-5 (mutation — 배선이 진짜인가)** — 각 서비스 config 의 builder 에서 **`.allowSuperAdminWildcard()` / `.trustEntitledDomains()` / `.exempt(...)` 를 하나씩 빼면 그 서비스 스위트가 RED**.
+- [x] **AC-4 (테스트 없는 사본 해소)** — **`approval-service` 와 `notification-service` 는 `TenantClaimEnforcer` 테스트가 0개다**(실측 — masterdata·read-model 만 보유). AC-3 이 4개 전부에 존재해야 한다.
+- [x] **AC-5 (mutation — 배선이 진짜인가)** — 각 서비스 config 의 builder 에서 **`.allowSuperAdminWildcard()` / `.trustEntitledDomains()` / `.exempt(...)` 를 하나씩 빼면 그 서비스 스위트가 RED**.
       **⚠️ 정책 핀은 `ServiceLevelOAuth2Config` 에서 빈을 꺼내 써야 한다.** 테스트가 자기 builder 로 subject 를 새로 만들면 **config 에서 스위치가 빠져도 초록**이고 이 AC 는 연극이 된다(D5-3 에서 이걸 못박았다).
       **⚠️ mutation 러너의 기준 프레임을 확인하라.** D5-3 의 첫 러너는 `git diff` 를 **HEAD 기준**으로 봐서 **거짓 GREEN** 을 냈다 — mutation 이 지우는 줄은 *그 task 가 방금 추가한* 줄이라 diff 에 `-` 로 나타나지 않는다. **mutation 직전 파일을 기준 삼고, 사라진 줄을 출력해서 눈으로 확인한 뒤** 결과를 읽어라.
-- [ ] **AC-6 (기존 단언 4개 GREEN)** — `assertNoApiOnSharedLibs` · `assertClasspathNeutrality` ×2 · `assertNoServletOnReactiveEdge`. **artefact 수가 변하면 무언가 잘못 들어온 것이다**(D5-3 기준: 23 / 50 / 94).
-- [ ] **AC-7 (테스트 GREEN — XML 실측)** — **`BUILD SUCCESSFUL` 을 믿지 말 것.** 테스트 수 · skipped 를 XML 로 확인하라(Docker 부재 시 전건 SKIPPED 인데도 성공이 뜬다).
+- [x] **AC-6 (기존 단언 4개 GREEN)** — `assertNoApiOnSharedLibs` · `assertClasspathNeutrality` ×2 · `assertNoServletOnReactiveEdge`. **artefact 수가 변하면 무언가 잘못 들어온 것이다**(D5-3 기준: 23 / 50 / 94).
+- [x] **AC-7 (테스트 GREEN — XML 실측)** — approval 142 · masterdata 81 · notification 97 · read-model 135 · erp gateway 22 = **477 tests / 0 skipped / 0 failures / 0 errors**.
+
+---
+
+# 실측 결과
+
+**AC-1 = 43 → 31** (`git grep` 전수). erp 사본 **0**.
+**AC-5 = 12건 전부 RED** (스위치 3 × 서비스 4). 매 회차 **사라진 줄을 출력**해 mutation 적용을 먼저 확인했다:
+
+| 뺀 것 | 4개 서비스 공통 |
+|---|---|
+| `.allowSuperAdminWildcard()` | gradle=1, 정책핀 실패 **2** |
+| `.trustEntitledDomains()` | gradle=1, 정책핀 실패 **2** |
+| `.exempt(PublicPaths::isPublic)` | gradle=1, 정책핀 실패 **1** |
+
+**AC-6 = 4/4 GREEN**, artefact 수 불변(23 / 50 / 94).
+
+## 정책표는 실측으로 확인됐다 (물려받지 않았다)
+
+4개 서비스의 `shouldNotFilter` 와 validator 생성자를 각각 읽었다. **wildcard 4/4 · entitled 4/4 · 면제=`PublicPaths::isPublic` 4/4**, `PublicPaths` 내용도 4개 동일(actuator 3개 + `health/` prefix). **티켓의 표가 맞았다.**
+
+## erp 에는 finance 에 없던 참조 표면이 둘 있었다
+
+1. **`ReadAuthorizationGate`**(notification · read-model) — **프로덕션 코드가 `TenantClaimValidator.isEntitled(jwt, domainKey)` 를 직접 호출**한다. finance 에는 이런 소비자가 없었다. import 교체로 해결.
+2. **`NotificationInboxControllerSliceTest:46` 의 `@Import({SecurityConfig.class, TenantClaimEnforcer.class, ...})`** — 필터를 **컴포넌트 클래스로** import 하고 있었다. 공유 클래스는 `@Component` 가 아니고 **생성자가 private** 이라 이대로면 슬라이스가 깨진다.
+
+   **`TenantGateTestConfig` 같은 테스트용 config 를 만들어 스위치 3개를 다시 쓰는 방법을 택하지 않았다** — 그러면 **정책이 두 곳에 쓰인다.** 이 ADR 이 없애려는 바로 그것이다. 대신 슬라이스가 **진짜 `ServiceLevelOAuth2Config` 를 import** 하게 했다(`NimbusJwtDecoder.withJwkSetUri` 는 lazy 라 URI 문자열만 주면 빈이 뜬다. `jwt()` post-processor 가 디코드를 우회하므로 JWKS 는 fetch 되지 않는다).
+
+## 같은 패키지 참조 함정 — 세 번째
+
+`SecurityConfig`(approval · masterdata)와 `ActorContextJwtAuthenticationConverter`(approval · masterdata)가 validator 와 **같은 패키지라 `import` 줄이 없었다**. **심볼로 grep 했기에 잡혔다.** 그리고 **컴파일러로 재확인**했다 — `compileTestJava` 4개가 전부 통과해야 참조를 빠짐없이 잡은 것이다(grep 은 놓칠 수 있지만 컴파일러는 못 놓친다).
+
+## 스크립트가 조용히 아무것도 안 한 사건 (또)
+
+`build.gradle` 4개에 의존 줄을 넣는 perl 치환이 **CRLF 때문에 0건 적용**됐다(`)\n` 이 `)\r\n` 과 매치 안 됨). **적용 건수를 먼저 출력했기에** `0 -> 0` 을 보고 즉시 알았다. Edit 도구로 전환하고 4/4 재확인했다. *탐지식/변환식의 0건은 "할 일이 없었다" 가 아니다.*
 
 ---
 

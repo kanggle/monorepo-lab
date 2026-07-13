@@ -1,6 +1,6 @@
 package com.example.erp.readmodel.presentation.security;
 
-import com.example.erp.readmodel.config.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.example.security.jwt.AbacDataScope;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.Jwt;

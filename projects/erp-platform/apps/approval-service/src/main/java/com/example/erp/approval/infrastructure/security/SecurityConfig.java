@@ -1,6 +1,7 @@
 package com.example.erp.approval.infrastructure.security;
 
 import com.example.erp.approval.presentation.security.PublicPaths;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
