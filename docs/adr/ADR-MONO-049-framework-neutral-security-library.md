@@ -356,6 +356,49 @@ Fleet-wide, only these two files do this (measured). Which is exactly why nothin
 
 ---
 
+### 1.11 wms has no `TenantClaimEnforcer` — and that is a finding, not a gap (`TASK-MONO-390`, D5-7)
+
+D5-6 left 14 copies. **All 14 are validators. `TenantClaimEnforcer` is at zero across the fleet** (measured on `origin/main` after `TASK-MONO-387` merged). One of the three classes this ADR set out to unify is *finished*.
+
+That is not a coincidence, and it is the shape of the two remaining steps: **wms and iam never had an enforcer.** Which means three things that dominated D5-3…D5-6 **do not exist in D5-7**:
+
+- no `.exempt(...)` axis, so no `PublicPaths`, no permit-list coupling — **§ 1.8's hazard cannot occur here**;
+- no filter-order argument — D5-5's `ExemptionEqualsThePermitList` has nothing to pin;
+- and **§ 1.9's decode-pass / filter-block split is structurally impossible.** That defect needed *two* layers that could disagree. wms's tenant gate has **one**: the decode-time validator. The thing D5-3 caught cannot happen in a service with nothing to disagree with.
+
+**The obvious next thought is the wrong one.** "wms is missing its defence-in-depth layer, we should add the enforcer" is a *behaviour change* wearing an extraction's clothes — and wms's own gateway config already wrote the rule against it: *"whether a platform operator should be able to reach the wms edge during an incident is a real question, but changing the answer is a behaviour change and does not belong in an extraction."* D5-7 moves what is there. Whether wms *wants* a second layer is a question for a ticket that is allowed to answer it.
+
+#### The mutation direction inverts, and the quiet direction changes sides
+
+Every step so far has had the same failure mode: *forget* a switch, narrow the gate, watch something go red. D5-6 was the first to run the mutation in both directions and found the reverse — an *added* switch widens the gate, and widening is quiet.
+
+**wms is where that stops being a curiosity.** It is the **only platform in the fleet that rejects the SUPER_ADMIN `"*"` wildcard** (its copies say so in a comment; `ADR-MONO-048` § D5 preserves it deliberately). So in D5-7 the dangerous mistake is not omission — the builder defaults closed, omission is safe here — it is **habit**: writing `.allowSuperAdminWildcard()` because the last four projects did.
+
+And `TASK-MONO-355` already told us what that would cost: **this exact gate had zero coverage for its rejection.** The copies D5-7 deletes assert the tenant match, the cross-tenant refusal, the entitlement grant, the malformed-claim fail-closed — and **never once assert that `"*"` is refused.** The one property that distinguishes wms from the rest of the fleet was the one property nothing was holding. `WmsTenantGatePolicyTest` is that missing assertion, and AC-5 mutates in the **adding** direction to prove it bites.
+
+#### The canonical chain was already in production, in the same project
+
+D5-7 needed no design. **`wms/gateway-service` has been running the shared `TenantClaimValidator` since the gateway-lineage convergence** (`ADR-MONO-048` § D7):
+
+```java
+public TenantClaimValidator tenantGate() {
+    return TenantClaimValidator.forTenant(requiredTenantId)
+            .trustEntitledDomains()
+            .build();                 // no .allowSuperAdminWildcard() — deliberate
+}
+```
+
+…and its policy pin already takes its subject from that production method. So the servlet side is not adopting a *proposed* wiring; it is **aligning with one the same project already proves.** Branch equivalence with the copies was measured rather than argued — three success branches, two failure branches, identical down to the failure-message strings, and the error codes (`tenant_mismatch`, `invalid_issuer`) unchanged.
+
+The error codes mattering is not cosmetic: **all five wms `SecurityConfig`s branch on `ERROR_CODE_TENANT_MISMATCH` in their `AuthenticationEntryPoint` to raise 403 `TENANT_FORBIDDEN`**, which `specs/integration/iam-integration.md` states as a contract. A changed code degrades 403 → 401 silently. D5-5 *did* change an error code, so this was checked, not assumed.
+
+#### Two services are out of scope, measured
+
+- **`wms/notification-service` has no OAuth2 resource server at all** — zero `jwtDecoder`, zero `oauth2ResourceServer`, zero `OAuth2TokenValidator`. There is no gate to move. *(Whether it should have one is not this ADR's question; it is recorded here because "we checked and there is nothing" is a different statement from "we did not look.")*
+- **`wms/gateway-service`** — already shared (§ D6).
+
+---
+
 ## 2. Alternatives considered
 
 ### 2.1 A CI guard asserting the copies stay identical — **rejected**
@@ -536,8 +579,8 @@ Per `TASK-MONO-364` § AC-6 the roadmap lives here, not in `tasks/ready/`. **Tic
 | **D5-4** | erp — approval, masterdata, notification, read-model | 12 | **✅ `TASK-MONO-384`** — **43 → 31**, the largest single-project deletion. Policy measured, not inherited: wildcard 4/4, entitlement 4/4, `PublicPaths` 4/4 identical. **Mutation-verified 12 times** (3 switches × 4 services), each run printing the removed line first. 477 tests / 0 skipped / 0 failures. **Two referencer surfaces finance did not have**: `ReadAuthorizationGate` calls `TenantClaimValidator.isEntitled` from production code, and a `@WebMvcTest` slice `@Import`-ed the filter *as a component class* — the shared one has a private constructor. The slice now imports the real `ServiceLevelOAuth2Config` rather than a test double that re-states the switches: **a second place to write the policy is the thing this ADR exists to remove.** |
 | **D5-5** | scm — procurement (all 3); demand-planning + inventory-visibility (Enforcer + **two inline validator implementations** — § 1.10) | 5 | **✅ `TASK-MONO-385`** — **31 → 26**, and the two inline implementations are gone (fleet-wide zero). **§ 1.8's exemption axis is decided: narrowed, and the narrowing is proven unobservable** — Spring Security's chain runs *before* the enforcer, so the actuator paths that lost the exemption were already `denyAll`'d and the filter never saw them. **The permit list and the exemption are now one object**, which is what § 1.8 actually asked for. One observable change, stated: the issuer error code moves `invalid_token` → `invalid_issuer` (status and response `code` unchanged; zero consumers; it aligns scm with erp/fan/finance). Mutation-verified 9×. 351 tests / 0 failures. |
 | **D5-6** | fan — artist, community, membership, notification | 12 | **✅ `TASK-MONO-387`** — **26 → 14**. **The first project that leaves a switch OFF**, and the first whose mutation runs in *both* directions: removing `.allowSuperAdminWildcard()` reds 2 assertions, **and *adding* `.trustEntitledDomains()` reds 3.** A switch only ever tested in the ON position is not tested; here the untested position was OFF. § 1.9's null branch degenerates to the unconditional 401 fan's copies wrote by hand — asserted. **`membership`'s `/internal/**` exemption: load-bearing, kept** — and § 1.8 records what the mutation actually exposed. 381 tests / 0 failures. |
-| D5-7 | wms — 5 services (**validators only**; `admin-service` needs the one new `java-security` line) | 10 | ⏳ |
-| D5-8 | iam — community, membership (**validators only**; the **gateway** stays out — § D6) | 4 | ⏳ |
+| **D5-7** | wms — admin, inbound, outbound, inventory, master (**validators only**) | 10 | **✅ `TASK-MONO-390`** — **14 → 4**, and **`TenantClaimEnforcer` was already at zero: one of the three classes is finished.** The mutation direction **inverts here** — wms is the only platform that refuses the SUPER_ADMIN wildcard, so the dangerous edit is *adding* `.allowSuperAdminWildcard()`, not omitting it. **Mutated in both directions, 5/5 services each:** adding the wildcard reds **1 per service** (the assertion that did not exist before this task — `TASK-MONO-355` found this gate had **zero coverage for its rejection**), removing `.trustEntitledDomains()` reds **3 per service**. **No design was needed: wms's own gateway has been running the identical shared chain since `ADR-MONO-048` § D7**, so the servlet side aligned with a wiring the same project already proves — branch equivalence measured down to the failure-message strings, error codes unchanged (which matters: all five `SecurityConfig`s key their 403 `TENANT_FORBIDDEN` off `ERROR_CODE_TENANT_MISMATCH`). 75 policy assertions / 0 skipped / 0 failures; `compileTestJava` green across all 7 wms modules. See § 1.11. |
+| D5-8 | iam — community, membership (**validators only**; the **gateway** stays out — § D6) | 4 | ⏳ **the last step.** |
 | | | **49** | |
 
 Carried forward, **not** resolved by this ADR (§ D6):
