@@ -1,5 +1,7 @@
 package com.example.fanplatform.artist.adapter.in.web.security;
 
+import com.example.security.oauth2.TenantClaimValidator;
+
 import com.example.fanplatform.artist.application.ActorContext;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;

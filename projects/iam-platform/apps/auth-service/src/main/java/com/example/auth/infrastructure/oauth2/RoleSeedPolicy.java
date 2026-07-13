@@ -22,6 +22,14 @@ import java.util.List;
  * are emitted verbatim — never unioned with the seed). {@code PREMIUM_MEMBER}
  * (needs a fan membership lookup) is out of scope — {@code FAN} only.
  *
+ * <p><b>TASK-MONO-381: the caller gates this table, and that gate is the security property.</b>
+ * This method still answers "what does platform X seed", but
+ * {@link TenantClaimTokenCustomizer} now calls it <b>only when the principal's own tenant IS
+ * that platform</b>. Keyed on the client alone — as it was — it handed {@code CUSTOMER} to
+ * every principal who authenticated through the storefront client, operators and SUPER_ADMIN
+ * included, which made the role guard of ADR-MONO-035 §4b-iii structurally unable to fire.
+ * Do not reintroduce a client-only call site.
+ *
  * <p>A null/blank input or an unknown platform → an immutable empty list (never
  * null). An empty result means the roles claim is omitted, and the gateway then
  * 403s — the correct least-privilege behaviour.

@@ -788,6 +788,81 @@ class TenantClaimTokenCustomizerTest {
         assertThat(built.<List<String>>getClaim("roles")).containsExactly("CUSTOMER");
     }
 
+    // ── TASK-MONO-381 — the seed is a CROSS-TENANT guard ──────────────────────────────
+    // The seed used to be keyed on the client alone, so every principal who authenticated
+    // through the storefront client got CUSTOMER — operators and SUPER_ADMIN included. A
+    // CUSTOMER-less token was unconstructible on that path, so ADR-MONO-035 §4b-iii's role
+    // guard could never fire. Nothing asserted the roles of a CROSS-TENANT principal on the
+    // ecommerce client; these are those assertions.
+
+    private void givenEcommerceClientWith(String principalTenant, JwtClaimsSet.Builder claimsBuilder) {
+        RegisteredClient client = buildClientWithTenantSettings(
+                "ecommerce", "B2C", AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(principal.getDetails()).thenReturn(Map.of(
+                "tenant_id", principalTenant,
+                "tenant_type", "B2C",
+                "account_id", "acc-x"));
+        when(accountServicePort.listEntitledDomains(principalTenant)).thenReturn(List.of());
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.AUTHORIZATION_CODE);
+        when(context.getRegisteredClient()).thenReturn(client);
+        when(context.getPrincipal()).thenReturn(principal);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+    }
+
+    @Test
+    @DisplayName("MONO-381: 타 tenant operator(wms)가 storefront 클라이언트로 로그인 → seed 미발화, roles 클레임 없음 (web-store 가드가 비로소 문다)")
+    void authorizationCode_crossTenantOperator_onEcommerceClient_omitsRoles() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+        givenEcommerceClientWith("wms", claimsBuilder);
+        when(accountServicePort.listAccountRoles("wms", "acc-x")).thenReturn(List.of());
+
+        customizer.customize(context);
+
+        assertThat(claimsBuilder.build().<List<String>>getClaim("roles")).isNull();
+    }
+
+    @Test
+    @DisplayName("MONO-381: SUPER_ADMIN('*')이 storefront 클라이언트로 로그인 → roles 클레임 없음 (게이트웨이의 acceptAnyWellFormedTenant 가 '*' 를 통과시켜도 가드가 막는다)")
+    void authorizationCode_superAdminWildcard_onEcommerceClient_omitsRoles() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+        givenEcommerceClientWith("*", claimsBuilder);
+        when(accountServicePort.listAccountRoles("*", "acc-x")).thenReturn(List.of());
+
+        customizer.customize(context);
+
+        assertThat(claimsBuilder.build().<List<String>>getClaim("roles")).isNull();
+    }
+
+    @Test
+    @DisplayName("MONO-381: BE-507 이전 레거시 소비자(fan-platform)가 storefront 로 로그인 → roles 없음. 로그인은 되지만 스토어프론트는 거부 — MONO-386 의 forcing function")
+    void authorizationCode_legacyFanPlatformConsumer_onEcommerceClient_omitsRoles() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+        givenEcommerceClientWith("fan-platform", claimsBuilder);
+        when(accountServicePort.listAccountRoles("fan-platform", "acc-x")).thenReturn(List.of());
+
+        customizer.customize(context);
+
+        // 의도된 결과다. 이 계정은 BE-507 의 cross-tenant credential 폴백으로 *인증*은 되지만,
+        // 자기 tenant 가 storefront 의 platform 이 아니므로 소비자 role 을 받지 못한다.
+        assertThat(claimsBuilder.build().<List<String>>getClaim("roles")).isNull();
+    }
+
+    @Test
+    @DisplayName("MONO-381: fail-soft 가 seed 를 되살리지 못한다 — account-service 장애 + cross-tenant principal → 여전히 roles 없음")
+    void authorizationCode_crossTenantPrincipal_lookupThrows_stillOmitsRoles() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+        givenEcommerceClientWith("wms", claimsBuilder);
+        when(accountServicePort.listAccountRoles("wms", "acc-x"))
+                .thenThrow(new RuntimeException("account-service down"));
+
+        customizer.customize(context);
+
+        // fail-soft(ADR-033 S5)는 유지되지만, 그 폴백이 cross-tenant principal 에게
+        // CUSTOMER 를 주는 뒷문이 되어서는 안 된다.
+        assertThat(claimsBuilder.build().<List<String>>getClaim("roles")).isNull();
+    }
+
     @Test
     @DisplayName("MONO-263 authorization_code: wms + empty stored → NO roles claim (seed is consumer-only, no wms consumer)")
     void authorizationCode_emptyStored_wms_omitsRoles() {

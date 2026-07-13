@@ -1,5 +1,7 @@
 package com.wms.inventory.config.security;
 
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -44,7 +46,14 @@ public class OAuth2ResourceServerConfig {
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(new JwtTimestampValidator());
         validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(new TenantClaimValidator(requiredTenantId));
+        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
+                // no .allowSuperAdminWildcard() — wms is the only platform that rejects the
+                // SUPER_ADMIN "*" wildcard (ADR-MONO-048 § D5). The builder defaults closed,
+                // so ADDING that switch widens the gate and nothing complains — which is why
+                // WmsTenantGatePolicyTest asserts the refusal, not just the acceptance
+                // (TASK-MONO-355 found this gate had zero coverage for its rejection).
+                .trustEntitledDomains()   // entitlement-trust dual-accept (ADR-MONO-019 § D5)
+                .build());
         validators.add(JwtValidators.createDefault());
         return new DelegatingOAuth2TokenValidator<>(validators);
     }

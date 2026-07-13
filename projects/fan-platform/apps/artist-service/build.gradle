@@ -50,6 +50,10 @@ dependencies {
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-observability')
     implementation project(':libs:java-security')
+    // ADR-MONO-049 § D5-6: the canonical servlet TenantClaimEnforcer. `implementation`, not
+    // `api` — a shared security class must not transit onto a consumer's compile classpath
+    // (§ D2; assertNoApiOnSharedLibs enforces it).
+    implementation project(':libs:java-security-servlet')
 
     // Test (unit + slice)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

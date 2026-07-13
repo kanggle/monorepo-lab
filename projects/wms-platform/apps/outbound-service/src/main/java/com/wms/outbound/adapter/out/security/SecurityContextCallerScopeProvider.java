@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  *   <li>{@code tenant_id} is the platform wildcard {@code "*"}.</li>
  * </ul>
  * Any other (customer) {@code tenant_id} — admitted to wms via the
- * {@code entitled_domains} dual-accept ({@link com.wms.outbound.config.security.TenantClaimValidator})
+ * {@code entitled_domains} dual-accept ({@link com.example.security.oauth2.TenantClaimValidator})
  * — is restricted to that tenant's ecommerce-fulfilment orders.
  */
 @Component

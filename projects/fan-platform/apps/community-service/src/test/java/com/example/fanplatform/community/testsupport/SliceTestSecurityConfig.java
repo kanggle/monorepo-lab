@@ -1,8 +1,8 @@
 package com.example.fanplatform.community.testsupport;
 
 import com.example.fanplatform.community.infrastructure.security.ActorContextJwtAuthenticationConverter;
-import com.example.fanplatform.community.infrastructure.security.AllowedIssuersValidator;
-import com.example.fanplatform.community.infrastructure.security.TenantClaimValidator;
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -85,7 +85,9 @@ public class SliceTestSecurityConfig {
                     new AllowedIssuersValidator(List.of(
                             JwtTestHelper.SAS_ISSUER,
                             JwtTestHelper.LEGACY_ISSUER)),
-                    new TenantClaimValidator(JwtTestHelper.DEFAULT_TENANT_ID));
+                    TenantClaimValidator.forTenant(JwtTestHelper.DEFAULT_TENANT_ID)
+                        .allowSuperAdminWildcard()
+                        .build());
             decoder.setJwtValidator(validator);
             return decoder;
         } catch (java.text.ParseException | JOSEException e) {
