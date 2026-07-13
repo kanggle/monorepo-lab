@@ -214,7 +214,15 @@ resource "aws_apigatewayv2_api" "api" {
   name          = "${local.name}-api"
   protocol_type = "HTTP"
   cors_configuration {
-    allow_origins = [var.allowed_origin]
+    # 기본값은 사이트 자신의 오리진 — 배포 시점에야 정해지므로 CloudFront 도메인을
+    # **참조**한다. 변수에 손으로 박으면 그건 결함 2(커밋된 리터럴)의 재현이다.
+    # var.allowed_origin 을 명시하면 그쪽이 이긴다(로컬에서 파일을 열어보는 경우 등).
+    #
+    # ⚠️ CORS 는 보안 경계가 아니다 — 브라우저 정책일 뿐이고 curl 로 우회된다.
+    # `/start` 의 실질적 상한은 여전히 Lambda 의 월 예산 가드뿐이다.
+    allow_origins = [
+      var.allowed_origin != "" ? var.allowed_origin : "https://${aws_cloudfront_distribution.site.domain_name}"
+    ]
     allow_methods = ["GET", "POST", "OPTIONS"]
     allow_headers = ["content-type"]
   }
@@ -276,4 +284,123 @@ resource "aws_lambda_permission" "events" {
   function_name = aws_lambda_function.control.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.idle.arn
+}
+
+# ---------------------------------------------------------------------------
+# 정적 "Start Demo" 사이트 — S3(비공개) + CloudFront(OAC)  [TASK-MONO-389]
+#
+# 이것이 없던 동안 데모에는 **정문이 없었다**. 저장소는 방문자가 버튼을 누른다고
+# 적었지만 그 버튼은 어디에도 배포되지 않았고, `site/index.html` 의 `API_BASE` 는
+# **git 에 커밋된 리터럴**이라 재생성마다 죽었다(실제로 죽어 있었다).
+#
+# 그래서 여기서 고치는 것은 "값" 이 아니라 **모양** 이다: 페이지는 API URL 을
+# 들고 있지 않고, terraform 이 **자기 상태에서** `config.js` 한 줄을 렌더한다.
+# ⇒ 배포된 페이지가 자기 API 와 어긋나는 것이 **표현 불가능해진다.**
+#
+# HTML 자체를 templatefile 로 렌더하지 않는 이유: 이 페이지의 JS 는 템플릿
+# 리터럴(`${ip}` `${label}` `${status}`)을 여럿 쓰는데 그건 terraform 의 보간
+# 문법과 **같은 글자**다. 하나라도 이스케이프를 빠뜨리면 조용히 깨진다.
+# 생성되는 것을 한 줄로 격리하면 그 함정이 아예 사라진다.
+# ---------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
+
+resource "aws_s3_bucket" "site" {
+  bucket        = "${local.name}-site-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_public_access_block" "site" {
+  bucket                  = aws_s3_bucket.site.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_cloudfront_origin_access_control" "site" {
+  name                              = "${local.name}-site-oac"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_cloudfront_distribution" "site" {
+  enabled             = true
+  default_root_object = "index.html"
+  comment             = "${local.name} on-demand demo launcher"
+  price_class         = "PriceClass_200"
+
+  origin {
+    domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
+    origin_id                = "s3-site"
+    origin_access_control_id = aws_cloudfront_origin_access_control.site.id
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "s3-site"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+
+    # 캐시를 짧게 둔다. `config.js` 는 재생성마다 바뀌고, 캐시된 옛 값이 살아 있으면
+    # 결함 2(죽은 API_BASE)가 **캐시 층에서 부활한다**.
+    min_ttl     = 0
+    default_ttl = 60
+    max_ttl     = 300
+
+    forwarded_values {
+      query_string = false
+      cookies { forward = "none" }
+    }
+  }
+
+  restrictions {
+    geo_restriction { restriction_type = "none" }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+
+data "aws_iam_policy_document" "site" {
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.site.arn}/*"]
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.site.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "site" {
+  bucket = aws_s3_bucket.site.id
+  policy = data.aws_iam_policy_document.site.json
+}
+
+resource "aws_s3_object" "index" {
+  bucket       = aws_s3_bucket.site.id
+  key          = "index.html"
+  source       = "${path.module}/../site/index.html"
+  etag         = filemd5("${path.module}/../site/index.html")
+  content_type = "text/html; charset=utf-8"
+  cache_control = "public, max-age=60"
+}
+
+# **이 한 줄이 이 task 의 본체다.** 저장소는 API URL 을 들고 있지 않는다 —
+# terraform 이 자기 상태에서 만든다. 재생성으로 API id 가 바뀌면 이 객체도 함께
+# 바뀐다. 사람이 고칠 것이 없고, 따라서 고치는 것을 잊을 수도 없다.
+resource "aws_s3_object" "config" {
+  bucket        = aws_s3_bucket.site.id
+  key           = "config.js"
+  content       = "window.DEMO_API_BASE = ${jsonencode(aws_apigatewayv2_api.api.api_endpoint)};\n"
+  content_type  = "application/javascript; charset=utf-8"
+  cache_control = "public, max-age=60"
+  etag          = md5(aws_apigatewayv2_api.api.api_endpoint)
 }

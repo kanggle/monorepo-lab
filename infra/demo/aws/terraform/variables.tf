@@ -57,9 +57,14 @@ variable "admin_ssh_cidr" {
 }
 
 variable "allowed_origin" {
-  description = "CORS 허용 오리진 (정적 포트폴리오 사이트 도메인). 데모/PoC는 * 도 가능"
+  description = <<-EOT
+    CORS 허용 오리진. **비워두면 사이트 자신의 CloudFront 도메인**이 쓰인다(권장) —
+    그 값은 배포 시점에야 정해지므로 terraform 이 참조한다. 손으로 박으면 재생성마다
+    썩는다(TASK-MONO-389 가 고친 결함이 정확히 그것이다).
+    로컬에서 index.html 을 파일로 열어보려면 "*" 를 명시하라.
+  EOT
   type        = string
-  default     = "*"
+  default     = ""
 }
 
 variable "idle_minutes" {

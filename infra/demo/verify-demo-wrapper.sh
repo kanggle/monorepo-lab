@@ -660,6 +660,129 @@ if [ -d "$tpl_dir" ] && [ -f "$ovr" ]; then
   ok "브라우저 표면 경로 전부 라우팅됨 ($(grep -ohE "@\{'?/[a-zA-Z0-9_.-]+" "$tpl_dir"/*.html 2>/dev/null | sed -E "s/^@\{'?\///" | sort -u | tr '\n' ' '))"
 fi
 
+echo "[verify] (q) 문서가 부르는 terraform output 이 실제로 존재하는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-389): README 가 `terraform output api_endpoint` 를 시키는데 **그런 output 은
+# 없었다**(실제 이름은 api_base_url). 절차를 그대로 따르면 "Output not found" 로 죽는다.
+#
+# **아무도 이 문서를 끝까지 따라 해본 적이 없어서** 그 한 줄이 살아남았다. 배포된 적이
+# 없는 절차는 고장 났는지 알 수 없다 — 그래서 사람이 아니라 가드가 대조한다.
+tf_dir="$ROOT/infra/demo/aws/terraform"
+if [ -d "$tf_dir" ]; then
+  declared="$(grep -hoE '^output[[:space:]]+"[^"]+"' "$tf_dir"/*.tf 2>/dev/null \
+                | sed -E 's/^output[[:space:]]+"([^"]+)"/\1/' | sort -u)"
+  [ -n "$declared" ] || fail "(q) outputs.tf 에서 output 을 하나도 못 읽었습니다 — 가드가 공허합니다."
+
+  # **인용문(`>`)은 지시가 아니다.** 이 README 는 옛 절차가 왜 틀렸는지를 인용으로 설명하는데,
+  # 거기 적힌 `terraform output api_endpoint` 는 *하지 말라*는 뜻이지 하라는 뜻이 아니다.
+  # 그것까지 물면 이 가드는 **정직한 설명에 대해 첫날부터 RED** 이고, 첫날 RED 인 가드는
+  # 꺼진다 — 그리고 꺼진 잡의 skip 은 초록으로 보고된다(MONO-360). 오탐 0 이 무는 것만큼 중요하다.
+  referenced="$(grep -rnE 'terraform output [a-z_]+' "$ROOT/infra/demo/aws" "$ROOT/README.md" 2>/dev/null \
+                  | grep -vE '^[^:]*:[0-9]+:[[:space:]]*>' \
+                  | grep -oE 'terraform output [a-z_]+' \
+                  | sed -E 's/^terraform output //' | sort -u)"
+  [ -n "$referenced" ] || fail "(q) 문서에서 'terraform output <name>' 참조를 하나도 못 찾았습니다 — 가드가 공허합니다."
+
+  ghost=""
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    printf '%s\n' "$declared" | grep -qx "$name" || ghost="$ghost   terraform output $name"$'\n'
+  done <<EOF
+$referenced
+EOF
+  [ -z "$ghost" ] || fail "문서가 **존재하지 않는** terraform output 을 부릅니다:"\
+    $'\n'"$ghost"\
+    $'\n'"→ 선언된 output: $(printf '%s' "$declared" | tr '\n' ' ')"\
+    $'\n'"→ 절차를 그대로 따르면 'Output not found' 로 죽습니다."
+  ok "문서가 부르는 output 이 전부 실재함 ($(printf '%s' "$referenced" | tr '\n' ' '))"
+fi
+
+echo "[verify] (r) 배포될 페이지가 API URL 을 리터럴로 들고 있지 않은가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-389): site/index.html 에 `const API_BASE = "https://7l4n2ydrkd.execute-api…"`
+# 가 **커밋돼 있었고, 그 API 는 존재하지 않았다.** API Gateway id 는 재생성마다 바뀌는데
+# 그 값이 git 에 박혀 있었으니, **드리프트가 일어난 게 아니라 일어나도록 설계돼 있었다.**
+#
+# 고친 방향은 "값" 이 아니라 **모양** 이다: terraform 이 자기 상태에서 config.js 를 렌더한다
+# ⇒ 배포된 페이지가 자기 API 와 어긋나는 것이 표현 불가능해진다. 이 가드는 그 모양을 지킨다.
+site_dir="$ROOT/infra/demo/aws/site"
+if [ -d "$site_dir" ]; then
+  # 주석 안의 예시 URL 은 잡지 않는다 — 첫날 RED 인 가드는 꺼지고,
+  # 꺼진 잡의 skip 은 초록으로 보고된다(MONO-360). 코드 줄의 리터럴만 본다.
+  hits="$(grep -rnE '^[^#/*]*["'"'"'][^"'"'"']*execute-api[^"'"'"']*["'"'"']' "$site_dir" 2>/dev/null || true)"
+  [ -z "$hits" ] || fail "배포될 페이지가 API Gateway URL 을 **리터럴로** 들고 있습니다:"\
+    $'\n'"$hits"\
+    $'\n'"→ API id 는 terraform 재생성마다 바뀝니다. 커밋된 리터럴은 **커밋되는 순간부터 썩습니다.**"\
+    $'\n'"→ terraform 이 config.js 를 렌더하게 하세요 (aws_s3_object.config)."
+  ok "site/ 에 API URL 리터럴 없음 (terraform 이 config.js 를 렌더)"
+fi
+
+echo "[verify] (s) 저장소 어디에도 배포마다 바뀌는 엔드포인트가 박혀 있지 않은가"
+# ---------------------------------------------------------------------------
+# (r) 은 site/ 만 본다. 그런데 같은 결함은 **문서로도 들어온다.**
+#
+# MONO-389 를 하면서 나는 "실제 site_url 을 루트 README 에 넣겠다" 고 적었다. 그 URL 은
+# CloudFront 배포 도메인이고, 배포마다 새로 할당되며, destroy 하면 죽는다 — 즉 내가 (r) 로
+# 막은 **바로 그 썩는 리터럴**이다. 가드를 세워 놓고 그 옆에서 같은 짓을 할 뻔했다.
+#
+# 규칙: API Gateway id 와 CloudFront 배포 도메인은 **terraform 상태이지 소스가 아니다.**
+# 저장소에 적히는 순간 부패가 시작된다. 값이 필요하면 `terraform output` 이 유일한 출처다.
+#
+# **`git grep` 이다. `grep -r` 이 아니다.** 명제는 "저장소에 *커밋*돼 있는가" 인데
+# `grep -r` 은 파일시스템을 본다 — 그래서 첫 판본이 `terraform.tfstate` 를 물었다.
+# 그 파일은 gitignore 되어 **커밋되지 않는다.** 술어와 모집단이 어긋난 것이고,
+# 그런 가드는 첫날 빨개져서 꺼진다(MONO-360). tracked 만 보면 그 실패가 사라진다.
+#
+# 오탐 둘을 더 의도적으로 비켜간다:
+#   1. 산문의 "CloudFront" 라는 낱말 — 구체적 id 가 붙은 호스트명만 본다.
+#   2. task/ADR 이 죽은 URL 을 **증거로 인용**하는 것 — TASK-MONO-389 본문이 실제로
+#      그렇게 한다. 술어는 이것이다: **task/ADR 은 "무엇이었는지" 를 기록하고,
+#      README/infra 는 "무엇을 하라" 고 지시한다.** 부패하는 것은 지시뿐이다.
+volatile_re='[a-z0-9]{6,}\.cloudfront\.net|[a-z0-9]{6,}\.execute-api\.[a-z0-9-]+\.amazonaws\.com'
+hits="$(git -C "$ROOT" grep -nIE "$volatile_re" -- \
+          ':(exclude)tasks/' ':(exclude,glob)**/adr/**' \
+          ':(exclude)infra/demo/verify-demo-wrapper.sh' 2>/dev/null || true)"
+[ -z "$hits" ] || fail "배포마다 바뀌는 엔드포인트가 저장소에 커밋돼 있습니다:"\
+  $'\n'"$hits"\
+  $'\n'"→ API Gateway id 와 CloudFront 도메인은 **terraform 상태이지 소스가 아닙니다.**"\
+  $'\n'"→ destroy/재생성 한 번이면 죽습니다. 유일한 출처는 \`terraform output site_url\` 입니다."
+ok "저장소에 휘발성 엔드포인트 리터럴 없음"
+
+echo "[verify] (t) 페이지가 만드는 데모 도메인이 부팅이 파생하는 것과 같은가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-389): `demo-boot.sh` 는 IMDSv2 로 읽은 IP 를 **대시**로 바꿔 파생한다
+# (`tr '.' '-'`) 그리고 Traefik 라우터는 그 표기로만 뜬다. 그런데 `site/index.html` 은
+# **점 표기**로 링크를 만들고 있었다.
+#
+# sslip.io 가 두 표기를 모두 해석해 주는 것이 함정이다: DNS 는 풀리고 TCP 도 붙는데
+# **Traefik 이 매치되는 라우터를 못 찾아 404** 를 낸다. 실측: 점 → 404 / 대시 → 307.
+# 사이트 200, `/start` 200, 96개 컨테이너 healthy — 그런데 방문자는 데모에 못 들어간다.
+# **"버튼이 200 을 낸다" 와 "방문자가 도달한다" 는 다른 명제다.**
+#
+# 그래서 이 가드는 문자열을 열거하지 않고 **두 규칙을 같은 입력으로 실행해 대조한다.**
+# 어느 쪽이 바뀌든(대시→점, 접미사 변경, 서브도메인 추가) 두 값이 갈라지는 순간 빨개진다.
+site_html="$ROOT/infra/demo/aws/site/index.html"
+if [ -f "$site_html" ]; then
+  command -v node >/dev/null 2>&1 || fail "(t) node 가 없습니다 — 이 가드는 페이지의 규칙을 **실행**해서 대조합니다."\
+    $'\n'"→ 조용히 건너뛰면 skip 이 초록으로 보고됩니다(MONO-360). 건너뛰지 않습니다."
+
+  sample_ip="203.0.113.7"   # TEST-NET-3. 실주소가 아니므로 값이 새어도 무해하다.
+  boot_host="$(printf '%s' "$sample_ip" | tr '.' '-').sslip.io"
+
+  page_expr="$(sed -n 's/^[[:space:]]*\(const demoHost =.*\); \/\/ GUARD-T-ANCHOR.*/\1/p' "$site_html")"
+  [ -n "$page_expr" ] || fail "(t) index.html 에서 GUARD-T-ANCHOR 를 못 찾았습니다 — **가드가 공허합니다.**"\
+    $'\n'"→ demoHost 를 바꿨다면 앵커 주석도 함께 유지하세요."
+
+  page_host="$(node -e "$page_expr; process.stdout.write(demoHost('$sample_ip'))")"
+
+  [ "$page_host" = "$boot_host" ] || fail "페이지가 만드는 데모 도메인이 부팅의 파생과 다릅니다:"\
+    $'\n'"    demo-boot.sh  → $boot_host"\
+    $'\n'"    index.html    → $page_host"\
+    $'\n'"→ Traefik 라우터는 **부팅이 파생한 표기로만** 존재합니다. 다른 표기로 링크하면"\
+    $'\n'"   DNS 는 풀리고 TCP 도 붙지만 **404** 가 납니다 (실측: 점 404 / 대시 307)."
+  ok "페이지와 부팅이 같은 도메인을 만든다 ($page_host)"
+fi
+
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"

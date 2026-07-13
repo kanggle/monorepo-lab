@@ -12,6 +12,20 @@ A monorepo for developing multiple domain projects side-by-side, accumulating a 
 
 ---
 
+## 🚀 Live demo — on-demand, scale-to-zero
+
+The whole portfolio (**8 projects / 96 containers**) runs as one federated stack on a single EC2 host. A visitor presses **Start Demo**, the host wakes, the stack comes up (~2–4 min), and it **stops itself** once idle. Nobody using it ⇒ **compute cost is zero**.
+
+**There is no permanent public URL in this file, and that is deliberate.** The front door is a CloudFront distribution that terraform creates; its domain is **deployment state, not source**. A URL pasted here would be a fresh literal that dies at the next `destroy` — exactly the defect `TASK-MONO-389` was filed to kill (the demo page used to carry a hardcoded, and by then dead, API Gateway URL). A guard in [`infra/demo/verify-demo-wrapper.sh`](infra/demo/verify-demo-wrapper.sh) now fails CI if any such endpoint is committed — including into this README. The only honest source is:
+
+```bash
+cd infra/demo/aws/terraform && terraform apply && terraform output site_url
+```
+
+Full reproduction — AMI bake, terraform stack, required IAM permissions, cost guards, why it's HTTP: [**`infra/demo/aws/`**](infra/demo/aws/). Spend is guarded in three layers (idle-stop · max-runtime · **monthly budget**), because `/start` is a public endpoint and an unguarded one is an unbounded-spend button.
+
+---
+
 ## 🎯 Projects
 
 **7 domain projects + 1 horizontal console.** Service counts track [`settings.gradle`](settings.gradle), the only inventory the build reads — [`scripts/check-service-map-drift.sh`](scripts/check-service-map-drift.sh) fails CI when the detailed service maps in [`docs/project-overview.md`](docs/project-overview.md) drift from it.

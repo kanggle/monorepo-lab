@@ -1,0 +1,20 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SiteBucket",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::portfolio-demo-site-*",
+        "arn:aws:s3:::portfolio-demo-site-*/*"
+      ]
+    },
+    {
+      "Sid": "SiteCdn",
+      "Effect": "Allow",
+      "Action": "cloudfront:*",
+      "Resource": "*"
+    }
+  ]
+}
