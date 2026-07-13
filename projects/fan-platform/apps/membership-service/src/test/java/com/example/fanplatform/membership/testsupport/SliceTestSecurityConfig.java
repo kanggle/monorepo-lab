@@ -1,9 +1,9 @@
 package com.example.fanplatform.membership.testsupport;
 
 import com.example.fanplatform.membership.infrastructure.security.ActorContextJwtAuthenticationConverter;
-import com.example.fanplatform.membership.infrastructure.security.AllowedIssuersValidator;
+import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.fanplatform.membership.infrastructure.security.SecurityConfig;
-import com.example.fanplatform.membership.infrastructure.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.example.fanplatform.membership.infrastructure.security.WorkloadIdentityAuthoritiesConverter;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -63,7 +63,9 @@ public class SliceTestSecurityConfig {
         OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
                 new JwtTimestampValidator(),
                 new AllowedIssuersValidator(List.of(JwtTestHelper.SAS_ISSUER, JwtTestHelper.LEGACY_ISSUER)),
-                new TenantClaimValidator(JwtTestHelper.DEFAULT_TENANT_ID));
+                TenantClaimValidator.forTenant(JwtTestHelper.DEFAULT_TENANT_ID)
+                        .allowSuperAdminWildcard()
+                        .build());
         decoder.setJwtValidator(validator);
         return decoder;
     }
