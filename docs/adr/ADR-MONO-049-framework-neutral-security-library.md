@@ -241,6 +241,14 @@ Two of those decisions are already known to be non-trivial:
 - **`fan/membership`** — keep the `/internal/**` exemption, or remove it? Keeping it preserves behaviour (§ 6 V6). Removing it is a *narrowing*, and would need its internal callers checked first.
 - **`scm/demand-planning`, `scm/inventory-visibility`** — pass `PublicPaths::isPublic` like every other service (a **narrowing**, and the safer default), or reproduce the blanket `/actuator/` exemption? **Narrowing is a behaviour change and must be an explicit decision, not a silent one.**
 
+#### The three facts D5-5's decision needs (measured while ticketing `TASK-MONO-385`)
+
+- **A.** Both services' `SecurityConfig` `permitAll`s **only** `/actuator/{health,info,prometheus}` and ends `anyRequest().denyAll()`. `/actuator/env` is refused by Spring Security *before* the enforcer's exemption is consulted.
+- **B.** It follows that the actuator paths which are *exempt but not permitted* are **unreachable even with a token**. So narrowing the exemption to those three is very likely a **zero-reachable-behaviour-change** narrowing — but that is a claim to be **proven**, not assumed, and `TASK-MONO-385` AC-3 makes the proof the price of choosing it. *An unproven narrowing is not a decision, it is a bet.*
+- **C.** `inventory-visibility` also `permitAll`s `/internal/inventory-visibility/**`. **This is not a defect** — `InternalSnapshotController` is the network-trusted, tenant-agnostic batch read that `ADR-MONO-027` § D7.1 documents, called by a scheduler that holds no token, and the gateway does not route it. Because it is `permitAll`, no JWT arrives, and the enforcer passes non-`JwtAuthenticationToken` requests through regardless of its predicate. **The exemption axis does not reach that path, and narrowing the exemption cannot break it.**
+
+Neither service holds a `PublicPaths` class today (only `procurement` does), so choosing the narrow shape means creating one.
+
 > **The copies did not disagree because anyone decided they should.** They disagreed because thirteen files were maintained by hand and nothing ever compared them. **Extracting them is what made the disagreement visible** — which is the whole argument of this ADR, arriving as evidence rather than assertion.
 
 ### 1.9 🔴 The canonical class had reintroduced the split the copies were written to avoid (`TASK-MONO-383`, D5-3)
@@ -278,6 +286,30 @@ With `trustEntitledDomains` off (fan), `entitled` is always `false` and this **i
 **Guarded, both ways.** `TenantClaimEnforcerTest` gains a nested `AgreesWithTheDecoder` group that runs a token set through **both** the validator and the enforcer and asserts the verdicts match — in *both* directions (nothing the decoder admits is refused; nothing it refuses is admitted). Each finance service's `FinanceTenantGatePolicyTest` asserts the same agreement over its own wiring. Mutation-verified: restoring the unconditional shape turns both red.
 
 > **Whether an entitlement without a `tenant_id` *should* be admitted is a real policy question — and it is not this refactor's to answer.** Today both layers say yes. If that is wrong, it is wrong at the *validator* too, fleet-wide, and belongs in its own ticket with its own ADR. What D5 may not do is change the answer silently, on one layer only, while claiming behaviour invariance.
+
+### 1.10 🔴 The population was wrong a sixth time — and this time the detector, not the scope, was too narrow (`TASK-MONO-385`, D5-5)
+
+Every count in this lineage has been measured with the same predicate: **a file whose body starts `public class TenantClaimValidator` (or the other two).** Five corrections later — 4 → 10 → 18 → 49, plus D5-3's arithmetic slip — the predicate itself had never been questioned.
+
+Ticketing D5-5 questioned it. **`scm/demand-planning` and `scm/inventory-visibility` hold the same validator logic as everyone else, written as inline lambdas inside their `ServiceLevelOAuth2Config`:**
+
+```java
+public static OAuth2TokenValidator<Jwt> tenantClaimValidator(String expectedTenantId) {
+    return jwt -> { ... };     // wildcard + entitled_domains + "tenant_mismatch" — the class policy
+}
+private static OAuth2TokenValidator<Jwt> allowedIssuersValidator(List<String> allowed) {
+    return jwt -> { ... };
+}
+static boolean isEntitled(Jwt jwt, String domain) { ... }
+```
+
+Fleet-wide, only these two files do this (measured). Which is exactly why nothing caught them: **`^public class` cannot see a lambda.** § 1.7's "scm: 1 validator / 3 enforcers" is arithmetically right about *files* and wrong about *what is being hand-maintained there* — the truth is **one validator class and two inline implementations of it**.
+
+> **The first five corrections were about where we looked. This one is about what we agreed to call a copy.** A count is only as honest as its predicate, and a predicate that has never been wrong is a predicate nobody has tested. (The same lesson, in a different costume, as the `grep -c` that counted Javadoc in `TASK-MONO-375`.)
+
+**And the drift is already there, as always.** The inline issuer check fails with error code **`invalid_token`**; every class copy — including the canonical one — uses **`invalid_issuer`**. Adopting the shared class therefore changes an observable response code on those two services. That is a real behaviour change, it is small, and D5-5 must state it rather than let it ride along (`TASK-MONO-385` AC-2).
+
+**The file count is unaffected** — D5-5 still deletes five class files, 31 → 26. What changes is the work: it must also delete the two inline implementations. Leaving them would mean the class this ADR just declared canonical still has hand-maintained copies in the fleet — **the ADR executing its own thesis on itself**, which is the argument § 1.6 used to widen D5 to scope A in the first place.
 
 ---
 
@@ -459,7 +491,7 @@ Per `TASK-MONO-364` § AC-6 the roadmap lives here, not in `tasks/ready/`. **Tic
 | **D5-2** | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | **✅ `TASK-MONO-382`.** The 13 copies hold **eight distinct bodies**, which reduce to **three policy axes** — everything else was line-wrapping and an inlined `@Value`. **The axes are recorded in § 1.8, because one of them is a security boundary and D5-3…D5-8 have to carry it.** Canonical class is builder-parameterised, **every switch closed by default** (including the wildcard, which all 13 copies enable — *a default is what you get when someone forgets*). 19 tests; each switch asserted **on *and* off**. |
 | **D5-3** | finance — account, ledger | 6 | **✅ `TASK-MONO-383`** — the first deletion: **49 → 43**. All three switches wired explicitly and **mutation-verified** (remove any one → finance's suite goes red). **`ledger-service` has test coverage for these classes for the first time** — the service § 1.3 names (all three classes, zero tests) now holds 20 policy assertions. **V6 earned its keep on its first run: it caught a latent decode-pass / filter-block split in D5-2's canonical class — see § 1.9.** |
 | **D5-4** | erp — approval, masterdata, notification, read-model | 12 | **✅ `TASK-MONO-384`** — **43 → 31**, the largest single-project deletion. Policy measured, not inherited: wildcard 4/4, entitlement 4/4, `PublicPaths` 4/4 identical. **Mutation-verified 12 times** (3 switches × 4 services), each run printing the removed line first. 477 tests / 0 skipped / 0 failures. **Two referencer surfaces finance did not have**: `ReadAuthorizationGate` calls `TenantClaimValidator.isEntitled` from production code, and a `@WebMvcTest` slice `@Import`-ed the filter *as a component class* — the shared one has a private constructor. The slice now imports the real `ServiceLevelOAuth2Config` rather than a test double that re-states the switches: **a second place to write the policy is the thing this ADR exists to remove.** |
-| D5-5 | scm — procurement (all 3); demand-planning + inventory-visibility (**Enforcer only**) | 5 | ⏳ |
+| **D5-5** | scm — procurement (all 3); demand-planning + inventory-visibility (Enforcer, **plus two inline validator implementations** — § 1.10) | 5 | **`TASK-MONO-385` (ready)** — **31 → 26**, and **the step that decides § 1.8's exemption axis.** The three facts the decision needs are measured in the ticket. It also removes two hand-maintained validator implementations that no file-count ever saw, and it changes one observable error code (§ 1.10). |
 | D5-6 | fan — artist, community, membership, notification | 12 | ⏳ |
 | D5-7 | wms — 5 services (**validators only**; `admin-service` needs the one new `java-security` line) | 10 | ⏳ |
 | D5-8 | iam — community, membership (**validators only**; the **gateway** stays out — § D6) | 4 | ⏳ |
