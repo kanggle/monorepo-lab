@@ -19,7 +19,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
  *
  * <h2>The gate is parameterized, and the parameters are policy</h2>
  *
- * The four gateways deliberately run <em>different</em> tenant gates (ADR-MONO-048 § D5 —
+ * The gateways deliberately run <em>different</em> tenant gates (ADR-MONO-048 § D5 —
  * each one traced to a documented decision, not to drift):
  *
  * <table>
@@ -28,20 +28,25 @@ import org.springframework.security.oauth2.jwt.Jwt;
  *   <tr><td>wms</td><td>no</td><td>yes</td><td>strict legacy equality is an explicit choice; ADR-MONO-019 § D5</td></tr>
  *   <tr><td>scm</td><td>yes</td><td>yes</td><td>ADR-MONO-019 § D5 (SUPER_ADMIN incident response)</td></tr>
  *   <tr><td>fan</td><td>yes</td><td>no</td><td>fan sits outside the entitlement plane — the branch would be dead code</td></tr>
+ *   <tr><td>erp / finance / ecommerce</td><td>yes</td><td>yes</td><td>ADR-MONO-019 § D5; ecommerce is the marketplace edge (ADR-MONO-030 § D1-A) and reaches it via entitlement, like everyone else</td></tr>
  * </table>
  *
- * <p><strong>Both switches default to closed.</strong> The plain
+ * <p><strong>Every switch defaults to closed, and every switch narrows.</strong> The plain
  * {@link #forTenant(String)} gate accepts nothing but an exact {@code tenant_id} match;
  * every relaxation requires an explicit call at the wiring site. A shared security class
- * whose defaults open the gate is one typo away from opening four of them.
+ * whose defaults open the gate is one typo away from opening all of them.
  *
- * <p>ecommerce (D7 step 3) adds a fourth: {@link Builder#acceptAnyWellFormedTenant()} —
- * <strong>the only switch in this library that opens a gate rather than narrowing one</strong>.
- * It is justified (ADR-MONO-030 § 2.4: ecommerce is a multi-tenant marketplace SaaS,
- * entitlement is decided at IAM issuance and the edge trusts issuance; tenant separation is
- * enforced by the persistence layer's {@code WHERE tenant_id} and proven by the M6
- * cross-tenant-leak IT), and it is guarded: {@code TenantGatePolicyLeakTest} asserts it is
- * off in wms, scm and fan. A flag that opens an edge needs a test that says where it isn't.
+ * <p><strong>There used to be a switch that opened one.</strong> {@code acceptAnyWellFormedTenant}
+ * admitted <em>any</em> non-blank {@code tenant_id}, and ecommerce was its only caller — the
+ * marketplace edge serves every tenant, so "does this token's tenant match this gateway's?" was
+ * held to be a question it could not ask. But the question it actually needed was
+ * <em>"is this tenant entitled to <b>this</b> domain?"</em>, and that is what
+ * {@link Builder#trustEntitledDomains()} asks — the same thing erp, finance, scm and wms ask.
+ * Accepting any well-formed tenant answered a <em>weaker</em> question and let a token entitled
+ * only to some <em>other</em> domain through (TASK-BE-506). ecommerce now runs the fleet's gate
+ * and the opening switch is gone (TASK-MONO-388, ADR-MONO-049 § D5). <strong>Do not reintroduce
+ * it.</strong> A marketplace edge is not a gate that admits everyone; it is a gate whose
+ * admissible set is decided by entitlement rather than by its own name.
  */
 public class TenantClaimValidator implements OAuth2TokenValidator<Jwt> {
 
@@ -68,18 +73,11 @@ public class TenantClaimValidator implements OAuth2TokenValidator<Jwt> {
     private final String expectedTenantId;
     private final boolean allowWildcard;
     private final boolean trustEntitledDomains;
-    private final boolean acceptAnyWellFormedTenant;
 
     private TenantClaimValidator(Builder builder) {
         this.expectedTenantId = builder.expectedTenantId;
         this.allowWildcard = builder.allowWildcard;
         this.trustEntitledDomains = builder.trustEntitledDomains;
-        this.acceptAnyWellFormedTenant = builder.acceptAnyWellFormedTenant;
-    }
-
-    /** Whether this gate admits any well-formed {@code tenant_id}. Exposed so a leak guard can assert it. */
-    public boolean acceptsAnyWellFormedTenant() {
-        return acceptAnyWellFormedTenant;
     }
 
     /** Strictest gate: exact {@code tenant_id} equality, nothing else. Relax explicitly. */
@@ -91,30 +89,9 @@ public class TenantClaimValidator implements OAuth2TokenValidator<Jwt> {
         private final String expectedTenantId;
         private boolean allowWildcard;
         private boolean trustEntitledDomains;
-        private boolean acceptAnyWellFormedTenant;
 
         private Builder(String expectedTenantId) {
             this.expectedTenantId = Objects.requireNonNull(expectedTenantId, "expectedTenantId");
-        }
-
-        /**
-         * Admit <strong>any</strong> non-blank {@code tenant_id} from a verified token. Only
-         * a missing / blank / non-string claim is rejected.
-         *
-         * <p><strong>This is the one switch here that opens a gate.</strong> It exists for the
-         * multi-tenant marketplace edge (ADR-MONO-030 § 2.4): ecommerce serves every tenant,
-         * entitlement is decided at IAM issuance time, and the edge trusts issuance. Tenant
-         * separation is not an edge concern there — it is enforced at the persistence layer by
-         * {@code WHERE tenant_id}, which the M6 cross-tenant-leak IT exists to prove.
-         *
-         * <p>It is <em>not</em> appropriate for a single-domain edge, where the whole point of
-         * the gate is that this gateway serves one tenant. Turning it on for wms, scm or fan
-         * would silently admit every tenant's tokens — so {@code TenantGatePolicyLeakTest}
-         * asserts it is off in all three. Do not remove that guard.
-         */
-        public Builder acceptAnyWellFormedTenant() {
-            this.acceptAnyWellFormedTenant = true;
-            return this;
         }
 
         /**
@@ -181,12 +158,6 @@ public class TenantClaimValidator implements OAuth2TokenValidator<Jwt> {
                 && (expectedTenantId.equals(tenantId)
                         || (allowWildcard && WILDCARD_TENANT.equals(tenantId)));
         if (legacyOk) {
-            return OAuth2TokenValidatorResult.success();
-        }
-        // The marketplace edge (ADR-MONO-030 § 2.4). Still rejects a missing / blank /
-        // non-string claim: "any tenant" is not "no tenant" — a token with no tenant context
-        // would leave the persistence-layer WHERE tenant_id filter with nothing to filter on.
-        if (acceptAnyWellFormedTenant && wellFormed) {
             return OAuth2TokenValidatorResult.success();
         }
         if (trustEntitledDomains && isEntitled(jwt, expectedTenantId)) {
