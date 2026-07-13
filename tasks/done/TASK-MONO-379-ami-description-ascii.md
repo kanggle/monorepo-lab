@@ -8,7 +8,7 @@ em dash 하나가 40분치 AMI 를 태우고 산출물까지 지웠다 — `pack
 
 # Status
 
-review
+done
 
 # Owner
 
