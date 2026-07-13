@@ -8,7 +8,7 @@ ecommerce 게이트웨이를 **entitlement-trust 로 이행** — `acceptAnyWell
 
 # Status
 
-review
+done
 
 # Owner
 
