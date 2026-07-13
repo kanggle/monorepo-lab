@@ -123,7 +123,14 @@ services:
       - "traefik.docker.network=traefik-net"
       # 브라우저가 밟는 OIDC 표면만. priority 를 게이트웨이 라우터보다 높여
       # `Host(iam.*)` 전체 매칭을 앞선다(Traefik 기본 priority = rule 길이).
-      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/login`) || PathPrefix(`/.well-known`))"
+      #
+      # `/signup` 이 load-bearing 이다(TASK-MONO-380). 갓 부팅한 데모의 credentials
+      # 테이블은 비어 있으므로 **가입이 유일한 입구**다. 이 규칙이 경로를 열거하는데
+      # 처음에는 /signup 이 빠져 있었고, 그러면 요청이 iam 게이트웨이 라우터로 떨어져
+      # 404 가 된다 — **로그인 폼 자신이 /signup 으로 링크를 거는데.** 컨테이너는 전부
+      # healthy 하고 /login 도 200 인데 **아무도 데모에 로그인할 수 없다.**
+      # 가드 (p) 가 템플릿의 링크와 이 규칙을 대조한다 — 손으로 열거하면 또 드리프트한다.
+      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/.well-known`))"
       - "traefik.http.routers.iam-oidc.priority=1000"
       - "traefik.http.routers.iam-oidc.entrypoints=web"
       - "traefik.http.services.iam-oidc.loadbalancer.server.port=8081"

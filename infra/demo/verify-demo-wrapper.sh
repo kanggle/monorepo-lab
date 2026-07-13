@@ -615,6 +615,51 @@ if [ -f "$pkr" ]; then
 fi
 ok "packer 의 AMI 이름/설명이 ASCII"
 
+echo "[verify] (p) 로그인 페이지가 링크하는 경로가 데모 엣지에서 라우팅되는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-380): iam OIDC 라우터 규칙은 **경로를 열거한다** —
+#
+#   Host(iam.<도메인>) && (PathPrefix(/oauth2) || PathPrefix(/login) || PathPrefix(/.well-known))
+#
+# 그리고 `/signup` 이 빠져 있었다. 그 요청은 iam **게이트웨이** 라우터로 떨어지고
+# 게이트웨이엔 그런 경로가 없어 **404** 다. 그런데 **로그인 폼 자신이 /signup 으로
+# 링크를 건다.**
+#
+# 치명적인 이유: **갓 부팅한 데모의 credentials 테이블은 비어 있다**(실측 — 새 AMI
+# 로 부팅한 인스턴스에서 `SELECT email FROM credentials` 가 0행). 즉 **가입이 유일한
+# 입구**이고, 그 입구가 404 이면 **아무도 데모에 로그인할 수 없다.** 그런데 컨테이너
+# 96개는 전부 healthy 하고, /login 도 200 이고, 라우터도 "있다".
+#
+# 358 의 로그인 증명이 통했던 것은 그 인스턴스의 DB 에 계정이 **누적돼 있었기**
+# 때문이다 — 새 부팅에는 없다. 열거된 목록은 드리프트한다: 손으로 세지 말고
+# **템플릿이 실제로 링크하는 경로**와 대조한다.
+tpl_dir="$ROOT/projects/iam-platform/apps/auth-service/src/main/resources/templates"
+ovr="$ROOT/infra/demo/iam-traefik.override.yml"
+if [ -d "$tpl_dir" ] && [ -f "$ovr" ]; then
+  rule_line="$(grep -F 'routers.iam-oidc.rule=' "$ovr" || true)"
+  [ -n "$rule_line" ] || fail "iam-traefik.override.yml 에 iam-oidc 라우터 규칙이 없습니다."
+
+  # 템플릿의 `@{/xxx}` (Thymeleaf 링크/폼 action) 에서 최상위 경로 세그먼트를 뽑는다.
+  # 예: @{/signup} → /signup, @{'/login/oauth/' + ...} → /login
+  missing=""
+  while IFS= read -r seg; do
+    [ -n "$seg" ] || continue
+    case "$rule_line" in
+      *"PathPrefix(\`/$seg\`)"*) : ;;
+      *) missing="$missing   /$seg"$'\n' ;;
+    esac
+  done < <(grep -ohE "@\{'?/[a-zA-Z0-9_.-]+" "$tpl_dir"/*.html 2>/dev/null \
+             | sed -E "s/^@\{'?\///" | sort -u)
+
+  [ -z "$missing" ] || fail "로그인/가입 템플릿이 링크하는데 데모 엣지 라우터가 덮지 않는 경로:"\
+    $'\n'"$missing"\
+    $'\n'"→ 이 경로들은 iam 게이트웨이 라우터로 떨어져 **404** 가 됩니다."\
+    $'\n'"→ 갓 부팅한 데모의 credentials 는 비어 있어 **가입이 유일한 입구**입니다."\
+    $'\n'"   그 입구가 404 면 컨테이너가 전부 healthy 해도 **아무도 로그인할 수 없습니다.**"\
+    $'\n'"→ iam-traefik.override.yml 의 iam-oidc 규칙에 PathPrefix 를 추가하세요."
+  ok "브라우저 표면 경로 전부 라우팅됨 ($(grep -ohE "@\{'?/[a-zA-Z0-9_.-]+" "$tpl_dir"/*.html 2>/dev/null | sed -E "s/^@\{'?\///" | sort -u | tr '\n' ' '))"
+fi
+
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"
