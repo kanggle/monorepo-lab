@@ -8,7 +8,7 @@ TASK-MONO-394
 
 # Status
 
-in-progress
+review
 
 # Owner
 
