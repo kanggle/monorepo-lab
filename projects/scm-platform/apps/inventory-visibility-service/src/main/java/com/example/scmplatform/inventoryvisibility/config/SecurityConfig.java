@@ -1,5 +1,6 @@
 package com.example.scmplatform.inventoryvisibility.config;
 
+import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.security.PublicPaths;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -33,19 +34,38 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // The actuator permit list and TenantClaimEnforcer's exemption now come from the same
+        // object (ADR-MONO-049 § 1.8, TASK-MONO-385). They used to be written out separately
+        // here and in the filter, and they had already drifted: this list held three paths while
+        // the filter exempted all of /actuator/.
+        String[] exact = PublicPaths.EXACT.toArray(new String[0]);
+        String[] prefixed = PublicPaths.PREFIXES.stream()
+                .map(p -> p + "**")
+                .toArray(String[]::new);
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
-                        // Internal, network-trusted, gateway-blocked (ADR-MONO-027 §D7.1).
-                        // No JWT: the demand-planning replenishment batch is unattended (no
-                        // operator token). Reachable only on the intra-scm container network —
-                        // scm-gateway routes only /api/v1/**, never /internal/**.
-                        .requestMatchers("/internal/inventory-visibility/**").permitAll()
-                        .requestMatchers("/api/inventory-visibility/**").authenticated()
-                        .anyRequest().denyAll()
-                )
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers(exact).permitAll();
+                    // PREFIXES is empty for this service today. Guarded rather than omitted so
+                    // that adding one to PublicPaths permits it here automatically — the whole
+                    // point is that these two can no longer be edited independently.
+                    if (prefixed.length > 0) {
+                        auth.requestMatchers(prefixed).permitAll();
+                    }
+                    // Internal, network-trusted, gateway-blocked (ADR-MONO-027 §D7.1).
+                    // No JWT: the demand-planning replenishment batch is unattended (no
+                    // operator token). Reachable only on the intra-scm container network —
+                    // scm-gateway routes only /api/v1/**, never /internal/**.
+                    //
+                    // Deliberately NOT in PublicPaths: PublicPaths is the tenant filter's
+                    // exemption list, and this path needs no exemption. It carries no JWT, and
+                    // TenantClaimEnforcer passes non-JwtAuthenticationToken requests straight
+                    // through — so the filter never gates it either way (ADR-MONO-049 § 1.8 C).
+                    auth.requestMatchers("/internal/inventory-visibility/**").permitAll();
+                    auth.requestMatchers("/api/inventory-visibility/**").authenticated()
+                            .anyRequest().denyAll();
+                })
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> {})
                         .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)

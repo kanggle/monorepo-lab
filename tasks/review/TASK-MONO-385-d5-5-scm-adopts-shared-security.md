@@ -8,7 +8,7 @@ TASK-MONO-385
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -127,17 +127,73 @@ protected boolean shouldNotFilter(HttpServletRequest request) {
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (사본이 사라졌다 — 클래스 **와** 인라인)** — `projects/scm-platform` 에 세 클래스 파일 **0개** (함대 **31 → 26**, `git grep` 전수 재카운트). **그리고 `ServiceLevelOAuth2Config` 안의 인라인 `tenantClaimValidator` / `allowedIssuersValidator` / `isEntitled` 도 0개** — 공유 클래스로 대체됐다. *파일 수만 세면 이 절반을 놓친다.*
-- [ ] **AC-2 (행동 불변 — § 6 V6 — 그리고 *한 곳은 진짜로 바뀐다*)** — scm 3개 서비스 스위트 통과. 기존 단언의 *동작*은 바뀌지 않는다(주어만 교체).
+- [x] **AC-1 (사본이 사라졌다 — 클래스 **와** 인라인)** — `projects/scm-platform` 에 세 클래스 파일 **0개** (함대 **31 → 26**, `git grep` 전수 재카운트). **그리고 `ServiceLevelOAuth2Config` 안의 인라인 `tenantClaimValidator` / `allowedIssuersValidator` / `isEntitled` 도 0개** — 공유 클래스로 대체됐다. *파일 수만 세면 이 절반을 놓친다.*
+- [x] **AC-2 (행동 불변 — § 6 V6 — 그리고 *한 곳은 진짜로 바뀐다*)** — scm 3개 서비스 스위트 통과. 기존 단언의 *동작*은 바뀌지 않는다(주어만 교체).
       **예외 1건: 발급자 거부 에러코드가 `invalid_token` → `invalid_issuer` 로 바뀐다**(두 서비스). **이 코드의 소비자를 전수로 찾고**(`SecurityConfig` 에러 매핑 · `specs/contracts/` · 프런트 · IT), **없으면 "관측 가능하나 소비자 없음" 을 근거와 함께 기록**하라. **소비자가 있으면 멈추고 보고하라.**
-- [ ] **AC-3 (면제 결정 — *증명한 뒤에* 좁힌다)** — (A) 를 택했다면: 두 서비스의 `SecurityConfig` 가 `permitAll` 하는 경로를 **전수 열거**하고, **면제에서 빠지는 actuator 경로가 전부 `denyAll` 로 이미 도달 불가능함을 보여라**(테스트로). ⇒ **도달 가능한 행동 변화 0** 을 증명한 뒤 좁힌다.
+- [x] **AC-3 (면제 결정 — *증명한 뒤에* 좁힌다)** — (A) 를 택했다면: 두 서비스의 `SecurityConfig` 가 `permitAll` 하는 경로를 **전수 열거**하고, **면제에서 빠지는 actuator 경로가 전부 `denyAll` 로 이미 도달 불가능함을 보여라**(테스트로). ⇒ **도달 가능한 행동 변화 0** 을 증명한 뒤 좁힌다.
       **증명이 안 되면 (B)** 를 택하고 **§ 1.8 에 이유를 적어라.** *증명 없는 narrowing 은 결정이 아니라 도박이다.*
-- [ ] **AC-4 (정책 핀 = 허용 **과** 거부, 그리고 두 층의 합의)** — **서비스 3개 각각**: `tenant_id=scm` → 통과 / `"*"` → 통과 / `entitled_domains=[scm]`+`tenant_id=erp` → 통과 / `tenant_id=erp` entitled 없음 → **403** / claim 부재 → **401** / 면제경로 → 건너뜀 / **비면제 경로 → 게이트 적용** / **decoder 와 enforcer 가 같은 판정**(§ 1.9).
+- [x] **AC-4 (정책 핀 = 허용 **과** 거부, 그리고 두 층의 합의)** — **서비스 3개 각각**: `tenant_id=scm` → 통과 / `"*"` → 통과 / `entitled_domains=[scm]`+`tenant_id=erp` → 통과 / `tenant_id=erp` entitled 없음 → **403** / claim 부재 → **401** / 면제경로 → 건너뜀 / **비면제 경로 → 게이트 적용** / **decoder 와 enforcer 가 같은 판정**(§ 1.9).
       **⚠️ subject 는 `ServiceLevelOAuth2Config` 에서 꺼낼 것.** 자기 builder 로 만들면 config 에서 스위치가 빠져도 초록이고 AC-5 가 연극이 된다.
-- [ ] **AC-5 (mutation)** — 서비스별로 `.allowSuperAdminWildcard()` / `.trustEntitledDomains()` / `.exempt(...)` 를 하나씩 빼면 **그 서비스 스위트가 RED**.
+- [x] **AC-5 (mutation)** — 서비스별로 `.allowSuperAdminWildcard()` / `.trustEntitledDomains()` / `.exempt(...)` 를 하나씩 빼면 **그 서비스 스위트가 RED**.
       **⚠️ mutation 이 적용됐는지 결과 읽기 전에 확인하라** — 기준을 **mutation 직전 파일**로 잡고 **사라진 줄을 출력**할 것. (D5-3 의 첫 러너는 `HEAD` 기준 diff 로 **거짓 GREEN** 을 냈다. D5-4 에서는 perl 치환이 **CRLF 때문에 0건 적용**됐는데 적용 건수를 먼저 찍어 잡았다.)
-- [ ] **AC-6 (기존 단언 4개 GREEN)** — artefact 수 불변(23 / 50 / 94).
-- [ ] **AC-7 (테스트 GREEN — XML 실측)** — `BUILD SUCCESSFUL` 을 믿지 말고 테스트 수 · skipped 를 XML 로 확인하라.
+- [x] **AC-6 (기존 단언 4개 GREEN)** — artefact 수 불변(23 / 50 / 94).
+- [x] **AC-7 (테스트 GREEN — XML 실측)** — `BUILD SUCCESSFUL` 을 믿지 말고 테스트 수 · skipped 를 XML 로 확인하라.
+
+---
+
+# 실측 결과 + 결정
+
+## 결정: **(A) 좁힌다** — 그리고 도달 가능한 행동 변화가 **0** 임을 증명했다
+
+**증명의 축은 필터 순서였다.** `TenantClaimEnforcer.ORDER = LOWEST_PRECEDENCE - 100`(= `Integer.MAX_VALUE - 100`)이고 Spring Security 체인은 `SecurityProperties.DEFAULT_FILTER_ORDER = -100` 에 등록된다 ⇒ **Spring Security 가 먼저 돈다.** `authorizeHttpRequests` 가 거부한 요청은 **Enforcer 에 도달조차 하지 않는다.**
+
+⇒ **면제를 잃은 actuator 경로들**(`env` · `beans` · `loggers` · `heapdump` · `health/liveness`)은 전부 `anyRequest().denyAll()` 에 걸리므로 **애초에 필터가 본 적이 없다.** 좁히기는 **관측 불가능**하다. *(가정이 아니라 `ExemptionEqualsThePermitList` 4개 테스트가 단언한다 — 서비스당.)*
+
+**그리고 §1.8 의 진짜 위험을 구조적으로 없앴다**: 두 서비스에 `PublicPaths` 를 만들고 **`SecurityConfig` 의 permit 리스트를 거기서 유도**하게 했다. 이제 **면제 = permit 리스트**이고, 둘이 따로 편집될 수 없다. *(§1.8 이 지적한 건 "지금 뚫려 있다" 가 아니라 "선을 지키는 곳과 면제를 정의하는 곳이 달라서, `permitAll("/actuator/**")` 한 줄이면 테넌트 게이트가 조용히 사라진다" 였다.)*
+
+**⚠️ `PREFIXES` 는 비워 뒀다 — 실수가 아니다.** procurement 의 `PublicPaths` 는 `/actuator/health/` prefix 를 갖지만, **이 두 서비스의 `SecurityConfig` 는 `/actuator/health/liveness` 를 permit 한 적이 없다.** prefix 를 넣었으면 **리팩터링을 가장해 permit 리스트를 넓히는 것**이었다.
+
+**사실 C 확인**: `/internal/inventory-visibility/**` 는 `permitAll` 이라 JWT 가 없고, Enforcer 는 비-`JwtAuthenticationToken` 요청을 그냥 통과시킨다 ⇒ **면제 축이 닿지 않는다.** 테스트로 못 박았다(`internalPathIsNotAnExemptionConcern`).
+
+## AC-2 — 관측 가능한 변경 1건, 그리고 그것이 정확히 무엇인가
+
+인라인 발급자 검증(`invalid_token`) → 공유 클래스(`invalid_issuer`). **소비자를 전수로 찾았다**:
+
+| | before | after |
+|---|---|---|
+| HTTP status | **401** | **401** (불변) |
+| 응답 `code` | **UNAUTHORIZED** | **UNAUTHORIZED** (불변) |
+| 응답 `message` | 일반 디코드 메시지 | `iss '...' is not in the allowed list` |
+
+**`SecurityConfig.extractOAuth2Error` 는 `invalid_token` 을 *의도적으로 건너뛴다*** (`!"invalid_token".equals(...)`) — 그래서 인라인판의 발급자 메시지는 **여태 응답에 드러난 적이 없다**. `code` 가 `TENANT_FORBIDDEN` 으로 바뀌는 분기는 `tenant_mismatch` 뿐이다.
+
+**소비자 0건** — `specs/` · `contracts/` · 프런트 · e2e 어디에도 `invalid_issuer` 를 키로 쓰는 곳이 없다(전수 grep). **그리고 이 변경은 scm 을 erp · fan · finance 와 *일치*시킨다**(그 셋은 이미 `invalid_issuer` 를 낸다). 테스트로 못 박았다.
+
+## 실측 수치
+
+- **AC-1** — 클래스 사본 **31 → 26**, scm **0**. **인라인 구현 함대 전체 0** (`OAuth2TokenValidator<Jwt> tenantClaimValidator(` 전수 grep). *(1차 탐지식은 `5` 를 냈는데, 그건 **wms 의 클래스 사본**이었다 — 술어가 넓었다. 숫자를 결론으로 읽지 않고 무엇을 매치했는지 봤다.)*
+- **AC-5 mutation — 9건 전부 RED** (스위치 3 × 서비스 3). 매 회차 **사라진 줄을 출력**해 적용을 먼저 확인:
+
+  | 뺀 것 | procurement | demand-planning | inventory-visibility |
+  |---|---|---|---|
+  | `.allowSuperAdminWildcard()` | 2 fail | 2 fail | 2 fail |
+  | `.trustEntitledDomains()` | 3 fail | 3 fail | 3 fail |
+  | `.exempt(PublicPaths::isPublic)` | 2 fail | 1 fail | 1 fail |
+
+- **AC-6** — 4/4 GREEN, artefact 불변(23 / 50 / 94).
+- **AC-7** — procurement 171 · demand-planning 72 · inventory-visibility 61 · scm gateway 47 = **351 tests / 0 skipped / 0 failures / 0 errors**.
+
+## 컴파일러가 grep 이 놓친 것을 잡았다 (D5-4 절차의 값)
+
+**`TenantFailClosedIntegrationTest`**(demand-planning)는 클래스명이 아니라 **`ServiceLevelOAuth2Config.tenantClaimValidator(...)` 라는 메서드**를 참조한다 ⇒ 내 심볼 grep(`TenantClaim|AllowedIssuers|...`)에 **걸리지 않았다.** `compileTestJava` 가 잡았다. 그 단언 5개(scm 통과 / wms 거부 / `*` 통과 / entitled 통과 / non-entitled 거부)는 전부 새 정책 핀으로 이관했다.
+
+## §1.9 의 세 번째 독립 확인
+
+inventory-visibility 의 **기존** `TenantClaimEnforcerTest` 가 이미 이렇게 단언하고 있었다:
+
+> `entitled_domains containing scm grants even when tenant_id absent` → **200**
+
+**필터 층에서**. D5-2 의 정경 클래스(무조건 401)를 그대로 채택했다면 이 기존 테스트가 RED 가 됐을 것이다. §1.9 의 수정이 옳았다는, 세 번째이자 가장 직접적인 증거다.
 
 ---
 
