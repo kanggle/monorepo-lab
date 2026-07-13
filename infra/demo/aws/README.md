@@ -27,6 +27,7 @@ infra/demo/aws/
 ```bash
 # 0) 자격증명 (비밀 키를 파일이나 채팅에 붙여넣지 말 것)
 aws configure                     # 또는 AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+#    필요 권한은 아래 "배포 주체 권한" 절 — 없으면 apply 가 절반만 하고 멈춘다
 
 # 1) AMI 굽기 (~55분 — 이미지 빌드 + 100GB 스냅샷 등록이 대부분)
 cd infra/demo/aws/packer
@@ -54,6 +55,29 @@ terraform output site_url
 `terraform apply` 2분이면 되고 **AMI 를 다시 구울 필요가 없다.**
 
 ⚠️ `destroy` 는 SSM 의 **월 사용량 카운터도 지운다**(예산 가드 리셋).
+
+---
+
+## 배포 주체 권한
+
+`terraform apply` 를 실행하는 IAM 주체에게 필요한 것:
+
+| | |
+|---|---|
+| 관리형 정책 | `AmazonEC2FullAccess` · `AWSLambda_FullAccess` · `AmazonAPIGatewayAdministrator` · `AmazonSSMFullAccess` · `AmazonEventBridgeFullAccess` · `CloudWatchLogsFullAccess` · `IAMFullAccess`<br>(IAM 은 이 스택이 EC2/Lambda 의 **역할을 직접 만들기** 때문에 필요하다) |
+| 인라인 정책 | [`iam/deployer-site-policy.json`](iam/deployer-site-policy.json) — 정문(S3 + CloudFront) |
+
+```bash
+aws iam put-user-policy --user-name <deployer> \
+  --policy-name portfolio-demo-site \
+  --policy-document file://iam/deployer-site-policy.json
+```
+
+정문 정책을 따로 둔 이유는 **관리형 `AmazonS3FullAccess` 가 계정의 모든 버킷을 여는데, 이 스택은 자기 버킷 하나만 필요**하기 때문이다. 그래서 `portfolio-demo-site-*` 접두사로 좁혔다. CloudFront 는 생성 시점에 ARN 을 알 수 없어 리소스 스코프가 성립하지 않는다(`Resource: "*"`).
+
+> 이 절은 **한 번도 존재한 적이 없었고**, 그래서 정문을 추가한 첫 `apply` 가 29개 중 14개만
+> 만들고 `AccessDenied` 로 멈췄다. 재현 절차가 자격증명을 *"`aws configure` 하라"* 로만
+> 말하면, **그 자격증명이 무엇을 할 수 있어야 하는지는 아무도 말하지 않은 것이다** — TASK-MONO-389.
 
 ---
 

@@ -717,6 +717,37 @@ if [ -d "$site_dir" ]; then
   ok "site/ 에 API URL 리터럴 없음 (terraform 이 config.js 를 렌더)"
 fi
 
+echo "[verify] (s) 저장소 어디에도 배포마다 바뀌는 엔드포인트가 박혀 있지 않은가"
+# ---------------------------------------------------------------------------
+# (r) 은 site/ 만 본다. 그런데 같은 결함은 **문서로도 들어온다.**
+#
+# MONO-389 를 하면서 나는 "실제 site_url 을 루트 README 에 넣겠다" 고 적었다. 그 URL 은
+# CloudFront 배포 도메인이고, 배포마다 새로 할당되며, destroy 하면 죽는다 — 즉 내가 (r) 로
+# 막은 **바로 그 썩는 리터럴**이다. 가드를 세워 놓고 그 옆에서 같은 짓을 할 뻔했다.
+#
+# 규칙: API Gateway id 와 CloudFront 배포 도메인은 **terraform 상태이지 소스가 아니다.**
+# 저장소에 적히는 순간 부패가 시작된다. 값이 필요하면 `terraform output` 이 유일한 출처다.
+#
+# **`git grep` 이다. `grep -r` 이 아니다.** 명제는 "저장소에 *커밋*돼 있는가" 인데
+# `grep -r` 은 파일시스템을 본다 — 그래서 첫 판본이 `terraform.tfstate` 를 물었다.
+# 그 파일은 gitignore 되어 **커밋되지 않는다.** 술어와 모집단이 어긋난 것이고,
+# 그런 가드는 첫날 빨개져서 꺼진다(MONO-360). tracked 만 보면 그 실패가 사라진다.
+#
+# 오탐 둘을 더 의도적으로 비켜간다:
+#   1. 산문의 "CloudFront" 라는 낱말 — 구체적 id 가 붙은 호스트명만 본다.
+#   2. task/ADR 이 죽은 URL 을 **증거로 인용**하는 것 — TASK-MONO-389 본문이 실제로
+#      그렇게 한다. 술어는 이것이다: **task/ADR 은 "무엇이었는지" 를 기록하고,
+#      README/infra 는 "무엇을 하라" 고 지시한다.** 부패하는 것은 지시뿐이다.
+volatile_re='[a-z0-9]{6,}\.cloudfront\.net|[a-z0-9]{6,}\.execute-api\.[a-z0-9-]+\.amazonaws\.com'
+hits="$(git -C "$ROOT" grep -nIE "$volatile_re" -- \
+          ':(exclude)tasks/' ':(exclude,glob)**/adr/**' \
+          ':(exclude)infra/demo/verify-demo-wrapper.sh' 2>/dev/null || true)"
+[ -z "$hits" ] || fail "배포마다 바뀌는 엔드포인트가 저장소에 커밋돼 있습니다:"\
+  $'\n'"$hits"\
+  $'\n'"→ API Gateway id 와 CloudFront 도메인은 **terraform 상태이지 소스가 아닙니다.**"\
+  $'\n'"→ destroy/재생성 한 번이면 죽습니다. 유일한 출처는 \`terraform output site_url\` 입니다."
+ok "저장소에 휘발성 엔드포인트 리터럴 없음"
+
 # ---------------------------------------------------------------------------
 if [ "$LIVE" -eq 0 ]; then
   echo "[verify] 정적 검증 PASS (실기동 증명은 --live)"

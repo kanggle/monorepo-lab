@@ -65,6 +65,9 @@ infra/demo/aws/terraform/*.tfstate
 infra/demo/aws/terraform/*.tfstate.*
 infra/demo/aws/terraform/.terraform/
 infra/demo/aws/terraform/.terraform.lock.hcl
-infra/demo/aws/terraform/tfplan
+# 저장된 plan 은 tfvars 값(공인 IP CIDR)을 그대로 품는다. 이름 하나만 막으면
+# `-out=tfplan.bin` 같은 변형이 그대로 새어 나간다 — 실제로 새어 나갈 뻔했다(MONO-389).
+infra/demo/aws/terraform/tfplan*
+infra/demo/aws/terraform/*.tfplan
 infra/demo/aws/terraform/lambda/__pycache__/
 infra/demo/aws/terraform/*.zip
