@@ -1,6 +1,7 @@
 package com.example.erp.approval.infrastructure.security;
 
 import com.example.erp.approval.application.ActorContext;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.example.security.jwt.AbacDataScope;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;

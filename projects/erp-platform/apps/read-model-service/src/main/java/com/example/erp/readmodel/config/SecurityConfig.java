@@ -1,6 +1,6 @@
 package com.example.erp.readmodel.config;
 
-import com.example.erp.readmodel.config.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.example.erp.readmodel.presentation.security.PublicPaths;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

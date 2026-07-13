@@ -1,7 +1,9 @@
 package com.example.erp.readmodel.config;
 
-import com.example.erp.readmodel.config.security.AllowedIssuersValidator;
-import com.example.erp.readmodel.config.security.TenantClaimValidator;
+import com.example.erp.readmodel.presentation.security.PublicPaths;
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.TenantClaimEnforcer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -63,9 +65,32 @@ public class ServiceLevelOAuth2Config {
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(new JwtTimestampValidator());
         validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(new TenantClaimValidator(requiredTenantId));
+        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
+                .allowSuperAdminWildcard()   // SUPER_ADMIN platform scope (ADR-MONO-019 § D5)
+                .trustEntitledDomains()      // entitlement-trust dual-accept
+                .build());
         validators.add(JwtValidators.createDefault());
         return new DelegatingOAuth2TokenValidator<>(validators);
+    }
+
+    /**
+     * erp's servlet tenant gate — the inner layer behind {@link #jwtTokenValidator()}.
+     *
+     * <p>An explicit {@code @Bean}, not a component scan. The copy this replaces was a
+     * {@code @Component} in this service's own source tree, so its policy lived wherever that
+     * file happened to be; a shared class annotated {@code @Component} would decide the same
+     * policy somewhere nobody looks. The three relaxations below are the whole of erp's
+     * deviation from the closed default, and they must match {@link #jwtTokenValidator()}
+     * above — a decoder and an enforcer that disagree are not defence in depth (ADR-MONO-049
+     * § 1.8 and § 1.9).
+     */
+    @Bean
+    public TenantClaimEnforcer tenantClaimEnforcer() {
+        return TenantClaimEnforcer.forTenant(requiredTenantId)
+                .exempt(PublicPaths::isPublic)   // erp's own list: the actuator probes only
+                .allowSuperAdminWildcard()
+                .trustEntitledDomains()
+                .build();
     }
 
     private static List<String> parseCsv(String csv) {

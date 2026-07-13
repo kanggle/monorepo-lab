@@ -1,7 +1,7 @@
 package com.example.erp.notification.config;
 
-import com.example.erp.notification.config.security.TenantClaimValidator;
 import com.example.erp.notification.presentation.security.PublicPaths;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
