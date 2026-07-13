@@ -136,6 +136,28 @@ public final class JwtTestHelper {
      * @param tenantId  {@code tenant_id} claim, or {@code null} to omit
      */
     public String signTokenWithIssuerAndTenant(String issuer, String tenantId) {
+        return signTokenWithIssuerTenantAndEntitlements(issuer, tenantId, null);
+    }
+
+    /**
+     * As {@link #signTokenWithIssuerAndTenant(String, String)}, plus the GAP-signed
+     * {@code entitled_domains} claim.
+     *
+     * <p><strong>This is what lets a token whose {@code tenant_id} names another tenant reach the
+     * ecommerce edge</strong> (TASK-MONO-388). A customer-tenant operator running their own store
+     * carries {@code tenant_id=<their tenant>} and {@code entitled_domains ∋ ecommerce} — that
+     * pair is the marketplace (ADR-MONO-030 § D1-A), and it is the only shape in which such a
+     * token exists in production, because IAM issues {@code entitled_domains} from
+     * {@code tenant_domain_subscription}.
+     *
+     * <p>Before TASK-MONO-388 the gate admitted any well-formed {@code tenant_id}, so a fixture
+     * could name a foreign tenant with no entitlement and still get in. <strong>No such token can
+     * be issued</strong> — the fixture was only possible against the gate, never against IAM.
+     *
+     * @param entitledDomains {@code entitled_domains} claim, or {@code null} to omit
+     */
+    public String signTokenWithIssuerTenantAndEntitlements(
+            String issuer, String tenantId, List<String> entitledDomains) {
         Instant now = Instant.now();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject("user-" + UUID.randomUUID())
@@ -147,6 +169,9 @@ public final class JwtTestHelper {
                 .claim("account_type", "CONSUMER");
         if (tenantId != null) {
             claims.claim("tenant_id", tenantId);
+        }
+        if (entitledDomains != null) {
+            claims.claim("entitled_domains", entitledDomains);
         }
         return sign(claims.build());
     }
@@ -162,6 +187,14 @@ public final class JwtTestHelper {
      * cross-tenant rate-limit isolation IT, where each tenant needs a distinct
      * {@code tenant_id} bucket. Valid for 5 minutes.
      *
+     * <p><strong>Carries {@code entitled_domains: [ecommerce]}</strong> (TASK-MONO-388). The
+     * tenant gate no longer admits any well-formed {@code tenant_id}; a token naming a tenant
+     * other than {@code ecommerce} reaches this edge only by being entitled to it. That is not a
+     * concession to the gate — it is the shape the token really has: a user of tenant A's store
+     * exists because tenant A subscribed to ecommerce, and IAM writes that subscription into the
+     * claim. <strong>Without it the fixture describes a token IAM cannot issue</strong>, and a
+     * green test on an impossible input proves nothing.
+     *
      * @param tenantId {@code tenant_id} claim, or {@code null} to omit
      */
     public String signCustomerTokenForTenant(String tenantId) {
@@ -174,7 +207,8 @@ public final class JwtTestHelper {
                 .jwtID(UUID.randomUUID().toString())
                 .audience(List.of("ecommerce"))
                 .claim("account_type", "CONSUMER")
-                .claim("roles", List.of("CUSTOMER"));
+                .claim("roles", List.of("CUSTOMER"))
+                .claim("entitled_domains", List.of("ecommerce"));
         if (tenantId != null) {
             claims.claim("tenant_id", tenantId);
         }
