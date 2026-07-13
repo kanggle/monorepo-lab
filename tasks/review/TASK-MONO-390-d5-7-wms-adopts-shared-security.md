@@ -8,7 +8,7 @@ TASK-MONO-390
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -189,3 +189,54 @@ wms 사본과 **분기별로 동일**하다(성공 3분기 · 실패 2분기 · 
 **동시에 이 단계는 방향이 뒤집힌 첫 단계다.** 다른 프로젝트에서 위험은 *스위치를 빠뜨려* 게이트가 좁아지는 쪽이었다. wms 에서 위험은 **스위치를 켜서 게이트가 넓어지는 쪽**이다 — 그리고 `TASK-MONO-355` 가 이미 말했듯, **거부 쪽엔 커버리지가 없었다.** 넓어지는 방향은 조용하다. AC-4 와 AC-5 가 그 침묵을 깨는 장치다.
 
 분석=Opus 4.8 / 구현 권장=**Sonnet** (배선은 정경 레퍼런스가 코드에 이미 있고, 결정 사항이 없다 — `TenantClaimEnforcer` 를 **추가하지 않는다**는 결정은 이 티켓이 이미 내렸다. **단, AC-5 의 mutation 은 반드시 실행하고 적용 여부를 눈으로 확인할 것.**)
+
+---
+
+# 구현 결과 (2026-07-13, Opus 4.8)
+
+## 모집단 — 티켓의 숫자를 물려받지 않고 다시 셌고, 맞았다
+
+main **10** / test **9** / 인라인 람다 **0**. 사본 **14 → 4**(iam 만 남는다). 게이트웨이의 `TenantClaimValidatorTest` 는 **공유 클래스를 import 하므로 삭제하지 않았다** — 파일명이 같다고 지웠으면 정책 핀 하나를 잃을 뻔했다.
+
+## AC-1 — 컴파일러가 grep 을 다시 이겼다 (그리고 이번엔 아무것도 놓치지 않았다)
+
+심볼 grep 이 **숨은 참조자 6곳**을 찾아냈다: `SecurityConfig` **5개 전부**가 `TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH` 로 **403 을 분기**하고, **`admin` 은 `TenantClaimValidator.isEntitled(...)` 를 권한 변환기에서 직접 호출**한다. 여기에 `outbound` 의 `SecurityContextCallerScopeProvider` Javadoc `{@link}` 가 삭제될 클래스를 가리키고 있었다(공유 FQN 으로 교정).
+
+`compileTestJava` **7개 모듈 전부 GREEN**(servlet 5 + gateway + notification). 이번엔 컴파일러가 추가로 잡은 것이 없다 — **grep 이 처음으로 완전했고, 그것을 아는 유일한 방법이 컴파일러였다.**
+
+## AC-2 — 에러코드 불변, 실측대로
+
+`tenant_mismatch` · `invalid_issuer` **둘 다 공유 클래스와 동일**. 빈 allowlist → `IllegalArgumentException` 도 공유 클래스가 그대로 던진다(**기동 실패 = fail-fast**; 게이트가 열린 채 뜨지 않는다). 정책 핀이 셋 다 못 박았다.
+
+## AC-3/AC-4 — 없던 단언을 만들었다
+
+`WmsTenantGatePolicyTest` ×5, **75 tests / 0 skipped / 0 failures**. subject 는 **프로덕션 `jwtTokenValidator()`** 에서 온다(자기 손으로 세운 체인이 아니다 — MONO-355).
+
+**지워진 사본들의 테스트는 와일드카드 거부를 단 한 번도 단언하지 않았다.** tenant 일치 · 크로스테넌트 거부 · entitlement 수용 · malformed fail-closed 는 다 있었는데, **wms 를 함대의 나머지와 구별하는 유일한 성질만 아무도 지키지 않고 있었다.** `TheWildcardIsRefused` 가 그 빈자리다.
+
+## AC-5 — mutation 양방향, 5/5 서비스 전부 RED
+
+| mutation | 방향 | 결과 |
+|---|---|---|
+| **`.allowSuperAdminWildcard()` 추가** | **넓힘 (조용한 쪽)** | **5/5 서비스 RED, 각 1건** — 오탐 0 |
+| `.trustEntitledDomains()` 제거 | 좁힘 | **5/5 서비스 RED, 각 3건** |
+
+**적용 건수를 먼저 출력하고 제거/추가된 줄을 눈으로 확인한 뒤 결과를 읽었다.** 가드는 pre-mutation 파일에 앵커했다(HEAD 가 아니라 — mutation 이 지우는 줄은 *이 task 가 방금 추가한* 줄이라 HEAD diff 에는 `-` 로 나타나지 않는다).
+
+**⚠️ 그리고 이번에도 가드 술어가 틀렸다 — 그런데 게이팅하지 않아서 살았다.** `.trustEntitledDomains()` 호출 수를 5로 기대했는데 실제는 **6**이었다(servlet 5 + **게이트웨이 1**). D5-6 에서는 똑같은 종류의 오차가 **멀쩡한 mutation 을 중단시켰다.** 이번엔 그 값을 **가드가 아니라 출력**으로 썼기에 사고가 없었다. *가드도 틀린다 — 그러니 틀렸을 때 무엇이 죽는지가 중요하다.*
+
+## AC-6 — 빌드 단언 4/4 GREEN
+
+artefact **23 / 50 / 94 불변**.
+
+## AC-7 — ADR
+
+**§ 1.11 신설**: wms 에 Enforcer 가 없다는 관찰 + **추가하지 않는다는 결정과 그 이유**(추출이 아니라 행동 변경) + **mutation 방향 역전** + 정경 체인이 이미 프로덕션에 있다는 사실. § 7 로드맵 D5-7 ✅, 사본 14 → 4.
+
+## ⚠️ 환경 — 로컬 Testcontainers 는 권위가 아니다 (그리고 내가 그것을 악화시켰다)
+
+`LotRepositoryImplTest` 등 IT 가 `ContainerLaunchException` 으로 실패한다. 원인은 **호스트 포화**(사용자의 fed-e2e 데모 스택 56 컨테이너 가동 중) — 코드와 무관하고, **CI Linux 가 권위**다. 데모 스택은 건드리지 않았다.
+
+**그리고 내가 그 IT 실행을 kill 하면서 Gradle 빌드 캐시에 불완전한 `compileJava` 산출물이 저장됐다.** 그 뒤 `inventory-service` 가 *"package com.wms.inventory.application.port.out does not exist"* 로 컴파일 실패했는데 — **소스는 멀쩡했다.** `clean` 을 해도 캐시가 깨진 산출물을 **`FROM-CACHE` 로 다시 복원**했다. `--no-build-cache --rerun-tasks` 로 해소.
+
+**진단 중에 또 한 번 잘림을 부재로 읽었다**: `ls ... | head` 가 목록을 자르는 바람에 `domain/model/masterref` 가 **없다고 결론**낼 뻔했다. 실제로는 있었다. **`FROM-CACHE` 라는 한 단어가 진짜 증거였고, 그것은 콘솔의 성공/실패 줄이 아니라 태스크 상태 줄에 있었다.**

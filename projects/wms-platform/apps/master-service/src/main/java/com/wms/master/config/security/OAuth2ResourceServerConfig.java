@@ -1,5 +1,7 @@
 package com.wms.master.config.security;
 
+import com.example.security.oauth2.AllowedIssuersValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -54,6 +56,26 @@ public class OAuth2ResourceServerConfig {
         return decoder;
     }
 
+    /**
+     * The tenant gate, and the only place master-service's policy is stated.
+     *
+     * <h2>{@code allowSuperAdminWildcard()} is deliberately NOT called</h2>
+     *
+     * wms is the <strong>only</strong> platform that rejects the SUPER_ADMIN {@code "*"}
+     * wildcard that erp, fan, finance and scm accept. That is a documented choice rather
+     * than drift ({@code ADR-MONO-048} § D5 preserves it explicitly), and it is also the
+     * <em>quiet</em> direction: the builder defaults closed, so a forgotten switch narrows
+     * the gate and reds a test, while an <em>added</em> one widens it and nothing complains.
+     * {@code TASK-MONO-355} found this exact gate had zero coverage for its rejection.
+     *
+     * <p>{@code WmsTenantGatePolicyTest} therefore builds its subject from <em>this</em>
+     * method and asserts the refusal, not just the acceptance — add
+     * {@code .allowSuperAdminWildcard()} here and that suite goes red instead of the wms
+     * edge silently opening to a platform operator.
+     *
+     * <p>The same chain already runs at wms's own edge: see {@code gateway-service}'s
+     * {@code OAuth2ResourceServerConfig#tenantGate()} (ADR-MONO-048 § D7).
+     */
     @Bean
     public OAuth2TokenValidator<Jwt> jwtTokenValidator() {
         List<String> allowedIssuers = parseCsv(allowedIssuersCsv);
@@ -63,7 +85,10 @@ public class OAuth2ResourceServerConfig {
         // No JwtIssuerValidator: we accept either the SAS issuer or the legacy
         // "iam" string while D2-b deprecation is ongoing.
         validators.add(new AllowedIssuersValidator(allowedIssuers));
-        validators.add(new TenantClaimValidator(requiredTenantId));
+        validators.add(TenantClaimValidator.forTenant(requiredTenantId)
+                // no .allowSuperAdminWildcard() — see above; wms rejects it on purpose
+                .trustEntitledDomains()   // entitlement-trust dual-accept (ADR-MONO-019 § D5)
+                .build());
         // Add Spring's default validators (currently just timestamp, but future-proof).
         validators.add(JwtValidators.createDefault());
         return new DelegatingOAuth2TokenValidator<>(validators);

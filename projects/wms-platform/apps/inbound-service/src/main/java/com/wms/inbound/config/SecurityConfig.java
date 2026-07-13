@@ -2,7 +2,7 @@ package com.wms.inbound.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inbound.adapter.in.web.dto.response.ApiErrorEnvelope;
-import com.wms.inbound.config.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.Collection;
