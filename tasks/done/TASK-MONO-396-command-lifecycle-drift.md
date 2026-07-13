@@ -8,7 +8,7 @@ TASK-MONO-396
 
 # Status
 
-review
+done
 
 # Owner
 
