@@ -27,16 +27,6 @@ import { loginAndExpectRoleGuardRejection, SEEDED_CROSS_TENANT_PRINCIPAL } from 
  * guard; ADR-MONO-035 §4b-iii is amended to say so.
  */
 test.describe('cross-tenant role 가드 (web-store)', () => {
-  // This file sorts FIRST in the lane, so it is the run's first GAP login: it pays the
-  // cold-JVM cost of the Spring Authorization Server (authorize → form POST → callback →
-  // token exchange), and every later spec logs in against a warm one. Measured locally
-  // against the lean IAM stack: 28.5s on a freshly-booted auth-service, 33.6s warm — but
-  // it overran the 60s default twice on a contended host. 60s is not a real budget for a
-  // cold full OIDC round-trip; 120s is. (Same cold-start shape as the console's 5s→30s
-  // override.) The other specs keep the 60s default — they only stay fast because this
-  // one absorbed the cold start.
-  test.describe.configure({ timeout: 120_000 });
-
   test('타 tenant principal(platform-scope)이 web-store 에 로그인하면 거부된다', async ({ page }) => {
     await loginAndExpectRoleGuardRejection(page, SEEDED_CROSS_TENANT_PRINCIPAL);
 
