@@ -28,8 +28,14 @@ public class SocialSignupUseCase {
 
     @Transactional
     public SocialSignupResult execute(SocialSignupCommand command) {
-        // TASK-BE-228: tenant context is fixed to FAN_PLATFORM until TASK-BE-229
-        // introduces dynamic tenant injection from the JWT claim / X-Tenant-Id header.
+        // TASK-BE-506: social signup is fan-platform-only, by construction — and the caller
+        // already knows better. auth-service resolves the initiating OIDC client's tenant
+        // (SavedRequestTenantResolver) and stamps it on the social-identity row and the
+        // token, but drops it on the /internal/accounts/social-signup hop, so the account
+        // row lands here as fan-platform. Net effect: a social shopper's token says
+        // tenant_id=ecommerce while their account row says fan-platform. (The old
+        // "until TASK-BE-229" note was false — BE-229 is done and never touched this input.)
+        // Threading the caller's tenant through is TASK-BE-507.
         TenantId tenantId = TenantId.FAN_PLATFORM;
 
         String normalizedEmail = command.email().trim().toLowerCase();

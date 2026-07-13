@@ -42,7 +42,8 @@ public class AccountStatusUseCase {
 
     @Transactional(readOnly = true)
     public AccountStatusResult getStatus(String accountId) {
-        // TASK-BE-228: tenant context is fixed to FAN_PLATFORM until TASK-BE-229
+        // TASK-BE-506: fan-platform-only lookup — FAN_PLATFORM is a compile-time constant,
+        // not a resolved tenant (see TenantId.FAN_PLATFORM; dynamic resolution is TASK-BE-507).
         Account account = accountRepository.findById(TenantId.FAN_PLATFORM, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 

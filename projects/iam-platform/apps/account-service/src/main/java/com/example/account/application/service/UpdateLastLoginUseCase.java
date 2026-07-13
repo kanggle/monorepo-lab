@@ -63,8 +63,11 @@ public class UpdateLastLoginUseCase {
             return;
         }
 
-        // TASK-BE-228: tenant context is fixed to FAN_PLATFORM until TASK-BE-229.
-        // The auth.login.succeeded event does not yet carry tenant_id (TASK-BE-229).
+        // TASK-BE-506: fan-platform-only lookup — FAN_PLATFORM is a compile-time constant,
+        // not a resolved tenant (see TenantId.FAN_PLATFORM; dynamic resolution is TASK-BE-507).
+        // The auth.login.succeeded event carries no tenant_id, so there is nothing to key on
+        // even if this lookup were tenant-aware: a login by any non-fan account silently
+        // no-ops below (the poison-pill guard), leaving last_login_at unset. Part of BE-507.
         Optional<Account> maybeAccount = accountRepository.findById(TenantId.FAN_PLATFORM, accountId);
         if (maybeAccount.isEmpty()) {
             // Poison-pill guard — log and return without throwing so that the

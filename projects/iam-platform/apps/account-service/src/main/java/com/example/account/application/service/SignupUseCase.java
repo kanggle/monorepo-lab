@@ -30,8 +30,15 @@ public class SignupUseCase {
 
     @Transactional
     public SignupResult execute(SignupCommand command) {
-        // TASK-BE-228: tenant context is fixed to FAN_PLATFORM until TASK-BE-229
-        // introduces dynamic tenant injection from the JWT claim / X-Tenant-Id header.
+        // TASK-BE-506: consumer signup is fan-platform-only, by construction. The old note
+        // here promised dynamic tenant injection "until TASK-BE-229" — that promise was
+        // never going to arrive: BE-229 (done) taught auth-service to *consume* the tenant
+        // already sitting on the credential row; it never gave account-service a tenant
+        // input. So a shopper registering through the ecommerce web-store OIDC client is
+        // still born tenant=fan-platform, and that value rides on into credentials.tenant_id
+        // and the token's tenant_id claim. Resolving the tenant from the initiating OIDC
+        // client is TASK-BE-507 — it cannot be done here alone (the consumer read paths are
+        // keyed on FAN_PLATFORM too, and form login looks credentials up cross-tenant).
         TenantId tenantId = TenantId.FAN_PLATFORM;
 
         // Check email uniqueness within this tenant (primary defense: DB unique constraint)
