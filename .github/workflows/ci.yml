@@ -171,10 +171,19 @@ jobs:
       platform-console: ${{ steps.filter.outputs.platform-console == 'true' && steps.filter.outputs.code-changed == 'true' }}
       contracts: ${{ steps.filter.outputs.contracts }}
       observability: ${{ steps.filter.outputs.observability }}
-      # TASK-MONO-341: integrated demo wrapper (infra/demo). Pure-positive filter,
-      # AND-composed with `code-changed` so a README-only edit under infra/demo
-      # skips the smoke while the .sh / docker-compose.yml surfaces still trigger it.
-      demo-wrapper: ${{ steps.filter.outputs.demo-wrapper == 'true' && steps.filter.outputs.code-changed == 'true' }}
+      # TASK-MONO-341: integrated demo wrapper (infra/demo). Pure-positive filter.
+      #
+      # TASK-MONO-389 removed the `&& code-changed` AND, reversing 341's deliberate
+      # choice — because the premise it rested on stopped being true. 341's comment
+      # read: "AND-composed so a README-only edit under infra/demo skips the smoke."
+      # That was right when every guard here watched .sh / docker-compose.yml.
+      #
+      # Guard (q) watches the READMEs: it asserts that every `terraform output <name>`
+      # the docs tell you to run actually exists. **That drift ARRIVES as a markdown
+      # edit** — and `.md` is (deliberately) not in `code-changed`, so AND-composing
+      # disabled the guard on exactly the change it exists to police. MONO-360 named
+      # this rule after measuring it: the trigger follows the defect's arrival path.
+      demo-wrapper: ${{ steps.filter.outputs.demo-wrapper }}
       # TASK-MONO-345: raw filter — deliberately NOT AND-combined with
       # `code-changed`. The guard's whole purpose is to catch a markdown edit to
       # docs/project-overview.md that drifts from settings.gradle; a doc-only
@@ -294,6 +303,10 @@ jobs:
               - 'infra/demo/**'
               - 'infra/traefik/**'
               - 'projects/*/docker-compose.yml'
+              # TASK-MONO-389: guard (q) reads the root README too (it can carry a
+              # `terraform output <name>` line). A guard that cannot see the file it
+              # polices reports green — MONO-366 § 4-a was bitten in exactly this spot.
+              - 'README.md'
             # TASK-MONO-345: docs/project-overview.md carries a hand-maintained
             # service map per project. settings.gradle is the only inventory the
             # build reads. When they diverge, the doc is silently wrong and no

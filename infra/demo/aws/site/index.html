@@ -35,9 +35,22 @@
 
   <p class="hint">자동 종료: 20분 무활동 · 최대 3시간. 요금 안전장치가 이중으로 걸려 있습니다.</p>
 
+  <!-- terraform 이 자기 상태에서 렌더한다 (aws_s3_object.config). 저장소에는 없다. -->
+  <script src="config.js"></script>
   <script>
-    // terraform output api_base_url  (2026-07-11 apply 결과)
-    const API_BASE = "https://7l4n2ydrkd.execute-api.ap-northeast-2.amazonaws.com";
+    // API_BASE 는 **이 저장소에 존재하지 않는다.** 예전에는 여기 리터럴이 박혀 있었고,
+    // API Gateway id 는 재생성마다 바뀌므로 그 값은 썩었다 — 실제로 죽어 있었다.
+    // 이제 terraform 이 config.js 를 자기 상태에서 렌더한다(TASK-MONO-389).
+    const API_BASE = window.DEMO_API_BASE;
+
+    // config.js 가 없으면 **크게 실패한다.** 조용히 undefined 로 두면 페이지는 200 을
+    // 내고 버튼은 아무 일도 하지 않는다 — 정확히 이 task 가 고친 결함의 모양이다.
+    if (!API_BASE) {
+      document.getElementById("msg").textContent =
+        "⚠️ config.js 가 로드되지 않았습니다 — terraform apply 로 사이트를 배포했는지 확인하세요.";
+      document.getElementById("start").disabled = true;
+      throw new Error("DEMO_API_BASE is not set: config.js missing or not deployed");
+    }
 
     // 데모 진입 URL 은 /status 가 돌려주는 공인 IP 로 **동적 구성**한다.
     // 인스턴스에 EIP 가 없어 start 마다 IP 가 바뀌므로 상수로 박을 수 없다.
@@ -45,10 +58,8 @@
     // sslip.io: `<anything>.1.2.3.4.sslip.io` → 1.2.3.4 로 해석되는 공개 와일드카드
     // DNS. 도메인 구매도 DNS 설정도 필요 없다.
     //
-    // ⚠️ 전제: 데모 호스트의 Traefik 라우터가 `Host(`console.${DEMO_DOMAIN}`)` 처럼
-    //    접미사를 파라미터화하고, 부팅 시 DEMO_DOMAIN=<ip>.sslip.io 를 주입해야 한다.
-    //    현재 저장소의 compose 는 `Host(`console.local`)` 로 하드코딩되어 있어,
-    //    그 변경 전에는 IP 로 접속해도 Traefik 이 어떤 라우터에도 매치시키지 못한다.
+    // 데모 호스트는 부팅 시 IMDSv2 로 공인 IP 를 읽어 DEMO_DOMAIN=<ip>.sslip.io 를
+    // 파생하고, Traefik 라우터가 그 접미사로 뜬다 (TASK-MONO-366 이 실기동으로 증명).
     const demoUrl = (ip) => `http://console.${ip}.sslip.io/`;
 
     const $ = (id) => document.getElementById(id);

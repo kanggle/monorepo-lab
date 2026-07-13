@@ -28,20 +28,32 @@ infra/demo/aws/
 # 0) 자격증명 (비밀 키를 파일이나 채팅에 붙여넣지 말 것)
 aws configure                     # 또는 AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
 
-# 1) AMI 굽기 (~40분 — 이미지 43개 빌드 + 100GB 스냅샷)
+# 1) AMI 굽기 (~55분 — 이미지 빌드 + 100GB 스냅샷 등록이 대부분)
 cd infra/demo/aws/packer
-packer init . && packer build demo-ami.pkr.hcl
+packer init . && packer build -var "repo_ref=main" demo-ami.pkr.hcl
 
-# 2) 인프라
+# 2) 인프라 + 정적 사이트 (CloudFront 배포 때문에 apply 가 5~15분 걸린다)
 cd ../terraform
 cp terraform.tfvars.example terraform.tfvars   # ami_id + admin_ssh_cidr 채우기
 terraform init && terraform apply
 
-# 3) 정적 사이트에 API 엔드포인트 주입 후 배포
-terraform output api_endpoint      # site/index.html 의 API_BASE 에 넣는다
+# 3) 방문자가 열 주소 — 이게 데모의 정문이다
+terraform output site_url
 ```
 
+**3단계에 손으로 넣을 값이 없다.** 제어 API 의 URL 은 `terraform` 이 `config.js` 로
+렌더해 사이트에 자동 주입한다(`aws_s3_object.config`). 저장소에는 그 URL 이 **없다.**
+
+> 예전에는 여기가 *"`terraform output api_endpoint` 를 `site/index.html` 의 `API_BASE` 에
+> 넣는다"* 였다. **`api_endpoint` 라는 output 은 존재한 적이 없고**(실제 이름은 `api_base_url`),
+> 그 리터럴은 API Gateway id 가 재생성마다 바뀌므로 **커밋되는 순간부터 썩고 있었다.**
+> 아무도 이 절차를 끝까지 밟은 적이 없어서 둘 다 살아남았다 — `TASK-MONO-389`.
+
 `terraform destroy` 로 전부 되돌릴 수 있다 — 상태를 EBS 볼륨에만 두므로 재생성이 안전하다.
+**AMI 와 스냅샷은 packer 산출물이라 terraform 관리 밖이고 살아남는다** ⇒ 되살리는 데
+`terraform apply` 2분이면 되고 **AMI 를 다시 구울 필요가 없다.**
+
+⚠️ `destroy` 는 SSM 의 **월 사용량 카운터도 지운다**(예산 가드 리셋).
 
 ---
 
@@ -86,3 +98,4 @@ terraform output api_endpoint      # site/index.html 의 API_BASE 에 넣는다
 ## 비밀
 
 `terraform.tfvars`(본인 공인 IP CIDR) · `*.tfstate` · `.terraform/` 은 **gitignore** 다. `terraform.tfvars.example` 만 커밋되며, 그것이 재현 계약이다. **AWS 비밀 키를 tfvars 에 적지 말 것** — 평문이다. 환경변수나 `~/.aws/credentials` 를 쓴다.
+
