@@ -2,7 +2,7 @@ package com.example.erp.gateway.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.apigateway.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.example.erp.gateway.config.OAuth2ResourceServerConfig;
 import java.time.Instant;
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.example.apigateway.security;
+package com.example.security.oauth2;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,10 +46,20 @@ import org.springframework.security.oauth2.jwt.Jwt;
 public class TenantClaimValidator implements OAuth2TokenValidator<Jwt> {
 
     /**
-     * Sourced from the shared registry so the code this validator <em>raises</em> and the
-     * code the shared {@code SecurityConfig} maps to 403 cannot drift apart (TASK-MONO-351).
+     * The wire value a cross-tenant rejection carries, so the code this validator
+     * <em>raises</em> and the code a {@code SecurityConfig} maps to 403 cannot drift apart
+     * (TASK-MONO-351).
+     *
+     * <p><strong>This class now owns the literal; it used to borrow it.</strong> While the
+     * validator was per-domain, {@code libs/java-gateway}'s {@code GatewayErrorCodes} held the
+     * value and this field delegated to it — that was the only way to have one definition
+     * without the library reaching into a service class. Now that the validator itself is
+     * shared, and lives in a module {@code java-gateway} <em>depends on</em>, the delegation
+     * has to run the other way or the two modules form a cycle. So the arrow is reversed:
+     * {@code GatewayErrorCodes.TENANT_MISMATCH} points here. **One literal, both sides pointing
+     * at it** — MONO-351's property, unchanged; only its direction moved. (ADR-MONO-049 § D5-1.)
      */
-    public static final String ERROR_CODE_TENANT_MISMATCH = GatewayErrorCodes.TENANT_MISMATCH;
+    public static final String ERROR_CODE_TENANT_MISMATCH = "tenant_mismatch";
     public static final String CLAIM_TENANT_ID = "tenant_id";
     public static final String CLAIM_ENTITLED_DOMAINS = "entitled_domains";
     /** SUPER_ADMIN platform-scope wildcard. */

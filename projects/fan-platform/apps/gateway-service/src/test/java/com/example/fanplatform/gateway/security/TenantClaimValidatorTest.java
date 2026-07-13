@@ -1,6 +1,6 @@
 package com.example.fanplatform.gateway.security;
 
-import com.example.apigateway.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.example.fanplatform.gateway.config.OAuth2ResourceServerConfig;
 
 import org.junit.jupiter.api.DisplayName;

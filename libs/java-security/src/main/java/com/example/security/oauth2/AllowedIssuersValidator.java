@@ -1,4 +1,4 @@
-package com.example.apigateway.security;
+package com.example.security.oauth2;
 
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -21,6 +21,16 @@ import java.util.Objects;
  * ecommerce) — the only Tier-1 class that was 4/4. It is constructed directly by
  * each gateway's {@code OAuth2ResourceServerConfig} (never a bean), so adopting it
  * costs a consumer nothing but an import.
+ *
+ * <h2>Why it lives in {@code java-security} and not {@code java-gateway}</h2>
+ *
+ * It is <strong>framework-neutral</strong> — an {@link OAuth2TokenValidator}, nothing
+ * reactive about it — and {@code TASK-MONO-377} counted <strong>eighteen more copies</strong>
+ * of it inside servlet services across six projects, every one of them identical to this
+ * file after normalisation. A servlet service cannot consume {@code libs/java-gateway}
+ * without dragging WebFlux and Spring Cloud Gateway onto its runtime classpath
+ * (<code>ADR-MONO-049</code> § D1; the bleed {@code TASK-MONO-044a} already paid for once),
+ * so the class had to move to a module both edges can see. {@code ADR-MONO-049} § D5-1.
  */
 public class AllowedIssuersValidator implements OAuth2TokenValidator<Jwt> {
 

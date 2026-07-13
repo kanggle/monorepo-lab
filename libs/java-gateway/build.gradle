@@ -37,6 +37,19 @@ plugins {
 // -------------------------------------------------------------------------
 
 dependencies {
+    // The two framework-neutral token validators (AllowedIssuersValidator,
+    // TenantClaimValidator) live in libs:java-security, because eighteen SERVLET services
+    // hold copies of them and none of them may see WebFlux (ADR-MONO-049 § D1 / § D5-1).
+    // This module still uses both — GatewayJwtDecoders constructs them, JwtClaims and
+    // GatewayErrorCodes read their constants — so it declares the dependency itself.
+    //
+    // `implementation`, NOT `api` (§ D2). That means it does NOT transit to the six
+    // gateway services' compile classpath: each of them declares libs:java-security itself.
+    // The tempting one-line fix — `api` here, so the gateways need no change — is exactly
+    // what ADR-MONO-048 § D1 banned, and a ban that acquires an exception the first time it
+    // is inconvenient is not a ban.
+    implementation project(':libs:java-security')
+
     // Spring Cloud Gateway — GlobalFilter, GatewayFilterChain, RateLimiter,
     // RedisRateLimiter (FailOpenRateLimiter decorates it).
     implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
@@ -84,3 +97,59 @@ dependencyManagement {
 test {
     useJUnitPlatform()
 }
+
+// -------------------------------------------------------------------------
+// ADR-MONO-049 § D3, assertion V2 — the reactive edge must never see the servlet API.
+//
+// The converse of libs:java-security's V1. This module is the REACTIVE edge; a servlet type
+// on its runtime classpath is the TASK-MONO-044a bleed running in the direction it originally
+// ran (a servlet leak triggered BeanDefinitionOverrideException in three reactive gateway
+// classpaths).
+//
+// The concrete way this regresses, and the reason the assertion exists at all: § D5-2 adds
+// libs:java-security-servlet (the canonical TenantClaimEnforcer, an OncePerRequestFilter).
+// The moment anyone makes java-gateway depend on it — because the class name looks shared —
+// this goes red. That is the assertion doing its job.
+// -------------------------------------------------------------------------
+tasks.register('assertNoServletOnReactiveEdge') {
+    group = 'verification'
+    description = 'ADR-MONO-049 § D3 V2 — libs:java-gateway must not see jakarta.servlet.'
+
+    def runtimeCp = configurations.named('runtimeClasspath')
+    def forbidden = [
+            'jakarta.servlet-api': 'the servlet API on the reactive edge (TASK-MONO-044a)',
+            'spring-webmvc'      : 'Spring MVC on the reactive edge',
+            'tomcat-embed-core'  : 'an embedded servlet container on the reactive edge',
+    ]
+
+    doLast {
+        def names = runtimeCp.get().files*.name
+        if (names.isEmpty()) {
+            // No signal is not a pass (TASK-MONO-359).
+            throw new GradleException(
+                    'assertNoServletOnReactiveEdge: runtimeClasspath resolved to ZERO artefacts. ' +
+                    'The assertion would pass having verified nothing.')
+        }
+        def violations = []
+        forbidden.each { marker, why ->
+            def hits = names.findAll { it.startsWith(marker) }
+            if (hits) {
+                violations << "  ${hits.join(', ')}\n      -> ${why}"
+            }
+        }
+        if (violations) {
+            throw new GradleException(
+                    "libs:java-gateway has a SERVLET artefact on its runtime classpath. It is the " +
+                    "reactive edge; this is the ADR-MONO-048 § D1 isolation failing.\n\n" +
+                    violations.join('\n') + "\n\n" +
+                    "  The likeliest cause: this module was made to depend on " +
+                    "libs:java-security-servlet. It must not — the reactive edge cannot see the " +
+                    "servlet filter at all (ADR-MONO-049 § D1).\n" +
+                    "  (${names.size()} artefacts inspected.)")
+        }
+        logger.lifecycle("assertNoServletOnReactiveEdge: OK — ${names.size()} artefacts on " +
+                "libs:java-gateway's runtimeClasspath, none servlet-bound.")
+    }
+}
+
+tasks.named('check') { dependsOn 'assertNoServletOnReactiveEdge' }

@@ -63,3 +63,61 @@ subprojects {
         systemProperty 'api.version', apiVersion
     }
 }
+
+// ---------------------------------------------------------------------------
+// ADR-MONO-049 § D2 / § D3 assertion V4 — NO `api` ON A SHARED LIBRARY. ANYWHERE.
+//
+// `implementation project(':libs:x')` keeps x's own dependencies off the consumer's compile
+// classpath. `api` re-exports them. That difference is the ONLY thing holding the
+// servlet/reactive isolation apart: libs:java-gateway declares libs:java-security with
+// `implementation`, so it does NOT transit — which is precisely why the six gateways each
+// declare java-security themselves (TASK-MONO-378, four new lines).
+//
+// The temptation this assertion exists to kill is exactly those four lines. Switching
+// java-gateway's dependency to `api` makes them unnecessary and the build green. It also
+// starts re-exporting whatever java-security transitively holds — today spring-security-oauth2-jose,
+// tomorrow whatever someone adds — into every consumer of java-gateway. ADR-MONO-048 § D1 banned
+// `api` on the gateway library for that reason, and A BAN THAT ACQUIRES AN EXCEPTION THE FIRST
+// TIME IT IS INCONVENIENT IS NOT A BAN.
+//
+// This inspects the resolved dependency graph, not the text of a build file: a rename, an
+// alias, or a `configurations.api.extendsFrom(...)` indirection cannot slip past it.
+// ---------------------------------------------------------------------------
+tasks.register('assertNoApiOnSharedLibs') {
+    group = 'verification'
+    description = 'ADR-MONO-049 § D2 — no module may re-export a libs:* project via `api`.'
+
+    def offenders = []
+    def inspected = 0
+    allprojects.each { p ->
+        def apiConf = p.configurations.findByName('api')
+        if (apiConf == null) {
+            return  // no java-library plugin here; `api` does not exist to be misused
+        }
+        inspected++
+        apiConf.dependencies.each { d ->
+            if (d instanceof ProjectDependency && d.dependencyProject.path.startsWith(':libs:')) {
+                offenders << "  ${p.path}  ->  api project('${d.dependencyProject.path}')"
+            }
+        }
+    }
+
+    doLast {
+        if (offenders) {
+            throw new GradleException(
+                    "A shared library is re-exported with `api`. That undoes the servlet/reactive " +
+                    "isolation the libs:* split exists for (ADR-MONO-048 § D1, ADR-MONO-049 § D2).\n\n" +
+                    offenders.join('\n') + "\n\n" +
+                    "  Use `implementation`, and let each consumer declare what it actually uses.\n" +
+                    "  If that means adding a dependency line to several consumers: add the lines. " +
+                    "That is the cost of the isolation, and it is the intended cost.")
+        }
+        logger.lifecycle("assertNoApiOnSharedLibs: OK — ${inspected} module(s) declare an `api` " +
+                "configuration, none of them re-export a libs:* project.")
+    }
+}
+
+// The root `check` runs in CI's "Build & Test (JDK 21, Linux)" job, so this assertion is
+// reachable on every code change — not only when someone happens to build the module they
+// broke. A guard that does not run reports green (TASK-MONO-359 / TASK-MONO-360).
+tasks.named('check') { dependsOn 'assertNoApiOnSharedLibs' }

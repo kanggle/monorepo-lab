@@ -8,7 +8,7 @@ TASK-MONO-378
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -82,14 +82,25 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (행동 불변 — 이게 증명의 본체)** — **게이트웨이 6개의 기존 스위트가 *수정 없이* 통과한다.** *스위트를 고쳐야 했다면 이관이 행동을 바꾼 것이다*(§ 6 V6). 어떤 테스트 파일도 assertion 이 바뀌면 안 된다 — import 만 바뀐다.
-- [ ] **AC-2 (배선 실측)** — 이관 **후** `./gradlew :projects:...:gateway-service:compileJava` 가 **6개 게이트웨이 전부** 통과한다. **특히 ecommerce · erp · finance** — 이 셋이 ADR 이 "공짜" 라 적은 지점이다.
-- [ ] **AC-3 (V1 — 중립성을 빌드가 보증한다)** — `libs:java-security` 의 `runtimeClasspath` 에 WebFlux **0** · Spring Cloud Gateway **0** · `jakarta.servlet` **0**.
-  **mutation 필수**: `libs/java-security/build.gradle` 에 `spring-boot-starter-web` 을 넣으면 **RED**. **주입이 실제로 적용됐는지 결과를 읽기 전에 확인한다.**
-- [ ] **AC-4 (V4 — `api` 금지)** — 저장소 어디에도 `api project(':libs:java-security')` 가 없다. **mutation**: 소비자 하나를 `api` 로 바꾸면 **RED**.
-- [ ] **AC-5 (사본 0 — 이 단계는 아직 아무것도 안 지운다)** — `projects/` 의 사본 **49개는 그대로**다. 실측으로 확인: `AllowedIssuersValidator` 18 · `TenantClaimValidator` 18 · `TenantClaimEnforcer` 13. **줄었으면 범위를 넘은 것이다.**
-- [ ] **AC-6 (패키지 경계)** — `com.example.security.jwt`(jjwt 기반)와 `com.example.security.oauth2`(Spring Security 기반)가 **분리**돼 있다. 전자에 `org.springframework` import 가 **0건**.
-- [ ] **AC-7** — `libs/java-gateway` 에 두 클래스의 **잔존 사본이 없다**(이동이지 복사가 아니다). `grep -r "class AllowedIssuersValidator" libs/java-gateway` → **0건**.
+- [x] **AC-1 (행동 불변 — 증명의 본체)** — ✅ 게이트웨이 6개 스위트 **304 tests / skipped 0 / failures 0**, **수정 없이** 통과. **`projects/**/src/test/` 에서 바뀐 *코드* 줄 = 0** (import 20줄 + Javadoc `{@link}` 1줄뿐). *스위트를 고쳐야 했다면 이관이 행동을 바꾼 것이다*(§ 6 V6) — 안 고쳤다.
+  *(첫 검증식은 Javadoc `{@link}` 줄을 assertion 으로 오검출했다. 술어를 정교화해 재확인 — 오늘만 같은 클래스 일곱 번째.)*
+- [x] **AC-2 (배선 실측)** — ✅ 6개 게이트웨이 전부 컴파일 + 테스트 통과. **ecommerce · erp · finance 포함** — ADR 이 "공짜" 라 적은 그 셋. 각각 `implementation project(':libs:java-security')` **1줄** 신규 선언(+ `libs:java-gateway` 1줄 = **총 4줄**). 전체 `./gradlew check` **BUILD SUCCESSFUL** (FAILED 태스크 0).
+- [x] **AC-3 (V1 — 중립성을 빌드가 보증한다)** — ✅ **신규 `assertClasspathNeutrality`** (`libs/java-security/build.gradle`, `check` 에 물림): `runtimeClasspath` **23 아티팩트** 검사, WebFlux/SCG/`jakarta.servlet`/`spring-webmvc`/`tomcat-embed-core` **0**. 아티팩트 0건이면 **exit 2**(공허 통과 금지, MONO-359).
+  **mutation ✅**: `spring-boot-starter-web` 주입 → **RED**, `spring-webmvc-6.2.1.jar` · `tomcat-embed-core-10.1.34.jar` 를 이름으로 지목. **주입 건수를 결과 읽기 전에 확인**했다.
+  **+ V2 신규 `assertNoServletOnReactiveEdge`**: `libs:java-gateway` 94 아티팩트, servlet **0**. mutation → **RED**. *(V2 는 D5-2 에서 누군가 `java-gateway` 를 `java-security-servlet` 에 의존시키는 순간을 위해 존재한다.)*
+- [x] **AC-4 (V4 — `api` 금지)** — ✅ **신규 `assertNoApiOnSharedLibs`** (루트, `check` 에 물림). **텍스트 grep 이 아니라 해결된 의존 그래프**를 본다(rename·alias·`extendsFrom` 우회 불가).
+  **mutation ✅**: `java-gateway` 에 `java-library` 플러그인 + `api project(':libs:java-security')` — **AC-2 의 4줄을 없애는 바로 그 지름길** — 주입 → **RED**, 위반 모듈을 경로로 지목.
+- [x] **AC-5 (사본 0 — 이 단계는 아직 아무것도 안 지운다)** — ✅ **18 / 18 / 13 = 49 그대로**.
+- [x] **AC-6 (패키지 경계)** — ✅ `com.example.security.jwt`(jjwt 기반)에 `org.springframework` import **0건**. Spring Security 바인딩은 신설 `com.example.security.oauth2` 에만.
+- [x] **AC-7** — ✅ `libs/java-gateway` 에 두 클래스의 잔존 사본 **0**. `git mv` 로 이동(rename 인식 = 이력 보존).
+
+## 착수 후 드러난 것 — ADR 의 다섯 번째 거짓 주장
+
+**① 순환 의존이 숨어 있었다.** `TenantClaimValidator:52` 가 `GatewayErrorCodes.TENANT_MISMATCH` 를 읽는다. **같은 패키지라 `import` 문이 없어서** 착수 전 `^import` grep 이 못 봤고, 나는 *"java-gateway 의 다른 클래스에 의존하지 않는다 — 깨끗한 이동"* 이라고 **단언했다**. 옮기면 `java-security → java-gateway` 의존이 생겨 **순환**이다.
+⇒ **위임 방향을 뒤집었다**: validator 가 리터럴을 소유하고 `GatewayErrorCodes` 가 그것을 가리킨다. 방향이 `java-gateway → java-security` 가 되어 순환이 없고, **MONO-351 의 "리터럴 하나, 양쪽이 그것을 가리킨다" 속성은 그대로**다 — 화살표만 뒤집혔다.
+⇒ 그리고 **두 상수의 일치를 단언하던 테스트를 `java-gateway` 쪽으로 옮겼다.** 원래 자리(`java-security`)에 두면 `GatewayErrorCodes` 가 안 보이므로 — **컴파일을 통과시키려고 그 단언을 지웠을 것이고, 드리프트 가드가 이동 중에 조용히 죽었을 것이다.**
+
+**② § D3 이 *"`ADR-MONO-048` § D1 의 AC-6 이 이미 `runtimeClasspath` 격리를 단언한다"* 고 적었는데 — 그 단언은 존재하지 않는다.** AC-6 은 **산문으로만** 쓰였고 태스크가 된 적이 없다(저장소 전수 grep). **이 task 가 만든 V1/V2/V4 가 최초의 실행 가능한 형태다.** § 6 이 스스로 적어둔 말이 이 ADR 자신에게 성립했다: ***"아무도 실패하는 걸 본 적 없는 단언은 Task 를 두른 주석이다."***
 
 ---
 

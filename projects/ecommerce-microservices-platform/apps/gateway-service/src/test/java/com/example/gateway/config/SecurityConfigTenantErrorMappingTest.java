@@ -2,7 +2,7 @@ package com.example.gateway.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.apigateway.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

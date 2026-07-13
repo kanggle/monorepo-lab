@@ -204,6 +204,81 @@ D1 and D5 both assert, of the very first step:
 - **Still true, still not a defect:** each project's servlet policy exactly mirrors its own gateway. **There is no live defect here**, and this migration must not create one. § 6 V6 is the guard: *if a per-domain suite has to change, the migration changed behaviour.*
 - **Not in scope, unchanged:** the **iam gateway** (§ D6 — a different, defensible design; audited by `TASK-MONO-365`). **Note the distinction, because it is easy to misread:** iam's *gateway* is out of scope; iam's *servlet services* (community, membership) are **in** scope — they hold 4 of the 49 copies.
 
+### 1.8 🔴 The thirteen `TenantClaimEnforcer` copies, and the axis nobody had counted (`TASK-MONO-382`, D5-2)
+
+§ 1.6 measured **behavioural drift on the axis of "does each project's servlet policy mirror its own gateway?"** and answered: **yes, everywhere.** That answer still stands.
+
+**It is not the only axis.** D5-2 compared all thirteen `TenantClaimEnforcer` copies before writing the canonical one. They hold **eight distinct normalised bodies** — but the eight reduce to **three policy axes**; the rest was line-wrapping, an inlined `@Value` import, and locally re-declared claim constants:
+
+| axis | what the fleet actually does |
+|---|---|
+| **wildcard `"*"`** | **all 13 allow it** |
+| **`entitled_domains`** | erp (4) · finance (2) · scm (3) = **9 honour it** · **fan (4) do not** *(fan sits outside the entitlement plane — the branch would be dead code)* |
+| 🔴 **public-path exemption (`shouldNotFilter`)** | **three different answers — and this is a security boundary** |
+
+#### The exemption axis, in full
+
+| shape | services |
+|---|---|
+| `PublicPaths.isPublic(request)` | **10** |
+| `PublicPaths.isPublic(request) \|\| uri.startsWith("/internal/")` | **`fan/membership`** — its three fan siblings do **not** |
+| `path.startsWith("/actuator/")` — **`PublicPaths` is not consulted at all** | **`scm/demand-planning`, `scm/inventory-visibility`** |
+
+**The scm pair's exemption is *wider* than their own sibling's.** `scm/procurement`'s `PublicPaths` exempts exactly `/actuator/health`, `/actuator/info`, `/actuator/prometheus` (+ a webhook prefix). The other two exempt **every** `/actuator/**` path — `env`, `beans`, `heapdump`, `loggers`.
+
+#### 🟢 It is not a live vulnerability — and saying otherwise would cost the real argument
+
+Both services' `SecurityConfig` permits **only** `health` / `info` / `prometheus` and ends with **`anyRequest().denyAll()`**. Spring Security rejects `/actuator/env` before the enforcer's exemption is ever consulted. **Measured, not assumed.**
+
+**But the line is being held in one place while the exemption is maintained in another.** Add `.requestMatchers("/actuator/**").permitAll()` to either service — an ordinary-looking change — and the tenant gate silently disappears for every actuator endpoint there. And these two services hold **no `TenantClaimValidator`** (§ 1.7): the enforcer is their *only* servlet-layer tenant check.
+
+#### What this changes for D5-3 … D5-8
+
+**The canonical `TenantClaimEnforcer` takes its exemption as a `Predicate<HttpServletRequest>`, defaulting to *exempt nothing*.** Each adopting service passes its own rule — which means **each adoption step must decide, explicitly, which of the three shapes that service is actually entitled to**, rather than inheriting whichever body got copied into it.
+
+Two of those decisions are already known to be non-trivial:
+
+- **`fan/membership`** — keep the `/internal/**` exemption, or remove it? Keeping it preserves behaviour (§ 6 V6). Removing it is a *narrowing*, and would need its internal callers checked first.
+- **`scm/demand-planning`, `scm/inventory-visibility`** — pass `PublicPaths::isPublic` like every other service (a **narrowing**, and the safer default), or reproduce the blanket `/actuator/` exemption? **Narrowing is a behaviour change and must be an explicit decision, not a silent one.**
+
+> **The copies did not disagree because anyone decided they should.** They disagreed because thirteen files were maintained by hand and nothing ever compared them. **Extracting them is what made the disagreement visible** — which is the whole argument of this ADR, arriving as evidence rather than assertion.
+
+### 1.9 🔴 The canonical class had reintroduced the split the copies were written to avoid (`TASK-MONO-383`, D5-3)
+
+D5-3 is the first step that adopts the canonical `TenantClaimEnforcer` in a live service, and § 6 V6 (**behaviour invariance**) is the check it has to pass. **It did not pass on the first attempt** — and what it caught was in the shared class, not in finance.
+
+The thirteen copies split **two ways** on how they reject a token with no `tenant_id`:
+
+| shape | services |
+|---|---|
+| `if ((tenantId == null \|\| blank) && !entitled)` → 401 | **9** — erp (4), finance (2), scm (3) |
+| `if (tenantId == null \|\| blank)` → 401, unconditionally | **4** — fan |
+
+**That is not a fourth axis.** The two sets are exactly the `entitled_domains` axis (§ 1.8): fan has no `entitled` variable at all, so its condition *degenerates* to the unconditional form. **The three-axis model holds.**
+
+But D5-2's canonical class rejected **unconditionally, regardless of the switch** — so adopting it would have *narrowed* the gate for the nine entitlement-honouring services. And narrowed it into a specific, named failure:
+
+> **`TenantClaimValidator` — the decode-time gate running in the very same services — consults the entitlement relaxation *before* it rejects an absent claim** (`TenantClaimValidator#validate`: the `trustEntitledDomains && isEntitled(...)` branch precedes the null check). An enforcer that rejected unconditionally would **refuse a token the decoder had just admitted.**
+
+The copies' own Javadoc names this hazard verbatim — *"both enforcement points share a single source of truth (**mismatch would create a decode-pass / filter-block split**)"* — and finance's pre-existing `TenantClaimValidatorTest` already **asserted the admitted side** (`entitled_domains containing finance grants even when tenant_id absent` → `hasErrors()` is `false`). The property was pinned on one layer and about to be contradicted on the other.
+
+**Not live-reachable today, and the ADR should say so plainly.** IAM only ever populates `entitled_domains` *after* a `tenant_id` is resolved, and every issuance path fails closed (`IllegalStateException`) when it is absent — so no issuable token has one without the other. This was a **latent** defect in a class with **zero consumers**, caught by the first adoption. It was not a live vulnerability, and claiming otherwise would cost the real point.
+
+**The real point is the shape of the failure.** The enforcer exists to still be standing when the decoder is misconfigured. Two layers of a defence in depth that reach *opposite verdicts* on the same token are not defence in depth — the inner one is contradicting the outer one, which is precisely the state the enforcer was built to survive.
+
+**Fix (in D5-3):** the null branch consults the switch, exactly as all thirteen copies do —
+
+```java
+boolean entitled = trustEntitledDomains && TenantClaimValidator.isEntitled(token, expectedTenantId);
+if ((tenantId == null || tenantId.isBlank()) && !entitled) { /* 401 */ }
+```
+
+With `trustEntitledDomains` off (fan), `entitled` is always `false` and this **is** the unconditional rejection those four copies wrote by hand. One expression, both shapes, no new axis.
+
+**Guarded, both ways.** `TenantClaimEnforcerTest` gains a nested `AgreesWithTheDecoder` group that runs a token set through **both** the validator and the enforcer and asserts the verdicts match — in *both* directions (nothing the decoder admits is refused; nothing it refuses is admitted). Each finance service's `FinanceTenantGatePolicyTest` asserts the same agreement over its own wiring. Mutation-verified: restoring the unconditional shape turns both red.
+
+> **Whether an entitlement without a `tenant_id` *should* be admitted is a real policy question — and it is not this refactor's to answer.** Today both layers say yes. If that is wrong, it is wrong at the *validator* too, fleet-wide, and belongs in its own ticket with its own ADR. What D5 may not do is change the answer silently, on one layer only, while claiming behaviour invariance.
+
 ---
 
 ## 2. Alternatives considered
@@ -252,7 +327,9 @@ The six gateway `OAuth2ResourceServerConfig` classes import `TenantClaimValidato
 
 ### D3 — The isolation is asserted by the build, not by intent
 
-`ADR-MONO-048` § D1's AC-6 already asserts *"SCG/WebFlux on a servlet service's `runtimeClasspath` = 0."* Extend it, and add the converse:
+> 🔴 **Corrected by `TASK-MONO-378`.** The sentence below says AC-6 *"already asserts"* this. **It does not.** `ADR-MONO-048` § D1's AC-6 was written as prose and **never became a task** — grep the repo before believing it. D5-1 built the first executable form: `assertClasspathNeutrality` (`libs:java-security`), `assertNoServletOnReactiveEdge` (`libs:java-gateway`) and `assertNoApiOnSharedLibs` (root), all wired into `check` and all mutation-verified. **This is the fifth claim in this ADR's lineage that was true only as an intention.** *(An assertion nobody has watched fail is a comment with a `Task` around it — § 6 says so, and § D3 was itself the counter-example.)*
+
+`ADR-MONO-048` § D1's AC-6 ~~already asserts~~ **states, as prose only,** *"SCG/WebFlux on a servlet service's `runtimeClasspath` = 0."* Make it executable, and add the converse:
 
 - `libs:java-security` `runtimeClasspath` contains **0** WebFlux, **0** Spring Cloud Gateway, **0** `jakarta.servlet` entries. *(Neutrality is a property of the module, so the build should be the one holding it — not a comment.)*
 - `libs:java-gateway` `runtimeClasspath` contains **0** `jakarta.servlet` entries.
@@ -378,10 +455,10 @@ Per `TASK-MONO-364` § AC-6 the roadmap lives here, not in `tasks/ready/`. **Tic
 
 | step | scope | copies | status |
 |---|---|---|---|
-| **D5-1** | move the two neutral validators `java-gateway` → `java-security` | 0 | **`TASK-MONO-378` (ready)** |
-| D5-2 | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | ⏳ after D5-1 |
-| D5-3 | finance — account, ledger | 6 | ⏳ |
-| D5-4 | erp — approval, masterdata, notification, read-model | 12 | ⏳ |
+| **D5-1** | move the two neutral validators `java-gateway` → `java-security` (`com.example.security.oauth2`) | 0 | **✅ `TASK-MONO-378`** — 4 dependency lines, 6 gateways' imports, **0 assertions changed**. V1/V2/V4 built and mutation-verified. |
+| **D5-2** | `libs/java-security-servlet` + canonical `TenantClaimEnforcer` | 0 | **✅ `TASK-MONO-382`.** The 13 copies hold **eight distinct bodies**, which reduce to **three policy axes** — everything else was line-wrapping and an inlined `@Value`. **The axes are recorded in § 1.8, because one of them is a security boundary and D5-3…D5-8 have to carry it.** Canonical class is builder-parameterised, **every switch closed by default** (including the wildcard, which all 13 copies enable — *a default is what you get when someone forgets*). 19 tests; each switch asserted **on *and* off**. |
+| **D5-3** | finance — account, ledger | 6 | **✅ `TASK-MONO-383`** — the first deletion: **49 → 43**. All three switches wired explicitly and **mutation-verified** (remove any one → finance's suite goes red). **`ledger-service` has test coverage for these classes for the first time** — the service § 1.3 names (all three classes, zero tests) now holds 20 policy assertions. **V6 earned its keep on its first run: it caught a latent decode-pass / filter-block split in D5-2's canonical class — see § 1.9.** |
+| **D5-4** | erp — approval, masterdata, notification, read-model | 12 | **`TASK-MONO-384` (ready)** — **43 → 31**, the largest single-project deletion. All four carry finance's policy (wildcard on, entitlement trusted, own `PublicPaths`), so the wiring is D5-3's shape — **but package layout differs between them** (`infrastructure/security/` for approval + masterdata, `config/security/` for notification + read-model), and **`approval` and `notification` hold no `TenantClaimEnforcer` test at all**. D5-3 already paid this step's real risk: § 1.9's split hit *all nine* entitlement-honouring services, four of which are erp's. |
 | D5-5 | scm — procurement (all 3); demand-planning + inventory-visibility (**Enforcer only**) | 5 | ⏳ |
 | D5-6 | fan — artist, community, membership, notification | 12 | ⏳ |
 | D5-7 | wms — 5 services (**validators only**; `admin-service` needs the one new `java-security` line) | 10 | ⏳ |
