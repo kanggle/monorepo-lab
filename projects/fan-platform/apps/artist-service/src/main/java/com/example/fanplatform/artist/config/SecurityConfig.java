@@ -2,7 +2,7 @@ package com.example.fanplatform.artist.config;
 
 import com.example.fanplatform.artist.adapter.in.web.security.ActorContextJwtAuthenticationConverter;
 import com.example.fanplatform.artist.adapter.in.web.security.PublicPaths;
-import com.example.fanplatform.artist.adapter.in.web.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;

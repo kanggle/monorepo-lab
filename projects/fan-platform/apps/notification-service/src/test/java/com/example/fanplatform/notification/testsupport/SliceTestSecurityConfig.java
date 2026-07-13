@@ -1,9 +1,13 @@
 package com.example.fanplatform.notification.testsupport;
 
+import com.example.fanplatform.notification.infrastructure.security.ServiceLevelOAuth2Config;
+import com.example.security.servlet.TenantClaimEnforcer;
+import org.springframework.test.util.ReflectionTestUtils;
+
 import com.example.fanplatform.notification.infrastructure.security.ActorContextJwtAuthenticationConverter;
-import com.example.fanplatform.notification.infrastructure.security.AllowedIssuersValidator;
+import com.example.security.oauth2.AllowedIssuersValidator;
 import com.example.fanplatform.notification.infrastructure.security.SecurityConfig;
-import com.example.fanplatform.notification.infrastructure.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.RSAKey;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -60,11 +64,32 @@ public class SliceTestSecurityConfig {
         OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
                 new JwtTimestampValidator(),
                 new AllowedIssuersValidator(List.of(JwtTestHelper.SAS_ISSUER, JwtTestHelper.LEGACY_ISSUER)),
-                new TenantClaimValidator(JwtTestHelper.DEFAULT_TENANT_ID));
+                TenantClaimValidator.forTenant(JwtTestHelper.DEFAULT_TENANT_ID)
+                        .allowSuperAdminWildcard()
+                        .build());
         decoder.setJwtValidator(validator);
         return decoder;
     }
 
+
+    /**
+     * The tenant filter, taken from the <strong>production</strong> config rather than rebuilt
+     * here.
+     *
+     * <p>The filter used to arrive as {@code @Import(TenantClaimEnforcer.class)} — it was a
+     * {@code @Component} in this service's own tree. It is a shared class now (ADR-MONO-049
+     * § D5-6) with a private constructor, so it has to come from a bean method. It comes from
+     * <em>that</em> bean method, and not a copy of it, deliberately: the three switches are
+     * fan's tenant policy, and a slice test that re-stated them would keep passing while the
+     * real gate changed underneath it.
+     */
+    @Bean
+    public TenantClaimEnforcer tenantClaimEnforcer() {
+        ServiceLevelOAuth2Config production = new ServiceLevelOAuth2Config();
+        ReflectionTestUtils.setField(
+                production, "requiredTenantId", JwtTestHelper.DEFAULT_TENANT_ID);
+        return production.tenantClaimEnforcer();
+    }
     @Bean
     public SecurityFilterChain endUserFilterChain(HttpSecurity http) throws Exception {
         http
