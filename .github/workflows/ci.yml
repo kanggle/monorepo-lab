@@ -1364,6 +1364,18 @@ jobs:
         :projects:iam-platform:apps:membership-service:integrationTest
         :projects:iam-platform:apps:security-service:integrationTest
       artifact-name: iam-integration-test-reports
+      # TASK-MONO-393: seven modules, each booting its own MySQL + Kafka + Redis +
+      # WireMock Testcontainers stack. With org.gradle.parallel=true they boot at once
+      # on the 2-CPU/7GB runner — the exact condition TASK-MONO-331 diagnosed for WMS
+      # (four modules), except this lane has seven and never got the mitigation.
+      #
+      # Observed (PR #2515, attempt 2): Redis connections were severed mid-run
+      # ("RedisConnectionFailureException: Unable to connect to Redis"), and because the
+      # blacklist check is deliberately fail-closed, EVERY refresh returned 401. That
+      # surfaced as DeviceSessionIntegrationTest claiming a single-session revoke had
+      # killed another session's token — a security defect that does not exist. scm's
+      # lane failed in the same attempt, which is what runner-wide exhaustion looks like.
+      gradle-args: --no-parallel
       report-paths: |
         projects/iam-platform/apps/*/build/reports/tests/integrationTest/
         projects/iam-platform/apps/*/build/test-results/integrationTest/

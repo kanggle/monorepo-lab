@@ -5,6 +5,7 @@ import com.example.auth.domain.credentials.CredentialHash;
 import com.example.auth.domain.session.DeviceSession;
 import com.example.auth.domain.session.RevokeReason;
 import com.example.auth.domain.repository.DeviceSessionRepository;
+import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.infrastructure.persistence.CredentialJpaEntity;
 import com.example.auth.infrastructure.persistence.CredentialJpaRepository;
 import com.example.auth.infrastructure.persistence.AuthOutboxJpaRepository;
@@ -18,6 +19,8 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -35,6 +38,7 @@ import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -87,6 +91,10 @@ class DeviceSessionIntegrationTest extends AbstractIntegrationTest {
     @Autowired private DeviceSessionRepository deviceSessionRepository;
     @Autowired private AuthOutboxJpaRepository outboxJpaRepository;
     @Autowired private CredentialJpaRepository credentialJpaRepository;
+    // TASK-MONO-393: the DB is the only place the scoping property can be asserted without
+    // Redis being able to answer for it; redisTemplate is used only to name an outage.
+    @Autowired private RefreshTokenRepository refreshTokenRepository;
+    @Autowired private StringRedisTemplate redisTemplate;
 
     private static final String TEST_EMAIL = "session-it@example.com";
     private static final String TEST_PASSWORD = "password-session-1";
@@ -187,14 +195,25 @@ class DeviceSessionIntegrationTest extends AbstractIntegrationTest {
 
         List<DeviceSession> sessions = deviceSessionRepository.findActiveByAccountId(ACCOUNT_ID);
         assertThat(sessions).hasSize(2);
-        String deviceIdToDrop = sessions.stream()
-                .filter(s -> s.getUserAgent() != null && s.getUserAgent().contains("delete-me"))
-                .findFirst().orElseThrow()
-                .getDeviceId();
+        String deviceIdToDrop = deviceIdOf(sessions, "delete-me");
+        String deviceIdToKeep = deviceIdOf(sessions, "keep");
 
         mockMvc.perform(delete("/api/accounts/me/sessions/" + deviceIdToDrop)
                         .header("X-Account-Id", ACCOUNT_ID))
                 .andExpect(status().isNoContent());
+
+        // TASK-MONO-393 — assert the scoping property in the DB, where Redis cannot lie about it.
+        // The HTTP checks below cannot carry this on their own: the blacklist lookup is
+        // deliberately fail-closed, so if Redis is unreachable EVERY refresh answers 401 — which
+        // silently satisfies the "revoked -> 401" expectation for the wrong reason and then fails
+        // the surviving one, making an infrastructure outage look like a cross-session token leak.
+        // That is exactly what happened in PR #2515 and it cost a ticket to disprove.
+        assertThat(refreshTokenRepository.findActiveJtisByDeviceId(deviceIdToDrop))
+                .as("the revoked device's refresh token must be gone")
+                .isEmpty();
+        assertThat(refreshTokenRepository.findActiveJtisByDeviceId(deviceIdToKeep))
+                .as("revoking one device must NOT touch the other device's refresh token")
+                .hasSize(1);
 
         // Refresh with the dropped token -> 401
         mockMvc.perform(post("/api/auth/refresh")
@@ -202,11 +221,51 @@ class DeviceSessionIntegrationTest extends AbstractIntegrationTest {
                         .content("{\"refreshToken\":\"%s\"}".formatted(refreshTokenA)))
                 .andExpect(status().isUnauthorized());
 
-        // Other token still works
-        mockMvc.perform(post("/api/auth/refresh")
+        // Other token still works — and if it does not, say WHY.
+        MvcResult surviving = mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"%s\"}".formatted(refreshTokenB)))
-                .andExpect(status().isOk());
+                .andReturn();
+        int status = surviving.getResponse().getStatus();
+        if (status != 200) {
+            fail(explainSurvivingTokenRejection(status));
+        }
+    }
+
+    /**
+     * Names the cause of an unexpected rejection instead of letting the next reader infer a
+     * security defect from a bare {@code expected:<200> but was:<401>} (TASK-MONO-393).
+     */
+    private String explainSurvivingTokenRejection(int status) {
+        if (!redisReachable()) {
+            return ("The surviving device's refresh was rejected (%d), but Redis is UNREACHABLE. "
+                    + "The blacklist check is fail-closed, so it denies every refresh while Redis is "
+                    + "down — this is NOT a cross-session revoke leak. The DB assertions above already "
+                    + "proved the other device's token survived. Cause is the Testcontainers stack, not "
+                    + "auth-service: see TASK-MONO-393 (the iam lane boots seven stacks on one runner).")
+                    .formatted(status);
+        }
+        return ("The surviving device's refresh was rejected (%d) while Redis is REACHABLE. "
+                + "The DB assertions above passed, so the token row is still active — meaning the "
+                + "rejection came from the token pipeline itself (blacklist entry, bulk-invalidation "
+                + "marker, tenant mismatch or reuse detection), not from session scoping. "
+                + "This one is real; do not dismiss it as flake.").formatted(status);
+    }
+
+    private boolean redisReachable() {
+        try {
+            redisTemplate.hasKey("mono-393:liveness-probe");
+            return true;
+        } catch (DataAccessException e) {
+            return false;
+        }
+    }
+
+    private static String deviceIdOf(List<DeviceSession> sessions, String userAgentNeedle) {
+        return sessions.stream()
+                .filter(s -> s.getUserAgent() != null && s.getUserAgent().contains(userAgentNeedle))
+                .findFirst().orElseThrow()
+                .getDeviceId();
     }
 
     @Test
