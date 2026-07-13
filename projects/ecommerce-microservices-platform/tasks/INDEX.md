@@ -75,7 +75,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
-| TASK-FE-090 | **🟢 READY — 자진 신고. `account-type-guard.spec.ts` 의 120s timeout override 를 제거한다 — 그 근거를 CI 가 반증했다.** `TASK-MONO-381`(root, `8dabdb38d`)이 커밋 `556ff90e0` 으로 이 스펙에만 120s 를 주며 주석에 *"레인의 첫 GAP 로그인이라 cold-SAS 비용을 떠안는다 ⇒ 60s 는 진짜 예산이 아니다"* 라고 단언했다. **머지 직후 push-트리거 nightly(런 `29244678278`)가 그 단언을 반증했다 — 그 "첫 GAP 로그인" 은 CI 에서 `4.0s`** 다(golden-flow 3.8s · cart 6.9s · logout 17.6s · 12 passed / 46.4s, `assert-specs-ran` 표에 `ran=1 skipped=0`). **기본 60s 에 15배 여유** ⇒ cold-SAS 이론은 성립하지 않는다. **원인: 오염된 호스트에서 잰 시간을 인과로 승격시켰다** — 로컬 측정 당시 다른 세션의 컨테이너 19개가 CPU 를 먹는 중이었다(`env_webstore_local_lighthouse_host_saturation` 가 이미 기록한 함정). **MONO-381 은 PR 본문엔 유보를 적었지만**(*"호스트 경합과 분리하지 못해 근본 원인은 주장하지 않았다"*) **코드 주석엔 확신만 남겼다** — 유보는 리뷰어가 읽고 주석은 다음 구현자가 읽는다. ⇒ 이 저장소가 반복해 대가를 치른 **선언↔진실 드리프트**를 스스로 하나 심은 것. **AC-2 가 본체**: 제거 후에도 `assert-specs-ran` 표에서 `ran≥1 / skipped=0` 을 **직접 읽어** 확인(잡이 초록인 것은 증거가 아니다 — MONO-373). **AC-3**: `flaky=0`(재시도가 초록으로 덮는 것이 MONO-381 에서 실제로 일어난 실패 모드다). **가드 로직·시드·REQUIRED 목록은 전부 CI 로 정상 실증됐다 — 손대지 않는다.** 분석=Opus 4.8 / 구현 권장=**Haiku**(주석 블록 + 한 줄 제거, 판단은 끝났고 관측만 남았다). | web-store | test, cleanup |
 
 ## in-progress
 
@@ -85,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-090 | **🔵 REVIEW — 자진 신고. `account-type-guard.spec.ts` 의 120s timeout override 제거 — 그 근거를 CI 가 반증했다.** `TASK-MONO-381`(root, `8dabdb38d`)이 커밋 `556ff90e0` 으로 이 스펙에만 120s 를 주며 주석에 *"레인의 첫 GAP 로그인이라 cold-SAS 비용을 떠안는다 ⇒ 60s 는 진짜 예산이 아니다"* 라고 단언했다. **머지 직후 push-트리거 nightly(런 `29244678278`)가 그 단언을 반증했다 — 그 "첫 GAP 로그인" 은 CI 에서 `4.0s`** 다(golden-flow 3.8s · cart 6.9s · logout 17.6s · 12 passed / 46.4s, `assert-specs-ran` 표에 `ran=1 skipped=0`). **기본 60s 에 15배 여유** ⇒ cold-SAS 이론은 성립하지 않는다. **원인: 오염된 호스트에서 잰 시간을 인과로 승격시켰다** — 로컬 측정 당시 다른 세션의 컨테이너 19개가 CPU 를 먹는 중이었다(`env_webstore_local_lighthouse_host_saturation` 가 이미 기록한 함정). **MONO-381 은 PR 본문엔 유보를 적었지만**(*"호스트 경합과 분리하지 못해 근본 원인은 주장하지 않았다"*) **코드 주석엔 확신만 남겼다** — 유보는 리뷰어가 읽고 주석은 다음 구현자가 읽는다. ⇒ 이 저장소가 반복해 대가를 치른 **선언↔진실 드리프트**를 스스로 하나 심었다. **구현**: 10줄 순삭(override + 근거 주석), 스펙은 나머지 5개와 같은 기본 60s 를 쓴다. **AC-1 / AC-4 ✅**(`tsc` 0 · `next lint` 0 · 성능 인과 주장 0). **🔴 AC-2 / AC-3 은 impl PR CI 가 말할 수 없다** — full-stack 레인은 **PR 에서 돌지 않는다**(schedule + push-to-main) ⇒ 머지 후 push-트리거 런의 `assert-specs-ran` 표(`ran≥1 / skipped=0`)와 `flaky=0` 을 **직접 읽어** 채운 뒤 close chore. **이 비대칭이 MONO-381 이 물린 바로 그 자리이고, 이 티켓이 다시 그 자리를 지난다.** **가드 로직·시드·REQUIRED 목록은 손대지 않았다 — 같은 CI 런이 정상 동작을 실증했다.** 분석=Opus 4.8. | web-store | test, cleanup |
 
 ## done
 
