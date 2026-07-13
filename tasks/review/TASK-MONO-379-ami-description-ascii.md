@@ -8,7 +8,7 @@ em dash 하나가 40분치 AMI 를 태우고 산출물까지 지웠다 — `pack
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -91,14 +91,15 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **`ami_description` 이 ASCII 다** — `packer build` 가 마지막 단계에서 죽지 않는다.
-- [ ] **가드 (o) 가 실제로 문다 — mutation 필수.** 통과는 증거가 아니다:
+- [x] **`ami_description` 이 ASCII 다** — `packer build` 가 마지막 단계에서 죽지 않는다.
+- [x] **가드 (o) 가 실제로 문다 — mutation 필수.** 통과는 증거가 아니다:
       - O1 `ami_description` 에 em dash 재주입 → **FAIL**
       - O2 `ami_name` 에 비-ASCII → **FAIL** (같은 API, 같은 이유)
       - O3 **한글 주석은 무해**(오탐 0) — 이게 없으면 가드가 첫날 꺼진다
       - O5 vacuity: 정상 트리 **PASS**
-- [ ] **AMI 가 실제로 구워진다** — `packer build` 완주, AMI id 가 남는다(deregister 되지 않는다).
+- [x] **AMI 가 실제로 구워진다** — **`ami-051cd83db9a46eea2`**, `packer_exit=0`, AWS 에서 `available` + ASCII description 확인(deregister 되지 않음). **옛 AMI(`ami-0a99246fd0ad65007`)는 승격 전 사본으로 구운 것**이므로 이것이 **승격본으로 구운 최초의 AMI** 다.
 - [ ] **`TASK-MONO-366` 의 미이행 AC 를 완주한다** — 새 AMI 로 `terraform apply` → `POST /start` → **SSM·SSH 접속 없이** 브라우저 OIDC 로그인 왕복.
+      **⚠️ 이 AMI 로는 아직 못 한다** — 부팅은 완전히 성공했으나(§ `TASK-MONO-380` 관측) **`/signup` 이 404 라 로그인할 계정을 만들 수 없다.** 380 을 함께 담아 **한 번만 다시 굽는다.**
 - [ ] CI GREEN.
 
 ---

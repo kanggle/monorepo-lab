@@ -8,7 +8,7 @@ TASK-MONO-380
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -105,11 +105,12 @@ Host(`iam.<도메인>`) && (PathPrefix(`/oauth2`) || PathPrefix(`/login`) || Pat
 # Acceptance Criteria
 
 - [ ] **`/signup` 이 데모 도메인에서 200** — 라우터가 덮는다.
-- [ ] **가드 (p) 가 실제로 문다 — mutation 필수.** 통과는 증거가 아니다:
-      - P1 규칙에서 `/signup` 제거(= 원래 결함) → **FAIL**
-      - P2 템플릿에 새 링크 추가(미래 드리프트) → **FAIL**
-      - P3 규칙에서 `/login` 제거 → **FAIL**
-      - P5 vacuity: 정상 트리 **PASS**
+- [x] **가드 (p) 가 실제로 문다 — mutation 4방향 확인.** 통과는 증거가 아니다:
+      - P1 규칙에서 `/signup` 제거(= 원래 결함) → **FAIL** ✅ (누락 경로를 지목)
+      - P2 템플릿에 새 링크 추가(미래 드리프트) → **FAIL** ✅ (`/reset-password` 지목)
+      - P3 규칙에서 `/login` 제거 → **FAIL** ✅
+      - P5 vacuity: 정상 트리 **PASS** ✅
+      **⚠️ P2 의 첫 시도는 무효였다** — `perl` 정규식이 `@{...}` 의 중괄호에서 깨져(`Search pattern not terminated`) **mutation 이 적용조차 되지 않았고**, 그 상태의 `ok` 는 *"가드가 물지 않는다"* 는 증거가 **아니었다**(아무것도 안 바꿨으니 통과가 당연하다). `sed` 로 다시 넣고 **적용 여부를 먼저 확인한 뒤**(`reset-password` 가 링크 집합에 등장) 가드가 무는 것을 봤다. ***mutation 이 적용됐는지부터 확인하라*** — 이 저장소 4번째 재발.
 - [ ] **무인 로그인 왕복 — `TASK-MONO-366` 의 핵심 AC.**
       새 AMI → `terraform apply` → `POST /start` → **SSM·SSH 접속 없이** 브라우저로 **가입 → 로그인 → 인증된 세션.**
 - [ ] CI GREEN.
