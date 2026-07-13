@@ -1,16 +1,14 @@
 package com.example.membership.integration;
 
-import com.example.membership.infrastructure.security.AllowedIssuersValidator;
-import com.example.membership.infrastructure.security.TenantClaimValidator;
+import com.example.membership.infrastructure.config.OAuth2ResourceServerConfig;
 import com.example.security.jwt.Rs256JwtSigner;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -87,13 +85,24 @@ public final class MembershipJwtTestSupport {
 
         @Bean
         public JwtDecoder jwtDecoder() {
+            // The KEY is swapped so the test does not fetch JWKS over the network.
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey()).build();
-            OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
-                    new JwtTimestampValidator(),
-                    new AllowedIssuersValidator(List.of(SAS_ISSUER, LEGACY_ISSUER)),
-                    new TenantClaimValidator(DEFAULT_TENANT_ID));
-            decoder.setJwtValidator(validator);
+            // The POLICY is not swapped — it comes from production (ADR-MONO-049 § 1.12).
+            decoder.setJwtValidator(productionTokenValidator());
             return decoder;
+        }
+
+        /**
+         * The validator chain from {@link OAuth2ResourceServerConfig#jwtTokenValidator()}, rather
+         * than a hand-written copy of it. Replacing the decoder's key is legitimate; rewriting
+         * what the decoder enforces means the tests stop watching the real gate.
+         */
+        private static OAuth2TokenValidator<Jwt> productionTokenValidator() {
+            OAuth2ResourceServerConfig production = new OAuth2ResourceServerConfig();
+            ReflectionTestUtils.setField(production, "requiredTenantId", DEFAULT_TENANT_ID);
+            ReflectionTestUtils.setField(production, "allowedIssuersCsv",
+                    SAS_ISSUER + "," + LEGACY_ISSUER);
+            return production.jwtTokenValidator();
         }
     }
 }

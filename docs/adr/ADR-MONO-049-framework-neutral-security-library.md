@@ -399,6 +399,60 @@ The error codes mattering is not cosmetic: **all five wms `SecurityConfig`s bran
 
 ---
 
+### 1.12 The last four files were the easy part — the policy had a second home nobody had counted (`TASK-MONO-392`, D5-8)
+
+D5-8 deleted the final four copies and took the fleet to **zero**. It also found that **deleting them was not the work.**
+
+#### The census could never have seen this
+
+Every count in this lineage — 4 → 10 → 18 → 49, and § 1.10's correction for inline lambdas — has asked the same question: *where else is this class written?* In iam, the answer was also: **in the tests, twice per service.**
+
+`SliceTestSecurityConfig` and the integration bases (`CommunityIntegrationTestBase`, `MembershipJwtTestSupport`) each **hand-built their own validator chain**:
+
+```java
+OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
+        new JwtTimestampValidator(),
+        new AllowedIssuersValidator(List.of(SAS_ISSUER, LEGACY_ISSUER)),
+        new TenantClaimValidator(DEFAULT_TENANT_ID));       // ← not production's
+```
+
+Swapping the decoder's **key** is legitimate — there is no auth-service in a slice test, so it verifies against a local key instead of fetching JWKS. Swapping the **policy** is not. And these files did both, in the same breath, which is precisely why nobody noticed: *the legitimate reason to touch the decoder carried the illegitimate change in with it.*
+
+#### What that cost, measured rather than asserted
+
+The claim "these tests would stay green while the real gate changed" is easy to make and easy to hand-wave. So D5-8 measured it. A **canary mutation** was inserted into production's `jwtTokenValidator()` — a validator that rejects **every** token — and both projects' full suites were run:
+
+| production's tenant gate rejects **everything** | test-side failures |
+|---|---|
+| **before D5-8** (tests build their own chain) | **0**, across **50 suites** |
+| **after D5-8** (tests delegate to production) | **36** (community 22 · membership 14) |
+
+**The production gate refused every token in existence and fifty test suites went green.** That is what a second copy of the policy buys you. It is the same defect as `TASK-MONO-355` (wms's wildcard refusal had zero coverage) and `TASK-MONO-387` (membership's `/internal/**` exemption was undefended), and it earns the same sentence: **a property nothing can observe is a property nothing is holding.**
+
+> **The fix is not a shared `TenantGateTestConfig`.** That would be a *third* copy of the policy — and a test helper is exactly where a third copy would hide, because it looks like de-duplication while it is doing the opposite. The tests now call `OAuth2ResourceServerConfig#jwtTokenValidator()` — the bean production wires — and keep only the key swap.
+
+#### And a count was wrong one last time, in the ticket that boasted the counting was fixed
+
+`TASK-MONO-390`'s notes recorded that D5-7 was the first step where **grep was complete** and the compiler found nothing further. D5-8's ticket then measured iam's dependencies and stated: *both services already declare `libs:java-security`; no new dependency line is needed.*
+
+**`membership` declares it as `testImplementation`.** The grep counted the *string* and returned `1` for both services; it never looked at the **configuration**, which is the only part that matters — `testImplementation` does not reach the production compile classpath. The build failed on the first compile with *"package `com.example.security.oauth2` does not exist"*.
+
+**The compiler refuted the measurement, again — and this time the measurement was the one that had just declared itself reliable.** A count is only as honest as its predicate, and `grep -c 'java-security'` is not a predicate about dependencies. It is a predicate about text.
+
+#### And then the author of this section shipped the mutation
+
+The first push of D5-8 went **red on CI**, and the two failing tests were `EntitlementIsRefused` — the assertions this very task had written to prove iam refuses the entitlement switch.
+
+The cause: two mutation runs were executing **concurrently against the same worktree** (one backgrounded, one launched in the foreground before it had finished). One process's *restore* raced the other's *apply*, and the apply won. `.trustEntitledDomains()` was left in both production configs — **directly beneath the comment that says `no .trustEntitledDomains()`** — and committed.
+
+The residue check afterwards looked for leftover `.premut` files and stray canary validators. It found none, and reported clean. **It never checked for the switches themselves.**
+
+> **The guard was blind to precisely the failure mode it existed to prevent** — the third time in this series that a guard's *predicate* was wrong rather than its *subject* (§ D5-6 aborted a good mutation on a bad count; § D5-7's count was off by the gateway). And it is the third time the fix was the same: **assert the property you are protecting, not a proxy for it.** The check that catches this is one line — *zero switch calls in iam's production configs* — and it is now what runs.
+>
+> **What caught it was the policy pin this task wrote.** A test authored in this commit turned CI red against its own commit. That is the entire thesis of § 1.12, executed on the person writing § 1.12: *the value of a suite is not that it passes; it is that it is watching.* It was watching. **And "the tests passed locally" was never the claim worth making — the artefact I tested and the artefact I committed had drifted apart, and only one of them was real.**
+
+---
+
 ## 2. Alternatives considered
 
 ### 2.1 A CI guard asserting the copies stay identical — **rejected**
@@ -550,6 +604,26 @@ The first draft priced in **two new Gradle modules and twelve consumers to wire*
 
 **Cost.** Two new Gradle modules; four PRs; 18 files deleted and 12 build files touched. No runtime surface changes, no contract changes, no behaviour change — every step is provable by the existing suites.
 
+### 5.1 ✅ D5 is complete (`TASK-MONO-392`, 2026-07-13) — and the population was never the interesting number
+
+**Copies: 49 → 0**, across eight serialised steps, `main` green at every one. Zero behaviour changes; one observable error-code change, stated rather than smuggled (§ D5-5). The three classes are one class each.
+
+**What the migration actually turned up is worth more than the deletion.** Every step was supposed to be mechanical, and every step found something the census could not see:
+
+| step | what it found |
+|---|---|
+| D5-3 | the *canonical* class had reintroduced the decode-pass / filter-block split the copies were written to avoid (§ 1.9) |
+| D5-5 | two services held the same logic as **inline lambdas** — `^public class` cannot see a lambda (§ 1.10) |
+| D5-6 | membership's `/internal/**` exemption was **load-bearing and completely undefended**; the mutation that proved it load-bearing also proved nothing was watching it |
+| D5-7 | wms refuses the SUPER_ADMIN wildcard, and **not one test asserted the refusal** — the single property distinguishing it from the fleet (`TASK-MONO-355` called this shot) |
+| D5-8 | the policy had a **second and third home in the tests**; production could be made to reject every token and **50 suites stayed green** (§ 1.12) |
+
+**The through-line is one sentence, and it is not about duplication.** Duplication was the *symptom* — the thing that let six copies drift. The disease is that **none of these properties were being watched.** A copy that nothing observes and a canonical class that nothing observes fail the same way; unifying them only helps because it makes one place worth watching.
+
+> So the ADR's title undersold it. *Eighteen hand-copied validators are only eight tests away from a fix that lands nowhere* — true, but the eight tests were the point all along. **We did not have a duplication problem with a testing footnote. We had a testing problem that duplication made expensive.**
+
+**And the counting never did become reliable.** The population was wrong six times before D5 began (§ 1.6, § 1.10), and D5-8 — in the very step after the one whose notes recorded that "grep was finally complete" — found `membership` declaring the library as `testImplementation` while a `grep -c` reported it present. *A count is only as honest as its predicate, and every predicate here was eventually wrong.* What caught each one was never a better grep. It was the compiler, or a mutation.
+
 ---
 
 ## 6. Verification
@@ -564,8 +638,11 @@ How each decision is shown to hold — **and how each is shown to fail when viol
 | V4 (D2) | no `api project(':libs:java-security')` anywhere | change one consumer's `implementation` to `api` → red |
 | V5 (D4) | the shared `TenantClaimValidator`'s switches are **closed by default**, and **every switch narrows**; each domain's suite asserts both what its gate **admits** and what it **refuses** | drop `trustEntitledDomains` from one domain → that domain's suite goes red *(MONO-357 ran the equivalent mutation on `acceptAnyWellFormedTenant`; it bit. That switch — the one switch here that **opened** a gate — was removed by **TASK-MONO-388**: ecommerce reaches its edge through entitlement like every other domain, and `TenantGatePolicyLeakTest` now asserts the builder exposes no opening switch at all.)* |
 | V6 (D5) | behaviour unchanged at every step | the existing per-domain suites pass **unmodified** — if a suite has to change, the migration changed behaviour |
+| **V7 (D5-8)** | **each service's tests watch the gate production wires** — slice configs and integration bases take their validator chain from `OAuth2ResourceServerConfig#jwtTokenValidator()`, never a hand-built one | **poison production's chain so it rejects every token → that service's suites go red.** If they stay green, the tests are asserting against a copy of the policy and the gate is unwatched *(§ 1.12: before D5-8 this mutation left **50 suites green**)* |
 
 **V5 is the one that matters.** MONO-355 found that wms's rejection of the `*` SUPER_ADMIN wildcard — the most distinctive gate in the fleet, and the one ADR-048 § D5 names by reason — had **zero test coverage**. A suite that records only what a gate accepts will not notice when what it refuses changes.
+
+**V7 is V5's shadow, and it took until the last step to see it.** V5 asks whether a suite asserts the refusals. V7 asks a question that has to come *first*: **is the suite even looking at the real gate?** iam's tests asserted refusals diligently — against a validator chain they had built themselves. Every assertion passed, and none of them was watching production. *A test that owns its own copy of the subject is not a test of the subject.*
 
 ## 7. Roadmap — **ACCEPTED, scope A** (`TASK-MONO-377`, 2026-07-13)
 
@@ -580,8 +657,8 @@ Per `TASK-MONO-364` § AC-6 the roadmap lives here, not in `tasks/ready/`. **Tic
 | **D5-5** | scm — procurement (all 3); demand-planning + inventory-visibility (Enforcer + **two inline validator implementations** — § 1.10) | 5 | **✅ `TASK-MONO-385`** — **31 → 26**, and the two inline implementations are gone (fleet-wide zero). **§ 1.8's exemption axis is decided: narrowed, and the narrowing is proven unobservable** — Spring Security's chain runs *before* the enforcer, so the actuator paths that lost the exemption were already `denyAll`'d and the filter never saw them. **The permit list and the exemption are now one object**, which is what § 1.8 actually asked for. One observable change, stated: the issuer error code moves `invalid_token` → `invalid_issuer` (status and response `code` unchanged; zero consumers; it aligns scm with erp/fan/finance). Mutation-verified 9×. 351 tests / 0 failures. |
 | **D5-6** | fan — artist, community, membership, notification | 12 | **✅ `TASK-MONO-387`** — **26 → 14**. **The first project that leaves a switch OFF**, and the first whose mutation runs in *both* directions: removing `.allowSuperAdminWildcard()` reds 2 assertions, **and *adding* `.trustEntitledDomains()` reds 3.** A switch only ever tested in the ON position is not tested; here the untested position was OFF. § 1.9's null branch degenerates to the unconditional 401 fan's copies wrote by hand — asserted. **`membership`'s `/internal/**` exemption: load-bearing, kept** — and § 1.8 records what the mutation actually exposed. 381 tests / 0 failures. |
 | **D5-7** | wms — admin, inbound, outbound, inventory, master (**validators only**) | 10 | **✅ `TASK-MONO-390`** — **14 → 4**, and **`TenantClaimEnforcer` was already at zero: one of the three classes is finished.** The mutation direction **inverts here** — wms is the only platform that refuses the SUPER_ADMIN wildcard, so the dangerous edit is *adding* `.allowSuperAdminWildcard()`, not omitting it. **Mutated in both directions, 5/5 services each:** adding the wildcard reds **1 per service** (the assertion that did not exist before this task — `TASK-MONO-355` found this gate had **zero coverage for its rejection**), removing `.trustEntitledDomains()` reds **3 per service**. **No design was needed: wms's own gateway has been running the identical shared chain since `ADR-MONO-048` § D7**, so the servlet side aligned with a wiring the same project already proves — branch equivalence measured down to the failure-message strings, error codes unchanged (which matters: all five `SecurityConfig`s key their 403 `TENANT_FORBIDDEN` off `ERROR_CODE_TENANT_MISMATCH`). 75 policy assertions / 0 skipped / 0 failures; `compileTestJava` green across all 7 wms modules. See § 1.11. |
-| D5-8 | iam — community, membership (**validators only**; the **gateway** stays out — § D6) | 4 | ⏳ **the last step.** |
-| | | **49** | |
+| **D5-8** | iam — community, membership (**validators only**; the **gateway** stays out — § D6) | 4 | **✅ `TASK-MONO-392`** — **4 → 0. D5 is complete.** iam is the only project that calls **neither** switch, so every meaningful mutation runs in the *adding* direction: with a closed-by-default builder, *forgetting* one is not a reachable mistake. Both refusals asserted; adding either switch reds both services. **But the four files were the easy part.** Both services wrote the tenant policy a **second and third time** — in `SliceTestSecurityConfig` and in their integration bases — and a canary mutation proved the cost: **poison production's gate so it rejects every token, and before this task 50 test suites stayed green. After it, 36 assertions fail.** The tests now delegate to `OAuth2ResourceServerConfig#jwtTokenValidator()` and keep only the (legitimate) key swap. A shared `TenantGateTestConfig` was deliberately **not** created — that would be a third copy wearing de-duplication's clothes. See § 1.12, which also records the last miscount: `membership` declared the library as `testImplementation`, and the grep that said otherwise was counting text, not dependencies. 237 tests / 0 failures / 0 skipped. |
+| | | **49 → 0** | **✅ complete** |
 
 Carried forward, **not** resolved by this ADR (§ D6):
 

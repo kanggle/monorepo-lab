@@ -1,8 +1,8 @@
 package com.example.community.support;
 
+import com.example.community.infrastructure.config.OAuth2ResourceServerConfig;
 import com.example.community.infrastructure.security.ActorContextJwtAuthenticationConverter;
-import com.example.community.infrastructure.security.AllowedIssuersValidator;
-import com.example.community.infrastructure.security.TenantClaimValidator;
+import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletResponse;
@@ -14,20 +14,18 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.List;
 
 /**
  * Slice-test security wiring (TASK-BE-253).
@@ -65,15 +63,38 @@ public class SliceTestSecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder() {
         AccountJwtTestFixture f = fixture();
+        // Swapping the KEY is legitimate — there is no auth-service in a slice test, so the
+        // decoder verifies against the fixture's local key instead of fetching JWKS.
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(f.publicKey()).build();
-        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
-                new JwtTimestampValidator(),
-                new AllowedIssuersValidator(List.of(
-                        AccountJwtTestFixture.SAS_ISSUER,
-                        AccountJwtTestFixture.LEGACY_ISSUER)),
-                new TenantClaimValidator(AccountJwtTestFixture.DEFAULT_TENANT_ID));
-        decoder.setJwtValidator(validator);
+        // Swapping the POLICY is not. The validator chain comes from production.
+        decoder.setJwtValidator(productionTokenValidator());
         return decoder;
+    }
+
+    /**
+     * The tenant gate, taken from {@link OAuth2ResourceServerConfig#jwtTokenValidator()} —
+     * the bean production actually wires — rather than re-stated here.
+     *
+     * <p>Until {@code TASK-MONO-390}'s successor this class hand-built its own chain
+     * ({@code new AllowedIssuersValidator(...)} + {@code new TenantClaimValidator(...)}).
+     * That made it a <strong>second place the policy was written</strong>: relax the real gate
+     * and these slice tests stayed green, because they were asserting against a copy of the
+     * policy rather than the policy. Same failure as {@code TASK-MONO-355} (wms's wildcard
+     * refusal had no coverage) and {@code TASK-MONO-387} (membership's {@code /internal/**}
+     * exemption was undefended) — <em>a property nothing can observe is a property nothing is
+     * holding.</em>
+     *
+     * <p>The fix is deliberately <em>not</em> a shared {@code TenantGateTestConfig}: that
+     * would be a <strong>third</strong> copy of the policy, which is the thing
+     * {@code ADR-MONO-049} exists to remove.
+     */
+    static OAuth2TokenValidator<Jwt> productionTokenValidator() {
+        OAuth2ResourceServerConfig production = new OAuth2ResourceServerConfig();
+        ReflectionTestUtils.setField(production, "requiredTenantId",
+                AccountJwtTestFixture.DEFAULT_TENANT_ID);
+        ReflectionTestUtils.setField(production, "allowedIssuersCsv",
+                AccountJwtTestFixture.SAS_ISSUER + "," + AccountJwtTestFixture.LEGACY_ISSUER);
+        return production.jwtTokenValidator();
     }
 
     @Bean

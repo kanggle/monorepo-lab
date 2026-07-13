@@ -1,7 +1,6 @@
 package com.example.community.integration;
 
-import com.example.community.infrastructure.security.AllowedIssuersValidator;
-import com.example.community.infrastructure.security.TenantClaimValidator;
+import com.example.community.infrastructure.config.OAuth2ResourceServerConfig;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.example.security.jwt.Rs256JwtSigner;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -12,13 +11,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -147,13 +145,27 @@ public abstract class CommunityIntegrationTestBase extends AbstractIntegrationTe
         @Bean
         public JwtDecoder jwtDecoder() throws Exception {
             RSAPublicKey publicKey = loadPublicKey();
+            // The KEY is swapped because there is no auth-service in the Testcontainers stack.
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();
-            OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
-                    new JwtTimestampValidator(),
-                    new AllowedIssuersValidator(List.of(SAS_ISSUER, LEGACY_ISSUER)),
-                    new TenantClaimValidator(DEFAULT_TENANT_ID));
-            decoder.setJwtValidator(validator);
+            // The POLICY is not swapped — it comes from production (ADR-MONO-049 § 1.12).
+            decoder.setJwtValidator(productionTokenValidator());
             return decoder;
+        }
+
+        /**
+         * The validator chain from {@link OAuth2ResourceServerConfig#jwtTokenValidator()}.
+         *
+         * <p>This class used to re-state the chain by hand, which meant these integration tests
+         * asserted against a <em>copy</em> of the tenant policy rather than the policy — relax
+         * the real gate and they stayed green. Bypassing OIDC discovery is a legitimate reason
+         * to replace the decoder's key; it is not a reason to rewrite what the decoder enforces.
+         */
+        private static OAuth2TokenValidator<Jwt> productionTokenValidator() {
+            OAuth2ResourceServerConfig production = new OAuth2ResourceServerConfig();
+            ReflectionTestUtils.setField(production, "requiredTenantId", DEFAULT_TENANT_ID);
+            ReflectionTestUtils.setField(production, "allowedIssuersCsv",
+                    SAS_ISSUER + "," + LEGACY_ISSUER);
+            return production.jwtTokenValidator();
         }
 
         private RSAPublicKey loadPublicKey() throws Exception {

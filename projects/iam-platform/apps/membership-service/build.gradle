@@ -10,8 +10,11 @@ dependencies {
     implementation project(':libs:java-web-servlet')
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-observability')
-    // TASK-BE-253: integration tests need Rs256JwtSigner to issue local test tokens.
-    testImplementation project(':libs:java-security')
+    // Was testImplementation (TASK-BE-253: integration tests needed Rs256JwtSigner to issue
+    // local test tokens). Promoted to implementation by TASK-MONO-392 — production now takes
+    // its OAuth2 validators from here too (ADR-MONO-049 § D5-8). `implementation` already
+    // reaches the test compile classpath, so the test-side use is unaffected.
+    implementation project(':libs:java-security')
 
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka'
