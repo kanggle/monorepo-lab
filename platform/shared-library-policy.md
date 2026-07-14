@@ -116,6 +116,48 @@ class** — a slice test never loads auto-configurations, so only a booting cont
 integration lane) observes it. Guarded by `scripts/check-shared-lib-jpa-scan.sh`.
 (TASK-BE-333, TASK-BE-432, TASK-BE-461, TASK-BE-489 → TASK-MONO-406.)
 
+## Review smell: imperative language toward consumers
+
+`Forbidden` (above) names **artifacts** — kinds of classes that must not exist in a shared
+library. This entry names a **smell** instead: a pattern in the library's own javadoc/README
+that predicts a Forbidden-shaped defect before the artifact is ever found by a grep.
+
+**If a shared library's javadoc/README imposes an imperative obligation on its consumers**
+(`MUST` / `IMPORTANT` / "be sure to" / "each service must …") **that every consumer has to
+remember and apply correctly, without the library itself enforcing or defaulting it, that
+sentence is not documentation — it is the library outsourcing its own defect to every
+caller.** Do not ask how to phrase the obligation more clearly; ask what would make the
+obligation unnecessary (a safer default, a different API shape, or deleting the code that
+requires it).
+
+The two read almost identically at the sentence level, so judge the **binding**, not the
+wording:
+
+| Legitimate contract (addressed to an implementer) | Offloaded obligation (addressed to every consumer) |
+|---|---|
+| An interface/SPI's javadoc tells the class that **implements** it what its own implementation must guarantee (e.g. "an implementation of this method MUST NOT throw — encode every outcome in the return type"). The obligation is discharged once, by the one class implementing the contract, next to the interface that states it. | A library component that installs itself in **every** consumer's context with zero action from the consumer (an auto-configuration, a component scan, any context-wide annotation) tells the *consuming application* what it must separately declare so the library does not silently break something it never asked the library to touch. The obligation repeats once per consumer, has no fallback if forgotten, and only a booting context — never a compiler or a unit test — can see the omission. |
+
+**The asymmetry that decides it:** something a consumer must explicitly opt into (construct
+it, call it, wire it as a bean) can carry a real precondition in its javadoc without being a
+smell — the consumer chose to touch it, and a safe, recommended call path can already absorb
+the precondition so most callers never need to think about it. Something that installs
+itself with **zero opt-in** and *still* leaves a `MUST` for the consumer to satisfy is always
+the offloaded kind — there was never an opt-in moment for the obligation to attach to.
+
+**Incident.** A shared messaging library's auto-configuration javadoc read, for years, "every
+service that depends on this library MUST declare its own …" while the defect it was warning
+about broke four service boots — each fixed locally with a per-service exclusion, none at the
+source, until the auto-configuration was retired outright instead of documented more clearly
+(`TASK-MONO-406`). The rule above is the discriminator that incident left behind
+(`TASK-MONO-408`).
+
+**Why no keyword guard gates this.** A grep for `MUST`/`IMPORTANT`/"be sure to" finds
+candidate sentences, not verdicts: separating the two columns above requires knowing whether
+activation is automatic or opt-in and whether a safe call path already absorbs the
+precondition — both are questions about the surrounding wiring, not the sentence, and neither
+is mechanically decidable without a false-positive rate this repo has already paid for once
+(`TASK-MONO-360`). Triage every hit by hand at review time; do not gate CI on the count.
+
 ---
 
 # Dependency Rule
