@@ -1,10 +1,10 @@
 # Event Contract — ecommerce subscriptions to IAM account lifecycle (← IAM `account.created` / `account.deleted` / `account.status.changed`)
 
-Implements **[ADR-MONO-037](../../../../docs/adr/ADR-MONO-037-ecommerce-account-lifecycle-projection.md)** (project the IAM account lifecycle into ecommerce) — the death/projection sibling of ADR-036's birth/provisioning.
+Implements **[ADR-MONO-037](../../../../../docs/adr/ADR-MONO-037-ecommerce-account-lifecycle-projection.md)** (project the IAM account lifecycle into ecommerce) — the death/projection sibling of ADR-036's birth/provisioning.
 
 Post-IAM ([TASK-BE-132](../../../../README.md), ecommerce `auth-service` decommissioned), ecommerce no longer has an in-tree producer of signup/withdrawal events. `user-service` and `notification-service` subscribe to the **IAM account-service** lifecycle events instead of the retired `auth.user.signed-up` (see [`auth-events.md`](auth-events.md) DEPRECATED).
 
-Authoritative producer schemas: **IAM** [`account-events.md`](../../../iam-platform/specs/contracts/events/account-events.md) (`account.created` / `account.deleted`, schema v2). This subscription adds ecommerce consumers to those events — **no producer payload change**. The GDPR handling here is the realization of IAM's standing consumer obligation ([`account-events.md` § Consumer Obligations, TASK-BE-258](../../../iam-platform/specs/contracts/events/account-events.md) + [`consumer-integration-guide.md` § GDPR downstream](../../../iam-platform/specs/features/consumer-integration-guide.md)).
+Authoritative producer schemas: **IAM** [`account-events.md`](../../../../iam-platform/specs/contracts/events/account-events.md) (`account.created` / `account.deleted`, schema v2). This subscription adds ecommerce consumers to those events — **no producer payload change**. The GDPR handling here is the realization of IAM's standing consumer obligation ([`account-events.md` § Consumer Obligations, TASK-BE-258](../../../../iam-platform/specs/contracts/events/account-events.md) + [`consumer-integration-guide.md` § GDPR downstream](../../../../iam-platform/specs/features/consumer-integration-guide.md)).
 
 ---
 
@@ -90,7 +90,7 @@ and `OutboxPublisher` relays the stored payload verbatim. The on-wire JSON there
 fields (`accountId`, `tenantId`, `currentStatus`, …) at the **top level** — there is **no** nested
 `payload` object and **no** `eventId`/`eventType`/`source`/`schemaVersion` envelope. This matches
 the authoritative producer contract
-[`account-events.md`](../../../iam-platform/specs/contracts/events/account-events.md). Consumers
+[`account-events.md`](../../../../iam-platform/specs/contracts/events/account-events.md). Consumers
 must read fields from the JSON **root** (as the IAM-internal `security-service` consumer does) and
 bind the tenant from the top-level `tenantId` (falling back to the default tenant — M5/D8
 net-zero). Deserialization is tolerant (camelCase primary + snake_case alias + ignore-unknown) for

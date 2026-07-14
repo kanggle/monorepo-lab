@@ -250,7 +250,7 @@ The library owns the mechanism and tests it once (`libs/java-gateway`). This ser
 ## References
 
 - `platform/api-gateway-policy.md` · `platform/error-handling.md` · `platform/service-types/rest-api.md`
-- [`ADR-MONO-048`](../../../../docs/adr/ADR-MONO-048-shared-reactive-gateway-library.md) — the shared gateway library
+- [`ADR-MONO-048`](../../../../../docs/adr/ADR-MONO-048-shared-reactive-gateway-library.md) — the shared gateway library
 - ADR-MONO-019 § D5 — entitlement-trust dual-accept
 - `TASK-MONO-347` — the drift this service closes · `TASK-MONO-357` — this service's bootstrap task
 - `projects/scm-platform/apps/gateway-service` — reference implementation

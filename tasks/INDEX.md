@@ -166,7 +166,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-409-orphaned-contract-and-dead-relative-links.md` — **IMPLEMENTED → review (2026-07-15).** 스펙 전수 진단(389 파일 / 1932 링크)에서 나온 **결정 없이 닫히는** 결함 둘. doc-only, 의미 변경 0. ① **`platform/contracts/notification-inbox-contract.md`(ADR-MONO-043 D3 정경)가 읽기 순서 어디에도 없었다** — `rules/common.md § Platform Contracts` 는 스스로를 *"`platform/contracts/` 하위 계약 파일들"* 이라 소개하고 표를 여는데 **디렉터리엔 2개, 표엔 1개**였고 `entrypoint.md` 에도 없었다 ⇒ **규정대로 읽는 에이전트는 이 정경을 절대 열지 않는다**(erp·fan 이 conformance 를 한 건 task 가 직접 가리켜서이지 읽기 순서가 데려다줘서가 아니다). 표에 행 추가 + **"이 표는 디렉터리 전체를 열거한다"** 규범 문장 명시 + `entrypoint.md` 기존 `api` 태그에 배선(**새 태그 0** → `.claude/config/` 동반 수정 불필요). ② **깨진 상대링크 13 → 0.** 11건은 `../` 깊이 off-by-one, **2건은 깊이가 아니라 경로가 틀렸다**(`user-api.md` 가 `contracts/events/` 파일을 같은 디렉터리로 가리킴 / `batch-worker` 는 `../` 하나 초과) — **sed 일괄이었으면 못 고치거나 멀쩡한 링크를 깼다.** **🔴 AC-0 이 진단을 반증했다**: 초안은 정경 계약 **3개**가 고아라 했으나 실측 **1개** — `abac-data-scope`·`access-conditions` 는 **`platform/security-rules.md`(Core=항상 읽음) `:70-75`** 가 명시적 포인터로 링크한다. **틀린 건 검사식이 아니라 모집단이었다**(읽기 순서에서 **Core 를 빼먹었다**; 대조군 `jwt-standard-claims`=2곳이 통과해 검증된 것처럼 보였다). 그대로 갔으면 **이미 도달 가능한 파일을 이중 배선**할 뻔했다 — 없는 병에 처방하는 것도 드리프트다. **범위 밖(별건, 결정 필요)**: wms 중첩 에러봉투 ↔ flat 정경 모순(계약 5 + 코드 + 테스트 + 콘솔 파서 2개) · 페이지네이션 **정경의 자기모순**(`rest-api.md:46` "PageResult MUST" ↔ `notification-inbox-contract.md:68` "wrapper 는 domain-owned")과 그 아래 5가지 wire shape · HARDSTOP-03 자신(4가지 범위 + 훅은 그중 아무것도 탐지 못 하는 5번째를 구현) · `rules/domains/saas.md` 에 iam 전용 API·테이블(단 `saas` 는 iam·console **둘**이 선언). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 ## done
 

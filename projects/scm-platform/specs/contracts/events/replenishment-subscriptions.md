@@ -105,7 +105,7 @@ posture as the `inventory-visibility-service` precedent and ADR-MONO-022 §D8.
 
 ## References
 
-- [ADR-MONO-027](../../../../docs/adr/ADR-MONO-027-wms-scm-replenishment-loop.md)
+- [ADR-MONO-027](../../../../../docs/adr/ADR-MONO-027-wms-scm-replenishment-loop.md)
   D1 (transport), D4 (scm-owned reorder policy vs wms threshold), D6 (idempotency
   + open-suggestion guard), D8 (degradation)
 - [`inventory-visibility-subscriptions.md`](./inventory-visibility-subscriptions.md)
