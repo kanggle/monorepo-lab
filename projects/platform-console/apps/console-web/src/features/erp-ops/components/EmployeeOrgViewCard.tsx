@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import {
+  masterStatusTone,
   type EmployeeOrgViewListResponse,
   type OrgViewListQueryParams,
 } from '../api/types';
@@ -121,12 +123,12 @@ export function EmployeeOrgViewCard({ initial }: EmployeeOrgViewCardProps) {
                     <td className="p-2">{emp.employeeNumber}</td>
                     <td className="p-2">{emp.name}</td>
                     <td className="p-2">
-                      <span
+                      <StatusBadge
+                        tone={masterStatusTone(emp.status)}
                         data-testid={`erp-orgview-status-${i}`}
-                        className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
                       >
                         {emp.status}
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td className="p-2" data-testid={`erp-orgview-dept-${i}`}>
                       {deptUnresolved ? (
@@ -206,11 +208,8 @@ export function EmployeeOrgViewCard({ initial }: EmployeeOrgViewCardProps) {
  *  NEVER crash on an unresolved reference (AC-4). */
 function SyncBadge() {
   return (
-    <span
-      data-testid="erp-orgview-sync-badge"
-      className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800 dark:bg-amber-950/60 dark:text-amber-100"
-    >
+    <StatusBadge tone="warning" data-testid="erp-orgview-sync-badge">
       동기화 중
-    </span>
+    </StatusBadge>
   );
 }

@@ -6,9 +6,10 @@ import type {
   DelegationGrant,
   DelegationListResponse,
 } from '../api/delegation-types';
-import { isActiveGrant } from '../api/delegation-types';
+import { delegationStatusTone, isActiveGrant } from '../api/delegation-types';
 import { approvalErrorMessage } from './approval-error';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { statusToneClass } from '@/shared/ui/StatusBadge';
 
 /**
  * Presentational delegation grant list (TASK-PC-FE-150 — behaviour-
@@ -24,37 +25,27 @@ import { formatDateTime } from '@/shared/lib/datetime';
 // ---------------------------------------------------------------------------
 
 export function DelegationStatusBadge({ grant }: { grant: DelegationGrant }) {
-  if (grant.status === 'REVOKED') {
-    return (
-      <span
-        data-testid="delegation-status-badge"
-        data-status="REVOKED"
-        className="inline-block rounded px-1.5 py-0.5 text-xs bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-100"
-      >
-        회수됨
-      </span>
-    );
-  }
-  // ACTIVE — check if expired
-  const active = isActiveGrant(grant);
-  if (!active) {
-    return (
-      <span
-        data-testid="delegation-status-badge"
-        data-status="ACTIVE_EXPIRED"
-        className="inline-block rounded px-1.5 py-0.5 text-xs bg-muted text-muted-foreground"
-      >
-        만료
-      </span>
-    );
-  }
+  // `data-status` is the test/E2E contract and is NOT the raw producer enum:
+  // an ACTIVE grant past its `validTo` reports ACTIVE_EXPIRED — and so does an
+  // unknown/future status, because `status` is a tolerant free string and
+  // `isActiveGrant` is false for anything that is not exactly ACTIVE. Both the
+  // three labels and the three `data-status` values are preserved verbatim from
+  // the hand-rolled badge this replaced.
+  const revoked = grant.status === 'REVOKED';
+  const expired = !revoked && !isActiveGrant(grant);
+  const dataStatus = revoked
+    ? 'REVOKED'
+    : expired
+      ? 'ACTIVE_EXPIRED'
+      : 'ACTIVE';
+  const label = revoked ? '회수됨' : expired ? '만료' : '활성';
   return (
     <span
       data-testid="delegation-status-badge"
-      data-status="ACTIVE"
-      className="inline-block rounded px-1.5 py-0.5 text-xs bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-100"
+      data-status={dataStatus}
+      className={statusToneClass(delegationStatusTone(grant.status, expired))}
     >
-      활성
+      {label}
     </span>
   );
 }

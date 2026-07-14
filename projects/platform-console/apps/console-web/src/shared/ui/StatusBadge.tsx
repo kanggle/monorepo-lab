@@ -32,10 +32,21 @@ const TONE_CLASS: Record<StatusTone, string> = {
   neutral: 'bg-muted text-muted-foreground',
 };
 
+/** The tone's colour classes ONLY (background + foreground + dark variants), with
+ *  no geometry. For a badge that must keep its own shape/size — e.g. a larger
+ *  `rounded-full px-3 py-1 text-sm` feed indicator — but must still take its
+ *  palette from here rather than hand-writing `bg-*-100 text-*-800` (which is how
+ *  chips end up with no `dark:` variant at all). Prefer `<StatusBadge>`; reach for
+ *  {@link statusToneClass} when you need the standard pill on a different element;
+ *  reach for this only when the geometry itself has to differ. */
+export function statusToneColorClass(tone: StatusTone): string {
+  return TONE_CLASS[tone];
+}
+
 /** The pill classes for a tone — for the rare call site that needs the raw
  *  className (e.g. a non-`<span>` element). Prefer the `<StatusBadge>`. */
 export function statusToneClass(tone: StatusTone): string {
-  return `inline-block rounded px-2 py-0.5 text-xs font-medium ${TONE_CLASS[tone]}`;
+  return `inline-block rounded px-2 py-0.5 text-xs font-medium ${statusToneColorClass(tone)}`;
 }
 
 export interface StatusBadgeProps {

@@ -34,6 +34,20 @@ formatDate(iso: string | null | undefined, placeholder = '-'): string
 - Both are tolerant: empty/absent input → `placeholder` (`"-"` by default);
   an unparseable string is returned verbatim — **never throws**.
 
+**The same field renders in the same format everywhere.** Pick the precision from
+what the *field* means, not from the screen it happens to be on: if `createdAt`
+is a `formatDateTime` in the detail view, it is a `formatDateTime` in the list
+too. Do not drop the time component "because it's a table" — a list row and a
+detail row showing the same value must not disagree. (`OrdersTable.tsx` and
+`OrderDetail.tsx` both `formatDateTime` the same `createdAt`; that agreement is
+the rule, not a coincidence.)
+
+> This rule is the reason § 3's `StatusBadge` residue mattered: the *status*
+> dimension had drifted exactly the way this rule forbids for dates — the same
+> `ACTIVE` master rendered green in a list and grey in a detail — until
+> TASK-PC-FE-242 closed it. Same-field/same-rendering is a convention about
+> **fields**, not about dates.
+
 ### Why the two formatting details are load-bearing, not style
 
 - **`hourCycle: 'h23'`** — ko-KR's `hour12: false` renders midnight as
@@ -208,29 +222,82 @@ function statusToneClass(tone: StatusTone): string; // escape hatch, see below
   palette* into a structurally-different element is the sanctioned escape
   hatch; hand-writing colour classes (`bg-green-100 text-green-800 …`) is not.
 
-### Known residue — not yet migrated
+### Residue: none (TASK-PC-FE-242)
 
-Three erp org/delegation surfaces still hand-roll their own status chip
-markup instead of using `StatusBadge`/`statusToneClass`:
+**Every entity-status chip in `console-web` now renders through `StatusBadge`,
+`statusToneClass`, or `statusToneColorClass`.** Hand-written status palettes:
+zero.
 
-- `features/erp-ops/components/DelegationFactCard.tsx` — local `StatusBadge`
-  function with its own hardcoded Tailwind classes.
-- `features/erp-ops/components/DelegationGrantList.tsx` — local
-  `DelegationStatusBadge` component, same pattern.
-- `features/erp-ops/components/EmployeeOrgViewCard.tsx` — inline
-  `rounded bg-muted …` className on the status cell, no component at all.
+This section previously listed *three* non-adopters, all in `erp-ops`. That
+count was wrong, and the way it was wrong is worth keeping: the residue had been
+counted **inside one feature**, while the rule is console-wide. Re-measuring by
+the actual predicate — *a status pill whose palette does not come from the
+shared tone map* — found **15 chips across 12 components**, and the shape of the
+miss was systematic:
 
-This is **known, out-of-scope residue** (per this task's Scope), not a
-newly-discovered defect — recorded here so it isn't "discovered" again and
-isn't mistaken for the pattern to copy. Migrating them is a separate,
-optional follow-up.
+> **TASK-PC-FE-159's console-wide roll-out reached the *list/table* surfaces and
+> stopped there. The *detail* surfaces kept their hand-rolled chips.**
+
+So the same field rendered two different colours depending on which screen you
+were looking at: an `ACTIVE` ERP master was **green in the list and grey in the
+detail** (all five master detail screens); a `SEPARATED` employee was grey in
+the list and amber in the detail; a `REVOKED` delegation was red in
+`DelegationGrantList` and grey in `DelegationFactCard`. These were not style
+drift — they were the *status* twin of the § 1 list/detail consistency rule.
+
+One was an outright bug rather than an inconsistency: `ledger-ops/FxRatesTable`'s
+four chips (`피드 활성`/`피드 비활성`, `STALE`/`최신`) carried **no `dark:`
+variants at all**, so they rendered light-on-light in the console's dark theme.
+Every tone in `StatusBadge` ships its dark variant, so taking the palette from
+the tone map fixed the bug as a side effect of the migration.
+
+### The three levels of the escape hatch
+
+Reach for the *narrowest* one that works:
+
+| Level | Use when | What you get |
+|---|---|---|
+| `<StatusBadge tone={…}>` | the default — a status chip | the component: pill geometry + tone palette + `data-testid` passthrough |
+| `statusToneClass(tone)` | the element must carry props `StatusBadge` does not forward (`data-status`, `data-retired`, `title`) — e.g. `EffectivePeriodBadge`, `DelegationFactStatusBadge`, `erp-ops/approval-common.tsx` | the full pill className (geometry + palette) for your own `<span>` |
+| `statusToneColorClass(tone)` | the **geometry itself** must differ — e.g. `FxRatesTable`'s page-level feed indicator is a `rounded-full px-3 py-1 text-sm` badge carrying a sentence, not a table chip | the tone's colours **only** (bg + fg + `dark:` variants) |
+
+Hand-writing `bg-*-100 text-*-800` is not on this list. That is exactly how a
+chip ends up with no dark variant.
+
+### Deliberately NOT status chips — do not "discover" these again
+
+The following also use colour, and are **out of scope by design**. They are
+listed so a future sweep doesn't file them as residue:
+
+- **Service-health dots** — `bg-green-500` / `bg-red-500` round dots in
+  `ErpOverviewScreen`, `ScmOverview`, `wms-overview-cell`, `iam-overview`'s
+  `overview-labels`, `catalog/ServiceTile`. A dot is a different affordance from
+  a pill and carries a health signal, not an entity status enum.
+- **Attribute chips** — `BusinessPartner`'s `유형` (`partnerType`),
+  `DelegationFactCard`'s `ScopeCell` (`GLOBAL`/`REQUEST`). These render a
+  *property*, not a lifecycle state; forcing them onto a five-tone semantic
+  status palette would assign them a meaning they don't have.
+- **Row highlights / annotation tags** — `ApprovalDetail`'s current-step row,
+  `JournalEntryDetail`'s `환산 (revaluation)` marker, `NotificationBell`'s unread
+  count.
+- **Semantic-token indicators** — `TrialBalanceTable` / `PeriodDetail` /
+  `WmsInventoryDataTable` / `OperatorBadges` use `bg-muted` and
+  `bg-destructive/15` (theme tokens, which already adapt to dark mode) for
+  computed validity/lock indicators, not for a producer status enum.
 
 ### Established by
 
 - TASK-PC-FE-158 — extract shared `StatusBadge` + semantic tone palette
   (wms-outbound + ecommerce users/sellers migrated)
 - TASK-PC-FE-159 — roll `StatusBadge` out to the remaining domains (orders,
-  shipping, products, promotions, finance, ledger, scm, replenishment, …)
+  shipping, products, promotions, finance, ledger, scm, replenishment, …) —
+  **list/table surfaces only, as it turned out**
+- TASK-PC-FE-242 — close the tail: the five ERP master *detail* screens, the two
+  delegation badges (+ a single `delegationStatusTone` so the fact card and the
+  grant list stop disagreeing), `EffectivePeriodBadge`'s parallel
+  `normal|warn|danger` vocabulary, `EmployeeOrgViewCard`, `WmsAlertsTable`,
+  `accounts/AccountStatusBadge` (a second implementation of this component), and
+  `FxRatesTable`'s dark-mode bug. Adds `statusToneColorClass`.
 
 ---
 

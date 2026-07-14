@@ -3,8 +3,10 @@
 import {
   KNOWN_MASTER_STATUSES,
   labelForUnknownEnum,
+  masterStatusTone,
   type JobGrade,
 } from '../api/types';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { useJobGrade } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 
@@ -58,12 +60,12 @@ export function JobGradeDetail({ id, initial }: JobGradeDetailProps) {
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd className="text-foreground">
-            <span
+            <StatusBadge
+              tone={masterStatusTone(g.status)}
               data-testid="erp-jobgrade-status"
-              className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
             >
               {labelForUnknownEnum(g.status, KNOWN_MASTER_STATUSES)}
-            </span>
+            </StatusBadge>
           </dd>
         </div>
         <div>
