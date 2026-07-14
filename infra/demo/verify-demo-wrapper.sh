@@ -828,4 +828,99 @@ running="$(docker ps --filter 'name=scm-platform-redis' --filter 'name=fan-platf
 [ "$running" = "2" ] || fail "두 redis 가 공존하지 않음 (running=$running) — 병합 회귀 의심"
 ok "같은 키 'redis' 2개가 별도 -p 로 공존 (running=2)"
 
+echo "[verify] (u) --live: 메모리 리밋이 워킹셋 위에 여유를 남기는가"
+# ---------------------------------------------------------------------------
+# 근거(MONO-397): `ecommerce-kafka` 의 리밋이 **512M** 이었고, 데모 호스트에서
+# `constraint=CONSTRAINT_MEMCG` OOM 으로 **14회 재시작**했다(anon-rss 481 MB 에서 kill).
+#
+# **그런데 격리 상태의 512M kafka 는 죽지 않는다** — 실측 83.2% / RestartCount 0 /
+# healthcheck 통과. `docker ps` 에는 `Up 16 seconds` 로 보인다. 죽는 건 **함대가 붙을 때**다
+# (ecommerce 12개 서비스가 컨슈머로 연결되면 커넥션·페치 버퍼가 그 17% 를 먹는다).
+#
+# ⇒ **그래서 이 가드는 "죽었는가" 를 묻지 않는다. "여유가 얼마나 남았는가" 를 묻는다.**
+#   "죽었는가" 를 묻는 가드는 512M 을 **통과시켰을 것이다** — 그리고 그게 정확히
+#   지난 몇 달간 일어난 일이다.
+#
+# 리밋은 **compose 에서 읽는다**(열거하지 않는다). image·env 도 마찬가지다 —
+# 값을 바꾸면 가드가 **그 값으로** 잰다. 이미지나 힙 설정이 바뀌어도 따라간다.
+#
+# 실측 (동일 부하: 토픽 10 × 파티션 3, 2000 × 1KB):
+#   512M → RSS 425.9 MiB = 83.2%   (여유 86 MiB)   ← 결함
+#   1G   → RSS 459.4 MiB = 44.9%   (여유 565 MiB)  ← 수정
+# 임계 75% 는 그 사이에서 넉넉히 갈린다. 부하가 **프로듀서 전용**이라(이 하네스는 함대의
+# 클라이언트 40여 개를 충실히 모사하지 못한다) 나머지 25% 는 **모사하지 못한 그 간극**의
+# 몫으로 남긴다. 재현하지 못한 것을 재현했다고 하지 않고, 대신 여유를 요구한다.
+U_MAX_PCT=75
+u_net="verify-u-net"; u_ctr="verify-u-kafka"
+cleanup_u() { docker rm -f "$u_ctr" >/dev/null 2>&1 || true; docker network rm "$u_net" >/dev/null 2>&1 || true; }
+trap 'cleanup_u; rm -f "$names_file" "$ports_file"' EXIT
+cleanup_u
+
+u_render="$(render ecommerce)"
+[ -n "$u_render" ] || fail "(u) ecommerce compose 렌더 실패 — 가드가 공허합니다."
+
+# kafka 서비스 블록만 잘라낸다 (다음 최상위 서비스 키 전까지).
+# ⚠️ 들여쓰기 칸수를 **하드코딩하지 않는다** — 첫 판본이 `memory:` 를 12칸으로 잡았는데
+# compose 는 10칸으로 렌더한다. 그 가드는 리밋을 못 읽고 "공허" FAIL 을 냈다.
+# (조용히 통과하지 않은 것이 설계의 성과다. 하지만 세는 것보다 안 세는 편이 낫다.)
+u_block="$(printf '%s\n' "$u_render" | awk '/^  kafka:$/{f=1;next} /^  [A-Za-z0-9._-]+:$/{f=0} f')"
+u_image="$(printf '%s\n' "$u_block" | awk '/^[[:space:]]*image:[[:space:]]/{print $2; exit}')"
+u_limit="$(printf '%s\n' "$u_block" | awk '/^[[:space:]]*memory:[[:space:]]/{gsub(/"/,"",$2); print $2; exit}')"
+
+[ -n "$u_image" ] || fail "(u) compose 에서 kafka 의 image 를 못 읽었습니다 — **가드가 공허합니다.**"
+[ -n "$u_limit" ] || fail "(u) compose 에서 kafka 의 memory 리밋을 못 읽었습니다 — **가드가 공허합니다.**"\
+  $'\n'"→ 리밋을 지우면 이 가드는 아무것도 재지 않습니다. 리밋 없는 브로커는 호스트를 굶깁니다."
+u_limit_mib=$(( u_limit / 1048576 ))
+echo "  compose 에서 읽음: image=$u_image  limit=${u_limit_mib}MiB"
+
+# env 도 compose 에서 읽는다 (advertised listener 는 `kafka` 를 가리키므로 network-alias 로 맞춘다)
+u_envs=()
+while IFS= read -r line; do
+  [ -n "$line" ] && u_envs+=(-e "$line")
+done < <(printf '%s\n' "$u_block" | awk '
+  /^    environment:$/ { e=1; next }
+  e && /^      [A-Z_]+:/ { k=$1; sub(":","",k); $1=""; sub(/^ /,""); gsub(/^"|"$/,""); print k "=" $0; next }
+  e && /^    [a-z]/ { e=0 }')
+[ "${#u_envs[@]}" -ge 5 ] || fail "(u) kafka env 를 ${#u_envs[@]}개밖에 못 읽었습니다 — **파싱이 깨졌습니다.**"
+
+docker network create "$u_net" >/dev/null 2>&1 || true
+docker run -d --name "$u_ctr" --network "$u_net" --network-alias kafka \
+  --memory "$u_limit" "${u_envs[@]}" "$u_image" >/dev/null \
+  || fail "(u) kafka 기동 실패 (image=$u_image limit=${u_limit_mib}MiB)"
+
+u_up=0
+for _ in $(seq 1 40); do
+  if docker exec "$u_ctr" sh -c '/opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092' >/dev/null 2>&1; then u_up=1; break; fi
+  sleep 3
+done
+[ "$u_up" = "1" ] || fail "(u) kafka 가 ${u_limit_mib}MiB 리밋에서 기동조차 못 했습니다."
+
+# 부하 — 토픽 10 × 파티션 3, 2000 × 1KB. 볼륨보다 **파티션 수**가 RSS 를 지배한다.
+docker exec "$u_ctr" sh -c '
+  for i in $(seq 1 10); do /opt/kafka/bin/kafka-topics.sh --create --topic t$i --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092 >/dev/null 2>&1; done
+  for i in $(seq 1 10); do /opt/kafka/bin/kafka-producer-perf-test.sh --topic t$i --num-records 2000 --record-size 1024 --throughput -1 --producer-props bootstrap.servers=localhost:9092 >/dev/null 2>&1; done' >/dev/null 2>&1
+
+# **부하가 실제로 들어갔는지 먼저 확인한다.** 안 들어간 채로 낮은 사용률을 재면
+# 이 가드는 초록을 내면서 아무것도 보지 않은 것이다 (MONO-389 에서 여러 번 겪었다).
+u_msgs="$(docker exec "$u_ctr" sh -c '/opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic t5 2>/dev/null' | awk -F: '{s+=$3} END{print s+0}')"
+[ "${u_msgs:-0}" -ge 2000 ] || fail "(u) 부하가 들어가지 않았습니다 (t5 메시지=${u_msgs:-0}, 2000 기대)."\
+  $'\n'"→ **무부하 상태의 사용률은 이 가드가 묻는 질문의 답이 아닙니다.**"
+
+sleep 8
+u_pct_raw="$(docker stats "$u_ctr" --no-stream --format '{{.MemPerc}}')"
+u_pct="${u_pct_raw%\%}"
+u_used="$(docker stats "$u_ctr" --no-stream --format '{{.MemUsage}}')"
+u_rc="$(docker inspect "$u_ctr" --format '{{.RestartCount}}')"
+
+awk -v p="$u_pct" -v m="$U_MAX_PCT" 'BEGIN { exit !(p+0 <= m+0) }' \
+  || fail "kafka 가 선언된 리밋의 ${u_pct}% 를 씁니다 (임계 ${U_MAX_PCT}%):"\
+    $'\n'"    limit ${u_limit_mib}MiB · 부하 후 $u_used · RestartCount=$u_rc"\
+    $'\n'"→ **살아 있다는 것은 증거가 아닙니다.** 512M 짜리 kafka 도 격리 상태에선 살아서"\
+    $'\n'"   healthcheck 를 통과했고, 함대 12개 서비스가 컨슈머로 붙자 cgroup OOM 으로"\
+    $'\n'"   14회 재시작했습니다 (MONO-397). 여유가 없는 브로커는 **연결되는 순간** 죽습니다."\
+    $'\n'"→ compose 의 리밋을 올리세요. JVM 힙은 리밋의 25% 로 함께 따라옵니다."
+[ "$u_rc" = "0" ] || fail "(u) kafka 가 부하 중 ${u_rc}회 재시작했습니다 — 리밋이 명백히 부족합니다."
+ok "kafka 여유 확인 — limit ${u_limit_mib}MiB, 부하 후 $u_used (${u_pct}% ≤ ${U_MAX_PCT}%), 재시작 0"
+cleanup_u
+
 echo "[verify] 전체 PASS (정적 + 실기동 증명)"
