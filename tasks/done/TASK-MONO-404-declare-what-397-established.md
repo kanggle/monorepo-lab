@@ -8,7 +8,7 @@ TASK-MONO-404
 
 # Status
 
-ready
+done
 
 # Owner
 
