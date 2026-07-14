@@ -828,29 +828,49 @@ running="$(docker ps --filter 'name=scm-platform-redis' --filter 'name=fan-platf
 [ "$running" = "2" ] || fail "두 redis 가 공존하지 않음 (running=$running) — 병합 회귀 의심"
 ok "같은 키 'redis' 2개가 별도 -p 로 공존 (running=2)"
 
-echo "[verify] (u) --live: 메모리 리밋이 워킹셋 위에 여유를 남기는가"
+echo "[verify] (u) --live: 브로커가 리밋에서 얻는 **힙**이 브로커를 돌릴 만한가"
 # ---------------------------------------------------------------------------
 # 근거(MONO-397): `ecommerce-kafka` 의 리밋이 **512M** 이었고, 데모 호스트에서
 # `constraint=CONSTRAINT_MEMCG` OOM 으로 **14회 재시작**했다(anon-rss 481 MB 에서 kill).
 #
-# **그런데 격리 상태의 512M kafka 는 죽지 않는다** — 실측 83.2% / RestartCount 0 /
-# healthcheck 통과. `docker ps` 에는 `Up 16 seconds` 로 보인다. 죽는 건 **함대가 붙을 때**다
-# (ecommerce 12개 서비스가 컨슈머로 연결되면 커넥션·페치 버퍼가 그 17% 를 먹는다).
+# **격리 상태의 512M kafka 는 죽지 않는다** — RestartCount 0, healthcheck 통과,
+# `docker ps` 에 healthy. 죽는 건 **함대가 붙을 때**다(ecommerce 12개 서비스가 컨슈머로
+# 연결되면 커넥션·페치 버퍼가 남은 여유를 먹는다). ⇒ **"죽었는가" 를 묻는 가드는 이 결함을
+# 통과시킨다.** 그게 지난 몇 달간 일어난 일이다.
 #
-# ⇒ **그래서 이 가드는 "죽었는가" 를 묻지 않는다. "여유가 얼마나 남았는가" 를 묻는다.**
-#   "죽었는가" 를 묻는 가드는 512M 을 **통과시켰을 것이다** — 그리고 그게 정확히
-#   지난 몇 달간 일어난 일이다.
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠️ **첫 판본은 RSS 사용률(≤75%)을 물었고, 그건 틀렸다.** 측정 전용 PR(#2533)로
+#    가드가 **도는 곳에서** 물어봤더니:
 #
-# 리밋은 **compose 에서 읽는다**(열거하지 않는다). image·env 도 마찬가지다 —
-# 값을 바꾸면 가드가 **그 값으로** 잰다. 이미지나 힙 설정이 바뀌어도 따라간다.
+#      내 Windows 호스트, 512M → RSS 425.9 MiB = 83.2%   → RED
+#      CI 러너(ubuntu),   512M → RSS 193.2 MiB = 38.2%   → **통과**
+#      CI 러너(ubuntu),   1G   → RSS 317.3 MiB = 31.2%
 #
-# 실측 (동일 부하: 토픽 10 × 파티션 3, 2000 × 1KB):
-#   512M → RSS 425.9 MiB = 83.2%   (여유 86 MiB)   ← 결함
-#   1G   → RSS 459.4 MiB = 44.9%   (여유 565 MiB)  ← 수정
-# 임계 75% 는 그 사이에서 넉넉히 갈린다. 부하가 **프로듀서 전용**이라(이 하네스는 함대의
-# 클라이언트 40여 개를 충실히 모사하지 못한다) 나머지 25% 는 **모사하지 못한 그 간극**의
-# 몫으로 남긴다. 재현하지 못한 것을 재현했다고 하지 않고, 대신 여유를 요구한다.
-U_MAX_PCT=75
+#    **같은 컨테이너·같은 리밋·같은 부하인데 RSS 가 2.2배 다르다**(WSL2 의 `docker stats`
+#    회계 차이). CI 러너에서는 512M(38%)과 1G(31%)의 **분리가 사실상 없어** 어떤 임계로도
+#    결함을 가려낼 수 없다. 내가 임계를 보정한 83% 는 **신호가 아니라 아티팩트**였고,
+#    그 위에 세운 가드는 **CI 에서 장식**이었다. 측정 전용 PR 을 안 돌렸다면 그대로 머지됐다.
+#    (`MONO-360`: **가드가 무는지는 그것이 도는 곳에서 증명해야 한다.**)
+#
+# ⇒ 술어를 **호스트에 무관한 것**으로 바꾼다: **JVM 이 실제로 얻는 힙.**
+#    `KAFKA_HEAP_OPTS` 가 없으므로 JVM 은 cgroup 을 읽어 힙을 리밋의 25%
+#    (`MaxRAMPercentage` 기본값)로 잡는다 — 이건 **JVM 레벨 규칙이라 호스트와 무관하다**:
+#
+#      512M → MaxHeapSize = 134217728 (128 MiB)   ← 128 MiB 힙으로 도는 Kafka 브로커
+#      1G   → MaxHeapSize = 268435456 (256 MiB)
+#
+#    **리밋은 상한이 아니라 설정이다.** `512M` 은 "512MB 까지 써라" 가 아니라
+#    "**128 MiB 힙으로 브로커를 돌려라**" 다. 그게 이 결함의 실체이고, 그 문장은
+#    러너에서든 노트북에서든 똑같이 참이다.
+#
+#    그리고 이 가드는 25% 규칙을 **가정하지 않는다** — JVM 에게 **직접 묻는다**.
+#    누가 `KAFKA_HEAP_OPTS` 를 넣어 결합을 끊어도 가드는 여전히 진실을 잰다.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 리밋·image·env 는 **compose 에서 읽는다**(열거하지 않는다). 값을 바꾸면 그 값으로 잰다.
+# RSS 는 **관측으로만 찍는다** — 단언하지 않는다. 호스트마다 2배씩 달라지는 값 위에
+# 단언을 세우지 않는다.
+U_MIN_HEAP_MIB=256   # 1G 리밋이 주는 힙. 128 MiB(=512M 리밋)는 브로커를 돌릴 힙이 아니다.
 u_net="verify-u-net"; u_ctr="verify-u-kafka"
 cleanup_u() { docker rm -f "$u_ctr" >/dev/null 2>&1 || true; docker network rm "$u_net" >/dev/null 2>&1 || true; }
 trap 'cleanup_u; rm -f "$names_file" "$ports_file"' EXIT
@@ -895,6 +915,25 @@ for _ in $(seq 1 40); do
 done
 [ "$u_up" = "1" ] || fail "(u) kafka 가 ${u_limit_mib}MiB 리밋에서 기동조차 못 했습니다."
 
+# ── 이 가드의 본체: **JVM 에게 자기 힙을 직접 묻는다.** ──────────────────────────
+# 25% 규칙을 가정하지 않는다 — 누가 KAFKA_HEAP_OPTS 로 결합을 끊어도 진실을 잰다.
+# 브로커와 같은 이미지·같은 cgroup 안에서 물어야 답이 같다.
+u_heap_bytes="$(docker exec "$u_ctr" sh -c \
+  'java -XX:+PrintFlagsFinal -version 2>/dev/null | awk "/ MaxHeapSize /{print \$4}"' | tr -d '[:space:]')"
+case "${u_heap_bytes:-}" in
+  ''|*[!0-9]*) fail "(u) JVM 의 MaxHeapSize 를 못 읽었습니다 ('${u_heap_bytes:-}') — **가드가 공허합니다.**"\
+    $'\n'"→ 이미지가 바뀌어 java 가 없거나 플래그 출력 형식이 달라졌을 수 있습니다. 조용히 통과시키지 않습니다." ;;
+esac
+u_heap_mib=$(( u_heap_bytes / 1048576 ))
+
+[ "$u_heap_mib" -ge "$U_MIN_HEAP_MIB" ] || fail "kafka 가 ${u_limit_mib}MiB 리밋에서 **${u_heap_mib} MiB 힙**만 얻습니다 (최소 ${U_MIN_HEAP_MIB} MiB):"\
+  $'\n'"→ **리밋은 상한이 아니라 설정입니다.** JVM 은 cgroup 을 읽어 힙을 리밋의 25% 로 잡습니다."\
+  $'\n'"   '${u_limit_mib}M' 은 \"${u_limit_mib}MB 까지 써라\" 가 아니라 \"**${u_heap_mib} MiB 힙으로 브로커를 돌려라**\" 입니다."\
+  $'\n'"→ 살아 있다는 것은 증거가 아닙니다. 512M kafka 는 격리 상태에서 살아서 healthcheck 를"\
+  $'\n'"   통과했고, 함대 12개 서비스가 컨슈머로 붙자 cgroup OOM 으로 14회 재시작했습니다(MONO-397)."\
+  $'\n'"→ compose 의 memory 리밋을 올리거나, KAFKA_HEAP_OPTS 로 힙을 명시하세요."
+ok "kafka 힙 ${u_heap_mib} MiB (limit ${u_limit_mib}MiB, 최소 ${U_MIN_HEAP_MIB} MiB)"
+
 # 부하 — 토픽 10 × 파티션 3, 2000 × 1KB. 볼륨보다 **파티션 수**가 RSS 를 지배한다.
 docker exec "$u_ctr" sh -c '
   for i in $(seq 1 10); do /opt/kafka/bin/kafka-topics.sh --create --topic t$i --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092 >/dev/null 2>&1; done
@@ -907,20 +946,18 @@ u_msgs="$(docker exec "$u_ctr" sh -c '/opt/kafka/bin/kafka-get-offsets.sh --boot
   $'\n'"→ **무부하 상태의 사용률은 이 가드가 묻는 질문의 답이 아닙니다.**"
 
 sleep 8
-u_pct_raw="$(docker stats "$u_ctr" --no-stream --format '{{.MemPerc}}')"
-u_pct="${u_pct_raw%\%}"
-u_used="$(docker stats "$u_ctr" --no-stream --format '{{.MemUsage}}')"
+u_used="$(docker stats "$u_ctr" --no-stream --format '{{.MemUsage}} ({{.MemPerc}})')"
 u_rc="$(docker inspect "$u_ctr" --format '{{.RestartCount}}')"
 
-awk -v p="$u_pct" -v m="$U_MAX_PCT" 'BEGIN { exit !(p+0 <= m+0) }' \
-  || fail "kafka 가 선언된 리밋의 ${u_pct}% 를 씁니다 (임계 ${U_MAX_PCT}%):"\
-    $'\n'"    limit ${u_limit_mib}MiB · 부하 후 $u_used · RestartCount=$u_rc"\
-    $'\n'"→ **살아 있다는 것은 증거가 아닙니다.** 512M 짜리 kafka 도 격리 상태에선 살아서"\
-    $'\n'"   healthcheck 를 통과했고, 함대 12개 서비스가 컨슈머로 붙자 cgroup OOM 으로"\
-    $'\n'"   14회 재시작했습니다 (MONO-397). 여유가 없는 브로커는 **연결되는 순간** 죽습니다."\
-    $'\n'"→ compose 의 리밋을 올리세요. JVM 힙은 리밋의 25% 로 함께 따라옵니다."
+# RSS 는 **관측이지 단언이 아니다.** 같은 컨테이너·리밋·부하인데 호스트마다 2.2배 다르다
+# (Windows/WSL2 512M → 83.2% ↔ ubuntu 러너 512M → 38.2%). 그 위에 임계를 세우면 러너에서
+# 512M 과 1G 가 갈리지 않아 **가드가 장식이 된다** — #2533 이 그걸 실측으로 보여줬다.
+# 남겨 두는 이유는 사람이 값의 추이를 볼 수 있어서다. 판정은 위의 **힙**이 한다.
+echo "  (관측) 부하 후 메모리: $u_used   ← 호스트마다 다르다. 단언에 쓰지 않는다."
+
+# 부하 중에 죽었다면 그건 호스트와 무관하게 결함이다.
 [ "$u_rc" = "0" ] || fail "(u) kafka 가 부하 중 ${u_rc}회 재시작했습니다 — 리밋이 명백히 부족합니다."
-ok "kafka 여유 확인 — limit ${u_limit_mib}MiB, 부하 후 $u_used (${u_pct}% ≤ ${U_MAX_PCT}%), 재시작 0"
+ok "kafka 부하 완주 (RestartCount=0, t5 메시지=${u_msgs})"
 cleanup_u
 
 echo "[verify] 전체 PASS (정적 + 실기동 증명)"
