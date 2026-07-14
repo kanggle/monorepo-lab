@@ -82,7 +82,7 @@ services:
           #
           # 같은 결함 클래스가 바로 아래 elasticsearch 에서 이미 한 번 물었다
           # (TASK-BE-406, 1G → 2G). 그때 아무도 kafka 에도 같은 문제가 있는지 묻지 않았다.
-          memory: 1G
+          memory: 512M
           cpus: '0.5'
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-metadata.sh status -s localhost:9092 2>/dev/null || /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092"]
