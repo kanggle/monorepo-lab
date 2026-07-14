@@ -31,7 +31,7 @@ batch-worker 는 **HTTP API 0**. 다음 채널만 보유:
 | Channel | Endpoint / Topic / Job | Auth | Purpose |
 |---|---|---|---|
 | Spring Scheduler | `expiredSessionCleanupJob` (`@Scheduled(cron = "0 0 * * * *")`) | — | hourly session GC |
-| Spring Scheduler | `stalePaidOrderConfirmationJob` (`@Scheduled(cron = "0 */10 * * * *")`) | client_credentials (outbound to order-service) | every 10 min forward-confirm of paid-but-unconfirmed `PENDING` orders (`payment_id IS NOT NULL`) via order-service internal endpoint — see [order-confirm-paid-stale.md](../../../contracts/http/internal/order-confirm-paid-stale.md). Disjoint from BE-138 (`payment_id IS NULL`). |
+| Spring Scheduler | `stalePaidOrderConfirmationJob` (`@Scheduled(cron = "0 */10 * * * *")`) | client_credentials (outbound to order-service) | every 10 min forward-confirm of paid-but-unconfirmed `PENDING` orders (`payment_id IS NOT NULL`) via order-service internal endpoint — see [order-confirm-paid-stale.md](../../contracts/http/internal/order-confirm-paid-stale.md). Disjoint from BE-138 (`payment_id IS NULL`). |
 | Spring Scheduler | `searchIndexConsistencyCheckJob` (`@Scheduled(cron = "0 0 3 * * *")`) | — | daily 03:00 index drift check — **heuristic spot-check only**: search-api has no full-enumeration endpoint, so the check paginates the product-service authority catalog and queries search by name; results represent suspected drift, not confirmed inconsistency (see `SearchIndexConsistencyJob` javadoc + AC-6, TASK-BE-409). |
 | Kafka publish | TBD (per future contracts) | — | batch 완료 통지 |
 | HTTP outbound | `product-service`, `search-service` (published contracts read-only) | — | index consistency check |

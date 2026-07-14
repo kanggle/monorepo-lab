@@ -59,6 +59,9 @@
 | 파일 | 적용 시점 |
 |---|---|
 | [../platform/contracts/jwt-standard-claims.md](../platform/contracts/jwt-standard-claims.md) | identity-platform 서비스가 토큰을 발급하거나 게이트웨이가 JWT를 검증하는 모든 프로젝트 |
+| [../platform/contracts/notification-inbox-contract.md](../platform/contracts/notification-inbox-contract.md) | 알림(notification) 표면을 **생산**하거나(도메인 inbox REST + 이벤트 봉투) **소비**하는(집계 shell) 프로젝트. ADR-MONO-043 D3 — 봉투와 inbox shape 만 공유이고 base path·인증·수신자 해석·테넌시는 도메인 소유 |
+
+> 이 표는 `platform/contracts/` **디렉터리 전체**를 열거한다. 새 계약 파일을 추가하면 이 표에도 행을 추가할 것 — 표에 없는 계약은 [entrypoint.md](../platform/entrypoint.md)의 어느 레이어에도 없으면 **읽기 순서에서 도달 불가**가 되고, 도달하지 못하는 정경은 정경이 아니다 (TASK-MONO-409).
 
 ---
 
