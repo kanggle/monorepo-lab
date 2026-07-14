@@ -2,6 +2,7 @@
 
 import type { FxRatesResponse } from '../api/types';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { statusToneColorClass } from '@/shared/ui/StatusBadge';
 
 /**
  * FX 환율 피드 대시보드 테이블 (TASK-PC-FE-092 — § 2.4.7.1).
@@ -81,17 +82,20 @@ export function FxRatesTable({ data, onRefresh, refreshing = false, onSelectPair
 
       {/* feedEnabled badge */}
       <div className="mb-4 flex items-center gap-3">
+        {/* Palette (incl. dark variants) comes from the shared tone map; the
+            geometry stays local because this badge is a page-level indicator
+            carrying a sentence, not a table chip (TASK-PC-FE-242). */}
         {feedEnabled ? (
           <span
             data-testid="ledger-fx-rates-feed-badge"
-            className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800"
+            className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${statusToneColorClass('success')}`}
           >
             피드 활성
           </span>
         ) : (
           <span
             data-testid="ledger-fx-rates-feed-badge"
-            className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-800"
+            className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${statusToneColorClass('warning')}`}
           >
             피드 비활성 — 환율 폴백이 꺼져 있습니다
           </span>
@@ -188,11 +192,15 @@ export function FxRatesTable({ data, onRefresh, refreshing = false, onSelectPair
                 </td>
                 <td className="p-2">
                   {rate.stale ? (
-                    <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-800">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${statusToneColorClass('warning')}`}
+                    >
                       STALE
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${statusToneColorClass('success')}`}
+                    >
                       최신
                     </span>
                   )}

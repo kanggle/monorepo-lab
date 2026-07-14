@@ -6,8 +6,10 @@ import {
   type DelegationFactListResponse,
   type DelegationFactListQueryParams,
 } from '../api/types';
+import { delegationStatusTone } from '../api/delegation-types';
 import { useDelegationFacts } from '../hooks/use-erp-ops';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { statusToneClass } from '@/shared/ui/StatusBadge';
 
 /**
  * ERP "위임 현황" read-only card (TASK-PC-FE-055 — ADR-MONO-013 §D3.1).
@@ -191,7 +193,7 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
                 >
                   <td className="p-2 text-sm font-mono">{fact.grantId}</td>
                   <td className="p-2">
-                    <StatusBadge status={fact.status} index={i} />
+                    <DelegationFactStatusBadge status={fact.status} index={i} />
                   </td>
                   <td className="p-2 text-sm">{fact.delegatorId}</td>
                   <td className="p-2 text-sm">{fact.delegateId}</td>
@@ -288,21 +290,34 @@ function ScopeCell({
   return <>{scope}</>;
 }
 
-/** Status badge for delegation facts — ACTIVE / REVOKED. */
-function StatusBadge({ status, index }: { status: string; index: number }) {
-  const isActive = status === 'ACTIVE';
-  const isRevoked = status === 'REVOKED';
-  const label = isActive ? '활성' : isRevoked ? '회수됨' : status;
-  const className = isActive
-    ? 'rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-800 dark:bg-green-950/60 dark:text-green-100'
-    : isRevoked
-      ? 'rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground'
-      : 'rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground';
+/**
+ * Status badge for delegation facts — ACTIVE / REVOKED (unknown → verbatim).
+ *
+ * Takes its palette from the shared tone map (TASK-PC-FE-242) rather than a
+ * local colour ladder. It composes its own `<span>` instead of using
+ * `<StatusBadge>` because it carries `data-status`, which the shared component
+ * does not forward — the sanctioned `statusToneClass` escape hatch.
+ *
+ * A fact row has no `validTo`, so the expired-vs-revoked distinction the grant
+ * list makes does not exist here; `expired` is left at its default. Note this
+ * changes REVOKED from grey to red: the fact card and the grant list disagreed
+ * on the same status, and the grant list's mapping (revoked = a withdrawal, not
+ * a lapse) is the one that carries information.
+ */
+function DelegationFactStatusBadge({
+  status,
+  index,
+}: {
+  status: string;
+  index: number;
+}) {
+  const label =
+    status === 'ACTIVE' ? '활성' : status === 'REVOKED' ? '회수됨' : status;
   return (
     <span
       data-testid={`delegation-fact-status-${index}`}
       data-status={status}
-      className={className}
+      className={statusToneClass(delegationStatusTone(status))}
     >
       {label}
     </span>

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 /**
  * Feature-local types for the erp `approval-service` delegation surface
@@ -119,4 +120,35 @@ export function isActiveGrant(
   if (!g.validTo) return true; // open-ended — never expires
   const now = nowIso ? new Date(nowIso) : new Date();
   return new Date(g.validTo) >= now;
+}
+
+// ---------------------------------------------------------------------------
+// Status tone (TASK-PC-FE-242).
+// ---------------------------------------------------------------------------
+
+/**
+ * Delegation grant status → shared semantic {@link StatusTone}.
+ *
+ * The three states the UI distinguishes are NOT the raw producer enum: a grant
+ * is 활성 / 만료 / 회수됨, where 만료 is an ACTIVE grant whose `validTo` has
+ * passed ({@link isActiveGrant}). Hence the `expired` parameter — status alone
+ * cannot decide the tone.
+ *
+ *   활성   (ACTIVE, not expired) → success
+ *   회수됨 (REVOKED)             → danger — a grant that was actively withdrawn
+ *   만료   (ACTIVE, past validTo)→ neutral — a passive lapse, not an action
+ *   unknown/future status        → neutral (tolerant)
+ *
+ * Before PC-FE-242 the same REVOKED grant rendered red in `DelegationGrantList`
+ * and grey in `DelegationFactCard` — two hand-rolled badges, two palettes. The
+ * list's mapping is kept because it is the one that preserves the
+ * revoked-vs-expired distinction; the fact card now agrees with it.
+ */
+export function delegationStatusTone(
+  status: string,
+  expired = false,
+): StatusTone {
+  if (status === 'REVOKED') return 'danger';
+  if (status === 'ACTIVE') return expired ? 'neutral' : 'success';
+  return 'neutral';
 }

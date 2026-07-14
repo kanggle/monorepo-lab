@@ -1,3 +1,4 @@
+import { statusToneClass } from '@/shared/ui/StatusBadge';
 import { isRetired, type EffectivePeriod } from '../api/types';
 
 /**
@@ -42,20 +43,16 @@ export function EffectivePeriodBadge({
     : futureStart
       ? `scheduled (${period.effectiveFrom}~)`
       : `active (${period.effectiveFrom}~${period.effectiveTo ?? '∞'})`;
-  const variant: 'normal' | 'warn' | 'danger' = retired
-    ? 'warn'
-    : futureStart
-      ? 'normal'
-      : 'normal';
-  const cls: Record<'normal' | 'warn' | 'danger', string> = {
-    normal: 'rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground',
-    warn: 'rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-100',
-    danger:
-      'rounded bg-destructive/15 px-1.5 py-0.5 text-xs text-destructive',
-  };
+  // Retired is the one state that asks for attention (§ 2.4.8 surfaces it
+  // honestly rather than hiding the row) → `warning`. Active and
+  // future-scheduled are both ordinary states → `neutral`. Palette comes from
+  // the shared tone map (TASK-PC-FE-242); this badge composes its own <span>
+  // because it carries `data-retired` + `title`, which `<StatusBadge>` does not
+  // forward — the sanctioned escape hatch.
+  const tone = retired ? 'warning' : 'neutral';
   return (
     <span
-      className={cls[variant]}
+      className={statusToneClass(tone)}
       data-testid={retired ? 'erp-effective-retired' : 'erp-effective-active'}
       data-retired={retired ? 'true' : 'false'}
       title={`${period.effectiveFrom} ~ ${period.effectiveTo ?? 'open-ended'}`}

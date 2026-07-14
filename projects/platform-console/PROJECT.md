@@ -59,6 +59,16 @@ GAP 측 선행 작업 (spec-first, [TASK-BE-296](../iam-platform/tasks/ready/TAS
 
 통합 계약 상세: [specs/contracts/console-integration-contract.md](specs/contracts/console-integration-contract.md).
 
+## Frontend UI Conventions (필독 — `console-web` 을 만지기 전에)
+
+**[docs/conventions/frontend-ui.md](docs/conventions/frontend-ui.md)** — `console-web` 이 실제로 강제하는 UI 규칙의 **정경 홈**:
+
+- **날짜/시간** — `shared/lib/datetime.ts` 의 `formatDateTime`/`formatDate` 만 사용(호출부에서 `toLocale*` 직접 호출 금지). `hourCycle:'h23'`·pinned `Asia/Seoul` 은 취향이 아니라 **버그픽스**(자정 `24:00:00` quirk / SSR-하이드레이션 불일치).
+- **상세/폼 헤더 + `<dl>` 순서** — 공유 `shared/ui/DetailHeader`, 필드 순서 = 명칭 → 상태 → 식별자 → 날짜.
+- **상태칩** — 공유 `shared/ui/StatusBadge`. 상태칩 재구현·색 하드코딩 금지(도메인은 `status → StatusTone` 맵만 소유).
+
+이 규칙들은 **기계 가드가 없다**(문서가 그 이유를 적어 둔다) — 즉 **읽지 않으면 지켜지지 않는다.** 새 화면·새 상태 컬럼·새 날짜 렌더를 추가하기 전에 위 문서를 읽을 것. (TASK-PC-FE-241 신설 / TASK-PC-FE-242 정정·잔여 청산.)
+
 ## Local Network
 
 [ADR-MONO-001](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md) Option C 채택 — `console.local` 호스트네임으로 Traefik routing. PORT_PREFIX 미사용. 공유 Traefik 스택(`infra/traefik/`, TASK-MONO-022)에 join.

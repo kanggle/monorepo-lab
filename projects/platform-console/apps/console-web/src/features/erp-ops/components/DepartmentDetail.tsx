@@ -3,8 +3,10 @@
 import {
   KNOWN_MASTER_STATUSES,
   labelForUnknownEnum,
+  masterStatusTone,
   type Department,
 } from '../api/types';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { useDepartment } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { RetiredReferenceBadge } from './RetiredReferenceBadge';
@@ -70,12 +72,12 @@ export function DepartmentDetail({ id, initial }: DepartmentDetailProps) {
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd className="text-foreground">
-            <span
+            <StatusBadge
+              tone={masterStatusTone(d.status)}
               data-testid="erp-department-status"
-              className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
             >
               {labelForUnknownEnum(d.status, KNOWN_MASTER_STATUSES)}
-            </span>
+            </StatusBadge>
           </dd>
         </div>
         <div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/shared/ui/Button';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import type { AlertRow } from '../api/types';
 
 /**
@@ -63,16 +64,14 @@ export function WmsAlertsTable({ rows, onAck }: WmsAlertsTableProps) {
                 <td className="p-2">{a.detectedAt ?? '—'}</td>
                 <td className="p-2">
                   {a.acknowledged ? (
-                    <span
-                      className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                    <StatusBadge
+                      tone="neutral"
                       data-testid={`wms-alert-acked-${i}`}
                     >
                       확인됨
-                    </span>
+                    </StatusBadge>
                   ) : (
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
-                      미확인
-                    </span>
+                    <StatusBadge tone="warning">미확인</StatusBadge>
                   )}
                 </td>
                 <td className="p-2">

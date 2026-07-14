@@ -3,9 +3,12 @@
 import {
   KNOWN_EMPLOYMENT_STATUSES,
   KNOWN_MASTER_STATUSES,
+  employmentStatusTone,
   labelForUnknownEnum,
+  masterStatusTone,
   type Employee,
 } from '../api/types';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import {
   useCostCenter,
   useDepartment,
@@ -91,23 +94,23 @@ export function EmployeeDetail({ id, initial }: EmployeeDetailProps) {
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd className="text-foreground">
-            <span
+            <StatusBadge
+              tone={masterStatusTone(e.status)}
               data-testid="erp-employee-status"
-              className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
             >
               {labelForUnknownEnum(e.status, KNOWN_MASTER_STATUSES)}
-            </span>
+            </StatusBadge>
           </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">고용 상태</dt>
           <dd className="text-foreground">
-            <span
+            <StatusBadge
+              tone={employmentStatusTone(e.employmentStatus)}
               data-testid="erp-employee-employment"
-              className={`rounded px-1.5 py-0.5 text-xs ${e.employmentStatus === 'SEPARATED' ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-100' : 'bg-muted text-muted-foreground'}`}
             >
               {labelForUnknownEnum(e.employmentStatus, KNOWN_EMPLOYMENT_STATUSES)}
-            </span>
+            </StatusBadge>
           </dd>
         </div>
         <div>

@@ -107,7 +107,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-242-status-chip-residue-undercounted.md` — **IMPLEMENTED → review.** `PC-FE-241`(#2567)이 만든 정경 문서 §3 은 `StatusBadge` 미채택을 **erp 3건**으로 적었다. **실측 15칩 / 12 컴포넌트.** 그리고 **내가 티켓에 쓴 "7건" 도 과소계수였다** — 첫 술어("팔레트를 손으로 쓴 pill")는 **색이 아니라 *톤 매핑이 통째로 없는*** 칩(상수 `bg-muted`)을 못 본다. **진짜 지문은 잔여가 아니다: `PC-FE-159` 의 "전 콘솔 롤아웃" 이 *리스트/테이블* 표면에서 멈추고 *상세* 표면을 두고 갔다** ⇒ 같은 `ACTIVE` 마스터가 **리스트=초록 / 상세=회색**(ERP 마스터 5종), 같은 `SEPARATED` 가 리스트=회색/상세=amber(**`employmentStatusTone` 은 이미 있었다**), 같은 `REVOKED` 가 GrantList=빨강/FactCard=회색. **이건 §1 "같은 필드=어디서나 동일 포맷" 규칙의 *상태* 판이다.** 결함 1건: **`ledger-ops/FxRatesTable` 4칩은 `dark:` 변형이 전무** → 다크 테마에서 깨짐(미채택이 아니라 버그). 부수: 승격 중 **유실된 규칙**(§1) 복원 + **도달성**(`PROJECT.md` → 정경 문서 포인터; 기존 링크는 사람용 온보딩 1곳뿐). 공유 모듈에 `statusToneColorClass`(팔레트 전용 escape hatch) 신설. **검증: tsc 0 · lint 0 · vitest 2804/2804 — 테스트 수정 0줄**(= 계약 보존 증거이자, *색을 단언하는 테스트가 처음부터 없어서 이 드리프트가 어떤 게이트에도 안 걸렸다는* 증거). 분석=Opus 4.8 / 구현=Opus 4.8.
 
 ## done
 

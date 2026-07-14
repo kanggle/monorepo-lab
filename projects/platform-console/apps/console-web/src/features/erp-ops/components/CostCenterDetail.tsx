@@ -3,8 +3,10 @@
 import {
   KNOWN_MASTER_STATUSES,
   labelForUnknownEnum,
+  masterStatusTone,
   type CostCenter,
 } from '../api/types';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { useCostCenter, useDepartment } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { RetiredReferenceBadge } from './RetiredReferenceBadge';
@@ -61,12 +63,12 @@ export function CostCenterDetail({ id, initial }: CostCenterDetailProps) {
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd className="text-foreground">
-            <span
+            <StatusBadge
+              tone={masterStatusTone(c.status)}
               data-testid="erp-costcenter-status"
-              className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
             >
               {labelForUnknownEnum(c.status, KNOWN_MASTER_STATUSES)}
-            </span>
+            </StatusBadge>
           </dd>
         </div>
         <div>

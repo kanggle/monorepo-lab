@@ -4,8 +4,10 @@ import {
   KNOWN_MASTER_STATUSES,
   KNOWN_PARTNER_TYPES,
   labelForUnknownEnum,
+  masterStatusTone,
   type BusinessPartner,
 } from '../api/types';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { useBusinessPartner } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 
@@ -79,12 +81,12 @@ export function BusinessPartnerDetail({
         <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd className="text-foreground">
-            <span
+            <StatusBadge
+              tone={masterStatusTone(p.status)}
               data-testid="erp-businesspartner-status"
-              className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
             >
               {labelForUnknownEnum(p.status, KNOWN_MASTER_STATUSES)}
-            </span>
+            </StatusBadge>
           </dd>
         </div>
         <div>
