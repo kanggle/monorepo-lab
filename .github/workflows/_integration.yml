@@ -37,11 +37,23 @@ on:
         default: 30
       gradle-args:
         description: >-
-          Extra flags appended to the ./gradlew invocation. Use --no-parallel to
-          serialize a caller whose modules each spin a heavy Testcontainers stack
-          (Postgres + Kafka): the root gradle.properties sets org.gradle.parallel=true,
-          so a multi-module caller otherwise boots every module's stack at once and
-          can exhaust the runner (transient DB connection loss). Empty by default.
+          Extra flags appended to the ./gradlew invocation. Empty by default.
+
+          --no-parallel serialises a caller so that one module's Testcontainers stack
+          runs at a time (the root gradle.properties sets org.gradle.parallel=true, so a
+          multi-module caller otherwise boots every stack at once and can exhaust a small
+          runner, severing DB/cache connections mid-run).
+
+          Do NOT add it because a caller has many modules. Module count is a hypothesis,
+          not evidence: TASK-MONO-398 audited the unmitigated lanes and found four
+          multi-module lanes that had never once shown the problem. Add it only when THIS
+          lane has the starvation signature in its own CI history — connections severed
+          while the tests are actually executing. And it is not free: serialising roughly
+          doubles the lane's wall-clock, and one serialised lane has already crossed its
+          job timeout and been CANCELLED.
+
+          Rule, evidence and cost: platform/testing-strategy.md
+          § Integration lane serialisation (CI resource contention).
         required: false
         type: string
         default: ''

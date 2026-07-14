@@ -1289,12 +1289,17 @@ jobs:
       )
     uses: ./.github/workflows/_integration.yml
     with:
-      # Serialize the four WMS module integrationTest tasks: each spins its own
-      # Postgres + Confluent cp-kafka Testcontainers stack, and org.gradle.parallel=true
-      # otherwise boots all four at once — on the 2-CPU/7GB runner that exhausts
-      # memory/CPU and severs DB connections (SQLTransientConnectionException /
-      # "I/O error sending to the backend"), failing whichever module loses the race
-      # as a cluster. --no-parallel runs one stack at a time (TASK-MONO-331).
+      # SERIALISED. Rule (evidence, never module count) and cost:
+      # platform/testing-strategy.md § Integration lane serialisation.
+      #
+      # Evidence — TASK-MONO-331 (2026-07-06): this lane severed its Postgres connections
+      # mid-run (SQLTransientConnectionException / "I/O error sending to the backend") and
+      # failed whichever module lost the race, as a cluster of seed-dependent tests that
+      # looked nothing like contention.
+      #
+      # Watch the margin: since serialising, this lane has also crossed the 30 min timeout
+      # and been CANCELLED (TASK-MONO-335). A CANCELLED job is not a failure and nothing
+      # reports it as one. Re-check before adding a fifth module.
       timeout-minutes: 30
       gradle-args: --no-parallel
       gradle-tasks: >-
@@ -1327,10 +1332,8 @@ jobs:
     #
     # A SEPARATE job from the 4-module WMS lane above so the per-stack
     # Testcontainers footprint is contention-isolated: MONO-331's flake was
-    # intra-runner (all stacks booting on one 2-CPU/7GB runner). --no-parallel
-    # serializes the two modules (one Postgres + cp-kafka stack at a time) on this
-    # runner, same as the 4-module lane. Same gating as the WMS lane
-    # (push / libs / workflows / wms).
+    # intra-runner (all stacks booting on one 2-CPU/7GB runner). Same gating as the
+    # WMS lane (push / libs / workflows / wms).
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
       (
@@ -1341,6 +1344,10 @@ jobs:
       )
     uses: ./.github/workflows/_integration.yml
     with:
+      # SERIALISED. Inherited from the lane it was split out of (TASK-MONO-335): same
+      # runner, same per-module Postgres + cp-kafka footprint, so the same contention is
+      # reachable here. Rule and cost: platform/testing-strategy.md
+      # § Integration lane serialisation.
       timeout-minutes: 30
       gradle-args: --no-parallel
       gradle-tasks: >-
@@ -1377,30 +1384,25 @@ jobs:
         :projects:iam-platform:apps:gateway-service:integrationTest
         :projects:iam-platform:apps:security-service:integrationTest
       artifact-name: iam-integration-test-reports
-      # TASK-MONO-393: each module boots its own MySQL + Kafka + Redis + WireMock
-      # Testcontainers stack. With org.gradle.parallel=true they boot at once on the
-      # 2-CPU/7GB runner — the exact condition TASK-MONO-331 diagnosed for WMS (four
-      # modules), except this lane had seven and never got the mitigation.
-      # (TASK-MONO-394 has since retired community-service and membership-service, so
-      # the lane is five, not seven. Whether --no-parallel is still needed at five is
-      # NOT measured here and this comment does not claim it is — TASK-MONO-398 owns
-      # that question, and its lane table still says seven. Keeping the mitigation is
-      # the conservative default, not a finding.)
+      # SERIALISED. Rule (evidence, never module count) and cost:
+      # platform/testing-strategy.md § Integration lane serialisation.
       #
-      # Observed (PR #2515, attempt 2): Redis connections were severed mid-run
-      # ("RedisConnectionFailureException: Unable to connect to Redis"), and because the
-      # blacklist check is deliberately fail-closed, EVERY refresh returned 401. That
-      # surfaced as DeviceSessionIntegrationTest claiming a single-session revoke had
-      # killed another session's token — a security defect that does not exist.
+      # Evidence — TASK-MONO-393 (PR #2515, attempt 2): Redis connections were severed
+      # mid-run (RedisConnectionFailureException, 10+). Because the token-blacklist check
+      # is deliberately fail-closed, every refresh then returned 401 — which surfaced as
+      # DeviceSessionIntegrationTest reporting that revoking one session had killed another
+      # session's token. That security defect does not exist. The outage wore its costume,
+      # and it took the test's own output window to tell them apart.
       #
-      # TASK-MONO-398 corrects a claim MONO-393 left here: that scm's lane failing in the
-      # same attempt was evidence of a starved runner. It was not. scm died in a GitHub
-      # Actions action-resolution outage (Bad Gateway) without running a line of code.
-      # Two lanes failing together is NOT a fingerprint of exhaustion — an Actions outage
-      # kills many jobs at once, so simultaneous failure is more often infrastructure.
-      # Classify by WHERE the job died: setup / action resolve is infrastructure; a fault
-      # inside the failing test's own output window is real. The iam diagnosis above stands
-      # on the latter, not on scm.
+      # MONO-393 also offered a second argument here — that another lane failing in the
+      # same attempt showed the runner was starved. TASK-MONO-398 opened that lane's log:
+      # it died in an Actions action-resolution outage without running any code. Jobs
+      # failing together is an infrastructure signal, not a contention one; the rule doc
+      # says why. The evidence above never depended on it.
+      #
+      # Caveat: that evidence was measured when this lane ran seven modules. TASK-MONO-394
+      # has since retired two, so it runs five. Whether five still needs the mitigation is
+      # UNMEASURED. Keeping it is the conservative default — not a finding.
       gradle-args: --no-parallel
       report-paths: |
         projects/iam-platform/apps/*/build/reports/tests/integrationTest/
@@ -1672,26 +1674,23 @@ jobs:
         :projects:ecommerce-microservices-platform:apps:search-service:integrationTest
         :projects:ecommerce-microservices-platform:apps:settlement-service:integrationTest
       artifact-name: ecommerce-integration-test-reports
-      # TASK-MONO-398: twelve modules, each booting its own Postgres (+ Kafka, + a nori
-      # Elasticsearch for search-service) Testcontainers stack. With org.gradle.parallel=true
-      # they boot at once on the 2-CPU/7GB runner — the condition TASK-MONO-331 diagnosed for
-      # WMS (four modules) and TASK-MONO-393 for iam (seven). This is the largest lane in the
-      # repo and it was the last one without the mitigation.
+      # SERIALISED. Rule (evidence, never module count) and cost:
+      # platform/testing-strategy.md § Integration lane serialisation.
       #
-      # This is NOT applied on module count alone — that is a hypothesis, not evidence, and
-      # over-serialising costs wall-clock and invites the timeout-CANCELLED that WMS hit. It is
-      # applied because the lane demonstrably has the disease: the 2026-07-12 failure (job
-      # 86703554954, hidden inside a rerun so it never showed as a red run) logged
-      # "Connection is not available" x151 and SQLTransientConnectionException x31 with the
-      # tests actually running, and review-service:integrationTest died as the module that lost
-      # the race — the same Hikari/Postgres starvation signature MONO-331 recorded, an order of
-      # magnitude louder than iam's.
+      # Twelve modules — the largest lane in the repo, and the last one to get the
+      # mitigation. That is NOT why it got it.
       #
-      # The other unmitigated lanes (fan, erp, scm, finance) showed ZERO exhaustion evidence in
-      # the same audit and are deliberately left alone. scm's only failure was a Bad Gateway
-      # from the Actions outage — the very misreading MONO-398 exists to correct.
+      # Evidence — TASK-MONO-398, job 86703554954 (2026-07-12), which never appeared as a
+      # red run because a rerun buried it: "Connection is not available" x151 and
+      # SQLTransientConnectionException x31, with the tests actually executing, and
+      # review-service:integrationTest dying as the module that lost the race. The same
+      # Hikari/Postgres starvation signature MONO-331 recorded, an order of magnitude louder
+      # than iam's. The four other unmitigated lanes showed zero evidence in the same audit
+      # and were deliberately left alone — zero is a result.
       #
-      # Cost: the lane runs 8-9 min parallel against a 30 min timeout, so serialisation has room.
+      # Cost, measured: 8 min parallel -> 16 min 08 s serial, against the 30 min default
+      # timeout (47% margin). This is now the repo's longest serialised lane. A thirteenth
+      # module narrows that margin and nothing here will warn you.
       gradle-args: --no-parallel
       report-paths: |
         projects/ecommerce-microservices-platform/apps/order-service/build/reports/tests/integrationTest/
