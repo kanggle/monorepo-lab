@@ -20,7 +20,7 @@ This service type is reserved for the central identity / OIDC / IAM service. The
 
 Use `identity-platform` for a service whose primary responsibility is **all of**:
 
-- Issuing access tokens and refresh tokens signed with an asymmetric key pair (RSA or EdDSA)
+- Issuing access tokens and refresh tokens signed with an asymmetric key pair (**`RS256`** — the algorithm is defined by [`platform/contracts/jwt-standard-claims.md`](../contracts/jwt-standard-claims.md) § JWT Signing Strategy, not here)
 - Publishing the corresponding public keys at a JWKS endpoint for relying parties
 - Owning the lifecycle of user / operator accounts that authenticate against the platform
 - Providing OIDC-style flows (Authorization Code + PKCE, refresh, revoke, introspect)
@@ -70,7 +70,7 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 
 ## Access Token
 
-- Format: signed JWT (RS256 or stronger; HS256 forbidden for cross-service use)
+- Format: signed JWT — **`RS256`, and nothing else** (not "or stronger": a relying party MUST reject any other `alg`, so a token this file blessed but the contract did not is a token our own verifier rejects). Canonical: [`platform/contracts/jwt-standard-claims.md`](../contracts/jwt-standard-claims.md) § JWT Signing Strategy.
 - Lifetime: **5 to 15 minutes** depending on the requested surface's capability
   - operator-facing platforms (wms, erp, mes, scm, ecommerce admin surface): 5 minutes (short-lived; high-privilege)
   - consumer-facing surfaces (ecommerce customer, fan-platform): 15 minutes
