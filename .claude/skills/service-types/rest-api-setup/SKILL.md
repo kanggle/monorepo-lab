@@ -37,7 +37,10 @@ Prerequisite: read `platform/service-types/rest-api.md` before using this skill.
 Mutating endpoints (POST creating resources, PUT/PATCH state transitions) accept `Idempotency-Key`:
 
 ```java
-@PostMapping("/orders")
+// URL versioning is mandatory: /api/v{n}/{resource} (platform/versioning-policy.md).
+// The `/api/` prefix is part of the contract — a controller mapped at /orders is
+// unreachable through the gateway.
+@PostMapping("/api/v1/orders")
 public ResponseEntity<OrderResponse> placeOrder(
     @RequestHeader("Idempotency-Key") String key,
     @Valid @RequestBody PlaceOrderRequest request,
@@ -65,7 +68,7 @@ spring:
         - id: example-service
           uri: lb://example-service
           predicates:
-            - Path=/v1/orders/**
+            - Path=/api/v1/orders/**   # /api/v{n}/{resource} — versioning-policy.md
           filters:
             - StripPrefix=0
             - JwtAuthFilter

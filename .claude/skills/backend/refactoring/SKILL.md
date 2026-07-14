@@ -121,7 +121,7 @@ When domain logic lives in the wrong layer. Check `specs/services/<service>/arch
 
 ```java
 // Before: business rule in controller (wrong layer)
-@PostMapping("/orders")
+@PostMapping("/api/v1/orders")
 public ResponseEntity<OrderResponse> create(@RequestBody CreateOrderRequest req) {
     if (req.items().stream().anyMatch(i -> i.quantity() <= 0)) {
         throw new InvalidOrderException("quantity must be positive");
@@ -131,7 +131,7 @@ public ResponseEntity<OrderResponse> create(@RequestBody CreateOrderRequest req)
 
 // After: business rule moved to domain/service layer
 // Controller — only delegates
-@PostMapping("/orders")
+@PostMapping("/api/v1/orders")
 public ResponseEntity<OrderResponse> create(@RequestBody CreateOrderRequest req) {
     var result = orderService.placeOrder(req.toCommand());
     return ResponseEntity.status(HttpStatus.CREATED).body(OrderResponse.from(result));
