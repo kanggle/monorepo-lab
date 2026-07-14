@@ -25,8 +25,8 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 - See `platform/api-gateway-policy.md`
 
 ## Versioning
-- Use URI path versioning for public endpoints. The canonical full path is `/api/v{n}/{resource}` (e.g. `/api/v1/orders`) — the `/api/` prefix is mandatory per `platform/versioning-policy.md` and `platform/naming-conventions.md`; `v1` / `v2` denotes only the version segment.
-- Follow `platform/versioning-policy.md` and `.claude/skills/cross-cutting/api-versioning/SKILL.md`
+- **Canonical: [`platform/versioning-policy.md`](../versioning-policy.md) § HTTP API Versioning.** That section fixes the mandatory `/api/` prefix, the `/api/v{n}/{resource}` form, and when the `v{n}` segment must be introduced. This section is a pointer — do not restate the rule here. (A restatement here is exactly how the two files came to contradict each other: this file asserted the `/api/` prefix was mandatory *per* `versioning-policy.md`, while that file's own bullet read as though the prefix was omitted. TASK-MONO-411.)
+- Also follow `.claude/skills/cross-cutting/api-versioning/SKILL.md`
 
 ## Error Handling
 - Use the project-wide error envelope defined in `platform/error-handling.md`
@@ -38,9 +38,10 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 - See `backend/jwt-auth.md`, `backend/gateway-security.md`
 
 ## Idempotency
-- All non-idempotent endpoints (POST that creates resources, PUT/PATCH that mutates state) MUST accept an `Idempotency-Key` header
-- Repeated calls with the same key MUST return the same response
-- TTL: 24 hours minimum
+- **Gated by the `transactional` trait. Canonical: [`rules/traits/transactional.md`](../../rules/traits/transactional.md) T1** — that file outranks this one (CLAUDE.md § Source of Truth Priority: `rules/traits/` is layer 4, `platform/` is layer 5), and [`platform/error-handling.md`](../error-handling.md) § Transactional Trait already registers `IDEMPOTENCY_KEY_REQUIRED` / `DUPLICATE_REQUEST` as trait-activated codes. This section is a pointer.
+- **When the project declares `transactional`** in `PROJECT.md`: every state-changing public endpoint accepts and honors `Idempotency-Key` per T1 (key scope, storage, and the 24-hour minimum TTL are defined there).
+- **When it does not**: this file imposes no idempotency requirement of its own. Note this does not license dropping the header — a `rest-api` service that forwards a mutating call into a `transactional` project's API still propagates the caller's `Idempotency-Key`, because that obligation comes from the downstream contract, not from this section.
+- This section formerly stated an unconditional MUST for *all* `rest-api` services, contradicting the trait gate it sits below (TASK-MONO-411).
 
 ## Pagination
 - All list endpoints MUST paginate via `PageQuery` / `PageResult`
@@ -96,7 +97,7 @@ When implementing a `rest-api` service or feature:
 - [ ] `specs/services/<service>/architecture.md` declares `Service Type: rest-api`
 - [ ] Gateway route configured in `gateway-service`
 - [ ] Authentication and authorization wired
-- [ ] Idempotency keys honored on mutating endpoints
+- [ ] Idempotency keys honored on mutating endpoints — **if the project declares the `transactional` trait** (§ Idempotency)
 - [ ] Pagination on all list endpoints
 - [ ] Metrics, logs, traces emitted
 - [ ] Contract tests pass

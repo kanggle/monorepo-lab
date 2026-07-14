@@ -98,8 +98,10 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 
 ## Algorithm
 
-- RSA 2048-bit minimum, or EdDSA (Ed25519). RSA 4096 recommended for OPERATOR-aud signing keys.
+- **Canonical: [`platform/contracts/jwt-standard-claims.md`](../contracts/jwt-standard-claims.md) § JWT Signing Strategy.** RSA (`RS256`) only, 2048-bit minimum. This file does not define the signing algorithm and **must not widen it** — it is a pointer.
 - The same key MAY be used to sign for multiple `aud` values, but operators MAY isolate keys per platform if blast-radius reduction is desired.
+
+> This section formerly read *"RSA 2048-bit minimum, or EdDSA (Ed25519)"*. The contract permits no such alternative, no implementation supports one, and the live verification path rejects any `alg` other than `RS256` — an EdDSA-signed token would have been rejected fail-closed by code that this document told an implementer to write. The key-strength guidance moved to the contract, which is the one file every relying party reads (TASK-MONO-411).
 
 ## Key Identifier (`kid`)
 
