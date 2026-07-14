@@ -228,6 +228,11 @@ jobs:
       # make this guard unreachable on exactly the edits that break it — the
       # mistake MONO-360 measured.
       ci-baseline: ${{ steps.filter.outputs.ci-baseline }}
+      # TASK-MONO-405. Raw filter, NOT AND-combined with `code-changed`: a PowerShell
+      # hook is not "code" by that filter's definition, so AND-ing would make the one
+      # job that tests the hooks unreachable on exactly the edits that break them —
+      # the mistake MONO-360 measured, and a skipped job reports green.
+      hooks: ${{ steps.filter.outputs.hooks }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
       - uses: actions/checkout@v4
@@ -239,13 +244,36 @@ jobs:
               - 'libs/**'
               - 'platform/**'
               - 'rules/**'
-              - '.claude/**'
+              # TASK-MONO-405: `.claude/**` used to sit here wholesale, so editing one
+              # line of a PowerShell hook woke the Java build, three frontend lanes,
+              # seven Testcontainers lanes and E2E — ~20 minutes, and not one of those
+              # jobs exercises a hook (measured on PR #2545: 22 SUCCESS / 9 SKIPPED,
+              # hook coverage 0). The rule-routing subtrees below genuinely do have
+              # cross-project impact and stay. The agent harness — hooks/ and the
+              # settings.json that wires them — moves to the `hooks` filter, which
+              # gates the one job that actually tests them.
+              - '.claude/agents/**'
+              - '.claude/commands/**'
+              - '.claude/config/**'
+              - '.claude/skills/**'
+              - '.claude/templates/**'
+              - '.claude/workflows/**'
               - 'build.gradle'
               - 'settings.gradle'
               - 'package.json'
               - 'tsconfig.base.json'
               - 'tasks/templates/**'
               - '!**/*.md'
+            # TASK-MONO-405: gates the hook fixture suite (.claude/hooks/__tests__/).
+            # No `!**/*.md` exclusion — the suite runs in under a minute, and a README
+            # edit paying for a cheap run beats a filter that reasons about which hook
+            # file "counts". Includes settings.json because the WIRING is half the
+            # guard: MONO-402's three main-branch hooks were fine and simply never
+            # called, because the matcher named only one of the two tools that reach
+            # git.
+            hooks:
+              - '.claude/hooks/**'
+              - '.claude/settings.json'
             workflows:
               - '.github/workflows/**'
             wms:
@@ -684,6 +712,47 @@ jobs:
 
       - name: Guard — every emitted error code is registered
         run: bash scripts/check-error-code-registry.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-405: the hook fixtures ran nowhere.
+  #
+  # .claude/hooks/__tests__/run-all.ps1 said so on its own first line — "Developer-run
+  # only — not CI-gated" — and `.github/` contained zero references to it. Twelve hooks,
+  # thirteen fixtures, ~60 assertions, executed only when a human remembered to.
+  #
+  # That left MONO-402's regression fixtures blind the day they were born: done/ is
+  # frozen, the close chore still passes (break that one and EVERY task close in the
+  # repo is blocked), a push arriving from the PowerShell tool is refused, an implicit
+  # HEAD=main push is refused. Revert the regex or narrow the matcher and CI stayed
+  # green. A property nobody observes is a property nobody is keeping.
+  #
+  # Why windows-latest, and not pwsh on the ubuntu runners every other job uses:
+  # settings.json launches these hooks with `powershell -NoProfile -File …`, so in
+  # production they execute under Windows PowerShell 5.1. Running them under pwsh
+  # (Core) on Linux would test a different shell than the one that runs them — and
+  # 5.1↔Core differ in exactly the places these fixtures live (ConvertTo-Json, -match,
+  # here-strings). This repo has already paid twice, inside a single ticket, for a
+  # guard calibrated on an environment that was not the one it had to bite in
+  # (MONO-397). The suite finishes in well under a minute, so the cost argument for
+  # Linux does not survive contact with the correctness argument.
+  # ---------------------------------------------------------------------------
+  hook-fixtures:
+    name: Hook fixtures (Windows PowerShell — the shell the hooks actually run in)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    needs: changes
+    if: needs.changes.outputs.hooks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      # The fixtures pipe synthesized stdin payloads at the real hook scripts and
+      # assert the JSON decision they emit. run-all.ps1 exits non-zero on any failure.
+      #
+      # `shell: powershell` is Windows PowerShell 5.1 — deliberately NOT `pwsh`.
+      # It is the same interpreter settings.json names, which is the whole point.
+      - name: Hook fixture suite (60+ assertions across 12 hooks)
+        shell: powershell
+        run: .\.claude\hooks\__tests__\run-all.ps1
 
   demo-wrapper-smoke:
     name: Demo wrapper smoke (infra/demo)
