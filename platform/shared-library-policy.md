@@ -14,6 +14,8 @@ They must not become a container for service-specific business logic.
 
 # Catalog
 
+> The Consumers column names concrete projects for `libs/java-gateway` (and, by extension, other rows) — a declared exception to the project-agnostic rule for shared paths (`platform/README.md § Editing Policy`): it records which projects actually consume which module (an operational fact, not a policy this file defines). See `TASK-MONO-412`.
+
 | Module | Contents | Consumers |
 |---|---|---|
 | `libs/java-common` | framework-neutral technical utilities | most services |
