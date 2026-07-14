@@ -1,6 +1,8 @@
 # infra/demo/aws — 온디맨드 포트폴리오 데모 호스트 (TASK-MONO-366)
 
-방문자가 **Start Demo** 를 누르면 EC2 가 깨어나 통합 데모(9 프로젝트 / 96 컨테이너)를 올리고, 유휴해지면 스스로 꺼진다. **scale-to-zero** — 아무도 안 쓰면 컴퓨트 비용이 0 이다.
+방문자가 **Start Demo** 를 누르면 EC2 가 깨어나 통합 데모(8 프로젝트 / 96 컨테이너)를 올리고, 유휴해지면 스스로 꺼진다. **scale-to-zero** — 아무도 안 쓰면 컴퓨트 비용이 0 이다.
+
+> 프로젝트 수의 출처는 `infra/demo/projects.sh` 의 `FULL` 배열이다(iam · wms · scm · finance · erp · ecommerce · fan · console = **8**). 여기에 숫자를 다시 적지 말고 그 파일을 세라.
 
 이 디렉터리는 그 호스트를 **저장소만으로 재현**하기 위해 존재한다. 이전에는 이 코드가 세션 스코프 scratchpad 에만 있어서, `README.md` 가 온디맨드 데모를 포트폴리오로 내세우는데 **그걸 만드는 코드는 저장소에 없었다** — 검증 불가능한 주장이었다.
 
@@ -52,9 +54,43 @@ terraform output site_url
 
 `terraform destroy` 로 전부 되돌릴 수 있다 — 상태를 EBS 볼륨에만 두므로 재생성이 안전하다.
 **AMI 와 스냅샷은 packer 산출물이라 terraform 관리 밖이고 살아남는다** ⇒ 되살리는 데
-`terraform apply` 2분이면 되고 **AMI 를 다시 구울 필요가 없다.**
+`terraform apply` 2분이면 되고 **AMI 를 다시 구울 필요가 없다** — **다만 이것은 *복구*에 대해서만
+참이다. *코드를 고친 경우*는 다르다. 바로 아래 절을 읽어라.**
 
 ⚠️ `destroy` 는 SSM 의 **월 사용량 카운터도 지운다**(예산 가드 리셋).
+
+---
+
+## 🔴 코드를 고쳤다 — 그게 데모에 도달하는가? (배포 층이 둘이다)
+
+**AMI 는 저장소의 *스냅샷*이다.** packer 가 bake 때 `git clone --depth 1 --branch main` 하고
+(`packer/demo-ami.pkr.hcl`), **`demo-boot.sh` 는 부팅 시 `git pull` 을 하지 않는다** — 도메인만
+파생하고 `/opt/monorepo-lab` 을 **있는 그대로** 쓴다.
+
+⇒ **무엇을 고쳤느냐에 따라 재굽기 필요 여부가 갈린다:**
+
+| 고친 것 | 도달 경로 | 재굽기 |
+|---|---|---|
+| `terraform/**` · `terraform/lambda/handler.py` · `site/index.html` · `ec2/user-data.sh` | **`terraform apply` 가 저장소에서 그때 읽는다** (`file()` / `archive_file` / `aws_s3_object`) | ❌ 불필요 |
+| `infra/demo/*.sh` · `demo-stack.service` · **`projects/*/docker-compose.yml`** · 앱 소스(Java/TS) | **AMI 에 구워져 있다** | ✅ **필요** (`packer build`, ~55분) |
+
+**⚠️ 그래서 `main` 이 초록인 것은 데모가 고쳐졌다는 증거가 아니다.**
+
+실제로 그런 상태다 — `TASK-MONO-397` 이 `ecommerce` 의 kafka 메모리 리밋을 **512M → 1G** 로
+고쳤지만 그건 `docker-compose.yml` 이고, **현재 AMI 는 그 커밋 이전에 구워졌다.** 즉 **지금 데모를
+켜면 여전히 512 MiB kafka 가 뜨고, 부하가 붙으면 OOM 으로 재시작한다.** 인수 = `TASK-MONO-399` AC-6.
+
+**이것은 `TASK-MONO-367` 이 이름 붙인 실패 모드다** — *"일을 잘못한다" 가 아니라 **"일을 끝내는 것이
+일을 끝낸 것처럼 보인다"***. 머지는 절반이다.
+
+**실험만 할 거라면 재굽기는 필요 없다**: compose 의 *값* 하나(리밋·env)를 바꿔 보는 것뿐이면
+인스턴스 안에서 그 줄을 고치고 `docker compose up -d` 하면 된다(이미지는 안 바뀐다).
+**단 `terraform destroy` 하면 사라진다** — 영속시키려면 저장소에 커밋하고 **재굽기**해야 한다.
+
+**그리고 구운 것을 믿지 마라.** `--branch main` 은 ***bake 시점의*** main 이므로, **성공한 bake 가
+옛 커밋을 담을 수 있다.** 새 AMI 로 띄운 뒤 **인스턴스 안에서 런타임으로** 확인하라 —
+`git -C /opt/monorepo-lab log -1` 과 `docker inspect ecommerce-kafka --format '{{.HostConfig.Memory}}'`.
+선언이 아니라 **실행 중인 값**을 물어야 한다.
 
 ---
 
@@ -99,11 +135,27 @@ aws iam put-user-policy --user-name <deployer> \
 
 ---
 
-## 사이징 — 실측으로 정정된 값
+## 사이징 — **1회 관측치이지, 아무것도 강제하지 않는 예산이다**
 
-`full` = **96 컨테이너 / 메모리 ~26GB** (JVM 40+).
+`full` ≈ **96 컨테이너 / 메모리 ~26GB** (JVM 40+). m6i.2xlarge(32GB)에서 **여유 ~5.5GB.**
+`TASK-MONO-366` 이 실행 중인 스택을 **한 번 재서 얻은 값**이다.
 
-이전 문서에 적혀 있던 *"43 컨테이너 / 21GB 여유"* 는 **고장난 스택을 잰 값이었다** — `bitnami/kafka:3.7` 이 Docker Hub 에서 삭제되어 33개만 뜬 상태였고(TASK-MONO-353), 죽은 이미지 하나가 나머지 6개 프로젝트를 통째로 막고 있었다. m6i.2xlarge(32GB)에서 **실제 여유는 5.5GB 뿐**이다.
+이전 문서에 적혀 있던 *"43 컨테이너 / 21GB 여유"* 는 **고장난 스택을 잰 값이었다** — `bitnami/kafka:3.7` 이 Docker Hub 에서 삭제되어 33개만 뜬 상태였고(TASK-MONO-353), 죽은 이미지 하나가 나머지 6개 프로젝트를 통째로 막고 있었다.
+
+> 🔴 **이 숫자를 상한으로 읽지 마라.** 데모가 띄우는 compose 서비스 키 107개 중 **메모리 리밋을
+> 선언하는 것은 34개뿐이고 전부 `ecommerce` 다.** 나머지 **7개 프로젝트(iam·wms·scm·finance·erp·
+> fan·console)는 리밋을 하나도 선언하지 않는다** ⇒ 그 컨테이너들은 **천장이 없다.** 26GB 도,
+> 5.5GB 여유도 **저장소의 무엇도 강제하지 않는 관측치**이며, 다음 변경이 그 여유를 먹어도
+> **아무 게이트도 멈춰 세우지 않는다.**
+>
+> ⚠️ 이미 살짝 낡았다 — `TASK-MONO-397` 이 ecommerce kafka 를 **512M → 1G** 로 올렸는데
+> 26GB/5.5GB 는 그 뒤로 다시 재지 않았다. **재측정 = `TASK-MONO-399` AC-2.**
+>
+> **그리고 "일관성 있게" 다른 프로젝트에 리밋을 추가하지 마라** — 컨테이너 메모리 리밋은
+> **상한이 아니라 *설정*이다.** `JAVA_OPTS` 가 없는 JVM 은 cgroup 리밋을 읽어 힙을 **그 25%** 로
+> 잡는다(`MaxRAMPercentage` 기본값). 리밋을 넣는 순간 지금 무제한인 JVM 들이 조용히 25% 힙으로
+> **재설정된다.** `TASK-MONO-397` 이 정확히 그 함정에서 나왔다(`512M` = "128 MiB 힙으로 카프카를
+> 돌려라"). **일관성이 새 결함을 만든다.**
 
 ---
 

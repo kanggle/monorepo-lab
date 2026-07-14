@@ -29,7 +29,7 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/monorepo-lab
 
-# 프로파일: full(9 프로젝트) | demo-core(iam+ecommerce+wms+console)
+# 프로파일: full(8 프로젝트 — 출처는 projects.sh 의 FULL 배열) | demo-core(iam+ecommerce+wms+console)
 Environment=DEMO_PROFILE=full
 
 # ⚠️ `demo-up.sh` 를 직접 부르지 않는다 — 그것이 MONO-366 이 고치는 결함이다.
