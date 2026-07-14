@@ -1,4 +1,4 @@
-# HARDSTOP-10 fixture — architecture.md Write without a recognised Service Type declaration.
+﻿# HARDSTOP-10 fixture — architecture.md Write without a recognised Service Type declaration.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..\..') | Select-Object -ExpandProperty Path

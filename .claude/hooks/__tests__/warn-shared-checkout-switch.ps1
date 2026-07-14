@@ -1,4 +1,4 @@
-# warn-shared-checkout-switch fixture — 1 positive (ask) + 5 negative (allow).
+﻿# warn-shared-checkout-switch fixture — 1 positive (ask) + 5 negative (allow).
 #
 # Safety-rail PreToolUse[Bash] guard, exempt from the 4-block remediation
 # standard. Asserts raw decision shape via Assert-PlainAsk / Assert-Allowed.

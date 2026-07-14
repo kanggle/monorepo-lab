@@ -1,4 +1,4 @@
-# Test helpers for .claude/hooks/__tests__/ fixtures.
+﻿# Test helpers for .claude/hooks/__tests__/ fixtures.
 #
 # Provides Invoke-Hook + Assert-Stanza so each fixture is a short, declarative
 # script that pipes synthesized stdin JSON to the target hook and asserts the

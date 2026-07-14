@@ -1,4 +1,4 @@
-# verify-worktree-isolation fixture — 4 positive + 5 negative cases.
+﻿# verify-worktree-isolation fixture — 4 positive + 5 negative cases.
 #
 # This hook is a safety-rail (PreToolUse Edit/Write guard), intentionally
 # exempt from the 4-block remediation message standard (same policy as

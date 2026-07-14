@@ -1,4 +1,4 @@
-# Runner for the hook fixtures.
+﻿# Runner for the hook fixtures.
 #
 # CI-gated since TASK-MONO-405 — the `hook-fixtures` job in .github/workflows/ci.yml
 # runs this on windows-latest under Windows PowerShell, gated on the `hooks` paths

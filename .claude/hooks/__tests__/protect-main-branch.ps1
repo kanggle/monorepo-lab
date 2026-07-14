@@ -1,4 +1,4 @@
-# protect-main-branch fixture — 4 positive + 3 negative cases.
+﻿# protect-main-branch fixture — 4 positive + 3 negative cases.
 #
 # This hook is a safety-rail (Bash-tool guard), intentionally exempt from the
 # 4-block remediation message standard (see .claude/hooks/README.md). We

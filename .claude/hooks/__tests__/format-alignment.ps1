@@ -1,4 +1,4 @@
-# Format-alignment fixtures — spec-check.ps1 + rule-consistency-check.ps1 emit 4-block stanzas.
+﻿# Format-alignment fixtures — spec-check.ps1 + rule-consistency-check.ps1 emit 4-block stanzas.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..\..') | Select-Object -ExpandProperty Path

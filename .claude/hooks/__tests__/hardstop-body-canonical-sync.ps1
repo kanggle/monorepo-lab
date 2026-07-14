@@ -1,4 +1,4 @@
-# Canonical-body sync fixture (TASK-MONO-100).
+﻿# Canonical-body sync fixture (TASK-MONO-100).
 #
 # Verifies that the [WHY] and [REFERENCE] blocks emitted by the hook for each
 # mechanically-detectable HARDSTOP trigger match the canonical stanza in

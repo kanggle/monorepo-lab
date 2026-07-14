@@ -1,4 +1,4 @@
-$reader    = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8)
+﻿$reader    = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8)
 $inputJson = $reader.ReadToEnd()
 
 # "작업이 완료되었습니다."

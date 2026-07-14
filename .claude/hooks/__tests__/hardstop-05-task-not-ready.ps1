@@ -1,4 +1,4 @@
-# HARDSTOP-05 fixture — body edit on a task file inside tasks/in-progress/, tasks/review/ or tasks/done/.
+﻿# HARDSTOP-05 fixture — body edit on a task file inside tasks/in-progress/, tasks/review/ or tasks/done/.
 # Includes positive (body edit) and negative (Status-field lifecycle move) cases.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
