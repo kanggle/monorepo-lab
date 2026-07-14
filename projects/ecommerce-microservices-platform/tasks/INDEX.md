@@ -74,7 +74,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
-| TASK-FE-091 | **READY (2026-07-14, `TASK-PC-FE-241` AC-4 잔여)**. **web-store 는 콘솔의 날짜·시간 규약을 *구현만* 복제했고 규칙은 복제하지 않았다** — cross-project import 가 불가능해 `web-store/src/shared/lib/datetime.ts` 가 별도 복제본으로 존재하는데, 규약의 정경(`projects/platform-console/docs/conventions/frontend-ui.md`)을 가리키는 포인터가 **web-store 쪽에 없다** ⇒ 그 앱 개발자에게 규칙은 사실상 존재하지 않는다(`hourCycle:'h23'`=자정 `24:00:00` quirk, pinned KST=SSR 하이드레이션 — **이유 없이 남은 코드는 "간소화" 된다**). **범위 = 포인터 한 줄**(이미 읽히는 파일에). **🔴 규칙 본문 복사 금지** — 그게 PC-FE-241 AC-4 가 막은 것이다(복사본은 갈라진다). **AC-1 = 두 헬퍼 대조하되 갈라져 있으면 기록만 하고 고치지 않는다**(복제본 정합화는 자기 티켓·자기 검증이 필요). 분석=Opus 4.8 / 구현 권장=Haiku~Sonnet. | web-store | code, onboarding |
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
 
 ## in-progress
@@ -85,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-FE-091 | **IMPLEMENTED → review (2026-07-15)**. `TASK-PC-FE-241` AC-4 잔여 — web-store 가 콘솔 날짜·시간 규약의 *구현만* 복제하고 규칙은 복제하지 않은 상태. **doc-only, 코드 0줄.** **AC-1 대조 결과 = 갈라지지 않았다**(`hourCycle:'h23'`·pinned `Asia/Seoul`·placeholder·파싱불가→verbatim 전부 일치) ⇒ 정합화 티켓 불필요. 포인터 **2곳**: `PROJECT.md`(에이전트 필독 **SoT #1** — PC-FE-242 가 콘솔에 쓴 것과 같은 레버) + `docs/onboarding/local-dev.md`(사람 경로, 콘솔과 대칭). **🔴 후보 문서 대부분이 0바이트 스텁이었다**(`coding-standards.md`·`build-test-run.md`·`repository-map.md`·`release-process.md`) — 거기 넣었으면 티켓의 Edge Case("아무도 안 읽는 문서 = 여전히 도달 불가")를 그대로 밟았다. 규칙 본문은 재서술하지 않음(AC-3): 포인터는 *무엇을 쓰라* + *왜 여기 없는가*만 말하고 근거는 가리키기만 한다. 🔵 부수 기록: `frontend-ui.md` §4 는 web-store 주석이 *"근거 없이 mirrors 만 적혀 있다"* 고 했으나 **실제로는 근거 3줄이 있다 — 빠진 건 링크였다**(주석은 호출부 요약이라 존치 판단). | web-store | code, onboarding |
 
 ## done
 
