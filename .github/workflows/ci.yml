@@ -229,15 +229,20 @@ jobs:
       # markdown-only. AND-ing would switch the guard off on exactly half the diffs
       # it exists to police, and a skipped job reports green.
       service-type: ${{ steps.filter.outputs.service-type }}
-      # TASK-MONO-374. NOT AND-combined with `code-changed`: a workflow file and a
-      # bash guard are not "code" by that filter's definition, and AND-ing would
-      # make this guard unreachable on exactly the edits that break it — the
-      # mistake MONO-360 measured.
+      # TASK-MONO-374. Raw filter, NOT AND-combined with `code-changed`.
+      # TASK-MONO-407 correction: this used to say "a workflow file and a bash guard are
+      # not 'code' by that filter's definition". That stopped being true when MONO-366 added
+      # `**/*.yml` and `**/*.sh` to `code-changed` — AND-ing would no longer strand the guard.
+      # The decision stands on its real footing: the job is seconds of bash, and keeping the
+      # filter raw means its reachability cannot be quietly revoked by a future edit to the
+      # `code-changed` list. A guard that a skip can switch off is a guard that reports green
+      # while seeing nothing (the mistake MONO-360 measured).
       ci-baseline: ${{ steps.filter.outputs.ci-baseline }}
-      # TASK-MONO-405. Raw filter, NOT AND-combined with `code-changed`: a PowerShell
-      # hook is not "code" by that filter's definition, so AND-ing would make the one
-      # job that tests the hooks unreachable on exactly the edits that break them —
-      # the mistake MONO-360 measured, and a skipped job reports green.
+      # TASK-MONO-405. Raw filter, NOT AND-combined with `code-changed`.
+      # TASK-MONO-407 correction: this used to say "a PowerShell hook is not 'code' by that
+      # filter's definition". False since MONO-366 added `**/*.ps1`. Same real footing as
+      # above: the fixture suite runs in under a minute, and the one job that tests the hooks
+      # must not depend on the `code-changed` list continuing to name the hook file types.
       hooks: ${{ steps.filter.outputs.hooks }}
       code-changed: ${{ steps.filter.outputs.code-changed }}
     steps:
@@ -269,7 +274,10 @@ jobs:
               - 'package.json'
               - 'tsconfig.base.json'
               - 'tasks/templates/**'
-              - '!**/*.md'
+              # TASK-MONO-407: `- '!**/*.md'` removed. It did not exclude markdown — it
+              # matched every file that is NOT markdown, so ANY non-md file anywhere (a
+              # shell script under scripts/, say) turned `libs` on. Markdown under libs/ or
+              # platform/ is already excluded by `libs && code-changed` at the outputs layer.
             # TASK-MONO-405: gates the hook fixture suite (.claude/hooks/__tests__/).
             # No `!**/*.md` exclusion — the suite runs in under a minute, and a README
             # edit paying for a cheap run beats a filter that reasons about which hook
@@ -282,34 +290,40 @@ jobs:
               - '.claude/settings.json'
             workflows:
               - '.github/workflows/**'
+            # TASK-MONO-407 — NO NEGATION PATTERNS HERE. Do not "helpfully" re-add
+            # `- '!projects/<p>/tasks/**'` or `- '!projects/<p>/**/*.md'`.
+            #
+            # In dorny/paths-filter a filter is TRUE when ANY changed file matches ANY
+            # pattern, and `!x` matches EVERY FILE THAT IS NOT x. So `!projects/wms/tasks/**`
+            # made every file OUTSIDE wms turn the wms filter on — the exact inverse of the
+            # intent, and it made all eight project filters permanently true. Measured before
+            # the fix: PR #2516 touched projects/iam-platform ONLY (zero shared files) and ran
+            # all nine Testcontainers lanes; across 20 consecutive merged PRs the lane count
+            # was 0 or 9, never in between. The `changes` job printed `wms=true ecommerce=true
+            # iam=true fan=true scm=true finance=true erp=true` for a PR that touched no
+            # project at all.
+            #
+            # The exclusion these negations were reaching for is already provided by the
+            # outputs layer: `<project> && code-changed`. A markdown/tasks-only diff sets the
+            # project filter true and `code-changed` false, so the output is false. Same
+            # behaviour, no quirk. This is the MONO-074/075 rule (pure-positive + AND), and
+            # `platform-console` below has followed it since TASK-PC-BE-001 — it was the one
+            # filter that was not broken, which is why it read `false` while the other seven
+            # read `true` on the same diff.
             wms:
               - 'projects/wms-platform/**'
-              - '!projects/wms-platform/tasks/**'
-              - '!projects/wms-platform/**/*.md'
             ecommerce:
               - 'projects/ecommerce-microservices-platform/**'
-              - '!projects/ecommerce-microservices-platform/tasks/**'
-              - '!projects/ecommerce-microservices-platform/**/*.md'
             iam:
               - 'projects/iam-platform/**'
-              - '!projects/iam-platform/tasks/**'
-              - '!projects/iam-platform/**/*.md'
             fan:
               - 'projects/fan-platform/**'
-              - '!projects/fan-platform/tasks/**'
-              - '!projects/fan-platform/**/*.md'
             scm:
               - 'projects/scm-platform/**'
-              - '!projects/scm-platform/tasks/**'
-              - '!projects/scm-platform/**/*.md'
             finance:
               - 'projects/finance-platform/**'
-              - '!projects/finance-platform/tasks/**'
-              - '!projects/finance-platform/**/*.md'
             erp:
               - 'projects/erp-platform/**'
-              - '!projects/erp-platform/tasks/**'
-              - '!projects/erp-platform/**/*.md'
             # TASK-PC-BE-001: pure-positive filter for platform-console backend
             # (console-bff). No negation patterns (MONO-074/075 quirk rule).
             # TASK-PC-FE-021: also covers console-web so the new

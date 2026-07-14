@@ -8,7 +8,7 @@ TASK-MONO-407
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -115,7 +115,8 @@ AND 합성(`libs && code-changed`)은 **문서-only PR** 은 정확히 막는다
 
 # Acceptance Criteria
 
-- [ ] **AC-1 — negation 0개.** `.github/workflows/ci.yml` 의 `filters:` 블록에 `- '!` 로 시작하는 줄이 **0개**. (현재 15개.)
+- [x] **AC-1 — negation 0개.** `.github/workflows/ci.yml` 의 `filters:` 블록에 `- '!` 로 시작하는 줄이 **0개**. (현재 15개.)
+  **✅ 15 → 0.** grep 이 아니라 **파싱된 YAML** 로 확인했다(`js-yaml` 로 `ci.yml` 을 로드 → `filters` 문자열을 다시 파싱 → 필터별 패턴 열거). 프로젝트 필터 7개가 전부 **패턴 1개짜리 pure-positive** 가 됐고, 이는 `platform-console`(패턴 4개, negation 0)과 같은 모양이다. **텍스트 grep 만 믿지 않은 이유**: 이 티켓의 전제 자체가 *"패턴이 실제로 어떻게 해석되는가"* 이므로, 검증도 텍스트가 아니라 **해석된 구조**에 물어야 한다.
 - [ ] **AC-2 — 🔴 양성: 자기 레인은 여전히 돈다.** 한 프로젝트의 **코드 파일만** 바꾼 실제 PR 에서 **그 프로젝트의 통합 레인이 실행(SUCCESS)** 된다. **이게 이 티켓의 가장 위험한 지점이다** — 과도-교정하면 레인이 skip 되고 **skip 은 초록으로 보고된다**(`MONO-360`·`MONO-405`). **"돌았다" 를 `conclusion=SUCCESS` 로 확인하라. SKIPPED 를 통과로 읽지 말 것.**
 - [ ] **AC-3 — 음성: 남의 레인은 안 돈다.** 같은 PR 에서 **다른 프로젝트들의 통합 레인은 SKIPPED**. (현재는 9개 전부 SUCCESS 다 — 이 대조가 결함이 실제로 고쳐졌음을 보이는 유일한 증거다.)
 - [ ] **AC-4 — 공유 변경은 여전히 전부 깨운다.** `libs/**` 또는 `platform/**` 을 건드리는 PR 에서 **통합 레인 9개 전부 SUCCESS**. (필터를 조여서 **공유 라이브러리 회귀를 놓치면** 이 티켓은 순손실이다.)
@@ -127,6 +128,7 @@ AND 합성(`libs && code-changed`)은 **문서-only PR** 은 정확히 막는다
 # Edge Cases
 
 - **`platform-console` 필터는 오늘 `false` 였다** (`PR #2559` 의 `changes` 출력). 다른 7개가 전부 true 인데 이것만 false 라면 **패턴 형태가 다르다는 뜻**이다 — 착수 시 그 차이를 먼저 읽어라. **그 필터가 "고장 나지 않은 표본"일 수 있고, 그렇다면 고칠 모양이 이미 저장소 안에 있다.**
+  **✅ 구현 확인 (2026-07-14): 정확히 그랬다.** `platform-console` 에는 negation 이 **하나도 없고**, 그 위에 이렇게 적혀 있다: *"`TASK-PC-BE-001`: **pure-positive** filter … **No negation patterns (MONO-074/075 quirk rule)**"*. ⇒ **규칙은 알려져 있었고, 딱 한 필터에만 적용됐다.** 나머지 7개는 아무도 손대지 않았다. **고칠 모양을 발명할 필요가 없었다 — 저장소 안에 이미 있었다.**
 - **`!` 를 지우면 프로젝트의 `.md`/`tasks/` 변경이 필터를 켠다** — 그러나 출력단 AND 가 막는다. **단 AND 되지 않는 raw 출력(`service-type` · `ci-baseline` · `hooks` · `jwt-claims`)에 프로젝트 필터를 새로 물리지 말 것** — 그 넷은 **일부러** AND 를 안 한다(각 주석 참조: markdown-only 편집이 그 가드가 감시하는 바로 그 편집이다).
 - **`workflows` 필터(`.github/workflows/**`)는 negation 이 없다** — 이미 pure-positive 다. 건드릴 것 없음.
 - **CI 자기 자신을 바꾸는 PR** 은 `workflows` 필터로 전 레인을 깨운다 ⇒ **이 티켓의 PR 자체는 9레인을 돌린다**(정당하다 — 게이팅을 바꿨으니). AC-2/AC-3 은 **그 PR 이 아니라 그 뒤의 프로젝트-스코프 PR** 에서 확인해야 한다. **머지 직후 첫 프로젝트 PR 을 관찰하라.**
