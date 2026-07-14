@@ -1,6 +1,5 @@
 package com.example.erp.readmodel;
 
-import com.example.messaging.outbox.OutboxAutoConfiguration;
 import com.example.messaging.outbox.OutboxMetricsAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -21,16 +20,20 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *
  * <p><b>E5 read-only boundary</b>: this service holds no domain business logic,
  * owns no aggregate state machine, and never re-emits or writes back
- * authoritative master facts. It therefore runs <b>no transactional outbox</b>
- * — {@link OutboxAutoConfiguration} (and its metrics companion) from
- * {@code libs/java-messaging} are excluded so no {@code outbox}/lib
- * {@code processed_events} schema is required. Consumer idempotency (T8) lives
- * entirely in this service's own {@code processed_events} dedupe table.
+ * authoritative master facts. It therefore runs <b>no transactional outbox</b>:
+ * {@link OutboxMetricsAutoConfiguration} from {@code libs/java-messaging} stays excluded
+ * (nothing here publishes, so a publish-failure counter would be dead weight). Consumer
+ * idempotency (T8) lives entirely in this service's own {@code processed_events} dedupe
+ * table.
+ *
+ * <p>The companion {@code exclude = OutboxAutoConfiguration.class} was dropped by
+ * TASK-MONO-406: that auto-config's only remaining payload was an {@code @EntityScan} +
+ * {@code @EnableJpaRepositories} registering the library's own {@code ProcessedEvent}
+ * entity/repository fleet-wide, whose bean name collided with this service's. ADR-MONO-004
+ * already placed per-service dedupe entities outside the shared library, so MONO-406 deleted
+ * them there — leaving nothing to exclude.
  */
-@SpringBootApplication(exclude = {
-        OutboxAutoConfiguration.class,
-        OutboxMetricsAutoConfiguration.class
-})
+@SpringBootApplication(exclude = OutboxMetricsAutoConfiguration.class)
 public class ReadModelServiceApplication {
 
     public static void main(String[] args) {

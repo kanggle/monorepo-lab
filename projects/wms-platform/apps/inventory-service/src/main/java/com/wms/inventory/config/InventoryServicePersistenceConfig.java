@@ -9,14 +9,14 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 /**
  * JPA configuration for inventory-service.
  *
- * <p>Explicit because {@code libs/java-messaging} ships an
- * {@code @EnableJpaRepositories} of its own that backs off Spring Boot's
- * default JPA-repositories autoconfig. Without this declaration the service's
- * own repositories under {@code com.wms.inventory.adapter.out.persistence}
- * would not be scanned.
- *
- * <p>Scope is limited to this service's persistence package — the lib's
- * {@code OutboxJpaConfig} already scans {@code com.example.messaging.outbox}.
+ * <p>Scopes repository / entity scanning to this service's own persistence package
+ * ({@code com.wms.inventory.adapter.out.persistence}). It used to be mandatory:
+ * {@code libs/java-messaging}'s {@code OutboxJpaConfig} shipped an app-wide
+ * {@code @EnableJpaRepositories} that backed off Spring Boot's default
+ * JPA-repositories autoconfig, so without this declaration the service's own
+ * repositories were not scanned. TASK-MONO-406 deleted that config — the library now
+ * contributes no {@code @Entity} and no repository at all — so this is the service's
+ * own explicit choice, not a workaround.
  */
 @Configuration
 @EntityScan(basePackages = "com.wms.inventory.adapter.out.persistence")

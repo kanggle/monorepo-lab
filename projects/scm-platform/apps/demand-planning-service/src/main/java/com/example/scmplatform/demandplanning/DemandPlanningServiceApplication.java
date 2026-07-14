@@ -1,6 +1,5 @@
 package com.example.scmplatform.demandplanning;
 
-import com.example.messaging.outbox.OutboxAutoConfiguration;
 import com.example.messaging.outbox.OutboxMetricsAutoConfiguration;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.springframework.boot.SpringApplication;
@@ -17,16 +16,18 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * <p>This is a <b>terminal consumer</b> — it raises local {@code reorder_suggestion}
  * aggregates and (in BE-025) calls procurement synchronously; it publishes no domain
- * events and runs <b>no transactional outbox</b>. {@link OutboxAutoConfiguration} (and
- * its metrics companion) from {@code libs/java-messaging} are excluded so the lib's
- * {@code ProcessedEventJpaRepository} bean is not registered — otherwise it collides
- * with this service's own {@code dp_processed_events} repository (same bean name).
- * The service owns its dedupe table locally (feedback §13, fan notification-service precedent).
+ * events and runs <b>no transactional outbox</b>: {@link OutboxMetricsAutoConfiguration}
+ * from {@code libs/java-messaging} stays excluded (nothing here publishes, so a
+ * publish-failure counter would be dead weight).
+ *
+ * <p>The companion {@code exclude = OutboxAutoConfiguration.class} was dropped by
+ * TASK-MONO-406, which deleted the library's {@code ProcessedEventJpaRepository} — it used
+ * to be registered into every consumer's context and collided by bean name with this
+ * service's own {@code dp_processed_events} repository. ADR-MONO-004 already placed
+ * per-service dedupe entities outside the shared library; this service always owned its
+ * dedupe table locally, and now nothing contests it.
  */
-@SpringBootApplication(exclude = {
-        OutboxAutoConfiguration.class,
-        OutboxMetricsAutoConfiguration.class
-})
+@SpringBootApplication(exclude = OutboxMetricsAutoConfiguration.class)
 @EnableScheduling
 @EnableSchedulerLock(defaultLockAtMostFor = "PT30M")
 public class DemandPlanningServiceApplication {

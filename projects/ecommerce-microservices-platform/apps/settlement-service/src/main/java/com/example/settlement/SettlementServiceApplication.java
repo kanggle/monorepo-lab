@@ -1,6 +1,5 @@
 package com.example.settlement;
 
-import com.example.messaging.outbox.OutboxAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -23,21 +22,22 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * publishes nothing; inbound dedupe uses the locally-owned {@code processed_event}
  * table ({@code com.example.settlement.infrastructure.persistence}).
  *
- * <p><b>Excludes {@link OutboxAutoConfiguration} (TASK-BE-461).</b> That lib auto-config
- * now does nothing but {@code @Import(OutboxJpaConfig)}, which registers the lib's
- * {@code ProcessedEventJpaEntity} (table {@code processed_events}) +
- * {@code ProcessedEventJpaRepository}. settlement keeps its OWN processed-event (table
- * {@code processed_event}); the lib copy collides — identical bean name
- * {@code processedEventJpaRepository} ({@code BeanDefinitionOverrideException}) and
- * identical JPA entity name {@code ProcessedEventJpaEntity}, with no
- * {@code processed_events} table for it. BE-415 introduced the collision (latent until
- * a full-context IT ran under TASK-MONO-319); excluding the auto-config drops the unused
- * lib copy. {@code @EntityScan} is correspondingly scoped to {@code com.example.settlement}
- * only — the lib {@code OutboxRowEntity} {@code @MappedSuperclass} is resolved via the
- * entity hierarchy, not entity scanning (mirrors
- * {@code com.wms.inventory.InventoryServiceApplication}, TASK-BE-432).
+ * <p><b>No longer excludes anything (TASK-MONO-406).</b> This class used to carry
+ * {@code exclude = OutboxAutoConfiguration.class} because that lib auto-config imported an
+ * {@code @EnableJpaRepositories} registering the lib's own {@code ProcessedEventJpaRepository}
+ * — same simple name as settlement's, hence the same bean name, hence
+ * {@code BeanDefinitionOverrideException} and a context that never started (TASK-BE-461;
+ * TASK-BE-415 introduced it, latent until TASK-MONO-319 added a full-context IT). MONO-406
+ * deleted the lib's dedupe entity/repository and the auto-config that carried them, so there
+ * is nothing left to exclude. settlement's own processed-event (table
+ * {@code processed_event}, {@code com.example.settlement.infrastructure.persistence}) is
+ * unchanged and remains the only one.
+ *
+ * <p>{@code @EntityScan} stays scoped to {@code com.example.settlement} — the lib
+ * {@code OutboxRowEntity} is a {@code @MappedSuperclass}, resolved via the entity hierarchy
+ * rather than entity scanning, so no library package needs to be on the scan path.
  */
-@SpringBootApplication(exclude = OutboxAutoConfiguration.class)
+@SpringBootApplication
 @EnableScheduling
 @EntityScan(basePackages = "com.example.settlement")
 @EnableJpaRepositories(basePackages = "com.example.settlement.infrastructure.persistence")

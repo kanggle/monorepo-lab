@@ -4,7 +4,7 @@ import com.example.order.infrastructure.event.PaymentCompletedEventConsumer;
 import com.example.order.infrastructure.event.PaymentRefundedEventConsumer;
 import com.example.order.infrastructure.event.StockChangedEventConsumer;
 import com.example.order.infrastructure.event.UserWithdrawnEventConsumer;
-import com.example.messaging.outbox.ProcessedEventJpaRepository;
+import com.example.order.infrastructure.persistence.ProcessedEventJpaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,4 +1,4 @@
-package com.example.messaging.outbox;
+package com.example.security.infrastructure.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,6 +10,19 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * Consume-path idempotency record — security-service owns its {@code processed_events}
+ * table (Flyway {@code V0003__create_processed_events.sql}), whose UNIQUE constraint on
+ * {@code event_id} is the authoritative dedupe guard (the Redis fast path in
+ * {@code EventDedupService} is advisory only).
+ *
+ * <p>TASK-MONO-406 moved this out of {@code libs/java-messaging}. Per ADR-MONO-004 the
+ * shared library ships the {@code EventDedupePort} contract; the entity, the table and
+ * the repository scan belong to the service.
+ *
+ * <p>{@code LocalDateTime} is unchanged from the library original — no reader compares it
+ * against an {@code Instant}, so there is no timezone defect to fix here.
+ */
 @Entity
 @Table(name = "processed_events")
 @Getter

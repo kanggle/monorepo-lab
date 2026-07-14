@@ -13,9 +13,12 @@ import java.util.UUID;
 
 /**
  * Idempotent-consumer dedupe (T8) for the wms reconciliation leg — product-service's
- * first inbound consumer. Keyed by the wms envelope {@code eventId}. A local table
- * (not {@code libs/java-messaging}) to avoid pulling in OutboxAutoConfiguration, which
- * product-service does not use.
+ * first inbound consumer. Keyed by the wms envelope {@code eventId}. A service-local table
+ * (not {@code libs/java-messaging}), originally to avoid pulling in the lib's
+ * {@code OutboxAutoConfiguration}, which product-service does not use. TASK-MONO-406 deleted
+ * that auto-config and the library's own dedupe entity/repository, so service-local ownership
+ * is now the only shape there is (ADR-MONO-004: the library ships the {@code EventDedupePort}
+ * contract; the entity, the table and the repository scan belong to the service).
  */
 @Entity
 @Table(name = "wms_processed_event")

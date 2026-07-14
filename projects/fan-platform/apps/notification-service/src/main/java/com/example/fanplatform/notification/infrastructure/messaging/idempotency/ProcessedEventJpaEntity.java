@@ -15,12 +15,14 @@ import java.time.Instant;
  * envelope {@code eventId}; a duplicate eventId is skipped without creating a
  * second notification.
  *
- * <p>Same column shape as {@code libs:java-messaging}'s
- * {@code ProcessedEventJpaEntity} (event_id / event_type / processed_at).
- * Declared service-locally (not the lib entity) because this service excludes
- * {@code OutboxAutoConfiguration} — scanning the lib's {@code ProcessedEvent}
- * would also drag the lib's {@code OutboxJpaRepository}, whose outbox entity has
- * no table here (feedback §13; erp notification-service precedent).
+ * <p>Column shape: event_id / event_type / processed_at. Declared service-locally,
+ * which is now the only option: TASK-MONO-406 deleted the library's own
+ * {@code ProcessedEventJpaEntity} / {@code ProcessedEventJpaRepository} (and the
+ * {@code OutboxAutoConfiguration} / {@code OutboxJpaConfig} that registered them
+ * app-wide) — a shared-library entity for a per-service dedupe table violated
+ * ADR-MONO-004 + {@code platform/shared-library-policy.md} and collided with
+ * service-local beans of the same name. {@code libs:java-messaging} no longer ships
+ * any {@code @Entity}.
  */
 @Entity
 @Table(name = "processed_events")

@@ -4,7 +4,7 @@ import com.example.account.application.port.AuthServicePort;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.tenant.TenantId;
-import com.example.messaging.outbox.ProcessedEventJpaRepository;
+import com.example.account.infrastructure.persistence.ProcessedEventJpaRepository;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;

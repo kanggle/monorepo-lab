@@ -257,3 +257,69 @@ Surfaced by TASK-MONO-207 (federation-e2e spec flakiness) and pinned by TASK-MON
 | **✅ ADR-MONO-004 § 6 v1→v2 outbox sweep COMPLETE (2026-06-27).** Every platform is now 100% v2: wms · finance · ecommerce · scm · erp · fan · iam. The lib v1 path (`OutboxPublisher`/`OutboxPollingScheduler`/`BaseEventPublisher`/`OutboxWriter`) is retained only as abandoned-on-cutover `ddl-auto=validate` stubs (no live v1 producer or relay remains in any service). | — | — |
 | ~~Decide admin-service `AdminEventDedupeRepository` fate (extend lib `EventDedupePort` with `APPLIED_LATE` or keep custom)~~ — **RESOLVED: keep custom (TASK-MONO-321, 2026-07-01).** The two interfaces serve different purposes: the lib `EventDedupePort` is a simple run-once wrapper (`process(eventId, type, Runnable) → {APPLIED, IGNORED_DUPLICATE, FAILED}`), whereas `AdminEventDedupeRepository` is a **projection-specific** contract with out-of-order LWW handling (`markStale` / `IGNORED_DUPLICATE_LATE`), lifetime aggregate counts (`countLifetime` — powers `/operations/projection-status`) and lag-probe queries (`maxProcessedAtByEventType`). Folding those admin-projection concerns into the shared lib port would bloat the shared contract with service-specific semantics (shared-library-policy boundary, HARDSTOP-03-adjacent). No code change. | ~~Architectural call~~ | ~~wms admin-service backlog~~ |
 | ~~Cleanup pre-existing javadoc reference in `BaseEventPublisher.java` ("account and admin publishers")~~ — **OBSOLETE (TASK-MONO-321, 2026-07-01): `BaseEventPublisher.java` was removed by TASK-MONO-312 (lib outbox v1 dead-code removal).** No file remains to clean; the follow-up is void. | ~~Trivial; bundle with the next libs/java-messaging PR~~ | ~~shared backlog~~ |
+
+---
+
+## 7. Amendment — the v1 dedupe shim outlived its reason (TASK-MONO-406, 2026-07-14)
+
+**This ADR's own Forbidden column had the answer, and the library did not obey it.**
+
+§ 2.1 (D1) lists `EventDedupePort` + `Outcome` as the Allowed dedupe surface, and
+`platform/shared-library-policy.md` — this ADR's boundary table — puts **"Per-service dedupe
+table entities, retention-cleanup schedulers, tenant-scoping logic"** in the **Forbidden**
+column. Yet § 4.3 and § 6 retained `ProcessedEventJpaEntity` (+ `ProcessedEventJpaRepository`,
+`OutboxJpaConfig`, `OutboxAutoConfiguration`) as an explicitly **temporary** v1 back-compat
+shim: *"retained so master-service and other v1 callers keep working without migration."*
+
+`TASK-MONO-312` then completed the v1 → v2 sweep and deleted `OutboxWriter` /
+`OutboxPublisher` / `OutboxJpaEntity` — **and left the ProcessedEvent trio behind.** § 6's
+closing row says the v1 path survives "only as abandoned-on-cutover `ddl-auto=validate`
+stubs". **That sentence was not true of this trio, and the cost was not zero:**
+
+`OutboxJpaConfig` carried `@EntityScan` + `@EnableJpaRepositories`. Those are **application-wide**
+annotations inside an `@AutoConfiguration`, so they ran in every consumer:
+
+1. Boot's `JpaRepositoriesAutoConfiguration` backed off **app-wide** in all 27 consumers —
+   each had to hand-declare its own narrowing `@EnableJpaRepositories` or silently lose its
+   own repositories. The library's javadoc documented this obligation instead of removing it.
+2. The library's repository claimed the bean name `processedEventJpaRepository`, so any
+   service that modelled the same concept failed to boot with `BeanDefinitionOverrideException`.
+3. The library's `@Entity` was scanned into every consumer, so **14 services created a
+   `processed_events` table they never use**, purely to satisfy `ddl-auto: validate`. Two of
+   those migrations say so in their own comments.
+
+**Four contexts failed to load:** `TASK-BE-333` (wms outbound) and `TASK-BE-432` (wms
+inventory) on the v1 `outboxPublisher` bean-name collision; `TASK-BE-461` (ecommerce
+settlement) and `TASK-BE-489` (wms inbound) on the `ProcessedEvent` registration. Each was
+fixed **service-locally** with `exclude = OutboxAutoConfiguration.class` — nobody asked why the
+library was laying the trap — until ten services carried the exclude and the auto-config's own
+javadoc read *"retained **because** numerous services exclude it by name."* **The workaround
+had become the reason to keep the thing being worked around.**
+
+**TASK-MONO-406 finished the retirement this ADR started.** The four classes are deleted; the
+four services that still used the library's dedupe entity now own it (their `processed_events`
+tables already existed — the move is class-only, no schema change); the ten excludes are gone.
+
+**Two artefacts were missing, and are now present:**
+
+- **the rule** — `platform/shared-library-policy.md` § *No context-wide annotations in a shared
+  `@AutoConfiguration`*. The Forbidden column named the *artefact* (a dedupe entity) but never
+  the *mechanism* (an auto-config that reconfigures its consumers), so the mechanism was free
+  to be reintroduced under any other name.
+- **the guard** — `scripts/check-shared-lib-jpa-scan.sh`, wired into `ci.yml`. **This defect
+  class is invisible to the compiler and to unit tests** (a slice test never loads
+  auto-configurations); only a booting context sees it, and that needs Docker. The guard is
+  the Docker-free check on the source, and it was demonstrated RED on the pre-fix commit.
+
+**Not changed, deliberately.** The 14 unused `processed_events` tables stay: applied Flyway
+migrations are immutable, the tables are now unmapped by any entity and empty, and Hibernate's
+`validate` ignores tables it does not map. Their migration comments (which explain the table by
+citing the library's EntityScan) are consequently stale and **cannot be corrected** — editing an
+applied migration changes its checksum and breaks every existing database. Dropping the tables
+is a separate, forward-migration decision, not housekeeping.
+
+**The six services that kept their own dedupe entity were never the problem.** They were the
+ones already complying with this ADR. Four of them genuinely need columns the library's
+three-field entity does not have (`topic`, `aggregateId`, `tenantId`, `sourceTransactionId`,
+`sourceTopic`, a `UUID` key). Consolidating them is explicitly **rejected**: a one-size entity
+is nobody's shape, and the duplication was a symptom, not the disease.

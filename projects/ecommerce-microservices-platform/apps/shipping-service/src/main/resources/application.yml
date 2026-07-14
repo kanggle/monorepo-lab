@@ -55,10 +55,13 @@ management:
     tags:
       service: ${spring.application.name}
 
-# TASK-BE-446: outbox v2 (ShippingOutboxPublisher extends AbstractOutboxPublisher).
-# The legacy `outbox.polling.*` keys below are retained only because the lib
-# OutboxAutoConfiguration beans (unreferenced after the v2 swap) still bind them;
+# TASK-BE-446: outbox v2 (ShippingOutboxPublisher extends AbstractOutboxPublisher);
 # the v2 publisher reads the `shipping.outbox.*` keys.
+# TASK-MONO-406 corrected the note that used to sit here: these keys were never bound by
+# the lib OutboxAutoConfiguration (that auto-config only imported a JPA config, and it no
+# longer exists at all). Measured: `outbox.polling.enabled` IS live — it is the
+# @ConditionalOnProperty gate on the v2 publisher — but `interval-ms` / `batch-size` bind
+# to nothing. They are v1 leftovers, kept rather than removed under an unrelated task.
 outbox:
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
@@ -88,8 +91,12 @@ fulfillment:
 # value is hard-coded; the defaults are blank so an unconfigured deploy is net-zero/fail-closed.
 shipping:
   # TASK-BE-446: outbox v2 (ShippingOutboxPublisher extends AbstractOutboxPublisher).
-  # The legacy top-level `outbox.polling.*` keys are retained only because the lib
-  # OutboxAutoConfiguration beans (unreferenced after the v2 swap) still bind them.
+  # TASK-MONO-406 corrected the note that used to sit here: the top-level
+  # `outbox.polling.*` keys were never bound by the lib OutboxAutoConfiguration (that
+  # auto-config only imported a JPA config, and it no longer exists at all). Measured:
+  # `outbox.polling.enabled` IS live — it is the @ConditionalOnProperty gate on each
+  # service's own v2 publisher — but `outbox.polling.interval-ms` / `batch-size` bind to
+  # nothing. They are v1 leftovers, kept here rather than removed under an unrelated task.
   outbox:
     batch-size: ${SHIPPING_OUTBOX_BATCH_SIZE:100}
     poll-ms: ${SHIPPING_OUTBOX_POLL_MS:1000}

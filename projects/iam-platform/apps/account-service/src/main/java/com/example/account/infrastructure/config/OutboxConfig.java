@@ -21,16 +21,20 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       adapters' {@code created_at} stamp (account-service had no Clock bean).</li>
  * </ul>
  *
- * <p><b>KEEP lib auto-config.</b> The v1 relay
+ * <p><b>Legacy v1 tables (TASK-MONO-406).</b> The v1 relay
  * ({@code AccountOutboxPollingScheduler extends OutboxPollingScheduler}) is gone and
  * the write path ({@code OutboxAccountEventPublisher} +
  * {@code OutboxTenantDomainSubscriptionEventPublisher}) no longer uses the lib
- * {@code OutboxWriter}. The lib {@code OutboxAutoConfiguration} is intentionally
- * RETAINED (not excluded): its {@code OutboxJpaConfig} EntityScan keeps the v1
- * {@code outbox} / {@code processed_events} tables required under
- * {@code ddl-auto=validate} (see {@code V0003}/{@code V0005} + {@code V0026}). The v1
- * {@code OutboxWriter} / {@code OutboxPublisher} beans it still registers are no
- * longer referenced.
+ * {@code OutboxWriter}. TASK-MONO-312 deleted the lib's v1 {@code OutboxJpaEntity} /
+ * {@code OutboxWriter} / {@code OutboxPublisher} beans and TASK-MONO-406 deleted the
+ * remaining {@code OutboxAutoConfiguration} / {@code OutboxJpaConfig} /
+ * {@code ProcessedEventJpaEntity}, so the library maps no table at all any more.
+ * The v1 {@code outbox} table ({@code V0003}/{@code V0005}) is now unmapped legacy — it
+ * survives only because applied migrations are immutable, and {@code ddl-auto=validate}
+ * only validates mapped entities. {@code processed_events} is still mapped, by this
+ * service's OWN {@code com.example.account.infrastructure.persistence.ProcessedEventJpaEntity}
+ * (added by TASK-MONO-406) — <b>do not drop it</b>. The live outbox table is
+ * {@code account_outbox} ({@code V0026}), mapped by {@code AccountOutboxJpaEntity}.
  */
 @Configuration
 public class OutboxConfig {

@@ -1,6 +1,5 @@
 package com.example.finance.account;
 
-import com.example.messaging.outbox.OutboxAutoConfiguration;
 import com.example.messaging.outbox.OutboxMetricsAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -20,11 +19,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * cache), GAP IdP (OAuth2 Resource Server, RS256 JWKS, {@code tenant_id=finance}
  * fail-closed gate). See {@code projects/finance-platform/PROJECT.md} +
  * {@code specs/integration/iam-integration.md}.
+ *
+ * <p>{@link OutboxMetricsAutoConfiguration} stays excluded (this service publishes via its
+ * own {@code OutboxRow} relay and supplies its own failure handling). The companion
+ * {@code exclude = OutboxAutoConfiguration.class} was dropped by TASK-MONO-406, which
+ * deleted that auto-config along with the library's fleet-wide {@code ProcessedEvent}
+ * entity/repository — per ADR-MONO-004 a dedupe entity belongs to the service, not the
+ * shared library. There is nothing left to exclude.
  */
-@SpringBootApplication(exclude = {
-        OutboxAutoConfiguration.class,
-        OutboxMetricsAutoConfiguration.class
-})
+@SpringBootApplication(exclude = OutboxMetricsAutoConfiguration.class)
 @EnableScheduling
 public class AccountServiceApplication {
 

@@ -17,13 +17,16 @@ import org.hibernate.type.SqlTypes;
  * {@link com.example.messaging.outbox.AbstractOutboxPublisher} relay can drive
  * this table without depending on this entity.
  *
- * <p><b>Why a per-service outbox, not the libs {@code OutboxWriter}.</b> The libs
- * {@code OutboxAutoConfiguration} entity-scans the libs
- * {@code ProcessedEventJpaEntity} (mapped to {@code processed_events}), which
- * collides with ledger-service's OWN {@code processed_events} consumer-dedupe
- * table. ledger keeps {@code OutboxAutoConfiguration} +
- * {@code OutboxMetricsAutoConfiguration} excluded (1st-increment stance) and owns
- * this {@code ledger_outbox} table instead. The consumer-dedupe path is untouched.
+ * <p><b>Why a per-service outbox row (ADR-MONO-004).</b> The dedupe/outbox tables of a
+ * service belong to the service, not to the shared library. Historically the libs
+ * {@code OutboxAutoConfiguration} entity-scanned a library
+ * {@code ProcessedEventJpaEntity} (also mapped to {@code processed_events}) into every
+ * consumer, which collided with ledger-service's OWN consumer-dedupe entity —
+ * TASK-MONO-406 deleted that auto-config and the library entity/repository outright, so
+ * {@code libs/java-messaging} now ships no {@code @Entity} and there is nothing left to
+ * exclude ({@code OutboxMetricsAutoConfiguration}, which still exists, remains excluded:
+ * this service supplies its own outbox failure handling). ledger owns this
+ * {@code ledger_outbox} table; the consumer-dedupe path is untouched.
  *
  * <p><b>MySQL mapping.</b> {@code payload} is a {@code TEXT} column (the
  * account-service {@code outbox.payload TEXT} MySQL precedent — NOT Postgres

@@ -15,10 +15,13 @@ memberships  (one windowed subscription per (account, tenant) lifecycle row)
    └── (logical) accountId → IAM account; no cross-service FK
 
 idempotency_keys  (subscribe idempotency — (tenant_id, account_id, idempotency_key))
-outbox            (libs:java-messaging — at-least-once relay)
-processed_events  (libs:java-messaging — inbox dedupe; required by Hibernate
-                   schema-validation since java-messaging entities are
-                   @EntityScan'd whenever the lib is on the classpath)
+membership_outbox (v2 at-least-once relay — MembershipOutboxJpaEntity)
+outbox            (legacy v1 relay table; unmapped since TASK-MONO-312 deleted the
+                   lib OutboxJpaEntity — kept only because applied Flyway
+                   migrations are immutable)
+processed_events  (legacy v1 dedupe table; unmapped since TASK-MONO-406 deleted the
+                   lib ProcessedEventJpaEntity — libs:java-messaging now ships no
+                   @Entity, so Hibernate schema-validation no longer requires it)
 ```
 
 ---

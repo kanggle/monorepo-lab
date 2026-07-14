@@ -1,6 +1,46 @@
 # TASK-MONO-406 — `libs/java-messaging` still ships the v1 `ProcessedEvent*` dedupe entity that ADR-MONO-004 forbids; its auto-config's `@EnableJpaRepositories` has broken two services' boot and ten now exclude it by name
 
-**Status:** ready
+**Status:** review
+
+---
+
+## ⚠️ AC-0 refuted two of this ticket's own numbers (2026-07-14, at implementation)
+
+The ticket's draft measurements were a handed-over hypothesis, and re-measuring on entry
+(AC-0) refuted two of them. **The wrong claims are left in place below, next to the
+corrections** — how a ticket was wrong is part of what it is worth.
+
+| draft claim (below) | re-measured |
+|---|---|
+| *"It has already broken production boots **twice**"* — `TASK-BE-432`, `TASK-BE-461` | **Four times.** `wms/inbound-service`'s own javadoc named `TASK-BE-489`, and inside it, `TASK-BE-333` (wms outbound). **BE-333 + BE-432** died on the v1 `outboxPublisher` bean-name collision (those beans were deleted by MONO-312); **BE-461 + BE-489** died on the `ProcessedEvent` registration. One auto-config, four dead contexts. BE-489's javadoc even calls the lib entity a *"phantom entity"*. |
+| *"~29 services declare `libs:java-messaging`"* | **27.** The draft's `grep` counted **two build.gradle files that only mention the library in a comment** — and one of those comments says *"**Do NOT** pull `libs:java-messaging`"*. `grep` counts comments; this is the third time in this ticket's own execution. |
+
+**And AC-0 found something the ticket did not ask about — the trap's real bill.**
+Because `OutboxJpaConfig` `@EntityScan`ed the library's `@Entity` into every consumer, under
+`ddl-auto: validate` a consumer had to have the table *or fail to boot*. So **14 services
+created a `processed_events` table they never use**: ecommerce `payment` · `promotion` ·
+`review`, erp `approval` · `masterdata`, fan `artist` · `community` · `membership`, finance
+`account`, iam `admin` · `auth`, scm `inventory-visibility` · `procurement`, wms `master`.
+
+This is **measured, not inferred** — two of the migrations say it in their own words:
+
+> iam `auth-service` `V0004`: *"Hibernate schema-validation requires this table **because
+> `ProcessedEventJpaEntity` is auto-scanned via `OutboxJpaConfig`** whenever java-messaging is
+> on the classpath."*
+>
+> wms `master-service` `V2`: *"master-service is a **producer only**; `processed_events` is
+> still created **because java-messaging registers both entities in its EntityScan**, and
+> `ddl-auto=validate` would fail if either table were absent."*
+
+**The repo wrote down the bill twice and kept paying it.**
+
+Those 14 tables are **left in place**: applied Flyway migrations are immutable, the tables are
+now mapped by no entity and are empty, and `validate` ignores tables it does not map. Their
+migration comments are now stale and **cannot be fixed** — editing an applied migration changes
+its checksum and breaks every existing database. Dropping the tables is a separate forward
+migration, not housekeeping.
+
+---
 
 **Type:** TASK-MONO (shared library — `libs/java-messaging`; atomic cross-project)
 **Analysis model:** Opus 4.8 / **Recommended impl model:** Opus (shared-library contract change rippling into 6 projects / ~14 services; the deletion is compiler-guarded but the 4 caller migrations touch money-adjacent consume-path dedupe)

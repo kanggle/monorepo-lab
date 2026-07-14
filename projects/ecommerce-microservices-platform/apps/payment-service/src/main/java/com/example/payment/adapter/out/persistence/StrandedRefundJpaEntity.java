@@ -20,8 +20,11 @@ import java.time.Instant;
  * JPA mapping for the {@code stranded_refund} table (TASK-BE-438, Flyway V7).
  *
  * <p>Lives in {@code adapter.out.persistence} so it is covered by the package-scoped
- * {@code @EnableJpaRepositories} / {@code @EntityScan} in {@code JpaConfig} (the lib's
- * {@code OutboxJpaConfig} suppresses Boot's default repository auto-scan).
+ * {@code @EnableJpaRepositories} / {@code @EntityScan} in {@code JpaConfig}. That config
+ * used to be mandatory — the lib's {@code OutboxJpaConfig} declared an app-wide
+ * {@code @EnableJpaRepositories} that made Spring Boot's default repository auto-scan back
+ * off — but TASK-MONO-406 deleted it. {@code JpaConfig} is kept because it scopes scanning
+ * to payment-service's own packages, not because the library forces it.
  */
 @Entity
 @Table(name = "stranded_refund")

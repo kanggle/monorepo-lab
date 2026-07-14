@@ -14,9 +14,11 @@ import java.util.UUID;
  * {@code MasterOutboxEntity} / ecommerce {@code PromotionOutboxEntity} reference.
  *
  * <p>Lives under {@code com.example.order.infrastructure.persistence} so it is
- * picked up by both {@code @EntityScan(basePackages = {"com.example.order",
- * "com.example.messaging"})} and
+ * picked up by both {@code @EntityScan(basePackages = "com.example.order")} and
  * {@code @EnableJpaRepositories(basePackages = "com.example.order.infrastructure.persistence")}.
+ * (TASK-MONO-406 dropped {@code "com.example.messaging"} from the {@code @EntityScan} list:
+ * the library holds no {@code @Entity}, and the {@code @MappedSuperclass} above is resolved
+ * via the entity class hierarchy, not via entity scanning.)
  */
 @Entity
 @Table(name = "order_outbox")

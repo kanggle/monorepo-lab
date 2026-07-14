@@ -7,13 +7,16 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 /**
  * Explicit JPA scanning for notification-service's persistence packages.
  *
- * <p>{@code libs/java-messaging}'s {@code OutboxJpaConfig} declares its own
- * {@code @EnableJpaRepositories}, which (when imported) suppresses Spring Boot's
- * default JPA repository auto-scanning. This service EXCLUDES that outbox
- * auto-config (no-outbox terminal consumer — see
- * {@code NotificationServiceApplication}), so we declare scanning explicitly for
- * the {@code Notification} aggregate + the service-owned {@code processed_events}
- * dedupe table. (Mirrors the membership / read-model pattern.)
+ * <p>Declares scanning explicitly for the {@code Notification} aggregate + the
+ * service-owned {@code processed_events} dedupe table. This used to be forced:
+ * {@code libs/java-messaging}'s {@code OutboxJpaConfig} declared an app-wide
+ * {@code @EnableJpaRepositories} that made Spring Boot's default JPA repository
+ * auto-scanning back off. TASK-MONO-406 deleted that config (and the
+ * {@code OutboxAutoConfiguration} that imported it), so the declaration below is now
+ * this service's own choice — it keeps scanning scoped to this service's packages.
+ * notification remains a no-outbox terminal consumer (see
+ * {@code NotificationServiceApplication}). (Mirrors the membership / read-model
+ * pattern.)
  */
 @Configuration
 @EnableJpaRepositories(basePackages = {

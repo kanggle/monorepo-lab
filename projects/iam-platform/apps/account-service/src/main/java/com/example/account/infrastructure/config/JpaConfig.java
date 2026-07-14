@@ -7,11 +7,14 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 /**
  * Explicit JPA scanning for the account-service's own persistence package.
  *
- * <p>This is required because java-messaging's {@code OutboxJpaConfig}
- * declares its own {@code @EnableJpaRepositories}, which causes Spring Boot's
- * {@code JpaRepositoriesAutoConfiguration} to back off. Without this
- * configuration, service repositories such as {@code AccountJpaRepository}
- * are no longer auto-scanned. See TASK-BE-047.
+ * <p>Scopes repository / entity scanning to this service's own persistence package
+ * ({@code AccountJpaRepository}, {@code AccountOutboxJpaEntity}, the service-owned
+ * {@code ProcessedEventJpaEntity}/{@code Repository}, …). It used to be mandatory:
+ * java-messaging's {@code OutboxJpaConfig} declared an app-wide
+ * {@code @EnableJpaRepositories} that made Spring Boot's
+ * {@code JpaRepositoriesAutoConfiguration} back off, so without this class the service's
+ * own repositories were silently not scanned (TASK-BE-047). TASK-MONO-406 deleted that
+ * lib config, so this declaration is now the service's own choice, not a workaround.
  *
  * <p>Kept in its own {@code @Configuration} class (rather than on the main
  * application class) so that web-layer slice tests ({@code @WebMvcTest})

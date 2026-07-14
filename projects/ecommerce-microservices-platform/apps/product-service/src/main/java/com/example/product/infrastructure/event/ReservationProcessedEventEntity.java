@@ -13,9 +13,13 @@ import java.util.UUID;
 
 /**
  * Idempotent-consumer dedupe for the reservation saga consumers (TASK-BE-428). Keyed by the
- * inbound envelope {@code event_id}. A local table (not {@code libs/java-messaging}) mirroring
- * {@code wms_processed_event} — product-service uses direct Kafka publish, not the outbox, so it
- * does not pull in {@code OutboxAutoConfiguration}.
+ * inbound envelope {@code event_id}. A service-local table (not {@code libs/java-messaging})
+ * mirroring {@code wms_processed_event}: originally to avoid pulling in the lib's
+ * {@code OutboxAutoConfiguration} (product-service publishes to Kafka directly, not via the
+ * outbox). TASK-MONO-406 deleted that auto-config together with the library's own dedupe
+ * entity/repository, making service-local ownership the only shape there is — per
+ * ADR-MONO-004 the shared library ships the {@code EventDedupePort} contract, while the
+ * entity, the table and the repository scan belong to the service.
  */
 @Entity
 @Table(name = "reservation_processed_events")

@@ -1,6 +1,6 @@
 package com.example.security.consumer.handler;
 
-import com.example.messaging.outbox.ProcessedEventJpaRepository;
+import com.example.security.infrastructure.persistence.ProcessedEventJpaRepository;
 import com.example.security.infrastructure.redis.RedisEventDedupStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

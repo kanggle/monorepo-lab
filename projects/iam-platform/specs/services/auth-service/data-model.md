@@ -75,7 +75,7 @@ provider 연결 목록을 보여줄 때 `account_id` 인덱스로 조회.
 
 ### `outbox`
 
-[libs/java-messaging](../../../../../libs/java-messaging) 표준 스키마 사용. 테이블 이름은 라이브러리의 `OutboxJpaEntity`가 `@Table(name = "outbox")`으로 선언하므로 `outbox`를 사용한다.
+v1 레거시 테이블. 원래 [libs/java-messaging](../../../../../libs/java-messaging)의 `OutboxJpaEntity`(`@Table(name = "outbox")`)가 매핑했으나, TASK-MONO-312 가 그 엔티티를, TASK-MONO-406 이 남은 `OutboxAutoConfiguration` / `OutboxJpaConfig` / `ProcessedEventJpaEntity` 를 삭제했다 — 이제 이 테이블을 매핑하는 엔티티는 **없다**(적용된 Flyway 마이그레이션은 불변이라 스키마에만 잔존; `ddl-auto=validate` 는 매핑된 엔티티만 검증). 현행 아웃박스는 `auth_outbox`(V0027, `AuthOutboxJpaEntity`).
 
 | 컬럼 | 타입 | 설명 |
 |---|---|---|

@@ -17,11 +17,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <p>Service Type: {@code rest-api}. Architecture: Hexagonal
  * (domain / application / infrastructure / presentation).
  *
- * <p><b>Outbox is KEPT</b> (unlike {@code read-model-service}, which excludes it
- * because it is a no-outbox E5 consumer): approval-service is a producer — it
- * emits {@code erp.approval.*.v1} through the {@code libs/java-messaging}
- * transactional outbox, so {@code OutboxAutoConfiguration} stays enabled
- * (mirrors {@code masterdata-service}).
+ * <p><b>Runs a transactional outbox</b> (unlike {@code read-model-service}, a
+ * no-outbox E5 consumer): approval-service is a producer — it emits
+ * {@code erp.approval.*.v1} through its own {@code approval_outbox} table, relayed
+ * by {@code ApprovalOutboxPublisher} on top of {@code libs/java-messaging}'s
+ * {@code AbstractOutboxPublisher} (mirrors {@code masterdata-service}).
+ * TASK-MONO-406 deleted the library's {@code OutboxAutoConfiguration}, so there is
+ * no outbox auto-config left to keep or exclude.
  */
 @SpringBootApplication
 public class ApprovalServiceApplication {

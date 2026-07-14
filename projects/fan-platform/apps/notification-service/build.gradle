@@ -15,9 +15,11 @@ group = 'com.example.fanplatform.notification'
 // recipient-scoped read-only inbox. Layered, Postgres fanplatform_notification.
 //
 // TERMINAL consumer: no outbox, no produced topic. libs:java-messaging is on the
-// classpath for its canonical envelope shape + processed_events contract, but
-// its OutboxAutoConfiguration is EXCLUDED (NotificationServiceApplication) — the
-// service owns a no-outbox processed_events dedupe table (feedback §13).
+// classpath for its canonical envelope shape + dedupe port, and its
+// OutboxMetricsAutoConfiguration is EXCLUDED (NotificationServiceApplication) —
+// nothing here publishes. The service owns its processed_events dedupe entity
+// locally (TASK-MONO-406 deleted the library's ProcessedEvent entity/repository
+// and the OutboxAutoConfiguration that registered them app-wide).
 //
 // Source sets:
 // * `test`             — unit + slice tests (default; Docker-free).
@@ -57,8 +59,8 @@ dependencies {
     // Structured logging (prod profile)
     implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
 
-    // Shared libs (java-messaging for the canonical envelope + processed_events
-    // shape; its outbox auto-config is excluded — terminal consumer, no outbox).
+    // Shared libs (java-messaging for the canonical envelope + dedupe port; its
+    // outbox-metrics auto-config is excluded — terminal consumer, no outbox).
     implementation project(':libs:java-common')
     implementation project(':libs:java-web')
     implementation project(':libs:java-messaging')

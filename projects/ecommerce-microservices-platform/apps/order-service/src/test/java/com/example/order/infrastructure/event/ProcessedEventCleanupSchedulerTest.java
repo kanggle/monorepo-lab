@@ -1,6 +1,6 @@
 package com.example.order.infrastructure.event;
 
-import com.example.messaging.outbox.ProcessedEventJpaRepository;
+import com.example.order.infrastructure.persistence.ProcessedEventJpaRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

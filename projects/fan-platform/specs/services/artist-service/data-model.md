@@ -87,8 +87,13 @@ Active membership = `left_at IS NULL AND role <> 'FORMER_MEMBER'`.
 
 ### `outbox` + `processed_events`
 
-Schema matches `libs/java-messaging`'s `OutboxJpaEntity` /
-`ProcessedEventJpaEntity` exactly. Do NOT diverge.
+Legacy v1 tables. `libs/java-messaging` no longer maps them: TASK-MONO-312 deleted
+`OutboxJpaEntity` and TASK-MONO-406 deleted `ProcessedEventJpaEntity` (the library
+now ships **no** `@Entity` at all). Both tables survive in the schema only because
+applied Flyway migrations are immutable — nothing maps them, so `ddl-auto=validate`
+ignores them. The live outbox is `artist_outbox`, mapped by this service's own
+`ArtistOutboxJpaEntity` (which extends the library `@MappedSuperclass`
+`OutboxRowEntity`).
 
 ---
 

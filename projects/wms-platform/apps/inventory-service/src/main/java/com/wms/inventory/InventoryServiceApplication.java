@@ -1,27 +1,32 @@
 package com.wms.inventory;
 
-import com.example.messaging.outbox.OutboxAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * TASK-BE-432: exclude the shared {@link OutboxAutoConfiguration} — the same fix
- * outbound-service applied in TASK-BE-333. inventory-service supplies its OWN outbox
- * stack (the {@code AbstractOutboxPublisher}-based {@code @Component OutboxPublisher} +
- * {@code OutboxWriterAdapter} over its {@code InventoryOutboxJpaEntity}) and uses no
- * libs auto-config bean. The libs {@code @Bean outboxPublisher} (type
- * {@code com.example.messaging.outbox.OutboxPublisher}, {@code @ConditionalOnMissingBean}
- * by type) does NOT see inventory's differently-typed {@code outboxPublisher}
- * {@code @Component}, so under any non-{@code standalone} profile both register under
- * the SAME bean name {@code "outboxPublisher"} → {@code BeanDefinitionOverrideException}
- * and the context fails to start.
+ * inventory-service supplies its OWN outbox stack (the {@code AbstractOutboxPublisher}-based
+ * {@code @Component OutboxPublisher} + {@code OutboxWriterAdapter} over its
+ * {@code InventoryOutboxJpaEntity}) and consumes no bean from a libs auto-config.
  *
- * <p>Never caught because no inventory full-context (Testcontainers) job runs in CI and
- * the slice/unit tests don't load the auto-config; it surfaced only when the service was
- * brought up as a real app in the TASK-BE-431 ecommerce↔wms fulfillment-loop demo.
+ * <p><b>Formerly excluded {@code OutboxAutoConfiguration} (TASK-BE-432; the same fix
+ * outbound-service applied in TASK-BE-333) — removed by TASK-MONO-406.</b> The original
+ * trigger was the v1 libs {@code @Bean outboxPublisher}, which registered under the same
+ * bean name as inventory's differently-typed {@code @Component} and threw
+ * {@code BeanDefinitionOverrideException}; TASK-MONO-312 deleted those v1 beans. What kept
+ * the exclude load-bearing afterwards was the auto-config's remaining payload — an
+ * {@code @EntityScan} + {@code @EnableJpaRepositories} registering the lib's
+ * {@code ProcessedEventJpaEntity}, which inventory never uses and has no
+ * {@code processed_events} table for (under {@code ddl-auto: validate} that alone fails the
+ * boot). MONO-406 deleted the entity and the auto-config, so the exclude has nothing left to
+ * suppress.
+ *
+ * <p>The BE-432 defect went uncaught because no inventory full-context (Testcontainers) job
+ * ran in CI and the slice/unit tests never load auto-configs — it surfaced only when the
+ * service was brought up as a real app in the TASK-BE-431 fulfillment-loop demo. That is the
+ * general shape of this defect class: it is invisible to the compiler and to unit tests.
  */
-@SpringBootApplication(exclude = OutboxAutoConfiguration.class)
+@SpringBootApplication
 @EnableScheduling
 public class InventoryServiceApplication {
 

@@ -12,8 +12,10 @@ dependencies {
 
     // Messaging (transactional Outbox pattern) — introduced this increment
     // (TASK-BE-415): settlement-service becomes a producer for its first event,
-    // settlement.period.closed.v1. OutboxAutoConfiguration / OutboxMetricsAutoConfiguration
-    // auto-enable via the lib's AutoConfiguration.imports once the dependency is present.
+    // settlement.period.closed.v1. Since TASK-MONO-406 the lib's
+    // AutoConfiguration.imports lists only OutboxMetricsAutoConfiguration
+    // (OutboxAutoConfiguration was deleted); the outbox itself is wired explicitly by
+    // this service (SettlementOutboxEntity / SettlementOutboxPublisher / OutboxConfig).
     implementation project(':libs:java-messaging')
 
     // Observability

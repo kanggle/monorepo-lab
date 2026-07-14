@@ -76,6 +76,45 @@ Shared libraries must not contain:
 - service-specific orchestration logic
 - code that forces unrelated services to depend on a domain they do not own
 - domain event payload classes (`*.event.<Verb>Event`) — these stay per-service per ADR-MONO-004
+- **context-wide Spring annotations in an `@AutoConfiguration`** — see below
+
+## No context-wide annotations in a shared `@AutoConfiguration`
+
+A shared library's `@AutoConfiguration` — or any `@Configuration` it `@Import`s — **must not
+declare `@EnableJpaRepositories` or `@EntityScan`** (the same reasoning applies to any
+annotation whose effect is the whole consuming `ApplicationContext`: `@ComponentScan`,
+`@EnableScheduling`, `@EnableCaching`, …).
+
+An auto-configuration runs in **every** consumer. These annotations are not scoped to the
+library; they reconfigure the application:
+
+1. **They silently disable Boot's default.** An explicit `@EnableJpaRepositories` anywhere in
+   the context makes Spring Boot's `JpaRepositoriesAutoConfiguration` back off **for the whole
+   application**. Every consumer must then hand-declare its own narrowing
+   `@EnableJpaRepositories` (and `@EntityScan`) — and a consumer that does not **silently
+   loses its own repositories**. A library that ships this obligation has moved a bug into its
+   javadoc.
+2. **They collide on bean name.** A repository the library registers takes the default bean
+   name derived from its simple name. If a service models the same concept — which, for a
+   generic concept, it will — both register under that name and the context dies with
+   `BeanDefinitionOverrideException`.
+3. **They force schema on services that never asked.** An `@Entity` registered by an
+   auto-configuration is scanned into every consumer, so under `ddl-auto: validate` every
+   consumer must create that table or fail to boot — including services that never use it.
+
+**Ship the contract, not the mapping.** The library provides the port/interface and the
+generic machinery; the service owns the `@Entity`, the table, the migration and the repository
+scan. If the library genuinely needs a JPA type, expose it as a `@MappedSuperclass` (resolved
+via the entity class hierarchy, so it needs no entity scan) and let each service declare the
+concrete `@Entity`.
+
+**Why this rule exists.** These are not hypotheticals. Four services' `ApplicationContext`
+failed to load because of one such auto-configuration, each was fixed locally with an
+`exclude = …` rather than at the source, and the auto-configuration ended up being retained
+*because* so many services excluded it. **No compiler and no unit test can see this defect
+class** — a slice test never loads auto-configurations, so only a booting context (an
+integration lane) observes it. Guarded by `scripts/check-shared-lib-jpa-scan.sh`.
+(TASK-BE-333, TASK-BE-432, TASK-BE-461, TASK-BE-489 → TASK-MONO-406.)
 
 ---
 
