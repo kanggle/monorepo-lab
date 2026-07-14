@@ -1,6 +1,6 @@
 # TASK-MONO-406 — `libs/java-messaging` still ships the v1 `ProcessedEvent*` dedupe entity that ADR-MONO-004 forbids; its auto-config's `@EnableJpaRepositories` has broken two services' boot and ten now exclude it by name
 
-**Status:** review
+**Status:** done
 
 ---
 
