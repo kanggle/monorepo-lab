@@ -50,7 +50,10 @@ KEEP_TRAEFIK=1 bash infra/demo/demo-down.sh   # traefik-net 유지
 | `full` | 8개 전부 | 콘솔 5/5 federated 포함 전체 |
 
 > 리소스 주의: `full`(41 JVM 동시)은 RAM ~32–48GB. 저사양/로컬에서는 OOM/exit137
-> 위험이 있으니 `demo-core` 부터 확인할 것. 실제 데모 호스트는 `m6i.4xlarge`(64GB) 기준.
+> 위험이 있으니 `demo-core` 부터 확인할 것.
+> **실제 데모 호스트는 `m6i.2xlarge`(32GB)** — `terraform/variables.tf` 의 기본값이 권위다
+> (`TASK-MONO-366` 실측: ~26GB 사용 / 여유 ~5.5GB). 64GB 는 여유를 원할 때의 *선택지*이지
+> 현재 구성이 아니다.
 
 ## 프로젝트당 compose 파일이 여러 개일 수 있다 (TASK-MONO-342/344)
 
@@ -117,7 +120,9 @@ CI 잡 `demo-wrapper-smoke` (`.github/workflows/ci.yml`) 가 `infra/demo/**` ·
 - ✅ 실기동 증명 — `scm-platform-redis` + `fan-platform-redis` 동시 healthy (같은 compose 키 `redis`)
 - ✅ include/-f 가 중복 키를 잃는다는 실측 확인(위 근거)
 - ⏳ **`full`(41 JVM) 실기동 healthcheck 스모크는 EC2 권위** — GH 러너(16GB)·로컬 Windows
-  (Docker VM 11.68GiB) 모두 물리적 불가. `m6i.4xlarge`(64GB) 필요.
+  (Docker VM 11.68GiB) 모두 물리적 불가. **실측 결과 `m6i.2xlarge`(32GB)로 뜬다**
+  (`TASK-MONO-366`: ~26GB 사용). 이 줄의 이전 판은 64GB 가 *필요*하다고 적었는데 그건
+  측정 전의 추정이었다.
 
 ## 데모 도메인 (`DEMO_DOMAIN`) — TASK-MONO-358
 
@@ -161,4 +166,13 @@ systemd(demo-stack.service) → demo-boot.sh → (IMDSv2 로 공인 IP → DEMO_
 seed 등 런타임 federation env 배선이 필요하며, 이는 `tests/federation-hardening-e2e/`
 데모 오버레이(MONO-170/174)가 이미 6도메인에 대해 해둔 것과 겹친다. 데모 호스트
 정식화 시 그 오버레이 env 를 이 래퍼의 프로젝트별 `.env` 로 승격/재사용한다
-(중복 재구현 금지). AWS Terraform/AMI/start-stop 은 scratchpad PoC `ondemand-demo/` 참조.
+(중복 재구현 금지).
+
+> AWS Terraform / AMI / start-stop 은 **[`aws/`](aws/) 에 있다.**
+>
+> 이 줄의 이전 판은 세션 스코프 **scratchpad PoC 디렉터리**를 가리키고 있었다 —
+> `TASK-MONO-366`/`389` 가 그 코드를 저장소로 승격한 뒤에도 **포인터만 남아 있었다.**
+> scratchpad 는 다른 사람에게 **존재하지 않는 경로**이므로, 그 문장을 따른 독자는 아무
+> 데도 갈 수 없었다. `aws/README.md` 자신이 *"이전에는 코드가 scratchpad 에만 있어서
+> 검증 불가능한 주장이었다"* 고 적어 둔 그 결함이, **바로 옆 파일에서 그대로 살아 있었다.**
+> (옛 경로 문자열은 여기 다시 적지 않는다 — **설명이 탐지식에 잡히면 그 자체가 오검출**이 된다.)

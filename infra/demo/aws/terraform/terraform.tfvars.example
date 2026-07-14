@@ -13,11 +13,19 @@ project = "portfolio-demo"
 #   cd ../packer && packer build demo-ami.pkr.hcl
 ami_id = "ami-xxxxxxxxxxxxxxxxx"
 
-# 사이징 — TASK-MONO-353 이 **실측으로 정정**했다.
-#   `full` = **96 컨테이너 / 메모리 ~26GB**(JVM 40+).
+# 사이징 — **TASK-MONO-366** 의 1회 관측치다(이전 판은 이 값을 TASK-MONO-353 의 것이라
+# 적었는데, 353 은 `bitnami/kafka:3.7` 삭제 티켓이다).
+#   `full` ≈ **96 컨테이너 / 메모리 ~26GB**(JVM 40+), m6i.2xlarge(32GB) 에서 **여유 ~5.5GB**.
 #   (이전 문서의 "43 컨테이너 / 21GB 여유" 는 `bitnami/kafka:3.7` 삭제로 33개만 뜬
 #    **고장난 스택**을 잰 값이었다. 죽은 이미지가 6개 프로젝트를 막고 있었다.)
-#   m6i.2xlarge(32GB) 에서 **여유는 5.5GB 뿐**이다 — 여유를 원하면 m6i.4xlarge(64GB).
+#
+# 🔴 **이 숫자는 상한이 아니다 — 아무것도 강제하지 않는 관측치다.** 데모가 띄우는 compose
+#    서비스 키 107개 중 메모리 리밋을 선언하는 것은 **34개뿐이고 전부 ecommerce** 다.
+#    나머지 7개 프로젝트는 리밋이 **0개** ⇒ 천장이 없다. 재측정 = TASK-MONO-399 AC-2.
+#    ⚠️ 그렇다고 "일관성 있게" 리밋을 추가하지 마라 — 리밋은 상한이 아니라 **설정**이다
+#    (JAVA_OPTS 없는 JVM 은 힙을 cgroup 리밋의 25% 로 잡는다). TASK-MONO-397 참조.
+#
+# 여유를 원하면 m6i.4xlarge(64GB) — 단 월 예산 상한(600분) 하에서 최대 ~$10.
 instance_type = "m6i.2xlarge"
 
 # (선택) 비우면 default VPC + 그 첫 퍼블릭 서브넷을 자동 탐색한다.
