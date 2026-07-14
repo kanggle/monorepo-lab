@@ -56,6 +56,9 @@
 
 - **예시 섹션**: error-handling.md의 도메인별 에러 코드 섹션은 프로젝트 도메인에 맞게 교체 가능
 - **도메인 예시**: architecture.md·glossary.md의 예시 서비스 이름은 프로젝트에 맞게 참고 가능
+- **운영 인벤토리 (project-agnostic 예외, TASK-MONO-412)**: 다음 두 표면은 프로젝트 이름을 부르지만 **규칙이 아니라 감시 가능한 운영 사실**을 기록한다 — 프로젝트별 정책을 여기서 새로 제정하는 것이 아니라, 이미 존재하는 상태(누가 어떤 키 전략을 쓰는지 / 어떤 프로젝트가 어떤 shared lib 을 소비하는지)를 등록할 뿐이므로 project-agnostic 원칙과 병존한다:
+  - [api-gateway-policy.md](api-gateway-policy.md) § Rate Limiting → Key shape 의 **"Current fleet"** 표 — `TASK-MONO-368`/`370` 이 실제로 치른 대가(누가 429 를 맞는지)의 기록. *"No recorded deviations"* 는 다음에 표를 여는 사람이 확인할 수 있는 사실이다.
+  - [shared-library-policy.md](shared-library-policy.md) § Catalog 의 `libs/java-gateway` 행 — 소비 프로젝트 목록(wms, scm, fan, ecommerce)과 iam 제외 사유(ADR-MONO-048 § D2, 독립 구현). reactive/servlet 분리 규칙(같은 파일 L29)이 왜 지금 이 모양인지의 근거.
 
 편집 시에는 [../TEMPLATE.md](../TEMPLATE.md)의 back-porting 절차를 따를 것.
 

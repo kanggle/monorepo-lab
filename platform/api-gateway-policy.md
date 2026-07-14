@@ -102,6 +102,8 @@ A rate limit is only as good as the thing it counts. The key decides **who gets 
 
 ### Current fleet (2026-07-12)
 
+> Declared exception to the project-agnostic rule for shared paths (`platform/README.md § Editing Policy`) — this table records operational fact (who keys how), not a per-project policy defined here. See `TASK-MONO-412`.
+
 | Gateway | Anonymous | Authenticated | Note |
 |---|---|---|---|
 | ecommerce | `ip` | `t:<tenant>:acct:<sub>` | tenant is real for assume-tenant tokens; account restores per-caller isolation (MONO-368) |
