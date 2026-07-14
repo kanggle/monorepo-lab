@@ -8,7 +8,7 @@ TASK-MONO-402
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
