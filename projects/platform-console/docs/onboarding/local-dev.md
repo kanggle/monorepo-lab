@@ -43,3 +43,6 @@ Authoritative inventory: [`docker-compose.yml`](../../docker-compose.yml). At a 
 - **Full local demo**: the richer, wired-together experience is the `federation-hardening-e2e` stack via `pnpm console-demo:up`, which bundles the console with upstream platforms. Prefer that for an end-to-end console demo.
 - **IAM hard dependency**: console login goes through `iam.local` — `pnpm iam:up` first.
 - Host-specific operational concerns (cold-start timeouts, per-leg env wiring, redeploy `--no-deps`) are developer-environment notes, not part of this doc.
+- **UI conventions** (date/time formatting, `DetailHeader`/`<dl>` field order, `StatusBadge`) — see
+  [`docs/conventions/frontend-ui.md`](../conventions/frontend-ui.md), the canonical home for `console-web`'s
+  enforced-but-previously-unwritten UI rules.
