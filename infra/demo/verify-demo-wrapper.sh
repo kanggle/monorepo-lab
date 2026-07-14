@@ -828,49 +828,54 @@ running="$(docker ps --filter 'name=scm-platform-redis' --filter 'name=fan-platf
 [ "$running" = "2" ] || fail "두 redis 가 공존하지 않음 (running=$running) — 병합 회귀 의심"
 ok "같은 키 'redis' 2개가 별도 -p 로 공존 (running=2)"
 
-echo "[verify] (u) --live: 브로커가 리밋에서 얻는 **힙**이 브로커를 돌릴 만한가"
+echo "[verify] (u) kafka 의 메모리 리밋이 브로커를 돌릴 만한가"
 # ---------------------------------------------------------------------------
 # 근거(MONO-397): `ecommerce-kafka` 의 리밋이 **512M** 이었고, 데모 호스트에서
 # `constraint=CONSTRAINT_MEMCG` OOM 으로 **14회 재시작**했다(anon-rss 481 MB 에서 kill).
 #
-# **격리 상태의 512M kafka 는 죽지 않는다** — RestartCount 0, healthcheck 통과,
-# `docker ps` 에 healthy. 죽는 건 **함대가 붙을 때**다(ecommerce 12개 서비스가 컨슈머로
-# 연결되면 커넥션·페치 버퍼가 남은 여유를 먹는다). ⇒ **"죽었는가" 를 묻는 가드는 이 결함을
-# 통과시킨다.** 그게 지난 몇 달간 일어난 일이다.
+# **격리 상태의 512M kafka 는 죽지 않는다** — RestartCount 0, healthcheck 통과, healthy.
+# 죽는 건 **함대가 붙을 때**다(ecommerce 12개 서비스가 컨슈머로 연결되면 커넥션·페치
+# 버퍼가 남은 여유를 먹는다). ⇒ **"죽었는가" 를 묻는 가드는 이 결함을 통과시킨다.**
 #
-# ─────────────────────────────────────────────────────────────────────────────
-# ⚠️ **첫 판본은 RSS 사용률(≤75%)을 물었고, 그건 틀렸다.** 측정 전용 PR(#2533)로
-#    가드가 **도는 곳에서** 물어봤더니:
+# **왜 512M 이 브로커를 못 돌리는가** — 리밋은 **상한이 아니라 설정**이다.
+# `KAFKA_HEAP_OPTS` 가 없으므로 JVM 은 cgroup 을 읽어 힙을 리밋의 25%
+# (`MaxRAMPercentage` 기본값)로 잡는다:
 #
-#      내 Windows 호스트, 512M → RSS 425.9 MiB = 83.2%   → RED
-#      CI 러너(ubuntu),   512M → RSS 193.2 MiB = 38.2%   → **통과**
-#      CI 러너(ubuntu),   1G   → RSS 317.3 MiB = 31.2%
+#     512M → 힙 128 MiB   ← "128 MiB 힙으로 Kafka 브로커를 돌려라"
+#     1G   → 힙 256 MiB
 #
-#    **같은 컨테이너·같은 리밋·같은 부하인데 RSS 가 2.2배 다르다**(WSL2 의 `docker stats`
-#    회계 차이). CI 러너에서는 512M(38%)과 1G(31%)의 **분리가 사실상 없어** 어떤 임계로도
-#    결함을 가려낼 수 없다. 내가 임계를 보정한 83% 는 **신호가 아니라 아티팩트**였고,
-#    그 위에 세운 가드는 **CI 에서 장식**이었다. 측정 전용 PR 을 안 돌렸다면 그대로 머지됐다.
-#    (`MONO-360`: **가드가 무는지는 그것이 도는 곳에서 증명해야 한다.**)
+# 그래서 하한은 **1 GiB** 다. 아래 elasticsearch 의 `2G`(TASK-BE-406)와 같은 종류의
+# 상수이고, 같은 이유로 존재한다.
 #
-# ⇒ 술어를 **호스트에 무관한 것**으로 바꾼다: **JVM 이 실제로 얻는 힙.**
-#    `KAFKA_HEAP_OPTS` 가 없으므로 JVM 은 cgroup 을 읽어 힙을 리밋의 25%
-#    (`MaxRAMPercentage` 기본값)로 잡는다 — 이건 **JVM 레벨 규칙이라 호스트와 무관하다**:
+# ═══════════════════════════════════════════════════════════════════════════
+# ⚠️ **동적으로 재려는 시도를 두 번 했고, 두 번 다 CI 러너가 반박했다.**
+#    (`MONO-360`: **가드가 무는지는 그것이 도는 곳에서 증명해야 한다.** 두 번 다
+#     측정 전용 PR 이 없었다면 "가드를 넣었다" 고 보고하고 머지했을 것이다.)
 #
-#      512M → MaxHeapSize = 134217728 (128 MiB)   ← 128 MiB 힙으로 도는 Kafka 브로커
-#      1G   → MaxHeapSize = 268435456 (256 MiB)
+#  시도 1 — **RSS 사용률 ≤ 75%**  (측정 전용 PR #2533)
+#      내 Windows/WSL2, 512M → RSS 425.9 MiB = 83.2%  → RED
+#      CI 러너(ubuntu), 512M → RSS 193.2 MiB = 38.2%  → **통과**
+#      CI 러너(ubuntu), 1G   → RSS 317.3 MiB = 31.2%
+#    같은 컨테이너·리밋·부하인데 RSS 가 **2.2배** 다르다(WSL2 의 `docker stats` 회계).
+#    러너에선 512M(38%)과 1G(31%)이 **갈리지 않는다** — 어떤 임계로도 못 잡는다.
 #
-#    **리밋은 상한이 아니라 설정이다.** `512M` 은 "512MB 까지 써라" 가 아니라
-#    "**128 MiB 힙으로 브로커를 돌려라**" 다. 그게 이 결함의 실체이고, 그 문장은
-#    러너에서든 노트북에서든 똑같이 참이다.
+#  시도 2 — **JVM 에게 자기 힙을 묻는다** (`docker exec … java -XX:+PrintFlagsFinal`)
+#                                                        (측정 전용 PR #2534)
+#      내 Windows/WSL2, 512M → MaxHeapSize 128 MiB   → RED
+#      CI 러너(ubuntu), 512M → MaxHeapSize **3998 MiB** → **통과**
+#    러너에서는 **컨테이너 안의 JVM 이 cgroup 리밋을 아예 못 본다**(호스트 RAM 16GB 의
+#    25%). "JVM 레벨 규칙이라 호스트 무관" 이라던 내 논거가 그대로 반박됐다.
 #
-#    그리고 이 가드는 25% 규칙을 **가정하지 않는다** — JVM 에게 **직접 묻는다**.
-#    누가 `KAFKA_HEAP_OPTS` 를 넣어 결합을 끊어도 가드는 여전히 진실을 잰다.
-# ─────────────────────────────────────────────────────────────────────────────
+#  ⇒ **컨테이너 안에서 재는 것은 러너에서 신뢰할 수 없다.** 세 번째 영리한 술어를
+#    시도하지 않는다. **선언된 리밋 자체**를 단언한다 — 상수이고, 열거이고, **작동한다.**
+#    이 주석이 그 상수의 근거이고, **실패한 두 시도를 숫자와 함께 남기는 이유는 다음
+#    사람이 같은 길을 다시 걷지 않게 하기 위해서다.**
+# ═══════════════════════════════════════════════════════════════════════════
 #
-# 리밋·image·env 는 **compose 에서 읽는다**(열거하지 않는다). 값을 바꾸면 그 값으로 잰다.
-# RSS 는 **관측으로만 찍는다** — 단언하지 않는다. 호스트마다 2배씩 달라지는 값 위에
-# 단언을 세우지 않는다.
-U_MIN_HEAP_MIB=256   # 1G 리밋이 주는 힙. 128 MiB(=512M 리밋)는 브로커를 돌릴 힙이 아니다.
+# 리밋·image·env 는 **compose 에서 읽는다**(열거하지 않는다). 하한만 상수다.
+# 실기동(부하 완주 + RestartCount 0)은 남긴다 — 그건 호스트에 무관하게 참인 명제다.
+# RSS 는 **관측으로만 찍는다.** 호스트마다 2배씩 달라지는 값 위에 단언을 세우지 않는다.
+U_MIN_LIMIT_MIB=1024   # 힙 256 MiB. 512M(=힙 128 MiB)는 브로커를 돌릴 리밋이 아니다.
 u_net="verify-u-net"; u_ctr="verify-u-kafka"
 cleanup_u() { docker rm -f "$u_ctr" >/dev/null 2>&1 || true; docker network rm "$u_net" >/dev/null 2>&1 || true; }
 trap 'cleanup_u; rm -f "$names_file" "$ports_file"' EXIT
@@ -893,6 +898,19 @@ u_limit="$(printf '%s\n' "$u_block" | awk '/^[[:space:]]*memory:[[:space:]]/{gsu
 u_limit_mib=$(( u_limit / 1048576 ))
 echo "  compose 에서 읽음: image=$u_image  limit=${u_limit_mib}MiB"
 
+# ── 판정 ────────────────────────────────────────────────────────────────────
+# 정적이고, 결정론적이고, 러너에서든 노트북에서든 같은 답을 낸다. 위 주석의 두 시도가
+# 실패한 뒤 남은 유일한 술어다. **작동하는 단순한 가드가, 작동하지 않는 영리한 가드보다 낫다.**
+[ "$u_limit_mib" -ge "$U_MIN_LIMIT_MIB" ] || fail "kafka 의 메모리 리밋이 ${u_limit_mib}MiB 입니다 (최소 ${U_MIN_LIMIT_MIB}MiB):"\
+  $'\n'"→ **리밋은 상한이 아니라 설정입니다.** KAFKA_HEAP_OPTS 가 없으면 JVM 이 cgroup 을 읽어"\
+  $'\n'"   힙을 리밋의 25% 로 잡습니다: ${u_limit_mib}M → 힙 $(( u_limit_mib / 4 )) MiB."\
+  $'\n'"   '512M' 은 \"512MB 까지 써라\" 가 아니라 \"**128 MiB 힙으로 Kafka 브로커를 돌려라**\" 입니다."\
+  $'\n'"→ **살아 있다는 것은 증거가 아닙니다.** 512M kafka 는 격리 상태에서 살아 healthcheck 를"\
+  $'\n'"   통과했고, 함대 12개 서비스가 컨슈머로 붙자 cgroup OOM 으로 14회 재시작했습니다(MONO-397)."\
+  $'\n'"→ compose 의 memory 리밋을 ${U_MIN_LIMIT_MIB}MiB 이상으로 올리세요."
+ok "kafka 리밋 ${u_limit_mib}MiB ≥ ${U_MIN_LIMIT_MIB}MiB (힙 $(( u_limit_mib / 4 )) MiB)"
+
+# ── 실기동 — 선언된 리밋으로 실제로 도는가 (호스트 무관하게 참인 명제만 단언한다) ──
 # env 도 compose 에서 읽는다 (advertised listener 는 `kafka` 를 가리키므로 network-alias 로 맞춘다)
 u_envs=()
 while IFS= read -r line; do
@@ -915,24 +933,15 @@ for _ in $(seq 1 40); do
 done
 [ "$u_up" = "1" ] || fail "(u) kafka 가 ${u_limit_mib}MiB 리밋에서 기동조차 못 했습니다."
 
-# ── 이 가드의 본체: **JVM 에게 자기 힙을 직접 묻는다.** ──────────────────────────
-# 25% 규칙을 가정하지 않는다 — 누가 KAFKA_HEAP_OPTS 로 결합을 끊어도 진실을 잰다.
-# 브로커와 같은 이미지·같은 cgroup 안에서 물어야 답이 같다.
+# JVM 이 이 cgroup 에서 실제로 보는 힙 — **관측이다. 단언하지 않는다.**
+# 러너에서는 컨테이너 안의 JVM 이 cgroup 리밋을 못 봐서 3998 MiB 를 돌려줬다(#2534).
+# 왜 그런지는 이 가드의 관심사가 아니지만, **그 값을 판정에 쓸 수 없다는 것**은 관심사다.
 u_heap_bytes="$(docker exec "$u_ctr" sh -c \
-  'java -XX:+PrintFlagsFinal -version 2>/dev/null | awk "/ MaxHeapSize /{print \$4}"' | tr -d '[:space:]')"
+  'java -XX:+PrintFlagsFinal -version 2>/dev/null | awk "/ MaxHeapSize /{print \$4}"' | tr -d '[:space:]' || true)"
 case "${u_heap_bytes:-}" in
-  ''|*[!0-9]*) fail "(u) JVM 의 MaxHeapSize 를 못 읽었습니다 ('${u_heap_bytes:-}') — **가드가 공허합니다.**"\
-    $'\n'"→ 이미지가 바뀌어 java 가 없거나 플래그 출력 형식이 달라졌을 수 있습니다. 조용히 통과시키지 않습니다." ;;
+  ''|*[!0-9]*) echo "  (관측) 컨테이너 내 JVM MaxHeapSize: 읽기 실패" ;;
+  *) echo "  (관측) 컨테이너 내 JVM MaxHeapSize: $(( u_heap_bytes / 1048576 )) MiB   ← 러너에서는 cgroup 을 못 본다. 판정에 쓰지 않는다." ;;
 esac
-u_heap_mib=$(( u_heap_bytes / 1048576 ))
-
-[ "$u_heap_mib" -ge "$U_MIN_HEAP_MIB" ] || fail "kafka 가 ${u_limit_mib}MiB 리밋에서 **${u_heap_mib} MiB 힙**만 얻습니다 (최소 ${U_MIN_HEAP_MIB} MiB):"\
-  $'\n'"→ **리밋은 상한이 아니라 설정입니다.** JVM 은 cgroup 을 읽어 힙을 리밋의 25% 로 잡습니다."\
-  $'\n'"   '${u_limit_mib}M' 은 \"${u_limit_mib}MB 까지 써라\" 가 아니라 \"**${u_heap_mib} MiB 힙으로 브로커를 돌려라**\" 입니다."\
-  $'\n'"→ 살아 있다는 것은 증거가 아닙니다. 512M kafka 는 격리 상태에서 살아서 healthcheck 를"\
-  $'\n'"   통과했고, 함대 12개 서비스가 컨슈머로 붙자 cgroup OOM 으로 14회 재시작했습니다(MONO-397)."\
-  $'\n'"→ compose 의 memory 리밋을 올리거나, KAFKA_HEAP_OPTS 로 힙을 명시하세요."
-ok "kafka 힙 ${u_heap_mib} MiB (limit ${u_limit_mib}MiB, 최소 ${U_MIN_HEAP_MIB} MiB)"
 
 # 부하 — 토픽 10 × 파티션 3, 2000 × 1KB. 볼륨보다 **파티션 수**가 RSS 를 지배한다.
 docker exec "$u_ctr" sh -c '
