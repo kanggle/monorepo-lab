@@ -26,9 +26,10 @@
 
 -- ---------------------------------------------------------------------------
 -- 1. Producer databases + service users
---    Created here since GAP init.sh only knows auth_db/account_db/
---    security_db/admin_db/community_db/membership_db. finance_db + 3
---    producer schemas added for this cross-product overlay.
+--    Created here since iam init.sh only knows auth_db/account_db/
+--    security_db/admin_db (community_db/membership_db went with their
+--    services in TASK-MONO-394). finance_db + 3 producer schemas added
+--    for this cross-product overlay.
 -- ---------------------------------------------------------------------------
 CREATE DATABASE IF NOT EXISTS `finance_db`
   CHARACTER SET utf8mb4

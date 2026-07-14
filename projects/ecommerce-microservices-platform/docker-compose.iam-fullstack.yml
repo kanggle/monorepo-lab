@@ -83,8 +83,6 @@ services:
       ACCOUNT_DB_PASSWORD: account_pass
       SECURITY_DB_PASSWORD: security_pass
       ADMIN_DB_PASSWORD: admin_pass
-      COMMUNITY_DB_PASSWORD: community_pass
-      MEMBERSHIP_DB_PASSWORD: membership_pass
     volumes:
       - ../iam-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
     healthcheck:

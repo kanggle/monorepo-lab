@@ -34,7 +34,8 @@
 #                           + `http://console.local/`.)
 #   - GAP security-service (cross-service bulk lock + account auto-lock — not
 #                           reached by the 2 e2e click sequences.)
-#   - GAP community / membership-service (not federated by the console v1.)
+#     (GAP community / membership-service used to be listed here as "not
+#      federated by the console v1." — both were RETIRED by TASK-MONO-394.)
 #   - Observability stack  (Jaeger / Prometheus / Grafana / Loki / Promtail —
 #                           7 GB runner memory budget; OTEL exporter errors are
 #                           non-blocking.)
@@ -100,8 +101,6 @@ services:
       ACCOUNT_DB_PASSWORD: account_pass
       SECURITY_DB_PASSWORD: security_pass
       ADMIN_DB_PASSWORD: admin_pass
-      COMMUNITY_DB_PASSWORD: community_pass
-      MEMBERSHIP_DB_PASSWORD: membership_pass
     volumes:
       # Reuse the GAP init script verbatim — it creates the 4 GAP databases +
       # service users. finance_db is created at seed time (seed.sql first

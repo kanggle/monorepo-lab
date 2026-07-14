@@ -460,7 +460,7 @@ Refresh token rotation. 기존 refresh token을 소비하고 새 access/refresh 
 
 서명: RS256. 공개 키는 JWKS 엔드포인트로 배포.
 
-**검증 필수 사항 (TASK-BE-143):** gateway-service 와 community-service 는 `iss == iam-platform` 을 강제 검증한다. `iss` claim 이 누락되거나 다른 값이면 토큰을 거부 (`401 TOKEN_INVALID`). 검증 기댓값은 각 서비스의 `*.jwt.expected-issuer` 설정으로 관리되며 환경별 분리 시 환경 변수로 override 한다. admin-service 는 자체 `IssuerEnforcingJwtVerifier` 로 admin IdP issuer 를 별도 강제한다.
+**검증 필수 사항 (TASK-BE-143):** gateway-service 는 `iss == iam-platform` 을 강제 검증한다 (community-service 도 함께 강제했으나 TASK-MONO-394 로 RETIRED). `iss` claim 이 누락되거나 다른 값이면 토큰을 거부 (`401 TOKEN_INVALID`). 검증 기댓값은 각 서비스의 `*.jwt.expected-issuer` 설정으로 관리되며 환경별 분리 시 환경 변수로 override 한다. admin-service 는 자체 `IssuerEnforcingJwtVerifier` 로 admin IdP issuer 를 별도 강제한다.
 
 **`device_id` claim 설계 근거** ([specs/services/auth-service/device-session.md](../../services/auth-service/device-session.md) D1): `device_id`는 서버 발급 opaque UUID v7이며 fingerprint가 아니다. PII/식별 리스크가 낮아 access token claim으로 실어도 안전하며, stateless 경로에서 "현재 세션"을 즉시 해석할 수 있다.
 
