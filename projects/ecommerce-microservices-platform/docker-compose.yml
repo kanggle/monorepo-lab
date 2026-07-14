@@ -80,7 +80,7 @@ services:
           # (TASK-BE-406, 1G → 2G). 그때 아무도 kafka 에도 같은 문제가 있는지 묻지 않았다.
           #
           # 가드 (u) 가 이 리밋을 **compose 에서 읽어** 부하를 걸고 사용률을 잰다.
-          memory: 1G
+          memory: 512M
           cpus: '0.5'
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-metadata.sh status -s localhost:9092 2>/dev/null || /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092"]
