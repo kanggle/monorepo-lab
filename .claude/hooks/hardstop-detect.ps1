@@ -110,8 +110,18 @@ try {
     $sharedPathPattern = '^(platform|rules|\.claude|libs|tasks/templates|docs/guides|CLAUDE\.md|TEMPLATE\.md|build\.gradle|settings\.gradle)(?:$|/)'
     $isSharedFile = $relFromRoot -match $sharedPathPattern
 
-    # ===== HARDSTOP-05: edit on task file under tasks/in-progress/ or tasks/review/ =====
+    # ===== HARDSTOP-05: edit on task file under tasks/in-progress/, tasks/review/ or tasks/done/ =====
     # These are frozen per tasks/INDEX.md § Move Rules + projects/<name>/tasks/INDEX.md.
+    #
+    # TASK-MONO-402: `done` was absent from the path regex below while this stanza's own
+    # [VIOLATION]/[WHY] text named it as frozen — so the repo's record of what actually
+    # happened was the one lifecycle stage nothing guarded. The regex now says what the
+    # message says.
+    #
+    # The lifecycle-move exception is what keeps close chores working: `/review-task`
+    # § Close Chore edits `Status: review -> done` INSIDE tasks/done/, after the `git mv`.
+    # That edit is a lifecycle move, so it clears below before the path check runs.
+    # Re-probe an actual close chore against any change to that exception.
     #
     # Lifecycle Status-field moves are allowed: simulate each `<from>` -> `<to>` lifecycle swap
     # on old_string. If swapping the first occurrence yields exactly new_string, the edit is a
@@ -136,7 +146,7 @@ try {
         }
     }
 
-    if (-not $isLifecycleMove -and $relFromRoot -match '(?:^|/)tasks/(in-progress|review)/[^/]+\.md$') {
+    if (-not $isLifecycleMove -and $relFromRoot -match '(?:^|/)tasks/(in-progress|review|done)/[^/]+\.md$') {
         $stage  = $matches[1]
         $taskId = (($relFromRoot -split '/') | Select-Object -Last 1) -replace '\.md$', ''
         $stanza = @"
