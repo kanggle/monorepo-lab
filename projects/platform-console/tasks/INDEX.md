@@ -83,8 +83,6 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-- `TASK-PC-FE-241-console-ui-conventions-have-no-canonical-home.md` — **🟢 READY (2026-07-14, `/audit-memory` 산물).** **콘솔이 실제로 강제하는 UI 컨벤션 3종(날짜·시간 표기 / `DetailHeader`·dl 필드 순서 / `StatusBadge`)이 저장소 어디에도 적혀 있지 않다** — `projects/platform-console/` specs·docs grep **0건**. 근거는 **닫힌 task 본문과 에이전트 메모리**뿐이라, 새로 합류하는 사람·세션은 **코드를 역공학해야** 알 수 있고 **역공학은 규칙과 우연을 구별하지 못한다.** *1곳에만(그것도 저장소 밖에) 있는 규칙 = 사실상 없는 규칙.* **범위 = 선언을 만드는 것**(`docs/conventions/frontend-ui.md`), 컨벤션 변경 아님. **AC-1 = 코드 재검증이 먼저** — 메모리는 12일 됐고 그 사이 PC-FE-233~240 이 지나갔다; **어긋나면 코드가 이긴다.** **⚠️ 지우면 안 되는 *이유* 2개**: `hourCycle:'h23'`(ko-KR `hour12:false` 가 자정을 `24:00:00` 으로 뱉는다) · `timeZone:'Asia/Seoul'` 고정(로컬 존이면 SSR-seed 뷰가 **하이드레이션 불일치**) — 취향이 아니라 버그 픽스이므로 근거를 함께 적지 않으면 다음 사람이 "간소화" 한다. **범위 밖 = lint 가드**(헬퍼 자신과 UTC day-edge 예외 `formatPromotionDay` 가 정당하게 `toLocale*` 를 호출하므로 순진한 룰은 **첫날 RED** → 꺼지고, 꺼진 가드는 없는 가드보다 나쁘다) — **AC-3 이 "기계화 가능한가" 에 명시적으로 답한다.** **AC-4 = 규칙 본문은 한 곳에만**(web-store 는 헬퍼를 복제했지만 규칙 본문까지 복사하면 갈라진다 → 포인터). 짝 = root `TASK-MONO-408`. 분석=Opus 4.8 / 구현 권장=Sonnet.
-
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
 _(직전 완료)_ **IAM 「권한」/「권한 세트」 화면 완료** (PC-FE-227/228 DONE, 2026-07-09, PR #2343 squash `cbdc1a04`). `/permissions`·`/permission-sets` 스텁을 BE-486 RBAC 카탈로그(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`) 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(228=role을 권한 세트로 재프레이밍, 별도 엔드포인트 없음). native `<details>` drill-down·SSR 회복탄력성(operators/audit 매퍼 미러). vitest 2696/2696. **→ BE-486 언블록 소비 완료.**
@@ -109,7 +107,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-241-console-ui-conventions-have-no-canonical-home.md` — **🟡 REVIEW (2026-07-14).** doc-only — new `projects/platform-console/docs/conventions/frontend-ui.md` (canonical home for datetime formatting / `DetailHeader`+dl field order / `StatusBadge` conventions), cross-linked from `docs/onboarding/local-dev.md`. AC-1 re-verification against current code found no code-vs-memory disagreement on rule substance (two new findings added: `DetailHeader`'s `shared/ui/` promotion via TASK-PC-FE-237 § F, and the `Number#toLocaleString` false-positive surface for AC-3). AC-3 verdict: lint mechanization not viable (helpers + `formatPromotionDay` legitimately call `toLocale*`; 40+ unrelated `Number#toLocaleString` call sites would false-positive on a syntax rule). AC-4: canonical home = this doc; `web-store`'s own pointer-line edit deferred to a follow-up task in `ecommerce-microservices-platform/tasks/ready/` (cross-project, outside this task's Target App). `pnpm lint`/`tsc --noEmit`/`vitest run` all green (270 files / 2804 tests) via a worktree `node_modules` junction to the main checkout (main untouched).
 
 ## done
 
