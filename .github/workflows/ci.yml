@@ -1391,8 +1391,16 @@ jobs:
       # ("RedisConnectionFailureException: Unable to connect to Redis"), and because the
       # blacklist check is deliberately fail-closed, EVERY refresh returned 401. That
       # surfaced as DeviceSessionIntegrationTest claiming a single-session revoke had
-      # killed another session's token — a security defect that does not exist. scm's
-      # lane failed in the same attempt, which is what runner-wide exhaustion looks like.
+      # killed another session's token — a security defect that does not exist.
+      #
+      # TASK-MONO-398 corrects a claim MONO-393 left here: that scm's lane failing in the
+      # same attempt was evidence of a starved runner. It was not. scm died in a GitHub
+      # Actions action-resolution outage (Bad Gateway) without running a line of code.
+      # Two lanes failing together is NOT a fingerprint of exhaustion — an Actions outage
+      # kills many jobs at once, so simultaneous failure is more often infrastructure.
+      # Classify by WHERE the job died: setup / action resolve is infrastructure; a fault
+      # inside the failing test's own output window is real. The iam diagnosis above stands
+      # on the latter, not on scm.
       gradle-args: --no-parallel
       report-paths: |
         projects/iam-platform/apps/*/build/reports/tests/integrationTest/
@@ -1664,6 +1672,27 @@ jobs:
         :projects:ecommerce-microservices-platform:apps:search-service:integrationTest
         :projects:ecommerce-microservices-platform:apps:settlement-service:integrationTest
       artifact-name: ecommerce-integration-test-reports
+      # TASK-MONO-398: twelve modules, each booting its own Postgres (+ Kafka, + a nori
+      # Elasticsearch for search-service) Testcontainers stack. With org.gradle.parallel=true
+      # they boot at once on the 2-CPU/7GB runner — the condition TASK-MONO-331 diagnosed for
+      # WMS (four modules) and TASK-MONO-393 for iam (seven). This is the largest lane in the
+      # repo and it was the last one without the mitigation.
+      #
+      # This is NOT applied on module count alone — that is a hypothesis, not evidence, and
+      # over-serialising costs wall-clock and invites the timeout-CANCELLED that WMS hit. It is
+      # applied because the lane demonstrably has the disease: the 2026-07-12 failure (job
+      # 86703554954, hidden inside a rerun so it never showed as a red run) logged
+      # "Connection is not available" x151 and SQLTransientConnectionException x31 with the
+      # tests actually running, and review-service:integrationTest died as the module that lost
+      # the race — the same Hikari/Postgres starvation signature MONO-331 recorded, an order of
+      # magnitude louder than iam's.
+      #
+      # The other unmitigated lanes (fan, erp, scm, finance) showed ZERO exhaustion evidence in
+      # the same audit and are deliberately left alone. scm's only failure was a Bad Gateway
+      # from the Actions outage — the very misreading MONO-398 exists to correct.
+      #
+      # Cost: the lane runs 8-9 min parallel against a 30 min timeout, so serialisation has room.
+      gradle-args: --no-parallel
       report-paths: |
         projects/ecommerce-microservices-platform/apps/order-service/build/reports/tests/integrationTest/
         projects/ecommerce-microservices-platform/apps/order-service/build/test-results/integrationTest/

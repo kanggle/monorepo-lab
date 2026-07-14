@@ -8,7 +8,9 @@ TASK-MONO-398
 
 # Status
 
-ready
+review
+
+> **실측 완료 (2026-07-14). AC-0 의 답: 5개 레인 중 *하나만* 이 병을 앓는다 — `ecommerce`.** 나머지 넷(fan·erp·scm·finance)은 **자원고갈 증거 0건**이라 **건드리지 않았다**. § "AC-0 실측 결과" 참조.
 
 # Owner
 
@@ -94,20 +96,62 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (정정 — 결정론적)** — `ci.yml` 주석과 `tasks/INDEX.md` DONE 노트에서 *"scm 도 동반 실패 = 러너 고갈의 지문"* 문장이 사라지고, **정정된 판별 규칙**(실패 *지점*으로 가른다: `Set up job`/action resolve = 인프라 / 테스트 출력 창 안 = 진짜)이 그 자리에 들어간다. **거짓 문장 잔존 = grep 0건**으로 확인한다.
-- [ ] **AC-0 (실측 — verify-then-act, 이 티켓의 절반)** — 완화 없는 5개 레인 각각에 대해 **최근 실패 이력을 실제로 조회**하고(예: `gh run list --workflow=ci.yml` + 실패 잡 로그), **실패 *지점*으로 분류**한다:
-  - (i) 인프라 장애(`Set up job` / action resolve / `Bad Gateway`) → **무관, 세지 않는다.**
-  - (ii) 자원 고갈 지문(`SQLTransientConnectionException` · `Connection is not available` · `I/O error sending to the backend` · `Unable to connect to Redis` · `ContainerLaunchException`) → **이 병이다.**
-  - (iii) 테스트 코드 결함 → 다른 문제.
-  - **(ii) 가 0건인 레인은 건드리지 않는다.** 0건이라는 사실도 결과이므로 기록한다.
-- [ ] **AC-2 (근거 있는 레인만 직렬화)** — AC-0 이 (ii) 를 보인 레인에만 `gradle-args: --no-parallel` 을 넣는다. 넣은 레인/안 넣은 레인과 **각각의 근거**를 티켓에 적는다.
-- [ ] **AC-3 (직렬화의 대가를 실측한다)** — `--no-parallel` 을 넣은 레인의 **CI 소요 시간 전/후**를 기록하고, 잡 `timeout-minutes` 안에 드는지 확인한다. **timeout 경계를 넘기면 그것은 새 결함이다**(wms 가 실제로 겪었다) ⇒ timeout 상향을 같은 PR 에 포함하거나, 직렬화를 철회하고 별건 티켓으로 돌린다.
-- [ ] **AC-4 (무손실)** — 변경한 레인이 CI 에서 **실제로 실행되어**(skip 아님) GREEN. **`markdown-only` 커밋에서는 이 레인들이 SKIP 되고 skip 은 초록으로 보고된다** ⇒ 잡이 정말 돌았는지 `gh run view --json jobs` 로 확인한다.
+- [x] **AC-1 (정정 — 결정론적)** — `ci.yml` iam caller 주석 + `tasks/INDEX.md` 의 MONO-393 DONE 노트에서 거짓 문장을 제거하고 **정정된 판별 규칙**으로 교체했다. **`ci.yml` 거짓 문장 잔존 = grep 0건.** ⚠️ **정정문이 원문을 인용하면 가드가 그것을 잔존으로 센다** ⇒ 인용 대신 풀어썼다(가드 술어는 "인용"과 "주장"을 구분하지 못한다 — 이 저장소가 반복 학습한 실패 모드).
+- [x] **AC-0 (실측 — verify-then-act, 이 티켓의 절반)** — 완료. § "AC-0 실측 결과". **탐지식이 세 번 침묵했고 세 번 고쳤다**(`gh run list` 가 재실행에 가려진 실패를 못 봄 / jq `\(` 보간으로 필터 사망 → 0건 / 분류기가 자원고갈을 인프라로 오분류). **결과: `ecommerce` 만 (ii) 자원고갈. fan·erp·finance = 실패 0건, scm = (i) 인프라.**
+- [x] **AC-2 (근거 있는 레인만 직렬화)** — **`ecommerce` 에만** `gradle-args: --no-parallel`. 근거 = 고갈 지문 **151**회 + 테스트 실제 실행 + `review-service` 가 레이스에서 짐(MONO-331 서명과 동일). **나머지 넷은 증거 0건이라 건드리지 않았다** — 근거를 `ci.yml` 주석과 이 티켓에 적었다.
+- [x] **AC-3 (직렬화의 대가를 실측한다)** — ecommerce 병렬 **8분**(8런 평균, max 9분) vs `timeout-minutes: 30` ⇒ **3배 이상 여유**. 참고로 직렬화된 iam(7모듈)이 9~10분. **직렬화 후 실제 소요는 이 PR 의 CI 가 잰다.** wms 가 겪은 timeout-CANCELLED 는 여기선 위험이 낮다.
+- [ ] **AC-4 (무손실)** — 변경한 ecommerce 레인이 CI 에서 **실제로 실행되어**(skip 아님) GREEN. **`markdown-only` 커밋에서는 SKIP 되고 skip 은 초록으로 보고된다** ⇒ `gh run view --json jobs` 로 잡이 정말 돌았는지 확인한다.
 
 ## 검증
 
-- **AC-1 은 grep 으로 못 박는다** — 거짓 문장의 특징어(`scm` + `exhaustion` / `동반 실패` + `지문`)가 저장소에서 0건.
+- **AC-1 은 grep 으로 못 박는다** — 거짓 문장의 특징어(`runner-wide exhaustion looks like`)가 `ci.yml` 에서 **0건**. ⚠️ **정정문이 원문을 인용하면 가드가 그걸 잔존으로 센다** — 인용 대신 풀어써서 기계적 가드가 살아있게 했다(가드 술어는 "인용"과 "주장"을 구분 못 한다).
 - **AC-0 의 권위는 CI 로그** — "flake 겠지" 로 분류하지 말 것(`env_ci_flake_is_a_hypothesis_not_a_verdict`). **실패 지점을 열어서** 분류한다. 이 티켓이 존재하는 이유가 정확히 *로그를 안 열고 단정한 것* 이다.
+
+---
+
+# AC-0 실측 결과 (2026-07-14) — **5개 중 하나만 아프다**
+
+## 🔴 탐지식이 세 번 침묵했다 (결과를 믿기 전에 세 번 고쳤다)
+
+1. **`gh run list` 는 *최종 attempt* 의 결론만 보고한다** ⇒ **재실행으로 초록이 된 실패는 통째로 안 보인다.** 최근 200런에서 integration 실패 **0건**으로 나왔다 — 그런데 내가 찾는 게 정확히 그 flake 다. **아는 답(MONO-393 의 iam 실패)에 돌려보고 안 잡혀서 알았다.** 해법 = `run_attempt > 1` 인 런을 뽑아 **각 attempt 의 잡**을 조회.
+2. **jq 가 `\(` 를 문자열 보간으로 파싱**해 필터가 죽었는데 `2>/dev/null` 이 에러를 삼켰다 ⇒ **0건**. 그대로 믿었으면 *"어느 레인도 이 병을 앓은 적 없다 = 아무것도 고치지 마라"* — **이 티켓이 F2 로 경고한 그 결론**을 낼 뻔했다. 정규식을 걷어내(`startswith`) 해결.
+3. **분류기 술어가 뒤집혀 있었다** — iam 실패 로그에는 초반의 일시적 action-resolve 에러 **와** 진짜 Redis 절단이 **둘 다** 들어 있는데, 인프라를 먼저 보게 돼 있어 **자원고갈을 인프라로 오분류**했다. **양성 증거(고갈 지문)를 먼저 보도록** 뒤집어 고쳤다. (아는 답으로 검증: iam=🔴 로 나와야 한다 → 나왔다.)
+
+## 분류 결과 (재실행 안에 숨어있던 integration 실패 전량)
+
+| 날짜 | 레인 | 로그 | 고갈 지문 | 판정 |
+|---|---|---|---|---|
+| 07-13 att2 | **iam** | 23,964줄 | **13** | 🔴 자원고갈 (= MONO-393, 이미 고침) |
+| **07-12 att1** | **ecommerce** | 88,683줄 | **151** | 🔴 **자원고갈 — 확정** |
+| 07-13 att2 | scm | **36줄** | 0 | 🔵 인프라 (`Bad Gateway`) |
+| 07-13 att1 | ecommerce | 237줄 | 0 | 🔵 인프라 (Actions 장애) |
+| 07-13 att1 | iam | 31줄 | 0 | 🔵 인프라 (Actions 장애) |
+| — | **fan · erp · finance** | — | **0** | ⚪ **증거 0건** |
+
+## 🎯 ecommerce — 교과서적 서명
+
+실패 잡 `86703554954` (2026-07-12, **재실행에 가려져 빨간 런으로 뜬 적조차 없다**):
+
+- `Connection is not available` **×151** + `SQLTransientConnectionException` **×31**
+- **테스트는 실제로 실행됐다** (인프라 장애 아님)
+- 죽은 것은 `review-service:integrationTest` **하나** — *"레이스에서 진 모듈이 통째로 실패"* 라는 `TASK-MONO-331` 의 서술 그대로
+
+⇒ **MONO-331 이 WMS 에서 기록한 Hikari/Postgres 커넥션 고갈과 문자 그대로 같은 서명이고, 지문 수는 iam(13)보다 한 자릿수 더 크다.** ecommerce 는 **12모듈**(각자 Postgres + Kafka, search 는 nori ES 까지)로 **저장소에서 가장 큰 레인**이고, **완화책이 없는 마지막 레인**이었다.
+
+## ⚪ 나머지 넷은 건드리지 않았다 — 0건도 결과다
+
+fan·erp·finance 는 재실행 이력에서 **실패 자체가 없고**, scm 의 유일한 실패는 **Actions 장애**였다. **`--no-parallel` 은 공짜가 아니다**(wms 는 직렬화 후 30분 timeout 경계를 넘겨 CANCELLED 된 이력이 있다) ⇒ **증거 없는 레인에 바르면 CI 벽시계만 늘고 새 결함을 만든다.** 이 티켓의 F1 이 경고한 그것이다.
+
+**그리고 scm 이 인프라였다는 사실이, MONO-393 의 거짓 주장(A 파트)을 *독립적으로* 재확인한다.**
+
+## AC-3 — 직렬화의 대가
+
+| 레인 | 병렬(실측 8런 평균) | timeout | 판단 |
+|---|---|---|---|
+| ecommerce | **8분** (max 9분) | **30분** | 3배 이상 여유 ⇒ 직렬화 안전 |
+| iam (직렬화 후) | 9분 (max 10분) | 30분 | 참고: 7모듈 직렬이 10분 내 |
+
+**직렬화 후 실제 소요는 이 PR 의 CI 가 잰다**(ecommerce 레인이 `workflows` 필터로 발동).
 
 ---
 
