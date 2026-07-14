@@ -1,5 +1,8 @@
 package com.example.common.page;
 
+// TASK-MONO-407 measurement probe (AC-4) — a shared-library edit must still wake
+// every project lane. Not intended to be merged.
+
 /**
  * Common pagination request. Used across services as a cross-service technical DTO.
  * <p>
