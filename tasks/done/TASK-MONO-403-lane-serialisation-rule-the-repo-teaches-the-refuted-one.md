@@ -1,6 +1,6 @@
 # TASK-MONO-403 — 저장소가 가르치는 레인 직렬화 규칙은 MONO-398 이 반증한 그 규칙이다
 
-- **Status**: review
+- **Status**: done
 - **Type**: monorepo (shared — `.github/workflows/`, `platform/`)
 - **Priority**: P2
 - **Origin**: 자진 신고 (TASK-MONO-398 의 정합화 감사에서 발견)
