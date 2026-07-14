@@ -84,8 +84,16 @@ include(
     // of "something calls account-service's internal API". fan-platform now does
     // exactly that, for real and deployed, so the exhibit became a duplicate that
     // every platform-wide sweep still had to carry. No compose ever started them.
-    // auth-service's Flyway V0009 still seeds their OAuth clients (migrations are
-    // immutable); those rows are now orphaned and harmless.
+    // auth-service's Flyway V0009 still seeds `community-service-client` and
+    // `membership-service-client`. TASK-MONO-394 called those rows "orphaned and
+    // harmless" — TASK-MONO-400 measured it and they are NOT. `community-service-
+    // client` is a LIVE credential: fan-platform's deployed community-service
+    // authenticates with it (client_credentials -> membership.read) to reach its own
+    // membership-service. Revoking it fails the premium-feed gate closed
+    // (TASK-FAN-BE-019), which is a feature outage, not a quiet 500. Do not "clean
+    // up" V0009. (`membership-service-client` has no consumer — V0009 pre-registered
+    // it for a migration that never came — but it is registered in the auth-api
+    // contract, so retiring it is its own decision, not housekeeping.)
     // TASK-MONO-080: iam tests/e2e module historical 등록 누락 정정. PR #432
     // (TASK-MONO-078) 가 본 모듈의 build.gradle 을 갱신했으나 settings.gradle
     // include 가 없어 gradle 이 인식 못 했고 nightly iam-e2e-full job 의 첫

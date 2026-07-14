@@ -314,6 +314,14 @@ B2B 소비자가 사용자 디렉터리를 IAM에 동기화할 때:
 >
 > **이 ADR 의 결정(D1~D4)은 하나도 바뀌지 않는다.** OIDC 채택, RS256, SAS 기반 AS, 소비자 검증 패턴 모두 유효하다 — 다만 **그 패턴의 소비자 목록에서 두 데모가 빠졌을 뿐**이다. 살아있는 IAM 내부 소비자는 이제 `gateway-service` · `admin-service` · `security-service` 이고, 외부 소비자는 `wms` · `scm` · `finance` · `erp` · `ecommerce` · `fan-platform` 이다.
 >
-> **잔존물(의도적)**: `auth-service` 의 Flyway `V0009__seed_community_membership_oauth_clients.sql` 는 **적용된 마이그레이션이므로 불변** — 두 서비스의 OAuth 클라이언트 행과 `membership.read` 스코프는 **고아 상태로 남는다**(무해). 이 파일을 지우면 체크섬 불일치로 살아있는 `auth-service` 가 기동하지 못한다.
+> **🔴 잔존물 — `V0009` 는 지우면 안 된다** *(이 문단은 `TASK-MONO-400` 이 정정한 것이다. 원래 이 자리에는 "두 클라이언트는 고아 상태로 남는다(무해)" 라고 적혀 있었고, **그것은 거짓이었다.**)*
 >
-> 은퇴 근거·실측 전문: [`TASK-MONO-394`](../../../../tasks/done/TASK-MONO-394-iam-community-membership-ci-live-deploy-dead.md) · [`ADR-MONO-049` § 1.12](../../../../docs/adr/ADR-MONO-049-framework-neutral-security-library.md).
+> `auth-service` 의 `V0009__seed_community_membership_oauth_clients.sql` 는 적용된 마이그레이션이라 불변이다. 그러나 **불변성은 지우면 안 되는 이유가 아니다** — 살아있는 소비자가 이유다:
+>
+> - **`community-service-client` = 살아있는 자격증명.** `fan-platform` 의 **배포된** `community-service` 가 이 client 로 `client_credentials` 토큰을 받아(`IamClientCredentialsTokenProvider`) `membership.read` 스코프로 자기 `membership-service` 의 `/internal/membership/*` 를 호출한다(`HttpMembershipChecker`). **revoke 하면** 멤버십 게이트가 **fail-close**(`TASK-FAN-BE-019`) 되어 **프리미엄 피드가 전면 차단**된다.
+> - **`membership-service-client` = 소비자 없음** (V0009 주석: *"Reserved for future outbound calls"*). 다만 `auth-api.md` § Registered Clients 에 tenant `fan-platform` 로 **등록**돼 있어 폐기는 **별개 판단**이다.
+> - **`auth-api.md` 는 처음부터 옳았다** — 두 client 를 iam 이 아니라 **`fan-platform` 테넌트**로 적어뒀다. 은퇴한 것은 **iam 의 서비스**이지 **fan 의 자격증명**이 아니다.
+>
+> (파일 삭제 자체도 체크섬 불일치로 `auth-service` 를 기동 불가로 만든다 — 그러나 **더 중요한 이유는 위**다: 새 마이그레이션으로 revoke 해도 프로덕션이 끊긴다.)
+>
+> 은퇴 근거·실측 전문: [`TASK-MONO-394`](../../../../tasks/done/TASK-MONO-394-iam-community-membership-ci-live-deploy-dead.md) · 정정: [`TASK-MONO-400`](../../../../tasks/done/TASK-MONO-400-the-orphan-claim-is-false-fan-uses-those-credentials.md) · [`ADR-MONO-049` § 1.12](../../../../docs/adr/ADR-MONO-049-framework-neutral-security-library.md).

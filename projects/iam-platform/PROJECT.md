@@ -90,7 +90,10 @@ WMS 같은 enterprise 소비자는 [specs/features/multi-tenancy.md](specs/featu
 
 - **은퇴 근거**: 어떤 compose 도 이들을 띄우지 않았고(라우트 0, 살아있는 소비자 0), 그럼에도 **모든 플랫폼-전역 스윕이 이들을 끌고 다녔다**(`TASK-BE-454/455` outbox v2, `TASK-MONO-392` 보안 클래스 통합). 덤으로 **테넌트 게이트 정책이 fan 운영본과 반대로 갈라져 있었다**(iam=SUPER_ADMIN 와일드카드 거부 / fan=허용) — **반대로 갈라진 정책을 든 채 얼어 있는 코드는 그냥 얼어 있는 코드보다 나쁘다.**
 - **형태**: [`admin-web`](#admin-web--retired-2026-05-18-adr-mono-013-phase-3) 은퇴(`TASK-BE-299`)와 같은 패턴 — 소스·스펙·빌드 참조는 제거하고, 서비스 맵의 행은 **취소선 + RETIRED** 로 남긴다. 원본은 git history 에 보존.
-- **잔존물 (의도적)**: `auth-service` 의 Flyway `V0009__seed_community_membership_oauth_clients.sql` 는 **적용된 마이그레이션이므로 불변** — 두 서비스의 OAuth 클라이언트 행은 **고아 상태로 남는다**(무해).
+- **🔴 잔존물 — `V0009` 는 지우면 안 된다 (`TASK-MONO-400` 정정)**: `auth-service` 의 `V0009__seed_community_membership_oauth_clients.sql` 는 적용된 마이그레이션이라 불변이지만, **불변성은 지우면 안 되는 이유가 아니다.** `MONO-394` 는 이 행들을 *"고아(무해)"* 라고 적었고 **그것은 거짓이었다**:
+  - **`community-service-client` = 살아있는 자격증명이다.** [`fan-platform` 의 배포된 `community-service`](../fan-platform/apps/community-service/src/main/resources/application.yml) 가 이 client 로 `client_credentials` 토큰을 받아(`IamClientCredentialsTokenProvider`) `membership.read` 스코프로 **자기 `membership-service` 의 `/internal/membership/*`** 를 호출한다(`HttpMembershipChecker`). **revoke 하면** 멤버십 게이트가 **fail-close** 되어(`TASK-FAN-BE-019`) **프리미엄 피드가 전면 차단된다** — 조용한 500 이 아니라 기능 정지다.
+  - **`membership-service-client` 은 소비자가 없다** (V0009 자신의 주석: *"Reserved for future outbound calls"*). 다만 [`auth-api.md` § Registered Clients](specs/contracts/http/auth-api.md) 에 **tenant `fan-platform` 으로 등록**돼 있으므로, 폐기는 **별개 판단**이지 청소가 아니다.
+  - **계약 파일은 처음부터 옳았다** — `auth-api.md` 는 두 client 를 iam 이 아니라 **`fan-platform` 테넌트**로 적어뒀다. 틀렸던 것은 `MONO-394` 의 서술뿐이다.
 - **결과**: iam 은 **순수 backend-only IdP** (auth/account/admin/security/gateway) 로 정리됐다 — product-layer 잔재 없음.
 
 ### admin-web — RETIRED 2026-05-18 (ADR-MONO-013 Phase 3)
