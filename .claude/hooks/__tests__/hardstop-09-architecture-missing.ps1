@@ -1,4 +1,4 @@
-# HARDSTOP-09 fixture — edit under projects/<name>/apps/<service>/src/main/ without architecture.md.
+﻿# HARDSTOP-09 fixture — edit under projects/<name>/apps/<service>/src/main/ without architecture.md.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..\..') | Select-Object -ExpandProperty Path

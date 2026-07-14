@@ -270,7 +270,13 @@ try {
             if ($data.tool_name -eq 'Write' -or ($data.tool_input -and $data.tool_input.content)) {
                 $post09 = $newString
             } elseif (Test-Path $absFile09 -PathType Leaf) {
-                $existing09 = Get-Content -Raw -Path $absFile09 -ErrorAction SilentlyContinue
+                # TASK-MONO-405: -Encoding UTF8 everywhere this hook reads a repo file.
+                # WinPS 5.1 defaults Get-Content to the host ANSI codepage, so on a
+                # non-UTF-8 host every non-ASCII character in a spec or task file
+                # (em-dashes, Korean) decodes wrong — and a guard that compares against
+                # misread text silently stops matching. The guard does not fail loudly;
+                # it just stops seeing.
+                $existing09 = Get-Content -Raw -Encoding UTF8 -Path $absFile09 -ErrorAction SilentlyContinue
                 if ($existing09 -and $oldString -and $newString -and $existing09.Contains($oldString)) {
                     $post09 = $existing09.Replace($oldString, $newString)
                 } elseif ($existing09) {
@@ -293,7 +299,7 @@ try {
                         $hs09Cand = Get-ChildItem -Path $rd -Filter 'TASK-*.md' -File -ErrorAction SilentlyContinue |
                             Where-Object { $_.Name -match '(?i)^TASK-[A-Z0-9-]*BE-' }
                         foreach ($hc in $hs09Cand) {
-                            $hs09Body = Get-Content -Raw -Path $hc.FullName -ErrorAction SilentlyContinue
+                            $hs09Body = Get-Content -Raw -Encoding UTF8 -Path $hc.FullName -ErrorAction SilentlyContinue
                             if ($hs09Body -and $hs09Body -match 'architecture\.md') { $hs09HasBackfillTask = $true; break }
                         }
                     }
@@ -326,7 +332,7 @@ try {
         if ($data.tool_name -eq 'Write' -or ($data.tool_input -and $data.tool_input.content)) {
             $simContent = $newString
         } elseif (Test-Path $absFile -PathType Leaf) {
-            $existing = Get-Content -Raw -Path $absFile -ErrorAction SilentlyContinue
+            $existing = Get-Content -Raw -Encoding UTF8 -Path $absFile -ErrorAction SilentlyContinue
             if ($existing -and $oldString -and $newString) {
                 if ($existing.Contains($oldString)) {
                     $simContent = $existing.Replace($oldString, $newString)
@@ -358,7 +364,7 @@ try {
         $stCatalog = @()
         $stIndexPath = Join-Path $repoRoot "platform/service-types/INDEX.md"
         if (Test-Path $stIndexPath -PathType Leaf) {
-            $stIndex = Get-Content -Raw -Path $stIndexPath -ErrorAction SilentlyContinue
+            $stIndex = Get-Content -Raw -Encoding UTF8 -Path $stIndexPath -ErrorAction SilentlyContinue
             if ($stIndex) {
                 $stCatalog = [regex]::Matches($stIndex, '`([a-z][a-z0-9-]+)`') |
                     ForEach-Object { $_.Groups[1].Value } |

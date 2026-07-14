@@ -1,4 +1,4 @@
-# HARDSTOP-09 fixture — rule-sanctioned deferred-skeleton (Option 3) recognition.
+﻿# HARDSTOP-09 fixture — rule-sanctioned deferred-skeleton (Option 3) recognition.
 #
 # Provenance: TASK-MONO-120 (erp PR-B (g)(1) over-fire; finance PR-B was the
 # same target). platform/hardstop-rules.md HARDSTOP-09 Remediation Option 3

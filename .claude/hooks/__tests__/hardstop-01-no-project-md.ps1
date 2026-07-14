@@ -1,4 +1,4 @@
-# HARDSTOP-01 fixture — file under projects/<name>/ without PROJECT.md ancestor.
+﻿# HARDSTOP-01 fixture — file under projects/<name>/ without PROJECT.md ancestor.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
 # Use a synthetic projects/<orphan>/foo.md path under a temp tree that mimics the repo layout

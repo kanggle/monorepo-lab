@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Title   = "Claude Code",
     [string]$Message = ([string][char[]]@(0xC791,0xC5C5,0x20,0xC644,0xB8CC))
 )

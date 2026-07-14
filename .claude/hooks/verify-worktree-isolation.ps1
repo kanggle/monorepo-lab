@@ -1,4 +1,4 @@
-# Defensive PreToolUse Edit/Write guard for the 2026-05-25 PC-BE-005 dispatch
+﻿# Defensive PreToolUse Edit/Write guard for the 2026-05-25 PC-BE-005 dispatch
 # worktree path-leak (~2.8% rate, 4 leaks / 144 tool_uses). When an Agent runs
 # in `isolation: "worktree"`, the cwd is a *linked* git worktree; Write/Edit
 # tool calls whose `file_path` resolves OUTSIDE that worktree's toplevel are

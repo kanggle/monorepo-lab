@@ -1,4 +1,4 @@
-# HARDSTOP-03 fixture — shared file references a project name as path token.
+﻿# HARDSTOP-03 fixture — shared file references a project name as path token.
 # Includes positive (genuine violation) and negative (annotated allow) cases.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 

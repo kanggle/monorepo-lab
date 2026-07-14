@@ -1,4 +1,4 @@
-# HARDSTOP-10 CRLF/LF simulation fixture (TASK-MONO-102).
+﻿# HARDSTOP-10 CRLF/LF simulation fixture (TASK-MONO-102).
 #
 # Regression guard for the 4-instance Edit hook CRLF/LF simulation mismatch
 # (MONO-083 / MONO-093 / MONO-095 / MONO-101). Before this fix, an Edit whose

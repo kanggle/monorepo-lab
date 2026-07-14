@@ -1,4 +1,4 @@
-# PreToolUse[Bash] advisory guard for the concurrent-session shared-checkout
+﻿# PreToolUse[Bash] advisory guard for the concurrent-session shared-checkout
 # hazard (CLAUDE.md > Cross-Project Changes > "Concurrent-session worktree
 # isolation"; project memory env_concurrent_git_branch_switch_hazard;
 # TASK-MONO-235 promoted the rule, this hook is its TASK-MONO-236 enforcement).

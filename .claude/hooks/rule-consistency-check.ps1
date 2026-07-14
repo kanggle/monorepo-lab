@@ -1,4 +1,4 @@
-$reader    = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8)
+﻿$reader    = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8)
 $inputJson = $reader.ReadToEnd()
 
 function Write-Block {
@@ -62,7 +62,9 @@ try {
     }
     elseif ($null -ne $data.tool_input.old_string) {
         if ($filePath -and (Test-Path -LiteralPath $filePath)) {
-            $existing = Get-Content -Raw -LiteralPath $filePath
+            # TASK-MONO-405: see hardstop-detect.ps1 — WinPS 5.1 reads with the host ANSI
+            # codepage by default, which silently mangles non-ASCII on a non-UTF-8 host.
+            $existing = Get-Content -Raw -Encoding UTF8 -LiteralPath $filePath
             $content = $existing.Replace([string]$data.tool_input.old_string, [string]$data.tool_input.new_string)
         }
         else {

@@ -1,4 +1,4 @@
-# PreToolUse[Bash] HARD-BLOCK guard: prohibit doing task work directly in the
+﻿# PreToolUse[Bash] HARD-BLOCK guard: prohibit doing task work directly in the
 # MAIN checkout. Complements warn-shared-checkout-switch.ps1, which only `ask`s
 # and ONLY when the tree is DIRTY — that left a gap: a CLEAN-start
 # `git checkout -b task/...` in the main checkout was allowed silently, which is

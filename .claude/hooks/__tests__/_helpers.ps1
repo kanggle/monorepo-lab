@@ -1,4 +1,4 @@
-# Test helpers for .claude/hooks/__tests__/ fixtures.
+﻿# Test helpers for .claude/hooks/__tests__/ fixtures.
 #
 # Provides Invoke-Hook + Assert-Stanza so each fixture is a short, declarative
 # script that pipes synthesized stdin JSON to the target hook and asserts the
@@ -99,7 +99,13 @@ function Get-CanonicalStanza {
     if (-not (Test-Path $RulesPath -PathType Leaf)) {
         throw "Canonical rules file not found: $RulesPath"
     }
-    $content = (Get-Content -Path $RulesPath -Raw) -replace "`r`n", "`n"
+    # TASK-MONO-405: -Encoding UTF8 is load-bearing. Windows PowerShell 5.1's default
+    # for Get-Content is the host ANSI codepage, not UTF-8. hardstop-rules.md is UTF-8
+    # without a BOM and its headings carry em-dashes ("## HARDSTOP-01 — ..."), so on a
+    # CP1252 host the heading decodes to mojibake and the pattern below matches nothing
+    # — reported as "canonical stanza not found", which reads like a missing rule rather
+    # than a misread file. Green on a UTF-8-codepage dev box, red on the CI runner.
+    $content = (Get-Content -Path $RulesPath -Raw -Encoding UTF8) -replace "`r`n", "`n"
     $idEsc = [regex]::Escape($RuleId)
     # Match: heading "## HARDSTOP-NN — ..." then anything up to ```...``` code block; capture inner body.
     $pattern = "(?ms)^## $idEsc — [^\n]+\n.*?\n``````\n(.+?)\n``````"

@@ -1,7 +1,17 @@
-# Diagnostic runner for the hook fixtures. Developer-run only — not CI-gated.
+﻿# Runner for the hook fixtures.
+#
+# CI-gated since TASK-MONO-405 — the `hook-fixtures` job in .github/workflows/ci.yml
+# runs this on windows-latest under Windows PowerShell, gated on the `hooks` paths
+# filter (.claude/hooks/** + .claude/settings.json). Before that it was developer-run
+# only, which meant MONO-402's regression fixtures were watching nothing: the regex
+# could be reverted or the matcher narrowed again and CI stayed green.
+#
+# Run under Windows PowerShell (5.1), NOT pwsh — settings.json launches the hooks with
+# `powershell -NoProfile -File …`, and the fixtures shell out the same way. That is the
+# interpreter whose behaviour we need to be asserting.
 #
 # Usage:
-#   pwsh .claude/hooks/__tests__/run-all.ps1
+#   powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/__tests__/run-all.ps1
 #
 # Each fixture is self-contained and emits one "PASS:" line per assertion.
 # A failure throws, and the runner exits non-zero with the failing fixture name.
@@ -19,7 +29,6 @@ $fixtures = @(
     'hardstop-body-canonical-sync.ps1',
     'format-alignment.ps1',
     'protect-main-branch.ps1',
-    'verify-worktree-isolation.ps1',
     'verify-worktree-isolation.ps1',
     'warn-shared-checkout-switch.ps1'
 )
