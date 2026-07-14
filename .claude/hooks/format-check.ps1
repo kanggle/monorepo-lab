@@ -12,7 +12,9 @@ try {
     # Check Java files for common format issues after edit
     if ($filePath -match '\.java$') {
         if (Test-Path $filePath) {
-            $content = Get-Content $filePath -Raw -ErrorAction Stop
+            # TASK-MONO-405: see hardstop-detect.ps1 — WinPS 5.1 reads with the host ANSI
+            # codepage by default, which silently mangles non-ASCII on a non-UTF-8 host.
+            $content = Get-Content $filePath -Raw -Encoding UTF8 -ErrorAction Stop
 
             $issues = @()
 
