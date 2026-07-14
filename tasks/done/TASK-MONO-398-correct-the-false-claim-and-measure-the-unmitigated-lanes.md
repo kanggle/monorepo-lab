@@ -8,7 +8,7 @@ TASK-MONO-398
 
 # Status
 
-review
+done
 
 > **실측 완료 (2026-07-14). AC-0 의 답: 5개 레인 중 *하나만* 이 병을 앓는다 — `ecommerce`.** 나머지 넷(fan·erp·scm·finance)은 **자원고갈 증거 0건**이라 **건드리지 않았다**. § "AC-0 실측 결과" 참조.
 
