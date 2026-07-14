@@ -688,7 +688,11 @@ jobs:
   demo-wrapper-smoke:
     name: Demo wrapper smoke (infra/demo)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # TASK-MONO-397: 10 → 15. Guard (u) boots kafka under its compose-declared
+    # memory limit, drives a fixed load, and measures headroom — about two
+    # minutes. A guard that times out is a guard that gets switched off, and a
+    # switched-off job's skip reports green (MONO-360).
+    timeout-minutes: 15
     needs: changes
     if: needs.changes.outputs.demo-wrapper == 'true'
     steps:

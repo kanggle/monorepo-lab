@@ -59,7 +59,32 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          # TASK-MONO-397: 512M → 1G.
+          #
+          # ⚠️ **리밋은 상한이 아니라 설정이다.** KAFKA_HEAP_OPTS 가 없으므로 JVM 은
+          # cgroup 을 읽어 힙을 리밋의 25%(MaxRAMPercentage 기본값)로 잡는다 — 실측:
+          #
+          #   limit 512M → MaxHeapSize = 134217728 (**128 MiB**)
+          #   limit 1G   → MaxHeapSize = 268435456 (**256 MiB**)
+          #
+          # 즉 `512M` 은 "512MB 까지 써라" 가 아니라 **"128 MiB 힙으로 Kafka 브로커를
+          # 돌려라"** 였다. 그래서 "512면 넉넉하지" 가 그럴듯하게 들렸다.
+          #
+          # 512M 도 **격리 상태에선 산다** — RestartCount 0, healthcheck 통과, healthy.
+          # 죽는 건 함대가 붙을 때다: 데모 호스트에서 12개 ecommerce 서비스가 컨슈머로
+          # 붙자 `constraint=CONSTRAINT_MEMCG` OOM 으로 **14회 재시작**했다(anon-rss
+          # 481 MB 에서 kill). 그 크래시루프는 `docker ps` 에 `Up 16 seconds` 로 보인다.
+          #
+          # 📎 이 값을 **동적으로 재려는 시도를 두 번 했고, 두 번 다 CI 러너가 반박했다:**
+          #    ① RSS 사용률 → WSL2 83.2% vs ubuntu 러너 38.2% (**2.2배 차이**, #2533)
+          #    ② 컨테이너 내 JVM 의 MaxHeapSize → WSL2 128 MiB vs 러너 **3998 MiB**
+          #       (러너에서는 컨테이너 안의 JVM 이 cgroup 리밋을 아예 못 본다, #2534)
+          # ⇒ 가드 (u) 는 **선언된 리밋 자체**를 1 GiB 하한과 대조한다. 상수이고, 열거이고,
+          #   **러너에서든 노트북에서든 같은 답을 낸다.** 근거는 위 산술과 데모 호스트의 OOM.
+          #
+          # 같은 결함 클래스가 바로 아래 elasticsearch 에서 이미 한 번 물었다
+          # (TASK-BE-406, 1G → 2G). 그때 아무도 kafka 에도 같은 문제가 있는지 묻지 않았다.
+          memory: 1G
           cpus: '0.5'
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-metadata.sh status -s localhost:9092 2>/dev/null || /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092"]
