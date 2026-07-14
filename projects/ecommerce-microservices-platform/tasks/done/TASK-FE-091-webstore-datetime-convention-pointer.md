@@ -8,7 +8,7 @@ web-store 는 콘솔의 날짜·시간 규약을 **복제해 쓰면서** 그 규
 
 # Status
 
-review
+done
 
 # Owner
 
