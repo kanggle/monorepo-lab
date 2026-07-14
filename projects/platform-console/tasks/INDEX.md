@@ -83,6 +83,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-PC-FE-242-status-chip-residue-undercounted.md` — **정경 문서가 자기 잔여를 과소계수했다.** `PC-FE-241`(#2567)이 만든 `docs/conventions/frontend-ui.md` §3 은 `StatusBadge` 미채택을 **erp 3건**으로 적었다. 상태칩 술어(= 팔레트를 손으로 쓴 pill)로 **전수** 재측정하면 **7건**이다 — erp 안에 2건 추가(`EffectivePeriodBadge` 의 병행 톤 어휘 / `EmployeeDetail` 은 **`employmentStatusTone()` 이 이미 있는데도** 삼항으로 색칠), **erp 밖에 2건**(`ledger-ops/FxRatesTable`·`wms-ops/WmsAlertsTable`). 규칙은 콘솔 전역인데 **잔여를 한 피처에서만 셌다.** 그리고 **`FxRatesTable` 은 `dark:` 변형이 아예 없어 다크 테마에서 깨진다 — 미채택이 아니라 결함이다.** 부수 2건: 승격 중 **규칙 하나가 유실**(§1 "같은 필드=리스트·상세 동일 포맷" — 코드는 지킨다: `OrdersTable:81`↔`OrderDetail:83`)되었고, 새 정경 문서를 가리키는 링크가 **사람용 온보딩 1곳뿐**이라 `PROJECT.md`(SoT #1) 에서 도달 불가. 분석=Opus 4.8 / 구현 권장=Opus 4.8 (계약 보존 + 다크모드 회귀 판단 포함).
+
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
 _(직전 완료)_ **IAM 「권한」/「권한 세트」 화면 완료** (PC-FE-227/228 DONE, 2026-07-09, PR #2343 squash `cbdc1a04`). `/permissions`·`/permission-sets` 스텁을 BE-486 RBAC 카탈로그(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`) 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(228=role을 권한 세트로 재프레이밍, 별도 엔드포인트 없음). native `<details>` drill-down·SSR 회복탄력성(operators/audit 매퍼 미러). vitest 2696/2696. **→ BE-486 언블록 소비 완료.**
