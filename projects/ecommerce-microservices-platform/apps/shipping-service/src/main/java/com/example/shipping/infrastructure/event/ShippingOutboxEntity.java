@@ -14,8 +14,10 @@ import java.util.UUID;
  * {@code MasterOutboxEntity} / ecommerce {@code PromotionOutboxEntity} reference.
  *
  * <p>Lives under {@code com.example.shipping.infrastructure.event} so it is
- * picked up by the application's {@code @EntityScan(basePackages =
- * {"com.example.shipping", "com.example.messaging"})}.
+ * picked up by the application's {@code @EntityScan(basePackages = "com.example.shipping")}.
+ * (TASK-MONO-406 dropped {@code "com.example.messaging"} from that list: the library holds no
+ * {@code @Entity}, and the {@code @MappedSuperclass} above is resolved via the entity class
+ * hierarchy, not via entity scanning.)
  */
 @Entity
 @Table(name = "shipping_outbox")

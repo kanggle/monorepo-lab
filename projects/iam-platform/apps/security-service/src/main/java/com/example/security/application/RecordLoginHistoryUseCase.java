@@ -1,7 +1,7 @@
 package com.example.security.application;
 
-import com.example.messaging.outbox.ProcessedEventJpaEntity;
-import com.example.messaging.outbox.ProcessedEventJpaRepository;
+import com.example.security.infrastructure.persistence.ProcessedEventJpaEntity;
+import com.example.security.infrastructure.persistence.ProcessedEventJpaRepository;
 import com.example.security.domain.history.LoginHistoryEntry;
 import com.example.security.domain.repository.LoginHistoryRepository;
 import lombok.RequiredArgsConstructor;

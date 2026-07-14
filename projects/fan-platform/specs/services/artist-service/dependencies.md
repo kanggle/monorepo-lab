@@ -22,8 +22,12 @@ Declared in `apps/artist-service/build.gradle`:
 - shared libs:
   - `libs:java-common` — `UuidV7`, `PageQuery/PageResult`
   - `libs:java-web` — common web utilities
-  - `libs:java-messaging` — `OutboxWriter`, `BaseEventPublisher`,
-    `OutboxPollingScheduler`, `OutboxJpaEntity`, `ProcessedEventJpaEntity`
+  - `libs:java-messaging` — `AbstractOutboxPublisher`, `OutboxRowEntity`
+    (`@MappedSuperclass`), `SpringDataOutboxRowRepository`, `TopicResolver`,
+    `OutboxMetrics` / `MicrometerOutboxMetrics`. (The v1 `OutboxWriter` /
+    `BaseEventPublisher` / `OutboxPollingScheduler` / `OutboxJpaEntity` were deleted
+    by TASK-MONO-312 and `ProcessedEventJpaEntity` by TASK-MONO-406 — the library
+    ships no `@Entity`.)
   - `libs:java-observability` — Micrometer / OTel auto-config helpers
   - `libs:java-security` — common security utilities (no per-service identity
     logic; gateway/community-service/artist-service replicate validators

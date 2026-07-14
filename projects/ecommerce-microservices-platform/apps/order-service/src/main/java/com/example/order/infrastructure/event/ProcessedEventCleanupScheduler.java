@@ -1,6 +1,6 @@
 package com.example.order.infrastructure.event;
 
-import com.example.messaging.outbox.ProcessedEventJpaRepository;
+import com.example.order.infrastructure.persistence.ProcessedEventJpaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -7,12 +7,14 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 /**
  * Explicit JPA scanning for account-service's persistence package.
  *
- * <p>An explicit declaration is required because account-service excludes the
- * libs {@code OutboxAutoConfiguration} (TASK-FIN-BE-045 — outbox v2): with an
- * explicit {@code @EnableJpaRepositories} present, Spring Boot's default JPA
- * auto-scanning backs off, so every repository package must be listed here.
- * Covers the domain persistence package plus the v2 {@code infrastructure.outbox}
- * package ({@code AccountOutboxJpaEntity} / {@code AccountOutboxJpaRepository}).
+ * <p>Scopes repository / entity scanning to this service's own packages: the domain
+ * persistence package plus the v2 {@code infrastructure.outbox} package
+ * ({@code AccountOutboxJpaEntity} / {@code AccountOutboxJpaRepository}). Because an
+ * explicit {@code @EnableJpaRepositories} is present, Spring Boot's default JPA
+ * repository auto-scanning backs off, so every repository package must be listed here.
+ * TASK-MONO-406 deleted the libs {@code OutboxAutoConfiguration} /
+ * {@code OutboxJpaConfig}, so this declaration is now the service's own choice rather
+ * than a response to a library-imposed app-wide {@code @EnableJpaRepositories}.
  * Mirrors scm-procurement-service / ledger-service.
  */
 @Configuration

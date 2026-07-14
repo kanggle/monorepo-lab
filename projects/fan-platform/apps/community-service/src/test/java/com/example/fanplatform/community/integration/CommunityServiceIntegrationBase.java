@@ -55,16 +55,19 @@ public abstract class CommunityServiceIntegrationBase {
     protected JdbcTemplate jdbcTemplate;
 
     /**
-     * Truncate all tables via JDBC (NOT Spring Data {@code deleteAll()}). The
-     * {@code outbox} / {@code processed_events} repositories come from
-     * java-messaging {@code OutboxJpaConfig} which declares
-     * {@code @EnableJpaRepositories(enableDefaultTransactions = false)}, so their
-     * {@code deleteAll()} runs without a transaction and fails
-     * ("No EntityManager with actual transaction available ... merge"). A JDBC
+     * Truncate all tables via JDBC (NOT Spring Data {@code deleteAll()}). A JDBC
      * TRUNCATE auto-commits on its own connection — no JPA transaction required —
-     * and clears every table so the shared singleton containers do not leak state
-     * across IT classes (memory §19c). Mirrors the CI-green membership-service /
-     * erp masterdata bases.
+     * and clears every table in one statement so the shared singleton containers do
+     * not leak state across IT classes (memory §19c). That includes the legacy
+     * {@code outbox} / {@code processed_events} tables, which have no Spring Data
+     * repository at all any more: TASK-MONO-406 deleted java-messaging's
+     * {@code OutboxJpaConfig} + {@code ProcessedEventJpaRepository} (the tables
+     * survive only because applied Flyway migrations are immutable). Historically the
+     * JDBC route was also forced by those lib repositories being declared
+     * {@code @EnableJpaRepositories(enableDefaultTransactions = false)}, which made
+     * their {@code deleteAll()} fail with "No EntityManager with actual transaction
+     * available ... merge". Mirrors the CI-green membership-service / erp masterdata
+     * bases.
      */
     protected void truncateAll() {
         jdbcTemplate.execute(

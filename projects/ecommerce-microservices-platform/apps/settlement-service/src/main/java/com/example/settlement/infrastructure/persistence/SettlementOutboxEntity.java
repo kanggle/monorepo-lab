@@ -14,8 +14,10 @@ import java.util.UUID;
  * {@code MasterOutboxEntity} / ecommerce {@code PromotionOutboxEntity} reference.
  *
  * <p>Lives under {@code com.example.settlement.infrastructure.persistence} so it is
- * picked up by the application's {@code @EntityScan(basePackages =
- * {"com.example.settlement", "com.example.messaging"})}.
+ * picked up by the application's {@code @EntityScan(basePackages = "com.example.settlement")}.
+ * No library package is on that scan path: the {@code @MappedSuperclass} above is resolved via
+ * the entity class hierarchy, not by entity scanning, and since TASK-MONO-406 {@code libs/}
+ * contains no {@code @Entity} at all.
  */
 @Entity
 @Table(name = "settlement_outbox")

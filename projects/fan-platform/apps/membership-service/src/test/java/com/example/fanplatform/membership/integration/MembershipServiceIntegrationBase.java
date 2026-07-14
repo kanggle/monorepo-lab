@@ -55,14 +55,18 @@ public abstract class MembershipServiceIntegrationBase {
     protected JdbcTemplate jdbcTemplate;
 
     /**
-     * Truncate all tables via JDBC (NOT Spring Data {@code deleteAll()}). The
-     * {@code outbox} / {@code processed_events} repositories are configured with
-     * {@code enableDefaultTransactions = false} (java-messaging
-     * {@code OutboxJpaConfig}), so their {@code deleteAll()} runs without a
-     * transaction and fails ("No EntityManager with actual transaction available
-     * ... merge"). A JDBC TRUNCATE auto-commits on its own connection — no JPA
-     * transaction required — and also clears {@code idempotency_keys} so the
-     * shared singleton containers do not leak state across test classes.
+     * Truncate all tables via JDBC (NOT Spring Data {@code deleteAll()}). A JDBC
+     * TRUNCATE auto-commits on its own connection — no JPA transaction required —
+     * and clears every table in one statement (including {@code idempotency_keys})
+     * so the shared singleton containers do not leak state across test classes. It
+     * also covers the legacy {@code outbox} / {@code processed_events} tables, which
+     * have no Spring Data repository at all any more: TASK-MONO-406 deleted
+     * java-messaging's {@code OutboxJpaConfig} + {@code ProcessedEventJpaRepository}
+     * (the tables survive only because applied Flyway migrations are immutable).
+     * Historically the JDBC route was also forced by those lib repositories being
+     * configured {@code enableDefaultTransactions = false}, which made their
+     * {@code deleteAll()} fail with "No EntityManager with actual transaction
+     * available ... merge".
      */
     protected void truncateAll() {
         jdbcTemplate.execute(

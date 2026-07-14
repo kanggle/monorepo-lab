@@ -21,14 +21,17 @@ import org.springframework.transaction.support.TransactionTemplate;
  * ({@link Clock}, {@link TransactionTemplate}) plus the envelope serializer and
  * the {@link DomainEventPort} write adapter.
  *
- * <p>The v1 stack — {@code MasterOutboxPollingScheduler}, the bespoke
- * {@code OutboxMetrics} bean, and the lib {@code OutboxWriter}-based write path —
- * is gone. The lib {@code OutboxAutoConfiguration} is intentionally retained
- * (not excluded): its {@code OutboxJpaConfig} EntityScan is what keeps the v1
- * {@code outbox}/{@code processed_events} tables required under
- * {@code ddl-auto=validate}; see {@code V8__master_outbox_v2.sql}. The v1
- * {@code OutboxWriter}/{@code OutboxPublisher} beans it still registers are no
- * longer referenced or scheduled by master-service.
+ * <p><b>Legacy v1 tables (TASK-MONO-406).</b> The v1 stack —
+ * {@code MasterOutboxPollingScheduler}, the bespoke {@code OutboxMetrics} bean, and the
+ * lib {@code OutboxWriter}-based write path — is gone. TASK-MONO-312 deleted the lib's
+ * v1 {@code OutboxJpaEntity} / {@code OutboxWriter} / {@code OutboxPublisher} beans and
+ * TASK-MONO-406 deleted the remaining {@code OutboxAutoConfiguration} /
+ * {@code OutboxJpaConfig} / {@code ProcessedEventJpaEntity}, so no library entity maps
+ * the v1 {@code outbox} / {@code processed_events} tables any more. They survive in the
+ * schema only because applied Flyway migrations are immutable, and
+ * {@code ddl-auto=validate} only validates mapped entities. The live outbox table is
+ * {@code master_outbox} ({@code V8__master_outbox_v2.sql}), mapped by this service's own
+ * {@code MasterOutboxEntity}.
  */
 @Configuration
 public class OutboxConfig {

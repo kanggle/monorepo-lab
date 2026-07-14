@@ -82,8 +82,11 @@ logging:
 
 outbox:
   # Legacy v1 timing knobs — inert now that the v1 OutboxPollingScheduler is gone
-  # (TASK-FAN-BE-020). The lib OutboxAutoConfiguration is retained for its
-  # EntityScan only; no scheduler reads these keys anymore.
+  # (TASK-FAN-BE-020). TASK-MONO-406 corrected the second half of this note: the lib
+  # OutboxAutoConfiguration was NOT "retained for its EntityScan" — it has been deleted
+  # along with the ProcessedEvent entity it carried, and libs/ now ships no @Entity at all.
+  # `polling.enabled` below is still a live @ConditionalOnProperty gate; `interval-ms` and
+  # `batch-size` bind to nothing.
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
     batch-size: ${OUTBOX_POLLING_BATCH_SIZE:50}

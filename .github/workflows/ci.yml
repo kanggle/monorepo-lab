@@ -193,6 +193,12 @@ jobs:
       # Same reasoning as service-map above: deleting a row from error-handling.md is a
       # docs-only diff, and that is precisely the change the guard must catch.
       error-registry: ${{ steps.filter.outputs.error-registry }}
+      # TASK-MONO-406: NOT AND-combined with `code-changed` either. The rule this
+      # guard enforces lives in `platform/shared-library-policy.md`, and weakening
+      # the rule is a markdown-only diff — exactly the change the guard must still
+      # see. (The `.imports` registry is not a code extension either: adding a class
+      # back to it is how a deleted auto-config would return.)
+      shared-lib-autoconfig: ${{ steps.filter.outputs.shared-lib-autoconfig }}
       # TASK-MONO-360: same reasoning again, and this one is the reason the rule
       # exists. TASK-MONO-347's drift ARRIVES as a one-line markdown edit — a
       # PROJECT.md that promises a `gateway-service` the build never builds.
@@ -355,6 +361,24 @@ jobs:
               - '**/*.java'
               - 'platform/error-handling.md'
               - 'scripts/check-error-code-registry.sh'
+            # TASK-MONO-406: a shared library's @AutoConfiguration runs in every
+            # consumer, so a context-wide annotation in one (@EnableJpaRepositories /
+            # @EntityScan / @ComponentScan / ...) silently reconfigures the whole fleet.
+            # libs/java-messaging shipped exactly that and four services' contexts
+            # failed to load (BE-333, BE-432, BE-461, BE-489) — each patched locally
+            # with `exclude = ...` until the auto-config was being retained *because*
+            # so many services excluded it. No compiler and no unit test can see this
+            # class of defect; only a booting context can, and that needs Docker. This
+            # guard is the Docker-free check on the source.
+            # The defect arrives as an edit to a libs .java file or to the
+            # AutoConfiguration.imports registry — both are enumerated here, so the
+            # job gets its chance to bite (MONO-359/360 reachability rule).
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            shared-lib-autoconfig:
+              - 'libs/*/src/main/**/*.java'
+              - 'libs/*/src/main/resources/META-INF/spring/**'
+              - 'platform/shared-library-policy.md'
+              - 'scripts/check-shared-lib-jpa-scan.sh'
             # TASK-MONO-360 (carries TASK-MONO-347 AC-3): three hand-maintained
             # declarations about gateways — api-gateway-policy.md prose,
             # PROJECT.md, and the compose Traefik labels — against one build
@@ -677,6 +701,57 @@ jobs:
   # The filter is NOT AND-combined with `code-changed` — see the outputs block.
   # Cheap (a few hundred ms of bash).
   # ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-406 — shared-library auto-configuration hygiene.
+  #
+  # A shared library's @AutoConfiguration runs in EVERY consumer without being asked.
+  # A context-wide annotation inside one (@EnableJpaRepositories / @EntityScan /
+  # @ComponentScan / ...) is therefore not scoped to the library — it reconfigures the
+  # whole consuming application. libs/java-messaging shipped an auto-config that
+  # imported a @Configuration carrying @EntityScan + @EnableJpaRepositories, and:
+  #
+  #   * Boot's JpaRepositoriesAutoConfiguration backed off app-wide in all 27
+  #     consumers, so each had to hand-declare its own narrowing @EnableJpaRepositories
+  #     or silently lose its own repositories;
+  #   * the library's repository claimed the bean name `processedEventJpaRepository`,
+  #     so a service that modelled the same concept died with
+  #     BeanDefinitionOverrideException;
+  #   * the library's @Entity was scanned into every consumer, so 14 services created a
+  #     `processed_events` table they never use, purely to satisfy ddl-auto=validate.
+  #
+  # Four contexts failed to load (BE-333, BE-432, BE-461, BE-489). Each was fixed
+  # service-locally with `exclude = ...` — nobody asked why the library was laying the
+  # trap — until the auto-config was retained *because* so many services excluded it.
+  #
+  # This defect class is invisible to the compiler and to unit tests: a slice test never
+  # loads auto-configurations. Only a booting context sees it, and that needs Docker.
+  # This job is the Docker-free check on the source, and it was demonstrated RED on the
+  # parent commit and GREEN here — a guard that has never been observed to fail is not
+  # a guard (MONO-397/MONO-402).
+  #
+  # Scope note: only the AUTO-CONFIG CLOSURE is checked. A library @Configuration that
+  # consumers must explicitly component-scan is opt-in and is NOT flagged — libs/
+  # java-gateway's @EnableWebFluxSecurity is exactly that, and flagging it would have
+  # made this guard red on arrival, which is how guards get switched off (MONO-360).
+  #
+  # The filter is NOT AND-combined with `code-changed` — see the outputs block.
+  # Cheap (a few hundred ms of bash).
+  # ---------------------------------------------------------------------------
+  shared-lib-autoconfig:
+    name: Shared-library auto-config hygiene (no context-wide annotations)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: needs.changes.outputs.shared-lib-autoconfig == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-shared-lib-jpa-scan.sh
+
+      - name: Guard — no @EnableJpaRepositories / @EntityScan in a shared auto-config
+        run: bash scripts/check-shared-lib-jpa-scan.sh
+
   service-type-drift:
     name: Service type drift (architecture.md declarations vs annotations)
     runs-on: ubuntu-latest

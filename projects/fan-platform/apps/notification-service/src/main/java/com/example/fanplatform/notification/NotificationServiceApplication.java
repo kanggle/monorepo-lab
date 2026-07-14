@@ -1,6 +1,5 @@
 package com.example.fanplatform.notification;
 
-import com.example.messaging.outbox.OutboxAutoConfiguration;
 import com.example.messaging.outbox.OutboxMetricsAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -23,20 +22,21 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *
  * <p><b>Terminal consumer</b>: this service holds notification logic only — it
  * owns no domain state machine and never re-emits or publishes any event. It
- * therefore runs <b>no transactional outbox</b>:
- * {@link OutboxAutoConfiguration} (and its metrics companion) from
- * {@code libs/java-messaging} are excluded so no {@code outbox} schema is
- * required and no {@code OutboxWriter}/{@code OutboxPublisher} bean is created
- * (those require an {@code outbox} table). Consumer idempotency lives entirely in
- * this service's own {@code processed_events} dedupe table (libs:java-messaging
- * {@code processed_events} shape; feedback §13). The only Kafka <i>producer</i>
- * use is the DLQ recoverer ({@code KafkaConsumerConfig}) writing to
+ * therefore runs <b>no transactional outbox</b>: {@link OutboxMetricsAutoConfiguration}
+ * from {@code libs/java-messaging} stays excluded (nothing here publishes, so a
+ * publish-failure counter would be dead weight). Consumer idempotency lives entirely in
+ * this service's own {@code processed_events} dedupe table. The only Kafka
+ * <i>producer</i> use is the DLQ recoverer ({@code KafkaConsumerConfig}) writing to
  * {@code <topic>.dlq} — infrastructure error-handling, not a domain event.
+ *
+ * <p>The companion {@code exclude = OutboxAutoConfiguration.class} was dropped by
+ * TASK-MONO-406: that auto-config's only remaining payload was an {@code @EntityScan} +
+ * {@code @EnableJpaRepositories} registering the library's own {@code ProcessedEvent}
+ * entity/repository fleet-wide, whose bean name collided with this service's. ADR-MONO-004
+ * already placed per-service dedupe entities outside the shared library, so MONO-406 deleted
+ * them there — leaving nothing to exclude.
  */
-@SpringBootApplication(exclude = {
-        OutboxAutoConfiguration.class,
-        OutboxMetricsAutoConfiguration.class
-})
+@SpringBootApplication(exclude = OutboxMetricsAutoConfiguration.class)
 public class NotificationServiceApplication {
 
     public static void main(String[] args) {

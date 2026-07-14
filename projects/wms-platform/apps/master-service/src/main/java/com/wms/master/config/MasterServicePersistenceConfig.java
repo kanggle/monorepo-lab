@@ -9,15 +9,16 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 /**
  * JPA configuration for master-service.
  *
- * <p>Required because {@code libs/java-messaging} ships its own
- * {@code OutboxJpaConfig} with {@code @EnableJpaRepositories}, which causes
- * Spring Boot's default {@code JpaRepositoriesAutoConfiguration} to back off.
- * Without an explicit declaration here, this service's own repositories under
- * {@code com.wms.master.adapter.out.persistence} would not be scanned.
- *
- * <p>Scope is <strong>only</strong> master-service's persistence package. The
- * lib's {@code OutboxJpaConfig} already scans {@code com.example.messaging.outbox};
- * including it here too triggers {@code BeanDefinitionOverrideException}.
+ * <p>Scopes repository / entity scanning to <strong>only</strong> master-service's own
+ * persistence package ({@code com.wms.master.adapter.out.persistence}). It used to be
+ * mandatory: {@code libs/java-messaging} shipped an {@code OutboxJpaConfig} with an
+ * app-wide {@code @EnableJpaRepositories}, which made Spring Boot's default
+ * {@code JpaRepositoriesAutoConfiguration} back off, so without an explicit declaration
+ * here the service's own repositories were not scanned (and re-scanning the lib's
+ * {@code com.example.messaging.outbox} package here triggered
+ * {@code BeanDefinitionOverrideException}). TASK-MONO-406 deleted that config — the
+ * library now contributes no {@code @Entity} and no repository at all — so this is the
+ * service's own explicit choice, not a workaround.
  */
 @Configuration
 @EntityScan(basePackages = "com.wms.master.adapter.out.persistence")

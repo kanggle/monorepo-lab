@@ -15,10 +15,13 @@ posts ───────< post_status_history (append-only audit)
    ├──< reactions   (composite PK: post_id + reactor_account_id)
    │
 follows  (composite PK: fan_account_id + artist_account_id; references logical accounts only)
-outbox            (libs:java-messaging — at-least-once relay)
-processed_events  (libs:java-messaging — inbox dedupe; required by Hibernate
-                   schema-validation since java-messaging entities are
-                   @EntityScan'd whenever the lib is on the classpath)
+community_outbox  (v2 at-least-once relay — CommunityOutboxJpaEntity)
+outbox            (legacy v1 relay table; unmapped since TASK-MONO-312 deleted the
+                   lib OutboxJpaEntity — kept only because applied Flyway
+                   migrations are immutable)
+processed_events  (legacy v1 dedupe table; unmapped since TASK-MONO-406 deleted the
+                   lib ProcessedEventJpaEntity — libs:java-messaging now ships no
+                   @Entity, so Hibernate schema-validation no longer requires it)
 ```
 
 ---

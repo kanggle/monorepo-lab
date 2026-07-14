@@ -1,6 +1,5 @@
 package com.example.finance.ledger;
 
-import com.example.messaging.outbox.OutboxAutoConfiguration;
 import com.example.messaging.outbox.OutboxMetricsAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -28,17 +27,18 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * {@code LedgerOutboxPublisher}). It never writes back (the wallet single-entry
  * balance is account-service's authority; the feed is downstream-only).
  *
- * <p>The libs {@link OutboxAutoConfiguration} (and its metrics companion) stay
- * <b>excluded</b>: that auto-config entity-scans the libs
- * {@code ProcessedEventJpaEntity} (mapped to {@code processed_events}), which would
- * collide with this service's OWN {@code processed_events} consumer-dedupe table.
- * Using the per-service {@code OutboxRow} path keeps the dedupe table untouched (F1)
- * while still emitting the feed. {@code @EnableScheduling} drives the outbox relay.
+ * <p>{@link OutboxMetricsAutoConfiguration} stays <b>excluded</b> (this service supplies its
+ * own outbox failure handling). The companion {@code exclude = OutboxAutoConfiguration.class}
+ * was dropped by TASK-MONO-406: that auto-config entity-scanned the library's
+ * {@code ProcessedEventJpaEntity} (also mapped to {@code processed_events}) into every
+ * consumer, which collided with this service's OWN five-column consumer-dedupe entity
+ * ({@code eventId}, {@code tenantId}, {@code topic}, {@code sourceTransactionId},
+ * {@code processedAt}) on both bean name and JPA entity name. ADR-MONO-004 already placed
+ * per-service dedupe entities outside the shared library — MONO-406 deleted the library's,
+ * so there is nothing left to exclude and ledger's dedupe table is untouched (F1).
+ * {@code @EnableScheduling} drives the outbox relay.
  */
-@SpringBootApplication(exclude = {
-        OutboxAutoConfiguration.class,
-        OutboxMetricsAutoConfiguration.class
-})
+@SpringBootApplication(exclude = OutboxMetricsAutoConfiguration.class)
 @EnableScheduling
 public class LedgerServiceApplication {
 

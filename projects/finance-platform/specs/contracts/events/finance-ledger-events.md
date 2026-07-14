@@ -122,10 +122,12 @@ own consumer parses):
   detail = `ledger-api.md § FX rates (read)`; provider / cache / poller detail = architecture.md
   § FX rate feed.
 
-> **Outbox path (not the libs `OutboxWriter`).** ledger-service keeps the libs
-> `OutboxAutoConfiguration` excluded (its `ProcessedEventJpaEntity` would collide with
-> the ledger's own consumer-dedupe `processed_events`) and uses the
-> `AbstractOutboxPublisher` + per-service `LedgerOutboxJpaEntity` path (ADR-MONO-004).
+> **Outbox path.** ledger-service uses the `AbstractOutboxPublisher` + per-service
+> `LedgerOutboxJpaEntity` path (ADR-MONO-004) — the dedupe/outbox tables are mapped by
+> the service's own entities. The libs `OutboxAutoConfiguration` it once had to exclude
+> (its `ProcessedEventJpaEntity` collided with the ledger's own consumer-dedupe
+> `processed_events`) was deleted by TASK-MONO-406; `libs/java-messaging` now ships no
+> `@Entity`.
 
 ## Relationship to platform / rules
 

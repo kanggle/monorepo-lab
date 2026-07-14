@@ -62,8 +62,12 @@ outbox:
 
 order:
   # TASK-BE-448: outbox v2 (OrderOutboxPublisher extends AbstractOutboxPublisher).
-  # The legacy top-level `outbox.polling.*` keys are retained only because the lib
-  # OutboxAutoConfiguration beans (unreferenced after the v2 swap) still bind them.
+  # TASK-MONO-406 corrected the note that used to sit here: the top-level
+  # `outbox.polling.*` keys were never bound by the lib OutboxAutoConfiguration (that
+  # auto-config only imported a JPA config, and it no longer exists at all). Measured:
+  # `outbox.polling.enabled` IS live — it is the @ConditionalOnProperty gate on each
+  # service's own v2 publisher — but `outbox.polling.interval-ms` / `batch-size` bind to
+  # nothing. They are v1 leftovers, kept here rather than removed under an unrelated task.
   outbox:
     batch-size: ${ORDER_OUTBOX_BATCH_SIZE:100}
     poll-ms: ${ORDER_OUTBOX_POLL_MS:1000}

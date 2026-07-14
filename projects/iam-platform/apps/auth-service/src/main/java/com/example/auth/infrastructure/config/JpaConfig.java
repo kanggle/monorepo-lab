@@ -9,9 +9,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * Explicit JPA scanning for the auth-service's own persistence packages.
- * Required because java-messaging's {@code OutboxJpaConfig} declares its own
- * {@code @EnableJpaRepositories}, which suppresses Spring Boot's default
- * JPA repository auto-scanning. See TASK-BE-047.
+ *
+ * <p>Scopes repository / entity scanning to this service's own packages. It used to be
+ * mandatory: java-messaging's {@code OutboxJpaConfig} declared an app-wide
+ * {@code @EnableJpaRepositories} that made Spring Boot's default JPA repository
+ * auto-scanning back off (TASK-BE-047). TASK-MONO-406 deleted that lib config, so this
+ * declaration is now the service's own choice, not a workaround.
  *
  * <p>TASK-BE-252: added {@code oauth2.persistence} package for OAuthClientEntity et al.
  * Also exposes {@link PasswordEncoder} bean used by

@@ -135,7 +135,7 @@ and the rule files indexed by `PROJECT.md`'s declared `domain` (`erp`) and
 | Bounded Context | Audit / Operations — notification fan-out (`rules/domains/erp.md` § Bounded Contexts: "결재 상신/승인/반려 … 알림"). **Notification logic only** (recipient resolution + message rendering); **no domain business logic** (no approval/master state machine), and **no authoritative-fact re-emission** (E5-adjacent boundary, see § Scope discipline) |
 | Deployable unit | `apps/notification-service/` |
 | Data store | MySQL `erp_db` (same instance as `masterdata-service` / `approval-service`, **separate tables** `notification` / `notification_delivery` / `processed_events`; no shared tables, no cross-service JOIN) |
-| Event publication | **None** — notification-service is a terminal consumer. It runs **no transactional outbox** and publishes **no** `erp.notification.*` topic (`rules/domains/erp.md` § Internal Event Catalog has **no** `erp.notification.*` entry — notification is a CONSUMER, not a producer). `OutboxAutoConfiguration` is **excluded**, see § Outbox + audit_log invariants |
+| Event publication | **None** — notification-service is a terminal consumer. It runs **no transactional outbox** and publishes **no** `erp.notification.*` topic (`rules/domains/erp.md` § Internal Event Catalog has **no** `erp.notification.*` entry — notification is a CONSUMER, not a producer). `OutboxMetricsAutoConfiguration` is **excluded** (TASK-MONO-406 deleted `OutboxAutoConfiguration` from the library outright), see § Outbox + audit_log invariants |
 | Event consumption | Kafka topics from `approval-service` (same project): the 4 transition topics `erp.approval.{submitted,approved,rejected,withdrawn}.v1` + `erp.approval.delegated.v1` (TASK-ERP-BE-014 — delegation-granted) + `erp.approval.delegation.revoked.v1` (TASK-ERP-BE-016 — delegation-revoked); both delegation topics `aggregateType = DelegationGrant`; `processed_events` dedupe, T8; consumer group `erp-notification-v1` |
 
 ### Service Type Composition
@@ -232,9 +232,9 @@ authoritative facts:
   service publishes **no** event. `rules/domains/erp.md` § Internal Event Catalog
   lists `erp.masterdata.*` / `erp.approval.*` / `erp.permission.*` /
   `erp.readmodel.*` but **no** `erp.notification.*` — notification is a terminal
-  consumer leaf. There is no state-of-record change to relay, so the
-  transactional outbox (`OutboxAutoConfiguration`) is **excluded** (§ Outbox +
-  audit_log invariants).
+  consumer leaf. There is no state-of-record change to relay, so no transactional
+  outbox is wired and the library's `OutboxMetricsAutoConfiguration` is
+  **excluded** (§ Outbox + audit_log invariants).
 - **Ids-only display, name enrichment optional (deferred).** Events carry only
   ids (`approverId` / `submitterId` / `subjectId` are opaque master ids —
   `erp-approval-events.md` § Envelope). The first increment stores the recipient
@@ -298,7 +298,7 @@ Hexagonal variant — `presentation/` is the inbound web adapter (inbox),
 
 ```
 com.example.erp.notification/
-├── NotificationServiceApplication.java     ← @SpringBootApplication (excludes OutboxAutoConfiguration)
+├── NotificationServiceApplication.java     ← @SpringBootApplication (excludes OutboxMetricsAutoConfiguration)
 ├── domain/                                 ← pure Java, no framework
 │   ├── notification/
 │   │   ├── Notification.java               ← aggregate (recipient, type, title, body, source, read, createdAt)
@@ -351,8 +351,8 @@ com.example.erp.notification/
 
 - `spring-boot-starter-{web,data-jpa,validation,actuator,security,oauth2-resource-server}`.
 - `org.springframework.kafka:spring-kafka` (consumer; transitive through
-  `libs:java-messaging`). **`OutboxAutoConfiguration` is excluded** — no publish
-  side (§ Outbox + audit_log invariants).
+  `libs:java-messaging`). **`OutboxMetricsAutoConfiguration` is excluded** — no
+  publish side (§ Outbox + audit_log invariants).
 - `org.flywaydb:flyway-core`, `flyway-mysql`, `com.mysql:mysql-connector-j` (runtime).
 - `io.micrometer:micrometer-registry-prometheus`, `micrometer-tracing-bridge-otel`,
   `io.opentelemetry:opentelemetry-exporter-otlp`.
@@ -366,12 +366,15 @@ com.example.erp.notification/
 - Messaging / HTTP-client / vendor SDKs in `domain/` or `application/` — must be
   behind `infrastructure/` ports (the `NotificationChannelPort` is the only
   outbound delivery boundary).
-- The transactional **outbox** (`OutboxAutoConfiguration` /
-  `OutboxPollingScheduler`) — explicitly **not** wired (terminal consumer; no
-  `erp.notification.*` topic exists — `rules/domains/erp.md` § Internal Event
-  Catalog). This mirrors the `feedback_spring_boot_diagnostic_patterns` § 13
-  "no-outbox consumer = explicit OutboxAutoConfiguration exclude" lesson (lib↔spec
-  `processed_events` table-name reuse).
+- The transactional **outbox** (`AbstractOutboxPublisher` + an outbox table) —
+  explicitly **not** wired (terminal consumer; no `erp.notification.*` topic
+  exists — `rules/domains/erp.md` § Internal Event Catalog), and the library's
+  `OutboxMetricsAutoConfiguration` is excluded (a publish-failure counter would be
+  dead weight). The historical `OutboxAutoConfiguration` exclude
+  (`feedback_spring_boot_diagnostic_patterns` § 13 — the lib↔spec
+  `processed_events` table-name reuse hazard) no longer applies: TASK-MONO-406
+  deleted that auto-config and its `ProcessedEvent` entity/repository from
+  `libs/java-messaging`, so the library no longer maps any table.
 - Direct cross-tenant repository methods that omit `tenant_id` — every repository
   signature carries `tenant_id` (defense-in-depth; mirrors masterdata / approval /
   read-model).
@@ -555,12 +558,15 @@ a set-to-true is naturally idempotent).
 transactional outbox and publishes **no** events. `rules/domains/erp.md`
 § Internal Event Catalog has **no** `erp.notification.*` topic — notification is a
 consumer leaf, never an authoritative-fact producer (§ Scope discipline). The
-`libs/java-messaging` `OutboxAutoConfiguration` is **explicitly excluded**
-(`@SpringBootApplication(exclude = OutboxAutoConfiguration.class)` or the
-equivalent `spring.autoconfigure.exclude`) — wiring it would create an unused
-`outbox` table (and the lib↔spec `processed_events` table-name reuse hazard,
-`feedback_spring_boot_diagnostic_patterns` § 13). Only the **consumer** + dedupe
-side of `libs:java-messaging` is used.
+`libs/java-messaging` `OutboxMetricsAutoConfiguration` is **explicitly excluded**
+(`@SpringBootApplication(exclude = OutboxMetricsAutoConfiguration.class)` or the
+equivalent `spring.autoconfigure.exclude`) — nothing here publishes, so a
+publish-failure counter would be dead weight. TASK-MONO-406 deleted the former
+`OutboxAutoConfiguration` (and its `ProcessedEvent` entity/repository) from the
+library, so there is no longer any lib↔spec `processed_events` table-name reuse
+hazard (`feedback_spring_boot_diagnostic_patterns` § 13) and nothing else to
+exclude: this service's `processed_events` dedupe table is mapped by its **own**
+entity. Only the **consumer** + dedupe side of `libs:java-messaging` is used.
 
 ### Dispatch + read traceability (E8 / I6 + A2 / A3 / A7)
 
@@ -854,7 +860,7 @@ project memory `project_testcontainers_docker_desktop_blocker`).
 | **transactional T1** Idempotency on mutating endpoints | N/A | The only inbox mutation (`mark-read`) is a naturally-idempotent set-to-true; idempotency is event-side (T8). |
 | **transactional T8** Idempotent event consumption | ✅ | `processed_events` keyed on `eventId`; duplicate → skip; no duplicate notification. |
 | **transactional T2** Atomic command boundary | ✅ | Consume use case writes `Notification` + `NotificationDelivery` + `processed_events` in one `@Transactional` (single-aggregate boundary; no cross-service Tx). |
-| **transactional T3** Outbox / event publication | N/A | No published events — terminal consumer; `OutboxAutoConfiguration` excluded. |
+| **transactional T3** Outbox / event publication | N/A | No published events — terminal consumer; no outbox wired, `OutboxMetricsAutoConfiguration` excluded. |
 | **transactional T4** State machine via dedicated module | ✅ (delivery only) | `NotificationDelivery` is a pure state-machine module (PENDING → DELIVERED/FAILED); no direct `status` UPDATE. It is a *delivery* machine, not a domain-fact machine. |
 | **transactional T5** Optimistic locking | ✅ (v2-relevant) | `version` on `notification_delivery` guards the v2 retry-scheduler contention; v1 IN_APP has no concurrent writer. |
 | **audit-heavy A2** Standard audit schema | ✅ (dispatch trace) | Dispatch trace uses the A2 minimal shape (event_id / occurred_at / actor / action / target / outcome). |

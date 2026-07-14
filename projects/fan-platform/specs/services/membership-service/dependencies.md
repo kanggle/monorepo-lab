@@ -27,7 +27,7 @@ Declared in `apps/membership-service/build.gradle` (authored by FAN-BE-009):
 - shared libs:
   - `libs:java-common` — `UuidV7`, `PageQuery/PageResult`, `ClockPort`
   - `libs:java-web` — `ErrorResponse`, `CommonGlobalExceptionHandler` (membership-service's `GlobalExceptionHandler` uses the project envelope shape, matching community-service)
-  - `libs:java-messaging` — `OutboxWriter`, `BaseEventPublisher`, `OutboxPollingScheduler`, `OutboxJpaEntity`, `ProcessedEventJpaEntity`
+  - `libs:java-messaging` — `AbstractOutboxPublisher`, `OutboxRowEntity` (`@MappedSuperclass`), `SpringDataOutboxRowRepository`, `TopicResolver`, `OutboxMetrics` / `MicrometerOutboxMetrics`. (The v1 `OutboxWriter` / `BaseEventPublisher` / `OutboxPollingScheduler` / `OutboxJpaEntity` were deleted by TASK-MONO-312 and `ProcessedEventJpaEntity` by TASK-MONO-406 — the library ships no `@Entity`.)
   - `libs:java-observability` — Micrometer / OTel auto-config helpers
   - `libs:java-security` — common security utilities (no per-service identity logic; gateway/community/membership-service replicate validators verbatim until rule-of-three justifies extraction)
 

@@ -43,10 +43,13 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
-# TASK-BE-445: outbox v2 (ReviewOutboxPublisher extends AbstractOutboxPublisher).
-# The legacy `outbox.polling.*` keys below are retained only because the lib
-# OutboxAutoConfiguration beans (unreferenced after the v2 swap) still bind them;
+# TASK-BE-445: outbox v2 (ReviewOutboxPublisher extends AbstractOutboxPublisher);
 # the v2 publisher reads the `review.outbox.*` keys.
+# TASK-MONO-406 corrected the note that used to sit here: these keys were never bound by
+# the lib OutboxAutoConfiguration (that auto-config only imported a JPA config, and it no
+# longer exists at all). Measured: `outbox.polling.enabled` IS live — it is the
+# @ConditionalOnProperty gate on the v2 publisher — but `interval-ms` / `batch-size` bind
+# to nothing. They are v1 leftovers, kept rather than removed under an unrelated task.
 outbox:
   polling:
     interval-ms: 1000

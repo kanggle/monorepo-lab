@@ -90,8 +90,10 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   demonstration of the double-entry invariant).
 - Tenant gate (dual-accept), RS256/JWKS, append-only `audit_log`, Flyway, the
   full unit/slice/Testcontainers test pyramid.
-- **Terminal consumer** (no outbox / no emission) — `OutboxAutoConfiguration`
-  excluded, like erp read-model-service.
+- **Terminal consumer** (no outbox / no emission) in this increment — the libs
+  `OutboxAutoConfiguration` was excluded, like erp read-model-service. (TASK-MONO-406
+  has since deleted that auto-config from `libs/java-messaging`; only
+  `OutboxMetricsAutoConfiguration` is excluded today.)
 
 **Second increment — IN (TASK-FIN-BE-008, period close):**
 - **`AccountingPeriod`** aggregate (OPEN→CLOSED state machine; tenant-scoped,
@@ -119,16 +121,18 @@ follow-ups (each its own task) — mirroring the erp `read-model-service` /
   **`finance.ledger.period.closed.v1`** (appended on close in the close
   `@Transactional`). Atomic — the outbox row commits with the domain write (the GL
   feed can never diverge from the books). See § Event publication.
-- **Decision — per-service `OutboxRow` path, NOT the libs `OutboxWriter`**: the libs
-  `OutboxAutoConfiguration` (`OutboxWriter`) entity-scans the libs
-  `ProcessedEventJpaEntity` (mapped to `processed_events`), which would **collide**
-  with ledger-service's OWN `processed_events` consumer-dedupe table (different
-  schema — the collision that made the 1st increment exclude `OutboxAutoConfiguration`).
-  So this increment uses the **`AbstractOutboxPublisher` + per-service
-  `LedgerOutboxJpaEntity implements OutboxRow`** path (ADR-MONO-004; wms
-  inbound/inventory/outbound precedent): ledger keeps `OutboxAutoConfiguration` +
-  `OutboxMetricsAutoConfiguration` **excluded** and owns a `ledger_outbox` table +
-  relay. The consumer-dedupe path is untouched.
+- **Decision — per-service `OutboxRow` path** (ADR-MONO-004; wms
+  inbound/inventory/outbound precedent): the **`AbstractOutboxPublisher` + per-service
+  `LedgerOutboxJpaEntity implements OutboxRow`** path, with ledger owning a
+  `ledger_outbox` table + relay. Historically the libs `OutboxAutoConfiguration`
+  (`OutboxWriter`) entity-scanned a libs `ProcessedEventJpaEntity` (also mapped to
+  `processed_events`) into every consumer, which **collided** with ledger-service's OWN
+  `processed_events` consumer-dedupe table — the collision that made the 1st increment
+  exclude it. **TASK-MONO-406 deleted that auto-config plus the library's
+  `ProcessedEvent` entity/repository**, so `libs/java-messaging` now ships no `@Entity`
+  and there is nothing left to exclude on that axis;
+  `OutboxMetricsAutoConfiguration` (which still exists) stays **excluded**. The
+  consumer-dedupe path is untouched.
 
 **Fourth increment — IN (TASK-FIN-BE-010, reconciliation matching):**
 - The ledger reconciles its **clearing-account** entries (`CASH_CLEARING` /
@@ -529,8 +533,8 @@ It MUST NOT:
 - Mutate account-service state or write back to `finance_db` when publishing the
   GL/AP feed — the emitted events (3rd increment) are a one-way downstream feed, not
   a callback into the wallet. (The 1st/2nd increments emitted nothing; the 3rd adds
-  the per-service outbox — `OutboxRow` path, libs `OutboxAutoConfiguration` still
-  excluded — see § Event publication.)
+  the per-service outbox — `OutboxRow` path; the libs `OutboxAutoConfiguration` no
+  longer exists at all, TASK-MONO-406 — see § Event publication.)
 
 ---
 
@@ -565,7 +569,7 @@ Root package `com.example.finance.ledger`.
 
 ```
 com.example.finance.ledger/
-├── LedgerServiceApplication.java          ← @SpringBootApplication (excludes OutboxAutoConfiguration — terminal consumer)
+├── LedgerServiceApplication.java          ← @SpringBootApplication (excludes OutboxMetricsAutoConfiguration — own outbox failure handling)
 ├── domain/                                ← pure Java, no framework
 │   ├── account/
 │   │   ├── LedgerAccount.java             ← chart-of-accounts node (code, type, normalSide)
@@ -713,11 +717,12 @@ dedupe is event-id based via `processed_events`).
 
 ### Forbidden dependencies
 
-`float`/`double` in money; writing to `finance_db` (account-service's schema); the libs
-`OutboxAutoConfiguration` / `OutboxWriter` path (its `ProcessedEventJpaEntity` collides with the
-consumer-dedupe `processed_events` — the per-service `AbstractOutboxPublisher` /
-`LedgerOutboxJpaEntity` path is used instead, **3rd increment onward**; the service was a
-terminal consumer only through the 1st–2nd increments); external GL/ERP SDKs in
+`float`/`double` in money; writing to `finance_db` (account-service's schema); any
+shared-library entity for the dedupe/outbox tables (the per-service
+`AbstractOutboxPublisher` / `LedgerOutboxJpaEntity` path is used instead, **3rd increment
+onward**; the service was a terminal consumer only through the 1st–2nd increments — the
+libs `OutboxAutoConfiguration` / `OutboxWriter` / `ProcessedEventJpaEntity` path it once
+had to avoid no longer exists, TASK-MONO-312 + TASK-MONO-406); external GL/ERP SDKs in
 `domain/`/`application/`.
 
 ### Boundary rules
@@ -2077,13 +2082,17 @@ row published after the Kafka ACK (at-least-once; downstream consumers dedupe on
 envelope `eventId`). `TopicResolver`: `finance.ledger.X → finance.ledger.X.v1`.
 Exponential backoff + a `ledger.outbox.pending.count` gauge come from the lib.
 
-**Why the `OutboxRow` path, not the libs `OutboxWriter`.** The libs
-`OutboxAutoConfiguration` entity-scans the libs `ProcessedEventJpaEntity` (mapped to
-`processed_events`), which collides with ledger-service's OWN `processed_events`
-consumer-dedupe table. ledger keeps `OutboxAutoConfiguration` +
-`OutboxMetricsAutoConfiguration` **excluded** (1st-increment stance unchanged) and
-owns `LedgerOutboxJpaEntity implements OutboxRow` (`ledger_outbox` table, MySQL
-`payload TEXT`). The consumer-dedupe path is untouched (§ Idempotency / dedupe).
+**Why the `OutboxRow` path (ADR-MONO-004).** A service's dedupe/outbox tables are
+mapped by the service's own entities, never by the shared library. Historically the
+libs `OutboxAutoConfiguration` entity-scanned a libs `ProcessedEventJpaEntity` (also
+mapped to `processed_events`) into every consumer, colliding with ledger-service's OWN
+`processed_events` consumer-dedupe table — hence the 1st-increment exclude.
+**TASK-MONO-406 deleted that auto-config together with the library's `ProcessedEvent`
+entity/repository**, so `libs/java-messaging` now ships no `@Entity` and the collision
+is structurally gone; `OutboxMetricsAutoConfiguration` (still shipped) stays
+**excluded**. ledger owns `LedgerOutboxJpaEntity implements OutboxRow`
+(`ledger_outbox` table, MySQL `payload TEXT`). The consumer-dedupe path is untouched
+(§ Idempotency / dedupe).
 
 ## fintech Mandatory Rule mapping (rules/domains/fintech.md)
 
@@ -2214,8 +2223,9 @@ services synchronously or writes back to `finance_db` (the feed is downstream-on
   payload; close a period → **consume `finance.ledger.period.closed.v1`** and assert
   `{periodId, from, to, closedAt, entryCount}`; a guard-rejected posting into a
   CLOSED period emits **no** `entry.posted` row (atomic rollback). App boot proves
-  no `processed_events` duplicate-mapping (OutboxRow path; `OutboxAutoConfiguration`
-  excluded).
+  no `processed_events` duplicate-mapping (OutboxRow path; since TASK-MONO-406 the
+  library ships no `ProcessedEvent` entity at all, so the only mapping is this
+  service's own).
 - **Reconciliation (4th increment)**: unit — `ReconciliationMatcherTest` (1:1 match;
   unmatched-external → UNMATCHED_EXTERNAL; unmatched-internal → UNMATCHED_INTERNAL;
   amount-mismatch; multi-line determinism); application — `IngestStatementUseCase`

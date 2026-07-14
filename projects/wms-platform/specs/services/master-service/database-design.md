@@ -49,15 +49,16 @@ domain meaning of each table.
                           │ master_outbox│ (V8)  │  outbox    │  │ processed_events │
                           │ UUID PK, v2  │       │ (V2, stub) │  │ (V2, stub)       │
                           └──────────────┘       └────────────┘  └──────────────────┘
-                          (live publisher)       (retained, unused — EntityScan/validate)
+                          (live publisher)       (legacy, unused — unmapped since MONO-406)
 ```
 
 Total: 9 tables across 8 migrations (V1=32, V2=28, V3=43, V4=53, V5=52,
 V6=49, V7=45, V8=master_outbox). **TASK-BE-438** added V8 `master_outbox`
 (v2 `AbstractOutboxPublisher`: UUID PK + TEXT payload + `occurred_at` +
 `retries`/`last_error`). The original V2 `outbox`/`processed_events` tables
-are retained-but-unused (the lib EntityScan + `ddl-auto=validate` require
-them) — see § 2 below.
+are legacy-but-unused: since TASK-MONO-406 deleted the lib entities that mapped
+them, nothing maps them at all and `ddl-auto=validate` ignores them — they simply
+stay in the schema because applied migrations are immutable — see § 2 below.
 
 ---
 
@@ -99,13 +100,13 @@ fire at the application layer before the deactivation succeeds.
 
 ---
 
-## 2. Outbox (V8 `master_outbox`, v2 AbstractOutboxPublisher) + retained V2 stubs
+## 2. Outbox (V8 `master_outbox`, v2 AbstractOutboxPublisher) + legacy V2 stubs
 
 master-service publishes via the shared **v2** outbox stack
 (`AbstractOutboxPublisher<MasterOutboxEntity>`, `libs/java-messaging`,
 ADR-MONO-004 § 5) since **TASK-BE-438**. The live table is `master_outbox`
 (V8). The original V2 library tables (`outbox`, `processed_events`) are
-**retained but unused** — see "Retained V2 stubs" below.
+**unused and, since TASK-MONO-406, unmapped** — see "Legacy V2 stubs" below.
 
 ### Live table: `master_outbox` (V8)
 
@@ -147,13 +148,18 @@ CREATE INDEX idx_master_outbox_pending
 
 The partial index keeps only the unpublished tail indexed for the FIFO drain.
 
-### Retained V2 stubs: `outbox` + `processed_events` (DO NOT DROP)
+### Legacy V2 stubs: `outbox` + `processed_events` (unmapped since TASK-MONO-406)
 
-`libs/java-messaging` force-registers `OutboxJpaEntity` (table `outbox`) **and**
-`ProcessedEventJpaEntity` (table `processed_events`) in its EntityScan
-(`OutboxJpaConfig`, imported via the retained `OutboxAutoConfiguration`). With
-`hibernate.ddl-auto=validate`, **both tables must remain present** or the
-context fails to boot. V8 therefore leaves them in place:
+`libs/java-messaging` used to force-register `OutboxJpaEntity` (table `outbox`) **and**
+`ProcessedEventJpaEntity` (table `processed_events`) in an app-wide EntityScan
+(`OutboxJpaConfig`, imported by `OutboxAutoConfiguration`) — under
+`hibernate.ddl-auto=validate` both tables therefore had to remain present or the context
+failed to boot. **That is no longer true**: TASK-MONO-312 deleted `OutboxJpaEntity` and
+TASK-MONO-406 deleted `ProcessedEventJpaEntity` + `OutboxJpaConfig` +
+`OutboxAutoConfiguration`, so the library now ships **no** `@Entity` and **nothing maps
+either table**; `ddl-auto=validate` only validates mapped entities and ignores them.
+They remain in the schema because applied Flyway migrations are immutable (V2 itself must
+never be edited — that would change its checksum), not because boot needs them:
 
 ```sql
 -- V2__init_outbox.sql (still applied; rows no longer produced or polled)
@@ -183,9 +189,9 @@ CREATE TABLE processed_events (
 - **Cutover disposition (F1):** any unpublished rows sitting in the v1 `outbox`
   at deploy time are **abandoned** (not migrated): master events are
   low-volume operator-driven mutations, re-derivable in the demo / fed-e2e / CI
-  usage this monorepo targets. A later cleanup task can drop both stub tables
-  once the lib stops force-scanning the v1 entities (would also let master drop
-  the retained `OutboxAutoConfiguration`).
+  usage this monorepo targets. Since TASK-MONO-406 removed the lib entities that
+  force-scanned them, a later cleanup task **may now drop both stub tables** in a new
+  forward migration (the previous boot-blocking constraint is gone).
 
 ---
 
@@ -461,9 +467,9 @@ and by `(status, updated_at)` (default list query).
 | `warehouses` | `idx_warehouses_status_updated_at` | btree | list query default sort |
 | `master_outbox` | `master_outbox_pkey` | PK (UUID `event_id`) | row lookup / mark-published |
 | `master_outbox` | `idx_master_outbox_pending` | partial (`published_at IS NULL`) | v2 publisher FIFO drain |
-| `outbox` | `outbox_pkey` | PK (BIGSERIAL) | (retained stub — unused since V8) |
-| `outbox` | `idx_outbox_status_created_at` | btree | (retained stub — unused since V8) |
-| `processed_events` | `processed_events_pkey` | PK (event_id) | (stub — never written) |
+| `outbox` | `outbox_pkey` | PK (BIGSERIAL) | (legacy stub — unused since V8, unmapped since MONO-406) |
+| `outbox` | `idx_outbox_status_created_at` | btree | (legacy stub — unused since V8, unmapped since MONO-406) |
+| `processed_events` | `processed_events_pkey` | PK (event_id) | (legacy stub — never written, unmapped since MONO-406) |
 | `zones` | `zones_pkey` | PK | row lookup |
 | `zones` | `uq_zones_warehouse_code` | unique compound | per-warehouse zone_code |
 | `zones` | `idx_zones_warehouse_status_updated_at` | btree | scoped list query |
@@ -491,7 +497,7 @@ and by `(status, updated_at)` (default list query).
 | Version | File | Line | Scope |
 |---|---|---|---|
 | V1 | `V1__init_warehouse.sql` | 32 | warehouses |
-| V2 | `V2__init_outbox.sql` | 28 | outbox + processed_events (libs/java-messaging) |
+| V2 | `V2__init_outbox.sql` | 28 | outbox + processed_events (originally mapped by libs/java-messaging; unmapped since TASK-MONO-406) |
 | V3 | `V3__init_zone.sql` | 43 | zones (FK warehouse, compound unique) |
 | V4 | `V4__init_location.sql` | 53 | locations (FK warehouse+zone, W3 global unique) |
 | V5 | `V5__init_sku.sql` | 52 | skus (UPPERCASE check, partial unique barcode) |

@@ -576,9 +576,13 @@ verbatim).
   (`@ConditionalOnProperty("outbox.polling.enabled")` — preserved v1 gate name)
   drains `masterdata_outbox` with exponential backoff + `eventId`/`eventType`
   headers; the wire (topics, value JSON, key = aggregateId) is byte-identical to v1.
-- **KEEP-auto-config.** The lib `OutboxAutoConfiguration` is RETAINED (not excluded);
-  the v1 `outbox` + `processed_events` tables stay (EntityScanned under
-  `ddl-auto=validate`). In-flight v1 rows at cutover are abandoned (re-derivable).
+- **Legacy v1 tables (TASK-MONO-406).** The lib `OutboxAutoConfiguration` /
+  `OutboxJpaConfig` / `ProcessedEventJpaEntity` were deleted (TASK-MONO-312 had
+  already removed the v1 `OutboxJpaEntity` / `OutboxWriter` / `OutboxPublisher`), so
+  **no library entity maps the v1 `outbox` + `processed_events` tables any more**.
+  Those tables remain in the schema (applied Flyway migrations are immutable) but are
+  now unmapped, and `ddl-auto=validate` only validates *mapped* entities. In-flight v1
+  rows at cutover are abandoned (re-derivable).
 - **Dormant relay preserved.** masterdata-service has NO `@EnableScheduling` (none
   under v1 either), so the `@Scheduled` relay is dormant — events are written but not
   drained until scheduling is enabled (a separate, out-of-scope concern).

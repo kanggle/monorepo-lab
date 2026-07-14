@@ -12,7 +12,7 @@
 - `org.springframework.boot:spring-boot-starter-validation`
 - `org.springframework.boot:spring-boot-starter-actuator`
 - `org.springframework.kafka:spring-kafka` (event consumer **+ producer** since the period-close increment)
-- `libs/java-messaging` (`OutboxAutoConfiguration` / `OutboxMetricsAutoConfiguration`) — **introduced in the period-close increment** (TASK-BE-415) to publish `settlement.period.closed.v1` via the transactional outbox (was excluded in v1)
+- `libs/java-messaging` (`AbstractOutboxPublisher` / `OutboxRowEntity` `@MappedSuperclass` / `OutboxMetricsAutoConfiguration`) — **introduced in the period-close increment** (TASK-BE-415) to publish `settlement.period.closed.v1` via the transactional outbox (was excluded in v1). TASK-MONO-406 deleted the lib's `OutboxAutoConfiguration` / `OutboxJpaConfig` and its dedupe entity/repository, so `OutboxMetricsAutoConfiguration` is now the only auto-configuration the lib contributes; the outbox is wired explicitly by the service.
 - `org.flywaydb:flyway-core` + `flyway-database-postgresql`
 - `org.postgresql:postgresql`
 - `org.springdoc:springdoc-openapi-starter-webmvc-ui`
@@ -46,4 +46,4 @@
 
 ## Notes
 All dependency changes that affect service boundaries must be reflected in related specs and contracts first.
-`libs/java-messaging` (`OutboxAutoConfiguration` / `OutboxMetricsAutoConfiguration`) was excluded in v1 (terminal consumer) and is **introduced in the period-close increment** (TASK-BE-415) — settlement-service publishes exactly one event (`settlement.period.closed.v1`) via the transactional outbox.
+`libs/java-messaging` was excluded in v1 (terminal consumer) and is **introduced in the period-close increment** (TASK-BE-415) — settlement-service publishes exactly one event (`settlement.period.closed.v1`) via the transactional outbox. Since TASK-MONO-406 the library's only auto-configuration is `OutboxMetricsAutoConfiguration`; the deleted `OutboxAutoConfiguration` no longer needs to be excluded, and the library ships no JPA entity (`OutboxRowEntity` is a `@MappedSuperclass`), so settlement's `processed_event` dedupe table remains service-owned per ADR-MONO-004.

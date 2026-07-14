@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-@EntityScan(basePackages = {"com.example.order", "com.example.messaging"})
+@EntityScan(basePackages = "com.example.order")
 @EnableJpaRepositories(basePackages = "com.example.order.infrastructure.persistence")
 public class OrderServiceApplication {
 

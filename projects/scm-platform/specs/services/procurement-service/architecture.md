@@ -442,10 +442,13 @@ the preserved `procurement_outbox_publish_failures_total` Micrometer counter (pl
 the v2 `procurement.outbox.publish.{success,failure}.total` / `.lag.seconds`
 metrics and the `procurement.outbox.pending.count` gauge).
 
-The lib `OutboxAutoConfiguration` is intentionally **retained** (not excluded):
-its EntityScan keeps the v1 `outbox` / `processed_events` tables required under
-`ddl-auto=validate`. The v1 `outbox` table is no longer written or polled
-(abandoned-on-cutover); `processed_events` remains the consumer-dedupe table.
+**Legacy v1 tables (TASK-MONO-406).** The lib `OutboxAutoConfiguration` /
+`OutboxJpaConfig` / `ProcessedEventJpaEntity` were deleted, so **no library entity maps
+the v1 `outbox` / `processed_events` tables any more**. Both tables remain in the schema
+(applied Flyway migrations are immutable) but are now unmapped, and `ddl-auto=validate`
+only validates *mapped* entities. The v1 `outbox` table is neither written nor polled
+(abandoned-on-cutover); the live outbox is `procurement_outbox`
+(`ProcurementOutboxJpaEntity`).
 
 Source = `"scm-platform-procurement-service"` on every published envelope.
 
@@ -621,7 +624,7 @@ All other paths require JWT or are denied (`anyRequest().denyAll()`).
 |---|---|---|
 | **T1** Idempotency on mutating endpoints | ✅ | `Idempotency-Key` header required on all REST mutations; `idempotency_keys` table + Redis primary |
 | **T2** Atomic state-change + outbox write | ✅ | `OutboxProcurementEventPublisher` (v2 write adapter) persists a `procurement_outbox` row inside the `@Transactional` use case |
-| **T3** Outbox table + polling relay | ✅ | `procurement_outbox` (v2) drained by `ProcurementOutboxPublisher` (extends `AbstractOutboxPublisher`) every `procurement.outbox.poll-ms`; v1 `outbox`/`processed_events` retained for EntityScan validate |
+| **T3** Outbox table + polling relay | ✅ | `procurement_outbox` (v2) drained by `ProcurementOutboxPublisher` (extends `AbstractOutboxPublisher`) every `procurement.outbox.poll-ms`; the v1 `outbox`/`processed_events` tables survive as unmapped legacy (TASK-MONO-406 deleted the lib entities that mapped them) |
 | **T4** State machine enforced via dedicated module | ✅ | `PoStatusMachine.ensureTransitionAllowed` — no setter mutations |
 | **T7** Optimistic locking on aggregates | ✅ | `@Version` on `PurchaseOrder`, `Supplier`, `AdvanceShipmentNotice` |
 | **I2** Circuit breaker on external calls | ✅ | `@CircuitBreaker(name="supplier")` 50%/10-call window |

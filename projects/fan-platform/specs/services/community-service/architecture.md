@@ -206,9 +206,13 @@ applies the same tiering at the row level — locked items are returned with
   fallback, preserving the v1 key).
 - Envelope shape (canonical 7-field, byte-identical to the v1
   `BaseEventPublisher.writeEvent`): `{ eventId, eventType, source, occurredAt, schemaVersion, partitionKey, payload }`.
-- The lib `OutboxAutoConfiguration` is intentionally **retained** (not excluded):
-  its EntityScan keeps the v1 `outbox` / `processed_events` tables required under
-  `ddl-auto=validate`. The v1 `outbox` table is no longer written or polled.
+- **Legacy v1 tables (TASK-MONO-406).** The lib `OutboxAutoConfiguration` /
+  `OutboxJpaConfig` / `ProcessedEventJpaEntity` were deleted, so **no library entity
+  maps the v1 `outbox` / `processed_events` tables any more**. Both tables remain in
+  the schema (applied Flyway migrations are immutable) but are now unmapped, and
+  `ddl-auto=validate` only validates *mapped* entities. The v1 `outbox` table is
+  neither written nor polled; the live table is `community_outbox`
+  (`CommunityOutboxJpaEntity`).
 
 ---
 

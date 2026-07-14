@@ -17,12 +17,18 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>The v1 relay ({@code OutboxPollingScheduler extends
  * com.example.messaging.outbox.OutboxPollingScheduler}) is gone and the write
- * path no longer uses the lib {@code OutboxWriter}. The lib
- * {@code OutboxAutoConfiguration} is intentionally retained (not excluded): its
- * {@code OutboxJpaConfig} EntityScan is what keeps the v1 {@code outbox} /
- * {@code processed_events} tables required under {@code ddl-auto=validate}; see
- * {@code V7__promotion_outbox_v2.sql}. The v1 {@code OutboxWriter} /
- * {@code OutboxPublisher} beans it still registers are no longer referenced.
+ * path no longer uses the lib {@code OutboxWriter}. TASK-MONO-406 then deleted the lib
+ * {@code OutboxAutoConfiguration} and the {@code OutboxJpaConfig} it imported, so there is
+ * nothing left to import or exclude: {@code libs/java-messaging} now ships no
+ * {@code @Entity} at all ({@code OutboxRowEntity} is a {@code @MappedSuperclass}, resolved
+ * through the entity hierarchy rather than by scanning).
+ *
+ * <p>Consequently the v1 {@code outbox} (V3) and {@code processed_events} (V5) tables are
+ * mapped by no entity in promotion-service any more — the lib's entities were the only
+ * mappings — and are inert. {@code ddl-auto=validate} only validates mapped entities, so
+ * their presence is no longer required; they stay in the schema because applied Flyway
+ * migrations are immutable. See {@code V7__promotion_outbox_v2.sql}, whose EntityScan
+ * rationale is superseded by MONO-406.
  */
 @Configuration
 public class OutboxConfig {

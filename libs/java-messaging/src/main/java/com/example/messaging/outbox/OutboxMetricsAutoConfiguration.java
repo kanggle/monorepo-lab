@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Bean;
  * precedence — this auto-configuration backs off via {@link ConditionalOnMissingBean}.
  * Services without Micrometer on the classpath skip this configuration entirely.
  */
-@AutoConfiguration(after = OutboxAutoConfiguration.class)
+@AutoConfiguration
 @ConditionalOnClass(MeterRegistry.class)
 public class OutboxMetricsAutoConfiguration {
 

@@ -14,8 +14,9 @@ group = 'com.example.erp.approval'
 // (E3/I4 SoD), idempotent transitions (E4), immutable audit (E8/A7), and a
 // masterdata subject reference-integrity check on submit (E1). Hexagonal,
 // rest-api. Publishes erp.approval.{submitted,approved,rejected,withdrawn}.v1
-// through the transactional outbox (KEEPS OutboxAutoConfiguration — mirrors
-// masterdata-service; this service is a producer, unlike read-model-service).
+// through the transactional outbox (this service is a producer, unlike
+// read-model-service; TASK-MONO-406 deleted the lib's OutboxAutoConfiguration,
+// so there is no longer any outbox auto-config to keep or exclude).
 //
 // Source sets:
 // * `test`             — unit + slice tests (default).
@@ -35,7 +36,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
-    // Kafka — outbox relay via libs/java-messaging OutboxPollingScheduler
+    // Kafka — outbox relay via libs/java-messaging AbstractOutboxPublisher
     implementation 'org.springframework.kafka:spring-kafka'
 
     // Database — MySQL (mirrors masterdata-service's engine choice)
