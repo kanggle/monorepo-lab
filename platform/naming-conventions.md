@@ -61,6 +61,8 @@ Examples:
 
 # API Endpoints
 
+> **Naming only.** Path shape and versioning — the mandatory `/api/` prefix and when the `v{n}` segment is required — are defined by [`versioning-policy.md`](versioning-policy.md) § HTTP API Versioning. The `v1` in the examples below is illustrative, not an assertion that every endpoint carries an explicit version segment (TASK-MONO-411).
+
 - Use `kebab-case` for URL path segments: `/api/v1/<resource>/refresh-token` (but prefer single words where possible).
 - Use plural nouns for resource collections: `/api/v1/<resources>`.
 - Use verbs only for action endpoints that don't map cleanly to resources: `/api/v1/<resource>/<action>` (e.g., `/deactivate`, `/refresh`).

@@ -19,6 +19,9 @@
 ## Mandatory Rules
 
 ### T1. Idempotency Key 필수
+
+> **이 항목이 `Idempotency-Key` 요구의 정경이다.** [`platform/service-types/rest-api.md`](../../platform/service-types/rest-api.md) § Idempotency 는 여기를 가리키는 포인터이며 (SoT 우선순위: `rules/traits/` = 4층 > `platform/` = 5층), 따라서 **이 요구는 `transactional` trait 을 선언한 프로젝트에서만 활성화된다.** `transactional` 없이 `rest-api` 인 서비스에는 플랫폼이 부과하는 멱등성 요구가 없다 (TASK-MONO-411).
+
 상태를 변경하는 모든 공개 API는 `Idempotency-Key` 헤더를 받아들이고 존중해야 한다. 같은 키로 반복 호출되면 **정확히 1회**만 실행되고, 반복 호출은 첫 실행의 결과를 반환한다.
 
 - 키 유효 기간: 최소 24시간

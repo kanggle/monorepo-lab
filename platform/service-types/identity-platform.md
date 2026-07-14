@@ -20,7 +20,7 @@ This service type is reserved for the central identity / OIDC / IAM service. The
 
 Use `identity-platform` for a service whose primary responsibility is **all of**:
 
-- Issuing access tokens and refresh tokens signed with an asymmetric key pair (RSA or EdDSA)
+- Issuing access tokens and refresh tokens signed with an asymmetric key pair (**`RS256`** — the algorithm is defined by [`platform/contracts/jwt-standard-claims.md`](../contracts/jwt-standard-claims.md) § JWT Signing Strategy, not here)
 - Publishing the corresponding public keys at a JWKS endpoint for relying parties
 - Owning the lifecycle of user / operator accounts that authenticate against the platform
 - Providing OIDC-style flows (Authorization Code + PKCE, refresh, revoke, introspect)
@@ -70,7 +70,7 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 
 ## Access Token
 
-- Format: signed JWT (RS256 or stronger; HS256 forbidden for cross-service use)
+- Format: signed JWT — **`RS256`, and nothing else** (not "or stronger": a relying party MUST reject any other `alg`, so a token this file blessed but the contract did not is a token our own verifier rejects). Canonical: [`platform/contracts/jwt-standard-claims.md`](../contracts/jwt-standard-claims.md) § JWT Signing Strategy.
 - Lifetime: **5 to 15 minutes** depending on the requested surface's capability
   - operator-facing platforms (wms, erp, mes, scm, ecommerce admin surface): 5 minutes (short-lived; high-privilege)
   - consumer-facing surfaces (ecommerce customer, fan-platform): 15 minutes
@@ -98,8 +98,10 @@ The `password` grant type is forbidden. The `client_credentials` grant type is a
 
 ## Algorithm
 
-- RSA 2048-bit minimum, or EdDSA (Ed25519). RSA 4096 recommended for OPERATOR-aud signing keys.
+- **Canonical: [`platform/contracts/jwt-standard-claims.md`](../contracts/jwt-standard-claims.md) § JWT Signing Strategy.** RSA (`RS256`) only, 2048-bit minimum. This file does not define the signing algorithm and **must not widen it** — it is a pointer.
 - The same key MAY be used to sign for multiple `aud` values, but operators MAY isolate keys per platform if blast-radius reduction is desired.
+
+> This section formerly read *"RSA 2048-bit minimum, or EdDSA (Ed25519)"*. The contract permits no such alternative, no implementation supports one, and the live verification path rejects any `alg` other than `RS256` — an EdDSA-signed token would have been rejected fail-closed by code that this document told an implementer to write. The key-strength guidance moved to the contract, which is the one file every relying party reads (TASK-MONO-411).
 
 ## Key Identifier (`kid`)
 

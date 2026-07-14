@@ -33,7 +33,9 @@ Self-service signup grants consumer-facing roles; operator/admin provisioning gr
 
 # JWT Signing Strategy
 
-- **Algorithm:** RSA asymmetric (public/private key pair)
+- **Algorithm:** RSA asymmetric (public/private key pair). The JWS algorithm is **`RS256`**, as published in the JWKS `alg` field (§ JWKS Endpoint Convention). **No other signature family (EdDSA/Ed25519, ECDSA) and no HMAC `alg` is permitted** — relying parties MUST reject a token whose header `alg` is anything other than `RS256`.
+  - **This contract is the canonical decision site for the signing algorithm** (§ Change Rule: a signature-algorithm change must be documented *here* before any identity-platform service emits it or any gateway enforces it). [`platform/service-types/identity-platform.md`](../service-types/identity-platform.md) § Key Management defers to this line and must not widen it — it previously offered EdDSA as an alternative this contract never permitted (TASK-MONO-411).
+- **Key Strength:** RSA 2048-bit minimum. RSA 4096 is recommended for signing keys serving high-privilege audiences.
 - **Key Management:**
   - The identity-platform service holds the private key (signing)
   - All platform gateways fetch the public key via JWKS endpoint (verification)
