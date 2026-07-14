@@ -468,6 +468,27 @@ So the question is not *"which wildcard policy is correct"*. It is **"should the
 
 > ⚠️ **And this subsection is late.** `TASK-MONO-392` § AC-8 required the divergence to be recorded *here*, and its PR body said it had been. It had not — it went into the task file and the INDEX and **not into the ADR**. **A declaration-versus-truth drift, inside the document whose thesis is that declarations drift.** Caught while ticketing the follow-up, by re-reading the section instead of trusting what the PR claimed about it.
 
+#### The answer (`TASK-MONO-394`, 2026-07-14) — they were retired, and the question above was asked wrong
+
+**Decision (human): retire both.** iam's `community-service` and `membership-service` are gone; the fleet-wide copy count and the divergence go with them.
+
+**But the paragraph above got its own measurement wrong, twice, and that is the part worth keeping.**
+
+| what § 1.12 asserted | what re-measuring found |
+|---|---|
+| *"`iam-platform/docker-compose.yml` starts `auth`, `account`, `security`, `admin` and `gateway`"* | That file is **infrastructure-only**. The five apps are in **`docker-compose.e2e.yml`**. The conclusion held; **the evidence pointed at the wrong file.** |
+| *"nothing references them outside `settings.gradle` and `ci.yml`"* | **16 spec files, `PROJECT.md`, `docs/project-overview.md`, iam `ADR-001`, `docker/mysql/init.sh`, `docker-compose.yml`, and the service-map drift guard.** |
+| *"they are deployed nowhere"* — framed as a **discovery** | They were **declared `FROZEN` in six places**, with a stated purpose (`PROJECT.md`: *"a portfolio integration example"*), and `check-service-map-drift.sh` **encoded the exemption in a guard**. Nobody had lost them. |
+
+**So the follow-up's real question was never "live or dead".** It was **"is the exhibit still worth its shelf space"** — and the answer is no, because **`fan-platform` performs the exhibit's stated purpose for real and in production.** The exhibit had become a duplicate that every platform-wide sweep still had to carry (`TASK-BE-454/455`, and D5-8 itself).
+
+Two things fall out that the divergence table above could not show:
+
+- **The divergence was not a regression D5-8 introduced.** Reading the pre-D5-8 hand-rolled validator (`82a5859e5`) shows **pure equality, no wildcard branch** — iam refused `*` before the extraction and after it. **D5-8's "behaviour preserved" claim is true.** The drift was born at fan's bootstrap (`ba916c9d3`, 2026-05-03), which **added** a wildcard the GAP original never had.
+- **fan is not a copy of iam's copy.** Copy-detection (self-validated against a known rename, which yields 1923 `R` entries) reports **30 copies from `global-account-platform` at 58–78% similarity** — reworked from birth — and today **zero byte-identical files** across 24 fan commits versus 6. Deleting iam's side cost fan nothing.
+
+> **The lesson lands on this ADR itself.** § 1.12 was written by the session that had just finished D5-8, and it **inherited its own scope instead of re-counting** — the same error § 1.6 diagnoses in § 1.1, committed one subsection later by the person diagnosing it. **A prior document's numbers are a hypothesis, not a source** — including when the prior document is your own, and including when it is this one.
+
 ---
 
 ## 2. Alternatives considered

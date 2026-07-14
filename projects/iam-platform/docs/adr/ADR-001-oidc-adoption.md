@@ -304,3 +304,16 @@ B2B 소비자가 사용자 디렉터리를 IAM에 동기화할 때:
 |---|---|---|
 | 2026-05-01 | PROPOSED | 초안 작성, 5개 결정 항목 사용자 확인 대기 |
 | 2026-05-01 | ACCEPTED | D1=A, D2=D2-b, D3=D3-b, D4=D4-c 확정. TASK-BE-251~259 (9건) + TASK-MONO-019 발행 |
+| 2026-07-14 | (additive note) | **`community-service` · `membership-service` RETIRED** (`TASK-MONO-394`) — 본문은 불변으로 보존 |
+
+---
+
+> **Additive note — `community-service` / `membership-service` RETIRED 2026-07-14 (`TASK-MONO-394`).**
+>
+> 본 ADR 은 § 2 에서 이 두 서비스를 **"frozen demo"** 소비자로, § 8 P1 에서 `TASK-BE-253`(OIDC 통합, *"FROZEN 예외"*)의 대상으로 적고 있다. **두 서비스는 2026-07-14 은퇴했다** — 어떤 compose 도 이들을 띄우지 않았고(게이트웨이 라우트 0, 살아있는 소비자 0), **`fan-platform` 이 같은 도메인(community·membership)을 실제로 구현·배포하면서** 이들이 수행하던 *"포트폴리오 integration 예시"* 역할이 중복이 되었다.
+>
+> **이 ADR 의 결정(D1~D4)은 하나도 바뀌지 않는다.** OIDC 채택, RS256, SAS 기반 AS, 소비자 검증 패턴 모두 유효하다 — 다만 **그 패턴의 소비자 목록에서 두 데모가 빠졌을 뿐**이다. 살아있는 IAM 내부 소비자는 이제 `gateway-service` · `admin-service` · `security-service` 이고, 외부 소비자는 `wms` · `scm` · `finance` · `erp` · `ecommerce` · `fan-platform` 이다.
+>
+> **잔존물(의도적)**: `auth-service` 의 Flyway `V0009__seed_community_membership_oauth_clients.sql` 는 **적용된 마이그레이션이므로 불변** — 두 서비스의 OAuth 클라이언트 행과 `membership.read` 스코프는 **고아 상태로 남는다**(무해). 이 파일을 지우면 체크섬 불일치로 살아있는 `auth-service` 가 기동하지 못한다.
+>
+> 은퇴 근거·실측 전문: [`TASK-MONO-394`](../../../../tasks/done/TASK-MONO-394-iam-community-membership-ci-live-deploy-dead.md) · [`ADR-MONO-049` § 1.12](../../../../docs/adr/ADR-MONO-049-framework-neutral-security-library.md).

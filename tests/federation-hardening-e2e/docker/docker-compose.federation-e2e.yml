@@ -90,8 +90,9 @@ x-logging: &default-logging
 services:
   # ---------------------------------------------------------------------------
   # MySQL — shared instance for GAP + finance + erp schemas.
-  # Reuses the GAP init.sh verbatim (creates auth_db / account_db /
-  # security_db / admin_db / community_db / membership_db).
+  # Reuses the iam init.sh verbatim (creates auth_db / account_db /
+  # security_db / admin_db — community_db / membership_db went with their
+  # services in TASK-MONO-394).
   # finance_db + erp_db are created at phase 1.5 via seed.sql.
   # wms and scm use separate PostgreSQL sidecars (below).
   # ---------------------------------------------------------------------------
@@ -105,8 +106,6 @@ services:
       ACCOUNT_DB_PASSWORD: account_pass
       SECURITY_DB_PASSWORD: security_pass
       ADMIN_DB_PASSWORD: admin_pass
-      COMMUNITY_DB_PASSWORD: community_pass
-      MEMBERSHIP_DB_PASSWORD: membership_pass
     volumes:
       - ../../../projects/iam-platform/docker/mysql/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
     healthcheck:

@@ -650,7 +650,7 @@ Owned by `community-service` (post / comment / reaction / follow).
 | Code | HTTP | Description |
 |---|---|---|
 | POST_NOT_FOUND | 404 | Post does not exist (or cross-tenant — see `multi-tenant.md` M3) |
-| POST_STATUS_TRANSITION_INVALID | 422 | Illegal post-state transition (DRAFT/PUBLISHED/HIDDEN/DELETED) (`InvalidStateTransitionException`); cross-shared with IAM community-service |
+| POST_STATUS_TRANSITION_INVALID | 422 | Illegal post-state transition (DRAFT/PUBLISHED/HIDDEN/DELETED) (`InvalidStateTransitionException`). Was cross-shared with IAM's community-service until TASK-MONO-394 retired it — this code is now fan-only |
 | MEMBERSHIP_TIER_INSUFFICIENT | 403 | Caller membership tier below required (PUBLIC < FOLLOWERS < MEMBERS_ONLY < SUBSCRIBERS_ONLY). No current emitter — the live content-gate emits `MEMBERSHIP_REQUIRED` (below); this finer-grained tier code is reserved (TASK-MONO-249) |
 | MEMBERSHIP_REQUIRED | 403 | Caller's membership tier insufficient for this content (`MembershipRequiredException`). Cross-project alias — see `Community  [domain: saas]` |
 | COMMENT_NOT_FOUND | 404 | Comment does not exist or scope mismatch (`CommentNotFoundException`) |

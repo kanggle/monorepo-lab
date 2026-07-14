@@ -73,8 +73,7 @@ public class DeviceSessionJpaEntity {
     /**
      * Copy mutable fields from the domain aggregate into this managed entity. Identity
      * (id, device_id, account_id, fingerprint, issued_at) is preserved so JPA managed
-     * state stays consistent across save() round-trips. Mirrors the version-preservation
-     * pattern used by membership-service's SubscriptionRepositoryImpl.
+     * state stays consistent across save() round-trips.
      */
     public void updateFromDomain(DeviceSession s) {
         this.userAgent = s.getUserAgent();

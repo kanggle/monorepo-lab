@@ -822,9 +822,7 @@ jobs:
           :projects:iam-platform:apps:auth-service:check
           :projects:iam-platform:apps:account-service:check
           :projects:iam-platform:apps:admin-service:check
-          :projects:iam-platform:apps:community-service:check
           :projects:iam-platform:apps:gateway-service:check
-          :projects:iam-platform:apps:membership-service:check
           :projects:iam-platform:apps:security-service:check
           :projects:iam-platform:tests:e2e:check
           --no-daemon --stacktrace
@@ -1372,15 +1370,18 @@ jobs:
         :projects:iam-platform:apps:auth-service:integrationTest
         :projects:iam-platform:apps:account-service:integrationTest
         :projects:iam-platform:apps:admin-service:integrationTest
-        :projects:iam-platform:apps:community-service:integrationTest
         :projects:iam-platform:apps:gateway-service:integrationTest
-        :projects:iam-platform:apps:membership-service:integrationTest
         :projects:iam-platform:apps:security-service:integrationTest
       artifact-name: iam-integration-test-reports
-      # TASK-MONO-393: seven modules, each booting its own MySQL + Kafka + Redis +
-      # WireMock Testcontainers stack. With org.gradle.parallel=true they boot at once
-      # on the 2-CPU/7GB runner — the exact condition TASK-MONO-331 diagnosed for WMS
-      # (four modules), except this lane has seven and never got the mitigation.
+      # TASK-MONO-393: each module boots its own MySQL + Kafka + Redis + WireMock
+      # Testcontainers stack. With org.gradle.parallel=true they boot at once on the
+      # 2-CPU/7GB runner — the exact condition TASK-MONO-331 diagnosed for WMS (four
+      # modules), except this lane had seven and never got the mitigation.
+      # (TASK-MONO-394 has since retired community-service and membership-service, so
+      # the lane is five, not seven. Whether --no-parallel is still needed at five is
+      # NOT measured here and this comment does not claim it is — TASK-MONO-398 owns
+      # that question, and its lane table still says seven. Keeping the mitigation is
+      # the conservative default, not a finding.)
       #
       # Observed (PR #2515, attempt 2): Redis connections were severed mid-run
       # ("RedisConnectionFailureException: Unable to connect to Redis"), and because the
