@@ -176,6 +176,36 @@ try {
     }
     Assert-Allowed -Output $n7
     "PASS: negative-7 (refspec source main:feature-x allowed)"
+
+    # --- Positive 6 (TASK-MONO-402): the SAME command arriving from the PowerShell tool.
+    #
+    # This hook was wired under `"matcher": "Bash"` only, while the harness also exposes a
+    # separate PowerShell tool whose own description points the agent at git. Measured
+    # 2026-07-14: `git push --dry-run origin main` was BLOCKED via Bash and EXECUTED via
+    # PowerShell — the regex was fine, the hook was simply never called. settings.json now
+    # wires the same three git guards under a `"PowerShell"` matcher as well.
+    #
+    # The hook itself never reads tool_name, so its logic is tool-agnostic — this fixture
+    # pins that, so a future refactor cannot make the guard Bash-specific and silently
+    # re-open the other door. NOTE: a fixture cannot test the *wiring* (which matcher the
+    # harness fires on); that is verified by a live probe in a restarted session.
+    $p6 = Invoke-Hook -HookName 'protect-main-branch.ps1' -Payload @{
+        tool_name  = 'PowerShell'
+        tool_input = @{ command = 'git push origin main' }
+        cwd        = $repoFeat
+    }
+    Assert-PlainBlock -Output $p6 -ExpectedReasonSubstring 'direct push, force push, or hard reset'
+    "PASS: positive-6 (same push arriving from the PowerShell tool blocked) — MONO-402"
+
+    # --- Positive 7 (TASK-MONO-402): HEAD-on-main implicit push from the PowerShell tool.
+    # The exact shape of the 2026-05-25 leak, arriving through the unguarded door.
+    $p7 = Invoke-Hook -HookName 'protect-main-branch.ps1' -Payload @{
+        tool_name  = 'PowerShell'
+        tool_input = @{ command = 'git push -u origin HEAD' }
+        cwd        = $repoMain
+    }
+    Assert-PlainBlock -Output $p7 -ExpectedReasonSubstring 'cwd HEAD is'
+    "PASS: positive-7 (HEAD=main implicit push via PowerShell blocked) — MONO-402"
 }
 finally {
     Remove-Item -Path $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue

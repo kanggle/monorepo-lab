@@ -1,4 +1,4 @@
-# HARDSTOP-05 fixture — body edit on a task file inside tasks/in-progress/ or tasks/review/.
+# HARDSTOP-05 fixture — body edit on a task file inside tasks/in-progress/, tasks/review/ or tasks/done/.
 # Includes positive (body edit) and negative (Status-field lifecycle move) cases.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
@@ -43,3 +43,44 @@ $negativeMultilineOutput = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload 
 }
 Assert-Allowed -Output $negativeMultilineOutput
 "PASS: HARDSTOP-05 negative-2 (contextual Status-field move)"
+
+# ===== TASK-MONO-402: tasks/done/ is frozen too =====
+#
+# The path regex used to cover only (in-progress|review) while this stanza's own
+# [VIOLATION]/[WHY] text named `done` as frozen. The repo's record of what actually
+# happened was the one lifecycle stage nothing guarded — an arbitrary edit to a
+# done/ task file passed silently (measured, 2026-07-14).
+$doneFile = Join-Path $repoRoot "tasks\done\TASK-MONO-EXAMPLE.md"
+
+# Positive case: arbitrary body edit on a task file under tasks/done/ — must block.
+# Before MONO-402 this was ALLOWED.
+$donePositiveOutput = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{
+        file_path  = $doneFile
+        old_string = "# Goal`n`nOriginal goal."
+        new_string = "# Goal`n`nRewriting history after the fact."
+    }
+    cwd = $repoRoot
+}
+Assert-Stanza -Output $donePositiveOutput -ExpectedId 'HARDSTOP-05' -ExpectedDecision 'block'
+"PASS: HARDSTOP-05 positive-2 (body edit in done/) — MONO-402"
+
+# Negative case 3 — THE ONE THAT MATTERS.
+#
+# The close chore (`/review-task` § Close Chore, introduced by TASK-MONO-396) does:
+#   git mv tasks/review/X.md tasks/done/X.md   then   edit Status: review -> done
+# That Status edit therefore happens INSIDE tasks/done/. If freezing done/ blocked it,
+# this change would break every task close in the repo — fixing the guard by breaking
+# the pipeline it guards. The lifecycle-move exception must keep clearing it.
+$doneCloseChoreOutput = Invoke-Hook -HookName 'hardstop-detect.ps1' -Payload @{
+    tool_name  = 'Edit'
+    tool_input = @{
+        file_path  = $doneFile
+        old_string = "# Status`n`nreview"
+        new_string = "# Status`n`ndone"
+    }
+    cwd = $repoRoot
+}
+Assert-Allowed -Output $doneCloseChoreOutput
+"PASS: HARDSTOP-05 negative-3 (close-chore Status move inside done/) — MONO-402"
