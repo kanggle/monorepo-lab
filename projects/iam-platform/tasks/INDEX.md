@@ -72,7 +72,17 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+**IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
+
+- `TASK-BE-508` — 사용자 세션 4경로가 게이트웨이 경유 도달 불가(auth-service 라우트 부재 → 500). 🔴 기능 불능. (분석=Opus 4.8 / 구현 권장=Opus — 라우트 계약 정합 + 순서 함정)
+- `TASK-BE-509` — GDPR export 항상 500(`admin_actions.idempotency_key` NOT NULL 위반, `GdprAdminUseCase` 가 리터럴 null). 🔴 이식권 불능. (구현 권장=Opus — 스키마 vs 키파생 설계 판단)
+- `TASK-BE-510` — 운영자 계정 검색이 `+` 이메일 미검색(admin→account 아웃바운드 URI 미인코딩). 🟡 (구현 권장=Sonnet — 국소 fix)
+- `TASK-BE-511` — Kafka init 토픽 목록이 이벤트 계약/생산자와 드리프트(+DLQ 짝 없음). 🟡 (구현 권장=Sonnet — infra + 재열거)
+- `TASK-BE-512` — Layer-2 로그인 rate-limit 429 에 `Retry-After` 누락. 🟡 (구현 권장=Sonnet — 국소 fix)
+
+> 관련 monorepo-level: **루트 `tasks/ready/TASK-MONO-415`** — 공유 `libs/java-web-servlet` `CommonGlobalExceptionHandler` 가 404(NoResourceFound)를 500 으로 변질(소비 서비스 11개 파급, cross-project 원자 PR). BE-508 의 500 도 이것과 합작.
+
+> 결함 #3(레거시 `POST /api/auth/login` 이 발급한 토큰을 하류가 401 거부)은 **신규 티켓 없음** — `TASK-BE-398`(레거시 커스텀-JWT 일몰 제거)이 그 경로를 통째로 제거하므로 그쪽에서 처리. OIDC(authorization_code+PKCE) 경로는 스윕에서 정상 확인.
 
 > `tasks/ready/TASK-BE-398` 은 날짜 게이트 대기.
 
