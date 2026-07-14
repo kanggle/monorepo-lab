@@ -8,7 +8,7 @@ TASK-MONO-400
 
 # Status
 
-review
+done
 
 # Owner
 
