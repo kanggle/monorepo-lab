@@ -18,7 +18,7 @@
 
 ## Responsibilities
 
-- Create a **minimal** user profile on IAM `account.created` consumption (`email`/`name` sourced later from the OIDC token — the event is emailHash-only; [ADR-MONO-037](../../../../docs/adr/ADR-MONO-037-ecommerce-account-lifecycle-projection.md) P1).
+- Create a **minimal** user profile on IAM `account.created` consumption (`email`/`name` sourced later from the OIDC token — the event is emailHash-only; [ADR-MONO-037](../../../../../docs/adr/ADR-MONO-037-ecommerce-account-lifecycle-projection.md) P1).
 - Manage user profile query and update (`email`, `name`, `nickname`, `phone`, `profileImageUrl`).
 - Own shipping address CRUD — add / update / delete / list + default address designation.
 - React to IAM `account.deleted` (two-phase): grace entry (`anonymized=false`) → status `WITHDRAWN` + publish `UserWithdrawn`; post-grace (`anonymized=true`) → anonymize profile PII (the TASK-BE-258 obligation; ADR-MONO-037 P2/P3).
