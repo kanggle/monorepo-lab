@@ -46,4 +46,11 @@ Authoritative inventory: [`docker-compose.yml`](../../docker-compose.yml). At a 
 - **Elasticsearch cold start** is slow (nori plugin + single-node bootstrap, ~120s `start_period`); the search stack is the last to become healthy.
 - **Object storage**: product images are served from MinIO; `minio-init` is a one-shot bucket bootstrap that exits after running.
 - **WMS fulfillment loop** (order → pick/pack/ship → auto-SHIPPED) is a *separate cross-stack* wired under `tests/fulfillment-demo/` — not part of this standalone bring-up.
+- **`web-store` date/time formatting**: the rule lives in
+  [`platform-console/docs/conventions/frontend-ui.md` § 1](../../../platform-console/docs/conventions/frontend-ui.md#1-datetime-formatting)
+  (§ 4 covers `web-store` specifically). `web-store` carries its own copy of the
+  *helper* (`shared/lib/datetime.ts`) because it cannot import the console's —
+  different app, different project — but the *rationale* (`hourCycle: 'h23'`,
+  pinned `Asia/Seoul`) is written down once, there. Use `formatDateTime` /
+  `formatDate`; never call `toLocale*` on a `Date` at a call site.
 - Host-specific operational concerns (memory pressure, batch redeploy sizing) are developer-environment notes, not part of this doc.

@@ -52,6 +52,14 @@ taxonomy_version: 0.1
 | `web-store` | `frontend-app` | Next.js 15 스토어프런트. 운영자 UI 는 platform-console 로 흡수됨 (ADR-MONO-031 Phase 6) |
 | ~~`auth-service`~~ | ~~`rest-api`~~ | **RETIRED** (TASK-BE-132) — `settings.gradle` include 제외, IAM OIDC 로 대체. 소스는 이력 보존 목적으로 `apps/auth-service/` 에 잔존 |
 
+## Frontend Conventions — `web-store` (필독)
+
+`web-store` 의 **날짜·시간 표기 규약**은 이 프로젝트가 소유하지 않는다. 정경 홈은 **[`projects/platform-console/docs/conventions/frontend-ui.md` § 1](../platform-console/docs/conventions/frontend-ui.md#1-datetime-formatting)** 이다(§ 4 가 `web-store` 를 명시적으로 다룬다).
+
+`web-store` 는 `shared/lib/datetime.ts` 에 **헬퍼 복제본**을 갖고 있다 — 콘솔의 것을 import 할 수 없기 때문이다(다른 앱·다른 프로젝트, 공유 패키지 경계 없음). **복제된 것은 *구현*이지 *규칙*이 아니다**: `hourCycle:'h23'`(ko-KR 자정 `24:00:00` quirk)과 pinned `Asia/Seoul`(SSR↔hydration 불일치 방지)이 **왜** 그렇게 생겼는지는 위 문서 한 곳에만 산다. **여기에 규칙 본문을 복사하지 말 것** — 복사본은 갈라지고, 갈라진 규칙은 규칙이 아니다.
+
+새 날짜 렌더는 **호출부에서 `toLocale*` 직접 호출 금지**, `shared/lib/datetime.ts` 의 `formatDateTime`/`formatDate` 사용. (TASK-PC-FE-241 정경화 / TASK-FE-091 포인터.)
+
 ## Out of Scope (의도적 제외)
 
 명시적으로 선언하지 않은 분류:

@@ -8,7 +8,7 @@ web-store 는 콘솔의 날짜·시간 규약을 **복제해 쓰면서** 그 규
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -51,10 +51,10 @@ PC-FE-241 은 AC-4 에서 **규칙 본문은 한 곳에만 산다**고 결정했
 
 # Acceptance Criteria
 
-- [ ] **AC-1** web-store 헬퍼가 콘솔 규약과 실제로 일치하는지 코드로 확인하고 결과를 기록. 불일치가 있으면 **기록만 하고 고치지 않는다**(별건 티켓 제안).
-- [ ] **AC-2** web-store 프런트 개발자가 실제로 읽는 문서에 포인터가 있고, 그 포인터가 **정경 홈의 정확한 경로**를 가리킨다(링크가 깨지지 않는지 확인).
-- [ ] **AC-3** 규칙 본문은 여전히 **한 곳에만** 있다 — 이 PR 이 규칙을 재서술하지 않았음을 diff 로 확인.
-- [ ] **AC-4** 검증: doc-only 면 lint 대상 변경 0. web-store 로컬 검증은 신뢰도가 낮다(workspace + Node24 제약) — **CI 가 권위**임을 알고 결과를 읽는다.
+- [x] **AC-1 (대조)** — **일치. 갈라지지 않았다.** `web-store/src/shared/lib/datetime.ts` 전문 대조: `hourCycle:'h23'` ✔ · `timeZone:'Asia/Seoul'` **pinned** ✔ · placeholder 기본 `'-'` ✔ · 파싱불가 입력 → **원문 verbatim 반환**(throw 안 함) ✔ · `formatDate` = `toLocaleDateString('ko-KR', {timeZone})` ✔. **코드 변경 0** (별건 티켓 제안 없음).
+- [x] **AC-2 (도달성)** 포인터 **2곳**: ① `PROJECT.md` — 에이전트 필독 **Source of Truth #1** (`CLAUDE.md` 가 착수 시 읽으라고 규정한 파일) ② `docs/onboarding/local-dev.md` § Project-specific notes — 사람 경로(콘솔이 `frontend-ui.md` 를 링크한 것과 같은 자리). **링크·앵커 실측 검증**: 상대경로 2개 모두 해석됨, 앵커 원본 `## 1. Date/time formatting` 존재 확인.
+- [x] **AC-3 (규칙 본문 단일)** 두 포인터 모두 **규칙을 재서술하지 않는다** — "무엇을 쓰라"(헬퍼 이름)와 "왜 여기 없는가"(cross-project import 불가)만 적고, **근거**(자정 quirk·하이드레이션)는 *가리키기만* 한다. 규칙 본문은 여전히 `frontend-ui.md` 한 곳.
+- [x] **AC-4 (검증)** **doc-only — 코드/lint 대상 변경 0줄**(`.md` 2개 + task 2개). web-store 로컬 검증은 신뢰도가 낮으므로(workspace + Node24) **CI 가 권위**.
 
 ---
 
@@ -122,3 +122,24 @@ None (doc-only).
 `TASK-PC-FE-241`(2026-07-14, `/audit-memory` 산물)의 **AC-4 잔여**. 구현 에이전트가 포인터 편집이 자기 Target App 범위 밖(cross-project)임을 정확히 판단해 **넣지 않고 후속으로 남겼다** — 그 판단이 옳았고, 이 task 가 그 잔여다.
 
 분석=Opus 4.8 / 구현 권장=**Haiku 또는 Sonnet**(문서 한 줄 + 코드 대조).
+
+---
+
+# 착수 기록 (구현)
+
+## 포인터를 어디에 뒀나 — 후보 대부분이 **빈 파일**이었다
+
+티켓은 *"이미 프런트 개발자가 읽는 파일"* 을 고르라고 했다. `docs/onboarding/` 을 열어보니 **`coding-standards.md`·`build-test-run.md`·`repository-map.md`·`release-process.md` 가 전부 0바이트 스텁**이다. 여기 포인터를 넣었다면 **티켓의 Edge Case 를 그대로 밟는다**("아무도 안 읽는 문서에 넣으면 규칙은 여전히 도달 불가").
+
+살아있는 문서는 `local-dev.md`(49줄) 와 `PROJECT.md`(81줄) 뿐이다. ⇒ **둘 다** 썼다:
+
+- **`PROJECT.md`** — `CLAUDE.md` 가 착수 시 **반드시 읽으라고 규정한 Source of Truth #1**. 에이전트 경로에서 **한 홉**. (같은 레버를 `TASK-PC-FE-242` 가 콘솔 쪽에 적용했다.)
+- **`docs/onboarding/local-dev.md` § Project-specific notes** — 사람 경로. 콘솔이 `frontend-ui.md` 를 링크한 것과 **같은 자리**(대칭).
+
+## 🔵 정경 문서의 문장 하나가 정확하지 않다 (기록만, 고치지 않음)
+
+`frontend-ui.md` § 4 는 web-store 의 `datetime.ts` 주석이 *"only says 'mirrors platform-console' without a link"* 라고 적었다. **실제 주석은 근거를 짧게 갖고 있다** — pinned KST(SSR↔hydration byte-identical)와 `hourCycle:'h23'`(ko-KR 자정 quirk)을 3줄로 요약해 둔다. 빠진 것은 **근거가 아니라 *링크*** 다.
+
+**판단: 그 3줄을 지우지 않는다.** ① 코드 편집은 이 task 의 Out of Scope 다. ② 그 3줄은 **호출부에서 읽히는 요약**이지 정경과 경쟁하는 규칙 서술이 아니다 — 오히려 다음 사람이 `h23` 을 "간소화" 하는 것을 막는 마지막 방어선이다. 규칙 **본문**(예외·AC-3 판정·web-store 결정)은 여전히 `frontend-ui.md` 한 곳에만 있다.
+
+**AC-1 결론**: 헬퍼는 갈라지지 않았다 — 정합화 티켓 불필요.
