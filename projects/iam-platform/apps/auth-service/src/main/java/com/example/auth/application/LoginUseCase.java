@@ -68,7 +68,11 @@ public class LoginUseCase {
             authEventPublisher.publishLoginAttempted(null, emailHash, tenantIdForRateLimit, ctx);
             authEventPublisher.publishLoginFailed(null, emailHash, tenantIdForRateLimit,
                     "RATE_LIMITED", failCount, ctx);
-            throw new LoginRateLimitedException();
+            // TASK-BE-512: carry the window's remaining seconds so the 429 handler can set
+            // Retry-After (rate-limiting.md "429 응답은 항상 Retry-After 포함") — Layer-1
+            // (gateway RateLimitFilter) already does this; Layer-2 (this counter) did not.
+            long retryAfterSeconds = loginAttemptCounter.getTtlSeconds(tenantIdForRateLimit, emailHash);
+            throw new LoginRateLimitedException(retryAfterSeconds);
         }
 
         authEventPublisher.publishLoginAttempted(null, emailHash, tenantIdForRateLimit, ctx);

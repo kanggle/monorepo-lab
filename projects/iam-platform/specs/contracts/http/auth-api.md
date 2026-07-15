@@ -365,7 +365,7 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 | 423 | `ACCOUNT_DORMANT` | 휴면 상태 (별도 복구 흐름 필요) |
 | 410 | `ACCOUNT_DELETED` | 삭제(익명화)된 계정 |
 | 500 | `ACCOUNT_STATUS_UNKNOWN` | 인식할 수 없는 계정 상태. **의도된 fail-loud** — 알 수 없는 상태를 조용히 거부(4xx)로 흘리지 않는다 |
-| 429 | `LOGIN_RATE_LIMITED` | 로그인 실패 횟수 초과 (Redis 카운터) |
+| 429 | `LOGIN_RATE_LIMITED` | 로그인 실패 횟수 초과 (Redis 카운터). `Retry-After`(초) 헤더 포함 ([rate-limiting.md](../../features/rate-limiting.md), TASK-BE-512) |
 | 400 | `VALIDATION_ERROR` | 이메일/패스워드 형식 오류 |
 
 > **계정상태 응답은 blanket 403 이 아니다** (TASK-BE-462). 권위는 [`platform/error-handling.md`](../../../../../platform/error-handling.md) § Account — `ACCOUNT_LOCKED`=423, `ACCOUNT_DORMANT`=423, `ACCOUNT_DELETED`=410. 구현은 `auth-service` `AuthExceptionHandler#handleAccountLocked` / `#handleAccountStatus`. **403 으로 되돌리지 말 것.**

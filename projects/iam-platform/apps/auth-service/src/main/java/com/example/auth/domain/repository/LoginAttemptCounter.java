@@ -24,6 +24,16 @@ public interface LoginAttemptCounter {
     void resetFailureCount(String tenantId, String emailHash);
 
     /**
+     * Returns the remaining seconds until the failure-count window resets — the
+     * Redis TTL on the counter key — for use as the {@code Retry-After} value on
+     * a {@code LOGIN_RATE_LIMITED} 429 (TASK-BE-512; {@code rate-limiting.md}
+     * "429 응답은 항상 Retry-After 포함"). Implementations must always return a
+     * positive number of seconds, falling back to the full configured window
+     * when the TTL is unknown, the key has no expiry, or Redis is unavailable.
+     */
+    long getTtlSeconds(String tenantId, String emailHash);
+
+    /**
      * @deprecated since TASK-BE-295 — use {@link #getFailureCount(String, String)};
      * delegates to the default tenant ({@code TenantContext.DEFAULT_TENANT_ID}).
      */
