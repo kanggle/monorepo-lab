@@ -77,15 +77,18 @@ class LoginControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/auth/login returns 429 for rate limited")
+    @DisplayName("POST /api/auth/login returns 429 for rate limited, with a Retry-After header (TASK-BE-512)")
     void loginRateLimited() throws Exception {
-        when(loginUseCase.execute(any())).thenThrow(new LoginRateLimitedException());
+        when(loginUseCase.execute(any())).thenThrow(new LoginRateLimitedException(300L));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"test@example.com\",\"password\":\"password123\"}"))
                 .andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$.code").value("LOGIN_RATE_LIMITED"));
+                .andExpect(jsonPath("$.code").value("LOGIN_RATE_LIMITED"))
+                .andExpect(header().string("Retry-After", "300"))
+                .andExpect(header().doesNotExist("X-RateLimit-Remaining"))
+                .andExpect(header().doesNotExist("X-RateLimit-Reset"));
     }
 
     @Test

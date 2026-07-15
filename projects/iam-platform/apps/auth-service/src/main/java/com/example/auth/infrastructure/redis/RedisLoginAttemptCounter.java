@@ -9,6 +9,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Redis-backed login attempt counter.
@@ -94,6 +95,24 @@ public class RedisLoginAttemptCounter implements LoginAttemptCounter {
             redisTemplate.delete(buildKey(tenantId, emailHash));
         } catch (DataAccessException e) {
             log.warn("Redis unavailable for login failure counter reset: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Remaining TTL on the counter key (TASK-BE-512). Falls back to the full
+     * configured window when the key has no TTL ({@code getExpire} returns a
+     * non-positive value — e.g. it just expired between the failure-count read
+     * and this call) or Redis is unavailable, so callers always receive a
+     * positive, meaningful {@code Retry-After} value.
+     */
+    @Override
+    public long getTtlSeconds(String tenantId, String emailHash) {
+        try {
+            Long ttl = redisTemplate.getExpire(buildKey(tenantId, emailHash), TimeUnit.SECONDS);
+            return (ttl != null && ttl > 0) ? ttl : failureWindowSeconds;
+        } catch (DataAccessException e) {
+            log.warn("Redis unavailable for login failure counter TTL read: {}", e.getMessage());
+            return failureWindowSeconds;
         }
     }
 }

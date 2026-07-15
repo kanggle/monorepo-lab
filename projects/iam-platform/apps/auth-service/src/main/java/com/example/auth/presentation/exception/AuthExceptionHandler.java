@@ -5,6 +5,7 @@ import com.example.auth.domain.credentials.PasswordPolicyViolationException;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.CommonGlobalExceptionHandler;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -113,9 +114,20 @@ public class AuthExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of(e.getErrorCode(), e.getMessage()));
     }
 
+    /**
+     * Layer-2 (per-email failure counter) 429. Must carry {@code Retry-After} just like
+     * the gateway's Layer-1 ({@code RateLimitFilter}) already does — {@code rate-limiting.md}
+     * "429 응답은 항상 Retry-After 포함" (TASK-BE-512). The value is the counter window's
+     * remaining seconds, always positive (see {@link LoginRateLimitedException}).
+     *
+     * <p>Deliberately does NOT add {@code X-RateLimit-Remaining}/reset-style headers —
+     * {@code rate-limiting.md} forbids exposing rate-limit counters (helps attackers
+     * calibrate an attack).
+     */
     @ExceptionHandler(LoginRateLimitedException.class)
     public ResponseEntity<ErrorResponse> handleRateLimited(LoginRateLimitedException e) {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(e.getRetryAfterSeconds()))
                 .body(ErrorResponse.of("LOGIN_RATE_LIMITED", "Too many login attempts. Try again later."));
     }
 

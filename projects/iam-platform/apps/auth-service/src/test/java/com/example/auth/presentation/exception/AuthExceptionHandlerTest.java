@@ -5,11 +5,13 @@ import com.example.auth.application.exception.AccountStatusException;
 import com.example.auth.application.exception.CredentialsInvalidException;
 import com.example.auth.application.exception.CurrentPasswordMismatchException;
 import com.example.auth.application.exception.InvalidOAuthStateException;
+import com.example.auth.application.exception.LoginRateLimitedException;
 import com.example.auth.application.exception.OAuthCodeInvalidException;
 import com.example.auth.application.exception.OAuthProviderException;
 import com.example.web.dto.ErrorResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -96,6 +98,43 @@ class AuthExceptionHandlerTest {
         assertThat(handler.handleAccountStatus(
                         new AccountStatusException("DELETED", "ACCOUNT_DELETED")).getStatusCode())
                 .isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ---------------------------------------------------------------------
+    // TASK-BE-512 — Layer-2 (per-email counter) 429 must carry Retry-After,
+    // like the gateway's Layer-1 already does, and must NOT leak rate-limit
+    // counters (remaining/reset) that would help an attacker calibrate.
+    // ---------------------------------------------------------------------
+
+    @Test
+    @DisplayName("LOGIN_RATE_LIMITED → 429 carries a positive-integer Retry-After header")
+    void loginRateLimitedCarriesRetryAfter() {
+        ResponseEntity<ErrorResponse> r = handler.handleRateLimited(new LoginRateLimitedException(300L));
+
+        assertStatus(r, HttpStatus.TOO_MANY_REQUESTS, "LOGIN_RATE_LIMITED");
+        String retryAfter = r.getHeaders().getFirst(HttpHeaders.RETRY_AFTER);
+        assertThat(retryAfter).isNotNull();
+        assertThat(Long.parseLong(retryAfter))
+                .as("Retry-After must be a positive integer number of seconds")
+                .isPositive()
+                .isEqualTo(300L);
+    }
+
+    /**
+     * rate-limiting.md forbids exposing remaining-count/reset headers on a 429 —
+     * they help an attacker calibrate a credential-stuffing attack. Only
+     * Retry-After is permitted.
+     */
+    @Test
+    @DisplayName("LOGIN_RATE_LIMITED 429 does not leak X-RateLimit-*/remaining/reset headers")
+    void loginRateLimitedDoesNotLeakCountHeaders() {
+        ResponseEntity<ErrorResponse> r = handler.handleRateLimited(new LoginRateLimitedException(60L));
+
+        HttpHeaders headers = r.getHeaders();
+        assertThat(headers.keySet()).noneMatch(name ->
+                name.toLowerCase().contains("ratelimit")
+                        || name.equalsIgnoreCase("X-Remaining")
+                        || name.toLowerCase().contains("reset"));
     }
 
     // ---------------------------------------------------------------------

@@ -275,6 +275,23 @@ class LoginUseCaseTest {
         verify(accountServicePort, never()).getAccountStatus(anyString());
     }
 
+    /**
+     * TASK-BE-512: the 429 handler needs a positive Retry-After — this pins that
+     * {@link LoginUseCase} reads it from the counter's window TTL rather than
+     * throwing the no-args exception the handler could not derive a header from.
+     */
+    @Test
+    @DisplayName("Login rate limited → exception carries the counter's remaining-window TTL as retryAfterSeconds")
+    void loginFailsRateLimitedCarriesRetryAfterSecondsFromTtl() {
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(5);
+        when(loginAttemptCounter.getTtlSeconds(eq(TENANT_ID), anyString())).thenReturn(742L);
+
+        assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, null, CTX)))
+                .isInstanceOf(LoginRateLimitedException.class)
+                .extracting(e -> ((LoginRateLimitedException) e).getRetryAfterSeconds())
+                .isEqualTo(742L);
+    }
+
     @Test
     @DisplayName("Login fails when account is locked")
     void loginFailsAccountLocked() {

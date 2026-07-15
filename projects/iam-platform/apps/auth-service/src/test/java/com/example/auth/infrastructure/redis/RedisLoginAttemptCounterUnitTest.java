@@ -140,4 +140,33 @@ class RedisLoginAttemptCounterUnitTest {
 
         counter.resetFailureCount("fan-platform", "hash-err");
     }
+
+    // ── getTtlSeconds (TASK-BE-512) ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("getTtlSeconds — 키에 TTL 있음 → 남은 초 반환")
+    void getTtlSeconds_keyHasTtl_returnsRemainingSeconds() {
+        when(redisTemplate.getExpire("login:fail:fan-platform:hash-5", java.util.concurrent.TimeUnit.SECONDS))
+                .thenReturn(120L);
+
+        assertThat(counter.getTtlSeconds("fan-platform", "hash-5")).isEqualTo(120L);
+    }
+
+    @Test
+    @DisplayName("getTtlSeconds — TTL 없음(-1/-2) → 설정된 윈도우로 폴백 (항상 양수)")
+    void getTtlSeconds_noTtl_fallsBackToConfiguredWindow() {
+        when(redisTemplate.getExpire("login:fail:fan-platform:hash-6", java.util.concurrent.TimeUnit.SECONDS))
+                .thenReturn(-2L);
+
+        assertThat(counter.getTtlSeconds("fan-platform", "hash-6")).isEqualTo(900L);
+    }
+
+    @Test
+    @DisplayName("getTtlSeconds — Redis 오류 → 설정된 윈도우로 폴백 (항상 양수)")
+    void getTtlSeconds_redisException_fallsBackToConfiguredWindow() {
+        when(redisTemplate.getExpire(any(String.class), any()))
+                .thenThrow(new QueryTimeoutException("Redis timeout"));
+
+        assertThat(counter.getTtlSeconds("fan-platform", "hash-err")).isEqualTo(900L);
+    }
 }
