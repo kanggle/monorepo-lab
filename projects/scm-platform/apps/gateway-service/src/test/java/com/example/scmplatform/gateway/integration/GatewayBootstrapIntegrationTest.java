@@ -66,6 +66,24 @@ class GatewayBootstrapIntegrationTest extends GatewayIntegrationBase {
     }
 
     @Test
+    void authenticatedTokenWithoutRoleOrScopeIsRejectedWith403Forbidden() {
+        // Rule-6 admission (TASK-MONO-416): a valid scm token — correct tenant, issuer and
+        // signature — carrying neither a role nor a scope is authenticated but NOT authorized,
+        // and must be 403'd at the edge. The paired clientCredentialsTokenPassesThroughToDownstream
+        // test (scope, no role → 200) is the regression guard for the scope leg — together they
+        // pin that admission gates on "role OR scope", not role alone. code=FORBIDDEN (not
+        // TENANT_FORBIDDEN) proves it is the admission gate, not the tenant gate.
+        String token = jwt.signNoRoleToken("roleless-1");
+
+        webTestClient.get().uri("/api/v1/procurement/po")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("FORBIDDEN");
+    }
+
+    @Test
     void superAdminWildcardTokenPassesThrough() {
         downstream.enqueue(new MockResponse()
                 .setResponseCode(200)

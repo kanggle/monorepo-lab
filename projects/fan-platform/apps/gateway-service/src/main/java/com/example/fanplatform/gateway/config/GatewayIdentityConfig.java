@@ -1,8 +1,11 @@
 package com.example.fanplatform.gateway.config;
 
+import com.example.apigateway.error.GatewayErrorHandler;
 import com.example.apigateway.filter.IdentityHeaderStripFilter;
 import com.example.apigateway.filter.JwtHeaderEnrichmentFilter;
 import com.example.apigateway.filter.JwtHeaderMapping;
+import com.example.apigateway.filter.RoleAdmissionFilter;
+import com.example.apigateway.filter.RoleAdmissions;
 import com.example.apigateway.security.JwtClaims;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
@@ -44,5 +47,21 @@ public class GatewayIdentityConfig {
                 JwtHeaderMapping.skipIfBlank("X-Tenant-Id", JwtClaims::tenantId),
                 JwtHeaderMapping.always("X-User-Role", JwtClaims::role),
                 JwtHeaderMapping.always("X-Roles", JwtClaims::role)));
+    }
+
+    /**
+     * fan's role-based admission (JWT rule 6 — TASK-MONO-416). The shared {@code SecurityConfig}
+     * authenticates ({@code .authenticated()}); this leg authorizes. {@link RoleAdmissions#roleOrScope()}
+     * admits any token carrying a role (FAN / ARTIST / operator / the {@code SUPER_ADMIN} wildcard)
+     * or a machine scope, and 403s a token that carries neither. Public routes (no security context)
+     * pass. Runs at {@link RoleAdmissionFilter#ADMISSION_ORDER} — before header enrichment, so a
+     * rejected request is never enriched with identity headers.
+     */
+    @Bean
+    public RoleAdmissionFilter roleAdmissionFilter(GatewayErrorHandler errorHandler) {
+        return new RoleAdmissionFilter(
+                RoleAdmissions.roleOrScope(),
+                "fan-platform access requires an authorized role",
+                errorHandler);
     }
 }

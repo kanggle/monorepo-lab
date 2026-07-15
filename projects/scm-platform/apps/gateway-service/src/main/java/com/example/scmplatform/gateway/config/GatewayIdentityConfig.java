@@ -1,8 +1,11 @@
 package com.example.scmplatform.gateway.config;
 
+import com.example.apigateway.error.GatewayErrorHandler;
 import com.example.apigateway.filter.IdentityHeaderStripFilter;
 import com.example.apigateway.filter.JwtHeaderEnrichmentFilter;
 import com.example.apigateway.filter.JwtHeaderMapping;
+import com.example.apigateway.filter.RoleAdmissionFilter;
+import com.example.apigateway.filter.RoleAdmissions;
 import com.example.apigateway.security.JwtClaims;
 import com.example.scmplatform.gateway.security.ScmTokenType;
 import java.util.List;
@@ -57,5 +60,23 @@ public class GatewayIdentityConfig {
                 JwtHeaderMapping.always("X-Roles", JwtClaims::role),
                 JwtHeaderMapping.skipIfBlank("X-Scopes", JwtClaims::scope),
                 JwtHeaderMapping.always("X-Token-Type", ScmTokenType::of)));
+    }
+
+    /**
+     * scm's role-based admission (JWT rule 6 — TASK-MONO-416). The shared {@code SecurityConfig}
+     * authenticates; this leg authorizes. {@link RoleAdmissions#roleOrScope()} admits a token
+     * carrying a role (scm's {@code OPERATOR}/{@code ADMIN}/{@code BUYER}, the {@code SUPER_ADMIN}
+     * wildcard, or iam's assume-tenant {@code SCM_OPERATOR}) <strong>or</strong> a machine
+     * {@code scope} — scm v1 is backend-only, so {@code client_credentials} tokens
+     * ({@code scope}, no roles) are the primary caller shape (iam-integration.md Edge Case E3);
+     * the "scope or role" gate is that spec's documented admission. A token with neither is 403'd.
+     * Public routes pass. Runs at {@link RoleAdmissionFilter#ADMISSION_ORDER} — before enrichment.
+     */
+    @Bean
+    public RoleAdmissionFilter roleAdmissionFilter(GatewayErrorHandler errorHandler) {
+        return new RoleAdmissionFilter(
+                RoleAdmissions.roleOrScope(),
+                "scm access requires an authorized role",
+                errorHandler);
     }
 }
