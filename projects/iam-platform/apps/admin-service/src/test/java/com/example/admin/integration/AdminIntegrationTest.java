@@ -35,6 +35,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -249,5 +250,95 @@ class AdminIntegrationTest extends AbstractIntegrationTest {
                 com.github.tomakehurst.wiremock.client.WireMock.moreThanOrExactly(2),
                 com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor(
                         urlPathEqualTo("/internal/accounts/acc-002/lock")));
+    }
+
+    /**
+     * TASK-BE-509 regression: GET /export must return 200 AND persist a
+     * DATA_EXPORT/SUCCESS audit row. Before the fix the success meta-audit
+     * passed literal {@code null} for the NOT-NULL {@code idempotency_key}
+     * column, so the fail-closed audit write threw and every export returned
+     * 500 AUDIT_FAILURE. This test only passes once the read-path audit stamps
+     * the unique auditId as the idempotency key.
+     */
+    @Test
+    @DisplayName("Export success: 200 + DATA_EXPORT/SUCCESS audit row persisted (BE-509)")
+    void exportSuccessPersistsDataExportAuditRow() throws Exception {
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/accounts/acc-export-1/export"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                    "accountId": "acc-export-1",
+                                    "email": "user@example.com",
+                                    "status": "ACTIVE",
+                                    "createdAt": "2026-01-01T00:00:00Z",
+                                    "profile": {
+                                        "displayName": "Jane",
+                                        "phoneNumber": "+82-10-0000-0000",
+                                        "birthDate": "1990-01-15",
+                                        "locale": "ko-KR",
+                                        "timezone": "Asia/Seoul"
+                                    },
+                                    "exportedAt": "2026-04-25T10:00:00Z"
+                                }
+                                """)));
+
+        mockMvc.perform(get("/api/admin/accounts/acc-export-1/export")
+                        .header("Authorization", operatorToken())
+                        .header("X-Operator-Reason", "subject-access-request"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value("acc-export-1"))
+                .andExpect(jsonPath("$.email").value("user@example.com"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.profile.displayName").value("Jane"));
+
+        // The meta-audit row must be persisted with a non-null idempotency_key
+        // (= the auditId) so the fail-closed write succeeds.
+        await().atMost(java.time.Duration.ofSeconds(5)).untilAsserted(() -> {
+            List<AdminActionJpaEntity> rows = adminActionRepository.findAll();
+            AdminActionJpaEntity row = rows.stream()
+                    .filter(r -> "DATA_EXPORT".equals(r.getActionCode()))
+                    .filter(r -> "acc-export-1".equals(r.getTargetId()))
+                    .findFirst().orElseThrow();
+            assertThat(row.getOutcome()).isEqualTo("SUCCESS");
+            assertThat(row.getIdempotencyKey()).isNotNull();
+            assertThat(row.getIdempotencyKey()).isEqualTo(row.getLegacyAuditId());
+            assertThat(row.getCompletedAt()).isNotNull();
+        });
+    }
+
+    /**
+     * TASK-BE-509 regression: when the downstream export fails, the FAILURE
+     * meta-audit path must also persist (its idempotency_key was likewise
+     * literal null before the fix). The ORIGINAL downstream cause must surface
+     * (503 DOWNSTREAM_ERROR) rather than being masked by a secondary
+     * 500 AUDIT_FAILURE.
+     */
+    @Test
+    @DisplayName("Export downstream 500: original cause surfaces (503) + DATA_EXPORT/FAILURE audit row (BE-509)")
+    void exportDownstreamFailurePersistsFailureAuditAndSurfacesOriginalCause() throws Exception {
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/accounts/acc-export-2/export"))
+                .willReturn(aResponse()
+                        .withStatus(500)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"code\":\"INTERNAL_ERROR\",\"message\":\"boom\"}")));
+
+        mockMvc.perform(get("/api/admin/accounts/acc-export-2/export")
+                        .header("Authorization", operatorToken())
+                        .header("X-Operator-Reason", "subject-access-request"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("DOWNSTREAM_ERROR"));
+
+        await().atMost(java.time.Duration.ofSeconds(5)).untilAsserted(() -> {
+            List<AdminActionJpaEntity> rows = adminActionRepository.findAll();
+            AdminActionJpaEntity row = rows.stream()
+                    .filter(r -> "DATA_EXPORT".equals(r.getActionCode()))
+                    .filter(r -> "acc-export-2".equals(r.getTargetId()))
+                    .findFirst().orElseThrow();
+            assertThat(row.getOutcome()).isEqualTo("FAILURE");
+            assertThat(row.getIdempotencyKey()).isNotNull();
+            assertThat(row.getCompletedAt()).isNotNull();
+        });
     }
 }

@@ -199,6 +199,10 @@ class GdprAdminUseCaseTest {
             assertThat(captor.getValue().outcome()).isEqualTo(Outcome.SUCCESS);
             assertThat(captor.getValue().actionCode()).isEqualTo(ActionCode.DATA_EXPORT);
             assertThat(captor.getValue().downstreamDetail()).isNull();
+            // TASK-BE-509: read-path meta-audit must carry a non-null idempotency
+            // key (= auditId) so the NOT-NULL admin_actions.idempotency_key insert
+            // succeeds instead of surfacing 500 AUDIT_FAILURE.
+            assertThat(captor.getValue().idempotencyKey()).isEqualTo("audit-export-1");
         }
 
         @Test
@@ -250,6 +254,8 @@ class GdprAdminUseCaseTest {
             verify(auditor, times(1)).record(captor.capture());
             assertThat(captor.getValue().outcome()).isEqualTo(Outcome.FAILURE);
             assertThat(captor.getValue().downstreamDetail()).isEqualTo("account-service unavailable");
+            // TASK-BE-509: failure meta-audit must also carry a non-null idempotency key.
+            assertThat(captor.getValue().idempotencyKey()).isEqualTo("audit-export-fail");
         }
 
         @Test

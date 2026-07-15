@@ -8,7 +8,7 @@ GDPR 데이터 이식(export)이 항상 500 — 감사 행 `idempotency_key` NOT
 
 # Status
 
-ready
+review
 
 # Owner
 

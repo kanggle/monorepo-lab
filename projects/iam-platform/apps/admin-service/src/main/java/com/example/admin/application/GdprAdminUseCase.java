@@ -89,10 +89,14 @@ public class GdprAdminUseCase {
         }
 
         Instant completedAt = Instant.now();
+        // DATA_EXPORT is a read-path (GET) meta-audit with no client Idempotency-Key.
+        // The admin_actions.idempotency_key column is NOT NULL, so we stamp the
+        // already-unique auditId as the idempotency key (satisfies the
+        // (actor_id, action_code, idempotency_key) UNIQUE index without collision).
         auditor.record(new AdminActionAuditor.AuditRecord(
                 auditId, ActionCode.DATA_EXPORT, operator,
                 "ACCOUNT", accountId,
-                reason, null, null,
+                reason, null, auditId,
                 Outcome.SUCCESS, null,
                 startedAt, completedAt));
 
@@ -131,10 +135,14 @@ public class GdprAdminUseCase {
                                               OperatorContext operator, String targetId,
                                               String reason, Instant startedAt,
                                               String failureMessage) {
+        // Same read-path constraint as the success record: stamp the unique
+        // auditId as the idempotency key so the fail-closed audit write itself
+        // succeeds and surfaces the ORIGINAL downstream cause (not a secondary
+        // AUDIT_FAILURE masking it).
         auditor.record(new AdminActionAuditor.AuditRecord(
                 auditId, actionCode, operator,
                 "ACCOUNT", targetId,
-                reason, null, null,
+                reason, null, auditId,
                 Outcome.FAILURE, failureMessage,
                 startedAt, Instant.now()));
     }
