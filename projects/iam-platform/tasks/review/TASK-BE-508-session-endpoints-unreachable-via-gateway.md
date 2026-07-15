@@ -8,7 +8,7 @@ TASK-BE-508
 
 # Status
 
-ready
+review
 
 # Owner
 

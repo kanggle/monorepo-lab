@@ -26,6 +26,21 @@ spring:
           filters:
             - StripPrefix=0
 
+        # TASK-BE-508: user session-management endpoints are implemented by
+        # auth-service (AccountSessionController), NOT account-service, yet they
+        # share the /api/accounts/me/sessions prefix. This more-specific route MUST
+        # be declared BEFORE the account-service /api/accounts/** route — Spring
+        # Cloud Gateway matches routes in DECLARATION ORDER, so the broader account
+        # route would otherwise swallow session calls (misroute → account-service
+        # NoResourceFoundException → 500). Authenticated: NOT in public-paths, so the
+        # JWT filter runs and injects X-Account-ID / X-Device-Id downstream.
+        - id: auth-service-sessions
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/accounts/me/sessions,/api/accounts/me/sessions/**
+          filters:
+            - StripPrefix=0
+
         - id: account-service
           uri: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
           predicates:
