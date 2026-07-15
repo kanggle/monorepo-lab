@@ -35,7 +35,7 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 ## Authentication and Authorization
 - All endpoints except explicitly public ones require JWT bearer token validation
 - Authorization decisions live at the application service layer, not the controller
-- See `backend/jwt-auth.md`, `backend/gateway-security.md`
+- See `.claude/skills/backend/jwt-auth/SKILL.md`, `.claude/skills/backend/gateway-security/SKILL.md`
 
 ## Idempotency
 - **Gated by the `transactional` trait. Canonical: [`rules/traits/transactional.md`](../../rules/traits/transactional.md) T1** — that file outranks this one (CLAUDE.md § Source of Truth Priority: `rules/traits/` is layer 4, `platform/` is layer 5), and [`platform/error-handling.md`](../error-handling.md) § Transactional Trait already registers `IDEMPOTENCY_KEY_REQUIRED` / `DUPLICATE_REQUEST` as trait-activated codes. This section is a pointer.
@@ -46,7 +46,7 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 ## Pagination
 - All list endpoints MUST paginate via `PageQuery` / `PageResult`
 - Unbounded list responses are forbidden
-- See `backend/pagination.md`
+- See `.claude/skills/backend/pagination/SKILL.md`
 
 ## Observability
 - Every endpoint emits request rate, error rate, and latency metrics (see `.claude/skills/cross-cutting/observability-setup/SKILL.md`)
@@ -60,7 +60,7 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 - Synchronous HTTP request/response
 - Asynchronous publishing of domain events via outbox (`.claude/skills/messaging/outbox-pattern/SKILL.md`)
 - Subscribing to events as a secondary capability (document under Integration Rules)
-- Caching reads via Redis (`cross-cutting/caching.md`)
+- Caching reads via Redis (`.claude/skills/cross-cutting/caching/SKILL.md`)
 
 ---
 
@@ -79,7 +79,7 @@ A `rest-api` service exposes synchronous HTTP endpoints to clients (browsers, mo
 - Controller slice tests (`@WebMvcTest`) for every controller
 - Contract tests against `specs/contracts/http/` for every public endpoint
 - Integration tests with Testcontainers for end-to-end happy paths and key error cases
-- See `platform/testing-strategy.md` (full five-level pyramid), `testing/contract-test.md`, `testing/e2e-test.md`
+- See `platform/testing-strategy.md` (full five-level pyramid), `.claude/skills/testing/contract-test/SKILL.md`, `.claude/skills/testing/e2e-test/SKILL.md`
 
 ---
 

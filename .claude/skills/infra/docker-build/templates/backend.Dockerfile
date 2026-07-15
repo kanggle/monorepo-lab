@@ -1,4 +1,4 @@
-# Multi-stage build for Spring Boot services.
+# Multi-stage build for Spring Boot services. Per-service port is declared in specs/services/<service>/architecture.md.
 # Replace {service} with the app module name. Exposed port defaults to 8081.
 
 # Stage 1: OpenTelemetry agent
@@ -25,5 +25,5 @@ RUN chown -R appuser:appgroup /app
 USER appuser
 EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD wget -qO- http://localhost:8081/actuator/health || exit 1
+  CMD wget -qO- http://127.0.0.1:8081/actuator/health || exit 1
 ENTRYPOINT ["java", "-javaagent:/app/opentelemetry-javaagent.jar", "-XX:MaxRAMPercentage=75.0", "org.springframework.boot.loader.launch.JarLauncher"]

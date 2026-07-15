@@ -128,14 +128,35 @@ Every feature wraps this with typed methods and never calls `fetch` directly.
 
 ## web-vitals Reporting
 
+`platform/service-types/frontend-app.md` § Server vs Client Components requires pushing the `'use client'` boundary "as deep in the tree as possible" — marking the root `layout.tsx` itself `'use client'` opts the entire app out of server components, which defeats that rule. Put the client hook in its own leaf component and mount it from the (still server) layout:
+
 ```tsx
-// app/layout.tsx
+// shared/observability/WebVitalsReporter.tsx
 'use client';
 import { useReportWebVitals } from 'next/web-vitals';
 
-useReportWebVitals(metric => {
-  navigator.sendBeacon('/api/vitals', JSON.stringify(metric));
-});
+export function WebVitalsReporter() {
+  useReportWebVitals(metric => {
+    navigator.sendBeacon('/api/vitals', JSON.stringify(metric));
+  });
+  return null;
+}
+```
+
+```tsx
+// app/layout.tsx — stays a server component
+import { WebVitalsReporter } from '@/shared/observability/WebVitalsReporter';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <WebVitalsReporter />
+        {children}
+      </body>
+    </html>
+  );
+}
 ```
 
 The `/api/vitals` route forwards to the observability backend.

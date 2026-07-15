@@ -27,14 +27,14 @@ Typical candidates include notification services (react to business events to se
   1. Natural idempotency (e.g., upsert by event-derived key)
   2. Idempotency table keyed by `eventId` (24h+ TTL)
   3. Optimistic concurrency on the target aggregate
-- See `messaging/idempotent-consumer.md`
+- See `.claude/skills/messaging/idempotent-consumer/SKILL.md`
 
 ## Retry and DLQ
 - Transient failures: in-process exponential backoff with jitter (max 3 retries by default)
 - Persistent failures: route to dead-letter queue with full event payload + failure reason
 - DLQ topic name: `<topic>.dlq`
 - Operator MUST be alerted when DLQ depth > 0
-- See `messaging/consumer-retry-dlq.md`
+- See `.claude/skills/messaging/consumer-retry-dlq/SKILL.md`
 
 ## Schema Versioning
 - Consumers MUST tolerate unknown fields (forward compatibility)

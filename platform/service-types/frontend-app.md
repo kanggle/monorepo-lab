@@ -28,7 +28,7 @@ Typical frontend surfaces include a customer-facing storefront/portal and an int
 ## Authentication
 - Tokens stored in HttpOnly cookies only — never localStorage / sessionStorage
 - Refresh handled by a server route, not client JavaScript
-- See `frontend/auth-client.md`
+- See `.claude/skills/frontend/auth-client/SKILL.md`
 
 ## Server vs Client Components
 - Default to server components
@@ -39,11 +39,11 @@ Typical frontend surfaces include a customer-facing storefront/portal and an int
 - First-load JS budget per route declared in `architecture.md`
 - Default budget: 180 KB gzipped (landing routes), 250 KB (app routes)
 - CI fails on budget regression
-- See `frontend/bundling-perf.md`
+- See `.claude/skills/frontend/bundling-perf/SKILL.md`
 
 ## Accessibility
 - WCAG 2.1 AA compliance required for all production routes
-- Component tests include axe-core check (`frontend/component-library.md`)
+- Component tests include axe-core check (`.claude/skills/frontend/component-library/SKILL.md`)
 - Lighthouse a11y score >= 90 in CI
 
 ## Observability
@@ -61,7 +61,7 @@ Typical frontend surfaces include a customer-facing storefront/portal and an int
 # Allowed Patterns
 
 - Server components for data fetching
-- Server actions for forms colocated with server components (`frontend/server-actions.md`)
+- Server actions for forms colocated with server components (`.claude/skills/frontend/server-actions/SKILL.md`)
 - React Query for client-side mutations and shared cache
 - HttpOnly cookies for auth
 - shadcn/ui-style component primitives in `shared/ui/`

@@ -8,7 +8,7 @@ category: backend
 
 Patterns for the shared pagination DTOs used across all services.
 
-Prerequisite: read `platform/coding-rules.md` before using this skill.
+Prerequisite: read `platform/coding-rules.md` before using this skill. Concrete list-endpoint contracts live in `specs/contracts/http/<service>-api.md`.
 
 ---
 
@@ -19,6 +19,14 @@ Shared record in `libs/java-common`. Validates and clamps input values.
 ```java
 public record PageQuery(int page, int size, String sortBy, String sortDirection) {
 
+    // This constructor throws bare IllegalArgumentException — a validation failure, which
+    // platform/error-handling.md requires as 400 VALIDATION_ERROR, not the default 500 it gets
+    // if nothing maps it. Always go through PageQuery.of() below, which clamps instead of
+    // throwing; if a controller ever constructs PageQuery directly, the global exception
+    // handler MUST have an explicit @ExceptionHandler(IllegalArgumentException.class) mapping
+    // to 400 (see backend/exception-handling/SKILL.md § Common Pitfalls) or this exception
+    // falls through to the catch-all Exception handler and returns 500 for what is really a
+    // client input error.
     public PageQuery {
         if (page < 0) throw new IllegalArgumentException("Page must be >= 0");
         if (size < 1 || size > 100) throw new IllegalArgumentException("Size must be 1-100");
@@ -102,7 +110,8 @@ public PageResult<Order> findByUserId(String userId, PageQuery pageQuery) {
 
 | Pitfall | Fix |
 |---|---|
-| Page size > 100 | `PageQuery` constructor rejects sizes > 100 |
+| Page size > 100 | `PageQuery` constructor rejects sizes > 100 — but prefer `PageQuery.of()`, which clamps instead of throwing |
 | Negative page number | `PageQuery.of()` clamps to 0 |
+| Constructor's bare `IllegalArgumentException` reaching the client as 500 | Global handler needs an explicit mapping to 400 `VALIDATION_ERROR` (`backend/exception-handling/SKILL.md`) — do not rely on the catch-all |
 | Mapping in controller instead of `map()` | Use `result.map(Response::from)` for clean projection |
 | Creating a custom PageResult per service | Use the shared `libs/java-common` record |

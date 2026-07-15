@@ -57,7 +57,7 @@ class ProductControllerContractTest {
 
 ## Event Contract Test
 
-Verify that published events match the expected envelope structure.
+Verify that published events match the expected envelope structure. `platform/event-driven-policy.md` § Event Envelope Format declares 10 base fields — assert all of them present, not just the ones the payload assertions happen to touch:
 
 ```java
 @Test
@@ -67,12 +67,20 @@ void productCreatedEvent_matchesContract() {
 
     assertThat(event.eventId()).isNotNull();
     assertThat(event.eventType()).isEqualTo("ProductCreated");
+    assertThat(event.eventVersion()).isPositive();
     assertThat(event.occurredAt()).isNotNull();
+    assertThat(event.source()).isNotBlank();
+    assertThat(event.aggregateType()).isNotBlank();
+    assertThat(event.aggregateId()).isNotBlank();
+    assertThat(event.traceId()).isNotNull();
+    // event.actorId() may be null for system-originated events — assert nullability, not presence
     assertThat(event.payload().productId()).isNotNull();
     assertThat(event.payload().name()).isNotBlank();
     assertThat(event.payload().price()).isPositive();
 }
 ```
+
+(Field names above follow `platform/event-driven-policy.md`'s canonical shape; a project whose actual wire envelope diverges — see its own events contract index, the `specs/contracts/events/` directory's `README.md`, per `TASK-MONO-415`'s census — asserts its own real field set instead, but still asserts the full set, not a subset.)
 
 ---
 
