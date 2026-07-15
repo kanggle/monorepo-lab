@@ -51,7 +51,12 @@ public class SecurityConfig {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    private static final String[] ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN" };
+    // FAN_OPERATOR is the assume-tenant operator role iam mints on token-exchange
+    // (OperatorRoleDerivation); included so a cross-tenant console operator is admitted on the
+    // mutating routes rather than silently 403'd here after passing the gateway (TASK-MONO-417).
+    // The JWT converter maps every role to ROLE_<role>, so hasAnyRole("FAN_OPERATOR") matches a
+    // FAN_OPERATOR claim. Additive — existing generic operators unaffected.
+    private static final String[] ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {

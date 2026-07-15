@@ -59,6 +59,16 @@ public final class JwtTestHelper {
                 Map.of("roles", List.of("OPERATOR")));
     }
 
+    /**
+     * Assume-tenant operator token — iam's token-exchange mints the domain-prefixed
+     * {@code FAN_OPERATOR} (OperatorRoleDerivation), never a generic role. Must be admitted on
+     * admin-tier routes just like a directly-provisioned operator (TASK-MONO-417).
+     */
+    public String signFanOperatorToken(String subject) {
+        return sign(subject, "FAN_OPERATOR", DEFAULT_TENANT_ID, 300,
+                Map.of("roles", List.of("FAN_OPERATOR")));
+    }
+
     public String signCrossTenantToken(String subject) {
         return sign(subject, "OPERATOR", "wms", 300, Map.of());
     }
