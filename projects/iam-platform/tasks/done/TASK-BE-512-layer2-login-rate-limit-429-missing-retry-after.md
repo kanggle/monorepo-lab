@@ -8,7 +8,7 @@ auth-service 이메일별 로그인 rate-limit 의 429 에 `Retry-After` 헤더 
 
 # Status
 
-review
+done
 
 # Owner
 
