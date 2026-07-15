@@ -1,0 +1,46 @@
+package com.wms.outbound.adapter.in.web.advice;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+/**
+ * Unit tests for {@link GlobalExceptionHandler}'s unmatched-path handling
+ * (TASK-MONO-420): a request to a path this service does not serve must
+ * degrade to 404, not fall through to the catch-all 500.
+ */
+class GlobalExceptionHandlerNotFoundTest {
+
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+    @Test
+    void noResourceFound_returns404_withCode_NOT_FOUND() {
+        NoResourceFoundException ex =
+                new NoResourceFoundException(HttpMethod.GET, "/api/definitely-not-a-real-endpoint");
+
+        ResponseEntity<ApiErrorEnvelope> resp = handler.handleNoResource(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(resp.getBody().code()).isEqualTo("NOT_FOUND");
+        assertThat(resp.getBody().message()).isEqualTo("Resource not found");
+    }
+
+    @Test
+    void noHandlerFound_returns404_withCode_NOT_FOUND() {
+        NoHandlerFoundException ex =
+                new NoHandlerFoundException("GET", "/api/definitely-not-a-real-endpoint", new HttpHeaders());
+
+        ResponseEntity<ApiErrorEnvelope> resp = handler.handleNoHandlerFound(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(resp.getBody().code()).isEqualTo("NOT_FOUND");
+        assertThat(resp.getBody().message()).isEqualTo("Resource not found");
+    }
+}

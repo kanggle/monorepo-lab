@@ -21,6 +21,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Maps domain + framework exceptions to the {@link ApiErrorEnvelope} shape
@@ -74,6 +76,23 @@ public class GlobalExceptionHandler {
             MethodArgumentNotValidException.class})
     public ResponseEntity<ApiErrorEnvelope> handleBadInput(Exception e) {
         return body(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", e.getMessage());
+    }
+
+    /**
+     * Defense-in-depth (TASK-MONO-420): a request to a path this service does
+     * not serve raises {@link NoResourceFoundException} (static resource lookup) or
+     * {@link NoHandlerFoundException} (no matching handler). Without these handlers
+     * they fall through to {@link #handleUnknown} → 500, masking a mis-route as
+     * a service fault. Map them to a clean 404 so mis-routes degrade honestly.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleNoResource(NoResourceFoundException e) {
+        return body(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found");
+    }
+
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleNoHandlerFound(NoHandlerFoundException e) {
+        return body(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found");
     }
 
     @ExceptionHandler(Exception.class)
