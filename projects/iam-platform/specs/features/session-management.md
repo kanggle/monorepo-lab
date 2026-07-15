@@ -47,12 +47,14 @@
 
 | 시나리오 | 트리거 | 영향 범위 | 이벤트 |
 |---|---|---|---|
-| 사용자 로그아웃 | `POST /api/auth/logout` | 해당 세션 1개 | `session.revoked` |
-| 관리자 강제 로그아웃 | `POST /api/admin/sessions/{id}/revoke` | 해당 계정 전체 | `session.revoked` |
-| 토큰 재사용 탐지 | refresh rotation 중 중복 감지 | 해당 계정 전체 | `auth.token.reuse.detected` + `session.revoked` |
+| 사용자 로그아웃 | `POST /api/auth/logout` | 해당 세션 1개 | `auth.session.revoked` (1건) |
+| 관리자 강제 로그아웃 | `POST /api/admin/sessions/{id}/revoke` | 해당 계정 전체 | `auth.session.revoked` (device당 1건) |
+| 토큰 재사용 탐지 | refresh rotation 중 중복 감지 | 해당 계정 전체 | `auth.token.reuse.detected` + `auth.session.revoked` (device당 1건) |
 | 계정 잠금 | ACTIVE → LOCKED 전이 | 해당 계정 전체 | `account.locked` → auth-service 소비 → revoke |
 | 계정 삭제 | ACTIVE → DELETED 전이 | 해당 계정 전체 | `account.deleted` → auth-service 소비 → revoke |
-| 패스워드 변경 | (미래) 패스워드 변경 시 | 다른 모든 세션 (선택적) | `session.revoked` |
+| 패스워드 변경 | (미래) 패스워드 변경 시 | 다른 모든 세션 (선택적) | `auth.session.revoked` (device당 1건) |
+
+> 세션 무효화 이벤트는 per-device `auth.session.revoked` 이다([auth-events.md](../contracts/events/auth-events.md#authsessionrevoked)). 계정 전체 revoke 는 device 마다 한 건씩 발행된다(bulk 단일 이벤트 아님). 과거 `session.revoked`(bulk) 선언은 미구현으로 SUPERSEDED — [session-events.md](../contracts/events/session-events.md) 참조 (TASK-BE-513).
 
 ## Business Rules
 

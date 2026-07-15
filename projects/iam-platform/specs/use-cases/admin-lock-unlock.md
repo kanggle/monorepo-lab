@@ -66,7 +66,7 @@
 2. `POST /api/admin/sessions/{accountId}/revoke` 호출
 3. admin-service: 인증·감사 → `POST /internal/auth/accounts/{id}/force-logout`
 4. auth-service: 해당 account의 모든 refresh_tokens `revoked=TRUE` + `refresh:invalidate-all:{account_id}` Redis SET
-5. `session.revoked` 이벤트 발행 (revokeReason=ADMIN_FORCE_LOGOUT)
+5. `auth.session.revoked` 이벤트 발행 (device당 1건, `reason=ADMIN_FORCED`)
 6. admin-service: audit SUCCESS + 이벤트
 7. 응답 200: `{ accountId, revokedSessionCount, auditId }`
 

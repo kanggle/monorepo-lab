@@ -267,7 +267,7 @@ device session이 revoke될 때 발행. 사용자 명시 revoke, concurrent-sess
   - `ADMIN` — admin-service 경유 강제 revoke
   - `SYSTEM` — eviction, token reuse cascade 등 자동화 경로
 
-**Consumers**: security-service (login_history outcome=SESSION_REVOKED 기록)
+**Consumers**: (현재 없음 — 미구현). 설계 의도는 security-service 가 이 이벤트를 소비해 `login_history` 에 `outcome=SESSION_REVOKED` 행을 기록하는 것이나, **현재 그 `@KafkaListener` 는 존재하지 않는다** (TASK-BE-513 재측정 확인 2026-07-16). `login_history` 는 `auth.login.attempted/failed/succeeded` + `auth.token.refreshed/reuse.detected` 로만 채워진다. 이 소비를 실제로 구현하려면 별도 후속(기능)으로 분리한다 — 계약이 없는 소비를 있는 것처럼 선언하지 않는다.
 
 ---
 

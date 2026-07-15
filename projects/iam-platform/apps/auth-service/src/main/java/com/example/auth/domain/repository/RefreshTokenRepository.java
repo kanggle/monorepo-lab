@@ -24,7 +24,7 @@ public interface RefreshTokenRepository {
 
     /**
      * Returns the jtis of all currently-active (non-revoked) refresh tokens for the account.
-     * Used to populate the {@code session.revoked} event's {@code revokedJtis} field when
+     * Used to populate the {@code auth.session.revoked} event's {@code revokedJtis} field when
      * performing a bulk revoke.
      */
     List<String> findActiveJtisByAccountId(String accountId);
