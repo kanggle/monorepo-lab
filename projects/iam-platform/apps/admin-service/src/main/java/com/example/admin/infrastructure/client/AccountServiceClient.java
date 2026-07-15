@@ -58,9 +58,18 @@ public class AccountServiceClient {
             return restClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/internal/accounts")
-                            .queryParam("email", email)
-                            .queryParam("tenantId", tenantId)  // TASK-BE-357: tenant-scoped (was fan-platform hard-coded)
-                            .build())
+                            // TASK-BE-510: "{email}"/"{tenantId}" are URI VARIABLES expanded via
+                            // build(Map), NOT literal query values. Spring's variable expander
+                            // percent-encodes every reserved char (including '+') in the supplied
+                            // value; queryParam(name, literalValue).build() instead only quotes
+                            // structurally-illegal characters and leaves '+' as a literal '+'
+                            // (it IS a legal RFC 3986 query char). A literal '+' then reaches
+                            // account-service, whose query-string parser (application/
+                            // x-www-form-urlencoded rules) decodes it back to a space, so
+                            // plus-addressed emails ("foo+bar@x.com") never matched.
+                            .queryParam("email", "{email}")
+                            .queryParam("tenantId", "{tenantId}")  // TASK-BE-357: tenant-scoped (was fan-platform hard-coded)
+                            .build(Map.of("email", email, "tenantId", tenantId)))
                     .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, resp) -> {
