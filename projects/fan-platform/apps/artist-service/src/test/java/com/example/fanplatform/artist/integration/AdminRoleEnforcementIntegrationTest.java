@@ -46,4 +46,23 @@ class AdminRoleEnforcementIntegrationTest extends ArtistServiceIntegrationBase {
         JsonNode root = objectMapper.readTree(adminResponse.getBody());
         assertThat(root.path("data").path("status").asText()).isEqualTo("DRAFT");
     }
+
+    @Test
+    @DisplayName("assume-tenant FAN_OPERATOR token POST /api/artists → 201 (TASK-MONO-417)")
+    void assumeTenantOperatorCreated() throws Exception {
+        // iam mints FAN_OPERATOR (not a generic role) on the assume-tenant token-exchange.
+        // A cross-tenant console operator carrying only FAN_OPERATOR must be admitted on the
+        // admin-tier mutating routes, not 403'd. Before TASK-MONO-417 ADMIN_ROLES held only the
+        // generic triple, so this returned 403 — a silent privilege downgrade at the service.
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(jwt.signFanOperatorToken("assume-op-1"));
+        String body = """
+                {"artistType":"SOLO","stageName":"AssumeTenantOp-1"}
+                """;
+        ResponseEntity<String> response = rest.exchange(
+                "/api/artists", HttpMethod.POST,
+                new HttpEntity<>(body, headers), String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
 }
