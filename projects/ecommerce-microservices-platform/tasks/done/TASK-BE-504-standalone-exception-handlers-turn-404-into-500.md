@@ -8,7 +8,7 @@ ecommerce 서비스별 독립 GlobalExceptionHandler 가 404(NoResourceFound)를
 
 # Status
 
-review
+done
 
 # Owner
 
