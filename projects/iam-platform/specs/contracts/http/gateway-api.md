@@ -22,6 +22,10 @@
 | `GET /api/accounts/me` | account-service | Yes | — |
 | `PATCH /api/accounts/me/profile` | account-service | Yes | — |
 | `GET /api/accounts/me/status` | account-service | Yes | — |
+| `GET /api/accounts/me/sessions` | auth-service | Yes | 세션 관리 — auth-service `AccountSessionController` (TASK-BE-508). `/api/accounts/**` 보다 **먼저** 선언된 전용 라우트. [auth-api.md](auth-api.md) |
+| `GET /api/accounts/me/sessions/current` | auth-service | Yes | 현재 device session 단건 (TASK-BE-508). [auth-api.md](auth-api.md) |
+| `DELETE /api/accounts/me/sessions/{deviceId}` | auth-service | Yes | 특정 device session revoke (TASK-BE-508). [auth-api.md](auth-api.md) |
+| `DELETE /api/accounts/me/sessions` | auth-service | Yes | 현재 세션 제외 전체 revoke (TASK-BE-508). [auth-api.md](auth-api.md) |
 | `POST /api/admin/auth/login` | admin-service | No (gateway layer) | admin-service self-serve auth, [admin-api.md §Authentication Exceptions](admin-api.md) |
 | `POST /api/admin/auth/2fa/enroll` | admin-service | Bootstrap token (body) | admin-service 내부 검증 |
 | `POST /api/admin/auth/2fa/verify` | admin-service | Bootstrap token (body) | admin-service 내부 검증 |
@@ -34,6 +38,13 @@
 | `GET /api/admin/console/registry` | admin-service | Yes (operator token, downstream) | platform-console product/tenant registry (TASK-BE-296). 아래 §Admin Routes 참조. contract: [console-registry-api.md](console-registry-api.md) |
 | `GET /actuator/health` | gateway 자체 | No | 헬스체크 |
 | `/internal/tenants/{tenantId}/**` | account-service | Yes (JWT) | path `{tenantId}` ↔ JWT `tenant_id` 검사. 불일치 시 403 `TENANT_SCOPE_DENIED`. 외부 노출 금지 |
+
+### 세션 라우팅 순서 정책 (TASK-BE-508)
+
+`/api/accounts/me/sessions**` 4개 경로는 **auth-service** 가 담당하고, 나머지 `/api/accounts/**` 는 **account-service** 가 담당한다. Spring Cloud Gateway 는 라우트를 **선언 순서**로 매칭하므로, 더 구체적인 세션 라우트(`id: auth-service-sessions`)를 광범위한 `id: account-service`(`/api/accounts/**`) 라우트보다 **먼저** 선언해야 한다. 순서가 뒤바뀌면 세션 호출이 account-service 로 오배송되어 500 으로 변질된다.
+
+- 세션 라우트 predicate 는 `Path=/api/accounts/me/sessions,/api/accounts/me/sessions/**` — 프로필/상태(`/api/accounts/me`, `/api/accounts/me/profile`, `/api/accounts/me/status`)는 매칭하지 않으므로 account-service 로 정상 라우팅된다.
+- 세션 4경로는 public-paths 에 포함되지 않는다(인증 필수) — gateway JWT 필터가 `X-Account-ID` / `X-Device-Id` 를 주입한다.
 
 ### OIDC / OAuth2 라우팅 정책 (TASK-BE-251 Phase 2c)
 
