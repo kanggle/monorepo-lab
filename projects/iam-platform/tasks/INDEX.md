@@ -82,6 +82,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 **→ IAM 라이브 스윕 결함 6건 전량 종결** (BE-508·509·510·511·512 + monorepo `TASK-MONO-415`). 부수 산출: `TASK-MONO-415` 착수 재측정이 ecommerce 갈라진 핸들러 복사본을 발견 → 후속 `TASK-BE-504`(ecommerce ready/) 생성.
 
+- `TASK-BE-513` — `session.revoked`(계약) vs `auth.session.revoked`(코드) 토픽 불일치 + 계약이 선언한 소비 관계가 코드에 미구현. `TASK-BE-511` 부수 발견. 오늘 소비자 0이라 무해하나 미래 소비자가 계약대로 구독하면 이벤트 0인 **잠재 함정**(선언↔진실 갭). **AC-1 사람 결정 필요**(A=계약을 코드에 맞춤 / B=코드를 계약에 맞춤 + 중복 병합 여부). (분석=Opus 4.8 / 구현 권장=Opus — 계약 권위 판단)
+
 > 관련 monorepo-level: **루트 `tasks/ready/TASK-MONO-415`** — 공유 `libs/java-web-servlet` `CommonGlobalExceptionHandler` 가 404(NoResourceFound)를 500 으로 변질(소비 서비스 11개 파급, cross-project 원자 PR). BE-508 의 500 도 이것과 합작.
 
 > 결함 #3(레거시 `POST /api/auth/login` 이 발급한 토큰을 하류가 401 거부)은 **신규 티켓 없음** — `TASK-BE-398`(레거시 커스텀-JWT 일몰 제거)이 그 경로를 통째로 제거하므로 그쪽에서 처리. OIDC(authorization_code+PKCE) 경로는 스윕에서 정상 확인.
