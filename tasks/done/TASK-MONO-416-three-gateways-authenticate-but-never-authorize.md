@@ -8,7 +8,7 @@ TASK-MONO-416
 
 # Status
 
-ready
+done
 
 # Owner
 
