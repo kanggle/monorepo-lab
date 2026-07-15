@@ -8,7 +8,7 @@ TASK-MONO-415
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -46,14 +46,20 @@ public ResponseEntity<ErrorResponse> handleGeneral(Exception e) {
 
 Spring 6.1+ 는 정적/매핑 미존재 경로에 `org.springframework.web.servlet.resource.NoResourceFoundException`(HTTP 404 의미)을 던지는데, 위 포괄 핸들러가 이를 잡아 500 으로 만든다. 클라이언트는 "서버 버그" 로 오인하고, 오배송·오타 경로가 404 대신 500 으로 관측된다(디버깅 함정 — `TASK-BE-508` 에서 세션 오배송이 500 으로 보인 원인이기도 함).
 
-## 파급 범위 (실측 스냅샷, 재열거 대상)
+## 파급 범위 — 🔵 착수 시 재열거로 정정됨 (2026-07-15)
 
-`com.example.web.exception.CommonGlobalExceptionHandler` 를 상속/사용하는 서비스 (2026-07-15 grep):
+**최초 스냅샷(가설)**: "iam 4 + ecommerce 7 = 11 소비자". **이 숫자는 틀렸다.** 착수 재grep(AC-0)이 정정:
 
-- **iam-platform**: account-service, admin-service, auth-service, security-service (4)
-- **ecommerce-microservices-platform**: order, product, promotion, search, settlement, shipping, user (7)
+- **공유 `CommonGlobalExceptionHandler` 를 실제 `extends`/import 하는 건 iam-platform 4개뿐** — account-service, admin-service(AuthExceptionHandler), auth-service(AuthExceptionHandler), security-service(QueryExceptionHandler).
+- **ecommerce 7개(order/product/promotion/search/settlement/shipping/user, 그 외 포함)는 공유 base 를 안 쓴다** — 각자 **독립 `GlobalExceptionHandler` 복사본**에 동일한 `@ExceptionHandler(Exception.class)`→`INTERNAL_ERROR` 버그를 갖고 있고, `libs/java-web` 의 `ErrorResponse` 만 소비한다.
 
-→ **최소 11개 서비스**. 라이브러리 한 곳을 고치면 전부 이득이지만, **cross-project 원자 PR** 로 각 소비자의 빌드·테스트 회귀를 함께 검증해야 한다(CLAUDE.md § Cross-Project Changes). **착수 시 소비자 목록을 다시 grep** 할 것(그사이 신규 소비자 유입 가능).
+**결과**:
+1. 이 라이브러리 fix 는 **iam 4개만** 상속으로 자동 교정 — 그래서 사실상 **cross-project adaptation 이 없다**(ecommerce 는 base 미소비 → 손댈 것 없음). "cross-project 원자 PR" 이라는 최초 AC 는 무효화됨; 다만 여전히 `libs/` 변경이므로 monorepo-level 이고 CI 전 매트릭스가 회귀를 검증한다.
+2. **ecommerce 7개의 갈라진 복사본은 이 fix 로 안 고쳐진다** — 별개 결함 클래스(라이브러리 소비가 아니라 *전파된 복사본*). → **후속 `TASK-BE-504`**(ecommerce project) 로 분리. 원자 PR 을 조용히 7개로 확장하지 않았다(에이전트가 플래그).
+
+"없는 경로→500" 단언 화석: iam 4개 소비자에 **0건**(`INTERNAL_ERROR` 히트 3건은 전부 정당 — 진짜 AuditFailure 500 + WireMock 다운스트림 stub 2). ecommerce 의 `isNotFound`/`isInternalServerError` 단언은 매핑된 엔드포인트 대상이라 무영향.
+
+> 교훈: `ready/` 티켓의 "11" 은 *"패키지/클래스명 grep 히트"* 를 *"공유 base 실소비"* 로 혼동한 값이었다. 착수=재측정(AC-0)이 이를 잡았다 — 물려받은 범위는 가설이다.
 
 # Scope
 
