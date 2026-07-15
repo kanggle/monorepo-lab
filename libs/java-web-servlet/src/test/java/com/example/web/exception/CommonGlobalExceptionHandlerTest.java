@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpInputMessage;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -16,6 +18,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 
@@ -123,6 +127,32 @@ class CommonGlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody().code()).isEqualTo("CONFLICT");
         assertThat(response.getBody().message()).isEqualTo("Concurrent modification detected. Please retry.");
+    }
+
+    @Test
+    @DisplayName("NoResourceFoundException — 404, NOT_FOUND (매핑 없는 경로가 500 으로 변질되지 않음)")
+    void handleNoResourceFound_returns404() {
+        NoResourceFoundException e =
+                new NoResourceFoundException(HttpMethod.GET, "/api/definitely-not-a-real-endpoint");
+
+        ResponseEntity<ErrorResponse> response = handler.handleNoResourceFound(e);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().code()).isEqualTo("NOT_FOUND");
+        assertThat(response.getBody().message()).isEqualTo("The requested resource was not found");
+    }
+
+    @Test
+    @DisplayName("NoHandlerFoundException — 404, NOT_FOUND (throw-exception-if-no-handler-found 서비스)")
+    void handleNoHandlerFound_returns404() {
+        NoHandlerFoundException e =
+                new NoHandlerFoundException("GET", "/api/definitely-not-a-real-endpoint", new HttpHeaders());
+
+        ResponseEntity<ErrorResponse> response = handler.handleNoHandlerFound(e);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().code()).isEqualTo("NOT_FOUND");
+        assertThat(response.getBody().message()).isEqualTo("The requested resource was not found");
     }
 
     @Test
