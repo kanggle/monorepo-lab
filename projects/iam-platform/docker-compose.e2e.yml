@@ -134,15 +134,26 @@ services:
         sleep 3
         KAFKA_BIN="/opt/kafka/bin"
         BOOTSTRAP="kafka:9092"
+        # TASK-BE-511: reconciled against actual outbox-publisher topicFor() maps
+        # (AuthOutboxPublisher, AccountOutboxPublisher, SecurityOutboxPublisher,
+        # AdminOutboxPublisher) + specs/contracts/events/*.md — the produced set,
+        # not the contract-declared superset. "session.revoked" (session-events.md)
+        # dropped: no producer AND no consumer found anywhere in apps/*/src/main
+        # (superseded in practice by auth.session.revoked).
         TOPICS=(
           "auth.login.attempted" "auth.login.failed" "auth.login.succeeded"
-          "auth.token.refreshed" "auth.token.reuse.detected"
+          "auth.token.refreshed" "auth.token.reuse.detected" "auth.token.tenant.mismatch"
+          "auth.session.created" "auth.session.revoked"
           "account.created" "account.status.changed" "account.locked"
-          "account.unlocked" "account.deleted"
-          "session.revoked"
+          "account.unlocked" "account.roles.changed" "account.deleted"
+          "tenant.subscription.changed"
           "security.suspicious.detected" "security.auto.lock.triggered"
-          "security.auto.lock.pending"
+          "security.auto.lock.pending" "security.pii.masked"
           "admin.action.performed"
+          "tenant.created" "tenant.suspended" "tenant.reactivated" "tenant.updated"
+          "partnership.invited" "partnership.accepted" "partnership.suspended"
+          "partnership.reactivated" "partnership.terminated"
+          "partnership.participant_added" "partnership.participant_removed"
         )
         for t in "$${TOPICS[@]}"; do
           $$KAFKA_BIN/kafka-topics.sh --bootstrap-server $$BOOTSTRAP \

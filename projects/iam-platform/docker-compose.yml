@@ -21,7 +21,7 @@
 #   mysql        — 4 databases: auth_db, account_db, security_db, admin_db
 #   redis        — single instance with password
 #   kafka        — KRaft single broker
-#   kafka-init   — creates 14 main + 14 DLQ topics idempotently
+#   kafka-init   — creates 31 main + 31 DLQ topics idempotently (TASK-BE-511)
 #   kafka-ui     — broker / topic inspection (Traefik-routed)
 #   prometheus   — metrics scrape
 #   alertmanager — alert routing
@@ -144,7 +144,13 @@ services:
       - iam-net
 
   # ---------------------------------------------------------------------------
-  # Kafka Topic Initializer — creates 14 main + 14 DLQ topics idempotently
+  # Kafka Topic Initializer — creates 31 main + 31 DLQ topics idempotently
+  # (TASK-BE-511: reconciled against outbox-publisher topicFor() maps in
+  # AuthOutboxPublisher / AccountOutboxPublisher / SecurityOutboxPublisher /
+  # AdminOutboxPublisher + specs/contracts/events/*.md — the actually-produced
+  # set, not the contract-declared superset. "session.revoked" (session-events.md)
+  # excluded: no producer AND no consumer found in apps/*/src/main — superseded
+  # in practice by auth.session.revoked.)
   # ---------------------------------------------------------------------------
   kafka-init:
     image: apache/kafka:3.7.0
@@ -174,15 +180,32 @@ services:
           "auth.login.succeeded"
           "auth.token.refreshed"
           "auth.token.reuse.detected"
+          "auth.token.tenant.mismatch"
+          "auth.session.created"
+          "auth.session.revoked"
           "account.created"
           "account.status.changed"
           "account.locked"
           "account.unlocked"
+          "account.roles.changed"
           "account.deleted"
-          "session.revoked"
+          "tenant.subscription.changed"
           "security.suspicious.detected"
           "security.auto.lock.triggered"
+          "security.auto.lock.pending"
+          "security.pii.masked"
           "admin.action.performed"
+          "tenant.created"
+          "tenant.suspended"
+          "tenant.reactivated"
+          "tenant.updated"
+          "partnership.invited"
+          "partnership.accepted"
+          "partnership.suspended"
+          "partnership.reactivated"
+          "partnership.terminated"
+          "partnership.participant_added"
+          "partnership.participant_removed"
         )
 
         create_topic() {
