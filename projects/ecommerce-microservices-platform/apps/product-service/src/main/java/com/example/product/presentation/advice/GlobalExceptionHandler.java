@@ -21,6 +21,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
@@ -121,6 +123,18 @@ public class GlobalExceptionHandler {
     public ErrorResponse handleOptimisticLocking(OptimisticLockingFailureException ex) {
         log.warn("Optimistic locking conflict: {}", ex.getMessage());
         return ErrorResponse.of("CONFLICT", "Concurrent modification conflict. Please try again.");
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse handleNoResourceFound(NoResourceFoundException ex) {
+        return ErrorResponse.of("NOT_FOUND", "The requested resource was not found");
+    }
+
+    @ExceptionHandler(NoHandlerFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse handleNoHandlerFound(NoHandlerFoundException ex) {
+        return ErrorResponse.of("NOT_FOUND", "The requested resource was not found");
     }
 
     @ExceptionHandler(Exception.class)
