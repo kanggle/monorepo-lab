@@ -11,6 +11,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
@@ -56,6 +58,18 @@ public class GlobalExceptionHandler {
     public ErrorResponse handleSearchException(SearchException ex) {
         log.error("Search infrastructure error", ex);
         return ErrorResponse.of("SEARCH_UNAVAILABLE", "Search service is temporarily unavailable");
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse handleNoResourceFound(NoResourceFoundException ex) {
+        return ErrorResponse.of("NOT_FOUND", "The requested resource was not found");
+    }
+
+    @ExceptionHandler(NoHandlerFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse handleNoHandlerFound(NoHandlerFoundException ex) {
+        return ErrorResponse.of("NOT_FOUND", "The requested resource was not found");
     }
 
     @ExceptionHandler(Exception.class)
