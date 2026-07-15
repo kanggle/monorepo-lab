@@ -48,6 +48,23 @@ class GatewayBootstrapIntegrationTest extends GatewayIntegrationBase {
     }
 
     @Test
+    void authenticatedTokenWithoutRoleIsRejectedWith403Forbidden() {
+        // Rule-6 admission (TASK-MONO-416): a valid fan-platform token — correct tenant,
+        // issuer and signature — carrying neither a role nor a scope is authenticated but
+        // NOT authorized, and must be 403'd at the edge. code=FORBIDDEN (not TENANT_FORBIDDEN)
+        // proves it is the admission gate firing, not the tenant gate; the request never
+        // reaches the downstream MockWebServer (no response enqueued).
+        String token = jwt.signNoRoleToken("roleless-1");
+
+        webTestClient.get().uri("/api/v1/community/posts")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("FORBIDDEN");
+    }
+
+    @Test
     void superAdminWildcardTokenPassesThrough() {
         downstream.enqueue(new MockResponse()
                 .setResponseCode(200)

@@ -131,6 +131,17 @@ public final class JwtTestHelper {
         return signToken(subject, "OPERATOR", "wms", 300, Map.of());
     }
 
+    /**
+     * Convenience: a valid scm token (correct tenant, issuer, signature) carrying neither a
+     * role nor a scope — authenticated but unauthorized. Rule-6 admission (TASK-MONO-416)
+     * must reject it with 403 {@code FORBIDDEN}. Contrast {@link #signClientCredentialsToken()},
+     * which carries a scope and is therefore admitted.
+     */
+    public String signNoRoleToken(String subject) {
+        return signToken(subject, null, DEFAULT_TENANT_ID, 300,
+                Map.of("email", subject + "@test.local"));
+    }
+
     public String keyId() {
         return rsaJwk.getKeyID();
     }

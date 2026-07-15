@@ -1,8 +1,11 @@
 package com.example.erp.gateway.config;
 
+import com.example.apigateway.error.GatewayErrorHandler;
 import com.example.apigateway.filter.IdentityHeaderStripFilter;
 import com.example.apigateway.filter.JwtHeaderEnrichmentFilter;
 import com.example.apigateway.filter.JwtHeaderMapping;
+import com.example.apigateway.filter.RoleAdmissionFilter;
+import com.example.apigateway.filter.RoleAdmissions;
 import com.example.apigateway.security.JwtClaims;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
@@ -56,5 +59,21 @@ public class GatewayIdentityConfig {
                 JwtHeaderMapping.skipIfNull("X-User-Email", JwtClaims::email),
                 JwtHeaderMapping.always("X-User-Role", JwtClaims::role),
                 JwtHeaderMapping.skipIfBlank("X-Tenant-Id", JwtClaims::tenantId)));
+    }
+
+    /**
+     * erp's role-based admission (JWT rule 6 — TASK-MONO-416). The shared {@code SecurityConfig}
+     * authenticates; this leg authorizes. {@link RoleAdmissions#roleOrScope()} admits any token
+     * carrying an operator role ({@code ERP_OPERATOR} / {@code ERP_ADMIN} / the {@code SUPER_ADMIN}
+     * wildcard) or a machine scope ({@code erp.read}/{@code erp.write} — services authorize on
+     * scope), and 403s a token that carries neither. Public routes pass. Runs at
+     * {@link RoleAdmissionFilter#ADMISSION_ORDER} — before header enrichment.
+     */
+    @Bean
+    public RoleAdmissionFilter roleAdmissionFilter(GatewayErrorHandler errorHandler) {
+        return new RoleAdmissionFilter(
+                RoleAdmissions.roleOrScope(),
+                "erp access requires an authorized role",
+                errorHandler);
     }
 }

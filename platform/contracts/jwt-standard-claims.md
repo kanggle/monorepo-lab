@@ -132,7 +132,8 @@ Every platform gateway MUST implement the following validation and injection log
    - **ecommerce gateway (path-based):**
      - `/api/admin/**` paths: require an admin-family role (e.g. `ADMIN`)
      - All other paths: require a consumer role (e.g. `CUSTOMER`)
-   - **wms, erp, mes, scm gateways:** require an operator role for that platform (e.g. `WMS_OPERATOR`)
+   - **wms, erp, mes, scm, finance gateways:** require an operator role for that platform (e.g. `WMS_OPERATOR`). finance is an entitlement-plane operator platform (`ProductCatalog.ENTRIES`, symmetric with erp) — added TASK-MONO-416.
+   - **iam is intentionally excluded** (not a row above): the IdP authorizes by tenant-scoping on its own `/internal/tenants/{id}/**` surface, not by a platform-surface role, so rule 6 does not apply to it.
 
    This preserves the isolation that matters: a `CUSTOMER`-only token still fails the `/api/admin/**` role check, and a consumer-surface token never carries operator roles for a different `aud` (different token, § Role Strategy). Defense-in-depth (RBAC, ABAC data scope, access conditions) is unchanged and remains the primary gate on sensitive surfaces.
 
