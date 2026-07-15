@@ -8,7 +8,7 @@ category: infra
 
 Patterns for building Docker images in this repository.
 
-Prerequisite: read `platform/deployment-policy.md` before using this skill.
+Prerequisite: read `platform/deployment-policy.md` before using this skill. Concrete per-service image/port declarations live in `specs/services/<service>/architecture.md` § Deployment.
 
 ---
 

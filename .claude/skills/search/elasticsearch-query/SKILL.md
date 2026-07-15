@@ -8,7 +8,7 @@ category: search
 
 Patterns for building search queries in the search service.
 
-Prerequisite: read `platform/coding-rules.md` before using this skill.
+Prerequisite: read `platform/coding-rules.md` before using this skill. Concrete search API contracts live in `specs/contracts/http/<service>-api.md`.
 
 ---
 
@@ -41,7 +41,10 @@ public class ElasticsearchQueryAdapter implements SearchQueryPort {
 
             SearchResponse<Map> response = elasticsearchClient.search(request, Map.class);
             return toResult(response);
-        } catch (Exception e) {
+        } catch (IOException | ElasticsearchException e) {
+            // Narrow catch, not top-level (platform/coding-rules.md § Exceptions: "Do not catch
+            // Exception unless at the top-level handler"). IOException is the client's checked
+            // transport failure; ElasticsearchException is the unchecked ES-side error response.
             log.error("Search failed", e);
             throw new SearchException("Search failed", e);
         }
@@ -161,4 +164,4 @@ private SearchProductResult toResult(SearchResponse<Map> response) {
 | Using `match` on keyword fields | Use `term` for exact match on keyword fields |
 | Not handling null in optional filters | Only add filter clause when value is non-null |
 | Missing `from` calculation | `from = page * size` — not just `page` |
-| No error wrapping | Catch all exceptions and wrap in `SearchException` |
+| No error wrapping | Catch `IOException` / `ElasticsearchException` (not bare `Exception` — `platform/coding-rules.md` § Exceptions) and wrap in `SearchException` |

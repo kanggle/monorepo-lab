@@ -8,9 +8,11 @@ category: search
 
 Patterns for synchronizing Elasticsearch indexes with source data via events.
 
-Prerequisite: read `platform/event-driven-policy.md` before using this skill.
+Prerequisite: read `platform/event-driven-policy.md` before using this skill. Concrete producer event contracts live in `specs/contracts/events/<producer>-events.md`.
 
 ---
+
+Topic names below are illustrative placeholders, not a real project's convention — `platform/event-driven-policy.md` § Broker states the canonical RULE (`{service|domain}.{aggregate}.{version}`, versioned); check the producing project's own events contract index (the `specs/contracts/events/` directory's `README.md`) for the shape actually in use.
 
 ## Event-Driven Sync Flow
 

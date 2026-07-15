@@ -20,7 +20,7 @@ Prerequisite: read `platform/service-types/event-consumer.md` before using this 
 4. **Consumer wiring** — `messaging/event-implementation/SKILL.md`
 5. **Idempotency** — `messaging/idempotent-consumer/SKILL.md`
 6. **Retry / DLQ** — `messaging/consumer-retry-dlq/SKILL.md`
-7. **Schema versioning** — branch on `schemaVersion` per `cross-cutting/api-versioning/SKILL.md`
+7. **Schema versioning** — branch on `eventVersion` per `platform/service-types/event-consumer.md` § Schema Versioning and `cross-cutting/api-versioning/SKILL.md` (canonical field is `eventVersion`, not `schemaVersion`)
 8. **Observability** — `cross-cutting/observability-setup/SKILL.md` plus consumer-specific metrics below
 9. **Tests** — `backend/testing-backend/SKILL.md`, `testing/testcontainers/SKILL.md` with Kafka
 

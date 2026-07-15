@@ -8,7 +8,7 @@ category: testing
 
 Patterns for end-to-end integration tests across services.
 
-Prerequisite: read `platform/testing-strategy.md` before using this skill.
+Prerequisite: read `platform/testing-strategy.md` before using this skill. No single project spec — concrete flows are declared per project under `specs/services/<service>/architecture.md` § Testing.
 
 ---
 
@@ -25,7 +25,14 @@ E2E tests verify complete user flows across multiple services:
 
 Use Docker Compose to run all services and dependencies.
 
+## `@Tag("smoke")` / `@Tag("full")` — mandatory, not optional
+
+Every class extending an e2e base class MUST carry `@Tag("smoke")` or `@Tag("full")` (class-level, or method-level when the class is mixed) **in addition to** the base class's `@Tag("e2e")` umbrella. This is `platform/testing-strategy.md` § E2E Smoke vs Full / § Rules (ADR-MONO-010 D4) — read it before using this skill; this section is a pointer, not a restatement.
+
+**Why this is not optional**: an untagged class is not "ungraded" — it is **silently classified as `full`** (the conservative default), which means it runs **nightly and on push-to-main only, never on a PR**. Write a happy-path smoke test without the tag and it still passes locally and in CI — just never in the fast lane a reviewer is looking at. A regression the test was meant to catch on every PR instead surfaces a day later on `main`, and the PR that broke it merges green in the meantime. **A test that doesn't run on this diff is reported as if it did.**
+
 ```java
+@Tag("smoke")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class OrderFlowE2ETest {
 
@@ -50,6 +57,8 @@ class OrderFlowE2ETest {
     }
 }
 ```
+
+This example qualifies as `smoke` under the classification rubric (happy path, deterministic `await` under 30s, regression-shaped) — hence `@Tag("smoke")` above. If your test trips any of the `full` triggers (burst/load, container-pause, ≥3 state transitions, cross-project consumption, DLQ/circuit-breaker), tag it `@Tag("full")` instead. See `platform/testing-strategy.md` § Classification rubric for the full S1–S4 / F1–F6 checklist — do not guess; check the list.
 
 ---
 

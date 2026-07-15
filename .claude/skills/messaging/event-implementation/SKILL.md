@@ -36,9 +36,11 @@ All templates use `Product*` / `Order*` as placeholders. Replace with your aggre
 
 ## Topic Naming Convention
 
-Pattern: `{source-service}.{aggregate}.{event-name}`
+**Canonical RULE** (`platform/event-driven-policy.md` § Broker): `{service|domain}.{aggregate}.{version}` — versioned. The project chooses `{service}` or `{domain}` as the first segment and documents which in its own `specs/contracts/events/README.md`.
 
-Examples:
+Projects genuinely diverge on this today (confirmed by the `TASK-MONO-415` cross-project census) — do not assume the unversioned examples below match your project. Check the project's own events README before wiring a topic name.
+
+Illustrative placeholders only (not a real project's topic names):
 - `product.product.created`
 - `order.order.placed`
 - `order.order.cancelled`

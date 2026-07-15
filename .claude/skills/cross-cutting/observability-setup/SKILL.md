@@ -41,7 +41,7 @@ JSON only. Required fields:
 }
 ```
 
-- Never log secrets, tokens, or full PII (mask emails to `u***@d***.com`)
+- Never log secrets, tokens, or PII — no exception, and masking does not create one. `platform/security-rules.md` § Sensitive Data and `platform/observability.md` § Log Levels are unconditional: "Personally identifiable information (PII) must not appear in logs or error messages" / "Never log: passwords, tokens, card numbers, PII." A masked email is still PII in the log stream (the local-part fragment plus a stable `u***@d***.com` shape is enough to correlate a user across log lines). Log an opaque, non-reversible identifier instead — `userId` (already an MDC field below), not any transform of the email.
 - Use MDC (`org.slf4j.MDC`) to attach `traceId`, `userId`, `requestId` to every log within a request
 - Log level guidelines: ERROR for failures requiring investigation, WARN for recoverable, INFO for state transitions, DEBUG for development only
 
@@ -133,7 +133,7 @@ Tune per service in `infra/prometheus/rules/`.
 
 | Pitfall | Fix |
 |---|---|
-| Logging PII in plain text | Mask at filter level, audit logs separately |
+| Logging PII in plain text or masked form | Do not log PII at all (`platform/security-rules.md` § Sensitive Data — no exception for masked values); log `userId`, not email. Audit trails that must record PII use the separate `backend/audit-logging/SKILL.md` DB-backed audit log, which is not the application log stream |
 | Unbounded label cardinality | Whitelist allowed label values |
 | Missing trace context across async boundary | Use OTel context propagation explicitly |
 | Sampling 100% in production | Use head-based sampling 1-10%, always-on for errors |

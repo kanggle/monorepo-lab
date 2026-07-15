@@ -18,10 +18,10 @@ Prerequisite: read `platform/versioning-policy.md` and `platform/api-gateway-pol
 |---|---|---|
 | Public REST | URI path (`/v1/`, `/v2/`) | Discoverable, cache-friendly, gateway routing |
 | Internal REST | Header (`Api-Version: 2`) | No URL churn, internal-only |
-| Events | Schema version field in payload (`schemaVersion: 2`) | Decoupled producer/consumer rollout |
+| Events | `eventVersion` field on the envelope (`eventVersion: 2`) | Decoupled producer/consumer rollout |
 | gRPC | Proto package version (`auth.v2`) | Binary compat enforced by codegen |
 
-Default for new services: URI versioning for public endpoints, schema-version field for events.
+Default for new services: URI versioning for public endpoints, `eventVersion` field for events.
 
 ---
 
@@ -46,8 +46,8 @@ Patch and minor bumps are not used at the contract level — every breaking chan
 When `vN+1` is introduced, `vN` must continue serving for **one full release cycle** (default: 90 days). Both versions live side-by-side in the same service.
 
 ```
-specs/contracts/http/order-api.md         # latest (v2)
-specs/contracts/http/order-api-v1.md      # legacy (deprecated, sunset date)
+specs/contracts/http/<service>-api.md         # latest (v2)
+specs/contracts/http/<service>-api-v1.md      # legacy (deprecated, sunset date)
 ```
 
 The deprecated contract file must include:
@@ -83,12 +83,13 @@ Producer must publish both `vN` and `vN+1` contract tests during the coexistence
 
 ## Event Schema Evolution
 
-Embed `schemaVersion` in every event payload:
+The envelope field is **`eventVersion`**, not `schemaVersion` — `platform/event-driven-policy.md` § Event Envelope Format defines `eventVersion` as the canonical field, and `platform/service-types/event-consumer.md` § Schema Versioning states "Consumers MUST branch on `eventVersion`." (Some services' wire envelopes use a `schemaVersion` field instead — this is a documented, live divergence per each project's events contract index (the `specs/contracts/events/` directory's `README.md`), not something to copy into new code; new events use `eventVersion`.)
 
 ```json
 {
-  "schemaVersion": 2,
   "eventId": "...",
+  "eventType": "...",
+  "eventVersion": 2,
   "occurredAt": "...",
   "payload": { ... }
 }
@@ -96,7 +97,7 @@ Embed `schemaVersion` in every event payload:
 
 Consumers must:
 - Tolerate unknown fields (forward compat)
-- Branch on `schemaVersion` if semantics changed
+- Branch on `eventVersion` if semantics changed
 - Reject events with unsupported version into DLQ (see `messaging/consumer-retry-dlq/SKILL.md`)
 
 ---
@@ -110,6 +111,7 @@ Consumers must:
 | Reusing version number after rollback | Forbidden — always increment forward |
 | No sunset date | Required on every deprecated contract |
 | Skipping contract tests | CI must enforce; no exception |
+| Teaching `schemaVersion` as the event-version field | Canonical field is `eventVersion` (`platform/event-driven-policy.md`, `platform/service-types/event-consumer.md`) |
 
 ---
 

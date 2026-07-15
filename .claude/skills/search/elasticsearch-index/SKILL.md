@@ -8,7 +8,7 @@ category: search
 
 Patterns for managing Elasticsearch indexes in the search service.
 
-Prerequisite: read `platform/coding-rules.md` before using this skill.
+Prerequisite: read `platform/coding-rules.md` before using this skill. Concrete index field mappings live in `specs/services/<service>/architecture.md` § Search Index.
 
 ---
 
@@ -41,7 +41,7 @@ public class ElasticsearchIndexAdapter implements SearchIndexPort {
                 .id(document.productId())
                 .document(doc)
             ));
-        } catch (Exception e) {
+        } catch (IOException | ElasticsearchException e) {
             log.error("Failed to upsert document: productId={}", document.productId(), e);
             throw new SearchException("Failed to upsert search index", e);
         }
@@ -54,7 +54,7 @@ public class ElasticsearchIndexAdapter implements SearchIndexPort {
                 .index(indexProperties.name())
                 .id(productId)
             ));
-        } catch (Exception e) {
+        } catch (IOException | ElasticsearchException e) {
             log.error("Failed to delete document: productId={}", productId, e);
             throw new SearchException("Failed to delete search index", e);
         }
@@ -82,7 +82,7 @@ public void updateStock(String productId, int totalStock, String status) {
             .docAsUpsert(true)
             .doc(partial)
         ), Map.class);
-    } catch (Exception e) {
+    } catch (IOException | ElasticsearchException e) {
         log.error("Failed to update stock: productId={}", productId, e);
         throw new SearchException("Failed to update stock", e);
     }
@@ -122,5 +122,5 @@ elasticsearch:
 |---|---|
 | Not using `docAsUpsert(true)` for partial updates | Document may not exist yet — upsert handles both cases |
 | Null fields in document map | Default to empty string or 0 to avoid indexing errors |
-| Missing error handling | Always catch and wrap in `SearchException` |
+| Missing error handling | Catch `IOException` / `ElasticsearchException` (not bare `Exception` — `platform/coding-rules.md` § Exceptions forbids catching `Exception` outside a top-level handler) and wrap in `SearchException` |
 | Not using document ID as product ID | Use `productId` as the Elasticsearch document ID for idempotent upserts |

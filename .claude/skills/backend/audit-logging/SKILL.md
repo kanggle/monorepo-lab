@@ -8,7 +8,7 @@ category: backend
 
 Patterns for recording audit logs with separate transaction handling.
 
-Prerequisite: read `platform/security-rules.md` before using this skill.
+Prerequisite: read `platform/security-rules.md` before using this skill. Concrete audited actions per service are declared in `specs/services/<service>/architecture.md` § Audit Logging.
 
 ---
 
@@ -64,7 +64,7 @@ Two separate beans to isolate transaction behavior.
 
 ### AuditLogService (Facade)
 
-Provides typed methods per event. Catches all exceptions to prevent audit failures from breaking the main flow.
+Provides typed methods per event. Catches `DataAccessException` (not bare `Exception` — `platform/coding-rules.md` § Exceptions) to prevent audit-persistence failures from breaking the main flow.
 
 ```java
 @Slf4j
@@ -85,9 +85,12 @@ public class AuditLogService {
     private void save(AuditLog auditLog) {
         try {
             auditLogWriter.save(auditLog);
-        } catch (Exception e) {
+        } catch (DataAccessException e) {
+            // Narrow catch, not top-level (platform/coding-rules.md § Exceptions: "Do not catch
+            // Exception unless at the top-level handler"). DataAccessException is Spring Data's
+            // unchecked persistence-failure root — the actual failure family this boundary
+            // must absorb. Never propagate — audit failure must not break the main operation.
             log.error("Audit log save failed: eventType={}", auditLog.getEventType(), e);
-            // Never propagate — audit failure must not break the main operation
         }
     }
 }
@@ -151,7 +154,7 @@ public enum AuditResult {
 
 | Pitfall | Fix |
 |---|---|
-| Audit failure propagates to caller | Always catch exceptions in `AuditLogService.save()` |
+| Audit failure propagates to caller | Catch `DataAccessException` in `AuditLogService.save()` — not bare `Exception` (`platform/coding-rules.md` § Exceptions) |
 | `REQUIRES_NEW` on same bean method | Spring self-invocation bypasses proxy — use separate bean |
 | Long user agent strings | Truncate to column max length |
 | Missing audit on error paths | Record failure events, not just successes |

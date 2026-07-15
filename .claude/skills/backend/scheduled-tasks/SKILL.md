@@ -8,65 +8,25 @@ category: backend
 
 Patterns for recurring scheduled tasks and batch processing.
 
-Prerequisite: read `platform/event-driven-policy.md` before using this skill.
+Prerequisite: read `platform/event-driven-policy.md` before using this skill. Concrete outbox schema per service lives alongside `specs/services/<service>/architecture.md`; the shared V2 pattern is documented in `messaging/outbox-pattern/SKILL.md`.
 
 ---
 
-## Outbox Polling (Template Method)
+## Outbox Polling
 
-Base class in `libs/java-messaging`. Each service extends and implements `resolveTopic()`.
+**This skill does not teach the outbox relay** — that base class
+(`AbstractOutboxPublisher`, `libs/java-messaging`) and its scheduling wiring
+(`OutboxSchedulerConfig`'s dedicated `outboxTaskScheduler` bean) are documented in
+full in `messaging/outbox-pattern/SKILL.md` § Outbox Relay. Read that skill for the
+current pattern; do not re-derive an outbox scheduler from `@Scheduled` primitives
+here — the shared library already implements polling, exponential backoff, and
+publish-then-mark-published, and a hand-rolled scheduler duplicates it without the
+backoff.
 
-```java
-// libs/java-messaging
-public abstract class OutboxPollingScheduler {
-
-    private final OutboxPublisher outboxPublisher;
-    private final KafkaTemplate<String, String> kafkaTemplate;
-
-    @Scheduled(fixedDelayString = "${outbox.polling.interval-ms:1000}")
-    public void pollAndPublish() {
-        List<OutboxEntry> entries = outboxPublisher.findPending();
-        for (OutboxEntry entry : entries) {
-            String topic = resolveTopic(entry.getEventType());
-            try {
-                kafkaTemplate.send(topic, entry.getAggregateId(), entry.getPayload());
-                outboxPublisher.markPublished(entry.getId());
-            } catch (Exception e) {
-                onKafkaSendFailure(entry.getEventType(), entry.getAggregateId(), e);
-            }
-        }
-    }
-
-    protected abstract String resolveTopic(String eventType);
-
-    protected void onKafkaSendFailure(String eventType, String aggregateId, Exception e) {
-        // override for metrics
-    }
-}
-```
-
-### Service Implementation
-
-```java
-@Component
-@Profile("!standalone")
-public class OrderOutboxPollingScheduler extends OutboxPollingScheduler {
-
-    @Override
-    protected String resolveTopic(String eventType) {
-        return switch (eventType) {
-            case "OrderPlaced"    -> "order.order.placed";
-            case "OrderCancelled" -> "order.order.cancelled";
-            default -> throw new IllegalArgumentException("Unknown: " + eventType);
-        };
-    }
-
-    @Override
-    protected void onKafkaSendFailure(String eventType, String aggregateId, Exception e) {
-        orderMetrics.recordEventPublishFailure(eventType);
-    }
-}
-```
+(Historical note: an older `OutboxPollingScheduler` base class existed under
+`libs/java-messaging` for the v1 outbox schema. `TASK-MONO-312` deleted it after
+every project's v1→v2 migration completed — it is not part of the shared library
+and does not exist to extend.)
 
 ---
 
@@ -111,7 +71,11 @@ public class CouponExpirationScheduler {
         for (Coupon coupon : expired) {
             coupon.expire();
             couponRepository.save(coupon);
-            outboxPublisher.publish("Coupon", coupon.getId(), "CouponExpired", payload);
+            // Write the outbox row directly against your own row-writer/repository —
+            // see messaging/outbox-pattern/SKILL.md § Writing to Outbox. There is no
+            // shared `outboxPublisher.publish(...)` convenience method in the v2 API.
+            couponOutboxRepository.save(CouponOutboxEntity.create(
+                coupon.getId(), "Coupon", "CouponExpired", toPayloadJson(coupon), clock.instant()));
         }
     }
 }
@@ -152,7 +116,7 @@ public class BatchJobExecution {
 
 - Always `@Profile("!standalone")` on schedulers that depend on Kafka/external services.
 - Use `fixedDelay` (not `fixedRate`) to prevent overlap.
-- Record metrics for failures in `onKafkaSendFailure()`.
+- Record metrics for failures (`OutboxMetrics` for the outbox relay — see `messaging/outbox-pattern/SKILL.md`; your own meter for domain schedulers).
 - Batch operations should track execution status for observability.
 
 ---
@@ -164,4 +128,5 @@ public class BatchJobExecution {
 | `fixedRate` causes overlapping executions | Use `fixedDelay` — waits for completion |
 | Missing `@Profile("!standalone")` | Scheduler tries to connect to Kafka in standalone mode |
 | No failure tracking | Record metrics or log errors for monitoring |
+| Re-implementing outbox polling with a hand-rolled `@Scheduled` method | Extend `AbstractOutboxPublisher` (`messaging/outbox-pattern/SKILL.md`) — it already has backoff and the mark-published transaction |
 | Scheduler running in tests | Use `@ActiveProfiles("test")` or `@MockBean` for scheduler |
