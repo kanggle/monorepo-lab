@@ -1,8 +1,11 @@
 package com.wms.gateway.config;
 
+import com.example.apigateway.error.GatewayErrorHandler;
 import com.example.apigateway.filter.IdentityHeaderStripFilter;
 import com.example.apigateway.filter.JwtHeaderEnrichmentFilter;
 import com.example.apigateway.filter.JwtHeaderMapping;
+import com.example.apigateway.filter.RoleAdmissionFilter;
+import com.example.apigateway.filter.RoleAdmissions;
 import com.example.apigateway.security.JwtClaims;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
@@ -54,5 +57,25 @@ public class GatewayIdentityConfig {
                 JwtHeaderMapping.skipIfNull("X-Actor-Id", JwtClaims::subject),
                 JwtHeaderMapping.skipIfNull("X-User-Email", JwtClaims::email),
                 JwtHeaderMapping.always("X-User-Role", JwtClaims::role)));
+    }
+
+    /**
+     * wms's role-based admission (JWT rule 6). Converged onto the shared
+     * {@link RoleAdmissionFilter} (TASK-MONO-419) from wms's former
+     * {@code AccountTypeValidationFilter} — the last presence-based admission copy the fleet
+     * carried (ADR-MONO-049). wms is an operator-only, tenant-gated platform, so any role admits;
+     * {@link RoleAdmissions#roleOrScope()} additionally admits a machine {@code scope}, which is
+     * behaviour-identical today (wms's inter-service comms are Kafka-based and its registered
+     * {@code client_credentials} client is dormant) and forward-compatible with that client going
+     * live (iam-integration.md § Scopes / "insufficient role/scope → 403"). A token carrying
+     * neither is 403'd; public routes pass. Runs at {@link RoleAdmissionFilter#ADMISSION_ORDER}
+     * (-2) — the same order the former filter used, before header enrichment.
+     */
+    @Bean
+    public RoleAdmissionFilter roleAdmissionFilter(GatewayErrorHandler errorHandler) {
+        return new RoleAdmissionFilter(
+                RoleAdmissions.roleOrScope(),
+                "wms access requires an authorized role",
+                errorHandler);
     }
 }
