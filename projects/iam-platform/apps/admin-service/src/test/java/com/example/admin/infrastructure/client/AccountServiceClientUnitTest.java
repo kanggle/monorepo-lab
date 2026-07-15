@@ -77,6 +77,70 @@ class AccountServiceClientUnitTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-510: search — '+' 포함(plus-addressing) 이메일이 %2B 로 퍼센트 인코딩되어 전송된다 "
+            + "(리터럴 '+' 로 나가면 수신측이 공백으로 디코드 — 원 결함)")
+    void search_plusAddressedEmail_encodesPlusOnTheWire() {
+        wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"content\":[],\"totalElements\":0,\"page\":0,\"size\":20,\"totalPages\":0}")));
+
+        client.search("fan-platform", "foo+bar@x.com");
+
+        // WireMock decodes the captured query param the same way a real HTTP server does
+        // (application/x-www-form-urlencoded rules: '+' -> space). If the client sent a
+        // literal '+' (the TASK-BE-510 defect), this would decode to "foo bar@x.com" and
+        // fail to match. If the client double-encoded (the Failure Scenario the task warns
+        // about), this would decode to a literal "foo%2Bbar@x.com" and also fail to match.
+        // Only a single, correct %2B on the wire decodes back to "foo+bar@x.com".
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/accounts"))
+                .withQueryParam("email", equalTo("foo+bar@x.com"))
+                .withQueryParam("tenantId", equalTo("fan-platform")));
+
+        // Defense-in-depth: assert the raw wire bytes directly, independent of WireMock's own
+        // query-string decoding, to pin down that the '+' left as %2B (not literal, not %252B).
+        java.util.List<com.github.tomakehurst.wiremock.verification.LoggedRequest> requests =
+                wireMock.findAll(getRequestedFor(urlPathEqualTo("/internal/accounts")));
+        assertThat(requests).hasSize(1);
+        assertThat(requests.get(0).getUrl()).contains("email=foo%2Bbar%40x.com");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-510: search — 평문 이메일은 회귀 없이 그대로 전송된다")
+    void search_plainEmail_noRegression() {
+        wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"content\":[],\"totalElements\":0,\"page\":0,\"size\":20,\"totalPages\":0}")));
+
+        client.search("fan-platform", "plain@example.com");
+
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/accounts"))
+                .withQueryParam("email", equalTo("plain@example.com"))
+                .withQueryParam("tenantId", equalTo("fan-platform")));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-510: search — 그 외 예약문자(공백/&/%/유니코드) 포함 이메일도 라운드트립된다")
+    void search_otherReservedCharsEmail_roundTrips() {
+        wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"content\":[],\"totalElements\":0,\"page\":0,\"size\":20,\"totalPages\":0}")));
+
+        // '&' and '%' are also reserved in a query string; exercise them alongside '+' in one
+        // representative case rather than one WireMock instance per character.
+        client.search("fan-platform", "a&b+50%off@x.com");
+
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/accounts"))
+                .withQueryParam("email", equalTo("a&b+50%off@x.com"))
+                .withQueryParam("tenantId", equalTo("fan-platform")));
+    }
+
+    @Test
     @DisplayName("TASK-BE-475: listAll(status=null) — 요청에 ?status 파라미터를 붙이지 않는다 (back-compat)")
     void listAll_nullStatus_omitsStatusQueryParam() {
         wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))
