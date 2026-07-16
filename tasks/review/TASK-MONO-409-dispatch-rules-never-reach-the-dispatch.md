@@ -8,7 +8,7 @@ TASK-MONO-409
 
 # Status
 
-ready
+review
 
 # Owner
 

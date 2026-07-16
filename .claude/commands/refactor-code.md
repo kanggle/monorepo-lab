@@ -146,7 +146,7 @@ If `--dry-run` is specified, **stop here**.
 
 For each refactoring unit:
 
-1. Launch one Agent with `isolation: "worktree"` and `subagent_type: "refactoring-engineer"` using the Agent Prompt Template below
+1. Launch one Agent with `isolation: "worktree"` and `subagent_type: "refactoring-engineer"` using the Agent Prompt Template below. **Pass `model=` explicitly** (`CLAUDE.md` § Recommending Tasks and Dispatching Agents — the canonical tier table; do not restate it): a cross-cutting refactor (package moves, fleet-wide renames, cross-service) → `model="opus"`; a single-file / mechanical refactor → `model="sonnet"`.
 2. Wait for completion
 3. If successful: merge the worktree branch into the coordinator's **integration branch** — **never into `main`**
    ```

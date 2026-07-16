@@ -139,12 +139,13 @@ If `--dry-run` is specified, **stop here** and do not proceed to Phase 5.
 
 1. **Parallel round** (independent tasks):
    - Launch multiple Agent tool calls in a single message, each with `isolation: "worktree"` and the `subagent_type` matching the task category: `"backend-engineer"` (BE tasks), `"frontend-engineer"` (FE tasks), `"refactoring-engineer"` (`simple-refactor` category). For `contract-change` tasks, dispatch `"api-designer"` (API contracts) or `"event-architect"` (event contracts) for the contract step first, then the implementing engineer — per the Contract-first rule (Phase 3, step 4).
+   - **Pass `model=` explicitly on every Agent call — do not rely on session inheritance** (`CLAUDE.md` § Recommending Tasks and Dispatching Agents — the canonical rule and tier table; do not restate it here). Read that table and pick the tier from the task's complexity: complex domain work (state machines, transaction design, event-driven outbox, cross-cutting refactors, contract design) → `model="opus"`; CI / docs / single-line config / lifecycle chore → `model="sonnet"` (or `"haiku"`). The `api-designer` / `event-architect` agents already default to `opus` in their frontmatter (their role is Opus-tier), so a contract dispatch is Opus even if `model=` is omitted — but pass it anyway, so the choice is visible at the dispatch site.
    - Each agent gets its own copy of the repo on a temporary branch
    - Each agent receives a complete, self-contained prompt (see Agent Prompt Template below)
    - Wait for all agents in the round to complete
 
 2. **Sequential round** (dependent tasks):
-   - Launch one agent at a time with `isolation: "worktree"` and appropriate `subagent_type`
+   - Launch one agent at a time with `isolation: "worktree"` and appropriate `subagent_type`, passing `model=` explicitly (same tier rule as the parallel round above)
    - Wait for completion before launching the next
 
 3. **Between rounds** (integration step):
@@ -222,9 +223,16 @@ When done, return a summary:
 
 Category-specific instructions per type:
 
-**simple-refactor / simple-code**:
+**simple-code**:
 ```
 Standard implementation. No special handling needed.
+```
+
+**simple-refactor** (mirrors `/refactor-code`'s baseline → refactor → retest order):
+```
+- Baseline FIRST: run the existing tests and verify they pass BEFORE changing anything. Never refactor without a green baseline (`refactoring-engineer` `## Does NOT`).
+- Refactor with NO change to externally observable behavior; do not modify API/event contracts, do not mix in feature work, do not change test assertions.
+- Re-run the SAME tests afterward — they must still pass unchanged.
 ```
 
 **code-with-event**:
@@ -235,11 +243,20 @@ Standard implementation. No special handling needed.
 - Follow platform/event-driven-policy.md (outbox pattern, idempotency)
 ```
 
-**contract-change**:
+**contract-change** — this category dispatches **two agents in sequence** (contract agent first, then the implementing engineer — Phase 5 step 1). Give each its own instructions; do **not** send one block to both:
+
+_Contract step — `api-designer` / `event-architect`:_
 ```
-- Update contract files FIRST (specs/contracts/http/ or specs/contracts/events/)
-- Then implement against the updated contracts
-- Verify contract and implementation are consistent
+- Update ONLY the contract files (specs/contracts/http/ or specs/contracts/events/) to match the task's Related Contracts.
+- Do NOT write implementation code — your `## Does NOT` forbids it. The implementing engineer, dispatched next, does that.
+- Verify the contract is internally consistent and versioned per platform rules.
+```
+
+_Implement step — `backend-engineer` / `frontend-engineer` (dispatched after the contract step):_
+```
+- The contract files are already updated by the contract agent — implement against them.
+- Do NOT re-edit the contracts. If a contract is wrong, stop and report — do not silently diverge.
+- Verify the implementation matches the contract.
 ```
 
 **cross-service**:
