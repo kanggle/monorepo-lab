@@ -2,7 +2,7 @@
 id: TASK-BE-505
 type: TASK-BE
 title: inventory-service REST idempotency is declared in the contract but never enforced (no filter consumes the store)
-status: review
+status: done
 service: inventory-service
 domain: wms
 traits: [transactional]
