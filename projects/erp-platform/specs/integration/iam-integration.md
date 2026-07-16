@@ -152,6 +152,12 @@ curl -u erp-platform-internal-services-client:erp-dev \
 - `scope` = `erp.read`
 - `sub` = `erp-platform-internal-services-client`
 
+> **⚠️ 이 머신 토큰의 write 한계 (TASK-ERP-BE-029)**: `client_credentials` 토큰은 `roles`·`org_scope`(data-scope) claim 을 **갖지 않는다** (위 § Edge Case). masterdata-service 의 write-side 인가(`RoleScopeAuthorizationAdapter`)는 **부서 타겟이 있는** mutation 에 대해 data-scope 포함을 요구하므로, 이 토큰(scope=`erp.write`)으로는 **read + 부서-타겟이 없는 write 만** 가능하다:
+> - ✅ 가능: 모든 list/detail read, **루트** 부서 생성(`parentId=null`), job-grade·business-partner 생성/수정/폐기 (target 없음).
+> - ❌ 403 `DATA_SCOPE_FORBIDDEN`: employee·cost-center 생성/수정/폐기, **자식** 부서 생성/이동/폐기 — 즉 부서 subtree 를 타겟하는 모든 write.
+>
+> 부서-스코프 write 는 `org_scope`(멤버십 파생 subtree-root 집합, 또는 platform `["*"]`)를 담은 **운영자 토큰**으로 수행해야 한다. 머신 토큰에 platform-wide data-scope 를 부여하려던 converter fallback 은 **dead code 였고 TASK-ERP-BE-029 에서 제거**되었다 (predicate 가 실 IAM 토큰과 불일치 — 절대 발화하지 않았다). read-model-service 의 read gate 는 반대로 absent `org_scope` 를 platform 으로 취급한다(BE-007 net-zero) — read/write 는 **의도적으로** 다르다.
+
 ---
 
 ## 운영 체크리스트

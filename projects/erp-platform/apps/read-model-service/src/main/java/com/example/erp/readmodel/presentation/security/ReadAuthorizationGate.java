@@ -71,8 +71,15 @@ public class ReadAuthorizationGate {
 
     /**
      * Extracts the operator's {@code org_scope} read-narrowing scope (TASK-ERP-BE-008).
-     * Mirrors masterdata-service's {@code ActorContextJwtAuthenticationConverter}
-     * org_scope parsing + {@code isPlatformScope()} semantics:
+     *
+     * <p><b>READ vs WRITE differ by design (TASK-ERP-BE-029).</b> This READ gate defaults an
+     * <em>absent</em> {@code org_scope} to {@link OrgScope#platform()} (no narrowing — the
+     * BE-007 net-zero contract; every existing read caller relies on it). masterdata-service's
+     * write side does the <em>opposite</em>: an absent data-scope is fail-closed (403
+     * {@code DATA_SCOPE_FORBIDDEN}) so a token with no {@code org_scope} cannot perform a
+     * department-scoped write. The asymmetry is intentional — reads on the internal read-model
+     * default open (net-zero), mutations default closed (least-privilege). Do NOT "align" this
+     * to fail-closed without revisiting the BE-007 read contract.
      * <ul>
      *   <li>absent / blank {@code org_scope} → {@link OrgScope#platform()} (no
      *       narrowing — net-zero for every BE-007 caller).</li>

@@ -91,6 +91,8 @@ curl -u erp-platform-internal-services-client:erp-dev \
      http://iam.local/oauth2/token
 ```
 
+> 이 머신(`client_credentials`) 토큰은 `org_scope`(data-scope)가 없어 **부서-타겟 write(employee·cost-center·자식 부서)는 403 `DATA_SCOPE_FORBIDDEN`** 이다 — read + 부서-타겟 없는 write(루트 부서·job-grade·거래처)만 가능. 부서-스코프 write 는 운영자 토큰(`org_scope` 보유) 필요. 상세 = [specs/integration/iam-integration.md § dev smoke test](specs/integration/iam-integration.md) (TASK-ERP-BE-029).
+
 통합 상세는 [specs/integration/iam-integration.md](specs/integration/iam-integration.md).
 
 ## Local Network

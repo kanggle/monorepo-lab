@@ -42,12 +42,24 @@ public class ActorContextJwtAuthenticationConverter
             throw new IllegalStateException("tenant_id claim is missing on the JWT");
         }
         Set<String> roles = extractClaim(jwt, "roles", "role", "scope", "scopes");
+        // Data-scope (org_scope / data_scope) drives write-side subtree containment in
+        // RoleScopeAuthorizationAdapter. A client_credentials machine token carries neither
+        // claim, so it lands with an EMPTY data-scope and is fail-closed (403
+        // DATA_SCOPE_FORBIDDEN) on any department-scoped write — department-scoped writes
+        // (employee / cost-center / child department) require an operator token carrying
+        // org_scope (TASK-ERP-BE-029). Reads and unscoped writes (root department, job-grade,
+        // business-partner) are unaffected.
+        //
+        // This deliberately fail-closes rather than defaulting a machine token to platform-wide
+        // WRITE: least-privilege for mutations in an audit-heavy internal system. read-model-
+        // service's ReadAuthorizationGate makes the opposite (READ-side) choice for an absent
+        // org_scope — platform / net-zero (BE-007) — so the two services intentionally differ
+        // read vs write; see ReadAuthorizationGate#orgScope. (An earlier `roles.contains(
+        // "client_credentials") → Set.of("*")` fallback here was dead code: `roles` is built
+        // from roles/role/scope/scopes claims, so a real IAM cc token holds {"erp.write"},
+        // never the literal "client_credentials". Removed in TASK-ERP-BE-029.)
         Set<String> scope = new HashSet<>(AbacDataScope.fromClaimValues(
                 jwt.getClaim("org_scope"), jwt.getClaim("data_scope")).tokens());
-        // client_credentials machine tokens default to platform-wide scope.
-        if (scope.isEmpty() && roles.contains("client_credentials")) {
-            scope = Set.of("*");
-        }
         // ADR-MONO-019 § D5 entitlement-trust: lift the signed entitled_domains
         // claim into the actor so the authorization layer can dual-accept READ
         // (mirrors TenantClaimValidator.isEntitled / safeStringList — fail-closed
