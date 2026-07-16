@@ -10,14 +10,18 @@ import com.wms.outbound.domain.exception.PickingRequestNotFoundException;
 import com.wms.outbound.domain.exception.ShipmentNotFoundException;
 import com.wms.outbound.domain.exception.TenantScopeDeniedException;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -120,6 +124,34 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoHandlerFoundException.class)
     public ResponseEntity<ApiErrorEnvelope> handleNoHandlerFound(NoHandlerFoundException e) {
         return body(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found");
+    }
+
+    /**
+     * Wrong HTTP method on a matched path (TASK-MONO-421) — Spring throws
+     * {@link HttpRequestMethodNotSupportedException}. Without a dedicated handler the catch-all
+     * {@link #handleUnknown} swallows it into a 500; semantically it is a client error (405).
+     * Emits the RFC 7231 §6.5.5 {@code Allow} header listing the supported methods.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        Set<HttpMethod> supported = e.getSupportedHttpMethods();
+        if (supported != null && !supported.isEmpty()) {
+            builder.allow(supported.toArray(new HttpMethod[0]));
+        }
+        return builder.body(ApiErrorEnvelope.of("METHOD_NOT_ALLOWED",
+                "HTTP method not supported for this endpoint"));
+    }
+
+    /**
+     * Unsupported request {@code Content-Type} on a matched path (TASK-MONO-421) — Spring throws
+     * {@link HttpMediaTypeNotSupportedException}. Same catch-all-swallow-into-500 defect as
+     * {@link #handleMethodNotSupported}; semantically a 415.
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+        return body(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE",
+                "Request Content-Type is not supported by this endpoint");
     }
 
     @ExceptionHandler(Exception.class)

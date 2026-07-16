@@ -17,6 +17,8 @@ import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -153,6 +155,33 @@ class CommonGlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody().code()).isEqualTo("NOT_FOUND");
         assertThat(response.getBody().message()).isEqualTo("The requested resource was not found");
+    }
+
+    @Test
+    @DisplayName("HttpRequestMethodNotSupportedException — 405, METHOD_NOT_ALLOWED, Allow 헤더 (500 아님)")
+    void handleMethodNotSupported_returns405WithAllowHeader() {
+        HttpRequestMethodNotSupportedException e =
+                new HttpRequestMethodNotSupportedException("DELETE", java.util.List.of("GET", "POST"));
+
+        ResponseEntity<ErrorResponse> response = handler.handleMethodNotSupported(e);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(response.getBody().code()).isEqualTo("METHOD_NOT_ALLOWED");
+        assertThat(response.getHeaders().getAllow())
+                .containsExactlyInAnyOrder(HttpMethod.GET, HttpMethod.POST);
+    }
+
+    @Test
+    @DisplayName("HttpMediaTypeNotSupportedException — 415, UNSUPPORTED_MEDIA_TYPE (500 아님)")
+    void handleMediaTypeNotSupported_returns415() {
+        HttpMediaTypeNotSupportedException e = new HttpMediaTypeNotSupportedException(
+                org.springframework.http.MediaType.TEXT_PLAIN,
+                java.util.List.of(org.springframework.http.MediaType.APPLICATION_JSON));
+
+        ResponseEntity<ErrorResponse> response = handler.handleMediaTypeNotSupported(e);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat(response.getBody().code()).isEqualTo("UNSUPPORTED_MEDIA_TYPE");
     }
 
     @Test

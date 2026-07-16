@@ -1,13 +1,17 @@
 package com.example.fanplatform.artist.adapter.in.web.advice;
 
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiErrorBody;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -54,5 +58,32 @@ class GlobalExceptionHandlerNotFoundTest {
         assertThat(result.getBody()).isNotNull();
         assertThat(result.getBody().code()).isEqualTo("NOT_FOUND");
         assertThat(result.getBody().message()).isEqualTo("The requested resource was not found");
+    }
+
+    @Test
+    @DisplayName("HttpRequestMethodNotSupportedException(지원하지 않는 HTTP 메서드)이 405 METHOD_NOT_ALLOWED로 처리된다 (500 아님)")
+    void handleMethodNotSupported_returns405MethodNotAllowed() {
+        HttpRequestMethodNotSupportedException ex =
+                new HttpRequestMethodNotSupportedException("DELETE", List.of("GET", "POST"));
+
+        ResponseEntity<ApiErrorBody> result = handler.handleMethodNotSupported(ex);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().code()).isEqualTo("METHOD_NOT_ALLOWED");
+        assertThat(result.getHeaders().getAllow()).contains(HttpMethod.GET, HttpMethod.POST);
+    }
+
+    @Test
+    @DisplayName("HttpMediaTypeNotSupportedException(지원하지 않는 Content-Type)이 415 UNSUPPORTED_MEDIA_TYPE로 처리된다 (500 아님)")
+    void handleMediaTypeNotSupported_returns415UnsupportedMediaType() {
+        HttpMediaTypeNotSupportedException ex =
+                new HttpMediaTypeNotSupportedException(MediaType.TEXT_PLAIN, List.of(MediaType.APPLICATION_JSON));
+
+        ResponseEntity<ApiErrorBody> result = handler.handleMediaTypeNotSupported(ex);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().code()).isEqualTo("UNSUPPORTED_MEDIA_TYPE");
     }
 }

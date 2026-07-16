@@ -2,10 +2,14 @@ package com.example.web.exception;
 
 import com.example.web.dto.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
+import java.util.Set;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -80,6 +84,37 @@ public abstract class CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleNoHandlerFound(NoHandlerFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("NOT_FOUND", "The requested resource was not found"));
+    }
+
+    /**
+     * Wrong HTTP method on a matched path — Spring throws
+     * {@link HttpRequestMethodNotSupportedException}. Without a dedicated handler the catch-all
+     * {@link #handleGeneral(Exception)} swallows it into a 500; semantically it is a client
+     * error (405). Unlike {@link NoResourceFoundException} (404), this is thrown after the path
+     * matches a controller, so it fires even for unauthenticated requests. Emits the RFC 7231
+     * §6.5.5 {@code Allow} header listing the supported methods.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        Set<HttpMethod> supported = e.getSupportedHttpMethods();
+        if (supported != null && !supported.isEmpty()) {
+            builder.allow(supported.toArray(new HttpMethod[0]));
+        }
+        return builder.body(ErrorResponse.of("METHOD_NOT_ALLOWED",
+                "HTTP method not supported for this endpoint"));
+    }
+
+    /**
+     * Unsupported request {@code Content-Type} on a matched path — Spring throws
+     * {@link HttpMediaTypeNotSupportedException}. Same catch-all-swallow-into-500 defect as
+     * {@link #handleMethodNotSupported}; semantically a 415.
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ErrorResponse.of("UNSUPPORTED_MEDIA_TYPE",
+                        "Request Content-Type is not supported by this endpoint"));
     }
 
     @ExceptionHandler(Exception.class)

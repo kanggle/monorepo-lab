@@ -6,12 +6,16 @@ import com.kanggle.platformconsole.bff.application.usecase.UpstreamUnauthorizedE
 import com.kanggle.platformconsole.bff.domain.credential.MissingCredentialException;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Instant;
+import java.util.Set;
 
 /**
  * Global error envelope for console-bff inbound web controllers.
@@ -64,6 +68,33 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ObjectNode> handleIllegalArgument(IllegalArgumentException ex) {
         return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage());
+    }
+
+    /**
+     * Wrong HTTP method on a matched inbound-web controller path (405). Without this the
+     * catch-all {@link #handleGeneric(Exception)} swallows it into a 500. Emits the RFC 7231
+     * §6.5.5 {@code Allow} header. (Actuator 405s stay on Spring's default handling — this
+     * advice is {@code basePackages}-scoped, see the class Javadoc.)
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ObjectNode> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        ObjectNode body = JsonNodeFactory.instance.objectNode();
+        body.put("code", "METHOD_NOT_ALLOWED");
+        body.put("message", "HTTP method not supported for this endpoint");
+        body.put("timestamp", Instant.now().toString());
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        Set<HttpMethod> supported = ex.getSupportedHttpMethods();
+        if (supported != null && !supported.isEmpty()) {
+            builder.allow(supported.toArray(new HttpMethod[0]));
+        }
+        return builder.body(body);
+    }
+
+    /** Unsupported request {@code Content-Type} on a matched path (415) — same swallow defect. */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ObjectNode> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
+        return error(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE",
+                "Request Content-Type is not supported by this endpoint");
     }
 
     @ExceptionHandler(Exception.class)
