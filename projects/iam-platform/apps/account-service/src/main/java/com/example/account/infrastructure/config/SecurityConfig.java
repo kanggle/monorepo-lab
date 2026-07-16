@@ -13,6 +13,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -20,7 +23,9 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -41,6 +46,16 @@ public class SecurityConfig {
 
     @Value("${internal.api.jwt.issuer:http://localhost:8081}")
     private String jwtIssuer;
+
+    /**
+     * TASK-BE-514: the workload scope a {@code /internal/**} token must carry. The IAM SAS is a shared
+     * issuer that mints both system ({@code client_credentials}) and user ({@code authorization_code})
+     * tokens, so signature + issuer alone do not distinguish a system credential — this scope
+     * ({@code internal.invoke}, seeded to the workload clients in {@code V0019}) is the discriminator.
+     * Blank → {@link RequiredScopeValidator} fails closed (rejects all).
+     */
+    @Value("${internal.api.jwt.required-scope:internal.invoke}")
+    private String requiredScope;
 
     private final Environment environment;
 
@@ -63,12 +78,29 @@ public class SecurityConfig {
      * document) so application startup is not coupled to auth-service availability — the JWKS is
      * fetched lazily on first verification. account-service is multi-tenant, so {@code tenant_id}
      * is intentionally NOT pinned here (unlike community/membership resource servers).
+     *
+     * <p>TASK-BE-514: additionally pins the {@code internal.invoke} workload scope via
+     * {@link #internalTokenValidator()} — signature + issuer alone do not distinguish a system
+     * credential from a user token on the shared IAM issuer (see {@link RequiredScopeValidator}).
      */
     @Bean
     public JwtDecoder internalJwtDecoder() {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(jwtIssuer));
+        decoder.setJwtValidator(internalTokenValidator());
         return decoder;
+    }
+
+    /**
+     * The validator chain enforced on {@code /internal/**} tokens: the issuer/timestamp default plus
+     * the {@code internal.invoke} scope discriminator (TASK-BE-514). Package-private so a test can
+     * assert the <em>actual</em> chain the decoder uses (not a re-implemented copy) — a scope-less
+     * token must be rejected here.
+     */
+    OAuth2TokenValidator<Jwt> internalTokenValidator() {
+        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
+        validators.add(JwtValidators.createDefaultWithIssuer(jwtIssuer));
+        validators.add(new RequiredScopeValidator(requiredScope));
+        return new DelegatingOAuth2TokenValidator<>(validators);
     }
 
     @Bean
@@ -88,6 +120,9 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         // TASK-BE-319b: JWT-only — satisfied solely by a valid GAP client_credentials
                         // JWT (oauth2ResourceServer below); the static X-Internal-Token path was removed.
+                        // TASK-BE-514: the decoder additionally requires the internal.invoke scope, so
+                        // .authenticated() here means "a system workload credential", not merely any
+                        // valid-issuer token (the IAM issuer is shared with user tokens).
                         .requestMatchers("/internal/**").authenticated()
                         .requestMatchers("/api/**").permitAll()
                         .anyRequest().denyAll()
