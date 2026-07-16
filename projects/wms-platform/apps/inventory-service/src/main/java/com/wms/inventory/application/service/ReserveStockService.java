@@ -94,9 +94,12 @@ public class ReserveStockService implements ReserveStockUseCase {
 
     @Override
     public ReservationView reserve(ReserveStockCommand command) {
-        // Idempotency: if a Reservation already exists for this pickingRequestId,
-        // assume the body has been verified upstream (REST IdempotencyFilter
-        // handles body-hash mismatches; consumer paths use eventId dedupe).
+        // Idempotency (two layers): the shared IdempotencyKeyFilter (wired in
+        // IdempotencyConfig, TASK-BE-505) short-circuits same-Idempotency-Key
+        // replays and rejects same-key/different-body with 409 before this method
+        // runs; a same pickingRequestId that still reaches here (e.g. a distinct
+        // key, or the consumer path which uses eventId dedupe, not the header)
+        // is treated as an idempotent hit and the existing Reservation replayed.
         var existing = reservationRepository.findByPickingRequestId(command.pickingRequestId());
         if (existing.isPresent()) {
             log.debug("Reservation already exists for pickingRequestId {}; returning cached",
