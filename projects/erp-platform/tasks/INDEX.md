@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-ERP-BE-029-machine-token-data-scope-dead-fallback.md` — **masterdata-service: machine-token data-scope fallback is dead code.** Found by **live full-stack verification 2026-07-16**: `ActorContextJwtAuthenticationConverter.java:48` gates a "client_credentials → platform-wide data-scope" default on `roles.contains("client_credentials")`, but `roles` is built from `roles`/`role`/`scope`/`scopes` claims → for a real IAM machine token it is `{"erp.write"}`, never `"client_credentials"` → dead code. Machine token lands with empty data-scope → `403 DATA_SCOPE_FORBIDDEN` on every department-scoped op. Live-confirmed: documented `erp.write` machine token creates root dept / job-grade (target null) 201 but child dept / employee / cost-center 403. **NOT the finance FIN-BE-046 gap** — erp enforces scope correctly (`erp.read`→write→403); this is the opposite (fail-closed under-permit + dead security code + broken documented flow). Also: masterdata (fail-closed on absent data-scope) ↔ read-model (`platform()` default) disagree — one is wrong. AC-0 live-repro embedded; **AC-1 = architecture decision** (A: activate intended platform-wide for machine tokens [security-expanding, needs sign-off] vs B: remove dead code + document machine=read+unscoped-write only [least-privilege]). `(분석=Opus 4.8 / 구현 권장=Opus)`
 
 ## in-progress
 
