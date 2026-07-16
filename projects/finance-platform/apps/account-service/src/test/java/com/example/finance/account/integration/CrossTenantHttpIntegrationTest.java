@@ -59,6 +59,10 @@ class CrossTenantHttpIntegrationTest extends AbstractAccountIntegrationTest {
                 .issuer("http://test-issuer")
                 .claim("tenant_id", tenant)
                 .claim("roles", java.util.List.of("HOLDER"))
+                // Real finance tokens always carry a scope; these tenant-gate assertions fire
+                // before authorization, but the token must satisfy the scope matcher
+                // (TASK-FIN-BE-046) for the entitlement case that reaches the controller (404).
+                .claim("scope", java.util.List.of("finance.read", "finance.write"))
                 .issueTime(new Date())
                 .expirationTime(Date.from(Instant.now().plusSeconds(300)));
         if (entitledDomains != null) {

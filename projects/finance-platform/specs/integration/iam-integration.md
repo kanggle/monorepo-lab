@@ -94,7 +94,7 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
 2. **표준 클레임 검증** — `exp`, `nbf`, `iat` (`JwtTimestampValidator`).
 3. **Issuer 검증** — SAS issuer + legacy `iam-platform` 양쪽 허용 (D2-b deprecate 호환).
 4. **Tenant 검증** — `tenant_id` claim 이 `finance` 또는 `*` (SUPER_ADMIN platform-scope) 인 경우만 통과. 그 외 (`wms`, `ecommerce`, `fan-platform`, `scm`, 향후 `erp`) → `tenant_mismatch` → 403 `TENANT_FORBIDDEN`.
-5. **Scope 검증** — 다운스트림 service 의 `SecurityConfig` 가 `X-Scopes` 헤더 또는 SecurityContext 의 `Jwt.getClaimAsString("scope")` 로 enforce.
+5. **Scope 검증** — 다운스트림 service 의 `SecurityConfig` 가 JWT 의 `scope` claim 을 **값**으로 enforce (TASK-FIN-BE-046). account-service 기준: **쓰기**(`POST`/`PUT`/`PATCH`/`DELETE` `/api/finance/**`) 는 `finance.write` scope 를 요구하고, **읽기**(`GET`) 는 `finance.read` 또는 `finance.write` scope 를 요구한다. 두 경우 모두 operator/admin **role** (`OPERATOR`/`ADMIN`/`SUPER_ADMIN`/`FINANCE_OPERATOR`) 을 가진 토큰은 scope 없이도 통과한다 — 게이트웨이의 `roleOrScope` admission 과 같은 role-OR-scope 정책이며, operator-only 경로(`/kyc/upgrade`)의 애플리케이션단 게이트를 여기서 가리지 않기 위함이고, platform-console operator read consumer(ADR-MONO-013, role 기반 read)를 보존한다. 인증된 토큰의 scope/role 이 부족하면 → 403 `PERMISSION_DENIED` (account-service `SecurityConfig`). `scope` 는 GAP 가 JSON 배열로 발급하며(`["finance.read"]`) 공백구분 문자열·`scp` alias 도 수용한다. (게이트웨이단 `RoleAdmissionFilter` 는 role/scope 의 **존재**만 보는 presence-admission → 둘 다 없으면 403 `FORBIDDEN`; 값 enforce 는 service 층 책임이다.)
 
 ---
 
@@ -124,7 +124,8 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
 |---|---|---|
 | Authorization 헤더 누락 / 만료 / 서명 불일치 | 401 | `UNAUTHORIZED` |
 | `tenant_id != finance` (cross-tenant, 그리고 `*` 가 아님) | 403 | `TENANT_FORBIDDEN` |
-| 유효 토큰이지만 scope/role 부족 | 403 | `FORBIDDEN` |
+| 게이트웨이단: role/scope 가 **둘 다 없음** (presence-admission 실패) | 403 | `FORBIDDEN` |
+| service 단: 인증됐으나 endpoint 가 요구하는 scope **값** 부족 (예: `finance.read` 토큰의 write, TASK-FIN-BE-046) | 403 | `PERMISSION_DENIED` |
 
 `platform/error-handling.md` 의 envelope 형식 (`{ "code", "message", "timestamp" }`) 을 따른다.
 

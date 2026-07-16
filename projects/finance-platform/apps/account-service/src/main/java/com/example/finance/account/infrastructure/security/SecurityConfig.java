@@ -4,20 +4,39 @@ import com.example.finance.account.presentation.security.PublicPaths;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
+import java.util.stream.Stream;
+
 /**
  * account-service Spring Security configuration.
  *
  * <ul>
  *   <li>{@code /actuator/{health,info,prometheus}} — public</li>
- *   <li>{@code /api/finance/**} — bearer token required (RS256, GAP JWKS)</li>
+ *   <li>{@code /api/finance/**} writes (POST/PUT/PATCH/DELETE) — require {@code finance.write}
+ *       scope (or an operator role, so the application-layer operator gate on /kyc/upgrade still
+ *       governs rather than being shadowed here)</li>
+ *   <li>{@code /api/finance/**} reads (GET/HEAD) — require {@code finance.read} or
+ *       {@code finance.write} scope (or an operator role, so the platform-console operator read
+ *       consumer keeps working, ADR-MONO-013)</li>
  *   <li>everything else — denied</li>
  * </ul>
+ *
+ * <p>Scope is enforced by value here (TASK-FIN-BE-046): {@code iam-integration.md § Token 검증
+ * 규칙 #5} declares the downstream service enforces {@code finance.read}/{@code finance.write}, but
+ * this chain previously required only {@code .authenticated()} — a {@code finance.read}-only token
+ * could perform every write. The {@code SCOPE_*} authorities come from
+ * {@link ActorContextJwtAuthenticationConverter}. Insufficient scope for an authenticated caller →
+ * 403 {@code PERMISSION_DENIED} via {@link SecurityErrorHandler#onAccessDenied}; no token → 401.
+ *
+ * <p>Read-OR-scope, not scope-only: a caller admitted by an operator role (no finance scope) is
+ * still allowed, mirroring the gateway's {@code roleOrScope} admission and keeping the two layers
+ * from disagreeing about validity.
  *
  * No public webhook surface in v1 (finance has no external caller).
  * Error handling (401/403 responses) is delegated to {@link SecurityErrorHandler}.
@@ -27,6 +46,24 @@ import org.springframework.security.web.SecurityFilterChain;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private static final String SCOPE_READ = "SCOPE_finance.read";
+    private static final String SCOPE_WRITE = "SCOPE_finance.write";
+
+    /**
+     * Roles that admit a caller regardless of scope — the operator/admin identities the
+     * application layer already recognises ({@link com.example.finance.account.application.ActorContext#isOperator()}).
+     * Kept in sync with that method so a role-bearing operator token is never blocked here before
+     * the application-layer operator check runs.
+     */
+    private static final String[] OPERATOR_AUTHORITIES = {
+            "ROLE_OPERATOR", "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_FINANCE_OPERATOR"
+    };
+
+    private static String[] withOperators(String... scopes) {
+        return Stream.concat(Stream.of(scopes), Stream.of(OPERATOR_AUTHORITIES))
+                .toArray(String[]::new);
+    }
+
     private final SecurityErrorHandler securityErrorHandler;
 
     @Bean
@@ -35,13 +72,19 @@ public class SecurityConfig {
         String[] prefixed = PublicPaths.PREFIXES.stream()
                 .map(p -> p + "**")
                 .toArray(String[]::new);
+        String[] writeAuthorities = withOperators(SCOPE_WRITE);
+        String[] readAuthorities = withOperators(SCOPE_READ, SCOPE_WRITE);
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(exact).permitAll()
                         .requestMatchers(prefixed).permitAll()
-                        .requestMatchers("/api/finance/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/finance/**").hasAnyAuthority(writeAuthorities)
+                        .requestMatchers(HttpMethod.PUT, "/api/finance/**").hasAnyAuthority(writeAuthorities)
+                        .requestMatchers(HttpMethod.PATCH, "/api/finance/**").hasAnyAuthority(writeAuthorities)
+                        .requestMatchers(HttpMethod.DELETE, "/api/finance/**").hasAnyAuthority(writeAuthorities)
+                        .requestMatchers("/api/finance/**").hasAnyAuthority(readAuthorities)
                         .anyRequest().denyAll()
                 )
                 .oauth2ResourceServer(rs -> rs

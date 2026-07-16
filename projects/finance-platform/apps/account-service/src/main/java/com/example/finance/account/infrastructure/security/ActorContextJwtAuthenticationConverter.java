@@ -40,6 +40,14 @@ public class ActorContextJwtAuthenticationConverter
         for (String role : roles) {
             authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
         }
+        // Lift the OAuth2 `scope` claim into SCOPE_* authorities (Spring's standard prefix) so
+        // SecurityConfig can require a specific scope value per endpoint. Without this the `scope`
+        // claim was invisible to authorization and any authenticated finance token could write —
+        // the least-privilege gap TASK-FIN-BE-046 closes. ActorContext (roles) is unchanged, so the
+        // application-layer operator gate (/kyc/upgrade) keeps deriving from roles independently.
+        for (String scope : extractScopes(jwt)) {
+            authorities.add(new SimpleGrantedAuthority("SCOPE_" + scope));
+        }
         return new ActorContextJwtAuthenticationToken(jwt, actor, authorities);
     }
 
@@ -51,6 +59,30 @@ public class ActorContextJwtAuthenticationConverter
         Set<String> out = new HashSet<>();
         if (raw instanceof Collection<?> c) {
             for (Object v : c) out.add(String.valueOf(v));
+        } else if (raw instanceof String s) {
+            for (String part : s.split("[,\\s]+")) {
+                if (!part.isBlank()) out.add(part);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Extract OAuth2 scopes. GAP issues {@code scope} as a JSON array (e.g.
+     * {@code ["finance.read"]}); RFC 6749 also allows a space-delimited string, and {@code scp}
+     * is a common alias — accept all three shapes.
+     */
+    @SuppressWarnings("unchecked")
+    private static Set<String> extractScopes(Jwt jwt) {
+        Object raw = jwt.getClaim("scope");
+        if (raw == null) raw = jwt.getClaim("scp");
+        if (raw == null) return Collections.emptySet();
+        Set<String> out = new HashSet<>();
+        if (raw instanceof Collection<?> c) {
+            for (Object v : c) {
+                String s = String.valueOf(v);
+                if (!s.isBlank()) out.add(s);
+            }
         } else if (raw instanceof String s) {
             for (String part : s.split("[,\\s]+")) {
                 if (!part.isBlank()) out.add(part);
