@@ -173,7 +173,7 @@ Paginated (`?page=&size=&type=&status=`).
 | `AML_SCREENING_REQUIRED` | 422 | screening unresolved |
 | `SANCTION_HIT` | 422 | sanction/watchlist match (txn FAILED + operator queue) |
 | `TRANSACTION_LIMIT_EXCEEDED` | 422 | KYC/policy limit exceeded |
-| `PERMISSION_DENIED` | 403 | operator-only op by non-operator |
+| `PERMISSION_DENIED` | 403 | operator-only op by non-operator; also insufficient OAuth2 scope — a write without `finance.write`, or a read without `finance.read`/`finance.write` (and no operator role), rejected by `SecurityConfig` (TASK-FIN-BE-046) |
 | `TENANT_FORBIDDEN` | 403 | tenant_id ∉ {finance,*} |
 | `IDEMPOTENCY_STORE_UNAVAILABLE` | 503 | Redis + DB idempotency store both down |
 | `CONCURRENT_MODIFICATION` | 409 | optimistic-lock conflict |
