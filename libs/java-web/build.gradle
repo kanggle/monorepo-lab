@@ -29,7 +29,16 @@ dependencies {
     // services that call the builder already supply swagger-core via springdoc.
     compileOnly 'io.swagger.core.v3:swagger-models-jakarta:2.2.28'
 
+    // spring-security-oauth2-jose supplies the framework-agnostic OAuth2 token-validation types
+    // (OAuth2TokenValidator / OAuth2Error / Jwt) used by RequiredScopeValidator. compileOnly for the
+    // same reason as swagger above — it never reaches a consumer's runtime classpath, so the reactive
+    // gateway (which depends on libs:java-web) is unaffected; the servlet REST services that consume the
+    // validator already supply spring-security-oauth2-resource-server at runtime. Preserves the MONO-044a
+    // framework-agnostic charter (oauth2-jose is not spring-web / servlet — it is used by both stacks).
+    compileOnly 'org.springframework.security:spring-security-oauth2-jose'
+
     testImplementation 'io.swagger.core.v3:swagger-models-jakarta:2.2.28'
+    testImplementation 'org.springframework.security:spring-security-oauth2-jose'
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
     testImplementation 'org.assertj:assertj-core'
