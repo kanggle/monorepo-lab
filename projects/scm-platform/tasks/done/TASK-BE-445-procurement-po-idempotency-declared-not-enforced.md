@@ -2,7 +2,7 @@
 id: TASK-BE-445
 type: TASK-BE
 title: procurement-service PO mutation idempotency is declared in the contract but never enforced
-status: review
+status: done
 service: procurement-service
 domain: scm
 traits: [transactional]
