@@ -3,11 +3,15 @@ package com.wms.outbound.adapter.in.web.advice;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.wms.outbound.adapter.in.web.dto.response.ApiErrorEnvelope;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -42,5 +46,28 @@ class GlobalExceptionHandlerNotFoundTest {
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(resp.getBody().code()).isEqualTo("NOT_FOUND");
         assertThat(resp.getBody().message()).isEqualTo("Resource not found");
+    }
+
+    @Test
+    void methodNotSupported_returns405_withCode_METHOD_NOT_ALLOWED_andAllowHeader() {
+        HttpRequestMethodNotSupportedException ex =
+                new HttpRequestMethodNotSupportedException("DELETE", List.of("GET", "POST"));
+
+        ResponseEntity<ApiErrorEnvelope> resp = handler.handleMethodNotSupported(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(resp.getBody().code()).isEqualTo("METHOD_NOT_ALLOWED");
+        assertThat(resp.getHeaders().getAllow()).contains(HttpMethod.GET, HttpMethod.POST);
+    }
+
+    @Test
+    void mediaTypeNotSupported_returns415_withCode_UNSUPPORTED_MEDIA_TYPE() {
+        HttpMediaTypeNotSupportedException ex =
+                new HttpMediaTypeNotSupportedException(MediaType.TEXT_PLAIN, List.of(MediaType.APPLICATION_JSON));
+
+        ResponseEntity<ApiErrorEnvelope> resp = handler.handleMediaTypeNotSupported(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat(resp.getBody().code()).isEqualTo("UNSUPPORTED_MEDIA_TYPE");
     }
 }

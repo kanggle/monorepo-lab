@@ -5,8 +5,12 @@ import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -14,6 +18,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -70,6 +75,29 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ErrorResponse handleNoHandlerFound(NoHandlerFoundException ex) {
         return ErrorResponse.of("NOT_FOUND", "The requested resource was not found");
+    }
+
+    /**
+     * Wrong HTTP method on a matched path. Unlike the other handlers in this class, this
+     * cannot use {@code @ResponseStatus} alone because the RFC 7231 §6.5.5 {@code Allow}
+     * header requires access to the response headers, so it returns {@link ResponseEntity}.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        Set<HttpMethod> supported = ex.getSupportedHttpMethods();
+        if (supported != null && !supported.isEmpty()) {
+            builder.allow(supported.toArray(new HttpMethod[0]));
+        }
+        return builder.body(ErrorResponse.of("METHOD_NOT_ALLOWED",
+                "HTTP method not supported for this endpoint"));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    public ErrorResponse handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
+        return ErrorResponse.of("UNSUPPORTED_MEDIA_TYPE",
+                "Request Content-Type is not supported by this endpoint");
     }
 
     @ExceptionHandler(Exception.class)

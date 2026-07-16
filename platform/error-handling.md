@@ -131,6 +131,8 @@ Codes activated by the `content-heavy` trait declared in `PROJECT.md`. Expected 
 | Code | HTTP | Description |
 |---|---|---|
 | NOT_FOUND | 404 | Requested resource does not exist (use only where a domain-specific `*_NOT_FOUND` does not apply) |
+| METHOD_NOT_ALLOWED | 405 | HTTP method not supported for the matched endpoint (Spring `HttpRequestMethodNotSupportedException`). Handler-side framework mapping — the response carries the RFC 7231 `Allow` header. Without a dedicated handler the catch-all swallows it into `INTERNAL_ERROR` 500 (TASK-MONO-421) |
+| UNSUPPORTED_MEDIA_TYPE | 415 | Request `Content-Type` not supported by the matched endpoint (Spring `HttpMediaTypeNotSupportedException`). Handler-side framework mapping; same catch-all-swallow defect as `METHOD_NOT_ALLOWED` (TASK-MONO-421) |
 | INTERNAL_ERROR | 500 | Unexpected server-side error |
 | DATA_INTEGRITY_VIOLATION | 409 | Generic DB constraint violation not covered by a domain-specific code. Catch-all surfaced by Spring `DataIntegrityViolationException` when no `*Exception.java` mapping applies. Prefer a domain code when a known constraint is hit |
 | ILLEGAL_STATE | 422 | Generic `IllegalStateException` caught at the controller boundary (aggregate invariant violated) — the unclassified fallback. Emitted by scm procurement, fan-platform services' `AbstractDomainExceptionHandler`, erp masterdata/approval, and finance account/ledger. Prefer a domain-specific code or `STATE_TRANSITION_INVALID` (Transactional Trait) where the failure is a known state-machine transition. **Never emit `VALIDATION_ERROR` at 422 for this** — that code is registered at 400 above, and a service emitting one code at two statuses breaks `code`-keyed clients (TASK-MONO-348) |

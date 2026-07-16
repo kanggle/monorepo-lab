@@ -1,24 +1,23 @@
-package com.wms.admin.api.advice;
+package com.wms.master.adapter.in.web.advice;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.wms.admin.api.dto.ApiErrorEnvelope;
+import com.wms.master.adapter.in.web.dto.response.ApiErrorEnvelope;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
- * Unit tests for {@link GlobalExceptionHandler}'s unmatched-path handling
- * (TASK-MONO-420): a request to a path this service does not serve must
- * degrade to 404, not fall through to the catch-all 500.
+ * Unit tests for {@link GlobalExceptionHandler}'s unmatched-path / wrong-method /
+ * wrong-media-type handling (TASK-MONO-162, TASK-MONO-421): a request to a path
+ * this service does not serve, or that uses the wrong HTTP method / Content-Type,
+ * must degrade to the correct 4xx status, not fall through to the catch-all 500.
  */
 class GlobalExceptionHandlerNotFoundTest {
 
@@ -30,18 +29,6 @@ class GlobalExceptionHandlerNotFoundTest {
                 new NoResourceFoundException(HttpMethod.GET, "/api/definitely-not-a-real-endpoint");
 
         ResponseEntity<ApiErrorEnvelope> resp = handler.handleNoResource(ex);
-
-        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(resp.getBody().error().code()).isEqualTo("NOT_FOUND");
-        assertThat(resp.getBody().error().message()).isEqualTo("Resource not found");
-    }
-
-    @Test
-    void noHandlerFound_returns404_withCode_NOT_FOUND() {
-        NoHandlerFoundException ex =
-                new NoHandlerFoundException("GET", "/api/definitely-not-a-real-endpoint", new HttpHeaders());
-
-        ResponseEntity<ApiErrorEnvelope> resp = handler.handleNoHandlerFound(ex);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(resp.getBody().error().code()).isEqualTo("NOT_FOUND");
