@@ -3,6 +3,8 @@ package com.example.scmplatform.procurement.presentation.controller;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.scmplatform.procurement.application.ActorContext;
+import com.example.scmplatform.procurement.application.IdempotencyExecutor;
+import com.example.scmplatform.procurement.application.IdempotencyHasher;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
 import com.example.scmplatform.procurement.application.PurchaseOrderView;
 import com.example.scmplatform.procurement.application.command.CancelPurchaseOrderCommand;
@@ -19,6 +21,7 @@ import com.example.scmplatform.procurement.presentation.dto.DraftPurchaseOrderRe
 import com.example.scmplatform.procurement.presentation.dto.PageResponse;
 import com.example.scmplatform.procurement.presentation.dto.PurchaseOrderResponse;
 import jakarta.validation.Valid;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -47,6 +50,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class PurchaseOrderController {
 
     private final PurchaseOrderApplicationService service;
+    private final IdempotencyExecutor idempotency;
+    private final IdempotencyHasher hasher;
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<PurchaseOrderResponse>> draft(
@@ -62,7 +67,12 @@ public class PurchaseOrderController {
                                 l.lineNo(), l.sku(), l.supplierSku(), l.quantity(), l.unitPrice()))
                         .toList()
         );
-        PurchaseOrderView view = service.draft(cmd);
+        // TASK-BE-445: idempotency now enforced — the required header value is honoured
+        // (was discarded). Same key+payload replays; same key+different payload → 422.
+        PurchaseOrderView view = idempotency.execute(
+                actor.tenantId(), "POST /api/procurement/po", idempotencyKey,
+                hasher.hash(req), HttpStatus.CREATED.value(), PurchaseOrderView.class,
+                () -> service.draft(cmd));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiEnvelope.of(PurchaseOrderResponse.from(view)));
     }
@@ -127,7 +137,10 @@ public class PurchaseOrderController {
             @PathVariable String poId,
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
-        PurchaseOrderView view = service.confirm(new ConfirmPurchaseOrderCommand(actor, poId));
+        PurchaseOrderView view = idempotency.execute(
+                actor.tenantId(), "POST /api/procurement/po/{poId}/confirm", idempotencyKey,
+                hasher.hash(Map.of("poId", poId)), HttpStatus.OK.value(), PurchaseOrderView.class,
+                () -> service.confirm(new ConfirmPurchaseOrderCommand(actor, poId)));
         return ResponseEntity.ok(ApiEnvelope.of(PurchaseOrderResponse.from(view)));
     }
 
@@ -138,7 +151,11 @@ public class PurchaseOrderController {
             @Valid @RequestBody(required = false) CancelPurchaseOrderRequest req) {
         ActorContext actor = ActorContextResolver.currentOrThrow();
         String reason = req == null ? null : req.reason();
-        PurchaseOrderView view = service.cancel(new CancelPurchaseOrderCommand(actor, poId, reason));
+        PurchaseOrderView view = idempotency.execute(
+                actor.tenantId(), "POST /api/procurement/po/{poId}/cancel", idempotencyKey,
+                hasher.hash(Map.of("poId", poId, "reason", reason == null ? "" : reason)),
+                HttpStatus.OK.value(), PurchaseOrderView.class,
+                () -> service.cancel(new CancelPurchaseOrderCommand(actor, poId, reason)));
         return ResponseEntity.ok(ApiEnvelope.of(PurchaseOrderResponse.from(view)));
     }
 }

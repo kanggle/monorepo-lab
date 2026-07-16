@@ -1,6 +1,8 @@
 package com.example.scmplatform.procurement.presentation.controller;
 
 import com.example.scmplatform.procurement.application.ActorContext;
+import com.example.scmplatform.procurement.application.IdempotencyExecutor;
+import com.example.scmplatform.procurement.application.IdempotencyHasher;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
 import com.example.scmplatform.procurement.application.PurchaseOrderView;
 import com.example.scmplatform.procurement.application.command.DraftFromSuggestionCommand;
@@ -33,6 +35,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -72,12 +75,28 @@ class PurchaseOrderControllerSliceTest {
     @MockitoBean
     PurchaseOrderApplicationService service;
 
+    // TASK-BE-445: the controller now wraps mutations in IdempotencyExecutor. For the
+    // slice we stub it as a pass-through (invoke the action Supplier) so these tests keep
+    // asserting controller↔service behaviour; the executor's own logic is covered by
+    // IdempotencyExecutorTest. The hasher is irrelevant here (returns a constant).
+    @MockitoBean
+    IdempotencyExecutor idempotency;
+
+    @MockitoBean
+    IdempotencyHasher hasher;
+
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void populateSecurityContext() {
         TestingAuthenticationToken auth =
                 new TestingAuthenticationToken(BUYER, "credentials", "ROLE_BUYER");
         auth.setAuthenticated(true);
         SecurityContextHolder.getContext().setAuthentication(auth);
+
+        when(hasher.hash(any())).thenReturn("test-hash");
+        when(idempotency.execute(anyString(), anyString(), anyString(), anyString(),
+                anyInt(), any(), any()))
+                .thenAnswer(inv -> ((java.util.function.Supplier<Object>) inv.getArgument(6)).get());
     }
 
     // ---- helpers ----
