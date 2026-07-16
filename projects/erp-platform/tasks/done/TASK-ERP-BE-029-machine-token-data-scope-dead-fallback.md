@@ -1,6 +1,6 @@
 # TASK-ERP-BE-029 — masterdata-service: machine-token data-scope fallback is dead code (documented flow 403s on scoped ops)
 
-Status: review
+Status: done
 
 `(분석=Opus 4.8 / 구현 권장=Opus — security-relevant authz policy + masterdata↔read-model 정합)`
 
