@@ -2,7 +2,7 @@
 id: TASK-BE-505
 type: TASK-BE
 title: order-service /api/internal/** accepts any valid IAM token, not just the declared system credential
-status: review
+status: done
 service: order-service
 domain: ecommerce
 traits: [transactional, multi-tenant]
