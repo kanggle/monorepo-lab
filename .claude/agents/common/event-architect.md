@@ -1,7 +1,7 @@
 ---
 name: event-architect
 description: Event-driven architecture specialist. Designs domain events, event contracts, and messaging patterns.
-model: sonnet
+model: opus
 tools: Read, Write, Edit, Glob, Grep
 capabilities: [event-contract-design, payload-schema, idempotency-design, retry-dlq-design, schema-versioning]
 languages: [yaml, markdown]

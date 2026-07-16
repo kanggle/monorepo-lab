@@ -54,9 +54,9 @@ Follow the full `/implement-task` batch mode procedure. **`/implement-task` (bat
 6. Analyze: extract metadata, classify category (simple-refactor, simple-code, code-with-event, contract-change, cross-service)
 7. Resolve dependencies: build dependency graph, output topological ordering in execution rounds
 8. Present execution plan
-9. If `--dry-run`, show plan and continue to Phase 2 dry-run (do not execute)
+9. If `--dry-run`, show plan and continue to Phase 2 dry-run (do not execute). **This deliberately diverges from `/implement-task --dry-run`, which stops after its plan** (`/implement-task` Phase 4): `/process-tasks` chains Implement → Review, so its dry-run spans **both** phases' plans rather than halting after the implement plan. The divergence is intended, not drift.
 10. Execute via worktree-isolated subagents following `/implement-task` batch mode Phase 5 rules:
-    - Parallel rounds for independent tasks, `subagent_type` per task category per `/implement-task` Phase 5 (`"backend-engineer"` / `"frontend-engineer"`; `"refactoring-engineer"` for simple-refactor; `"api-designer"` + `"event-architect"` for contract-change)
+    - Parallel rounds for independent tasks, `subagent_type` per task category per `/implement-task` Phase 5 (`"backend-engineer"` / `"frontend-engineer"`; `"refactoring-engineer"` for simple-refactor; `"api-designer"` + `"event-architect"` for contract-change). **Pass `model=` explicitly on every Agent call, per `/implement-task` Phase 5 (canonical) and `CLAUDE.md` § Recommending Tasks and Dispatching Agents** — do not rely on session inheritance
     - Sequential rounds for dependent tasks
     - Merge worktree branches between rounds into the coordinator's **integration branch** (`task/batch-<id>`) — **never into `main`** — then verify that branch builds/compiles before the next round (per `/implement-task` Phase 5 step 3, integration sub-step)
     - Mark dependents of failed tasks as blocked

@@ -115,6 +115,8 @@ All review tasks are independent — launch all agents in parallel.
 
 Launch one subagent per task, all in a single message, each with `isolation: "worktree"` and `subagent_type: "code-reviewer"`.
 
+**Pass `model=` explicitly on every Agent call — do not rely on session inheritance** (`CLAUDE.md` § Recommending Tasks and Dispatching Agents; do not restate the rule here). Pick the tier from that table by the complexity of the task being reviewed: complex domain work (state machines, transaction/contract/event design, cross-cutting refactors) → `model="opus"`; CI / docs / single-line config / lifecycle chore → `model="sonnet"`.
+
 Each subagent receives the Agent Prompt Template below.
 
 #### Agent Prompt Template

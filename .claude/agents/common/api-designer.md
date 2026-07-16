@@ -1,7 +1,7 @@
 ---
 name: api-designer
 description: API contract design specialist (REST; GraphQL/gRPC when those service types are introduced). Defines API contracts, endpoint design, and request/response schemas.
-model: sonnet
+model: opus
 tools: Read, Write, Edit, Glob, Grep
 capabilities: [api-contract-design, request-response-schema, error-mapping, versioning, idempotency-design]
 languages: [yaml, openapi, markdown]
