@@ -1,6 +1,6 @@
 # TASK-FIN-BE-046 — account-service: declared OAuth2 scope enforcement is absent (read token performs writes)
 
-Status: review
+Status: done
 
 `(분석=Opus 4.8 / 구현 권장=Opus — 규제 fintech authz semantics + scope→authority 매핑 + 테스트)`
 
