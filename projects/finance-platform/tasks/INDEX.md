@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-046-account-service-scope-enforcement-gap.md` — **account-service: declared OAuth2 scope enforcement is absent (least-privilege gap).** Found by **live full-stack verification 2026-07-16** (lean gateway+account stack against the running iam auth-service, gateway on host `:18100`): `specs/integration/iam-integration.md` § Token 검증 규칙 #5 declares downstream `SecurityConfig` enforces scope (`Jwt.getClaimAsString("scope")`) and the Error table declares `403 FORBIDDEN` for insufficient scope, but `SecurityConfig.java:44` gates `/api/finance/**` with `.authenticated()` only — **a `finance.read`-only token opened an account (201) and reached hold/transfer (409/404, not 403)**. Declared-rule-does-not-reach-enforcement class; CI-invisible (no scope-denial test; `CrossTenantHttpIntegrationTest` covers tenant only). AC-0 live-repro embedded; **AC-1 = architecture decision** (Option 1 enforce [recommended — spec authoritative + `finance.write` scope exists] vs Option 2 correct spec). Not a regression — original gap since FIN-BE-001. `(분석=Opus 4.8 / 구현 권장=Opus)`
 
 ## in-progress
 
