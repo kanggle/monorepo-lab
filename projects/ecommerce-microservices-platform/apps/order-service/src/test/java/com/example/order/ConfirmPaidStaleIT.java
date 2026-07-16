@@ -191,6 +191,38 @@ class ConfirmPaidStaleIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    // TASK-BE-505: the shared issuer means an ordinary CUSTOMER access token is signed by
+    // the same key and passes signature+issuer+audience. Before the subject pin it also
+    // passed .authenticated() and RAN THE SWEEP. These two cases assert it now 401s and the
+    // sweep never executes — the declared "system credential only" contract, enforced.
+    @Test
+    @DisplayName("유효하지만 시스템 클라이언트가 아닌 sub(고객 UUID) 토큰 → 401, sweep 미실행")
+    void validButNonSystemSubject_returns401_andSweepDoesNotRun() {
+        String paidStale = seedOrder("pay-1", OrderStatus.PENDING, 7200);
+        // A CUSTOMER access token shape: correct issuer + audience, unexpired, but sub is an
+        // account UUID (not the reserved internal client-id).
+        String customerToken = jwt.issueToken(java.util.UUID.randomUUID().toString(),
+                InternalJwtTestHelper.ISSUER, InternalJwtTestHelper.AUDIENCE, Duration.ofHours(1));
+
+        ResponseEntity<String> response = post(customerToken, "{\"olderThanMinutes\":30,\"limit\":200}");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(reload(paidStale).getStatus())
+                .as("the sweep must not run for a non-system credential")
+                .isEqualTo(OrderStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("다른 클라이언트-id sub(타 플랫폼 시스템 토큰) → 401")
+    void validButDifferentClientSubject_returns401() {
+        String otherClientToken = jwt.issueToken("wms-internal-services-client",
+                InternalJwtTestHelper.ISSUER, InternalJwtTestHelper.AUDIENCE, Duration.ofHours(1));
+
+        ResponseEntity<String> response = post(otherClientToken, "{\"olderThanMinutes\":30,\"limit\":200}");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
     // ---- AC-3 / AC-4 / AC-5: predicate disjointness + saga-identical confirm + skip --
 
     @Test

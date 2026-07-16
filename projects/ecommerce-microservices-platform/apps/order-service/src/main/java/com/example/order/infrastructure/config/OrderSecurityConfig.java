@@ -37,12 +37,16 @@ import java.util.List;
  * <p>The single exception is the gateway-EXCLUDED internal route {@code /api/internal/**}
  * (TASK-BE-412): it is never fronted by the gateway, so it validates the inbound
  * {@code client_credentials} Bearer JWT itself as a resource server (JWKS signature +
- * {@code exp}/{@code nbf}/{@code iat} + issuer + audience), <b>fail-closed</b> — a missing /
- * expired / malformed / wrong-issuer / wrong-audience token → {@code 401 UNAUTHORIZED} and the
- * sweep never executes. Mirrors the IAM account-service {@code /internal/**} resource-server
- * shape (TASK-BE-317/319b, product-to-account.md / BE-402 precedent): decoder built directly
- * from the JWKS URI (lazy fetch — startup is not coupled to auth-service availability),
- * issuer + audience pinned via env-overridable properties.
+ * {@code exp}/{@code nbf}/{@code iat} + issuer + audience + <b>system-client subject</b>),
+ * <b>fail-closed</b> — a missing / expired / malformed / wrong-issuer / wrong-audience token,
+ * <b>or a valid token whose {@code sub} is not an allow-listed internal client-id</b>
+ * ({@link SystemClientSubjectValidator}, TASK-BE-505) → {@code 401 UNAUTHORIZED} and the sweep
+ * never executes. The subject pin is required because the ecommerce issuer is shared with
+ * ordinary CUSTOMER access tokens, so signature + issuer alone do not distinguish a system
+ * credential from a user token. Mirrors the IAM account-service {@code /internal/**}
+ * resource-server shape (TASK-BE-317/319b, product-to-account.md / BE-402 precedent): decoder
+ * built directly from the JWKS URI (lazy fetch — startup is not coupled to auth-service
+ * availability), issuer + audience + allowed client-ids pinned via env-overridable properties.
  *
  * <p>Two chains, ordered so the {@code /api/internal/**}-scoped resource-server chain matches
  * first and the permissive chain catches everything else.
@@ -61,6 +65,14 @@ public class OrderSecurityConfig {
     private String audience;
 
     /**
+     * Comma-separated allow-list of {@code client_credentials} client-ids permitted on
+     * {@code /api/internal/**}. A token's {@code sub} must be one of these (TASK-BE-505).
+     * Defaults to the sole reserved internal client; overridable per environment.
+     */
+    @Value("${order.internal.oauth2.allowed-client-ids:ecommerce-internal-services-client}")
+    private String allowedClientIds;
+
+    /**
      * Decoder for the {@code client_credentials} access tokens presented on
      * {@code /api/internal/**}. Built from the JWKS URI directly (not OIDC discovery) so
      * startup is not coupled to auth-service availability — the JWKS is fetched lazily on
@@ -74,8 +86,24 @@ public class OrderSecurityConfig {
         validators.add(new JwtTimestampValidator());
         validators.add(JwtValidators.createDefaultWithIssuer(issuer));
         validators.add(new AudienceValidator(audience));
+        // TASK-BE-505: pin the subject to the reserved internal system client(s). The
+        // issuer is shared with ordinary CUSTOMER access tokens, so signature+issuer alone
+        // does not distinguish a system credential — without this an ordinary token passes
+        // .authenticated(), contradicting the "system credential only" contract.
+        validators.add(new SystemClientSubjectValidator(parseAllowedClientIds()));
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(validators));
         return decoder;
+    }
+
+    /** Parse the comma-separated {@code allowedClientIds} into a trimmed, non-blank set. */
+    private java.util.Set<String> parseAllowedClientIds() {
+        if (allowedClientIds == null || allowedClientIds.isBlank()) {
+            return java.util.Set.of();
+        }
+        return java.util.Arrays.stream(allowedClientIds.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     /**

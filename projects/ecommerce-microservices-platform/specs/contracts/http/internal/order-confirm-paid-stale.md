@@ -42,11 +42,26 @@ confirm step — same domain transition, same emitted event — so downstream fu
 `IamClientCredentialsTokenProvider` (mirrors product-service, BE-402).
 
 order-service validates the bearer as a **resource server** (JWKS signature + `exp`/`nbf`/`iat`
-+ issuer + audience). **Fail-closed**: a missing / expired / malformed / wrong-issuer /
-wrong-audience token → **401 `UNAUTHORIZED`**; the endpoint NEVER executes the sweep without a
-valid system credential. The internal security filter chain for `/api/internal/**` is separate
-from the gateway-fronted user chain (which trusts `X-User-*` headers stripped+injected by the
-gateway) — `/api/internal/**` is never gateway-fronted, so it validates the JWT directly.
++ issuer + audience + **system-client subject**). **Fail-closed**: a missing / expired /
+malformed / wrong-issuer / wrong-audience token → **401 `UNAUTHORIZED`**; the endpoint NEVER
+executes the sweep without a valid system credential. The internal security filter chain for
+`/api/internal/**` is separate from the gateway-fronted user chain (which trusts `X-User-*`
+headers stripped+injected by the gateway) — `/api/internal/**` is never gateway-fronted, so it
+validates the JWT directly.
+
+> **System-client subject pin (TASK-BE-505).** The ecommerce issuer is shared: ordinary
+> CUSTOMER access tokens are signed by the **same** Spring Authorization Server key and issuer,
+> so signature + issuer + audience alone do **not** distinguish a system credential from a user
+> token — a valid CUSTOMER token would otherwise pass `.authenticated()` and run the sweep
+> (contradicting "valid **system** credential"). The chain therefore also pins the token
+> `sub` to the allow-listed internal client-id(s) (`order.internal.oauth2.allowed-client-ids`,
+> default `ecommerce-internal-services-client`). A `client_credentials` token's `sub` is the
+> client-id (per auth-service `TenantClaimTokenCustomizer` — `sub` is only overridden to the
+> account UUID on the `authorization_code`/`refresh_token` paths), while a CUSTOMER token's
+> `sub` is an account UUID; so a valid-but-non-system token → **401 `UNAUTHORIZED`**, sweep not
+> run. This gate applies to the whole `/api/internal/orders/**` chain, including the
+> operator-cancel endpoint (`{orderId}/cancel`, TASK-BE-428), which likewise carries no
+> customer-ownership check and must be reachable only by a system credential.
 
 ## Request
 
