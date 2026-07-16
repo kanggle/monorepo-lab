@@ -1,7 +1,7 @@
 # TASK-BE-514 — account-service `/internal/**` accepts any valid-issuer token (system-credential contract unenforced)
 
 - **Type**: TASK-BE
-- **Status**: review
+- **Status**: done
 - **Service**: account-service (iam-platform)
 - **Domain/traits**: saas / [transactional, regulated, audit-heavy, integration-heavy, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (security authz + multi-tenant blast radius)
