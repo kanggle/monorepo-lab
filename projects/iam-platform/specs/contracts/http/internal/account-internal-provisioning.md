@@ -10,7 +10,7 @@ expose `/internal/**` to the public internet.
 > registration, OAuth client issuance, JWKS setup, and event subscription.
 
 **Path prefix**: `/internal/tenants/{tenantId}/accounts`
-**Authentication**: `Authorization: Bearer <IAM client_credentials JWT>` (TASK-BE-319b; 정적 `X-Internal-Token` 제거됨). account-service `InternalApiFilter`/oauth2 resource-server 가 JWKS 서명 + issuer 로 검증.
+**Authentication**: `Authorization: Bearer <IAM client_credentials JWT>` (TASK-BE-319b; 정적 `X-Internal-Token` 제거됨). account-service oauth2 resource-server 가 JWKS 서명 + issuer + **`internal.invoke` scope** 로 검증한다 (TASK-BE-514). The IAM `auth-service` SAS is a **single shared issuer** that mints both system (`client_credentials`) and user (`authorization_code`) tokens, so signature + issuer alone do **not** distinguish a system credential — the token MUST carry the `internal.invoke` workload scope (seeded to the GAP-internal workload clients in `V0019`). A valid-issuer token **without** `internal.invoke` (e.g. an ordinary user token) is rejected `401 UNAUTHORIZED`, fail-closed. All registered internal callers (admin/auth/security-service-client) carry this scope.
 **Authorization**: Path `{tenantId}` must match the caller's JWT `tenant_id` claim,
 or the caller must hold a platform-scope `SUPER_ADMIN` role.
 
@@ -39,7 +39,7 @@ or the caller must hold a platform-scope `SUPER_ADMIN` role.
 | `ACCOUNT_NOT_FOUND` | 404 | `{accountId}` does not exist within this tenant |
 | `STATE_TRANSITION_INVALID` | 409 | Requested status transition is not permitted by `AccountStatusMachine` |
 | `VALIDATION_ERROR` | 400 | Request body fails Bean Validation |
-| `UNAUTHORIZED` | 401 | `Authorization: Bearer` JWT is missing or invalid |
+| `UNAUTHORIZED` | 401 | `Authorization: Bearer` JWT is missing, invalid, or lacks the `internal.invoke` scope (TASK-BE-514) |
 | `BULK_LIMIT_EXCEEDED` | 400 | `items` array exceeds the maximum of 1 000 entries (TASK-BE-257) |
 
 ---
