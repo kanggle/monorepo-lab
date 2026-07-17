@@ -1,7 +1,7 @@
 # TASK-MONO-425 — the two rules that decide whether a hook runs at all live only in private memory; the hook-authoring guide never mentions them
 
 - **Type**: TASK-MONO (monorepo-level — shared path `.claude/hooks/`)
-- **Status**: review
+- **Status**: done
 - **Target**: `.claude/hooks/README.md` § Adding a new detector
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (the README edit is user-applied — `.claude/hooks/` is classifier-blocked for the agent)
 
