@@ -1,7 +1,7 @@
 # TASK-ERP-BE-030 — approval-service data-scope control is structurally unreachable + fail-open; honest de-scope to v2 (ERP-BE-029 sibling)
 
 - **Type**: TASK-ERP-BE
-- **Status**: review
+- **Status**: done
 - **Service**: approval-service (erp-platform)
 - **Domain/traits**: erp / [transactional, audit-heavy, integration-heavy]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (authz + spec correction) · **Decision**: Option B (de-scope) — user-selected
