@@ -1,7 +1,7 @@
 # TASK-MONO-424 — the `.claude/` classifier-block note is over-broad; the repo already recorded the measurement that falsifies it, in a task note nobody reads
 
 - **Type**: TASK-MONO (monorepo-level — shared paths `CLAUDE.md`, `platform/`)
-- **Status**: review
+- **Status**: done
 - **Target**: `CLAUDE.md` § Cross-Project Changes (L191), `platform/git-workflow-policy.md` § `.claude/` Self-Modification Is Classifier-Blocked
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (two-statement doc correction, non-code)
 
