@@ -644,12 +644,16 @@ discipline):
    a non-approver principal at approve/reject time
    (`APPROVAL_NOT_AUTHORIZED_APPROVER`). These are **independent** guards (Separation
    of Duties — request ≠ approve, I4).
-4. **DataScope** is derived from the JWT `org_scope` claim (department subtree-root
-   ids — membership-derived, or `*` for machine/unscoped). A transition's target
-   data scope = the subject's owning department subtree; out-of-scope →
-   `DATA_SCOPE_FORBIDDEN`. (Same subtree-containment semantics as masterdata-service's
-   `RoleScopeAuthorizationAdapter`; the inbox list is data-scope-filtered to the
-   approver's own pending items.)
+4. **DataScope (subject owning-department subtree) — DEFERRED to v2 (TASK-ERP-BE-030).**
+   v1 does NOT confine a transition to the subject's owning-department subtree. Enforcing
+   that would need to resolve the subject's owning department from masterdata (the JWT
+   `org_scope` claim carries the CALLER's scope subtree-roots, not the SUBJECT's owning
+   department), which the JWT does not carry — so it is deferred to the v2 `permission-service`
+   (`AuthorizationPort` is the swap point; `targetDepartmentId` is reserved for it). The prior
+   in-adapter attempt was removed because it was structurally unreachable (every call site
+   passed `targetDepartmentId=null`) AND fail-OPEN on absent scope. `DATA_SCOPE_FORBIDDEN` is
+   reserved (registered) but not emitted in v1. (The inbox list remains participant-filtered to
+   the approver's own pending items — that is a query filter, not the data-scope authz control.)
 5. **Fail-CLOSED default** (E6 / I3) — missing/unrecognizable role or scope → `DENY`.
    No allow-by-default codepath.
 
@@ -673,6 +677,7 @@ inbox but may not approve — the approver-eligibility guard still applies).
 Errors:
 - `PERMISSION_DENIED` (403) — required role not present.
 - `DATA_SCOPE_FORBIDDEN` (403) — subject's owning department outside caller scope.
+  **Reserved for v2 `permission-service`; NOT emitted in v1** (TASK-ERP-BE-030 — see point 4 above).
 - `APPROVAL_NOT_AUTHORIZED_APPROVER` (403) — acting principal is not the route's
   approver (the approval-specific authz error; takes precedence over the generic
   `PERMISSION_DENIED` when the caller has the `approve` scope but is the wrong
@@ -965,7 +970,7 @@ treatment; this increment's single stage is not a saga.
 | 5 | Missing JWT / invalid signature / expired | 401 `UNAUTHORIZED` |
 | 6 | External (non-internal-network) traffic at ingress | rejected at Traefik / network layer; surfaced debug path → 403 `EXTERNAL_TRAFFIC_REJECTED` |
 | 7 | Caller lacks required role | 403 `PERMISSION_DENIED` |
-| 8 | Target subject's owning department outside caller scope | 403 `DATA_SCOPE_FORBIDDEN` |
+| 8 | Target subject's owning department outside caller scope | 403 `DATA_SCOPE_FORBIDDEN` — **v2-deferred; NOT enforced/emitted in v1** (TASK-ERP-BE-030) |
 | 9 | Unknown approval-request id | 404 `APPROVAL_REQUEST_NOT_FOUND` |
 | 10 | Illegal transition (e.g. `approve` on a DRAFT) | 409 `APPROVAL_STATUS_TRANSITION_INVALID` |
 | 11 | approve/reject by a principal who is not the route's approver | 403 `APPROVAL_NOT_AUTHORIZED_APPROVER` |
@@ -992,7 +997,9 @@ treatment; this increment's single stage is not a saga.
     (`@ExtendWith(MockitoExtension.class)` STRICT_STUBS): one happy + edge per
     Command; **idempotency replay** (same key → prior outcome, state not
     re-transitioned); **authz** (non-approver approve → `APPROVAL_NOT_AUTHORIZED_APPROVER`;
-    missing role → `PERMISSION_DENIED`; out-of-scope → `DATA_SCOPE_FORBIDDEN`);
+    missing role → `PERMISSION_DENIED`; subject data-scope is v2-deferred, TASK-ERP-BE-030,
+    so no `DATA_SCOPE_FORBIDDEN` case in v1 — `JwtBackedAuthorizationAdapterTest` pins that
+    a narrow-scope actor with an out-of-subtree target is ALLOWED in v1);
     masterdata-port subject-resolution (ACTIVE → submit ok; RETIRED/absent →
     `APPROVAL_ROUTE_INVALID`).
   - adapters — validator unit tests, `TenantClaimEnforcerTest`,

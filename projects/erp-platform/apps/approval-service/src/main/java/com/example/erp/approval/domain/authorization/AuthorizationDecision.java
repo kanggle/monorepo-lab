@@ -4,12 +4,15 @@ package com.example.erp.approval.domain.authorization;
  * Outcome of an authorization check (erp E6 — fail-CLOSED).
  *
  * <ul>
- *   <li>{@link Outcome#ALLOW} — caller has the required role AND the target is
- *       within the caller's data-scope.</li>
+ *   <li>{@link Outcome#ALLOW} — caller has the required role (v1). Subject data-scope
+ *       confinement is a v2 concern, so v1 ALLOW means "role satisfied".</li>
  *   <li>{@link Outcome#DENY_ROLE} — required role not present →
  *       {@code PERMISSION_DENIED}.</li>
  *   <li>{@link Outcome#DENY_SCOPE} — target outside caller data-scope →
- *       {@code DATA_SCOPE_FORBIDDEN}.</li>
+ *       {@code DATA_SCOPE_FORBIDDEN}. <b>Reserved for the v2 {@code permission-service}</b>
+ *       (TASK-ERP-BE-030) — the v1 {@code JwtBackedAuthorizationAdapter} never produces it
+ *       (subject owning-department is not resolved in v1); the exception + error-registry
+ *       mapping remain so the v2 client can emit it without a contract change.</li>
  * </ul>
  *
  * <p>Pure Java — no framework imports.
