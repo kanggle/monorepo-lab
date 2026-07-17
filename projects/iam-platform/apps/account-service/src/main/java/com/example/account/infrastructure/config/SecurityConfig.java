@@ -22,6 +22,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 
+import com.example.web.security.RequiredScopeValidator;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;

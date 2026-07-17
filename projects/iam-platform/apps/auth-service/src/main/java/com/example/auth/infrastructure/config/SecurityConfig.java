@@ -16,14 +16,21 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
+import com.example.web.security.RequiredScopeValidator;
+
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Default security filter chain for the existing auth-service endpoints.
@@ -71,6 +78,16 @@ public class SecurityConfig {
     @Value("${internal.api.jwt.issuer:http://localhost:8081}")
     private String jwtIssuer;
 
+    /**
+     * TASK-MONO-422: the workload scope a {@code /internal/**} token must carry. auth-service IS the
+     * shared SAS, minting both system ({@code client_credentials}) and user ({@code authorization_code})
+     * tokens, so signature + issuer alone do not distinguish a system credential — this scope
+     * ({@code internal.invoke}, seeded to the workload clients in {@code V0019}) is the discriminator.
+     * Blank → the shared {@link RequiredScopeValidator} fails closed.
+     */
+    @Value("${internal.api.jwt.required-scope:internal.invoke}")
+    private String requiredScope;
+
     private final Environment environment;
 
     public SecurityConfig(Environment environment) {
@@ -91,12 +108,30 @@ public class SecurityConfig {
      * checks and the GAP issuer. Built from the JWKS URI directly (not the issuer's OIDC discovery
      * document) so application startup is not coupled to the SAS being ready — the JWKS is fetched
      * lazily on first verification.
+     *
+     * <p>TASK-MONO-422: additionally pins the {@code internal.invoke} workload scope via
+     * {@link #internalTokenValidator(String, String)} — auth-service issues both system and user tokens
+     * from this same issuer, so signature + issuer alone do not distinguish a system credential (see the
+     * shared {@link RequiredScopeValidator}). A scope-less token → 401 via the entry point below.
      */
     @Bean
     public JwtDecoder internalJwtDecoder() {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(jwtIssuer));
+        decoder.setJwtValidator(internalTokenValidator(jwtIssuer, requiredScope));
         return decoder;
+    }
+
+    /**
+     * The validator chain enforced on {@code /internal/**} tokens: the issuer/timestamp default plus the
+     * {@code internal.invoke} scope discriminator (TASK-MONO-422). {@code static} so a test can assert the
+     * <em>actual</em> chain the decoder uses (not a re-implemented copy) — a scope-less token must be
+     * rejected here. A blank {@code requiredScope} makes {@link RequiredScopeValidator} fail closed.
+     */
+    static OAuth2TokenValidator<Jwt> internalTokenValidator(String issuer, String requiredScope) {
+        List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
+        validators.add(JwtValidators.createDefaultWithIssuer(issuer));
+        validators.add(new RequiredScopeValidator(requiredScope));
+        return new DelegatingOAuth2TokenValidator<>(validators);
     }
 
     @Bean

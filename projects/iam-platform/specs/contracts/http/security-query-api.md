@@ -12,7 +12,7 @@ base path: `/internal/security`
 
 특정 계정의 로그인 이력 조회.
 
-**Auth required**: internal — `Authorization: Bearer <IAM client_credentials JWT>` (TASK-BE-319a; 정적 `X-Internal-Token` 제거됨). 수신측 `InternalAuthFilter` 가 JWKS 서명 + issuer 로 검증. 자격증명 미제시/무효 → 403 `PERMISSION_DENIED`.
+**Auth required**: internal — `Authorization: Bearer <IAM client_credentials JWT>` (TASK-BE-319a; 정적 `X-Internal-Token` 제거됨). 수신측 `InternalAuthFilter` 가 JWKS 서명 + issuer + **`internal.invoke` scope** 로 검증한다 (TASK-MONO-422). GAP `auth-service` SAS 는 시스템·유저 토큰을 모두 발급하는 **공유 issuer** 라 서명+issuer 만으로는 시스템 자격을 구별 못 하므로, 토큰은 `internal.invoke` 워크로드 scope(`V0019` seed)를 반드시 지녀야 한다. 자격증명 미제시/무효/scope 없음(유저 토큰 포함) → 403 `PERMISSION_DENIED` (fail-closed). 정당한 내부 caller(`admin-service-client`)는 이 scope 를 지닌다.
 
 **Query Parameters**:
 
@@ -65,7 +65,7 @@ base path: `/internal/security`
 
 특정 계정의 비정상 로그인 탐지 이벤트 조회.
 
-**Auth required**: internal — `Authorization: Bearer <IAM client_credentials JWT>` (TASK-BE-319a; 정적 `X-Internal-Token` 제거됨). 수신측 `InternalAuthFilter` 가 JWKS 서명 + issuer 로 검증. 자격증명 미제시/무효 → 403 `PERMISSION_DENIED`.
+**Auth required**: internal — `Authorization: Bearer <IAM client_credentials JWT>` (TASK-BE-319a; 정적 `X-Internal-Token` 제거됨). 수신측 `InternalAuthFilter` 가 JWKS 서명 + issuer + **`internal.invoke` scope** 로 검증한다 (TASK-MONO-422). GAP `auth-service` SAS 는 시스템·유저 토큰을 모두 발급하는 **공유 issuer** 라 서명+issuer 만으로는 시스템 자격을 구별 못 하므로, 토큰은 `internal.invoke` 워크로드 scope(`V0019` seed)를 반드시 지녀야 한다. 자격증명 미제시/무효/scope 없음(유저 토큰 포함) → 403 `PERMISSION_DENIED` (fail-closed). 정당한 내부 caller(`admin-service-client`)는 이 scope 를 지닌다.
 
 **Query Parameters**:
 
