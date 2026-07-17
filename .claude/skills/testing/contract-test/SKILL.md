@@ -15,7 +15,7 @@ Prerequisite: read `platform/testing-strategy.md` before using this skill.
 ## Purpose
 
 Contract tests verify that:
-- API responses match the schema in `specs/contracts/api/`.
+- API responses match the schema in `specs/contracts/http/`.
 - Event payloads match the schema in `specs/contracts/events/`.
 - Changes to one service do not break consumers.
 

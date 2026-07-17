@@ -26,7 +26,7 @@ Follow `platform/testing-strategy.md`.
 - **Unit tests**: `@ExtendWith(MockitoExtension.class)`, STRICT_STUBS rules
 - **Slice tests**: `@WebMvcTest` + `SecurityConfig` + `GlobalExceptionHandler`
 - **Integration tests**: `@SpringBootTest` + Testcontainers (PostgreSQL, Redis)
-- H2 forbidden — use real databases
+- H2 forbidden for integration tests — use real databases (one exception: a non-authoritative `@DataJpaTest` H2 slice alongside an authoritative Testcontainers IT, per `platform/testing-strategy.md § H2 auxiliary-slice exception`)
 - Data isolation: use UUID or unique emails per test
 
 ### Frontend Tests
