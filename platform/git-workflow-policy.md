@@ -52,6 +52,34 @@ The repo squash-merges PRs; feature/chore refs are not auto-pruned and accumulat
 
 ---
 
+## A PR whose base is not `main` receives **zero** checks — and merges unblocked
+
+`.github/workflows/ci.yml` is triggered by `pull_request: branches: [main]`. That filter matches on the PR's
+**base**. A PR opened against any other base therefore **matches no workflow at all** — GitHub does not run,
+skip, or queue anything. It reports **0 checks**.
+
+This is the dangerous case precisely because it looks like the safe one:
+
+- "0 failing checks" and "CI ran and approved this" are **indistinguishable at the merge button**.
+- There is no red X, no pending spinner, and nothing to block the merge — branch protection has no required
+  check to wait for when no workflow ever matched.
+- The code reaches `main` through the **normal, green-looking path**, having never been compiled or tested.
+
+**0 checks is not a flake, and it is not a merge conflict** (a conflicting PR still *matches* the workflow;
+it just cannot run — see the distinction below). It means the workflow never applied.
+
+**Therefore**: open every PR — spec and impl alike — with **`base=main`**, and merge them sequentially.
+Where the work genuinely stacks, follow § Post-Merge Branch Hygiene: land it as a single tip-only PR whose
+base is `main`, not as a chain of PRs pointed at each other.
+
+> The invariant is about the **PR base**, not about local branch topology. Stacked *branches* are fine.
+> A PR whose `base != main` is not.
+
+Before trusting a PR's check state, confirm the count is non-zero — an empty check list is a signal, not an
+absence of problems.
+
+---
+
 ## `gh pr create` / `gh pr merge` Body Hook False-Match
 
 The `protect-main-branch` hook inspects the command string for direct-to-`main` pushes. A `gh pr create` / `gh pr merge` whose **inline body text** (`--body "…"`) contains literal tokens such as `push origin --delete`, `push --delete`, or `reset … to main` can trip a false-match and be **blocked** even though the command only opens/merges a PR. Workaround: pass the body via a file — `gh pr create --body-file <path>` (the hook matches the inline command string, not file contents) — or reword the body to avoid those literal tokens. (Agent personal-memory detail, this host: `project_branch_hygiene_policy`.)
