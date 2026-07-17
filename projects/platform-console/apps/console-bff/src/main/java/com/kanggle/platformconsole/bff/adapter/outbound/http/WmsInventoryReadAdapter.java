@@ -31,11 +31,6 @@ public class WmsInventoryReadAdapter implements WmsInventoryReadPort {
     }
 
     @Override
-    public DomainTarget domainTarget() {
-        return DomainTarget.WMS;
-    }
-
-    @Override
     public Map<String, Object> read(String tenantId, String credential) {
         return RestClientHelper.authenticatedGet(
                 client,

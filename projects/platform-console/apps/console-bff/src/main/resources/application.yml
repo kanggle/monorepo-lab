@@ -63,8 +63,6 @@ logging:
     level: "%5p [traceId=%X{traceId:-} requestId=%X{requestId:-} tenantId=%X{tenantId:-}]"
 
 consolebff:
-  gap:
-    issuer-url: ${CONSOLE_BFF_IAM_ISSUER_URL:http://iam.local}
   # Per-domain outbound base URLs for the BFF composition adapters
   # (§ 2.4.9.1). Default = Traefik internal hostnames per Local Network
   # Convention (ADR-MONO-001). Env-overridable for tests (DynamicPropertySource)

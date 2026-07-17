@@ -1,7 +1,6 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
 import com.kanggle.platformconsole.bff.application.port.outbound.ScmInventoryReadPort;
-import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -42,11 +41,6 @@ public class ScmInventoryReadAdapter implements ScmInventoryReadPort {
 
     public ScmInventoryReadAdapter(@Qualifier("scmRestClient") RestClient client) {
         this.client = client;
-    }
-
-    @Override
-    public DomainTarget domainTarget() {
-        return DomainTarget.SCM;
     }
 
     @Override

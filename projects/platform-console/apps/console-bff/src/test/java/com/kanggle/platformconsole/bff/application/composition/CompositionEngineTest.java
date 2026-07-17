@@ -30,8 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <ul>
  *   <li><b>all-success</b> — every leg supplier returns ok ⇒ engine
- *       returns the supplied results keyed by domain in
- *       {@link CompositionEngine#CARD_ORDER}; every leg's latency timer
+ *       returns the supplied results keyed by domain in the fixed
+ *       {@code DOMAINS} test fixture order; every leg's latency timer
  *       is registered with {@code bff_fanout_latency{domain,route}}.</li>
  *   <li><b>partial-failure</b> — one leg supplier throws ⇒ the
  *       {@link LegErrorClassifier} maps the exception to a degraded leg
@@ -51,6 +51,20 @@ class CompositionEngineTest {
 
     private static final String ROUTE = "operator-overview"; // arbitrary route label
 
+    /**
+     * Test-local fixture domain set — the engine is order-agnostic (TASK-MONO-241
+     * decoupling; {@code CompositionEngine.CARD_ORDER} was removed as dead code,
+     * TASK-PC-BE-012). Kept here only so these scenario tests have a fixed 5-domain
+     * set to build {@code legBodies} maps against.
+     */
+    private static final List<DomainTarget> DOMAINS = List.of(
+            DomainTarget.IAM,
+            DomainTarget.WMS,
+            DomainTarget.SCM,
+            DomainTarget.FINANCE,
+            DomainTarget.ERP
+    );
+
     private SimpleMeterRegistry meterRegistry;
     private CompositionEngine engine;
 
@@ -68,7 +82,7 @@ class CompositionEngineTest {
     @DisplayName("all_success: 5 leg suppliers return ok ⇒ 5 ok results in CARD_ORDER; 5 latency timers registered; 0 error counters")
     void all_success() {
         Map<DomainTarget, Supplier<CompositionLeg>> bodies = new EnumMap<>(DomainTarget.class);
-        for (DomainTarget d : CompositionEngine.CARD_ORDER) {
+        for (DomainTarget d : DOMAINS) {
             bodies.put(d, () -> engine.time(d,
                     () -> CompositionLeg.ok(LegOutcome.ok(d), Map.of("ok", true)),
                     (domain, e) -> CompositionLeg.outcomeOnly(LegOutcome.degraded(domain, "DOWNSTREAM_ERROR"))));
@@ -77,12 +91,12 @@ class CompositionEngineTest {
         Map<DomainTarget, CompositionLeg> results = engine.fanOut("tenant-1", bodies);
 
         assertThat(results).hasSize(5);
-        for (DomainTarget d : CompositionEngine.CARD_ORDER) {
+        for (DomainTarget d : DOMAINS) {
             assertThat(results.get(d).outcome().isOk())
                     .as("domain %s should be ok", d).isTrue();
         }
         // 5 latency timers, no error counters.
-        for (DomainTarget d : CompositionEngine.CARD_ORDER) {
+        for (DomainTarget d : DOMAINS) {
             Timer timer = meterRegistry.find("bff_fanout_latency")
                     .tag("domain", d.name().toLowerCase())
                     .tag("route", ROUTE)
@@ -110,7 +124,7 @@ class CompositionEngineTest {
         };
 
         Map<DomainTarget, Supplier<CompositionLeg>> bodies = new EnumMap<>(DomainTarget.class);
-        for (DomainTarget d : CompositionEngine.CARD_ORDER) {
+        for (DomainTarget d : DOMAINS) {
             if (d == DomainTarget.WMS) {
                 bodies.put(d, () -> engine.time(d,
                         () -> { throw new RuntimeException("boom"); },
@@ -169,7 +183,7 @@ class CompositionEngineTest {
         // as TIMEOUT (engine.resolve(...) pending-future fallback). The
         // small overshoot keeps the test bounded to ~5.2s.
         Map<DomainTarget, Supplier<CompositionLeg>> bodies = new EnumMap<>(DomainTarget.class);
-        for (DomainTarget d : CompositionEngine.CARD_ORDER) {
+        for (DomainTarget d : DOMAINS) {
             if (d == DomainTarget.SCM) {
                 bodies.put(d, () -> {
                     try {
@@ -280,7 +294,7 @@ class CompositionEngineTest {
             Map<DomainTarget, String> observed = new ConcurrentHashMap<>();
             Map<DomainTarget, Supplier<CompositionLeg>> bodies =
                     new EnumMap<>(DomainTarget.class);
-            for (DomainTarget d : CompositionEngine.CARD_ORDER) {
+            for (DomainTarget d : DOMAINS) {
                 bodies.put(d, () -> {
                     // Runs on a virtual thread — the propagated context must be visible.
                     String seen = callerCtx.get();
@@ -293,7 +307,7 @@ class CompositionEngineTest {
 
             assertThat(results).hasSize(5);
             assertThat(observed).hasSize(5);
-            for (DomainTarget d : CompositionEngine.CARD_ORDER) {
+            for (DomainTarget d : DOMAINS) {
                 assertThat(observed.get(d))
                         .as("leg %s must observe the propagated calling-thread context on its virtual thread", d)
                         .isEqualTo("trace-abc-123");

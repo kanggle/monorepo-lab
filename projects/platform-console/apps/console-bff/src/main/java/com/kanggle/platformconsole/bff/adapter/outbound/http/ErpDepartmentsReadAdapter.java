@@ -1,7 +1,6 @@
 package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
 import com.kanggle.platformconsole.bff.application.port.outbound.ErpDepartmentsReadPort;
-import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -31,11 +30,6 @@ public class ErpDepartmentsReadAdapter implements ErpDepartmentsReadPort {
 
     public ErpDepartmentsReadAdapter(@Qualifier("erpRestClient") RestClient client) {
         this.client = client;
-    }
-
-    @Override
-    public DomainTarget domainTarget() {
-        return DomainTarget.ERP;
     }
 
     @Override
