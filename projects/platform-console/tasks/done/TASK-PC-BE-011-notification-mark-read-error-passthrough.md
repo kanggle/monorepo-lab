@@ -1,7 +1,7 @@
 # TASK-PC-BE-011 — console-bff notification mark-read swallows every downstream 4xx/5xx into a generic 500 (contract § 4.5 passthrough unenforced)
 
 - **Type**: TASK-PC-BE
-- **Status**: review
+- **Status**: done
 - **Service**: console-bff (platform-console)
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (BFF error-handling, non-security)
 
