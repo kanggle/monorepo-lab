@@ -81,9 +81,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — `/finance` landing. **⚠️ PARKED / DECLINED (2026-07-03, user-approved):** finance v1 has no list/search GET → no count overview possible, no synthetic ₩. finance keeps `Finance 운영` (honest lookup surface); N/A for the PC-FE-162 capstone. **Do NOT re-pick from a backlog sweep** — resume only if the producer adds a list GET or a concrete non-count operator need appears (see task body).
 
-**리팩토링 발굴 스윕 후보 (2026-07-18)** — console-web/console-bff 3방향 스캔(god-file · 갈라진 중복 · dead-code+컨벤션)에서 검증된 후보. 각 파일의 backlog→ready 게이트(범위·spec·AC) 미충족 상태. console-web features/shared 는 같은 날 dead-code **audited-clean(0건)**. **PC-FE-243 · PC-BE-012 · PC-FE-244 · PC-FE-245 는 구현 완료 → review 이동(2026-07-18).**
+**리팩토링 발굴 스윕 후보 (2026-07-18)** — console-web/console-bff 3방향 스캔(god-file · 갈라진 중복 · dead-code+컨벤션)에서 검증된 후보. 각 파일의 backlog→ready 게이트(범위·spec·AC) 미충족 상태. console-web features/shared 는 같은 날 dead-code **audited-clean(0건)**. **PC-FE-243 · PC-BE-012 · PC-FE-244 · PC-FE-245 · PC-FE-246 은 구현 완료 → review 이동(2026-07-18). PC-FE-247(조사 2건)만 backlog 잔류.**
 
-- `TASK-PC-FE-246-relative-time-dedup-and-investigations.md` — **[MED/LOW]** 상대시간 포매터 dedup(`formatRelative()`) + sizing 조사 2건(api/types.ts 상태머신 게이트 혼재 전수스캔 · DomainHealthCard pill-vs-dot 정책 사람판단).
+- `TASK-PC-FE-247-console-refactor-sizing-investigations.md` — **[LOW · investigation]** PC-FE-246 에서 분리된 sizing 조사 2건: ① `features/*/api/types.ts` 의 Zod 스키마 + UI 상태머신 게이트 혼재(전수 스캔으로 범위확정 후 승격) · ② `DomainHealthCard` pill-vs-dot(정경 §3 정책 소유자 판단 후 실행). **기계적 신뢰 금지 — 착수=재측정.**
 
 ## ready
 
@@ -111,6 +111,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-246-relative-time-dedup-and-investigations.md` — **구현 완료, 검증 통과 (2026-07-18, 미머지)**. 두 바이트-동일 상대시간 버킷(방금/N분 전/N시간 전/N일 전)을 `shared/lib/datetime.ts formatRelativeAge()` 로 통합(`FxRatesTable.humanizeAge` + `NotificationBell.formatShortDate` 위임). 출력 바이트 동일(음수 clamp·경계 보존), NotificationBell 절대 fallback TZ pin 은 관찰가능이라 제외(후속). 검증: tsc 0 · lint clean · NotificationBell+LedgerFxRates 31 tests GREEN, 테스트 무수정. 조사 2건은 PC-FE-247 분리.
 - `TASK-PC-FE-245-frontend-ui-convention-drift-residue.md` — **구현 완료, 검증 통과 (2026-07-18, 미머지)**. `frontend-ui.md` §2 단독 outlier 2건 정렬: `TenantDetail` hand-rolled 헤더 → 공용 `DetailHeader`(바이트 동일 DOM·testid 보존), `BusinessPartnerDetail` dl 상태 필드를 라벨 직후로 이동(형제 4종 정렬). 데이터·색·testid 불변. 검증: tsc 0 · lint clean · tenant/erp 54 tests GREEN, 테스트 무수정.
 - `TASK-PC-FE-244-console-sidebar-nav-split.md` — **구현 완료, 검증 통과 (2026-07-18, 미머지)**. `shared/ui/ConsoleSidebarNav.tsx`(546→194) 를 `console-nav-config.ts`(GROUPS+타입+isParent) + `console-nav-matching.ts`(순수 헬퍼) 로 분리, 컴포넌트·DOM·클래스·testid 불변. `domain-health-nav.test.tsx` 는 NAV_PATH 를 `console-nav-config.ts` 로 재조준(source-string 가드 리로케이션, 단언 무변경). 신설 `console-nav-matching.test.ts`(15). 검증: tsc 0 · lint clean · nav 소비자 13파일/100 + 매칭 15/15 GREEN.
 - `TASK-PC-BE-012-console-bff-dead-code-removal.md` — **구현 완료, 검증 통과 (2026-07-18, 미머지)**. console-bff 미호출 심볼(`compose(String)` 1-arg · `DomainReadPort.domainTarget()`+6impl · `CompositionEngine.routeLabel()` getter · `DegradePolicy.isPartialFailure`/`countDegraded` · `CARD_ORDER`) + 미배선 `consolebff.gap.issuer-url` + stale `SecurityConfig` javadoc 제거. **행동 불변** — `routeLabel` 필드·`isAllDown`·live config 보존, `CompositionEngineTest` 외 테스트 무접촉. 검증: `gradle :console-bff:check` BUILD SUCCESSFUL(54 tests, 0 fail), 13 files 29+/99-. 착수-시 0-caller 전건 재grep.
