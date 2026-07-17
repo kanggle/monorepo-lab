@@ -74,9 +74,11 @@ class AuthServiceClientUnitTest {
 
         wireMockServer.verify(postRequestedFor(urlEqualTo(CREDENTIALS_PATH))
                 .withHeader("Authorization", equalTo("Bearer test-cc-token")));
-        // The token was minted from the GAP token endpoint with the account-service-client credentials.
+        // The token was minted from the GAP token endpoint with the account-service-client credentials,
+        // requesting the internal.invoke scope the /internal/** receiver now requires (TASK-BE-515).
         wireMockServer.verify(postRequestedFor(urlEqualTo(TOKEN_PATH))
-                .withRequestBody(matching(".*grant_type=client_credentials.*")));
+                .withRequestBody(matching(".*grant_type=client_credentials.*"))
+                .withRequestBody(matching(".*scope=internal\\.invoke.*")));
     }
 
     @Test

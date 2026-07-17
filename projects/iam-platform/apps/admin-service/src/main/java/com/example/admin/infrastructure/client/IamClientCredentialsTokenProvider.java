@@ -68,7 +68,11 @@ public class IamClientCredentialsTokenProvider {
                 .uri(tokenUri)
                 .header("Authorization", basicAuthHeader)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body("grant_type=client_credentials")
+                // Request the internal.invoke scope the receiver requires (TASK-BE-514/MONO-422).
+                // SAS grants ONLY explicitly-requested scopes for client_credentials — omitting the
+                // scope yields an empty scope claim → the /internal/** RequiredScopeValidator rejects
+                // it (401). The client is registered with internal.invoke in auth-service V0019.
+                .body("grant_type=client_credentials&scope=internal.invoke")
                 .retrieve()
                 .body(TokenResponse.class);
         if (resp == null || resp.accessToken() == null || resp.accessToken().isBlank()) {
