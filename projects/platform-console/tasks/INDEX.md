@@ -81,6 +81,14 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — `/finance` landing. **⚠️ PARKED / DECLINED (2026-07-03, user-approved):** finance v1 has no list/search GET → no count overview possible, no synthetic ₩. finance keeps `Finance 운영` (honest lookup surface); N/A for the PC-FE-162 capstone. **Do NOT re-pick from a backlog sweep** — resume only if the producer adds a list GET or a concrete non-count operator need appears (see task body).
 
+**리팩토링 발굴 스윕 후보 (2026-07-18)** — console-web/console-bff 3방향 스캔(god-file · 갈라진 중복 · dead-code+컨벤션)에서 검증된 후보. 각 파일의 backlog→ready 게이트(범위·spec·AC) 미충족 상태. console-web features/shared 는 같은 날 dead-code **audited-clean(0건)**.
+
+- `TASK-PC-FE-243-flat-envelope-gateway-core-consolidation.md` — **[HIGH]** erp/finance/ledger 의 hardened 호출 스캐폴드 5벌을 공용 코어로 통합(wms PC-FE-192 · scm PC-FE-189 가 이미 한 straggler parity). idempotency 가드 divergence 실증. 가드 부여 여부는 관찰가능 변경 → 착수 시 분리 판단.
+- `TASK-PC-BE-012-console-bff-dead-code-removal.md` — **[HIGH]** console-bff 미호출 심볼(`domainTarget()`+6impl · `routeLabel()` getter · `DegradePolicy.isPartialFailure/countDegraded` · `compose(String)` 1-arg · `CARD_ORDER`) + 미배선 `consolebff.gap.issuer-url` + stale `SecurityConfig` javadoc. 착수 시 0-caller 재grep.
+- `TASK-PC-FE-244-console-sidebar-nav-split.md` — **[MODERATE]** `shared/ui/ConsoleSidebarNav.tsx`(546줄) data/logic/render 분할, route-matching 헬퍼 단위테스트화.
+- `TASK-PC-FE-245-frontend-ui-convention-drift-residue.md` — **[HIGH]** `frontend-ui.md` §2 드리프트: `TenantDetail` hand-rolled DetailHeader(9-vs-1) + `BusinessPartnerDetail` dl 필드순서(5-vs-1). 색/순서 단언 테스트 부재 주의.
+- `TASK-PC-FE-246-relative-time-dedup-and-investigations.md` — **[MED/LOW]** 상대시간 포매터 dedup(`formatRelative()`) + sizing 조사 2건(api/types.ts 상태머신 게이트 혼재 전수스캔 · DomainHealthCard pill-vs-dot 정책 사람판단).
+
 ## ready
 
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
