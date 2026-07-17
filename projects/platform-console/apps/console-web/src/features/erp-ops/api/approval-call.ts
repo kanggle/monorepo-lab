@@ -1,7 +1,8 @@
-import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
-import { ApiError, ErpUnavailableError } from '@/shared/api/errors';
+import { ErpUnavailableError } from '@/shared/api/errors';
+import {
+  callFlatEnvelopeGateway,
+  type FlatEnvelopeGatewayProfile,
+} from '@/shared/api/flat-envelope-gateway';
 import {
   ApprovalDetailResponseSchema,
   type ApprovalRequest,
@@ -13,46 +14,37 @@ import {
 
 /**
  * Shared call core for the erp `approval-service` workflow client
- * (TASK-PC-FE-051 — ADR-MONO-016 § D3.1 parity slice; extracted in
- * TASK-PC-FE-153 from the former single `approval-api.ts`). Holds the
- * single hardened call site (`callApproval`), the FLAT-envelope error
- * parser, the query-string helpers, and the detail/mutation response
- * parser — consumed by the `approval-reads` + `approval-mutations`
- * sub-modules, never imported by app code directly (the public surface
- * stays the `approval-api.ts` barrel).
+ * (TASK-PC-FE-051 — ADR-MONO-016 § D3.1). As of TASK-PC-FE-243 the hardened
+ * call site is the shared {@link callFlatEnvelopeGateway} FLAT-envelope core;
+ * this file supplies the {@link APPROVAL_PROFILE} and holds the query-string
+ * helpers + detail/mutation response parser — consumed by the `approval-reads`
+ * + `approval-mutations` sub-modules, never imported by app code directly.
+ * Behaviour is IDENTICAL to the pre-consolidation per-client copy.
  *
- * Server-only by construction (same posture as `erp-api.ts`): imported
- * exclusively from server components + the `runtime = 'nodejs'` route
- * handlers; `getServerEnv()` throws outside the server runtime. The token
- * + any data never reach client JS — client components call the
- * same-origin `/api/erp/approval/**` proxy routes which attach the
- * HttpOnly credential here server-side.
+ * Server-only by construction (same posture as `erp-client.ts`). The token +
+ * any data never reach client JS — client components call the same-origin
+ * `/api/erp/approval/**` proxy routes.
  *
- * ── PER-DOMAIN CREDENTIAL — REUSE of § 2.4.8 (NOT re-derived) ──
- * Identical credential posture to `erp-api.ts`: the DOMAIN-FACING GAP
- * OIDC token (`getDomainFacingToken()` — the assumed tenant-scoped token
- * when the operator has switched, else the base access token; net-zero),
- * NEVER `getOperatorToken()`. erp resolves the tenant from the JWT
- * `tenant_id ∈ {erp,*}` claim producer-side — the console sends NO
- * `X-Tenant-Id`. The approval-service enforces `erp.read` (reads) /
- * `erp.write` (mutations) + the E3 transition-authorization (approver /
- * submitter / no-self-approval) producer-side.
+ * ── PER-DOMAIN CREDENTIAL — REUSE of § 2.4.8 ── the domain-facing IAM OIDC
+ * token (`getDomainFacingToken()`), NEVER `getOperatorToken()`; NO
+ * `X-Tenant-Id` (erp resolves tenant from the JWT claim). create + the 4
+ * transitions carry a console-generated `Idempotency-Key`; the reasoned
+ * transitions ALSO echo `X-Operator-Reason` (audit trail) — reads + submit +
+ * a reasonless approve send none. The idempotency fail-fast guard is OFF (the
+ * header is attached only when present).
  *
- * Error envelope: the flat erp shape `{ code, message, details?,
- * timestamp }`. The approval-specific codes — 403
- * `APPROVAL_NOT_AUTHORIZED_APPROVER`, 409
- * `APPROVAL_STATUS_TRANSITION_INVALID` / `APPROVAL_ALREADY_FINALIZED`,
- * 422 `APPROVAL_ROUTE_INVALID`, 404 `APPROVAL_REQUEST_NOT_FOUND`,
- * `IDEMPOTENCY_*` — surface as `ApiError` (inline actionable, no crash).
- * Resilience (§ 2.5): 401 → ApiError(401) whole-session re-login; 403 →
- * ApiError(403) inline; 503 / timeout / network → ErpUnavailableError
- * (ONLY the approval section degrades). NO 429 branch (erp has no
- * documented rate-limit — identical to the masterdata surface).
+ * Error envelope: the flat erp shape `{ code, message, details?, timestamp }`.
+ * The approval-specific codes (403 `APPROVAL_NOT_AUTHORIZED_APPROVER`, 409
+ * `APPROVAL_STATUS_TRANSITION_INVALID` / `APPROVAL_ALREADY_FINALIZED`, 422
+ * `APPROVAL_ROUTE_INVALID`, 404 `APPROVAL_REQUEST_NOT_FOUND`, `IDEMPOTENCY_*`)
+ * surface as `ApiError` (inline actionable). Resilience (§ 2.5): 401 →
+ * whole-session re-login; 403 → inline; 503 / timeout / network →
+ * `ErpUnavailableError` (ONLY the approval section degrades). No rate-limit
+ * handling (erp documents no 429 — the profile supplies no policy).
  *
- * Confidential / audit-heavy: structured logs are server-side only; the
- * IAM token, the request title / subject / actor ids, and any reason text
- * are NEVER logged (redacted) — the log payloads carry ONLY `requestId` +
- * a sanitised route shape (a literal `{id}` placeholder, never the URL).
+ * Confidential / audit-heavy: structured logs are server-side only; the token,
+ * the request title / subject / actor ids, and any reason text are NEVER logged
+ * — the log `path` carries the sanitised `logPath` route shape.
  */
 
 export interface CallOptions {
@@ -66,189 +58,56 @@ export interface CallOptions {
   body?: unknown;
   /** `Idempotency-Key` header — required on create + the 4 transitions. */
   idempotencyKey?: string;
-  /** `X-Operator-Reason` header — set ONLY on the transitions that record
-   *  a reason (the producer echoes it for the audit trail). Reads + create
-   *  never set it. */
+  /** `X-Operator-Reason` header — set ONLY on the transitions that record a
+   *  reason (the producer echoes it for the audit trail). Reads + create never
+   *  set it. */
   operatorReason?: string;
 }
 
-/** Parses the erp FLAT error envelope (`{ code, message, details?,
- *  timestamp }`). Defensive: a missing / non-JSON body degrades to a
- *  synthetic code rather than throwing. */
-async function parseApprovalError(
-  res: Response,
-): Promise<{
-  code: string;
-  message: string;
-  details?: unknown;
-  timestamp?: string;
-}> {
-  let code = `HTTP_${res.status}`;
-  let message = `erp approval request failed (${res.status})`;
-  let details: unknown | undefined;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      details?: unknown;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      if (typeof body.code === 'string') code = body.code;
-      if (typeof body.message === 'string') message = body.message;
-      if ('details' in body) details = body.details;
-      if (typeof body.timestamp === 'string') timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, details, timestamp };
-}
+/**
+ * erp approval profile for the shared {@link callFlatEnvelopeGateway} core:
+ * degrades via {@link ErpUnavailableError} and logs `erp_approval_*` events
+ * against the erp `approval-service` at `${ERP_BASE_URL}` (timeout
+ * `ERP_TIMEOUT_MS`). No rate-limit policy; no idempotency fail-fast guard.
+ */
+const APPROVAL_PROFILE: FlatEnvelopeGatewayProfile = {
+  logPrefix: 'erp_approval',
+  requestFailedLabel: 'erp approval request failed',
+  resolveDefaults: (env) => ({
+    baseUrl: env.ERP_BASE_URL,
+    timeoutMs: env.ERP_TIMEOUT_MS,
+  }),
+  makeUnavailable: (reason, code, message) =>
+    new ErpUnavailableError(reason, code, message),
+  isUnavailable: (err) => err instanceof ErpUnavailableError,
+  messages: {
+    degraded: 'erp approval unavailable',
+    timeout: 'erp approval call timed out',
+    network: 'erp approval call failed',
+  },
+};
 
 /**
- * Single hardened call site. Resolves the domain-facing IAM OIDC token,
- * applies the timeout, maps the erp FLAT error envelope to the § 2.5
- * resilience taxonomy. No 429 / Retry-After / backoff branch (erp has no
- * documented rate-limit — identical to the masterdata surface).
+ * Single hardened call site — a thin wrapper over the shared
+ * {@link callFlatEnvelopeGateway} core with the {@link APPROVAL_PROFILE}.
  */
 export async function callApproval<T>(
   opts: CallOptions,
   parse: (json: unknown) => T,
 ): Promise<T> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // Domain-facing IAM OIDC token (assumed-when-switched, else base) —
-  // NEVER getOperatorToken() (the #569 invariant is GAP-domain-scoped).
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('erp_approval_no_gap_session', {
-      requestId,
-      path: opts.logPath,
-    });
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-    // NOTE: deliberately NO `X-Tenant-Id` — erp resolves tenant from the
-    // JWT `tenant_id` claim (§ 2.4.8 tenant-model divergence).
-  };
-  const method = opts.method ?? 'GET';
-  if (opts.idempotencyKey !== undefined) {
-    headers['Idempotency-Key'] = opts.idempotencyKey;
-  }
-  if (opts.operatorReason !== undefined) {
-    // Audit echo (producer § Operator reason) — the reason ALSO rides in
-    // the body; this header mirrors it for the immutable audit trail.
-    headers['X-Operator-Reason'] = opts.operatorReason;
-  }
-  if (opts.body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.ERP_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${env.ERP_BASE_URL}${opts.path}`, {
-      method,
-      headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (res.status === 401) {
-      const e = await parseApprovalError(res);
-      logger.warn('erp_approval_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.logPath,
-      });
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseApprovalError(res);
-      logger.warn('erp_approval_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.logPath,
-      });
-      // Token not erp-scoped / insufficient scope / data scope / NOT the
-      // request's approver|submitter (E3) / external traffic → inline.
-      throw new ApiError(403, e.code || 'TENANT_FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseApprovalError(res);
-      logger.warn('erp_approval_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.logPath,
-      });
-      throw new ErpUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'erp approval unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400 VALIDATION_ERROR / IDEMPOTENCY_KEY_REQUIRED, 404
-      // APPROVAL_REQUEST_NOT_FOUND, 409 APPROVAL_STATUS_TRANSITION_INVALID
-      // / APPROVAL_ALREADY_FINALIZED / IDEMPOTENCY_KEY_CONFLICT, 422
-      // APPROVAL_ROUTE_INVALID — inline actionable (no crash). A stray
-      // 429 lands here (no Retry-After / backoff — erp has no documented
-      // rate-limit).
-      const e = await parseApprovalError(res);
-      logger.warn('erp_approval_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.logPath,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    const json = await res.json();
-    logger.info('erp_approval_ok', {
-      requestId,
-      status: res.status,
-      path: opts.logPath,
-    });
-    return parse(json);
-  } catch (err) {
-    if (err instanceof ApiError || err instanceof ErpUnavailableError) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('erp_approval_timeout', {
-        requestId,
-        timeoutMs: env.ERP_TIMEOUT_MS,
-        path: opts.logPath,
-      });
-      throw new ErpUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'erp approval call timed out',
-      );
-    }
-    logger.error('erp_approval_error', { requestId, path: opts.logPath });
-    throw new ErpUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'erp approval call failed',
-    );
-  } finally {
-    clearTimeout(timer);
-  }
+  const { raw } = await callFlatEnvelopeGateway(
+    {
+      path: opts.path,
+      logPath: opts.logPath,
+      method: opts.method,
+      body: opts.body,
+      idempotencyKey: opts.idempotencyKey,
+      operatorReason: opts.operatorReason,
+    },
+    parse,
+    APPROVAL_PROFILE,
+  );
+  return raw;
 }
 
 // ---------------------------------------------------------------------------

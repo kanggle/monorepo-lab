@@ -1,7 +1,8 @@
-import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
-import { ApiError, ErpUnavailableError } from '@/shared/api/errors';
+import { ErpUnavailableError } from '@/shared/api/errors';
+import {
+  callFlatEnvelopeGateway,
+  type FlatEnvelopeGatewayProfile,
+} from '@/shared/api/flat-envelope-gateway';
 import {
   DelegationListResponseSchema,
   type DelegationListResponse,
@@ -18,34 +19,33 @@ import {
  *   read   listDelegations (GET /delegations ?role=DELEGATOR|DELEGATE)
  *   write  createDelegation (POST /delegations) + revokeDelegation (POST /{id}/revoke)
  *
- * Server-only by construction (same posture as `approval-api.ts`): imported
- * exclusively from server components + the `runtime = 'nodejs'` route
- * handlers; `getServerEnv()` throws outside the server runtime. The token +
- * any data never reach client JS — client components call the same-origin
- * `/api/erp/approval/delegations/**` proxy routes which attach the HttpOnly
- * credential here server-side.
+ * As of TASK-PC-FE-243 the hardened call site is the shared
+ * {@link callFlatEnvelopeGateway} FLAT-envelope core; this file supplies the
+ * {@link DELEGATION_PROFILE}. Behaviour is IDENTICAL to the pre-consolidation
+ * per-client copy.
  *
- * ── PER-DOMAIN CREDENTIAL — REUSE of § 2.4.8 (NOT re-derived) ──
- * Identical credential posture to `approval-api.ts`: the DOMAIN-FACING GAP
- * OIDC token (`getDomainFacingToken()`), NEVER `getOperatorToken()`. erp
- * resolves the tenant from the JWT `tenant_id` claim — the console sends
- * NO `X-Tenant-Id`. The delegator identity is the JWT `sub` — NOT in the
- * request body (the producer derives it from the token).
+ * Server-only by construction (same posture as `approval-api.ts`). The token +
+ * any data never reach client JS — client components call the same-origin
+ * `/api/erp/approval/delegations/**` proxy routes.
+ *
+ * ── PER-DOMAIN CREDENTIAL — REUSE of § 2.4.8 ── the DOMAIN-FACING IAM OIDC
+ * token (`getDomainFacingToken()`), NEVER `getOperatorToken()`. erp resolves the
+ * tenant from the JWT `tenant_id` claim — the console sends NO `X-Tenant-Id`.
+ * The delegator identity is the JWT `sub` — NOT in the request body.
  *
  * MUTATION discipline (producer §v2.1 delegation endpoints):
- *   - create + revoke each carry a console-generated `Idempotency-Key`.
- *   - The delegation `reason` rides in the request BODY (NOT in the
- *     `X-Operator-Reason` header — unlike the approval transitions, the
- *     delegation endpoints do not define an operator-reason audit header).
+ *   - create + revoke each carry a console-generated `Idempotency-Key` (the
+ *     fail-fast guard is OFF — the header is attached only when present).
+ *   - The delegation `reason` rides in the request BODY (NOT the
+ *     `X-Operator-Reason` header — the delegation endpoints define no
+ *     operator-reason audit header, unlike the approval transitions).
  *
- * Error envelope: the flat erp shape `{ code, message, details?,
- * timestamp }`. The delegation-specific codes — 422 `DELEGATION_INVALID`
- * (self-delegation / invalid period), 404 `DELEGATION_NOT_FOUND`,
- * 403 `PERMISSION_DENIED`/`TENANT_FORBIDDEN`, 400
- * `VALIDATION_ERROR`/`IDEMPOTENCY_KEY_REQUIRED`, 409
- * `IDEMPOTENCY_KEY_CONFLICT` — surface as `ApiError` (inline actionable,
- * no crash). Resilience (§ 2.5): 401 → re-login; 503 / timeout →
- * ErpUnavailableError (ONLY the delegation section degrades).
+ * Error envelope: the flat erp shape `{ code, message, details?, timestamp }`.
+ * The delegation-specific codes (422 `DELEGATION_INVALID`, 404
+ * `DELEGATION_NOT_FOUND`, 403 `PERMISSION_DENIED`/`TENANT_FORBIDDEN`, 400
+ * `VALIDATION_ERROR`/`IDEMPOTENCY_KEY_REQUIRED`, 409 `IDEMPOTENCY_KEY_CONFLICT`)
+ * surface as `ApiError` (inline actionable). Resilience (§ 2.5): 401 → re-login;
+ * 503 / timeout → `ErpUnavailableError` (ONLY the delegation section degrades).
  */
 
 interface CallOptions {
@@ -59,172 +59,49 @@ interface CallOptions {
   idempotencyKey?: string;
 }
 
-/** Parses the erp FLAT error envelope. Defensive — a missing / non-JSON
- *  body degrades to a synthetic code rather than throwing. */
-async function parseDelegationError(
-  res: Response,
-): Promise<{
-  code: string;
-  message: string;
-  details?: unknown;
-  timestamp?: string;
-}> {
-  let code = `HTTP_${res.status}`;
-  let message = `erp delegation request failed (${res.status})`;
-  let details: unknown | undefined;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      details?: unknown;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      if (typeof body.code === 'string') code = body.code;
-      if (typeof body.message === 'string') message = body.message;
-      if ('details' in body) details = body.details;
-      if (typeof body.timestamp === 'string') timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, details, timestamp };
-}
+/**
+ * erp delegation profile for the shared {@link callFlatEnvelopeGateway} core:
+ * degrades via {@link ErpUnavailableError} and logs `erp_delegation_*` events
+ * against the erp `approval-service` at `${ERP_BASE_URL}` (timeout
+ * `ERP_TIMEOUT_MS`). No rate-limit policy; no idempotency fail-fast guard.
+ */
+const DELEGATION_PROFILE: FlatEnvelopeGatewayProfile = {
+  logPrefix: 'erp_delegation',
+  requestFailedLabel: 'erp delegation request failed',
+  resolveDefaults: (env) => ({
+    baseUrl: env.ERP_BASE_URL,
+    timeoutMs: env.ERP_TIMEOUT_MS,
+  }),
+  makeUnavailable: (reason, code, message) =>
+    new ErpUnavailableError(reason, code, message),
+  isUnavailable: (err) => err instanceof ErpUnavailableError,
+  messages: {
+    degraded: 'erp delegation unavailable',
+    timeout: 'erp delegation call timed out',
+    network: 'erp delegation call failed',
+  },
+};
 
 /**
- * Single hardened call site. Resolves the domain-facing IAM OIDC token,
- * applies the timeout, maps the erp FLAT error envelope to the § 2.5
- * resilience taxonomy. No 429 / Retry-After / backoff branch (erp has no
- * documented rate-limit — identical to the approval surface).
+ * Single hardened call site — a thin wrapper over the shared
+ * {@link callFlatEnvelopeGateway} core with the {@link DELEGATION_PROFILE}.
  */
 async function callDelegation<T>(
   opts: CallOptions,
   parse: (json: unknown) => T,
 ): Promise<T> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('erp_delegation_no_gap_session', {
-      requestId,
-      path: opts.logPath,
-    });
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-    // NOTE: deliberately NO `X-Tenant-Id` — erp resolves tenant from the
-    // JWT `tenant_id` claim (§ 2.4.8 tenant-model divergence).
-    // NOTE: deliberately NO `X-Operator-Reason` — the delegation reason
-    // rides in the BODY only (unlike the approval transition surface).
-  };
-  const method = opts.method ?? 'GET';
-  if (opts.idempotencyKey !== undefined) {
-    headers['Idempotency-Key'] = opts.idempotencyKey;
-  }
-  if (opts.body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.ERP_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${env.ERP_BASE_URL}${opts.path}`, {
-      method,
-      headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (res.status === 401) {
-      const e = await parseDelegationError(res);
-      logger.warn('erp_delegation_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.logPath,
-      });
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseDelegationError(res);
-      logger.warn('erp_delegation_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.logPath,
-      });
-      throw new ApiError(403, e.code || 'TENANT_FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseDelegationError(res);
-      logger.warn('erp_delegation_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.logPath,
-      });
-      throw new ErpUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'erp delegation unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400 VALIDATION_ERROR / IDEMPOTENCY_KEY_REQUIRED, 404
-      // DELEGATION_NOT_FOUND, 409 IDEMPOTENCY_KEY_CONFLICT, 422
-      // DELEGATION_INVALID — inline actionable (no crash).
-      const e = await parseDelegationError(res);
-      logger.warn('erp_delegation_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.logPath,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    const json = await res.json();
-    logger.info('erp_delegation_ok', {
-      requestId,
-      status: res.status,
-      path: opts.logPath,
-    });
-    return parse(json);
-  } catch (err) {
-    if (err instanceof ApiError || err instanceof ErpUnavailableError) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('erp_delegation_timeout', {
-        requestId,
-        timeoutMs: env.ERP_TIMEOUT_MS,
-        path: opts.logPath,
-      });
-      throw new ErpUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'erp delegation call timed out',
-      );
-    }
-    logger.error('erp_delegation_error', { requestId, path: opts.logPath });
-    throw new ErpUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'erp delegation call failed',
-    );
-  } finally {
-    clearTimeout(timer);
-  }
+  const { raw } = await callFlatEnvelopeGateway(
+    {
+      path: opts.path,
+      logPath: opts.logPath,
+      method: opts.method,
+      body: opts.body,
+      idempotencyKey: opts.idempotencyKey,
+    },
+    parse,
+    DELEGATION_PROFILE,
+  );
+  return raw;
 }
 
 // ---------------------------------------------------------------------------

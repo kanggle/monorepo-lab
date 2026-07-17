@@ -81,9 +81,8 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 - `TASK-PC-FE-160-finance-landing-overview-snapshot.md` — `/finance` landing. **⚠️ PARKED / DECLINED (2026-07-03, user-approved):** finance v1 has no list/search GET → no count overview possible, no synthetic ₩. finance keeps `Finance 운영` (honest lookup surface); N/A for the PC-FE-162 capstone. **Do NOT re-pick from a backlog sweep** — resume only if the producer adds a list GET or a concrete non-count operator need appears (see task body).
 
-**리팩토링 발굴 스윕 후보 (2026-07-18)** — console-web/console-bff 3방향 스캔(god-file · 갈라진 중복 · dead-code+컨벤션)에서 검증된 후보. 각 파일의 backlog→ready 게이트(범위·spec·AC) 미충족 상태. console-web features/shared 는 같은 날 dead-code **audited-clean(0건)**.
+**리팩토링 발굴 스윕 후보 (2026-07-18)** — console-web/console-bff 3방향 스캔(god-file · 갈라진 중복 · dead-code+컨벤션)에서 검증된 후보. 각 파일의 backlog→ready 게이트(범위·spec·AC) 미충족 상태. console-web features/shared 는 같은 날 dead-code **audited-clean(0건)**. **PC-FE-243 은 구현 완료 → review 이동(2026-07-18).**
 
-- `TASK-PC-FE-243-flat-envelope-gateway-core-consolidation.md` — **[HIGH]** erp/finance/ledger 의 hardened 호출 스캐폴드 5벌을 공용 코어로 통합(wms PC-FE-192 · scm PC-FE-189 가 이미 한 straggler parity). idempotency 가드 divergence 실증. 가드 부여 여부는 관찰가능 변경 → 착수 시 분리 판단.
 - `TASK-PC-BE-012-console-bff-dead-code-removal.md` — **[HIGH]** console-bff 미호출 심볼(`domainTarget()`+6impl · `routeLabel()` getter · `DegradePolicy.isPartialFailure/countDegraded` · `compose(String)` 1-arg · `CARD_ORDER`) + 미배선 `consolebff.gap.issuer-url` + stale `SecurityConfig` javadoc. 착수 시 0-caller 재grep.
 - `TASK-PC-FE-244-console-sidebar-nav-split.md` — **[MODERATE]** `shared/ui/ConsoleSidebarNav.tsx`(546줄) data/logic/render 분할, route-matching 헬퍼 단위테스트화.
 - `TASK-PC-FE-245-frontend-ui-convention-drift-residue.md` — **[HIGH]** `frontend-ui.md` §2 드리프트: `TenantDetail` hand-rolled DetailHeader(9-vs-1) + `BusinessPartnerDetail` dl 필드순서(5-vs-1). 색/순서 단언 테스트 부재 주의.
@@ -115,7 +114,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-(empty)
+- `TASK-PC-FE-243-flat-envelope-gateway-core-consolidation.md` — **구현 완료, 검증 통과 (2026-07-18, 미머지)**. erp/finance/ledger 의 FLAT-envelope 호출 스캐폴드 5벌 + scm-gateway 를 공용 코어 `shared/api/flat-envelope-gateway.ts` 로 통합(wms PC-FE-192 · scm PC-FE-189 straggler parity 확장). **행동 불변** — ~1045줄 중복 제거(442 ins/1487 del + 395 코어), idempotency 가드 default-off 로 erp/finance/ledger 현행 보존, wms(NESTED 봉투)·모든 `*.test.ts` 무접촉. 검증: tsc 0 · next lint clean · vitest 270 files/2804 tests GREEN(테스트 0줄 수정) + 영향 도메인 스위트 독립 재실행 96 GREEN. 발굴=2026-07-18 리팩토링 스윕(divergence 실증). **후속 후보**: idempotency 가드 parity(관찰가능 변경) 별도 판단.
 
 ## done
 
