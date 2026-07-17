@@ -6,12 +6,15 @@ import path from 'node:path';
  * Console nav-source guard.
  *
  * History: TASK-PC-FE-013 additive guard → TASK-PC-FE-034 overview
- * consolidation → **TASK-PC-FE-039 moves the section nav out of the top-bar
+ * consolidation → TASK-PC-FE-039 moves the section nav out of the top-bar
  * `(console)/layout.tsx` into a Vercel-style left sidebar
- * (`ConsoleSidebarNav.tsx`)**. The nav is now a data-driven list (`testid: …`
- * / `href: …`) rather than inline JSX attributes, so the guard reads that
- * source and asserts the data entries; it also verifies the layout still wires
- * the sidebar in.
+ * (`ConsoleSidebarNav.tsx`) → **TASK-PC-FE-244 splits the nav-tree data
+ * (`GROUPS` + node types) out of `ConsoleSidebarNav.tsx` into
+ * `console-nav-config.ts`**, so this guard's source-file target is repointed
+ * there (the literal `testid: …` / `href: …` entries this guard asserts
+ * physically live in `console-nav-config.ts` now; the guard's purpose —
+ * pinning the nav taxonomy literals — is unchanged, only the target file
+ * follows the moved data).
  *
  * The nav is a client component (usePathname) and the layout a server
  * component — neither mounts cleanly in jsdom without app-router context, so
@@ -24,7 +27,7 @@ const NAV_PATH = path.resolve(
   'src',
   'shared',
   'ui',
-  'ConsoleSidebarNav.tsx',
+  'console-nav-config.ts',
 );
 const LAYOUT_PATH = path.resolve(
   APP_ROOT,
