@@ -277,4 +277,51 @@ class NotificationAggregatorIntegrationTest extends AbstractConsoleBffIntegratio
         assertThat(body).as("body:\n%s", body).contains("\"code\":\"NOTIFICATION_NOT_FOUND\"");
         assertThat(ERP.getRequestCount()).as("no outbound expected for unknown domain").isEqualTo(before);
     }
+
+    // TASK-PC-BE-011: the mark-read leg PROPAGATES the producer status (contract § 4.5) — before the
+    // GlobalExceptionHandler downstream arms, any producer non-2xx became an opaque 500 (then 502 at
+    // console-web). These pin the passthrough. No test previously enqueued a downstream 4xx/5xx for
+    // mark-read, so the swallow shipped green.
+
+    @Test
+    @DisplayName("mark_read_producer_404: producer 404 → 404 NOTIFICATION_NOT_FOUND (contract § 4.5, not 500)")
+    void mark_read_producer_404() {
+        respond(ERP, 404, "{\"code\":\"NOTIFICATION_NOT_FOUND\"}");
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "http://localhost:" + port + "/api/console/notifications/erp/n1/read",
+                HttpMethod.POST, new HttpEntity<>(authHeaders()), String.class);
+        String body = response.getBody();
+
+        assertThat(response.getStatusCode()).as("non-404 body:\n%s", body).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(body).as("body:\n%s", body).contains("\"code\":\"NOTIFICATION_NOT_FOUND\"");
+    }
+
+    @Test
+    @DisplayName("mark_read_producer_503: producer 503 → 503 DOWNSTREAM_ERROR (degrade, not a bare 500)")
+    void mark_read_producer_503() {
+        respond(ERP, 503, "{\"code\":\"DOWNSTREAM_ERROR\"}");
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "http://localhost:" + port + "/api/console/notifications/erp/n1/read",
+                HttpMethod.POST, new HttpEntity<>(authHeaders()), String.class);
+        String body = response.getBody();
+
+        assertThat(response.getStatusCode()).as("non-503 body:\n%s", body).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(body).as("body:\n%s", body).contains("\"code\":\"DOWNSTREAM_ERROR\"");
+    }
+
+    @Test
+    @DisplayName("mark_read_producer_403: producer 403 → 403 PERMISSION_DENIED (not 500)")
+    void mark_read_producer_403() {
+        respond(ERP, 403, "{\"code\":\"PERMISSION_DENIED\"}");
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "http://localhost:" + port + "/api/console/notifications/erp/n1/read",
+                HttpMethod.POST, new HttpEntity<>(authHeaders()), String.class);
+        String body = response.getBody();
+
+        assertThat(response.getStatusCode()).as("non-403 body:\n%s", body).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(body).as("body:\n%s", body).contains("\"code\":\"PERMISSION_DENIED\"");
+    }
 }
