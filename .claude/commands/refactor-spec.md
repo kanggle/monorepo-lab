@@ -204,10 +204,10 @@ If `--dry-run` produces a mix, **report each tier separately** in Phase 3 plan a
 For Tier 1 + Tier 3 mechanical fixes:
 
 1. **Author task** in `tasks/ready/` describing total fix count + pattern catalog + Tier 2 skips with explicit `## Out of Scope` rationale.
-2. **Apply fixes** with the `Edit` tool (`replace_all: true` for a repeated literal within a file; the markdown link form `](...)` makes a precise search string). Do NOT use Bash `sed`/`sed -i` — global CLAUDE.md § Windows Shell Environment forbids it (msys2 sed crashes traversing large trees, leaving `.stackdump`).
+2. **Apply fixes** with the `Edit` tool (`replace_all: true` for a repeated literal within a file; the markdown link form `](...)` makes a precise search string). Do NOT use Bash `sed`/`sed -i` for bulk edits — it is unreliable across hosts (on some shells msys2 `sed` crashes traversing large trees, leaving `.stackdump` files); the `Edit` tool is the portable, reviewable path.
 3. **Verify** with a dead-ref checker script (markdown link extractor + `[ -e ... ]` per target). Expected remaining count = Tier 2 skips (documented in task body).
 4. **Move lifecycle** `ready/` → `review/`. Don't modify task body after move except the Status field (CLAUDE.md HARDSTOP-05 — review/ frozen).
-5. **Commit + push** per `feedback_pr_on_request.md` policy (PR open is user-explicit). Separate impl PR from close-chore PR per `tasks/INDEX.md § PR Separation Rule`.
+5. **Commit + push**; open a PR only when the user explicitly asks. Separate impl PR from close-chore PR per `tasks/INDEX.md § PR Separation Rule`.
 
 ### Cycle pattern (dry-run → multi-PR closure)
 

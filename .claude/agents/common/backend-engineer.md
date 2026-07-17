@@ -42,7 +42,7 @@ Implement Spring Boot backend services.
 - Unit tests: `@ExtendWith(MockitoExtension.class)`, STRICT_STUBS
 - Slice tests: `@WebMvcTest` + `SecurityConfig` + `GlobalExceptionHandler`
 - Integration tests: `@SpringBootTest` + Testcontainers (PostgreSQL, Redis)
-- H2 is forbidden — use real databases
+- H2 is forbidden for integration tests — use real databases (one exception: a non-authoritative `@DataJpaTest` H2 slice alongside an authoritative Testcontainers IT, per `platform/testing-strategy.md § H2 auxiliary-slice exception`)
 
 ## Does NOT
 

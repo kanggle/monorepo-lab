@@ -32,7 +32,7 @@ Design domain events and document event contracts in `specs/contracts/`.
 - Events are past tense — they describe facts that already happened
 
 ### Event Schema
-- Required fields: event_id, event_type, occurred_at, source, payload
+- Required envelope fields (camelCase, per `platform/event-driven-policy.md` § Event Envelope Format): eventId, eventType, eventVersion, occurredAt, source, aggregateType, aggregateId, traceId, actorId, payload
 - Include data consumers need in the payload (avoid unnecessary lookups)
 - Schema versioning
 

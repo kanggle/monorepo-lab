@@ -43,7 +43,7 @@ Examples:
 
 ## Rules
 
-- No H2 or in-memory substitutes — use real Testcontainers
+- No H2 or in-memory substitutes for integration tests — use real Testcontainers (the one exception: a non-authoritative `@DataJpaTest` H2 slice alongside an authoritative Testcontainers IT, per `platform/testing-strategy.md § H2 auxiliary-slice exception`)
 - Test method naming: `{scenario}_{condition}_{expectedResult}`
 - `@DisplayName` must describe business behavior in Korean
 - Mockito STRICT_STUBS mode

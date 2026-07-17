@@ -44,19 +44,27 @@ Per event:
 
 ## Standard Envelope
 
+Per `platform/event-driven-policy.md` § Event Envelope Format (the contract source of truth). All base fields
+MUST be present; additional fields are allowed.
+
 ```json
 {
-  "event_id": "UUID",
-  "event_type": "EventName",
-  "occurred_at": "ISO-8601",
-  "source": "service-name",
+  "eventId": "string (UUID)",
+  "eventType": "string",
+  "eventVersion": 1,
+  "occurredAt": "string (ISO 8601 UTC)",
+  "source": "string (producing service name)",
+  "aggregateType": "string",
+  "aggregateId": "string",
+  "traceId": "string",
+  "actorId": "string or null",
   "payload": { }
 }
 ```
 
 ## Rules
 
-- Envelope fields: snake_case, payload fields: camelCase
+- Envelope fields: camelCase (per `platform/event-driven-policy.md`); payload fields: camelCase
 - Events represent past facts — immutable after publication
 - Topic naming: `{service}.{entity}.{event}` (kebab-case)
 - Consumers: idempotent processing required, DLQ required
