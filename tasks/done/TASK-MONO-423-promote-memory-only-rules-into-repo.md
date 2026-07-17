@@ -1,7 +1,7 @@
 # TASK-MONO-423 — four repo-wide rules exist only in one operator's private AI memory; a fresh session or a different developer never sees them
 
 - **Type**: TASK-MONO (monorepo-level — shared paths `platform/`)
-- **Status**: review
+- **Status**: done
 - **Target**: `platform/security-rules.md`, `platform/git-workflow-policy.md`, `platform/testing-strategy.md`, `platform/architecture-decision-rule.md`
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (security invariant + rule wording)
 
