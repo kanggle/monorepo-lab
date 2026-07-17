@@ -1,7 +1,7 @@
 # TASK-FIN-BE-047 — ledger-service `/api/finance/**` enforces only `.authenticated()`; the `finance.write` scope rule never reaches enforcement (FIN-BE-046 straggler)
 
 - **Type**: TASK-FIN-BE
-- **Status**: review
+- **Status**: done
 - **Service**: ledger-service (finance-platform)
 - **Domain/traits**: fintech-ish saas / regulated, audit-heavy, transactional
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (security authz, regulated money domain)
