@@ -21,6 +21,42 @@ Defines platform-wide security requirements that all services must follow.
 - Role and permission checks must be applied before executing business logic.
 - Services must not rely solely on the gateway for authorization decisions.
 
+## A verified token proves authentication, not authorization
+
+Because each project declares exactly **one** issuer (§ Authentication), that issuer mints **both** end-user
+credentials and machine (service-workload) credentials. They therefore carry the **same issuer and the same
+signature**, and differ only in their *claims*.
+
+It follows that a surface intended only for service-to-service traffic **MUST NOT** be gated on
+`issuer + signature + "is authenticated"` alone, nor on a bare token-decode. **An end-user token satisfies
+all of those.** A service that gates an internal-only surface this way is not protecting it: any holder of
+any valid user token of that project can call it.
+
+Every internal-only surface MUST additionally require a claim that **only a machine credential can carry**.
+Exactly one of:
+
+- **Subject allow-list** — check the client-credentials subject (the client id) against an explicit
+  allow-list. Appropriate when the set of legitimate callers is small and static.
+- **Required scope** — require a scope that is granted only to workload clients and never to any end-user
+  grant. Appropriate when callers are many or expected to change; it is self-maintaining, since a new
+  workload client is provisioned with the scope.
+
+Two constraints on how the discriminator is applied:
+
+- **Enforce it where the token is validated** (the decoder/validator), not only in a filter. A check that a
+  test profile or an alternate filter chain can bypass is not enforcement — and a test that bypasses it
+  passes without ever exercising the rule.
+- **Before enforcing, prove that every legitimate caller already carries the discriminator.** Enumerate the
+  callers and verify each one; do not infer it from configuration. Enforcing without that inventory converts
+  an authorization gap into an outage.
+
+> **Why this is written down.** This is not a hypothetical. Fleet services re-created this exact defect on
+> four separate occasions, each time by mirroring a sibling that had it. The shared *code* for the check was
+> eventually promoted to a shared library — but the **rule** was not, so every new internal surface had to
+> re-derive it, and the ones that didn't shipped the gap behind green tests. If a precedent you are mirroring
+> is itself defective, the mirror inherits the defect: read the validator the precedent actually installs
+> rather than trusting that it must be correct because it exists.
+
 ---
 
 # Transport Security

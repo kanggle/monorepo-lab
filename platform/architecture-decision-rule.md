@@ -35,6 +35,28 @@ The architecture for each service must be declared in:
 
 ---
 
+# The ACCEPTED Gate — what actually lifts a PAUSE
+
+Where this document (and an ADR's own lifecycle) says *"PAUSE until ACCEPTED"*, the pause is lifted **only**
+by an explicit human decision that **names the ADR** — for example `ADR-<scope>-0NN ACCEPTED`.
+
+- A bare **"진행" / "proceed" / "go ahead" / "OK"** does **NOT** accept an ADR, even when it replies directly
+  to the message that proposed it, and even when the intent seems obvious from context. Approval to *continue
+  the conversation* is not approval of *the architecture decision*. The two are routinely conflated because
+  they arrive in the same breath.
+- An agent **MUST NOT self-ACCEPT** an ADR it proposed. Authoring the proposal and ratifying it are different
+  roles; an agent occupying both makes the gate decorative. This holds no matter how confident the agent is,
+  and no matter how thoroughly it argued the alternatives.
+- Until the exact-form intent arrives, an ADR stays **PROPOSED** and dependent implementation stays paused.
+  Record the proposal, state plainly what is blocked on it, and stop.
+
+**Why the exact form.** The gate exists to make an architecture decision *attributable* — someone chose this,
+on the record, knowing it was a decision. A gate that any affirmative noise can open is not a gate; it
+launders an agent's own preference into an accepted decision, which is exactly what § Prohibited Decisions
+forbids.
+
+---
+
 # Selection Guidelines
 
 For guidance on when to use each architecture style, consult the matching skill under `.claude/skills/backend/architecture/<style>/SKILL.md` (e.g. `hexagonal/`, `layered/`, `clean/`).

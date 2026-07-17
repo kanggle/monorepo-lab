@@ -160,6 +160,31 @@ while the Testcontainers IT remains authoritative on Docker-capable runners.
 The exception **permits, it does not mandate** — do not retrofit H2 slices onto
 services that do not need them (on-demand policy).
 
+## Never bind a `java.sql.Timestamp` in a fixture — bind an explicit-UTC `LocalDateTime`
+
+A fixture that binds a `java.sql.Timestamp` (or a `Date`) makes the test's correctness depend on the
+**host's timezone**, because the two ends of the round-trip disagree about what the stored value means:
+
+- the JDBC connector formats the `Timestamp` using the **JVM default timezone**, while
+- the ORM reads the naive `DATETIME`/`TIMESTAMP` column back as **UTC**.
+
+The result is a **fixed offset skew** equal to the host's UTC offset. Any assertion computed from the stored
+instant (an age, an elapsed duration, a "not older than" window) is wrong by exactly that offset.
+
+**Bind `LocalDateTime.ofInstant(instant, ZoneOffset.UTC)` instead** — it pins the meaning at the fixture
+rather than inheriting it from the host.
+
+**Why this one is worth a rule:** the failure is *invisible to the lane that is supposed to be
+authoritative*. Runners are UTC, so the offset is zero and the test passes — **on CI, both the broken
+fixture and the fixed one are green**. It goes RED only on a developer's non-UTC host, where it reads as a
+local-environment annoyance rather than a defect. So CI cannot prove the fix, and the host that *can* see it
+is the one whose signal gets dismissed. This is the § G4 axis (*a threshold calibrated on your host is a
+proposition about your host*) pointing the other way: here the **runner** is the host that cannot see the
+property.
+
+Corollary for triage: an integration failure whose delta is *exactly* a whole-hour UTC offset is this bug
+until proven otherwise — check the fixture's binding before suspecting the code under test.
+
 ## Integration-test bootstrap pitfalls (full-context-only failures)
 
 These two failures are invisible to Docker-free `:check` (unit + slice load no Spring `ApplicationContext`); only a Testcontainers `@SpringBootTest` integration test catches them. Apply both when bootstrapping a new service's IT base or adding a multi-dependency bean.
