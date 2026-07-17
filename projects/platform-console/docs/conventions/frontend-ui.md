@@ -273,6 +273,16 @@ listed so a future sweep doesn't file them as residue:
   `ErpOverviewScreen`, `ScmOverview`, `wms-overview-cell`, `iam-overview`'s
   `overview-labels`, `catalog/ServiceTile`. A dot is a different affordance from
   a pill and carries a health signal, not an entity status enum.
+- **Service-health status pills** — `DomainHealthCard`'s `HEALTH_VISUAL` pill
+  (`domain-health-card-*-visual`) renders the raw four-value Spring actuator
+  `HealthStatus` (`UP`/`DOWN`/`OUT_OF_SERVICE`/`UNKNOWN`) as *one visual per
+  value* — a glyph (`OK`/`X`/`!`/`?`) + colour + label, documented in
+  `domain-health/api/types.ts`. It is a service-health indicator, not an entity
+  lifecycle enum: `StatusBadge`'s five semantic tones carry no glyph affordance
+  and do not model these four actuator values. The 3-tone `healthTone()` **dot**
+  in `DomainHealthSummaryCard` is the *collapsed glance* of the same signal; the
+  pill is its full-fidelity detail. Both are by design — not two colour systems
+  for one signal (TASK-PC-FE-247).
 - **Attribute chips** — `BusinessPartner`'s `유형` (`partnerType`),
   `DelegationFactCard`'s `ScopeCell` (`GLOBAL`/`REQUEST`). These render a
   *property*, not a lifecycle state; forcing them onto a five-tone semantic
