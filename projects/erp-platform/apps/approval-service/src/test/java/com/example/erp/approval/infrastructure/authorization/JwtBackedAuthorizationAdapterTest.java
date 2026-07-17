@@ -51,18 +51,16 @@ class JwtBackedAuthorizationAdapterTest {
     }
 
     @Test
-    @DisplayName("data-scope: non-platform actor outside target subtree → DENY_SCOPE")
-    void dataScopeDenied() {
+    @DisplayName("v1: data-scope NOT enforced — narrow-scope actor with an out-of-subtree target is ALLOWED (deferred to v2 permission-service, TASK-ERP-BE-030)")
+    void dataScopeNotEnforcedInV1() {
+        // Even with a non-null target department OUTSIDE the actor's scope, v1 allows: the JWT-backed
+        // adapter enforces role/scope only. Subject owning-department subtree confinement is a v2
+        // permission-service concern. This is the honest inverse of the removed (unreachable,
+        // fail-open) data-scope branch — it guards against silently re-introducing a broken check.
         var d = adapter.evaluate(actor(Set.of("erp.write"), Set.of("dept-A"), Set.of()),
                 RequiredScope.WRITE, "dept-B");
-        assertThat(d.outcome()).isEqualTo(AuthorizationDecision.Outcome.DENY_SCOPE);
-    }
-
-    @Test
-    @DisplayName("data-scope: actor within target subtree → ALLOW")
-    void dataScopeAllowed() {
-        var d = adapter.evaluate(actor(Set.of("erp.write"), Set.of("dept-A"), Set.of()),
-                RequiredScope.WRITE, "dept-A");
-        assertThat(d.allowed()).isTrue();
+        assertThat(d.allowed())
+                .as("v1 approval does not confine by subject owning-department; subtree enforcement is a v2 concern")
+                .isTrue();
     }
 }

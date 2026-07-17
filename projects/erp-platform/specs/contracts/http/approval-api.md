@@ -107,13 +107,17 @@ All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {erp, *}`
   (RS256, IAM JWKS — [`iam-integration.md`](../../integration/iam-integration.md)).
   Cross-tenant → 403 `TENANT_FORBIDDEN`.
-- Enforce the **authorization matrix + data scope** (E6, fail-closed) — the
-  caller must hold `erp.write` for mutations / `erp.read` for reads, and the
-  request's subject (`subjectType`/`subjectId`) must fall inside the caller's
-  data scope; insufficient role → 403 `PERMISSION_DENIED`; subject outside the
-  caller's organization subtree → 403 `DATA_SCOPE_FORBIDDEN`. Both checks happen
-  inside the single application path (`AuthorizationPort.evaluate(...)`) BEFORE
-  any repository call.
+- Enforce the **authorization matrix** (E6, fail-closed) — the caller must hold
+  `erp.write` for mutations / `erp.read` for reads; insufficient role → 403
+  `PERMISSION_DENIED`, evaluated in the single application path
+  (`AuthorizationPort.evaluate(...)`) BEFORE any repository call.
+  - **Subject data-scope confinement is a v2 concern (TASK-ERP-BE-030)** — v1 does
+    NOT confine a request to the subject's owning-department subtree. Enforcing
+    that (`DATA_SCOPE_FORBIDDEN`) requires resolving the subject's owning
+    department from masterdata, which the JWT claims do not carry; it is deferred
+    to the v2 `permission-service` (`AuthorizationPort` is the swap point). The
+    prior v1 attempt was removed because it was structurally unreachable AND
+    fail-open. `DATA_SCOPE_FORBIDDEN` is reserved (registered) but not emitted in v1.
 - **Transition authorization** (E3) — `approve` / `reject` may be performed
   **only by the request's `approverId`**; any other caller → 403
   `APPROVAL_NOT_AUTHORIZED_APPROVER`. `withdraw` may be performed only by the
@@ -448,7 +452,7 @@ filtering (v2 deferred).
 | `APPROVAL_NOT_AUTHORIZED_APPROVER` | 403 | `approve`/`reject` caller ≠ `approverId`, or `withdraw` caller ≠ `submitterId`, or approver ineligible at submit (E3) |
 | `APPROVAL_ROUTE_INVALID` | 422 | route construction error at submit: self-approval (`approverId == submitterId`) or unresolved subject master (E3/E1) |
 | `PERMISSION_DENIED` | 403 | required role/scope not present (E6) |
-| `DATA_SCOPE_FORBIDDEN` | 403 | request subject outside caller's data scope (E6) |
+| `DATA_SCOPE_FORBIDDEN` | 403 | request subject outside caller's data scope (E6). **Reserved for v2 `permission-service`; NOT emitted in v1** (TASK-ERP-BE-030 — see § Auth). Endpoint error lists below retain it as the reserved v2 code. |
 | `TENANT_FORBIDDEN` | 403 | `tenant_id ∉ {erp, *}` |
 | `UNAUTHORIZED` | 401 | missing / invalid / expired JWT (Platform-Common Authentication) |
 | `EXTERNAL_TRAFFIC_REJECTED` | 403 | external (non-internal-network) ingress (E7) — primarily enforced at Traefik / network layer; application-layer fallback surface |
@@ -478,8 +482,10 @@ Identical to [`masterdata-api.md`](masterdata-api.md) and
   dual-accept applies wherever the platform-console operator token reaches this
   service (same `RoleScopeAuthorizationAdapter` semantics as the read surfaces).
 - **Authorization (E6, fail-closed)** — reads require `erp.read`; mutations
-  require `erp.write`. The authorization matrix + data scope are evaluated on
-  every request before any repository access.
+  require `erp.write`. The authorization matrix (role/scope) is evaluated on every
+  request before any repository access. **Subject data-scope confinement is NOT
+  enforced in v1** — deferred to the v2 `permission-service` (TASK-ERP-BE-030);
+  `DATA_SCOPE_FORBIDDEN` is reserved but not emitted in v1.
 - **Transition authorization (E3)** — beyond the scope check, `approve`/`reject`
   require caller == `approverId`, `withdraw` requires caller == `submitterId`,
   and `submit` refuses self-approval — all surfaced as

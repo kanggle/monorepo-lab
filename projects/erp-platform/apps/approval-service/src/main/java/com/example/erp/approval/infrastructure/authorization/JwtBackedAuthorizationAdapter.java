@@ -17,6 +17,11 @@ import org.springframework.stereotype.Component;
  *
  * <p><b>Fail-CLOSED default</b>: an actor with no recognised role/scope is
  * DENY_ROLE. There is no allow-by-default codepath.
+ *
+ * <p><b>Data-scope (subject owning-department subtree) is a v2 concern</b> (TASK-ERP-BE-030):
+ * v1 enforces role/scope only. Confining a write to the subject's owning-department subtree is
+ * deferred to the v2 {@code permission-service} — it requires an owning-department resolution the
+ * JWT claims do not carry. The {@code targetDepartmentId} parameter is reserved for that v2 client.
  */
 @Component
 public class JwtBackedAuthorizationAdapter implements AuthorizationPort {
@@ -32,16 +37,16 @@ public class JwtBackedAuthorizationAdapter implements AuthorizationPort {
             return AuthorizationDecision.denyRole(
                     "actor lacks the required erp " + required + " role/scope");
         }
-        // Data-scope: platform/operator scope sees everything; otherwise a
-        // non-null target outside the actor's department subtree is denied.
-        if (targetDepartmentId != null
-                && !actor.isPlatformScope()
-                && !actor.isOperator()
-                && actor.dataScopeDepartmentIds() != null
-                && !actor.dataScopeDepartmentIds().contains(targetDepartmentId)) {
-            return AuthorizationDecision.denyScope(
-                    "target department '" + targetDepartmentId + "' outside actor data scope");
-        }
+        // v1 (TASK-ERP-BE-030): the JWT-backed adapter enforces role/scope ONLY. Subject
+        // data-scope confinement (denying a caller whose scope does not contain the subject's
+        // owning-department subtree) is NOT enforced in v1 and is deferred to the v2
+        // permission-service — this port is that swap point, and {@code targetDepartmentId} is
+        // reserved for the v2 client. The earlier in-adapter attempt was removed here because it
+        // was BOTH structurally unreachable (every call site passes {@code targetDepartmentId=null};
+        // the subject's owning department is never resolved) AND fail-OPEN on an absent data scope
+        // (it fell through to allow when {@code dataScopeDepartmentIds()} was null) — a control that
+        // could never fire and, if reached, would fail open. Separation-of-Duties (approver
+        // eligibility) remains enforced as a domain guard on the aggregate, independent of this port.
         return AuthorizationDecision.allow();
     }
 }
