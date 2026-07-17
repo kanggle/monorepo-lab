@@ -1,6 +1,6 @@
 # TASK-PC-FE-246 — 상대시간 포매터 dedup → `formatRelativeAge()`
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · `shared/lib/datetime.ts` + `features/{notifications,ledger-ops}`
 **Type:** `TASK-PC-FE` (frontend refactor — dedup, **행동 불변**)
 **Lifecycle:** backlog(2026-07-18 발굴; 조사 2건은 PC-FE-247 로 분리) → 구현 → review
