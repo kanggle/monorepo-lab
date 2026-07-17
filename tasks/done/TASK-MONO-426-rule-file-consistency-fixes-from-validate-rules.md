@@ -1,7 +1,7 @@
 # TASK-MONO-426 — /validate-rules found rule files that contradict the platform specs they cite, and a shared command that depends on private-only sources
 
 - **Type**: TASK-MONO (monorepo-level — shared paths `.claude/commands/`, `.claude/agents/`, `.claude/skills/`)
-- **Status**: review
+- **Status**: done
 - **Target**: `.claude/commands/{design-event,write-tests,refactor-spec}.md`, `.claude/agents/common/{event-architect,backend-engineer,qa-engineer}.md`, `.claude/skills/testing/contract-test/SKILL.md`
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (rule-file wording + spec alignment)
 
