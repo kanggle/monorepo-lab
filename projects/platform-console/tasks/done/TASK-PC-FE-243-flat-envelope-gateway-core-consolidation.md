@@ -1,6 +1,6 @@
 # TASK-PC-FE-243 — flat-envelope gateway 호출 코어 **straggler 통합** (erp/finance/ledger)
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · `features/{erp-ops,finance-ops,ledger-ops}/api/*` + `shared/api/`
 **Type:** `TASK-PC-FE` (frontend refactor — **행동 불변**, 기존 테스트 무수정 통과)
 **Lifecycle:** backlog(2026-07-18 발굴) → 인라인 spec + 구현 1-pass → review

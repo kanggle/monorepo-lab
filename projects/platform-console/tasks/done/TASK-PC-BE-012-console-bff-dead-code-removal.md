@@ -1,6 +1,6 @@
 # TASK-PC-BE-012 — console-bff dead-code + 미배선 config 제거
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-bff (Java, hexagonal)
 **Type:** `TASK-PC-BE` (backend refactor — **행동 불변**)
 **Lifecycle:** backlog(2026-07-18 발굴) → 착수-시 0-caller 재grep + 구현 → review

@@ -1,6 +1,6 @@
 # TASK-PC-FE-244 — `ConsoleSidebarNav.tsx` data/logic/render 분할
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · `shared/ui/ConsoleSidebarNav.tsx` (546→194줄)
 **Type:** `TASK-PC-FE` (frontend refactor — 순수 이동, 행동 불변)
 **Lifecycle:** backlog(2026-07-18 발굴) → ready(가드 이슈 해소 승격) → 구현 → review

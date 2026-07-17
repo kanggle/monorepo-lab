@@ -1,6 +1,6 @@
 # TASK-PC-FE-245 — `frontend-ui.md` 컨벤션 드리프트 잔여 정렬
 
-**Status:** review
+**Status:** done
 **Area:** platform-console / console-web · `features/tenants` + `features/erp-ops`
 **Type:** `TASK-PC-FE` (frontend refactor — 컨벤션 정렬, 행동/데이터 불변)
 **Lifecycle:** backlog(2026-07-18 발굴) → 구현 → review
