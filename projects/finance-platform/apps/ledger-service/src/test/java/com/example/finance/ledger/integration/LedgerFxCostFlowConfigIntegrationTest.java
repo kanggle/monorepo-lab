@@ -60,7 +60,7 @@ class LedgerFxCostFlowConfigIntegrationTest extends AbstractLedgerIntegrationTes
 
     @Test
     void costFlowConfigLifecycle() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // AC-1: GET default — unset → WEIGHTED_AVERAGE, no audit fields.
         HttpResponse<String> getDefault = get(COST_FLOW_PATH, token);

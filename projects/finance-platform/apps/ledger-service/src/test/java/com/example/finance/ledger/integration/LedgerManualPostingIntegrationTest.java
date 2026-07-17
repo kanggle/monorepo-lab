@@ -96,7 +96,7 @@ class LedgerManualPostingIntegrationTest extends AbstractLedgerIntegrationTest {
 
     @Test
     void manualPostingFunnelsThroughTheGuardedWritePathAndIsIdempotent() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) Drive a TOPUP auto-journal so the wallet liability account exists (the
         //     manual path rejects an unknown account — no lazy mint).

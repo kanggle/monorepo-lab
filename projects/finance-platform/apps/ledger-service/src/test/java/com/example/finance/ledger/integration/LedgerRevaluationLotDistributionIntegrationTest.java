@@ -166,7 +166,7 @@ class LedgerRevaluationLotDistributionIntegrationTest extends AbstractLedgerInte
 
     @Test
     void revaluationDistributesCarryingToLotsKeepingTheSumInvariant() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
         seedAssetAccount();
 
         // ============ (AC-1) invariant: Σ open-lot carrying == revaluedBase ============

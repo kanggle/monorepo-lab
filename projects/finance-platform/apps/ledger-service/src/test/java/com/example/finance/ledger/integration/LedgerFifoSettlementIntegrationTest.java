@@ -147,7 +147,7 @@ class LedgerFifoSettlementIntegrationTest extends AbstractLedgerIntegrationTest 
 
     @Test
     void fifoSettlementConsumesOldestLotsFirstAndFallsBackOnShortfall() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
         seedAssetAccount();
 
         // ============ (AC-1) FIFO lot-exact partial settle ============

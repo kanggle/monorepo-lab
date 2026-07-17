@@ -92,7 +92,7 @@ class LedgerFxRateHistoryIntegrationTest extends AbstractLedgerIntegrationTest {
         historyRepository.append(older);
         historyRepository.append(newer);
 
-        String token = financeReadToken();
+        String token = financeWriteToken();
         HttpResponse<String> resp = getHistory(FX_HISTORY_PATH_USD, token);
 
         assertThat(resp.statusCode()).as("AC-1: must be 200").isEqualTo(200);
@@ -136,7 +136,7 @@ class LedgerFxRateHistoryIntegrationTest extends AbstractLedgerIntegrationTest {
                 Currency.KRW, Currency.USD,
                 new BigDecimal("13.60000000"), newerFetchedAt, "stub", newerFetchedAt));
 
-        String token = financeReadToken();
+        String token = financeWriteToken();
         HttpResponse<String> resp = getHistory(FX_HISTORY_PATH_USD, token, 1);
 
         assertThat(resp.statusCode()).as("AC-2: must be 200").isEqualTo(200);
@@ -154,7 +154,7 @@ class LedgerFxRateHistoryIntegrationTest extends AbstractLedgerIntegrationTest {
     @Test
     void unknownPairReturns200WithEmptyQuotes() throws Exception {
         // cleanLedgerState() in @BeforeEach already cleared fx_rate_quote_history.
-        String token = financeReadToken();
+        String token = financeWriteToken();
         HttpResponse<String> resp = getHistory(FX_HISTORY_PATH_XXX, token);
 
         assertThat(resp.statusCode()).as("AC-3: unknown pair must be 200, not 404").isEqualTo(200);

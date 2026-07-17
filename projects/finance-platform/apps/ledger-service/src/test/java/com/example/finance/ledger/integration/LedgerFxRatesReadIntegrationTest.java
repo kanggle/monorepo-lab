@@ -89,7 +89,7 @@ class LedgerFxRatesReadIntegrationTest extends AbstractLedgerIntegrationTest {
     @Test
     void emptyCacheReturns200WithEmptyRates() throws Exception {
         // cleanLedgerState() in @BeforeEach already deleted all fx_rate_quote rows.
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         HttpResponse<String> resp = getFxRates(token);
         assertThat(resp.statusCode()).as("empty cache must be 200, not 404").isEqualTo(200);
@@ -120,7 +120,7 @@ class LedgerFxRatesReadIntegrationTest extends AbstractLedgerIntegrationTest {
         seedQuote("KRW", "EUR", new BigDecimal("14.20000000"),
                 staleAsOf, "stub", staleAsOf);
 
-        String token = financeReadToken();
+        String token = financeWriteToken();
         HttpResponse<String> resp = getFxRates(token);
         assertThat(resp.statusCode()).isEqualTo(200);
 

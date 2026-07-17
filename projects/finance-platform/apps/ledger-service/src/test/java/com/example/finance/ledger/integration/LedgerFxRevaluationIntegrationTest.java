@@ -125,7 +125,7 @@ class LedgerFxRevaluationIntegrationTest extends AbstractLedgerIntegrationTest {
 
     @Test
     void fxRevaluationFunnelsThroughTheGuardedWritePathWithoutDoubleBooking() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (0) Drive a TOPUP auto-journal so a KRW wallet liability account exists (the
         //     manual path rejects an unknown account — no lazy mint).

@@ -253,9 +253,18 @@ public abstract class AbstractLedgerIntegrationTest {
     // JWT minting
     // ------------------------------------------------------------------------
 
-    /** Mints an RS256 token with tenant_id=finance + finance.read scope (happy path). */
+    /** Mints an RS256 token with tenant_id=finance + finance.read scope (read-only happy path). */
     protected String financeReadToken() {
         return token(c -> c.claim("tenant_id", "finance").claim("scope", "finance.read"));
+    }
+
+    /**
+     * Mints an RS256 token with tenant_id=finance + finance.write scope — the happy path for
+     * MUTATING endpoints (TASK-FIN-BE-047: writes require finance.write; a finance.read-only token
+     * is now rejected 403). finance.write also admits reads, so a mixed read+write test can use this.
+     */
+    protected String financeWriteToken() {
+        return token(c -> c.claim("tenant_id", "finance").claim("scope", "finance.write"));
     }
 
     /** Mints a cross-tenant token (tenant_id != finance, no entitled_domains). */

@@ -102,7 +102,7 @@ class LedgerMultiCurrencyReconciliationIntegrationTest extends AbstractLedgerInt
 
     @Test
     void foreignBaseDifferenceRecordsAmountMismatchOnMatchedLine() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) A USD DEBIT internal line on CASH_CLEARING, carrying 130000 KRW @ 13.0.
         //     Counter-leg = the seeded SETTLEMENT_SUSPENSE (manual posting = no lazy mint).

@@ -96,7 +96,7 @@ class LedgerFxPositionLotIntegrationTest extends AbstractLedgerIntegrationTest {
 
     @Test
     void acquisitionLotsAreCreatedShadowAndBackfillReconstructsThePosition() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
         seedAssetAccount();
 
         // (AC-1) A single USD acquisition → exactly one lot.

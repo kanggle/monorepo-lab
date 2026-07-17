@@ -130,7 +130,7 @@ class LedgerFxPositionLotsReadIntegrationTest extends AbstractLedgerIntegrationT
 
     @Test
     void acOneAndTwoAndThreeAndFour() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
         seedAssetAccount();
 
         // ============ (AC-3) empty position → empty list + zero summary, 200 not 404 ============

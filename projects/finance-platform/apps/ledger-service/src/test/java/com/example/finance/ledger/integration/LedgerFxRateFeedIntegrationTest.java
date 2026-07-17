@@ -117,7 +117,7 @@ class LedgerFxRateFeedIntegrationTest extends AbstractLedgerIntegrationTest {
 
         // (4) Operator path is byte-identical (AC-1). A manual-rate settlement still removes the
         //     position + realizes the gain — the loaded cache does NOT influence it (shadow).
-        String token = financeReadToken();
+        String token = financeWriteToken();
         String wallet = ensureWallet(token);
         establishUsdPosition(token, wallet);
         long[] before = usdPosition();

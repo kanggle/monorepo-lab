@@ -198,7 +198,7 @@ class LedgerFxSettlementIntegrationTest extends AbstractLedgerIntegrationTest {
 
     @Test
     void fxSettlementRemovesThePositionAndRealizesGainLossThroughTheGuardedWritePath() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (0) Drive a TOPUP auto-journal so a KRW wallet liability account exists.
         String wallet = ensureWallet(token);
