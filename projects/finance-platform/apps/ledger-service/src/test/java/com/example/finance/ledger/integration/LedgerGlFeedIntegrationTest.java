@@ -63,7 +63,7 @@ class LedgerGlFeedIntegrationTest extends AbstractLedgerIntegrationTest {
 
     @Test
     void glFeedRoundTripForEntryPostedAndPeriodClosed() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) A TOPUP completed event → balanced entry posts → outbox row → relay
         //     publishes finance.ledger.entry.posted.v1.

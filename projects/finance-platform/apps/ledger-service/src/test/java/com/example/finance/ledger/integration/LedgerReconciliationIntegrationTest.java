@@ -57,7 +57,7 @@ class LedgerReconciliationIntegrationTest extends AbstractLedgerIntegrationTest 
 
     @Test
     void ingestMatchesDiscrepanciesOpenEmitsEventsAndResolves() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) Two TOPUPs → two DR CASH_CLEARING internal lines (150000 + 99000).
         String acct1 = "acc-" + newId();

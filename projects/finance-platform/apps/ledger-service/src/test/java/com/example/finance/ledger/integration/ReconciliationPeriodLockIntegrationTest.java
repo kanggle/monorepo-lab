@@ -94,7 +94,7 @@ class ReconciliationPeriodLockIntegrationTest extends AbstractLedgerIntegrationT
 
     @Test
     void resolveIntoClosedPeriodIsLockedAndStaysOpen() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) A clearing-account internal line so CASH_CLEARING exists / matching runs
         //     against a real account (drive a TOPUP via the event path).

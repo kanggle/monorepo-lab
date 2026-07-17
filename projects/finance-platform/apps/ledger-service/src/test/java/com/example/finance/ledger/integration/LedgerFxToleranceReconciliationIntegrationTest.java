@@ -126,7 +126,7 @@ class LedgerFxToleranceReconciliationIntegrationTest extends AbstractLedgerInteg
 
     @Test
     void configurableToleranceSuppressesWithinBandAmountMismatch() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) ABSENT → EXACT: no config row; internal carrying 130000, bank reports
         //     130500 (a 500 diff). Under EXACT this still records AMOUNT_MISMATCH —

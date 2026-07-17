@@ -63,7 +63,7 @@ class LedgerFxRateConsumptionIntegrationTest extends AbstractLedgerIntegrationTe
 
     @Test
     void omittedRateFallsBackToFreshCacheThenFailsClosedWithoutCache() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
         String wallet = ensureWallet(token);
 
         // ---- (1) Omitted rate + fresh cache → fallback @ 1300, audit reason records the source. ----

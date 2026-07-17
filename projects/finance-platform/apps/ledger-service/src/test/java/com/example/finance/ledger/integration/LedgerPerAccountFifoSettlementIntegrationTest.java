@@ -117,7 +117,7 @@ class LedgerPerAccountFifoSettlementIntegrationTest extends AbstractLedgerIntegr
 
     @Test
     void accountOverrideElevatesToFifoAndConsumesOldestLotsFirst() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
         seedAssetAccount();
 
         // Tenant config is UNSET (default WEIGHTED_AVERAGE) — confirm no per-tenant row.

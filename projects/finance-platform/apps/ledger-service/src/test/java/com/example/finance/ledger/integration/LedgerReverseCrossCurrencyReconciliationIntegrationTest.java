@@ -92,7 +92,7 @@ class LedgerReverseCrossCurrencyReconciliationIntegrationTest extends AbstractLe
 
     @Test
     void foreignExternalMatchesKrwInternalByDeclaredBase() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) A KRW DEBIT internal line (130000) on FX_REVCROSS_KRW_CLEARING.
         String entryId = postKrwClearingEntry(token, 130_000L);

@@ -58,7 +58,7 @@ class PeriodCloseIntegrationTest extends AbstractLedgerIntegrationTest {
 
     @Test
     void periodCloseLocksTheWindowAndCapturesTheTrialBalanceSnapshot() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) Happy-path postings BEFORE any period — net-zero (no period defined).
         String topupAcct = "acc-" + newId();

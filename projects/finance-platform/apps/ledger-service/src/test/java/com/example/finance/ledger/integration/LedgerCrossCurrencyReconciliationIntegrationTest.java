@@ -97,7 +97,7 @@ class LedgerCrossCurrencyReconciliationIntegrationTest extends AbstractLedgerInt
 
     @Test
     void krwExternalMatchesForeignInternalByCarryingBase() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) A USD DEBIT internal line on SETTLEMENT_SUSPENSE carrying 130000 KRW @ 13.0.
         String entryId = postUsdSuspenseEntry(token, 10_000L, 130_000L);

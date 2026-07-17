@@ -70,7 +70,7 @@ class LedgerFxCostFlowAccountConfigIntegrationTest extends AbstractLedgerIntegra
 
     @Test
     void costFlowAccountConfigLifecycle() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // AC-4a: GET empty — no overrides → [].
         HttpResponse<String> getEmpty = get(ACCOUNTS_PATH, token);

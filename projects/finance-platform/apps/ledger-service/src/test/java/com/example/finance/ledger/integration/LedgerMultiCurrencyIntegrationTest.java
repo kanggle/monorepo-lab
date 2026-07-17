@@ -60,7 +60,7 @@ class LedgerMultiCurrencyIntegrationTest extends AbstractLedgerIntegrationTest {
 
     @Test
     void multiCurrencyEntryBalancesInBaseAndBackfillIsNetZero() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) V5 backfill / net-zero — a KRW TOPUP auto-journal posts byte-identically.
         String walletAcct = "acc-" + newId();

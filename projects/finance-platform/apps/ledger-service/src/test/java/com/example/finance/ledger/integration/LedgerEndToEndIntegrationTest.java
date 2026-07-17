@@ -54,7 +54,7 @@ class LedgerEndToEndIntegrationTest extends AbstractLedgerIntegrationTest {
         assertThat(entry.isBalanced()).isTrue();
         assertThat(entry.lines()).hasSize(2);
 
-        String token = financeReadToken();
+        String token = financeWriteToken();
         JsonNode tb = trialBalance(token);
         assertThat(tb.at("/data/inBalance").asBoolean()).isTrue();
         assertThat(tb.at("/data/grandDebitTotal/amount").asText())
@@ -125,7 +125,7 @@ class LedgerEndToEndIntegrationTest extends AbstractLedgerIntegrationTest {
         assertThat(reversal.reversalOfEntryId()).isNotNull();
         assertThat(reversal.isBalanced()).isTrue();
 
-        JsonNode tb = trialBalance(financeReadToken());
+        JsonNode tb = trialBalance(financeWriteToken());
         assertThat(tb.at("/data/inBalance").asBoolean()).isTrue();
     }
 

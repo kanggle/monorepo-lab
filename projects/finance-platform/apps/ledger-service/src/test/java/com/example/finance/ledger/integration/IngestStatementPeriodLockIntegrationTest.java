@@ -97,7 +97,7 @@ class IngestStatementPeriodLockIntegrationTest extends AbstractLedgerIntegration
 
     @Test
     void ingestIntoClosedPeriodIsRejectedAndNothingPersisted() throws Exception {
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         // (1) Open + close an accounting period covering January 2026
         //     [Jan 1 00:00Z, Feb 1 00:00Z) — covers 2026-01-31 start-of-day UTC.
@@ -176,7 +176,7 @@ class IngestStatementPeriodLockIntegrationTest extends AbstractLedgerIntegration
     @Test
     void ingestWithNoClosedPeriodSucceeds() throws Exception {
         // No period created at all → findCovering empty → net-zero, ingest proceeds.
-        String token = financeReadToken();
+        String token = financeWriteToken();
 
         HttpResponse<String> resp = tryIngest(token, LocalDate.parse("2026-06-15"), "BANKTXN-FREE");
         assertThat(resp.statusCode()).isEqualTo(201);
@@ -194,7 +194,7 @@ class IngestStatementPeriodLockIntegrationTest extends AbstractLedgerIntegration
     @Test
     void ingestWithOpenPeriodCoveringDateSucceeds() throws Exception {
         // An OPEN period covering the statementDate does NOT lock (only CLOSED locks).
-        String token = financeReadToken();
+        String token = financeWriteToken();
         LocalDate stmtDate = LocalDate.parse("2026-04-15");
 
         // Open a period covering April 2026, but do NOT close it.
