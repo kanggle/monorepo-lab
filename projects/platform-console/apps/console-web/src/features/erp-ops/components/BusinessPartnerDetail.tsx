@@ -68,17 +68,6 @@ export function BusinessPartnerDetail({
           <dd className="text-foreground">{p.name}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">유형</dt>
-          <dd className="text-foreground">
-            <span
-              data-testid="erp-businesspartner-type"
-              className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-            >
-              {labelForUnknownEnum(p.partnerType, KNOWN_PARTNER_TYPES)}
-            </span>
-          </dd>
-        </div>
-        <div>
           <dt className="text-muted-foreground">상태</dt>
           <dd className="text-foreground">
             <StatusBadge
@@ -87,6 +76,17 @@ export function BusinessPartnerDetail({
             >
               {labelForUnknownEnum(p.status, KNOWN_MASTER_STATUSES)}
             </StatusBadge>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">유형</dt>
+          <dd className="text-foreground">
+            <span
+              data-testid="erp-businesspartner-type"
+              className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+            >
+              {labelForUnknownEnum(p.partnerType, KNOWN_PARTNER_TYPES)}
+            </span>
           </dd>
         </div>
         <div>

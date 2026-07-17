@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
+import { DetailHeader } from '@/shared/ui/DetailHeader';
 import { StatusBadge, type StatusTone } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { formatDateTime } from '@/shared/lib/datetime';
@@ -76,12 +76,13 @@ export function TenantDetail({ tenant }: TenantDetailProps) {
 
   return (
     <section aria-labelledby="tenant-detail-heading" data-testid="tenant-detail">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 id="tenant-detail-heading" className="text-2xl font-semibold">
-          테넌트 상세
-        </h1>
-        <div className="flex gap-2">
-          {!editing && (
+      <DetailHeader
+        headingId="tenant-detail-heading"
+        title="테넌트 상세"
+        backHref="/tenants"
+        backTestId="tenant-detail-back"
+        actions={
+          !editing ? (
             <Button
               variant="secondary"
               onClick={openEdit}
@@ -89,14 +90,9 @@ export function TenantDetail({ tenant }: TenantDetailProps) {
             >
               수정
             </Button>
-          )}
-          <Link href="/tenants">
-            <Button variant="ghost" data-testid="tenant-detail-back">
-              목록
-            </Button>
-          </Link>
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {!editing ? (
         <dl className="mb-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
