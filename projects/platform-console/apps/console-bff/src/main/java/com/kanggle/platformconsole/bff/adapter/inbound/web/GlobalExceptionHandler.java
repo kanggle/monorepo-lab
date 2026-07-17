@@ -13,6 +13,8 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.time.Instant;
 import java.util.Set;
@@ -95,6 +97,46 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ObjectNode> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
         return error(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE",
                 "Request Content-Type is not supported by this endpoint");
+    }
+
+    /**
+     * A downstream producer returned a non-2xx status on a leg that <b>propagates</b> it (the
+     * mark-read passthrough — contract § 4.5). The GET aggregate/overview legs degrade errors to a
+     * 200 partial inside {@code CompositionEngine} and never reach here; only the single-domain
+     * mark-read proxy lets a {@link HttpStatusCodeException} surface. Without this arm it fell to
+     * {@link #handleGeneric(Exception)} → a generic 500, so a producer 404 (mark-read on another
+     * recipient's notification — § 4.5) or a 503 became an opaque 500 (then 502 at console-web),
+     * turning a should-degrade into a hard error (TASK-PC-BE-011).
+     *
+     * <p>Maps the producer status through faithfully: 404 → {@code NOTIFICATION_NOT_FOUND}
+     * (existence-leak-safe, passed through inline-actionably); 401 → {@code TOKEN_INVALID};
+     * 403 → {@code PERMISSION_DENIED} (a non-eligible operator degrades the bell); any other
+     * (incl. 5xx) → {@code 503 DOWNSTREAM_ERROR} (unavailable, never a bare 500).
+     */
+    @ExceptionHandler(HttpStatusCodeException.class)
+    public ResponseEntity<ObjectNode> handleDownstreamStatus(HttpStatusCodeException ex) {
+        int status = ex.getStatusCode().value();
+        return switch (status) {
+            case 404 -> error(HttpStatus.NOT_FOUND, "NOTIFICATION_NOT_FOUND",
+                    "The notification was not found");
+            case 401 -> error(HttpStatus.UNAUTHORIZED, "TOKEN_INVALID",
+                    "The downstream rejected the credential");
+            case 403 -> error(HttpStatus.FORBIDDEN, "PERMISSION_DENIED",
+                    "Not permitted for this notification");
+            default -> error(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_ERROR",
+                    "The notification service is unavailable");
+        };
+    }
+
+    /**
+     * A downstream call timed out / could not connect on a propagating leg (mark-read). Same
+     * should-degrade-not-500 rationale as {@link #handleDownstreamStatus} — surface it as
+     * {@code 503 DOWNSTREAM_ERROR}, not a generic 500 (TASK-PC-BE-011).
+     */
+    @ExceptionHandler(ResourceAccessException.class)
+    public ResponseEntity<ObjectNode> handleDownstreamUnavailable(ResourceAccessException ex) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "DOWNSTREAM_ERROR",
+                "The notification service is unavailable");
     }
 
     @ExceptionHandler(Exception.class)
