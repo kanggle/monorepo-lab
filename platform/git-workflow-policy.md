@@ -92,9 +92,33 @@ Chaining `git commit … && git push …` in a **single** Bash-tool invocation l
 
 ---
 
-## `.claude/` Self-Modification Is Classifier-Blocked
+## `.claude/` Self-Modification — Which Paths the Classifier Actually Blocks
 
-The auto-mode classifier hard-blocks editing or committing files under `.claude/hooks/`, `.claude/agents/`, `.claude/commands/` even with explicit user approval (the same higher-safety layer as mass `push --delete`). Hand the exact patch to the user to apply + commit; do not attempt a shell-write bypass. `platform/` is **not** subject to this — only `.claude/`. (Agent personal-memory detail, this host: `env_classifier_claude_self_mod_block`.)
+The auto-mode classifier (the same higher-safety layer as mass `push --delete`) blocks agent self-modification
+of the **hook machinery only**. The measured map:
+
+| Path | Agent edit + commit | Note |
+|---|---|---|
+| `.claude/hooks/` | ❌ **hard-blocked** | **Intent-resistant** — an explicit user instruction does *not* clear it. |
+| `.claude/settings.json` | ❌ **hard-blocked** | Not a hook file, but hook **wiring** — same treatment. |
+| `.claude/commands/` | ✅ passes | edit + commit + push + merge (TASK-MONO-396, PR #2525) |
+| `.claude/agents/` | ✅ passes | edit + commit + push + merge (TASK-MONO-409, PR #2616) |
+| `.claude/config/` | ✅ passes | (TASK-MONO-167, PR #1021) |
+| `.claude/skills/` | ⚠️ passes with **explicit per-action** authorization | vague agreement is not enough (TASK-MONO-234) |
+| `platform/` | ✅ not subject | only `.claude/` trips this |
+
+For the blocked rows: hand the exact patch to the user to apply + commit; **do not attempt a shell-write
+bypass** — that dodges the denial's intent, and the block is real.
+
+For every other row: **do not pre-emptively hand off on assumption.** This map is an *observation of an
+external policy that can change silently*, not a guarantee. Attempt the edit once; hand it over only if it is
+**actually** blocked. The asymmetry is the argument — a wasted attempt costs one round-trip, while a wrong
+assumption costs a needless human hand-off **and files a false completion note in the ticket**. That is not
+hypothetical: this section previously asserted `agents/` and `commands/` were blocked, TASK-MONO-409's own
+preamble repeated the claim, and the agent that tried anyway landed PR #2616 directly. The over-broad wording
+had been propagating unchallenged, and the correction was recorded only in that task's DONE note — a place
+nobody greps when asking "am I allowed to edit this?". (Agent personal-memory detail, this host:
+`env_classifier_claude_self_mod_block`.)
 
 ---
 
