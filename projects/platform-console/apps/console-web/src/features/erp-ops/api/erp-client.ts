@@ -1,348 +1,123 @@
-import { getServerEnv } from '@/shared/config/env';
-import { getDomainFacingToken } from '@/shared/lib/session';
-import { logger, newRequestId } from '@/shared/lib/logger';
-import { ApiError, ErpUnavailableError } from '@/shared/api/errors';
+import { ErpUnavailableError } from '@/shared/api/errors';
+import {
+  callFlatEnvelopeGateway,
+  type FlatEnvelopeGatewayProfile,
+} from '@/shared/api/flat-envelope-gateway';
 
 /**
  * Server-side erp `masterdata-service` operations client (TASK-PC-FE-010 —
- * ADR-MONO-013 Phase 6, the FOURTH non-IAM federated domain and the
- * FIRST internal-system-primary confirmation: wms / scm / finance /
- * **erp**). STRICTLY READ-ONLY.
+ * ADR-MONO-013 Phase 6). As of TASK-PC-FE-243 the hardened call scaffold is the
+ * shared {@link callFlatEnvelopeGateway} FLAT-envelope core; this file is now a
+ * thin wrapper supplying the {@link ERP_PROFILE} (its `ERP_BASE_URL` /
+ * `ERP_TIMEOUT_MS` selectors, `ErpUnavailableError` degrade class, `erp_*`
+ * log-event prefix + messages). Behaviour is IDENTICAL to the pre-consolidation
+ * per-client copy.
  *
- * Server-only by construction (same posture as `finance-api.ts` /
- * `scm-api.ts` / `wms-api.ts`): imported exclusively from server
- * components and the `runtime = 'nodejs'` route handlers;
- * `getServerEnv()` throws outside the server runtime. The token + any
- * data never reach client JS — client components call the same-origin
- * `/api/erp/**` proxy routes, which attach the HttpOnly credential
- * here server-side.
+ * Server-only by construction (same posture as `finance-api.ts` / `scm-api.ts`
+ * / `wms-api.ts`): imported exclusively from server components and the
+ * `runtime = 'nodejs'` route handlers. The token + any data never reach client
+ * JS — client components call the same-origin `/api/erp/**` proxy routes, which
+ * attach the HttpOnly credential here server-side.
  *
- * ── PER-DOMAIN CREDENTIAL — REUSE of the § 2.4.5 rule (NOT re-derived) ──
+ * ── PER-DOMAIN CREDENTIAL — REUSE of § 2.4.5 (NOT re-derived) ──
+ * The domain-facing IAM OIDC token (`getDomainFacingToken()` — assumed-when-
+ * switched, else base; ADR-MONO-020 D4), NEVER `getOperatorToken()` (the #569
+ * invariant is GAP-domain-scoped). erp resolves the tenant from the JWT
+ * `tenant_id ∈ {erp,*}` claim producer-side — the console sends NO
+ * `X-Tenant-Id`.
  *
- * The normative per-domain credential rule is DEFINED in
- * console-integration-contract § 2.4.5 (each binding declares its own
- * credential against its producer; never blanket-apply one domain's
- * auth to another). erp REUSES it with the SAME outcome as wms / scm /
- * finance: the erp `masterdata-service` validates a IAM RS256 JWT
- * (ADR-001) against IAM JWKS, `tenant_id ∈ { erp, * }` enforced
- * producer-side from the JWT claim (erp `iam-integration.md` §
- * platform-console Operator Read Consumer — TASK-ERP-BE-002 merged
- * 2026-05-20). erp has NO token-exchange.
- *
- * Therefore this client uses `getAccessToken()` (the GAP-session
- * HttpOnly cookie) and NEVER `getOperatorToken()` — exactly like
- * `finance-api.ts` / `scm-api.ts` / `wms-api.ts`, and the EXACT
- * INVERSE of the IAM `features/{accounts,audit,operators,dashboards}`
- * clients. The #569 trust-boundary invariant is GAP-domain-scoped
- * and does NOT generalise to erp. A test pins this (the
- * `getOperatorToken` path MUST be absent for erp; the cross-domain
- * regression covers GAP=operator-token / wms=GAP-OIDC / scm=GAP-OIDC
- * / finance=GAP-OIDC / **erp=GAP-OIDC** — 5 domains).
- *
- * Tenant invariant (§ 2.4.8 / reuse of § 2.4.5): erp resolves the
- * tenant from the JWT `tenant_id` claim (`∈ {erp,*}`) — NOT an
- * `X-Tenant-Id` header. The console therefore does NOT send
- * `X-Tenant-Id` to erp; the tenant rides inside the IAM OIDC token.
- * erp rejects cross-tenant producer-side (`403 TENANT_FORBIDDEN`).
- *
- * READ + DEPARTMENT WRITE PILOT (§ 2.4.8): the 10 read functions
- * (for each of 5 masters a `list*(params)` + a `get*ById(id, params?)`)
- * are pure `GET` — NO `Idempotency-Key`, NO `X-Operator-Reason`, NO
- * body (a test pins their absence on the read path). The **department**
- * master additionally exposes a WRITE PILOT (TASK-PC-FE-046):
- * `createDepartment` / `updateDepartment` / `retireDepartment` /
- * `moveDepartmentParent` (consuming the UNCHANGED producer
- * `masterdata-api.md` § Department mutations). The OTHER FOUR masters
- * remain read-only — NO write function exists for them (a test pins
- * that absence). erp writes carry an `Idempotency-Key` + a JSON body;
- * `reason` rides in the body ONLY where the producer has a slot
- * (retire / move-parent) — the console NEVER sends `X-Operator-Reason`
- * (erp does not read it). The v2 `approval-service` /
- * `read-model-service` / future `admin-service` surfaces stay out of
- * scope. Carrying the FE-007 alert-ack OR the IAM § 2.4.1 mutation
- * scaffolding (X-Operator-Reason) here is a defect (tests assert it).
- *
- * E3 ASOF THREAD-THROUGH (§ 2.4.8, CORE INVARIANT): the `asOf`
- * query parameter MUST thread through every list / detail call to
- * the producer verbatim. The producer returns the state-at-that-
- * instant (NOT the current state). A test asserts that when the
- * caller supplies `asOf=2025-01-01`, the producer client receives
- * `asOf=2025-01-01` verbatim (the core erp UX defect to avoid is
- * silently dropping `asOf` and rendering current state instead of
- * historical state — that is an E3 violation).
+ * READ + DEPARTMENT/MASTER WRITE (§ 2.4.8): the read functions are pure GET —
+ * NO `Idempotency-Key`, NO `X-Operator-Reason`, NO body. Writes carry an
+ * `Idempotency-Key` + a JSON body; `reason` rides in the BODY where the
+ * producer has a slot (retire / move-parent) — the console NEVER sends
+ * `X-Operator-Reason` (erp has no producer slot for it). The idempotency
+ * fail-fast guard is OFF (the header is attached only when the caller supplies
+ * a key — the honest erp posture, unlike wms's client-side 400).
  *
  * Error envelope (§ 2.4.8 / § 2.5): erp uses the FLAT shape
- * `{ code, message, details?, timestamp }` — DISTINCT from wms's
- * NESTED `{ error: { code … } }`. The wire shape is byte-identical
- * to scm's and finance's flat envelope, but erp is a DISTINCT
- * producer with its own error-code vocabulary (e.g.
- * `MASTERDATA_NOT_FOUND`, `TENANT_FORBIDDEN`, `DATA_SCOPE_FORBIDDEN`,
- * `EXTERNAL_TRAFFIC_REJECTED`). `parseErpError()` reads the flat
- * shape against the erp vocabulary. A test demonstrates that a
- * wms-nested body is NOT mis-parsed (no accidental cross-wire); each
- * domain owns its own parser even when the wire shape is identical.
+ * `{ code, message, details?, timestamp }` (DISTINCT from wms's NESTED
+ * `{ error: { code } }`); the shared parser reads the flat shape against the
+ * erp vocabulary (`MASTERDATA_NOT_FOUND`, `TENANT_FORBIDDEN`,
+ * `DATA_SCOPE_FORBIDDEN`, `EXTERNAL_TRAFFIC_REJECTED`). A wms-nested body is NOT
+ * mis-parsed (each domain owns its own envelope correctness).
  *
- * **NO 429 handling** (§ 2.4.8, identical to finance § 2.4.7 — honest
- * difference from scm § 2.4.6): `masterdata-api.md` § Error code →
- * HTTP status has NO `429` entry. This client does NOT add a
- * Retry-After / backoff branch. If erp ever returns a `429` it falls
- * through to the default-error path (a surfaced `ApiError` — the
- * UI rendering it as an unexpected error is better than a fabricated
- * backoff). A test asserts the absence (mock-feeds a 429 and
- * verifies the client did NOT retry-storm and did NOT take a
- * Retry-After branch).
+ * NO rate-limit handling (§ 2.4.8, identical to finance § 2.4.7 — honest
+ * difference from scm § 2.4.6): `masterdata-api.md` documents no `429`; the
+ * profile supplies no rate-limit policy, so a stray 429 surfaces through the
+ * default-error path as a plain `ApiError` (no backoff, no Retry-After honour).
  *
- * Resilience (§ 2.5 / integration-heavy I1): AbortController hard
- * timeout (no unbounded default); `401` → `ApiError` (forced
- * WHOLE-SESSION IAM re-login — not a per-section degrade); `403` →
- * `ApiError` (inline "not available / not scoped"); `404
- * MASTERDATA_NOT_FOUND` → `ApiError` (inline actionable "no such
- * record"); `400` / `422` → `ApiError` (inline actionable, no crash);
- * `503` / timeout / network → `ErpUnavailableError` (ONLY the erp
- * section degrades — shell + GAP/wms/scm/finance sections intact).
+ * Resilience (§ 2.5): AbortController hard timeout; `401` → whole-session
+ * re-login `ApiError`; `403` → inline `ApiError`; `404 MASTERDATA_NOT_FOUND` /
+ * `400` / `422` → inline `ApiError`; `503` / timeout / network →
+ * `ErpUnavailableError` (ONLY the erp section degrades).
  *
- * Confidential / audit-heavy (§ 2.4.8): structured logs are
- * server-side only; the IAM access token, employee PII (names /
- * contact), business-partner financial details (`paymentTerms`),
- * cost-center sensitive attrs, and any record ids in path-form are
- * NEVER logged (redacted) — the log payloads below carry ONLY
- * `requestId` + a sanitised route shape (no `{id}` substitution
- * leaks because the log field is the route shape with a literal
- * `{id}` placeholder, NOT the URL).
+ * Confidential / audit-heavy (§ 2.4.8): structured logs are server-side only;
+ * the token, employee PII, business-partner financial details, cost-center
+ * attrs, and record ids are NEVER logged — the log `path` carries the sanitised
+ * `logPath` route shape (a literal `{id}` placeholder, NOT the URL).
  */
 
 interface CallOptions {
-  /** Path relative to `${ERP_BASE_URL}` (e.g.
-   *  `/api/erp/masterdata/departments`). The path is built by the
-   *  caller including any encoded `{id}` AND the URLSearchParams
-   *  for `asOf` + filters + pagination — this client never mutates
-   *  it. */
+  /** Path relative to `${ERP_BASE_URL}` (built by the caller, including any
+   *  encoded `{id}` AND the URLSearchParams for `asOf` + filters + pagination). */
   path: string;
   /** Sanitised path shape for logging (no record id / no PII —
    *  e.g. `/api/erp/masterdata/departments/{id}`). */
   logPath: string;
-  /** HTTP method. Defaults to `GET` (the read surface). The
-   *  department write PILOT (TASK-PC-FE-046, § 2.4.8) supplies
-   *  `POST` / `PATCH`. Reads NEVER set this (the "pure GET" test
-   *  pins their method = GET, no body, no mutation headers). */
+  /** HTTP method. Defaults to `GET` (the read surface). The write functions
+   *  supply `POST` / `PATCH`. Reads NEVER set this. */
   method?: 'GET' | 'POST' | 'PATCH';
-  /** JSON request body for a mutation (department write PILOT only).
-   *  Undefined on reads — a test asserts reads carry no body. */
+  /** JSON request body for a mutation. Undefined on reads (a test asserts reads
+   *  carry no body). */
   body?: unknown;
-  /** `Idempotency-Key` header value — REQUIRED on every department
-   *  mutation (E1 / transactional T1), generated console-side per
-   *  attempt. Undefined on reads (asserted absent on the read path). */
+  /** `Idempotency-Key` header value — set on every master mutation, generated
+   *  console-side per attempt. Undefined on reads (asserted absent). */
   idempotencyKey?: string;
 }
 
 /**
- * Parses the erp FLAT error envelope
- * (`{ code, message, details?, timestamp }`). Defensive: a missing /
- * nested (wms-shaped) / non-JSON body degrades to a synthetic code
- * rather than throwing (the producer is the authority for the real
- * code; this never crashes the console on a malformed error body).
- * A wms-nested parser would MISS the erp flat `code` — this is the
- * per-domain envelope correctness pinned by tests. NOTE: erp is a
- * DISTINCT producer from scm / finance — even though the wire shape
- * is byte-identical, this parser is intentionally erp-local (its
- * `details` field is preserved for downstream rendering).
+ * erp profile for the shared {@link callFlatEnvelopeGateway} core: degrades via
+ * {@link ErpUnavailableError} and logs `erp_*` events against the erp
+ * `masterdata-service` at `${ERP_BASE_URL}` (timeout `ERP_TIMEOUT_MS`). No
+ * rate-limit policy (erp documents no 429) and no idempotency fail-fast guard
+ * (the header is attached only when present).
  */
-async function parseErpError(
-  res: Response,
-): Promise<{
-  code: string;
-  message: string;
-  details?: unknown;
-  timestamp?: string;
-}> {
-  let code = `HTTP_${res.status}`;
-  let message = `erp request failed (${res.status})`;
-  let details: unknown | undefined;
-  let timestamp: string | undefined;
-  try {
-    const body = (await res.json()) as {
-      code?: string;
-      message?: string;
-      details?: unknown;
-      timestamp?: string;
-    };
-    if (body && typeof body === 'object') {
-      if (typeof body.code === 'string') code = body.code;
-      if (typeof body.message === 'string') message = body.message;
-      if ('details' in body) details = body.details;
-      if (typeof body.timestamp === 'string') timestamp = body.timestamp;
-    }
-  } catch {
-    /* keep the synthetic defaults — never throw on a bad error body */
-  }
-  return { code, message, details, timestamp };
-}
+const ERP_PROFILE: FlatEnvelopeGatewayProfile = {
+  logPrefix: 'erp',
+  requestFailedLabel: 'erp request failed',
+  resolveDefaults: (env) => ({
+    baseUrl: env.ERP_BASE_URL,
+    timeoutMs: env.ERP_TIMEOUT_MS,
+  }),
+  makeUnavailable: (reason, code, message) =>
+    new ErpUnavailableError(reason, code, message),
+  isUnavailable: (err) => err instanceof ErpUnavailableError,
+  messages: {
+    degraded: 'erp unavailable',
+    timeout: 'erp call timed out',
+    network: 'erp call failed',
+  },
+};
 
 /**
- * Single hardened call site. Resolves the IAM OIDC access token,
- * applies the timeout, maps the erp FLAT error envelope to the
- * § 2.5 resilience taxonomy.
- *
- * **No 429 / Retry-After / backoff branch** (§ 2.4.8, honest
- * difference from scm; identical to finance § 2.4.7). If erp ever
- * returned a 429 it would surface as a generic `ApiError(429, …)`
- * through the default `!res.ok` path — but never as a retry,
- * never as a `Retry-After` honour. A test asserts this absence.
+ * Single hardened call site — a thin wrapper over the shared
+ * {@link callFlatEnvelopeGateway} core with the {@link ERP_PROFILE}. Returns the
+ * parsed body (the caller does not need the raw `Response`).
  */
 export async function callErp<T>(
   opts: CallOptions,
   parse: (json: unknown) => T,
 ): Promise<T> {
-  const env = getServerEnv();
-  const requestId = newRequestId();
-
-  // ── Per-domain credential (§ 2.4.8 reusing § 2.4.5): erp requires
-  //    the IAM OIDC ACCESS token directly. NEVER getOperatorToken() —
-  //    that is the GAP-domain (§ 2.6 exchanged) credential; erp
-  //    would reject it (wrong issuer/type). The #569 invariant is
-  //    GAP-domain-scoped.
-  //    ── ADR-MONO-020 D4 / § 2.7: the DOMAIN-FACING IAM OIDC token — the
-  //    ASSUMED (tenant-scoped) token when the operator has switched, else
-  //    the base access token (net-zero). Still NOT the operator token.
-  const token = await getDomainFacingToken();
-  if (!token) {
-    logger.warn('erp_no_gap_session', {
-      requestId,
-      path: opts.logPath,
-    });
-    // No IAM OIDC session ⇒ whole-session re-login (not a per-section
-    // degrade — no partial authed state).
-    throw new ApiError(401, 'UNAUTHORIZED', 'No IAM session');
-  }
-
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    Authorization: `Bearer ${token}`,
-    'X-Request-Id': requestId,
-    // NOTE: deliberately NO `X-Tenant-Id` — erp resolves tenant
-    // from the JWT `tenant_id` claim (§ 2.4.8 reuse of the § 2.4.5
-    // divergence) — UNCHANGED for the department write PILOT.
-    // NOTE: NEVER `X-Operator-Reason` — erp has no producer slot for
-    // it (that is a GAP/admin-service concept). The department write
-    // `reason` rides in the BODY where the producer has a slot
-    // (retire / move-parent), § 2.4.8.
-  };
-  const method = opts.method ?? 'GET';
-  // Department write PILOT (§ 2.4.8): mutations carry an
-  // `Idempotency-Key` (E1 / transactional T1) + a JSON body. Reads
-  // set NEITHER — the "every read is a pure GET" test pins their
-  // absence on the read path.
-  if (opts.idempotencyKey !== undefined) {
-    headers['Idempotency-Key'] = opts.idempotencyKey;
-  }
-  if (opts.body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.ERP_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${env.ERP_BASE_URL}${opts.path}`, {
-      method,
-      headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (res.status === 401) {
-      const e = await parseErpError(res);
-      logger.warn('erp_unauthorized', {
-        requestId,
-        status: 401,
-        code: e.code,
-        path: opts.logPath,
-      });
-      // IAM OIDC session expired → whole-session re-login (no
-      // partial authed state — NOT a per-section degrade).
-      throw new ApiError(401, e.code || 'UNAUTHORIZED', 'session expired');
-    }
-
-    if (res.status === 403) {
-      const e = await parseErpError(res);
-      logger.warn('erp_forbidden', {
-        requestId,
-        status: 403,
-        code: e.code,
-        path: opts.logPath,
-      });
-      // Token not erp-scoped / insufficient scope / outside org
-      // subtree (E6) / external traffic at the internal-only
-      // boundary (E7) → inline "not available / not scoped".
-      throw new ApiError(403, e.code || 'TENANT_FORBIDDEN', 'not permitted');
-    }
-
-    if (res.status === 503) {
-      const e = await parseErpError(res);
-      logger.warn('erp_degraded', {
-        requestId,
-        status: 503,
-        code: e.code,
-        path: opts.logPath,
-      });
-      // ONLY the erp section degrades — shell + GAP/wms/scm/finance
-      // sections intact.
-      throw new ErpUnavailableError(
-        e.code === 'CIRCUIT_OPEN' ? 'circuit_open' : 'downstream',
-        e.code || 'SERVICE_UNAVAILABLE',
-        'erp unavailable',
-      );
-    }
-
-    if (!res.ok) {
-      // 400/422 VALIDATION_ERROR, 404 MASTERDATA_NOT_FOUND, etc. —
-      // inline actionable (no crash). NOTE — a 429 from erp would
-      // land HERE (no Retry-After / backoff branch; erp has no
-      // documented 429 — the absence is an honest difference from
-      // scm § 2.4.6, identical to finance § 2.4.7, asserted by
-      // test).
-      const e = await parseErpError(res);
-      logger.warn('erp_request_error', {
-        requestId,
-        status: res.status,
-        code: e.code,
-        path: opts.logPath,
-      });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
-    }
-
-    const json = await res.json();
-    // Log ONLY status + the sanitised path — NEVER the response
-    // body (confidential + audit-heavy).
-    logger.info('erp_ok', {
-      requestId,
-      status: res.status,
-      path: opts.logPath,
-    });
-    return parse(json);
-  } catch (err) {
-    if (err instanceof ApiError || err instanceof ErpUnavailableError) {
-      throw err;
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      logger.warn('erp_timeout', {
-        requestId,
-        timeoutMs: env.ERP_TIMEOUT_MS,
-        path: opts.logPath,
-      });
-      throw new ErpUnavailableError(
-        'timeout',
-        'TIMEOUT',
-        'erp call timed out',
-      );
-    }
-    logger.error('erp_error', { requestId, path: opts.logPath });
-    throw new ErpUnavailableError(
-      'downstream',
-      'NETWORK_ERROR',
-      'erp call failed',
-    );
-  } finally {
-    clearTimeout(timer);
-  }
+  const { raw } = await callFlatEnvelopeGateway(
+    {
+      path: opts.path,
+      logPath: opts.logPath,
+      method: opts.method,
+      body: opts.body,
+      idempotencyKey: opts.idempotencyKey,
+    },
+    parse,
+    ERP_PROFILE,
+  );
+  return raw;
 }

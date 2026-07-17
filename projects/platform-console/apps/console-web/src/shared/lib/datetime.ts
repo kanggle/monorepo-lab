@@ -51,3 +51,20 @@ export function formatDate(
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('ko-KR', { timeZone: TZ });
 }
+
+/**
+ * Buckets an elapsed age (in seconds) into a Korean relative-time label:
+ * `방금` / `N분 전` / `N시간 전` / `N일 전`. Negative ages (clock skew) clamp
+ * to `방금`. Unbounded at day granularity — a caller that wants an absolute
+ * date past some threshold checks that threshold itself before delegating here.
+ *
+ * Extracted (TASK-PC-FE-246) from two byte-identical copies: `FxRatesTable`'s
+ * `humanizeAge` and `NotificationBell`'s `formatShortDate` relative buckets.
+ * TZ-free (no calendar formatting) so no `Asia/Seoul` pin is needed here.
+ */
+export function formatRelativeAge(ageSeconds: number): string {
+  if (ageSeconds < 60) return '방금';
+  if (ageSeconds < 3600) return `${Math.floor(ageSeconds / 60)}분 전`;
+  if (ageSeconds < 86400) return `${Math.floor(ageSeconds / 3600)}시간 전`;
+  return `${Math.floor(ageSeconds / 86400)}일 전`;
+}

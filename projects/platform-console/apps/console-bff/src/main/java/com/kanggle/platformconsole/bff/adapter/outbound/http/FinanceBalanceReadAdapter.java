@@ -2,7 +2,6 @@ package com.kanggle.platformconsole.bff.adapter.outbound.http;
 
 import com.kanggle.platformconsole.bff.application.port.outbound.DomainReadPort;
 import com.kanggle.platformconsole.bff.application.port.outbound.FinanceBalanceReadPort;
-import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -43,11 +42,6 @@ public class FinanceBalanceReadAdapter implements FinanceBalanceReadPort {
 
     public FinanceBalanceReadAdapter(@Qualifier("financeRestClient") RestClient client) {
         this.client = client;
-    }
-
-    @Override
-    public DomainTarget domainTarget() {
-        return DomainTarget.FINANCE;
     }
 
     /**

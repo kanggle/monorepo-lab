@@ -37,9 +37,11 @@ import java.time.Instant;
  * It is read by {@code OperatorCredentialContext} ({@code @RequestScope}) for
  * outbound dispatch only — the inbound auth filter never sees it as a principal.
  *
- * <p>No composition routes exist yet (skeleton only, TASK-PC-BE-001). The
- * {@code authenticated()} rule ensures that any future endpoint added by
- * TASK-PC-FE-011 cannot silently slip past authentication.
+ * <p>Three composition routes are live today — {@code DomainHealthController},
+ * {@code NotificationAggregatorController}, and {@code OperatorOverviewController}
+ * (all backed by the shared {@code CompositionEngine} fan-out). The
+ * {@code authenticated()} rule ensures that any future composition endpoint
+ * cannot silently slip past authentication.
  */
 @Configuration
 @EnableWebSecurity

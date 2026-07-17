@@ -19,23 +19,9 @@ public final class DegradePolicy {
     private DegradePolicy() {}
 
     /**
-     * Returns true if at least one leg is degraded or forbidden.
-     */
-    public static boolean isPartialFailure(List<LegOutcome> outcomes) {
-        return outcomes.stream().anyMatch(o -> !o.isOk());
-    }
-
-    /**
      * Returns true if every leg is degraded or forbidden (all-down scenario).
      */
     public static boolean isAllDown(List<LegOutcome> outcomes) {
         return !outcomes.isEmpty() && outcomes.stream().noneMatch(LegOutcome::isOk);
-    }
-
-    /**
-     * Returns the number of legs that require a degraded placeholder card.
-     */
-    public static long countDegraded(List<LegOutcome> outcomes) {
-        return outcomes.stream().filter(o -> o.isDegraded() || o.isForbidden()).count();
     }
 }

@@ -102,11 +102,6 @@ public class OperatorOverviewCompositionUseCase {
         this.ecommercePort = ecommercePort;
     }
 
-    /** Backward-compatible 1-arg overload — equivalent to {@code compose(tenantId, null)}. */
-    public List<CompositionLeg> compose(String tenantId) {
-        return compose(tenantId, null);
-    }
-
     /**
      * Composes the operator overview by firing 6 parallel outbound legs.
      *

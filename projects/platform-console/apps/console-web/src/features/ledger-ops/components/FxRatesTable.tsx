@@ -1,7 +1,7 @@
 'use client';
 
 import type { FxRatesResponse } from '../api/types';
-import { formatDateTime } from '@/shared/lib/datetime';
+import { formatDateTime, formatRelativeAge } from '@/shared/lib/datetime';
 import { statusToneColorClass } from '@/shared/ui/StatusBadge';
 
 /**
@@ -46,20 +46,6 @@ export interface FxRatesTableProps {
   onSelectPair?: (foreignCurrency: string) => void;
 }
 
-/**
- * Converts `ageSeconds` to a human-friendly Korean string.
- *   < 0 or < 60 s  → "방금"
- *   60 s–3599 s    → "N분 전"
- *   3600 s–86399 s → "N시간 전"
- *   ≥ 86400 s      → "N일 전"
- * Negative values (clock skew) are treated as "방금" (clamped).
- */
-function humanizeAge(ageSeconds: number): string {
-  if (ageSeconds < 60) return '방금';
-  if (ageSeconds < 3600) return `${Math.floor(ageSeconds / 60)}분 전`;
-  if (ageSeconds < 86400) return `${Math.floor(ageSeconds / 3600)}시간 전`;
-  return `${Math.floor(ageSeconds / 86400)}일 전`;
-}
 
 export function FxRatesTable({ data, onRefresh, refreshing = false, onSelectPair }: FxRatesTableProps) {
   if (!data) {
@@ -188,7 +174,7 @@ export function FxRatesTable({ data, onRefresh, refreshing = false, onSelectPair
                 <td className="p-2 text-muted-foreground">{formatDateTime(rate.asOf)}</td>
                 <td className="p-2 text-muted-foreground">{formatDateTime(rate.fetchedAt)}</td>
                 <td className="p-2 text-muted-foreground">
-                  {humanizeAge(rate.ageSeconds)}
+                  {formatRelativeAge(rate.ageSeconds)}
                 </td>
                 <td className="p-2">
                   {rate.stale ? (

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/shared/lib/cn';
+import { formatRelativeAge } from '@/shared/lib/datetime';
 import { useNotificationInbox, useMarkNotificationRead } from '../hooks/use-notifications';
 import {
   isApprovalSource,
@@ -36,19 +37,15 @@ import {
  * SPA navigation from refetch-storming. The count refreshes after a mark-read.
  */
 
-/** Formats a UTC ISO-8601 string to a short human-readable label. */
+/** Formats a UTC ISO-8601 string to a short human-readable label: the shared
+ *  relative-time buckets (방금 / N분 전 / N시간 전 / N일 전) up to 30 days, then
+ *  an absolute short date. */
 function formatShortDate(iso: string): string {
   try {
     const d = new Date(iso);
     const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMin = Math.floor(diffMs / 60_000);
-    if (diffMin < 1) return '방금';
-    if (diffMin < 60) return `${diffMin}분 전`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}시간 전`;
-    const diffDay = Math.floor(diffHr / 24);
-    if (diffDay < 30) return `${diffDay}일 전`;
+    const ageSeconds = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (ageSeconds < 30 * 86400) return formatRelativeAge(ageSeconds);
     return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
   } catch {
     return '';

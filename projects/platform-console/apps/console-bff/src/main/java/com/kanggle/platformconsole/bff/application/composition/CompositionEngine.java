@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -28,7 +27,7 @@ import java.util.function.Supplier;
  * composition use-cases (TASK-PC-BE-005 L6 duplication extraction).
  *
  * <p>Hosts the {@link #COMPOSITION_TIMEOUT} composition-level deadline,
- * the fixed {@link #CARD_ORDER}, the virtual-thread {@code fanOut}
+ * the virtual-thread {@code fanOut}
  * coordination, the per-leg latency {@link Timer} site (route-tagged),
  * the pending-leg {@code TIMEOUT} fallback, and the
  * {@link #emitErrorCounter(DomainTarget, String)} site for
@@ -89,26 +88,6 @@ public final class CompositionEngine {
      */
     public static final Duration COMPOSITION_TIMEOUT = Duration.ofSeconds(5);
 
-    /**
-     * The historic 5-domain leg order, retained as a convenience constant for
-     * callers/tests that still want the original shared set.
-     *
-     * <p><b>TASK-MONO-241 decoupling</b>: {@link #fanOut(String, Map)} no longer
-     * iterates this constant — it iterates the {@code legBodies} map it is
-     * handed (enum-order via {@link EnumMap}). Each use-case now owns its own
-     * card order ({@code OperatorOverviewCompositionUseCase.CARD_ORDER} = these
-     * 5; {@code DomainHealthCompositionUseCase.CARD_ORDER} = these 5 +
-     * {@link DomainTarget#ECOMMERCE}). The engine is order-agnostic and simply
-     * preserves whatever order the provided map yields.
-     */
-    public static final List<DomainTarget> CARD_ORDER = List.of(
-            DomainTarget.IAM,
-            DomainTarget.WMS,
-            DomainTarget.SCM,
-            DomainTarget.FINANCE,
-            DomainTarget.ERP
-    );
-
     private final MeterRegistry meterRegistry;
     private final Tracer tracer;
     private final String routeLabel;
@@ -131,10 +110,6 @@ public final class CompositionEngine {
         this.meterRegistry = meterRegistry;
         this.tracer = tracer;
         this.routeLabel = routeLabel;
-    }
-
-    public String routeLabel() {
-        return routeLabel;
     }
 
     // ------------------------------------------------------------------

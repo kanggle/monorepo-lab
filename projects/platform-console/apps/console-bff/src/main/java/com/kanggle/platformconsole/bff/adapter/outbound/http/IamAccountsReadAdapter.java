@@ -39,11 +39,6 @@ public class IamAccountsReadAdapter implements IamAccountsReadPort {
     }
 
     @Override
-    public DomainTarget domainTarget() {
-        return DomainTarget.IAM;
-    }
-
-    @Override
     public Map<String, Object> read(String tenantId, String credential) {
         return RestClientHelper.authenticatedGet(
                 client,

@@ -1,7 +1,6 @@
 package com.kanggle.platformconsole.bff.application.port.outbound;
 
 import com.kanggle.platformconsole.bff.domain.composition.LegOutcome;
-import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
 
 /**
  * Outbound port: reads a domain's data for use in a composition route.
@@ -17,11 +16,6 @@ import com.kanggle.platformconsole.bff.domain.credential.DomainTarget;
  * @param <R> the response data type for this domain read
  */
 public interface DomainReadPort<R> {
-
-    /**
-     * Returns the target domain this port serves.
-     */
-    DomainTarget domainTarget();
 
     /**
      * Performs the read. If the domain leg fails, the implementation wraps
