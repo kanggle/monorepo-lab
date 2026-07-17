@@ -1,7 +1,7 @@
 # TASK-MONO-422 — promote the internal-endpoint scope discriminator to a shared library and close the remaining IAM `/internal/**` shared-issuer stragglers (auth-service, security-service)
 
 - **Type**: TASK-MONO (monorepo-level — touches `libs/` shared path + 3 iam-platform services in one atomic cross-project PR)
-- **Status**: review
+- **Status**: done
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (security authz, cross-cutting shared-lib, multi-service)
 
 ## Goal
