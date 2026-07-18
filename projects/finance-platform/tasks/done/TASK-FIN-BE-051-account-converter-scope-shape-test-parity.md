@@ -1,7 +1,7 @@
 # TASK-FIN-BE-051 — account ActorContextJwtAuthenticationConverter: scope-shape unit-test parity with ledger
 
 - **Type**: TASK-FIN-BE (test-only parity fix)
-- **Status**: review
+- **Status**: done
 - **Service**: account-service (finance-platform)
 - **Domain/traits**: saas / [transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (test-only, mechanical parity)
