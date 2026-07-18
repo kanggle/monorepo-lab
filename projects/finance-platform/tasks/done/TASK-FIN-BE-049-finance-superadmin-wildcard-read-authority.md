@@ -1,7 +1,7 @@
 # TASK-FIN-BE-049 — finance super-admin wildcard READ authority parity (account + ledger)
 
 - **Type**: TASK-FIN-BE (backend — Spring Security authorization gate)
-- **Status**: review
+- **Status**: done
 - **Service**: finance-platform `account-service` + `ledger-service` (identical gate in each)
 - **Domain/traits**: saas / [transactional]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (security-critical authorization gate)
