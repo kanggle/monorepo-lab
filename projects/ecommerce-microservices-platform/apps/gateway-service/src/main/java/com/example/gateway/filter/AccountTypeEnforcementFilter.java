@@ -1,5 +1,6 @@
 package com.example.gateway.filter;
 
+import com.example.security.oauth2.TenantClaimValidator;
 import com.example.web.dto.ErrorResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,10 +10,12 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -21,7 +24,9 @@ import reactor.core.publisher.Mono;
 /**
  * Enforces role-based admission per route (ADR-MONO-035 4b-2a / ADR-032 D3):
  * <ul>
- *   <li>{@code /api/admin/**} → requires the {@code ECOMMERCE_OPERATOR} role; any other token → 403</li>
+ *   <li>{@code /api/admin/**} → requires the {@code ECOMMERCE_OPERATOR} role, <b>or</b> a
+ *       platform SUPER_ADMIN wildcard token ({@code tenant_id="*"}) on a <b>safe (read) method</b>
+ *       (GET/HEAD) only (TASK-BE-506); any other token → 403</li>
  *   <li>{@code operator-on-public} read trees ({@code /api/promotions},
  *       {@code /api/shippings}, {@code /api/notifications}) → admit {@code CUSTOMER}
  *       <b>or</b> {@code ECOMMERCE_OPERATOR}; the per-endpoint operator/consumer split is enforced
@@ -74,7 +79,8 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
                     java.util.List<String> roles = token.getClaimAsStringList("roles");
                     boolean isAdmin = path.startsWith("/api/admin/");
                     if (isAdmin) {
-                        boolean allowed = hasRole(roles, "ECOMMERCE_OPERATOR");
+                        boolean allowed = hasRole(roles, "ECOMMERCE_OPERATOR")
+                                || isSuperAdminWildcardRead(exchange, token);
                         return Mono.just(allowed);
                     } else {
                         // Consumers (CUSTOMER) pass everywhere on the public tree; operators
@@ -105,6 +111,39 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
 
     private static boolean hasRole(java.util.List<String> roles, String role) {
         return roles != null && roles.contains(role);
+    }
+
+    /**
+     * TASK-BE-506: admit a platform SUPER_ADMIN <b>wildcard</b> token on {@code /api/admin/**}
+     * for <b>read (safe) methods only</b>.
+     *
+     * <p>The platform super-admin's console operator-overview forwards the operator's base OIDC
+     * domain-facing token: {@code tenant_id="*"}, scope {@code openid profile email tenant.read},
+     * and <b>no {@code roles} claim</b> — the admin-plane {@code SUPER_ADMIN} role is deliberately
+     * kept off the domain token (ADR-033 S2 / ADR-034 U5). The layer-1 tenant gate already admits
+     * the wildcard ({@code allowSuperAdminWildcard()}); this account-type plane was the straggler
+     * that 403'd it for lack of {@code ECOMMERCE_OPERATOR}. Opening the read path here makes the
+     * console ecommerce overview card consistent with the finance (FIN-BE-048/049) and erp
+     * (ERP-BE-031) parity fixes (FIN-BE-050 sibling-parity audit provenance).
+     *
+     * <p><b>Invariant — widen READ visibility only, never mutation.</b> The admission is gated
+     * strictly on (safe method {@code AND} {@code tenant_id="*"}); a wildcard super-admin token is
+     * still 403'd on any write (POST/PUT/PATCH/DELETE) to {@code /api/admin/**}. This is an
+     * account-type-plane bypass, not a resource-server authority grant, and — because the
+     * downstream product-service trusts the gateway-injected headers — the gateway is the sole
+     * enforcement point, so the short-circuit is exactly this and nothing wider. The shared
+     * {@link TenantClaimValidator#WILDCARD_TENANT} constant is the same value the layer-1 gate
+     * admits on, so the two cannot drift.
+     */
+    private static boolean isSuperAdminWildcardRead(ServerWebExchange exchange, Jwt token) {
+        return isSafeMethod(exchange.getRequest().getMethod())
+                && TenantClaimValidator.WILDCARD_TENANT.equals(
+                        token.getClaimAsString(TenantClaimValidator.CLAIM_TENANT_ID));
+    }
+
+    /** Safe (read-only, side-effect-free) HTTP methods: GET and HEAD. */
+    private static boolean isSafeMethod(HttpMethod method) {
+        return HttpMethod.GET.equals(method) || HttpMethod.HEAD.equals(method);
     }
 
     /**

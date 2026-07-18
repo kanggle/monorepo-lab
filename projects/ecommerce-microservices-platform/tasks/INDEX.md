@@ -84,6 +84,7 @@ _(없음)_
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-506 | **REVIEW (impl PR open).** account-type 평면(`AccountTypeEnforcementFilter`)이 플랫폼 SUPER_ADMIN 의 wildcard 토큰(`tenant_id='*'`, roles 없음)을 `/api/admin/**` 에서 403 → 콘솔 operator-overview ecommerce 카드가 `forbidden`. `TASK-FIN-BE-050` sibling-parity 감사 provenance; finance(FIN-BE-048/049)·erp(ERP-BE-031) 정합. **수정 = READ(safe method GET/HEAD) AND `tenant_id='*'` 한정 admit** — write 는 operator-gated 유지(불변식: READ 가시성만 넓히고 mutation 은 절대 안 넓힌다). 공유 `TenantClaimValidator.WILDCARD_TENANT` 사용, layer-1 tenant gate 와 drift 없음. account-type 평면 bypass(게이트웨이가 유일 집행점 — downstream header-trust). RED-before/GREEN-after 확인(short-circuit 제거→GET/HEAD 2건 RED, write/non-wildcard/operator 무변). 분석·구현=Opus 4.8. | gateway-service | code, security, gateway |
 
 ## done
 
