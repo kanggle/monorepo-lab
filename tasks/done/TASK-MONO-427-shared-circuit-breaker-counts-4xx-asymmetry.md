@@ -1,7 +1,7 @@
 # TASK-MONO-427 — shared `ResilienceClientFactory` circuit breaker counts 4xx as failures (retry already ignores them) — a client error can open the circuit and cascade
 
 - **Type**: TASK-MONO (monorepo-level — shared library `libs/java-common`)
-- **Status**: ready
+- **Status**: done
 - **Scope path**: `libs/java-common/.../resilience/ResilienceClientFactory.java` (shared) + fleet impact
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (shared-lib resilience change, cross-service blast radius)
 
