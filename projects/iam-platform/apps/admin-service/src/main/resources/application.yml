@@ -200,6 +200,9 @@ resilience4j:
         randomized-wait-factor: 0.5
         ignore-exceptions:
           - com.example.admin.application.exception.NonRetryableDownstreamException
+          # TASK-BE-516: account-service business responses (4xx conflicts / not-found /
+          # 422 invariant) are definitive downstream answers, not faults — never retry them.
+          - com.example.admin.application.exception.AccountBusinessException
       authService:
         max-attempts: 3
         wait-duration: 500ms
@@ -239,6 +242,12 @@ resilience4j:
         register-health-indicator: true
         ignore-exceptions:
           - com.example.admin.application.exception.NonRetryableDownstreamException
+          # TASK-BE-516: account-service business responses (4xx conflicts / not-found /
+          # 422 invariant) must NOT count toward the circuit-breaker failure rate — they are
+          # definitive downstream answers, not faults. Without this a burst of business 409s
+          # (e.g. repeated SUSPEND on an already-suspended subscription) trips the circuit and
+          # the next legitimate call gets CIRCUIT_OPEN 503. Base type covers every subtype.
+          - com.example.admin.application.exception.AccountBusinessException
       authService:
         base-config: default
         failure-rate-threshold: 50

@@ -4,7 +4,7 @@ package com.example.admin.application.exception;
  * TASK-BE-250: Thrown when a requested tenant does not exist.
  * Maps to 404 TENANT_NOT_FOUND.
  */
-public class TenantNotFoundException extends RuntimeException {
+public class TenantNotFoundException extends AccountBusinessException {
 
     private final String tenantId;
 

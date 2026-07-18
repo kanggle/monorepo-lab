@@ -8,7 +8,7 @@ package com.example.admin.application.exception;
  * existence of a node outside the actor's subtree. Same enumeration-safety convention as
  * the cross-tenant account path (BE-467) and {@code OperatorAdminScopeConfinementIntegrationTest}.
  */
-public class OrgNodeNotFoundException extends RuntimeException {
+public class OrgNodeNotFoundException extends AccountBusinessException {
     public OrgNodeNotFoundException(String message) {
         super(message);
     }

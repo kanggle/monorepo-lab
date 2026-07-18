@@ -4,7 +4,7 @@ package com.example.admin.application.exception;
  * TASK-BE-250: Thrown when a tenant with the given tenantId already exists.
  * Maps to 409 TENANT_ALREADY_EXISTS.
  */
-public class TenantAlreadyExistsException extends RuntimeException {
+public class TenantAlreadyExistsException extends AccountBusinessException {
 
     private final String tenantId;
 
