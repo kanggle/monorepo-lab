@@ -1,10 +1,10 @@
 # ADR-MONO-046 — Operator Group Model (a first-class grouping primitive for `admin_operators` that lets an admin assign roles / tenant-assignments to **many operators as a unit** — the workforce-grouping facet AWS IAM User Group, IdC Group, and Google Group all provide but the portfolio has never had)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 
 **Date:** 2026-07-08
 
-**History:** PROPOSED 2026-07-08 (records the **operator-grouping model**: how a set of `admin_operators` becomes a named unit to which roles and tenant-assignments can be granted **once** instead of per-operator, and how that grouping stays **tenant-scoped**, **no-escalation-capped**, and **relationship-tracked for cascade removal**. Decisions D1–D6, **CHOSEN-PROPOSED** direction per the reasoning below; the ACCEPTED transition is a separate user-explicit-intent-gated task, mirroring the ADR-019/020/023/024/045 staged-child pattern. **No implementation in this task — decision record + impact scope + execution roadmap only. Self-ACCEPT prohibited.**)
+**History:** PROPOSED 2026-07-08 (records the **operator-grouping model**: how a set of `admin_operators` becomes a named unit to which roles and tenant-assignments can be granted **once** instead of per-operator, and how that grouping stays **tenant-scoped**, **no-escalation-capped**, and **relationship-tracked for cascade removal**. Decisions D1–D6, **CHOSEN-PROPOSED** direction per the reasoning below; the ACCEPTED transition is a separate user-explicit-intent-gated task, mirroring the ADR-019/020/023/024/045 staged-child pattern. **No implementation in this task — decision record + impact scope + execution roadmap only. Self-ACCEPT prohibited.**) · ACCEPTED 2026-07-19 (TASK-MONO-428 — user-explicit intent **"ADR-046 ACCEPT + 에픽 착수"** issued 2026-07-19 through the decision gate, **naming the ADR**; this was **NOT a self-ACCEPT**. The CHOSEN-PROPOSED direction D1–D6 is finalised **byte-unchanged**; the § 4 execution roadmap is **UNPAUSED** and its steps spawned as `TASK-BE-519` (spec) → `TASK-BE-520` (backend) → `TASK-PC-FE-250` (console).)
 
 **Decision driver:** The portfolio's IAM plane realizes operators (`admin_operators`), roles (`admin_operator_roles` / `admin_roles` → `admin_role_permissions`), and multi-tenant grants (`operator_tenant_assignment` + `permission_set_id`, ADR-020/024). RBAC evaluation is the **union of an operator's role→permission sets** — flat, no hierarchy, no inheritance (`rbac.md` § evaluation). **There is no primitive for grouping operators.** Every grant is per-`(operator, …)`: onboarding a five-person support squad to three tenants is 15 manual assignment rows, and a role change re-touches each. This is exactly the workforce-grouping facet that AWS **IAM User Group** / IdC **Group** and GCP **Google Group** provide (attach a policy/role to a group; membership inherits). The portfolio has faked it with per-individual rows, with two costs the exploration confirmed: (a) **N× manual repetition** on grant and on change; (b) **no unit** to reason about, audit, or revoke as a whole. Building operator grouping during implementation would silently bake a **new authorization-origination axis** (HARDSTOP-09): whether a group *inherits* (a new evaluation path through `PermissionEvaluator` + cache invalidation + the three `rbac.md` confinement axes) or merely *fans out* (a bulk-assign convenience that materializes ordinary assignment rows and never touches evaluation); whether groups are tenant-scoped; whether group grants are no-escalation-capped; and what happens to a member's access on group deletion / membership removal. Each is load-bearing and must not be chosen implicitly.
 
@@ -14,7 +14,7 @@
 
 ---
 
-> **PROPOSED (staged, sibling: ADR-019/020/023/024/045).** This ADR records the **decision direction** (D1–D6) + the **invariants the chosen direction preserves** (M1–M7 untouched; `SUPER_ADMIN` net-zero; group grants ≤ what the granter holds; deny-default; fail-closed; ADR-023 plane separation) + a **zero-regression execution roadmap**. The roadmap steps are **PAUSED** until a separate user-explicit ACCEPT gate. **Self-ACCEPT prohibited.** No implementation in this task.
+> **ACCEPTED 2026-07-19 (TASK-MONO-428; staged, sibling: ADR-019/020/023/024/045).** This ADR records the **decision direction** (D1–D6) + the **invariants the chosen direction preserves** (M1–M7 untouched; `SUPER_ADMIN` net-zero; group grants ≤ what the granter holds; deny-default; fail-closed; ADR-023 plane separation) + a **zero-regression execution roadmap**. The roadmap steps are now **UNPAUSED** — the user-explicit ACCEPT gate was opened 2026-07-19 by the ADR-naming intent **"ADR-046 ACCEPT + 에픽 착수"** (recorded in History). This was **NOT a self-ACCEPT** (the agent authored the PROPOSED record; a human ratified it). D1–D6 are finalised byte-unchanged; § 4 spawns `TASK-BE-519` → `TASK-BE-520` → `TASK-PC-FE-250`.
 
 ---
 
@@ -100,13 +100,13 @@ Six axes. Each table's first row is **CHOSEN (PROPOSED direction)**.
 
 ---
 
-## 4. Execution roadmap (PAUSED until ACCEPT)
+## 4. Execution roadmap (UNPAUSED — ACCEPTED 2026-07-19, TASK-MONO-428)
 
-Each step is a separate dependency-ordered task spawned off the ACCEPTED main (sibling: ADR-045 § 3.4). **None may start before the user-explicit ACCEPT gate.**
+Each step is a separate dependency-ordered task spawned off the ACCEPTED main (sibling: ADR-045 § 3.4). The user-explicit ACCEPT gate was **opened 2026-07-19** (see History / § banner); the three steps below are spawned into their owning projects' `ready/` queues by TASK-MONO-428 so implementation is task-backed from the first commit (HARDSTOP-05). Dependency order is strict: step 2 depends on step 1's contracts; step 3 depends on step 2's API.
 
-1. **Spec** (`iam-platform`, backend) — `rbac.md` (`group.manage` key + seed matrix; note v1 fan-out, evaluation unchanged), `data-model.md` (group tables DDL + classification), `contracts/http/admin-api.md` (group CRUD + membership + group-grant endpoints), `features/operator-management.md`. **Contracts/specs precede code (Change Rule).**
-2. **Backend** (`iam-platform`) — Flyway `operator_group` + `operator_group_member` (+ `group_origin` marker on fan-out rows); JPA entities + repository/adapter/port; `GroupAdminController` (`/api/admin/groups` CRUD, `/{id}/members`, `/{id}/grants`); fan-out/cascade service (D5) with transaction + outbox atomicity; `group.manage` seed; `@RequiresPermission` + `admin_actions`; `TenantScopeGuard` confinement. Tests: Unit (fan-out/cascade + audit-on-failure), Integration (Testcontainers + WireMock), Security (non-admin 403), Audit immutability, Fail-closed, no-escalation matrix.
-3. **Frontend** (`platform-console`) — 「운영자 그룹」 screen (`src/features/operator-groups/`): CRUD, member management, group-level role/tenant assignment, no-escalation gating (grantable-roles convention). Consumes step-2 API.
+1. **Spec** (`iam-platform`, backend) — **`TASK-BE-519`** — `rbac.md` (`group.manage` key + seed matrix; note v1 fan-out, evaluation unchanged), `data-model.md` (group tables DDL + classification), `contracts/http/admin-api.md` (group CRUD + membership + group-grant endpoints), `features/operator-management.md`. **Contracts/specs precede code (Change Rule).**
+2. **Backend** (`iam-platform`) — **`TASK-BE-520`** — Flyway `operator_group` + `operator_group_member` (+ `group_origin` marker on fan-out rows); JPA entities + repository/adapter/port; `GroupAdminController` (`/api/admin/groups` CRUD, `/{id}/members`, `/{id}/grants`); fan-out/cascade service (D5) with transaction + outbox atomicity; `group.manage` seed; `@RequiresPermission` + `admin_actions`; `TenantScopeGuard` confinement. Tests: Unit (fan-out/cascade + audit-on-failure), Integration (Testcontainers + WireMock), Security (non-admin 403), Audit immutability, Fail-closed, no-escalation matrix.
+3. **Frontend** (`platform-console`) — **`TASK-PC-FE-250`** — 「운영자 그룹」 screen (`src/features/operator-groups/`): CRUD, member management, group-level role/tenant assignment, no-escalation gating (grantable-roles convention). Consumes step-2 API; **replaces** the `/operator-groups` stub route (TASK-PC-FE-225).
 
 Follow-up ADR (out of this scope): **inheritance semantics (D2-B)** — promote fan-out to an evaluation-time path if live-membership re-authorization is needed.
 
@@ -118,4 +118,4 @@ Follow-up ADR (out of this scope): **inheritance semantics (D2-B)** — promote 
 - **Negative / trade-offs** — fan-out is eventually-consistent with membership (a membership change requires a re-fan-out, not instant like inheritance); `group_origin` rows add lifecycle bookkeeping; inheritance power deferred.
 - **Neutral** — consumer grouping (Cognito-plane) remains unaddressed by design (D1-C deferred).
 
-**No implementation in this task.** PROPOSED → ACCEPTED is a separate user-explicit-gated step; **self-ACCEPT prohibited**.
+**ACCEPTED 2026-07-19 (TASK-MONO-428).** The PROPOSED → ACCEPTED transition was made through the user-explicit ACCEPT gate (ADR-naming intent **"ADR-046 ACCEPT + 에픽 착수"**, recorded in History) — **not a self-ACCEPT**. D1–D6 are finalised byte-unchanged; the § 4 roadmap is UNPAUSED and its steps are spawned as `TASK-BE-519` → `TASK-BE-520` → `TASK-PC-FE-250`. **Implementation now proceeds under those tasks, not this ADR.**
