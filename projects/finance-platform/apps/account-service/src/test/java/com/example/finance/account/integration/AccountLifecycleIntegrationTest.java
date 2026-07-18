@@ -1,13 +1,10 @@
 package com.example.finance.account.integration;
 
 import com.example.finance.account.application.AccountApplicationService;
-import com.example.finance.account.application.ActorContext;
 import com.example.finance.account.application.command.CaptureHoldCommand;
-import com.example.finance.account.application.command.OpenAccountCommand;
 import com.example.finance.account.application.command.PlaceHoldCommand;
 import com.example.finance.account.application.command.ReleaseHoldCommand;
 import com.example.finance.account.application.command.TransferCommand;
-import com.example.finance.account.application.command.UpgradeKycCommand;
 import com.example.finance.account.application.view.AccountView;
 import com.example.finance.account.domain.error.DomainErrors.SanctionHitException;
 import com.example.finance.account.infrastructure.persistence.jpa.AuditLogJpaRepository;
@@ -15,8 +12,6 @@ import com.example.finance.account.infrastructure.persistence.jpa.ComplianceRevi
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,11 +23,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
 
-    private static final ActorContext HOLDER =
-            new ActorContext("user-1", TENANT_FINANCE, Set.of());
-    private static final ActorContext OPERATOR =
-            new ActorContext("op-1", TENANT_FINANCE, Set.of("OPERATOR"));
-
     @Autowired
     AccountApplicationService service;
     @Autowired
@@ -40,18 +30,11 @@ class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
     @Autowired
     ComplianceReviewQueueJpaRepository reviewQueueJpa;
 
-    private AccountView openActiveFullKyc(String ownerRef) {
-        AccountView opened = service.openAccount(new OpenAccountCommand(
-                HOLDER, ownerRef, "KRW", "NONE"));
-        return service.upgradeKyc(new UpgradeKycCommand(
-                OPERATOR, opened.accountId(), "FULL", "kyc verified"));
-    }
-
     @Test
     @DisplayName("open → KYC upgrade → ACTIVE; audit_log rows written")
     void openKycActivate() {
         long auditBefore = auditLogJpa.count();
-        AccountView v = openActiveFullKyc("cust-open-1");
+        AccountView v = openActiveFullKyc(service, "cust-open-1");
         assertThat(v.status()).isEqualTo("ACTIVE");
         assertThat(v.kycLevel()).isEqualTo("FULL");
         // F6: OPEN_ACCOUNT + UPGRADE_KYC audit rows committed.
@@ -61,7 +44,7 @@ class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
     @Test
     @DisplayName("F2: hold → capture (partial) → remainder released; balances consistent")
     void holdCapturePartial() {
-        AccountView acc = openActiveFullKyc("cust-hcp-1");
+        AccountView acc = openActiveFullKyc(service, "cust-hcp-1");
         // Seed ledger via the v1 internal/stub funding source.
         service.topUp(HOLDER, acc.accountId(), 10_000L);
 
@@ -82,7 +65,7 @@ class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
     @Test
     @DisplayName("hold → release returns funds to available")
     void holdRelease() {
-        AccountView acc = openActiveFullKyc("cust-hr-1");
+        AccountView acc = openActiveFullKyc(service, "cust-hr-1");
         service.topUp(HOLDER, acc.accountId(), 5000L);
 
         var hold = service.placeHold(new PlaceHoldCommand(
@@ -99,8 +82,8 @@ class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
     @Test
     @DisplayName("F1: transfer is atomic — source debited + target credited exactly once")
     void transferAtomicity() {
-        AccountView from = openActiveFullKyc("cust-tf-from");
-        AccountView to = openActiveFullKyc("cust-tf-to");
+        AccountView from = openActiveFullKyc(service, "cust-tf-from");
+        AccountView to = openActiveFullKyc(service, "cust-tf-to");
         service.topUp(HOLDER, from.accountId(), 10_000L);
 
         var v = service.transfer(new TransferCommand(
@@ -118,7 +101,7 @@ class AccountLifecycleIntegrationTest extends AbstractAccountIntegrationTest {
     void sanctionHit() {
         // owner ref is registered as sanctioned via the IT-only property; the
         // gate rejects BEFORE any balance check so no funding is required.
-        AccountView acc = openActiveFullKyc("SANCTIONED-OWNER");
+        AccountView acc = openActiveFullKyc(service, "SANCTIONED-OWNER");
         long queueBefore = reviewQueueJpa.count();
 
         assertThatThrownBy(() -> service.placeHold(new PlaceHoldCommand(

@@ -47,14 +47,6 @@ class LedgerFxToleranceReconciliationIntegrationTest extends AbstractLedgerInteg
 
     private final HttpClient http = HttpClient.newHttpClient();
 
-    private HttpResponse<String> get(String path, String token) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + path))
-                .header("Authorization", "Bearer " + token)
-                .GET().build();
-        return http.send(req, HttpResponse.BodyHandlers.ofString());
-    }
-
     private HttpResponse<String> put(String path, String token, String body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
@@ -65,7 +57,7 @@ class LedgerFxToleranceReconciliationIntegrationTest extends AbstractLedgerInteg
         return http.send(req, HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> post(String path, String token, String body) throws Exception {
+    protected HttpResponse<String> post(String path, String token, String body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Authorization", "Bearer " + token)

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -35,17 +34,7 @@ import static org.awaitility.Awaitility.await;
  */
 class LedgerReconciliationIntegrationTest extends AbstractLedgerIntegrationTest {
 
-    private final HttpClient http = HttpClient.newHttpClient();
-
-    private HttpResponse<String> get(String path, String token) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + path))
-                .header("Authorization", "Bearer " + token)
-                .GET().build();
-        return http.send(req, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> post(String path, String token, String body) throws Exception {
+    protected HttpResponse<String> post(String path, String token, String body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Authorization", "Bearer " + token)

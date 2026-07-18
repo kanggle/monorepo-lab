@@ -7,7 +7,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -75,19 +74,7 @@ class LedgerRevaluationLotDistributionIntegrationTest extends AbstractLedgerInte
 
     /** Seed the unique ASSET account so the manual path (no lazy mint) accepts it. */
     private void seedAssetAccount() {
-        jdbcTemplate.update(
-                "INSERT INTO ledger_account (code, tenant_id, type, normal_side, created_at) "
-                        + "VALUES (?, 'finance', 'ASSET', 'DEBIT', ?) "
-                        + "ON DUPLICATE KEY UPDATE code = code",
-                FX_ACCOUNT, java.sql.Timestamp.from(Instant.now()));
-    }
-
-    private void setCostFlow(String method) {
-        jdbcTemplate.update(
-                "INSERT INTO fx_cost_flow_config (tenant_id, method, updated_by, updated_at) "
-                        + "VALUES ('finance', ?, 'it-operator', ?) "
-                        + "ON DUPLICATE KEY UPDATE method = VALUES(method)",
-                method, java.sql.Timestamp.from(Instant.now()));
+        seedAssetAccount(FX_ACCOUNT);
     }
 
     /** Post a single USD acquisition (DR FX_ACCOUNT foreign@base / CR SETTLEMENT_SUSPENSE base). */
@@ -122,25 +109,12 @@ class LedgerRevaluationLotDistributionIntegrationTest extends AbstractLedgerInte
 
     /** The FX_REVAL_USD_WALLET USD position's foreign balance + base carrying from journal_line. */
     private long[] usdPosition() {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT "
-                        + "COALESCE(SUM(CASE WHEN direction='DEBIT' THEN amount_minor ELSE 0 END),0) "
-                        + "- COALESCE(SUM(CASE WHEN direction='CREDIT' THEN amount_minor ELSE 0 END),0) AS f, "
-                        + "COALESCE(SUM(CASE WHEN direction='DEBIT' THEN base_amount_minor ELSE 0 END),0) "
-                        + "- COALESCE(SUM(CASE WHEN direction='CREDIT' THEN base_amount_minor ELSE 0 END),0) AS b "
-                        + "FROM journal_line WHERE tenant_id='finance' "
-                        + "AND ledger_account_code='" + FX_ACCOUNT + "' AND currency='USD'");
-        Map<String, Object> r = rows.get(0);
-        return new long[]{((Number) r.get("f")).longValue(), ((Number) r.get("b")).longValue()};
+        return positionFor(FX_ACCOUNT, "USD");
     }
 
     /** The open lots (remaining > 0) of the FX_REVAL_USD_WALLET USD position, FIFO-ordered. */
     private List<Map<String, Object>> openLots() {
-        return jdbcTemplate.queryForList(
-                "SELECT remaining_foreign_minor, carrying_base_minor, seq "
-                        + "FROM fx_position_lot WHERE tenant_id='finance' "
-                        + "AND ledger_account_code='" + FX_ACCOUNT + "' AND currency='USD' "
-                        + "AND remaining_foreign_minor > 0 ORDER BY acquired_at ASC, seq ASC");
+        return openLots(FX_ACCOUNT);
     }
 
     private long sumOpenLotCarrying() {

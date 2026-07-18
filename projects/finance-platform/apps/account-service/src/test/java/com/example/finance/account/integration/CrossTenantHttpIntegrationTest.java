@@ -1,21 +1,11 @@
 package com.example.finance.account.integration;
 
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.time.Instant;
-import java.util.Date;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -30,50 +20,39 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class CrossTenantHttpIntegrationTest extends AbstractAccountIntegrationTest {
 
-    private static RSAKey rsaKey;
-
     @Autowired
     MockMvc mockMvc;
 
     @BeforeAll
-    static void publishSigningKey() throws Exception {
-        rsaKey = new RSAKeyGenerator(2048).keyID("test-key").generate();
-        // Publish the public JWK into the base-owned JWKS server. The single
-        // jwk-set-uri registration lives in AbstractAccountIntegrationTest
-        // (a duplicate @DynamicPropertySource here was non-deterministically
-        // shadowed by the base — the original failure). @BeforeAll runs before
-        // the resource server lazily fetches the JWK set on the first request.
-        // allowed-issuers (http://test-issuer) is set by the base; required-
-        // tenant-id (finance) by application-test.yml — both already cover this.
-        publishJwks("{\"keys\":[" + rsaKey.toPublicJWK().toJSONString() + "]}");
+    static void publishKey() {
+        // Publish the shared signing key's public JWK into the base-owned JWKS
+        // server. The single jwk-set-uri registration lives in
+        // AbstractAccountIntegrationTest (a duplicate @DynamicPropertySource here
+        // was non-deterministically shadowed by the base — the original failure).
+        // @BeforeAll runs before the resource server lazily fetches the JWK set on
+        // the first request. allowed-issuers (http://test-issuer) is set by the
+        // base; required-tenant-id (finance) by application-test.yml.
+        publishSigningKey();
     }
 
-    private String token(String tenant) throws Exception {
+    private String token(String tenant) {
         return token(tenant, null);
     }
 
-    private String token(String tenant, java.util.List<String> entitledDomains)
-            throws Exception {
-        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
-                .subject("user-1")
-                .issuer("http://test-issuer")
-                .claim("tenant_id", tenant)
-                .claim("roles", java.util.List.of("HOLDER"))
-                // Real finance tokens always carry a scope; these tenant-gate assertions fire
-                // before authorization, but the token must satisfy the scope matcher
-                // (TASK-FIN-BE-046) for the entitlement case that reaches the controller (404).
-                .claim("scope", java.util.List.of("finance.read", "finance.write"))
-                .issueTime(new Date())
-                .expirationTime(Date.from(Instant.now().plusSeconds(300)));
-        if (entitledDomains != null) {
-            claims.claim("entitled_domains", entitledDomains);
-        }
-        SignedJWT jwt = new SignedJWT(
-                new JWSHeader.Builder(JWSAlgorithm.RS256)
-                        .keyID(rsaKey.getKeyID()).build(),
-                claims.build());
-        jwt.sign(new RSASSASigner(rsaKey));
-        return jwt.serialize();
+    private String token(String tenant, java.util.List<String> entitledDomains) {
+        // Claim shape is local to this IT (tenant gate + fixed HOLDER role +
+        // full read/write scope). Only the signing mechanics are shared.
+        return token(claims -> {
+            claims.claim("tenant_id", tenant)
+                    .claim("roles", java.util.List.of("HOLDER"))
+                    // Real finance tokens always carry a scope; these tenant-gate assertions fire
+                    // before authorization, but the token must satisfy the scope matcher
+                    // (TASK-FIN-BE-046) for the entitlement case that reaches the controller (404).
+                    .claim("scope", java.util.List.of("finance.read", "finance.write"));
+            if (entitledDomains != null) {
+                claims.claim("entitled_domains", entitledDomains);
+            }
+        });
     }
 
     @Test

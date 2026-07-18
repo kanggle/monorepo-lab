@@ -40,14 +40,6 @@ class LedgerFxCostFlowConfigIntegrationTest extends AbstractLedgerIntegrationTes
 
     private final HttpClient http = HttpClient.newHttpClient();
 
-    private HttpResponse<String> get(String path, String token) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + path))
-                .header("Authorization", "Bearer " + token)
-                .GET().build();
-        return http.send(req, HttpResponse.BodyHandlers.ofString());
-    }
-
     private HttpResponse<String> put(String path, String token, String body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))

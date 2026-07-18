@@ -37,14 +37,6 @@ class LedgerMultiCurrencyIntegrationTest extends AbstractLedgerIntegrationTest {
 
     private final HttpClient http = HttpClient.newHttpClient();
 
-    private HttpResponse<String> get(String path, String token) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + path))
-                .header("Authorization", "Bearer " + token)
-                .GET().build();
-        return http.send(req, HttpResponse.BodyHandlers.ofString());
-    }
-
     private HttpResponse<String> postEntry(String token, String idempotencyKey, String body)
             throws Exception {
         HttpRequest.Builder b = HttpRequest.newBuilder()

@@ -1,10 +1,7 @@
 package com.example.finance.account.integration;
 
 import com.example.finance.account.application.AccountApplicationService;
-import com.example.finance.account.application.ActorContext;
-import com.example.finance.account.application.command.OpenAccountCommand;
 import com.example.finance.account.application.command.PlaceHoldCommand;
-import com.example.finance.account.application.command.UpgradeKycCommand;
 import com.example.finance.account.application.view.AccountView;
 import com.example.finance.account.domain.transaction.Transaction;
 import com.example.finance.account.domain.transaction.TransactionType;
@@ -16,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Instant;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,11 +23,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class AuditAndImmutabilityIntegrationTest extends AbstractAccountIntegrationTest {
 
-    private static final ActorContext HOLDER =
-            new ActorContext("user-1", TENANT_FINANCE, Set.of());
-    private static final ActorContext OPERATOR =
-            new ActorContext("op-1", TENANT_FINANCE, Set.of("OPERATOR"));
-
     @Autowired
     AccountApplicationService service;
     @Autowired
@@ -39,18 +30,11 @@ class AuditAndImmutabilityIntegrationTest extends AbstractAccountIntegrationTest
     @Autowired
     TransactionJpaRepository txnJpa;
 
-    private AccountView active(String ref) {
-        AccountView o = service.openAccount(new OpenAccountCommand(
-                HOLDER, ref, "KRW", "NONE"));
-        return service.upgradeKyc(new UpgradeKycCommand(
-                OPERATOR, o.accountId(), "FULL", "kyc"));
-    }
-
     @Test
     @DisplayName("F6: audit_log is append-only — every fund op adds an immutable row")
     void auditAppendOnly() {
         long before = auditLogJpa.count();
-        AccountView acc = active("cust-audit-1");
+        AccountView acc = openActiveFullKyc(service, "cust-audit-1");
         service.topUp(HOLDER, acc.accountId(), 5000L);
         service.placeHold(new PlaceHoldCommand(
                 HOLDER, acc.accountId(), "1000", "KRW", 3600, "x"));
@@ -62,7 +46,7 @@ class AuditAndImmutabilityIntegrationTest extends AbstractAccountIntegrationTest
     @Test
     @DisplayName("F3: a SETTLED/COMPLETED transaction cannot be re-mutated in place")
     void settledTransactionImmutable() {
-        AccountView acc = active("cust-imm-1");
+        AccountView acc = openActiveFullKyc(service, "cust-imm-1");
         service.topUp(HOLDER, acc.accountId(), 5000L);
         var hold = service.placeHold(new PlaceHoldCommand(
                 HOLDER, acc.accountId(), "1000", "KRW", 3600, "x"));

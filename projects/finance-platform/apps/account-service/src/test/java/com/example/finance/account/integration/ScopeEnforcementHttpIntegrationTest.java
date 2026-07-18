@@ -1,12 +1,5 @@
 package com.example.finance.account.integration;
 
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,8 +8,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.Instant;
-import java.util.Date;
 import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -42,39 +33,32 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class ScopeEnforcementHttpIntegrationTest extends AbstractAccountIntegrationTest {
 
-    private static RSAKey rsaKey;
-
     @Autowired
     MockMvc mockMvc;
 
     @BeforeAll
-    static void publishSigningKey() throws Exception {
-        rsaKey = new RSAKeyGenerator(2048).keyID("scope-test-key").generate();
-        publishJwks("{\"keys\":[" + rsaKey.toPublicJWK().toJSONString() + "]}");
+    static void publishKey() {
+        publishSigningKey();
     }
 
     /** A signed finance-tenant token carrying exactly the given scopes and roles (either may be null). */
-    private String token(List<String> scopes, List<String> roles) throws Exception {
+    private String token(List<String> scopes, List<String> roles) {
         return token(TENANT_FINANCE, scopes, roles, null);
     }
 
-    /** A signed token with an explicit tenant, scopes, roles, and entitled_domains (any may be null). */
+    /**
+     * A signed token with an explicit tenant, scopes, roles, and entitled_domains (any may be null).
+     * The claim shape is local to this IT (scope/role are parameterised); only the signing mechanics
+     * are shared with the base.
+     */
     private String token(String tenantId, List<String> scopes, List<String> roles,
-                         List<String> entitledDomains) throws Exception {
-        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
-                .subject("user-1")
-                .issuer("http://test-issuer")
-                .claim("tenant_id", tenantId)
-                .issueTime(new Date())
-                .expirationTime(Date.from(Instant.now().plusSeconds(300)));
-        if (scopes != null) claims.claim("scope", scopes);
-        if (roles != null) claims.claim("roles", roles);
-        if (entitledDomains != null) claims.claim("entitled_domains", entitledDomains);
-        SignedJWT jwt = new SignedJWT(
-                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsaKey.getKeyID()).build(),
-                claims.build());
-        jwt.sign(new RSASSASigner(rsaKey));
-        return jwt.serialize();
+                         List<String> entitledDomains) {
+        return token(claims -> {
+            claims.claim("tenant_id", tenantId);
+            if (scopes != null) claims.claim("scope", scopes);
+            if (roles != null) claims.claim("roles", roles);
+            if (entitledDomains != null) claims.claim("entitled_domains", entitledDomains);
+        });
     }
 
     private static final String OPEN_BODY =

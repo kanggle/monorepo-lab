@@ -53,7 +53,7 @@ class LedgerReverseCrossCurrencyReconciliationIntegrationTest extends AbstractLe
 
     private final HttpClient http = HttpClient.newHttpClient();
 
-    private HttpResponse<String> post(String path, String token, String body) throws Exception {
+    protected HttpResponse<String> post(String path, String token, String body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .header("Authorization", "Bearer " + token)

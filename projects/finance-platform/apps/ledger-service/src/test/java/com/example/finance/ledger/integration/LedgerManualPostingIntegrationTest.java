@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -37,16 +36,6 @@ import static org.awaitility.Awaitility.await;
  * instant blocks postings into it), so this is one ordered test.
  */
 class LedgerManualPostingIntegrationTest extends AbstractLedgerIntegrationTest {
-
-    private final HttpClient http = HttpClient.newHttpClient();
-
-    private HttpResponse<String> get(String path, String token) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + path))
-                .header("Authorization", "Bearer " + token)
-                .GET().build();
-        return http.send(req, HttpResponse.BodyHandlers.ofString());
-    }
 
     private HttpResponse<String> postEntry(String token, String idempotencyKey, String body)
             throws Exception {

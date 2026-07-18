@@ -7,7 +7,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -80,20 +79,7 @@ class LedgerFxPositionLotsReadIntegrationTest extends AbstractLedgerIntegrationT
 
     /** Seed the unique ASSET account (idempotent via ON DUPLICATE KEY). */
     private void seedAssetAccount() {
-        jdbcTemplate.update(
-                "INSERT INTO ledger_account (code, tenant_id, type, normal_side, created_at) "
-                        + "VALUES (?, 'finance', 'ASSET', 'DEBIT', ?) "
-                        + "ON DUPLICATE KEY UPDATE code = code",
-                FX_ACCOUNT, java.sql.Timestamp.from(Instant.now()));
-    }
-
-    /** Set the tenant's FX cost-flow method (upsert). */
-    private void setCostFlow(String method) {
-        jdbcTemplate.update(
-                "INSERT INTO fx_cost_flow_config (tenant_id, method, updated_by, updated_at) "
-                        + "VALUES ('finance', ?, 'it-operator', ?) "
-                        + "ON DUPLICATE KEY UPDATE method = VALUES(method)",
-                method, java.sql.Timestamp.from(Instant.now()));
+        seedAssetAccount(FX_ACCOUNT);
     }
 
     /**

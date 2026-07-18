@@ -45,6 +45,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.security.interfaces.RSAPrivateKey;
 import java.time.Duration;
 import java.time.Instant;
@@ -193,6 +197,9 @@ public abstract class AbstractLedgerIntegrationTest {
     @Autowired protected JdbcTemplate jdbcTemplate;
     @Autowired protected ObjectMapper objectMapper;
 
+    /** Shared HTTP client for the raw {@code java.net.http} verb helpers below. */
+    protected final HttpClient http = HttpClient.newHttpClient();
+
     /**
      * Cross-class test isolation. The MySQL container is static (shared by every
      * ledger IT class in the JVM). A test that closes an accounting period covering
@@ -288,6 +295,81 @@ public abstract class AbstractLedgerIntegrationTest {
         } catch (Exception e) {
             throw new IllegalStateException("JWT signing failed", e);
         }
+    }
+
+    // ------------------------------------------------------------------------
+    // HTTP-verb helpers (raw java.net.http.HttpClient against the random port)
+    // ------------------------------------------------------------------------
+
+    protected HttpResponse<String> get(String path, String token) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + path))
+                .header("Authorization", "Bearer " + token)
+                .GET().build();
+        return http.send(req, HttpResponse.BodyHandlers.ofString());
+    }
+
+    protected HttpResponse<String> post(String path, String token, String body) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + path))
+                .header("Authorization", "Bearer " + token);
+        if (body != null) {
+            b.header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body));
+        } else {
+            b.POST(HttpRequest.BodyPublishers.noBody());
+        }
+        return http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    protected JsonNode readJson(HttpResponse<String> resp) throws Exception {
+        return objectMapper.readTree(resp.body());
+    }
+
+    // ------------------------------------------------------------------------
+    // FX seed/query SQL helpers (parameterised on the differing literal)
+    // ------------------------------------------------------------------------
+
+    /** A ledger account's ({@code currency}) foreign balance + base carrying from the DB. */
+    protected long[] positionFor(String account, String currency) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT "
+                        + "COALESCE(SUM(CASE WHEN direction='DEBIT' THEN amount_minor ELSE 0 END),0) "
+                        + "- COALESCE(SUM(CASE WHEN direction='CREDIT' THEN amount_minor ELSE 0 END),0) AS f, "
+                        + "COALESCE(SUM(CASE WHEN direction='DEBIT' THEN base_amount_minor ELSE 0 END),0) "
+                        + "- COALESCE(SUM(CASE WHEN direction='CREDIT' THEN base_amount_minor ELSE 0 END),0) AS b "
+                        + "FROM journal_line "
+                        + "WHERE tenant_id='finance' AND ledger_account_code='" + account
+                        + "' AND currency='" + currency + "'");
+        Map<String, Object> r = rows.get(0);
+        return new long[]{((Number) r.get("f")).longValue(), ((Number) r.get("b")).longValue()};
+    }
+
+    /** Seed a unique ASSET account (idempotent via ON DUPLICATE KEY) so the manual path accepts it. */
+    protected void seedAssetAccount(String code) {
+        jdbcTemplate.update(
+                "INSERT INTO ledger_account (code, tenant_id, type, normal_side, created_at) "
+                        + "VALUES (?, 'finance', 'ASSET', 'DEBIT', ?) "
+                        + "ON DUPLICATE KEY UPDATE code = code",
+                code, java.sql.Timestamp.from(Instant.now()));
+    }
+
+    /** Set the tenant's FX cost-flow method (upsert). */
+    protected void setCostFlow(String method) {
+        jdbcTemplate.update(
+                "INSERT INTO fx_cost_flow_config (tenant_id, method, updated_by, updated_at) "
+                        + "VALUES ('finance', ?, 'it-operator', ?) "
+                        + "ON DUPLICATE KEY UPDATE method = VALUES(method)",
+                method, java.sql.Timestamp.from(Instant.now()));
+    }
+
+    /** The open lots (remaining &gt; 0) of {@code account}'s USD position, FIFO-ordered. */
+    protected List<Map<String, Object>> openLots(String account) {
+        return jdbcTemplate.queryForList(
+                "SELECT remaining_foreign_minor, carrying_base_minor, seq "
+                        + "FROM fx_position_lot WHERE tenant_id='finance' "
+                        + "AND ledger_account_code='" + account + "' AND currency='USD' "
+                        + "AND remaining_foreign_minor > 0 ORDER BY acquired_at ASC, seq ASC");
     }
 
     // ------------------------------------------------------------------------
