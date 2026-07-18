@@ -1,7 +1,7 @@
 # TASK-FIN-BE-052 — finance converter unit tests: convert() error-path + role-shape coverage (account + ledger)
 
 - **Type**: TASK-FIN-BE (test-only coverage fix, both siblings)
-- **Status**: review
+- **Status**: done
 - **Service**: account-service + ledger-service (finance-platform)
 - **Domain/traits**: saas / [transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (test-only, mechanical)
