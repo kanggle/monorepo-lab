@@ -1,14 +1,11 @@
 package com.example.finance.account.integration;
 
 import com.example.finance.account.application.AccountApplicationService;
-import com.example.finance.account.application.ActorContext;
 import com.example.finance.account.application.command.OpenAccountCommand;
 import com.example.finance.account.application.view.AccountView;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,9 +21,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * contains hyphens to exercise exactly that regression path.
  */
 class OwnerRefEncryptionAtRestIntegrationTest extends AbstractAccountIntegrationTest {
-
-    private static final ActorContext HOLDER =
-            new ActorContext("user-1", TENANT_FINANCE, Set.of());
 
     @Autowired
     AccountApplicationService service;

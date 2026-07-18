@@ -1,10 +1,7 @@
 package com.example.finance.account.integration;
 
 import com.example.finance.account.application.AccountApplicationService;
-import com.example.finance.account.application.ActorContext;
-import com.example.finance.account.application.command.OpenAccountCommand;
 import com.example.finance.account.application.command.PlaceHoldCommand;
-import com.example.finance.account.application.command.UpgradeKycCommand;
 import com.example.finance.account.application.port.outbound.IdempotencyStore;
 import com.example.finance.account.application.view.AccountView;
 import com.example.finance.account.presentation.dto.ApiEnvelope;
@@ -16,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,11 +31,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class IdempotencyConcurrencyIntegrationTest extends AbstractAccountIntegrationTest {
 
-    private static final ActorContext HOLDER =
-            new ActorContext("user-1", TENANT_FINANCE, Set.of());
-    private static final ActorContext OPERATOR =
-            new ActorContext("op-1", TENANT_FINANCE, Set.of("OPERATOR"));
-
     @Autowired
     AccountApplicationService service;
     @Autowired
@@ -50,10 +41,7 @@ class IdempotencyConcurrencyIntegrationTest extends AbstractAccountIntegrationTe
     @Test
     @DisplayName("F1: same key + identical payload concurrently → funds move exactly once")
     void concurrentSameKeyMovesFundsOnce() throws Exception {
-        AccountView opened = service.openAccount(new OpenAccountCommand(
-                HOLDER, "cust-idem-1", "KRW", "NONE"));
-        AccountView acc = service.upgradeKyc(new UpgradeKycCommand(
-                OPERATOR, opened.accountId(), "FULL", "kyc"));
+        AccountView acc = openActiveFullKyc(service, "cust-idem-1");
         service.topUp(HOLDER, acc.accountId(), 10_000L);
 
         String endpoint = "POST /api/finance/accounts/{id}/holds";

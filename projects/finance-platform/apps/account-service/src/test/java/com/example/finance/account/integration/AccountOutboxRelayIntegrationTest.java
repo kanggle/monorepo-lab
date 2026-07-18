@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import com.example.finance.account.application.AccountApplicationService;
-import com.example.finance.account.application.ActorContext;
 import com.example.finance.account.application.command.OpenAccountCommand;
 import com.example.finance.account.application.view.AccountView;
 import com.example.finance.account.infrastructure.outbox.AccountOutboxJpaEntity;
@@ -15,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 import java.util.UUID;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -48,8 +46,6 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 class AccountOutboxRelayIntegrationTest extends AbstractAccountIntegrationTest {
 
-    private static final ActorContext HOLDER =
-            new ActorContext("user-1", TENANT_FINANCE, Set.of());
     private static final String TOPIC_ACCOUNT_OPENED = "finance.account.opened.v1";
 
     @Autowired
