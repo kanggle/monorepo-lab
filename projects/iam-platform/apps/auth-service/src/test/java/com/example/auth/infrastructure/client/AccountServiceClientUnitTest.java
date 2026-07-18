@@ -373,4 +373,33 @@ class AccountServiceClientUnitTest {
         assertThatThrownBy(() -> client.getTenantType("fault"))
                 .isInstanceOf(AccountServiceUnavailableException.class);
     }
+
+    // ── TASK-BE-517: SUPER_ADMIN wildcard '*' short-circuit ─────────────────────
+    // account-service's TenantId rejects '*' with 400 VALIDATION_ERROR; that 400 used to trip the
+    // shared accountService circuit breaker during token minting, fail-softing OTHER tenants'
+    // entitled_domains/roles lookups in the same window → spurious domain 403s (the finance-card RED).
+    // The wildcard has no per-tenant entitlements/roles (it passes gates via the wildcard), so the
+    // lookup must be skipped entirely — no network call, no circuit impact.
+
+    @Test
+    @DisplayName("listEntitledDomains('*') — 와일드카드는 조회 없이 빈 목록 (account-service 400·서킷 오염 회피)")
+    void listEntitledDomains_wildcard_skipsCallReturnsEmpty() {
+        List<String> domains = client.listEntitledDomains("*");
+
+        assertThat(domains).isEmpty();
+        assertThat(wireMockServer.getAllServeEvents())
+                .as("the '*' wildcard must not make any account-service call")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("listAccountRoles('*', …) — 와일드카드는 조회 없이 빈 목록")
+    void listAccountRoles_wildcard_skipsCallReturnsEmpty() {
+        List<String> roles = client.listAccountRoles("*", "any-account");
+
+        assertThat(roles).isEmpty();
+        assertThat(wireMockServer.getAllServeEvents())
+                .as("the '*' wildcard must not make any account-service call")
+                .isEmpty();
+    }
 }
