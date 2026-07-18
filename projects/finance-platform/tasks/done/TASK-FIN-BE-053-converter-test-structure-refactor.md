@@ -1,7 +1,7 @@
 # TASK-FIN-BE-053 — finance converter unit tests: structural refactor (@Nested + shared builder), no behaviour change
 
 - **Type**: TASK-FIN-BE (test refactor — behaviour-preserving)
-- **Status**: review
+- **Status**: done
 - **Service**: account-service + ledger-service (finance-platform)
 - **Domain/traits**: saas / [transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (test refactor, mechanical)
