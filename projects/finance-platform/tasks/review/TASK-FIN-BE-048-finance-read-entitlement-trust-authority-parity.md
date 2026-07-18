@@ -1,7 +1,7 @@
 # TASK-FIN-BE-048 — finance READ entitlement-trust authority parity (account + ledger)
 
 - **Type**: TASK-FIN-BE (backend — Spring Security authorization gate)
-- **Status**: in-progress
+- **Status**: review
 - **Service**: finance-platform `account-service` + `ledger-service` (identical gate in each)
 - **Domain/traits**: saas / [transactional]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (security-critical authorization gate)
