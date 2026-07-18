@@ -55,14 +55,21 @@ class ScopeEnforcementHttpIntegrationTest extends AbstractAccountIntegrationTest
 
     /** A signed finance-tenant token carrying exactly the given scopes and roles (either may be null). */
     private String token(List<String> scopes, List<String> roles) throws Exception {
+        return token(TENANT_FINANCE, scopes, roles, null);
+    }
+
+    /** A signed token with an explicit tenant, scopes, roles, and entitled_domains (any may be null). */
+    private String token(String tenantId, List<String> scopes, List<String> roles,
+                         List<String> entitledDomains) throws Exception {
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject("user-1")
                 .issuer("http://test-issuer")
-                .claim("tenant_id", TENANT_FINANCE)
+                .claim("tenant_id", tenantId)
                 .issueTime(new Date())
                 .expirationTime(Date.from(Instant.now().plusSeconds(300)));
         if (scopes != null) claims.claim("scope", scopes);
         if (roles != null) claims.claim("roles", roles);
+        if (entitledDomains != null) claims.claim("entitled_domains", entitledDomains);
         SignedJWT jwt = new SignedJWT(
                 new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(rsaKey.getKeyID()).build(),
                 claims.build());
@@ -141,6 +148,50 @@ class ScopeEnforcementHttpIntegrationTest extends AbstractAccountIntegrationTest
         mockMvc.perform(get("/api/finance/accounts/does-not-exist")
                         .header("Authorization", "Bearer " + token(null, List.of("OPERATOR"))))
                 .andExpect(status().isNotFound());
+    }
+
+    // ---- entitlement-trust READ authority (TASK-FIN-BE-048) --------------------------------------
+    // The runtime-confirmed scenario (federation run 29632072800): a platform-console-federated
+    // customer operator carries tenant_id=acme, entitled_domains=[finance,wms], NO finance scope,
+    // NO roles. Layer-1 (the tenant gate) admits it via trustEntitledDomains(); before this fix
+    // layer-2 (this authz gate) 403'd its READS because it held none of readAuthorities. The
+    // converter now grants ROLE_FINANCE_VIEWER (READ only), so its READS pass while its WRITES stay
+    // gated — the finance analogue of the WMS ROLE_WMS_VIEWER synthesis (TASK-MONO-162).
+
+    @Test
+    @DisplayName("entitled operator (tenant=acme, entitled_domains=[finance], no scope/role) → GET → 404 (read gate open)")
+    void entitledNoScopeNoRoleCanRead() throws Exception {
+        mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                        .header("Authorization", "Bearer "
+                                + token("acme", null, null, List.of("finance", "wms"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("entitled operator (no scope/role) → POST /accounts → 403 (write gate intact — VIEWER is read-only)")
+    void entitledNoScopeNoRoleCannotWrite() throws Exception {
+        mockMvc.perform(post("/api/finance/accounts")
+                        .header("Authorization", "Bearer "
+                                + token("acme", null, null, List.of("finance", "wms")))
+                        .header("Idempotency-Key", "entitled-viewer-open")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(OPEN_BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    @DisplayName("entitled operator (no scope/role) → POST transfer → 403 (fund movement blocked; entitlement widens READ only)")
+    void entitledNoScopeNoRoleCannotTransfer() throws Exception {
+        mockMvc.perform(post("/api/finance/accounts/acc-x/transfers")
+                        .header("Authorization", "Bearer "
+                                + token("acme", null, null, List.of("finance", "wms")))
+                        .header("Idempotency-Key", "entitled-viewer-xfer")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"toAccountId\":\"acc-y\",\"money\":{\"amount\":\"100\",\"currency\":\"KRW\"}}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     // ---- deny: no scope and no role is fully unprivileged ----------------------------------------

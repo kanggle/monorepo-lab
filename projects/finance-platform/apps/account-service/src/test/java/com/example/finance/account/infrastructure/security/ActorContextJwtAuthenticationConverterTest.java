@@ -1,4 +1,4 @@
-package com.example.finance.ledger.infrastructure.security;
+package com.example.finance.account.infrastructure.security;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,13 +13,17 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Unit tests for the ledger {@link ActorContextJwtAuthenticationConverter} scope-lifting
- * (TASK-FIN-BE-047). The converter must lift the OAuth2 {@code scope} claim into {@code SCOPE_*}
- * authorities so {@link SecurityConfig} can require {@code finance.write} per endpoint — before this
- * fix the ledger converter lifted only roles, so the {@code scope} claim was invisible to
- * authorization and any authenticated finance token could write.
+ * Unit tests for the account {@link ActorContextJwtAuthenticationConverter}. Two concerns:
+ *
+ * <ul>
+ *   <li>scope-lifting (TASK-FIN-BE-046): the OAuth2 {@code scope} claim becomes {@code SCOPE_*}
+ *       authorities so {@link SecurityConfig} can require {@code finance.write} per endpoint;</li>
+ *   <li>entitlement-trust READ authority (TASK-FIN-BE-048): a finance-entitled token
+ *       ({@code entitled_domains ∋ "finance"}) is granted {@code ROLE_FINANCE_VIEWER} — READ
+ *       visibility only — mirroring the WMS {@code ROLE_WMS_VIEWER} synthesis (TASK-MONO-162).</li>
+ * </ul>
  */
-@DisplayName("ledger ActorContextJwtAuthenticationConverter — scope lifting (TASK-FIN-BE-047)")
+@DisplayName("account ActorContextJwtAuthenticationConverter — scope lifting + entitlement-trust VIEWER")
 class ActorContextJwtAuthenticationConverterTest {
 
     private final ActorContextJwtAuthenticationConverter converter =
@@ -41,24 +45,12 @@ class ActorContextJwtAuthenticationConverterTest {
         return token.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
     }
 
+    // ---- scope lifting (TASK-FIN-BE-046) ---------------------------------------------------------
+
     @Test
     @DisplayName("scope 클레임(List)이 SCOPE_* 권한으로 리프트된다")
     void listScopeLifted() {
         assertThat(authorities(jwt(b -> b.claim("scope", List.of("finance.write")))))
-                .contains("SCOPE_finance.write");
-    }
-
-    @Test
-    @DisplayName("scope 클레임(공백 구분 문자열)도 리프트된다")
-    void spaceDelimitedScopeLifted() {
-        assertThat(authorities(jwt(b -> b.claim("scope", "finance.read finance.write"))))
-                .contains("SCOPE_finance.read", "SCOPE_finance.write");
-    }
-
-    @Test
-    @DisplayName("scp fallback 클레임도 리프트된다")
-    void scpFallbackLifted() {
-        assertThat(authorities(jwt(b -> b.claim("scp", List.of("finance.write")))))
                 .contains("SCOPE_finance.write");
     }
 

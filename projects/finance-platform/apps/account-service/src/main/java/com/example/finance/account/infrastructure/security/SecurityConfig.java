@@ -22,8 +22,9 @@ import java.util.stream.Stream;
  *       scope (or an operator role, so the application-layer operator gate on /kyc/upgrade still
  *       governs rather than being shadowed here)</li>
  *   <li>{@code /api/finance/**} reads (GET/HEAD) — require {@code finance.read} or
- *       {@code finance.write} scope (or an operator role, so the platform-console operator read
- *       consumer keeps working, ADR-MONO-013)</li>
+ *       {@code finance.write} scope, or an operator role, or the entitlement-trust
+ *       {@code ROLE_FINANCE_VIEWER} (so the platform-console operator read consumer keeps working,
+ *       ADR-MONO-013, including the entitled-but-scopeless operator)</li>
  *   <li>everything else — denied</li>
  * </ul>
  *
@@ -37,6 +38,17 @@ import java.util.stream.Stream;
  * <p>Read-OR-scope, not scope-only: a caller admitted by an operator role (no finance scope) is
  * still allowed, mirroring the gateway's {@code roleOrScope} admission and keeping the two layers
  * from disagreeing about validity.
+ *
+ * <p><strong>Entitlement-trust READ authority (TASK-FIN-BE-048, ADR-MONO-019 § D5 / ADR-MONO-020
+ * D4 — the finance analogue of the WMS {@code ROLE_WMS_VIEWER} synthesis, TASK-MONO-162):</strong>
+ * a finance-entitled token ({@code entitled_domains ∋ "finance"}) that carries no finance scope and
+ * no operator role — the base OIDC domain-facing token the platform console federates for an
+ * entitled customer operator — is granted {@link ActorContextJwtAuthenticationConverter#VIEWER_ROLE}
+ * by the converter, so its READS pass this gate. This is <em>read-visibility only</em>:
+ * {@code VIEWER_ROLE} is in {@code readAuthorities} but NOT {@code writeAuthorities}, so such a token
+ * still 403s on every write. Finance had applied entitlement-trust at the tenant layer only
+ * (TASK-FIN-BE-006 pilot); when the read-scope hardening landed (FIN-BE-046) the entitled operator
+ * became a straggler — 403 at this authorization layer despite passing layer-1. This closes it.
  *
  * No public webhook surface in v1 (finance has no external caller).
  * Error handling (401/403 responses) is delegated to {@link SecurityErrorHandler}.
@@ -72,8 +84,13 @@ public class SecurityConfig {
         String[] prefixed = PublicPaths.PREFIXES.stream()
                 .map(p -> p + "**")
                 .toArray(String[]::new);
+        // Writes: scope finance.write or an operator role ONLY — the entitlement-trust
+        // ROLE_FINANCE_VIEWER is deliberately absent, so an entitled-but-scopeless token can never
+        // mutate (TASK-FIN-BE-048 invariant: entitlement-trust widens READ visibility only).
         String[] writeAuthorities = withOperators(SCOPE_WRITE);
-        String[] readAuthorities = withOperators(SCOPE_READ, SCOPE_WRITE);
+        // Reads: scope finance.read|write, an operator role, or the entitlement-trust VIEWER role.
+        String[] readAuthorities = withOperators(
+                SCOPE_READ, SCOPE_WRITE, ActorContextJwtAuthenticationConverter.VIEWER_ROLE);
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

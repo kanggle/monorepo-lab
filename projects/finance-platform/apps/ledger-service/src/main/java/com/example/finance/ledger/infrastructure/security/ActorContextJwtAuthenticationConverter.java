@@ -24,6 +24,16 @@ import java.util.Set;
 public class ActorContextJwtAuthenticationConverter
         implements Converter<Jwt, AbstractAuthenticationToken> {
 
+    /**
+     * Domain key for the entitlement-trust READ-visibility synthesis. A token whose signed
+     * {@code entitled_domains} claim contains {@code finance} is granted {@link #VIEWER_ROLE}
+     * (READ only) even when it carries no finance scope and no finance role.
+     */
+    public static final String ENTITLEMENT_DOMAIN = "finance";
+
+    /** The single READ-visibility role synthesised from entitlement-trust. */
+    public static final String VIEWER_ROLE = "ROLE_FINANCE_VIEWER";
+
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
         String subject = jwt.getSubject();
@@ -47,6 +57,21 @@ public class ActorContextJwtAuthenticationConverter
         // account-service FIN-BE-046 fix). ActorContext (roles) is unchanged.
         for (String scope : extractScopes(jwt)) {
             authorities.add(new SimpleGrantedAuthority("SCOPE_" + scope));
+        }
+        // Entitlement-trust dual-accept (ADR-MONO-019 § D5, ADR-MONO-020 D4 — the finance
+        // analogue of TASK-MONO-162, closing the FIN-BE-046/047 read straggler): a
+        // finance-entitled token (entitled_domains ∋ "finance") is granted ROLE_FINANCE_VIEWER
+        // so the /api/finance/** READ gate passes even when the token carries no finance scope
+        // and no finance role — the entitled-but-scopeless operator the platform console federates
+        // (tenant_id=acme, entitled_domains=[finance], no roles, scope=[openid,...]). This
+        // synthesises ONLY the VIEWER role — the WRITE gate (SCOPE_finance.write or an operator
+        // role) is unaffected, so entitlement-trust widens READ visibility only, never mutation
+        // authority. entitled_domains is read only from the RS256/JWKS-verified token, so it is
+        // unforgeable; a claim-shape anomaly degrades to "not entitled" (TenantClaimValidator
+        // fail-closed). Layer-1 (the tenant gate) already admitted this token via
+        // trustEntitledDomains(); this closes the matching AUTHORITY-layer gap.
+        if (TenantClaimValidator.isEntitled(jwt, ENTITLEMENT_DOMAIN)) {
+            authorities.add(new SimpleGrantedAuthority(VIEWER_ROLE));
         }
         return new ActorContextJwtAuthenticationToken(jwt, actor, authorities);
     }
