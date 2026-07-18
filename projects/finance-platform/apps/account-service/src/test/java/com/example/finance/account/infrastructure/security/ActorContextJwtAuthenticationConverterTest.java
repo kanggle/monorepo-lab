@@ -55,6 +55,20 @@ class ActorContextJwtAuthenticationConverterTest {
     }
 
     @Test
+    @DisplayName("scope 클레임(공백 구분 문자열)도 리프트된다")
+    void spaceDelimitedScopeLifted() {
+        assertThat(authorities(jwt(b -> b.claim("scope", "finance.read finance.write"))))
+                .contains("SCOPE_finance.read", "SCOPE_finance.write");
+    }
+
+    @Test
+    @DisplayName("scp fallback 클레임도 리프트된다")
+    void scpFallbackLifted() {
+        assertThat(authorities(jwt(b -> b.claim("scp", List.of("finance.write")))))
+                .contains("SCOPE_finance.write");
+    }
+
+    @Test
     @DisplayName("roles 와 scope 가 함께 리프트된다 (ROLE_* + SCOPE_*)")
     void rolesAndScopesBothLifted() {
         List<String> auths = authorities(jwt(b -> b
