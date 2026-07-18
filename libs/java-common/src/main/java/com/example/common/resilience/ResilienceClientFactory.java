@@ -119,6 +119,13 @@ public final class ResilienceClientFactory {
     /**
      * Standard {@link CircuitBreakerConfig.Builder}: 50% failure rate, 10s
      * TIME_BASED window, minimum 5 calls, 10s wait-in-open, 3 half-open calls.
+     * {@link HttpClientErrorException} is ignored (4xx is a contract failure —
+     * a downstream <em>client</em> error, not a downstream <em>availability</em>
+     * failure, so it must not count toward the failure rate or open the circuit);
+     * this mirrors {@link #standardRetryConfig()}'s already-shipped intent.
+     * 5xx ({@code HttpServerErrorException}, a sibling of {@code RestClientResponseException}
+     * — not a subtype of {@link HttpClientErrorException}), connection/timeout, and
+     * {@code CallNotPermittedException} still count and still open the circuit.
      */
     public static CircuitBreakerConfig.Builder standardCircuitBreakerConfig() {
         return CircuitBreakerConfig.custom()
@@ -127,7 +134,8 @@ public final class ResilienceClientFactory {
                 .slidingWindowSize(10)
                 .minimumNumberOfCalls(5)
                 .waitDurationInOpenState(Duration.ofSeconds(10))
-                .permittedNumberOfCallsInHalfOpenState(3);
+                .permittedNumberOfCallsInHalfOpenState(3)
+                .ignoreExceptions(HttpClientErrorException.class);
     }
 
     /**
