@@ -85,6 +85,25 @@ ADR-001 D2-b(2026-05-01 deprecated, removal ≥2026-08-01) + ADR-006(BE-396 이 
 
 ---
 
+# AC-0 재확인 (2026-07-18, static re-measure)
+
+착수자(≥08-01)가 물려받을 스냅샷을 **재측정**했다(2026-07-04 숫자를 승계하지 않고 repo-wide 전수 재분류). **결론: 레거시 4경로(`/api/auth/{login,oauth,refresh,logout}`)의 live 외부 call-site 소비자 = 0.** 2026-07-04 스냅샷과 동일하게 (a) 코드 grep + (c) 소비자 OIDC 이전 **PASS**. (b) 라이브 게이트웨이 트래픽=0 은 여전히 구동 스택이 필요 → **08-01 재확인 유지**.
+
+전수 재분류:
+
+- **fan · scm · erp · finance-platform**: 참조 **0건** (1차 소비자 fan 포함 완전 OIDC 이전).
+- **iam auth-service 자체 컨트롤러/테스트/route-config**: 제거 대상 자신 — 소비자 아님.
+- **ecommerce-microservices-platform**: 독립 auth 스택 — 경로 문자열만 동일, iam 엔드포인트 아님.
+- **platform-console (console-web)**: `/api/auth/{login,refresh,logout}` 은 **console 자체 Next.js 라우트**(→ OIDC `/oauth2/*` · RP-initiated logout). iam 레거시 호출 아님.
+- **admin-web**: live 파일 0 (은퇴). done-task history 만 잔존.
+
+**2026-07-04 스냅샷 대비 정정 2건 (둘 다 제거 블로커 아님 — dead-code/자산 정리):**
+
+1. **레거시 `iss=iam` 토큰-수용 dead-code 표면이 community-service 보다 넓다.** `wms-platform` 이 gateway·master·inbound **3서비스**의 `OAuth2ResourceServerConfig`(Javadoc *"accepts both legacy `POST /api/auth/login` tokens and SAS"*) + `master-service/application.yml` 주석(*"Drop after deprecation"*) + `JwtTestHelper` + `infra/grafana/auth-overview.json` 에서 레거시 발급자를 **검증 수용**한다(호출 아님). 제거 후 신규 `iss=iam` 발급 중단 → 이 분기들은 dead code → **동반/후속 정리 대상**(community-service 와 동일 범주). `TASK-MONO-365` 의 게이트웨이 `,iam` allowlist 테마와 같으나, wms 백엔드(master/inbound) resource-server 수용은 **게이트웨이 밖 표면**이라 별도로 헤아릴 것.
+2. **iam 자체 load-test 가 레거시 경로를 구동한다.** `load-tests/scenarios/auth-load-test.js`(login·logout) + `load-tests/lib/helpers.js` — 제거 시 함께 갱신할 **In-Scope 테스트 자산**(현 Scope 절 미기재).
+
+---
+
 # Scope
 
 ## In Scope (제거)
