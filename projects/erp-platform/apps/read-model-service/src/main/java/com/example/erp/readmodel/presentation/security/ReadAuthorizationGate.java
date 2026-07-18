@@ -63,7 +63,18 @@ public class ReadAuthorizationGate {
         boolean scoped = scopes.contains(SCOPE_READ) || scopes.contains(SCOPE_WRITE);
         boolean operator = isOperator(scopes);
         boolean entitled = TenantClaimValidator.isEntitled(jwt, domainKey);
-        if (!scoped && !operator && !entitled) {
+        // READ-only platform-super-admin wildcard admission (TASK-ERP-BE-031): the erp
+        // authority-layer analogue of the tenant gate's allowSuperAdminWildcard(),
+        // mirroring finance FIN-BE-049. A platform-console super-admin forwards its base
+        // OIDC domain token — tenant_id='*', NO erp scope, NO domain roles,
+        // entitled_domains=[] — which passes layer-1 but matches none of the clauses
+        // above. Per ADR-033 S2 / ADR-034 U5 the admin-plane SUPER_ADMIN role is kept OFF
+        // the domain token, so isOperator()'s SUPER_ADMIN branch is dead for the real
+        // super-admin persona — the wildcard tenant_id is the correct key. This gate is
+        // READ-only (E5: no mutating endpoints), so this never widens a write.
+        boolean superAdminWildcard = TenantClaimValidator.WILDCARD_TENANT
+                .equals(jwt.getClaimAsString(TenantClaimValidator.CLAIM_TENANT_ID));
+        if (!scoped && !operator && !entitled && !superAdminWildcard) {
             throw new ReadAccessDeniedException(
                     "actor lacks erp.read scope, operator role, or erp entitlement");
         }

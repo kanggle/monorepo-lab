@@ -6,6 +6,7 @@ import com.example.erp.masterdata.domain.authorization.AuthorizationDecision;
 import com.example.erp.masterdata.domain.authorization.RequiredScope;
 import com.example.erp.masterdata.domain.department.Department;
 import com.example.erp.masterdata.domain.department.repository.DepartmentRepository;
+import com.example.security.oauth2.TenantClaimValidator;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -78,7 +79,19 @@ public class RoleScopeAuthorizationAdapter implements AuthorizationPort {
         // NEVER widened by entitlement-trust (visibility, not mutation).
         boolean roleOk = switch (required) {
             case READ -> actor.hasScope(SCOPE_READ) || actor.hasScope(SCOPE_WRITE)
-                    || actor.isOperator() || actor.isEntitledTo(DOMAIN_KEY);
+                    || actor.isOperator() || actor.isEntitledTo(DOMAIN_KEY)
+                    // READ-only platform-super-admin wildcard admission (TASK-ERP-BE-031):
+                    // the erp authority-layer analogue of the tenant gate's
+                    // allowSuperAdminWildcard(), mirroring finance FIN-BE-049. A
+                    // platform-console super-admin forwards its base OIDC domain token —
+                    // tenant_id='*', NO erp scope, NO domain roles, entitled_domains=[] —
+                    // which passes layer-1 (ServiceLevelOAuth2Config.allowSuperAdminWildcard)
+                    // but matches none of the clauses above. Per ADR-033 S2 / ADR-034 U5
+                    // the admin-plane SUPER_ADMIN role is deliberately kept OFF the domain
+                    // token, so actor.isOperator()'s SUPER_ADMIN branch is dead for the real
+                    // super-admin persona — the wildcard tenant_id is the correct key.
+                    // Widens READ visibility only; the WRITE arm below is never widened.
+                    || TenantClaimValidator.WILDCARD_TENANT.equals(actor.tenantId());
             case WRITE -> actor.hasScope(SCOPE_WRITE) || actor.isOperator();
         };
         if (!roleOk) {
