@@ -102,4 +102,22 @@ class ActorContextJwtAuthenticationConverterTest {
         List<String> auths = authorities(jwt(b -> b.claim("entitled_domains", List.of("finance"))));
         assertThat(auths).containsExactly(ActorContextJwtAuthenticationConverter.VIEWER_ROLE);
     }
+
+    // ---- platform super-admin wildcard READ authority (TASK-FIN-BE-049) --------------------------
+
+    @Test
+    @DisplayName("tenant_id='*' (super-admin wildcard, no scope/role/entitlement) → ROLE_FINANCE_SUPERADMIN_READ 만 합성")
+    void wildcardTenantGrantsSuperadminReadRole() {
+        List<String> auths = authorities(jwt(b -> b.claim("tenant_id", "*")));
+        // read-visibility only — exactly the wildcard-read role, no SCOPE_* / VIEWER / operator role
+        assertThat(auths).containsExactly(ActorContextJwtAuthenticationConverter.SUPERADMIN_READ_ROLE);
+        assertThat(auths).noneMatch(a -> a.startsWith("SCOPE_"));
+    }
+
+    @Test
+    @DisplayName("tenant_id 가 '*' 아니면 (finance) SUPERADMIN_READ 권한 없다 (와일드카드에만 엄격 키잉)")
+    void nonWildcardTenantGetsNoSuperadminRead() {
+        List<String> auths = authorities(jwt(b -> b.claim("roles", List.of("OPERATOR"))));
+        assertThat(auths).doesNotContain(ActorContextJwtAuthenticationConverter.SUPERADMIN_READ_ROLE);
+    }
 }

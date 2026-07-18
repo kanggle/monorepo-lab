@@ -157,6 +157,41 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
+    // ---- platform super-admin wildcard READ authority (TASK-FIN-BE-049) --------------------------
+    // A platform super-admin's base OIDC domain-facing token carries tenant_id="*", NO finance scope,
+    // NO domain role (ADR-033 S2 / ADR-034 U5 keep SUPER_ADMIN off the domain token), and
+    // entitled_domains=[]. Layer-1 (the tenant gate) admits it via allowSuperAdminWildcard(); the
+    // converter now grants ROLE_FINANCE_SUPERADMIN_READ (READ only), so its READS pass this gate while
+    // its WRITES stay gated — the wildcard sibling of FIN-BE-048 (nightly-e2e run 29635409302, console
+    // super-admin persona: finance overview card forbidden, reason=PERMISSION_DENIED).
+
+    private String wildcardSuperadminToken() {
+        return token(c -> c.claim("tenant_id", "*"));
+    }
+
+    @Test
+    @DisplayName("super-admin wildcard (tenant_id='*', no scope/role) → GET periods → not 403 (read gate open)")
+    void wildcardSuperadminCanRead() throws Exception {
+        MvcResult r = mockMvc.perform(get(READ_PATH)
+                        .header("Authorization", "Bearer " + wildcardSuperadminToken()))
+                .andReturn();
+        assertThat(r.getResponse().getStatus())
+                .as("super-admin wildcard READ role admits reads for a scopeless/roleless platform token")
+                .isNotEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("super-admin wildcard (no scope/role) → POST entries → 403 PERMISSION_DENIED (write gate intact — wildcard READ is read-only)")
+    void wildcardSuperadminCannotWrite() throws Exception {
+        mockMvc.perform(post(WRITE_PATH)
+                        .header("Authorization", "Bearer " + wildcardSuperadminToken())
+                        .header("Idempotency-Key", "wildcard-superadmin-post")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(POST_BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
     // ---- deny: no scope and no role is fully unprivileged ----------------------------------------
 
     @Test

@@ -194,6 +194,48 @@ class ScopeEnforcementHttpIntegrationTest extends AbstractAccountIntegrationTest
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
+    // ---- platform super-admin wildcard READ authority (TASK-FIN-BE-049) --------------------------
+    // The runtime-confirmed scenario (nightly-e2e run 29635409302, console super-admin persona): a
+    // platform super-admin's base OIDC domain-facing token carries tenant_id="*", NO finance scope,
+    // NO domain role (ADR-033 S2 / ADR-034 U5 keep SUPER_ADMIN off the domain token), and
+    // entitled_domains=[]. Layer-1 (the tenant gate) admits it via allowSuperAdminWildcard(); before
+    // this fix layer-2 (this authz gate) 403'd its READS (finance overview card forbidden,
+    // reason=PERMISSION_DENIED). The converter now grants ROLE_FINANCE_SUPERADMIN_READ (READ only),
+    // so its READS pass while its WRITES stay gated — the wildcard sibling of FIN-BE-048.
+
+    @Test
+    @DisplayName("super-admin wildcard (tenant_id='*', no scope/role/entitlement) → GET → 404 (read gate open)")
+    void wildcardSuperadminCanRead() throws Exception {
+        mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                        .header("Authorization", "Bearer " + token("*", null, null, null)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("super-admin wildcard (no scope/role) → POST /accounts → 403 (write gate intact — wildcard READ is read-only)")
+    void wildcardSuperadminCannotWrite() throws Exception {
+        mockMvc.perform(post("/api/finance/accounts")
+                        .header("Authorization", "Bearer " + token("*", null, null, null))
+                        .header("Idempotency-Key", "wildcard-superadmin-open")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(OPEN_BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    @Test
+    @DisplayName("super-admin wildcard (no scope/role) → POST transfer → 403 (fund movement blocked; wildcard widens READ only)")
+    void wildcardSuperadminCannotTransfer() throws Exception {
+        mockMvc.perform(post("/api/finance/accounts/acc-x/transfers")
+                        .header("Authorization", "Bearer " + token("*", null, null, null))
+                        .header("Idempotency-Key", "wildcard-superadmin-xfer")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"toAccountId\":\"acc-y\",\"money\":{\"amount\":\"100\",\"currency\":\"KRW\"}}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
     // ---- deny: no scope and no role is fully unprivileged ----------------------------------------
 
     @Test
