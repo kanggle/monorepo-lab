@@ -121,6 +121,42 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
                 .isNotEqualTo(403);
     }
 
+    // ---- entitlement-trust READ authority (TASK-FIN-BE-048) --------------------------------------
+    // A platform-console-federated customer operator carries tenant_id=acme,
+    // entitled_domains=[finance,wms], NO finance scope, NO roles. Layer-1 (the tenant gate) admits
+    // it via trustEntitledDomains(); the converter now grants ROLE_FINANCE_VIEWER (READ only), so its
+    // READS pass this gate while its WRITES stay gated — mirrors the WMS ROLE_WMS_VIEWER synthesis
+    // (TASK-MONO-162) and the account-service sibling.
+
+    private String entitledOperatorToken() {
+        return token(c -> c
+                .claim("tenant_id", "acme")
+                .claim("entitled_domains", List.of("finance", "wms")));
+    }
+
+    @Test
+    @DisplayName("entitled operator (entitled_domains=[finance], no scope/role) → GET periods → not 403 (read gate open)")
+    void entitledNoScopeNoRoleCanRead() throws Exception {
+        MvcResult r = mockMvc.perform(get(READ_PATH)
+                        .header("Authorization", "Bearer " + entitledOperatorToken()))
+                .andReturn();
+        assertThat(r.getResponse().getStatus())
+                .as("entitlement-trust VIEWER admits reads for a scopeless/roleless entitled operator")
+                .isNotEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("entitled operator (no scope/role) → POST entries → 403 PERMISSION_DENIED (write gate intact — VIEWER is read-only)")
+    void entitledNoScopeNoRoleCannotWrite() throws Exception {
+        mockMvc.perform(post(WRITE_PATH)
+                        .header("Authorization", "Bearer " + entitledOperatorToken())
+                        .header("Idempotency-Key", "entitled-viewer-post")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(POST_BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
     // ---- deny: no scope and no role is fully unprivileged ----------------------------------------
 
     @Test

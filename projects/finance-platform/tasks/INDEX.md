@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-FIN-BE-048-finance-read-entitlement-trust-authority-parity.md` — **finance READ entitlement-trust authority parity (account + ledger)**. Synthesises a READ-only `ROLE_FINANCE_VIEWER` on `entitled_domains ∋ finance` in both finance `ActorContextJwtAuthenticationConverter`s + adds it to `readAuthorities` only (writes stay gated), mirroring the WMS `ROLE_WMS_VIEWER` pattern (TASK-MONO-162, ADR-MONO-019 §D5 / ADR-MONO-020 D4). Closes the FIN-BE-046/047 read-scope straggler surfaced by federation run `29632072800` (entitled acme operator's finance card `forbidden` — passed layer-1 tenant gate, 403'd at layer-2 authority). Pins iam-platform `TASK-BE-518` candidate 2. Impl PR (this) moves the task ready → in-progress → review. 분석=Opus 4.8 / 구현=Opus (security-critical).
 
 ## done
 
