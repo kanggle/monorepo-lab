@@ -3,9 +3,6 @@ package com.example.finance.ledger.integration;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
@@ -32,29 +29,6 @@ import static org.awaitility.Awaitility.await;
  * covering now blocks every posting once CLOSED), so this is one ordered test.
  */
 class PeriodCloseIntegrationTest extends AbstractLedgerIntegrationTest {
-
-    private final HttpClient http = HttpClient.newHttpClient();
-
-    private HttpResponse<String> get(String path, String token) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + path))
-                .header("Authorization", "Bearer " + token)
-                .GET().build();
-        return http.send(req, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> post(String path, String token, String body) throws Exception {
-        HttpRequest.Builder b = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + path))
-                .header("Authorization", "Bearer " + token);
-        if (body != null) {
-            b.header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body));
-        } else {
-            b.POST(HttpRequest.BodyPublishers.noBody());
-        }
-        return http.send(b.build(), HttpResponse.BodyHandlers.ofString());
-    }
 
     @Test
     void periodCloseLocksTheWindowAndCapturesTheTrialBalanceSnapshot() throws Exception {
@@ -149,10 +123,6 @@ class PeriodCloseIntegrationTest extends AbstractLedgerIntegrationTest {
         // cross-tenant token → 403.
         assertThat(get("/api/finance/ledger/periods", crossTenantToken()).statusCode())
                 .isEqualTo(403);
-    }
-
-    private JsonNode readJson(HttpResponse<String> resp) throws Exception {
-        return objectMapper.readTree(resp.body());
     }
 
     private String windowBody(Instant from, Instant to) {

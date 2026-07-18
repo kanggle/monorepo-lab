@@ -12,8 +12,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -172,17 +170,7 @@ class LedgerFxRateConsumptionIntegrationTest extends AbstractLedgerIntegrationTe
     }
 
     private long[] usdPosition() {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT "
-                        + "COALESCE(SUM(CASE WHEN direction='DEBIT' THEN amount_minor ELSE 0 END),0) "
-                        + "- COALESCE(SUM(CASE WHEN direction='CREDIT' THEN amount_minor ELSE 0 END),0) AS f, "
-                        + "COALESCE(SUM(CASE WHEN direction='DEBIT' THEN base_amount_minor ELSE 0 END),0) "
-                        + "- COALESCE(SUM(CASE WHEN direction='CREDIT' THEN base_amount_minor ELSE 0 END),0) AS b "
-                        + "FROM journal_line "
-                        + "WHERE tenant_id='finance' AND ledger_account_code='CASH_CLEARING' "
-                        + "AND currency='USD'");
-        Map<String, Object> r = rows.get(0);
-        return new long[]{((Number) r.get("f")).longValue(), ((Number) r.get("b")).longValue()};
+        return positionFor("CASH_CLEARING", "USD");
     }
 
     /**

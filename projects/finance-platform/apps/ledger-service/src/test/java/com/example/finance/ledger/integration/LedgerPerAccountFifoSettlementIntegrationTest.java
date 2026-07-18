@@ -7,7 +7,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -72,11 +71,7 @@ class LedgerPerAccountFifoSettlementIntegrationTest extends AbstractLedgerIntegr
 
     /** Seed the unique ASSET account so the manual path (no lazy mint) accepts it. */
     private void seedAssetAccount() {
-        jdbcTemplate.update(
-                "INSERT INTO ledger_account (code, tenant_id, type, normal_side, created_at) "
-                        + "VALUES (?, 'finance', 'ASSET', 'DEBIT', ?) "
-                        + "ON DUPLICATE KEY UPDATE code = code",
-                FX_ACCOUNT, java.sql.Timestamp.from(Instant.now()));
+        seedAssetAccount(FX_ACCOUNT);
     }
 
     /** Post a single USD acquisition (DR FX_ACCOUNT foreign@base / CR SETTLEMENT_SUSPENSE base). */
@@ -104,11 +99,7 @@ class LedgerPerAccountFifoSettlementIntegrationTest extends AbstractLedgerIntegr
 
     /** The open lots (remaining > 0) of the FX_ACCOUNT USD position, FIFO-ordered. */
     private List<Map<String, Object>> openLots() {
-        return jdbcTemplate.queryForList(
-                "SELECT remaining_foreign_minor, carrying_base_minor, seq "
-                        + "FROM fx_position_lot WHERE tenant_id='finance' "
-                        + "AND ledger_account_code='" + FX_ACCOUNT + "' AND currency='USD' "
-                        + "AND remaining_foreign_minor > 0 ORDER BY acquired_at ASC, seq ASC");
+        return openLots(FX_ACCOUNT);
     }
 
     private static long asLong(Object v) {

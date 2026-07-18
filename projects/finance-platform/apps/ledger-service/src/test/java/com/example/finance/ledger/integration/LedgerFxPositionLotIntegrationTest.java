@@ -73,11 +73,7 @@ class LedgerFxPositionLotIntegrationTest extends AbstractLedgerIntegrationTest {
 
     /** Seed the unique ASSET account so the manual path (no lazy mint) accepts it. */
     private void seedAssetAccount() {
-        jdbcTemplate.update(
-                "INSERT INTO ledger_account (code, tenant_id, type, normal_side, created_at) "
-                        + "VALUES (?, 'finance', 'ASSET', 'DEBIT', ?) "
-                        + "ON DUPLICATE KEY UPDATE code = code",
-                FX_ACCOUNT, java.sql.Timestamp.from(Instant.now()));
+        seedAssetAccount(FX_ACCOUNT);
     }
 
     private List<Map<String, Object>> lotsFor(String account, String currency) {

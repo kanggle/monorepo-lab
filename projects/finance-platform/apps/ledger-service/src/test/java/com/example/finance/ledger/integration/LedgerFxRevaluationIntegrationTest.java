@@ -10,8 +10,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -45,14 +43,6 @@ import static org.awaitility.Awaitility.await;
 class LedgerFxRevaluationIntegrationTest extends AbstractLedgerIntegrationTest {
 
     private final HttpClient http = HttpClient.newHttpClient();
-
-    private HttpResponse<String> get(String path, String token) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + path))
-                .header("Authorization", "Bearer " + token)
-                .GET().build();
-        return http.send(req, HttpResponse.BodyHandlers.ofString());
-    }
 
     private HttpResponse<String> postEntry(String token, String idempotencyKey, String body)
             throws Exception {
@@ -111,16 +101,7 @@ class LedgerFxRevaluationIntegrationTest extends AbstractLedgerIntegrationTest {
 
     /** The CASH_CLEARING USD position's foreign balance + base carrying from the DB. */
     private long[] usdPosition() {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT "
-                        + "COALESCE(SUM(CASE WHEN direction='DEBIT' THEN amount_minor ELSE 0 END),0) "
-                        + "- COALESCE(SUM(CASE WHEN direction='CREDIT' THEN amount_minor ELSE 0 END),0) AS f, "
-                        + "COALESCE(SUM(CASE WHEN direction='DEBIT' THEN base_amount_minor ELSE 0 END),0) "
-                        + "- COALESCE(SUM(CASE WHEN direction='CREDIT' THEN base_amount_minor ELSE 0 END),0) AS b "
-                        + "FROM journal_line "
-                        + "WHERE tenant_id='finance' AND ledger_account_code='CASH_CLEARING' AND currency='USD'");
-        Map<String, Object> r = rows.get(0);
-        return new long[]{((Number) r.get("f")).longValue(), ((Number) r.get("b")).longValue()};
+        return positionFor("CASH_CLEARING", "USD");
     }
 
     @Test

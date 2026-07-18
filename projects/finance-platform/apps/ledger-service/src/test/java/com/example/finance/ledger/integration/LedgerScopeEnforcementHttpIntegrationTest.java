@@ -8,13 +8,12 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import java.util.List;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -61,7 +60,7 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @Test
     @DisplayName("finance.read token → POST entries → 403 PERMISSION_DENIED (write requires finance.write)")
     void readScopeCannotPostJournal() throws Exception {
-        mockMvc.perform(post(WRITE_PATH)
+        mockMvc.perform(MockMvcRequestBuilders.post(WRITE_PATH)
                         .header("Authorization", "Bearer " + financeToken(c -> c.claim("scope", List.of("finance.read"))))
                         .header("Idempotency-Key", "scope-read-post")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -75,7 +74,7 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @Test
     @DisplayName("finance.read token → GET periods → not 403 (read admitted, gate open)")
     void readScopeCanRead() throws Exception {
-        MvcResult r = mockMvc.perform(get(READ_PATH)
+        MvcResult r = mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
                         .header("Authorization", "Bearer " + financeToken(c -> c.claim("scope", List.of("finance.read")))))
                 .andReturn();
         assertThat(r.getResponse().getStatus())
@@ -88,7 +87,7 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @Test
     @DisplayName("finance.write token → POST entries → not 403 (write admitted; authz gate opened)")
     void writeScopeCanWrite() throws Exception {
-        MvcResult r = mockMvc.perform(post(WRITE_PATH)
+        MvcResult r = mockMvc.perform(MockMvcRequestBuilders.post(WRITE_PATH)
                         .header("Authorization", "Bearer " + financeToken(c -> c.claim("scope", List.of("finance.write"))))
                         .header("Idempotency-Key", "scope-write-post")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -102,7 +101,7 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @Test
     @DisplayName("finance.write token → GET periods → not 403 (write implies read)")
     void writeScopeCanRead() throws Exception {
-        MvcResult r = mockMvc.perform(get(READ_PATH)
+        MvcResult r = mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
                         .header("Authorization", "Bearer " + financeToken(c -> c.claim("scope", List.of("finance.write")))))
                 .andReturn();
         assertThat(r.getResponse().getStatus()).isNotEqualTo(403);
@@ -113,7 +112,7 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @Test
     @DisplayName("operator role, NO finance scope → GET → not 403 (role-OR-scope; console read consumer preserved)")
     void operatorRoleCanReadWithoutScope() throws Exception {
-        MvcResult r = mockMvc.perform(get(READ_PATH)
+        MvcResult r = mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
                         .header("Authorization", "Bearer " + financeToken(c -> c.claim("roles", List.of("OPERATOR")))))
                 .andReturn();
         assertThat(r.getResponse().getStatus())
@@ -137,7 +136,7 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @Test
     @DisplayName("entitled operator (entitled_domains=[finance], no scope/role) → GET periods → not 403 (read gate open)")
     void entitledNoScopeNoRoleCanRead() throws Exception {
-        MvcResult r = mockMvc.perform(get(READ_PATH)
+        MvcResult r = mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
                         .header("Authorization", "Bearer " + entitledOperatorToken()))
                 .andReturn();
         assertThat(r.getResponse().getStatus())
@@ -148,7 +147,7 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @Test
     @DisplayName("entitled operator (no scope/role) → POST entries → 403 PERMISSION_DENIED (write gate intact — VIEWER is read-only)")
     void entitledNoScopeNoRoleCannotWrite() throws Exception {
-        mockMvc.perform(post(WRITE_PATH)
+        mockMvc.perform(MockMvcRequestBuilders.post(WRITE_PATH)
                         .header("Authorization", "Bearer " + entitledOperatorToken())
                         .header("Idempotency-Key", "entitled-viewer-post")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -172,7 +171,7 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @Test
     @DisplayName("super-admin wildcard (tenant_id='*', no scope/role) → GET periods → not 403 (read gate open)")
     void wildcardSuperadminCanRead() throws Exception {
-        MvcResult r = mockMvc.perform(get(READ_PATH)
+        MvcResult r = mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
                         .header("Authorization", "Bearer " + wildcardSuperadminToken()))
                 .andReturn();
         assertThat(r.getResponse().getStatus())
@@ -183,7 +182,7 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @Test
     @DisplayName("super-admin wildcard (no scope/role) → POST entries → 403 PERMISSION_DENIED (write gate intact — wildcard READ is read-only)")
     void wildcardSuperadminCannotWrite() throws Exception {
-        mockMvc.perform(post(WRITE_PATH)
+        mockMvc.perform(MockMvcRequestBuilders.post(WRITE_PATH)
                         .header("Authorization", "Bearer " + wildcardSuperadminToken())
                         .header("Idempotency-Key", "wildcard-superadmin-post")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -198,13 +197,13 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     @DisplayName("finance token with NO scope and NO role → POST 403 + GET 403 (defense in depth)")
     void unprivilegedFinanceTokenDenied() throws Exception {
         String bare = financeToken(c -> { });
-        mockMvc.perform(post(WRITE_PATH)
+        mockMvc.perform(MockMvcRequestBuilders.post(WRITE_PATH)
                         .header("Authorization", "Bearer " + bare)
                         .header("Idempotency-Key", "scope-bare-post")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(POST_BODY))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(get(READ_PATH)
+        mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
                         .header("Authorization", "Bearer " + bare))
                 .andExpect(status().isForbidden());
     }
