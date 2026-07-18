@@ -1,7 +1,7 @@
 # TASK-BE-517 — SUPER_ADMIN wildcard `*` entitled-domains/roles lookup 400s and trips the auth→account circuit → tokens omit entitlements → finance card `forbidden`
 
 - **Type**: TASK-BE
-- **Status**: ready
+- **Status**: done
 - **Service**: auth-service (iam-platform)
 - **Domain/traits**: saas / [transactional, integration-heavy, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (token-minting + cross-tenant circuit blast radius)
