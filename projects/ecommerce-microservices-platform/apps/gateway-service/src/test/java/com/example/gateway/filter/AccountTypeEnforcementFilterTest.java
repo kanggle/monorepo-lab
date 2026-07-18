@@ -2,11 +2,13 @@ package com.example.gateway.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.security.oauth2.TenantClaimValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
@@ -134,6 +136,81 @@ class AccountTypeEnforcementFilterTest {
     }
 
     // -----------------------------------------------------------------------
+    // SUPER_ADMIN wildcard READ admission on /api/admin/** (TASK-BE-506)
+    //
+    // The platform super-admin's console operator-overview forwards the base OIDC
+    // domain token: tenant_id="*", NO roles claim (SUPER_ADMIN kept off the domain
+    // token per ADR-033 S2 / ADR-034 U5). Admit it for SAFE methods (GET/HEAD) only;
+    // writes stay operator-gated. Consistent with finance (FIN-BE-048/049) and
+    // erp (ERP-BE-031); FIN-BE-050 sibling-parity audit provenance.
+    // -----------------------------------------------------------------------
+
+    @Test
+    void adminRoute_superAdminWildcard_get_passesThrough() {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.GET, "/api/admin/products");
+        CapturingChain chain = new CapturingChain();
+
+        run(exchange, chain, jwtWildcardTenantNoRoles());
+
+        assertThat(chain.called).as("wildcard super-admin admitted on GET /api/admin/**").isTrue();
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void adminRoute_superAdminWildcard_head_passesThrough() {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.HEAD, "/api/admin/products");
+        CapturingChain chain = new CapturingChain();
+
+        run(exchange, chain, jwtWildcardTenantNoRoles());
+
+        assertThat(chain.called).as("wildcard super-admin admitted on HEAD /api/admin/**").isTrue();
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void adminRoute_superAdminWildcard_writeMethods_return403() {
+        // Invariant: widen READ visibility only, never mutation. A wildcard super-admin
+        // token must still be 403'd on every write to /api/admin/**.
+        for (HttpMethod method : new HttpMethod[] {
+                HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE}) {
+            MockServerWebExchange exchange = exchangeFor(method, "/api/admin/products");
+            CapturingChain chain = new CapturingChain();
+
+            run(exchange, chain, jwtWildcardTenantNoRoles());
+
+            assertThat(chain.called).as("wildcard super-admin 403'd on %s /api/admin/**", method).isFalse();
+            assertThat(exchange.getResponse().getStatusCode())
+                    .as("write %s stays operator-gated", method).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    @Test
+    void adminRoute_nonWildcardNonOperator_get_returns403() {
+        // The admission is keyed strictly on the wildcard tenant, NOT on authentication:
+        // a well-formed non-wildcard token with no operator role is still 403'd on a read.
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.GET, "/api/admin/products");
+        CapturingChain chain = new CapturingChain();
+
+        run(exchange, chain, jwtWithTenantNoRoles("ecommerce"));
+
+        assertThat(chain.called).as("non-wildcard non-operator blocked on GET /api/admin/**").isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void adminRoute_operatorRole_writeMethod_stillPassesThrough() {
+        // No regression: an ECOMMERCE_OPERATOR keeps write access (the wildcard-read
+        // admission is additive, it does not narrow the operator's authority).
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.POST, "/api/admin/products");
+        CapturingChain chain = new CapturingChain();
+
+        run(exchange, chain, jwtWithRoles("ECOMMERCE_OPERATOR"));
+
+        assertThat(chain.called).as("ECOMMERCE_OPERATOR admitted on POST /api/admin/**").isTrue();
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // -----------------------------------------------------------------------
     // Role-based admission — roles claim, with or without account_type
     // -----------------------------------------------------------------------
 
@@ -251,6 +328,42 @@ class AccountTypeEnforcementFilterTest {
 
     private static MockServerWebExchange exchangeFor(String path) {
         return MockServerWebExchange.from(MockServerHttpRequest.get(path).build());
+    }
+
+    private static MockServerWebExchange exchangeFor(HttpMethod method, String path) {
+        return MockServerWebExchange.from(MockServerHttpRequest.method(method, path).build());
+    }
+
+    /**
+     * The platform super-admin's base OIDC domain token as forwarded by the console
+     * operator-overview: {@code tenant_id="*"} and <b>no roles claim</b> (SUPER_ADMIN
+     * is kept off the domain token per ADR-033 S2 / ADR-034 U5).
+     */
+    private static Jwt jwtWildcardTenantNoRoles() {
+        return Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("super-admin")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .claims(c -> {
+                    c.put("iss", "test");
+                    c.put(TenantClaimValidator.CLAIM_TENANT_ID, TenantClaimValidator.WILDCARD_TENANT);
+                })
+                .build();
+    }
+
+    /** A well-formed non-wildcard token with no roles — proves admission is keyed on the wildcard. */
+    private static Jwt jwtWithTenantNoRoles(String tenantId) {
+        return Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("user-1")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .claims(c -> {
+                    c.put("iss", "test");
+                    c.put(TenantClaimValidator.CLAIM_TENANT_ID, tenantId);
+                })
+                .build();
     }
 
     /** JWT with no roles claim and no account_type. */
