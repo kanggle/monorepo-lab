@@ -86,7 +86,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## review
 
-(empty)
+- `TASK-ERP-BE-031-superadmin-wildcard-read-authority-parity.md` — **IN REVIEW**. Super-admin wildcard READ authority parity across `masterdata-service` + `read-model-service` + `notification-service` (erp analogue of finance FIN-BE-048/049, surfaced by the sibling-parity audit TASK-FIN-BE-050). A platform-console super-admin's forwarded base OIDC domain token (`tenant_id='*'`, no erp scope/role, `entitled_domains=[]`) passes erp's layer-1 tenant gate (`allowSuperAdminWildcard()`) but was 403'd at layer-2 by the domain READ gates → erp overview card `forbidden`. Fix: a READ-only wildcard short-circuit (`TenantClaimValidator.WILDCARD_TENANT.equals(tenantId)`) added to each gate's READ predicate — widens READ visibility only, WRITES stay gated (masterdata write arm untouched; read-model/notification are structurally READ-only). RED-before/GREEN-after masterdata proof + per-service mutation-check. 분석=Opus 4.8 / 구현=Opus.
 
 ## done
 

@@ -246,6 +246,41 @@ class RoleScopeAuthorizationAdapterTest {
         assertThat(d.outcome()).isEqualTo(AuthorizationDecision.Outcome.DENY_SCOPE);
     }
 
+    // ── platform-super-admin wildcard READ authority (TASK-ERP-BE-031, erp analogue of FIN-BE-049) ──
+
+    @Test
+    @DisplayName("wildcard super-admin: tenant_id='*' + NO scope/role/entitlement + READ + null target → ALLOW")
+    void superAdminWildcardReadAllow() {
+        // The platform-console super-admin's forwarded base OIDC domain token:
+        // tenant_id='*', no erp scope, no domain roles, entitled_domains=[]. This is
+        // exactly the token the operator-overview ERP card calls listDepartments with.
+        ActorContext actor = new ActorContext("super-admin", "*",
+                Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
+        AuthorizationDecision d = adapter().evaluate(actor, RequiredScope.READ, null);
+        assertThat(d.outcome()).isEqualTo(AuthorizationDecision.Outcome.ALLOW);
+    }
+
+    @Test
+    @DisplayName("wildcard super-admin: tenant_id='*' + NO scope/role/entitlement + WRITE → DENY_ROLE (read-only invariant)")
+    void superAdminWildcardWriteStillDenied() {
+        // Same wildcard token — the READ-only admission must NOT widen mutation.
+        ActorContext actor = new ActorContext("super-admin", "*",
+                Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
+        AuthorizationDecision d = adapter().evaluate(actor, RequiredScope.WRITE, null);
+        assertThat(d.outcome()).isEqualTo(AuthorizationDecision.Outcome.DENY_ROLE);
+    }
+
+    @Test
+    @DisplayName("wildcard is strictly keyed on tenant_id='*': a non-wildcard scopeless token + READ → DENY_ROLE")
+    void nonWildcardScopelessReadStillDenied() {
+        // AC-4 analogue: the admission is gated strictly on the '*' literal, not on
+        // "authenticated" — a plain non-wildcard, non-entitled, no-scope token still 403s.
+        ActorContext actor = new ActorContext("u", "erp",
+                Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
+        AuthorizationDecision d = adapter().evaluate(actor, RequiredScope.READ, null);
+        assertThat(d.outcome()).isEqualTo(AuthorizationDecision.Outcome.DENY_ROLE);
+    }
+
     // ── test fixture helpers ──
 
     private void seedTree() {

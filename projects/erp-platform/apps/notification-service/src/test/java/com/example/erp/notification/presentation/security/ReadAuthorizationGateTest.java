@@ -52,4 +52,24 @@ class ReadAuthorizationGateTest {
         assertThatThrownBy(() -> gate.requireRead(null))
                 .isInstanceOf(ReadAccessDeniedException.class);
     }
+
+    // ── platform-super-admin wildcard READ authority (TASK-ERP-BE-031, erp analogue of FIN-BE-049) ──
+
+    @Test
+    void superAdminWildcardTenantReadAllowed() {
+        // The platform-console super-admin's forwarded base OIDC domain token:
+        // tenant_id='*', no erp scope, no domain roles, no entitled_domains. Admitted
+        // for the READ gate; the only POST (mark-read) is a self-scoped, recipient-owned
+        // read-adjacent action, so this never widens an org-wide mutation.
+        assertThatCode(() -> gate.requireRead(jwt(Map.of("tenant_id", "*", "sub", "u"))))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void nonWildcardTenantWithoutScopeStillDenied() {
+        // Strict keying: admission is on the '*' literal, not on "authenticated" — a
+        // concrete non-wildcard tenant with no scope/role/entitlement still 403s.
+        assertThatThrownBy(() -> gate.requireRead(jwt(Map.of("tenant_id", "erp", "sub", "u"))))
+                .isInstanceOf(ReadAccessDeniedException.class);
+    }
 }
