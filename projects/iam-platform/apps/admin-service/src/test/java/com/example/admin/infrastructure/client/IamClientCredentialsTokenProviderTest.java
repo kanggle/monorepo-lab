@@ -57,7 +57,7 @@ class IamClientCredentialsTokenProviderTest {
                 .encodeToString("admin-service-client:secret".getBytes());
         wireMock.verify(postRequestedFor(urlEqualTo("/oauth2/token"))
                 .withHeader("Authorization", equalTo(expectedBasic))
-                .withRequestBody(equalTo("grant_type=client_credentials")));
+                .withRequestBody(equalTo("grant_type=client_credentials&scope=internal.invoke")));
     }
 
     @Test

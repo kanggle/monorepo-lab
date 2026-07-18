@@ -299,4 +299,63 @@ class OAuth2AuthorizationServerIntegrationTest extends AbstractIntegrationTest {
         assertThat(jwt.getClaimAsString("tenant_id")).isEqualTo("global-account-platform");
         assertThat(jwt.getClaimAsString("tenant_type")).isEqualTo("INTERNAL");
     }
+
+    @Test
+    @Order(8)
+    @DisplayName("TASK-BE-515: client_credentials grants a scope ONLY when explicitly requested — "
+            + "no scope param → no internal.invoke claim (the /internal/** RED mechanism); "
+            + "scope=internal.invoke → claim present")
+    void clientCredentials_scopeClaim_grantedOnlyWhenRequested() throws Exception {
+        String basicAuth = "Basic " + Base64.getEncoder()
+                .encodeToString("account-service-client:secret".getBytes());
+
+        // Shared JWKS decoder for both minted tokens.
+        String jwksJson = mockMvc.perform(get("/oauth2/jwks"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        RSAPublicKey publicKey = JWKSet.parse(jwksJson).getKeys().get(0).toRSAKey().toRSAPublicKey();
+        JwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();
+
+        // (a) WITH scope=internal.invoke — the receiver-required scope IS present in the token.
+        String withScopeToken = objectMapper.readTree(mockMvc.perform(post("/oauth2/token")
+                        .header(HttpHeaders.AUTHORIZATION, basicAuth)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "client_credentials")
+                        .param("scope", "internal.invoke"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString())
+                .get("access_token").asText();
+        assertThat(scopesOf(decoder.decode(withScopeToken)))
+                .as("explicit scope=internal.invoke must appear in the minted token's scope claim")
+                .contains("internal.invoke");
+
+        // (b) WITHOUT any scope param — SAS grants NO scopes, so internal.invoke is absent. This is the
+        // exact mechanism behind the TASK-BE-514/MONO-422 nightly RED: the four IAM workload providers
+        // used to send no scope, so their tokens failed the /internal/** RequiredScopeValidator (401).
+        // TASK-BE-515 makes them request the scope; this negative case guards the regression.
+        String noScopeToken = objectMapper.readTree(mockMvc.perform(post("/oauth2/token")
+                        .header(HttpHeaders.AUTHORIZATION, basicAuth)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "client_credentials"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString())
+                .get("access_token").asText();
+        assertThat(scopesOf(decoder.decode(noScopeToken)))
+                .as("no scope param → SAS grants no scopes → internal.invoke absent (the RED mechanism)")
+                .doesNotContain("internal.invoke");
+    }
+
+    /** Extract scopes from a JWT {@code scope} claim (space-delimited String or Collection; absent → empty). */
+    private static java.util.List<String> scopesOf(Jwt jwt) {
+        Object scope = jwt.getClaim("scope");
+        if (scope == null) {
+            return java.util.List.of();
+        }
+        if (scope instanceof java.util.Collection<?> collection) {
+            return collection.stream().map(String::valueOf).toList();
+        }
+        return java.util.Arrays.stream(scope.toString().trim().split("\\s+"))
+                .filter(s -> !s.isBlank())
+                .toList();
+    }
 }
