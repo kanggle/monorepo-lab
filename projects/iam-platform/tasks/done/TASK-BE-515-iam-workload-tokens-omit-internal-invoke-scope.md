@@ -1,7 +1,7 @@
 # TASK-BE-515 — IAM workload client_credentials tokens omit `internal.invoke` scope → all cross-service `/internal/**` calls rejected (nightly + federation E2E RED)
 
 - **Type**: TASK-BE
-- **Status**: ready
+- **Status**: done
 - **Service**: account-service, admin-service, auth-service, security-service (iam-platform)
 - **Domain/traits**: saas / [transactional, regulated, audit-heavy, integration-heavy, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (security authz + fleet-wide cross-service blast radius)
