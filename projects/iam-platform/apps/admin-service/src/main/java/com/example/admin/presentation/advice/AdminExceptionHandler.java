@@ -458,6 +458,66 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of(e.getCode(), e.getMessage()));
     }
 
+    // TASK-BE-520 (ADR-MONO-046 D3/D5) — operator-group management errors
+    // (admin-api.md § Operator Group Management error tables). Cross-scope on a READ path is
+    // 404 (enumeration-safe); an out-of-scope MUTATION is 403 TENANT_SCOPE_DENIED via the
+    // reused TenantScopeGuard, and the group's absence is this 404.
+    @ExceptionHandler(com.example.admin.application.exception.GroupNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleGroupNotFound(
+            com.example.admin.application.exception.GroupNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("GROUP_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.GroupNameConflictException.class)
+    public ResponseEntity<ErrorResponse> handleGroupNameConflict(
+            com.example.admin.application.exception.GroupNameConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("GROUP_NAME_CONFLICT", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.GroupMemberAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleGroupMemberAlreadyExists(
+            com.example.admin.application.exception.GroupMemberAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("GROUP_MEMBER_ALREADY_EXISTS", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.GroupMemberNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleGroupMemberNotFound(
+            com.example.admin.application.exception.GroupMemberNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("GROUP_MEMBER_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.GroupMemberTenantMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleGroupMemberTenantMismatch(
+            com.example.admin.application.exception.GroupMemberTenantMismatchException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("GROUP_MEMBER_TENANT_MISMATCH", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.GroupGrantAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleGroupGrantAlreadyExists(
+            com.example.admin.application.exception.GroupGrantAlreadyExistsException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("GROUP_GRANT_ALREADY_EXISTS", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.GroupGrantNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleGroupGrantNotFound(
+            com.example.admin.application.exception.GroupGrantNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("GROUP_GRANT_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.GroupGrantNoEscalationException.class)
+    public ResponseEntity<ErrorResponse> handleGroupGrantNoEscalation(
+            com.example.admin.application.exception.GroupGrantNoEscalationException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("GROUP_GRANT_NO_ESCALATION", e.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

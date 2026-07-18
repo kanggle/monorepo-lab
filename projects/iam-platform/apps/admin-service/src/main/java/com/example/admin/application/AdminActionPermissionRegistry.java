@@ -92,6 +92,16 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.ORG_NODE_CEILING_SET, "ORG_NODE");
         map.put(ActionCode.ORG_ADMIN_GRANT, "ORG_NODE");
         map.put(ActionCode.ORG_ADMIN_REVOKE, "ORG_NODE");
+        // TASK-BE-520 (ADR-MONO-046 D6) — operator-group lifecycle + membership + grant.
+        // The GROUP is the audit subject for the member/grant rows too (the affected
+        // operator/grant rides in `detail`), mirroring the ORG_ADMIN_GRANT convention above.
+        map.put(ActionCode.GROUP_CREATE, "GROUP");
+        map.put(ActionCode.GROUP_UPDATE, "GROUP");
+        map.put(ActionCode.GROUP_DELETE, "GROUP");
+        map.put(ActionCode.GROUP_MEMBER_ADD, "GROUP");
+        map.put(ActionCode.GROUP_MEMBER_REMOVE, "GROUP");
+        map.put(ActionCode.GROUP_GRANT_ADD, "GROUP");
+        map.put(ActionCode.GROUP_GRANT_REVOKE, "GROUP");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -164,6 +174,9 @@ public class AdminActionPermissionRegistry {
             // TASK-BE-492 (ADR-MONO-047 D5) — every org-node mutation gates on org.manage.
             case ORG_NODE_CREATE, ORG_NODE_UPDATE, ORG_NODE_DELETE, ORG_NODE_CEILING_SET,
                  ORG_ADMIN_GRANT, ORG_ADMIN_REVOKE -> Permission.ORG_MANAGE;
+            // TASK-BE-520 (ADR-MONO-046 D6) — every operator-group mutation gates on group.manage.
+            case GROUP_CREATE, GROUP_UPDATE, GROUP_DELETE, GROUP_MEMBER_ADD, GROUP_MEMBER_REMOVE,
+                 GROUP_GRANT_ADD, GROUP_GRANT_REVOKE -> Permission.GROUP_MANAGE;
             // TASK-BE-306 — self-serve operator profile mutation (no grantable permission;
             // synthetic <self_action> sentinel for symmetry with reason="<self_profile_update>").
             case OPERATOR_PROFILE_UPDATE -> AdminActionAuditor.PERMISSION_SELF_ACTION;

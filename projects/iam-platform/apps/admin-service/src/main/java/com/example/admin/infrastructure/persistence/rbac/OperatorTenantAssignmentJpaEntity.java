@@ -65,6 +65,17 @@ public class OperatorTenantAssignmentJpaEntity {
     private List<String> orgScope;
 
     /**
+     * TASK-BE-520 (ADR-MONO-046 D5, Flyway V0044) — the fan-out marker. Non-null ⇒ this
+     * assignment row was MATERIALISED by a fan-out of the named {@code operator_group}'s
+     * TENANT_ASSIGNMENT grant (references {@code operator_group.id}); null (default) ⇒ a
+     * DIRECT assignment, byte-unchanged. Lifecycle bookkeeping only — evaluation never reads
+     * it; cascade-revoke filters strictly on this column so a direct assignment
+     * ({@code group_origin IS NULL}) is never destroyed. Sibling of {@link #orgScope}.
+     */
+    @Column(name = "group_origin")
+    private Long groupOrigin;
+
+    /**
      * Sole factory.
      *
      * @param operatorId      internal BIGINT id of the assigned operator
@@ -108,6 +119,33 @@ public class OperatorTenantAssignmentJpaEntity {
      */
     public void setOrgScope(List<String> orgScope) {
         this.orgScope = orgScope;
+    }
+
+    /**
+     * TASK-BE-520 (ADR-MONO-046 D5) — set/clear the fan-out marker on a managed entity.
+     * Mirrors {@link #setOrgScope}.
+     */
+    public void setGroupOrigin(Long groupOrigin) {
+        this.groupOrigin = groupOrigin;
+    }
+
+    /**
+     * TASK-BE-520 (ADR-MONO-046 D5) — factory for a fan-out assignment materialised from a
+     * group's TENANT_ASSIGNMENT grant. Whole-tenant ({@code orgScope=null} ⟺ {@code ["*"]})
+     * and inherits operator-level roles ({@code permissionSetId=null}), like a direct
+     * whole-tenant assignment; {@code groupOrigin} tags it for cascade-revoke.
+     *
+     * @throws IllegalArgumentException if {@code groupOrigin} is null
+     */
+    public static OperatorTenantAssignmentJpaEntity createGroupScoped(Long operatorId, String tenantId,
+                                                                      Instant grantedAt, Long grantedBy,
+                                                                      Long groupOrigin) {
+        if (groupOrigin == null) {
+            throw new IllegalArgumentException("groupOrigin is required for a fan-out assignment");
+        }
+        OperatorTenantAssignmentJpaEntity e = create(operatorId, tenantId, grantedAt, grantedBy, null, null);
+        e.groupOrigin = groupOrigin;
+        return e;
     }
 
     public static class PK implements Serializable {
