@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for the account {@link ActorContextJwtAuthenticationConverter}. Two concerns:
@@ -133,5 +134,51 @@ class ActorContextJwtAuthenticationConverterTest {
     void nonWildcardTenantGetsNoSuperadminRead() {
         List<String> auths = authorities(jwt(b -> b.claim("roles", List.of("OPERATOR"))));
         assertThat(auths).doesNotContain(ActorContextJwtAuthenticationConverter.SUPERADMIN_READ_ROLE);
+    }
+
+    // ---- convert() guard clauses (TASK-FIN-BE-052) -----------------------------------------------
+
+    @Test
+    @DisplayName("sub 클레임이 없으면 IllegalStateException (sub 가드; tenant_id 는 존재)")
+    void missingSubClaimThrows() {
+        Jwt noSub = Jwt.withTokenValue("t")
+                .header("alg", "RS256")
+                .claim("tenant_id", "finance")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+        assertThatThrownBy(() -> converter.convert(noSub))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("sub");
+    }
+
+    @Test
+    @DisplayName("tenant_id 클레임이 없으면 IllegalStateException (tenant_id 가드; sub 는 존재)")
+    void missingTenantIdClaimThrows() {
+        Jwt noTenant = Jwt.withTokenValue("t")
+                .header("alg", "RS256")
+                .subject("user-1")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+        assertThatThrownBy(() -> converter.convert(noTenant))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("tenant_id");
+    }
+
+    // ---- extractRoles claim shapes (TASK-FIN-BE-052) ---------------------------------------------
+
+    @Test
+    @DisplayName("role 단수 alias 클레임도 ROLE_* 로 리프트된다 (roles 없을 때 fallback)")
+    void roleSingularAliasLifted() {
+        assertThat(authorities(jwt(b -> b.claim("role", List.of("OPERATOR")))))
+                .contains("ROLE_OPERATOR");
+    }
+
+    @Test
+    @DisplayName("roles 가 구분자 문자열(공백/쉼표)이면 다중 ROLE_* 로 분해된다")
+    void delimitedRolesLifted() {
+        assertThat(authorities(jwt(b -> b.claim("roles", "OPERATOR ADMIN"))))
+                .contains("ROLE_OPERATOR", "ROLE_ADMIN");
     }
 }
