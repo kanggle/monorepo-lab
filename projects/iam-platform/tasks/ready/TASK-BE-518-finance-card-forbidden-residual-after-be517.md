@@ -13,6 +13,34 @@ Clear the finance overview card `forbidden` that **persists after TASK-BE-517** 
 2026-07-18 "verify all services" sweep. BE-515/516/517 each removed a real, verified layer of this
 onion, but the surface RED remains, so at least one more independent cause is stacked underneath.
 
+## AC-0 RESULT (runtime-confirmed) — federation acme persona: candidate 2 (finance-side authority gate)
+
+Pinned from federation run `29632072800` (DIAG logging, since discarded). The **federation acme**
+persona's cause is **candidate 2** (a finance-side gate rejects for a reason other than the tenant
+claim — specifically the **scope/role authority layer**, NOT the tenant gate):
+
+- acme operator's OIDC domain-facing token: `tenant_id=acme-corp`, `entitled_domains=[finance, wms]`,
+  `scope=[openid,profile,email,tenant.read]`, **NO roles** (`resolvedRoles=[]`). So the token minting is
+  correct (candidate 1 refuted for this persona — `entitled_domains` DOES contain `finance` at runtime).
+- console-bff finance leg: `financeDefaultAccountId present=true` → HTTP GET made → finance returned
+  **HTTP 403 `{"code":"PERMISSION_DENIED"}`** (candidate 3 / MISSING_PREREQUISITE refuted — it is a real
+  403, not a missing-account short-circuit).
+- Same token PASSES the WMS leg (admin-service grants `ROLE_WMS_VIEWER` on `entitled_domains ∋ wms`);
+  finance had no equivalent authority-layer grant.
+
+**Root cause:** finance `account-service` + `ledger-service` `SecurityConfig` `readAuthorities` require a
+finance scope or an operator role; the entitled-but-scopeless base token holds neither, so it 403s at
+**layer-2 (authorization)** despite PASSING **layer-1** (the finance tenant gate admits it via
+`trustEntitledDomains()`). Finance applied entitlement-trust at the tenant layer only (FIN-BE-006) but
+never at the authority layer — a straggler behind the WMS `ROLE_WMS_VIEWER` pattern (TASK-MONO-162).
+
+**Fix = `TASK-FIN-BE-048`** (finance-platform): synthesise a READ-only `ROLE_FINANCE_VIEWER` on
+`entitled_domains ∋ finance` in both finance converters + add it to `readAuthorities` only (writes stay
+gated). **This BE-518 closes only when the federation `entitlement-trust-crossdomain` finance card goes
+green in CI post-merge of FIN-BE-048.** The **console super-admin** (`tenant_id=*`) persona of
+`operators-profile.spec.ts:60` is NOT covered by FIN-BE-048 (wildcard, not entitlement) — pin it
+separately before closing AC-2 for that spec.
+
 ## AC-0 — Finding so far (runtime-verified; the cause below is NOT yet pinned)
 
 - **Failing specs:** federation `entitlement-trust-crossdomain.spec.ts:66/120/127` (acme-operator,
