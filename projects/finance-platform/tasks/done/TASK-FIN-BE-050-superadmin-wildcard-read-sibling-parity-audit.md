@@ -1,7 +1,7 @@
 # TASK-FIN-BE-050 — super-admin wildcard READ authority: sibling-parity audit (erp / scm / ecommerce) — INVESTIGATION
 
 - **Type**: TASK-FIN-BE (doc-only investigation; likely resolves into per-domain fix tasks after AC-0 — reassign each to its own project after runtime pinning)
-- **Status**: ready
+- **Status**: done
 - **Service**: TBD by AC-0 — the domain services that ALSO open the tenant-layer wildcard via
   `.allowSuperAdminWildcard()`: erp (read-model / notification / masterdata), scm, ecommerce.
 - **Domain/traits**: saas / [transactional, multi-tenant]

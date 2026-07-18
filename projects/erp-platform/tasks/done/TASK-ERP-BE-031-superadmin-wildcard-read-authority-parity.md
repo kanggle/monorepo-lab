@@ -1,7 +1,7 @@
 # TASK-ERP-BE-031 — super-admin wildcard READ authority parity (masterdata + read-model + notification)
 
 - **Type**: TASK-ERP-BE (backend — Spring Security authorization gate)
-- **Status**: review
+- **Status**: done
 - **Service**: erp-platform `masterdata-service` + `read-model-service` + `notification-service` (shared READ-gate predicate)
 - **Domain/traits**: saas / [transactional]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (security-critical authorization gate)
