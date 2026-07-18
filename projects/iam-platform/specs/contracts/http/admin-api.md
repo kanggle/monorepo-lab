@@ -2446,6 +2446,332 @@ actor 의 reach 로 스코프된 노드 **flat array**. SUPER_ADMIN → 전체; 
 
 ---
 
+## Operator Group Management (ADR-MONO-046)
+
+**운영자 그룹**의 operator-facing 관리 표면 — `admin_operators` 를 named unit(`operator_group`, [data-model.md](../../services/admin-service/data-model.md))으로 묶고, 역할/tenant-assignment 를 **여러 operator 에 한 번에** 부여한다(AWS IAM User Group / Google Group 의 workforce-grouping facet). **v1 은 fan-out**(`ADR-MONO-046 § D2-A`): group 에 grant 하면 각 현재 멤버의 flat `operator_tenant_assignment`/`admin_operator_roles` row 로 materialise 되고 `group_origin` 마커로 태깅되며([rbac.md](../../services/admin-service/rbac.md#operator-group-fan-out-adr-mono-046-d2-a)), 그룹 멤버십은 **평가-시점 edge 가 아니다** — `PermissionEvaluator`·perm-cache·모든 confinement 축은 byte-unchanged. 모든 엔드포인트(read 포함)는 `@RequiresPermission("group.manage")` 로 게이트되고(deny-default, `admin_actions` 감사 — D6), 모든 변이는 **`X-Operator-Reason` reason-gated** + `TenantScopeGuard`(대상 = `operator_group.tenant_id`, D3) confine 된다. grant 는 추가로 `RoleGrantGuard`(≤-own no-escalation, `ADR-MONO-024 § D3` 재사용, D4)를 grant-time + add-member-time 양쪽에서 거친다.
+
+> **파생 권한 = 평범한 직접 grant.** 이 표면은 group aggregate 와 그 멤버십/grant 템플릿만 다룬다. 멤버가 실제로 얻는 권한은 fan-out 으로 materialise 된 **평범한 flat per-operator row** 이며(직접 grant 와 구별 불가, `group_origin` 마커만 상이), 그 마커는 lifecycle 부기 전용이다. inheritance 평가 경로(D2-B)는 후속 ADR — v1 은 group 을 새 평가/confinement 축으로 만들지 **않는다**.
+
+### Group wire shape
+
+```json
+{
+  "groupId": "00000000-0000-7000-8000-0000000000g1",
+  "tenantId": "acme-corp",
+  "name": "물류 지원팀",
+  "description": "WMS 출고 지원 스쿼드",
+  "memberCount": 5,
+  "grantCount": 3,
+  "createdAt": "2026-07-19T09:00:00Z",
+  "updatedAt": "2026-07-19T09:00:00Z"
+}
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `groupId` | string (UUID v7) | 외부 식별자(`operator_group.group_id`) |
+| `tenantId` | string | group 소유 테넌트(`TenantScopeGuard` 대상). `'*'` 아님 |
+| `name` | string | 1~120 자, `(tenantId, name)` 테넌트 내 유니크 |
+| `description` | string \| null | 선택 설명(≤255 자) |
+| `memberCount` / `grantCount` | int | 현재 멤버 수 / 현재 grant 템플릿 수(조회 편의) |
+| `createdAt` / `updatedAt` | string (ISO-8601) | — |
+
+### Group grant wire shape
+
+각 grant 템플릿(`operator_group_grant`)은 역할 **또는** tenant-assignment 다:
+
+```json
+{ "grantId": "…", "type": "ROLE", "roleName": "SUPPORT_LOCK", "grantedAt": "2026-07-19T09:00:00Z" }
+{ "grantId": "…", "type": "TENANT_ASSIGNMENT", "tenantId": "acme-corp", "grantedAt": "2026-07-19T09:00:00Z" }
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `grantId` | string (UUID v7) | 외부 식별자(`operator_group_grant.grant_id`) — 개별 revoke path 에 사용 |
+| `type` | enum | `ROLE` \| `TENANT_ASSIGNMENT` |
+| `roleName` | string | `type=ROLE` 일 때 부여 역할명 |
+| `tenantId` | string | `type=TENANT_ASSIGNMENT` 일 때 부여 대상(ASSIGNED) 테넌트 |
+| `grantedAt` | string (ISO-8601) | — |
+
+### POST /api/admin/groups
+
+신규 운영자 그룹 생성. 생성자는 `group.manage` + 대상 `tenantId` 에 대한 스코프를 보유해야 한다.
+
+**Auth required**: Yes (operator token, `token_type=admin`) · **Required permission**: `group.manage`
+**Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트 한정), `ORG_ADMIN`(subtree 테넌트 한정)
+
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: <required>`, `Idempotency-Key: <required>`
+
+**Tenant confinement (D3)**: actor 는 `tenantId` 에 대해 `group.manage` 스코프(`effectiveAdminScope`)를 보유해야 한다 — `TENANT_ADMIN @ acme` 는 `tenantId=acme` 로만. SUPER_ADMIN(`'*'`) net-zero.
+
+**Request**:
+```json
+{
+  "tenantId": "acme-corp",
+  "name": "물류 지원팀",
+  "description": "WMS 출고 지원 스쿼드"
+}
+```
+
+| 필드 | 타입 | 필수 | 검증 |
+|---|---|---|---|
+| `tenantId` | string | Y | tenantId 정규식; `!= '*'`(플랫폼-전역 그룹 불가); actor 스코프 내 |
+| `name` | string | Y | 1~120 자, trim 후 검증, `(tenantId, name)` 유니크 |
+| `description` | string | N | ≤255 자 |
+
+**Response 201**: [group wire shape](#group-wire-shape) (`memberCount=0`, `grantCount=0`).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `name` 길이, `tenantId` 정규식/`'*'` 위반 |
+| 400 | `REASON_REQUIRED` | `X-Operator-Reason` 헤더 누락 |
+| 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 403 | `PERMISSION_DENIED` | `group.manage` 권한 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | actor 가 `tenantId` 스코프 밖 (best-effort DENIED row) |
+| 409 | `GROUP_NAME_CONFLICT` | `(tenantId, name)` 그룹 이미 존재 |
+
+**Side Effects**: `admin_actions` `action_code=GROUP_CREATE`, `permission_used=group.manage`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<tenantId>`. fan-out 없음(멤버·grant 0).
+
+---
+
+### GET /api/admin/groups
+
+actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 미노출). `tenant.manage`/`org.manage` read-gating 규약대로 read 도 `group.manage` 게이트.
+
+**Auth required**: Yes · **Required permission**: `group.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`, `ORG_ADMIN`
+
+**Headers**: `Authorization: Bearer <operator-token>`
+
+**Query parameters**: `tenantId`(optional 필터 — 생략 시 actor 스코프 전체), `page`, `size`(max 100).
+
+**Tenant confinement (D3)**: 결과는 `operator_group.tenant_id ∈ actor effectiveAdminScope(group.manage)` 인 row 로 confine. SUPER_ADMIN(`'*'`) → 전체.
+
+**Response 200**: `{ "items": [ <group wire shape>, ... ], "page": 0, "size": 20, "totalElements": 3, "totalPages": 1 }`.
+
+**Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`.
+
+**Side Effects**: 없음(read-path — `admin_actions` row 미기록, `grantable-roles`/BE-486 규약).
+
+---
+
+### GET /api/admin/groups/{groupId}
+
+단건 그룹 조회.
+
+**Auth required**: Yes · **Required permission**: `group.manage` + `TenantScopeGuard`(그룹 `tenant_id` ∈ actor 스코프; 밖 → 404) · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`, `ORG_ADMIN`
+
+**Path Variable**: `groupId` — `operator_group.group_id` (UUID v7)
+
+**Response 200**: [group wire shape](#group-wire-shape).
+
+**Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 404 `GROUP_NOT_FOUND`(미존재 또는 actor 스코프 밖 — enumeration-safe).
+
+**Side Effects**: 없음(read-path).
+
+---
+
+### PATCH /api/admin/groups/{groupId}
+
+그룹 rename / describe. 두 필드 optional, 최소 1개 필요. **fan-out 무관**(멤버 grant 불변).
+
+**Auth required**: Yes · **Required permission**: `group.manage` + `TenantScopeGuard`(그룹 `tenant_id` ∈ actor 스코프) · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트), `ORG_ADMIN`(subtree)
+
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: <required>`
+
+**Request** (둘 중 하나 또는 둘 다):
+```json
+{ "name": "물류 지원팀 (개편)", "description": "…" }
+```
+
+**Response 200**: [group wire shape](#group-wire-shape) (변경 후).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | 두 필드 모두 누락, `name` 길이 위반 |
+| 400 | `REASON_REQUIRED` | `X-Operator-Reason` 누락 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `group.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | 그룹 `tenant_id` 가 actor 스코프 밖 |
+| 404 | `GROUP_NOT_FOUND` | 미존재/스코프 밖 |
+| 409 | `GROUP_NAME_CONFLICT` | 새 `name` 이 `(tenantId, name)` 충돌 |
+
+**Side Effects**: `admin_actions` `action_code=GROUP_UPDATE`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`.
+
+---
+
+### DELETE /api/admin/groups/{groupId}
+
+그룹 삭제 → **cascade-revoke**(D5): 이 그룹의 모든 `group_origin=<groupId>` fan-out row(멤버들의 assignment/role)를 revoke. 멤버의 **직접 grant(`group_origin IS NULL`)는 불변**. 멤버십·grant 템플릿은 FK CASCADE.
+
+**Auth required**: Yes · **Required permission**: `group.manage` + `TenantScopeGuard`(그룹 `tenant_id` ∈ actor 스코프) · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트), `ORG_ADMIN`(subtree)
+
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: <required>`
+
+**Response 204** (no content).
+
+**Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 404 `GROUP_NOT_FOUND`, 400 `REASON_REQUIRED`.
+
+**Side Effects**: `admin_actions` `action_code=GROUP_DELETE`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. cascade-revoke 는 삭제와 **단일 트랜잭션**(감사·outbox 원자성, D6). 영향받은 멤버의 perm-cache 무효화. 이벤트는 v1 audit-only(소비자 존재 시 `admin_outbox` v2 새 `topicFor`, D6).
+
+---
+
+### GET /api/admin/groups/{groupId}/members
+
+그룹 멤버 목록.
+
+**Auth required**: Yes · **Required permission**: `group.manage` + `TenantScopeGuard`(그룹 `tenant_id` ∈ actor 스코프) · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`, `ORG_ADMIN`
+
+**Response 200**:
+```json
+{
+  "items": [
+    { "operatorId": "op-123", "displayName": "김운영", "addedAt": "2026-07-19T09:00:00Z" }
+  ]
+}
+```
+
+**Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 404 `GROUP_NOT_FOUND`.
+
+**Side Effects**: 없음(read-path).
+
+---
+
+### POST /api/admin/groups/{groupId}/members
+
+멤버 추가 → **fan-out**(D5): 그룹의 현행 grant 를 새 멤버로 materialise. 멤버는 그룹 테넌트 소속 operator 만.
+
+**Auth required**: Yes · **Required permission**: `group.manage` + `TenantScopeGuard`(그룹 `tenant_id` ∈ actor 스코프) · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트), `ORG_ADMIN`(subtree)
+
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: <required>`, `Idempotency-Key: <required>`
+
+**Tenant confinement (D3)**: 대상 `operatorId` 의 home `tenant_id` == 그룹 `tenant_id`(그룹은 자기 테넌트 사람만) — 위반 → `422 GROUP_MEMBER_TENANT_MISMATCH`.
+
+**No-escalation (D4, add-member 재검사)**: 그룹의 현행 grant 를 이 멤버로 fan-out 할 때 각 grant 가 actor 의 `effectiveAdminScope`/`RoleGrantGuard` 이내여야 한다 — 자기 미보유 role/tenant 를 새 멤버에게 우회 부여 불가. 위반 → `403 ROLE_GRANT_FORBIDDEN` 또는 `422 GROUP_GRANT_NO_ESCALATION`.
+
+**Request**:
+```json
+{ "operatorId": "op-123" }
+```
+
+**Response 201**: `{ "operatorId": "op-123", "displayName": "김운영", "addedAt": "2026-07-19T09:00:00Z", "fannedOutGrants": 3 }` (`fannedOutGrants` = 이 멤버에 새로 materialise 된 grant 수; 이미 보유한 동등 직접 grant 는 idempotent skip 되어 미포함).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` / `REASON_REQUIRED` | `operatorId` 누락 / reason 누락 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `group.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | 그룹 `tenant_id` 가 actor 스코프 밖 |
+| 403 | `ROLE_GRANT_FORBIDDEN` | fan-out grant 가 actor 보유 초과(no-escalation) |
+| 404 | `GROUP_NOT_FOUND` | 그룹 미존재/스코프 밖 |
+| 404 | `OPERATOR_NOT_FOUND` | `operatorId` 미존재 |
+| 409 | `GROUP_MEMBER_ALREADY_EXISTS` | (groupId, operatorId) 멤버십 이미 존재 |
+| 422 | `GROUP_MEMBER_TENANT_MISMATCH` | 대상 operator home tenant ≠ 그룹 tenant |
+| 422 | `GROUP_GRANT_NO_ESCALATION` | fan-out grant 가 tenant-scope no-escalation 위반 |
+
+**Side Effects**: `admin_actions` `action_code=GROUP_MEMBER_ADD`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`(대상 operator 는 `detail`). fan-out row(`group_origin=<group.id>`) INSERT + 멤버 perm-cache 무효화 — 멤버십 add 와 **단일 트랜잭션**(D5/D6). idempotent: 멤버가 이미 보유한 동등 직접 grant 는 중복 생성 안 함.
+
+---
+
+### DELETE /api/admin/groups/{groupId}/members/{operatorId}
+
+멤버 제거 → 그 멤버의 `group_origin=<groupId>` fan-out row **만** revoke(D5). 멤버의 **직접 grant(`group_origin IS NULL`)는 불변**.
+
+**Auth required**: Yes · **Required permission**: `group.manage` + `TenantScopeGuard`(그룹 `tenant_id` ∈ actor 스코프) · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트), `ORG_ADMIN`(subtree)
+
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: <required>`
+
+**Response 204** (no content).
+
+**Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 404 `GROUP_NOT_FOUND`, 404 `GROUP_MEMBER_NOT_FOUND`(멤버십 부재), 400 `REASON_REQUIRED`.
+
+**Side Effects**: `admin_actions` `action_code=GROUP_MEMBER_REMOVE`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. cascade-revoke(`group_origin=<groupId>` row) + 멤버십 delete 단일 트랜잭션 + 멤버 perm-cache 무효화. **직접 grant·타 그룹발 row 미변경**.
+
+---
+
+### GET /api/admin/groups/{groupId}/grants
+
+그룹의 현행 grant 템플릿 목록.
+
+**Auth required**: Yes · **Required permission**: `group.manage` + `TenantScopeGuard`(그룹 `tenant_id` ∈ actor 스코프) · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`, `ORG_ADMIN`
+
+**Response 200**: `{ "items": [ <group grant wire shape>, ... ] }`.
+
+**Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 404 `GROUP_NOT_FOUND`.
+
+**Side Effects**: 없음(read-path).
+
+---
+
+### POST /api/admin/groups/{groupId}/grants
+
+그룹에 역할 및/또는 tenant-assignment grant → **fan-out**(D5): 전 현재 멤버로 materialise. **no-escalation(D4, grant-time)**: actor 는 자기 보유 이내만 grant 가능.
+
+**Auth required**: Yes · **Required permission**: `group.manage` + `TenantScopeGuard`(그룹 `tenant_id` ∈ actor 스코프) + `RoleGrantGuard`(≤-own) · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트), `ORG_ADMIN`(subtree)
+
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: <required>`, `Idempotency-Key: <required>`
+
+**No-escalation (D4)**: 각 `roles[]` 는 `RoleGrantGuard`(비-`SUPER_ADMIN` + actor 권한 ⊇ role 권한, `ADR-MONO-024 § D3` 재사용); 각 `tenantAssignments[].tenantId` 는 actor 의 `effectiveAdminScope`(operator.manage) 이내여야 한다. 위반 → `403 ROLE_GRANT_FORBIDDEN`(role) / `422 GROUP_GRANT_NO_ESCALATION`(tenant).
+
+**Request** (roles / tenantAssignments 중 최소 하나):
+```json
+{
+  "roles": ["SUPPORT_LOCK"],
+  "tenantAssignments": [{ "tenantId": "acme-corp" }]
+}
+```
+
+| 필드 | 타입 | 필수 | 검증 |
+|---|---|---|---|
+| `roles` | string[] | roles/tenantAssignments 중 최소 하나 | 존재하는 role; 비-`SUPER_ADMIN`; actor 보유 이내(≤-own) |
+| `tenantAssignments` | object[] | 〃 | 각 `tenantId` 는 tenantId 정규식 + actor `operator.manage` 스코프 이내 |
+
+**Response 201**: `{ "items": [ <group grant wire shape>, ... ], "fannedOutRows": 8 }` (생성된 grant 템플릿 + 전 멤버 fan-out 으로 materialise 된 row 수; 멤버별 동등 직접 grant 는 idempotent skip).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | roles·tenantAssignments 모두 비어있음, role 명/tenantId 형식 오류 |
+| 400 | `REASON_REQUIRED` | reason 누락 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `group.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | 그룹 `tenant_id` 가 actor 스코프 밖 |
+| 403 | `ROLE_GRANT_FORBIDDEN` | grant role 이 `SUPER_ADMIN` 또는 actor 보유 초과(no-escalation) |
+| 404 | `GROUP_NOT_FOUND` | 그룹 미존재/스코프 밖 |
+| 404 | `ROLE_NOT_FOUND` | `roles[]` 에 미존재 role |
+| 409 | `GROUP_GRANT_ALREADY_EXISTS` | 동일 (그룹, type, role/tenant) grant 템플릿 이미 존재 |
+| 422 | `GROUP_GRANT_NO_ESCALATION` | tenant-assignment grant 가 actor tenant-scope 초과 |
+
+**Side Effects**: `admin_actions` `action_code=GROUP_GRANT_ADD`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. grant 템플릿(`operator_group_grant`) INSERT + 전 멤버 fan-out row(`group_origin=<group.id>`) INSERT + 멤버 perm-cache 무효화 — **단일 트랜잭션**(D5/D6). idempotent: 멤버가 이미 보유한 동등 직접 grant 는 skip.
+
+---
+
+### DELETE /api/admin/groups/{groupId}/grants/{grantId}
+
+grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤버의 `group_origin=<groupId>` row(해당 role/tenant) revoke. 멤버의 **직접 grant 불변**.
+
+**Auth required**: Yes · **Required permission**: `group.manage` + `TenantScopeGuard`(그룹 `tenant_id` ∈ actor 스코프) · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트), `ORG_ADMIN`(subtree)
+
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: <required>`
+
+**Path Variables**: `groupId` — `operator_group.group_id`; `grantId` — `operator_group_grant.grant_id`
+
+**Response 204** (no content).
+
+**Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 404 `GROUP_NOT_FOUND`, 404 `GROUP_GRANT_NOT_FOUND`(grant 템플릿 부재/타 그룹), 400 `REASON_REQUIRED`.
+
+**Side Effects**: `admin_actions` `action_code=GROUP_GRANT_REVOKE`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. grant 템플릿 delete + 그 grant 의 fan-out row(`group_origin=<groupId>` + 해당 role/tenant 자연키) cascade-revoke + 멤버 perm-cache 무효화 — **단일 트랜잭션**. **직접 grant·타 grant 발 row 미변경**.
+
+> **Idempotence & 직접-grant 보존 (D5).** fan-out 은 멤버가 이미 보유한 동등 **직접** grant(`group_origin IS NULL`)를 절대 중복/덮어쓰기 하지 않으며(grant 당 최대 1 row — `(operator, tenant)`/`(operator, role)` PK), 모든 cascade-revoke 는 `group_origin = <groupId>` 로 엄격 필터하여 직접 grant 를 절대 파괴하지 않는다. 두 그룹이 같은 `(operator, grant)` 를 grant 하면 먼저 materialise 한 그룹이 마커를 소유하는 **단일-소유 v1 규약**이다([data-model.md](../../services/admin-service/data-model.md#group_origin-마커-fan-out-substrate)).
+
+---
+
 ## Common Error Format
 
 ```json
