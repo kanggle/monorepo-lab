@@ -1,7 +1,7 @@
 # TASK-FIN-BE-055 — ledger-service: consolidate integration-test HTTP/SQL helpers into AbstractLedgerIntegrationTest
 
 - **Type**: TASK-FIN-BE (test refactor — behaviour-preserving)
-- **Status**: review
+- **Status**: done
 - **Service**: ledger-service (finance-platform)
 - **Domain/traits**: saas / [transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (large multi-file behaviour-preserving refactor)

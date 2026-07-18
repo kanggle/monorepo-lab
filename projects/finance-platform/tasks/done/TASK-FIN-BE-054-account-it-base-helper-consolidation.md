@@ -1,7 +1,7 @@
 # TASK-FIN-BE-054 — account-service: consolidate integration-test helpers into AbstractAccountIntegrationTest
 
 - **Type**: TASK-FIN-BE (test refactor — behaviour-preserving)
-- **Status**: review
+- **Status**: done
 - **Service**: account-service (finance-platform)
 - **Domain/traits**: saas / [transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (multi-file behaviour-preserving refactor)
