@@ -1,7 +1,7 @@
 # TASK-BE-518 — finance overview card still `forbidden` after TASK-BE-517 (a deeper layer under the circuit-open fix) — INVESTIGATION
 
 - **Type**: TASK-BE (investigation; likely resolves into iam-platform account-service data/ceiling OR finance-platform gate OR a federation/console e2e seed fix — reassign after AC-0)
-- **Status**: ready
+- **Status**: done
 - **Service**: TBD by AC-0 — candidates: auth-service/account-service (iam-platform, entitled_domains issuance), finance-platform gateway/account-service, or the federation/console e2e fixtures
 - **Domain/traits**: saas / [transactional, integration-heavy, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (multi-service token/gate + e2e seed)
