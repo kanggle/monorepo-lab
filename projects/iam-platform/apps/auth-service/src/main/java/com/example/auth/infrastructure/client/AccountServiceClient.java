@@ -390,6 +390,15 @@ public class AccountServiceClient implements AccountServicePort {
 
     @Override
     public List<String> listEntitledDomains(String tenantId) {
+        // TASK-BE-517: the platform wildcard '*' (SUPER_ADMIN) is not a real tenant — account-service's
+        // TenantId rejects it with 400 VALIDATION_ERROR ("Invalid tenant_id: *"). SUPER_ADMIN has no
+        // per-tenant entitlements (it passes every domain gate via the wildcard), so skip the lookup.
+        // Making the call not only 400s but counts toward the shared accountService circuit breaker,
+        // opening it and fail-softing OTHER tenants' lookups during the same token-minting window —
+        // dropping their entitled_domains claim → spurious domain 403s (the finance-card RED).
+        if ("*".equals(tenantId)) {
+            return List.of();
+        }
         try {
             return callResilient(() -> doListEntitledDomains(tenantId));
         } catch (HttpClientErrorException e) {
@@ -463,6 +472,11 @@ public class AccountServiceClient implements AccountServicePort {
 
     @Override
     public List<String> listAccountRoles(String tenantId, String accountId) {
+        // TASK-BE-517: see listEntitledDomains — '*' (SUPER_ADMIN wildcard) is not a real tenant;
+        // account-service 400s on it and the failure trips the shared accountService circuit. Skip.
+        if ("*".equals(tenantId)) {
+            return List.of();
+        }
         try {
             return callResilient(() -> doListAccountRoles(tenantId, accountId));
         } catch (HttpClientErrorException e) {
