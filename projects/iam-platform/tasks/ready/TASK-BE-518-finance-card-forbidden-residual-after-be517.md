@@ -41,6 +41,41 @@ green in CI post-merge of FIN-BE-048.** The **console super-admin** (`tenant_id=
 `operators-profile.spec.ts:60` is NOT covered by FIN-BE-048 (wildcard, not entitlement) — pin it
 separately before closing AC-2 for that spec.
 
+## AC-0 RESULT — super-admin persona: finance-side **wildcard-read** authority straggler (`TASK-FIN-BE-049`)
+
+Pinned from **nightly-e2e run `29635409302`** against main `de8edcae4` (Playwright trace of the console
+`/dashboards/overview` RSC payload for the `operators-profile.spec.ts` super-admin persona):
+
+```
+"domain":"finance","status":"forbidden","reason":"PERMISSION_DENIED"
+```
+
+A real **403 at the authorization layer** — NOT `TENANT_FORBIDDEN` (tenant gate opened), NOT
+`MISSING_PREREQUISITE` (candidate 3 refuted). The cause is the **wildcard sibling** of the acme
+persona's straggler, one axis over from FIN-BE-048:
+
+- The super-admin's base OIDC domain-facing token carries `tenant_id='*'`, `scope=[openid,profile,email,
+  tenant.read]` (**no finance scope**), **no domain roles** (its `SUPER_ADMIN` is an
+  `admin_db.admin_operator_roles` / ADMIN-plane entry, DELIBERATELY kept off the domain-facing token per
+  **ADR-033 S2 / ADR-034 U5** disjointness — so the token has NO `ROLE_SUPER_ADMIN`), and
+  `entitled_domains=[]`.
+- finance `account-service`+`ledger-service` `ServiceLevelOAuth2Config` opens the tenant gate for this
+  token via `.allowSuperAdminWildcard()` (**layer-1 passes**), but `SecurityConfig.readAuthorities`
+  (tightened by FIN-BE-046/047) admits none of what the bare wildcard token carries → **layer-2 403s**.
+- FIN-BE-048 (entitlement, `entitled_domains ∋ finance`) does NOT cover this persona (`entitled_domains`
+  is empty; the wildcard is a different axis). The fix must NOT mint `ROLE_SUPER_ADMIN` at auth-service
+  (breaches ADR-033/034 plane disjointness) — it is finance-side.
+
+**Fix = `TASK-FIN-BE-049`** (finance-platform): synthesise a READ-only `ROLE_FINANCE_SUPERADMIN_READ`
+keyed strictly on `tenant_id='*'` in both finance converters + add it to `readAuthorities` only (writes
+stay gated) — the authority-layer analogue of the tenant gate's `allowSuperAdminWildcard()`.
+
+**BE-518 closes when BOTH cards are green post-merge:** (a) the federation `entitlement-trust-crossdomain`
+finance/wms acme card (already green via FIN-BE-048), AND (b) the console `operators-profile` super-admin
+finance card (via FIN-BE-049 + a nightly-e2e confirmation run). A doc-only sibling-parity audit for the
+OTHER wildcard-opening domains (erp/scm/ecommerce) is tracked as **TASK-FIN-BE-050** (ready/,
+investigation-first).
+
 ## AC-0 — Finding so far (runtime-verified; the cause below is NOT yet pinned)
 
 - **Failing specs:** federation `entitlement-trust-crossdomain.spec.ts:66/120/127` (acme-operator,

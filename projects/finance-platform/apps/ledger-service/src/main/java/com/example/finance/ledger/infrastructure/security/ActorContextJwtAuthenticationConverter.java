@@ -34,6 +34,14 @@ public class ActorContextJwtAuthenticationConverter
     /** The single READ-visibility role synthesised from entitlement-trust. */
     public static final String VIEWER_ROLE = "ROLE_FINANCE_VIEWER";
 
+    /**
+     * The READ-visibility role synthesised for a platform super-admin wildcard token
+     * ({@code tenant_id="*"}). Distinct from {@link #VIEWER_ROLE} so the two admission axes —
+     * customer entitlement vs. platform wildcard — stay separable in authority logs (audit clarity).
+     * READ only, exactly like {@link #VIEWER_ROLE}: never added to {@code writeAuthorities}.
+     */
+    public static final String SUPERADMIN_READ_ROLE = "ROLE_FINANCE_SUPERADMIN_READ";
+
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
         String subject = jwt.getSubject();
@@ -72,6 +80,23 @@ public class ActorContextJwtAuthenticationConverter
         // trustEntitledDomains(); this closes the matching AUTHORITY-layer gap.
         if (TenantClaimValidator.isEntitled(jwt, ENTITLEMENT_DOMAIN)) {
             authorities.add(new SimpleGrantedAuthority(VIEWER_ROLE));
+        }
+        // Platform super-admin wildcard READ authority (TASK-FIN-BE-049, ADR-MONO-019 § D5 — the
+        // authority-layer analogue of the tenant gate's allowSuperAdminWildcard()): a platform
+        // super-admin's base OIDC domain-facing token carries tenant_id="*" but no finance scope,
+        // no finance/domain role (per ADR-033 S2 / ADR-034 U5 the admin plane's SUPER_ADMIN is
+        // deliberately kept OFF the domain-facing token), and entitled_domains=[]. Layer-1 already
+        // admits it via allowSuperAdminWildcard() "so a platform operator can reach this edge during
+        // incident response"; before FIN-BE-049 layer-2 (the readAuthorities gate tightened by
+        // FIN-BE-046/047) held none of what this token carries, so its READS 403'd (nightly-e2e run
+        // 29635409302, console super-admin persona: finance overview card forbidden,
+        // reason=PERMISSION_DENIED). Grant ROLE_FINANCE_SUPERADMIN_READ so its READS pass. This is
+        // the wildcard sibling of the entitlement-trust straggler FIN-BE-048 closed — keyed STRICTLY
+        // on tenant_id="*" (not on "authenticated"), so a non-wildcard scopeless/roleless token is
+        // unaffected. Synthesises ONLY the READ role — the WRITE gate is untouched, so the wildcard
+        // widens READ visibility only, never mutation authority.
+        if (TenantClaimValidator.WILDCARD_TENANT.equals(tenantId)) {
+            authorities.add(new SimpleGrantedAuthority(SUPERADMIN_READ_ROLE));
         }
         return new ActorContextJwtAuthenticationToken(jwt, actor, authorities);
     }
