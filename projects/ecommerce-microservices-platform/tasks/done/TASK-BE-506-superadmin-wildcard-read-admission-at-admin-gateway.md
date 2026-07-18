@@ -8,7 +8,7 @@ ecommerce gateway 의 account-type 평면(`AccountTypeEnforcementFilter`)이 플
 
 # Status
 
-review
+done
 
 # Owner
 
