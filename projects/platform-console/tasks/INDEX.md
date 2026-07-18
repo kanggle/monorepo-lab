@@ -85,6 +85,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
+- `TASK-PC-FE-248-console-federation-e2e-specs-dormant-in-ci.md` — **콘솔 federation e2e 스펙 2개가 모든 CI 워크플로에서 gate OFF (휴면 커버리지).** `federation-omni-all-domains`·`federation-ecommerce-sellers-multi` 가 `PC_FEDERATION_E2E=1` 게이트인데 그 플래그가 **어떤 워크플로에도 없음**(grep 0) → 매 CI 런에서 SKIP. `/ecommerce/sellers` + omni 전-도메인 개요 단언이 **스펙은 있으나 한 번도 실행 안 됨.** AC-0=enable(federation 스택+persona 시드 CI 잡) vs remove 결정. **라이브 검증(2026-07-19): 두 표면 다 정상 렌더 — 기능 결함 아니라 회귀 커버리지 갭.** (2026-07-19 콘솔 메뉴 검증 스윕 산물.) 분석=Opus 4.8.
+- `TASK-PC-FE-249-console-menu-render-coverage-and-stale-nav-comments.md` — **3개 메뉴 화면 render 테스트 부재 + stale nav "stub" 주석.** `/partnerships`·`/ecommerce/users`·`/ecommerce/notifications/templates` 는 state/api/proxy/nav 테스트만 있고 **화면 컴포넌트를 마운트하는 테스트가 없음**(mount-crash 회귀가 초록으로 새어나감). + `console-nav-config.ts` 가 `/tenants`·`/permissions`·`/permission-sets` 를 "PC-FE-225 stub"이라 부르나 전부 **실기능**(FE-226/227/228) — 진짜 stub 은 `/operator-groups` 하나. **세 화면 다 라이브 렌더 OK — 회귀 가드 추가 + 주석 정정이지 fix 아님.** 분석=Opus 4.8 / 구현 권장=Sonnet. (2026-07-19 콘솔 메뉴 검증 스윕 산물.)
+
 _(직전 완료)_ 콘솔 6도메인 기능↔메뉴 정렬 웨이브 + IAM 「권한」/「권한 세트」 화면(PC-FE-227/228) 완결. ADR-MONO-046 「운영자 그룹」 로드맵은 여전히 PROPOSED/PAUSED 게이팅.
 
 _(직전 완료)_ **IAM 「권한」/「권한 세트」 화면 완료** (PC-FE-227/228 DONE, 2026-07-09, PR #2343 squash `cbdc1a04`). `/permissions`·`/permission-sets` 스텁을 BE-486 RBAC 카탈로그(`GET /api/admin/roles`+`/permissions`, 게이트 `operator.manage`) 위 read-only 화면으로 대체. 공유 클라이언트 `shared/api/rbac-catalog.ts`(228=role을 권한 세트로 재프레이밍, 별도 엔드포인트 없음). native `<details>` drill-down·SSR 회복탄력성(operators/audit 매퍼 미러). vitest 2696/2696. **→ BE-486 언블록 소비 완료.**
