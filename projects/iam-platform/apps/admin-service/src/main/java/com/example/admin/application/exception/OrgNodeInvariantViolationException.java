@@ -12,7 +12,7 @@ package com.example.admin.application.exception;
  * <p>{@code code} ∈ {{@code ORG_NODE_CYCLE}, {@code ORG_NODE_DEPTH_EXCEEDED},
  * {@code ORG_NODE_CEILING_NOT_SUBSET}, {@code ORG_NODE_NOT_EMPTY}}.
  */
-public class OrgNodeInvariantViolationException extends RuntimeException {
+public class OrgNodeInvariantViolationException extends AccountBusinessException {
 
     private static final String FALLBACK_CODE = "ORG_NODE_INVARIANT_VIOLATION";
 

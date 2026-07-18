@@ -5,7 +5,7 @@ package com.example.admin.application.exception;
  * {@code SUBSCRIPTION_NOT_FOUND} on a subscription transition. Surfaced to the
  * operator as 404 {@code SUBSCRIPTION_NOT_FOUND}.
  */
-public class SubscriptionNotFoundException extends RuntimeException {
+public class SubscriptionNotFoundException extends AccountBusinessException {
     public SubscriptionNotFoundException(String message) {
         super(message);
     }

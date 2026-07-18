@@ -6,7 +6,7 @@ package com.example.admin.application.exception;
  * guard rejected the transition). Surfaced to the operator as 409
  * {@code SUBSCRIPTION_TRANSITION_INVALID}.
  */
-public class SubscriptionTransitionInvalidException extends RuntimeException {
+public class SubscriptionTransitionInvalidException extends AccountBusinessException {
     public SubscriptionTransitionInvalidException(String message) {
         super(message);
     }

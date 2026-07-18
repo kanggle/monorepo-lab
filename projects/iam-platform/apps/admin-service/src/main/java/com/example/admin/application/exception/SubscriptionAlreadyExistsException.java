@@ -5,7 +5,7 @@ package com.example.admin.application.exception;
  * {@code SUBSCRIPTION_ALREADY_EXISTS} on subscribe. Surfaced to the operator as
  * 409 {@code SUBSCRIPTION_ALREADY_EXISTS}.
  */
-public class SubscriptionAlreadyExistsException extends RuntimeException {
+public class SubscriptionAlreadyExistsException extends AccountBusinessException {
     public SubscriptionAlreadyExistsException(String message) {
         super(message);
     }
