@@ -1,7 +1,7 @@
 # TASK-BE-516 — subscription SUSPEND returns `503 CIRCUIT_OPEN` in federation E2E (business 409 storm likely trips the account circuit)
 
 - **Type**: TASK-BE
-- **Status**: ready
+- **Status**: done
 - **Service**: admin-service (iam-platform), account-service downstream
 - **Domain/traits**: saas / [transactional, integration-heavy, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (resilience config + failure-classification correctness)
