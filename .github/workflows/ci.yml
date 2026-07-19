@@ -905,6 +905,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: changes
+    # TASK-MONO-440 — THIS IS NOT A GATE. Do not re-add `build-and-test` to any
+    # downstream `needs:`. It ran ahead of every integration/e2e lane until 2026-07-20,
+    # which put a 2m20s SERIAL segment in front of every code PR (measured: run
+    # 29706299169 = 12s changes + 2m20s here + 7m16s longest lane = 9m54s total, with
+    # only 3s of runner queueing — so the 2m20s was this edge, not scheduling).
+    #
+    # It was a pure ordering edge, never a data dependency: its only artifact is
+    # `test-reports` (uploaded `if: failure()`, diagnostic), ci.yml has zero
+    # `download-artifact` steps, and the job declares no `outputs:`. Removing the edge
+    # loses no signal — this job still runs, still reports, still fails the run. What it
+    # gave up is "don't spend compute on a red PR", bounded at ~9 integration jobs on the
+    # affected PR, against a 2m20s saving on every code PR.
+    #
+    # Evidence that trade is right for THIS repo: across the last 100 ci.yml runs this job
+    # failed 0 times, while all 3 CI failures were integration lanes. That is 0 events in
+    # ~20 executions — NOT proof of rarity (rule of three: 95% upper bound ~15%), which is
+    # why the reasoning is written down rather than treated as settled. If unit failures
+    # start actually costing integration compute, re-gating is a one-line revert.
+    #
+    # Real data dependencies were kept: the `*-boot-jars` jobs publish jars the e2e jobs
+    # download, so those `needs:` edges remain.
+    #
     # Activate when:
     #   - any shared library / cross-project path changed (libs, workflows)
     #   - any project's backend code changed (wms, ecommerce, iam, fan, scm, finance, erp)
@@ -1072,7 +1094,7 @@ jobs:
   boot-jars:
     name: Package boot jars
     runs-on: ubuntu-latest
-    needs: [changes, build-and-test]
+    needs: changes
     timeout-minutes: 15
     # Activate for wms changes or cross-project (libs/workflows).
     if: >-
@@ -1111,7 +1133,7 @@ jobs:
   ecommerce-boot-jars:
     name: Package boot jars (ecommerce)
     runs-on: ubuntu-latest
-    needs: [changes, build-and-test]
+    needs: changes
     timeout-minutes: 15
     # Activate for ecommerce changes or cross-project (libs/workflows).
     # Packages all 12 ecommerce backend services and uploads the JARs as an
@@ -1174,7 +1196,7 @@ jobs:
   fan-platform-boot-jars:
     name: Package boot jars (fan-platform)
     runs-on: ubuntu-latest
-    needs: [changes, build-and-test]
+    needs: changes
     timeout-minutes: 15
     # Activate for fan-platform changes or cross-project (libs/workflows).
     # Packages the 3 fan-platform v1 backend services (gateway / community /
@@ -1218,7 +1240,7 @@ jobs:
   scm-platform-boot-jars:
     name: Package boot jars (scm-platform)
     runs-on: ubuntu-latest
-    needs: [changes, build-and-test]
+    needs: changes
     timeout-minutes: 15
     # Activate for scm-platform changes or cross-project (libs/workflows).
     # Packages the 3 scm-platform v1 backend services (gateway / procurement /
@@ -1428,7 +1450,7 @@ jobs:
 
   integration-tests:
     name: Integration (master-service + notification-service + outbound-service, Testcontainers)
-    needs: [changes, build-and-test]
+    needs: changes
     # Integration suite boots Postgres + Kafka + Redis via Testcontainers.
     # Mirrors the e2e job's gating: runs only on the monorepo-lab dev
     # environment, skipped in the portfolio extraction (kanggle/wms-platform)
@@ -1478,7 +1500,7 @@ jobs:
 
   wms-inventory-inbound-integration-tests:
     name: Integration (inventory + inbound-service, Testcontainers)
-    needs: [changes, build-and-test]
+    needs: changes
     # TASK-MONO-335 + TASK-BE-489: the two dormant WMS integration suites
     # (inventory-service, then inbound-service) restored + wired here. Both could
     # not even load their IT context (SecurityConfig required an HttpSecurity bean
@@ -1520,7 +1542,7 @@ jobs:
 
   iam-integration-tests:
     name: Integration (iam ${{ matrix.shard }}, Testcontainers)
-    needs: [changes, build-and-test]
+    needs: changes
     # TASK-MONO-438 — SHARDED ACROSS RUNNERS (same technique as MONO-436's ecommerce lane).
     #
     # After 436 sharded ecommerce (16m53s -> 6m17s measured), this lane inherited the
@@ -1599,7 +1621,7 @@ jobs:
 
   fan-integration-tests:
     name: Integration (fan-platform, Testcontainers)
-    needs: [changes, build-and-test]
+    needs: changes
     # fan-platform integration suite boots Postgres + Kafka (libs/java-messaging
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction relies
@@ -1638,7 +1660,7 @@ jobs:
   iam-platform-e2e-smoke:
     name: E2E smoke (iam docker-compose)
     runs-on: ubuntu-latest
-    needs: [changes, build-and-test]
+    needs: changes
     timeout-minutes: 20
     # IAM PR-time smoke job — ADR-MONO-011 § 6.2 (inherited ADR-MONO-010 § 6.2)
     # outstanding closure (TASK-MONO-088). Phase 3 nightly iam-e2e-full 의
@@ -1718,7 +1740,7 @@ jobs:
 
   scm-integration-tests:
     name: Integration (scm-platform, Testcontainers)
-    needs: [changes, build-and-test]
+    needs: changes
     # SCM integration suite boots MySQL + Postgres + (per-service WireMock)
     # via Testcontainers. Scoped to monorepo-lab; standalone repo extraction
     # relies on its own Docker-free `check` signal.
@@ -1744,7 +1766,7 @@ jobs:
 
   finance-integration-tests:
     name: Integration (finance-platform, Testcontainers)
-    needs: [changes, build-and-test]
+    needs: changes
     # finance integration suite boots MySQL 8 + Redis + Kafka (libs/java-messaging
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction
@@ -1770,7 +1792,7 @@ jobs:
 
   erp-integration-tests:
     name: Integration (erp-platform, Testcontainers)
-    needs: [changes, build-and-test]
+    needs: changes
     # erp integration suite boots MySQL 8 + Kafka (libs/java-messaging
     # outbox relay) via Testcontainers; JWKS stubbed per-class (OkHttp
     # MockWebServer). Scoped to monorepo-lab; standalone repo extraction
@@ -1798,7 +1820,7 @@ jobs:
 
   platform-console-bff-integration-tests:
     name: Integration (platform-console console-bff, Testcontainers + WireMock JWKS)
-    needs: [changes, build-and-test]
+    needs: changes
     # console-bff integration suite boots the full Spring context with WireMock
     # stubbing the IAM JWKS endpoint. No DB/Kafka containers — stateless BFF.
     # Scoped to monorepo-lab; standalone repo extraction relies on its own
@@ -1823,7 +1845,7 @@ jobs:
 
   ecommerce-integration-tests:
     name: Integration (ecommerce ${{ matrix.shard }}, Testcontainers)
-    needs: [changes, build-and-test]
+    needs: changes
     # TASK-MONO-436 — SHARDED ACROSS RUNNERS. Read this before touching the split.
     #
     # This lane was the repo's critical path: 16m53s, against a next-longest job of 4m.
@@ -1976,7 +1998,7 @@ jobs:
 
   e2e-tests:
     name: E2E (gateway-master live-pair smoke, Testcontainers)
-    needs: [changes, build-and-test, boot-jars]
+    needs: [changes, boot-jars]
     # Scoped to the monorepo-lab dev environment (see integration-tests comment).
     # PR-time runs the @Tag("smoke") subset only via :e2eSmokeTest (ADR-MONO-010
     # D3); the @Tag("full") suite runs nightly via wms-platform-e2e-full using the
@@ -2010,7 +2032,7 @@ jobs:
 
   fan-platform-e2e:
     name: E2E (fan-platform v1 live-trio smoke, Testcontainers)
-    needs: [changes, build-and-test, fan-platform-boot-jars]
+    needs: [changes, fan-platform-boot-jars]
     # Live-trio e2e suite (TASK-FAN-INT-001): boots gateway-service +
     # community-service + artist-service plus Postgres + Redis + Kafka via
     # Testcontainers and a host-side WireMock JWKS stand-in. Pre-built images
@@ -2048,7 +2070,7 @@ jobs:
 
   scm-platform-e2e:
     name: E2E (scm-platform v1 cross-service smoke, Testcontainers)
-    needs: [changes, build-and-test, scm-platform-boot-jars]
+    needs: [changes, scm-platform-boot-jars]
     # Cross-service e2e suite (TASK-SCM-INT-001): boots gateway-service +
     # procurement-service + inventory-visibility-service + demand-planning-service
     # plus Postgres + Redis + Kafka via Testcontainers, a host-side WireMock JWKS
