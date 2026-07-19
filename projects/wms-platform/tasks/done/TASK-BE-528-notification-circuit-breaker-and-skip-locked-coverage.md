@@ -1,7 +1,7 @@
 # TASK-BE-528 — notification-service: circuit-breaker transitions + SKIP-LOCKED delivery-claim coverage
 
 - **Type**: TASK-BE (test-coverage hardening — no production behavior change)
-- **Status**: review
+- **Status**: done
 - **Service**: notification-service (wms-platform)
 - **Domain/traits**: wms / [event-driven, transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (Resilience4j state-machine semantics + real-DB `FOR UPDATE SKIP LOCKED` concurrency / double-claim proof)

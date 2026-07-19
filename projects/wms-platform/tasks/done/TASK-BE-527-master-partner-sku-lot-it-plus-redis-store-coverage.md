@@ -1,7 +1,7 @@
 # TASK-BE-527 — master-service: Partner/Sku/Lot full-stack IT + RedisIdempotencyStore unit coverage
 
 - **Type**: TASK-BE (test-coverage hardening — no production behavior change)
-- **Status**: review
+- **Status**: done
 - **Service**: master-service (wms-platform)
 - **Domain/traits**: wms / [transactional, event-driven, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (mechanical IT authoring — mirror the existing Warehouse/Zone/Location IT pattern; no straggler/behavior judgment)
