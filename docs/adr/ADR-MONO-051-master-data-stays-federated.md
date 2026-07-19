@@ -1,8 +1,8 @@
 # ADR-MONO-051 — Master data stays federated (no central MDM hub)
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-07-20
-**History:** PROPOSED 2026-07-20 (TASK-MONO-433)
+**History:** PROPOSED 2026-07-20 (TASK-MONO-433) · ACCEPTED 2026-07-20 (TASK-MONO-434 — user-explicit ADR-naming intent "ADR-MONO-051 ACCEPT")
 **Decision driver:** User question (2026-07-20) — "프로젝트에 mdm 있어?" → "도입하는 것과 유지하는 것 어떤 게 더 나아?". The repo has **no** service, spec, or task named `mdm` / "master data management" (repo-wide string search: 0 hits), but it does have several domain-owned master services. The question is whether to consolidate them behind a central MDM hub or keep the current federated shape. This ADR records the answer so the question does not have to be re-researched.
 **Supersedes:** none.
 **Related:** [ADR-MONO-050](ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §7 D9 (cross-service identifiers are **codes**, not UUIDs — this ADR generalises that from the scm↔wms leg to a repo-wide rule, and inherits its §4 rejection of "erp as the hub"), [ADR-MONO-027](ADR-MONO-027-wms-scm-replenishment-loop.md) (wms→scm replenishment; the `skuCode` join key), [ADR-MONO-022](ADR-MONO-022-ecommerce-wms-fulfillment-integration.md) (ecommerce→wms fulfillment; `lines[].skuCode` resolved locally), [`TEMPLATE.md`](../../TEMPLATE.md) § Discovery → Distribution (the standalone-extraction constraint that makes a hub structurally expensive), [`platform/service-boundaries.md`](../../platform/service-boundaries.md) § Asynchronous (Events) — cross-project allowed.
@@ -202,7 +202,7 @@ Re-run these before citing this ADR as current. Per repo practice, a prior count
 ## 7. Outstanding follow-ups
 
 - **None scheduled.** D5 is a trigger, not a backlog item; it produces a task when it fires, and no earlier.
-- Should this ADR be ACCEPTED, the D2 code-identity rule is a candidate for promotion into [`platform/service-boundaries.md`](../../platform/service-boundaries.md), so it binds at the layer agents actually read rather than only here. That promotion is out of scope for this ADR.
+- **Now eligible (acceptance, 2026-07-20):** promoting the D2 code-identity rule into [`platform/service-boundaries.md`](../../platform/service-boundaries.md), so it binds at the layer agents actually read rather than only here. Eligibility is not scheduling — this ADR still does not perform the promotion, and TASK-MONO-434 explicitly excluded it. It needs its own task.
 
 ---
 
@@ -211,5 +211,10 @@ Re-run these before citing this ADR as current. Per repo practice, a prior count
 | Date | Status | Note |
 |---|---|---|
 | 2026-07-20 | PROPOSED | Authored under TASK-MONO-433 in answer to the user's 2026-07-20 question. |
+| 2026-07-20 | ACCEPTED | Flipped under TASK-MONO-434 on the user's exact-form instruction **"ADR-MONO-051 ACCEPT"**. |
 
-**ACCEPT gate.** This ADR is PROPOSED only. The author does not self-ACCEPT. PROPOSED → ACCEPTED requires an explicit, ADR-naming instruction from the user and lands as a separate task, per [`platform/architecture-decision-rule.md`](../../platform/architecture-decision-rule.md) § The ACCEPTED Gate. A bare "진행" does not clear this gate.
+**ACCEPT gate — cleared, not bypassed.** Authoring and authorisation were separate acts by separate parties: TASK-MONO-433 wrote this ADR and left it PROPOSED, the user named it explicitly, and TASK-MONO-434 performed the flip. No self-ACCEPT occurred. The gate is defined in [`platform/architecture-decision-rule.md`](../../platform/architecture-decision-rule.md) § The ACCEPTED Gate; a bare "진행" would not have cleared it.
+
+**What acceptance binds.** The decision's conclusion is "change nothing", so acceptance authorises no implementation. It makes three things binding: **D2** (cross-project identifiers are business codes), **D6** (a hub-shaped proposal must first demonstrate that standalone extraction survives it), and **D5** (the tripwire and the answer it should get). **D4 remains conditional** — accepting the supplier triplication as "not a defect today" is not permanent approval, and it expires the moment D5 fires.
+
+**Amending this ADR.** What was authorised is the text as it was read. Later improvements — including any strengthening of D4's reasoning — go through an amendment section (the [ADR-MONO-050](ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §7 pattern), not an in-place rewrite of §1–§6.

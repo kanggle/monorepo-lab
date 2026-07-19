@@ -8,7 +8,7 @@ ADR-MONO-051 PROPOSED → ACCEPTED governance flip (user-explicit ADR-naming int
 
 # Status
 
-ready
+review
 
 # Owner
 
