@@ -45,12 +45,7 @@ public class OrderCancelledReservationConsumer {
             log.warn("order.order.cancelled has null/blank orderId, skipping. eventId={}", event.eventId());
             return;
         }
-        String tenantId = event.tenantId();
-        try {
-            TenantContext.set(tenantId);
-            reservationService.release(event.payload().orderId());
-        } finally {
-            TenantContext.clear();
-        }
+        TenantContext.runWithTenant(event.tenantId(),
+                () -> reservationService.release(event.payload().orderId()));
     }
 }
