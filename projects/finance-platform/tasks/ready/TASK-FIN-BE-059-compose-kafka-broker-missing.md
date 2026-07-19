@@ -62,7 +62,19 @@ account-service ──outbox──▶ finance.transaction.{completed,reversed}.v
 
 ## Edge Cases
 
-- **🔴 Do not copy a 512M sibling heap.** A 512MiB Kafka container survives idle and dies only once a real service fleet attaches — this exact failure was diagnosed and fixed under TASK-MONO-397 (512M → 1G). Size the new broker at **1G** from the start. Note also that a JVM inside a container does not necessarily observe the cgroup limit (a 512MiB container has been observed reporting a 3998MiB heap), so an in-container "how much heap do I have" probe is **not** evidence — set the limit explicitly and assert the compose value statically.
+- **🔴 Declare `memory: 1G` explicitly — the sibling you copy will not have one.** *(This bullet's first draft claimed "do not copy a 512M sibling". That was wrong; enumerating all 7 composes corrected it — recorded here rather than silently overwritten, because the corrected fact changes the instruction.)* Measured 2026-07-20:
+
+  | project | kafka block | declared memory limit |
+  |---|---|---|
+  | ecommerce | yes | **1G** (TASK-MONO-397, 512M → 1G) |
+  | wms / iam / scm / fan / erp | yes | **none** |
+  | finance | **none** | — |
+
+  So **no sibling declares 512M**, and 5 of 6 declare no limit at all. The reference impl named above (`erp-platform`) is one of those five — copying it verbatim yields an unlimited broker, not an over-tight one. Declare `memory: 1G` anyway: the limit is **a setting, not a ceiling** — with no `KAFKA_HEAP_OPTS`, the JVM reads the cgroup and takes 25% (`MaxRAMPercentage`), so `512M → 128 MiB heap` and `1G → 256 MiB heap`. 1 GiB is the floor `infra/demo/verify-demo-wrapper.sh` guard (u) enforces, with the arithmetic and the MONO-397 demo-host OOM (14 restarts at `CONSTRAINT_MEMCG`, anon-rss 481 MB) written out in that file.
+
+- **The 1 GiB floor guard will not check this broker.** Guard (u) reads `render ecommerce` — a single hardcoded project — so the finance broker (like the other five) is outside its reach. Do not treat "demo wrapper smoke is green" as confirmation that the new limit is sane; the guard never looked. Filed separately as a root-level task (guard (u) reachability), since `infra/demo/` is a shared path and out of scope for a finance ticket.
+
+- **A JVM inside a container may not see the cgroup limit at all.** A 512MiB container has been observed reporting a 3998MiB `MaxHeapSize` on a CI runner (vs 128 MiB on WSL2). An in-container "how much heap do I have" probe is therefore **not** evidence on any host. Assert the **declared compose value** statically instead — that is a constant, and it answers the same on a laptop and a runner.
 - **The healthcheck masks the defect.** Both services healthcheck `/actuator/health`, which returns UP without Kafka reachability. This is *why* the gap survived: the stack looks fully healthy with a severed event chain. Whether to add a Kafka health indicator is a real trade-off (it makes the stack fail-closed on broker restart) — AC-3 requires a documented decision either way.
 - **Failure is accumulate-silently, not crash.** The outbox pattern means no data is lost — rows sit in `account_outbox` with `published_at IS NULL`. The relay retries with exponential backoff (1s→30s cap) forever. So "nothing appears broken" is the expected symptom, and the only signal is the `account.outbox.pending.count` gauge, which nothing currently watches.
 - **`account-service` default is worse than `ledger-service`'s.** ledger points at `kafka:9092` — a host that simply does not resolve. account has no config at all, so it points at `localhost:9092` — *inside its own container*. Both fail, but only the second would keep failing even after the broker is added, if step 2 is done in compose only and not in `application.yml`. **Do both.**
@@ -73,6 +85,6 @@ account-service ──outbox──▶ finance.transaction.{completed,reversed}.v
 
 - **F1 — declaring victory on `docker compose up` alone.** Containers going healthy proves nothing here; that is precisely the pre-existing state. Only AC-4's three observations (published_at, topic exists, journal row) close this task.
 - **F2 — fixing compose but not `application.yml`.** account-service would still resolve `localhost:9092` and stay silently broken, with the stack now *looking* even more correct. The most likely way to half-fix this.
-- **F3 — copying a sibling broker block verbatim including a 512M limit.** Passes idle, dies under the service fleet, and reproduces TASK-MONO-397 in a new project.
+- **F3 — copying a sibling broker block verbatim and inheriting *no* memory limit.** Five of the six existing brokers declare none (measured — see Edge Cases), so the likely error is an unbounded broker rather than an over-tight one. Either way the demo host is the loser, and guard (u) will not catch it because it only inspects ecommerce.
 - **F4 — treating CI green as verification.** The Testcontainers suites supply their own per-service broker and have always been green *through this entire defect*. They cannot detect it and will not detect a regression of it. No CI job starts `projects/*/docker-compose.yml` at all.
 - **F5 — scope creep into the outbox/consumer code.** The production Kafka code is correct and tested. Any diff under `src/main/java/` in this task is a signal that the diagnosis drifted.
