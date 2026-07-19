@@ -8,7 +8,7 @@ ADR-MONO-051 D2 승격 — cross-project 식별자 = 비즈니스 CODE 규칙을
 
 # Status
 
-review
+done
 
 # Owner
 
