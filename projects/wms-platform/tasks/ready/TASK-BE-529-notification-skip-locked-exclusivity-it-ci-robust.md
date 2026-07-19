@@ -8,13 +8,20 @@
 
 ## Goal
 
-Prove, at runtime, the SKIP-LOCKED **exclusivity** guarantee that BE-528 could not ship CI-robustly:
-two retry-scheduler workers claiming concurrently via
+Ship a **CI-robust** notification delivery-claim integration test that BE-528 could not: it covers BOTH
+(a) the *plain* claim semantics — `findPendingDueForRetry` returns only PENDING + due rows ordered by
+`created_at`, exercising the REAL repository query against real Postgres — AND (b) the SKIP-LOCKED
+**exclusivity** guarantee: two retry-scheduler workers claiming concurrently via
 `NotificationDeliveryJpaRepository.findPendingDueForRetry`
 (`@Lock(PESSIMISTIC_WRITE)` + `jakarta.persistence.lock.timeout = -2`) must **never double-claim the same
-PENDING row** (architecture.md § Concurrency Control). BE-528 already shipped the *plain* claim semantics
-(`claimReturnsOnlyPendingDueOrdered`, real repo method) + the circuit-breaker transitions; this ticket is
-only the concurrent no-double-claim assertion.
+PENDING row** (architecture.md § Concurrency Control).
+
+BE-528 shipped the circuit-breaker transition coverage + `DeliveryRetrySchedulerTest` (both in the fast
+`test` lane, CI-GREEN) but **the whole `DeliverySkipLockedClaimIntegrationTest` was pulled**: even the simple
+single-tx `claimReturnsOnlyPendingDueOrdered` could not be kept because the bundled notification
+`integrationTest` lane hung 28 min / cancelled on CI once any new IT was added to it — an
+`env_wms_notification_seed_cluster_ci_flake`-class resource/lane issue (see below). So this ticket owns the
+entire notification delivery-claim IT, not just the concurrency half.
 
 ## Why this is its own ticket (BE-528 history — read before retrying)
 
@@ -33,9 +40,20 @@ on the bundled CI integration lane** (`master + notification + outbound` run tog
    `lock_timeout` on the raw connections, and `c1` only releases in a `finally` after `c2` returns → deadlock).
    Root cause of the local↔CI divergence was never reproduced locally.
 
-Net lesson (memory `env_ci_flake_is_a_hypothesis_not_a_verdict` + `project_testcontainers_docker_desktop_blocker`):
-**local GREEN is not authoritative for a lock-contention test; the CI lane is** — and a concurrency IT that
-can block MUST bound every wait so a failure is fast, not a 30-min hang.
+4. **Even the trimmed single-tx test** (`claimReturnsOnlyPendingDueOrdered` alone, no concurrency at all) left
+   in the class **still hung the bundled `notification:integrationTest` lane 28 min → cancel** on CI, while
+   the same commit's `Build & Test` (unit) lane stayed green and BE-527's bundle (same lane, no notification
+   IT change) was SUCCESS. So the trigger is **adding *any* IT to notification's bundled lane**, not the test
+   body — a strong `env_wms_notification_seed_cluster_ci_flake` (IT-lane resource exhaustion → connection
+   severance) signal. **First diagnostic for this ticket: reproduce/confirm the lane behaviour before writing
+   the assertion** — the problem is the lane, not (only) the test.
+
+Net lesson (memory `env_ci_flake_is_a_hypothesis_not_a_verdict` + `project_testcontainers_docker_desktop_blocker`
++ `env_wms_notification_seed_cluster_ci_flake`):
+**local GREEN is not authoritative for a lock-contention / IT-lane-resource test; the CI lane is** — and a
+concurrency IT that can block MUST bound every wait so a failure is fast, not a 30-min hang. Strongly consider
+giving notification-service its **own** integration job (unbundled) and/or `--no-parallel` within the lane
+before adding IT weight.
 
 ## Scope / Acceptance Criteria
 
