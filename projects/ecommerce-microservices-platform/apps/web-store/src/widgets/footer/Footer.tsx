@@ -21,7 +21,7 @@ export function Footer() {
           <div className={styles.columnTitle}>고객지원</div>
           <div className={styles.linkList}>
             <Link href="/my/profile" className={styles.link}>마이페이지</Link>
-            <Link href="/orders" className={styles.link}>주문조회</Link>
+            <Link href="/my/orders" className={styles.link}>주문조회</Link>
             <Link href="/my/addresses" className={styles.link}>배송지관리</Link>
           </div>
         </div>

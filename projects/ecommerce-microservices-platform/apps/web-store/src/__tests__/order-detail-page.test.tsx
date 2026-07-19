@@ -41,14 +41,13 @@ vi.mock('@repo/ui', () => ({
   ),
 }));
 
-import { useAuth, useRequireAuth } from '@/features/auth';
+import { useAuth } from '@/features/auth';
 import { useParams } from 'next/navigation';
 import { getOrder, cancelOrder } from '@/entities/order';
 import { getPayment } from '@/entities/payment';
-import OrderDetailPage from '@/app/(store)/orders/[id]/page';
+import OrderDetailPage from '@/app/(store)/my/orders/[id]/page';
 
 const mockUseAuth = vi.mocked(useAuth);
-const mockUseRequireAuth = vi.mocked(useRequireAuth);
 const mockUseParams = vi.mocked(useParams);
 const mockGetOrder = vi.mocked(getOrder);
 const mockCancelOrder = vi.mocked(cancelOrder);
@@ -89,7 +88,6 @@ describe('OrderDetailPage', () => {
       login: vi.fn(),
       logout: vi.fn(),
     });
-    mockUseRequireAuth.mockReturnValue({ isReady: true });
     mockUseParams.mockReturnValue({ id: 'order-1' });
     mockGetPayment.mockRejectedValue({ code: 'PAYMENT_NOT_FOUND', message: 'Not found' });
   });
@@ -315,17 +313,6 @@ describe('OrderDetailPage', () => {
       expect(screen.getByTestId('error-message')).toBeInTheDocument();
     });
     expect(screen.getByText('주문 정보를 불러오는데 실패했습니다.')).toBeInTheDocument();
-  });
-
-  it('미인증 상태에서 로그인 페이지로 리다이렉트한다', () => {
-    mockUseRequireAuth.mockImplementation(() => {
-      mockReplace('/login');
-      return { isReady: false };
-    });
-
-    render(<TestQueryProvider><OrderDetailPage /></TestQueryProvider>);
-
-    expect(mockReplace).toHaveBeenCalledWith('/login');
   });
 
   it('로딩 중일 때 주문 내용이 표시되지 않는다', () => {
