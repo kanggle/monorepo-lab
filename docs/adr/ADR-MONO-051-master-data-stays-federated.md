@@ -202,7 +202,11 @@ Re-run these before citing this ADR as current. Per repo practice, a prior count
 ## 7. Outstanding follow-ups
 
 - **None scheduled.** D5 is a trigger, not a backlog item; it produces a task when it fires, and no earlier.
-- **Now eligible (acceptance, 2026-07-20):** promoting the D2 code-identity rule into [`platform/service-boundaries.md`](../../platform/service-boundaries.md), so it binds at the layer agents actually read rather than only here. Eligibility is not scheduling — this ADR still does not perform the promotion, and TASK-MONO-434 explicitly excluded it. It needs its own task.
+- **✅ Done (TASK-MONO-435, 2026-07-20):** D2 is promoted into [`platform/service-boundaries.md`](../../platform/service-boundaries.md) § Data Boundaries, where it now binds at the layer agents actually read. Read the rule there; this ADR remains the record of *why* it was decided.
+
+  Measuring before promoting narrowed the work: **D1 and D3 were already canonical** in that same section ("Master/reference data … is owned by exactly one service and distributed via events for local caching") — propagated, not divergent, so restating them would have split the canon. Only D2 was genuinely absent; nothing in `platform/` declared what *form* an identifier takes when it crosses a boundary.
+
+  **D6 was deliberately not promoted.** It constrains deployment and extraction strategy rather than service boundaries, so its natural home is [`TEMPLATE.md`](../../TEMPLATE.md) § Discovery → Distribution. TASK-MONO-435 left that unadjudicated rather than forcing it into the wrong file; until it moves, D6 binds from this ADR alone.
 
 ---
 
