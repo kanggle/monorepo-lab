@@ -1519,8 +1519,43 @@ jobs:
         projects/wms-platform/apps/inbound-service/build/test-results/integrationTest/
 
   iam-integration-tests:
-    name: Integration (iam, Testcontainers)
+    name: Integration (iam ${{ matrix.shard }}, Testcontainers)
     needs: [changes, build-and-test]
+    # TASK-MONO-438 — SHARDED ACROSS RUNNERS (same technique as MONO-436's ecommerce lane).
+    #
+    # After 436 sharded ecommerce (16m53s -> 6m17s measured), this lane inherited the
+    # critical path at 9m04s. Sharded across runners; each shard is STILL --no-parallel
+    # internally. The cause was ever resource exhaustion on ONE runner, not parallelism as
+    # such, so spreading modules over runners does not re-enter the failure mode.
+    #
+    # Split = longest-processing-time greedy over per-module durations MEASURED on run
+    # 29705436294 / job 88241724977 (2026-07-19): admin 169s, auth 144s, account 75s,
+    # security 74s, gateway 27s. Those 489s + the measured 40s of Gradle configure/compile
+    # reconcile with that job's own `BUILD SUCCESSFUL in 8m 48s` — which is why the split
+    # is balanced rather than guessed. A=243s, B=246s.
+    #
+    # TWO shards, not three, ON PURPOSE. A 3-way split would reach ~3m51s and buy NOTHING:
+    # the next-longest job is the sharded ecommerce lane at 6m17s, so the run's critical
+    # path is ecommerce-bound the moment this lane drops below it, which two shards already
+    # do. Shard only as far as the next bottleneck; past that a third runner is pure cost.
+    # Re-open only if ecommerce drops further.
+    #
+    # Adding a module: put it in the shard with the lower total. Note admin-service alone
+    # is 169s — a future module heavier than ~245s unbalances a 2-way split and forces a
+    # re-split. Never resolve a slow or flaky shard by dropping --no-parallel from it.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: A
+            tasks: >-
+              :projects:iam-platform:apps:admin-service:integrationTest
+              :projects:iam-platform:apps:security-service:integrationTest
+          - shard: B
+            tasks: >-
+              :projects:iam-platform:apps:auth-service:integrationTest
+              :projects:iam-platform:apps:account-service:integrationTest
+              :projects:iam-platform:apps:gateway-service:integrationTest
     # IAM integration suite boots MySQL + Kafka + (per-service Redis/WireMock)
     # via Testcontainers. Scoped to monorepo-lab; the standalone repo
     # extraction relies on its own Docker-free `check` signal.
@@ -1535,13 +1570,9 @@ jobs:
       )
     uses: ./.github/workflows/_integration.yml
     with:
-      gradle-tasks: >-
-        :projects:iam-platform:apps:auth-service:integrationTest
-        :projects:iam-platform:apps:account-service:integrationTest
-        :projects:iam-platform:apps:admin-service:integrationTest
-        :projects:iam-platform:apps:gateway-service:integrationTest
-        :projects:iam-platform:apps:security-service:integrationTest
-      artifact-name: iam-integration-test-reports
+      gradle-tasks: ${{ matrix.tasks }}
+      # upload-artifact@v4 fails on duplicate artifact names within one run.
+      artifact-name: iam-integration-test-reports-${{ matrix.shard }}
       # SERIALISED. Rule (evidence, never module count) and cost:
       # platform/testing-strategy.md § Integration lane serialisation.
       #
