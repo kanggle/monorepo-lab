@@ -35,10 +35,10 @@ public class InternalSnapshotController {
 
     @GetMapping("/snapshot")
     public ResponseEntity<ApiEnvelope<List<InternalSnapshotResponse>>> getSnapshotAcrossTenants() {
-        List<InventorySnapshot> snapshots = applicationService.getAllSnapshotsAcrossTenants();
-        List<InternalSnapshotResponse> data = snapshots.stream()
-                .map(InternalSnapshotResponse::from)
-                .toList();
+        List<InternalSnapshotResponse> data =
+                applicationService.getAllSnapshotsAcrossTenantsWithWarehouseCode().stream()
+                        .map(row -> InternalSnapshotResponse.from(row.snapshot(), row.warehouseCode()))
+                        .toList();
         return ResponseEntity.ok(ApiEnvelope.of(data, Map.of("count", data.size())));
     }
 }

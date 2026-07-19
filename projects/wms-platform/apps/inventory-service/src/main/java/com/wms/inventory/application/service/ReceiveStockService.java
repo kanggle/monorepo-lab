@@ -13,6 +13,7 @@ import com.wms.inventory.domain.model.Inventory;
 import com.wms.inventory.domain.model.InventoryMovement;
 import com.wms.inventory.domain.model.ReasonCode;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -118,8 +119,14 @@ public class ReceiveStockService implements ReceiveStockUseCase {
                     persisted.availableQty()));
         }
 
+        // ADR-MONO-050 D9: carry the warehouse CODE so the cross-project scm batch
+        // replenishment leg can address the PO by code. Best-effort — null when the
+        // warehouse snapshot is not yet populated; the event still fires.
+        String warehouseCode = masterReadModel.findWarehouse(command.warehouseId())
+                .map(WarehouseSnapshot::warehouseCode).orElse(null);
         InventoryReceivedEvent event = new InventoryReceivedEvent(
                 command.warehouseId(),
+                warehouseCode,
                 command.sourceEventId(),
                 command.asnId(),
                 eventLines,

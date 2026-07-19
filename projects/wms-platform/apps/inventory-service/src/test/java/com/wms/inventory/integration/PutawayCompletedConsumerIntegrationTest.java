@@ -62,6 +62,76 @@ class PutawayCompletedConsumerIntegrationTest extends InventoryServiceIntegratio
         jdbc.update("TRUNCATE TABLE inventory_movement");
         jdbc.update("DELETE FROM inventory");
         jdbc.update("DELETE FROM inventory_event_dedupe");
+        jdbc.update("DELETE FROM warehouse_snapshot");
+    }
+
+    /**
+     * ADR-MONO-050 D9 / TASK-SCM-BE-037: {@code inventory.received} carries the warehouse
+     * CODE resolved from the warehouse master read-model, so the cross-project scm batch
+     * replenishment leg can address a PO by code rather than uuid.
+     */
+    @Test
+    @DisplayName("putaway → inventory.received payload carries warehouseCode")
+    void receivedEventCarriesWarehouseCode() throws Exception {
+        UUID warehouseId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        UUID skuId = UUID.randomUUID();
+        seedWarehouseSnapshot(warehouseId, "WH01");
+
+        publish(INBOUND_TOPIC, buildPutawayEvent(UUID.randomUUID(), warehouseId,
+                UUID.randomUUID(), locationId, skuId, null, 50));
+
+        await().atMost(45, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> assertThat(
+                        inventoryRepository.findByKey(locationId, skuId, null)).isPresent());
+
+        try (KafkaConsumer<String, String> consumer = newConsumer(OUTBOUND_TOPIC)) {
+            // Match THIS test's warehouse — the topic also replays earlier tests' events.
+            JsonNode envelope = pollMatching(consumer, OUTBOUND_TOPIC,
+                    p -> warehouseId.toString().equals(p.path("warehouseId").asText()), 30);
+            assertThat(envelope).as("inventory.received for warehouse %s", warehouseId).isNotNull();
+            assertThat(envelope.get("payload").get("warehouseCode").asText()).isEqualTo("WH01");
+        }
+    }
+
+    /**
+     * Best-effort resolution: with no warehouse snapshot the event must still be emitted
+     * with a null code — a missing code never blocks the receive.
+     */
+    @Test
+    @DisplayName("putaway without a warehouse snapshot → warehouseCode null, event still emitted")
+    void receivedEventWarehouseCodeNullWithoutSnapshot() throws Exception {
+        UUID warehouseId = UUID.randomUUID();  // deliberately NOT seeded
+        UUID locationId = UUID.randomUUID();
+        UUID skuId = UUID.randomUUID();
+
+        publish(INBOUND_TOPIC, buildPutawayEvent(UUID.randomUUID(), warehouseId,
+                UUID.randomUUID(), locationId, skuId, null, 50));
+
+        await().atMost(45, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> assertThat(
+                        inventoryRepository.findByKey(locationId, skuId, null)).isPresent());
+
+        try (KafkaConsumer<String, String> consumer = newConsumer(OUTBOUND_TOPIC)) {
+            // Match THIS test's warehouse — otherwise the first replayed event (from another
+            // test) could satisfy "code is null" and green this assertion for the wrong reason.
+            JsonNode envelope = pollMatching(consumer, OUTBOUND_TOPIC,
+                    p -> warehouseId.toString().equals(p.path("warehouseId").asText()), 30);
+            assertThat(envelope).as("inventory.received for warehouse %s", warehouseId).isNotNull();
+            JsonNode payload = envelope.get("payload");
+            assertThat(payload.has("warehouseCode")).isTrue();
+            assertThat(payload.get("warehouseCode").isNull()).isTrue();
+            assertThat(payload.get("lines").get(0).get("availableQtyAfter").asInt()).isEqualTo(50);
+        }
+    }
+
+    private void seedWarehouseSnapshot(UUID warehouseId, String warehouseCode) {
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        jdbc.update("""
+                INSERT INTO warehouse_snapshot
+                (id, warehouse_code, status, cached_at, master_version)
+                VALUES (?, ?, 'ACTIVE', ?, 1)
+                """, warehouseId, warehouseCode, now);
     }
 
     @Test
@@ -179,6 +249,36 @@ class PutawayCompletedConsumerIntegrationTest extends InventoryServiceIntegratio
             for (ConsumerRecord<String, String> r : records) {
                 if (topic.equals(r.topic())) {
                     return objectMapper.readTree(r.value());
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Like {@link #pollOne} but returns the first envelope whose payload satisfies
+     * {@code match}, instead of the first envelope on the topic.
+     *
+     * <p>The consumers here use a fresh group with {@code auto.offset.reset=earliest}, so a
+     * poll replays the topic from the beginning — including events published by EARLIER tests
+     * in this class. "First record on the topic" is therefore not "the event this test just
+     * caused"; asserting on it makes a test pass or fail based on execution order. Match on
+     * an id this test generated instead.
+     */
+    private JsonNode pollMatching(KafkaConsumer<String, String> consumer, String topic,
+                                  java.util.function.Predicate<JsonNode> match,
+                                  long maxSeconds) throws Exception {
+        long deadline = System.currentTimeMillis() + maxSeconds * 1_000L;
+        while (System.currentTimeMillis() < deadline) {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+            for (ConsumerRecord<String, String> r : records) {
+                if (!topic.equals(r.topic())) {
+                    continue;
+                }
+                JsonNode envelope = objectMapper.readTree(r.value());
+                JsonNode payload = envelope.get("payload");
+                if (payload != null && match.test(payload)) {
+                    return envelope;
                 }
             }
         }

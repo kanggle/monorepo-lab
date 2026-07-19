@@ -4,6 +4,7 @@ import com.wms.inventory.application.command.AdjustStockCommand;
 import com.wms.inventory.application.port.in.AdjustStockUseCase;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
 import com.wms.inventory.application.port.out.InventoryRepository;
+import com.wms.inventory.application.port.out.MasterReadModelPort;
 import com.wms.inventory.application.port.out.OutboxWriter;
 import com.wms.inventory.application.port.out.StockAdjustmentRepository;
 import com.wms.inventory.application.result.AdjustmentResult;
@@ -17,6 +18,7 @@ import com.wms.inventory.domain.model.InventoryMovement;
 import com.wms.inventory.domain.model.MovementType;
 import com.wms.inventory.domain.model.ReasonCode;
 import com.wms.inventory.domain.model.StockAdjustment;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -55,6 +57,7 @@ public class AdjustStockService implements AdjustStockUseCase {
     private final StockAdjustmentRepository adjustmentRepository;
     private final OutboxWriter outboxWriter;
     private final MasterRefValidator masterRefValidator;
+    private final MasterReadModelPort masterReadModel;
     private final LowStockDetectionService lowStockDetection;
     private final Clock clock;
     private final Counter adjustCounter;
@@ -66,6 +69,7 @@ public class AdjustStockService implements AdjustStockUseCase {
                               StockAdjustmentRepository adjustmentRepository,
                               OutboxWriter outboxWriter,
                               MasterRefValidator masterRefValidator,
+                              MasterReadModelPort masterReadModel,
                               LowStockDetectionService lowStockDetection,
                               Clock clock,
                               MeterRegistry meterRegistry) {
@@ -74,6 +78,7 @@ public class AdjustStockService implements AdjustStockUseCase {
         this.adjustmentRepository = adjustmentRepository;
         this.outboxWriter = outboxWriter;
         this.masterRefValidator = masterRefValidator;
+        this.masterReadModel = masterReadModel;
         this.lowStockDetection = lowStockDetection;
         this.clock = clock;
         this.adjustCounter = counter(meterRegistry, "ADJUST");
@@ -195,14 +200,19 @@ public class AdjustStockService implements AdjustStockUseCase {
         return result(adjustment, inventory);
     }
 
-    private static InventoryAdjustedEvent buildEvent(StockAdjustment adjustment, Inventory inventory,
-                                                     MovementType movementType,
-                                                     int delta, Bucket bucket,
-                                                     ReasonCode reasonCode, String reasonNote,
-                                                     Instant now, String actorId) {
+    private InventoryAdjustedEvent buildEvent(StockAdjustment adjustment, Inventory inventory,
+                                              MovementType movementType,
+                                              int delta, Bucket bucket,
+                                              ReasonCode reasonCode, String reasonNote,
+                                              Instant now, String actorId) {
+        // ADR-MONO-050 D9: this payload carries no warehouseId, so resolve the warehouse
+        // CODE from the aggregate's warehouseId for the cross-project scm batch
+        // replenishment leg. Best-effort — null when the snapshot is not yet populated.
+        String warehouseCode = masterReadModel.findWarehouse(inventory.warehouseId())
+                .map(WarehouseSnapshot::warehouseCode).orElse(null);
         return new InventoryAdjustedEvent(
                 adjustment.id(), inventory.id(),
-                inventory.locationId(), inventory.skuId(), inventory.lotId(),
+                inventory.locationId(), warehouseCode, inventory.skuId(), inventory.lotId(),
                 bucket, delta, reasonCode, reasonNote, movementType,
                 new InventoryAdjustedEvent.InventorySnapshot(
                         inventory.availableQty(), inventory.reservedQty(),

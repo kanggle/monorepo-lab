@@ -19,6 +19,7 @@ import com.wms.inventory.domain.model.StockTransfer;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
 import com.wms.inventory.domain.model.masterref.LotSnapshot;
 import com.wms.inventory.domain.model.masterref.SkuSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -174,8 +175,13 @@ public class TransferStockService implements TransferStockUseCase {
                 .map(LocationSnapshot::locationCode).orElse(null);
         String targetLocationCode = masterReadModel.findLocation(persistedTarget.locationId())
                 .map(LocationSnapshot::locationCode).orElse(null);
+        // ADR-MONO-050 D9: carry the warehouse CODE for the cross-project scm batch
+        // replenishment leg. Best-effort — null when the snapshot is not yet populated.
+        String warehouseCode = masterReadModel.findWarehouse(warehouseId)
+                .map(WarehouseSnapshot::warehouseCode).orElse(null);
         return new InventoryTransferredEvent(
-                savedTransfer.id(), warehouseId, command.skuId(), command.lotId(), command.quantity(),
+                savedTransfer.id(), warehouseId, warehouseCode,
+                command.skuId(), command.lotId(), command.quantity(),
                 command.reasonCode(),
                 new InventoryTransferredEvent.Endpoint(
                         persistedSource.locationId(), sourceLocationCode,

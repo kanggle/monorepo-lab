@@ -52,6 +52,7 @@ public class InventoryNodeRepositoryImpl implements InventoryNodeRepository {
                 e.getName(),
                 NodeStatus.valueOf(e.getStatus().name()),
                 e.getContactInfo(),
+                e.getWarehouseCode(),
                 e.getCreatedAt(),
                 e.getUpdatedAt()
         );
@@ -66,6 +67,7 @@ public class InventoryNodeRepositoryImpl implements InventoryNodeRepository {
         e.setName(n.getName());
         e.setStatus(InventoryNodeJpaEntity.NodeStatusJpa.valueOf(n.getStatus().name()));
         e.setContactInfo(n.getContactInfo());
+        e.setWarehouseCode(n.getWarehouseCode());
         e.setCreatedAt(n.getCreatedAt());
         e.setUpdatedAt(n.getUpdatedAt());
         return e;

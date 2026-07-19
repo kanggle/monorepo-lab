@@ -38,6 +38,15 @@ wms v1 envelope fields used by this consumer:
 - `payload.skuId` (String, identifies the SKU)
 - `payload.qtyReceived` / `payload.delta` / `payload.quantity` (Long, quantity)
 - `payload.source.locationId` / `payload.target.locationId` (transfer events)
+- `payload.warehouseCode` (String, **nullable** — ADR-MONO-050 D9 / TASK-SCM-BE-037): the
+  business code of the warehouse the mutated inventory belongs to. Persisted on the node
+  read-model (`inventory_nodes.warehouse_code`) and served by the internal snapshot
+  endpoint, so `demand-planning-service`'s **batch** sweep can address a replenishment PO
+  by warehouse **code** (cross-service identifiers are codes, not uuids). Best-effort: wms
+  emits `null` while its warehouse master snapshot is unpopulated — the node is still
+  created/updated, and a null code simply omits the wms inbound-expected addressing
+  downstream (fail-closed, no uuid leak). A non-null incoming code updates the stored one;
+  a null incoming code never overwrites a previously stored non-null code.
 
 Breaking change policy: if wms introduces `wms.inventory.received.v2`, this consumer
 continues on v1 during the grace period. Separate follow-up task migrates to v2.

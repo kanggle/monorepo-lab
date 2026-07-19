@@ -34,7 +34,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractInventoryVisibilityInt
         var node = persistNode(TENANT_SCM, "wh-cross-tenant-" + java.util.UUID.randomUUID());
         // Drive the apply path so a snapshot is created in TENANT_SCM
         applicationService.applyInventoryAdjusted(
-                node.getNodeExternalId(), "sku-cross-tenant", 5L,
+                node.getNodeExternalId(), "sku-cross-tenant", 5L, null,
                 java.util.UUID.randomUUID(), java.time.Instant.now(),
                 TENANT_SCM, "wms.inventory.adjusted.v1");
 

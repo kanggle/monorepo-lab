@@ -21,12 +21,21 @@ public class InventoryNode {
     private String name;
     private NodeStatus status;
     private String contactInfo; // JSONB stored as String
+    private String warehouseCode; // nullable — ADR-MONO-050 D9
     private final Instant createdAt;
     private Instant updatedAt;
 
     public InventoryNode(NodeId id, String tenantId, String nodeExternalId,
                          NodeType nodeType, String name, NodeStatus status,
                          String contactInfo, Instant createdAt, Instant updatedAt) {
+        this(id, tenantId, nodeExternalId, nodeType, name, status, contactInfo,
+                null, createdAt, updatedAt);
+    }
+
+    public InventoryNode(NodeId id, String tenantId, String nodeExternalId,
+                         NodeType nodeType, String name, NodeStatus status,
+                         String contactInfo, String warehouseCode,
+                         Instant createdAt, Instant updatedAt) {
         this.id = Objects.requireNonNull(id, "id");
         this.tenantId = Objects.requireNonNull(tenantId, "tenantId");
         this.nodeExternalId = Objects.requireNonNull(nodeExternalId, "nodeExternalId");
@@ -34,6 +43,7 @@ public class InventoryNode {
         this.name = name != null ? name : "";
         this.status = Objects.requireNonNull(status, "status");
         this.contactInfo = contactInfo;
+        this.warehouseCode = warehouseCode;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt");
     }
@@ -41,12 +51,34 @@ public class InventoryNode {
     /**
      * Factory: auto-register a WMS_WAREHOUSE node upon first event receipt.
      * Node name and contactInfo are empty — will be enriched when metadata arrives.
+     *
+     * @param warehouseCode the business warehouse code carried by the triggering wms
+     *                      mutation event (ADR-MONO-050 D9). Nullable — wms emits
+     *                      {@code null} while its warehouse master snapshot is
+     *                      unpopulated; the node is still registered.
      */
     public static InventoryNode autoRegisterWmsWarehouse(NodeId id, String tenantId,
-                                                          String warehouseId, Instant now) {
+                                                          String warehouseId,
+                                                          String warehouseCode, Instant now) {
         return new InventoryNode(id, tenantId, warehouseId,
                 NodeType.WMS_WAREHOUSE, "", NodeStatus.ACTIVE,
-                null, now, now);
+                null, warehouseCode, now, now);
+    }
+
+    /**
+     * Set-if-present update of the warehouse code (ADR-MONO-050 D9).
+     *
+     * <p>A {@code null} incoming code is ignored so a best-effort-null wms event
+     * can never wipe a previously learned non-null code. Returns {@code true} when
+     * the stored value actually changed, so the caller can skip a redundant write.
+     */
+    public boolean applyWarehouseCodeIfPresent(String incomingWarehouseCode, Instant now) {
+        if (incomingWarehouseCode == null || incomingWarehouseCode.equals(this.warehouseCode)) {
+            return false;
+        }
+        this.warehouseCode = incomingWarehouseCode;
+        this.updatedAt = Objects.requireNonNull(now, "now");
+        return true;
     }
 
     public boolean isActive() {
@@ -61,6 +93,8 @@ public class InventoryNode {
     public String getName() { return name; }
     public NodeStatus getStatus() { return status; }
     public String getContactInfo() { return contactInfo; }
+    /** Nullable business warehouse code learned from wms mutation events (ADR-MONO-050 D9). */
+    public String getWarehouseCode() { return warehouseCode; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

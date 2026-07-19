@@ -33,6 +33,7 @@ import com.wms.inventory.domain.model.TransferReasonCode;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
 import com.wms.inventory.domain.model.masterref.LotSnapshot;
 import com.wms.inventory.domain.model.masterref.SkuSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -180,6 +181,47 @@ class TransferStockServiceTest {
                 .isInstanceOf(MasterRefInactiveException.class);
     }
 
+    // ---- ADR-MONO-050 D9: warehouseCode on the mutation event -----------------
+
+    @Test
+    void transferredEventCarriesWarehouseCodeWhenMasterSnapshotPresent() {
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+        masterReadModel.locations.put(source, locationSnapshot(source, WAREHOUSE));
+        masterReadModel.locations.put(target, locationSnapshot(target, WAREHOUSE));
+        masterReadModel.putWarehouse(WAREHOUSE, "WH01");
+        seed(source, 100, 0, 0);
+
+        service.transfer(new TransferStockCommand(
+                source, target, SKU, null, 10,
+                TransferReasonCode.TRANSFER_INTERNAL, null, "actor", "idem-wc-1"));
+
+        assertThat(transferredEvent().warehouseCode()).isEqualTo("WH01");
+    }
+
+    @Test
+    void transferredEventWarehouseCodeNullWhenMasterSnapshotAbsent() {
+        UUID source = UUID.randomUUID();
+        UUID target = UUID.randomUUID();
+        masterReadModel.locations.put(source, locationSnapshot(source, WAREHOUSE));
+        masterReadModel.locations.put(target, locationSnapshot(target, WAREHOUSE));
+        // No putWarehouse(..) — startup race. The transfer must still succeed.
+        seed(source, 100, 0, 0);
+
+        service.transfer(new TransferStockCommand(
+                source, target, SKU, null, 10,
+                TransferReasonCode.TRANSFER_INTERNAL, null, "actor", "idem-wc-2"));
+
+        assertThat(transferredEvent().warehouseCode()).isNull();
+    }
+
+    private InventoryTransferredEvent transferredEvent() {
+        return outbox.events.stream()
+                .filter(e -> e instanceof InventoryTransferredEvent)
+                .map(InventoryTransferredEvent.class::cast)
+                .findFirst().orElseThrow();
+    }
+
     private void seed(UUID location, int available, int reserved, int damaged) {
         Inventory inv = Inventory.restore(UUID.randomUUID(), WAREHOUSE, location, SKU, null,
                 available, reserved, damaged, NOW, 0L,
@@ -245,9 +287,18 @@ class TransferStockServiceTest {
 
     private static class FakeMasterReadModel implements MasterReadModelPort {
         final Map<UUID, LocationSnapshot> locations = new HashMap<>();
+        final Map<UUID, WarehouseSnapshot> warehouses = new HashMap<>();
+
+        void putWarehouse(UUID id, String warehouseCode) {
+            warehouses.put(id, new WarehouseSnapshot(
+                    id, warehouseCode, WarehouseSnapshot.Status.ACTIVE, NOW, 1L));
+        }
+
         @Override public Optional<LocationSnapshot> findLocation(UUID id) { return Optional.ofNullable(locations.get(id)); }
         @Override public Optional<SkuSnapshot> findSku(UUID id) { return Optional.empty(); }
         @Override public Optional<LotSnapshot> findLot(UUID id) { return Optional.empty(); }
-        @Override public Optional<com.wms.inventory.domain.model.masterref.WarehouseSnapshot> findWarehouse(UUID id) { return Optional.empty(); }
+        @Override public Optional<WarehouseSnapshot> findWarehouse(UUID id) {
+            return Optional.ofNullable(warehouses.get(id));
+        }
     }
 }

@@ -62,6 +62,48 @@ class InventoryVisibilityRestAdapterTest {
         assertThat(result.get(0).availableQty()).isEqualTo(4);
     }
 
+    /**
+     * ADR-MONO-050 D9 / TASK-SCM-BE-037: the additive {@code warehouseCode} is parsed
+     * when present. It is what lets a BATCH-origin PO address its wms inbound-expected
+     * by code rather than uuid.
+     */
+    @Test
+    void parsesWarehouseCode_whenPresent() {
+        UUID node = UUID.randomUUID();
+        enqueueJson("{\"data\":["
+                + "{\"sku\":\"SKU-1\",\"nodeId\":\"" + node + "\",\"availableQty\":4,"
+                + "\"warehouseCode\":\"WH01\"}"
+                + "],\"meta\":{\"count\":1}}");
+
+        List<SkuWarehouseQty> result = adapter.findAllBelowReorderPoint("scm");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).warehouseCode()).isEqualTo("WH01");
+    }
+
+    /**
+     * ADR-MONO-050 D9: the field is ADDITIVE — an older IVS build omits it entirely and
+     * a node that has not yet learned a code serialises it as JSON null. Neither may fail
+     * the row: the candidate is still returned, only with a null code.
+     */
+    @Test
+    void warehouseCodeAbsentOrNull_yieldsNullCode_rowStillReturned() {
+        UUID absentNode = UUID.randomUUID();
+        UUID nullNode = UUID.randomUUID();
+        enqueueJson("{\"data\":["
+                + "{\"sku\":\"SKU-ABSENT\",\"nodeId\":\"" + absentNode + "\",\"availableQty\":4},"
+                + "{\"sku\":\"SKU-NULL\",\"nodeId\":\"" + nullNode + "\",\"availableQty\":7,"
+                + "\"warehouseCode\":null}"
+                + "],\"meta\":{\"count\":2}}");
+
+        List<SkuWarehouseQty> result = adapter.findAllBelowReorderPoint("scm");
+
+        assertThat(result).hasSize(2);
+        assertThat(result).allSatisfy(r -> assertThat(r.warehouseCode()).isNull());
+        assertThat(result).extracting(SkuWarehouseQty::skuCode)
+                .containsExactly("SKU-ABSENT", "SKU-NULL");
+    }
+
     @Test
     void emptyData_returnsEmptyList() {
         enqueueJson("{\"data\":[],\"meta\":{\"count\":0}}");

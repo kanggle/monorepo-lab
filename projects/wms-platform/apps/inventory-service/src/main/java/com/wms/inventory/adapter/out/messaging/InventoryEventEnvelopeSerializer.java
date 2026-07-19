@@ -101,6 +101,7 @@ public class InventoryEventEnvelopeSerializer {
     private static Map<String, Object> receivedPayload(InventoryReceivedEvent e) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("warehouseId", e.warehouseId().toString());
+        payload.put("warehouseCode", e.warehouseCode());
         payload.put("sourceEventId", e.sourceEventId() == null ? null : e.sourceEventId().toString());
         payload.put("asnId", e.asnId() == null ? null : e.asnId().toString());
         List<Map<String, Object>> lines = e.lines().stream().map(line -> {
@@ -189,6 +190,7 @@ public class InventoryEventEnvelopeSerializer {
         payload.put("adjustmentId", e.adjustmentId().toString());
         payload.put("inventoryId", e.inventoryId().toString());
         payload.put("locationId", e.locationId().toString());
+        payload.put("warehouseCode", e.warehouseCode());
         payload.put("skuId", e.skuId().toString());
         payload.put("lotId", e.lotId() == null ? null : e.lotId().toString());
         payload.put("bucket", e.bucket().name());
@@ -210,6 +212,7 @@ public class InventoryEventEnvelopeSerializer {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("transferId", e.transferId().toString());
         payload.put("warehouseId", e.warehouseId().toString());
+        payload.put("warehouseCode", e.warehouseCode());
         payload.put("skuId", e.skuId().toString());
         payload.put("lotId", e.lotId() == null ? null : e.lotId().toString());
         payload.put("quantity", e.quantity());
