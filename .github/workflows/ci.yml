@@ -1791,8 +1791,49 @@ jobs:
         projects/platform-console/apps/console-bff/build/test-results/integrationTest/
 
   ecommerce-integration-tests:
-    name: Integration (ecommerce, Testcontainers)
+    name: Integration (ecommerce ${{ matrix.shard }}, Testcontainers)
     needs: [changes, build-and-test]
+    # TASK-MONO-436 — SHARDED ACROSS RUNNERS. Read this before touching the split.
+    #
+    # This lane was the repo's critical path: 16m53s, against a next-longest job of 4m.
+    # It is serialised on purpose (see the gradle-args note below) and serialisation
+    # roughly doubled it. The fix for the wall-clock is NOT to re-parallelise inside a
+    # runner — that is precisely what starved Hikari/Postgres in MONO-398. It is to run
+    # fewer modules per runner, on more runners, each still serialised internally.
+    # Parallelism ACROSS runners is not the parallelism that broke.
+    #
+    # Split = longest-processing-time greedy over per-module durations MEASURED on run
+    # 29640065069 / job 88069194561 (2026-07-18): A=317s, B=309s, C=324s of the 950s total.
+    # Those 950s + the 63s of Gradle configure/compile reconcile exactly with that job's
+    # own `BUILD SUCCESSFUL in 16m 53s` — which is why the split is balanced rather than
+    # guessed. The numbers are a measurement from one date, not a property: as modules
+    # gain ITs the balance drifts. That is fine (each shard has ~25 min of headroom); it
+    # is not fine to treat the split as self-maintaining.
+    #
+    # Adding a module: put it in the shard with the lowest total, not "the last one".
+    # Never resolve a slow or flaky shard by dropping --no-parallel from it.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: A
+            tasks: >-
+              :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
+              :projects:ecommerce-microservices-platform:apps:settlement-service:integrationTest
+              :projects:ecommerce-microservices-platform:apps:notification-service:integrationTest
+              :projects:ecommerce-microservices-platform:apps:batch-worker:integrationTest
+          - shard: B
+            tasks: >-
+              :projects:ecommerce-microservices-platform:apps:promotion-service:integrationTest
+              :projects:ecommerce-microservices-platform:apps:payment-service:integrationTest
+              :projects:ecommerce-microservices-platform:apps:search-service:integrationTest
+          - shard: C
+            tasks: >-
+              :projects:ecommerce-microservices-platform:apps:shipping-service:integrationTest
+              :projects:ecommerce-microservices-platform:apps:user-service:integrationTest
+              :projects:ecommerce-microservices-platform:apps:product-service:integrationTest
+              :projects:ecommerce-microservices-platform:apps:review-service:integrationTest
+              :projects:ecommerce-microservices-platform:apps:gateway-service:integrationTest
     # ecommerce integration suite boots Postgres (Testcontainers) + embedded Kafka.
     # ecommerce ITs carry @Tag("integration") and are excluded from the Docker-free
     # `check`; a dedicated `:integrationTest` task (TASK-MONO-307) runs them on a
@@ -1818,20 +1859,10 @@ jobs:
       )
     uses: ./.github/workflows/_integration.yml
     with:
-      gradle-tasks: >-
-        :projects:ecommerce-microservices-platform:apps:order-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:payment-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:product-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:user-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:promotion-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:gateway-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:review-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:shipping-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:batch-worker:integrationTest
-        :projects:ecommerce-microservices-platform:apps:notification-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:search-service:integrationTest
-        :projects:ecommerce-microservices-platform:apps:settlement-service:integrationTest
-      artifact-name: ecommerce-integration-test-reports
+      gradle-tasks: ${{ matrix.tasks }}
+      # upload-artifact@v4 fails on duplicate artifact names within one run, so the
+      # shard key has to be part of it.
+      artifact-name: ecommerce-integration-test-reports-${{ matrix.shard }}
       # SERIALISED. Rule (evidence, never module count) and cost:
       # platform/testing-strategy.md § Integration lane serialisation.
       #
@@ -1850,31 +1881,12 @@ jobs:
       # timeout (47% margin). This is now the repo's longest serialised lane. A thirteenth
       # module narrows that margin and nothing here will warn you.
       gradle-args: --no-parallel
+      # Globbed rather than listed per module: each shard runs on its own fresh runner,
+      # so only the modules THAT shard ran have these directories, and a shard-specific
+      # literal list would have to be kept in sync with the matrix by hand.
       report-paths: |
-        projects/ecommerce-microservices-platform/apps/order-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/order-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/payment-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/payment-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/product-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/product-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/user-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/user-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/promotion-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/promotion-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/gateway-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/gateway-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/review-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/review-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/shipping-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/shipping-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/batch-worker/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/batch-worker/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/notification-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/notification-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/search-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/search-service/build/test-results/integrationTest/
-        projects/ecommerce-microservices-platform/apps/settlement-service/build/reports/tests/integrationTest/
-        projects/ecommerce-microservices-platform/apps/settlement-service/build/test-results/integrationTest/
+        projects/ecommerce-microservices-platform/apps/*/build/reports/tests/integrationTest/
+        projects/ecommerce-microservices-platform/apps/*/build/test-results/integrationTest/
 
   frontend-checks:
     name: Frontend lint & build (ecommerce + fan-platform)
