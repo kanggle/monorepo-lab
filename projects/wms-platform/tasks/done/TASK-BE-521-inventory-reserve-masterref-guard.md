@@ -1,7 +1,7 @@
 # TASK-BE-521 — inventory-service: ReserveStockService missing master-ref guard (SKU_INACTIVE / LOT_INACTIVE / LOT_EXPIRED)
 
 - **Type**: TASK-BE (bug fix — production correctness, sibling-parity straggler)
-- **Status**: review
+- **Status**: done
 - **Service**: inventory-service (wms-platform)
 - **Domain/traits**: wms / [transactional, event-driven, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (domain-correctness fix)
