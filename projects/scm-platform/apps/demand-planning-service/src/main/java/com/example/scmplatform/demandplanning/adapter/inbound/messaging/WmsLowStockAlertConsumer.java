@@ -93,10 +93,23 @@ public class WmsLowStockAlertConsumer {
                 throw new NonRetryableConsumerException("Non-UUID locationId eventId=" + envelope.eventId());
             }
 
+            // ADR-MONO-050 D9: the warehouse CODE (additive) is the value that must
+            // ultimately land in the PO destinationWarehouseId (wms findWarehouseByCode).
+            // Fail-closed if absent — emitting a PO without a resolvable code would only
+            // DLT on the wms side (same posture as missing skuCode/locationId).
+            String warehouseCode = envelope.warehouseCode();
+            if (warehouseCode == null || warehouseCode.isBlank()) {
+                log.error("Missing warehouseCode in alert payload eventId={} locationId={}",
+                        envelope.eventId(), locationId);
+                ack.acknowledge();
+                throw new NonRetryableConsumerException("Missing warehouseCode in alert payload eventId=" + envelope.eventId());
+            }
+
             evaluateReorderUseCase.evaluateFromAlert(
                     envelope.eventId(),
                     skuCode,
                     warehouseId,
+                    warehouseCode,
                     envelope.availableQty(),
                     envelope.threshold(),
                     envelope.occurredAt()

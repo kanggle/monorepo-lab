@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.io.Serializable;
-import java.util.UUID;
 
 @Entity
 @Table(name = "sku_supplier_map")
@@ -28,8 +27,9 @@ public class SkuSupplierMappingJpaEntity {
     @Column(name = "sku_code", nullable = false)
     private String skuCode;
 
+    // ADR-MONO-050 D9: supplier CODE (String), not a UUID — resolved by wms via findPartnerByCode.
     @Column(name = "supplier_id", nullable = false)
-    private UUID supplierId;
+    private String supplierId;
 
     @Column(name = "default_order_qty", nullable = false)
     private int defaultOrderQty;

@@ -51,6 +51,8 @@ public abstract class AbstractDemandPlanningIntegrationTest {
     protected static final String TENANT_SCM = "scm";
     protected static final String TOPIC_ALERT = "wms.inventory.alert.v1";
     protected static final String TOPIC_ALERT_DLT = "wms.inventory.alert.v1.DLT";
+    // ADR-MONO-050 D9: the additive warehouse CODE the alert now carries (→ PO destination).
+    protected static final String ALERT_WAREHOUSE_CODE = "WH-IT-01";
 
     @SuppressWarnings("resource")
     protected static final PostgreSQLContainer<?> POSTGRES =
@@ -162,6 +164,8 @@ public abstract class AbstractDemandPlanningIntegrationTest {
         payload.put("skuCode", skuCode);
         payload.put("locationId", locationId);
         payload.put("locationCode", "WH-A");
+        // ADR-MONO-050 D9: additive warehouse CODE the consumer threads to the PO destination.
+        payload.put("warehouseCode", ALERT_WAREHOUSE_CODE);
         payload.put("availableQty", availableQty);
         payload.put("threshold", threshold);
         payload.put("triggeringEventType", "inventory.adjusted");

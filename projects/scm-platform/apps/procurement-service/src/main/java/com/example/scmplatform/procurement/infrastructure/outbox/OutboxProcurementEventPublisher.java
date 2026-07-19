@@ -3,6 +3,7 @@ package com.example.scmplatform.procurement.infrastructure.outbox;
 import com.example.common.id.UuidV7;
 import com.example.scmplatform.procurement.application.event.ProcurementEventPublisher;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
+import com.example.scmplatform.procurement.domain.po.PurchaseOrderLine;
 import com.example.scmplatform.procurement.infrastructure.persistence.jpa.ProcurementOutboxJpaEntity;
 import com.example.scmplatform.procurement.infrastructure.persistence.jpa.ProcurementOutboxJpaRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -11,7 +12,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -51,6 +54,8 @@ public class OutboxProcurementEventPublisher implements ProcurementEventPublishe
     private static final String AGGREGATE_ASN = "asn";
     private static final String SOURCE = "scm-platform-procurement-service";
     private static final int SCHEMA_VERSION = 1;
+    /** v1 fixed unit of measure — PurchaseOrderLine carries no per-line uom yet (ADR-050 D1). */
+    private static final String UOM_EACH = "EA";
 
     private final ProcurementOutboxJpaRepository outboxRepository;
     private final ObjectMapper objectMapper;
@@ -118,6 +123,50 @@ public class OutboxProcurementEventPublisher implements ProcurementEventPublishe
         payload.put("expectedArrivalAt", expectedArrivalAt.toString());
         payload.put("receivedAt", receivedAt.toString());
         writeEvent(AGGREGATE_ASN, asnId, EVENT_ASN_RECEIVED, payload);
+    }
+
+    @Override
+    public void publishInboundExpected(PurchaseOrder po) {
+        // ADR-MONO-050 D1 payload — a dedicated ordered map (NOT the common PO
+        // base): only the fields wms inbound-service reads. eventId/occurredAt
+        // live in the envelope, not the payload (contract § Envelope reconciliation).
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("poId", po.getId());
+        payload.put("poNumber", po.getPoNumber());
+        payload.put("supplierId", po.getSupplierId());
+        payload.put("destinationWarehouseId", po.getDestinationWarehouseId());
+        payload.put("destinationNodeType", po.getDestinationNodeType());
+        payload.put("expectedArrivalDate", po.expectedArrivalDate().toString());
+        payload.put("currency", po.getTotalAmount().getCurrency());
+
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (PurchaseOrderLine line : po.linesView()) {
+            Map<String, Object> l = new LinkedHashMap<>();
+            l.put("skuCode", line.getSku());
+            // plain decimal string (avoid float parsing) — same convention as totalAmount.
+            l.put("expectedQty", line.getQuantity().stripTrailingZeros().toPlainString());
+            l.put("uom", UOM_EACH);
+            lines.add(l);
+        }
+        payload.put("lines", lines);
+        writeEvent(AGGREGATE_PO, po.getId(), EVENT_INBOUND_EXPECTED, payload);
+    }
+
+    @Override
+    public void publishInboundExpectedCancelled(PurchaseOrder po) {
+        // ADR-MONO-050 D6.3 payload — poId + poNumber + cancelled line skus.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("poId", po.getId());
+        payload.put("poNumber", po.getPoNumber());
+
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (PurchaseOrderLine line : po.linesView()) {
+            Map<String, Object> l = new LinkedHashMap<>();
+            l.put("skuCode", line.getSku());
+            lines.add(l);
+        }
+        payload.put("lines", lines);
+        writeEvent(AGGREGATE_PO, po.getId(), EVENT_INBOUND_EXPECTED_CANCELLED, payload);
     }
 
     private static Map<String, Object> base(PurchaseOrder po) {

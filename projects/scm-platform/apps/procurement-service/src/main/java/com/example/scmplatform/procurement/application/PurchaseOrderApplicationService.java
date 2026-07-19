@@ -166,7 +166,10 @@ public class PurchaseOrderApplicationService {
                 cmd.supplierId(),
                 actor.accountId(),
                 cmd.currency(),
-                cmd.sourceSuggestionId()
+                cmd.sourceSuggestionId(),
+                cmd.destinationWarehouseId(),
+                cmd.destinationNodeType(),
+                cmd.leadTimeDays()
         );
         for (DraftFromSuggestionCommand.Line line : cmd.lines()) {
             // unitPriceRef is a placeholder, not a price — persist 0 pending the
@@ -273,7 +276,39 @@ public class PurchaseOrderApplicationService {
                 "{\"status\":\"" + previous + "\"}",
                 "{\"status\":\"CONFIRMED\"}"));
         eventPublisher.publishPoConfirmed(saved, actor.accountId());
+        // ADR-MONO-050 D1/D2/D4: a warehouse-addressed replenishment PO also
+        // publishes an inbound-expected event to wms, in the SAME transaction as
+        // the CONFIRMED state change (outbox → no lost events, D8).
+        maybePublishInboundExpected(saved);
         return PurchaseOrderView.from(saved);
+    }
+
+    /**
+     * ADR-MONO-050 D3/D4 producer-side gate. Emits {@code inbound-expected.v1}
+     * only for own-warehouse ({@code WMS_WAREHOUSE}) replenishment POs. Everything
+     * else is fail-closed:
+     * <ul>
+     *   <li>operator-authored / 3PL-destination PO → not eligible → skip (D4);</li>
+     *   <li>eligible warehouse PO with an unknown lead time → skip + warn rather
+     *       than emit a wrong arrival horizon (Failure Scenario B — never guess).</li>
+     * </ul>
+     */
+    private void maybePublishInboundExpected(PurchaseOrder po) {
+        if (!po.isWmsWarehouseDestination()) {
+            log.debug("PO {} is not a WMS_WAREHOUSE-addressed replenishment PO "
+                    + "(origin={}, nodeType={}) — no inbound-expected emitted (ADR-050 D4)",
+                    po.getId(), po.getOrigin(), po.getDestinationNodeType());
+            return;
+        }
+        if (po.expectedArrivalDate() == null) {
+            // fail-closed: warehouse is known but the lead time is not — do not
+            // fabricate an arrival horizon. Surfaced to ops via WARN.
+            log.warn("inbound-expected NOT emitted for PO {} (warehouse={}): lead_time_days "
+                    + "missing — fail-closed per ADR-050 (no silent wrong horizon)",
+                    po.getId(), po.getDestinationWarehouseId());
+            return;
+        }
+        eventPublisher.publishInboundExpected(po);
     }
 
     // ---------------- CANCEL PO ----------------
@@ -292,6 +327,15 @@ public class PurchaseOrderApplicationService {
                 "{\"status\":\"CANCELED\",\"reason\":\""
                         + (cmd.reason() == null ? "" : cmd.reason()) + "\"}"));
         eventPublisher.publishPoCanceled(saved, cmd.reason(), actor.accountId());
+        // ADR-MONO-050 D6.3: cancel the wms inbound expectation for a
+        // warehouse-addressed replenishment PO so it is not stranded as a phantom.
+        // v1 note: the state machine only permits CANCELED from pre-CONFIRMED
+        // states, so in v1 this fires before any inbound-expected existed — a
+        // harmless no-op on the wms side; the wiring is ready for the day
+        // post-CONFIRMED cancellation is enabled (deferred, see contract doc).
+        if (saved.isWmsWarehouseDestination()) {
+            eventPublisher.publishInboundExpectedCancelled(saved);
+        }
         return PurchaseOrderView.from(saved);
     }
 

@@ -58,6 +58,8 @@ public class ProcurementOutboxPublisher extends AbstractOutboxPublisher<Procurem
     static final String TOPIC_PO_RECEIVED = "scm.procurement.po.received.v1";
     static final String TOPIC_PO_CLOSED = "scm.procurement.po.closed.v1";
     static final String TOPIC_ASN_RECEIVED = "scm.procurement.asn.received.v1";
+    static final String TOPIC_INBOUND_EXPECTED = "scm.procurement.inbound-expected.v1";
+    static final String TOPIC_INBOUND_EXPECTED_CANCELLED = "scm.procurement.inbound-expected.cancelled.v1";
 
     public ProcurementOutboxPublisher(ProcurementOutboxJpaRepository repository,
                                       KafkaTemplate<String, String> kafkaTemplate,
@@ -111,6 +113,8 @@ public class ProcurementOutboxPublisher extends AbstractOutboxPublisher<Procurem
             case ProcurementEventPublisher.EVENT_PO_RECEIVED -> TOPIC_PO_RECEIVED;
             case ProcurementEventPublisher.EVENT_PO_CLOSED -> TOPIC_PO_CLOSED;
             case ProcurementEventPublisher.EVENT_ASN_RECEIVED -> TOPIC_ASN_RECEIVED;
+            case ProcurementEventPublisher.EVENT_INBOUND_EXPECTED -> TOPIC_INBOUND_EXPECTED;
+            case ProcurementEventPublisher.EVENT_INBOUND_EXPECTED_CANCELLED -> TOPIC_INBOUND_EXPECTED_CANCELLED;
             default -> throw new IllegalArgumentException(
                     "Unknown procurement event type: " + eventType);
         };
