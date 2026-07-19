@@ -84,4 +84,21 @@ class AdjustmentAuditControllerWebMvcTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
     }
+
+    // A token bearing a role OUTSIDE the WMS hierarchy (SUPERADMIN>ADMIN>OPERATOR>VIEWER)
+    // cannot satisfy hasRole('WMS_VIEWER'); WMS_OPERATOR would be *allowed* here because
+    // it sits above VIEWER in the configured RoleHierarchy, so it is deliberately not used.
+    @Test
+    void list_roleOutsideWmsHierarchy_returns403() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/dashboard/adjustments")
+                        .with(jwt().jwt(j -> j.claim("tenant_id", "wms"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_WMS_GUEST"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void list_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/dashboard/adjustments"))
+                .andExpect(status().isUnauthorized());
+    }
 }

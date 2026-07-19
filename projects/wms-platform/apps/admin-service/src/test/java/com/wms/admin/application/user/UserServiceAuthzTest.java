@@ -11,12 +11,15 @@ import com.wms.admin.application.fakes.InMemoryAssignmentRepository;
 import com.wms.admin.application.fakes.InMemoryUserRepository;
 import com.wms.admin.application.fakes.RecordingOutboxPort;
 import com.wms.admin.domain.User;
+import com.wms.admin.domain.UserStatus;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.aop.support.AopUtils;
@@ -37,11 +40,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
  */
 class UserServiceAuthzTest {
 
+    private static final java.time.Instant FIXED = Instant.parse("2026-05-09T10:00:00Z");
+
     private UserService proxiedService;
+    private InMemoryUserRepository userRepo;
 
     @BeforeEach
     void setUp() {
-        InMemoryUserRepository userRepo = new InMemoryUserRepository();
+        userRepo = new InMemoryUserRepository();
         InMemoryAssignmentRepository assignmentRepo = new InMemoryAssignmentRepository();
         RecordingOutboxPort outbox = new RecordingOutboxPort();
         ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -109,6 +115,136 @@ class UserServiceAuthzTest {
         } catch (NoSuchMethodException e) {
             throw new AssertionError(e);
         }
+    }
+
+    // ----- update ------------------------------------------------------------
+
+    @Test
+    @DisplayName("update: ADMIN passes the gate")
+    void admin_can_update() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_ADMIN");
+        assertThat(proxiedService.update(new UpdateUserCommand(
+                u.id(), "New Name", null, null, null, "admin"))).isNotNull();
+    }
+
+    @Test
+    @DisplayName("update: SUPERADMIN passes the gate")
+    void superadmin_can_update() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_SUPERADMIN");
+        assertThat(proxiedService.update(new UpdateUserCommand(
+                u.id(), "New Name", null, null, null, "admin"))).isNotNull();
+    }
+
+    @Test
+    @DisplayName("update: OPERATOR is denied with AccessDeniedException")
+    void operator_cannot_update_raisesAccessDenied() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_OPERATOR");
+        assertThatThrownBy(() -> proxiedService.update(new UpdateUserCommand(
+                u.id(), "New Name", null, null, null, "admin")))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("update: VIEWER is denied with AccessDeniedException")
+    void viewer_cannot_update_raisesAccessDenied() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_VIEWER");
+        assertThatThrownBy(() -> proxiedService.update(new UpdateUserCommand(
+                u.id(), "New Name", null, null, null, "admin")))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ----- deactivate --------------------------------------------------------
+
+    @Test
+    @DisplayName("deactivate: ADMIN passes the gate")
+    void admin_can_deactivate() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_ADMIN");
+        DeactivateUserResult result = proxiedService.deactivate(
+                new DeactivateUserCommand(u.id(), false, "admin", false));
+        assertThat(result.user().status()).isEqualTo(UserStatus.INACTIVE);
+    }
+
+    @Test
+    @DisplayName("deactivate: SUPERADMIN passes the gate")
+    void superadmin_can_deactivate() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_SUPERADMIN");
+        assertThat(proxiedService.deactivate(
+                new DeactivateUserCommand(u.id(), false, "admin", true))).isNotNull();
+    }
+
+    @Test
+    @DisplayName("deactivate: OPERATOR is denied with AccessDeniedException")
+    void operator_cannot_deactivate_raisesAccessDenied() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_OPERATOR");
+        assertThatThrownBy(() -> proxiedService.deactivate(
+                new DeactivateUserCommand(u.id(), false, "admin", false)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("deactivate: VIEWER is denied with AccessDeniedException")
+    void viewer_cannot_deactivate_raisesAccessDenied() {
+        User u = seedActiveUser();
+        authenticateAs("ROLE_WMS_VIEWER");
+        assertThatThrownBy(() -> proxiedService.deactivate(
+                new DeactivateUserCommand(u.id(), false, "admin", false)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ----- reactivate --------------------------------------------------------
+
+    @Test
+    @DisplayName("reactivate: ADMIN passes the gate")
+    void admin_can_reactivate() {
+        User u = seedInactiveUser();
+        authenticateAs("ROLE_WMS_ADMIN");
+        User reactivated = proxiedService.reactivate(u.id(), "admin");
+        assertThat(reactivated.status()).isEqualTo(UserStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("reactivate: SUPERADMIN passes the gate")
+    void superadmin_can_reactivate() {
+        User u = seedInactiveUser();
+        authenticateAs("ROLE_WMS_SUPERADMIN");
+        assertThat(proxiedService.reactivate(u.id(), "admin")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("reactivate: OPERATOR is denied with AccessDeniedException")
+    void operator_cannot_reactivate_raisesAccessDenied() {
+        User u = seedInactiveUser();
+        authenticateAs("ROLE_WMS_OPERATOR");
+        assertThatThrownBy(() -> proxiedService.reactivate(u.id(), "admin"))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("reactivate: VIEWER is denied with AccessDeniedException")
+    void viewer_cannot_reactivate_raisesAccessDenied() {
+        User u = seedInactiveUser();
+        authenticateAs("ROLE_WMS_VIEWER");
+        assertThatThrownBy(() -> proxiedService.reactivate(u.id(), "admin"))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ----- helpers -----------------------------------------------------------
+
+    private User seedActiveUser() {
+        return userRepo.save(User.create(UUID.randomUUID(), "USR-1", "alice@example.com",
+                "Alice", null, null, FIXED, "system"));
+    }
+
+    private User seedInactiveUser() {
+        return userRepo.save(new User(UUID.randomUUID(), "USR-1", "alice@example.com", "Alice",
+                null, UserStatus.INACTIVE, null, 0L, FIXED, "system", FIXED, "system"));
     }
 
     private void authenticateAs(String role) {
