@@ -1,7 +1,7 @@
 # TASK-MONO-440 — drop the `needs: build-and-test` gate so downstream lanes start immediately
 
 - **Type**: TASK-MONO (CI wall-clock — measurement-driven, policy change)
-- **Status**: review
+- **Status**: done
 - **Scope**: root `.github/workflows/ci.yml` (17 `needs:` lists)
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus
 
