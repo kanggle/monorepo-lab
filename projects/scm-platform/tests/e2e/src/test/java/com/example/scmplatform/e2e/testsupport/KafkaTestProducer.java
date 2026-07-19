@@ -112,6 +112,9 @@ public final class KafkaTestProducer implements AutoCloseable {
         return id;
     }
 
+    /** Default warehouse business CODE used by the 5-arg alert overload (ADR-MONO-050 D9). */
+    private static final String DEFAULT_WAREHOUSE_CODE = "WH-E2E";
+
     /**
      * Emit a {@code wms.inventory.alert.v1} low-stock alert (ADR-MONO-027 D1)
      * whose envelope mirrors the wms {@code inventory.low-stock-detected} shape
@@ -120,10 +123,32 @@ public final class KafkaTestProducer implements AutoCloseable {
      * suggestion's warehouse dimension; {@code skuCode} the join key to the
      * reorder policy + supplier mapping.
      *
+     * <p>Carries the ADR-MONO-050 D9 additive {@code warehouseCode} using the
+     * {@link #DEFAULT_WAREHOUSE_CODE} default. The alert consumer now treats a
+     * blank {@code warehouseCode} as fail-closed (→ DLT, no suggestion), so this
+     * field is mandatory for the loop to progress — the pre-D9 5-arg envelope that
+     * omitted it would silently fail-close.
+     *
      * @return the {@code eventId} so tests can re-publish for T8 dedup assertions.
      */
     public UUID publishLowStockAlert(UUID eventId, String skuCode, String warehouseId,
                                      int availableQty, int threshold)
+            throws ExecutionException, InterruptedException, TimeoutException {
+        return publishLowStockAlert(eventId, skuCode, warehouseId, DEFAULT_WAREHOUSE_CODE,
+                availableQty, threshold);
+    }
+
+    /**
+     * ADR-MONO-050 D9 overload — emit a low-stock alert carrying an explicit
+     * warehouse business {@code warehouseCode}. This is the value that flows
+     * (via demand-planning → reorder suggestion → procurement) into the PO
+     * {@code destinationWarehouseId} of {@code scm.procurement.inbound-expected.v1},
+     * where wms resolves it with {@code findWarehouseByCode}. Distinct warehouse
+     * codes on distinct alerts drive the multi-warehouse routing case
+     * (SCM-INT-004); the same code across alerts is the single-warehouse case.
+     */
+    public UUID publishLowStockAlert(UUID eventId, String skuCode, String warehouseId,
+                                     String warehouseCode, int availableQty, int threshold)
             throws ExecutionException, InterruptedException, TimeoutException {
         UUID id = eventId != null ? eventId : UUID.randomUUID();
         Map<String, Object> envelope = new LinkedHashMap<>();
@@ -140,6 +165,8 @@ public final class KafkaTestProducer implements AutoCloseable {
         payload.put("skuCode", skuCode);
         payload.put("locationId", warehouseId);
         payload.put("locationCode", "WH-E2E");
+        // ADR-MONO-050 D9 additive field — the resolvable warehouse business CODE.
+        payload.put("warehouseCode", warehouseCode);
         payload.put("availableQty", availableQty);
         payload.put("threshold", threshold);
         payload.put("triggeringEventType", "inventory.adjusted");
