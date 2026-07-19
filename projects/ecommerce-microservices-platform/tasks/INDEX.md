@@ -75,6 +75,9 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 | ID | Title | Service | Tags |
 |---|---|---|---|
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
+| TASK-BE-532 | ADR↔구현 드리프트 감사(2026-07-20) 산물 ①. `alert-rules.yml` `notification_delivery` 그룹이 **어떤 코드도 emit 하지 않는** `notification_failed_total`/`notification_sent_total` 을 감시 → 영구 no-data(=거짓 커버리지). 규칙 제거/비활성 + `observability.md` 정정. **BE-533 과 분리한 이유: 533 이 지연돼도 거짓 신호는 먼저 사라져야 함.** | notification-service (infra) | docs, observability |
+| TASK-BE-533 | ADR↔구현 드리프트 감사 산물 ②. ADR-006 이 **자기 ACCEPT 의 게이트로 선언한** 4개 mitigation(notification 실패 카운터, user-service `UserWithdrawn` 알림, runbook 2종)이 미이행인 채 ACCEPTED(2026-05-11). 메트릭 실배선 + 알림 복원 + `knowledge/runbooks/` 신설. **BE-532 이후 착수.** | notification-service, user-service | code, observability, docs |
+| TASK-BE-534 | ADR↔구현 드리프트 감사 산물 ③. 프로젝트 ADR-003(frontend dual strategy)이 `Accepted` 인 채 방치 — ADR-MONO-031(ACCEPTED·집행완료)이 admin-dashboard 를 sunset 시켰고 스펙엔 RETIRED 마커가 있으나 **ADR 레벨 마커만 없어 SoT 사슬이 한 링크 끊김**. + ADR-004 의 `multi-tenant` 미선언 주장이 `PROJECT.md` 와 불일치(ADR-MONO-030 결과). | docs/adr | docs |
 
 ## in-progress
 
