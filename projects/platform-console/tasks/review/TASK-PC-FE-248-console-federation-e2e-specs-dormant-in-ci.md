@@ -1,7 +1,7 @@
 # TASK-PC-FE-248 — console federation e2e specs are gated OFF in every CI workflow (dormant coverage)
 
 - **Type**: TASK-PC-FE (frontend e2e / CI wiring)
-- **Status**: ready
+- **Status**: review
 - **Service**: platform-console `console-web` (`tests/e2e/` Playwright suite)
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (CI wiring + demo-stack seeding, decision-gated)
 

@@ -128,10 +128,12 @@ async function driveOidcPkceLogin(
   context: BrowserContext,
   email: string,
   password: string,
-  // TASK-PC-FE-113 — the active-tenant cookie to prime after login. Defaults to
-  // the SUPER_ADMIN's `fan-platform`. Pass `null` to skip priming entirely, for
-  // personas (federation operators) whose spec drives the tenant via the real
-  // `POST /api/tenant` switch (the assume-tenant re-scope is the thing under test).
+  // The active-tenant cookie to prime after login. Defaults to the SUPER_ADMIN's
+  // `fan-platform`. `null` skips priming entirely, for a spec that drives the
+  // tenant itself via the real `POST /api/tenant` switch. No current spec passes
+  // `null` (TASK-PC-FE-248 removed the federation-operator specs — see
+  // `tests/e2e/README.md`); the branch is kept because it is the correct
+  // behaviour for any spec that asserts the assume-tenant re-scope.
   activeTenant: string | null = DEFAULTS.defaultTenant,
 ): Promise<void> {
   // TASK-PC-FE-027 — start tracing BEFORE bridgeAuthServiceHostname so the
@@ -198,9 +200,9 @@ async function driveOidcPkceLogin(
     // Step 7 — seed the `console_active_tenant` cookie. In production this
     // is set by the client-side tenant-switcher write that happens on first
     // page load. The harness primes it here so the 2 e2e specs land in the
-    // expected tenant without an extra UI click. TASK-PC-FE-113 — skipped when
-    // `activeTenant === null` (federation-operator specs drive the tenant via
-    // the real `POST /api/tenant` switch instead).
+    // expected tenant without an extra UI click. Skipped when
+    // `activeTenant === null` — a spec that asserts the assume-tenant re-scope
+    // must drive the tenant via the real `POST /api/tenant` switch instead.
     if (activeTenant !== null) {
       await context.addCookies([
         {
@@ -255,19 +257,4 @@ export async function loginAsSuperAdmin(
  */
 export async function loginAsSuperAdminPage(page: Page): Promise<void> {
   await loginAsSuperAdmin(page.context());
-}
-
-/**
- * TASK-PC-FE-113 — log in as an arbitrary seeded operator persona via the same
- * production OIDC PKCE flow. `activeTenant` defaults to `null` (no tenant
- * primed) because the federation-operator specs assert the `POST /api/tenant`
- * assume-tenant re-scope themselves. Used by `fixtures/federation.ts`.
- */
-export async function loginAsOperator(
-  context: BrowserContext,
-  email: string,
-  password: string,
-  activeTenant: string | null = null,
-): Promise<void> {
-  await driveOidcPkceLogin(context, email, password, activeTenant);
 }
