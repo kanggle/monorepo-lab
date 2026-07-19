@@ -8,7 +8,7 @@ ADR-MONO-016 ↔ ADR-MONO-051 상호참조 + ADR-051 header 의 stale `TEMPLATE.
 
 # Status
 
-review
+done
 
 # Owner
 
