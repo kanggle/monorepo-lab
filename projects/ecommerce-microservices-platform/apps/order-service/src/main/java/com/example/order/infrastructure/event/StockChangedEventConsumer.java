@@ -25,17 +25,11 @@ public class StockChangedEventConsumer {
     @KafkaListener(topics = "product.product.stock-changed", groupId = "order-service")
     public void onMessage(@Payload String payload) throws JsonProcessingException {
         StockChangedEvent event = objectMapper.readValue(payload, StockChangedEvent.class);
-        // Bind the order's tenant from the consumed envelope (M5) so the confirm
-        // saga and the OrderConfirmed it emits stay within the tenant boundary.
-        // A pre-multi-tenant envelope (no tenant_id) resolves to the default tenant
-        // (net-zero, D8). Cleared in finally so the pooled listener thread leaks no
-        // context to the next message.
-        try {
-            TenantContext.set(event.tenantId());
-            handle(event);
-        } finally {
-            TenantContext.clear();
-        }
+        // Bind the order's tenant from the consumed envelope (M5) so the confirm saga and the
+        // OrderConfirmed it emits stay within the tenant boundary. A pre-multi-tenant envelope
+        // (no tenant_id) resolves to the default tenant (net-zero, D8); cleared in finally so
+        // the pooled listener thread leaks no context to the next message.
+        TenantContext.runWithTenant(event.tenantId(), () -> handle(event));
     }
 
     void handle(StockChangedEvent event) {

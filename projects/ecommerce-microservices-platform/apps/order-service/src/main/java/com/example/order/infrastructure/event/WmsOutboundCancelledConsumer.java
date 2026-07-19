@@ -65,17 +65,12 @@ public class WmsOutboundCancelledConsumer {
             return;
         }
 
-        // Bind the order's tenant so the auto-cancel + emitted order.cancelled resolve
-        // the correct tenant (not the default): envelope tenantId (facet d), else the
-        // local Order row's tenant by orderNo (older wms / standalone — D8).
-        TenantContext.set(resolveTenant(event.tenantId(), orderNo));
-        try {
-            // orderNo == ecommerce orderId (ADR-022 §D5 correlation).
-            backorderCancellationService.cancelForBackorder(orderNo, event.payload().reason());
-        } finally {
-            // Pooled Kafka listener thread — clear so the binding cannot leak (AC-4).
-            TenantContext.clear();
-        }
+        // Bind the order's tenant so the auto-cancel + emitted order.cancelled resolve the
+        // correct tenant (not the default): envelope tenantId (facet d), else the local Order
+        // row's tenant by orderNo (older wms / standalone — D8). Cleared in finally (pooled
+        // Kafka listener thread, AC-4). orderNo == ecommerce orderId (ADR-022 §D5 correlation).
+        TenantContext.runWithTenant(resolveTenant(event.tenantId(), orderNo),
+                () -> backorderCancellationService.cancelForBackorder(orderNo, event.payload().reason()));
     }
 
     /**
