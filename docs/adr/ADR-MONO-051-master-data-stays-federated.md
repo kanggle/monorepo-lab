@@ -108,6 +108,20 @@ When it fires, the answer is **still not a hub**. It is the path SKU already wal
 
 That is D1–D3 applied to one more entity, not an exception to them.
 
+**Level: service, not platform.** No `mdm-platform` is created — D6 forbids it. What the tripwire produces is one new *service* inside an existing project, and even that one is already foreshadowed in the specs ("supplier may be in v2 supplier-service", [procurement-service/data-model.md:82](../../projects/scm-platform/specs/services/procurement-service/data-model.md#L82)).
+
+**Ownership split (explicit, so the level question does not have to be re-derived).** The tripwire does *not* create "the supplier master" somewhere new. Business-partner identity is **already owned by erp** and stays there; what gets added is a sourcing-side consumer in scm:
+
+| Holder | Owns | Why there |
+|---|---|---|
+| erp `masterdata-service` (existing, unchanged) | partner **identity** — `code`, legal/contact detail, `paymentTerms`, effective dating | already the richest schema, and `partnerType: CUSTOMER \| SUPPLIER \| BOTH` already spans both directions of trade |
+| scm `supplier-service` (new at v2) | **sourcing** attributes — contract expiry, lead time, `sku_supplier_map` | procurement-domain concerns; putting them in erp would require erp to model procurement |
+| wms `Partner` (existing, unchanged) | receiving-side **projection** — business number, receiving contact | plain D3: consumer-owned, keyed by `partnerCode` |
+
+So "does MDM appear inside erp?" is answered *no new erp service* — erp is already the identity owner and needs no addition. And "is it a platform?" is answered *no* — the only new deployable is scm-side.
+
+Note the distinction from §4 A2: rejecting **erp as the repo-wide hub** (routing every master through it) is not the same as erp owning *this* master. erp owns business partner because it genuinely holds that entity's lifecycle, not because it is a hub.
+
 ### D6 — The standalone-extraction constraint is binding on this decision
 
 Any future proposal that introduces a component all five projects must call to resolve identity must first demonstrate how `scripts/sync-portfolio.sh` extraction and the per-contract "no hard dependency" degradation clauses survive it. Failing that demonstration is sufficient grounds for rejection without further architectural argument.
@@ -133,6 +147,8 @@ Rejected on three counts: (a) it makes all five projects hard-depend on it, brea
 ### A2 — Promote erp `masterdata-service` to the repo-wide hub (Rejected)
 
 Already rejected once, for the same reason, in [ADR-MONO-050](ADR-MONO-050-scm-procurement-wms-inbound-expected.md) §4: erp is an E5 domain that owns neither the PO ledger nor the stock ledger, so routing master identity through it produces a domain-blind nano-hop. Additionally erp today has **zero** cross-project event seams — making it the hub would invent five.
+
+**What is rejected here is erp as the *hub*, not erp as an owner.** erp remains the authoritative owner of business partner under D5, because it holds that entity's lifecycle — which is the opposite of a hub, where a service brokers masters whose lifecycles it does not own. Conflating the two is the likeliest way this alternative gets re-proposed.
 
 ### A3 — A shared master schema in `libs/` (Rejected)
 
