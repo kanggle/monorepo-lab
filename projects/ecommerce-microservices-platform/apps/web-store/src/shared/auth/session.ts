@@ -1,7 +1,6 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { getToken } from 'next-auth/jwt';
-import { auth } from '@/shared/auth/auth';
 
 /**
  * Server-only access to the authenticated session + bearer token. NEVER import
@@ -78,9 +77,4 @@ export async function getWebStoreSession(): Promise<WebStoreSession> {
     tenantId: token.tenantId ?? null,
     roles: token.roles ?? [],
   };
-}
-
-export async function isAuthenticated(): Promise<boolean> {
-  const session = await auth();
-  return Boolean(session?.accountId);
 }
