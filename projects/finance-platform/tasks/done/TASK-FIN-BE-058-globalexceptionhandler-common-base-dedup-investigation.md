@@ -1,13 +1,42 @@
-# TASK-FIN-BE-058 — investigate: finance GlobalExceptionHandler → CommonGlobalExceptionHandler dedup (DESIGN DECISION REQUIRED)
+# TASK-FIN-BE-058 — investigate: finance GlobalExceptionHandler → CommonGlobalExceptionHandler dedup (RESOLVED: WONTFIX / Option C)
 
 - **Type**: TASK-FIN-BE (INVESTIGATION-first — production dedup gated on a contract design decision)
-- **Status**: ready
+- **Status**: done
 - **Service**: account-service + ledger-service (finance-platform) — and possibly `libs/java-web-servlet`
 - **Domain/traits**: saas / [transactional, multi-tenant]
-- **Analysis model**: Opus 4.8 · **Impl model**: TBD after AC-0 (likely Opus — cross-cutting production + shared-lib)
+- **Analysis model**: Opus 4.8 · **Impl model**: N/A (resolved WONTFIX — no implementation)
 - **⚠️ INVESTIGATION-FIRST / DO NOT IMPLEMENT YET**: this is NOT a mechanical dedup. It touches
   **production code** and is blocked on a contract design decision (below). AC-0 must pin the decision
   BEFORE any impl. Surfaced (not invented) by the 2026-07-19 finance test audit.
+
+## RESOLUTION (2026-07-19): AC-0 decided → **Option C (WONTFIX)**. Closed, no implementation.
+
+AC-0 was resolved with runtime-grounded evidence (not the summary above — recounted against the
+actual code). The dedup is **declined**; the duplication is a deliberate per-service divergence, not a
+shared-lib smell. Evidence:
+
+- **The shared `CommonGlobalExceptionHandler` returns `ErrorResponse`** `{code, message, String timestamp}` —
+  **poorer** than finance's `ApiErrorBody` `{code, message, details?, Instant timestamp}`. `details` is a
+  **documented contract field** (`account-api.md`, `ApiErrorBody.of(code, message, details)` overload for
+  validation field errors), and the timestamp type differs (`Instant` vs `String`).
+- **Finance deliberately maps `IllegalArgumentException` differently**: account → `422 AMOUNT_INVALID`,
+  ledger → `400 VALIDATION_ERROR`; the shared handler maps IAE → `400 VALIDATION_ERROR`. account's file
+  already documents this as *"Deliberately asymmetric with ledger-service."* So finance would have to
+  **override** that handler even under any shared base.
+- **Option A** (adopt the shared handler / `ErrorResponse`) = a **public error-contract regression**
+  (drops `details`, `Instant`→`String`, changes account's deliberate 422→400) to remove ~4 framework
+  handlers. Not worth it.
+- **Option B** (make `CommonGlobalExceptionHandler` generic over the body type) = a shared-lib refactor
+  touching **4 iam-platform consumers** (account/admin/auth/security — all `extends
+  CommonGlobalExceptionHandler`), and finance would STILL override the IAE handler → not a full dedup for
+  a small payoff (4 framework handlers × 2 services). Blast radius ≫ benefit.
+- **Conclusion**: finance owning a **richer, documented error envelope** (`details` + `Instant`) is a
+  deliberate divergence; the 404/405/415/500 handler duplication (and the byte-identical
+  `GlobalExceptionHandlerNotFoundTest`) is its acceptable cost — the SAME category as the Money /
+  FinanceTenantGatePolicy / ActorContext per-service duplications the 2026-07-19 audit correctly declined
+  to dedup. What first read as "the one real shared-lib smell" downgraded to "intentional per-service
+  divergence" once the body-shape + IAE-asymmetry were verified. **No action.** If finance ever collapses
+  its envelope to the shared `ErrorResponse` for other reasons, revisit then.
 
 ## The observed smell (from the audit — a real, verified finding)
 
