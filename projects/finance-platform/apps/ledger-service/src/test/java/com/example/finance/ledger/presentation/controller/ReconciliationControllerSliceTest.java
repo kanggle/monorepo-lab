@@ -27,7 +27,6 @@ import com.example.finance.ledger.domain.reconciliation.ReconciliationMatch;
 import com.example.finance.ledger.domain.reconciliation.ResolutionType;
 import com.example.finance.ledger.domain.reconciliation.StatementSource;
 import com.example.finance.ledger.presentation.advice.GlobalExceptionHandler;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,8 +34,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -63,10 +60,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(ReconciliationController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
-class ReconciliationControllerSliceTest {
+class ReconciliationControllerSliceTest extends AbstractLedgerControllerSliceTest {
 
-    private static final ActorContext ACTOR =
-            new ActorContext("user-1", "finance", java.util.Set.of("finance.read"));
     private static final String CODE = LedgerAccountCodes.CASH_CLEARING;
 
     @Autowired
@@ -78,11 +73,9 @@ class ReconciliationControllerSliceTest {
     @MockitoBean GetFxToleranceUseCase getFxTolerance;
     @MockitoBean SetFxToleranceUseCase setFxTolerance;
 
-    @BeforeEach
-    void setUp() {
-        TestingAuthenticationToken auth = new TestingAuthenticationToken(ACTOR, "creds");
-        auth.setAuthenticated(true);
-        SecurityContextHolder.getContext().setAuthentication(auth);
+    @Override
+    protected ActorContext actor() {
+        return new ActorContext("user-1", "finance", java.util.Set.of("finance.read"));
     }
 
     private static Money krw(long m) {

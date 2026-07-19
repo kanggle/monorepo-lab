@@ -17,7 +17,6 @@ import com.example.finance.ledger.domain.journal.SourceRef;
 import com.example.finance.ledger.domain.money.Currency;
 import com.example.finance.ledger.domain.money.Money;
 import com.example.finance.ledger.presentation.advice.GlobalExceptionHandler;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,8 +24,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -50,10 +47,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(RevaluationController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
-class RevaluationControllerSliceTest {
+class RevaluationControllerSliceTest extends AbstractLedgerControllerSliceTest {
 
-    private static final ActorContext ACTOR =
-            new ActorContext("operator-7", "finance", java.util.Set.of("finance.read"));
     private static final Instant POSTED_AT = Instant.parse("2026-06-30T23:59:59Z");
     private static final String CASH = LedgerAccountCodes.CASH_CLEARING;
 
@@ -71,11 +66,9 @@ class RevaluationControllerSliceTest {
 
     @MockitoBean RevalueForeignBalanceUseCase revalueForeignBalance;
 
-    @BeforeEach
-    void setUp() {
-        TestingAuthenticationToken auth = new TestingAuthenticationToken(ACTOR, "creds");
-        auth.setAuthenticated(true);
-        SecurityContextHolder.getContext().setAuthentication(auth);
+    @Override
+    protected ActorContext actor() {
+        return new ActorContext("operator-7", "finance", java.util.Set.of("finance.read"));
     }
 
     private static JournalEntry revaluationEntry() {
