@@ -111,7 +111,7 @@ class ScmInboundExpectedConsumerTest {
                     "expectedArrivalDate": "2026-07-24",
                     "currency": "KRW",
                     "lines": [
-                      { "skuCode": "SKU-A", "expectedQty": 100, "uom": "EA" }
+                      { "skuCode": "SKU-A", "expectedQty": "100", "uom": "EA" }
                     ]
                   }
                 }

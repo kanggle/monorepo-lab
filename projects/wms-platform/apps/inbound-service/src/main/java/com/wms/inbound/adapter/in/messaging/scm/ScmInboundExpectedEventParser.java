@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.inbound.application.command.CancelScmInboundExpectationCommand;
 import com.wms.inbound.application.command.CreateScmInboundExpectationCommand;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -88,12 +89,42 @@ public class ScmInboundExpectedEventParser {
         return (value == null || value.isNull()) ? null : value.asText();
     }
 
+    /**
+     * Parses {@code expectedQty}, which scm emits as a decimal <em>string</em>
+     * ({@code BigDecimal.toPlainString()}, authoritative per ADR-MONO-050 D9) — e.g.
+     * {@code "100"}. Also tolerates a raw JSON number for forward-compatibility. The
+     * value must be a non-negative <em>integer</em>: a fractional value ({@code "1.5"}),
+     * a negative value, or a non-numeric token is a structural error → {@link
+     * IllegalArgumentException} → DLT. (The service-level {@code expectedQty <= 0} guard
+     * still applies to the resulting int.)
+     */
     private static int intValue(JsonNode node, String field) {
         JsonNode value = node.get(field);
-        if (value == null || value.isNull() || !value.canConvertToInt()) {
+        if (value == null || value.isNull()) {
             throw new IllegalArgumentException("event missing/invalid int field: " + field);
         }
-        return value.asInt();
+        BigDecimal decimal;
+        if (value.isNumber()) {
+            decimal = value.decimalValue();
+        } else if (value.isTextual() && !value.asText().isBlank()) {
+            try {
+                decimal = new BigDecimal(value.asText().trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("event missing/invalid int field: " + field, e);
+            }
+        } else {
+            throw new IllegalArgumentException("event missing/invalid int field: " + field);
+        }
+        int intValue;
+        try {
+            intValue = decimal.intValueExact();
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("event non-integer int field: " + field, e);
+        }
+        if (intValue <= 0) {
+            throw new IllegalArgumentException("event non-positive int field: " + field);
+        }
+        return intValue;
     }
 
     private static UUID uuidOrNull(JsonNode node, String field) {
