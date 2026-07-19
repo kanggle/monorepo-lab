@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +65,13 @@ import org.springframework.test.context.TestPropertySource;
         // Mirrors OutboundServiceIntegrationBase; complements the explicit topic
         // pre-creation + waitForAssignment below.
         "spring.kafka.consumer.auto-offset-reset=earliest",
-        "spring.kafka.consumer.properties.metadata.max.age.ms=2000"
+        "spring.kafka.consumer.properties.metadata.max.age.ms=2000",
+        // Keep the OTHER inbound listeners out of the group churn — only the scm
+        // containers this IT explicitly starts should join (mirrors
+        // OutboundServiceIntegrationBase / TASK-MONO-376). Without this, every
+        // auto-started sibling listener joining/leaving revokes the container under
+        // test's assignment and waitForAssignment never converges on a loaded runner.
+        "spring.kafka.listener.auto-startup=false"
 })
 class ScmInboundExpectedConsumerIT extends InboundServiceIntegrationBase {
 
@@ -400,8 +407,18 @@ class ScmInboundExpectedConsumerIT extends InboundServiceIntegrationBase {
         }
     }
 
-    /** Blocks until both scm-inbound-expected listener containers hold their partition. */
+    /**
+     * Blocks until both scm-inbound-expected listener containers hold their partition.
+     *
+     * <p>Both listeners share group {@code wms-inbound-scm-expected-v1}, so all needed
+     * containers must be <b>started first</b> and only then awaited: starting-then-awaiting
+     * one at a time makes the second member's join revoke the first's assignment, which never
+     * converges on a loaded CI runner (the failure mode documented in
+     * {@code OutboundServiceIntegrationBase}). Combined with {@code auto-startup=false}, the
+     * group forms once with exactly these two members and a single rebalance settles both.
+     */
     private void waitForScmListenerAssignment() {
+        List<MessageListenerContainer> scmContainers = new ArrayList<>();
         for (MessageListenerContainer c : listenerRegistry.getListenerContainers()) {
             String[] topics = c.getContainerProperties().getTopics();
             if (topics == null) {
@@ -409,11 +426,16 @@ class ScmInboundExpectedConsumerIT extends InboundServiceIntegrationBase {
             }
             List<String> t = Arrays.asList(topics);
             if (t.contains(TOPIC) || t.contains(TOPIC_CANCELLED)) {
-                if (!c.isRunning()) {
-                    c.start();
-                }
-                ContainerTestUtils.waitForAssignment(c, 1);
+                scmContainers.add(c);
             }
+        }
+        for (MessageListenerContainer c : scmContainers) {
+            if (!c.isRunning()) {
+                c.start();
+            }
+        }
+        for (MessageListenerContainer c : scmContainers) {
+            ContainerTestUtils.waitForAssignment(c, 1);
         }
     }
 
