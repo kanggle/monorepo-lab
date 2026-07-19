@@ -2,7 +2,6 @@ package com.example.shipping.application.service;
 
 import com.example.shipping.application.command.CreateShippingCommand;
 import com.example.shipping.application.command.UpdateShippingStatusCommand;
-import com.example.web.exception.AccessDeniedException;
 import com.example.shipping.application.port.ShippingEventPublisher;
 import com.example.shipping.application.result.UpdateShippingStatusResult;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
@@ -82,13 +81,7 @@ public class ShippingCommandService {
 
         ShippingStatus previousStatus = shipping.transitionTo(
                 ShippingStatus.SHIPPED, trackingNumber, carrier, clock);
-
-        Shipping saved = shippingRepository.save(shipping);
-
-        shippingEventPublisher.publishShippingStatusChanged(
-                saved.getTenantId(), saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
-                previousStatus, saved.getStatus(),
-                saved.getTrackingNumber(), saved.getCarrier());
+        Shipping saved = saveAndPublishStatusChange(shipping, previousStatus);
 
         log.info("Shipping marked SHIPPED via wms confirmation: shippingId={}, orderId={}, tracking={}, carrier={}",
                 saved.getShippingId(), orderId, trackingNumber, carrier);
@@ -96,20 +89,14 @@ public class ShippingCommandService {
 
     @Transactional
     public UpdateShippingStatusResult updateStatus(UpdateShippingStatusCommand command) {
-        validateAdminRole(command.userRole());
+        OperatorRoleGuard.requireOperator(command.userRole());
         // Tenant-scoped lookup (admin mutation): a cross-tenant shippingId → 404 (M3).
         Shipping shipping = shippingRepository.findByIdForTenant(command.shippingId())
                 .orElseThrow(() -> new ShippingNotFoundException(command.shippingId()));
 
         ShippingStatus previousStatus = shipping.transitionTo(
                 command.status(), command.trackingNumber(), command.carrier(), clock);
-
-        Shipping saved = shippingRepository.save(shipping);
-
-        shippingEventPublisher.publishShippingStatusChanged(
-                saved.getTenantId(), saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
-                previousStatus, saved.getStatus(),
-                saved.getTrackingNumber(), saved.getCarrier());
+        Shipping saved = saveAndPublishStatusChange(shipping, previousStatus);
 
         // ADR-MONO-022 D4 v2(c): operator-elected wms inventory deduction for a
         // hand-shipped, warehouse-routed order. Only when the target status is SHIPPED,
@@ -132,21 +119,18 @@ public class ShippingCommandService {
                 saved.getShippingId(), saved.getStatus(), saved.getUpdatedAt());
     }
 
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
-            throw new AccessDeniedException("Admin role required");
-        }
+    /**
+     * Persist the transitioned aggregate and publish the resulting status-changed event — the
+     * save+publish tail shared by the wms-confirmation and admin-update paths. Runs in the
+     * caller's transaction (private method); save → publish order is unchanged.
+     */
+    private Shipping saveAndPublishStatusChange(Shipping shipping, ShippingStatus previousStatus) {
+        Shipping saved = shippingRepository.save(shipping);
+        shippingEventPublisher.publishShippingStatusChanged(
+                saved.getTenantId(), saved.getShippingId(), saved.getOrderId(), saved.getUserId(),
+                previousStatus, saved.getStatus(),
+                saved.getTrackingNumber(), saved.getCarrier());
+        return saved;
     }
 
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if ("ECOMMERCE_OPERATOR".equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
-    }
 }

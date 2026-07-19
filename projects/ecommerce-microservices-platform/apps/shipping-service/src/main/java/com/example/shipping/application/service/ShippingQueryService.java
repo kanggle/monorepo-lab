@@ -1,6 +1,5 @@
 package com.example.shipping.application.service;
 
-import com.example.web.exception.AccessDeniedException;
 import com.example.common.summary.PeriodSummary;
 import com.example.common.time.KstPeriodBounds;
 import com.example.shipping.application.result.ShippingResult;
@@ -35,7 +34,7 @@ public class ShippingQueryService {
     }
 
     public PageResult<ShippingSummary> listShippings(String userRole, ShippingStatus status, PageQuery pageQuery) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         PageResult<Shipping> pageResult;
         if (status != null) {
             pageResult = shippingRepository.findByStatus(status, pageQuery);
@@ -53,7 +52,7 @@ public class ShippingQueryService {
     }
 
     public PeriodSummary getPeriodSummary(String userRole) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
 
         KstPeriodBounds b = KstPeriodBounds.now();
 
@@ -63,23 +62,5 @@ public class ShippingQueryService {
         long month = shippingRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
 
         return new PeriodSummary(today, week, month, total);
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
-            throw new AccessDeniedException("Admin role required");
-        }
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if ("ECOMMERCE_OPERATOR".equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

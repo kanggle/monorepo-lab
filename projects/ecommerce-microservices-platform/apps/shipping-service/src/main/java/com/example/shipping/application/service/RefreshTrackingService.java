@@ -1,7 +1,6 @@
 package com.example.shipping.application.service;
 
 import com.example.shipping.application.result.UpdateShippingStatusResult;
-import com.example.web.exception.AccessDeniedException;
 import com.example.shipping.domain.exception.ShippingNotFoundException;
 import com.example.shipping.domain.model.Shipping;
 import com.example.shipping.domain.repository.ShippingRepository;
@@ -42,9 +41,7 @@ public class RefreshTrackingService {
 
     @Transactional
     public UpdateShippingStatusResult refreshFromCarrier(String shippingId, String userRole) {
-        if (!hasAdminRole(userRole)) {
-            throw new AccessDeniedException("Admin role required");
-        }
+        OperatorRoleGuard.requireOperator(userRole);
         // Tenant-scoped lookup (admin mutation): a cross-tenant shippingId → 404 (M3).
         Shipping shipping = shippingRepository.findByIdForTenant(shippingId)
                 .orElseThrow(() -> new ShippingNotFoundException(shippingId));
@@ -64,17 +61,5 @@ public class RefreshTrackingService {
     private static UpdateShippingStatusResult result(Shipping shipping) {
         return new UpdateShippingStatusResult(
                 shipping.getShippingId(), shipping.getStatus(), shipping.getUpdatedAt());
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if ("ECOMMERCE_OPERATOR".equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }
