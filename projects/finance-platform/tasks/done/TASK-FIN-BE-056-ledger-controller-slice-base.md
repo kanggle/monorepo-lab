@@ -1,7 +1,7 @@
 # TASK-FIN-BE-056 — ledger-service: extract shared controller-slice test base (@WebMvcTest setup)
 
 - **Type**: TASK-FIN-BE (test refactor — behaviour-preserving)
-- **Status**: review
+- **Status**: done
 - **Service**: ledger-service (finance-platform)
 - **Domain/traits**: saas / [transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (multi-file behaviour-preserving refactor)
