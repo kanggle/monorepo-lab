@@ -78,7 +78,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-059-compose-kafka-broker-missing.md` — finance-platform `docker-compose.yml` 에 **Kafka 브로커가 없다** (형제 6 플랫폼은 각자 KRaft 단일 브로커 보유 — `infra/demo/README.md` 가 "kafka×6" 로 자체 집계). 그런데 양 서비스 모두 프로덕션 경로에 Kafka 존재: account `AccountOutboxPublisher`(v2, 폴링 기본 ON) → `finance.transaction.*.v1` → ledger `TransactionEventConsumer`(group `finance-ledger-v1`). ⇒ **account→ledger 파생 사슬이 로컬 스택에서 절단**, 원장이 빈 채로 전 컨테이너 healthy. account 는 compose env 도 `spring.kafka.bootstrap-servers` 도 **둘 다 부재**→`localhost:9092`(자기 컨테이너) 폴백, ledger 는 미해석 호스트 `kafka:9092`. 실패는 crash 아닌 **조용한 누적**(outbox `published_at IS NULL`, 백오프 무한재시도, 신호는 아무도 안 보는 `account.outbox.pending.count` 게이지뿐). **CI 는 구조적으로 못 잡는다** — IT 는 서비스별 Testcontainers 브로커를 스스로 띄우고, 어떤 잡도 `projects/*/docker-compose.yml` 을 기동하지 않음. 수정=브로커 추가 + 양쪽 배선, **단 512M 형제 복사 금지**(MONO-397 재현 — 1G). 수용은 빌드 초록 아닌 **라이브 3관측**(published_at / 토픽 존재 / 분개 행). 분석=Opus 4.8 / 구현 권장=Sonnet. [[project_guard_reachability_not_just_bite]] [[project_enforcement_straggler_sibling_parity]]
 
 ## in-progress
 
