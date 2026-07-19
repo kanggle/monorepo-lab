@@ -107,6 +107,7 @@ jobs:
             projects/finance-platform/apps/account-service/build/libs/account-service.jar
             projects/wms-platform/apps/master-service/build/libs/master-service.jar
             projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
+            projects/wms-platform/apps/inbound-service/build/libs/inbound-service.jar
             projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
             projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
             projects/scm-platform/apps/demand-planning-service/build/libs/demand-planning-service.jar
@@ -183,6 +184,10 @@ jobs:
           mkdir -p projects/wms-platform/apps/admin-service/build/libs/
           mv artifact-staging/wms-platform/apps/admin-service/build/libs/admin-service.jar \
              projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
+          # inbound-service (TASK-MONO-432 — ADR-050 scm -> wms inbound-expected consumer)
+          mkdir -p projects/wms-platform/apps/inbound-service/build/libs/
+          mv artifact-staging/wms-platform/apps/inbound-service/build/libs/inbound-service.jar \
+             projects/wms-platform/apps/inbound-service/build/libs/inbound-service.jar
 
           # scm-platform (procurement-service + inventory-visibility-service — TASK-MONO-162)
           mkdir -p projects/scm-platform/apps/procurement-service/build/libs/
