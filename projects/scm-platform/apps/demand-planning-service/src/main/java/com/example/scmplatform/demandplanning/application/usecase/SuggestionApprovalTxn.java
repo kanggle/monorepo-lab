@@ -78,7 +78,10 @@ public class SuggestionApprovalTxn {
 
         return ApprovalPlan.proceed(
                 suggestion.getId(), mapping.getSupplierId(), mapping.getCurrency(),
-                suggestion.getSkuCode(), suggestion.getSuggestedQty());
+                suggestion.getSkuCode(), suggestion.getSuggestedQty(),
+                // ADR-MONO-050 D1/D3: carry the seeding warehouse + lead time so
+                // procurement can address the wms inbound-expected event.
+                suggestion.getWarehouseId(), mapping.getLeadTimeDays());
     }
 
     /**
@@ -106,16 +109,18 @@ public class SuggestionApprovalTxn {
      */
     public record ApprovalPlan(boolean alreadyMaterialized, UUID existingPoId,
                                UUID suggestionId, UUID supplierId, String currency,
-                               String skuCode, int quantity) {
+                               String skuCode, int quantity,
+                               UUID warehouseId, int leadTimeDays) {
 
         public static ApprovalPlan alreadyMaterialized(UUID poId) {
-            return new ApprovalPlan(true, poId, null, null, null, null, 0);
+            return new ApprovalPlan(true, poId, null, null, null, null, 0, null, 0);
         }
 
         public static ApprovalPlan proceed(UUID suggestionId, UUID supplierId, String currency,
-                                           String skuCode, int quantity) {
+                                           String skuCode, int quantity,
+                                           UUID warehouseId, int leadTimeDays) {
             return new ApprovalPlan(false, null, suggestionId, supplierId, currency,
-                    skuCode, quantity);
+                    skuCode, quantity, warehouseId, leadTimeDays);
         }
     }
 }

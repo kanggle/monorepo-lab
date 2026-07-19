@@ -21,6 +21,13 @@ public record DraftFromSuggestionCommand(
         String supplierId,
         String currency,
         String sourceSuggestionId,
+        // wms inbound-expected addressing (ADR-MONO-050 D1/D3/D4), carried from
+        // demand-planning. destinationWarehouseId = the warehouse that seeded the
+        // reorder; destinationNodeType = WMS_WAREHOUSE in v1; leadTimeDays from
+        // sku_supplier_map. May be null for callers that don't address a warehouse.
+        String destinationWarehouseId,
+        String destinationNodeType,
+        Integer leadTimeDays,
         List<Line> lines
 ) {
     public record Line(int lineNo, String sku, int quantity, String unitPriceRef) {

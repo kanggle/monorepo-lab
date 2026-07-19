@@ -36,6 +36,9 @@ public class ProcurementDraftPoClient implements ProcurementDraftPoPort {
     private static final String FROM_SUGGESTION_PATH = "/api/procurement/po/from-suggestion";
     private static final String ORIGIN_DEMAND_PLANNING = "DEMAND_PLANNING";
     private static final String UNIT_PRICE_REF = "LAST_KNOWN";
+    // ADR-MONO-050 D4: v1 replenishment always targets an own wms warehouse (the
+    // low-stock alert that seeded the reorder named a wms warehouse).
+    private static final String NODE_TYPE_WMS_WAREHOUSE = "WMS_WAREHOUSE";
 
     private final RestClient client;
 
@@ -53,6 +56,10 @@ public class ProcurementDraftPoClient implements ProcurementDraftPoPort {
                 "currency", cmd.currency(),
                 "origin", ORIGIN_DEMAND_PLANNING,
                 "sourceSuggestionId", cmd.sourceSuggestionId().toString(),
+                // ADR-MONO-050 D1/D3/D4: address the wms inbound-expected event.
+                "destinationWarehouseId", cmd.destinationWarehouseId().toString(),
+                "destinationNodeType", NODE_TYPE_WMS_WAREHOUSE,
+                "leadTimeDays", cmd.leadTimeDays(),
                 "lines", List.of(Map.of(
                         "lineNo", 1,
                         "sku", cmd.skuCode(),

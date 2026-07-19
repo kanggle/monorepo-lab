@@ -141,6 +141,11 @@ class ApproveMaterializationIntegrationTest extends AbstractDemandPlanningIntegr
         assertThat(body.path("supplierId").asText()).isEqualTo(SUPPLIER_ID.toString());
         assertThat(body.path("lines").get(0).path("sku").asText()).isEqualTo(SKU);
         assertThat(body.path("lines").get(0).path("quantity").asInt()).isEqualTo(100);
+        // ADR-MONO-050 D1/D3/D4: the seeding warehouse + lead time + node type
+        // are addressed on the from-suggestion body.
+        assertThat(body.path("destinationWarehouseId").asText()).isEqualTo(WAREHOUSE_ID.toString());
+        assertThat(body.path("destinationNodeType").asText()).isEqualTo("WMS_WAREHOUSE");
+        assertThat(body.path("leadTimeDays").asInt()).isEqualTo(7);
     }
 
     @Test

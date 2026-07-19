@@ -94,6 +94,9 @@ public class PurchaseOrderController {
                 req.supplierId(),
                 req.currency(),
                 req.sourceSuggestionId(),
+                req.destinationWarehouseId(),
+                req.destinationNodeType(),
+                req.leadTimeDays(),
                 req.lines().stream()
                         .map(l -> new DraftFromSuggestionCommand.Line(
                                 l.lineNo(), l.sku(), l.quantity(), l.unitPriceRef()))

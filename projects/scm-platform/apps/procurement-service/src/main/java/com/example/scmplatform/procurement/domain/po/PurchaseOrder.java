@@ -21,6 +21,8 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -81,6 +83,31 @@ public class PurchaseOrder {
     @Column(name = "source_suggestion_id", length = 36)
     private String sourceSuggestionId;
 
+    /**
+     * wms inbound-expected addressing (ADR-MONO-050 D3). The warehouse that
+     * seeded the reorder suggestion — carried from demand-planning at
+     * materialization. NULL for operator-authored POs, which are never turned
+     * into a wms inbound expectation (fail-closed: no warehouse → no emit).
+     */
+    @Column(name = "destination_warehouse_id", length = 36)
+    private String destinationWarehouseId;
+
+    /**
+     * v1 stores only {@code WMS_WAREHOUSE}. The column exists so a future
+     * {@code THIRD_PARTY_LOGISTICS} destination (ADR-MONO-050 D4) is a data fact,
+     * not a schema change — the producer-side 3PL filter reads it.
+     */
+    @Column(name = "destination_node_type", length = 30)
+    private String destinationNodeType;
+
+    /**
+     * {@code sku_supplier_map.lead_time_days} carried at materialization
+     * (ADR-MONO-050 D1). {@code expectedArrivalDate = confirmedAt + leadTimeDays}.
+     * NULL for operator-authored POs.
+     */
+    @Column(name = "lead_time_days")
+    private Integer leadTimeDays;
+
     @Embedded
     private Money totalAmount;
 
@@ -117,6 +144,12 @@ public class PurchaseOrder {
     @Transient
     private final List<PurchaseOrderLine> lines = new ArrayList<>();
 
+    /**
+     * v1 destination node type accepted for wms inbound-expected emission
+     * (ADR-MONO-050 D4). Only own warehouses are turned into wms expectations.
+     */
+    public static final String NODE_TYPE_WMS_WAREHOUSE = "WMS_WAREHOUSE";
+
     public static PurchaseOrder createDraft(String id,
                                             String tenantId,
                                             String poNumber,
@@ -124,7 +157,7 @@ public class PurchaseOrder {
                                             String buyerAccountId,
                                             String currency) {
         return newDraft(id, tenantId, poNumber, supplierId, buyerAccountId, currency,
-                PoOrigin.OPERATOR, null);
+                PoOrigin.OPERATOR, null, null, null, null);
     }
 
     /**
@@ -141,10 +174,14 @@ public class PurchaseOrder {
                                                           String supplierId,
                                                           String buyerAccountId,
                                                           String currency,
-                                                          String sourceSuggestionId) {
+                                                          String sourceSuggestionId,
+                                                          String destinationWarehouseId,
+                                                          String destinationNodeType,
+                                                          Integer leadTimeDays) {
         Objects.requireNonNull(sourceSuggestionId, "sourceSuggestionId");
         return newDraft(id, tenantId, poNumber, supplierId, buyerAccountId, currency,
-                PoOrigin.DEMAND_PLANNING, sourceSuggestionId);
+                PoOrigin.DEMAND_PLANNING, sourceSuggestionId,
+                destinationWarehouseId, destinationNodeType, leadTimeDays);
     }
 
     private static PurchaseOrder newDraft(String id,
@@ -154,7 +191,10 @@ public class PurchaseOrder {
                                           String buyerAccountId,
                                           String currency,
                                           PoOrigin origin,
-                                          String sourceSuggestionId) {
+                                          String sourceSuggestionId,
+                                          String destinationWarehouseId,
+                                          String destinationNodeType,
+                                          Integer leadTimeDays) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(tenantId, "tenantId");
         Objects.requireNonNull(poNumber, "poNumber");
@@ -170,6 +210,9 @@ public class PurchaseOrder {
         po.status = PoStatus.DRAFT;
         po.origin = origin;
         po.sourceSuggestionId = sourceSuggestionId;
+        po.destinationWarehouseId = destinationWarehouseId;
+        po.destinationNodeType = destinationNodeType;
+        po.leadTimeDays = leadTimeDays;
         po.totalAmount = Money.zero(currency);
         Instant now = Instant.now();
         po.createdAt = now;
@@ -293,6 +336,38 @@ public class PurchaseOrder {
                     "Ack quantity " + ackQuantity + " exceeds ordered " + line.getQuantity()
                             + " on line " + poLineId);
         }
+    }
+
+    /**
+     * True when this PO is a warehouse-addressed replenishment order whose
+     * destination is an own ({@code WMS_WAREHOUSE}) warehouse (ADR-MONO-050
+     * D3/D4). Only such POs are turned into a wms inbound expectation:
+     * <ul>
+     *   <li>operator-authored POs carry no destination → excluded (fail-closed,
+     *       Failure Scenario B — never guess a warehouse);</li>
+     *   <li>a {@code THIRD_PARTY_LOGISTICS} destination → excluded (D4
+     *       producer-side filter — wms does not operate 3PL nodes).</li>
+     * </ul>
+     */
+    public boolean isWmsWarehouseDestination() {
+        return NODE_TYPE_WMS_WAREHOUSE.equals(destinationNodeType)
+                && destinationWarehouseId != null
+                && !destinationWarehouseId.isBlank();
+    }
+
+    /**
+     * Expected arrival date for the wms inbound expectation (ADR-MONO-050 D1):
+     * the confirmation date (UTC) plus {@code lead_time_days}. Computed at
+     * confirm time so the horizon is relative to supplier acknowledgement.
+     * Returns {@code null} when the lead time is unknown — the caller treats a
+     * null as a fail-closed signal (do not emit a wrong horizon).
+     */
+    public LocalDate expectedArrivalDate() {
+        if (leadTimeDays == null) {
+            return null;
+        }
+        Instant basis = confirmedAt != null ? confirmedAt : Instant.now();
+        return basis.atZone(ZoneOffset.UTC).toLocalDate().plusDays(leadTimeDays);
     }
 
     private PoStatus transition(PoStatus target, ActorType actor, java.util.function.Consumer<Instant> sideEffect) {

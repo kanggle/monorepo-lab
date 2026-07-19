@@ -69,6 +69,10 @@ class SuggestionApprovalTxnTest {
         assertThat(plan.currency()).isEqualTo("KRW");
         assertThat(plan.skuCode()).isEqualTo(SKU);
         assertThat(plan.quantity()).isEqualTo(100);
+        // ADR-MONO-050 D1/D3: the seeding warehouse + sku_supplier_map lead time
+        // are carried through to procurement addressing.
+        assertThat(plan.warehouseId()).isEqualTo(WAREHOUSE_ID);
+        assertThat(plan.leadTimeDays()).isEqualTo(7);
 
         ArgumentCaptor<ReorderSuggestion> saved = ArgumentCaptor.forClass(ReorderSuggestion.class);
         verify(suggestionPort).save(saved.capture());
