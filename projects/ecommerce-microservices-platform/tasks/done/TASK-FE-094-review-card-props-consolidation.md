@@ -8,7 +8,7 @@ web-store ReviewCard prop consolidation — group 13 flat props into review + ac
 
 # Status
 
-in-progress
+done
 
 # Owner
 
