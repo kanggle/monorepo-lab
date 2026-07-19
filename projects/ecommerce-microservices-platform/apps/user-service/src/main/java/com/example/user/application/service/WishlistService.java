@@ -55,9 +55,7 @@ public class WishlistService {
     }
 
     public WishlistPageResult getWishlist(UUID userId, int page, int size) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.max(Math.min(size, 100), 1);
-        PageQuery pageQuery = new PageQuery(safePage, safeSize, "addedAt", "DESC");
+        PageQuery pageQuery = PageQuery.of(page, size, "addedAt", "DESC");
 
         PageResult<WishlistItem> pageResult = wishlistItemRepository.findAllByUserId(userId, pageQuery);
 
@@ -73,7 +71,7 @@ public class WishlistService {
                 .map(item -> toWishlistItemResult(item, productInfos.get(item.getProductId())))
                 .toList();
 
-        return new WishlistPageResult(content, safePage, safeSize, pageResult.totalElements());
+        return new WishlistPageResult(content, pageQuery.page(), pageQuery.size(), pageResult.totalElements());
     }
 
     @Transactional
