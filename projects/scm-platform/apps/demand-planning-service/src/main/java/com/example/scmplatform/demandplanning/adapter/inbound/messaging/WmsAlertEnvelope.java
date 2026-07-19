@@ -46,11 +46,24 @@ public record WmsAlertEnvelope(
     }
 
     /**
-     * Extract warehouseId — use locationId as the warehouse dimension key.
+     * Extract warehouseId — use locationId as the warehouse dimension key (dedup key).
      */
     public String locationId() {
         if (payload == null) return null;
         Object v = payload.get("locationId");
+        return v instanceof String s ? s : null;
+    }
+
+    /**
+     * Extract the warehouse business CODE (ADR-MONO-050 D9, additive on the alert).
+     * This is the value that flows to the PO {@code destinationWarehouseId} so wms's
+     * {@code findWarehouseByCode} resolves it — distinct from {@link #locationId()}
+     * (the internal UUID kept only as the dedup-key dimension). May be null on an
+     * older alert that predates the additive field.
+     */
+    public String warehouseCode() {
+        if (payload == null) return null;
+        Object v = payload.get("warehouseCode");
         return v instanceof String s ? s : null;
     }
 

@@ -59,7 +59,8 @@ The consumer reads only these fields and MUST ignore unknown payload fields
 | `occurredAt` | ISO-8601 (envelope) | Suggestion provenance timestamp. |
 | `payload.skuId` | UUID | SKU identity. |
 | `payload.skuCode` | string | **Join key** to `sku_supplier_map` and `reorder_policy` (the SKU coding shared with procurement). |
-| `payload.locationId` / `payload.locationCode` | UUID / string | Warehouse/location dimension of the suggestion key `(sku_code, warehouse)`. |
+| `payload.locationId` / `payload.locationCode` | UUID / string | Warehouse/location dimension of the suggestion key `(sku_code, warehouse)`. `locationId` (UUID) is retained scm-side as the reorder-suggestion dedup-key dimension. |
+| `payload.warehouseCode` | string | **ADR-MONO-050 D9 (additive).** The warehouse **business CODE** (e.g. `"WH-SEOUL-01"`). scm threads it → `reorder_suggestion.warehouse_code` → the PO `destinationWarehouseId` so wms's `findWarehouseByCode` resolves the inbound-expected destination (Option A — cross-service identifiers are codes). Required on the live replenishment path (fail-closed to DLT if absent). |
 | `payload.availableQty` | int | Compared against the scm `reorder_point`. |
 | `payload.threshold` | int | The wms alert threshold — informational only; **NOT** the scm reorder decision (D4 — scm owns its own reorder point). |
 | `payload.triggeringEventType` | string | Diagnostic provenance (which mutation crossed the wms threshold). |

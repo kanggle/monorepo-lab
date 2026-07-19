@@ -38,6 +38,13 @@ class AsnJpaEntity {
     @Column(name = "notes", length = 1000)
     private String notes;
 
+    // ADR-MONO-050 — originating scm PO trace (null for MANUAL / WEBHOOK_ERP sources).
+    @Column(name = "po_number", length = 40)
+    private String poNumber;
+
+    @Column(name = "po_id")
+    private UUID poId;
+
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
@@ -64,6 +71,7 @@ class AsnJpaEntity {
 
     AsnJpaEntity(UUID id, String asnNo, String source, UUID supplierPartnerId,
                   UUID warehouseId, LocalDate expectedArriveDate, String notes,
+                  String poNumber, UUID poId,
                   String status, long version, Instant createdAt, String createdBy,
                   Instant updatedAt, String updatedBy) {
         this.id = id;
@@ -73,6 +81,8 @@ class AsnJpaEntity {
         this.warehouseId = warehouseId;
         this.expectedArriveDate = expectedArriveDate;
         this.notes = notes;
+        this.poNumber = poNumber;
+        this.poId = poId;
         this.status = status;
         this.version = version;
         this.createdAt = createdAt;
@@ -88,6 +98,8 @@ class AsnJpaEntity {
     UUID getWarehouseId() { return warehouseId; }
     LocalDate getExpectedArriveDate() { return expectedArriveDate; }
     String getNotes() { return notes; }
+    String getPoNumber() { return poNumber; }
+    UUID getPoId() { return poId; }
     String getStatus() { return status; }
     long getVersion() { return version; }
     Instant getCreatedAt() { return createdAt; }

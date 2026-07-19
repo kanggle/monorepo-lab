@@ -3,6 +3,7 @@ package com.wms.inventory.application.port.out;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
 import com.wms.inventory.domain.model.masterref.LotSnapshot;
 import com.wms.inventory.domain.model.masterref.SkuSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,4 +27,6 @@ public interface MasterReadModelPort {
     Optional<SkuSnapshot> findSku(UUID id);
 
     Optional<LotSnapshot> findLot(UUID id);
+
+    Optional<WarehouseSnapshot> findWarehouse(UUID id);
 }

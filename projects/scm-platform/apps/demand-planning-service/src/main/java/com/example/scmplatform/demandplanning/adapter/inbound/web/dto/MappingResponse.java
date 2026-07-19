@@ -2,11 +2,9 @@ package com.example.scmplatform.demandplanning.adapter.inbound.web.dto;
 
 import com.example.scmplatform.demandplanning.domain.model.SkuSupplierMapping;
 
-import java.util.UUID;
-
 public record MappingResponse(
         String skuCode,
-        UUID supplierId,
+        String supplierId,
         int defaultOrderQty,
         int leadTimeDays,
         String currency

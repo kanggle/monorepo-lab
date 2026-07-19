@@ -26,8 +26,16 @@ public interface ProcurementDraftPoPort {
      */
     DraftPoResult createDraftFromSuggestion(DraftPoCommand command, String bearerToken);
 
-    record DraftPoCommand(UUID sourceSuggestionId, UUID supplierId, String currency,
-                          String skuCode, int quantity) {
+    record DraftPoCommand(UUID sourceSuggestionId, String supplierId, String currency,
+                          String skuCode, int quantity,
+                          // ADR-MONO-050 D1/D3/D9: the warehouse CODE that seeded the
+                          // reorder (→ procurement destinationWarehouseId, resolved by wms
+                          // via findWarehouseByCode) + sku_supplier_map lead time
+                          // (→ expectedArrivalDate). Enables the wms inbound-expected event
+                          // on PO CONFIRMED. destinationWarehouseId is null for BATCH
+                          // suggestions (no code source) → no inbound-expected emitted.
+                          // supplierId is likewise a supplier CODE (wms findPartnerByCode).
+                          String destinationWarehouseId, int leadTimeDays) {
     }
 
     record DraftPoResult(String poId, String poStatus) {

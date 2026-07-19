@@ -1,0 +1,116 @@
+# =============================================================================
+# Federation Hardening E2E — inbound-expected loop overlay (TASK-SCM-INT-004 leg 2)
+#
+# ADR-MONO-050 §3 Phase 2 nightly live proof of the scm -> wms inbound-expected
+# loop. Composed ON TOP of docker-compose.federation-e2e.yml AND
+# docker-compose.federation-e2e.replenishment.yml (which already provides the
+# real `redpanda` broker + repoints scm-procurement's outbox relay at it):
+#
+#   docker compose \
+#     -f docker-compose.federation-e2e.yml \
+#     -f docker-compose.federation-e2e.replenishment.yml \
+#     -f docker-compose.federation-e2e.inbound-expected.yml up -d --build ...
+#
+# WHY AN OVERLAY (not edits to the base): identical rationale to the
+# replenishment overlay — the base CI compose is event-free (its `kafka` is a
+# placeholder and every service points KAFKA at 127.0.0.1:9999). This overlay
+# adds the FIRST scm -> wms runtime coupling's consumer to the federation stack,
+# isolated so the base stays byte-unchanged for every other invocation.
+#
+# WHAT IT ADDS:
+#   - wms-inbound-postgres          PostgreSQL for inbound-service (inbound_db).
+#   - wms-inbound-service           the REAL ADR-050 consumer of
+#                                   scm.procurement.inbound-expected.v1 → creates
+#                                   an Asn(CREATED, source=SCM_PROCUREMENT). Points
+#                                   KAFKA_BOOTSTRAP_SERVERS at the overlay redpanda.
+#
+# HOW THE LOOP IS DRIVEN (mirrors the replenishment leg's inject pattern).
+# Driving scm procurement all the way to CONFIRMED in the federation stack needs
+# the supplier adapter mock (SUBMIT → supplier call), which the base stack does
+# not run. So — exactly as the replenishment leg injects the canonical wms
+# low-stock alert because the real wms producer path is role-gated — this leg
+# injects the canonical `scm.procurement.inbound-expected.v1` envelope onto the
+# real broker and proves the REAL wms inbound-service consumer + Asn creation.
+# The scm PRODUCER-envelope fidelity (that a CONFIRMED warehouse-addressed PO
+# emits exactly this shape) is guarded by the PR-gated deterministic leg
+# InboundExpectedLoopE2ETest (scm tests/e2e). This nightly leg proves the wms
+# consumer end-to-end against a real broker + real Postgres inside the
+# federation stack. Per ADR-050 §5, the PR-gated legs are the authoritative
+# guard; this is the live demonstration.
+#
+# MASTER SEEDING: inbound-service resolves warehouse/supplier/sku by CODE against
+# its local read-model (normally populated by wms.master.* events). This overlay
+# does not boot the master projection onto redpanda; instead the workflow applies
+# fixtures/seed-wms-inbound.sql via psql once inbound-service is healthy (Flyway
+# has created the snapshot tables), seeding the shared codes the injected envelope
+# carries (WH-FED-IE / SUP-FED-IE / SKU-FED-IE).
+# =============================================================================
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
+services:
+  # ---------------------------------------------------------------------------
+  # wms-inbound-postgres — PostgreSQL for inbound-service (inbound_db).
+  # Own sidecar (a shared instance would fail Flyway/validate across services).
+  # ---------------------------------------------------------------------------
+  wms-inbound-postgres:
+    logging: *default-logging
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: inbound_db
+      POSTGRES_USER: inbound
+      POSTGRES_PASSWORD: inbound
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inbound -d inbound_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    ports: ["15437:5432"]
+    networks: [fed-e2e]
+
+  # ---------------------------------------------------------------------------
+  # wms-inbound-service — the ADR-050 scm -> wms consumer. Consumes
+  # scm.procurement.inbound-expected.v1 from redpanda → creates an Asn
+  # (source=SCM_PROCUREMENT) at the resolved warehouse. eclipse-temurin
+  # jre-alpine has no curl → wget healthcheck (parity with scm-inventory-visibility).
+  # ---------------------------------------------------------------------------
+  wms-inbound-service:
+    logging: *default-logging
+    build:
+      context: ../../../projects/wms-platform/apps/inbound-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      DB_URL: jdbc:postgresql://wms-inbound-postgres:5432/inbound_db
+      DB_USERNAME: inbound
+      DB_PASSWORD: inbound
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # Real broker (overlay redpanda) — the scm inbound-expected events land here.
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      # SUPER_ADMIN base token carries tenant_id='*', accepted by the wms
+      # TenantClaimValidator wildcard sentinel (same posture as wms-golden-path).
+      OIDC_REQUIRED_TENANT_ID: wms
+      OTLP_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+    depends_on:
+      wms-inbound-postgres: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      redis: { condition: service_healthy }
+      victoriatraces: { condition: service_healthy }
+    ports: ["18101:8080"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s

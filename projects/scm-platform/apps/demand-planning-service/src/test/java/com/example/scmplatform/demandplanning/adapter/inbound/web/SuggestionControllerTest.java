@@ -46,13 +46,15 @@ class SuggestionControllerTest {
 
     static final UUID SUGGESTION_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000001");
     static final UUID WAREHOUSE_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000002");
-    static final UUID SUPPLIER_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000003");
+    // ADR-MONO-050 D9: warehouse + supplier CODES (String).
+    static final String WAREHOUSE_CODE = "WH-SEOUL-01";
+    static final String SUPPLIER_ID = "SUP-0043";
 
     @Test
     @WithMockUser
     void listSuggestions_returns200_withPageMeta() throws Exception {
         ReorderSuggestion s = ReorderSuggestion.raiseFromAlert(
-                SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, SUPPLIER_ID,
+                SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
                 100, UUID.randomUUID(), 5, "scm", Instant.now());
 
         when(suggestionQueryUseCase.listSuggestions(anyString(), eq(null), eq(null), any()))
@@ -69,7 +71,7 @@ class SuggestionControllerTest {
     @WithMockUser
     void getSuggestion_returns200() throws Exception {
         ReorderSuggestion s = ReorderSuggestion.raiseFromAlert(
-                SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, SUPPLIER_ID,
+                SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
                 100, UUID.randomUUID(), 5, "scm", Instant.now());
         when(suggestionQueryUseCase.getById(SUGGESTION_ID)).thenReturn(s);
 
@@ -94,7 +96,7 @@ class SuggestionControllerTest {
     @WithMockUser
     void dismissSuggestion_returns200() throws Exception {
         ReorderSuggestion dismissed = ReorderSuggestion.reconstitute(
-                SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, SUPPLIER_ID,
+                SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
                 100, SuggestionStatus.DISMISSED, SuggestionSource.ALERT,
                 null, 5, null, "scm", 1, Instant.now(), Instant.now());
         when(suggestionQueryUseCase.dismiss(eq(SUGGESTION_ID), any())).thenReturn(dismissed);

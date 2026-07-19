@@ -8,6 +8,7 @@ import com.wms.inventory.domain.event.InventoryLowStockDetectedEvent;
 import com.wms.inventory.domain.model.Inventory;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
 import com.wms.inventory.domain.model.masterref.SkuSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -86,10 +87,16 @@ public class LowStockDetectionService {
         }
         String locationCode = masterReadModel.findLocation(inventory.locationId())
                 .map(LocationSnapshot::locationCode).orElse(null);
+        // ADR-MONO-050 D9: carry the warehouse CODE (not uuid) so the cross-project scm
+        // demand-planning consumer can address the replenishment PO by code. Best-effort:
+        // null when the warehouse snapshot has not been populated yet (startup race) —
+        // the alert still fires, consistent with locationCode/skuCode enrichment.
+        String warehouseCode = masterReadModel.findWarehouse(inventory.warehouseId())
+                .map(WarehouseSnapshot::warehouseCode).orElse(null);
         String skuCode = masterReadModel.findSku(inventory.skuId())
                 .map(SkuSnapshot::skuCode).orElse(null);
         outboxWriter.write(new InventoryLowStockDetectedEvent(
-                inventory.id(), inventory.locationId(), locationCode,
+                inventory.id(), inventory.locationId(), locationCode, warehouseCode,
                 inventory.skuId(), skuCode, inventory.lotId(),
                 inventory.availableQty(), threshold,
                 triggeringEventType, triggeringEventId, now, actorId));

@@ -38,6 +38,7 @@ Cross-project topics produced for ecommerce-microservices-platform to consume (`
 | `notification-events.md` | notification-service — producer |
 | `notification-subscriptions.md` | notification-service — consumer-side subscription overview |
 | `ecommerce-fulfillment-subscriptions.md` | outbound-service — consumer of ecommerce-microservices-platform's `ecommerce.fulfillment.requested.v1` / `ecommerce.shipping.manual-confirm-requested.v1` |
+| `scm-inbound-expected-subscriptions.md` | inbound-service — consumer of scm-platform's `scm.procurement.inbound-expected.v1` / `.cancelled.v1` (ADR-MONO-050; first `scm → wms` coupling) |
 
 ---
 

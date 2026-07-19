@@ -35,7 +35,9 @@ class ApproveSuggestionUseCaseTest {
     private ApproveSuggestionUseCase useCase;
 
     static final UUID SUGGESTION_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000001");
-    static final UUID SUPPLIER_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000003");
+    // ADR-MONO-050 D9: warehouse + supplier CODES flow to the procurement command.
+    static final String WAREHOUSE_CODE = "WH-SEOUL-01";
+    static final String SUPPLIER_ID = "SUP-0043";
     static final String TOKEN = "Bearer test-token";
 
     @BeforeEach
@@ -45,7 +47,8 @@ class ApproveSuggestionUseCaseTest {
 
     private SuggestionApprovalTxn.ApprovalPlan proceedPlan() {
         return SuggestionApprovalTxn.ApprovalPlan.proceed(
-                SUGGESTION_ID, SUPPLIER_ID, "KRW", "SKU-APPLE-001", 100);
+                SUGGESTION_ID, SUPPLIER_ID, "KRW", "SKU-APPLE-001", 100,
+                WAREHOUSE_CODE, 7);
     }
 
     @Test
@@ -62,13 +65,17 @@ class ApproveSuggestionUseCaseTest {
         assertThat(result.poId()).isEqualTo(poId);
         assertThat(result.poStatus()).isEqualTo("DRAFT");
 
-        // The procurement command carried the resolved supplier + sku + qty.
+        // The procurement command carried the resolved supplier + sku + qty +
+        // the ADR-050 addressing (warehouse + lead time).
         verify(procurementPort).createDraftFromSuggestion(
                 argThat(cmd -> cmd.sourceSuggestionId().equals(SUGGESTION_ID)
                         && cmd.supplierId().equals(SUPPLIER_ID)
                         && cmd.currency().equals("KRW")
                         && cmd.skuCode().equals("SKU-APPLE-001")
-                        && cmd.quantity() == 100),
+                        && cmd.quantity() == 100
+                        // ADR-MONO-050 D9: destination is the warehouse CODE, not a UUID.
+                        && cmd.destinationWarehouseId().equals(WAREHOUSE_CODE)
+                        && cmd.leadTimeDays() == 7),
                 eq(TOKEN));
     }
 

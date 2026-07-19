@@ -40,6 +40,7 @@ public class ReorderSuggestionAdapter implements ReorderSuggestionPort {
         entity.setId(suggestion.getId());
         entity.setSkuCode(suggestion.getSkuCode());
         entity.setWarehouseId(suggestion.getWarehouseId());
+        entity.setWarehouseCode(suggestion.getWarehouseCode());
         entity.setSupplierId(suggestion.getSupplierId());
         entity.setSuggestedQty(suggestion.getSuggestedQty());
         entity.setStatus(suggestion.getStatus());
@@ -72,7 +73,7 @@ public class ReorderSuggestionAdapter implements ReorderSuggestionPort {
 
     private ReorderSuggestion toDomain(ReorderSuggestionJpaEntity e) {
         return ReorderSuggestion.reconstitute(
-                e.getId(), e.getSkuCode(), e.getWarehouseId(), e.getSupplierId(),
+                e.getId(), e.getSkuCode(), e.getWarehouseId(), e.getWarehouseCode(), e.getSupplierId(),
                 e.getSuggestedQty(), e.getStatus(), e.getSource(),
                 e.getTriggerEventId(), e.getTriggerAvailableQty(),
                 e.getMaterializedPoId(), e.getTenantId(), e.getVersion(),

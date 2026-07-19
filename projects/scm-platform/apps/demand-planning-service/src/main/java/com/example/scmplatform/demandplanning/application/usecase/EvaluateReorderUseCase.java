@@ -87,13 +87,14 @@ public class EvaluateReorderUseCase {
      *
      * @param eventId        envelope eventId (T8 idempotency key)
      * @param skuCode        SKU code (join key to policy + mapping)
-     * @param warehouseId    warehouse dimension of the suggestion key
+     * @param warehouseId    warehouse dimension of the suggestion key (dedup key)
+     * @param warehouseCode  warehouse CODE (ADR-050 D9) → flows to the PO destination
      * @param availableQty   available quantity at alert time
      * @param alertThreshold wms alert threshold (informational only — scm uses its own reorder_point)
      * @param occurredAt     event occurrence time
      */
     @Transactional
-    public void evaluateFromAlert(UUID eventId, String skuCode, UUID warehouseId,
+    public void evaluateFromAlert(UUID eventId, String skuCode, UUID warehouseId, String warehouseCode,
                                    int availableQty, int alertThreshold, Instant occurredAt) {
         // T8: event dedup
         if (processedEventPort.isDuplicate(eventId)) {
@@ -146,7 +147,7 @@ public class EvaluateReorderUseCase {
 
         Instant now = Instant.now();
         ReorderSuggestion suggestion = ReorderSuggestion.raiseFromAlert(
-                UUID.randomUUID(), skuCode, warehouseId, mapping.getSupplierId(),
+                UUID.randomUUID(), skuCode, warehouseId, warehouseCode, mapping.getSupplierId(),
                 reorderQty, eventId, availableQty, TENANT_ID, now);
 
         suggestionPort.save(suggestion);

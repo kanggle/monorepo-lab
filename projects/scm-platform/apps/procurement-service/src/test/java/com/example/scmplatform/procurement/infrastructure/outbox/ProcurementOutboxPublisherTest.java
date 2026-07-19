@@ -64,6 +64,11 @@ class ProcurementOutboxPublisherTest {
                 .isEqualTo("scm.procurement.po.closed.v1");
         assertThat(ProcurementOutboxPublisher.topicFor("scm.procurement.asn.received"))
                 .isEqualTo("scm.procurement.asn.received.v1");
+        // ADR-MONO-050 inbound-expected family
+        assertThat(ProcurementOutboxPublisher.topicFor("scm.procurement.inbound-expected"))
+                .isEqualTo("scm.procurement.inbound-expected.v1");
+        assertThat(ProcurementOutboxPublisher.topicFor("scm.procurement.inbound-expected.cancelled"))
+                .isEqualTo("scm.procurement.inbound-expected.cancelled.v1");
     }
 
     @Test

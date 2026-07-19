@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Seed and inspect reorder policy + SKU-supplier mapping (operator admin surface).
@@ -50,7 +49,7 @@ public class PolicyManagementUseCase {
     }
 
     @Transactional
-    public SkuSupplierMapping upsertMapping(String skuCode, UUID supplierId, int defaultOrderQty,
+    public SkuSupplierMapping upsertMapping(String skuCode, String supplierId, int defaultOrderQty,
                                              int leadTimeDays, String currency) {
         SkuSupplierMapping mapping = new SkuSupplierMapping(skuCode, supplierId, defaultOrderQty,
                 leadTimeDays, currency, TENANT_ID);

@@ -44,7 +44,9 @@ class EvaluateReorderUseCaseTest {
 
     static final String SKU = "SKU-APPLE-001";
     static final UUID WAREHOUSE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    static final UUID SUPPLIER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    static final String WAREHOUSE_CODE = "WH-SEOUL-01";
+    // ADR-MONO-050 D9: supplierId is a supplier CODE (String), not a UUID.
+    static final String SUPPLIER_ID = "SUP-0042";
     static final UUID EVENT_ID = UUID.randomUUID();
 
     @BeforeEach
@@ -63,7 +65,7 @@ class EvaluateReorderUseCaseTest {
         when(suggestionPort.hasOpenSuggestion("scm", SKU, WAREHOUSE_ID)).thenReturn(false);
         when(suggestionPort.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, 5, 8, Instant.now());
+        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, 5, 8, Instant.now());
 
         verify(suggestionPort).save(any(ReorderSuggestion.class));
         verify(processedEventPort).markProcessed(eq(EVENT_ID), eq("scm"), any(), any());
@@ -77,17 +79,42 @@ class EvaluateReorderUseCaseTest {
         when(policyPort.findBySkuCode("scm", SKU))
                 .thenReturn(Optional.of(policy(10, 100)));
 
-        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, 15, 8, Instant.now());
+        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, 15, 8, Instant.now());
 
         verify(suggestionPort, never()).save(any());
         verify(processedEventPort).markProcessed(any(), any(), any(), any()); // still marks processed
     }
 
     @Test
+    void evaluateFromAlert_threadsWarehouseCode_ontoSuggestion_ADR050D9() {
+        when(processedEventPort.isDuplicate(EVENT_ID)).thenReturn(false);
+        when(mappingPort.findBySkuCode("scm", SKU))
+                .thenReturn(Optional.of(mapping()));
+        when(policyPort.findBySkuCode("scm", SKU))
+                .thenReturn(Optional.of(policy(10, 100)));
+        when(suggestionPort.hasOpenSuggestion("scm", SKU, WAREHOUSE_ID)).thenReturn(false);
+        when(suggestionPort.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, 5, 8, Instant.now());
+
+        org.mockito.ArgumentCaptor<ReorderSuggestion> saved =
+                org.mockito.ArgumentCaptor.forClass(ReorderSuggestion.class);
+        verify(suggestionPort).save(saved.capture());
+        // ADR-MONO-050 D9: the warehouse CODE (not the UUID) flows to the PO destination;
+        // supplier code carried from the mapping. warehouse_id stays the dedup dimension.
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getWarehouseCode())
+                .isEqualTo(WAREHOUSE_CODE);
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getWarehouseId())
+                .isEqualTo(WAREHOUSE_ID);
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getSupplierId())
+                .isEqualTo(SUPPLIER_ID);
+    }
+
+    @Test
     void evaluateFromAlert_skipsDuplicate_viaT8Dedup() {
         when(processedEventPort.isDuplicate(EVENT_ID)).thenReturn(true);
 
-        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, 5, 8, Instant.now());
+        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, 5, 8, Instant.now());
 
         verify(suggestionPort, never()).save(any());
         verify(processedEventPort, never()).markProcessed(any(), any(), any(), any());
@@ -102,7 +129,7 @@ class EvaluateReorderUseCaseTest {
                 .thenReturn(Optional.of(policy(10, 100)));
         when(suggestionPort.hasOpenSuggestion("scm", SKU, WAREHOUSE_ID)).thenReturn(true);
 
-        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, 5, 8, Instant.now());
+        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, 5, 8, Instant.now());
 
         verify(suggestionPort, never()).save(any());
         verify(processedEventPort).markProcessed(any(), any(), any(), any()); // still marks processed
@@ -114,7 +141,7 @@ class EvaluateReorderUseCaseTest {
         when(mappingPort.findBySkuCode("scm", SKU)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, 5, 8, Instant.now()))
+                useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, 5, 8, Instant.now()))
                 .isInstanceOf(SkuSupplierUnmappedException.class);
 
         verify(opsAlertPort).alertUnmappedSku(eq(SKU), any(), any());
@@ -131,7 +158,7 @@ class EvaluateReorderUseCaseTest {
         when(suggestionPort.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // alertThreshold=8, availableQty=5 → 5 <= 8 → should raise (degraded path)
-        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, 5, 8, Instant.now());
+        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, 5, 8, Instant.now());
 
         verify(suggestionPort).save(any(ReorderSuggestion.class));
     }

@@ -23,7 +23,8 @@ class AlertConsumerIntegrationTest extends AbstractDemandPlanningIntegrationTest
 
     static final String SKU = "SKU-APPLE-IT-001";
     static final UUID WAREHOUSE_ID = UUID.randomUUID();
-    static final UUID SUPPLIER_ID = UUID.randomUUID();
+    // ADR-MONO-050 D9: supplierId is a supplier CODE (String).
+    static final String SUPPLIER_ID = "SUP-IT-001";
 
     @BeforeEach
     void seedMapping() {
@@ -68,6 +69,9 @@ class AlertConsumerIntegrationTest extends AbstractDemandPlanningIntegrationTest
             ReorderSuggestionJpaEntity s = suggestions.get(0);
             assertThat(s.getSkuCode()).isEqualTo(SKU);
             assertThat(s.getWarehouseId()).isEqualTo(WAREHOUSE_ID);
+            // ADR-MONO-050 D9: the additive warehouse CODE is threaded onto the suggestion.
+            assertThat(s.getWarehouseCode()).isEqualTo(ALERT_WAREHOUSE_CODE);
+            assertThat(s.getSupplierId()).isEqualTo(SUPPLIER_ID);
             assertThat(s.getStatus()).isEqualTo(SuggestionStatus.SUGGESTED);
             assertThat(s.getTriggerAvailableQty()).isEqualTo(5);
             assertThat(s.getSuggestedQty()).isEqualTo(100);
@@ -108,6 +112,29 @@ class AlertConsumerIntegrationTest extends AbstractDemandPlanningIntegrationTest
 
         Awaitility.await().pollDelay(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(10))
                 .untilAsserted(() -> assertThat(suggestionJpa.findAll()).hasSize(1));
+    }
+
+    @Test
+    void alertWithoutWarehouseCode_stillRaisesSuggestion_degradesGracefully_BE038() {
+        // ADR-MONO-050 D9 / TASK-SCM-BE-038: warehouseCode is ADDITIVE — an absent code
+        // must NOT DLT the alert (that would break the pre-existing ADR-027 loop). The
+        // suggestion is still raised (warehouseCode=null); only the downstream
+        // inbound-expected leg fail-closes, exactly like the batch-sweep path.
+        UUID eventId = UUID.randomUUID();
+        String envelope = alertEnvelope(eventId, SKU, WAREHOUSE_ID.toString(), 5, 8, null);
+
+        publish(TOPIC_ALERT, SKU, envelope);
+
+        Awaitility.await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            List<ReorderSuggestionJpaEntity> suggestions = suggestionJpa.findAll();
+            assertThat(suggestions).hasSize(1);
+            ReorderSuggestionJpaEntity s = suggestions.get(0);
+            assertThat(s.getSkuCode()).isEqualTo(SKU);
+            assertThat(s.getWarehouseCode()).isNull();          // absent → null, not DLT
+            assertThat(s.getStatus()).isEqualTo(SuggestionStatus.SUGGESTED);
+        });
+        // Processed (not routed to DLT).
+        assertThat(processedEventJpa.existsByEventId(eventId)).isTrue();
     }
 
     @Test

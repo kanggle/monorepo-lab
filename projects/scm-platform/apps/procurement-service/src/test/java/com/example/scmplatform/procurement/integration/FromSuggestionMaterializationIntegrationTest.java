@@ -47,12 +47,18 @@ class FromSuggestionMaterializationIntegrationTest extends AbstractProcurementIn
     @Autowired
     private PurchaseOrderApplicationService service;
 
+    private static final String WAREHOUSE_ID = "0192cccc-0000-0000-0000-000000000002";
+
     private DraftFromSuggestionCommand commandFor(String suggestionId, String supplierId) {
         return new DraftFromSuggestionCommand(
                 OPERATOR,
                 supplierId,
                 "KRW",
                 suggestionId,
+                // ADR-MONO-050 addressing carried from demand-planning.
+                WAREHOUSE_ID,
+                "WMS_WAREHOUSE",
+                7,
                 List.of(new DraftFromSuggestionCommand.Line(1, "SKU-APPLE-001", 100, "LAST_KNOWN"))
         );
     }

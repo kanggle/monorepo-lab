@@ -249,6 +249,54 @@ class PurchaseOrderApplicationServiceTest {
                 .isInstanceOf(PoNotFoundException.class);
     }
 
+    // ---------------- CONFIRM → inbound-expected (ADR-MONO-050 D1/D2/D4) ----------------
+
+    @Test
+    @DisplayName("confirm() of a WMS_WAREHOUSE-addressed replenishment PO emits inbound-expected (ADR-050 D1)")
+    void confirmWarehouseAddressedEmitsInboundExpected() {
+        PurchaseOrder po = acknowledgedFromSuggestionPo("wh-01", "WMS_WAREHOUSE", 7);
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        service.confirm(new ConfirmPurchaseOrderCommand(OPERATOR, po.getId()));
+
+        verify(eventPublisher, times(1)).publishPoConfirmed(any(), eq(OPERATOR_ACCOUNT));
+        verify(eventPublisher, times(1)).publishInboundExpected(any());
+    }
+
+    @Test
+    @DisplayName("confirm() of an operator-authored PO (no destination) does NOT emit inbound-expected (fail-closed)")
+    void confirmOperatorPoDoesNotEmitInboundExpected() {
+        PurchaseOrder po = acknowledgedPo(); // createDraft → no destination
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        service.confirm(new ConfirmPurchaseOrderCommand(OPERATOR, po.getId()));
+
+        verify(eventPublisher, times(1)).publishPoConfirmed(any(), eq(OPERATOR_ACCOUNT));
+        verify(eventPublisher, never()).publishInboundExpected(any());
+    }
+
+    @Test
+    @DisplayName("confirm() of a 3PL-destination PO does NOT emit inbound-expected (ADR-050 D4 producer filter)")
+    void confirm3plDestinationDoesNotEmitInboundExpected() {
+        PurchaseOrder po = acknowledgedFromSuggestionPo("3pl-node-01", "THIRD_PARTY_LOGISTICS", 7);
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        service.confirm(new ConfirmPurchaseOrderCommand(OPERATOR, po.getId()));
+
+        verify(eventPublisher, never()).publishInboundExpected(any());
+    }
+
+    @Test
+    @DisplayName("confirm() of a warehouse PO with unknown lead time does NOT emit (fail-closed, Failure Scenario B)")
+    void confirmWarehousePoWithNullLeadTimeDoesNotEmit() {
+        PurchaseOrder po = acknowledgedFromSuggestionPo("wh-01", "WMS_WAREHOUSE", null);
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        service.confirm(new ConfirmPurchaseOrderCommand(OPERATOR, po.getId()));
+
+        verify(eventPublisher, never()).publishInboundExpected(any());
+    }
+
     // ---------------- CANCEL ----------------
 
     @Test
@@ -275,6 +323,29 @@ class PurchaseOrderApplicationServiceTest {
 
         verify(historyRepository, times(1)).save(any());
         verify(eventPublisher, times(1)).publishPoCanceled(any(), eq(null), eq(BUYER_ACCOUNT));
+    }
+
+    @Test
+    @DisplayName("cancel() of a WMS_WAREHOUSE-addressed PO emits inbound-expected.cancelled (ADR-050 D6.3)")
+    void cancelWarehouseAddressedEmitsInboundExpectedCancelled() {
+        PurchaseOrder po = draftFromSuggestionPo("wh-01", "WMS_WAREHOUSE", 7);
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        service.cancel(new CancelPurchaseOrderCommand(OPERATOR, po.getId(), "supplier delay"));
+
+        verify(eventPublisher, times(1)).publishPoCanceled(any(), any(), eq(OPERATOR_ACCOUNT));
+        verify(eventPublisher, times(1)).publishInboundExpectedCancelled(any());
+    }
+
+    @Test
+    @DisplayName("cancel() of an operator-authored PO does NOT emit inbound-expected.cancelled")
+    void cancelOperatorPoDoesNotEmitInboundExpectedCancelled() {
+        PurchaseOrder po = freshDraftPo(); // createDraft → no destination
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        service.cancel(new CancelPurchaseOrderCommand(BUYER, po.getId(), null));
+
+        verify(eventPublisher, never()).publishInboundExpectedCancelled(any());
     }
 
     // ---------------- RECEIVE ASN ----------------
@@ -380,6 +451,23 @@ class PurchaseOrderApplicationServiceTest {
     private PurchaseOrder confirmedPo() {
         PurchaseOrder po = acknowledgedPo();
         po.confirm(com.example.scmplatform.procurement.domain.po.status.ActorType.OPERATOR);
+        return po;
+    }
+
+    private PurchaseOrder draftFromSuggestionPo(String warehouseId, String nodeType, Integer leadTimeDays) {
+        PurchaseOrder po = PurchaseOrder.createDraftFromSuggestion(
+                "po-inb-001", TENANT, "PO-INB-001", SUPPLIER_ID, OPERATOR_ACCOUNT, "KRW",
+                "sugg-001", warehouseId, nodeType, leadTimeDays);
+        po.addLine(com.example.scmplatform.procurement.domain.po.PurchaseOrderLine.create(
+                "line-inb-001", po.getId(), TENANT, 1, "SKU-APPLE-001", null,
+                new BigDecimal("100"), BigDecimal.ZERO));
+        return po;
+    }
+
+    private PurchaseOrder acknowledgedFromSuggestionPo(String warehouseId, String nodeType, Integer leadTimeDays) {
+        PurchaseOrder po = draftFromSuggestionPo(warehouseId, nodeType, leadTimeDays);
+        po.submit(com.example.scmplatform.procurement.domain.po.status.ActorType.BUYER);
+        po.acknowledge(com.example.scmplatform.procurement.domain.po.status.ActorType.SUPPLIER);
         return po;
     }
 }

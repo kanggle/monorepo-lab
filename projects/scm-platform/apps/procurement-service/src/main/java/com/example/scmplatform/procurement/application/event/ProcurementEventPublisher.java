@@ -29,6 +29,8 @@ public interface ProcurementEventPublisher {
     String EVENT_PO_RECEIVED = "scm.procurement.po.received";
     String EVENT_PO_CLOSED = "scm.procurement.po.closed";
     String EVENT_ASN_RECEIVED = "scm.procurement.asn.received";
+    String EVENT_INBOUND_EXPECTED = "scm.procurement.inbound-expected";
+    String EVENT_INBOUND_EXPECTED_CANCELLED = "scm.procurement.inbound-expected.cancelled";
 
     void publishPoSubmitted(PurchaseOrder po);
 
@@ -46,4 +48,19 @@ public interface ProcurementEventPublisher {
                             String supplierAsnRef,
                             Instant expectedArrivalAt,
                             Instant receivedAt);
+
+    /**
+     * ADR-MONO-050 D1: publish {@code scm.procurement.inbound-expected.v1} for a
+     * warehouse-addressed replenishment PO on CONFIRMED. The caller
+     * ({@code PurchaseOrderApplicationService}) has already applied the
+     * producer-side filter (D4) — this method assumes the PO is a
+     * {@code WMS_WAREHOUSE}-addressed PO with a resolvable arrival date.
+     */
+    void publishInboundExpected(PurchaseOrder po);
+
+    /**
+     * ADR-MONO-050 D6.3: publish {@code scm.procurement.inbound-expected.cancelled.v1}
+     * so wms can drop a not-yet-received expectation for a cancelled PO.
+     */
+    void publishInboundExpectedCancelled(PurchaseOrder po);
 }

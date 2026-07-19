@@ -37,8 +37,14 @@ public class ReorderSuggestionJpaEntity implements Persistable<UUID> {
     @Column(name = "warehouse_id", nullable = false)
     private UUID warehouseId;
 
+    // ADR-MONO-050 D9: the warehouse CODE that flows to the PO destination (nullable
+    // for BATCH-sourced suggestions — the IVS read-model carries no warehouse code).
+    @Column(name = "warehouse_code")
+    private String warehouseCode;
+
+    // ADR-MONO-050 D9: supplier CODE (String), not a UUID — resolved by wms via findPartnerByCode.
     @Column(name = "supplier_id", nullable = false)
-    private UUID supplierId;
+    private String supplierId;
 
     @Column(name = "suggested_qty", nullable = false)
     private int suggestedQty;

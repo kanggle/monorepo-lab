@@ -96,7 +96,7 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
         return "SKU-SWEEP-IT-" + UUID.randomUUID();
     }
 
-    private void seedPolicyAndMapping(String sku, UUID supplierId, int reorderPoint, int reorderQty) {
+    private void seedPolicyAndMapping(String sku, String supplierId, int reorderPoint, int reorderQty) {
         SkuSupplierMappingJpaEntity mapping = new SkuSupplierMappingJpaEntity();
         mapping.setTenantId(TENANT_SCM);
         mapping.setSkuCode(sku);
@@ -140,7 +140,7 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
     void sweep_belowReorderPoint_raisesBatchSuggestion() {
         String sku = uniqueSku();
         UUID warehouse = UUID.randomUUID();
-        UUID supplier = UUID.randomUUID();
+        String supplier = "SUP-SWEEP-01";
         seedPolicyAndMapping(sku, supplier, 20, 50);
         expectSnapshot(sku, warehouse, 5); // 5 <= reorderPoint(20)
 
@@ -154,6 +154,8 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
         assertThat(s.getSource()).isEqualTo(SuggestionSource.BATCH);
         assertThat(s.getSuggestedQty()).isEqualTo(50); // reorderQty
         assertThat(s.getSupplierId()).isEqualTo(supplier);
+        // ADR-MONO-050 D9 batch-path: IVS carries no warehouse code → null (follow-up).
+        assertThat(s.getWarehouseCode()).isNull();
     }
 
     @Test
@@ -161,7 +163,7 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
     void sweep_aboveReorderPoint_raisesNothing() {
         String sku = uniqueSku();
         UUID warehouse = UUID.randomUUID();
-        seedPolicyAndMapping(sku, UUID.randomUUID(), 20, 50);
+        seedPolicyAndMapping(sku, "SUP-SWEEP-01", 20, 50);
         expectSnapshot(sku, warehouse, 50); // 50 > reorderPoint(20)
 
         sweepUseCase.sweep();
@@ -174,7 +176,7 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
     void sweep_idempotent_openGuard() {
         String sku = uniqueSku();
         UUID warehouse = UUID.randomUUID();
-        seedPolicyAndMapping(sku, UUID.randomUUID(), 20, 50);
+        seedPolicyAndMapping(sku, "SUP-SWEEP-01", 20, 50);
         expectSnapshot(sku, warehouse, 5);
 
         sweepUseCase.sweep();
@@ -191,7 +193,7 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
     void sweep_ivsUnavailable_skipsRun_noThrow() {
         String sku = uniqueSku();
         UUID warehouse = UUID.randomUUID();
-        seedPolicyAndMapping(sku, UUID.randomUUID(), 20, 50);
+        seedPolicyAndMapping(sku, "SUP-SWEEP-01", 20, 50);
         expectIvsUnavailable();
 
         assertThatCode(() -> sweepUseCase.sweep()).doesNotThrowAnyException();
