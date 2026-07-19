@@ -11,7 +11,6 @@ import com.example.settlement.presentation.dto.OpenPeriodRequest;
 import com.example.settlement.presentation.dto.PayoutListResponse;
 import com.example.settlement.presentation.dto.PeriodListResponse;
 import com.example.settlement.presentation.dto.PeriodResponse;
-import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -41,8 +40,6 @@ import java.util.List;
 @RequestMapping("/api/admin/settlements/periods")
 public class SettlementPeriodController {
 
-    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
-
     private final OpenSettlementPeriodUseCase openPeriod;
     private final CloseSettlementPeriodUseCase closePeriod;
     private final QuerySettlementPeriodUseCase queryPeriod;
@@ -52,7 +49,7 @@ public class SettlementPeriodController {
     public ResponseEntity<PeriodResponse> open(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @Valid @RequestBody OpenPeriodRequest request) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         PeriodView view = openPeriod.open(TenantContext.currentTenant(), request.from(), request.to());
         return ResponseEntity.status(HttpStatus.CREATED).body(PeriodResponse.summary(view));
     }
@@ -62,7 +59,7 @@ public class SettlementPeriodController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @PathVariable String periodId) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         String closedBy = (userId == null || userId.isBlank())
                 ? TenantContext.currentTenant() : userId;
         PeriodView view = closePeriod.close(periodId, TenantContext.currentTenant(), closedBy);
@@ -74,7 +71,7 @@ public class SettlementPeriodController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         return ResponseEntity.ok(PeriodListResponse.of(
                 queryPeriod.listPeriods(TenantContext.currentTenant()), page, size));
     }
@@ -91,7 +88,7 @@ public class SettlementPeriodController {
             @PathVariable String periodId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         List<PayoutView> views = executePayouts.list(periodId, TenantContext.currentTenant());
         return ResponseEntity.ok(PayoutListResponse.of(views, page, size));
     }
@@ -109,26 +106,8 @@ public class SettlementPeriodController {
             @PathVariable String periodId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         List<PayoutView> views = executePayouts.execute(periodId, TenantContext.currentTenant());
         return ResponseEntity.ok(PayoutListResponse.of(views, page, size));
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
-            throw new AccessDeniedException();
-        }
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if (ROLE_ADMIN.equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

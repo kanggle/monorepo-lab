@@ -11,7 +11,6 @@ import com.example.settlement.presentation.dto.AccrualListResponse;
 import com.example.settlement.presentation.dto.CommissionRateResponse;
 import com.example.settlement.presentation.dto.SellerBalanceResponse;
 import com.example.settlement.presentation.dto.SetCommissionRateRequest;
-import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -36,8 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/settlements")
 public class SettlementController {
 
-    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
-
     private final SettlementQueryService queryService;
     private final CommissionRateAdminService rateAdminService;
 
@@ -48,7 +45,7 @@ public class SettlementController {
             @RequestParam(required = false) String orderId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         PageQuery pageQuery = PageQuery.of(page, size, "occurredAt", "DESC");
         PageResult<CommissionAccrual> result = queryService.listAccruals(sellerId, orderId, pageQuery);
         return ResponseEntity.ok(AccrualListResponse.from(result));
@@ -58,7 +55,7 @@ public class SettlementController {
     public ResponseEntity<SellerBalanceResponse> sellerBalance(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         SellerBalance balance = queryService.sellerBalance(sellerId);
         return ResponseEntity.ok(SellerBalanceResponse.from(balance));
     }
@@ -67,7 +64,7 @@ public class SettlementController {
     public ResponseEntity<CommissionRateResponse> getRate(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         CommissionRate rate = rateAdminService.getEffectiveRate(sellerId);
         return ResponseEntity.ok(CommissionRateResponse.from(sellerId, rate));
     }
@@ -77,26 +74,8 @@ public class SettlementController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId,
             @Valid @RequestBody SetCommissionRateRequest request) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         CommissionRate rate = rateAdminService.setRate(sellerId, request.rateBps());
         return ResponseEntity.ok(CommissionRateResponse.from(sellerId, rate));
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
-            throw new AccessDeniedException();
-        }
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if (ROLE_ADMIN.equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

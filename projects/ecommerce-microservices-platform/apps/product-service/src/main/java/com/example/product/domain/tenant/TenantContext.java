@@ -50,4 +50,19 @@ public final class TenantContext {
     public static void clear() {
         CURRENT.remove();
     }
+
+    /**
+     * Binds {@code tenantId} for the duration of {@code body} and clears it in a
+     * {@code finally} — the async saga-path idiom (bind from the consumed envelope, run
+     * the handler, never leak context to the pooled listener thread's next message).
+     * {@link #set(String)} already normalises a null/blank tenant to the default.
+     */
+    public static void runWithTenant(String tenantId, Runnable body) {
+        try {
+            set(tenantId);
+            body.run();
+        } finally {
+            clear();
+        }
+    }
 }

@@ -1,6 +1,5 @@
 package com.example.promotion.application.service;
 
-import com.example.web.exception.AccessDeniedException;
 import com.example.promotion.application.result.PromotionDetail;
 import com.example.promotion.application.result.PromotionSummary;
 import com.example.common.page.PageResult;
@@ -25,14 +24,14 @@ public class PromotionQueryService {
     private final Clock clock;
 
     public PromotionDetail getPromotion(String promotionId, String userRole) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         Promotion promotion = promotionRepository.findById(promotionId)
                 .orElseThrow(() -> new PromotionNotFoundException(promotionId));
         return PromotionDetail.from(promotion, clock);
     }
 
     public PageResult<PromotionSummary> getPromotions(int page, int size, PromotionStatus status, String userRole) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
         PageResult<Promotion> result;
         if (status != null) {
             result = promotionRepository.findAllByStatus(status, page, size, clock);
@@ -52,7 +51,7 @@ public class PromotionQueryService {
     }
 
     public PeriodSummary getPeriodSummary(String userRole) {
-        validateAdminRole(userRole);
+        OperatorRoleGuard.requireOperator(userRole);
 
         KstPeriodBounds b = KstPeriodBounds.from(clock);
 
@@ -62,23 +61,5 @@ public class PromotionQueryService {
         long month = promotionRepository.countCreatedBetween(b.monthStartInstant(), b.nowInstant());
 
         return new PeriodSummary(today, week, month, total);
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
-            throw new AccessDeniedException();
-        }
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if ("ECOMMERCE_OPERATOR".equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

@@ -6,6 +6,7 @@ import com.example.review.application.result.CreateReviewResult;
 import com.example.review.application.result.MyReviewListResult;
 import com.example.review.application.result.ReviewListResult;
 import com.example.review.application.result.ReviewSummaryResult;
+import com.example.review.application.ReviewSortFields;
 import com.example.review.application.result.UpdateReviewResult;
 import com.example.review.application.service.ReviewCommandService;
 import com.example.review.application.service.ReviewQueryService;
@@ -24,7 +25,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Set;
 import java.util.UUID;
 
 @Validated
@@ -35,7 +35,6 @@ public class ReviewController {
 
     private static final int MAX_PAGE_SIZE = 100;
     private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("createdAt", "rating");
 
     private final ReviewCommandService reviewCommandService;
     private final ReviewQueryService reviewQueryService;
@@ -105,10 +104,7 @@ public class ReviewController {
     }
 
     private void validateSortParam(String sort) {
-        String field = sort.split(",")[0].trim();
-        if (!ALLOWED_SORT_FIELDS.contains(field)) {
-            throw new IllegalArgumentException("Invalid sort field: " + field);
-        }
+        ReviewSortFields.requireValid(sort);
     }
 
     private int sanitizePage(int page) {

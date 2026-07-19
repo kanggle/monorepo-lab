@@ -57,12 +57,8 @@ public class OrderPlacedReservationConsumer {
             return;
         }
         String tenantId = event.tenantId();
-        try {
-            TenantContext.set(tenantId);
-            reservationService.recordOrderPlaced(event.payload().orderId(), tenantId, lines);
-        } finally {
-            TenantContext.clear();
-        }
+        TenantContext.runWithTenant(tenantId,
+                () -> reservationService.recordOrderPlaced(event.payload().orderId(), tenantId, lines));
     }
 
     private List<StockReservationLine> toLines(List<OrderPlacedMessage.Item> items) {

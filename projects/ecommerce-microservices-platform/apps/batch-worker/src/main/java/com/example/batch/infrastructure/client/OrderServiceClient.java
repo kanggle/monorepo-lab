@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -44,13 +43,9 @@ public class OrderServiceClient {
             @Value("${batch.jobs.stale-paid-order-confirmation.limit:200}") int defaultLimit,
             IamClientCredentialsTokenProvider tokenProvider) {
         // Explicit timeouts: prevent a hung order-service from blocking the scheduler thread
-        // for the entire ShedLock window (mirrors ProductServiceClient 5s/10s pattern).
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(5));
-        factory.setReadTimeout(Duration.ofSeconds(10));
-        this.restClient = RestClient.builder()
+        // for the entire ShedLock window. 5s connect / 10s read.
+        this.restClient = RestClients.timed(Duration.ofSeconds(5), Duration.ofSeconds(10))
                 .baseUrl(baseUrl)
-                .requestFactory(factory)
                 .build();
         this.tokenProvider = tokenProvider;
         this.defaultOlderThanMinutes = defaultOlderThanMinutes;

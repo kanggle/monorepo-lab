@@ -40,16 +40,11 @@ public class OrderReservationFailedConsumer {
     public void onMessage(@Payload String payload) throws JsonProcessingException {
         OrderReservationFailedEvent event =
                 objectMapper.readValue(payload, OrderReservationFailedEvent.class);
-        // Bind the order's tenant from the consumed envelope (M5) so the backorder
-        // transition stays within the tenant boundary; a pre-multi-tenant / standalone
-        // envelope resolves to the default tenant (net-zero, D8). Cleared in finally so
-        // the pooled listener thread leaks no context to the next message.
-        try {
-            TenantContext.set(event.tenantId());
-            handle(event);
-        } finally {
-            TenantContext.clear();
-        }
+        // Bind the order's tenant from the consumed envelope (M5) so the backorder transition
+        // stays within the tenant boundary; a pre-multi-tenant / standalone envelope resolves
+        // to the default tenant (net-zero, D8); cleared in finally so the pooled listener
+        // thread leaks no context to the next message.
+        TenantContext.runWithTenant(event.tenantId(), () -> handle(event));
     }
 
     void handle(OrderReservationFailedEvent event) {

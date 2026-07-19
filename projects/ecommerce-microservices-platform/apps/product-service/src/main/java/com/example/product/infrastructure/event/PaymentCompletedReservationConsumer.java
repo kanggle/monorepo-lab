@@ -46,11 +46,7 @@ public class PaymentCompletedReservationConsumer {
             return;
         }
         String tenantId = event.tenantId();
-        try {
-            TenantContext.set(tenantId);
-            reservationService.recordPaymentCompleted(event.payload().orderId(), tenantId);
-        } finally {
-            TenantContext.clear();
-        }
+        TenantContext.runWithTenant(tenantId,
+                () -> reservationService.recordPaymentCompleted(event.payload().orderId(), tenantId));
     }
 }

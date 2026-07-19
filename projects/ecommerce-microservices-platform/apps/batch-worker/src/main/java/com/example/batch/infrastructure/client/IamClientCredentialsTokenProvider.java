@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -50,13 +49,9 @@ public class IamClientCredentialsTokenProvider {
         this.basicAuthHeader = "Basic " + Base64.getEncoder()
                 .encodeToString((clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
         // W-2: explicit connect+read timeouts — a hung IAM endpoint would otherwise block
-        // synchronized currentBearer() for the entire ShedLock window (same rationale as
-        // OrderServiceClient 5s/10s; IAM token calls are lightweight so 5s/5s is sufficient).
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(5));
-        factory.setReadTimeout(Duration.ofSeconds(5));
-        this.restClient = RestClient.builder()
-                .requestFactory(factory)
+        // synchronized currentBearer() for the entire ShedLock window. IAM token calls are
+        // lightweight so 5s/5s is sufficient.
+        this.restClient = RestClients.timed(Duration.ofSeconds(5), Duration.ofSeconds(5))
                 .build();
     }
 
