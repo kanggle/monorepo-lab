@@ -8,7 +8,7 @@ ADR-046 step 2 — operator-group backend (Flyway + JPA + GroupAdminController +
 
 # Status
 
-ready
+review
 
 # Owner
 

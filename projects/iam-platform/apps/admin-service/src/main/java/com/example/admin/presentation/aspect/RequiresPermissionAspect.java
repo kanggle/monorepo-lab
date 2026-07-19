@@ -312,6 +312,18 @@ public class RequiresPermissionAspect {
             if ("revokeNodeAdmin".equals(name)) return ActionCode.ORG_ADMIN_REVOKE;
             // listNodes / getNode / listSubtreeTenants / listNodeAdmins are reads
         }
+        // TASK-BE-520 (ADR-MONO-046 D6) — operator-group mutations; each maps to a dedicated
+        // action code so the DENIED row carries target_type=GROUP.
+        if ("GroupAdminController".equals(simple)) {
+            if ("createGroup".equals(name)) return ActionCode.GROUP_CREATE;
+            if ("updateGroup".equals(name)) return ActionCode.GROUP_UPDATE;
+            if ("deleteGroup".equals(name)) return ActionCode.GROUP_DELETE;
+            if ("addMember".equals(name)) return ActionCode.GROUP_MEMBER_ADD;
+            if ("removeMember".equals(name)) return ActionCode.GROUP_MEMBER_REMOVE;
+            if ("addGrants".equals(name)) return ActionCode.GROUP_GRANT_ADD;
+            if ("revokeGrant".equals(name)) return ActionCode.GROUP_GRANT_REVOKE;
+            // listGroups / getGroup / listMembers / listGrants are reads
+        }
         // Fallback for deny-by-default on unknown mutation endpoints.
         if (isMutation(m)) return null;
         return null;

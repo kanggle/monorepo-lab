@@ -89,5 +89,17 @@ public enum ActionCode {
     ORG_NODE_DELETE,
     ORG_NODE_CEILING_SET,
     ORG_ADMIN_GRANT,
-    ORG_ADMIN_REVOKE
+    ORG_ADMIN_REVOKE,
+    // TASK-BE-520 (ADR-MONO-046 D6): operator-group lifecycle + membership + grant
+    // mutations. target_type=GROUP, target_id=<groupId> (the affected member/grant rides in
+    // `detail` — the audit subject is the GROUP, mirroring PARTNERSHIP_PARTICIPANT_* /
+    // ORG_ADMIN_GRANT). permission_used=group.manage. Reads (GET) write no audit row on
+    // success (BE-486 read-path rule); a 403 writes a best-effort DENIED row.
+    GROUP_CREATE,
+    GROUP_UPDATE,
+    GROUP_DELETE,
+    GROUP_MEMBER_ADD,
+    GROUP_MEMBER_REMOVE,
+    GROUP_GRANT_ADD,
+    GROUP_GRANT_REVOKE
 }

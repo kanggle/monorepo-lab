@@ -566,6 +566,22 @@ Owned by `account-service` (authority) and proxied by `admin-service`.
 | PARTNERSHIP_SCOPE_INVALID | 422 | The requested partnership scope is malformed or not permitted |
 | PARTICIPANT_NOT_FOUND | 404 | Participant unknown within the partnership |
 | PARTICIPANT_NOT_OWN_OPERATOR | 422 | The operator being added as a participant does not belong to the calling tenant |
+
+### Operator groups  (ADR-MONO-046)
+
+`operator_group` is a tenant-scoped grouping of `admin_operators` owned by `admin-service` — a bulk-grant convenience (v1 **fan-out**: a group grant materialises ordinary per-operator assignment rows tagged `group_origin`; the evaluator/cache/confinement axes are unchanged). Mutations are `group.manage`-gated and tenant-confined (`TenantScopeGuard`, target = the group's `tenant_id`); grants reuse the `RoleGrantGuard` no-escalation cap.
+
+| Code | HTTP | Description |
+|---|---|---|
+| GROUP_NOT_FOUND | 404 | Operator-group id unknown, or outside the caller's tenant scope (enumeration-safe) (`GroupNotFoundException`) |
+| GROUP_MEMBER_NOT_FOUND | 404 | The operator is not a member of this group (`GroupMemberNotFoundException`) |
+| GROUP_MEMBER_ALREADY_EXISTS | 409 | The operator is already a member of this group (`GroupMemberAlreadyExistsException`) |
+| GROUP_MEMBER_TENANT_MISMATCH | 422 | The operator's home tenant does not match the group's tenant — a group holds only its own tenant's operators (`GroupMemberTenantMismatchException`) |
+| GROUP_GRANT_NOT_FOUND | 404 | Grant id unknown within this group (`GroupGrantNotFoundException`) |
+| GROUP_GRANT_ALREADY_EXISTS | 409 | An equal grant (same type + role/tenant) already exists on this group (`GroupGrantAlreadyExistsException`) |
+| GROUP_GRANT_NO_ESCALATION | 422 | A tenant-assignment grant exceeds the granter's own tenant scope — no-escalation (D4) at grant or add-member fan-out time (`GroupGrantNoEscalationException`) |
+
+> `GROUP_NAME_CONFLICT` (409) is emitted here too (`admin-service` `GroupNameConflictException`, duplicate group name within a tenant) and is registered once in the fan-platform group section below — the two services share the code because the semantic is identical ("a group name is already taken"). Role/no-escalation denials on group grants reuse the shared `ROLE_GRANT_FORBIDDEN` (403) / `TENANT_SCOPE_DENIED` (403) / `PERMISSION_DENIED` (403); an unknown role in a grant body returns `ROLE_NOT_FOUND` (400, the platform's shared mapping).
 | PARTICIPANT_SCOPE_EXCEEDS_DELEGATION | 422 | The participant's requested scope is wider than what the partnership delegates — a participant can only be granted a subset |
 
 ## Admin  `[domain: saas]`
@@ -675,7 +691,7 @@ Owned by `artist-service` (artist identity / fandom metadata).
 | ARTIST_ARCHIVED | 422 | Artist is ARCHIVED; operation rejected (`ArtistArchivedException`) |
 | ARTIST_GROUP_NOT_FOUND | 404 | Artist group not found (`ArtistGroupNotFoundException`) |
 | STAGE_NAME_CONFLICT | 409 | Artist stage name already taken (`StageNameConflictException`) |
-| GROUP_NAME_CONFLICT | 409 | Artist group name already taken (`GroupNameConflictException`) |
+| GROUP_NAME_CONFLICT | 409 | Group name already taken — fan-platform artist group (`GroupNameConflictException`), and shared by admin-service operator groups (ADR-MONO-046, same semantic — see the Operator groups section above) |
 | FANDOM_NOT_FOUND | 404 | Fandom record not found (`FandomNotFoundException`) |
 | FANDOM_ALREADY_EXISTS | 422 | Fandom already exists for this artist (`FandomAlreadyExistsException`) |
 | ALREADY_MEMBER | 422 | Account already a fandom member (`AlreadyMemberException`) |

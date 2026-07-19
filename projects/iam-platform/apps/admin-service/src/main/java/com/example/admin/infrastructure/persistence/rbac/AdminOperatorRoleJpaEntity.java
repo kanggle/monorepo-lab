@@ -60,6 +60,23 @@ public class AdminOperatorRoleJpaEntity {
     private String orgNodeId;
 
     /**
+     * TASK-BE-520 (ADR-MONO-046 D5, Flyway V0044) — the fan-out marker.
+     *
+     * <p>Non-null ⇒ this role binding was MATERIALISED by a fan-out of the named
+     * {@code operator_group}'s ROLE grant (references {@code operator_group.id}). Null
+     * (default) ⇒ a DIRECT grant, byte-unchanged.
+     *
+     * <p>The marker is lifecycle bookkeeping ONLY — evaluation never reads it, so a fan-out
+     * row is indistinguishable from a direct grant to {@code PermissionEvaluator} / the
+     * perm-cache (rbac.md § Operator Group Fan-Out). cascade-revoke filters strictly on this
+     * column so a direct grant ({@code group_origin IS NULL}) is never destroyed. A REAL FK
+     * to {@code operator_group.id} (same physical DB, unlike the opaque {@link #orgNodeId})
+     * with ON DELETE CASCADE backs delete-group at the DB layer.
+     */
+    @Column(name = "group_origin")
+    private Long groupOrigin;
+
+    /**
      * Sole factory. {@code tenantId} MUST equal the bound operator's
      * {@code admin_operators.tenant_id} (per-tenant binding invariant —
      * data-model.md §admin_operator_roles; ADR-002).
@@ -106,6 +123,25 @@ public class AdminOperatorRoleJpaEntity {
         }
         AdminOperatorRoleJpaEntity e = create(operatorId, roleId, grantedAt, grantedBy, tenantId);
         e.orgNodeId = orgNodeId;
+        return e;
+    }
+
+    /**
+     * TASK-BE-520 (ADR-MONO-046 D5) — factory for a fan-out ROLE binding materialised from a
+     * group grant. {@code tenantId} is still the bound (member) operator's own tenant
+     * (BE-289 WI-2), which equals the group's tenant (the member invariant); {@code groupOrigin}
+     * tags the row so cascade-revoke can find it without touching direct grants.
+     *
+     * @throws IllegalArgumentException if {@code groupOrigin} is null
+     */
+    public static AdminOperatorRoleJpaEntity createGroupScoped(Long operatorId, Long roleId,
+                                                               Instant grantedAt, Long grantedBy,
+                                                               String tenantId, Long groupOrigin) {
+        if (groupOrigin == null) {
+            throw new IllegalArgumentException("groupOrigin is required for a fan-out role binding");
+        }
+        AdminOperatorRoleJpaEntity e = create(operatorId, roleId, grantedAt, grantedBy, tenantId);
+        e.groupOrigin = groupOrigin;
         return e;
     }
 

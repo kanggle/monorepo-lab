@@ -38,4 +38,32 @@ public interface AdminOperatorRoleJpaRepository
      */
     Optional<AdminOperatorRoleJpaEntity> findByOperatorIdAndRoleIdAndOrgNodeId(
             Long operatorId, Long roleId, String orgNodeId);
+
+    // ---- TASK-BE-520 (ADR-MONO-046 D5) — group fan-out substrate ----------------
+
+    /** All fan-out role bindings materialised from one group (any member). */
+    List<AdminOperatorRoleJpaEntity> findByGroupOrigin(Long groupOrigin);
+
+    /**
+     * Delete-group cascade-revoke: every fan-out role binding tagged with this group.
+     * STRICT filter on {@code group_origin} — a direct grant ({@code group_origin IS NULL})
+     * is never touched.
+     */
+    @Modifying
+    @Query("DELETE FROM AdminOperatorRoleJpaEntity e WHERE e.groupOrigin = :groupOrigin")
+    int deleteByGroupOrigin(@Param("groupOrigin") Long groupOrigin);
+
+    /** Remove-member cascade-revoke: this member's fan-out role bindings from this group. */
+    @Modifying
+    @Query("DELETE FROM AdminOperatorRoleJpaEntity e "
+            + "WHERE e.groupOrigin = :groupOrigin AND e.operatorId = :operatorId")
+    int deleteByGroupOriginAndOperatorId(@Param("groupOrigin") Long groupOrigin,
+                                         @Param("operatorId") Long operatorId);
+
+    /** Revoke-grant cascade-revoke: the fan-out role bindings of one group's ROLE grant. */
+    @Modifying
+    @Query("DELETE FROM AdminOperatorRoleJpaEntity e "
+            + "WHERE e.groupOrigin = :groupOrigin AND e.roleId = :roleId")
+    int deleteByGroupOriginAndRoleId(@Param("groupOrigin") Long groupOrigin,
+                                     @Param("roleId") Long roleId);
 }

@@ -73,6 +73,21 @@ public final class Permission {
      */
     public static final String ORG_MANAGE = "org.manage";
 
+    /**
+     * TASK-BE-520 (ADR-MONO-046 D6): operator-group management authority — group CRUD,
+     * membership, and group-level role/tenant-assignment grants. Held by {@code SUPER_ADMIN}
+     * (all tenants' groups), {@code TENANT_ADMIN} (own tenant, D3 {@code TenantScopeGuard}
+     * confinement), and {@code ORG_ADMIN} (node-subtree tenants) — the exact holder set of
+     * {@code operator.manage}, because a group is a bulk-grant convenience ON TOP of the
+     * operators these roles already manage.
+     *
+     * <p>v1 is <b>fan-out</b> (D2-A): granting a role/tenant-assignment to a group
+     * materialises ordinary per-operator rows tagged {@code group_origin}; group membership
+     * is NOT an evaluation-time edge, so {@code PermissionEvaluator}, the perm-cache, and
+     * every confinement axis stay byte-unchanged (rbac.md § Operator Group Fan-Out).
+     */
+    public static final String GROUP_MANAGE = "group.manage";
+
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";
 
@@ -101,7 +116,8 @@ public final class Permission {
             SUBSCRIPTION_MANAGE,
             TENANT_ADMIN_DELEGATE,
             PARTNERSHIP_MANAGE,
-            ORG_MANAGE);
+            ORG_MANAGE,
+            GROUP_MANAGE);
 
     /** @return the canonical permission-key catalog (immutable, rbac.md order). */
     public static List<String> catalog() {
