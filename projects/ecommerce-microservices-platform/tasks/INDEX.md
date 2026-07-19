@@ -74,6 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-537 | **조사 티켓(수정 티켓 아님)**. ADR-002 D3 전수조사 후속 — `PUT /shippings/{id}/status` 는 순차 재전송을 상태머신이 확실히 막지만(NATURAL-KEY 확인), `@Version` 이 shipping-service 전체 0건(패턴 자기검증 완료: 저장소 타 위치 10개 파일서 히트)이라 **동시** SHIPPED 2건이 이중 `ManualShipConfirmRequested` 발행 → WMS 재고 이중차감 가능성. **관측된 바 없음 — 재현이 첫 산출물이고 재현 실패도 수확(AC-5)**. | shipping-service | investigation, concurrency |
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
 
 ## in-progress
