@@ -1,7 +1,7 @@
 # TASK-MONO-436 — shard the ecommerce integration lane across runners (keep serialisation inside each shard)
 
 - **Type**: TASK-MONO (CI wall-clock — measurement-driven)
-- **Status**: review
+- **Status**: done
 - **Scope**: root `.github/workflows/ci.yml` (`ecommerce-integration-tests` caller)
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (must not undo the MONO-398 reliability fix)
 
