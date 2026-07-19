@@ -1,6 +1,5 @@
 import 'server-only';
-import { cookies } from 'next/headers';
-import { getToken } from 'next-auth/jwt';
+import { decodeServerJwt } from './decode-server-jwt';
 
 /**
  * RP-initiated OIDC logout (GAP `end_session` / `/connect/logout`).
@@ -25,9 +24,6 @@ import { getToken } from 'next-auth/jwt';
  * RP-initiated logout.
  */
 
-const SECURE_COOKIE = '__Secure-authjs.session-token';
-const PLAIN_COOKIE = 'authjs.session-token';
-
 const ISSUER = process.env.OIDC_ISSUER_URL ?? 'http://iam.local';
 const CLIENT_ID =
   process.env.ECOMMERCE_WEB_STORE_CLIENT_ID ?? 'ecommerce-web-store-client';
@@ -41,24 +37,8 @@ const APP_URL = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
  * the browser through `/api/auth/session`.
  */
 async function getIdTokenHint(): Promise<string | null> {
-  const jar = await cookies();
-  const cookieName = jar.get(SECURE_COOKIE) ? SECURE_COOKIE : PLAIN_COOKIE;
-  const cookieHeader = jar
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join('; ');
-
-  const token = await getToken({
-    req: { headers: { cookie: cookieHeader } },
-    secret: process.env.NEXTAUTH_SECRET ?? '',
-    // Auth.js v5 derives the decryption salt from the cookie name; pass both so
-    // the secure (`__Secure-`) and plain variants both decode correctly.
-    salt: cookieName,
-    cookieName,
-    secureCookie: cookieName === SECURE_COOKIE,
-  });
-
-  return (token as { idToken?: string } | null)?.idToken ?? null;
+  const token = await decodeServerJwt<{ idToken?: string }>();
+  return token?.idToken ?? null;
 }
 
 /**
