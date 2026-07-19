@@ -1,17 +1,10 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { useRequireAuth } from '@/features/auth';
-import { OrderHistory } from '@/features/order';
-import { NarrowContainer } from '@/shared/ui';
-
-export default function OrdersPage() {
-  const { isReady } = useRequireAuth();
-
-  if (!isReady) return null;
-
-  return (
-    <NarrowContainer>
-      <OrderHistory />
-    </NarrowContainer>
-  );
+/**
+ * Legacy standalone order-history route. The canonical location is
+ * `/my/orders` (inside the account section with its sidebar). Kept as a
+ * permanent redirect so external bookmarks / old links keep working.
+ */
+export default function LegacyOrdersRedirect() {
+  redirect('/my/orders');
 }

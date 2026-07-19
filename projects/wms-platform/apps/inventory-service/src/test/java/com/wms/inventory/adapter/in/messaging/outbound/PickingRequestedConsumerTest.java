@@ -8,6 +8,7 @@ import com.wms.inventory.application.port.in.ReserveStockUseCase;
 import com.wms.inventory.application.port.out.EventDedupePort;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
 import com.wms.inventory.application.port.out.InventoryRepository;
+import com.wms.inventory.application.port.out.MasterReadModelPort;
 import com.wms.inventory.application.port.out.OutboxWriter;
 import com.wms.inventory.application.port.out.ReservationRepository;
 import com.wms.inventory.application.query.InventoryListCriteria;
@@ -17,6 +18,7 @@ import com.wms.inventory.application.result.InventoryView;
 import com.wms.inventory.application.result.MovementView;
 import com.wms.inventory.application.result.PageView;
 import com.wms.inventory.application.result.ReservationView;
+import com.wms.inventory.application.service.MasterRefValidator;
 import com.wms.inventory.application.service.ReserveStockService;
 import com.wms.inventory.domain.event.InventoryDomainEvent;
 import com.wms.inventory.domain.event.InventoryReserveFailedEvent;
@@ -24,6 +26,9 @@ import com.wms.inventory.domain.event.InventoryReservedEvent;
 import com.wms.inventory.domain.model.Inventory;
 import com.wms.inventory.domain.model.InventoryMovement;
 import com.wms.inventory.domain.model.Reservation;
+import com.wms.inventory.domain.model.masterref.LocationSnapshot;
+import com.wms.inventory.domain.model.masterref.LotSnapshot;
+import com.wms.inventory.domain.model.masterref.SkuSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -75,7 +80,8 @@ class PickingRequestedConsumerTest {
         dedupe = new FakeDedupe();
         TransactionTemplate tt = new TransactionTemplate(new NoopTxManager());
         ReserveStockService service = new ReserveStockService(
-                reservationRepo, invRepo, movementRepo, outbox, tt,
+                reservationRepo, invRepo, movementRepo, outbox,
+                new MasterRefValidator(new FakeMasterReadModel()), tt,
                 Clock.fixed(NOW, ZoneOffset.UTC), new SimpleMeterRegistry());
         consumer = new PickingRequestedConsumer(
                 new OutboundEventParser(MAPPER), dedupe, service, invRepo);
@@ -367,6 +373,13 @@ class PickingRequestedConsumerTest {
         @Override public PageView<ReservationView> listViews(ReservationListCriteria c) { throw new UnsupportedOperationException(); }
         @Override public List<Reservation> findExpired(Instant asOf, int limit) { throw new UnsupportedOperationException(); }
         @Override public long countActive() { return byId.size(); }
+    }
+
+    /** Empty master read model — snapshot absence is treated as "no opinion" (allow). */
+    private static class FakeMasterReadModel implements MasterReadModelPort {
+        @Override public Optional<LocationSnapshot> findLocation(UUID id) { return Optional.empty(); }
+        @Override public Optional<SkuSnapshot> findSku(UUID id) { return Optional.empty(); }
+        @Override public Optional<LotSnapshot> findLot(UUID id) { return Optional.empty(); }
     }
 
     /** Passthrough dedupe: runs the work the first time per eventId, ignores duplicates. */

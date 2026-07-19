@@ -1,19 +1,15 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { useParams } from 'next/navigation';
-import { useRequireAuth } from '@/features/auth';
-import { OrderDetailView } from '@/features/order';
-import { NarrowContainer } from '@/shared/ui';
-
-export default function OrderDetailPage() {
-  const params = useParams<{ id: string }>();
-  const { isReady } = useRequireAuth();
-
-  if (!isReady) return null;
-
-  return (
-    <NarrowContainer>
-      <OrderDetailView orderId={params.id} />
-    </NarrowContainer>
-  );
+/**
+ * Legacy standalone order-detail route. Canonical location is
+ * `/my/orders/[id]`. Kept as a redirect so external bookmarks / old links
+ * keep working; forwards the `[id]` param to the canonical path.
+ */
+export default async function LegacyOrderDetailRedirect({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  redirect(`/my/orders/${id}`);
 }

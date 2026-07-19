@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OrderDetail, PaymentResponse } from '@repo/types';
 import { isApiError } from '@repo/types/guards';
+import { mapQueryError } from '@/shared/lib/map-query-error';
 import { getOrder, cancelOrder } from '@/entities/order';
 import { getPayment } from '@/entities/payment';
 import { orderKeys, paymentKeys } from './query-keys';
@@ -37,17 +38,17 @@ export function useOrderDetail(orderId: string): UseOrderDetailReturn {
     retry: false,
   });
 
-  const orderError = orderQuery.error
-    ? isApiError(orderQuery.error) && orderQuery.error.code === 'ORDER_NOT_FOUND'
-      ? '주문을 찾을 수 없습니다.'
-      : '주문 정보를 불러오는데 실패했습니다.'
-    : '';
+  const orderError = mapQueryError(orderQuery.error, {
+    notFoundCode: 'ORDER_NOT_FOUND',
+    notFoundMessage: '주문을 찾을 수 없습니다.',
+    fallbackMessage: '주문 정보를 불러오는데 실패했습니다.',
+  });
 
-  const paymentError = paymentQuery.error
-    ? isApiError(paymentQuery.error) && paymentQuery.error.code === 'PAYMENT_NOT_FOUND'
-      ? ''
-      : '결제 정보를 불러오는데 실패했습니다.'
-    : '';
+  const paymentError = mapQueryError(paymentQuery.error, {
+    notFoundCode: 'PAYMENT_NOT_FOUND',
+    notFoundMessage: '',
+    fallbackMessage: '결제 정보를 불러오는데 실패했습니다.',
+  });
 
   async function handleCancel() {
     if (!orderQuery.data || isCancelling) return;

@@ -41,7 +41,7 @@ describe('Footer', () => {
     render(<Footer />);
 
     const link = screen.getByText('주문조회');
-    expect(link).toHaveAttribute('href', '/orders');
+    expect(link).toHaveAttribute('href', '/my/orders');
   });
 
   it('배송지관리 링크를 표시한다', () => {

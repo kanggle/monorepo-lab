@@ -40,12 +40,11 @@ vi.mock('@repo/ui', () => ({
   ),
 }));
 
-import { useAuth, useRequireAuth } from '@/features/auth';
+import { useAuth } from '@/features/auth';
 import { getOrders } from '@/entities/order';
-import OrdersPage from '@/app/(store)/orders/page';
+import OrdersPage from '@/app/(store)/my/orders/page';
 
 const mockUseAuth = vi.mocked(useAuth);
-const mockUseRequireAuth = vi.mocked(useRequireAuth);
 const mockGetOrders = vi.mocked(getOrders);
 
 const MOCK_ORDERS: OrderSummary[] = [
@@ -72,7 +71,6 @@ describe('OrdersPage', () => {
       login: vi.fn(),
       logout: vi.fn(),
     });
-    mockUseRequireAuth.mockReturnValue({ isReady: true });
   });
 
   it('로딩 중일 때 주문 내용이 표시되지 않는다', () => {
@@ -134,17 +132,6 @@ describe('OrdersPage', () => {
     await waitFor(() => {
       expect(screen.getAllByTestId('order-card')).toHaveLength(2);
     });
-  });
-
-  it('미인증 상태에서 로그인 페이지로 리다이렉트한다', () => {
-    mockUseRequireAuth.mockImplementation(() => {
-      mockReplace('/login');
-      return { isReady: false };
-    });
-
-    render(<TestQueryProvider><OrdersPage /></TestQueryProvider>);
-
-    expect(mockReplace).toHaveBeenCalledWith('/login');
   });
 
   describe('페이지네이션', () => {
