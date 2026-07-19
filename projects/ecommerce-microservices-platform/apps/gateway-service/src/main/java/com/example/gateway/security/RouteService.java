@@ -1,34 +1,9 @@
 package com.example.gateway.security;
 
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
-import org.springframework.util.AntPathMatcher;
 
 @Service
 public class RouteService {
-
-    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
-
-    public boolean isPublicRoute(HttpMethod method, String path) {
-        if (HttpMethod.OPTIONS.equals(method)) {
-            return true;
-        }
-        if (HttpMethod.POST.equals(method)) {
-            return "/api/auth/signup".equals(path)
-                    || "/api/auth/login".equals(path)
-                    || "/api/auth/refresh".equals(path)
-                    // Carrier webhook — HMAC-authenticated downstream (ADR-007 D5-2 / TASK-BE-359)
-                    || "/api/shippings/carrier-webhook".equals(path);
-        }
-        if (HttpMethod.GET.equals(method)) {
-            return PATH_MATCHER.match("/api/products/**", path)
-                    || PATH_MATCHER.match("/api/search/**", path)
-                    || PATH_MATCHER.match("/api/auth/oauth/**", path)
-                    || PATH_MATCHER.match("/api/reviews/products/**", path)
-                    || "/actuator/health".equals(path);
-        }
-        return false;
-    }
 
     public String resolveTargetService(String path) {
         if (path.startsWith("/api/auth")) return "auth-service";
