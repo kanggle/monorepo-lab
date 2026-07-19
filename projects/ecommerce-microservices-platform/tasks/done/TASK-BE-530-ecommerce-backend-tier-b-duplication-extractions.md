@@ -8,7 +8,7 @@ ecommerce backend Tier B refactoring sweep — genuine duplication extractions (
 
 # Status
 
-in-progress
+done
 
 # Owner
 
