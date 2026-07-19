@@ -359,6 +359,7 @@ Topic: `wms.inventory.alert.v1`
   "inventoryId": "uuid",
   "locationId": "uuid",
   "locationCode": "WH01-A-01-01-01",
+  "warehouseCode": "WH01",
   "skuId": "uuid",
   "skuCode": "SKU-APPLE-001",
   "lotId": "uuid-or-null",
@@ -369,11 +370,15 @@ Topic: `wms.inventory.alert.v1`
 }
 ```
 
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `warehouseCode` | string | yes | **Additive (ADR-MONO-050 D9).** Business code of the warehouse the low-stock inventory belongs to — resolved from the warehouse master read-model (`inventory-service` consumes `wms.master.warehouse.v1` for this). Cross-service identifiers are **codes**, not uuids: the scm demand-planning consumer routes the resulting replenishment PO by this code. Best-effort — `null` if the warehouse snapshot has not been populated yet (startup race); the alert still fires. Existing consumers that ignore the field are unaffected. |
+
 Consumer expectations:
 
 - `notification-service`: sends low-stock alert to configured operators
 - `admin-service`: projects into `AlertLog`
-- `scm-platform demand-planning-service` (cross-project, ADR-MONO-027): consumes for replenishment reorder-suggestion decisioning. Subscription contract: scm `replenishment-subscriptions.md` (group `scm-demand-planning-v1`). No schema/payload change — read-only consumer.
+- `scm-platform demand-planning-service` (cross-project, ADR-MONO-027 / ADR-MONO-050 D9): consumes for replenishment reorder-suggestion decisioning, addressing the target warehouse by the additive `warehouseCode`. Subscription contract: scm `replenishment-subscriptions.md` (group `scm-demand-planning-v1`). The `warehouseCode` addition is **additive / backward-compatible** — read-only consumer, same `eventVersion` (v1).
 
 ---
 

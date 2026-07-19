@@ -324,5 +324,6 @@ class AdjustStockServiceTest {
         @Override public Optional<LocationSnapshot> findLocation(UUID id) { return Optional.empty(); }
         @Override public Optional<SkuSnapshot> findSku(UUID id) { return Optional.empty(); }
         @Override public Optional<LotSnapshot> findLot(UUID id) { return Optional.empty(); }
+        @Override public Optional<com.wms.inventory.domain.model.masterref.WarehouseSnapshot> findWarehouse(UUID id) { return Optional.empty(); }
     }
 }

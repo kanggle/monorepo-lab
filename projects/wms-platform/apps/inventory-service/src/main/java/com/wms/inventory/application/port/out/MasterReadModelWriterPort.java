@@ -3,6 +3,7 @@ package com.wms.inventory.application.port.out;
 import com.wms.inventory.domain.model.masterref.LocationSnapshot;
 import com.wms.inventory.domain.model.masterref.LotSnapshot;
 import com.wms.inventory.domain.model.masterref.SkuSnapshot;
+import com.wms.inventory.domain.model.masterref.WarehouseSnapshot;
 
 /**
  * Out-port for upserting master read-model snapshots.
@@ -27,4 +28,6 @@ public interface MasterReadModelWriterPort {
     boolean upsertSku(SkuSnapshot snapshot);
 
     boolean upsertLot(LotSnapshot snapshot);
+
+    boolean upsertWarehouse(WarehouseSnapshot snapshot);
 }
