@@ -74,6 +74,7 @@ Tasks must not be implemented from `backlog/`, `in-progress/`, `review/`, `done/
 
 | ID | Title | Service | Tags |
 |---|---|---|---|
+| TASK-BE-537 | **조사 티켓(수정 티켓 아님)**. ADR-002 D3 전수조사 후속 — `PUT /shippings/{id}/status` 는 순차 재전송을 상태머신이 확실히 막지만(NATURAL-KEY 확인), `@Version` 이 shipping-service 전체 0건(패턴 자기검증 완료: 저장소 타 위치 10개 파일서 히트)이라 **동시** SHIPPED 2건이 이중 `ManualShipConfirmRequested` 발행 → WMS 재고 이중차감 가능성. **관측된 바 없음 — 재현이 첫 산출물이고 재현 실패도 수확(AC-5)**. | shipping-service | investigation, concurrency |
 | TASK-BE-390 | **READY — ⏳ 2026-08-01 게이트 (그 전 구현 금지)**. D2-b deprecation window(~2026-08-01) 종료 후 gateway `allowed-issuers`에서 레거시 `iam` issuer 제거 + 테스트 정리. AC-0 verify-then-act(live `iss=iam` 토큰 0 확인) 선행. | gateway-service | code, security, test |
 | TASK-BE-532 | ADR↔구현 드리프트 감사(2026-07-20) 산물 ①. `alert-rules.yml` `notification_delivery` 그룹이 **어떤 코드도 emit 하지 않는** `notification_failed_total`/`notification_sent_total` 을 감시 → 영구 no-data(=거짓 커버리지). 규칙 제거/비활성 + `observability.md` 정정. **BE-533 과 분리한 이유: 533 이 지연돼도 거짓 신호는 먼저 사라져야 함.** | notification-service (infra) | docs, observability |
 | TASK-BE-533 | ADR↔구현 드리프트 감사 산물 ②. ADR-006 이 **자기 ACCEPT 의 게이트로 선언한** 4개 mitigation(notification 실패 카운터, user-service `UserWithdrawn` 알림, runbook 2종)이 미이행인 채 ACCEPTED(2026-05-11). 메트릭 실배선 + 알림 복원 + `knowledge/runbooks/` 신설. **BE-532 이후 착수.** | notification-service, user-service | code, observability, docs |
