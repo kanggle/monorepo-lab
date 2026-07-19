@@ -18,7 +18,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
-import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -37,7 +36,8 @@ class PolicyControllerTest {
     @Autowired MockMvc mockMvc;
     @MockBean PolicyManagementUseCase policyManagementUseCase;
 
-    static final UUID SUPPLIER_ID = UUID.randomUUID();
+    // ADR-MONO-050 D9: supplierId is a supplier CODE (String), not a UUID.
+    static final String SUPPLIER_ID = "SUP-0043";
 
     @Test
     @WithMockUser

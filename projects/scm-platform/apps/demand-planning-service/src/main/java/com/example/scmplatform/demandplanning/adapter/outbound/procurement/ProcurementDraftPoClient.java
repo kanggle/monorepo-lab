@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -51,21 +52,33 @@ public class ProcurementDraftPoClient implements ProcurementDraftPoPort {
 
     @Override
     public DraftPoResult createDraftFromSuggestion(DraftPoCommand cmd, String bearerToken) {
-        Map<String, Object> body = Map.of(
-                "supplierId", cmd.supplierId().toString(),
-                "currency", cmd.currency(),
-                "origin", ORIGIN_DEMAND_PLANNING,
-                "sourceSuggestionId", cmd.sourceSuggestionId().toString(),
-                // ADR-MONO-050 D1/D3/D4: address the wms inbound-expected event.
-                "destinationWarehouseId", cmd.destinationWarehouseId().toString(),
-                "destinationNodeType", NODE_TYPE_WMS_WAREHOUSE,
-                "leadTimeDays", cmd.leadTimeDays(),
-                "lines", List.of(Map.of(
-                        "lineNo", 1,
-                        "sku", cmd.skuCode(),
-                        "quantity", cmd.quantity(),
-                        "unitPriceRef", UNIT_PRICE_REF))
-        );
+        // ADR-MONO-050 D9 (Option A): identifiers are emitted as CODES, verbatim.
+        // supplierId is the sku_supplier_map supplier CODE (wms findPartnerByCode);
+        // destinationWarehouseId is the warehouse CODE (wms findWarehouseByCode).
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("supplierId", cmd.supplierId());
+        body.put("currency", cmd.currency());
+        body.put("origin", ORIGIN_DEMAND_PLANNING);
+        body.put("sourceSuggestionId", cmd.sourceSuggestionId().toString());
+        body.put("leadTimeDays", cmd.leadTimeDays());
+        // ADR-MONO-050 D1/D3/D4/D9: address the wms inbound-expected event by warehouse
+        // CODE. Only ALERT-sourced suggestions carry a code; a BATCH suggestion has none
+        // (IVS read-model limitation) → omit the destination so procurement drafts the PO
+        // but never emits inbound-expected (fail-closed — never emit an unresolvable id).
+        String destinationWarehouseCode = cmd.destinationWarehouseId();
+        if (destinationWarehouseCode != null && !destinationWarehouseCode.isBlank()) {
+            body.put("destinationWarehouseId", destinationWarehouseCode);
+            body.put("destinationNodeType", NODE_TYPE_WMS_WAREHOUSE);
+        } else {
+            log.warn("No warehouse code on suggestion={} (BATCH-sourced?) — drafting PO without "
+                    + "wms inbound-expected addressing (follow-up: IVS carry warehouseCode)",
+                    cmd.sourceSuggestionId());
+        }
+        body.put("lines", List.of(Map.of(
+                "lineNo", 1,
+                "sku", cmd.skuCode(),
+                "quantity", cmd.quantity(),
+                "unitPriceRef", UNIT_PRICE_REF)));
 
         JsonNode response;
         try {

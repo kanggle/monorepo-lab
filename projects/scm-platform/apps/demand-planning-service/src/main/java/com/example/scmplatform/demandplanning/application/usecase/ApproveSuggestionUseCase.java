@@ -76,7 +76,7 @@ public class ApproveSuggestionUseCase {
                     new ProcurementDraftPoPort.DraftPoCommand(
                             plan.suggestionId(), plan.supplierId(), plan.currency(),
                             plan.skuCode(), plan.quantity(),
-                            plan.warehouseId(), plan.leadTimeDays()),
+                            plan.warehouseCode(), plan.leadTimeDays()),
                     bearerToken);
         } catch (RuntimeException e) {
             // Suggestion is left APPROVED (Tx-1 committed); operator retries.

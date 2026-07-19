@@ -23,7 +23,8 @@ class AlertConsumerIntegrationTest extends AbstractDemandPlanningIntegrationTest
 
     static final String SKU = "SKU-APPLE-IT-001";
     static final UUID WAREHOUSE_ID = UUID.randomUUID();
-    static final UUID SUPPLIER_ID = UUID.randomUUID();
+    // ADR-MONO-050 D9: supplierId is a supplier CODE (String).
+    static final String SUPPLIER_ID = "SUP-IT-001";
 
     @BeforeEach
     void seedMapping() {
@@ -68,6 +69,9 @@ class AlertConsumerIntegrationTest extends AbstractDemandPlanningIntegrationTest
             ReorderSuggestionJpaEntity s = suggestions.get(0);
             assertThat(s.getSkuCode()).isEqualTo(SKU);
             assertThat(s.getWarehouseId()).isEqualTo(WAREHOUSE_ID);
+            // ADR-MONO-050 D9: the additive warehouse CODE is threaded onto the suggestion.
+            assertThat(s.getWarehouseCode()).isEqualTo(ALERT_WAREHOUSE_CODE);
+            assertThat(s.getSupplierId()).isEqualTo(SUPPLIER_ID);
             assertThat(s.getStatus()).isEqualTo(SuggestionStatus.SUGGESTED);
             assertThat(s.getTriggerAvailableQty()).isEqualTo(5);
             assertThat(s.getSuggestedQty()).isEqualTo(100);

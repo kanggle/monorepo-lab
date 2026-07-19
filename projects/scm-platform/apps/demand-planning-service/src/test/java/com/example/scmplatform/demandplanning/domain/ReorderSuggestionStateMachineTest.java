@@ -15,11 +15,13 @@ class ReorderSuggestionStateMachineTest {
 
     private static final UUID ID = UUID.randomUUID();
     private static final UUID WAREHOUSE_ID = UUID.randomUUID();
-    private static final UUID SUPPLIER_ID = UUID.randomUUID();
+    // ADR-MONO-050 D9: warehouse + supplier CODES (String).
+    private static final String WAREHOUSE_CODE = "WH-SEOUL-01";
+    private static final String SUPPLIER_ID = "SUP-0043";
     private static final UUID EVENT_ID = UUID.randomUUID();
 
     private ReorderSuggestion suggested() {
-        return ReorderSuggestion.raiseFromAlert(ID, "SKU-001", WAREHOUSE_ID, SUPPLIER_ID,
+        return ReorderSuggestion.raiseFromAlert(ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
                 100, EVENT_ID, 5, "scm", Instant.now());
     }
 

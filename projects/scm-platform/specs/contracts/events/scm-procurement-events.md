@@ -85,7 +85,7 @@ below show only the **additional** fields each event appends.
 | `poId` | string (UUID v7) | no | Purchase order aggregate id (matches `partitionKey`). |
 | `poNumber` | string | no | `"PO-" + uuidV7-rand_b-tail-8-uppercase` per data-model.md § po_number format. |
 | `tenantId` | string | no | Always `"scm"` in v1. |
-| `supplierId` | string (UUID) | no | Reference to `suppliers.id` (no FK enforced cross-service). |
+| `supplierId` | string | no | Supplier reference (no FK enforced cross-service). For DEMAND_PLANNING-originated POs this is a supplier **CODE** (ADR-050 D9 Option A — sourced from `sku_supplier_map.supplier_id`, resolved by wms `findPartnerByCode`); operator-authored POs carry whatever supplier reference the operator supplied. Stored in `purchase_orders.supplier_id` (VARCHAR(36)). |
 | `buyerAccountId` | string (UUID) | no | IAM `sub` claim of the actor who drafted the PO. |
 | `totalAmount` | string (BigDecimal plain) | no | Sum of line.quantity × line.unit_price as plain decimal string (e.g., `"125000.00"`); avoid float parsing. |
 | `currency` | string (ISO 4217) | no | 3-char currency code. |
@@ -366,6 +366,18 @@ producer-side; wms additionally rejects a non-`WMS_WAREHOUSE` payload defensivel
 **Payload does NOT re-use the common PO base** — it is built as an ordered map
 (like `asn.received`), carrying only the fields wms `inbound-service` needs.
 
+> **Cross-service identifiers are CODES (ADR-MONO-050 §D9 — Option A).** Phase 1
+> built the scm→wms leg in two parallel lanes that diverged on identifier form:
+> scm emitted a warehouse **UUID** (the alert's `locationId`) and an scm supplier
+> **UUID**, but wms resolves **both by CODE** (`findWarehouseByCode` /
+> `findPartnerByCode`) → the loop fail-closed to the DLT. D9 (user-directed Option A)
+> fixes this at the source: `supplierId` and `destinationWarehouseId` in this payload
+> are **business codes**, not UUIDs. scm sources the warehouse code from the additive
+> `warehouseCode` field on the wms low-stock alert, and treats
+> `sku_supplier_map.supplier_id` as the supplier code (v1 contract). The internal
+> warehouse UUID (`locationId`) is retained scm-side only as the reorder-suggestion
+> dedup-key dimension `(tenantId, skuCode, warehouseId)` — it is never emitted here.
+
 > **Envelope reconciliation (ADR-MONO-050 §D1 illustration vs the live envelope).**
 > ADR-MONO-050 §D1 sketched `eventId` + `occurredAt` inside the payload. Per this
 > file's **Common Envelope** convention (and TASK-SCM-BE-034 Edge Case #1 — "add in
@@ -380,8 +392,8 @@ producer-side; wms additionally rejects a non-`WMS_WAREHOUSE` payload defensivel
 |---|---|---|---|
 | `poId` | string (UUID v7) | no | Purchase order aggregate id (matches `partitionKey`). |
 | `poNumber` | string | no | Business dedup key on the wms side, combined with the line (ADR-050 D6.2 `(poNumber, line)`). |
-| `supplierId` | string (UUID) | no | Reference to `suppliers.id` (no cross-service FK). |
-| `destinationWarehouseId` | string (UUID) | no | ★ **Addressed, not assumed** (ADR-050 D3). Sourced from the `warehouseId` that seeded the reorder suggestion (the wms low-stock alert named the warehouse whose stock dropped). Single- and multi-warehouse deployments are the same code path. |
+| `supplierId` | string (**CODE**) | no | ★ **Supplier business CODE** (ADR-050 **D9 Option A** — cross-service identifiers are codes, not UUIDs), e.g. `"SUP-0043"`. wms resolves it via `findPartnerByCode`. Sourced from `sku_supplier_map.supplier_id` (the v1 supplier-code stand-in). |
+| `destinationWarehouseId` | string (**CODE**) | no | ★ **Warehouse business CODE, addressed not assumed** (ADR-050 D3 + **D9 Option A**), e.g. `"WH-SEOUL-01"`. wms resolves it via `findWarehouseByCode`. Carried additively on the wms low-stock alert (`warehouseCode`) that seeded the reorder suggestion — the alert names the warehouse whose stock dropped. Single- and multi-warehouse deployments are the same code path. |
 | `destinationNodeType` | string enum | no | v1 emits only `WMS_WAREHOUSE`. The field exists for forward-compat (ADR-050 D4: a future `THIRD_PARTY_LOGISTICS` value routes elsewhere and is never emitted here in v1). |
 | `expectedArrivalDate` | string (ISO 8601 date, `YYYY-MM-DD`) | no | `confirmedAt` (UTC date) + `sku_supplier_map.lead_time_days`. Computed at confirm time so it is relative to supplier acknowledgement, not draft. |
 | `currency` | string (ISO 4217) | no | PO currency (from `sku_supplier_map.currency` at materialization). |
@@ -408,8 +420,8 @@ producer-side; wms additionally rejects a non-`WMS_WAREHOUSE` payload defensivel
   "payload": {
     "poId": "01HZWX12345678901234567890",
     "poNumber": "PO-A1B2C3D4",
-    "supplierId": "9b1d4a8c-1f2c-7a90-b1d4-3e6f8a2c9d10",
-    "destinationWarehouseId": "0192cccc-0000-0000-0000-000000000002",
+    "supplierId": "SUP-0043",
+    "destinationWarehouseId": "WH-SEOUL-01",
     "destinationNodeType": "WMS_WAREHOUSE",
     "expectedArrivalDate": "2026-07-24",
     "currency": "KRW",

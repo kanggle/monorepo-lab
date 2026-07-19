@@ -79,9 +79,11 @@ public class SuggestionApprovalTxn {
         return ApprovalPlan.proceed(
                 suggestion.getId(), mapping.getSupplierId(), mapping.getCurrency(),
                 suggestion.getSkuCode(), suggestion.getSuggestedQty(),
-                // ADR-MONO-050 D1/D3: carry the seeding warehouse + lead time so
-                // procurement can address the wms inbound-expected event.
-                suggestion.getWarehouseId(), mapping.getLeadTimeDays());
+                // ADR-MONO-050 D1/D3/D9: carry the seeding warehouse CODE + lead time so
+                // procurement can address the wms inbound-expected event by CODE (Option A).
+                // Null for BATCH suggestions (IVS carries no code) → procurement drafts
+                // the PO but emits no inbound-expected (fail-closed).
+                suggestion.getWarehouseCode(), mapping.getLeadTimeDays());
     }
 
     /**
@@ -108,19 +110,19 @@ public class SuggestionApprovalTxn {
      * call.
      */
     public record ApprovalPlan(boolean alreadyMaterialized, UUID existingPoId,
-                               UUID suggestionId, UUID supplierId, String currency,
+                               UUID suggestionId, String supplierId, String currency,
                                String skuCode, int quantity,
-                               UUID warehouseId, int leadTimeDays) {
+                               String warehouseCode, int leadTimeDays) {
 
         public static ApprovalPlan alreadyMaterialized(UUID poId) {
             return new ApprovalPlan(true, poId, null, null, null, null, 0, null, 0);
         }
 
-        public static ApprovalPlan proceed(UUID suggestionId, UUID supplierId, String currency,
+        public static ApprovalPlan proceed(UUID suggestionId, String supplierId, String currency,
                                            String skuCode, int quantity,
-                                           UUID warehouseId, int leadTimeDays) {
+                                           String warehouseCode, int leadTimeDays) {
             return new ApprovalPlan(false, null, suggestionId, supplierId, currency,
-                    skuCode, quantity, warehouseId, leadTimeDays);
+                    skuCode, quantity, warehouseCode, leadTimeDays);
         }
     }
 }

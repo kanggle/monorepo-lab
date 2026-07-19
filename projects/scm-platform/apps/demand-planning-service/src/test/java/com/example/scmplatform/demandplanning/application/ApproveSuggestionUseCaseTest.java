@@ -35,8 +35,9 @@ class ApproveSuggestionUseCaseTest {
     private ApproveSuggestionUseCase useCase;
 
     static final UUID SUGGESTION_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000001");
-    static final UUID WAREHOUSE_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000002");
-    static final UUID SUPPLIER_ID = UUID.fromString("0192cccc-0000-0000-0000-000000000003");
+    // ADR-MONO-050 D9: warehouse + supplier CODES flow to the procurement command.
+    static final String WAREHOUSE_CODE = "WH-SEOUL-01";
+    static final String SUPPLIER_ID = "SUP-0043";
     static final String TOKEN = "Bearer test-token";
 
     @BeforeEach
@@ -47,7 +48,7 @@ class ApproveSuggestionUseCaseTest {
     private SuggestionApprovalTxn.ApprovalPlan proceedPlan() {
         return SuggestionApprovalTxn.ApprovalPlan.proceed(
                 SUGGESTION_ID, SUPPLIER_ID, "KRW", "SKU-APPLE-001", 100,
-                WAREHOUSE_ID, 7);
+                WAREHOUSE_CODE, 7);
     }
 
     @Test
@@ -72,7 +73,8 @@ class ApproveSuggestionUseCaseTest {
                         && cmd.currency().equals("KRW")
                         && cmd.skuCode().equals("SKU-APPLE-001")
                         && cmd.quantity() == 100
-                        && cmd.destinationWarehouseId().equals(WAREHOUSE_ID)
+                        // ADR-MONO-050 D9: destination is the warehouse CODE, not a UUID.
+                        && cmd.destinationWarehouseId().equals(WAREHOUSE_CODE)
                         && cmd.leadTimeDays() == 7),
                 eq(TOKEN));
     }

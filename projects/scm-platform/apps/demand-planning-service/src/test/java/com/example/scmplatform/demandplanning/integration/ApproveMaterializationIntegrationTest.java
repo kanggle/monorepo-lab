@@ -47,7 +47,9 @@ class ApproveMaterializationIntegrationTest extends AbstractDemandPlanningIntegr
 
     static final String SKU = "SKU-APPLE-APPROVE-IT";
     static final UUID WAREHOUSE_ID = UUID.randomUUID();
-    static final UUID SUPPLIER_ID = UUID.randomUUID();
+    // ADR-MONO-050 D9: warehouse + supplier CODES flow to procurement (Option A).
+    static final String WAREHOUSE_CODE = "WH-SEOUL-01";
+    static final String SUPPLIER_ID = "SUP-0043";
 
     // One MockWebServer for the whole class — the client binds its base-url
     // (host:port) once at bean construction, so the port must stay stable. Each
@@ -77,6 +79,7 @@ class ApproveMaterializationIntegrationTest extends AbstractDemandPlanningIntegr
         s.setId(id);
         s.setSkuCode(SKU);
         s.setWarehouseId(WAREHOUSE_ID);
+        s.setWarehouseCode(WAREHOUSE_CODE);
         s.setSupplierId(SUPPLIER_ID);
         s.setSuggestedQty(100);
         s.setStatus(SuggestionStatus.SUGGESTED);
@@ -138,12 +141,13 @@ class ApproveMaterializationIntegrationTest extends AbstractDemandPlanningIntegr
         assertThat(body.path("origin").asText()).isEqualTo("DEMAND_PLANNING");
         assertThat(body.path("sourceSuggestionId").asText()).isEqualTo(suggestionId.toString());
         assertThat(body.path("currency").asText()).isEqualTo("KRW");
-        assertThat(body.path("supplierId").asText()).isEqualTo(SUPPLIER_ID.toString());
+        // ADR-MONO-050 D9: supplierId is emitted as the supplier CODE, verbatim.
+        assertThat(body.path("supplierId").asText()).isEqualTo(SUPPLIER_ID);
         assertThat(body.path("lines").get(0).path("sku").asText()).isEqualTo(SKU);
         assertThat(body.path("lines").get(0).path("quantity").asInt()).isEqualTo(100);
-        // ADR-MONO-050 D1/D3/D4: the seeding warehouse + lead time + node type
-        // are addressed on the from-suggestion body.
-        assertThat(body.path("destinationWarehouseId").asText()).isEqualTo(WAREHOUSE_ID.toString());
+        // ADR-MONO-050 D1/D3/D4/D9: the seeding warehouse CODE + lead time + node type
+        // are addressed on the from-suggestion body (destination resolved by CODE).
+        assertThat(body.path("destinationWarehouseId").asText()).isEqualTo(WAREHOUSE_CODE);
         assertThat(body.path("destinationNodeType").asText()).isEqualTo("WMS_WAREHOUSE");
         assertThat(body.path("leadTimeDays").asInt()).isEqualTo(7);
     }
