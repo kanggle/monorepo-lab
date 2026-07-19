@@ -4,37 +4,39 @@ import { StarRating } from './StarRating';
 import { ReviewForm } from './ReviewForm';
 import { formatDateTime } from '@/shared/lib';
 
-interface ReviewCardBaseProps {
-  reviewId: string;
+interface ReviewData {
   rating: number;
   title: string;
   content: string;
   createdAt: string;
-  isEditing: boolean;
-  showActions: boolean;
-  isUpdatePending: boolean;
+}
+
+interface ReviewCardActions {
   onEdit: () => void;
   onDelete: () => void;
   onUpdate: (formData: { rating: number; title: string; content: string }) => Promise<void>;
   onCancelEdit: () => void;
+}
+
+interface ReviewCardProps {
+  review: ReviewData;
+  isEditing: boolean;
+  showActions: boolean;
+  isUpdatePending: boolean;
+  actions: ReviewCardActions;
   productLink?: React.ReactNode;
 }
 
 export function ReviewCard({
-  reviewId: _reviewId,
-  rating,
-  title,
-  content,
-  createdAt,
+  review,
   isEditing,
   showActions,
   isUpdatePending,
-  onEdit,
-  onDelete,
-  onUpdate,
-  onCancelEdit,
+  actions,
   productLink,
-}: ReviewCardBaseProps) {
+}: ReviewCardProps) {
+  const { rating, title, content, createdAt } = review;
+  const { onEdit, onDelete, onUpdate, onCancelEdit } = actions;
   if (isEditing) {
     return (
       <div
