@@ -1,7 +1,7 @@
 # TASK-BE-522 — inventory-service: REST manual release not idempotent on an already-RELEASED reservation
 
 - **Type**: TASK-BE (bug fix — production correctness, sibling-parity straggler)
-- **Status**: review
+- **Status**: done
 - **Service**: inventory-service (wms-platform)
 - **Domain/traits**: wms / [transactional, event-driven, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (domain-correctness fix)
