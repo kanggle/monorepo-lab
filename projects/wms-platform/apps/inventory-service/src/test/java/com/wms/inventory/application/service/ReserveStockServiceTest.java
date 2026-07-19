@@ -7,6 +7,7 @@ import com.wms.inventory.application.command.ReserveStockCommand;
 import com.wms.inventory.application.port.in.ReserveStockUseCase;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
 import com.wms.inventory.application.port.out.InventoryRepository;
+import com.wms.inventory.application.port.out.MasterReadModelPort;
 import com.wms.inventory.application.port.out.OutboxWriter;
 import com.wms.inventory.application.port.out.ReservationRepository;
 import com.wms.inventory.application.query.InventoryListCriteria;
@@ -20,13 +21,18 @@ import com.wms.inventory.domain.event.InventoryDomainEvent;
 import com.wms.inventory.domain.event.InventoryReserveFailedEvent;
 import com.wms.inventory.domain.event.InventoryReservedEvent;
 import com.wms.inventory.domain.exception.InventoryNotFoundException;
+import com.wms.inventory.domain.exception.MasterRefInactiveException;
 import com.wms.inventory.domain.model.Inventory;
 import com.wms.inventory.domain.model.InventoryMovement;
 import com.wms.inventory.domain.model.ReasonCode;
 import com.wms.inventory.domain.model.Reservation;
+import com.wms.inventory.domain.model.masterref.LocationSnapshot;
+import com.wms.inventory.domain.model.masterref.LotSnapshot;
+import com.wms.inventory.domain.model.masterref.SkuSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -51,6 +57,7 @@ class ReserveStockServiceTest {
     private FakeMovementRepo movementRepo;
     private FakeOutbox outbox;
     private FakeReservationRepo reservationRepo;
+    private FakeMasterReadModel masterRefs;
     private ReserveStockService service;
 
     @BeforeEach
@@ -59,8 +66,10 @@ class ReserveStockServiceTest {
         movementRepo = new FakeMovementRepo();
         outbox = new FakeOutbox();
         reservationRepo = new FakeReservationRepo();
+        masterRefs = new FakeMasterReadModel();
         TransactionTemplate tt = new TransactionTemplate(new NoopTxManager());
         service = new ReserveStockService(reservationRepo, invRepo, movementRepo, outbox,
+                new MasterRefValidator(masterRefs),
                 tt, Clock.fixed(NOW, ZoneOffset.UTC), new SimpleMeterRegistry());
     }
 
@@ -243,9 +252,101 @@ class ReserveStockServiceTest {
         assertThat(outbox.events).isEmpty();
     }
 
+    // ---- TASK-BE-521: master-ref guard on the reserve path -------------------
+
+    @Test
+    void reserveForPickingEventEmitsReserveFailedOnInactiveSku() {
+        UUID skuId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        UUID invId = seedInventoryWithMasterRef(locationId, skuId, null, 100);
+        masterRefs.skus.put(skuId, new SkuSnapshot(
+                skuId, "SKU-X", SkuSnapshot.TrackingType.NONE, "EA",
+                SkuSnapshot.Status.INACTIVE, NOW, 1L));
+        ReserveStockCommand cmd = new ReserveStockCommand(
+                UUID.randomUUID(), UUID.randomUUID(),
+                List.of(new ReserveStockCommand.Line(invId, 30)),
+                86400, null, "system:picking-requested-consumer", null);
+
+        ReserveStockUseCase.ReserveOutcome outcome = service.reserveForPickingEvent(cmd);
+
+        assertThat(outcome).isEqualTo(ReserveStockUseCase.ReserveOutcome.BACKORDERED);
+        // Guard must fire BEFORE any mutation: no stock moved, no reservation, no movements.
+        assertThat(invRepo.entries.get(invId).availableQty()).isEqualTo(100);
+        assertThat(invRepo.entries.get(invId).reservedQty()).isZero();
+        assertThat(reservationRepo.byId).isEmpty();
+        assertThat(movementRepo.saved).isEmpty();
+        // Exactly one inventory.reserve.failed{reason=SKU_INACTIVE}.
+        assertThat(outbox.events).hasSize(1);
+        assertThat(outbox.events.get(0)).isInstanceOf(InventoryReserveFailedEvent.class);
+        InventoryReserveFailedEvent e = (InventoryReserveFailedEvent) outbox.events.get(0);
+        assertThat(e.reason()).isEqualTo("SKU_INACTIVE");
+        assertThat(e.pickingRequestId()).isEqualTo(cmd.pickingRequestId());
+        assertThat(e.insufficientLines()).hasSize(1);
+        assertThat(e.insufficientLines().get(0).skuId()).isEqualTo(skuId);
+    }
+
+    @Test
+    void reserveForPickingEventEmitsReserveFailedOnExpiredLot() {
+        UUID skuId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        UUID lotId = UUID.randomUUID();
+        UUID invId = seedInventoryWithMasterRef(locationId, skuId, lotId, 100);
+        masterRefs.lots.put(lotId, new LotSnapshot(
+                lotId, skuId, "L-1", LocalDate.now(),
+                LotSnapshot.Status.EXPIRED, NOW, 1L));
+        ReserveStockCommand cmd = new ReserveStockCommand(
+                UUID.randomUUID(), UUID.randomUUID(),
+                List.of(new ReserveStockCommand.Line(invId, 30)),
+                86400, null, "system:picking-requested-consumer", null);
+
+        ReserveStockUseCase.ReserveOutcome outcome = service.reserveForPickingEvent(cmd);
+
+        assertThat(outcome).isEqualTo(ReserveStockUseCase.ReserveOutcome.BACKORDERED);
+        assertThat(invRepo.entries.get(invId).availableQty()).isEqualTo(100);
+        assertThat(reservationRepo.byId).isEmpty();
+        assertThat(movementRepo.saved).isEmpty();
+        assertThat(outbox.events).hasSize(1);
+        assertThat(outbox.events.get(0)).isInstanceOf(InventoryReserveFailedEvent.class);
+        InventoryReserveFailedEvent e = (InventoryReserveFailedEvent) outbox.events.get(0);
+        assertThat(e.reason()).isEqualTo("LOT_EXPIRED");
+        assertThat(e.insufficientLines().get(0).lotId()).isEqualTo(lotId);
+    }
+
+    @Test
+    void reserveRestPathThrowsOnInactiveSku() {
+        UUID skuId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        UUID invId = seedInventoryWithMasterRef(locationId, skuId, null, 100);
+        masterRefs.skus.put(skuId, new SkuSnapshot(
+                skuId, "SKU-X", SkuSnapshot.TrackingType.NONE, "EA",
+                SkuSnapshot.Status.INACTIVE, NOW, 1L));
+        ReserveStockCommand cmd = new ReserveStockCommand(
+                UUID.randomUUID(), UUID.randomUUID(),
+                List.of(new ReserveStockCommand.Line(invId, 30)),
+                86400, null, "u", null);
+
+        // REST path mirrors the sibling services: the domain exception propagates
+        // (→ 422) rather than emitting a failure event.
+        assertThatThrownBy(() -> service.reserve(cmd))
+                .isInstanceOf(MasterRefInactiveException.class);
+        assertThat(invRepo.entries.get(invId).availableQty()).isEqualTo(100);
+        assertThat(reservationRepo.byId).isEmpty();
+        assertThat(movementRepo.saved).isEmpty();
+        assertThat(outbox.events).isEmpty();
+    }
+
     private UUID seedInventory(int qty) {
         UUID id = UUID.randomUUID();
         seedInventoryWithId(id, qty);
+        return id;
+    }
+
+    private UUID seedInventoryWithMasterRef(UUID locationId, UUID skuId, UUID lotId, int qty) {
+        UUID id = UUID.randomUUID();
+        Inventory inv = Inventory.restore(id, UUID.randomUUID(), locationId,
+                skuId, lotId, qty, 0, 0, NOW, 0L,
+                NOW, "seed", NOW, "seed");
+        invRepo.entries.put(id, inv);
         return id;
     }
 
@@ -347,6 +448,22 @@ class ReserveStockServiceTest {
         }
         @Override public List<Reservation> findExpired(Instant asOf, int limit) { throw new UnsupportedOperationException(); }
         @Override public long countActive() { return byId.size(); }
+    }
+
+    private static class FakeMasterReadModel implements MasterReadModelPort {
+        final Map<UUID, LocationSnapshot> locations = new HashMap<>();
+        final Map<UUID, SkuSnapshot> skus = new HashMap<>();
+        final Map<UUID, LotSnapshot> lots = new HashMap<>();
+
+        @Override public Optional<LocationSnapshot> findLocation(UUID id) {
+            return Optional.ofNullable(locations.get(id));
+        }
+        @Override public Optional<SkuSnapshot> findSku(UUID id) {
+            return Optional.ofNullable(skus.get(id));
+        }
+        @Override public Optional<LotSnapshot> findLot(UUID id) {
+            return Optional.ofNullable(lots.get(id));
+        }
     }
 
     /** Lightweight TX manager that just runs the callback without a real transaction. */
