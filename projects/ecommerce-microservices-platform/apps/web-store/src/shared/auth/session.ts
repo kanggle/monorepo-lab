@@ -1,7 +1,5 @@
 import 'server-only';
-import { cookies } from 'next/headers';
-import { getToken } from 'next-auth/jwt';
-import { auth } from '@/shared/auth/auth';
+import { decodeServerJwt } from './decode-server-jwt';
 
 /**
  * Server-only access to the authenticated session + bearer token. NEVER import
@@ -30,9 +28,6 @@ const EMPTY: WebStoreSession = {
   roles: [],
 };
 
-const SECURE_COOKIE = '__Secure-authjs.session-token';
-const PLAIN_COOKIE = 'authjs.session-token';
-
 interface WebStoreJwt {
   accessToken?: string;
   accountId?: string;
@@ -47,23 +42,7 @@ interface WebStoreJwt {
  * treat the request as unauthenticated.
  */
 async function readServerToken(): Promise<WebStoreJwt | null> {
-  const jar = await cookies();
-  const cookieName = jar.get(SECURE_COOKIE) ? SECURE_COOKIE : PLAIN_COOKIE;
-  const cookieHeader = jar
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join('; ');
-
-  const token = (await getToken({
-    req: { headers: { cookie: cookieHeader } },
-    secret: process.env.NEXTAUTH_SECRET ?? '',
-    // Auth.js v5 derives the decryption salt from the cookie name; pass both so
-    // the secure (`__Secure-`) and plain variants both decode correctly.
-    salt: cookieName,
-    cookieName,
-    secureCookie: cookieName === SECURE_COOKIE,
-  })) as WebStoreJwt | null;
-
+  const token = await decodeServerJwt<WebStoreJwt>();
   if (!token) return null;
   if (token.error) return null; // refresh failed → force re-auth (F3 fallback)
   return token;
@@ -78,9 +57,4 @@ export async function getWebStoreSession(): Promise<WebStoreSession> {
     tenantId: token.tenantId ?? null,
     roles: token.roles ?? [],
   };
-}
-
-export async function isAuthenticated(): Promise<boolean> {
-  const session = await auth();
-  return Boolean(session?.accountId);
 }

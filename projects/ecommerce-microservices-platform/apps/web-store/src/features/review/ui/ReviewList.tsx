@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useProductReviews } from '../model/use-product-reviews';
 import { useCreateReview } from '../model/use-create-review';
 import { useReviewActions } from '../model/use-review-actions';
-import { useAuth } from '@/features/auth';
+import { useAuth } from '@/shared/lib/auth-context';
 import { ErrorMessage, EmptyState } from '@repo/ui';
 import { ReviewForm } from './ReviewForm';
 import { RatingSummary } from './RatingSummary';
