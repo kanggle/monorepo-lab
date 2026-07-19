@@ -8,7 +8,7 @@ web-store FSD refactoring sweep — layer-import hygiene, dead-code removal, dup
 
 # Status
 
-in-progress
+done
 
 # Owner
 
