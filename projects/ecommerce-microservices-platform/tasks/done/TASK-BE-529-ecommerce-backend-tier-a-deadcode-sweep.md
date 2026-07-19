@@ -8,7 +8,7 @@ ecommerce backend Tier A refactoring sweep — dead-code deletion (review/gatewa
 
 # Status
 
-in-progress
+done
 
 # Owner
 
