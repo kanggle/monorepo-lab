@@ -207,3 +207,23 @@ PR shape per each project's `tasks/INDEX.md`: spec PR ↔ impl PR ↔ chore PR s
 
 - **2026-07-19 PROPOSED** (TASK-MONO-430) — authored for user review of §2 (D1 event transport, D2 fire-on-CONFIRMED, D3 warehouse-addressed single+multi, D4 3PL-out-of-scope, D5 wms InboundExpectation reuse, D6 idempotency/cancel/amend, D7 contract ownership, D8 standalone degradation).
 - **2026-07-19 ACCEPTED** (TASK-MONO-431) — user reviewed the PROPOSED document and gave explicit ADR-naming intent **"ADR-MONO-050 ACCEPTED"**, accepting the §2 decisions as authored. **NOT self-ACCEPT**: the user directed the transition (a bare "진행" was correctly rejected first per `platform/architecture-decision-rule.md` § The ACCEPTED Gate — the exact-form, ADR-naming intent arrived on the next turn). Phase 1 parallel tasks (SCM-BE-034/035 ∥ BE-506/507) and Phase 2 (SCM-INT-004) are now unblocked.
+
+---
+
+## 7. Amendment — D9 identifier semantics (post-Phase-1 reconciliation, user-directed 2026-07-19)
+
+Phase 1 built the two lanes in parallel and each was internally consistent + tested, but a cross-lane reconciliation pass found the §D1 payload **under-specified identifier semantics**, so the lanes diverged and the loop would not have worked end-to-end (every event would fail-closed to DLT). Three mismatches:
+
+1. **`expectedQty` string vs int** — scm emits a decimal string (`"100"`, `toPlainString()`, consistent with `totalAmount`); wms parsed it as a JSON number (`canConvertToInt()` → false on a text node → reject → DLT).
+2. **`destinationWarehouseId` UUID vs code** — scm carried a **UUID** (worse: the wms low-stock alert delivers a **location** id, which scm demand-planning had aliased as the warehouse dimension), while wms resolves the destination by **warehouse code** (`findWarehouseByCode`).
+3. **`supplierId` scm-ref vs wms partner code** — scm's `sku_supplier_map.supplier_id` is an scm-side reference; wms resolves suppliers against **its own** partner master by code.
+
+Root cause: the boundary payload named fields but not whether they are **codes** (namespace-shareable, human-stable) or **system-internal UUIDs**, and it assumed a clean `warehouseId` flows from the alert when the alert actually carries a location.
+
+### D9 (user-directed — Option A) — identifiers cross the boundary as CODES; the low-stock alert carries a warehouse code
+
+- **All cross-service identifiers in `scm.procurement.inbound-expected.v1` are CODES**: `destinationWarehouseId` = warehouse **code**, `supplierId` = supplier **code** (resolvable in wms's partner master), `skuCode` = SKU code (already aligned). `expectedQty` stays a **decimal string** (scm authoritative); **wms parses the string** (the smaller fix).
+- **`wms.inventory.alert.v1` is extended (additive) to carry `warehouseCode`** — the warehouse the low-stock inventory belongs to (resolved inventory → location → warehouse in wms `inventory-service`). scm demand-planning consumes `warehouseCode` and propagates it as the warehouse dimension (replacing the `locationId`-as-`warehouseId` alias) through `ReorderSuggestion` → PO → the inbound-expected event. This is an **additive** field on the alert (backward-compatible; no ADR-MONO-027 decision reversed — the alert's authoritative schema in wms `inventory-events.md` §7 gains one field).
+- **Supplier code alignment**: scm's `sku_supplier_map.supplier_id` must be seeded with the supplier **code** wms's partner master knows. The SCM-INT-004 E2E seeds a shared supplier code across both sides as the forcing function.
+
+Reconciliation tasks: **TASK-BE-508** (wms — alert `warehouseCode` extension: inventory-service producer + `inventory-events.md` §7) + refinements to the existing SCM-BE-035 (emit warehouse code) / BE-507 (parse decimal-string `expectedQty`; already resolves by code) / demand-planning warehouseCode propagation. Attribution: user chose Option A via AskUserQuestion on 2026-07-19; this amendment records that decision (not self-authored).
