@@ -93,16 +93,21 @@ public class WmsLowStockAlertConsumer {
                 throw new NonRetryableConsumerException("Non-UUID locationId eventId=" + envelope.eventId());
             }
 
-            // ADR-MONO-050 D9: the warehouse CODE (additive) is the value that must
-            // ultimately land in the PO destinationWarehouseId (wms findWarehouseByCode).
-            // Fail-closed if absent — emitting a PO without a resolvable code would only
-            // DLT on the wms side (same posture as missing skuCode/locationId).
+            // ADR-MONO-050 D9 / TASK-SCM-BE-038: warehouseCode is an ADDITIVE field on the
+            // alert — the wms producer emits it best-effort (null during a warehouse-master
+            // snapshot race, ADR-050 §7). Treat it as OPTIONAL: an absent code must NOT DLT
+            // the alert, because that would silently break the pre-existing ADR-027
+            // replenishment loop for the SKU (not just the new inbound-expected leg). Raise
+            // the reorder suggestion regardless; the downstream inbound-expected leg
+            // fail-closes on a null code (no wms expectation emitted) exactly like the
+            // batch-sweep path — so the reorder still happens, only the wms hand-off is
+            // skipped until the warehouse master populates.
             String warehouseCode = envelope.warehouseCode();
             if (warehouseCode == null || warehouseCode.isBlank()) {
-                log.error("Missing warehouseCode in alert payload eventId={} locationId={}",
-                        envelope.eventId(), locationId);
-                ack.acknowledge();
-                throw new NonRetryableConsumerException("Missing warehouseCode in alert payload eventId=" + envelope.eventId());
+                log.warn("Absent warehouseCode in alert payload eventId={} locationId={} — "
+                        + "raising reorder suggestion without a wms inbound-expected leg "
+                        + "(additive-field degrade, ADR-050 D9)", envelope.eventId(), locationId);
+                warehouseCode = null;
             }
 
             evaluateReorderUseCase.evaluateFromAlert(

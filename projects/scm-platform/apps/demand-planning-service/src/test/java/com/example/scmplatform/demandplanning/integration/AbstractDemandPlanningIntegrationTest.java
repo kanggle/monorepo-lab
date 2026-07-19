@@ -150,6 +150,16 @@ public abstract class AbstractDemandPlanningIntegrationTest {
      */
     protected String alertEnvelope(UUID eventId, String skuCode, String locationId,
                                     int availableQty, int threshold) {
+        return alertEnvelope(eventId, skuCode, locationId, availableQty, threshold, ALERT_WAREHOUSE_CODE);
+    }
+
+    /**
+     * ADR-MONO-050 D9 / TASK-SCM-BE-038: warehouseCode is ADDITIVE — pass {@code null} to
+     * simulate the wms producer's best-effort omission (warehouse-master snapshot race). The
+     * consumer must still raise the reorder suggestion (ADR-027 loop preserved), not DLT.
+     */
+    protected String alertEnvelope(UUID eventId, String skuCode, String locationId,
+                                    int availableQty, int threshold, String warehouseCode) {
         Map<String, Object> env = new LinkedHashMap<>();
         env.put("eventId", eventId.toString());
         env.put("eventType", "inventory.low-stock-detected");
@@ -164,8 +174,11 @@ public abstract class AbstractDemandPlanningIntegrationTest {
         payload.put("skuCode", skuCode);
         payload.put("locationId", locationId);
         payload.put("locationCode", "WH-A");
-        // ADR-MONO-050 D9: additive warehouse CODE the consumer threads to the PO destination.
-        payload.put("warehouseCode", ALERT_WAREHOUSE_CODE);
+        // ADR-MONO-050 D9: additive warehouse CODE the consumer threads to the PO destination
+        // (omitted when null — the additive-field best-effort case, TASK-SCM-BE-038).
+        if (warehouseCode != null) {
+            payload.put("warehouseCode", warehouseCode);
+        }
         payload.put("availableQty", availableQty);
         payload.put("threshold", threshold);
         payload.put("triggeringEventType", "inventory.adjusted");

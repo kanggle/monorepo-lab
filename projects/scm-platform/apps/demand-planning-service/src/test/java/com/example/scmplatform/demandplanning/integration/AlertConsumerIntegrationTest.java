@@ -115,6 +115,29 @@ class AlertConsumerIntegrationTest extends AbstractDemandPlanningIntegrationTest
     }
 
     @Test
+    void alertWithoutWarehouseCode_stillRaisesSuggestion_degradesGracefully_BE038() {
+        // ADR-MONO-050 D9 / TASK-SCM-BE-038: warehouseCode is ADDITIVE — an absent code
+        // must NOT DLT the alert (that would break the pre-existing ADR-027 loop). The
+        // suggestion is still raised (warehouseCode=null); only the downstream
+        // inbound-expected leg fail-closes, exactly like the batch-sweep path.
+        UUID eventId = UUID.randomUUID();
+        String envelope = alertEnvelope(eventId, SKU, WAREHOUSE_ID.toString(), 5, 8, null);
+
+        publish(TOPIC_ALERT, SKU, envelope);
+
+        Awaitility.await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            List<ReorderSuggestionJpaEntity> suggestions = suggestionJpa.findAll();
+            assertThat(suggestions).hasSize(1);
+            ReorderSuggestionJpaEntity s = suggestions.get(0);
+            assertThat(s.getSkuCode()).isEqualTo(SKU);
+            assertThat(s.getWarehouseCode()).isNull();          // absent → null, not DLT
+            assertThat(s.getStatus()).isEqualTo(SuggestionStatus.SUGGESTED);
+        });
+        // Processed (not routed to DLT).
+        assertThat(processedEventJpa.existsByEventId(eventId)).isTrue();
+    }
+
+    @Test
     void aboveReorderPoint_noSuggestionRaised() {
         UUID eventId = UUID.randomUUID();
         // availableQty=50, reorderPoint=10 → no raise
