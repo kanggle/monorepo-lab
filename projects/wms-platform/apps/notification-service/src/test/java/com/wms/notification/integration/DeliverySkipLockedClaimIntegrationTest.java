@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.wms.notification.application.port.out.DeliveryRepository;
 import com.wms.notification.domain.delivery.NotificationDelivery;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.sql.Connection;
+import java.sql.Statement;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -16,6 +20,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,12 +50,29 @@ import org.springframework.transaction.support.TransactionTemplate;
  * does not span threads, so each worker drives its own programmatic transaction
  * via {@link TransactionTemplate} on an {@link ExecutorService}, and a
  * {@link CountDownLatch} forces both to hold their claimed-row locks
- * concurrently (neither commits until both have run their locking SELECT). This
- * is the crux: without the latch, worker A could commit and release its locks
- * before worker B's SELECT ran, and B would legitimately see the rows —
- * masking a broken (non-SKIP-LOCKED) query.
+ * concurrently. The test calls the REAL repository method (not hand-written
+ * SQL) so a regression that dropped the SKIP-LOCKED hint from the annotation is
+ * caught.
+ *
+ * <h2>Why the whole test is bounded against a hang</h2>
+ *
+ * <p>A concurrent pessimistic-lock test is hang-prone: if the query were NOT
+ * skip-locked, a worker's SELECT would <em>block</em> on the peer's row locks,
+ * and a worker thread stuck in a native JDBC lock-wait does not respond to
+ * {@code shutdownNow()} interruption — its transaction stays open and the
+ * {@code @AfterEach TRUNCATE} then blocks on the orphaned lock until the CI job
+ * timeout (observed: a 30-min silent hang). Every blocking point is therefore
+ * bounded: each worker tx sets a short {@code lock_timeout} so a broken
+ * (blocking) query aborts in seconds instead of waiting forever; the pool uses
+ * daemon threads; the futures use bounded {@code get(timeout)}; and the cleanup
+ * TRUNCATE runs under its own {@code lock_timeout}. With a correct SKIP-LOCKED
+ * query nothing blocks at all — the bounds only convert a regression into a
+ * fast, loud failure rather than a hang.
  */
 class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrationBase {
+
+    /** Per-transaction lock wait cap: a non-skip-locked (blocking) query aborts here instead of hanging. */
+    private static final String WORKER_LOCK_TIMEOUT = "4000"; // ms
 
     @Autowired
     private DeliveryRepository deliveries;
@@ -61,9 +83,20 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
     @Autowired
     private JdbcTemplate jdbc;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @AfterEach
     void cleanup() {
-        jdbc.update("TRUNCATE TABLE notification_delivery");
+        // Guard the TRUNCATE with its own lock_timeout on the SAME connection:
+        // if a worker leaked a row lock, this fails fast+loud rather than hanging.
+        jdbc.execute((Connection c) -> {
+            try (Statement st = c.createStatement()) {
+                st.execute("SET lock_timeout = '5s'");
+                st.execute("TRUNCATE TABLE notification_delivery");
+            }
+            return null;
+        });
     }
 
     // --- seeding ---------------------------------------------------------
@@ -123,7 +156,7 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
     @DisplayName("two concurrent claimants never double-claim a PENDING row (SKIP LOCKED)")
     void twoConcurrentClaimantsNeverDoubleClaim() throws Exception {
         Instant now = Instant.now();
-        // Seed a handful of due PENDING rows.
+        // Seed 6 due PENDING rows; each worker claims a batch of 3.
         for (int i = 0; i < 6; i++) {
             seedPending(now.minus(30 - i, ChronoUnit.MINUTES), null);
         }
@@ -131,20 +164,26 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
                 "SELECT id FROM notification_delivery WHERE status = 'PENDING'", UUID.class);
         assertThat(allDue).hasSize(6);
 
-        // Both workers must hold their claimed-row locks at the SAME time.
+        // Both workers must hold their claimed-row locks at the SAME time so the
+        // second worker's claim overlaps the first's held locks (otherwise a
+        // broken, non-skip-locked query could still look correct).
         CountDownLatch bothClaimed = new CountDownLatch(2);
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2, daemonFactory());
         try {
             Callable<List<UUID>> worker = () -> {
                 TransactionTemplate tx = new TransactionTemplate(txManager);
                 return tx.execute(s -> {
-                    List<UUID> ids = deliveries.findAndLockPendingDueForRetry(now, 100).stream()
+                    // Bound this tx's lock wait: if the query is NOT skip-locked it
+                    // would block on the peer's locks — abort fast instead of hanging.
+                    entityManager.createNativeQuery(
+                            "SET LOCAL lock_timeout = '" + WORKER_LOCK_TIMEOUT + "'").executeUpdate();
+                    List<UUID> ids = deliveries.findAndLockPendingDueForRetry(now, 3).stream()
                             .map(NotificationDelivery::id).toList();
-                    // Signal we hold our locks, then wait for the peer so both
-                    // transactions overlap before either commits/releases.
+                    // Signal we hold our locks, then wait (bounded) for the peer so
+                    // both transactions overlap before either commits/releases.
                     bothClaimed.countDown();
                     try {
-                        bothClaimed.await(10, TimeUnit.SECONDS);
+                        bothClaimed.await(8, TimeUnit.SECONDS);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         throw new IllegalStateException(e);
@@ -162,12 +201,20 @@ class DeliverySkipLockedClaimIntegrationTest extends NotificationServiceIntegrat
             assertThat(Collections.disjoint(a, b))
                     .as("claims A=%s and B=%s must be disjoint (SKIP LOCKED)", a, b)
                     .isTrue();
-            // No row is lost: the two disjoint claims partition all due rows.
+            // Each worker claimed its batch of 3; together they partition all 6 due rows.
+            assertThat(a).hasSize(3).doesNotHaveDuplicates();
+            assertThat(b).hasSize(3).doesNotHaveDuplicates();
             assertThat(a.size() + b.size()).isEqualTo(6);
-            assertThat(a).doesNotHaveDuplicates();
-            assertThat(b).doesNotHaveDuplicates();
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    private static ThreadFactory daemonFactory() {
+        return r -> {
+            Thread t = new Thread(r, "skip-locked-claim-worker");
+            t.setDaemon(true);
+            return t;
+        };
     }
 }
