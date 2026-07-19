@@ -1,7 +1,7 @@
 # TASK-BE-524 — notification-service: outbox may publish `notification.delivery.scheduled` to Kafka contrary to contract — VERIFY
 
 - **Type**: TASK-BE (INVESTIGATION-first — possible contract violation, needs runtime confirmation)
-- **Status**: review
+- **Status**: done
 - **Service**: notification-service (wms-platform)
 - **Domain/traits**: wms / [event-driven, transactional]
 - **Analysis model**: Opus 4.8 · **Impl model**: TBD after AC-0
