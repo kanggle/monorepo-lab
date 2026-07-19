@@ -1,7 +1,7 @@
 # TASK-BE-525 — admin-service: authz-gate + IdempotencyFilter coverage hardening
 
 - **Type**: TASK-BE (test-coverage hardening — no production behavior change)
-- **Status**: review
+- **Status**: done
 - **Service**: admin-service (wms-platform)
 - **Domain/traits**: wms / [transactional, event-driven, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (AOP method-security proxy wiring + filter replay/lock semantics)
