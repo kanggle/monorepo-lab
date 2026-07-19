@@ -1,7 +1,7 @@
 # TASK-MONO-429 — libs/java-gateway: add testFixtures with shared JWT builder + RecordingGatewayFilterChain
 
 - **Type**: TASK-MONO (monorepo-level — shared library change + one project adaptation, atomic)
-- **Status**: review
+- **Status**: done
 - **Shared path**: `libs/java-gateway` (+ `finance-platform/apps/gateway-service` test adaptation)
 - **Analysis model**: Opus 4.8 · **Impl model**: Opus (build wiring + multi-file test refactor)
 

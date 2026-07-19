@@ -1,7 +1,7 @@
 # TASK-FIN-BE-057 — finance tests: @Nested split of long test classes (behaviour-preserving)
 
 - **Type**: TASK-FIN-BE (test refactor — behaviour-preserving)
-- **Status**: review
+- **Status**: done
 - **Service**: ledger-service + account-service (finance-platform)
 - **Domain/traits**: saas / [transactional, multi-tenant]
 - **Analysis model**: Opus 4.8 · **Impl model**: Sonnet (mechanical @Nested wrapping)
